@@ -37,7 +37,7 @@ it addresses, and what remains blocked.
 |------|---------|------|
 | `~/Nodes/PythonNode` | **pybitnode** | Scout/reference implementation; discovers live-chain blockers first |
 | `~/Nodes/TypeScriptNode` | **tsbitnode** | Fast follower; zero **runtime** npm deps; uses Node built-ins |
-| `~/Nodes/CppNode` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path |
+| `~/Nodes/CppNode` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage gate: `./scripts/coverage_report.sh` (100% line+branch on `src/`) |
 | `~/Nodes/JavaNode` | future | Clean Java follower/product node if restarted here |
 
 All active nodes target **Bitcoin testnet4**. They can run in parallel only with
@@ -261,7 +261,7 @@ Script verification applies on **spend paths** (non-coinbase transactions consum
 
 | Gap | Status |
 |-----|--------|
-| **CLTV / CSV** (BIP65 / BIP112) | Python implements full semantics; TS interpreter still **ignores** `OP_CHECKLOCKTIMEVERIFY` / `OP_CHECKSEQUENCEVERIFY` unless verify flags are set (then throws). Port from `pybitnode/consensus/script/interpreter.py` when sync stalls on timelocked redeems. |
+| **CLTV / CSV** (BIP65 / BIP112) | **Implemented** in TS (`interpreter.ts`): `OP_CHECKLOCKTIMEVERIFY` / `OP_CHECKSEQUENCEVERIFY` with `SCRIPT_VERIFY_*` flags (ported from Python). Re-run `npm test` after interpreter changes. |
 | **Multisig test coverage** | `CHECKMULTISIG` exists in the interpreter; no dedicated multisig fixtures in `tests/script.test.ts` (Python has richer coverage in `tests/test_script.py`). |
 | **Script template survey** | `npm run survey:scripts` — read-only port of Python `script_template_survey.py` |
 
