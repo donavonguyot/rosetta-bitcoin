@@ -1,0 +1,14 @@
+.DS_Store
+
+# Node implementation repos are tracked independently.
+/PythonNode/
+/TypeScriptNode/
+/CppNode/
+/JavaNode/
+
+# Shared scratch, if any lands at the workspace root.
+/data/
+/reports/
+*.log
+*.db
+*.db-journal
