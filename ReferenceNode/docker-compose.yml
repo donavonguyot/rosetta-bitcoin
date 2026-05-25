@@ -1,0 +1,27 @@
+name: rosetta-reference-node
+
+services:
+  bitcoin-core-testnet4:
+    image: bitcoin/bitcoin:28.2
+    container_name: rosetta-bitcoin-core-testnet4
+    restart: unless-stopped
+    command:
+      - -conf=/config/bitcoin.conf
+    ports:
+      - "127.0.0.1:48333:48333"
+      - "127.0.0.1:48332:48332"
+    volumes:
+      - ./bitcoin.conf:/config/bitcoin.conf:ro
+      - /Users/donavonguyot/NodeData/bitcoin-core-testnet4:/home/bitcoin/.bitcoin
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bitcoin-cli",
+          "-conf=/config/bitcoin.conf",
+          "getblockchaininfo"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
