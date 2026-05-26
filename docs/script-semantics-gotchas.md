@@ -28,8 +28,11 @@ sequences will fail otherwise valid historical spends.
 Follower checklist:
 
 - Test `SIGHASH_ALL`, `SIGHASH_NONE`, and `SIGHASH_SINGLE`.
+- For `SIGHASH_SINGLE` with `inputIndex > 0`, serialize `inputIndex + 1` outputs using **empty placeholder** `CTxOut(-1, "")` (Core default null output; `nValue` is `-1`, not `0`) for indices `< inputIndex`, then the real output at `inputIndex` (Core `SerializeOutput`; not prior real outputs).
+- When `inputIndex >= vout.size()` under `SIGHASH_SINGLE`, return **`uint256::ONE`** (256-bit little-endian integer 1: `hash[0]=0x01`, rest zero — not `hash[31]=1`).
 - Test `ANYONECANPAY` combinations.
 - Include a real fixture for height 38,010 if the port implements legacy script.
+- Include height 61,174 for multi-input P2PKH `SIGHASH_SINGLE` with `inputIndex > 0`.
 
 ## CLTV and CSV edge cases
 
