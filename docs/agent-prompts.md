@@ -179,3 +179,51 @@ Rules:
 - Do not remove lock files.
 - Do not treat snapshots as live truth when DB is available.
 ```
+
+## Port the performance pattern
+
+```text
+You are working on [PORT_NAME] in [PORT_PATH].
+
+Read /Users/donavonguyot/Nodes/AGENTS.md first.
+Read /Users/donavonguyot/Nodes/docs/port-performance-lessons.md.
+
+Goal:
+Port the proven Java/Python block-connect performance pattern without changing
+consensus outcomes.
+
+Tasks:
+1. Confirm no active sync/connect writer owns the target datadir.
+2. Identify the port's block connect, UTXO tracker/store, config, and script
+   verification entry points.
+3. Add or verify per-block timing for:
+   - utxo_load
+   - script_verify
+   - utxo_apply
+   - commit
+   - block_connect_store_commit
+4. Add a block-local UTXO view with created/spent/loaded state if missing.
+5. Reuse loaded prevouts for undo creation.
+6. Batch UTXO spends and creates inside one atomic block-connect transaction.
+7. Add configurable per-transaction input parallel script verification only
+   after prevouts are loaded.
+8. Preserve deterministic blocker reporting by height, txid, input index, and
+   spent scriptPubKey.
+9. Run the port's relevant tests and one measured connect-only replay on an
+   isolated or single-writer datadir.
+
+Rules:
+- Do not skip script rules.
+- Do not parallelize UTXO writes.
+- Do not reorder block transactions.
+- Do not share one SQLite connection across worker threads.
+- Do not treat another port's sync outcome as proof.
+
+Return:
+- before/after timing table
+- files changed
+- tests run
+- validated height after replay or resume
+- next blocker, if any
+- whether this improves throughput or moves the binary gate
+```

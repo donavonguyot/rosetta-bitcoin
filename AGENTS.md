@@ -83,6 +83,7 @@ queue for follower ports:
 - [`docs/consensus-blockers-testnet4.md`](docs/consensus-blockers-testnet4.md) — canonical blocker facts and fixture anchors.
 - [`docs/follower-port-matrix.md`](docs/follower-port-matrix.md) — conservative per-port status with explicit `unknown` cells.
 - [`docs/script-semantics-gotchas.md`](docs/script-semantics-gotchas.md) — language-neutral consensus traps learned from live blockers.
+- [`docs/port-performance-lessons.md`](docs/port-performance-lessons.md) — reusable block-connect performance patterns from Java/Python catch-up.
 - [`docs/agent-prompts.md`](docs/agent-prompts.md) — reusable prompts for porting blockers, harvesting fixtures, and updating ledgers.
 
 Followers copy blocker facts and tests from this trail, not trust outcomes. Every
