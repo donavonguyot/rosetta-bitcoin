@@ -75,6 +75,19 @@ For P2P/sync blockers, record the peer, command, datadir, advertised
 `start_height`, header height, validated height, and whether deferred handshake
 messages were sent.
 
+### Python / Java scout trail
+
+Shared coordination docs turn the Python and Java live-chain trail into a work
+queue for follower ports:
+
+- [`docs/consensus-blockers-testnet4.md`](docs/consensus-blockers-testnet4.md) — canonical blocker facts and fixture anchors.
+- [`docs/follower-port-matrix.md`](docs/follower-port-matrix.md) — conservative per-port status with explicit `unknown` cells.
+- [`docs/script-semantics-gotchas.md`](docs/script-semantics-gotchas.md) — language-neutral consensus traps learned from live blockers.
+- [`docs/agent-prompts.md`](docs/agent-prompts.md) — reusable prompts for porting blockers, harvesting fixtures, and updating ledgers.
+
+Followers copy blocker facts and tests from this trail, not trust outcomes. Every
+port must still independently validate the spend with its own implementation.
+
 ---
 
 ## Critical: handshake / sync state (“too advanced” disconnects)
