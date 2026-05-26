@@ -38,7 +38,7 @@ it addresses, and what remains blocked.
 | `~/Nodes/PythonNode` | **pybitnode** | Scout/reference implementation; discovers live-chain blockers first |
 | `~/Nodes/TypeScriptNode` | **tsbitnode** | Fast follower; zero **runtime** npm deps; uses Node built-ins |
 | `~/Nodes/CppNode` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
-| `~/Nodes/JavaNode` | future | Clean Java follower/product node if restarted here |
+| `~/Nodes/JavaNode` | **jbitnode** | Clean Java follower; live discovery above Python scout horizon |
 
 All active nodes target **Bitcoin testnet4**. They can run in parallel only with
 isolated state and deliberate peer allocation.
@@ -276,6 +276,23 @@ Block-only pass after headers are current:
 ```bash
 node dist/cli/syncRunner.js --no-header-refresh --blocks-max 64
 ```
+
+---
+
+## How to run JavaNode sync
+
+Normal catch-up uses **5000-block manual chunks** — not a daemon loop:
+
+```bash
+cd JavaNode
+make java-node-preflight
+make java-node-sync-chunk DATA_DIR=./data-java PEERS=127.0.0.1:48333
+make java-node-status
+make java-node-export-snapshots
+# repeat make java-node-sync-chunk until ValidationBlocker or tip
+```
+
+**Single writer:** `.jbitnode.lock` on `./data-java`; never run two `SyncLocalCore` processes on the same datadir. On `ValidationBlocker`: harvest → fix → `mvn verify` → update `JavaNode/docs/BLOCKER_LEDGER.md` → resume chunk from cleared height. Optional read-only: `make java-node-survey-scripts`.
 
 ---
 
