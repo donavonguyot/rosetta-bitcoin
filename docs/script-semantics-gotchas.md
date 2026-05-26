@@ -108,8 +108,10 @@ Observed Java fixes included:
 - `OP_NUMEQUAL`.
 - `OP_NIP`.
 - `OP_SHA256`.
+- `OP_SIZE` (tapscript; dual SHA256 hashlock size checks @52497).
 - `OP_CODESEPARATOR`.
 - `OP_LESSTHAN`.
+- `OP_0NOTEQUAL` (legacy @58173; **0x92 is not OP_MUL** — disabled `OP_MUL` is 0x95).
 
 Follower checklist:
 
