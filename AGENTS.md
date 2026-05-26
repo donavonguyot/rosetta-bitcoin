@@ -37,7 +37,7 @@ it addresses, and what remains blocked.
 |------|---------|------|
 | `~/Nodes/PythonNode` | **pybitnode** | Scout/reference implementation; discovers live-chain blockers first |
 | `~/Nodes/TypeScriptNode` | **tsbitnode** | Fast follower; zero **runtime** npm deps; uses Node built-ins |
-| `~/Nodes/CppNode` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage gate: `./scripts/coverage_report.sh` (100% line+branch on `src/`) |
+| `~/Nodes/CppNode` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
 | `~/Nodes/JavaNode` | future | Clean Java follower/product node if restarted here |
 
 All active nodes target **Bitcoin testnet4**. They can run in parallel only with
@@ -108,6 +108,72 @@ finding replaces it.
 
 **Never share datadirs or DB files between nodes or parallel agent runs.** One writer per datadir at a time.
 
+### Single writer rule (TypeScript)
+
+TypeScript enforces one SQLite writer per datadir via **`<datadir>/.tsbitnode_sync.lock`**
+(pid + holder metadata). These entry points acquire or respect the lock:
+
+| Process | Lock behavior |
+|---------|---------------|
+| `syncBatchLoop` | Holds lock for the full batch loop |
+| `tsbitnode-sync` (`syncRunner`) | Acquires lock; batch-loop children inherit parent lock via `TSBITNODE_SYNC_LOCK_PARENT_PID` |
+| `tsbitnode` (`node.ts`) | Acquires lock for the full run |
+
+**Never run `syncBatchLoop` and a standalone `tsbitnode-sync` / `tsbitnode` on the same datadir.**
+If a second process starts while the lock is held, it exits with:
+
+```text
+error: another sync process holds lock (pid …): …/.tsbitnode_sync.lock
+```
+
+Stale locks (dead pid) are reclaimed automatically. Legacy **`.sync_batch_loop.lock`**
+files are also checked so an old batch loop cannot overlap a new sync.
+
+Before starting sync, confirm no conflicting process:
+
+```bash
+ps aux | rg 'syncBatchLoop|syncRunner|tsbitnode-sync|dist/cli/node'
+ls -la TypeScriptNode/data-ts/.tsbitnode_sync.lock 2>/dev/null
+```
+
+### UTXO stall at 5579 (TypeScript repair playbook)
+
+**Symptom:** Block connect fails at height **5579** with `missing UTXO …` (often after
+parallel sync writers or interrupted rebuild).
+
+**Cause:** Dual-writer corruption — two processes wrote UTXO/state concurrently on the same
+datadir (e.g. `syncBatchLoop` + manual `tsbitnode-sync`, or overlapping rebuild + batch).
+
+**Recovery:**
+
+```bash
+cd TypeScriptNode && npm run build
+# Ensure no other sync holds the lock; wait for any in-flight rebuild to finish first.
+npx tsbitnode-sync --datadir ./data-ts --connect-only --rebuild
+```
+
+Rebuild must hold the exclusive lock and exit **0** before resuming batches.
+
+**Verify before batches:** `validated_height >= 5579` and UTXO count sane:
+
+```bash
+npx tsbitnode-db --db ./data-ts/tsbitnode.db
+```
+
+Only then resume:
+
+```bash
+./scripts/sync_batch_loop.sh --datadir ./data-ts --target 10000 --blocks-max 200
+```
+
+### Wait for rebuild
+
+Do **not** start `syncBatchLoop`, manual `tsbitnode-sync`, or `tsbitnode` on a datadir while
+`--connect-only --rebuild` is running. Rebuild rewrites the full validated chain and UTXO set;
+overlapping writers recreate the 5579-class stall.
+
+Wait until rebuild **exits 0** and the lock file is gone, then verify heights before batch sync.
+
 Prefer distinct peers per active node. Do not use Python's active ops peer for a
 follower sync while Python is actively syncing unless you are intentionally
 testing a known peer path and record that decision in the log/summary.
@@ -168,7 +234,8 @@ binary_gate_status: failed | not_attempted | passed
 | Running sync batch in a **sandbox without network** | False “broken sync” diagnosis; peers never connect |
 | Calling `completeDeferredHandshake()` **before block sync** | Peers disconnect; “too advanced” |
 | Advertising **inflated `start_height`** | Remote peer drops connection |
-| **Two writers** on same datadir | SQLite corruption / lock errors |
+| **Two writers** on same datadir | SQLite corruption / lock errors; UTXO stall at 5579 |
+| **syncBatchLoop + manual tsbitnode-sync** on same datadir | Dual writer; use `.tsbitnode_sync.lock` — see [Single writer rule](#single-writer-rule-typescript) |
 | **Parallel agents** editing `peer.ts` | Merge conflicts and conflicting handshake logic |
 | Editing consensus/P2P while a sync process is live | Run may mix old state with new code; blocker diagnosis becomes muddy |
 | Treating snapshots as live truth | Snapshots can lag DB/logs; check live DB/status before conclusions |

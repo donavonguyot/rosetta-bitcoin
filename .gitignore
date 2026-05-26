@@ -5,6 +5,8 @@
 /TypeScriptNode/
 /CppNode/
 /JavaNode/
+/CSharpNode/
+/ElixirNode/
 
 # Shared scratch, if any lands at the workspace root.
 /data/
