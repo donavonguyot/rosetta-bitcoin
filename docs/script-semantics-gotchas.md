@@ -115,6 +115,7 @@ Observed Java fixes included:
 - `OP_CODESEPARATOR`.
 - `OP_LESSTHAN`.
 - `OP_0NOTEQUAL` (legacy @58173; **0x92 is not OP_MUL** — disabled `OP_MUL` is 0x95).
+- `OP_ROT` (legacy @62754; **0x7b** rotates top three stack items `(x1 x2 x3 → x2 x3 x1)`; pubkey pushes may contain `0x7b` as data — use `decodescript` asm and byte offsets, not raw hex search).
 
 Follower checklist:
 
