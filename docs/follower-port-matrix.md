@@ -37,6 +37,7 @@ Legend:
 | 46,779 | P2WSH `OP_CODESEPARATOR` / comparison | unknown | cleared | unknown | not_reached | not_reached | not_reached |
 | 51,340 | P2SH `OP_ADD` redeem script | unknown | cleared | unknown | not_reached | not_reached | not_reached |
 | 52,024 | Tapscript `OP_SHA256` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 63,305 | P2SH redeem `OP_3DUP` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
 
 ## Port notes
 
@@ -48,7 +49,7 @@ or validates them.
 
 ### Java
 
-Java is the lead follower and has commits clearing the trail through 52,024. It
+Java is the lead follower and has commits clearing the trail through 63,305. It
 should be used as a reference implementation and fixture source, not as a
 validity oracle.
 
