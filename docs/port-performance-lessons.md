@@ -164,3 +164,20 @@ Java's 52k investigation provides the clearest measured example:
 
 Python is porting the same pattern as scout work reaches the same block shapes.
 Follower ports should copy the pattern and benchmark locally, not copy trust.
+
+## Cursor operating model
+
+The JavaNode long-sync setup also proved an operational pattern that ports should
+copy:
+
+- expose one normal chunk target for agents to run;
+- default long catch-up to local Reference Core (`127.0.0.1:48333`);
+- enforce one writer with a datadir lock;
+- keep chunks bounded and parseable;
+- write terminal summaries with `validated_height`, `sync_status`,
+  `current_blocker`, and `utxo_count`;
+- monitor with a separate read-only sentinel loop instead of restarting sync.
+
+PythonNode mirrors this in `PythonNode/Makefile`,
+`PythonNode/scripts/cursor_sync_monitor.py`, and
+`PythonNode/docs/OPERATIONS.md`.
