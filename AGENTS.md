@@ -282,18 +282,30 @@ node dist/cli/syncRunner.js --no-header-refresh --blocks-max 64
 
 ## How to run JavaNode sync
 
-Normal catch-up uses **5000-block manual chunks** — not a daemon loop:
+**Manual chunks** (default 5000 blocks) or **durable supervisor** for unattended catch-up:
 
 ```bash
 cd JavaNode
 make java-node-preflight
+
+# manual chunk (repeat until blocker or tip):
 make java-node-sync-chunk DATA_DIR=./data-java PEERS=127.0.0.1:48333
 make java-node-status
 make java-node-export-snapshots
-# repeat make java-node-sync-chunk until ValidationBlocker or tip
+
+# unattended (recommended overnight): sub-chunks + auto-restart on crash/stall
+make java-node-sync-supervisor DATA_DIR=./data-java PEERS=127.0.0.1:48333
+# stop: touch data-java/.stop_sync
 ```
 
-**Single writer:** `.jbitnode.lock` on `./data-java`; never run two `SyncLocalCore` processes on the same datadir. On `ValidationBlocker`: harvest → fix → `mvn verify` → update `JavaNode/docs/BLOCKER_LEDGER.md` → resume chunk from cleared height. Optional read-only: `make java-node-survey-scripts`.
+Single-shot large chunk (no auto-restart): `make java-node-sync-chunk-overnight` (15000) or
+`BLOCKS_MAX=25000`. JSON-only status for scripts: `make java-node-db-status`.
+
+**Single writer:** `.jbitnode.lock` on `./data-java` (pid metadata); preflight reclaims stale locks.
+On `ValidationBlocker`: harvest → fix → `mvn verify` → update `JavaNode/docs/BLOCKER_LEDGER.md` → resume.
+Supervisor exits **2** on blocker; inner `SyncLocalCore` exit **4**. Abnormal JVM exit sets
+`blocks_stalled` + supervisor restart (up to `MAX_RESTARTS=5`). Optional read-only:
+`make java-node-survey-scripts`.
 
 ---
 
