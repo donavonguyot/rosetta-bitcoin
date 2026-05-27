@@ -118,6 +118,7 @@ Observed Java fixes included:
 - `OP_ROT` (legacy @62754; **0x7b** rotates top three stack items `(x1 x2 x3 → x2 x3 x1)`; pubkey pushes may contain `0x7b` as data — use `decodescript` asm and byte offsets, not raw hex search).
 - `OP_3DUP` (legacy @63305; **0x6f** duplicates top three stack items `(x1 x2 x3 → x1 x2 x3 x1 x2 x3)`; seen in P2SH redeem script, not witness).
 - `OP_2DUP` (legacy @63603; **0x6e** duplicates top two stack items `(x1 x2 → x1 x2 x1 x2)`; seen in P2SH redeem script; do not confuse with `OP_DUP` 0x76 or disabled `OP_2MUL` 0x8d).
+- `OP_TOALTSTACK` / `OP_FROMALTSTACK` (P2WSH @66241; **0x6b** / **0x6c** move items between the main stack and an interpreter-local alternate stack; do not persist altstack across script evaluations).
 
 Follower checklist:
 

@@ -16,7 +16,7 @@ Status values:
 | Implementation | Last observed validated height | Notes |
 |----------------|-------------------------------:|-------|
 | Python | 50,000 | Scout path; cleared 46,779 and completed a bounded sync to 50,000. |
-| Java | 63,602+ | Lead follower; cleared through 63,603 P2SH OP_2DUP fix (resume sync pending). |
+| Java | 66,240+ | Lead follower; cleared through 66,241 P2WSH altstack fix (resume sync pending). |
 
 ## Blocker trail
 
@@ -50,6 +50,7 @@ Status values:
 | 62,754 | P2WSH witness `OP_ROT` | `00000000bd2dfde90fcd03b269ac02845925a01011eb053b0a7f9a7e62c48b96` | `f4ecb76ed2bb8e4a7540a060bb97dc1d417dc3c8a54200aa7c589b74a931d82a` | 0 | `002055cec8793c26a9cbcf8cdfb1c715ce567fe451a47deb114df9efa31218d5b2ac` | script verification failed for input 0 | unknown | cleared | Java cleared with `OP_ROT` (0x7b) on SIZE/SWAP/HASH160/IF/CSV witness script; not SIGHASH (classify before implementing). Fixtures `tx_p2wsh_rot_62754*`. |
 | 63,305 | P2SH redeem `OP_3DUP` | `0000000000000006d0233f081975a038cc7739f2519991b871eda65ba5c6b1e4` | `5f2ef82d267e50f4f15c4dc1c04c3b2b1ca74be0fec19697f44cb438ff85caeb` | 0 | `a914da5a92e670a66538be1c550af352646000b2367d87` | script verification failed for input 0 | unknown | cleared | Java cleared with `OP_3DUP` (0x6f) on legacy P2SH redeem script `OP_3DUP OP_ADD 9 OP_EQUALVERIFY …`; empty witness; scriptSig pushes `3 5 4` + redeem. Fixtures `tx_p2sh_3dup_63305*`. |
 | 63,603 | P2SH redeem `OP_2DUP` | `000000005b5b0f125eadd4a93c0b809e81d1bd1e7f51abd2d12d384aa4d34933` | `a21adb17edebeee255310e9b37c44a667e7a510bc8181efbf734a86bcac94f74` | 0 | `a9143b2169f7881b3c7d812ce17220f8080e817aac7e87` | script verification failed for input 0 | unknown | cleared | Java cleared with `OP_2DUP` (0x6e) on legacy P2SH redeem `OP_2DUP OP_ADD 7 OP_EQUALVERIFY OP_SUB 3 OP_EQUAL`; scriptSig pushes `5 2` + redeem. Fixtures `tx_p2sh_2dup_63603*`. |
+| 66,241 | P2WSH witness `OP_TOALTSTACK` / `OP_FROMALTSTACK` | `000000005e5e5b8f504ee1105cca7e94749de481341804ce08aea4db9a1ea6c9` | `e867dde78822d2f73a7313f4efa4a2cf280f315827cf032d23430153105a23bf` | 0 | `00208cb9dc10956508980592f26ba91fda95db82a90d33e652836719e75b81e33a18` | script verification failed for input 0 | unknown | cleared | Java cleared with `OP_TOALTSTACK` (0x6b) / `OP_FROMALTSTACK` (0x6c) on P2WSH script combining two CHECKMULTISIG results before CSV-gated CHECKSIG. Fixtures `tx_p2wsh_altstack_66241*`. |
 
 ## Operational blockers that are not consensus gaps
 
