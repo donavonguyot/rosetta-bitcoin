@@ -16,7 +16,7 @@ Status values:
 | Implementation | Last observed validated height | Notes |
 |----------------|-------------------------------:|-------|
 | Python | 52,996 | Scout path; cleared 52,497 P2TR tapscript `OP_SIZE` and completed a bounded local-Core proof chunk to 52,996. |
-| Java | 70,923+ | Lead follower; cleared through 70,924 P2TR tapscript OP_TUCK/OP_MIN fix (resume sync pending). |
+| Java | 71,266+ | Lead follower; cleared through 71,267 P2TR tapscript OP_ROLL/DEPTH/NUMNOTEQUAL fix (resume sync pending). |
 
 ## Blocker trail
 
@@ -53,6 +53,7 @@ Status values:
 | 66,241 | P2WSH witness `OP_TOALTSTACK` / `OP_FROMALTSTACK` | `000000005e5e5b8f504ee1105cca7e94749de481341804ce08aea4db9a1ea6c9` | `e867dde78822d2f73a7313f4efa4a2cf280f315827cf032d23430153105a23bf` | 0 | `00208cb9dc10956508980592f26ba91fda95db82a90d33e652836719e75b81e33a18` | script verification failed for input 0 | unknown | cleared | Java cleared with `OP_TOALTSTACK` (0x6b) / `OP_FROMALTSTACK` (0x6c) on P2WSH script combining two CHECKMULTISIG results before CSV-gated CHECKSIG. Fixtures `tx_p2wsh_altstack_66241*`. |
 | 67,562 | P2TR tapscript `OP_HASH256` | `000000000000a28e307403ba980d48b92e264b798fae176d33d08443a8cdd3ae` | `d3c78c53f3558feeafe22384db58b5ee1d96c5657f366b5b84cf39aedda42c6b` | 0 | `51204ce2727f5bc13a88d4ac9b95d09a9e0f2584651e074c37820eab48f1872471a4` | script verification failed for input 0 | unknown | cleared | Java cleared with tapscript `OP_HASH256` (0xaa) = SHA256(SHA256(x)); IF branch 2-of-2 CHECKSIGADD. Fixtures `tx_p2tr_tapscript_hash256_67562*`. |
 | 70,924 | P2TR tapscript `OP_TUCK` / `OP_MIN` mega-witness | `000000000000000274086aa7422c4231dda094f71d750f026adc8748b5018ce2` | `101d8cd4404f764295479dc7fb14f55623eb032fe8ffaab02482d99455eec5fb` | 0 | `51202a6d559d4b313016ce3ed49fbc1512b506262d28ad96c84cd2b1233624ac73af` | script verification failed for input 0 | unknown | cleared | Java cleared: `OP_TUCK` (0x7d) must insert copy of top before second item (not reorder); plus tapscript `OP_MIN`, `OP_PICK`, altstack, `OP_NEGATE`/`OP_ADD`/`OP_SUB`, `OP_HASH160` for ~4.6KB script, witness len 139. Fixtures `tx_p2tr_tapscript_70924*`. |
+| 71,267 | P2TR tapscript stack mega-witness | `0000000065ce760d61ad9ec6218467a5fee2d3af6f212ec073885454c3e210ac` | `ba53adeb3f9816cbbe4a08c7440aaff989acb4d1e558cacadc44ec0d6dbe12e1` | 0 | `5120d8ad5381f86f48a486571e7f76c2fd7db102606c8c003ac89e794dd15a90410c` | script verification failed for input 0 | unknown | cleared | Java cleared: tapscript `OP_ROLL`/`OP_DEPTH`/`OP_ROT`/`OP_2SWAP`/`OP_3DUP`/`OP_BOOLAND`/`OP_NOT`; fix `OP_NUMNOTEQUAL` to 0x9e (was wrongly 0x9d); add `OP_NUMEQUALVERIFY` (0x9d). ~251KB tapscript, witness len 100. Fixtures `tx_p2tr_tapscript_71267*`. |
 
 ## Operational blockers that are not consensus gaps
 
