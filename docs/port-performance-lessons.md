@@ -122,6 +122,7 @@ utxo_count:
 settings:
   sync_timing:
   parallel_script_verify:
+  script_executor:
   script_threads:
   script_min_inputs:
 
@@ -138,6 +139,38 @@ next_blocker:
 binary_gate_status:
 notes:
 ```
+
+### Safe copied-datadir benchmark workflow
+
+Benchmark connect changes only against a copied, quiescent datadir. Do not run
+timed experiments against the live `./data` or `./data-java` while a sync process
+may hold the writer lock.
+
+Minimum safe flow:
+
+```bash
+# Python example; choose a work path outside the repo or under a scratch dir.
+cp -a /path/to/quiescent/PythonNode/data /tmp/pybitnode-bench-data
+cd /Users/donavonguyot/Nodes/PythonNode
+SYNC_TIMING=1 PAR_SCRIPT_VERIFY=1 PAR_SCRIPT_THREADS=8 \
+  .venv/bin/pybitnode-sync --datadir /tmp/pybitnode-bench-data \
+  --connect-only --blocks-max 1 --log-level info
+.venv/bin/pybitnode-db --db /tmp/pybitnode-bench-data/pybitnode.db --events 20
+```
+
+For Java, copy `data-java` first, pass `DATA_DIR=/tmp/jbitnode-bench-data`, and
+use the normal local-core or connect-only entry point available for that branch.
+Record `block_connect_store_commit` as the wall-clock throughput metric.
+Summed parallel `script_verify` time is useful CPU accounting, not wall clock.
+
+Python process-worker experiments are opt-in with:
+
+```bash
+PAR_SCRIPT_EXECUTOR=process
+```
+
+Default remains `thread` until a copied-datadir benchmark shows that process
+workers reduce `block_connect_store_commit` on real heavy stored blocks.
 
 ## Anti-patterns
 
