@@ -38,6 +38,21 @@ Legend:
 | 51,340 | P2SH `OP_ADD` redeem script | unknown | cleared | unknown | not_reached | not_reached | not_reached |
 | 52,024 | Tapscript `OP_SHA256` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
 | 63,305 | P2SH redeem `OP_3DUP` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 87,214 | P2TR tapscript `OP_IFDUP` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 89,632 | P2TR tapscript CLTV/CSV v1 no-op | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 98,025 | P2WSH `OP_WITHIN` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 98,631 | P2WSH `OP_NIP` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 100,372 | P2TR tapscript `OP_0NOTEQUAL` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 107,951 | P2PKH relaxed terminal stack | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 108,508 | P2TR tapscript `OP_1SUB` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 108,972 | P2SH stack ops | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 116,040 | P2SH `OP_RIPEMD160` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 118,555 | Bare legacy mega-script | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 121,035 | P2TR tapscript `OP_BOOLOR` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 126,975 | P2TR tapscript `OP_2OVER`/`OP_OVER` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 132,361 | P2SH `OP_ABS` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 133,634 | P2TR tapscript CSV stack disable | unknown | cleared | unknown | not_reached | not_reached | not_reached |
+| 136,369 | P2WSH `OP_BOOLAND` | unknown | cleared | unknown | not_reached | not_reached | not_reached |
 
 ## Port notes
 
@@ -49,8 +64,9 @@ or validates them.
 
 ### Java
 
-Java is the lead follower and has commits clearing the trail through 63,305. It
-should be used as a reference implementation and fixture source, not as a
+Java is the lead follower with live validation through **136,863** and
+`binary_gate_status: passed` on `data-java` (Core-aligned chain, 2026-05-29).
+Use fixtures and ledger rows through **136,369** as the follower queue, not as a
 validity oracle.
 
 ### TypeScript
