@@ -1,0 +1,70 @@
+{
+  "manifest_version": 1,
+  "port": "typescript",
+  "status": "daemon_only",
+  "paths": {
+    "root": "Nodes/TypeScript",
+    "dockerfile": "Nodes/TypeScript/docker/Dockerfile",
+    "compose": "Nodes/TypeScript/docker/docker-compose.yml",
+    "dockerignore": "Nodes/TypeScript/docker/.dockerignore"
+  },
+  "images": {
+    "base": "node:20-slim",
+    "runtime": "node:20-slim",
+    "os_family": "Debian slim",
+    "package_manager": "apt plus npm",
+    "native_dependencies": []
+  },
+  "volumes": {
+    "data": "tsbitnode_data",
+    "proof": null,
+    "supervisor": null
+  },
+  "commands": {
+    "docker_config": "cd Nodes/TypeScript && docker compose -f docker/docker-compose.yml config",
+    "docker_build": "cd Nodes/TypeScript && docker compose -f docker/docker-compose.yml build tsbitnode",
+    "docker_status": "cd Nodes/TypeScript && docker compose -f docker/docker-compose.yml run --rm --no-deps tsbitnode node dist/cli/healthcheck.js",
+    "docker_proof_local": null,
+    "docker_probe_external": null,
+    "docker_supervisor": null,
+    "docker_supervisor_status": null,
+    "docker_supervisor_stop": null,
+    "docker_supervisor_resume": null,
+    "docker_smoke_once": null
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": false,
+      "command": null,
+      "peer": "not standardized for Docker proof",
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "sync_status"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+    }
+  },
+  "supervisor": {
+    "stop_marker": null,
+    "resume_marker": null,
+    "poll_sec": null,
+    "check_sec": null
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": null,
+    "notes": "Docker surface is daemon/healthcheck only; TypeScript remains SQLite-based by design."
+  },
+  "known_caveats": ["No Docker proof target", "No Docker supervisor target"]
+}

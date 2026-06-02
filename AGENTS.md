@@ -1,6 +1,6 @@
 # AGENTS.md — Nodes workspace guide for AI agents
 
-Quick context for agents working under `~/Nodes`. Read this before touching P2P
+Quick context for agents working under `~/RB`. Read this before touching P2P
 handshake, sync, consensus validation, datadirs, or port-following work.
 
 ---
@@ -20,12 +20,19 @@ independent validation, or skipping unknown consensus rules does **not** pass.
 Before editing a port, read:
 
 1. `README.md` at the workspace root.
-2. `docs/git-topology.md`.
-3. `docs/port-status.md`.
-4. `NodeCore/STATUS_CONTRACT.md`.
-5. `docs/blocker-ledger.md`.
-6. `docs/supervisor-contract.md`.
-7. The target port's README and blocker ledger.
+2. `docs/README.md`.
+3. `docs/git-topology.md`.
+4. `docs/port-status.md`.
+5. `NodeCore/STATUS_CONTRACT.md`.
+6. `NodeCore/storage/STORAGE_GATE.md`.
+7. `NodeCore/chainstate/CHAINSTATE_STORE.md`.
+8. `NodeCore/docker/DOCKER_RUNTIME_CONTRACT.md`.
+9. `NodeCore/docker/PORT_DOCKER_INVENTORY.md`.
+10. The target port manifest in `NodeCore/docker/ports/<port>.docker.json` before Docker work.
+11. `docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
+12. `docs/blocker-ledger.md`.
+13. `docs/supervisor-contract.md`.
+14. The target port's README and blocker ledger.
 
 Progress can be measured with many gauges, but the gauges are not the goal:
 
@@ -41,16 +48,34 @@ Progress can be measured with many gauges, but the gauges are not the goal:
 Agents should report whether a change moves the binary gate, what exact blocker
 it addresses, and what remains blocked.
 
+Core Node compliance is not a single green test. Keep consensus progress,
+native storage compliance, Docker runtime compliance, and Project imports
+separate. Native/Core mode is non-compliant if it creates, reads, or requires
+SQLite for operational node truth such as headers, block index, sync state,
+validated tip, UTXO, undo, chainstate metadata, blocker state, or status fields.
+Docker compliance requires an inventory row and the runtime contract in
+`NodeCore/docker/DOCKER_RUNTIME_CONTRACT.md`. Before changing Docker behavior,
+read the port manifest and run the report-only validator:
+
+```bash
+python3 NodeCore/docker/validate_docker_contract.py
+```
+
+Artifact cleanup follows `docs/artifact-retention.md` and
+`NodeCore/conformance/ARTIFACT_INVENTORY.md`: canonical proof JSON belongs in
+`NodeCore/conformance/results/`, while live datadirs, logs, DBs, build outputs,
+and Docker volumes stay ignored and port-local.
+
 ---
 
 ## Project layout and roles
 
 | Path | Package | Role |
 |------|---------|------|
-| `~/Nodes/PythonNode` | **pybitnode** | Scout/reference implementation; discovers live-chain blockers first |
-| `~/Nodes/TypeScriptNode` | **tsbitnode** | Fast follower; zero **runtime** npm deps; uses Node built-ins |
-| `~/Nodes/CppNode` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
-| `~/Nodes/JavaNode` | **jbitnode** | Clean Java follower; live discovery above Python scout horizon |
+| `~/RB/Nodes/Python` | **pybitnode** | Scout/reference implementation; discovers live-chain blockers first |
+| `~/RB/Nodes/TypeScript` | **tsbitnode** | Fast follower; zero **runtime** npm deps; uses Node built-ins |
+| `~/RB/Nodes/Cpp` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
+| `~/RB/Nodes/Java` | **jbitnode** | Clean Java follower; live discovery above Python scout horizon |
 
 All active nodes target **Bitcoin testnet4**. They can run in parallel only with
 isolated state and deliberate peer allocation.
@@ -159,7 +184,7 @@ Before starting sync, confirm no conflicting process:
 
 ```bash
 ps aux | rg 'syncBatchLoop|syncRunner|tsbitnode-sync|dist/cli/node'
-ls -la TypeScriptNode/data-ts/.tsbitnode_sync.lock 2>/dev/null
+ls -la Nodes/TypeScript/data-ts/.tsbitnode_sync.lock 2>/dev/null
 ```
 
 ### UTXO stall at 5579 (TypeScript repair playbook)
@@ -173,7 +198,7 @@ datadir (e.g. `syncBatchLoop` + manual `tsbitnode-sync`, or overlapping rebuild 
 **Recovery:**
 
 ```bash
-cd TypeScriptNode && npm run build
+cd Nodes/TypeScript && npm run build
 # Ensure no other sync holds the lock; wait for any in-flight rebuild to finish first.
 npx tsbitnode-sync --datadir ./data-ts --connect-only --rebuild
 ```
@@ -273,14 +298,14 @@ binary_gate_status: failed | not_attempted | passed
 ## How to run TypeScript sync
 
 ```bash
-cd TypeScriptNode && npm run build
+cd Nodes/TypeScript && npm run build
 DATA_DIR=./data-ts node dist/cli/syncRunner.js
 ```
 
 With Python’s default peer (explicit override):
 
 ```bash
-cd TypeScriptNode
+cd Nodes/TypeScript
 PEERS=89.167.10.150:48333 MAX_OUTBOUND_PEERS=1 SKIP_GETADDR=1 node dist/cli/syncRunner.js
 ```
 
@@ -297,7 +322,7 @@ node dist/cli/syncRunner.js --no-header-refresh --blocks-max 64
 **Manual chunks** (default 5000 blocks) or **durable supervisor** for unattended catch-up:
 
 ```bash
-cd JavaNode
+cd Nodes/Java
 make java-node-preflight
 
 # manual chunk (repeat until blocker or tip):
@@ -314,7 +339,7 @@ Single-shot large chunk (no auto-restart): `make java-node-sync-chunk-overnight`
 `BLOCKS_MAX=25000`. JSON-only status for scripts: `make java-node-db-status`.
 
 **Single writer:** `.jbitnode.lock` on `./data-java` (pid metadata); preflight reclaims stale locks.
-On `ValidationBlocker`: harvest → fix → `mvn verify` → update `JavaNode/docs/BLOCKER_LEDGER.md` → resume.
+On `ValidationBlocker`: harvest → fix → `mvn verify` → update `Nodes/Java/docs/BLOCKER_LEDGER.md` → resume.
 Supervisor exits **2** on blocker; inner `SyncLocalCore` exit **4**. Abnormal JVM exit sets
 `blocks_stalled` + supervisor restart (up to `MAX_RESTARTS=5`). Optional read-only:
 `make java-node-survey-scripts`.
@@ -324,7 +349,7 @@ Supervisor exits **2** on blocker; inner `SyncLocalCore` exit **4**. Abnormal JV
 ## How to verify progress
 
 ```bash
-cd TypeScriptNode
+cd Nodes/TypeScript
 npm run build
 
 # DB snapshot / heights
@@ -346,7 +371,7 @@ For Python, prefer live DB/status when the node is running and snapshots after a
 settled checkpoint:
 
 ```bash
-cd PythonNode
+cd Nodes/Python
 .venv/bin/pybitnode-db --db ./data/pybitnode.db
 .venv/bin/python scripts/export_snapshots.py --db ./data/pybitnode.db
 ```
@@ -375,7 +400,7 @@ Script verification applies on **spend paths** (non-coinbase transactions consum
 
 | Milestone | Height / target | Notes |
 |-----------|-----------------|-------|
-| First P2TR stall (documented) | **6975** | Taproot key-path spend; see [`PythonNode/docs/OPERATIONS.md`](PythonNode/docs/OPERATIONS.md) § block 6975 |
+| First P2TR stall (documented) | **6975** | Taproot key-path spend; see [`Nodes/Python/docs/OPERATIONS.md`](Nodes/Python/docs/OPERATIONS.md) § block 6975 |
 | Python batch reference | **10000** | Common `--blocks-target` for staged catch-up |
 | Mainnet Taproot activation | **709632** | **Do not use** as a testnet4 sync target or milestone |
 
@@ -417,10 +442,10 @@ Static status here will go stale quickly. Use the commands below before making
 claims about current progress:
 
 ```bash
-cd PythonNode && .venv/bin/pybitnode-db --db ./data/pybitnode.db
-cd TypeScriptNode && npx tsbitnode-db --db ./data-ts/tsbitnode.db
-tail -n 80 PythonNode/sync_batch_run.log
-tail -n 80 TypeScriptNode/sync_batch_operational.log
+cd Nodes/Python && .venv/bin/pybitnode-db --db ./data/pybitnode.db
+cd Nodes/TypeScript && npx tsbitnode-db --db ./data-ts/tsbitnode.db
+tail -n 80 Nodes/Python/sync_batch_run.log
+tail -n 80 Nodes/TypeScript/sync_batch_operational.log
 ```
 
 Known durable lessons:
@@ -456,7 +481,7 @@ Rules:
 
 ## Key files
 
-### TypeScript (`TypeScriptNode/src/`)
+### TypeScript (`Nodes/TypeScript/src/`)
 
 | File | Purpose |
 |------|---------|
@@ -469,7 +494,7 @@ Rules:
 | `consensus/script/verify.ts` | Spend-path verification entry |
 | `scripts/scriptTemplateSurvey.ts` | Offline script template survey (read-only DB) |
 
-### Python (`PythonNode/`)
+### Python (`Nodes/Python/`)
 
 | File | Purpose |
 |------|---------|

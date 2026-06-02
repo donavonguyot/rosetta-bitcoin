@@ -8,8 +8,8 @@ bracketed placeholders before use.
 ```text
 You are working on [PORT_NAME] in [PORT_PATH].
 
-Read /Users/donavonguyot/Nodes/AGENTS.md first.
-Read /Users/donavonguyot/Nodes/docs/consensus-blockers-testnet4.md for the
+Read /Users/donavonguyot/RB/AGENTS.md first.
+Read /Users/donavonguyot/RB/docs/consensus-blockers-testnet4.md for the
 blocker facts.
 
 Goal:
@@ -56,7 +56,7 @@ Return:
 ```text
 You are working on [PORT_NAME] in [PORT_PATH].
 
-Read /Users/donavonguyot/Nodes/AGENTS.md first.
+Read /Users/donavonguyot/RB/AGENTS.md first.
 
 Goal:
 Harvest a deterministic test fixture for blocker height [HEIGHT].
@@ -95,8 +95,8 @@ Return:
 You are comparing PythonNode and JavaNode for consensus rule [RULE].
 
 Read:
-- /Users/donavonguyot/Nodes/docs/consensus-blockers-testnet4.md
-- /Users/donavonguyot/Nodes/docs/script-semantics-gotchas.md
+- /Users/donavonguyot/RB/docs/consensus-blockers-testnet4.md
+- /Users/donavonguyot/RB/docs/script-semantics-gotchas.md
 - relevant Python and Java script/sighash/connect code
 
 Goal:
@@ -128,7 +128,7 @@ Return:
 ```text
 You cleared a consensus blocker in [PORT_NAME].
 
-Read /Users/donavonguyot/Nodes/AGENTS.md and the port's existing blocker ledger.
+Read /Users/donavonguyot/RB/AGENTS.md and the port's existing blocker ledger.
 
 Goal:
 Record enough information for the next follower port to reproduce the fix
@@ -147,7 +147,7 @@ java_fix:
 test_fixture:
 follower_notes:
 
-Also update /Users/donavonguyot/Nodes/docs/follower-port-matrix.md if this is a
+Also update /Users/donavonguyot/RB/docs/follower-port-matrix.md if this is a
 root coordination pass; otherwise report that the root matrix needs updating.
 
 Rules:
@@ -160,7 +160,7 @@ Rules:
 ```text
 You are doing a read-only status/survey pass for [PORT_NAME].
 
-Read /Users/donavonguyot/Nodes/AGENTS.md first.
+Read /Users/donavonguyot/RB/AGENTS.md first.
 
 Goal:
 Report current progress and likely next blocker without changing live state.
@@ -171,7 +171,7 @@ Tasks:
    and binary_gate_status.
 3. If a script survey tool exists, run it in read-only mode only.
 4. Compare the next few blocker heights against
-   /Users/donavonguyot/Nodes/docs/consensus-blockers-testnet4.md.
+   /Users/donavonguyot/RB/docs/consensus-blockers-testnet4.md.
 
 Rules:
 - Do not start sync.
@@ -185,8 +185,8 @@ Rules:
 ```text
 You are working on [PORT_NAME] in [PORT_PATH].
 
-Read /Users/donavonguyot/Nodes/AGENTS.md first.
-Read /Users/donavonguyot/Nodes/docs/port-performance-lessons.md.
+Read /Users/donavonguyot/RB/AGENTS.md first.
+Read /Users/donavonguyot/RB/docs/port-performance-lessons.md.
 
 Goal:
 Port the proven Java/Python block-connect performance pattern without changing

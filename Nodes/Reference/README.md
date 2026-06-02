@@ -1,6 +1,6 @@
-# ReferenceNode
+# Reference
 
-Local Bitcoin Core testnet4 reference peer for the `~/Nodes` workspace.
+Local Bitcoin Core testnet4 reference peer for the `~/RB` workspace.
 
 This node is a repeatability substrate, not a validation oracle. Port
 implementations may download headers and blocks from it, but each port must
@@ -9,19 +9,20 @@ still independently validate every stored connected block.
 ## Start
 
 ```bash
-cd ~/Nodes/ReferenceNode
-docker compose up -d
+cd ~/RB/Nodes/Reference
+docker compose -f docker/docker-compose.yml up -d
 ```
 
 The first run starts from an empty datadir and must sync from public testnet4.
-Later runs reuse the external runtime state directory:
+Later runs reuse the Reference-owned runtime state directory:
 
 ```text
-/Users/donavonguyot/NodeData/bitcoin-core-testnet4
+~/RB/Nodes/Reference/bitcoin-core-testnet4
 ```
 
-`~/Nodes/ReferenceNode` tracks only the reproducible recipe. Core chainstate is
-mutable runtime state and intentionally lives outside `~/Nodes`.
+`~/RB/Nodes/Reference` tracks the reproducible recipe. Core chainstate is
+mutable runtime state under `bitcoin-core-testnet4/` and is intentionally
+gitignored.
 
 ## Ports
 
@@ -47,7 +48,7 @@ rpcpassword=rosetta-dev-only
 ## Status
 
 ```bash
-docker compose exec bitcoin-core-testnet4 \
+docker compose -f docker/docker-compose.yml exec bitcoin-core-testnet4 \
   bitcoin-cli -conf=/config/bitcoin.conf getblockchaininfo
 ```
 

@@ -4,6 +4,10 @@ This matrix summarizes which ports are known to have cleared each shared
 testnet4 consensus blocker. It is deliberately conservative: if a port's ledger
 or live status did not prove a rule, the cell is `unknown` or `not_reached`.
 
+This matrix is not a Core Node compliance table. Consensus blocker clearance,
+native storage compliance, and Docker runtime compliance are tracked separately
+in [port-status.md](port-status.md) and the NodeCore contracts.
+
 Legend:
 
 - `cleared`: validated past this height or has a fixture proving the rule.
@@ -16,7 +20,7 @@ Legend:
 
 | Height | Rule / template | Python | Java | TypeScript | C# | Elixir | C++ |
 |--------|-----------------|--------|------|------------|----|--------|-----|
-| 739 | P2WPKH / BIP143 | cleared | cleared | cleared | cleared | cleared | blocked |
+| 739 | P2WPKH / BIP143 | cleared | cleared | cleared | cleared | cleared | cleared |
 | 6,975 | P2TR key-path | cleared | cleared | unknown | cleared | implemented_unverified | not_reached |
 | 18,675 | P2SH | cleared | cleared | unknown | cleared | not_reached | not_reached |
 | 22,830 | P2TR script-path | cleared | cleared | unknown | blocked | not_reached | not_reached |
@@ -90,8 +94,12 @@ Elixir has documented P2WPKH and P2TR key-path fixture coverage. Live sync past
 
 ### C++
 
-C++ was last known blocked at height 739. Update this matrix when C++ clears its
-P2WPKH blocker and records a fixture.
+C++ now has RocksDB/native secp256k1 proof infrastructure, a first-class
+height-739 diagnostic CLI, and a native fixture regression for tx index 1 input
+142 from `tests/fixtures/block739.hex`. Runtime sync still needs to be rerun
+from height 738 to advance the live Cpp datadir. C++ Core storage status is
+proof-pending after the RocksDB-only state cutover; fresh artifacts must show
+RocksDB owns all operational truth without opening SQLite.
 
 ## Update rule
 
@@ -102,3 +110,7 @@ When a port clears a row:
 3. Update this matrix from `not_reached` or `unknown` to `cleared`.
 4. Link back to the relevant catalog row in
    [consensus-blockers-testnet4.md](consensus-blockers-testnet4.md).
+
+Do not update this matrix to imply storage or Docker compliance. Those require
+separate evidence under `NodeCore/storage/`, `NodeCore/chainstate/`, and
+`NodeCore/docker/`.

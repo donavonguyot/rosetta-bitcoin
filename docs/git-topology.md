@@ -1,8 +1,9 @@
 # Nodes Git Topology
 
-`~/Nodes` uses the root repository as the coordination and contract layer, plus
-one implementation repository per serious node. This is the current policy until
-the workspace deliberately migrates to a monorepo or formal submodules.
+`~/RB` uses the root repository as the coordination and contract layer, plus one
+implementation repository per serious node under `Nodes/`. This is the current
+policy until the workspace deliberately migrates to a monorepo or formal
+submodules.
 
 ## Root Repository
 
@@ -11,26 +12,28 @@ The root repository owns shared infrastructure and cross-port truth:
 - `AGENTS.md` and the root onboarding/read-order docs.
 - `docs/` for shared blocker, performance, supervisor, storage, crypto, and
   status lessons.
-- `NodeCore/` for language-neutral contracts, fixtures, and selected
-  conformance proof artifacts.
+- `NodeCore/` for language-neutral contracts, Docker runtime inventory, fixtures,
+  and selected conformance proof artifacts.
 - `Project/` for observational imports and reports. `Project/project.db` is
   generated and must not become operational chainstate.
-- `ReferenceNode/` for the local Bitcoin Core testnet4 recipe.
+- `Nodes/Reference/` for the local Bitcoin Core testnet4 recipe.
 
 The root repository does **not** own live node datadirs, build outputs, local
 DBs, logs, dependency caches, or nested port `.git` metadata.
+Artifact cleanup and proof retention rules live in
+[`artifact-retention.md`](artifact-retention.md).
 
 ## Port Repositories
 
 These directories are independent implementation repos and are ignored by the
 root repo:
 
-- `PythonNode/` — scout/reference implementation.
-- `TypeScriptNode/` — fast follower.
-- `JavaNode/` — lead follower / proof surface.
-- `CppNode/` — systems follower.
-- `CSharpNode/` — RocksDB/native-crypto follower.
-- `ElixirNode/` — supervised follower.
+- `Nodes/Python/` — scout/reference implementation.
+- `Nodes/TypeScript/` — fast follower.
+- `Nodes/Java/` — lead follower / proof surface.
+- `Nodes/Cpp/` — systems follower.
+- `Nodes/CSharp/` — RocksDB/native-crypto follower.
+- `Nodes/Elixir/` — supervised follower.
 
 Port repositories track their own source, tests, fixtures, docs, package/build
 manifests, and intentional exported snapshots. They should ignore live datadirs,

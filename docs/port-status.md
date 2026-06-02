@@ -6,28 +6,56 @@ artifacts are durable checkpoint evidence.
 
 ## Current Baseline
 
-| Port | Role | Durable status | Current blocker / next rule | Notes |
-|------|------|----------------|-----------------------------|-------|
-| PythonNode | Scout | Snapshot evidence around `validated_height=52996` | Later rows above 52k are partly unknown in shared matrix | Scout facts seed follower work, not validity for other ports. |
-| JavaNode | Lead follower | Ledger records `validated_height=136863`, `binary_gate_status=passed`; Docker native proofs pass 10k and 50k | None at 136863; tip maintenance remains separate | Docs/proof naming need cleanup around RocksDB/native storage. |
-| CSharpNode | Follower | Persistent Docker supervisor reached `validated_height=22829` | Blocked at `22830` P2TR script-path / BIP342 | Cleared 6975 and 10k; first-class blocker diagnostics still needed. |
-| TypeScriptNode | Fast follower | Snapshot evidence around `validated_height=5578` | Matrix remains conservative above known fixtures | Has known 5579 dual-writer repair lesson in `AGENTS.md`. |
-| CppNode | Systems follower | Static docs indicate blocked at 739; snapshots placeholder only | P2WPKH/BIP143 path | Clear consensus path before storage gate claims. |
-| ElixirNode | Supervised follower | `make node-status` exists; no shared snapshots yet | Matrix marks P2TR key-path as implemented but unverified live | Needs export/status contract alignment. |
+Consensus status, Core storage compliance, and Docker compliance are separate.
+Do not promote a port to Core Node compliant because it clears a consensus
+fixture, emits a partial storage proof, or has a Dockerfile.
+
+| Port | Role | Consensus / runtime status | Core storage status | Docker status | Current blocker / next rule |
+|------|------|----------------------------|---------------------|---------------|-----------------------------|
+| Python | Scout | Snapshot evidence around `validated_height=52996`; later rows above 52k are partly unknown in shared matrix | SQLite scout/reference mode; no native/Core storage claim | daemon_only | Continue scout ledger facts; do not use Python as validity proof for followers |
+| Java | Lead follower | Ledger records `validated_height=136863`, `binary_gate_status=passed` | RocksDB/native evidence exists; continue auditing no legacy DB dependency in native mode | supervisor_partial | Tip maintenance and proof naming cleanup |
+| CSharp | Follower | Persistent Docker supervisor reached `validated_height=22829`; cleared 6975 and 10k | RocksDB/native evidence exists | supervisor_partial | Blocked at `22830` P2TR script-path / BIP342; native blocker diagnostics still needed |
+| TypeScript | Fast follower | Snapshot evidence around `validated_height=5578`; matrix remains conservative above known fixtures | SQLite by design; no native/Core storage claim | daemon_only | Known 5579 dual-writer repair lesson remains in `AGENTS.md` |
+| Cpp | Systems follower | Height 739 fixture regression passes; live datadir still needs rerun beyond 738 | proof_partial: RocksDB-only operational store and proof artifact exist; live staged sync rerun still pending | proof_partial | Keep native builds SQLite-free, then resume staged sync |
+| Elixir | Supervised follower | `make node-status` exists; no shared snapshots yet | no native/Core storage evidence | missing | Needs Docker surface and export/status contract alignment |
 
 ## Status Rules
 
 - Use each port's own status command for live truth.
 - Treat committed snapshots as checkpoint artifacts, not live truth.
+- Keep consensus progress, Core storage compliance, and Docker runtime
+  compliance as separate fields.
 - Record blockers with exact height, block hash, txid, input index, spent
   scriptPubKey, failure, and missing rule.
 - Do not use another port's chainstate as proof of local validity.
+- Do not claim Core Node compliance if native/Core mode depends on SQLite for
+  any operational node truth.
+- Do not claim Docker compliance unless the port has an inventory row and passes
+  the Docker runtime contract in `NodeCore/docker/DOCKER_RUNTIME_CONTRACT.md`.
+- Docker status should be checked against the port manifest in
+  `NodeCore/docker/ports/<port>.docker.json` and the report-only validator:
+
+```bash
+python3 NodeCore/docker/validate_docker_contract.py
+```
+
+## Artifact Retention
+
+Project-level evidence should be compact JSON under
+`NodeCore/conformance/results/`. Port-local datadirs, logs, build trees, and
+scratch proof directories are runtime artifacts and should stay ignored or be
+deleted after their evidence is centralized. See
+[`artifact-retention.md`](artifact-retention.md) and
+[`../NodeCore/conformance/ARTIFACT_INVENTORY.md`](../NodeCore/conformance/ARTIFACT_INVENTORY.md).
 
 ## Immediate Cleanup Facts
 
 - Root repo currently owns `docs/`, `NodeCore/`, `Project/`, and
-  `ReferenceNode/`; port repos remain independent.
+  `Nodes/Reference/`; implementation repos remain under `Nodes/`.
 - `NodeCore/` and `Project/` must be promoted as root-owned infrastructure with
   intentional ignores and selected artifacts.
+- Docker-capable ports use `Nodes/<Port>/docker/` for Dockerfiles, compose
+  files, and Docker ignore declarations; validate with the Docker contract
+  report before claiming Docker surface changes.
 - C# blocker inspection at 22830 used a temporary Python scanner; recurring
   blocker inspection needs native C# or NodeCore tooling.

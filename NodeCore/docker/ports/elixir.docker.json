@@ -1,0 +1,70 @@
+{
+  "manifest_version": 1,
+  "port": "elixir",
+  "status": "missing",
+  "paths": {
+    "root": "Nodes/Elixir",
+    "dockerfile": null,
+    "compose": null,
+    "dockerignore": null
+  },
+  "images": {
+    "base": null,
+    "runtime": null,
+    "os_family": null,
+    "package_manager": null,
+    "native_dependencies": []
+  },
+  "volumes": {
+    "data": null,
+    "proof": null,
+    "supervisor": null
+  },
+  "commands": {
+    "docker_config": null,
+    "docker_build": null,
+    "docker_status": null,
+    "docker_proof_local": null,
+    "docker_probe_external": null,
+    "docker_supervisor": null,
+    "docker_supervisor_status": null,
+    "docker_supervisor_stop": null,
+    "docker_supervisor_resume": null,
+    "docker_smoke_once": null
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": []
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": []
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": []
+    }
+  },
+  "supervisor": {
+    "stop_marker": null,
+    "resume_marker": null,
+    "poll_sec": null,
+    "check_sec": null
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": null,
+    "notes": "No Docker runtime surface exists yet."
+  },
+  "known_caveats": ["Docker missing", "No Docker proof target", "No Docker supervisor target"]
+}

@@ -11,8 +11,8 @@ services:
       - "127.0.0.1:48333:48333"
       - "127.0.0.1:48332:48332"
     volumes:
-      - ./bitcoin.conf:/config/bitcoin.conf:ro
-      - /Users/donavonguyot/NodeData/bitcoin-core-testnet4:/home/bitcoin/.bitcoin
+      - ../bitcoin.conf:/config/bitcoin.conf:ro
+      - ../bitcoin-core-testnet4:/home/bitcoin/.bitcoin
     healthcheck:
       test:
         [

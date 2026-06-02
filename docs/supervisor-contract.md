@@ -12,6 +12,10 @@ discarding validated state between code fixes.
 - Resume after a code change or explicit resume marker.
 - Support an explicit stop marker.
 - Report live status from inside the runtime surface, especially for Docker.
+- For Docker supervisors, follow
+  [`../NodeCore/docker/DOCKER_RUNTIME_CONTRACT.md`](../NodeCore/docker/DOCKER_RUNTIME_CONTRACT.md)
+  and keep the port row current in
+  [`../NodeCore/docker/PORT_DOCKER_INVENTORY.md`](../NodeCore/docker/PORT_DOCKER_INVENTORY.md).
 
 ## Cadence Rule
 
@@ -31,3 +35,13 @@ from `POLL_SEC` restored expected throughput.
 Status ticks must report active backend height and current blocker. A supervisor
 must not convert "process still running" into proof of progress; it must emit
 heights, status, and blocker fields from the runtime.
+
+## Smoke Versus Network Proof
+
+A one-shot supervisor smoke proves loop mechanics: image builds, container
+starts, status is read from inside the runtime surface, and
+`AGENT_LOOP_TICK_chatreport` is emitted. It must not require peer reachability.
+
+Network proof is separate and must document its peer strategy: host Core via
+`host.docker.internal`, a Reference compose service, or an explicit external
+peer.

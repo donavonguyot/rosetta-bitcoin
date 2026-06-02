@@ -1,0 +1,70 @@
+{
+  "manifest_version": 1,
+  "port": "csharp",
+  "status": "supervisor_partial",
+  "paths": {
+    "root": "Nodes/CSharp",
+    "dockerfile": "Nodes/CSharp/docker/Dockerfile",
+    "compose": "Nodes/CSharp/docker/docker-compose.yml",
+    "dockerignore": "Nodes/CSharp/docker/.dockerignore"
+  },
+  "images": {
+    "base": "mcr.microsoft.com/dotnet/sdk:8.0",
+    "runtime": "mcr.microsoft.com/dotnet/runtime:8.0",
+    "os_family": "Debian-family Microsoft .NET image",
+    "package_manager": "apt",
+    "native_dependencies": ["RocksDB native package or bundled library", "libsecp256k1 native backend"]
+  },
+  "volumes": {
+    "data": null,
+    "proof": "csbitnode_proof_data",
+    "supervisor": "csbitnode_sync_data"
+  },
+  "commands": {
+    "docker_config": "cd Nodes/CSharp && docker compose -f docker/docker-compose.yml config",
+    "docker_build": "cd Nodes/CSharp && docker compose -f docker/docker-compose.yml build csbitnode-sync-proof",
+    "docker_status": "cd Nodes/CSharp && DOCKER_PROOF_VOLUME=csbitnode_sync_data SECP256K1_BACKEND=native docker compose -f docker/docker-compose.yml run --rm --no-deps csbitnode-sync-proof status",
+    "docker_proof_local": "cd Nodes/CSharp && make docker-csharp-native-crypto-proof",
+    "docker_probe_external": null,
+    "docker_supervisor": "cd Nodes/CSharp && make docker-csharp-sync-supervisor",
+    "docker_supervisor_status": "cd Nodes/CSharp && make docker-csharp-sync-status",
+    "docker_supervisor_stop": "cd Nodes/CSharp && make docker-csharp-sync-stop",
+    "docker_supervisor_resume": "cd Nodes/CSharp && make docker-csharp-sync-resume",
+    "docker_smoke_once": null
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": true,
+      "command": "cd Nodes/CSharp && make docker-csharp-native-crypto-proof",
+      "peer": "host.docker.internal:48333",
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+    }
+  },
+  "supervisor": {
+    "stop_marker": ".csbitnode_supervisor_stop",
+    "resume_marker": ".csbitnode_supervisor_resume",
+    "poll_sec": 120,
+    "check_sec": 5
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": "NodeCore/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json",
+    "notes": "Persistent Docker supervisor exists; standard target aliases and external probe remain pending."
+  },
+  "known_caveats": ["External network probe command not standardized", "One-shot supervisor smoke target missing", "No daemon data volume in current compose"]
+}

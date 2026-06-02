@@ -30,6 +30,16 @@ Aggregate storage-gate files are expanded so each entry in `results[]` becomes
 one row in `conformance_results`. The original exported JSON remains preserved
 in `raw_json`.
 
+Canonical proof files should live under:
+
+```text
+NodeCore/conformance/results/<port>_<gate>_<surface>_<YYYY-MM-DD>.json
+```
+
+Do not import directly from port-local scratch datadirs when a canonical result
+file exists. Port-local logs, DBs, RocksDB/LevelDB directories, and Docker
+volumes are runtime artifacts, not Project evidence.
+
 Import a status JSON emitted by a node:
 
 ```bash

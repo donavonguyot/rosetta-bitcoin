@@ -1,0 +1,70 @@
+{
+  "manifest_version": 1,
+  "port": "reference",
+  "status": "daemon_only",
+  "paths": {
+    "root": "Nodes/Reference",
+    "dockerfile": null,
+    "compose": "Nodes/Reference/docker/docker-compose.yml",
+    "dockerignore": "Nodes/Reference/docker/.dockerignore"
+  },
+  "images": {
+    "base": "bitcoin/bitcoin:28.2",
+    "runtime": "bitcoin/bitcoin:28.2",
+    "os_family": "bitcoin upstream image",
+    "package_manager": null,
+    "native_dependencies": []
+  },
+  "volumes": {
+    "data": "Nodes/Reference/bitcoin-core-testnet4",
+    "proof": null,
+    "supervisor": null
+  },
+  "commands": {
+    "docker_config": "cd Nodes/Reference && docker compose -f docker/docker-compose.yml config",
+    "docker_build": null,
+    "docker_status": "docker exec rosetta-bitcoin-core-testnet4 bitcoin-cli -conf=/config/bitcoin.conf getblockchaininfo",
+    "docker_proof_local": null,
+    "docker_probe_external": null,
+    "docker_supervisor": null,
+    "docker_supervisor_status": null,
+    "docker_supervisor_stop": null,
+    "docker_supervisor_resume": null,
+    "docker_smoke_once": null
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": true,
+      "command": "cd Nodes/Reference && docker compose -f docker/docker-compose.yml up -d",
+      "peer": "127.0.0.1:48333",
+      "required_recorded_facts": ["best_block_hash", "blocks", "headers", "verification_progress"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": []
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": []
+    }
+  },
+  "supervisor": {
+    "stop_marker": null,
+    "resume_marker": null,
+    "poll_sec": null,
+    "check_sec": null
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": null,
+    "notes": "Reference is a local peer surface, not a follower validity proof."
+  },
+  "known_caveats": ["Reference service is not a Core Node port implementation."]
+}

@@ -37,9 +37,9 @@ block_size
 
 Java source material:
 
-- `JavaNode/src/main/java/com/jbitnode/storage/BlockStore.java`
-- `JavaNode/src/main/java/com/jbitnode/storage/BlockStorage.java`
-- `JavaNode/src/main/java/com/jbitnode/storage/DatadirLock.java`
+- `Nodes/Java/src/main/java/com/jbitnode/storage/BlockStore.java`
+- `Nodes/Java/src/main/java/com/jbitnode/storage/BlockStorage.java`
+- `Nodes/Java/src/main/java/com/jbitnode/storage/DatadirLock.java`
 
 ## Project Storage
 

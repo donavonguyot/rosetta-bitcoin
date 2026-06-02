@@ -41,6 +41,7 @@ live.consensus_blocker
 storage.native_fresh_start
 storage.native_restart
 storage.local_sqlite_artifact_absent
+storage.rocksdb_operational_state_boundary
 storage.project_export_observational
 sync.deferred_handshake
 sync.honest_start_height
@@ -118,6 +119,19 @@ expected_validated_hash: latest storage smoke validated hash
 expected_status: Project/project.db updated without becoming a runtime dependency
 expected_blocker:
 notes: Import/export may open Project/project.db only after runtime proof is complete.
+
+fixture_id: storage.rocksdb_operational_state_boundary
+category: storage
+chain: testnet4
+height: latest storage smoke validated height
+block_hash: latest storage smoke validated hash
+input_files: native storage proof datadir
+expected_result: passed
+expected_validated_height: latest storage smoke validated height
+expected_validated_hash: latest storage smoke validated hash
+expected_status: RocksDB owns operational metadata, headers, block index, sync state, tip, UTXO, undo, event, peer, and wire state
+expected_blocker:
+notes: Required for Cpp RocksDB-only compliance and useful for any future RocksDB-native port; no hidden SQLite observer is allowed.
 ```
 
 ## Result JSON

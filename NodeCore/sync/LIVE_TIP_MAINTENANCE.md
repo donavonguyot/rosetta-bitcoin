@@ -34,7 +34,7 @@ the project DB.
 
 ## Java Extraction Notes
 
-Use `JavaNode/src/main/java/com/jbitnode/cli/LiveNodeService.java` as the lead
+Use `Nodes/Java/src/main/java/com/jbitnode/cli/LiveNodeService.java` as the lead
 experiment. Preserve the bounded iteration model, idle polling, reconnect
 semantics, and health events. Replace any backend-specific assumptions with the
 `ChainstateStore` startup invariant.

@@ -1,8 +1,8 @@
 # Chainstate Store Contract
 
-`ChainstateStore` is the authoritative operational state for a node. It owns the
-validated tip, active UTXO set, undo records, backend metadata, and generation
-identity.
+`ChainstateStore` is the authoritative operational state for a node. In
+Core/native mode it owns every mutable fact needed to sync, validate, resume,
+diagnose blockers, and report status.
 
 ## Required Interface
 
@@ -13,6 +13,12 @@ open(datadir, chain, mode)
 metadata()
 tip()
 stats()
+
+headers()
+blockIndex()
+syncState()
+currentBlocker()
+lastError()
 
 getUtxo(outpoint)
 beginBlock(height, block_hash, prev_hash)
@@ -44,6 +50,29 @@ commit
 ```
 
 If commit fails, the active chainstate must not report the block as connected.
+
+## Operational State Boundary
+
+Core/native mode must not split operational truth across a native chainstate and
+a hidden SQLite tracker. The native store owns:
+
+```text
+headers
+block index
+sync state
+validated tip
+active UTXO set
+undo records
+backend metadata
+generation identity
+blocker/current-error state
+status truth
+```
+
+SQLite may exist as an explicit legacy/reference backend, but native entry
+points must not silently instantiate SQLite for any of those fields. A hybrid
+that stores UTXO/tip/undo in RocksDB while leaving headers, block index, sync
+state, or status truth in SQLite is not Core Node compliant.
 
 ## Backend Metadata
 
@@ -83,7 +112,8 @@ codec v2 vector conformance
 ```
 
 SQLite or file stores may be bootstrap/reference backends, but they must not
-become the authoritative serious-port chainstate by accident.
+become the authoritative serious-port chainstate by accident. They also must
+not remain as hidden side stores in native/Core proof mode.
 
 Java now uses RocksDB as its node-local KV storage target. Optimization work
 should improve the shared RocksDB plus Codec v2 path rather than maintaining a
@@ -109,10 +139,10 @@ compaction/tuning values surfaced in proof metadata
 
 Useful Java source material:
 
-- `JavaNode/src/main/java/com/jbitnode/db/UtxoStore.java`
-- `JavaNode/src/main/java/com/jbitnode/db/SqliteUtxoStore.java`
-- `JavaNode/src/main/java/com/jbitnode/db/LevelDbUtxoStore.java`
-- `JavaNode/src/main/java/com/jbitnode/consensus/connect/BlockConnector.java`
+- `Nodes/Java/src/main/java/com/jbitnode/db/UtxoStore.java`
+- `Nodes/Java/src/main/java/com/jbitnode/db/SqliteUtxoStore.java`
+- `Nodes/Java/src/main/java/com/jbitnode/db/LevelDbUtxoStore.java`
+- `Nodes/Java/src/main/java/com/jbitnode/consensus/connect/BlockConnector.java`
 
 The Java `UtxoStore` interface is a good start, but NodeCore needs the broader
 `ChainstateStore` concept so undo, validated tip, backend metadata, and UTXOs

@@ -150,8 +150,8 @@ Minimum safe flow:
 
 ```bash
 # Python example; choose a work path outside the repo or under a scratch dir.
-cp -a /path/to/quiescent/PythonNode/data /tmp/pybitnode-bench-data
-cd /Users/donavonguyot/Nodes/PythonNode
+cp -a /path/to/quiescent/Nodes/Python/data /tmp/pybitnode-bench-data
+cd /Users/donavonguyot/RB/Nodes/Python
 SYNC_TIMING=1 PAR_SCRIPT_VERIFY=1 PAR_SCRIPT_THREADS=8 \
   .venv/bin/pybitnode-sync --datadir /tmp/pybitnode-bench-data \
   --connect-only --blocks-max 1 --log-level info
@@ -211,6 +211,6 @@ copy:
   `current_blocker`, and `utxo_count`;
 - monitor with a separate read-only sentinel loop instead of restarting sync.
 
-PythonNode mirrors this in `PythonNode/Makefile`,
-`PythonNode/scripts/cursor_sync_monitor.py`, and
-`PythonNode/docs/OPERATIONS.md`.
+PythonNode mirrors this in `Nodes/Python/Makefile`,
+`Nodes/Python/scripts/cursor_sync_monitor.py`, and
+`Nodes/Python/docs/OPERATIONS.md`.

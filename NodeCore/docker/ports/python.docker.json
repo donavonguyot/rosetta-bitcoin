@@ -1,0 +1,70 @@
+{
+  "manifest_version": 1,
+  "port": "python",
+  "status": "daemon_only",
+  "paths": {
+    "root": "Nodes/Python",
+    "dockerfile": "Nodes/Python/docker/Dockerfile",
+    "compose": "Nodes/Python/docker/docker-compose.yml",
+    "dockerignore": "Nodes/Python/docker/.dockerignore"
+  },
+  "images": {
+    "base": "python:3.12-slim",
+    "runtime": "python:3.12-slim",
+    "os_family": "Debian slim",
+    "package_manager": "apt plus pip",
+    "native_dependencies": []
+  },
+  "volumes": {
+    "data": "pybitnode_data",
+    "proof": null,
+    "supervisor": null
+  },
+  "commands": {
+    "docker_config": "cd Nodes/Python && docker compose -f docker/docker-compose.yml config",
+    "docker_build": "cd Nodes/Python && docker compose -f docker/docker-compose.yml build pybitnode",
+    "docker_status": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode python -m pybitnode.healthcheck",
+    "docker_proof_local": null,
+    "docker_probe_external": null,
+    "docker_supervisor": null,
+    "docker_supervisor_status": null,
+    "docker_supervisor_stop": null,
+    "docker_supervisor_resume": null,
+    "docker_smoke_once": null
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": false,
+      "command": null,
+      "peer": "not standardized for Docker proof",
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "sync_status"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+    }
+  },
+  "supervisor": {
+    "stop_marker": null,
+    "resume_marker": null,
+    "poll_sec": null,
+    "check_sec": null
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": null,
+    "notes": "Docker surface is daemon/healthcheck only; Python remains SQLite scout/reference by design."
+  },
+  "known_caveats": ["No Docker proof target", "No Docker supervisor target", "No .dockerignore recorded in inventory"]
+}

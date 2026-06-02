@@ -37,6 +37,34 @@ single_writer:
   overlapping writers must fail instead of sharing mutable state
 ```
 
+## Native Means No Operational SQLite
+
+For Core Node native mode, SQLite must not be part of operational node truth.
+This is broader than checking whether `cpbitnode.db` or another `*.db` file is
+left in the proof datadir.
+
+Native/Core sync, status, proof, rebuild, and blocker-diagnostic commands must
+not create, read, or require SQLite for:
+
+```text
+headers
+block index
+sync state
+validated tip
+UTXO set
+undo records
+chainstate metadata
+blocker/current-error state
+status snapshot fields
+writer-lock truth
+```
+
+SQLite may exist only behind an explicitly named legacy/reference mode. Native
+entry points must fail before opening SQLite-backed operational state. Moving a
+SQLite observer outside the native datadir is not a valid storage-gate proof if
+the native runtime still depends on that observer for operational status or
+sync decisions.
+
 ## Required Fixture IDs
 
 The storage gate is expressed through these conformance fixture IDs:
@@ -48,9 +76,11 @@ storage.local_sqlite_artifact_absent
 storage.project_export_observational
 ```
 
-`storage.local_sqlite_artifact_absent` is a boundary check, not a migration
-policy. It fails only when a native storage proof leaves behind a forbidden
-port-local SQLite runtime artifact in the native datadir.
+`storage.local_sqlite_artifact_absent` is a boundary check, not a complete
+native-storage proof. It fails when a native storage proof leaves behind a
+forbidden port-local SQLite runtime artifact in the native datadir. The broader
+native invariant also fails if runtime code reaches SQLite-backed operational
+state, even if the SQLite file lives outside the proof datadir.
 
 ## Evidence JSON
 
@@ -66,7 +96,7 @@ The reusable proof shape is defined by
   "node_id": "javanode-native-storage",
   "category": "storage",
   "captured_at": "",
-  "datadir": "JavaNode/data-java-native-storage-smoke",
+  "datadir": "Nodes/Java/data-java-native-storage-smoke",
   "chain": "testnet4",
   "chainstate_backend": "rocksdb",
   "native_storage": true,
@@ -112,6 +142,7 @@ stored_block_height >= validated_height
 local_sqlite_artifact_absent == true for native storage proofs
 project_export.result == passed
 Project/project.db is not read by runtime sync, status, block lookup, or validation
+no SQLite-backed operational store is opened by native sync/status/proof paths
 ```
 
 Passing Java does not pass any follower. Followers may copy fixture facts and

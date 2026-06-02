@@ -1,23 +1,38 @@
 .DS_Store
 
 # Node implementation repos are tracked independently.
-/PythonNode/
-/TypeScriptNode/
-/CppNode/
-/JavaNode/
-/CSharpNode/
-/ElixirNode/
+/Nodes/Python/
+/Nodes/TypeScript/
+/Nodes/Cpp/
+/Nodes/Java/
+/Nodes/CSharp/
+/Nodes/Elixir/
 
 # Shared scratch, if any lands at the workspace root.
 /data/
 /reports/
 *.log
 *.db
+*.sqlite
+*.sqlite3
 *.db-journal
 *.db-wal
 *.db-shm
+*.lock
+*.pid
 __pycache__/
 *.py[cod]
+
+# Generated dependency/build trees if surfaced outside ignored port repos.
+node_modules/
+dist/
+build/
+build-*/
+target/
+_build/
+deps/
+.venv/
+venv/
 
 # Root-owned reporting scratch.
 /Project/project.db

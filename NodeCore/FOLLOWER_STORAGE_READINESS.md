@@ -1,16 +1,17 @@
 # Follower Storage Readiness
 
 This inventory compares follower ports against the NodeCore storage gate after
-the Java native storage proof.
+the Java native storage proof and the later C# / Cpp RocksDB cutovers.
 
 ## Recommendation
 
-Use `CSharpNode` as the first storage-gate follower. It is the intended clean
-follower in `SPEC.md` and `CSharpNode_FOLLOWER.md`, and its current shape is
-small enough to refactor before more live-chain state accumulates.
+Keep C# and Cpp on the RocksDB-only path. C# is the first clean follower with
+native storage evidence; Cpp is the systems follower whose compliance path is
+explicitly RocksDB-only.
 
-`TypeScriptNode` is the best fallback if C# is deferred, but its no-runtime-npm
-dependency rule makes native KV adoption a separate product decision.
+`TypeScriptNode` remains the best fallback only if its no-runtime-npm dependency
+rule is revisited. Python remains the scout, not a native storage migration
+leader.
 
 ## Port Matrix
 
@@ -20,28 +21,17 @@ dependency rule makes native KV adoption a separate product decision.
 | CSharpNode | Native RocksDB chainstate (`chainstate-rocksdb`) owns headers, UTXO, undo, tip, block index | Yes | Passed smoke/storage replay; bounded sync in progress | Keep RocksDB-only contract green and add richer status/proof exports |
 | ElixirNode | `exbitnode.db` SQLite owns headers, UTXO, undo, tip, block index | Yes | Not attempted | Keep consensus progress on exqlite while planning native chainstate |
 | TypeScriptNode | Node SQLite tracker owns operational truth | Yes | Not attempted | Defer native backend until runtime-deps rule is revisited |
-| CppNode | SQLite tracker owns operational truth | Yes | Not attempted | Clear consensus blocker path before storage gate |
+| CppNode | RocksDB `NodeStateStore` owns operational state in native mode | Yes | Proof partial after RocksDB-only cutover | Rerun live staged sync and keep native builds SQLite-free |
 | PythonNode | SQLite scout store | Yes | Not attempted | Keep as scout and fixture generator |
 
-## CSharpNode Readiness
+## Current Follower Notes
 
-Strengths:
-
-- Existing flat block store already matches the raw byte storage direction.
-- Existing datadir lock gives a starting point for single-writer enforcement.
-- `BlockConnector` already has block-local UTXO logic that can move behind an
-  active chainstate store.
-- The port is early enough that replacing SQLite truth is still cheaper than
-  preserving long-term compatibility.
-
-Risks:
-
-- Long-lived consensus status is ahead of port-local docs; the C# ledger and
-  shared matrix need to be updated from current durable evidence.
-- `export-snapshots` is still a stub, so C# has status JSON but not the full
-  Python/TypeScript snapshot package.
-- P2TR script-path at height 22830 is the next consensus blocker; storage gate
-  clearance does not imply tapscript clearance.
+- C# has RocksDB/native evidence and persistent Docker supervisor status, but
+  P2TR script-path at height 22830 remains a consensus blocker.
+- Cpp has a RocksDB-only operational store and native proof infrastructure, but
+  staged live sync still needs to be rerun before promotion.
+- Storage clearance does not imply consensus clearance or Docker contract
+  completion; keep those gates separate in `docs/port-status.md`.
 
 ## ElixirNode Readiness
 
@@ -53,6 +43,5 @@ contract and C# follower shape are clearer.
 ## TypeScript, C++, Python
 
 TypeScript has the strongest non-Java sync operations, but native backend work
-would conflict with its current zero runtime npm dependency rule. C++ is a good
-future native-KV candidate after consensus progress improves. Python should
+would conflict with its current zero runtime npm dependency rule. Python should
 remain the scout and fixture generator rather than lead a storage migration.

@@ -7,15 +7,14 @@ must consume the same fixtures and produce the same status/failure results.
 
 ```text
 fixtures/
-  genesis/
-  headers/
-  blocks/
-  chainstate/
-  scripts/
-  rebuild/
-  live-loop/
-  status/
+  README.md
+  chainstate_codec_v2_vectors.json
+  native_crypto_v1_vectors.json
 ```
+
+The fixture manifest is broader than the current shared byte tree. During
+bootstrap, fixture bytes may live in port-local test trees while the shared
+fixture ID and expected outcome remain documented in `MANIFEST.md`.
 
 ## Required Test Categories
 
@@ -50,6 +49,24 @@ failure
 
 The runner may export results to `Project/project.db`, but conformance execution
 must not depend on the project DB.
+
+## Result Retention
+
+Canonical project evidence is compact JSON under:
+
+```text
+NodeCore/conformance/results/
+```
+
+Use the naming convention from `docs/artifact-retention.md`:
+
+```text
+<port>_<gate>_<surface>_<YYYY-MM-DD>.json
+```
+
+Do not store live datadirs, DBs, block files, full logs, or proof scratch
+directories in `NodeCore/conformance/`. Preserve only compact proof summaries
+that support a project claim.
 
 ## Java Extraction Notes
 
