@@ -29,7 +29,7 @@ ports emit them.
 | `*.log`, `sync_*.log`, `sync_chunk_*.log`, `sync_catchup_*.log` | generated logs | Delete stale logs after preserving compact evidence. |
 | `build*/`, `target/`, `dist/`, `_build/`, `deps/`, `node_modules/`, `.venv/` | generated build output | Ignore/delete when not needed for immediate validation. |
 | `*.pid`, `.batch-sync-running`, `*.lock` | runtime markers | Delete only when the corresponding process is not running. |
-| nested `.git/` directories | port repo metadata | Keep for the port repo; never commit from root. |
+| nested `.git/` directories | legacy cruft | Delete; the workspace has one root Git repository. |
 
 ## Python
 

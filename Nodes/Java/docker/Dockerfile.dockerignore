@@ -1,0 +1,8 @@
+.git
+target
+data-java
+data-java-*
+*.log
+*.db
+*.db-*
+.docker-*

@@ -69,6 +69,14 @@ When script verify is parallelized, summed worker CPU can exceed wall time. Use
 `block_connect_store_commit` as the throughput gate and label summed worker time
 as CPU time if it is recorded.
 
+Performance claims must also cite the measured surface: host vs Docker, fresh
+proof vs persistent supervisor, chunk size, report cadence, and whether script
+verification was active. Docker proofs need in-container progress reporting;
+host-side waits can mislead when the node process is blocked. Restart overhead
+between chunks is part of supervisor throughput, so measure per-chunk validation
+time and inter-chunk delay separately. `POLL_SEC` must not throttle chunk
+turnover; use a separate `CHECK_SEC`.
+
 ## Safe parallelism boundary
 
 The safe first parallel step is per-transaction input verification:
@@ -120,6 +128,11 @@ input_count:
 utxo_count:
 
 settings:
+  runtime_surface:
+  datadir_or_volume:
+  chunk_size:
+  report_interval_sec:
+  check_interval_sec:
   sync_timing:
   parallel_script_verify:
   script_executor:
@@ -137,6 +150,8 @@ tests:
 validated_height_after:
 next_blocker:
 binary_gate_status:
+elapsed_sec:
+blocks_per_min:
 notes:
 ```
 
@@ -183,6 +198,8 @@ workers reduce `block_connect_store_commit` on real heavy stored blocks.
 - Treating `BLOCKS_MAX` as a performance fix instead of checkpoint hygiene.
 - Skipping unsupported scripts to move the height counter.
 - Reporting another port's success as local validation.
+- Projecting tip sync from easy early blocks without measuring large blocks and
+  tapscript mega-witness ranges.
 
 ## Reference trail
 

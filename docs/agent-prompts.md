@@ -1,7 +1,7 @@
 # Reusable follower-agent prompts
 
-These prompts are for agents working in isolated port repos or worktrees. Replace
-bracketed placeholders before use.
+These prompts are for agents working in root-owned port directories or isolated
+root worktrees. Replace bracketed placeholders before use.
 
 ## Port one blocker to a follower
 

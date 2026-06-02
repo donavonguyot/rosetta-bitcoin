@@ -1,0 +1,72 @@
+name: jbitnode
+
+services:
+  bitcoin-core-testnet4:
+    image: bitcoin/bitcoin:28.2
+    container_name: jbitnode-bitcoin-core-testnet4
+    restart: unless-stopped
+    command:
+      - -conf=/config/bitcoin.conf
+    ports:
+      - "127.0.0.1:48333:48333"
+      - "127.0.0.1:48332:48332"
+    volumes:
+      - ../bitcoin.conf:/config/bitcoin.conf:ro
+      - ../../Reference/bitcoin-core-testnet4:/home/bitcoin/.bitcoin
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bitcoin-cli",
+          "-conf=/config/bitcoin.conf",
+          "getblockchaininfo",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  jbitnode:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: jbitnode-dev
+    depends_on:
+      bitcoin-core-testnet4:
+        condition: service_healthy
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      # OrbStack / Docker Desktop on macOS reach host-published Core ports here.
+      PEERS: host.docker.internal:48333
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - jbitnode_data:/data
+    restart: unless-stopped
+
+  jbitnode-sync-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command:
+      - com.jbitnode.cli.SyncLocalCore
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      UTXO_BACKEND: rocksdb
+      ROCKSDB_DIR: /data/utxo-rocksdb
+      PEERS: host.docker.internal:48333
+      SECP256K1_BACKEND: ${SECP256K1_BACKEND:-pure_java}
+      HEADERS_MAX: ${HEADERS_MAX:-200}
+      HEADER_BATCHES_MAX: ${HEADER_BATCHES_MAX:-1}
+      BLOCKS_MAX: ${BLOCKS_MAX:-2}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - jbitnode_proof_data:/data
+
+volumes:
+  jbitnode_data:
+  jbitnode_proof_data:
+    name: ${DOCKER_PROOF_VOLUME:-jbitnode_proof_data}

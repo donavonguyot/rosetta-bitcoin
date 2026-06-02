@@ -76,11 +76,12 @@ def add_issue(issues: list[dict[str, str]], severity: str, message: str) -> None
     issues.append({"severity": severity, "message": message})
 
 
-def validate_manifest(path: Path) -> dict[str, Any]:
+def validate_manifest(path: Path, *, strict: bool = False) -> dict[str, Any]:
     data = json.loads(path.read_text())
     issues: list[dict[str, str]] = []
     port = data.get("port", path.stem)
     status = data.get("status")
+    layout_severity = "error" if strict else "warning"
 
     missing = sorted(REQUIRED_TOP_LEVEL - set(data))
     for key in missing:
@@ -112,19 +113,19 @@ def validate_manifest(path: Path) -> dict[str, Any]:
         if dockerfile and not rel_exists(dockerfile):
             add_issue(issues, "error", f"dockerfile does not exist: {dockerfile}")
         if dockerfile and "/docker/" not in dockerfile:
-            add_issue(issues, "warning", f"dockerfile should use standard docker/ layout: {dockerfile}")
+            add_issue(issues, layout_severity, f"dockerfile should use standard docker/ layout: {dockerfile}")
         if not compose:
             add_issue(issues, "error", "compose path is required for Docker-capable ports")
         if compose and not rel_exists(compose):
             add_issue(issues, "error", f"compose path does not exist: {compose}")
         if compose and "/docker/" not in compose:
-            add_issue(issues, "warning", f"compose should use standard docker/ layout: {compose}")
+            add_issue(issues, layout_severity, f"compose should use standard docker/ layout: {compose}")
         if port != "reference" and not dockerignore:
             add_issue(issues, "warning", ".dockerignore is missing or not declared")
         if dockerignore and not rel_exists(dockerignore):
             add_issue(issues, "warning", f".dockerignore path does not exist: {dockerignore}")
         if dockerignore and "/docker/" not in dockerignore:
-            add_issue(issues, "warning", f".dockerignore should use standard docker/ layout: {dockerignore}")
+            add_issue(issues, layout_severity, f".dockerignore should use standard docker/ layout: {dockerignore}")
 
     for command_name in STANDARD_COMMANDS:
         if command_name not in commands:
@@ -191,10 +192,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="emit JSON only")
     parser.add_argument("--ports-dir", default=str(PORTS_DIR), help="manifest directory")
+    parser.add_argument("--strict", action="store_true", help="exit nonzero on errors and enforce layout as errors")
     args = parser.parse_args()
 
     ports_dir = Path(args.ports_dir)
-    results = [validate_manifest(path) for path in sorted(ports_dir.glob("*.docker.json"))]
+    results = [validate_manifest(path, strict=args.strict) for path in sorted(ports_dir.glob("*.docker.json"))]
     summary = {
         "manifest_count": len(results),
         "error_count": sum(result["errors"] for result in results),
@@ -217,7 +219,8 @@ def main() -> int:
             for issue in result["issues"]:
                 print(f"  {issue['severity']}: {issue['message']}")
 
-    # Report-only: always return 0. CI can ratchet later with --strict if needed.
+    if args.strict and summary["error_count"] > 0:
+        return 1
     return 0
 
 

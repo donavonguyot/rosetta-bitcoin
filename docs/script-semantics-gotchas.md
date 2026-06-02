@@ -79,13 +79,17 @@ Key-path requires:
 
 - BIP340 Schnorr verification.
 - Taproot key-path sighash.
+- The first shared testnet4 key-path milestone is height 6,975.
 
 Script-path additionally requires:
 
 - Control block parsing.
-- Tapleaf hash and script commitment verification.
+- Leaf hash calculation and taproot output key commitment verification.
 - BIP342 tapscript opcode semantics.
 - Terminal stack truthiness.
+- The witness shape classifies key-path vs script-path: key-path spends have a
+  single Schnorr signature witness item, while script-path spends end with the
+  tapscript and control block items.
 
 Observed blockers:
 
@@ -100,6 +104,23 @@ Follower checklist:
 - Do not mark Taproot complete after only key-path support.
 - Reuse shared fixture names and record control-block metadata.
 - Confirm `castToBool` semantics for tapscript terminal success.
+- Before implementing C# tapscript at height 22,830, add a first-class C# or
+  NodeCore diagnostic that reports:
+
+```text
+height
+block_hash
+txid
+input_index
+spent_script_pubkey
+witness_item_count
+template
+taproot_spend_type
+tapscript_length
+control_block_length
+leaf_version
+missing_rule
+```
 
 ## Tapscript and legacy opcode overlap
 

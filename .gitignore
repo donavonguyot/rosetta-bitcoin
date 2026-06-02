@@ -1,12 +1,38 @@
 .DS_Store
 
-# Node implementation repos are tracked independently.
-/Nodes/Python/
-/Nodes/TypeScript/
-/Nodes/Cpp/
-/Nodes/Java/
-/Nodes/CSharp/
-/Nodes/Elixir/
+# Node implementation directories are root-owned source. Ignore only generated
+# runtime/build/dependency artifacts under them.
+/Nodes/*/data/
+/Nodes/*/data-*/
+/Nodes/*/blocks/
+/Nodes/*/chainstate-rocksdb/
+/Nodes/*/operational-*/
+/Nodes/*/utxo-*/
+/Nodes/*/bitcoin-core-testnet4/
+/Nodes/*/.venv/
+/Nodes/*/venv/
+/Nodes/*/node_modules/
+/Nodes/*/dist/
+/Nodes/*/build/
+/Nodes/*/build-*/
+/Nodes/*/target/
+/Nodes/*/_build/
+/Nodes/*/deps/
+/Nodes/*/bin/
+/Nodes/*/obj/
+/Nodes/*/.pytest_cache/
+/Nodes/*/.mypy_cache/
+/Nodes/*/.vitest/
+/Nodes/*/coverage/
+/Nodes/*/*.log
+/Nodes/*/*.db
+/Nodes/*/*.sqlite
+/Nodes/*/*.sqlite3
+/Nodes/*/*.db-journal
+/Nodes/*/*.db-wal
+/Nodes/*/*.db-shm
+/Nodes/*/*.lock
+/Nodes/*/*.pid
 
 # Shared scratch, if any lands at the workspace root.
 /data/
@@ -39,6 +65,3 @@ venv/
 /Project/reports/generated/
 /Project/tmp/
 
-# Keep nested repository metadata out of root commits if an ignored port is
-# intentionally surfaced during audits.
-**/.git/

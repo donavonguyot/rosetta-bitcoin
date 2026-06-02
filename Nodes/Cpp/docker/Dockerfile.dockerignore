@@ -1,0 +1,7 @@
+build/
+build-*/
+data-cpp/
+.git/
+.venv-cov/
+*.db
+*.log

@@ -1,0 +1,18 @@
+{
+  "height": 27815,
+  "block_hash": "00000000f649f4308fe8859ba632114ae244632461293c031cd905794981b250",
+  "txid": "2a691884927c92649b0c8759f929b931ba21d75bb21bc21f4a3b5868be0bc4d7",
+  "block_tx_index": 1,
+  "input_index": 0,
+  "prev_txid": "f0c813582d132e1e235aec1f1f905fbc0e1cf504a71ae887caeac8a274982443",
+  "prev_vout": 0,
+  "prev_amount_sats": 740492,
+  "branch_selector": "OP_1 (true \u2192 OP_IF numeric SWAP/SUB/GREATERTHAN path)",
+  "scriptsig_operand": 2001,
+  "if_branch_constant": 2024,
+  "if_branch_threshold": 18,
+  "if_branch_ops": "2024 OP_SWAP OP_SUB 18 OP_GREATERTHAN OP_VERIFY",
+  "else_branch_ops": "OP_ELSE OP_SHA256 PUSH(32) OP_EQUALVERIFY (inactive when OP_1 selected)",
+  "post_endif_ops": "PUSH(65) uncompressed pubkey OP_CHECKSIG",
+  "python_test": "test_real_testnet4_block27815_p2sh_if_else_numeric_branch_accepted"
+}

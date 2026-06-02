@@ -12,11 +12,11 @@ fixture, emits a partial storage proof, or has a Dockerfile.
 
 | Port | Role | Consensus / runtime status | Core storage status | Docker status | Current blocker / next rule |
 |------|------|----------------------------|---------------------|---------------|-----------------------------|
-| Python | Scout | Snapshot evidence around `validated_height=52996`; later rows above 52k are partly unknown in shared matrix | SQLite scout/reference mode; no native/Core storage claim | daemon_only | Continue scout ledger facts; do not use Python as validity proof for followers |
-| Java | Lead follower | Ledger records `validated_height=136863`, `binary_gate_status=passed` | RocksDB/native evidence exists; continue auditing no legacy DB dependency in native mode | supervisor_partial | Tip maintenance and proof naming cleanup |
-| CSharp | Follower | Persistent Docker supervisor reached `validated_height=22829`; cleared 6975 and 10k | RocksDB/native evidence exists | supervisor_partial | Blocked at `22830` P2TR script-path / BIP342; native blocker diagnostics still needed |
+| Python | Full-break native target | Legacy SQLite-scout evidence around `validated_height=52996` is historical only; forward parity must rerun blockers from empty native state | no current native/Core claim; target is RocksDB-owned operational truth with native crypto | daemon_only | Replace SQLite runtime path, add full Docker proof/supervisor, and rediscover blockers under native state |
+| Java | Lead follower | Ledger records `validated_height=136863`, `binary_gate_status=passed`; bounded Docker native proof still passes to height 2 | RocksDB/native evidence exists; continue auditing no legacy DB dependency in native mode | supervisor_partial | Tip maintenance and proof naming cleanup |
+| CSharp | Follower | Persistent Docker supervisor reached `validated_height=22829`; latest bounded Docker proof passes to height 2; cleared 6975 and 10k | RocksDB/native evidence exists | supervisor_partial | Blocked at `22830` P2TR script-path / BIP342; native blocker diagnostics still needed |
 | TypeScript | Fast follower | Snapshot evidence around `validated_height=5578`; matrix remains conservative above known fixtures | SQLite by design; no native/Core storage claim | daemon_only | Known 5579 dual-writer repair lesson remains in `AGENTS.md` |
-| Cpp | Systems follower | Height 739 fixture regression passes; live datadir still needs rerun beyond 738 | proof_partial: RocksDB-only operational store and proof artifact exist; live staged sync rerun still pending | proof_partial | Keep native builds SQLite-free, then resume staged sync |
+| Cpp | Systems follower | Height 739 fixture regression passes; bounded Docker RocksDB storage proof passes; live datadir still needs rerun beyond 738 | proof_partial: RocksDB-only operational store and proof artifact exist; live staged sync rerun still pending | proof_partial | Keep native builds SQLite-free, then resume staged sync |
 | Elixir | Supervised follower | `make node-status` exists; no shared snapshots yet | no native/Core storage evidence | missing | Needs Docker surface and export/status contract alignment |
 
 ## Status Rules
@@ -57,5 +57,9 @@ deleted after their evidence is centralized. See
 - Docker-capable ports use `Nodes/<Port>/docker/` for Dockerfiles, compose
   files, and Docker ignore declarations; validate with the Docker contract
   report before claiming Docker surface changes.
+- 2026-06-02 cleanup proof pass: default and strict Docker contract validation
+  reported `errors=0 warnings=0`; compose config passed for every Docker-capable
+  port; Cpp, C#, Java, Python, and TypeScript images built; bounded Cpp/C#/Java
+  Docker proofs passed against local Reference.
 - C# blocker inspection at 22830 used a temporary Python scanner; recurring
   blocker inspection needs native C# or NodeCore tooling.

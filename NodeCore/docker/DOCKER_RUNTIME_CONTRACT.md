@@ -56,11 +56,17 @@ Validate all manifests with:
 ```bash
 python3 NodeCore/docker/validate_docker_contract.py
 python3 NodeCore/docker/validate_docker_contract.py --json
+python3 NodeCore/docker/validate_docker_contract.py --strict
 ```
 
 The validator is report-only until the workspace deliberately ratchets Docker
 compliance. A passing validator report means declarations are complete enough
 to reason about; it does not run Docker builds by itself.
+
+Default validation always exits `0` so agents can gather a full report. Strict
+validation exits nonzero when manifest errors are present and treats nonstandard
+Docker file layout as an error. Strict mode still does not require every runtime
+proof command to pass; proof ratchets happen only after recorded proof runs.
 
 ## Standard Physical Layout
 
@@ -79,6 +85,10 @@ same exclusions while using the port root as context.
 
 Reference is a peer recipe rather than a port implementation, but it still uses
 `Nodes/Reference/docker/docker-compose.yml` for layout consistency.
+
+Python is not exempt from Docker parity. A forward Python native/Core claim
+requires Docker proof and supervisor support against the RocksDB/native-crypto
+runtime; the legacy SQLite scout daemon surface is historical evidence only.
 
 ## Standard Target Names
 

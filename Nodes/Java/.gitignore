@@ -1,0 +1,33 @@
+# Live datadir and local DB (one writer per datadir)
+data-java/
+data-java-*/
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+*.lock
+*.pid
+
+# Maven / Java build output
+target/
+*.class
+*.jar
+!/.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Logs and scratch output
+logs/
+*.log
+.docker-*
+
+# OS
+.DS_Store

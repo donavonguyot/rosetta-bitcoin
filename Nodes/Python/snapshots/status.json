@@ -1,0 +1,231 @@
+{
+  "chain": "testnet4",
+  "sync": {
+    "id": 1,
+    "chain": "testnet4",
+    "best_height": 136358,
+    "best_hash": "0000000000b01480f5f1d04f473715b122dd18b6014cf56dd3220017dff45293",
+    "header_count": 136359,
+    "sync_status": "blocks_syncing",
+    "updated_at": "2026-05-28T01:38:51+00:00"
+  },
+  "header_count": 136359,
+  "block_count": 52996,
+  "validated_height": 52996,
+  "validated_hash": "0000000000aee862fba8900f491f20aeae194e4140a9581a038ddae8dffe73c4",
+  "utxo_count": 600605,
+  "peer_count": 741,
+  "connected_peers": 32,
+  "phases": [
+    {
+      "id": 1,
+      "phase": "phase0",
+      "title": "Wire + handshake",
+      "status": "completed",
+      "notes": "Wire protocol and handshake verified",
+      "updated_at": "2026-05-24T19:02:12+00:00"
+    },
+    {
+      "id": 2,
+      "phase": "phase1",
+      "title": "Header sync",
+      "status": "completed",
+      "notes": "Header chain synced to height 136290",
+      "updated_at": "2026-05-24T19:02:12+00:00"
+    },
+    {
+      "id": 3,
+      "phase": "phase2",
+      "title": "Block download",
+      "status": "in_progress",
+      "notes": "52996 blocks stored, validated through height 52996",
+      "updated_at": "2026-05-28T01:38:53+00:00"
+    },
+    {
+      "id": 4,
+      "phase": "phase3",
+      "title": "Consensus validation",
+      "status": "in_progress",
+      "notes": "Validated through height 52996 (600605 UTXOs)",
+      "updated_at": "2026-05-28T01:38:53+00:00"
+    },
+    {
+      "id": 5,
+      "phase": "phase4",
+      "title": "Mempool + relay",
+      "status": "pending",
+      "notes": "Tx admission and rebroadcast",
+      "updated_at": "2026-05-24T18:56:08+00:00"
+    },
+    {
+      "id": 6,
+      "phase": "phase5",
+      "title": "Hardening",
+      "status": "pending",
+      "notes": "Metrics, peer banning, optional BIP324",
+      "updated_at": "2026-05-24T18:56:08+00:00"
+    }
+  ],
+  "wire": {
+    "required_total": 43,
+    "required_done": 39,
+    "required_percent": 90.7,
+    "checkpoints_total": 9,
+    "checkpoints_passed": 8,
+    "checkpoints_percent": 88.9,
+    "full_node_wire_ready": false
+  },
+  "checkpoints": {
+    "cp0_framing": {
+      "checkpoint": "cp0_framing",
+      "title": "Message framing",
+      "phase": "phase0",
+      "required_total": 5,
+      "required_done": 5,
+      "required_pass": true,
+      "optional_total": 1,
+      "optional_done": 0,
+      "capabilities_total": 6,
+      "capabilities_done": 5
+    },
+    "cp1_handshake": {
+      "checkpoint": "cp1_handshake",
+      "title": "Connection handshake",
+      "phase": "phase0",
+      "required_total": 6,
+      "required_done": 6,
+      "required_pass": true,
+      "optional_total": 2,
+      "optional_done": 0,
+      "capabilities_total": 8,
+      "capabilities_done": 6
+    },
+    "cp2_discovery": {
+      "checkpoint": "cp2_discovery",
+      "title": "Peer discovery",
+      "phase": "phase0",
+      "required_total": 5,
+      "required_done": 5,
+      "required_pass": true,
+      "optional_total": 1,
+      "optional_done": 0,
+      "capabilities_total": 6,
+      "capabilities_done": 5
+    },
+    "cp3_headers": {
+      "checkpoint": "cp3_headers",
+      "title": "Header sync",
+      "phase": "phase1",
+      "required_total": 10,
+      "required_done": 10,
+      "required_pass": true,
+      "optional_total": 0,
+      "optional_done": 0,
+      "capabilities_total": 10,
+      "capabilities_done": 10
+    },
+    "cp4_blocks": {
+      "checkpoint": "cp4_blocks",
+      "title": "Block download",
+      "phase": "phase2",
+      "required_total": 5,
+      "required_done": 5,
+      "required_pass": true,
+      "optional_total": 1,
+      "optional_done": 0,
+      "capabilities_total": 6,
+      "capabilities_done": 5
+    },
+    "cp5_tx_relay": {
+      "checkpoint": "cp5_tx_relay",
+      "title": "Transaction relay",
+      "phase": "phase4",
+      "required_total": 5,
+      "required_done": 5,
+      "required_pass": true,
+      "optional_total": 1,
+      "optional_done": 1,
+      "capabilities_total": 6,
+      "capabilities_done": 6
+    },
+    "cp6_serving": {
+      "checkpoint": "cp6_serving",
+      "title": "Inbound serving",
+      "phase": "phase4",
+      "required_total": 4,
+      "required_done": 0,
+      "required_pass": false,
+      "optional_total": 0,
+      "optional_done": 0,
+      "capabilities_total": 4,
+      "capabilities_done": 0
+    },
+    "cp7_keepalive": {
+      "checkpoint": "cp7_keepalive",
+      "title": "Connection keepalive",
+      "phase": "phase0",
+      "required_total": 3,
+      "required_done": 3,
+      "required_pass": true,
+      "optional_total": 0,
+      "optional_done": 0,
+      "capabilities_total": 3,
+      "capabilities_done": 3
+    },
+    "cp8_extensions": {
+      "checkpoint": "cp8_extensions",
+      "title": "Protocol extensions",
+      "phase": "phase5",
+      "required_total": 0,
+      "required_done": 0,
+      "required_pass": true,
+      "optional_total": 4,
+      "optional_done": 2,
+      "capabilities_total": 4,
+      "capabilities_done": 2
+    }
+  },
+  "recent_events": [
+    {
+      "id": 118150,
+      "category": "sync",
+      "level": "info",
+      "message": "Downloaded 20 blocks",
+      "details_json": "{\"from_height\": 52977, \"to_height\": 52996}",
+      "created_at": "2026-05-28T01:38:53+00:00"
+    },
+    {
+      "id": 118149,
+      "category": "p2p",
+      "level": "info",
+      "message": "Sent inv",
+      "details_json": "{\"host\": \"127.0.0.1\", \"port\": 48333}",
+      "created_at": "2026-05-28T01:38:53+00:00"
+    },
+    {
+      "id": 118148,
+      "category": "p2p",
+      "level": "info",
+      "message": "Sent getdata",
+      "details_json": "{\"host\": \"127.0.0.1\", \"port\": 48333}",
+      "created_at": "2026-05-28T01:38:53+00:00"
+    },
+    {
+      "id": 118147,
+      "category": "p2p",
+      "level": "info",
+      "message": "Sent inv",
+      "details_json": "{\"host\": \"127.0.0.1\", \"port\": 48333}",
+      "created_at": "2026-05-28T01:38:53+00:00"
+    },
+    {
+      "id": 118146,
+      "category": "p2p",
+      "level": "info",
+      "message": "Sent getdata",
+      "details_json": "{\"host\": \"127.0.0.1\", \"port\": 48333}",
+      "created_at": "2026-05-28T01:38:53+00:00"
+    }
+  ],
+  "exported_at": "2026-05-28T01:40:20+00:00"
+}

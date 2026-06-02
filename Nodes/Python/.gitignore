@@ -1,0 +1,34 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+*.pid
+*.lock
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+
+# Local batch / sync logs
+sync_batch_run.log
+sync_batch_nohup.log
+sync_batch_operational.log
+sync_supervisor.log
+sync_session_fix_agent.log
+sync_fix_needed.log
+sync_chunk*.log
+connect_only_replay.log
+forward_batch_*.log
+
+# Temp sync wrappers (do not commit)
+.tmp_continue_sync_batches.sh

@@ -1,0 +1,22 @@
+{
+  "height": 32712,
+  "block_hash": "0000000000000013db0b030faef1dd4e341e176036db9db4365f8430aadba6a3",
+  "txid": "6b586a4f831e267749a3c2e50b866fe5badb582d3d388ea636669cbdc13acd94",
+  "input_index": 0,
+  "prev_amount_sats": 50000,
+  "witness_stack_len": 5,
+  "witness_layout": "empty, sig1, sig2, tapscript, control_block",
+  "tapscript_template": "PUSH(32) CHECKSIG PUSH(32) CHECKSIGADD PUSH(32) CHECKSIGADD OP_2 OP_NUMEQUAL",
+  "tapscript_opcodes": [
+    "PUSH(32)",
+    "OP_CHECKSIG",
+    "PUSH(32)",
+    "OP_CHECKSIGADD",
+    "PUSH(32)",
+    "OP_CHECKSIGADD",
+    "OP_2",
+    "OP_NUMEQUAL"
+  ],
+  "missing_rule": "OP_NUMEQUAL (0x9c) in tapscript after CHECKSIGADD 2-of-3",
+  "python_test": "test_real_testnet4_block32712_p2tr_tapscript_checksigadd_2of3_numequal_accepted"
+}

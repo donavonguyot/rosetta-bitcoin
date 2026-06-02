@@ -1,0 +1,16 @@
+{
+  "height": 58173,
+  "block_hash": "0000000082559fc009f52f9c28226648a820546f54d211d0ab394937b573ebbf",
+  "txid": "d04fef455929e77e5e4a29b6708051037a11953fbec64240c3689bef9a1320cd",
+  "input_index": 0,
+  "spent_script_pubkey": "0020bf25d8d9e80fb053af13bc24117ea4841e38483bdc87bf2058e474f33bc4d049",
+  "prev_amount_sats": 10951,
+  "template": "P2WSH",
+  "witness_script_hex": "5221035074aaf41d043072aca0a9f0b5455546ba54e05be0c52313515c0c3c34af667021023e730775d89a88b5265cccc2e85944681efa44fdb2befef668393a56fc557bed52ae7c829263210252c70421bbed035f6082bab6a51ed1edd56769b541e8363780ea8cd32474a3c6ad53b26892935187",
+  "witness_script_asm": "2 035074aaf41d043072aca0a9f0b5455546ba54e05be0c52313515c0c3c34af6670 023e730775d89a88b5265cccc2e85944681efa44fdb2befef668393a56fc557bed 2 OP_CHECKMULTISIG OP_SWAP OP_SIZE OP_0NOTEQUAL OP_IF 0252c70421bbed035f6082bab6a51ed1edd56769b541e8363780ea8cd32474a3c6 OP_CHECKSIGVERIFY 3 OP_CHECKSEQUENCEVERIFY OP_ENDIF OP_0NOTEQUAL OP_ADD 1 OP_EQUAL",
+  "witness_stack_len": 5,
+  "input_sequence": 3,
+  "tx_version": 2,
+  "locktime": 58172,
+  "missing_rule": "OP_0NOTEQUAL (0x92) in P2WSH witness script evaluation"
+}

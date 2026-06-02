@@ -5,10 +5,11 @@ separate from consensus status: a port can clear a consensus blocker and still
 be Docker/Core non-compliant.
 
 Machine-readable manifests live under [`ports/`](ports/). Run the report-only
-validator after manifest or Docker-surface changes:
+or strict validator after manifest or Docker-surface changes:
 
 ```bash
 python3 NodeCore/docker/validate_docker_contract.py
+python3 NodeCore/docker/validate_docker_contract.py --strict
 ```
 
 Docker proof result artifacts, when produced, belong in
@@ -32,13 +33,13 @@ non_compliant
 
 | Port | Manifest | Dockerfile | Compose | Base / runtime image | Docker status | Validator status | Native/Core storage status |
 |------|----------|------------|---------|----------------------|---------------|------------------|----------------------------|
-| Reference | `ports/reference.docker.json` | n/a | `Nodes/Reference/docker/docker-compose.yml` | `bitcoin/bitcoin:28.2` | daemon_only local peer service | report-only | n/a |
-| Java | `ports/java.docker.json` | `Nodes/Java/docker/Dockerfile` | `Nodes/Java/docker/docker-compose.yml` | `eclipse-temurin:21-jdk` / `eclipse-temurin:21-jre` | supervisor_partial | report-only | RocksDB native evidence exists; keep verifying no legacy DB dependency in native mode |
-| C# | `ports/csharp.docker.json` | `Nodes/CSharp/docker/Dockerfile` | `Nodes/CSharp/docker/docker-compose.yml` | `mcr.microsoft.com/dotnet/sdk:8.0` / `runtime:8.0` | supervisor_partial | report-only | RocksDB/native evidence exists; first-class blocker diagnostics still pending |
-| Cpp | `ports/cpp.docker.json` | `Nodes/Cpp/docker/Dockerfile` | `Nodes/Cpp/docker/docker-compose.yml` | `ubuntu:24.04` / `ubuntu:24.04` | proof_partial | report-only | proof_pending: RocksDB-only native cutover landed; rerun Docker proof before promotion |
-| Python | `ports/python.docker.json` | `Nodes/Python/docker/Dockerfile` | `Nodes/Python/docker/docker-compose.yml` | `python:3.12-slim` | daemon_only | report-only | SQLite-based by design; not a native Core storage claim |
-| TypeScript | `ports/typescript.docker.json` | `Nodes/TypeScript/docker/Dockerfile` | `Nodes/TypeScript/docker/docker-compose.yml` | `node:20-slim` | daemon_only | report-only | SQLite-based by design; not a native Core storage claim |
-| Elixir | `ports/elixir.docker.json` | missing | missing | missing | missing | report-only | no Docker/Core storage evidence |
+| Reference | `ports/reference.docker.json` | n/a | `Nodes/Reference/docker/docker-compose.yml` | `bitcoin/bitcoin:28.2` | daemon_only local peer service | strict clean | n/a |
+| Java | `ports/java.docker.json` | `Nodes/Java/docker/Dockerfile` | `Nodes/Java/docker/docker-compose.yml` | `eclipse-temurin:21-jdk` / `eclipse-temurin:21-jre` | supervisor_partial | strict clean; build/proof passed 2026-06-02 | RocksDB native evidence exists; keep verifying no legacy DB dependency in native mode |
+| C# | `ports/csharp.docker.json` | `Nodes/CSharp/docker/Dockerfile` | `Nodes/CSharp/docker/docker-compose.yml` | `mcr.microsoft.com/dotnet/sdk:8.0` / `runtime:8.0` | supervisor_partial | strict clean; build/proof passed 2026-06-02 | RocksDB/native evidence exists; first-class blocker diagnostics still pending |
+| Cpp | `ports/cpp.docker.json` | `Nodes/Cpp/docker/Dockerfile` | `Nodes/Cpp/docker/docker-compose.yml` | `ubuntu:24.04` / `ubuntu:24.04` | proof_partial | strict clean; build/proof passed 2026-06-02 | proof_partial: RocksDB-only operational store and proof artifact exist; staged live sync still pending |
+| Python | `ports/python.docker.json` | `Nodes/Python/docker/Dockerfile` | `Nodes/Python/docker/docker-compose.yml` | `python:3.12-slim` | daemon_only | strict clean; build passed 2026-06-02 | legacy SQLite scout only; forward parity requires RocksDB/native-crypto/full Docker replay |
+| TypeScript | `ports/typescript.docker.json` | `Nodes/TypeScript/docker/Dockerfile` | `Nodes/TypeScript/docker/docker-compose.yml` | `node:20-slim` | daemon_only | strict clean; build passed 2026-06-02 | SQLite-based by design; not a native Core storage claim |
+| Elixir | `ports/elixir.docker.json` | missing | missing | missing | missing | strict clean for missing status | no Docker/Core storage evidence |
 
 ## Reference
 
@@ -76,7 +77,7 @@ resume_marker: .jbitnode_supervisor_resume
 peer_strategy: host.docker.internal:48333 with host-gateway mapping
 dockerignore_status: present
 runtime_surface_status: supervisor_partial
-known_caveats: Docker proof naming and native storage docs need cleanup
+known_caveats: Tip-scale Docker proof remains separate from bounded proof pass
 ```
 
 ## CSharp
@@ -123,7 +124,7 @@ resume_marker: .cpbitnode_supervisor_resume
 peer_strategy: currently 127.0.0.1:48333 in compose; should be host.docker.internal or Reference service for Docker network proof
 dockerignore_status: present after Cpp compliance attempt
 runtime_surface_status: proof_partial
-known_caveats: Cpp compliance backend is RocksDB-only; rerun proof after native cutover before promoting status
+known_caveats: Cpp compliance backend is RocksDB-only; bounded storage proof passes; staged live sync still needs rerun before promotion
 ```
 
 Cpp cannot claim Core Node compliance unless RocksDB owns headers, block index,
@@ -148,7 +149,7 @@ supervisor_command: missing Docker supervisor target
 peer_strategy: daemon compose publishes 48333; proof peer strategy not defined
 dockerignore_status: present
 runtime_surface_status: daemon_only
-known_caveats: scout/reference implementation; SQLite-based by design
+known_caveats: legacy SQLite scout evidence only; forward Python parity requires RocksDB/native-crypto proof and supervisor from empty native state
 ```
 
 ## TypeScript
@@ -222,3 +223,17 @@ native storage proof:
 
 Do not use this inventory as proof by itself. It is the checklist that tells
 agents which proof commands still need to be run and recorded.
+
+## Latest Validation Snapshot
+
+2026-06-02 cleanup proof pass:
+
+```text
+validator_default: passed, errors=0, warnings=0
+validator_strict: passed, errors=0, warnings=0
+compose_config: passed for Cpp, CSharp, Java, Python, Reference, TypeScript
+docker_build: passed for Cpp, CSharp, Java, Python, TypeScript
+bounded_proof: passed for Cpp RocksDB storage proof, CSharp native Docker proof, Java native Docker proof
+known_warning: TypeScript image build reports an npm audit vulnerability; build exit remains 0
+not_promoted: no port was promoted to contract_passed; long-running/tip-scale proofs remain separate
+```

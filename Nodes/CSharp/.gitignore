@@ -1,0 +1,27 @@
+# Build artifacts
+bin/
+obj/
+dist/
+
+# Local datadir and chainstate
+data-csharp/
+data-csharp-*/
+data-csharp-native*/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Logs and locks
+*.log
+.csbitnode.lock
+*.lock
+*.pid
+
+# IDE / OS
+.vs/
+.idea/
+.DS_Store
+
+# Snapshots (export artifacts unless committed intentionally)
+snapshots/

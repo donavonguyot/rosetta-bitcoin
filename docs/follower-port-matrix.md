@@ -62,9 +62,12 @@ Legend:
 
 ### Python
 
-Python remains the scout. It was observed syncing past 43,586, so all rows up to
-41,700 are marked cleared. Rows above that remain `unknown` until Python records
-or validates them.
+Python rows are historical SQLite-scout evidence. Python's forward parity path is
+a full-break RocksDB/native-crypto runtime, so these cells must be rediscovered
+from an empty native datadir before they count as current Python parity proof.
+The old scout was observed syncing past 43,586, so all rows up to 41,700 remain
+useful handoff facts; rows above that remain `unknown` until a current Python
+runtime records or validates them.
 
 ### Java
 

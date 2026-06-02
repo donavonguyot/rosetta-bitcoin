@@ -1,0 +1,15 @@
+{
+  "height": 116040,
+  "block_hash": "000000008111179882de773ffb40e062ab1423c58bd8373e516a9daa023e5714",
+  "txid": "a0a9fcb8a99ea3517d8fac76913ec4255066e9890c5f576ae2a4efc532302120",
+  "input_index": 1,
+  "spent_script_pubkey": "a91473f80e2acce9e331969256e394ff6a789b7cc06987",
+  "prev_amount_sats": 10000,
+  "template": "P2SH",
+  "redeem_script_hex": "10df7fab4934eb1e90844d3a6f12cce6ed7576a61432a8efa32f198f21b58d98919a25b0cbcb428d49882103784b6ebe47edcb0b81092d016c054a4375f9d0b73ca68afdf6c97614c83b83dfac",
+  "redeem_script_asm": "df7fab4934eb1e90844d3a6f12cce6ed OP_DROP OP_DUP OP_RIPEMD160 32a8efa32f198f21b58d98919a25b0cbcb428d49 OP_EQUALVERIFY 03784b6ebe47edcb0b81092d016c054a4375f9d0b73ca68afdf6c97614c83b83df OP_CHECKSIG",
+  "scriptsig_asm": "3006020101020101[SINGLE|ANYONECANPAY] 10df7fab4934eb1e90844d3a6f12cce6ed7576a61432a8efa32f198f21b58d98919a25b0cbcb428d49882103784b6ebe47edcb0b81092d016c054a4375f9d0b73ca68afdf6c97614c83b83dfac",
+  "witness_stack_len": 0,
+  "java_blocker": "script verification failed for input 1 @116040",
+  "missing_rule": "OP_RIPEMD160 (0xa6) in legacy P2SH redeem"
+}

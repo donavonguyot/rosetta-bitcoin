@@ -1,7 +1,7 @@
 # Checkpoint Strategy
 
-Use these checkpoints in order. The root repo and each port repo should be
-committed separately because they have different ownership boundaries.
+Use these checkpoints in order. The workspace is a single root repository, so
+commit boundaries are logical, not separate Git repos.
 
 ## Root Repo
 
@@ -21,27 +21,21 @@ committed separately because they have different ownership boundaries.
    - `docs/storage-contract.md`
    - `docs/native-crypto-contract.md`
    - `docs/supervisor-contract.md`
-   - `docs/performance-lessons.md`
-   - `docs/taproot-tapscript-lessons.md`
+   - `docs/port-performance-lessons.md`
+   - `docs/script-semantics-gotchas.md`
    - `NodeCore/diagnostics/BLOCKER_DIAGNOSTICS.md`
 
-## JavaNode Repo
+## Port Implementation Checkpoints
 
-Commit Java implementation/proof work separately from doc cleanup when possible.
-Do not include live `.docker-*` status files, datadirs, local DBs, target output,
-or transient logs.
+Commit port implementation/proof work separately from broad doc cleanup when
+possible. Do not include live `.docker-*` status files, datadirs, local DBs,
+target/build output, dependency caches, or transient logs.
 
 Recommended Java cleanup checkpoint:
 
 ```text
 Refresh Java RocksDB/native-crypto proof docs
 ```
-
-## CSharpNode Repo
-
-Commit C# implementation/proof work separately from doc cleanup when possible.
-Do not include Docker volumes, `bin/`, `obj/`, local datadirs, logs, or transient
-status files.
 
 Recommended C# cleanup checkpoint:
 
@@ -53,7 +47,7 @@ Document C# supervisor frontier and 22830 blocker
 
 Before each checkpoint:
 
-1. Run `git status --short` in that repo.
+1. Run `git status --short` at the workspace root.
 2. Review `git diff --stat` and the relevant diffs.
 3. Stage only intentional source, tests, docs, fixtures, contracts, and selected
    proof artifacts.

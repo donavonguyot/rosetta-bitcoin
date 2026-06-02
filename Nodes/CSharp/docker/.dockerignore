@@ -1,0 +1,8 @@
+.git
+bin
+obj
+**/bin
+**/obj
+data-csharp*
+*.log
+.docker-csharp-proof-*

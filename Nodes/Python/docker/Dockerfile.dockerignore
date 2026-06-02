@@ -1,0 +1,14 @@
+.git
+.venv
+venv
+data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+__pycache__
+.pytest_cache
+.mypy_cache
+dist
+build

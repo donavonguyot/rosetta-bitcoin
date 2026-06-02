@@ -115,6 +115,28 @@ SQLite or file stores may be bootstrap/reference backends, but they must not
 become the authoritative serious-port chainstate by accident. They also must
 not remain as hidden side stores in native/Core proof mode.
 
+## Python Full-Break Target
+
+Python parity is a breaking migration, not a compatibility profile. The legacy
+SQLite scout path is historical evidence only. A forward Python native/Core run
+must start from an empty native datadir and use RocksDB for:
+
+```text
+headers
+block index
+sync state
+blocker/current-error state
+status truth
+active UTXO set
+undo records
+backend metadata
+validated tip
+```
+
+Python must also use native crypto for the native/Core proof path and rerun
+blocker discovery under that RocksDB/native-crypto runtime before old scout
+clearance can count as current Python parity evidence.
+
 Java now uses RocksDB as its node-local KV storage target. Optimization work
 should improve the shared RocksDB plus Codec v2 path rather than maintaining a
 mixed Java storage posture or independent per-port engine selection.

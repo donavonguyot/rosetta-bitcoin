@@ -7,7 +7,7 @@ canonical docs below instead of adding a one-off plan file.
 
 - `port-status.md` - current all-port baseline; status claims must stay
   conservative and proof-backed.
-- `git-topology.md` - root repository, port repository, and artifact ownership.
+- `git-topology.md` - root repository, port directory, and artifact ownership.
 - `artifact-retention.md` - proof/log/datadir retention policy.
 - `storage-contract.md` - project-level storage compliance rules.
 - `supervisor-contract.md` - durable supervisor behavior and tick expectations.
@@ -19,10 +19,6 @@ canonical docs below instead of adding a one-off plan file.
 - `script-semantics-gotchas.md` - consensus/script traps learned from blockers.
 - `blocker-ledger.md` - blocker record shape and classification rules.
 - `port-performance-lessons.md` - reusable performance lessons.
-- `performance-lessons.md` - older performance notes; fold into
-  `port-performance-lessons.md` when touched.
-- `taproot-tapscript-lessons.md` - Taproot/Tapscript lessons; fold into
-  `script-semantics-gotchas.md` when touched.
 - `checkpoint-strategy.md` - checkpoint and snapshot guidance.
 - `native-crypto-contract.md` - native crypto expectations.
 - `agent-prompts.md` - reusable prompts for agents.

@@ -1,0 +1,13 @@
+{
+  "exported_at": null,
+  "db_path": "data-cpp/cpbitnode.db",
+  "chain": "testnet4",
+  "schema_version": "7",
+  "files": [
+    "status.json",
+    "phases.json",
+    "wire.json",
+    "capabilities.json"
+  ],
+  "note": "Gate 0 placeholder — populate via cpbitnode-db after first run"
+}

@@ -66,13 +66,17 @@ Artifact cleanup follows `docs/artifact-retention.md` and
 `NodeCore/conformance/results/`, while live datadirs, logs, DBs, build outputs,
 and Docker volumes stay ignored and port-local.
 
+This workspace has exactly one Git repository: `/Users/donavonguyot/RB/.git`.
+All `Nodes/<Port>/` directories are root-owned source directories. Nested
+`.git/` directories are legacy cruft and must not be recreated.
+
 ---
 
 ## Project layout and roles
 
 | Path | Package | Role |
 |------|---------|------|
-| `~/RB/Nodes/Python` | **pybitnode** | Scout/reference implementation; discovers live-chain blockers first |
+| `~/RB/Nodes/Python` | **pybitnode** | Full-break native parity target; legacy SQLite scout evidence is historical |
 | `~/RB/Nodes/TypeScript` | **tsbitnode** | Fast follower; zero **runtime** npm deps; uses Node built-ins |
 | `~/RB/Nodes/Cpp` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
 | `~/RB/Nodes/Java` | **jbitnode** | Clean Java follower; live discovery above Python scout horizon |
@@ -80,15 +84,16 @@ and Docker volumes stay ignored and port-local.
 All active nodes target **Bitcoin testnet4**. They can run in parallel only with
 isolated state and deliberate peer allocation.
 
-### Scout / follower rule
+### Port independence and Python full-break rule
 
-Python is the scout. That means Python may hit live-chain blockers first and
-produce exact handoff facts. Followers should use those facts to implement the
-same rule in their own language without silently weakening validation.
+Historical Python SQLite-scout blocker rows are handoff evidence, not forward
+validity proof. Python parity now requires a full break: RocksDB-owned
+operational truth, native crypto, full Docker proof/supervisor, and blocker
+rediscovery from an empty native datadir.
 
-Follower ports must not treat Python as an oracle for validity. They use Python's
-blocker ledger, tests, and fixture details as a work queue, then independently
-validate with their own code.
+No port may treat another port as an oracle for validity. Shared blocker ledgers,
+tests, and fixture details are a work queue; each port must independently
+validate with its own current implementation and active storage backend.
 
 ### Blocker ledger contract
 
@@ -112,10 +117,10 @@ For P2P/sync blockers, record the peer, command, datadir, advertised
 `start_height`, header height, validated height, and whether deferred handshake
 messages were sent.
 
-### Python / Java scout trail
+### Historical Python / Java trail
 
-Shared coordination docs turn the Python and Java live-chain trail into a work
-queue for follower ports:
+Shared coordination docs turn the historical Python SQLite-scout trail and Java
+live-chain trail into a work queue for ports:
 
 - [`docs/consensus-blockers-testnet4.md`](docs/consensus-blockers-testnet4.md) — canonical blocker facts and fixture anchors.
 - [`docs/follower-port-matrix.md`](docs/follower-port-matrix.md) — conservative per-port status with explicit `unknown` cells.
@@ -123,8 +128,8 @@ queue for follower ports:
 - [`docs/port-performance-lessons.md`](docs/port-performance-lessons.md) — reusable block-connect performance patterns from Java/Python catch-up.
 - [`docs/agent-prompts.md`](docs/agent-prompts.md) — reusable prompts for porting blockers, harvesting fixtures, and updating ledgers.
 
-Followers copy blocker facts and tests from this trail, not trust outcomes. Every
-port must still independently validate the spend with its own implementation.
+Ports copy blocker facts and tests from this trail, not trust outcomes. Python
+itself must also reprove blockers under its forward RocksDB/native-crypto path.
 
 ---
 

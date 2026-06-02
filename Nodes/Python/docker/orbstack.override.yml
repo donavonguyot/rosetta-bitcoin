@@ -1,0 +1,4 @@
+services:
+  pybitnode:
+    volumes:
+      - ../data:/data

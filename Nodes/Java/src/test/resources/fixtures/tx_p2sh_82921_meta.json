@@ -1,0 +1,9 @@
+{
+  "height": 82921,
+  "block_hash": "000000008056756272120a02098121533c01dbb40500abee0ade972838eabb21",
+  "txid": "e717bdada1619ffd40c7ddbefbafce596a1a15cfc68c7f02e305494c1b1c1bc1",
+  "input_index": 0,
+  "spent_script_pubkey": "a9144266fc6f2c2861d7fe229b279a79803afca7ba3487",
+  "redeem_script_asm": "OP_2DUP OP_EQUAL OP_NOT OP_VERIFY OP_SHA1 OP_SWAP OP_SHA1 OP_EQUAL",
+  "missing_rule": "OP_SHA1 (0xa7) and OP_NOT (0x91) in legacy P2SH redeem"
+}

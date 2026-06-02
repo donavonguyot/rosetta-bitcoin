@@ -1,0 +1,12 @@
+{
+  "exported_at": "2026-05-25T10:41:50Z",
+  "db_path": "./data-ts/tsbitnode.db",
+  "chain": "testnet4",
+  "schema_version": "8",
+  "files": [
+    "status.json",
+    "phases.json",
+    "wire.json",
+    "capabilities.json"
+  ]
+}

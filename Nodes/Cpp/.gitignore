@@ -1,0 +1,17 @@
+build/
+build-*/
+data-cpp/
+data-cpp-*/
+chainstate-rocksdb/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+*.lock
+*.pid
+*.o
+.DS_Store
+compile_commands.json
+.venv/
+.venv-cov/

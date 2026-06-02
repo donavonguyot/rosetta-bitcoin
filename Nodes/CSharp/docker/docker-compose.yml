@@ -1,0 +1,22 @@
+services:
+  csbitnode-sync-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      PEERS: ${PEERS:-host.docker.internal:48333}
+      HEADERS_MAX: ${HEADERS_MAX:-200}
+      HEADER_BATCHES_MAX: ${HEADER_BATCHES_MAX:-1}
+      BLOCKS_MAX: ${BLOCKS_MAX:-2}
+      SECP256K1_BACKEND: ${SECP256K1_BACKEND:-native}
+    command: ["sync"]
+    volumes:
+      - csbitnode_proof_data:/data
+
+volumes:
+  csbitnode_proof_data:
+    name: ${DOCKER_PROOF_VOLUME:-csbitnode_proof_data}

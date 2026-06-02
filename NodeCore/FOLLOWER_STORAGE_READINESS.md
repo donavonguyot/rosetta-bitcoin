@@ -5,13 +5,13 @@ the Java native storage proof and the later C# / Cpp RocksDB cutovers.
 
 ## Recommendation
 
-Keep C# and Cpp on the RocksDB-only path. C# is the first clean follower with
-native storage evidence; Cpp is the systems follower whose compliance path is
-explicitly RocksDB-only.
+Keep C#, Cpp, and Python on explicit RocksDB/native paths. C# is the first clean
+follower with native storage evidence; Cpp is the systems follower whose
+compliance path is explicitly RocksDB-only; Python parity is a full break from
+SQLite scout state and must replay blockers from empty native state.
 
-`TypeScriptNode` remains the best fallback only if its no-runtime-npm dependency
-rule is revisited. Python remains the scout, not a native storage migration
-leader.
+`TypeScriptNode` remains a native-backend candidate only if its no-runtime-npm
+dependency rule is revisited.
 
 ## Port Matrix
 
@@ -22,7 +22,7 @@ leader.
 | ElixirNode | `exbitnode.db` SQLite owns headers, UTXO, undo, tip, block index | Yes | Not attempted | Keep consensus progress on exqlite while planning native chainstate |
 | TypeScriptNode | Node SQLite tracker owns operational truth | Yes | Not attempted | Defer native backend until runtime-deps rule is revisited |
 | CppNode | RocksDB `NodeStateStore` owns operational state in native mode | Yes | Proof partial after RocksDB-only cutover | Rerun live staged sync and keep native builds SQLite-free |
-| PythonNode | SQLite scout store | Yes | Not attempted | Keep as scout and fixture generator |
+| PythonNode | Legacy SQLite scout store; forward path must replace it | Yes | Not attempted under native path | Build RocksDB/native-crypto/full-Docker path, then rerun blocker discovery from scratch |
 
 ## Current Follower Notes
 
@@ -30,6 +30,9 @@ leader.
   P2TR script-path at height 22830 remains a consensus blocker.
 - Cpp has a RocksDB-only operational store and native proof infrastructure, but
   staged live sync still needs to be rerun before promotion.
+- Python's old SQLite blocker trail is historical handoff evidence only. Python
+  cannot claim parity until RocksDB/native-crypto Docker runs rediscover and
+  clear blockers from an empty native datadir.
 - Storage clearance does not imply consensus clearance or Docker contract
   completion; keep those gates separate in `docs/port-status.md`.
 
@@ -40,8 +43,7 @@ best first storage-gate follower. It has a working `exqlite` baseline and flat
 block files, but the NIF/native backend decision should wait until the storage
 contract and C# follower shape are clearer.
 
-## TypeScript, C++, Python
+## TypeScript
 
 TypeScript has the strongest non-Java sync operations, but native backend work
-would conflict with its current zero runtime npm dependency rule. Python should
-remain the scout and fixture generator rather than lead a storage migration.
+would conflict with its current zero runtime npm dependency rule.

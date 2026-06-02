@@ -1,0 +1,56 @@
+services:
+  cpbitnode:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    # testnet4 P2P — host must allow this port for inbound peers when LISTEN=1.
+    ports:
+      - "48333:48333"
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      LOG_LEVEL: info
+      # Inbound P2P (same semantics as CLI --listen).
+      LISTEN: "1"
+    volumes:
+      - cpbitnode_data:/data
+    restart: unless-stopped
+    # `cpbitnode-healthcheck`: one JSON line; payload includes ok/healthy/sync_status/chain/count
+    # fields/mempool_* /metrics/summary. Exit 1 if sync_status is "error".
+    healthcheck:
+      test: ["CMD", "cpbitnode-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  cpbitnode-sync-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      CHAINSTATE_BACKEND: rocksdb
+      LOG_LEVEL: info
+      PEERS: ${PEERS:-127.0.0.1:48333}
+      BLOCKS_TARGET: ${BLOCKS_MAX:-2}
+      BLOCKS_MAX: ${BLOCKS_MAX:-2}
+    volumes:
+      - ${DOCKER_PROOF_VOLUME:-cpbitnode_proof_data}:/data
+    command:
+      - cpbitnode-sync
+      - --datadir
+      - /data
+      - --chainstate-backend
+      - rocksdb
+      - --peers
+      - ${PEERS:-127.0.0.1:48333}
+      - --blocks-target
+      - ${BLOCKS_MAX:-2}
+      - --blocks-max
+      - ${BLOCKS_MAX:-2}
+
+volumes:
+  cpbitnode_data:
+  cpbitnode_proof_data:
+  cpbitnode_sync_data:

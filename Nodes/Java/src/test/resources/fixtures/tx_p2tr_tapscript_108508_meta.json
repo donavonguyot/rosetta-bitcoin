@@ -1,0 +1,15 @@
+{
+  "height": 108508,
+  "block_hash": "00000000000000004e47b50fe877620553c166797a09885d38191c513878c8eb",
+  "txid": "fd5ccbbdb8b12c61f382cf4f895035df14dd01cf49b6aceea681eb27c511e48d",
+  "input_index": 0,
+  "spent_script_pubkey": "5120f9726a942625350947a664da076eaf6991a066c3f045f97f47dc584bf008c8f2",
+  "prev_amount_sats": 1500,
+  "template": "P2TR script-path",
+  "tapscript_asm": "OP_DEPTH OP_1SUB OP_IF 405f6684a474be0a3fb1a978c691119f3030b2c34386cc8b374afb6399176e5a OP_CHECKSIGVERIFY OP_ELSE 1 OP_CHECKSEQUENCEVERIFY OP_DROP OP_ENDIF efa9e138f0c0b5a220b1b092babcc37f517c3fd9a777693fb2a4eb1e3bc9757f OP_CHECKSIG",
+  "witness_stack_len": 4,
+  "input_sequence": 4294967295,
+  "tx_version": 2,
+  "locktime": 0,
+  "missing_rule": "OP_1SUB (0x8c) in tapscript \u2014 OP_DEPTH OP_1SUB OP_IF branch"
+}

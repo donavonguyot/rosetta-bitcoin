@@ -1,0 +1,17 @@
+{
+  "height": 27807,
+  "block_hash": "000000000024e0d475a335fe6bbf8032bd342337f98bb378423bc43fb5187ffc",
+  "txid": "d1a68c8f20cc0ce8297e4f4b5ec297af1c6f98630e8105fd9d63b39c004c4ff0",
+  "block_tx_index": 1,
+  "input_index": 0,
+  "prev_txid": "52ceb80c5c7a5a0eb6bd2fe84de9aaf119b6339e74648e300c3175ae0174c7d5",
+  "prev_vout": 0,
+  "prev_amount_sats": 489171,
+  "branch_selector": "OP_0 (false \u2192 OP_ELSE / SHA256 hashlock path)",
+  "preimage_ascii": "810899055",
+  "sha256_preimage_hex": "6009b3c19a19f84e6b5208493a411939d0f49a90b462aa55b5b32466602c80b4",
+  "if_branch_ops": "OP_IF \u2026 PUSH(2) OP_SWAP OP_SUB PUSH(1) OP_GREATERTHAN (inactive)",
+  "else_branch_ops": "OP_ELSE OP_SHA256 PUSH(32) OP_EQUALVERIFY",
+  "post_endif_ops": "PUSH(65) uncompressed pubkey OP_CHECKSIG",
+  "python_test": "test_real_testnet4_block27807_p2sh_if_else_sha256_accepted"
+}

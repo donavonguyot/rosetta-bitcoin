@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{6E879DD9-5C6E-49DC-8B12-24461A8EA85A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CsBitNode", "src\CsBitNode\CsBitNode.csproj", "{4BEA4107-3017-4B9B-9A83-C34A61D4F47D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{3F3C5907-2FF9-41B6-B4B9-8B7B5A64F30F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CsBitNode.Tests", "tests\CsBitNode.Tests\CsBitNode.Tests.csproj", "{B05F840E-5628-4E2A-9BDA-B2B491250C81}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4BEA4107-3017-4B9B-9A83-C34A61D4F47D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4BEA4107-3017-4B9B-9A83-C34A61D4F47D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4BEA4107-3017-4B9B-9A83-C34A61D4F47D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4BEA4107-3017-4B9B-9A83-C34A61D4F47D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B05F840E-5628-4E2A-9BDA-B2B491250C81}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B05F840E-5628-4E2A-9BDA-B2B491250C81}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B05F840E-5628-4E2A-9BDA-B2B491250C81}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B05F840E-5628-4E2A-9BDA-B2B491250C81}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4BEA4107-3017-4B9B-9A83-C34A61D4F47D} = {6E879DD9-5C6E-49DC-8B12-24461A8EA85A}
+		{B05F840E-5628-4E2A-9BDA-B2B491250C81} = {3F3C5907-2FF9-41B6-B4B9-8B7B5A64F30F}
+	EndGlobalSection
+EndGlobal

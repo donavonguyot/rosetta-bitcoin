@@ -1,0 +1,17 @@
+{
+  "height": 63603,
+  "block_hash": "000000005b5b0f125eadd4a93c0b809e81d1bd1e7f51abd2d12d384aa4d34933",
+  "block_tx_index": 423,
+  "txid": "a21adb17edebeee255310e9b37c44a667e7a510bc8181efbf734a86bcac94f74",
+  "input_index": 0,
+  "spent_script_pubkey": "a9143b2169f7881b3c7d812ce17220f8080e817aac7e87",
+  "prev_amount_sats": 16000,
+  "template": "P2SH",
+  "redeem_script_hex": "6e935788945387",
+  "redeem_script_asm": "OP_2DUP OP_ADD 7 OP_EQUALVERIFY OP_SUB 3 OP_EQUAL",
+  "redeem_script_opcode_sequence": "OP_2DUP OP_ADD 7 OP_EQUALVERIFY OP_SUB 3 OP_EQUAL",
+  "scriptsig_asm": "5 2 6e935788945387",
+  "witness_stack_len": 0,
+  "java_blocker": "script verification failed for input 0 @63603",
+  "missing_rule": "OP_2DUP (0x6e) in legacy P2SH redeem evaluation"
+}

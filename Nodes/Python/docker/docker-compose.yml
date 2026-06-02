@@ -1,0 +1,29 @@
+services:
+  pybitnode:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    # testnet4 P2P — host must allow this port for inbound peers when LISTEN=1.
+    ports:
+      - "48333:48333"
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      LOG_LEVEL: info
+      # Inbound P2P (same semantics as CLI --listen).
+      LISTEN: "1"
+    volumes:
+      - pybitnode_data:/data
+    restart: unless-stopped
+    # `python -m pybitnode.healthcheck`: one JSON line; `validate_healthcheck_payload`
+    # requires ok/healthy/sync_status/chain/count fields/mempool_* /metrics/summary,
+    # optional sync_progress_pct + last_error. Exit 1 if validation fails or
+    # sync_status is "error" (Docker uses exit status, not only JSON booleans).
+    healthcheck:
+      test: ["CMD", "python", "-m", "pybitnode.healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pybitnode_data:

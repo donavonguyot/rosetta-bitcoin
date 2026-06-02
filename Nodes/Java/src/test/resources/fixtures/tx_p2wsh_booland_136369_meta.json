@@ -1,0 +1,17 @@
+{
+  "height": 136369,
+  "block_hash": "00000000000000013bac826dbc0a7fcfd3e60bf4bc2ab34abb53a219c9762df3",
+  "txid": "34bbb5793c54f9e2530c88e8b0f7c2517b875bd29ffcd505bdb8abd7f8adf1dc",
+  "input_index": 0,
+  "spent_script_pubkey": "002015d8d785605bb57624a0fb5ce61211f3279edb9b6a9a5750f602bcbe5451537d",
+  "prev_amount_sats": 12838,
+  "template": "P2WSH",
+  "witness_script_asm": "OP_SIZE 32 OP_EQUALVERIFY OP_RIPEMD160 bb90f8acbd268b662c4074acb3877c711ce5dfef OP_EQUAL OP_SWAP 03f80b6154f42255428717741e6f8fef9be87511ff9120d51bfad279eedea42998 OP_CHECKSIG OP_BOOLAND",
+  "witness_script_len": 64,
+  "witness_stack_len": 3,
+  "input_sequence": 4294967293,
+  "tx_version": 2,
+  "locktime": 0,
+  "java_blocker": "script verification failed for input 0 @136369",
+  "missing_rule": "OP_BOOLAND (0x9a) in P2WSH witness script"
+}

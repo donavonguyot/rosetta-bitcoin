@@ -64,7 +64,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": null,
-    "notes": "Docker surface is daemon/healthcheck only; Python remains SQLite scout/reference by design."
+    "notes": "Docker surface is daemon/healthcheck only. Legacy SQLite scout state is historical; forward Python parity requires RocksDB/native-crypto Docker proof and supervisor from empty native state."
   },
-  "known_caveats": ["No Docker proof target", "No Docker supervisor target", "No .dockerignore recorded in inventory"]
+  "known_caveats": ["No Docker proof target", "No Docker supervisor target", "No RocksDB/native-crypto parity path yet", "Legacy SQLite scout evidence must be rerun from empty native state"]
 }

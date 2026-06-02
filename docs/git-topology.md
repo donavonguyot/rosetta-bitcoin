@@ -1,13 +1,18 @@
 # Nodes Git Topology
 
-`~/RB` uses the root repository as the coordination and contract layer, plus one
-implementation repository per serious node under `Nodes/`. This is the current
-policy until the workspace deliberately migrates to a monorepo or formal
-submodules.
+`~/RB` is a single root-owned monorepo. There is exactly one Git repository:
+
+```text
+/Users/donavonguyot/RB/.git
+```
+
+Nested Git repositories under `Nodes/<Port>/` are legacy cruft and must not be
+recreated.
 
 ## Root Repository
 
-The root repository owns shared infrastructure and cross-port truth:
+The root repository owns all source, contracts, docs, fixtures, manifests, and
+selected conformance evidence:
 
 - `AGENTS.md` and the root onboarding/read-order docs.
 - `docs/` for shared blocker, performance, supervisor, storage, crypto, and
@@ -16,42 +21,39 @@ The root repository owns shared infrastructure and cross-port truth:
   and selected conformance proof artifacts.
 - `Project/` for observational imports and reports. `Project/project.db` is
   generated and must not become operational chainstate.
-- `Nodes/Reference/` for the local Bitcoin Core testnet4 recipe.
+- `Nodes/` for all node implementation directories and the local Reference
+  recipe.
 
 The root repository does **not** own live node datadirs, build outputs, local
-DBs, logs, dependency caches, or nested port `.git` metadata.
+DBs, logs, dependency caches, Docker volumes, or nested `.git` metadata.
 Artifact cleanup and proof retention rules live in
 [`artifact-retention.md`](artifact-retention.md).
 
-## Port Repositories
+## Port Directories
 
-These directories are independent implementation repos and are ignored by the
-root repo:
+These are normal tracked directories in the root repository:
 
-- `Nodes/Python/` — scout/reference implementation.
+- `Nodes/Python/` — Python port; forward parity target is full-break native/Core.
 - `Nodes/TypeScript/` — fast follower.
 - `Nodes/Java/` — lead follower / proof surface.
 - `Nodes/Cpp/` — systems follower.
 - `Nodes/CSharp/` — RocksDB/native-crypto follower.
 - `Nodes/Elixir/` — supervised follower.
+- `Nodes/Reference/` — local Bitcoin Core testnet4 recipe.
 
-Port repositories track their own source, tests, fixtures, docs, package/build
-manifests, and intentional exported snapshots. They should ignore live datadirs,
-local DBs, logs, dependency caches, and build output.
+Port directories keep their source, tests, fixtures, docs, package/build
+manifests, Docker files, and intentional exported snapshots. They must ignore
+live datadirs, local DBs, logs, dependency caches, and build output.
 
 ## Coordination Rule
 
-Root docs can record cross-port facts, but each port must prove behavior in its
-own repo. A blocker row from Java or Python is a handoff fact, not a validity
-oracle for C#, TypeScript, C++, or Elixir.
+Root docs can record cross-port facts, but each port must prove behavior with
+its own implementation. A blocker row from another port is a handoff fact, not a
+validity oracle.
 
 ## Checkpoint Rule
 
-Use small checkpoints:
+Use small root commits. Stage only intentional source, tests, docs, fixtures,
+contracts, manifests, scripts, and selected compact proof artifacts.
 
-1. Root commits for shared contracts, topology, status, and lessons.
-2. Port commits for implementation behavior and port-local tests.
-3. NodeCore conformance artifacts only when they are intentional checkpoint
-   evidence and named by fixture/category.
-
-Do not commit a node's generated live state from the root repository.
+Do not commit generated live state from any node directory.

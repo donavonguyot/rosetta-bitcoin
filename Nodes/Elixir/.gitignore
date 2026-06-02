@@ -1,0 +1,22 @@
+# Build artifacts
+/_build/
+/deps/
+*.ez
+
+# Local datadir and databases
+/data-elixir/
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.lock
+*.pid
+
+# Logs and snapshots
+*.log
+/snapshots/
+
+# Editor / OS
+.elixir_ls/
+.DS_Store

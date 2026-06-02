@@ -1,0 +1,15 @@
+{
+  "height": 108972,
+  "block_hash": "00000000000000018efb8d326b651300cc066ffbd804b4cfc0f41a5f00fe0552",
+  "txid": "9a3d5d60b83e3b0d0469be19e8df6510c04d6d89f7e9db14b509dbf853da79f0",
+  "input_index": 0,
+  "spent_script_pubkey": "a914844a0e2219b6b30d31fddb92f78581e17031a2de87",
+  "prev_amount_sats": 10000,
+  "template": "P2SH",
+  "redeem_script_hex": "63727970746f677261706879",
+  "redeem_script_asm": "OP_IF OP_2SWAP OP_PICK OP_2OVER OP_DEPTH OP_3DUP OP_ELSE OP_2SWAP OP_NOP OP_2OVER OP_ENDIF OP_PICK",
+  "scriptsig_asm": "1 1 1 1 1 63727970746f677261706879",
+  "witness_stack_len": 0,
+  "java_blocker": "script verification failed for input 0 @108972",
+  "missing_rule": "OP_2SWAP (0x72), OP_PICK (0x79), OP_2OVER (0x70), OP_DEPTH (0x74) in legacy P2SH redeem"
+}

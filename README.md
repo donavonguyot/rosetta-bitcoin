@@ -1,7 +1,7 @@
 # RosettaBitcoin Workspace
 
-`~/RB` is a multi-port Bitcoin testnet4 validation workspace. The root repo
-is the coordination layer; each serious node implementation keeps its own repo.
+`~/RB` is a multi-port Bitcoin testnet4 validation workspace and a single
+root-owned monorepo. There is exactly one Git repository, at the workspace root.
 
 ## Canonical Read Order
 
@@ -23,7 +23,7 @@ is the coordination layer; each serious node implementation keeps its own repo.
 | `docs/` | Shared lessons, blocker handoffs, port matrix, topology |
 | `NodeCore/` | Cross-port contracts, fixtures, conformance manifests/results |
 | `Project/` | Observational status/proof imports and reports |
-| `Nodes/` | Independent node implementation repos |
+| `Nodes/` | Root-owned node implementation directories |
 | `Nodes/Reference/` | Local Bitcoin Core testnet4 reference peer recipe |
 
 ## Compliance Boundaries
@@ -38,9 +38,9 @@ Docker contract declarations are validated with:
 python3 NodeCore/docker/validate_docker_contract.py
 ```
 
-Live datadirs, build outputs, local DBs, logs, and port repository metadata are
-not root-owned artifacts. Compact proof JSON that supports a project claim
-belongs under `NodeCore/conformance/results/`; see
+Live datadirs, build outputs, local DBs, logs, dependency caches, and nested Git
+metadata are not root-owned artifacts. Compact proof JSON that supports a
+project claim belongs under `NodeCore/conformance/results/`; see
 [`docs/artifact-retention.md`](docs/artifact-retention.md).
 
 ## Binary Gate

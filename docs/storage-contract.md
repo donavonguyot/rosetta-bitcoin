@@ -27,8 +27,11 @@ block lookup, UTXO lookup, or status truth.
   `NodeCore/conformance/results/`.
 - CSharpNode has RocksDB codec/storage proof artifacts and a persistent Docker
   sync volume using native chainstate.
-- TypeScript and Python currently remain SQLite-based by design and therefore
-  are not making native/Core storage claims.
+- TypeScript currently remains SQLite-based and is not making a native/Core
+  storage claim.
+- Python's old SQLite scout path is legacy evidence only. Python parity requires
+  a full break to RocksDB-owned operational truth, native crypto, full Docker
+  proof/supervisor, and fresh blocker replay from empty native state.
 - Cpp's compliance path is RocksDB-only. Cpp is not compliant unless RocksDB
   owns all operational node truth without opening SQLite.
 

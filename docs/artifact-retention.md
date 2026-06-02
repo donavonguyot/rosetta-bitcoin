@@ -10,11 +10,11 @@ unless they have been promoted to a canonical result.
 |-------|-------|------------|---------|-------|
 | Canonical project evidence | Root | `NodeCore/conformance/results/` | Yes | Compact JSON proof that supports a project-level claim. |
 | Shared schemas/manifests | Root | `NodeCore/conformance/`, `NodeCore/docker/` | Yes | Contracts, fixture IDs, Docker manifests, validators. |
-| Port durable evidence | Port repo | `Nodes/<Port>/docs/`, `Nodes/<Port>/tests/fixtures/`, intentional `snapshots/` | Port-specific | Blocker facts, fixtures, and settled checkpoint exports. |
+| Port durable evidence | Root | `Nodes/<Port>/docs/`, `Nodes/<Port>/tests/fixtures/`, intentional `snapshots/` | Yes | Blocker facts, fixtures, and settled checkpoint exports. |
 | Observational aggregate | Root | `Project/project.db`, `Project/reports/generated/` | No | Generated imports/reports. Rebuild from canonical JSON or status exports. |
 | Runtime state | Port-local | `data*`, `blocks/`, RocksDB/LevelDB dirs, local DB files | No | Live truth for a port, never a root-owned artifact. |
 | Generated build output | Port-local | `build*/`, `target/`, `dist/`, `_build/`, `deps/`, `node_modules/`, `.venv/` | No | Regenerate from source. |
-| Legacy cruft | None | N/A | No | Stale logs, duplicate proof dirs, temp observer DBs, crash dumps, stale pid/lock files. |
+| Legacy cruft | None | N/A | No | Stale logs, duplicate proof dirs, temp observer DBs, crash dumps, stale pid/lock files, nested `.git/` metadata. |
 
 ## Canonical Result Naming
 
@@ -46,7 +46,7 @@ directories. Export a compact proof JSON instead.
 
 ## Port-Local Evidence
 
-Keep port-specific durable evidence in the port repo:
+Keep port-specific durable evidence in root-owned port directories:
 
 - `docs/BLOCKER_LEDGER.md`
 - `docs/STATUS.md`
