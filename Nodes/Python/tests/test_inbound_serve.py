@@ -320,7 +320,7 @@ async def test_dispatch_inbound_getheaders_sends_compact_headers_wire(tmp_path):
     assert len(hm.headers) == 1
     assert hm.headers[0].block_hash() == bh1.block_hash()
 
-    caps = list(tracker.db["wire_capabilities"].rows_where("capability_id = ?", ["serve.getheaders"], limit=1))
+    caps = list([tracker.get_wire_capability("serve.getheaders")])
     assert caps and caps[0]["implemented"]
     tracker.close()
 

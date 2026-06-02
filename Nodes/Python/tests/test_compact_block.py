@@ -179,7 +179,7 @@ async def test_peer_dispatch_cmpctblock_marks_wire_capability(tmp_path):
         prefilled=(PrefilledTransaction(index=0, tx=_minimal_coinbase()),),
     )
     await peer._dispatch(CompactBlockMessage.COMMAND, msg.serialize())
-    row = list(tracker.db["wire_capabilities"].rows_where("capability_id = ?", ["ext.cmpctblock"], limit=1))[0]
+    row = list([tracker.get_wire_capability("ext.cmpctblock")])[0]
     assert row["implemented"] == 1
     assert "partial" in row["notes"] or "parsed inbound cmpctblock" in row["notes"].lower()
     tracker.close()
@@ -228,7 +228,7 @@ async def test_peer_dispatch_cmpctblock_reconstructed_with_mock_mempool(tmp_path
     mempool.iter_pooled_transactions.return_value = iter([spend])
     peer.mempool = mempool
     await peer._dispatch(CompactBlockMessage.COMMAND, msg.serialize())
-    row = list(tracker.db["wire_capabilities"].rows_where("capability_id = ?", ["ext.cmpctblock"], limit=1))[0]
+    row = list([tracker.get_wire_capability("ext.cmpctblock")])[0]
     assert row["implemented"] == 1
     assert "reconstructed" in row["notes"]
     mempool.iter_pooled_transactions.assert_called_once_with()
@@ -325,11 +325,11 @@ async def test_peer_cmpctblock_sends_getblocktxn_then_accept_blocktxn(tmp_path):
     await peer._dispatch(BlockTxnMessage.COMMAND, reply.serialize())
 
     notes = [
-        row["notes"] for row in tracker.db["wire_capabilities"].rows_where("capability_id = ?", ["ext.cmpctblock"])
+        row["notes"] for row in [tracker.get_wire_capability("ext.cmpctblock")]
     ]
     assert any("blocktxn" in n.lower() for n in notes)
     getblocktxn_rows = list(
-        tracker.db["wire_capabilities"].rows_where("capability_id = ?", ["ext.getblocktxn"], limit=5)
+        [tracker.get_wire_capability("ext.getblocktxn")]
     )
     assert len(getblocktxn_rows) >= 1
     assert getblocktxn_rows[0]["implemented"] == 1
@@ -390,7 +390,7 @@ async def test_peer_cmpctblock_partial_mempool_then_blocktxn_merges_shortids(tmp
     await peer._dispatch(BlockTxnMessage.COMMAND, reply.serialize())
 
     notes = [
-        row["notes"] for row in tracker.db["wire_capabilities"].rows_where("capability_id = ?", ["ext.cmpctblock"])
+        row["notes"] for row in [tracker.get_wire_capability("ext.cmpctblock")]
     ]
     assert any("getblocktxn + blocktxn" in n.lower() for n in notes)
     mempool.iter_pooled_transactions.assert_called_once_with()

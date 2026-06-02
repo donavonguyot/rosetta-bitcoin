@@ -10,9 +10,9 @@ from pybitnode import healthcheck
 
 
 def test_docker_health_document_exposes_tracker_metrics(tmp_path):
-    db = tmp_path / "hc-chainstate"
-    settings = Settings(chain="testnet4", db_path=str(db))
-    tracker = ProjectTracker(settings.resolved_db_path())
+    state_path = tmp_path / "hc-chainstate"
+    settings = Settings(chain="testnet4", state_path=str(state_path))
+    tracker = ProjectTracker(settings.resolved_state_path())
 
     tracker.set_validated_tip(11, "aa" * 32, chain="testnet4")
     tracker.record_block(1, "bb" * 32, file_name="blk.dat", file_offset=0, size=100)
@@ -114,11 +114,11 @@ def test_validate_healthcheck_payload_ignores_unknown_top_level_keys():
 
 
 def test_healthcheck_main_writes_json_and_ok(tmp_path, monkeypatch, capsys):
-    db = tmp_path / "hm-chainstate"
-    monkeypatch.setenv("DB_PATH", str(db))
+    state_path = tmp_path / "hm-chainstate"
+    monkeypatch.setenv("STATE_PATH", str(state_path))
     monkeypatch.setenv("CHAIN", "testnet4")
 
-    tracker = ProjectTracker(str(db))
+    tracker = ProjectTracker(str(state_path))
     tracker.upsert_sync_state("testnet4", sync_status="headers_current")
     tracker.close()
 
@@ -131,11 +131,11 @@ def test_healthcheck_main_writes_json_and_ok(tmp_path, monkeypatch, capsys):
 
 
 def test_healthcheck_main_fails_when_sync_error(tmp_path, monkeypatch, capsys):
-    db = tmp_path / "bad-chainstate"
-    monkeypatch.setenv("DB_PATH", str(db))
+    state_path = tmp_path / "bad-chainstate"
+    monkeypatch.setenv("STATE_PATH", str(state_path))
     monkeypatch.setenv("CHAIN", "testnet4")
 
-    tracker = ProjectTracker(str(db))
+    tracker = ProjectTracker(str(state_path))
     tracker.upsert_sync_state("testnet4", sync_status="error")
     tracker.close()
 
@@ -149,9 +149,9 @@ def test_healthcheck_main_fails_when_sync_error(tmp_path, monkeypatch, capsys):
 
 
 def test_healthcheck_last_error_when_meta_set(tmp_path):
-    db = tmp_path / "le-chainstate"
-    settings = Settings(chain="testnet4", db_path=str(db))
-    tracker = ProjectTracker(settings.resolved_db_path())
+    state_path = tmp_path / "le-chainstate"
+    settings = Settings(chain="testnet4", state_path=str(state_path))
+    tracker = ProjectTracker(settings.resolved_state_path())
     tracker.upsert_sync_state("testnet4", sync_status="running", best_height=1)
     tracker.set_meta("last_error", "connection reset")
     doc = healthcheck.docker_health_document(settings, tracker)
@@ -162,9 +162,9 @@ def test_healthcheck_last_error_when_meta_set(tmp_path):
 
 
 def test_sync_progress_pct_none_when_no_peer_tip(tmp_path):
-    db = tmp_path / "np-chainstate"
-    settings = Settings(chain="testnet4", db_path=str(db))
-    tracker = ProjectTracker(settings.resolved_db_path())
+    state_path = tmp_path / "np-chainstate"
+    settings = Settings(chain="testnet4", state_path=str(state_path))
+    tracker = ProjectTracker(settings.resolved_state_path())
     tracker.set_validated_tip(5, "aa" * 32, chain="testnet4")
     tracker.upsert_sync_state(
         "testnet4",

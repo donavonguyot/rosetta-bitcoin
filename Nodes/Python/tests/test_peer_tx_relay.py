@@ -249,7 +249,7 @@ async def test_reply_getdata_serves_pool_tx(tmp_path):
     assert got.serialize(include_witness=False) == tx.serialize(include_witness=False)
 
     cap = list(
-        tracker.db["wire_capabilities"].rows_where("capability_id = ?", ["serve.getdata.txs"], limit=1)
+        [tracker.get_wire_capability("serve.getdata.txs")]
     )
     assert cap and cap[0]["implemented"] == 1
     tracker.close()
@@ -294,7 +294,7 @@ async def test_broadcast_witness_block_inv_announces_tip(tmp_path):
     assert inv_a.inventory[0].hash == bh
 
     cap = list(
-        tracker.db["wire_capabilities"].rows_where("capability_id = ?", ["serve.inv.blocks"], limit=1)
+        [tracker.get_wire_capability("serve.inv.blocks")]
     )
     assert cap and cap[0]["implemented"] == 1
 

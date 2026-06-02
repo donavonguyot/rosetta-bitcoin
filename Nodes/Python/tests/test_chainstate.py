@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import pytest
+
 from pybitnode.chain.genesis import TESTNET4_GENESIS
 from pybitnode.chain.params import TESTNET4
-from pybitnode.db.schema import SCHEMA_VERSION
-from pybitnode.chainstate.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import SCHEMA_VERSION, ProjectTracker
+from pybitnode.config import Settings
 from pybitnode.messages.headers import HeadersMessage
 from pybitnode.sync.headers import ensure_genesis, genesis_locator, next_locator, persist_headers, repair_sync_state
 
 
-def test_schema_initialization(tmp_path):
+def test_chainstate_initialization(tmp_path):
     tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
     assert tracker.get_meta("schema_version") == str(SCHEMA_VERSION)
     assert len(tracker.list_phases()) == 6
@@ -24,10 +26,17 @@ def test_native_tracker_creates_no_sqlite_artifacts(tmp_path):
     forbidden = [
         path
         for path in tmp_path.rglob("*")
-        if path.suffix in {"-chainstate", ".sqlite", ".sqlite3"}
+        if path.suffix in {".db", ".sqlite", ".sqlite3"}
         or path.name.endswith((".db-wal", ".db-shm", ".db-journal"))
     ]
     assert forbidden == []
+
+
+def test_legacy_db_env_is_rejected(monkeypatch):
+    monkeypatch.setenv("DB_PATH", "/tmp/pybitnode.db")
+    monkeypatch.delenv("STATE_PATH", raising=False)
+    with pytest.raises(RuntimeError, match="DB_PATH is retired"):
+        Settings.from_env()
 
 
 def test_tracker_project_phases_and_events(tmp_path):

@@ -90,7 +90,7 @@ def test_increment_peer_ban_updates_aggregate_and_peer_row(tmp_path):
     pid = tracker.record_peer_connected("203.0.113.81", 48333)
     delta = 12
     tracker.increment_peer_ban_score("203.0.113.81", 48333, delta, peer_id=pid)
-    prow = list(tracker.db["peers"].rows_where("id = ?", [pid], limit=1))[0]
+    prow = list([tracker.get_peer(pid)])[0]
 
     assert tracker.get_peer_endpoint_ban_score("203.0.113.81", 48333) == delta
     assert int(prow["ban_score"]) == delta

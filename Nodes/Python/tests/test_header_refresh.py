@@ -133,8 +133,8 @@ async def test_sync_blocks_skips_network_header_refresh_when_target_covered(
 ):
     from pybitnode.sync_runner import sync_blocks
 
-    db_path = tmp_path / "run-chainstate"
-    tracker = ProjectTracker(db_path)
+    state_path = tmp_path / "run-chainstate"
+    tracker = ProjectTracker(state_path)
     _seed_headers_through(tracker, 100)
     tracker.set_validated_tip(5, "0" * 64)
     tracker.close()
@@ -170,7 +170,7 @@ async def test_sync_blocks_skips_network_header_refresh_when_target_covered(
 
     settings = Settings(
         data_dir=str(tmp_path / "data"),
-        db_path=str(db_path),
+        state_path=str(state_path),
         blocks_target_height=80,
         peers="manual:48333",
     )

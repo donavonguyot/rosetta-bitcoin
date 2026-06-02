@@ -43,7 +43,7 @@ def _patch_peer_manager_no_network(monkeypatch: pytest.MonkeyPatch, *, track_hea
 @pytest.fixture
 def isolated_sync_env(monkeypatch: pytest.MonkeyPatch, tmp_path):
     monkeypatch.delenv("DATA_DIR", raising=False)
-    monkeypatch.delenv("DB_PATH", raising=False)
+    monkeypatch.delenv("STATE_PATH", raising=False)
     monkeypatch.delenv("PEERS", raising=False)
 
 
@@ -57,10 +57,10 @@ async def test_sync_blocks_skips_networked_headers_with_no_header_refresh(
     _patch_peer_manager_no_network(monkeypatch, track_header_sync=sync_header_calls)
 
     datadir = tmp_path / "node"
-    db_path = datadir / "chainstate-rocksdb"
+    state_path = datadir / "chainstate-rocksdb"
     datadir.mkdir(parents=True)
 
-    tracker = ProjectTracker(db_path)
+    tracker = ProjectTracker(state_path)
     from pybitnode.sync.headers import ensure_genesis, repair_sync_state
 
     ensure_genesis(tracker, TESTNET4)
@@ -88,10 +88,10 @@ def test_sync_runner_main_no_header_refresh_cli_skips_headers(
     _patch_peer_manager_no_network(monkeypatch, track_header_sync=sync_header_calls)
 
     datadir = tmp_path / "node"
-    db_path = datadir / "chainstate-rocksdb"
+    state_path = datadir / "chainstate-rocksdb"
     datadir.mkdir(parents=True)
 
-    tracker = ProjectTracker(db_path)
+    tracker = ProjectTracker(state_path)
     from pybitnode.sync.headers import ensure_genesis, repair_sync_state
 
     ensure_genesis(tracker, TESTNET4)

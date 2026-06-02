@@ -9,7 +9,7 @@ The node is organized in layers from **network bytes** at the bottom to **chain 
 ```mermaid
 flowchart TB
     subgraph app["Application / entrypoints"]
-        CLI[pybitnode / pybitnode-sync / pybitnode-db]
+        CLI[pybitnode / pybitnode-sync / pybitnode-status]
         Node[node.py / sync_runner.py]
     end
 
@@ -143,7 +143,7 @@ Checkpoints group binary wire/compatibility criteria. Each checkpoint declares a
 | `cp7_keepalive` | ping/pong + stale disconnect | `phase0` |
 | `cp8_extensions` | Optional protocol extensions (compact blocks, v2 transport, …) | `phase5` |
 
-Implementations mark capabilities in code and via **`ProjectTracker`** (mirrored rows); aggregates are computed with **`checkpoint_status`** and exposed through **`pybitnode-db --wire`**.
+Implementations mark capabilities in code and via **`ProjectTracker`** chainstate records; aggregates are computed with **`checkpoint_status`** and exposed through **`pybitnode-status --wire`**.
 
 ## Key CLI tools
 
@@ -153,6 +153,6 @@ Defined in **`pyproject.toml`** `[project.scripts]`:
 | ------- | ----------- | ---- |
 | **`pybitnode`** | `pybitnode.node:main` | Long-running node: peer bootstrap, header sync, optional block sync/connect, mempool handling, optional inbound listener. |
 | **`pybitnode-sync`** | `pybitnode.sync_runner:main` | Batch-oriented workflow: connect P2P, sync headers/blocks and/or **`--connect-only`** replay from **`storage`**, **`--rebuild`** full UTXO replay. |
-| **`pybitnode-db`** | `chainstate-rocksdb_status:main` | JSON summary of RocksDB native state tracker: sync state, phases, optional **`--wire`**, **`--checkpoint`**, events. |
+| **`pybitnode-status`** | `chainstate_status:main` | JSON summary of RocksDB native chainstate: sync state, phases, optional **`--wire`**, **`--checkpoint`**, events. |
 
 Operational flags, **[environment variable matrix](OPERATIONS.md#environment-variable-matrix)**, and recovery steps are documented in [OPERATIONS.md](OPERATIONS.md).

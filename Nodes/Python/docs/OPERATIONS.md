@@ -549,7 +549,7 @@ Compose sets **`LISTEN=1`**, maps host **`48333`** → container testnet4 P2P, a
 
 Health payload fields include **`header_height`**, **`mempool_size`** (tx count; same as **`mempool_tx_count`**), **`sync_progress_pct`** (validated height vs **`sync_state.best_height`**, capped at 100%), **`last_error`** (RocksDB native state meta **`last_error`; JSON **`null`** if empty), and **`metrics`**: **`blocks_validated_total`**, **`txs_relayed_total`** persisted as **`metric_blocks_validated_total`** / **`metric_txs_relayed_total`** in `meta`. **`validated_height`** and **`summary`** behave as before.
 
-**Prometheus scrape (live `pybitnode` only):** set **`METRICS_HTTP_PORT`** > `0` and scrape **`GET /metrics`** as in [Wire checkpoints, capabilities, and GET /metrics](#wire-checkpoints-capabilities-and-get-metrics); **`METRICS_HTTP_BIND`** defaults **`127.0.0.1`** (use **`0.0.0.0`** in Docker when the scraper is another container). Health probes still rely on **`DB_PATH`** / **`CHAIN`** for **`python -m pybitnode.healthcheck`** alone—metrics HTTP is separate.
+**Prometheus scrape (live `pybitnode` only):** set **`METRICS_HTTP_PORT`** > `0` and scrape **`GET /metrics`** as in [Wire checkpoints, capabilities, and GET /metrics](#wire-checkpoints-capabilities-and-get-metrics); **`METRICS_HTTP_BIND`** defaults **`127.0.0.1`** (use **`0.0.0.0`** in Docker when the scraper is another container). Health probes use **`STATE_PATH`** / **`CHAIN`** for **`python -m pybitnode.healthcheck`**—metrics HTTP is separate.
 
 ---
 

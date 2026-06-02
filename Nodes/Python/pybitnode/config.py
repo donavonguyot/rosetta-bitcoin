@@ -23,7 +23,6 @@ class Settings:
     chain: str = "testnet4"
     data_dir: str = "./data"
     state_path: str = ""
-    db_path: str = ""
     listen: bool = False
     p2p_port: int = 0
     peers: str = ""
@@ -50,9 +49,9 @@ class Settings:
     peer_ban_decay_amount: int = 15
     # Skip outbound getaddr / addr exchange during bootstrap (faster sync if peer hangs up).
     skip_getaddr: bool = False
-    # When True, never call networked header sync — mark headers current and validate/download blocks using DB headers only.
+    # When True, never call networked header sync; use stored native headers for block sync.
     sync_skip_headers: bool = False
-    # pybitnode-sync: skip networked header refresh (manual / automation); still uses DB headers for block sync.
+    # pybitnode-sync: skip networked header refresh; still uses native headers for block sync.
     no_header_refresh: bool = False
     # Defer txs with unknown prevouts into OrphanPool (accept_transaction + defer_orphans).
     enable_orphan_pool: bool = False
@@ -73,6 +72,8 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
+        if os.environ.get("DB_PATH"):
+            raise RuntimeError("DB_PATH is retired; use STATE_PATH for native chainstate")
         par_script_threads = max(1, _env_int("PAR_SCRIPT_THREADS", os.cpu_count() or 1))
         par_script_min_inputs = max(1, _env_int("PAR_SCRIPT_MIN_INPUTS", 2))
         par_script_executor = os.environ.get("PAR_SCRIPT_EXECUTOR", "thread").strip().lower()
@@ -81,7 +82,7 @@ class Settings:
         return cls(
             chain=os.environ.get("CHAIN", "testnet4"),
             data_dir=os.environ.get("DATA_DIR", "./data"),
-            state_path=os.environ.get("STATE_PATH", os.environ.get("DB_PATH", "")),
+            state_path=os.environ.get("STATE_PATH", ""),
             listen=_env_bool("LISTEN", False),
             p2p_port=_env_int("P2P_PORT", 0),
             peers=os.environ.get("PEERS", ""),
@@ -117,13 +118,7 @@ class Settings:
     def resolved_state_path(self) -> str:
         if self.state_path:
             return self.state_path
-        if self.db_path:
-            return self.db_path
         return f"{self.data_dir.rstrip('/')}/chainstate-rocksdb"
-
-    def resolved_db_path(self) -> str:
-        """Compatibility alias for callers not yet renamed to state_path."""
-        return self.resolved_state_path()
 
     def blocks_dir(self) -> str:
         return f"{self.data_dir.rstrip('/')}/blocks"

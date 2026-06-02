@@ -16,9 +16,9 @@ from pybitnode.metrics_http import serve_metrics_http_session
 
 
 def test_prometheus_exposition_shape_and_counters(tmp_path):
-    db = tmp_path / "m-chainstate"
-    settings = Settings(chain="testnet4", db_path=str(db), data_dir=str(tmp_path / "dd"))
-    tracker = ProjectTracker(settings.resolved_db_path())
+    state_path = tmp_path / "m-chainstate"
+    settings = Settings(chain="testnet4", state_path=str(state_path), data_dir=str(tmp_path / "dd"))
+    tracker = ProjectTracker(settings.resolved_state_path())
     tracker.set_meta(META_BLOCKS_VALIDATED_TOTAL, "101")
     tracker.set_meta(META_TXS_RELAYED_TOTAL, "7")
 
@@ -40,9 +40,9 @@ def test_prometheus_exposition_shape_and_counters(tmp_path):
 
 @pytest.mark.asyncio
 async def test_metrics_http_get_metrics_prom_text(tmp_path):
-    db = tmp_path / "mh-chainstate"
-    settings = Settings(chain="testnet4", db_path=str(db), data_dir=str(tmp_path / "dd"))
-    tracker = ProjectTracker(settings.resolved_db_path())
+    state_path = tmp_path / "mh-chainstate"
+    settings = Settings(chain="testnet4", state_path=str(state_path), data_dir=str(tmp_path / "dd"))
+    tracker = ProjectTracker(settings.resolved_state_path())
     tracker.set_meta(META_BLOCKS_VALIDATED_TOTAL, "42")
     tracker.set_meta(META_TXS_RELAYED_TOTAL, "9")
 
@@ -75,9 +75,9 @@ async def test_metrics_http_get_metrics_prom_text(tmp_path):
 
 @pytest.mark.asyncio
 async def test_metrics_http_404_unknown_path(tmp_path):
-    db = tmp_path / "nf-chainstate"
-    settings = Settings(chain="testnet4", db_path=str(db), data_dir=str(tmp_path / "dd"))
-    tracker = ProjectTracker(settings.resolved_db_path())
+    state_path = tmp_path / "nf-chainstate"
+    settings = Settings(chain="testnet4", state_path=str(state_path), data_dir=str(tmp_path / "dd"))
+    tracker = ProjectTracker(settings.resolved_state_path())
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         await serve_metrics_http_session(reader, writer, tracker=tracker, settings=settings)

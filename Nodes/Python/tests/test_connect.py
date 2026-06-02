@@ -161,7 +161,7 @@ def test_disconnect_and_reconnect_block2(tmp_path):
 
     utxos_after_1 = {
         (r["txid"], int(r["vout"]), int(r["height"]), int(r["value"]))
-        for r in tracker.db["utxos"].rows
+        for r in tracker.list_utxos()
     }
 
     connect_block(
@@ -172,26 +172,24 @@ def test_disconnect_and_reconnect_block2(tmp_path):
         expected_hash=bytes.fromhex(hashes[1])[::-1],
     )
     snapshot_after_two = {
-        (r["txid"], int(r["vout"]), int(r["height"]), int(r["value"])) for r in tracker.db["utxos"].rows
+        (r["txid"], int(r["vout"]), int(r["height"]), int(r["value"])) for r in tracker.list_utxos()
     }
 
     # utxo_undo (entries_json): coinbase-only blocks → no external prevout spends to record
     for h in (1, 2):
-        rows_undo = list(
-            tracker.db["utxo_undo"].rows_where("chain = ? AND height = ?", ["testnet4", h], limit=1)
-        )
-        assert len(rows_undo) == 1
-        assert "entries_json" in rows_undo[0]
-        assert json.loads(rows_undo[0]["entries_json"]) == []
+        assert tracker.get_utxo_undo("testnet4", h) == []
 
     assert tracker.get_validated_height("testnet4") == 2
     disconnect_block(tracker, 2, TESTNET4)
 
     assert tracker.get_validated_height("testnet4") == 1
     assert tracker.get_validated_hash("testnet4") == hashes[0]
-    assert not list(tracker.db["utxo_undo"].rows_where("chain = ? AND height = ?", ["testnet4", 2]))
-    assert len(list(tracker.db["utxo_undo"].rows_where("chain = ? AND height = ?", ["testnet4", 1]))) == 1
-    assert {(r["txid"], int(r["vout"]), int(r["height"]), int(r["value"])) for r in tracker.db["utxos"].rows} == utxos_after_1
+    assert tracker.get_utxo_undo("testnet4", 2) is None
+    assert tracker.get_utxo_undo("testnet4", 1) is not None
+    assert {
+        (r["txid"], int(r["vout"]), int(r["height"]), int(r["value"]))
+        for r in tracker.list_utxos()
+    } == utxos_after_1
 
     reconnect = connect_block(
         tracker,
@@ -202,7 +200,8 @@ def test_disconnect_and_reconnect_block2(tmp_path):
     )
     assert tracker.get_validated_height("testnet4") == 2
     assert {
-        (r["txid"], int(r["vout"]), int(r["height"]), int(r["value"])) for r in tracker.db["utxos"].rows
+        (r["txid"], int(r["vout"]), int(r["height"]), int(r["value"]))
+        for r in tracker.list_utxos()
     } == snapshot_after_two
     assert reconnect.transactions and tracker.get_utxo(cb1_txid, 0) is not None
     tracker.close()
@@ -232,12 +231,7 @@ def test_utxo_undo_external_spend_entry_shape(tmp_path):
         }
     ]
     tracker.replace_utxo_undo("testnet4", 9, entries)
-    loaded = json.loads(
-        list(tracker.db["utxo_undo"].rows_where("chain = ? AND height = ?", ["testnet4", 9], limit=1))[0][
-            "entries_json"
-        ]
-    )
-    assert loaded == entries
+    assert tracker.get_utxo_undo("testnet4", 9) == entries
     assert tracker.take_utxo_undo("testnet4", 9) == entries
     tracker.close()
 
@@ -321,7 +315,7 @@ def test_connect_block_timing_event_when_enabled(tmp_path, block1_payload: bytes
         expected_hash=bytes.fromhex("0000000012982b6d5f621229286b880e909984df669c2afabb102ce311b13f28")[::-1],
     )
 
-    rows = list(tracker.db["events"].rows_where("category = ?", ["timing"], limit=1))
+    rows = list(tracker.list_events(category="timing")[:1])
     assert len(rows) == 1
     details = json.loads(rows[0]["details_json"])
     assert details["height"] == 1
@@ -471,7 +465,8 @@ def test_rebuild_validated_chain_restores_utxo_set(tmp_path):
     assert tracker.get_validated_height("testnet4") == 5
     assert tracker.utxo_count() == 5
 
-    tracker.db["utxos"].delete(list(tracker.db["utxos"].rows)[0]["id"])
+    row = tracker.list_utxos()[0]
+    tracker.delete_utxo_by_hex(row["txid"], int(row["vout"]))
     assert tracker.utxo_count() == 4
 
     rebuilt = rebuild_validated_chain(tracker, local_store, TESTNET4)

@@ -121,8 +121,8 @@ def _internal_xonly_bip340_normalized(private_key: int) -> bytes:
 
 
 def test_mempool_accept_taproot_script_path_spend(tmp_path):
-    db = tmp_path / "tr_script_sp-chainstate"
-    tracker = ProjectTracker(str(db))
+    state_path = tmp_path / "tr_script_sp-chainstate"
+    tracker = ProjectTracker(str(state_path))
     prev = bytes.fromhex("44" * 32)
     input_value = 2_250_000
     internal_x = _internal_xonly_bip340_normalized(99)
@@ -157,8 +157,8 @@ def test_mempool_accept_taproot_script_path_spend(tmp_path):
 
 
 def test_mempool_add_remove_roundtrip(tmp_path):
-    db = tmp_path / "t-chainstate"
-    tracker = ProjectTracker(str(db))
+    state_path = tmp_path / "t-chainstate"
+    tracker = ProjectTracker(str(state_path))
     pool = Mempool(max_size_bytes=256 * 1024)
 
     prev = b"\xaa" * 32
