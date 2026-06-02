@@ -5,12 +5,12 @@ import json
 import pytest
 
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode import healthcheck
 
 
 def test_docker_health_document_exposes_tracker_metrics(tmp_path):
-    db = tmp_path / "hc.db"
+    db = tmp_path / "hc-chainstate"
     settings = Settings(chain="testnet4", db_path=str(db))
     tracker = ProjectTracker(settings.resolved_db_path())
 
@@ -114,7 +114,7 @@ def test_validate_healthcheck_payload_ignores_unknown_top_level_keys():
 
 
 def test_healthcheck_main_writes_json_and_ok(tmp_path, monkeypatch, capsys):
-    db = tmp_path / "hm.db"
+    db = tmp_path / "hm-chainstate"
     monkeypatch.setenv("DB_PATH", str(db))
     monkeypatch.setenv("CHAIN", "testnet4")
 
@@ -131,7 +131,7 @@ def test_healthcheck_main_writes_json_and_ok(tmp_path, monkeypatch, capsys):
 
 
 def test_healthcheck_main_fails_when_sync_error(tmp_path, monkeypatch, capsys):
-    db = tmp_path / "bad.db"
+    db = tmp_path / "bad-chainstate"
     monkeypatch.setenv("DB_PATH", str(db))
     monkeypatch.setenv("CHAIN", "testnet4")
 
@@ -149,7 +149,7 @@ def test_healthcheck_main_fails_when_sync_error(tmp_path, monkeypatch, capsys):
 
 
 def test_healthcheck_last_error_when_meta_set(tmp_path):
-    db = tmp_path / "le.db"
+    db = tmp_path / "le-chainstate"
     settings = Settings(chain="testnet4", db_path=str(db))
     tracker = ProjectTracker(settings.resolved_db_path())
     tracker.upsert_sync_state("testnet4", sync_status="running", best_height=1)
@@ -162,7 +162,7 @@ def test_healthcheck_last_error_when_meta_set(tmp_path):
 
 
 def test_sync_progress_pct_none_when_no_peer_tip(tmp_path):
-    db = tmp_path / "np.db"
+    db = tmp_path / "np-chainstate"
     settings = Settings(chain="testnet4", db_path=str(db))
     tracker = ProjectTracker(settings.resolved_db_path())
     tracker.set_validated_tip(5, "aa" * 32, chain="testnet4")

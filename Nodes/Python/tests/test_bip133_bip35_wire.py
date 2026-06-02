@@ -6,7 +6,7 @@ import pytest
 
 from pybitnode.chain.params import TESTNET4
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.messages.fee_filter import (
     FEEFILTER_MIN_VERSION,
     FeeFilterMessage,
@@ -45,7 +45,7 @@ def test_wire_value_from_settings_multiplies_kb():
 async def test_post_verack_outbound_announces_fee_and_requests_mempool(tmp_path):
     recv = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     frm = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
-    tracker = ProjectTracker(tmp_path / "nego.db")
+    tracker = ProjectTracker(tmp_path / "nego-chainstate")
 
     peer = PeerConnection(
         host="127.0.0.1",
@@ -83,7 +83,7 @@ async def test_post_verack_skips_fee_on_inbound(tmp_path):
     recv = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     frm = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
 
-    tracker = ProjectTracker(tmp_path / "nego_in.db")
+    tracker = ProjectTracker(tmp_path / "nego_in-chainstate")
     peer = PeerConnection(
         host="127.0.0.1",
         port=2,
@@ -113,7 +113,7 @@ async def test_post_verack_skips_fee_on_inbound(tmp_path):
 async def test_post_verack_peer_relay_disabled_skips_mempool(tmp_path):
     recv = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     frm = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
-    tracker = ProjectTracker(tmp_path / "norelay.db")
+    tracker = ProjectTracker(tmp_path / "norelay-chainstate")
 
     peer = PeerConnection(
         host="127.0.0.2",
@@ -144,7 +144,7 @@ async def test_post_verack_peer_relay_disabled_skips_mempool(tmp_path):
 async def test_post_verack_legacy_peer_skips_feefilter(tmp_path):
     recv = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     frm = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
-    tracker = ProjectTracker(tmp_path / "legacy.db")
+    tracker = ProjectTracker(tmp_path / "legacy-chainstate")
 
     peer = PeerConnection(
         host="127.0.0.3",

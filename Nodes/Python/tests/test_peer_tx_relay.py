@@ -10,7 +10,7 @@ from pybitnode.consensus.hash import hash160
 from pybitnode.consensus.merkle import transaction_txid
 from pybitnode.consensus.secp256k1 import _scalar_mult, Gx, Gy
 from pybitnode.consensus.witness import transaction_wtxid
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.mempool import Mempool, accept_transaction, transaction_meets_peer_feefilter
 from pybitnode.mempool.mempool import estimate_tx_virtual_size_scaffold
 from pybitnode.messages.block import GetDataMessage, NotFoundMessage
@@ -112,7 +112,7 @@ def test_tx_inventory_need_getdata_skips_when_witness_hash_known():
 
 @pytest.mark.asyncio
 async def test_inv_handler_sends_getdata_for_missing_tx(tmp_path):
-    tracker = ProjectTracker(tmp_path / "inv_tx.db")
+    tracker = ProjectTracker(tmp_path / "inv_tx-chainstate")
     pool = Mempool()
     peer = PeerConnection(
         host="127.0.0.1",
@@ -140,7 +140,7 @@ async def test_inv_handler_sends_getdata_for_missing_tx(tmp_path):
 
 @pytest.mark.asyncio
 async def test_inv_handler_skips_getdata_when_tx_in_mempool(tmp_path):
-    tracker = ProjectTracker(tmp_path / "inv_skip.db")
+    tracker = ProjectTracker(tmp_path / "inv_skip-chainstate")
     pool = Mempool()
     tx = _fund_tracker_and_signed_wire_like_tx(tracker=tracker)
     assert accept_transaction(tx, tracker, mempool_claimed_prevouts=pool.claimed_prevouts_frozen())
@@ -165,7 +165,7 @@ async def test_inv_handler_skips_getdata_when_tx_in_mempool(tmp_path):
 
 @pytest.mark.asyncio
 async def test_peer_manager_relay_skips_source_peer(tmp_path):
-    tracker = ProjectTracker(tmp_path / "relay_mgr.db")
+    tracker = ProjectTracker(tmp_path / "relay_mgr-chainstate")
     mgr = PeerManager(TESTNET4, tracker, Settings())
     source = _RelayPeerStub()
     sink = _RelayPeerStub()
@@ -188,7 +188,7 @@ async def test_peer_manager_relay_skips_source_peer(tmp_path):
 
 @pytest.mark.asyncio
 async def test_peer_dispatches_accept_triggers_relays(tmp_path):
-    tracker = ProjectTracker(tmp_path / "relay_dispatch.db")
+    tracker = ProjectTracker(tmp_path / "relay_dispatch-chainstate")
     pool = Mempool()
     relays: list[tuple[str, Transaction, PeerConnection]] = []
 
@@ -220,7 +220,7 @@ async def test_peer_dispatches_accept_triggers_relays(tmp_path):
 
 @pytest.mark.asyncio
 async def test_reply_getdata_serves_pool_tx(tmp_path):
-    tracker = ProjectTracker(tmp_path / "getdata_srv.db")
+    tracker = ProjectTracker(tmp_path / "getdata_srv-chainstate")
     pool = Mempool()
     tx = _sample_wire_tx()
     assert pool.add(tx)
@@ -257,7 +257,7 @@ async def test_reply_getdata_serves_pool_tx(tmp_path):
 
 @pytest.mark.asyncio
 async def test_reply_getdata_missing_tx_emits_notfound(tmp_path):
-    tracker = ProjectTracker(tmp_path / "getdata_nf.db")
+    tracker = ProjectTracker(tmp_path / "getdata_nf-chainstate")
     peer = PeerConnection(
         host="127.0.0.2",
         port=2,
@@ -279,7 +279,7 @@ async def test_reply_getdata_missing_tx_emits_notfound(tmp_path):
 
 @pytest.mark.asyncio
 async def test_broadcast_witness_block_inv_announces_tip(tmp_path):
-    tracker = ProjectTracker(tmp_path / "inv_tip.db")
+    tracker = ProjectTracker(tmp_path / "inv_tip-chainstate")
     bh = b"\xaa" * 32
     a = _RelayPeerStub()
     b = _RelayPeerStub()
@@ -309,7 +309,7 @@ async def test_broadcast_witness_block_inv_announces_tip(tmp_path):
 
 @pytest.mark.asyncio
 async def test_feefilter_dispatch_stores_peer_filter(tmp_path):
-    tracker = ProjectTracker(tmp_path / "ff_dispatch.db")
+    tracker = ProjectTracker(tmp_path / "ff_dispatch-chainstate")
     peer = PeerConnection(
         host="127.0.0.21",
         port=21,
@@ -327,7 +327,7 @@ async def test_feefilter_dispatch_stores_peer_filter(tmp_path):
 
 @pytest.mark.asyncio
 async def test_feefilter_dispatch_updates_on_repeat(tmp_path):
-    tracker = ProjectTracker(tmp_path / "ff_update.db")
+    tracker = ProjectTracker(tmp_path / "ff_update-chainstate")
     peer = PeerConnection(
         host="127.0.0.22",
         port=22,
@@ -377,7 +377,7 @@ def _signed_p2pkh_with_prev(
 
 @pytest.mark.asyncio
 async def test_peer_manager_relay_skips_when_below_peer_feefilter(tmp_path):
-    tracker = ProjectTracker(tmp_path / "relay_ff_skip.db")
+    tracker = ProjectTracker(tmp_path / "relay_ff_skip-chainstate")
     prev = b"\xce" * 32
     input_value = 700_000
     peer_filter_sat_kvb = 100 * 1000
@@ -411,7 +411,7 @@ async def test_peer_manager_relay_skips_when_below_peer_feefilter(tmp_path):
 
 @pytest.mark.asyncio
 async def test_peer_manager_relay_after_feefilter_zero(tmp_path):
-    tracker = ProjectTracker(tmp_path / "relay_ff_zero.db")
+    tracker = ProjectTracker(tmp_path / "relay_ff_zero-chainstate")
     prev = b"\xd0" * 32
     input_value = 700_000
     peer_filter_sat_kvb = 100 * 1000
@@ -448,7 +448,7 @@ async def test_peer_manager_relay_after_feefilter_zero(tmp_path):
 async def test_inv_handler_batches_getdata_for_many_tx_hashes(monkeypatch, tmp_path):
     monkeypatch.setattr("pybitnode.p2p.peer.MAX_GETDATA_TX_BATCH", 2)
 
-    tracker = ProjectTracker(tmp_path / "inv_batch.db")
+    tracker = ProjectTracker(tmp_path / "inv_batch-chainstate")
     pool = Mempool()
     peer = PeerConnection(
         host="127.0.0.5",

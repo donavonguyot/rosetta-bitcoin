@@ -11,7 +11,7 @@ import contextlib
 import logging
 
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.metrics import prometheus_exposition_format
 
 logger = logging.getLogger(__name__)

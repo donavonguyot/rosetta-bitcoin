@@ -3,7 +3,7 @@ from __future__ import annotations
 from pybitnode.chain.genesis import TESTNET4_GENESIS
 from pybitnode.chain.params import TESTNET4
 from pybitnode.db.schema import SCHEMA_VERSION
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.messages.headers import HeadersMessage
 from pybitnode.sync.headers import ensure_genesis, genesis_locator, next_locator, persist_headers, repair_sync_state
 
@@ -24,7 +24,7 @@ def test_native_tracker_creates_no_sqlite_artifacts(tmp_path):
     forbidden = [
         path
         for path in tmp_path.rglob("*")
-        if path.suffix in {".db", ".sqlite", ".sqlite3"}
+        if path.suffix in {"-chainstate", ".sqlite", ".sqlite3"}
         or path.name.endswith((".db-wal", ".db-shm", ".db-journal"))
     ]
     assert forbidden == []

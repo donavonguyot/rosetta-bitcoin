@@ -38,10 +38,10 @@ def test_block_store_write_and_read(tmp_path):
 
 def test_list_missing_block_heights(tmp_path):
     from pybitnode.chain.params import TESTNET4
-    from pybitnode.db.tracker import ProjectTracker
+    from pybitnode.chainstate.tracker import ProjectTracker
     from pybitnode.sync.headers import ensure_genesis
 
-    tracker = ProjectTracker(tmp_path / "blocks.db")
+    tracker = ProjectTracker(tmp_path / "blocks-chainstate")
     ensure_genesis(tracker, TESTNET4)
     tracker.record_header(1, "hash1", TESTNET4.genesis_hash, 100)
     tracker.record_header(2, "hash2", "hash1", 200)
@@ -94,7 +94,7 @@ async def test_request_block_from_peers_parallel_none_when_all_miss():
 @pytest.mark.asyncio
 async def test_sync_blocks_batch_parallel_marks_capability_and_bounded_gather(tmp_path, monkeypatch):
     from pybitnode.chain.params import TESTNET4
-    from pybitnode.db.tracker import ProjectTracker
+    from pybitnode.chainstate.tracker import ProjectTracker
     from pybitnode.storage.blocks import BlockStore
     from pybitnode.sync.blocks import sync_blocks_batch
     from pybitnode.sync.headers import ensure_genesis
@@ -132,7 +132,7 @@ async def test_sync_blocks_batch_parallel_marks_capability_and_bounded_gather(tm
     # One peer so each in-flight block maps to a single request_block (peak == 3 for 3 heights).
     peers = [_Peer()]
 
-    tracker = ProjectTracker(tmp_path / "par.db")
+    tracker = ProjectTracker(tmp_path / "par-chainstate")
     ensure_genesis(tracker, TESTNET4)
     prev_hex = TESTNET4.genesis_hash
     for height in range(1, 4):

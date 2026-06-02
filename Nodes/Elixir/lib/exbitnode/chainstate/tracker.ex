@@ -1,4 +1,4 @@
-defmodule Exbitnode.Db.ProjectTracker do
+defmodule Exbitnode.Chainstate.Tracker do
   @moduledoc false
 
   alias Exbitnode.{Messages.BlockHeaderCodec, Util.Hex}

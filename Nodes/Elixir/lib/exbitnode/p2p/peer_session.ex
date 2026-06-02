@@ -1,6 +1,8 @@
 defmodule Exbitnode.P2p.PeerSession do
   @moduledoc false
 
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
+
   import Bitwise
 
   alias Exbitnode.Messages.{BlockMessage, HandshakeMessages, HeadersMessage, InventoryMessages}
@@ -194,7 +196,7 @@ defmodule Exbitnode.P2p.PeerSession do
   end
 
   defp record_peer(%__MODULE__{conn: conn, host: host, port: port, remote_version: rv}) do
-    Exbitnode.Db.ProjectTracker.record_peer_connected(
+    ChainstateTracker.record_peer_connected(
       conn,
       host,
       port,

@@ -12,7 +12,7 @@ from pybitnode.consensus.script.interpreter import _taproot_tweak_pubkey_xonly
 from pybitnode.consensus.script.sighash import tapleaf_hash
 from pybitnode.consensus.secp256k1 import N, _scalar_mult, Gx, Gy
 from pybitnode.consensus.witness import transaction_wtxid
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.mempool import Mempool, accept_transaction, transaction_meets_peer_feefilter, OrphanPool
 from pybitnode.mempool.mempool import collect_missing_prevouts, estimate_tx_virtual_size_scaffold
 from pybitnode.messages.compact_block import (
@@ -121,7 +121,7 @@ def _internal_xonly_bip340_normalized(private_key: int) -> bytes:
 
 
 def test_mempool_accept_taproot_script_path_spend(tmp_path):
-    db = tmp_path / "tr_script_sp.db"
+    db = tmp_path / "tr_script_sp-chainstate"
     tracker = ProjectTracker(str(db))
     prev = bytes.fromhex("44" * 32)
     input_value = 2_250_000
@@ -157,7 +157,7 @@ def test_mempool_accept_taproot_script_path_spend(tmp_path):
 
 
 def test_mempool_add_remove_roundtrip(tmp_path):
-    db = tmp_path / "t.db"
+    db = tmp_path / "t-chainstate"
     tracker = ProjectTracker(str(db))
     pool = Mempool(max_size_bytes=256 * 1024)
 
@@ -291,14 +291,14 @@ def test_mempool_get_for_inv_witness_vs_tx_hash():
     ],
 )
 def test_accept_transaction_rejects_when_structure_invalid(tmp_path, tx_factory: object) -> None:
-    tracker = ProjectTracker(str(tmp_path / "structure.db"))
+    tracker = ProjectTracker(str(tmp_path / "structure-chainstate"))
     tx = tx_factory()
     assert accept_transaction(tx, tracker) is False
     tracker.close()
 
 
 def test_accept_transaction_accepts_valid_p2pkh_spend(tmp_path) -> None:
-    tracker = ProjectTracker(str(tmp_path / "good_p2pkh.db"))
+    tracker = ProjectTracker(str(tmp_path / "good_p2pkh-chainstate"))
     prev = b"\x12" * 32
     input_value = 1_234_568
     pubkey = _test_pubkey_sec1()
@@ -334,7 +334,7 @@ def _spend_prev(prevout: bytes, output_value: int) -> Transaction:
 
 
 def test_accept_transaction_min_relay_rejects_unknown_prevouts(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "relay_prev.db"))
+    tracker = ProjectTracker(str(tmp_path / "relay_prev-chainstate"))
     tx = _spend_prev(b"\xbb" * 32, output_value=1)
     policies = Settings(min_relay_feerate_sat_vb=1)
     assert accept_transaction(tx, tracker, settings=policies) is False
@@ -342,7 +342,7 @@ def test_accept_transaction_min_relay_rejects_unknown_prevouts(tmp_path):
 
 
 def test_accept_transaction_min_relay_rejects_below_threshold(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "relay_below.db"))
+    tracker = ProjectTracker(str(tmp_path / "relay_below-chainstate"))
     prev = b"\xcc" * 32
     input_value = 500_000
     pubkey = _test_pubkey_sec1()
@@ -370,7 +370,7 @@ def test_accept_transaction_min_relay_rejects_below_threshold(tmp_path):
 
 
 def test_accept_transaction_negative_fee_checked_after_verification_stub(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "negative_fee.db"))
+    tracker = ProjectTracker(str(tmp_path / "negative_fee-chainstate"))
     prev = b"\xcf" * 32
     _fund_utxo(tracker=tracker, prevout=prev, value=10_000)
     bogus = Transaction(
@@ -401,7 +401,7 @@ def test_accept_transaction_negative_fee_checked_after_verification_stub(tmp_pat
 
 
 def test_accept_transaction_rejects_duplicate_prevouts_within_same_tx(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "dup_prev.db"))
+    tracker = ProjectTracker(str(tmp_path / "dup_prev-chainstate"))
     prev = b"\xda" * 32
     input_value = 90_000
     pubkey = _test_pubkey_sec1()
@@ -432,7 +432,7 @@ def test_accept_transaction_rejects_duplicate_prevouts_within_same_tx(tmp_path):
 
 
 def test_accept_transaction_second_spend_conflict_when_mempool_claims_prevout(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "mempool_ds.db"))
+    tracker = ProjectTracker(str(tmp_path / "mempool_ds-chainstate"))
     prev = b"\xdb" * 32
     input_value = 400_000
     pubkey = _test_pubkey_sec1()
@@ -453,7 +453,7 @@ def test_accept_transaction_second_spend_conflict_when_mempool_claims_prevout(tm
 
 
 def test_mempool_claimed_prevouts_roundtrip_when_add_then_remove(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "claim_round.db"))
+    tracker = ProjectTracker(str(tmp_path / "claim_round-chainstate"))
     pool = Mempool(tracker=None)
     prev = b"\xdc" * 32
     input_value = 800_000
@@ -469,7 +469,7 @@ def test_mempool_claimed_prevouts_roundtrip_when_add_then_remove(tmp_path):
 
 
 def test_transaction_meets_peer_feefilter_passes_until_peer_announces(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "ff_utxo.db"))
+    tracker = ProjectTracker(str(tmp_path / "ff_utxo-chainstate"))
     prev = b"\xee" * 32
     _fund_utxo(tracker=tracker, prevout=prev, value=600_000)
     tx = _spend_prev(prev, output_value=599_990)
@@ -479,7 +479,7 @@ def test_transaction_meets_peer_feefilter_passes_until_peer_announces(tmp_path):
 
 
 def test_transaction_meets_peer_feefilter_below_peer_minimum(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "ff_below.db"))
+    tracker = ProjectTracker(str(tmp_path / "ff_below-chainstate"))
     prev = b"\xff" * 32
     input_value = 700_000
     _fund_utxo(tracker=tracker, prevout=prev, value=input_value)
@@ -500,7 +500,7 @@ def test_transaction_meets_peer_feefilter_below_peer_minimum(tmp_path):
 
 
 def test_accept_transaction_min_relay_accepts_exact_threshold(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "relay_ok.db"))
+    tracker = ProjectTracker(str(tmp_path / "relay_ok-chainstate"))
     prev = b"\xdd" * 32
     input_value = 800_000
     pubkey = _test_pubkey_sec1()
@@ -656,7 +656,7 @@ def _block_header_sid_fixture() -> BlockHeader:
 
 
 def test_mempool_iter_pooled_transactions_bip152_short_id_map(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "mempool_bip152_map.db"))
+    tracker = ProjectTracker(str(tmp_path / "mempool_bip152_map-chainstate"))
     pool = Mempool(tracker=tracker, max_size_bytes=4 * 1024 * 1024)
     coinbase = Transaction(
         version=2,
@@ -700,7 +700,7 @@ def test_mempool_iter_pooled_transactions_bip152_short_id_map(tmp_path):
 
 def test_accept_transaction_skips_orphan_when_defer_orphans_disabled(tmp_path):
     """enable_orphan_pool alone does nothing without defer_orphans (enqueue gate)."""
-    tracker = ProjectTracker(str(tmp_path / "orp_defer_off.db"))
+    tracker = ProjectTracker(str(tmp_path / "orp_defer_off-chainstate"))
     prev = b"\xf5" * 32
     tx_child = Transaction(
         version=2,
@@ -760,7 +760,7 @@ def test_orphan_pool_invalid_constructor():
 
 
 def test_accept_transaction_skips_orphan_without_settings_toggle(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "orp_no.cfg.db"))
+    tracker = ProjectTracker(str(tmp_path / "orp_no.cfg-chainstate"))
     prev = b"\xf0" * 32
     tx_child = Transaction(
         version=2,
@@ -790,7 +790,7 @@ def test_accept_transaction_skips_orphan_without_settings_toggle(tmp_path):
 
 
 def test_accept_transaction_queues_orphans_when_enabled(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "orp_yes.db"))
+    tracker = ProjectTracker(str(tmp_path / "orp_yes-chainstate"))
     prev = b"\xf1" * 32
     tx_child = Transaction(
         version=2,
@@ -821,7 +821,7 @@ def test_accept_transaction_queues_orphans_when_enabled(tmp_path):
 
 
 def test_mempool_promotes_orphan_when_parent_arrives_first_in_orphan_then_mempool(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "orp_chain.db"))
+    tracker = ProjectTracker(str(tmp_path / "orp_chain-chainstate"))
     prev_a = b"\xf3" * 32
     parent_amt = 400_000
     parent_out_to_child = 300_000
@@ -876,7 +876,7 @@ def test_mempool_promotes_orphan_when_parent_arrives_first_in_orphan_then_mempoo
 
 
 def test_orphan_pool_respects_transaction_limit(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "orp_limit.db"))
+    tracker = ProjectTracker(str(tmp_path / "orp_limit-chainstate"))
     policies = Settings(enable_orphan_pool=True)
     orphans = OrphanPool(max_transactions=1, max_size_bytes=256 * 1024)
 
@@ -920,7 +920,7 @@ def test_orphan_pool_respects_transaction_limit(tmp_path):
 
 
 def test_collect_missing_prevouts_finds_utxo_via_overlay_only(tmp_path):
-    tracker = ProjectTracker(str(tmp_path / "ovl.db"))
+    tracker = ProjectTracker(str(tmp_path / "ovl-chainstate"))
     parent = Transaction(
         version=2,
         inputs=(

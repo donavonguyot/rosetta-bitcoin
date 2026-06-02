@@ -20,6 +20,7 @@ dev = [
 
 [project.scripts]
 pybitnode = "pybitnode.node:main"
+pybitnode-status = "pybitnode.chainstate_status:main"
 pybitnode-db = "pybitnode.db_status:main"
 pybitnode-rocksdb-proof = "pybitnode.storage.rocksdb_proof:main"
 pybitnode-sync = "pybitnode.sync_runner:main"

@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { getChain } from "../chain/params.js";
 import { Settings } from "../config/settings.js";
 import { secp256k1BackendInfo } from "../consensus/cryptoBackend.js";
-import { ChainstateSession, TSBITNODE_SQLITE_DB } from "../db/chainstateSession.js";
+import { ChainstateSession, TSBITNODE_SQLITE_DB } from "../chainstate/chainstateSession.js";
 import { VERSION } from "../version.js";
 import { parseCli } from "./args.js";
 

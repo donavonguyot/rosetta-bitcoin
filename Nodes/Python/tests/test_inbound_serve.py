@@ -8,7 +8,7 @@ import pytest
 from pybitnode.chain.params import TESTNET4
 from pybitnode.config import Settings
 from pybitnode.consensus.witness import transaction_wtxid
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.mempool import Mempool
 from pybitnode.messages.block import BlockMessage, GetDataMessage, NotFoundMessage
 from pybitnode.messages.compact_block import serialize_block_wire
@@ -52,7 +52,7 @@ def _peer_conn(tracker: ProjectTracker, **kwargs: object) -> PeerConnection:
 
 @pytest.mark.asyncio
 async def test_inbound_getdata_msg_block_reads_block_store(tmp_path):
-    tracker = ProjectTracker(tmp_path / "gd_blk.db")
+    tracker = ProjectTracker(tmp_path / "gd_blk-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     payload, h1 = _height1_block_wire(g)
 
@@ -88,7 +88,7 @@ async def test_inbound_getdata_msg_block_reads_block_store(tmp_path):
 
 @pytest.mark.asyncio
 async def test_inbound_getdata_empty_inventory_no_peer_send(tmp_path):
-    tracker = ProjectTracker(tmp_path / "gd_empty.db")
+    tracker = ProjectTracker(tmp_path / "gd_empty-chainstate")
     peer = _peer_conn(tracker)
     peer.send = AsyncMock()
     local = BlockStore(tmp_path / "eblk", TESTNET4.magic)
@@ -99,7 +99,7 @@ async def test_inbound_getdata_empty_inventory_no_peer_send(tmp_path):
 
 @pytest.mark.asyncio
 async def test_inbound_getdata_block_missing_from_index_notfound_only(tmp_path):
-    tracker = ProjectTracker(tmp_path / "gd_nf.db")
+    tracker = ProjectTracker(tmp_path / "gd_nf-chainstate")
     peer = _peer_conn(tracker)
     peer.send = AsyncMock()
     local = BlockStore(tmp_path / "empty_blocks", TESTNET4.magic)
@@ -112,7 +112,7 @@ async def test_inbound_getdata_block_missing_from_index_notfound_only(tmp_path):
 
 @pytest.mark.asyncio
 async def test_inbound_getdata_row_present_read_raises_oserror_notfound(tmp_path, monkeypatch):
-    tracker = ProjectTracker(tmp_path / "gd_ose.db")
+    tracker = ProjectTracker(tmp_path / "gd_ose-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     payload, h1 = _height1_block_wire(g)
 
@@ -143,7 +143,7 @@ async def test_inbound_getdata_row_present_read_raises_oserror_notfound(tmp_path
 
 @pytest.mark.asyncio
 async def test_inbound_getdata_block_hash_mismatch_notfound(tmp_path):
-    tracker = ProjectTracker(tmp_path / "gd_mis.db")
+    tracker = ProjectTracker(tmp_path / "gd_mis-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     payload, h1 = _height1_block_wire(g)
 
@@ -169,7 +169,7 @@ async def test_inbound_getdata_block_hash_mismatch_notfound(tmp_path):
 
 @pytest.mark.asyncio
 async def test_inbound_getdata_serves_first_block_then_notfound_second(tmp_path):
-    tracker = ProjectTracker(tmp_path / "gd_mix.db")
+    tracker = ProjectTracker(tmp_path / "gd_mix-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     payload, h1 = _height1_block_wire(g)
 
@@ -206,7 +206,7 @@ async def test_inbound_getdata_serves_first_block_then_notfound_second(tmp_path)
 
 @pytest.mark.asyncio
 async def test_inbound_getdata_msg_tx_no_mempool_sends_notfound(tmp_path):
-    tracker = ProjectTracker(tmp_path / "gd_ntx.db")
+    tracker = ProjectTracker(tmp_path / "gd_ntx-chainstate")
     peer = _peer_conn(tracker)
     peer.send = AsyncMock()
     local = BlockStore(tmp_path / "nblo", TESTNET4.magic)
@@ -218,7 +218,7 @@ async def test_inbound_getdata_msg_tx_no_mempool_sends_notfound(tmp_path):
 
 @pytest.mark.asyncio
 async def test_inbound_getdata_forwards_non_tx_non_block_via_dispatch(tmp_path, monkeypatch):
-    tracker = ProjectTracker(tmp_path / "gd_fwd.db")
+    tracker = ProjectTracker(tmp_path / "gd_fwd-chainstate")
     peer = _peer_conn(tracker)
     peer.send = AsyncMock()
     disp = AsyncMock()
@@ -240,7 +240,7 @@ async def test_inbound_getdata_forwards_non_tx_non_block_via_dispatch(tmp_path, 
 
 @pytest.mark.asyncio
 async def test_inbound_getdata_witness_tx_serializes_with_witness(tmp_path):
-    tracker = ProjectTracker(tmp_path / "gd_wtx.db")
+    tracker = ProjectTracker(tmp_path / "gd_wtx-chainstate")
     pool = Mempool()
     tx = Transaction(
         version=2,
@@ -275,7 +275,7 @@ async def test_inbound_getdata_witness_tx_serializes_with_witness(tmp_path):
 
 @pytest.mark.asyncio
 async def test_dispatch_inbound_getheaders_sends_compact_headers_wire(tmp_path):
-    tracker = ProjectTracker(tmp_path / "dhdr.db")
+    tracker = ProjectTracker(tmp_path / "dhdr-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     bh1 = BlockHeader(
         version=g.version,
@@ -327,7 +327,7 @@ async def test_dispatch_inbound_getheaders_sends_compact_headers_wire(tmp_path):
 
 @pytest.mark.asyncio
 async def test_serve_inbound_session_dispatches_mocked_getheaders(monkeypatch, tmp_path):
-    tracker = ProjectTracker(tmp_path / "sess_ok.db")
+    tracker = ProjectTracker(tmp_path / "sess_ok-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     bh1 = BlockHeader(
         version=g.version,
@@ -388,7 +388,7 @@ async def test_serve_inbound_session_dispatches_mocked_getheaders(monkeypatch, t
 
 @pytest.mark.asyncio
 async def test_serve_inbound_session_handshake_fail_bans_known_endpoint(monkeypatch, tmp_path):
-    tracker = ProjectTracker(tmp_path / "sess_ban.db")
+    tracker = ProjectTracker(tmp_path / "sess_ban-chainstate")
     spy_inc = MagicMock(wraps=tracker.increment_peer_ban_score)
     monkeypatch.setattr(tracker, "increment_peer_ban_score", spy_inc)
 
@@ -423,7 +423,7 @@ async def test_serve_inbound_session_handshake_fail_bans_known_endpoint(monkeypa
 
 @pytest.mark.asyncio
 async def test_serve_inbound_session_handshake_fail_unknown_peer_no_ban(monkeypatch, tmp_path):
-    tracker = ProjectTracker(tmp_path / "sess_nob.db")
+    tracker = ProjectTracker(tmp_path / "sess_nob-chainstate")
     spy_inc = MagicMock(wraps=tracker.increment_peer_ban_score)
     monkeypatch.setattr(tracker, "increment_peer_ban_score", spy_inc)
 

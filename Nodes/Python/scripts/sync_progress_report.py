@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 
 _START_RE = re.compile(r"^=== batch (?P<num>\d+) start_validated=(?P<h>\d+) (?P<ts>[^ ]+) ===\s*$")
 _END_RE = re.compile(r"^=== batch (?P<num>\d+) end_validated=(?P<h>\d+) downloaded_delta=(?P<dl>\d+) exit=(?P<exit>\d+) \((?P<ts>[^)]+)\) validated_delta=(?P<vd>\d+) ===\s*$")

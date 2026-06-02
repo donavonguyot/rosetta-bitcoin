@@ -8,7 +8,7 @@ import pytest
 
 from pybitnode.chain.params import TESTNET4
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.messages.address import AddrMessage, GetAddrMessage
 from pybitnode.messages.handshake import NODE_NETWORK, NetworkAddress
 from pybitnode.p2p.discovery import merge_peer_candidates
@@ -35,7 +35,7 @@ def test_addr_message_roundtrip():
 
 
 def test_record_peer_address_and_list(tmp_path):
-    tracker = ProjectTracker(tmp_path / "peers.db")
+    tracker = ProjectTracker(tmp_path / "peers-chainstate")
     tracker.record_peer_address("203.0.113.10", 48333, services=1, source="getaddr")
     tracker.record_peer_address("198.51.100.4", 48333, source="addr")
     endpoints = tracker.list_peer_address_endpoints(limit=10)
@@ -60,7 +60,7 @@ def test_merge_peer_candidates_prefers_manual_and_deduplicates():
 
 
 async def test_keepalive_sends_ping_and_disconnects_stale(tmp_path):
-    tracker = ProjectTracker(tmp_path / "keepalive.db")
+    tracker = ProjectTracker(tmp_path / "keepalive-chainstate")
     peer = PeerConnection(
         host="127.0.0.1",
         port=48333,
@@ -104,7 +104,7 @@ async def test_request_block_from_peers_falls_back():
 
 @pytest.mark.parametrize("settings", [Settings(no_header_refresh=True), Settings(sync_skip_headers=True)])
 def test_lightweight_outbound_handshake_true_for_skip_flags(tmp_path, settings):
-    tracker = ProjectTracker(tmp_path / "lw.db")
+    tracker = ProjectTracker(tmp_path / "lw-chainstate")
     peer = PeerConnection(
         host="127.0.0.1",
         port=48333,
@@ -119,7 +119,7 @@ def test_lightweight_outbound_handshake_true_for_skip_flags(tmp_path, settings):
 
 
 def test_lightweight_outbound_handshake_false_by_default(tmp_path):
-    tracker = ProjectTracker(tmp_path / "lw2.db")
+    tracker = ProjectTracker(tmp_path / "lw2-chainstate")
     peer = PeerConnection(
         host="127.0.0.1",
         port=48333,
@@ -158,7 +158,7 @@ async def test_request_block_once_ignores_interleaved_getheaders(tmp_path):
     block_payload = serialize_block_wire(header, (coinbase,))
     block_hash = header.block_hash()
 
-    tracker = ProjectTracker(tmp_path / "blk.db")
+    tracker = ProjectTracker(tmp_path / "blk-chainstate")
     peer = PeerConnection(
         host="127.0.0.1",
         port=48333,

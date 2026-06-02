@@ -9,7 +9,7 @@ import pytest
 
 from pybitnode.chain.params import ChainParams, TESTNET4
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.p2p.discovery import bootstrap_peer_targets, merge_peer_candidates, resolve_seed_peers
 
 
@@ -124,7 +124,7 @@ def test_merge_peer_candidates_dedups_orderPreserves_priority():
 @pytest.mark.asyncio
 async def test_bootstrap_manual_peer_exempt_when_over_ban_threshold(tmp_path):
     """Manual peers remain candidates even when ban score exceeds threshold."""
-    tracker = ProjectTracker(tmp_path / "manual_exempt.db")
+    tracker = ProjectTracker(tmp_path / "manual_exempt-chainstate")
     host, port = "203.0.113.60", TESTNET4.default_port
     tracker.record_peer_address(host, port, services=1, source="test")
     tracker.increment_peer_ban_score(host, port, 200)

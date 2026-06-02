@@ -6,7 +6,7 @@ import re
 import pytest
 
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.metrics import (
     META_BLOCKS_VALIDATED_TOTAL,
     META_TXS_RELAYED_TOTAL,
@@ -16,7 +16,7 @@ from pybitnode.metrics_http import serve_metrics_http_session
 
 
 def test_prometheus_exposition_shape_and_counters(tmp_path):
-    db = tmp_path / "m.db"
+    db = tmp_path / "m-chainstate"
     settings = Settings(chain="testnet4", db_path=str(db), data_dir=str(tmp_path / "dd"))
     tracker = ProjectTracker(settings.resolved_db_path())
     tracker.set_meta(META_BLOCKS_VALIDATED_TOTAL, "101")
@@ -40,7 +40,7 @@ def test_prometheus_exposition_shape_and_counters(tmp_path):
 
 @pytest.mark.asyncio
 async def test_metrics_http_get_metrics_prom_text(tmp_path):
-    db = tmp_path / "mh.db"
+    db = tmp_path / "mh-chainstate"
     settings = Settings(chain="testnet4", db_path=str(db), data_dir=str(tmp_path / "dd"))
     tracker = ProjectTracker(settings.resolved_db_path())
     tracker.set_meta(META_BLOCKS_VALIDATED_TOTAL, "42")
@@ -75,7 +75,7 @@ async def test_metrics_http_get_metrics_prom_text(tmp_path):
 
 @pytest.mark.asyncio
 async def test_metrics_http_404_unknown_path(tmp_path):
-    db = tmp_path / "nf.db"
+    db = tmp_path / "nf-chainstate"
     settings = Settings(chain="testnet4", db_path=str(db), data_dir=str(tmp_path / "dd"))
     tracker = ProjectTracker(settings.resolved_db_path())
 

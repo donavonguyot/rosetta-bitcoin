@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Settings } from "../config/settings.js";
-import { ChainstateSession } from "../db/chainstateSession.js";
+import { ChainstateSession } from "../chainstate/chainstateSession.js";
 import { getChain } from "../chain/params.js";
 import { VERSION } from "../version.js";
 import { parseCli } from "./args.js";
@@ -67,7 +67,7 @@ async function main(): Promise<void> {
       chain: { type: "string" },
       datadir: { type: "string" },
     },
-    { name: "tsbitnode-native-status", version: VERSION },
+    { name: "tsbitnode-status", version: VERSION },
   );
   const settings = Settings.fromEnv({
     ...(typeof options.chain === "string" ? { chain: options.chain } : {}),

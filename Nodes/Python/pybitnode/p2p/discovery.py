@@ -7,7 +7,7 @@ import socket
 
 from pybitnode.chain.params import ChainParams
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.p2p.peer import PeerConnection, resolve_seed
 from pybitnode.endpoint_parse import host_port_is_well_formed_endpoint
 

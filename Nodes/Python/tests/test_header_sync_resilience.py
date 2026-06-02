@@ -6,13 +6,13 @@ import pytest
 
 from pybitnode.chain.params import TESTNET4
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.p2p.manager import PeerManager
 from pybitnode.sync.headers import HEADER_SYNC_NEAR_PEER_TIP, ensure_genesis, should_skip_header_download
 
 
 def test_should_skip_header_download_near_peer_tip(tmp_path):
-    tracker = ProjectTracker(tmp_path / "near.db")
+    tracker = ProjectTracker(tmp_path / "near-chainstate")
     ensure_genesis(tracker, TESTNET4)
     h = 10_000
     tracker.upsert_sync_state(TESTNET4.name, best_height=h - HEADER_SYNC_NEAR_PEER_TIP, sync_status="headers_syncing")
@@ -23,7 +23,7 @@ def test_should_skip_header_download_near_peer_tip(tmp_path):
 
 
 def test_should_skip_unknown_peer_tip_never_skips(tmp_path):
-    tracker = ProjectTracker(tmp_path / "unk.db")
+    tracker = ProjectTracker(tmp_path / "unk-chainstate")
     ensure_genesis(tracker, TESTNET4)
     tracker.upsert_sync_state(TESTNET4.name, best_height=999_999, sync_status="headers_current")
     assert not should_skip_header_download(tracker, TESTNET4, peer_tip_height=-1)
@@ -81,7 +81,7 @@ async def test_sync_headers_tries_next_peer_on_connection_error():
 
 @pytest.mark.asyncio
 async def test_sync_headers_best_effort_when_locals_cover(monkeypatch, tmp_path):
-    tracker = ProjectTracker(tmp_path / "bff.db")
+    tracker = ProjectTracker(tmp_path / "bff-chainstate")
     ensure_genesis(tracker, TESTNET4)
     for height in range(1, 4):
         prev = tracker.get_header_hash(height - 1) or TESTNET4.genesis_hash
@@ -111,7 +111,7 @@ async def test_sync_headers_best_effort_when_locals_cover(monkeypatch, tmp_path)
 
 @pytest.mark.asyncio
 async def test_sync_headers_still_raises_when_best_effort_not_covered(monkeypatch, tmp_path):
-    tracker = ProjectTracker(tmp_path / "narrow.db")
+    tracker = ProjectTracker(tmp_path / "narrow-chainstate")
     ensure_genesis(tracker, TESTNET4)
     # Only genesis: cannot satisfy follow-up validation range needing height 5000+
     tracker.upsert_sync_state(TESTNET4.name, best_height=0, best_hash=TESTNET4.genesis_hash)

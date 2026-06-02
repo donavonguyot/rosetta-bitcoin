@@ -6,7 +6,7 @@ from enum import Enum
 
 from pybitnode.chain.params import ChainParams
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.sync.headers import (
     HEADER_SYNC_NEAR_PEER_TIP,
     local_header_tip_height,

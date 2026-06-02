@@ -8,7 +8,7 @@ from pathlib import Path
 from pybitnode.chain.params import get_chain
 from pybitnode.config import Settings
 from pybitnode.consensus.connect import ConnectBlockError
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.node import _configure_logging, _parse_peers
 from pybitnode.p2p.manager import PeerManager
 from pybitnode.storage.blocks import BlockStore

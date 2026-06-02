@@ -27,6 +27,7 @@ defmodule Exbitnode.MixProject do
 
   defp aliases do
     [
+      status: ["run -e 'Exbitnode.CLI.NodeStatus.run([])'"],
       "node.status": ["run -e 'Exbitnode.CLI.NodeStatus.run([])'"],
       "sync.local": ["run -e 'Exbitnode.CLI.SyncLocal.run([])'"],
       "storage.proof": ["run -e 'Exbitnode.CLI.StorageProof.run([])'"]

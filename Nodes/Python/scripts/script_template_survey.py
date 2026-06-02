@@ -9,7 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 
 
 def _classify_scriptpubkey(spk: bytes) -> str:

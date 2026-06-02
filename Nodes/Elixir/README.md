@@ -32,7 +32,7 @@ cd ElixirNode
 make test
 
 # Read-only JSON status (runtime, heights, blockers, lock)
-make node-status
+make status
 
 # Sync headers from local Core (default peer 127.0.0.1:48333)
 make sync-local
@@ -51,7 +51,7 @@ lock prevents concurrent sync processes.
 
 ## Status fields
 
-`make node-status` reports:
+`make status` reports:
 
 - `runtime_status` — idle, syncing, blocked, failed
 - `header_height` / `validated_height`
@@ -76,7 +76,7 @@ lock prevents concurrent sync processes.
 - Block connect: merkle root, coinbase UTXO create, spend validation, undo rows
 - Script verify: P2PK, P2PKH, P2WPKH, P2TR key-path (honest stop on P2WSH/P2SH/P2TR script-path/unknown)
 - `make sync-local` runs headers then blocks (`BLOCKS_MAX`, `SKIP_BLOCKS`)
-- `make node-status` reports `validated_height`, `block_count`, `utxo_count`, blockers
+- `make status` reports `validated_height`, `block_count`, `utxo_count`, blockers
 
 ## M3 scope (complete)
 

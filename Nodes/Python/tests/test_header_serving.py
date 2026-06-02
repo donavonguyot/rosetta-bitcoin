@@ -6,7 +6,7 @@ import pytest
 
 from pybitnode.chain.genesis import TESTNET4_GENESIS
 from pybitnode.chain.params import TESTNET4
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.messages.headers import BlockHeader
 from pybitnode.messages.inventory import GetHeadersMessage
 from pybitnode.p2p.header_serving import (
@@ -52,7 +52,7 @@ def test_getheaders_deserialize_trailing_bytes_rejects():
 
 
 def test_find_common_fork_height_skips_unknown_then_hits_genesis(tmp_path):
-    tracker = ProjectTracker(tmp_path / "fork.db")
+    tracker = ProjectTracker(tmp_path / "fork-chainstate")
     ensure_genesis(tracker, TESTNET4)
     g = TESTNET4_GENESIS.block_hash()
     assert find_common_fork_height(tracker, [b"\xee" * 32, g]) == 0
@@ -60,7 +60,7 @@ def test_find_common_fork_height_skips_unknown_then_hits_genesis(tmp_path):
 
 
 def test_find_common_fork_height_returns_minus_one_when_no_locator_matches(tmp_path):
-    tracker = ProjectTracker(tmp_path / "fork_no_match.db")
+    tracker = ProjectTracker(tmp_path / "fork_no_match-chainstate")
     ensure_genesis(tracker, TESTNET4)
     assert find_common_fork_height(tracker, [b"\xcc" * 32, b"\xdd" * 32]) == -1
     tracker.close()
@@ -68,7 +68,7 @@ def test_find_common_fork_height_returns_minus_one_when_no_locator_matches(tmp_p
 
 def test_build_headers_response_empty_chain_unknown_locator_returns_no_headers(tmp_path):
     """No headers row: fork unresolved uses start=0 but height 0 missing -> empty reply."""
-    tracker = ProjectTracker(tmp_path / "empty.db")
+    tracker = ProjectTracker(tmp_path / "empty-chainstate")
     gh = GetHeadersMessage(version=70016, locator_hashes=[b"\xaa" * 32], hash_stop=b"\x00" * 32)
     reply = build_headers_response(tracker, TESTNET4, gh, None)
     assert reply.headers == ()
@@ -77,7 +77,7 @@ def test_build_headers_response_empty_chain_unknown_locator_returns_no_headers(t
 
 def test_build_headers_response_genesis_only_unknown_locator_restarts_from_genesis(tmp_path):
     """When no locator hash is on our chain, fork_height is -1 so we start at height 0."""
-    tracker = ProjectTracker(tmp_path / "gen_only.db")
+    tracker = ProjectTracker(tmp_path / "gen_only-chainstate")
     genesis = ensure_genesis(tracker, TESTNET4)
     gh = GetHeadersMessage(version=70016, locator_hashes=[b"\xbb" * 32], hash_stop=b"\x00" * 32)
     reply = build_headers_response(tracker, TESTNET4, gh, None)
@@ -86,7 +86,7 @@ def test_build_headers_response_genesis_only_unknown_locator_restarts_from_genes
 
 
 def test_build_headers_response_returns_successors_after_locator(tmp_path):
-    tracker = ProjectTracker(tmp_path / "chs.db")
+    tracker = ProjectTracker(tmp_path / "chs-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     h1 = BlockHeader(
         version=g.version,
@@ -126,7 +126,7 @@ def test_build_headers_response_returns_successors_after_locator(tmp_path):
 
 
 def test_build_headers_response_hash_stop_truncates_after_second_header(tmp_path):
-    tracker = ProjectTracker(tmp_path / "stop.db")
+    tracker = ProjectTracker(tmp_path / "stop-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     h1 = BlockHeader(
         version=g.version,
@@ -176,7 +176,7 @@ def test_build_headers_response_hash_stop_truncates_after_second_header(tmp_path
 
 
 def test_build_headers_response_truncates_at_2000_headers(tmp_path):
-    tracker = ProjectTracker(tmp_path / "batch.db")
+    tracker = ProjectTracker(tmp_path / "batch-chainstate")
     tip = ensure_genesis(tracker, TESTNET4)
     prev = tip.block_hash()
     prev_hex = tip.block_hash_hex()
@@ -210,7 +210,7 @@ def test_build_headers_response_truncates_at_2000_headers(tmp_path):
     tracker.close()
 
 def test_build_headers_null_locator_zero_hash_stop_returns_empty(tmp_path):
-    tracker = ProjectTracker(tmp_path / "null_loc0.db")
+    tracker = ProjectTracker(tmp_path / "null_loc0-chainstate")
     ensure_genesis(tracker, TESTNET4)
     gh = GetHeadersMessage(version=70016, locator_hashes=[], hash_stop=b"\x00" * 32)
     reply = build_headers_response(tracker, TESTNET4, gh, None)
@@ -219,7 +219,7 @@ def test_build_headers_null_locator_zero_hash_stop_returns_empty(tmp_path):
 
 
 def test_build_headers_null_locator_valid_hash_stop_returns_single_header(tmp_path):
-    tracker = ProjectTracker(tmp_path / "null_loc_ok.db")
+    tracker = ProjectTracker(tmp_path / "null_loc_ok-chainstate")
     genesis = ensure_genesis(tracker, TESTNET4)
     gh = GetHeadersMessage(version=70016, locator_hashes=[], hash_stop=genesis.block_hash())
     reply = build_headers_response(tracker, TESTNET4, gh, None)
@@ -228,7 +228,7 @@ def test_build_headers_null_locator_valid_hash_stop_returns_single_header(tmp_pa
 
 
 def test_build_headers_null_locator_unknown_hash_stop_returns_empty(tmp_path):
-    tracker = ProjectTracker(tmp_path / "null_loc_bad.db")
+    tracker = ProjectTracker(tmp_path / "null_loc_bad-chainstate")
     ensure_genesis(tracker, TESTNET4)
     unknown = b"\x22" * 32
     gh = GetHeadersMessage(version=70016, locator_hashes=[], hash_stop=unknown)
@@ -238,7 +238,7 @@ def test_build_headers_null_locator_unknown_hash_stop_returns_empty(tmp_path):
 
 
 def test_build_headers_hash_stop_before_fork_start_returns_empty(tmp_path):
-    tracker = ProjectTracker(tmp_path / "stop_before.db")
+    tracker = ProjectTracker(tmp_path / "stop_before-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     h1 = BlockHeader(
         version=g.version,
@@ -265,7 +265,7 @@ def test_build_headers_hash_stop_before_fork_start_returns_empty(tmp_path):
 
 
 def test_build_headers_stops_at_missing_intermediate_height(tmp_path):
-    tracker = ProjectTracker(tmp_path / "hole.db")
+    tracker = ProjectTracker(tmp_path / "hole-chainstate")
     g = ensure_genesis(tracker, TESTNET4)
     h1 = BlockHeader(
         version=g.version,
@@ -306,7 +306,7 @@ def test_build_headers_stops_at_missing_intermediate_height(tmp_path):
 
 def test_resolve_header_from_block_store_when_serialized_missing(tmp_path):
     """Height > 0 without header_serialized_hex: read 80-byte header from flat file."""
-    tracker = ProjectTracker(tmp_path / "blk_hdr.db")
+    tracker = ProjectTracker(tmp_path / "blk_hdr-chainstate")
     ensure_genesis(tracker, TESTNET4)
     fixture_store = BlockStore(FIXTURE_BLOCKS_DIR, TESTNET4.magic)
     payload = fixture_store.read("blk00000.dat", 0, 258)

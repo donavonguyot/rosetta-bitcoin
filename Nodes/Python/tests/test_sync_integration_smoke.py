@@ -6,7 +6,7 @@ import pytest
 
 from pybitnode.chain.params import TESTNET4
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.p2p.manager import PeerManager
 from pybitnode.sync.sync_datadir_lock import ExclusiveDataDirSyncLock
 

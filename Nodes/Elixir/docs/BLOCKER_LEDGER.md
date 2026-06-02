@@ -7,7 +7,7 @@ Handoff notes for exbitnode. Canonical scout trail remains
 
 ```bash
 cd ElixirNode
-make node-status
+make status
 ```
 
 ## M1 — header sync from local Core
@@ -77,7 +77,7 @@ make node-status
 | milestone | M5 peer reconnect + P2TR key-path |
 | peer | `127.0.0.1:48333` |
 | starting validated_height | `3411` |
-| ending validated_height | in progress (see `make node-status`) |
+| ending validated_height | in progress (see `make status`) |
 | starting utxo_count | `6171` |
 | missing_rule | none through first M5 batch at **4411** |
 | python_fix | P2TR key-path from Python `test_real_testnet4_block6975_taproot_keypath_accepted` |

@@ -8,9 +8,9 @@
   "bin": {
     "tsbitnode": "./dist/cli/node.js",
     "tsbitnode-sync": "./dist/cli/syncRunner.js",
-    "tsbitnode-db": "./dist/cli/dbStatus.js",
+    "tsbitnode-legacy-db": "./dist/cli/dbStatus.js",
     "tsbitnode-healthcheck": "./dist/cli/healthcheck.js",
-    "tsbitnode-native-status": "./dist/cli/nativeStatus.js",
+    "tsbitnode-status": "./dist/cli/nativeStatus.js",
     "tsbitnode-storage-proof": "./dist/cli/storageProof.js"
   },
   "files": [
@@ -26,7 +26,9 @@
     "sync:batch": "node dist/scripts/syncBatchLoop.js",
     "sync:progress": "node dist/scripts/syncProgressReport.js",
     "survey:scripts": "node dist/scripts/scriptTemplateSurvey.js",
+    "status": "node dist/cli/nativeStatus.js",
     "native:status": "node dist/cli/nativeStatus.js",
+    "legacy:db": "node dist/cli/dbStatus.js",
     "storage:proof": "node dist/cli/storageProof.js"
   },
   "engines": {

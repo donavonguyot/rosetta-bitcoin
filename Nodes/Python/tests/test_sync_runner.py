@@ -6,7 +6,7 @@ import pytest
 
 from pybitnode.chain.params import TESTNET4
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.p2p.manager import PeerManager
 from pybitnode.storage.blocks import BlockStore
 from pybitnode.sync.headers import ensure_genesis
@@ -34,7 +34,7 @@ async def test_peer_manager_passes_parallel_block_downloads_from_settings(tmp_pa
 
     monkeypatch.setattr("pybitnode.p2p.manager.sync_blocks_to_tip", fake_sync_blocks_to_tip)
 
-    tracker = ProjectTracker(tmp_path / "parallel.db")
+    tracker = ProjectTracker(tmp_path / "parallel-chainstate")
     ensure_genesis(tracker, TESTNET4)
     settings = Settings(parallel_block_downloads=5)
     mgr = PeerManager(TESTNET4, tracker, settings)
@@ -49,7 +49,7 @@ async def test_sync_blocks_to_tip_stops_at_target_height(tmp_path, monkeypatch):
     from pybitnode.p2p.peer import PeerConnection
     from pybitnode.sync.blocks import sync_blocks_to_tip
 
-    tracker = ProjectTracker(tmp_path / "target.db")
+    tracker = ProjectTracker(tmp_path / "target-chainstate")
     ensure_genesis(tracker, TESTNET4)
     for height in range(1, 4):
         tracker.record_header(height, f"hash{height}", TESTNET4.genesis_hash if height == 1 else f"hash{height-1}", 100 + height)

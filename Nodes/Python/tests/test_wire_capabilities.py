@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pybitnode.db.schema import SCHEMA_VERSION
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.wire.capabilities import (
     CAPABILITIES,
     CHECKPOINTS,

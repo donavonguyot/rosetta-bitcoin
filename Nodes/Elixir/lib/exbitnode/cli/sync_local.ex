@@ -3,7 +3,8 @@ defmodule Exbitnode.CLI.SyncLocal do
 
   alias Exbitnode.Chain.ChainRegistry
   alias Exbitnode.Config.NodePaths
-  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
+  alias Exbitnode.Db.ChainstateSession
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
   alias Exbitnode.P2p.PeerSupervisor
   alias Exbitnode.Storage.BlockStore
   alias Exbitnode.Storage.DatadirLock
@@ -45,8 +46,8 @@ defmodule Exbitnode.CLI.SyncLocal do
       block_store = BlockStore.new(blocks_dir, chain.magic)
 
       try do
-        ProjectTracker.repair_sync_state_from_headers(conn, chain.name)
-        start_height = ProjectTracker.bootstrap_start_height(conn, chain.name)
+        ChainstateTracker.repair_sync_state_from_headers(conn, chain.name)
+        start_height = ChainstateTracker.bootstrap_start_height(conn, chain.name)
 
         case PeerSupervisor.connect(host, port, chain, conn, start_height) do
           {:ok, peer} ->
@@ -81,10 +82,10 @@ defmodule Exbitnode.CLI.SyncLocal do
                 end
               end
 
-              validated_height = ProjectTracker.get_validated_height(conn, chain.name)
+              validated_height = ChainstateTracker.get_validated_height(conn, chain.name)
 
               IO.puts("  validated_height=#{validated_height}")
-              IO.puts("  utxo_count=#{ProjectTracker.utxo_count(conn, chain.name)}")
+              IO.puts("  utxo_count=#{ChainstateTracker.utxo_count(conn, chain.name)}")
 
               IO.puts(
                 "  binary_gate_status=#{binary_gate_status(validated_height, header_result.best_height)}"

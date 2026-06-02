@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pybitnode.chain.params import ChainParams
 from pybitnode.config import Settings
 from pybitnode.consensus.merkle import transaction_txid
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.mempool import Mempool, accept_transaction
 from pybitnode.messages.address import AddrMessage, GetAddrMessage
 from pybitnode.messages.block import BlockMessage, GetDataMessage, NotFoundMessage

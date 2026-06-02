@@ -8,7 +8,7 @@ from pybitnode.consensus.merkle import transaction_txid
 from pybitnode.consensus.script.verify import ScriptVerifyError, verify_transaction_input
 from pybitnode.consensus.witness import transaction_wtxid
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.messages.inventory import InventoryVector
 from pybitnode.messages.transaction import TxIn, Transaction
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 

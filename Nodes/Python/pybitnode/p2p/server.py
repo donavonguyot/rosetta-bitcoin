@@ -6,7 +6,7 @@ import logging
 
 from pybitnode.chain.params import ChainParams
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.mempool import Mempool
 from pybitnode.messages.block import BlockMessage, GetDataMessage, NotFoundMessage
 from pybitnode.messages.headers import HeadersMessage

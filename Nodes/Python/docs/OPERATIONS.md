@@ -16,16 +16,16 @@ Deep dives on how header/block sync and persistence fit together live in [`ARCHI
 
 | Goal | Approach |
 | ---- | -------- |
-| Inspect metrics / JSON dashboards | Run `scripts/export_snapshots.py` against a **quiescent** DB, or query with `pybitnode-db`, or copy the DB file when nothing is writing and open the copy read-only elsewhere. |
+| Inspect metrics / JSON dashboards | Run `scripts/export_snapshots.py` against a **quiescent** DB, or query with `pybitnode-status`, or inspect exported status JSON when nothing is writing and open the copy read-only elsewhere. |
 | Experiment with sync flags | Point at a **separate `--datadir`** (full clone or fresh sync), not the production disk. |
-| Long batch jobs in parallel | Run **different datadirs** (one process each), merge results only by intentional policy—not by sharing one DB. |
+| Long batch jobs in parallel | Run **different datadirs** (one process each), merge results only by intentional policy, never by sharing one chainstate. |
 
 ### Operational recap (single writer, lock, checkpoints)
 
 - **RocksDB native state / datadir:** At most **one** process performing **writes** (`pybitnode-sync`, long-running **`pybitnode`**, rebuild tools) per `--datadir`/state path.
 - **`.pybitnode-sync.lock`:** Blocks another **`pybitnode-sync`** instance on that datadir immediately; **does not** coordinate with **`pybitnode`** or ad hoc writers—enforce the rule above separately.
 - **Between batch invocations:** Let each **`pybitnode-sync`** exit cleanly; only then start the next run—see [recommended batch workflow](#recommended-iterative-batches-toward-10k-no-header-refresh) and, after the first major milestone, [continuing toward the header tip in batches](#after-10k-validated-continue-toward-the-header-tip-batches).
-- **Snapshots / dashboards:** Export JSON **between** batches when the DB is **quiescent**—see [when to export](#when-to-export-snapshots-timing)—never rely on **`export_snapshots.py`** timing as your default **during** heavy validation flushes.
+- **Snapshots / dashboards:** Export JSON **between** batches when native chainstate is **quiescent**—see [when to export](#when-to-export-snapshots-timing)—never rely on **`export_snapshots.py`** timing as your default **during** heavy validation flushes.
 
 **Between batch runs** (same datadir, sequential batches): stop the sync process cleanly before starting the next `pybitnode-sync` invocation. Export snapshots after stopping if you want a checkpoint on disk—see [Snapshot export workflow](#snapshot-export-workflow-snapshots).
 
@@ -175,10 +175,10 @@ Use one batch index per attempt; keep UTC **`YYYY-MM-DDTHH:MM:SSZ`** timestamps 
 
 Once **`validated_height`** has passed an initial milestone (for example **10k**), **do not** assume a single long run to the tip. Keep the same operational shape: sequential **`pybitnode-sync`** invocations on one **`--datadir`**, **no** overlapping writers.
 
-1. **Set the next `--blocks-target` from the header horizon:** Advance **`--blocks-target`** toward the height your RocksDB native state headers already represent—typically **`sync_state.best_height`** (see `pybitnode-db` / tracker meta) **or** the highest stored header (**`max(header height)`**, i.e. **`ProjectTracker.max_header_height()`**, surfaced as **`header_height`** in health JSON). Use an intermediate value for staged milestones, or the full tip height for “catch up to headers.” If **`best_height` and the stored header tip disagree**, a fresh sync start runs **`repair_sync_state`**; if confusion persists, use [Stuck sync recovery](#stuck-sync-recovery).
+1. **Set the next `--blocks-target` from the header horizon:** Advance **`--blocks-target`** toward the height your RocksDB native state headers already represent—typically **`sync_state.best_height`** (see `pybitnode-status` / chainstate metadata) **or** the highest stored header (**`max(header height)`**, i.e. **chainstate max header height**, surfaced as **`header_height`** in health JSON). Use an intermediate value for staged milestones, or the full tip height for “catch up to headers.” If **`best_height` and the stored header tip disagree**, a fresh sync start runs **`repair_sync_state`**; if confusion persists, use [Stuck sync recovery](#stuck-sync-recovery).
 2. **Same `--no-header-refresh` + lightweight handshake:** As long as stored headers cover the next target, keep **`--no-header-refresh`** (and env equivalents like **`MAX_OUTBOUND_PEERS=1`**, **`PARALLEL_BLOCK_DOWNLOADS=0`**, **`SKIP_GETADDR=1`** with manual **`--peers`**) so each batch uses the [**lightweight block-sync handshake**](#lightweight-block-sync-handshake-no-header-refresh)—minimal header chatter, block-focused **`getdata`** toward witness blocks.
 3. **Batch sizing:** Retain **`--blocks-max 200`** per run unless you are deliberately tuning chunk size; repeat until **`validated_height`** reaches **`--blocks-target`** or progress stalls ([Stuck sync recovery](#stuck-sync-recovery)).
-4. **Snapshot cadence:** Export JSON **between** batches when the DB is **quiescent**—same [**when to export**](#when-to-export-snapshots-timing) / [**between batch runs**](#between-batch-runs) rules as the first phase; optional milestone cadence (e.g. every N thousand validated) for reviewable **`snapshots/`** checkpoints.
+4. **Snapshot cadence:** Export JSON **between** batches when native chainstate is **quiescent**—same [**when to export**](#when-to-export-snapshots-timing) / [**between batch runs**](#between-batch-runs) rules as the first phase; optional milestone cadence (e.g. every N thousand validated) for reviewable **`snapshots/`** checkpoints.
 
 **Architecture:** How **`sync_state.best_height`** tracks the header chain and how block download follows stored headers is outlined in [ARCHITECTURE.md — Header sync](ARCHITECTURE.md#header-sync) and [ARCHITECTURE.md — Block sync](ARCHITECTURE.md#block-sync).
 
@@ -195,7 +195,7 @@ Header download runs on the first available peer in an **ordered** list: **`--pe
 1. Confirm the [single-writer rule](#safe-parallel-work-vs-the-live-native state); fix overlapping processes if any.
 2. Check logs for `Header sync failed via HOST:PORT`; try **stable manual peers** via `--peers` or `PEERS` (same syntax as the batch sync table above).
 3. Each sync start calls `repair_sync_state` so `sync_state` realigns with the highest row in the `headers` table—useful after a crash mid-headers.
-4. Inspect state: `DATA_DIR=./data .venv/bin/pybitnode-db` or `pybitnode-db --state-path ./data/chainstate-rocksdb` for `sync_status`, `best_height`, and errors.
+4. Inspect state: `DATA_DIR=./data .venv/bin/pybitnode-status --state-path ./data/chainstate-rocksdb` for `sync_status`, `best_height`, and errors.
 
 **Manual peers and discovery:** When you pass manual peers, bootstrap uses **at most one outbound peer** for that run (`_effective_max_outbound = 1` when `manual_peers` is non-empty) and **does not run post-handshake `getaddr` discovery** (same path as `SKIP_GETADDR`). Manual endpoints are **still attempted even if their ban score is high** (they bypass the ban threshold filter used for stored/discovered candidates).
 
@@ -207,7 +207,7 @@ If the local header tip is within **`HEADER_SYNC_NEAR_PEER_TIP` (2)** blocks of 
 
 When **`SYNC_SKIP_HEADERS=1`** (parsed in **`Settings`**), **`pybitnode-sync`** never performs networked header sync (`getheaders`): it calls **`mark_headers_current`** immediately and validates/downloads blocks against headers already stored in RocksDB native state.
 
-Otherwise, **`pybitnode/sync_runner.py`** skips `getheaders` when either **`should_skip_header_download`** succeeds for the first ordered bootstrap peer **or** the DB is **`repair_sync_state`**-aligned (local header tip matches `sync_state.best_height`) while the peer advertises a **longer** chain — continuing block validation with the stored tall header prefix instead of catch-up chatter that peers may drop mid-request.
+Otherwise, **`pybitnode/sync_runner.py`** skips `getheaders` when either **`should_skip_header_download`** succeeds for the first ordered bootstrap peer **or** native chainstate is **`repair_sync_state`**-aligned (local header tip matches `sync_state.best_height`) while the peer advertises a **longer** chain — continuing block validation with the stored tall header prefix instead of catch-up chatter that peers may drop mid-request.
 
 Unset `SYNC_SKIP_HEADERS` (or clear the heuristic by letting headers diverge from `sync_state`) when you deliberately need networked header extensions again.
 
@@ -224,7 +224,7 @@ On `ConnectBlockError`, block sync logs a tracker event before stopping the batc
 **CLI (last *N* rows, newest first):**
 
 ```bash
-.venv/bin/pybitnode-db --state-path /path/to/chainstate-rocksdb --events 50
+.venv/bin/pybitnode-status --state-path /path/to/chainstate-rocksdb --events 50
 ```
 
 **RocksDB native state:**

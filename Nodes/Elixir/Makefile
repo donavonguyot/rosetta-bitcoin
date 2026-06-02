@@ -14,13 +14,15 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: test node-status sync-local storage-proof docker-config docker-build docker-status docker-proof-local docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
+.PHONY: test status node-status sync-local storage-proof docker-config docker-build docker-status docker-proof-local docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 
 test:
 	$(MIX) test
 
-node-status:
-	DATA_DIR=$(DATA_DIR) PEERS=$(PEERS) $(MIX) node.status
+status:
+	DATA_DIR=$(DATA_DIR) PEERS=$(PEERS) $(MIX) status
+
+node-status: status
 
 sync-local:
 	DATA_DIR=$(DATA_DIR) PEERS=$(PEERS) HEADERS_MAX=$(or $(HEADERS_MAX),2000) \

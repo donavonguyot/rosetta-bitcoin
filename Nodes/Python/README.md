@@ -11,7 +11,7 @@ Contributor-oriented module map and data flows: [`docs/ARCHITECTURE.md`](docs/AR
 | Metric | Value |
 |--------|-------|
 | Headers synced | ~136k |
-| Blocks validated | live: `pybitnode-db --state-path ./data/chainstate-rocksdb` (snapshots may lag) |
+| Blocks validated | live: `pybitnode-status --state-path ./data/chainstate-rocksdb` (snapshots may lag) |
 | Wire capabilities | 34/43 required (79%) |
 | Checkpoints passing | 7/9 |
 
@@ -38,7 +38,7 @@ pybitnode-sync --datadir ./data --blocks-target 5000 --blocks-max 200
 pybitnode-sync --datadir ./data --connect-only --rebuild
 
 # Tracker / progress summary
-pybitnode-db --state-path ./data/chainstate-rocksdb
+pybitnode-status --state-path ./data/chainstate-rocksdb
 
 # Native RocksDB binding proof
 pybitnode-rocksdb-proof --datadir ./data-python-rocksdb-proof
@@ -60,7 +60,8 @@ pybitnode/
   sync/        header + block sync, validation
   consensus/   PoW, merkle, UTXO connect, scripts, secp256k1
   storage/     blk*.dat block files
-  db/          RocksDB-backed native tracker
+  chainstate/  canonical native chainstate API
+  db/          legacy compatibility namespace for old tracker imports
 snapshots/     exported tracker state (committed)
 data/          live datadir (gitignored)
 ```

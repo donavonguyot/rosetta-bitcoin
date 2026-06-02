@@ -21,7 +21,7 @@ from pybitnode.consensus.script.script_verify_runner import (
 )
 from pybitnode.consensus.subsidy import block_subsidy
 from pybitnode.consensus.witness import validate_witness_commitment
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.metrics import META_BLOCKS_VALIDATED_TOTAL, incr_meta_counter
 from pybitnode.messages.transaction import OutPoint, Transaction
 

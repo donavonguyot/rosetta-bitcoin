@@ -91,7 +91,8 @@ defmodule Exbitnode.Db.ChainstateSessionTest do
   use ExUnit.Case, async: false
 
   alias Exbitnode.Chain.Genesis
-  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
+  alias Exbitnode.Db.ChainstateSession
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
 
   setup do
     path = Path.join(System.tmp_dir!(), "exbitnode_test_#{:rand.uniform(1_000_000)}")
@@ -102,10 +103,16 @@ defmodule Exbitnode.Db.ChainstateSessionTest do
   end
 
   test "native chainstate initializes and stores genesis", %{conn: conn, path: path} do
-    ProjectTracker.ensure_genesis(conn, "testnet4", Genesis.testnet4(), Genesis.testnet4_hash())
-    assert ProjectTracker.header_count(conn, "testnet4") == 1
-    assert ProjectTracker.get_header_hash(conn, "testnet4", 0) == Genesis.testnet4_hash()
-    state = ProjectTracker.get_sync_state(conn, "testnet4")
+    ChainstateTracker.ensure_genesis(
+      conn,
+      "testnet4",
+      Genesis.testnet4(),
+      Genesis.testnet4_hash()
+    )
+
+    assert ChainstateTracker.header_count(conn, "testnet4") == 1
+    assert ChainstateTracker.get_header_hash(conn, "testnet4", 0) == Genesis.testnet4_hash()
+    state = ChainstateTracker.get_sync_state(conn, "testnet4")
     assert state.best_height == 0
     assert state.sync_status == "starting"
     refute File.exists?(Path.join(path, "exbitnode.db"))
@@ -132,7 +139,8 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
   alias Exbitnode.Consensus.Block.BlockDeserializer
   alias Exbitnode.Consensus.Connect.BlockConnector
   alias Exbitnode.Consensus.Merkle
-  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
+  alias Exbitnode.Db.ChainstateSession
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
   alias Exbitnode.Messages.BlockHeaderCodec
   alias Exbitnode.Consensus.Tx.{OutPoint, Transaction, TxIn, TxOut, TransactionParser}
   alias Exbitnode.Util.Hex
@@ -143,7 +151,14 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
     on_exit(fn -> File.rm_rf(path) end)
     {:ok, conn} = ChainstateSession.open_native(path, "testnet4")
     on_exit(fn -> ChainstateSession.close(conn) end)
-    ProjectTracker.ensure_genesis(conn, "testnet4", Genesis.testnet4(), Genesis.testnet4_hash())
+
+    ChainstateTracker.ensure_genesis(
+      conn,
+      "testnet4",
+      Genesis.testnet4(),
+      Genesis.testnet4_hash()
+    )
+
     {:ok, conn: conn}
   end
 
@@ -206,8 +221,8 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
       )
 
     assert result.height == 0
-    assert ProjectTracker.get_validated_height(conn, "testnet4") == 0
-    assert ProjectTracker.block_count(conn, "testnet4") == 0
+    assert ChainstateTracker.get_validated_height(conn, "testnet4") == 0
+    assert ChainstateTracker.block_count(conn, "testnet4") == 0
   end
 
   test "disconnect rewinds tip and removes block utxos", %{conn: conn} do
@@ -244,12 +259,12 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
       BlockHeaderCodec.serialize(header1) <> WireSerialize.write_compact_size(1) <> tx_bytes
 
     BlockConnector.connect(conn, "testnet4", 1, payload1, prev_internal, hash1_internal)
-    assert ProjectTracker.get_validated_height(conn, "testnet4") == 1
-    assert ProjectTracker.utxo_count(conn, "testnet4") == 1
+    assert ChainstateTracker.get_validated_height(conn, "testnet4") == 1
+    assert ChainstateTracker.utxo_count(conn, "testnet4") == 1
 
     :ok = BlockConnector.disconnect(conn, "testnet4", 1)
-    assert ProjectTracker.get_validated_height(conn, "testnet4") == 0
-    assert ProjectTracker.utxo_count(conn, "testnet4") == 0
+    assert ChainstateTracker.get_validated_height(conn, "testnet4") == 0
+    assert ChainstateTracker.utxo_count(conn, "testnet4") == 0
   end
 
   test "disconnect restores externally spent utxo and reconnect block", %{conn: conn} do
@@ -287,7 +302,7 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
     payload1 =
       BlockHeaderCodec.serialize(header1) <> WireSerialize.write_compact_size(1) <> tx_bytes
 
-    ProjectTracker.insert_header(conn, "testnet4", 1, hash1_hex, Genesis.testnet4_hash(), "")
+    ChainstateTracker.insert_header(conn, "testnet4", 1, hash1_hex, Genesis.testnet4_hash(), "")
     BlockConnector.connect(conn, "testnet4", 1, payload1, prev_internal, hash1_internal)
 
     coinbase_txid = Merkle.transaction_txid(coinbase) |> Hex.reverse() |> Hex.encode()
@@ -320,19 +335,19 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
       BlockHeaderCodec.serialize(header2) <>
         WireSerialize.write_compact_size(1) <> TransactionParser.serialize(coinbase2, false)
 
-    ProjectTracker.insert_header(conn, "testnet4", 2, hash2_hex, hash1_hex, "")
+    ChainstateTracker.insert_header(conn, "testnet4", 2, hash2_hex, hash1_hex, "")
     BlockConnector.connect(conn, "testnet4", 2, payload2, hash1_internal, hash2_internal)
     snapshot_after_two = snapshot_utxos(conn)
 
-    assert ProjectTracker.get_validated_height(conn, "testnet4") == 2
+    assert ChainstateTracker.get_validated_height(conn, "testnet4") == 2
     :ok = BlockConnector.disconnect(conn, "testnet4", 2)
 
-    assert ProjectTracker.get_validated_height(conn, "testnet4") == 1
+    assert ChainstateTracker.get_validated_height(conn, "testnet4") == 1
     assert snapshot_utxos(conn) == utxos_after_1
-    assert ProjectTracker.get_utxo(conn, "testnet4", coinbase_txid, 0) != nil
+    assert ChainstateTracker.get_utxo(conn, "testnet4", coinbase_txid, 0) != nil
 
     BlockConnector.connect(conn, "testnet4", 2, payload2, hash1_internal, hash2_internal)
-    assert ProjectTracker.get_validated_height(conn, "testnet4") == 2
+    assert ChainstateTracker.get_validated_height(conn, "testnet4") == 2
     assert snapshot_utxos(conn) == snapshot_after_two
   end
 
@@ -368,7 +383,7 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
   end
 
   defp snapshot_utxos(conn) do
-    ProjectTracker.utxo_snapshot(conn, "testnet4")
+    ChainstateTracker.utxo_snapshot(conn, "testnet4")
   end
 end
 
@@ -421,11 +436,12 @@ defmodule Exbitnode.Util.CryptoUtilTest do
   end
 end
 
-defmodule Exbitnode.Db.ProjectTrackerTest do
+defmodule Exbitnode.Chainstate.TrackerTest do
   use ExUnit.Case, async: false
 
   alias Exbitnode.Chain.Genesis
-  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
+  alias Exbitnode.Db.ChainstateSession
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
 
   setup do
     path = Path.join(System.tmp_dir!(), "exbitnode_tracker_#{:rand.uniform(1_000_000)}")
@@ -436,23 +452,39 @@ defmodule Exbitnode.Db.ProjectTrackerTest do
   end
 
   test "ensure_genesis preserves existing header tip", %{conn: conn} do
-    ProjectTracker.ensure_genesis(conn, "testnet4", Genesis.testnet4(), Genesis.testnet4_hash())
+    ChainstateTracker.ensure_genesis(
+      conn,
+      "testnet4",
+      Genesis.testnet4(),
+      Genesis.testnet4_hash()
+    )
 
-    ProjectTracker.upsert_sync_state(conn, "testnet4", %{
+    ChainstateTracker.upsert_sync_state(conn, "testnet4", %{
       best_height: 739,
       best_hash: "000000004cfba4fe6174c546086df7fb52b3d65d44788c0ee8acf436dd28de32",
       header_count: 740,
       sync_status: "headers_current"
     })
 
-    ProjectTracker.ensure_genesis(conn, "testnet4", Genesis.testnet4(), Genesis.testnet4_hash())
-    state = ProjectTracker.get_sync_state(conn, "testnet4")
+    ChainstateTracker.ensure_genesis(
+      conn,
+      "testnet4",
+      Genesis.testnet4(),
+      Genesis.testnet4_hash()
+    )
+
+    state = ChainstateTracker.get_sync_state(conn, "testnet4")
     assert state.best_height == 739
     assert state.sync_status == "headers_current"
   end
 
   test "replace_utxo_undo stores external spend rows", %{conn: conn} do
-    ProjectTracker.ensure_genesis(conn, "testnet4", Genesis.testnet4(), Genesis.testnet4_hash())
+    ChainstateTracker.ensure_genesis(
+      conn,
+      "testnet4",
+      Genesis.testnet4(),
+      Genesis.testnet4_hash()
+    )
 
     entries = [
       %{
@@ -465,13 +497,18 @@ defmodule Exbitnode.Db.ProjectTrackerTest do
       }
     ]
 
-    :ok = ProjectTracker.replace_utxo_undo(conn, "testnet4", 101, entries)
+    :ok = ChainstateTracker.replace_utxo_undo(conn, "testnet4", 101, entries)
 
-    assert ProjectTracker.take_utxo_undo(conn, "testnet4", 101) == entries
+    assert ChainstateTracker.take_utxo_undo(conn, "testnet4", 101) == entries
   end
 
   test "take_utxo_undo returns and clears journal rows", %{conn: conn} do
-    ProjectTracker.ensure_genesis(conn, "testnet4", Genesis.testnet4(), Genesis.testnet4_hash())
+    ChainstateTracker.ensure_genesis(
+      conn,
+      "testnet4",
+      Genesis.testnet4(),
+      Genesis.testnet4_hash()
+    )
 
     entries = [
       %{
@@ -484,8 +521,8 @@ defmodule Exbitnode.Db.ProjectTrackerTest do
       }
     ]
 
-    :ok = ProjectTracker.replace_utxo_undo(conn, "testnet4", 7, entries)
-    assert ProjectTracker.take_utxo_undo(conn, "testnet4", 7) == entries
-    assert [] = ProjectTracker.take_utxo_undo(conn, "testnet4", 7)
+    :ok = ChainstateTracker.replace_utxo_undo(conn, "testnet4", 7, entries)
+    assert ChainstateTracker.take_utxo_undo(conn, "testnet4", 7) == entries
+    assert [] = ChainstateTracker.take_utxo_undo(conn, "testnet4", 7)
   end
 end

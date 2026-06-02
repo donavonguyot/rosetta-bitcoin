@@ -10,7 +10,7 @@ import pytest
 
 from pybitnode.chain.params import TESTNET4
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.p2p.ban_policy import BAN_DISCONNECT, BAN_PROTOCOL_VIOLATION
 from pybitnode.p2p.discovery import bootstrap_peer_targets
 from pybitnode.p2p.peer import PeerConnection
@@ -18,7 +18,7 @@ from pybitnode.p2p.peer import PeerConnection
 
 @pytest.mark.asyncio
 async def test_bootstrap_peer_targets_respects_ban_threshold(tmp_path):
-    tracker = ProjectTracker(tmp_path / "bootstrap_ban.db")
+    tracker = ProjectTracker(tmp_path / "bootstrap_ban-chainstate")
     host = "203.0.113.50"
     port = TESTNET4.default_port
     tracker.record_peer_address(host, port, services=1, source="test")
@@ -45,7 +45,7 @@ async def test_bootstrap_peer_targets_respects_ban_threshold(tmp_path):
 
 @pytest.mark.asyncio
 async def test_consume_messages_ban_disconnect(tmp_path):
-    tracker = ProjectTracker(tmp_path / "consume.db")
+    tracker = ProjectTracker(tmp_path / "consume-chainstate")
     peer = PeerConnection(
         host="203.0.113.71",
         port=48333,
@@ -66,7 +66,7 @@ async def test_consume_messages_ban_disconnect(tmp_path):
 
 @pytest.mark.asyncio
 async def test_consume_messages_ban_protocol_violation(tmp_path):
-    tracker = ProjectTracker(tmp_path / "consume2.db")
+    tracker = ProjectTracker(tmp_path / "consume2-chainstate")
     peer = PeerConnection(
         host="203.0.113.72",
         port=48333,
@@ -86,7 +86,7 @@ async def test_consume_messages_ban_protocol_violation(tmp_path):
 
 
 def test_increment_peer_ban_updates_aggregate_and_peer_row(tmp_path):
-    tracker = ProjectTracker(tmp_path / "agg.db")
+    tracker = ProjectTracker(tmp_path / "agg-chainstate")
     pid = tracker.record_peer_connected("203.0.113.81", 48333)
     delta = 12
     tracker.increment_peer_ban_score("203.0.113.81", 48333, delta, peer_id=pid)
@@ -99,7 +99,7 @@ def test_increment_peer_ban_updates_aggregate_and_peer_row(tmp_path):
 
 
 def test_decay_reduces_aggregate(tmp_path):
-    tracker = ProjectTracker(tmp_path / "decay.db")
+    tracker = ProjectTracker(tmp_path / "decay-chainstate")
     tracker.increment_peer_ban_score("203.0.113.91", 48333, 40)
     tracker.decay_peer_ban_score("203.0.113.91", 48333, 15)
     assert tracker.get_peer_endpoint_ban_score("203.0.113.91", 48333) == 25
@@ -108,7 +108,7 @@ def test_decay_reduces_aggregate(tmp_path):
 
 
 def test_decay_peer_ban_score_floors_at_zero(tmp_path):
-    tracker = ProjectTracker(tmp_path / "floor.db")
+    tracker = ProjectTracker(tmp_path / "floor-chainstate")
     tracker.increment_peer_ban_score("203.0.113.92", 48333, 10)
     tracker.decay_peer_ban_score("203.0.113.92", 48333, 100)
     assert tracker.get_peer_endpoint_ban_score("203.0.113.92", 48333) == 0
@@ -118,7 +118,7 @@ def test_decay_peer_ban_score_floors_at_zero(tmp_path):
 
 def test_maybe_decay_requires_uptime_and_runs_once(tmp_path):
     """Long-uptime decay uses Settings and applies at most once per connection."""
-    tracker = ProjectTracker(tmp_path / "uptime_decay.db")
+    tracker = ProjectTracker(tmp_path / "uptime_decay-chainstate")
     host, port = "203.0.113.93", TESTNET4.default_port
     tracker.increment_peer_ban_score(host, port, 100)
 

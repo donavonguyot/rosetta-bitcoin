@@ -4,7 +4,7 @@ import json
 import sys
 
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.metrics import META_LAST_ERROR, snapshot_counters
 
 

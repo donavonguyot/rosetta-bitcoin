@@ -6,7 +6,7 @@ Counters survive process restarts and are readable from offline tools like ``hea
 
 from __future__ import annotations
 
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 
 META_BLOCKS_VALIDATED_TOTAL = "metric_blocks_validated_total"
 META_TXS_RELAYED_TOTAL = "metric_txs_relayed_total"

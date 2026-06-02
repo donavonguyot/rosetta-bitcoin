@@ -26,10 +26,10 @@ def test_headers_sync_done_at_peer_height():
 
 def test_mark_headers_current_updates_sync_state(tmp_path):
     from pybitnode.chain.params import TESTNET4
-    from pybitnode.db.tracker import ProjectTracker
+    from pybitnode.chainstate.tracker import ProjectTracker
     from pybitnode.sync.headers import ensure_genesis
 
-    tracker = ProjectTracker(tmp_path / "current.db")
+    tracker = ProjectTracker(tmp_path / "current-chainstate")
     ensure_genesis(tracker, TESTNET4)
     tracker.upsert_sync_state("testnet4", best_height=0, sync_status="headers_syncing")
     mark_headers_current(tracker, TESTNET4)

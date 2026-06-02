@@ -1,11 +1,3 @@
-export {
-  DEFAULT_PHASES,
-  INIT_SCHEMA_SQL,
-  SCHEMA_VERSION,
-  seedWireCapabilities,
-  utcNowIso,
-} from "./schema.js";
-export { ProjectTracker, type TrackerSummary, type WireProgress } from "./tracker.js";
 export type {
   ChainstateBlockCommit,
   ChainstateBlockIndexRecord,
@@ -16,13 +8,15 @@ export type {
   ChainstateStoredUtxo,
   ChainstateSyncState,
   ChainstateUndoEntry,
-} from "../chainstate/index.js";
+} from "./chainstate.js";
 export {
   ChainstateSession,
+  TSBITNODE_NATIVE_MARKER,
+  TSBITNODE_SQLITE_DB,
+} from "./chainstateSession.js";
+export {
   ROCKSDB_BACKEND_NAME,
   ROCKSDB_CODEC_VERSION,
   ROCKSDB_SCHEMA_VERSION,
   RocksDbChainstateStore,
-  TSBITNODE_NATIVE_MARKER,
-  TSBITNODE_SQLITE_DB,
-} from "../chainstate/index.js";
+} from "./rocksDbChainstateStore.js";

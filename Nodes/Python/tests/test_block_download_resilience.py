@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from pybitnode.chain.params import TESTNET4
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.p2p.ban_policy import BAN_DISCONNECT
 from pybitnode.p2p.peer import PeerConnection
 from pybitnode.storage.blocks import BlockStore
@@ -85,7 +85,7 @@ async def test_sync_blocks_batch_stops_sequential_batch_on_unavailable_block(tmp
         fake_request,
     )
 
-    tracker = ProjectTracker(tmp_path / "stall.db")
+    tracker = ProjectTracker(tmp_path / "stall-chainstate")
     ensure_genesis(tracker, TESTNET4)
     prev_hex = TESTNET4.genesis_hash
     for height in (1, 2):
@@ -111,7 +111,7 @@ async def test_sync_blocks_batch_stops_sequential_batch_on_unavailable_block(tmp
 
 @pytest.mark.asyncio
 async def test_read_message_raises_connection_error_on_peer_close(tmp_path):
-    tracker = ProjectTracker(tmp_path / "reader.db")
+    tracker = ProjectTracker(tmp_path / "reader-chainstate")
     peer = PeerConnection(
         host="203.0.113.61",
         port=48333,
@@ -130,7 +130,7 @@ async def test_read_message_raises_connection_error_on_peer_close(tmp_path):
 
 @pytest.mark.asyncio
 async def test_consume_messages_handles_connection_error_from_read_message(tmp_path):
-    tracker = ProjectTracker(tmp_path / "consume_read.db")
+    tracker = ProjectTracker(tmp_path / "consume_read-chainstate")
     peer = PeerConnection(
         host="203.0.113.62",
         port=48333,

@@ -3,7 +3,8 @@ defmodule Exbitnode.CLI.StorageProof do
 
   alias Exbitnode.Chain.Genesis
   alias Exbitnode.Config.NodePaths
-  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
+  alias Exbitnode.Db.ChainstateSession
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
   alias Exbitnode.Messages.BlockHeaderCodec
 
   def run(_args) do
@@ -49,41 +50,41 @@ defmodule Exbitnode.CLI.StorageProof do
   defp seed_storage!(store, chain) do
     genesis = Genesis.for_chain(chain)
     genesis_hash = Genesis.testnet4_hash()
-    ProjectTracker.ensure_genesis(store, chain, genesis, genesis_hash)
+    ChainstateTracker.ensure_genesis(store, chain, genesis, genesis_hash)
 
     serialized = genesis |> BlockHeaderCodec.serialize() |> Exbitnode.Util.Hex.encode()
     hash1 = String.duplicate("11", 32)
     hash2 = String.duplicate("22", 32)
-    _ = ProjectTracker.insert_header(store, chain, 1, hash1, genesis_hash, serialized)
-    _ = ProjectTracker.insert_header(store, chain, 2, hash2, hash1, serialized)
+    _ = ChainstateTracker.insert_header(store, chain, 1, hash1, genesis_hash, serialized)
+    _ = ChainstateTracker.insert_header(store, chain, 2, hash2, hash1, serialized)
 
-    ProjectTracker.upsert_sync_state(store, chain, %{
+    ChainstateTracker.upsert_sync_state(store, chain, %{
       best_height: 2,
       best_hash: hash2,
-      header_count: ProjectTracker.header_count(store, chain),
+      header_count: ChainstateTracker.header_count(store, chain),
       sync_status: "blocks_current"
     })
 
-    ProjectTracker.record_block(store, chain, 1, hash1, %{
+    ChainstateTracker.record_block(store, chain, 1, hash1, %{
       file_number: 0,
       file_offset: 0,
       block_size: 80
     })
 
-    ProjectTracker.record_block(store, chain, 2, hash2, %{
+    ChainstateTracker.record_block(store, chain, 2, hash2, %{
       file_number: 0,
       file_offset: 88,
       block_size: 80
     })
 
-    ProjectTracker.set_validated_tip(store, chain, 2, hash2)
+    ChainstateTracker.set_validated_tip(store, chain, 2, hash2)
   end
 
   defp build_proof(store, data_dir, chain, node_id) do
     metadata = ChainstateSession.metadata(store)
-    tip_height = ProjectTracker.get_validated_height(store, chain)
-    tip_hash = ProjectTracker.get_validated_hash(store, chain)
-    stored_block = ProjectTracker.max_stored_block(store, chain)
+    tip_height = ChainstateTracker.get_validated_height(store, chain)
+    tip_hash = ChainstateTracker.get_validated_hash(store, chain)
+    stored_block = ChainstateTracker.max_stored_block(store, chain)
     sqlite_absent = ChainstateSession.sqlite_artifacts_absent?(data_dir)
 
     %{
@@ -100,7 +101,7 @@ defmodule Exbitnode.CLI.StorageProof do
       validated_height: tip_height,
       validated_hash: tip_hash,
       header_height:
-        (ProjectTracker.get_sync_state(store, chain) || %{best_height: 0}).best_height,
+        (ChainstateTracker.get_sync_state(store, chain) || %{best_height: 0}).best_height,
       stored_block_height: (stored_block && stored_block.height) || -1,
       chainstate_status: metadata["status"] || "usable",
       project_export: %{

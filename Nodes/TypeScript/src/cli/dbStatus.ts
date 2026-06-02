@@ -15,7 +15,7 @@ const options = parseCli(
     checkpoint: { type: "string" },
     events: { type: "string" },
   },
-  { name: "tsbitnode-db", version: VERSION },
+  { name: "tsbitnode-legacy-db", version: VERSION },
 );
 
 const settings = Settings.fromEnv({

@@ -11,12 +11,12 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
   alias Exbitnode.Consensus.Connect.{BlockUtxoView, ConnectBlockError, ValidationBlocker}
   alias Exbitnode.Consensus.Script.{ScriptVerify, ScriptVerifyError, UnsupportedScriptRule}
   alias Exbitnode.Consensus.Tx.Transaction
-  alias Exbitnode.Db.ProjectTracker
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
   alias Exbitnode.Messages.BlockHeaderCodec
   alias Exbitnode.Util.Hex
 
   def connect(conn, chain, height, payload, expected_prev_internal, expected_hash_internal) do
-    validated = ProjectTracker.get_validated_height(conn, chain)
+    validated = ChainstateTracker.get_validated_height(conn, chain)
 
     if height != validated + 1 do
       raise ConnectBlockError,
@@ -82,14 +82,14 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
     undo_entries = BlockUtxoView.external_spend_undo_entries(view)
 
     BlockUtxoView.apply(view, conn)
-    ProjectTracker.replace_utxo_undo(conn, chain, height, undo_entries)
-    ProjectTracker.set_validated_tip(conn, chain, height, block_hash_hex)
+    ChainstateTracker.replace_utxo_undo(conn, chain, height, undo_entries)
+    ChainstateTracker.set_validated_tip(conn, chain, height, block_hash_hex)
 
     %{height: height, block_hash_hex: block_hash_hex, utxos_created: view.created_count}
   end
 
   def disconnect(conn, chain, height) do
-    validated = ProjectTracker.get_validated_height(conn, chain)
+    validated = ChainstateTracker.get_validated_height(conn, chain)
 
     cond do
       validated != height ->
@@ -100,17 +100,17 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
         raise ConnectBlockError, "cannot disconnect genesis (height < 1)"
 
       true ->
-        prev_hash_hex = ProjectTracker.get_header_hash(conn, chain, height - 1)
+        prev_hash_hex = ChainstateTracker.get_header_hash(conn, chain, height - 1)
 
         if is_nil(prev_hash_hex) do
           raise ConnectBlockError, "missing header at height #{height - 1}"
         end
 
-        undo_entries = ProjectTracker.take_utxo_undo(conn, chain, height)
-        :ok = ProjectTracker.delete_utxos_created_at_height(conn, chain, height)
+        undo_entries = ChainstateTracker.take_utxo_undo(conn, chain, height)
+        :ok = ChainstateTracker.delete_utxos_created_at_height(conn, chain, height)
 
         Enum.each(undo_entries, fn entry ->
-          ProjectTracker.insert_utxo(conn, chain, %{
+          ChainstateTracker.insert_utxo(conn, chain, %{
             txid: entry.txid,
             vout: entry.vout,
             height: entry.utxo_height,
@@ -120,7 +120,7 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
           })
         end)
 
-        ProjectTracker.set_validated_tip(conn, chain, height - 1, prev_hash_hex)
+        ChainstateTracker.set_validated_tip(conn, chain, height - 1, prev_hash_hex)
 
         :ok
     end
@@ -226,7 +226,7 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
 
   alias Exbitnode.Consensus.Tx.OutPoint
   alias Exbitnode.Consensus.Connect.ConnectBlockError
-  alias Exbitnode.Db.ProjectTracker
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
   alias Exbitnode.Util.Hex
 
   defstruct [:conn, :chain, :height, :overlay, :spent, :external_undo, :created_count]
@@ -259,7 +259,7 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
 
       true ->
         [txid, vout] = String.split(key, ":", parts: 2)
-        ProjectTracker.get_utxo(view.conn, view.chain, txid, String.to_integer(vout))
+        ChainstateTracker.get_utxo(view.conn, view.chain, txid, String.to_integer(vout))
     end
   end
 
@@ -317,11 +317,11 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
   def apply(%__MODULE__{} = view, conn) do
     Enum.each(view.spent, fn key ->
       [txid, vout] = String.split(key, ":", parts: 2)
-      ProjectTracker.delete_utxo(conn, view.chain, txid, String.to_integer(vout))
+      ChainstateTracker.delete_utxo(conn, view.chain, txid, String.to_integer(vout))
     end)
 
     Enum.each(view.overlay, fn {_key, utxo} ->
-      ProjectTracker.insert_utxo(conn, view.chain, utxo)
+      ChainstateTracker.insert_utxo(conn, view.chain, utxo)
     end)
 
     :ok

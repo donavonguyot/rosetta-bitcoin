@@ -24,7 +24,7 @@ Use a fresh native datadir:
 ```bash
 rm -rf ./data-python-native-replay
 pybitnode-sync --datadir ./data-python-native-replay --peers 127.0.0.1:48333 --blocks-max <bounded chunk>
-pybitnode-db --state-path ./data-python-native-replay/chainstate-rocksdb
+pybitnode-status --state-path ./data-python-native-replay/chainstate-rocksdb
 ```
 
 Docker equivalent:

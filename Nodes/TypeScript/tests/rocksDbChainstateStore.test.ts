@@ -8,7 +8,7 @@ import {
   ChainstateSession,
   TSBITNODE_NATIVE_MARKER,
   TSBITNODE_SQLITE_DB,
-} from "../src/db/chainstateSession.js";
+} from "../src/chainstate/chainstateSession.js";
 
 function tempDatadir(): string {
   return mkdtempSync(join(tmpdir(), "tsbitnode-native-"));

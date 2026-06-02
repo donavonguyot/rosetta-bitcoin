@@ -63,11 +63,11 @@ def test_validate_block_rejects_bad_merkle(block1_payload: bytes):
 
 
 def test_validate_stored_blocks_from_tracker(tmp_path):
-    from pybitnode.db.tracker import ProjectTracker
+    from pybitnode.chainstate.tracker import ProjectTracker
     from pybitnode.sync.blocks import validate_stored_blocks
     from pybitnode.sync.headers import ensure_genesis
 
-    tracker = ProjectTracker(tmp_path / "validate.db")
+    tracker = ProjectTracker(tmp_path / "validate-chainstate")
     ensure_genesis(tracker, TESTNET4)
     store = BlockStore(FIXTURE_BLOCKS_DIR, TESTNET4.magic)
     payload = store.read("blk00000.dat", 0, 258)

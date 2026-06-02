@@ -4,7 +4,7 @@ import pytest
 
 from pybitnode.chain.genesis import TESTNET4_GENESIS
 from pybitnode.chain.params import TESTNET4
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.messages.headers import BlockHeader, HeadersMessage
 from pybitnode.sync.headers import ensure_genesis, persist_headers
 from pybitnode.sync.validate import HeaderValidationError, header_meets_target, validate_header
@@ -53,7 +53,7 @@ def test_validate_rejects_bad_pow():
 
 
 def test_ensure_genesis_seeds_height_zero(tmp_path):
-    tracker = ProjectTracker(tmp_path / "genesis.db")
+    tracker = ProjectTracker(tmp_path / "genesis-chainstate")
     genesis = ensure_genesis(tracker, TESTNET4)
     assert tracker.get_header_hash(0) == genesis.block_hash_hex()
     assert tracker.header_count() == 1
@@ -63,7 +63,7 @@ def test_ensure_genesis_seeds_height_zero(tmp_path):
 
 
 def test_persist_headers_rejects_unlinked_header(tmp_path):
-    tracker = ProjectTracker(tmp_path / "reject.db")
+    tracker = ProjectTracker(tmp_path / "reject-chainstate")
     bad = BlockHeader(
         version=1,
         prev_block=b"\xff" * 32,

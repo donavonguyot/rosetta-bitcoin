@@ -109,6 +109,10 @@ the current command.
 | `docker-supervisor-resume` | Write the resume marker. |
 | `docker-smoke-once` | One-shot supervisor loop smoke; no peer reachability required. |
 
+Status and proof commands should follow the native naming contract: use
+`status` for runtime/chainstate inspection, `storage-proof` for bounded storage
+proofs, and `legacy-sqlite` for old evidence or fail-closed guards only.
+
 ## Required Smoke Checks
 
 A Docker-capable port must provide commands that prove:
@@ -263,9 +267,10 @@ Contract/tooling lands before implementation fixes. Ratchet ports in this order:
 1. Java and C#, because they already have local proof and supervisor patterns.
 2. Cpp after RocksDB owns every operational state family with no SQLite
    operational dependency.
-3. Python and TypeScript as daemon-only Docker surfaces, then optional
-   proof/supervisor surfaces.
-4. Elixir last, because Docker is currently missing.
+3. Python and TypeScript as native proof/supervisor surfaces that still need
+   empty-datadir replay before parity claims.
+4. Elixir after its proof-partial Docker surface grows real native RocksDB/NIF
+   and secp256k1 backends.
 
 ## Non-Goals For First Validator Pass
 

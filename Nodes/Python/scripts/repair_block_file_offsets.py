@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pybitnode.chain.params import get_chain
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.storage.blocks import block_hash_hex_from_payload
 
 

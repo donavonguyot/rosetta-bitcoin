@@ -6,7 +6,7 @@ import logging
 from pybitnode.chain.params import ChainParams
 from pybitnode.config import Settings
 from pybitnode.consensus.witness import transaction_wtxid
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.mempool import Mempool, transaction_meets_peer_feefilter
 from pybitnode.metrics import META_TXS_RELAYED_TOTAL, incr_meta_counter
 from pybitnode.messages.inventory import InvMessage, InventoryVector

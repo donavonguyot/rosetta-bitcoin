@@ -6,7 +6,7 @@ import pytest
 
 from pybitnode.chain.params import TESTNET4
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.sync.header_refresh import (
     HeaderRefreshAction,
     decide_header_refresh_action,
@@ -29,7 +29,7 @@ def _seed_headers_through(tracker: ProjectTracker, through: int) -> None:
 
 
 def test_skip_when_no_header_refresh_flag(tmp_path):
-    tracker = ProjectTracker(tmp_path / "nhr.db")
+    tracker = ProjectTracker(tmp_path / "nhr-chainstate")
     _seed_headers_through(tracker, 3)
     action = decide_header_refresh_action(
         Settings(no_header_refresh=True),
@@ -44,7 +44,7 @@ def test_skip_when_no_header_refresh_flag(tmp_path):
 
 
 def test_skip_when_sync_skip_headers_flag(tmp_path):
-    tracker = ProjectTracker(tmp_path / "ssh.db")
+    tracker = ProjectTracker(tmp_path / "ssh-chainstate")
     _seed_headers_through(tracker, 3)
     action = decide_header_refresh_action(
         Settings(sync_skip_headers=True),
@@ -63,7 +63,7 @@ def test_skip_when_sync_skip_headers_flag(tmp_path):
 
 def test_skip_aligned_db_ahead_of_peer(tmp_path):
     """DB/sync_state agree on tip but peer start_height is far ahead — avoid getheaders churn."""
-    tracker = ProjectTracker(tmp_path / "align.db")
+    tracker = ProjectTracker(tmp_path / "align-chainstate")
     tip = 100
     _seed_headers_through(tracker, tip)
     action = decide_header_refresh_action(
@@ -79,7 +79,7 @@ def test_skip_aligned_db_ahead_of_peer(tmp_path):
 
 
 def test_skip_when_max_header_covers_blocks_target(tmp_path):
-    tracker = ProjectTracker(tmp_path / "cover.db")
+    tracker = ProjectTracker(tmp_path / "cover-chainstate")
     _seed_headers_through(tracker, 50)
     tracker.set_validated_tip(10, "0" * 64)
     action = decide_header_refresh_action(
@@ -98,7 +98,7 @@ def test_skip_when_max_header_covers_blocks_target(tmp_path):
 
 
 def test_network_sync_when_headers_do_not_cover_target(tmp_path):
-    tracker = ProjectTracker(tmp_path / "need.db")
+    tracker = ProjectTracker(tmp_path / "need-chainstate")
     ensure_genesis(tracker, TESTNET4)
     tracker.upsert_sync_state(TESTNET4.name, best_height=0, best_hash=TESTNET4.genesis_hash)
     action = decide_header_refresh_action(
@@ -113,7 +113,7 @@ def test_network_sync_when_headers_do_not_cover_target(tmp_path):
 
 
 def test_skip_near_peer_tip(tmp_path):
-    tracker = ProjectTracker(tmp_path / "near.db")
+    tracker = ProjectTracker(tmp_path / "near-chainstate")
     tip = 10_000
     _seed_headers_through(tracker, tip - HEADER_SYNC_NEAR_PEER_TIP)
     action = decide_header_refresh_action(
@@ -133,7 +133,7 @@ async def test_sync_blocks_skips_network_header_refresh_when_target_covered(
 ):
     from pybitnode.sync_runner import sync_blocks
 
-    db_path = tmp_path / "run.db"
+    db_path = tmp_path / "run-chainstate"
     tracker = ProjectTracker(db_path)
     _seed_headers_through(tracker, 100)
     tracker.set_validated_tip(5, "0" * 64)

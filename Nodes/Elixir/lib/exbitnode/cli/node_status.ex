@@ -2,7 +2,8 @@ defmodule Exbitnode.CLI.NodeStatus do
   @moduledoc false
 
   alias Exbitnode.Config.NodePaths
-  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
+  alias Exbitnode.Db.ChainstateSession
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
   alias Exbitnode.Storage.DatadirLock
 
   def run(_args) do
@@ -51,15 +52,15 @@ defmodule Exbitnode.CLI.NodeStatus do
     {:ok, conn} = ChainstateSession.open_native(data_dir, chain)
 
     try do
-      sync_state = ProjectTracker.get_sync_state(conn, chain)
-      validated_height = ProjectTracker.get_validated_height(conn, chain)
-      validated_hash = ProjectTracker.get_validated_hash(conn, chain)
-      header_count = ProjectTracker.header_count(conn, chain)
-      block_count = ProjectTracker.block_count(conn, chain)
-      utxo_count = ProjectTracker.utxo_count(conn, chain)
-      latest_blocker = ProjectTracker.latest_blocker(conn, chain)
-      latest_error = ProjectTracker.latest_error(conn)
-      stored_block = ProjectTracker.max_stored_block(conn, chain)
+      sync_state = ChainstateTracker.get_sync_state(conn, chain)
+      validated_height = ChainstateTracker.get_validated_height(conn, chain)
+      validated_hash = ChainstateTracker.get_validated_hash(conn, chain)
+      header_count = ChainstateTracker.header_count(conn, chain)
+      block_count = ChainstateTracker.block_count(conn, chain)
+      utxo_count = ChainstateTracker.utxo_count(conn, chain)
+      latest_blocker = ChainstateTracker.latest_blocker(conn, chain)
+      latest_error = ChainstateTracker.latest_error(conn)
+      stored_block = ChainstateTracker.max_stored_block(conn, chain)
       metadata = ChainstateSession.metadata(conn)
 
       runtime_status =

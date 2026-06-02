@@ -5,7 +5,7 @@ import logging
 
 from pybitnode.chain.params import ChainParams
 from pybitnode.consensus.connect import ConnectBlockError, connect_block
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.p2p.peer import PeerConnection, broadcast_witness_block_inv
 from pybitnode.storage.blocks import BlockStore
 from pybitnode.sync.validate import BlockValidationError, validate_block

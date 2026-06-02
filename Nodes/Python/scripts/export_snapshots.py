@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 
 
 def _utcnow() -> str:

@@ -11,7 +11,7 @@ from pybitnode.consensus.connect import ConnectBlockError, connect_block, discon
 from pybitnode.consensus.merkle import transaction_txid
 from pybitnode.consensus.subsidy import block_subsidy
 from pybitnode.consensus.witness import validate_witness_commitment
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.storage.blocks import BlockStore
 from pybitnode.sync.blocks import connect_stored_blocks, rebuild_validated_chain
 from pybitnode.sync.headers import ensure_genesis
@@ -43,7 +43,7 @@ def test_witness_commitment_block1(block1_payload: bytes):
 
 
 def test_connect_block1_adds_utxo(tmp_path, block1_payload: bytes):
-    tracker = ProjectTracker(tmp_path / "connect.db")
+    tracker = ProjectTracker(tmp_path / "connect-chainstate")
     ensure_genesis(tracker, TESTNET4)
     tracker.record_header(
         1,
@@ -71,7 +71,7 @@ def test_connect_block1_adds_utxo(tmp_path, block1_payload: bytes):
 
 
 def test_connect_block_requires_sequential_height(tmp_path, block1_payload: bytes):
-    tracker = ProjectTracker(tmp_path / "order.db")
+    tracker = ProjectTracker(tmp_path / "order-chainstate")
     ensure_genesis(tracker, TESTNET4)
     tracker.record_header(
         1,
@@ -94,7 +94,7 @@ def test_connect_block_rejects_immature_coinbase_spend(tmp_path, block1_payload:
     from pybitnode.consensus.connect import ConnectBlockError, _BlockUtxoView, _validate_non_coinbase_inputs
     from pybitnode.messages.transaction import OutPoint, Transaction, TxIn, TxOut
 
-    tracker = ProjectTracker(tmp_path / "immature.db")
+    tracker = ProjectTracker(tmp_path / "immature-chainstate")
     ensure_genesis(tracker, TESTNET4)
     tracker.record_header(
         1,
@@ -134,7 +134,7 @@ def test_connect_block_rejects_immature_coinbase_spend(tmp_path, block1_payload:
 
 def test_disconnect_and_reconnect_block2(tmp_path):
     """Connect height 2, disconnect rewinds tip and UTXO set, reconnect restores state."""
-    tracker = ProjectTracker(tmp_path / "reorg.db")
+    tracker = ProjectTracker(tmp_path / "reorg-chainstate")
     ensure_genesis(tracker, TESTNET4)
     store = BlockStore(FIXTURE_BLOCKS_DIR, TESTNET4.magic)
 
@@ -213,7 +213,7 @@ def test_utxo_undo_external_spend_entry_shape(tmp_path):
     from pybitnode.consensus.connect import _BlockUtxoView, _external_spend_undo_entries
     from pybitnode.messages.transaction import OutPoint
 
-    tracker = ProjectTracker(tmp_path / "undo_shape.db")
+    tracker = ProjectTracker(tmp_path / "undo_shape-chainstate")
     ensure_genesis(tracker, TESTNET4)
     txid = b"\xab" * 32
     spk = b"\x76\xa9\x14" + b"\x00" * 20 + b"\x88\xac"
@@ -246,7 +246,7 @@ def test_block_utxo_view_caches_external_reads(tmp_path, monkeypatch):
     from pybitnode.consensus.connect import _BlockUtxoView
     from pybitnode.messages.transaction import OutPoint
 
-    tracker = ProjectTracker(tmp_path / "cache.db")
+    tracker = ProjectTracker(tmp_path / "cache-chainstate")
     ensure_genesis(tracker, TESTNET4)
     txid = b"\xcd" * 32
     tracker.add_utxo(txid, 0, height=1, value=5000, script_pubkey=b"\x51", coinbase=False)
@@ -272,7 +272,7 @@ def test_block_utxo_view_does_not_persist_same_block_spent_outputs(tmp_path):
     from pybitnode.consensus.connect import _BlockUtxoView
     from pybitnode.messages.transaction import OutPoint
 
-    tracker = ProjectTracker(tmp_path / "same_block.db")
+    tracker = ProjectTracker(tmp_path / "same_block-chainstate")
     ensure_genesis(tracker, TESTNET4)
     txid = b"\x12" * 32
     view = _BlockUtxoView(tracker, height=2)
@@ -289,7 +289,7 @@ def test_block_utxo_view_does_not_persist_same_block_spent_outputs(tmp_path):
 def test_block_utxo_view_rejects_duplicate_persisted_output(tmp_path):
     from pybitnode.consensus.connect import _BlockUtxoView
 
-    tracker = ProjectTracker(tmp_path / "duplicate.db")
+    tracker = ProjectTracker(tmp_path / "duplicate-chainstate")
     ensure_genesis(tracker, TESTNET4)
     txid = b"\x34" * 32
     tracker.add_utxo(txid, 0, height=1, value=5000, script_pubkey=b"\x51", coinbase=False)
@@ -304,7 +304,7 @@ def test_block_utxo_view_rejects_duplicate_persisted_output(tmp_path):
 
 def test_connect_block_timing_event_when_enabled(tmp_path, block1_payload: bytes, monkeypatch):
     monkeypatch.setenv("SYNC_TIMING", "1")
-    tracker = ProjectTracker(tmp_path / "timing.db")
+    tracker = ProjectTracker(tmp_path / "timing-chainstate")
     ensure_genesis(tracker, TESTNET4)
     tracker.record_header(
         1,
@@ -332,7 +332,7 @@ def test_connect_block_timing_event_when_enabled(tmp_path, block1_payload: bytes
 
 
 def test_disconnect_block_requires_tip(tmp_path):
-    tracker = ProjectTracker(tmp_path / "tip.db")
+    tracker = ProjectTracker(tmp_path / "tip-chainstate")
     ensure_genesis(tracker, TESTNET4)
     with pytest.raises(ConnectBlockError, match="validated tip"):
         disconnect_block(tracker, 1, TESTNET4)
@@ -343,7 +343,7 @@ def test_connect_block_does_not_mutate_utxo_set_on_failure(tmp_path, block1_payl
     from pybitnode.consensus.connect import _BlockUtxoView, _validate_non_coinbase_inputs
     from pybitnode.messages.transaction import OutPoint, Transaction, TxIn, TxOut
 
-    tracker = ProjectTracker(tmp_path / "atomic.db")
+    tracker = ProjectTracker(tmp_path / "atomic-chainstate")
     ensure_genesis(tracker, TESTNET4)
     tracker.record_header(
         1,
@@ -384,7 +384,7 @@ def test_validate_inputs_spends_only_after_script_verify_success(tmp_path, monke
     from pybitnode.consensus.script.script_verify_runner import ScriptVerifyBatchError
     from pybitnode.messages.transaction import OutPoint, Transaction, TxIn, TxOut
 
-    tracker = ProjectTracker(tmp_path / "verify_failure.db")
+    tracker = ProjectTracker(tmp_path / "verify_failure-chainstate")
     ensure_genesis(tracker, TESTNET4)
     txid = b"\xef" * 32
     tracker.add_utxo(txid, 0, height=1, value=5000, script_pubkey=b"\x51", coinbase=False)
@@ -417,7 +417,7 @@ def test_validate_inputs_spends_only_after_script_verify_success(tmp_path, monke
 
 
 def test_connect_stored_blocks_1_through_5(tmp_path):
-    tracker = ProjectTracker(tmp_path / "chain.db")
+    tracker = ProjectTracker(tmp_path / "chain-chainstate")
     ensure_genesis(tracker, TESTNET4)
     store = BlockStore(FIXTURE_BLOCKS_DIR, TESTNET4.magic)
     local_store = BlockStore(tmp_path / "blocks", TESTNET4.magic)
@@ -446,7 +446,7 @@ def test_connect_stored_blocks_1_through_5(tmp_path):
 
 
 def test_rebuild_validated_chain_restores_utxo_set(tmp_path):
-    tracker = ProjectTracker(tmp_path / "chain.db")
+    tracker = ProjectTracker(tmp_path / "chain-chainstate")
     ensure_genesis(tracker, TESTNET4)
     store = BlockStore(FIXTURE_BLOCKS_DIR, TESTNET4.magic)
     local_store = BlockStore(tmp_path / "blocks", TESTNET4.magic)

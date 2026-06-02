@@ -6,13 +6,13 @@ import pytest
 
 from pybitnode.chain.params import TESTNET4
 from pybitnode.config import Settings
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.p2p.manager import PeerManager
 
 
 @pytest.mark.asyncio
 async def test_connect_peers_keeps_peer_when_discover_raises(tmp_path, monkeypatch):
-    tracker = ProjectTracker(tmp_path / "discovery.db")
+    tracker = ProjectTracker(tmp_path / "discovery-chainstate")
 
     calls = []
 
@@ -40,7 +40,7 @@ async def test_connect_peers_keeps_peer_when_discover_raises(tmp_path, monkeypat
 
 @pytest.mark.asyncio
 async def test_bootstrap_runs_discover_even_with_manual_peer(tmp_path, monkeypatch):
-    tracker = ProjectTracker(tmp_path / "manual.db")
+    tracker = ProjectTracker(tmp_path / "manual-chainstate")
     monkeypatch.setattr(
         "pybitnode.p2p.manager.bootstrap_peer_targets",
         AsyncMock(return_value=[("203.0.113.2", 48333)]),
@@ -72,7 +72,7 @@ async def test_bootstrap_runs_discover_even_with_manual_peer(tmp_path, monkeypat
 
 @pytest.mark.asyncio
 async def test_bootstrap_skips_discover_when_skip_getaddr(tmp_path, monkeypatch):
-    tracker = ProjectTracker(tmp_path / "manual.db")
+    tracker = ProjectTracker(tmp_path / "manual-chainstate")
     monkeypatch.setattr(
         "pybitnode.p2p.manager.bootstrap_peer_targets",
         AsyncMock(return_value=[("203.0.113.2", 48333)]),
@@ -105,7 +105,7 @@ async def test_bootstrap_skips_discover_when_skip_getaddr(tmp_path, monkeypatch)
 @pytest.mark.asyncio
 async def test_bootstrap_manual_peers_only_skips_bootstrap_peer_targets(tmp_path, monkeypatch):
     """With `--peers` / explicit manual list, targets come only from that list (no DNS/DB merge)."""
-    tracker = ProjectTracker(tmp_path / "manual_only.db")
+    tracker = ProjectTracker(tmp_path / "manual_only-chainstate")
     monkeypatch.setattr(
         "pybitnode.p2p.manager.bootstrap_peer_targets",
         AsyncMock(side_effect=AssertionError("bootstrap_peer_targets must not run with manual_peers")),

@@ -2,7 +2,7 @@ defmodule Exbitnode.Sync.BlockSync do
   @moduledoc false
 
   alias Exbitnode.Consensus.Connect.{BlockConnector, ConnectBlockError, ValidationBlocker}
-  alias Exbitnode.Db.ProjectTracker
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
   alias Exbitnode.P2p.{PeerServer, PeerSupervisor}
   alias Exbitnode.Storage.BlockStorage
   alias Exbitnode.Util.Hex
@@ -46,13 +46,13 @@ defmodule Exbitnode.Sync.BlockSync do
     if max_blocks > 0 and connected >= max_blocks do
       finish(conn, chain.name, downloaded, connected, blocker, sync_status)
     else
-      next_height = ProjectTracker.get_validated_height(conn, chain.name) + 1
+      next_height = ChainstateTracker.get_validated_height(conn, chain.name) + 1
 
-      header_hash_hex = ProjectTracker.get_header_hash(conn, chain.name, next_height)
+      header_hash_hex = ChainstateTracker.get_header_hash(conn, chain.name, next_height)
 
       cond do
         is_nil(header_hash_hex) ->
-          ProjectTracker.log_event(
+          ChainstateTracker.log_event(
             conn,
             "sync",
             "missing header at height #{next_height}",
@@ -71,7 +71,7 @@ defmodule Exbitnode.Sync.BlockSync do
               stored = BlockStorage.store(block_store, payload)
 
               :ok =
-                ProjectTracker.record_block(
+                ChainstateTracker.record_block(
                   conn,
                   chain.name,
                   next_height,
@@ -104,21 +104,21 @@ defmodule Exbitnode.Sync.BlockSync do
                 )
               rescue
                 e in ValidationBlocker ->
-                  :ok = ProjectTracker.record_blocker(conn, chain.name, e)
-                  ProjectTracker.log_event(conn, "consensus", e.message, "error")
+                  :ok = ChainstateTracker.record_blocker(conn, chain.name, e)
+                  ChainstateTracker.log_event(conn, "consensus", e.message, "error")
                   finish(conn, chain.name, downloaded, connected, e, "blocked")
 
                 e in ConnectBlockError ->
-                  ProjectTracker.log_event(conn, "consensus", e.message, "error")
+                  ChainstateTracker.log_event(conn, "consensus", e.message, "error")
                   finish(conn, chain.name, downloaded, connected, blocker, "failed")
 
                 e ->
-                  ProjectTracker.log_event(conn, "consensus", Exception.message(e), "error")
+                  ChainstateTracker.log_event(conn, "consensus", Exception.message(e), "error")
                   finish(conn, chain.name, downloaded, connected, blocker, "failed")
               end
 
             {:error, :notfound, peer_pid, reconnects} ->
-              ProjectTracker.log_event(
+              ChainstateTracker.log_event(
                 conn,
                 "sync",
                 "peer did not return block at height #{next_height}",
@@ -137,7 +137,7 @@ defmodule Exbitnode.Sync.BlockSync do
               )
 
             {:error, reason, peer_pid, reconnects} ->
-              ProjectTracker.log_event(
+              ChainstateTracker.log_event(
                 conn,
                 "sync",
                 "peer transport error at height #{next_height}: #{inspect(reason)}",
@@ -169,7 +169,7 @@ defmodule Exbitnode.Sync.BlockSync do
 
       {:error, reason} when reason in @transport_errors ->
         if peer_ctx && reconnects < max_reconnects(peer_ctx) do
-          ProjectTracker.log_event(
+          ChainstateTracker.log_event(
             peer_ctx.conn,
             "sync",
             "peer #{inspect(reason)} at block request; reconnecting (#{reconnects + 1}/#{max_reconnects(peer_ctx)})",
@@ -195,7 +195,7 @@ defmodule Exbitnode.Sync.BlockSync do
   end
 
   defp reconnect_peer(%{host: host, port: port, chain: chain, conn: conn}) do
-    start_height = ProjectTracker.bootstrap_start_height(conn, chain.name)
+    start_height = ChainstateTracker.bootstrap_start_height(conn, chain.name)
     PeerSupervisor.connect(host, port, chain, conn, start_height)
   end
 
@@ -221,7 +221,7 @@ defmodule Exbitnode.Sync.BlockSync do
          _peer_pid \\ nil,
          _reconnects \\ 0
        ) do
-    ProjectTracker.upsert_sync_state(conn, chain, %{sync_status: sync_status})
+    ChainstateTracker.upsert_sync_state(conn, chain, %{sync_status: sync_status})
 
     %{
       downloaded: downloaded,
@@ -235,7 +235,7 @@ defmodule Exbitnode.Sync.BlockSync do
     if next_height == 0 do
       :binary.copy(<<0>>, 32)
     else
-      prev_hash_hex = ProjectTracker.get_header_hash(conn, chain, next_height - 1)
+      prev_hash_hex = ChainstateTracker.get_header_hash(conn, chain, next_height - 1)
       Hex.reverse(Hex.decode(prev_hash_hex))
     end
   end

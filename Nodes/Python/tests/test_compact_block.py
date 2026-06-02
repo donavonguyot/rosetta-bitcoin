@@ -6,7 +6,7 @@ import pytest
 
 from pybitnode.chain.params import TESTNET4
 from pybitnode.consensus.block import Block
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.messages.compact_block import (
     BlockTxnMessage,
     CompactBlockMessage,
@@ -163,7 +163,7 @@ def test_cmpctblock_serialize_rejects_bad_shortid_length():
 
 @pytest.mark.asyncio
 async def test_peer_dispatch_cmpctblock_marks_wire_capability(tmp_path):
-    tracker = ProjectTracker(tmp_path / "cmpctblock.db")
+    tracker = ProjectTracker(tmp_path / "cmpctblock-chainstate")
     peer = PeerConnection(
         host="127.0.0.1",
         port=48333,
@@ -204,7 +204,7 @@ def test_try_reconstruct_compact_block_from_mempool_wtxids():
 
 @pytest.mark.asyncio
 async def test_peer_dispatch_cmpctblock_reconstructed_with_mock_mempool(tmp_path):
-    tracker = ProjectTracker(tmp_path / "cmpctblock_mx.db")
+    tracker = ProjectTracker(tmp_path / "cmpctblock_mx-chainstate")
     peer = PeerConnection(
         host="127.0.0.1",
         port=48333,
@@ -288,7 +288,7 @@ def test_complete_compact_with_block_transactions_fills_sid_gap():
 
 @pytest.mark.asyncio
 async def test_peer_cmpctblock_sends_getblocktxn_then_accept_blocktxn(tmp_path):
-    tracker = ProjectTracker(tmp_path / "cmpctblock_gettxn.db")
+    tracker = ProjectTracker(tmp_path / "cmpctblock_gettxn-chainstate")
     peer = PeerConnection(
         host="127.0.0.1",
         port=48333,
@@ -340,7 +340,7 @@ async def test_peer_cmpctblock_sends_getblocktxn_then_accept_blocktxn(tmp_path):
 @pytest.mark.asyncio
 async def test_peer_cmpctblock_partial_mempool_then_blocktxn_merges_shortids(tmp_path):
     """Mempool resolves one BIP152 gap; remainder requested via getblocktxn then merged."""
-    tracker = ProjectTracker(tmp_path / "cmpctblock_partial_merge.db")
+    tracker = ProjectTracker(tmp_path / "cmpctblock_partial_merge-chainstate")
     peer = PeerConnection(
         host="127.0.0.1",
         port=48333,

@@ -5,7 +5,7 @@ Historical JSON exports; forward exports come from the live RocksDB native track
 | File | Contents |
 |------|----------|
 | `manifest.json` | Export metadata and file list |
-| `status.json` | Full summary (`pybitnode-db` default output) |
+| `status.json` | Full summary (`pybitnode-status` default output) |
 | `phases.json` | Roadmap phase status and notes |
 | `wire.json` | Wire capability progress and checkpoints |
 | `capabilities.json` | Per-capability implementation/verification state |
@@ -21,5 +21,5 @@ Or after syncing:
 ```bash
 .venv/bin/pybitnode-sync --datadir ./data --blocks-max 200
 .venv/bin/python scripts/export_snapshots.py --state-path ./data/chainstate-rocksdb
-git add snapshots/ && git commit -m "Update tracker snapshots"
+git add snapshots/ && git commit -m "Update chainstate snapshots"
 ```

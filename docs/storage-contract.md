@@ -6,6 +6,13 @@ block lookup, UTXO lookup, or status truth.
 
 ## Native Chainstate Rules
 
+- Use `chainstate` for operational headers, block index, sync state, validated
+  tip, UTXO set, undo records, metadata, blockers, and status truth.
+- Use `status` for user-facing runtime inspection commands and
+  `storage-proof` for bounded native storage proof commands.
+- Use `legacy-sqlite` only for old evidence, repair notes, and fail-closed guard
+  tests. Active native paths should not be described as `db`, `SQLite`,
+  `tracker`, or `ProjectTracker` in user-facing docs.
 - The active backend reports `validated_height`, `validated_hash`, UTXO count,
   and chainstate status.
 - RocksDB/native KV ports keep raw block bytes outside the chainstate backend,
@@ -27,13 +34,15 @@ block lookup, UTXO lookup, or status truth.
   `NodeCore/conformance/results/`.
 - CSharpNode has RocksDB codec/storage proof artifacts and a persistent Docker
   sync volume using native chainstate.
-- TypeScript currently remains SQLite-based and is not making a native/Core
-  storage claim.
+- TypeScript has a RocksDB `ChainstateStore` proof path and native status/proof
+  commands. Legacy SQLite tracker surfaces are non-Core compatibility only.
 - Python's old SQLite scout path is legacy evidence only. Python native-break
   work now targets RocksDB-owned operational truth, native crypto, and Docker
   proof/supervisor. Fresh blocker replay from empty native state remains a
   separate proof plan.
 - Cpp's compliance path is RocksDB-only. Cpp is not compliant unless RocksDB
   owns all operational node truth without opening SQLite.
+- Elixir has a RocksDB chainstate boundary and bounded proof path. Native
+  secp256k1 and empty-datadir replay remain pending.
 
 See `NodeCore/storage/STORAGE_GATE.md` for the portable fixture contract.

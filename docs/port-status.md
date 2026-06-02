@@ -17,10 +17,13 @@ fixture, emits a partial storage proof, or has a Dockerfile.
 | CSharp | Follower | Persistent Docker supervisor reached `validated_height=22829`; latest bounded Docker proof passes to height 2; cleared 6975 and 10k | RocksDB/native evidence exists | supervisor_partial | Blocked at `22830` P2TR script-path / BIP342; native blocker diagnostics still needed |
 | TypeScript | Native/Core migration target | Snapshot evidence around `validated_height=5578`; matrix remains conservative above known fixtures and must be replayed from empty native state | proof_partial: RocksDB storage proof path and native dependency boundary exist; SQLite runtime remains legacy/non-Core | supervisor_partial | Complete SQLite runtime exit, standardize external probe, and rediscover blockers under native state |
 | Cpp | Systems follower | Height 739 fixture regression passes; bounded Docker RocksDB storage proof passes; live datadir still needs rerun beyond 738 | proof_partial: RocksDB-only operational store and proof artifact exist; live staged sync rerun still pending | proof_partial | Keep native builds SQLite-free, then resume staged sync |
-| Elixir | Supervised follower | `make node-status` exists; no shared snapshots yet; native status now reports RocksDB backend fields | proof_partial: RocksDB chainstate boundary and bounded storage proof exist; native secp256k1 NIF still unavailable | proof_partial | Replace storage abstraction with real RocksDB NIF binding, add native secp256k1 NIF, then rerun live sync/blocker discovery |
+| Elixir | Supervised follower | `make status` reports RocksDB backend fields; no shared snapshots yet | proof_partial: RocksDB chainstate boundary and bounded storage proof exist; native secp256k1 NIF still unavailable | proof_partial | Replace storage abstraction with real RocksDB NIF binding, add native secp256k1 NIF, then rerun live sync/blocker discovery |
 
 ## Status Rules
 
+- User-facing native inspection commands should use `status`; bounded native
+  storage proofs should use `storage-proof`; old SQLite evidence should be
+  explicitly labeled `legacy-sqlite`.
 - Use each port's own status command for live truth.
 - Treat committed snapshots as checkpoint artifacts, not live truth.
 - Keep consensus progress, Core storage compliance, and Docker runtime

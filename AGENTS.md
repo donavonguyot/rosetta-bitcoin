@@ -77,7 +77,7 @@ All `Nodes/<Port>/` directories are root-owned source directories. Nested
 | Path | Package | Role |
 |------|---------|------|
 | `~/RB/Nodes/Python` | **pybitnode** | Full-break native parity target; legacy SQLite scout evidence is historical |
-| `~/RB/Nodes/TypeScript` | **tsbitnode** | Fast follower; zero **runtime** npm deps; uses Node built-ins |
+| `~/RB/Nodes/TypeScript` | **tsbitnode** | Native/Core migration target; RocksDB and scoped native crypto deps allowed |
 | `~/RB/Nodes/Cpp` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
 | `~/RB/Nodes/Java` | **jbitnode** | Clean Java follower; live discovery above Python scout horizon |
 
@@ -160,14 +160,15 @@ finding replaces it.
 | Default ops peer | Often `89.167.10.150:48333` | **Excluded by default** (parallel runs) |
 | Fallback | — | DNS seed; falls back to `89.167.10.150` when seeds fail |
 | Datadir | `./data` | `./data-ts` |
-| Operational state | `chainstate-rocksdb` | `tsbitnode.db` |
+| Operational state | `chainstate-rocksdb` | `chainstate-rocksdb` |
 
 **Never share datadirs or operational state between nodes or parallel agent runs.** One writer per datadir at a time.
 
 ### Single writer rule (TypeScript)
 
-TypeScript enforces one SQLite writer per datadir via **`<datadir>/.tsbitnode_sync.lock`**
-(pid + holder metadata). These entry points acquire or respect the lock:
+TypeScript enforces one native chainstate writer per datadir via
+**`<datadir>/.tsbitnode_sync.lock`** (pid + holder metadata). These entry points
+acquire or respect the lock:
 
 | Process | Lock behavior |
 |---------|---------------|
@@ -210,10 +211,17 @@ npx tsbitnode-sync --datadir ./data-ts --connect-only --rebuild
 
 Rebuild must hold the exclusive lock and exit **0** before resuming batches.
 
-**Verify before batches:** `validated_height >= 5579` and UTXO count sane:
+**Verify before batches:** `validated_height >= 5579` and UTXO count sane.
+For legacy repair evidence, inspect the old tracker explicitly:
 
 ```bash
-npx tsbitnode-db --db ./data-ts/tsbitnode.db
+npx tsbitnode-legacy-db --db ./data-ts/tsbitnode.db
+```
+
+For native state, use:
+
+```bash
+npx tsbitnode-status --datadir ./data-ts
 ```
 
 Only then resume:
@@ -364,16 +372,16 @@ Supervisor exits **2** on blocker; inner `SyncLocalCore` exit **4**. Abnormal JV
 cd Nodes/TypeScript
 npm run build
 
-# DB snapshot / heights
-npx tsbitnode-db --db ./data-ts/tsbitnode.db
+# Native chainstate status
+npx tsbitnode-status --datadir ./data-ts
 
 # Sync report
 npm run sync:progress
 
-# Export capability/wire snapshots
+# Legacy SQLite capability/wire snapshots only
 npm run export:snapshots -- --db ./data-ts/tsbitnode.db
 
-# Script template survey (read-only; optional block scan ahead of tip)
+# Legacy SQLite script template survey (read-only; optional block scan ahead of tip)
 npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20
 ```
 
@@ -384,7 +392,7 @@ snapshots after a settled checkpoint:
 
 ```bash
 cd Nodes/Python
-.venv/bin/pybitnode-db --state-path ./data/chainstate-rocksdb
+.venv/bin/pybitnode-status --state-path ./data/chainstate-rocksdb
 .venv/bin/python scripts/export_snapshots.py --state-path ./data/chainstate-rocksdb
 ```
 
@@ -437,11 +445,11 @@ sync until exact blocker -> record blocker -> implement exact missing rule
 
 ### Parallel prep checklist (consensus / sync agents)
 
-1. **Isolated datadirs** — Python `./data` + `chainstate-rocksdb` vs TypeScript `./data-ts` + `tsbitnode.db`; never share or copy mid-write.
+1. **Isolated datadirs** — Python `./data` + `chainstate-rocksdb` vs TypeScript `./data-ts` + `chainstate-rocksdb`; never share or copy mid-write.
 2. **One writer** per datadir; survey/export tools must not overlap active writers.
 3. **Peer exclusion** — TS excludes Python’s default ops peer (`89.167.10.150`) unless `PEERS=` overrides; avoids cross-node interference.
 4. **Honest handshake** — deferred `feefilter` / `mempool` / `sendcmpct`; conservative `start_height` (see [Critical: handshake](#critical-handshake--sync-state-too-advanced-disconnects)).
-5. **Baseline survey** — before and after batch sync: `npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20` (requires blocks downloaded past `validated_height`).
+5. **Legacy baseline survey** — before and after batch sync, only when inspecting the old SQLite tracker: `npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20` (requires blocks downloaded past `validated_height`).
 6. **Target heights** — use testnet4 milestones above; not mainnet activation heights.
 7. **Blocker ledger** — capture exact height/tx/input/template before implementing.
 8. **Repo hygiene** — commit source/tests/docs/snapshots; do not commit live DBs or generated output.
@@ -454,8 +462,8 @@ Static status here will go stale quickly. Use the commands below before making
 claims about current progress:
 
 ```bash
-cd Nodes/Python && .venv/bin/pybitnode-db --state-path ./data/chainstate-rocksdb
-cd Nodes/TypeScript && npx tsbitnode-db --db ./data-ts/tsbitnode.db
+cd Nodes/Python && .venv/bin/pybitnode-status --state-path ./data/chainstate-rocksdb
+cd Nodes/TypeScript && npx tsbitnode-status --datadir ./data-ts
 tail -n 80 Nodes/Python/sync_batch_run.log
 tail -n 80 Nodes/TypeScript/sync_batch_operational.log
 ```
@@ -468,7 +476,7 @@ Known durable lessons:
 | Block validation | Real progress is `validated_height`, not downloaded headers |
 | Consensus | Stop on missing script rules; do not skip them |
 | P2P | Deferred handshake + honest `start_height` during sync |
-| Snapshots | Export after settled checkpoints; DB/logs are fresher during active sync |
+| Snapshots | Export after settled checkpoints; live status/logs are fresher during active sync |
 
 Re-run tests after P2P changes: `npm test` in `TypeScriptNode`.
 
@@ -504,13 +512,13 @@ Rules:
 | `config/peers.ts` | Peer defaults, Python peer exclusion |
 | `consensus/script/interpreter.ts` | Script templates, opcode evaluation |
 | `consensus/script/verify.ts` | Spend-path verification entry |
-| `scripts/scriptTemplateSurvey.ts` | Offline script template survey (read-only DB) |
+| `scripts/scriptTemplateSurvey.ts` | Legacy SQLite script template survey (read-only) |
 
 ### Python (`Nodes/Python/`)
 
 | File | Purpose |
 |------|---------|
-| `scripts/script_template_survey.py` | Offline script template survey (read-only DB) |
+| `scripts/script_template_survey.py` | Offline script template survey (read-only native state) |
 | `pybitnode/p2p/peer.py` | Reference handshake behavior |
 | `pybitnode/sync_runner.py` | Reference sync orchestration |
 | `pybitnode/header_refresh.py` | Reference header sync |
@@ -530,7 +538,7 @@ Sync failing with immediate disconnect?
   └─> Check start_height vs validated_height. Simplify post-verack to sendheaders only.
 
 Running both nodes?
-  └─> ./data + chainstate-rocksdb  vs  ./data-ts + tsbitnode.db. Never mix.
+  └─> ./data + chainstate-rocksdb  vs  ./data-ts + chainstate-rocksdb. Never mix.
 
 Need live cp6 / serving proof?
   └─> LISTEN mode + completeDeferredHandshake after headers_current, not in syncRunner batch.

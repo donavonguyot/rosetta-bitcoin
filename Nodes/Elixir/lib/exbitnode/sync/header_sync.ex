@@ -1,10 +1,11 @@
 defmodule Exbitnode.Sync.HeaderSync do
   @moduledoc false
 
+  alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
+
   alias Exbitnode.{
     Chain.Genesis,
     Consensus.HeaderValidator,
-    Db.ProjectTracker,
     Messages.BlockHeaderCodec,
     P2p.PeerServer,
     Util.Hex
@@ -20,8 +21,8 @@ defmodule Exbitnode.Sync.HeaderSync do
   def sync_from_peer(peer_pid, chain, conn, max_headers, max_batches) when is_pid(peer_pid) do
     genesis = Genesis.for_chain(chain.name)
     genesis_hash = chain.genesis_hash
-    ProjectTracker.ensure_genesis(conn, chain.name, genesis, genesis_hash)
-    ProjectTracker.repair_sync_state_from_headers(conn, chain.name)
+    ChainstateTracker.ensure_genesis(conn, chain.name, genesis, genesis_hash)
+    ChainstateTracker.repair_sync_state_from_headers(conn, chain.name)
     genesis_hash_internal = BlockHeaderCodec.block_hash(genesis)
 
     peer_height = PeerServer.remote_start_height(peer_pid)
@@ -51,14 +52,16 @@ defmodule Exbitnode.Sync.HeaderSync do
          batches,
          genesis_hash_internal
        ) do
-    state = ProjectTracker.get_sync_state(conn, chain.name)
+    state = ChainstateTracker.get_sync_state(conn, chain.name)
     best_height = (state && state.best_height) || 0
 
     if should_skip?(peer_height, best_height) do
       mark_headers_current(conn, chain.name)
       result(total_stored, best_height, "headers_current")
     else
-      locator = ProjectTracker.next_locator(conn, chain.name, best_height, genesis_hash_internal)
+      locator =
+        ChainstateTracker.next_locator(conn, chain.name, best_height, genesis_hash_internal)
+
       remaining = max_headers - total_stored
 
       if remaining <= 0 or batches >= max_batches do
@@ -77,7 +80,7 @@ defmodule Exbitnode.Sync.HeaderSync do
 
               total_stored = total_stored + stored
               batches = batches + 1
-              state = ProjectTracker.get_sync_state(conn, chain.name)
+              state = ChainstateTracker.get_sync_state(conn, chain.name)
               best_height = (state && state.best_height) || tip_height
 
               cond do
@@ -90,8 +93,8 @@ defmodule Exbitnode.Sync.HeaderSync do
                   result(total_stored, best_height, "headers_current")
 
                 total_stored >= max_headers ->
-                  ProjectTracker.upsert_sync_state(conn, chain.name, %{
-                    header_count: ProjectTracker.header_count(conn, chain.name),
+                  ChainstateTracker.upsert_sync_state(conn, chain.name, %{
+                    header_count: ChainstateTracker.header_count(conn, chain.name),
                     sync_status: "headers_syncing"
                   })
 
@@ -113,7 +116,7 @@ defmodule Exbitnode.Sync.HeaderSync do
             end
 
           {:error, reason} ->
-            ProjectTracker.log_event(
+            ChainstateTracker.log_event(
               conn,
               "sync",
               "header request failed: #{inspect(reason)}",
@@ -135,11 +138,11 @@ defmodule Exbitnode.Sync.HeaderSync do
   end
 
   defp persist_headers(conn, chain, headers, tip_height, genesis_hash_internal) do
-    state = ProjectTracker.get_sync_state(conn, chain)
+    state = ChainstateTracker.get_sync_state(conn, chain)
     tip_height = (state && state.best_height) || tip_height
 
     tip_hash_hex =
-      ProjectTracker.get_header_hash(conn, chain, tip_height) || Genesis.testnet4_hash()
+      ChainstateTracker.get_header_hash(conn, chain, tip_height) || Genesis.testnet4_hash()
 
     tip_internal =
       if tip_height == 0 do
@@ -158,7 +161,7 @@ defmodule Exbitnode.Sync.HeaderSync do
         serialized = header |> BlockHeaderCodec.serialize() |> Hex.encode()
 
         inserted? =
-          case ProjectTracker.insert_header(
+          case ChainstateTracker.insert_header(
                  conn,
                  chain,
                  height,
@@ -172,17 +175,17 @@ defmodule Exbitnode.Sync.HeaderSync do
 
         if inserted? do
           :ok =
-            ProjectTracker.upsert_sync_state(conn, chain, %{
+            ChainstateTracker.upsert_sync_state(conn, chain, %{
               best_height: height,
               best_hash: block_hash,
-              header_count: ProjectTracker.header_count(conn, chain),
+              header_count: ChainstateTracker.header_count(conn, chain),
               sync_status: "headers_syncing"
             })
 
           tip_internal = BlockHeaderCodec.block_hash(header)
           {stored + 1, height, tip_internal}
         else
-          existing_hash = ProjectTracker.get_header_hash(conn, chain, height)
+          existing_hash = ChainstateTracker.get_header_hash(conn, chain, height)
 
           if existing_hash != block_hash do
             raise Exbitnode.Consensus.HeaderValidationError,
@@ -194,7 +197,7 @@ defmodule Exbitnode.Sync.HeaderSync do
         end
       rescue
         e in Exbitnode.Consensus.HeaderValidationError ->
-          ProjectTracker.log_event(
+          ChainstateTracker.log_event(
             conn,
             "sync",
             "Header rejected at height #{height + 1}: #{Exception.message(e)}",
@@ -207,12 +210,12 @@ defmodule Exbitnode.Sync.HeaderSync do
   end
 
   defp mark_headers_current(conn, chain) do
-    state = ProjectTracker.get_sync_state(conn, chain)
+    state = ChainstateTracker.get_sync_state(conn, chain)
 
-    ProjectTracker.upsert_sync_state(conn, chain, %{
+    ChainstateTracker.upsert_sync_state(conn, chain, %{
       best_height: state && state.best_height,
       best_hash: state && state.best_hash,
-      header_count: ProjectTracker.header_count(conn, chain),
+      header_count: ChainstateTracker.header_count(conn, chain),
       sync_status: "headers_current"
     })
   end

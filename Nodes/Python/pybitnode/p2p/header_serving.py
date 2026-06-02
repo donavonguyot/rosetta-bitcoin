@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pybitnode.chain.genesis import genesis_header_for
 from pybitnode.chain.params import ChainParams
-from pybitnode.db.tracker import ProjectTracker
+from pybitnode.chainstate.tracker import ProjectTracker
 from pybitnode.messages.headers import HEADER_SIZE, BlockHeader, HeadersMessage
 from pybitnode.messages.inventory import GetHeadersMessage
 from pybitnode.storage.blocks import BlockStore
