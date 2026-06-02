@@ -147,7 +147,7 @@ def docker_health_document(settings: Settings, tracker: ProjectTracker) -> dict:
 
 def main() -> None:
     settings = Settings.from_env()
-    tracker = ProjectTracker(settings.resolved_db_path())
+    tracker = ProjectTracker(settings.resolved_state_path())
     try:
         payload = docker_health_document(settings, tracker)
         try:

@@ -1,27 +1,15 @@
 #!/usr/bin/env python3
-"""Offline survey: validated tip, rejection events (script stubs), stored-block output tagging.
-
-Opens the SQLite URI in **read-only** mode by default (`?mode=ro`). Does **not**
-fetch from the network.
-
-Example:
-
-    PYTHONPATH=. ./scripts/script_template_survey.py --db ./data/pybitnode.db \\
-        --chain testnet4 --scan-blocks 20
-
-Ops playbook: docs/OPERATIONS.md (Next consensus gaps / offline survey).
-"""
+"""Offline survey of native state and stored block output templates."""
 
 from __future__ import annotations
 
 import argparse
-import sqlite3
 import sys
 from collections import Counter
 from pathlib import Path
 
-# Allow running without installing the package (repo-root PYTHONPATH=.).
-_REPO = Path(__file__).resolve().parent.parent
+from pybitnode.config import Settings
+from pybitnode.db.tracker import ProjectTracker
 
 
 def _classify_scriptpubkey(spk: bytes) -> str:
@@ -61,7 +49,6 @@ def _classify_scriptpubkey(spk: bytes) -> str:
 
 
 def _summarize_supported_templates() -> tuple[str, ...]:
-    """Parrots `verify_transaction_input`; keep in sync with verify.py manually."""
     return (
         "P2PK (<pubkey> checksig)",
         "P2PKH",
@@ -73,154 +60,65 @@ def _summarize_supported_templates() -> tuple[str, ...]:
     )
 
 
-def _open_ro(db_path: Path) -> sqlite3.Connection:
-    uri = f"file:{db_path.resolve()}?mode=ro"
-    return sqlite3.connect(uri, uri=True)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--db",
-        type=Path,
-        default=_REPO / "data" / "pybitnode.db",
-        help="Path to pybitnode SQLite file (default: ./data/pybitnode.db)",
-    )
-    parser.add_argument(
-        "--chain",
-        default="testnet4",
-        help="chain name in chain_state / sync_state (default: testnet4)",
-    )
-    parser.add_argument(
-        "--scan-blocks",
-        type=int,
-        metavar="N",
-        default=0,
-        help="Classify transaction output scriptPubKeys for stored blocks with height in "
-        "(validated_height, validated_height+N]. Use 0 to skip (default).",
-    )
-    parser.add_argument(
-        "--blocks-dir",
-        type=Path,
-        default=_REPO / "data" / "blocks",
-        help="Block flat-file directory (default: ./data/blocks)",
-    )
+    parser.add_argument("--state-path", type=Path, default=None)
+    parser.add_argument("--chain", default=None)
+    parser.add_argument("--scan-blocks", type=int, metavar="N", default=0)
+    parser.add_argument("--blocks-dir", type=Path, default=None)
     args = parser.parse_args()
 
-    if not args.db.is_file():
-        print(f"error: database not found: {args.db}", file=sys.stderr)
-        return 2
-
-    sys.path.insert(0, str(_REPO))
+    settings = Settings.from_env()
+    if args.state_path:
+        settings.state_path = str(args.state_path)
+    if args.chain:
+        settings.chain = args.chain
 
     from pybitnode.chain.params import get_chain
     from pybitnode.consensus.block import Block
     from pybitnode.storage.blocks import BlockStore
 
-    chain = get_chain(args.chain)
-
-    conn = _open_ro(args.db)
-    conn.row_factory = sqlite3.Row
-
-    cs = conn.execute(
-        "SELECT validated_height, validated_hash FROM chain_state WHERE chain = ?",
-        (args.chain,),
-    ).fetchone()
-    if cs is None:
-        print(f"error: no chain_state row for chain={args.chain!r}", file=sys.stderr)
-        return 2
-
-    ss = conn.execute(
-        "SELECT best_height, header_count, sync_status FROM sync_state WHERE chain = ?",
-        (args.chain,),
-    ).fetchone()
-
-    mx_row = conn.execute("SELECT MAX(height) AS mh FROM blocks").fetchone()
-    max_block = int(mx_row["mh"]) if mx_row and mx_row["mh"] is not None else None
-
-    print("=== chain_state ===")
-    print(f"  validated_height: {cs['validated_height']}")
-    print(f"  validated_hash:   {cs['validated_hash']}")
-    if ss:
+    chain = get_chain(settings.chain)
+    blocks_dir = args.blocks_dir or Path(settings.blocks_dir())
+    tracker = ProjectTracker(settings.resolved_state_path())
+    try:
+        summary = tracker.summary(settings.chain)
+        sync = summary.get("sync", {}) if isinstance(summary.get("sync"), dict) else {}
+        print("=== chain_state ===")
+        print(f"  validated_height: {summary.get('validated_height', 0)}")
+        print(f"  validated_hash:   {summary.get('validated_hash', '')}")
         print("=== sync_state ===")
-        print(f"  best_height:   {ss['best_height']}")
-        print(f"  header_count:  {ss['header_count']}")
-        print(f"  sync_status:   {ss['sync_status']}")
-    print("=== blocks table ===")
-    print(f"  max_stored_height: {max_block}")
-    gap = ""
-    if max_block is not None and cs["validated_height"] is not None:
-        gap = max_block - int(cs["validated_height"])
-    print(f"  stored_minus_validated (download ahead): {gap}")
+        print(f"  best_height:   {sync.get('best_height', 0)}")
+        print(f"  header_count:  {summary.get('header_count', 0)}")
+        print(f"  sync_status:   {sync.get('sync_status', 'unknown')}")
+        print("=== blocks index ===")
+        print(f"  max_stored_height: {tracker.max_stored_block_height()}")
+        print(f"  stored_minus_validated: {tracker.max_stored_block_height() - int(summary.get('validated_height', 0) or 0)}")
 
-    print("\n=== supported spend templates (see pybitnode/consensus/script/verify.py) ===")
-    for item in _summarize_supported_templates():
-        print(f"  • {item}")
-    print("\n=== interpreter opcode subset ===")
-    print(
-        "  evaluate_script knows pushes, DUP, HASH160, EQUAL/EQUALVERIFY, VERIFY, "
-        "CHECKSIG/CHECKSIGVERIFY, CHECKMULTISIG/CHECKMULTISIGVERIFY, "
-        "CHECKLOCKTIMEVERIFY/CHECKSEQUENCEVERIFY (legacy redeem scripts). "
-        "Tapscript: CHECKSIG/CHECKSIGVERIFY, CLTV/CSV (BIP65/BIP112 with Schnorr sighash)."
-    )
-    print("\n=== consensus gaps (still likely on mainnet-style traffic) ===")
-    print(
-        "  Typical remaining gaps after P2TR (incl. tapscript timelocks) + multisig + legacy "
-        "CLTV/CSV:\n"
-        "  • Bare/non-template outputs spent on spend path (bare multisig, odd P2PK variants, …).\n"
-        "    Unspendable outputs (common OP_RETURN commitments) skip verification.\n"
-        "  • Witness v2+ programs are detected and rejected with "
-        "'unsupported witness program version N' (not yet implemented; see verify.py)."
-    )
+        print("\n=== supported spend templates ===")
+        for item in _summarize_supported_templates():
+            print(f"  - {item}")
 
-    rej = conn.execute(
-        "SELECT COUNT(*) AS c FROM events WHERE message = 'Rejected invalid block'"
-    ).fetchone()["c"]
-    unsup = conn.execute(
-        "SELECT COUNT(*) AS c FROM events WHERE message = 'Rejected invalid block' "
-        "AND details_json LIKE '%unsupported scriptPubKey template%'"
-    ).fetchone()["c"]
-    print("\n=== events (all chains in this DB file) ===")
-    print(f"  Rejected invalid block (total rows):           {rej}")
-    print(f"  …details_json mentions unsupported script…:      {unsup}")
-
-    if args.scan_blocks > 0 and max_block is not None:
-        v = int(cs["validated_height"])
-        limit_h = min(v + args.scan_blocks, max_block)
-        rows = conn.execute(
-            """
-            SELECT height, file_name, file_offset, size
-            FROM blocks
-            WHERE height > ? AND height <= ?
-            ORDER BY height
-            """,
-            (v, limit_h),
-        ).fetchall()
-        conn.close()
-
-        print(
-            f"\n=== scan stored blocks heights ({v}, {v + args.scan_blocks}] "
-            f"available up to {limit_h} ==="
-        )
-        if not rows:
-            print("  (none — validated tip caught up with stored blocks or nothing downloaded past tip)")
+        if args.scan_blocks <= 0:
             return 0
-
-        store = BlockStore(Path(args.blocks_dir), chain.magic)
-        out_ctr: Counter[str] = Counter()
-        for row in rows:
-            payload = store.read(row["file_name"], int(row["file_offset"]), int(row["size"]))
-            block = Block.deserialize(payload)
+        store = BlockStore(blocks_dir, chain.magic)
+        counts: Counter[str] = Counter()
+        validated = tracker.get_validated_height(settings.chain)
+        for height in range(validated + 1, validated + args.scan_blocks + 1):
+            row = tracker.get_block(height)
+            if row is None:
+                continue
+            raw = store.read(row["file_name"], int(row["file_offset"]), int(row["size"]))
+            block = Block.deserialize(raw)
             for tx in block.transactions:
-                for o in tx.outputs:
-                    out_ctr[_classify_scriptpubkey(o.script_pubkey)] += 1
-        print(f"  scanned {len(rows)} block(s)")
-        for k, cnt in out_ctr.most_common():
-            print(f"    {k}: {cnt}")
-    else:
-        conn.close()
-
-    return 0
+                for out in tx.outputs:
+                    counts[_classify_scriptpubkey(out.script_pubkey)] += 1
+        print("\n=== next stored block output templates ===")
+        for template, count in counts.most_common():
+            print(f"  {template}: {count}")
+        return 0
+    finally:
+        tracker.close()
 
 
 if __name__ == "__main__":

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import sqlite_utils
-
-from pybitnode.db.schema import SCHEMA_VERSION, init_schema, seed_wire_capabilities
+from pybitnode.db.schema import SCHEMA_VERSION
+from pybitnode.db.tracker import ProjectTracker
 from pybitnode.wire.capabilities import (
     CAPABILITIES,
     CHECKPOINTS,
@@ -24,37 +23,29 @@ def test_checkpoint_pass_requires_all_required_capabilities():
 
 
 def test_wire_capabilities_table_seeded(tmp_path):
-    db_path = tmp_path / "caps.db"
-    db = sqlite_utils.Database(str(db_path))
-    init_schema(db)
-    assert db["wire_capabilities"].count == len(CAPABILITIES)
-    rows = list(db["wire_capabilities"].rows_where("capability_id = ?", ["frame.build"], limit=1))
-    assert rows[0]["implemented"] == 1
-    meta = list(db["meta"].rows_where("key = ?", ["schema_version"], limit=1))[0]
-    assert meta["value"] == str(SCHEMA_VERSION)
-    db.close()
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
+    caps = tracker.list_wire_capabilities()
+    assert len(caps) == len(CAPABILITIES)
+    assert next(row for row in caps if row["capability_id"] == "frame.build")["implemented"] == 1
+    assert tracker.get_meta("schema_version") == str(SCHEMA_VERSION)
+    tracker.close()
 
 
 def test_full_node_wire_progress_counts(tmp_path):
-    db_path = tmp_path / "progress.db"
-    db = sqlite_utils.Database(str(db_path))
-    init_schema(db)
-    cap_map = {row["capability_id"]: int(row["implemented"]) for row in db["wire_capabilities"].rows}
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
+    cap_map = tracker.wire_capability_map()
     progress = full_node_wire_progress(cap_map)
     required = sum(1 for c in CAPABILITIES if c.required)
     assert progress["required_total"] == required
     assert progress["checkpoints_total"] == len(CHECKPOINTS)
     assert progress["required_done"] < required  # not complete yet
-    db.close()
+    tracker.close()
 
 
 def test_seed_updates_registry_defaults(tmp_path):
-    db_path = tmp_path / "reseed.db"
-    db = sqlite_utils.Database(str(db_path))
-    init_schema(db)
-    row = list(db["wire_capabilities"].rows_where("capability_id = ?", ["frame.build"], limit=1))[0]
-    db["wire_capabilities"].update(row["id"], {"implemented": 0})
-    seed_wire_capabilities(db)
-    row = list(db["wire_capabilities"].rows_where("capability_id = ?", ["frame.build"], limit=1))[0]
-    assert row["implemented"] == 1
-    db.close()
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
+    tracker.mark_wire_capability("frame.build", implemented=False)
+    assert tracker.wire_capability_map()["frame.build"] == 0
+    tracker.mark_wire_capability("frame.build", implemented=True, verified_by="code")
+    assert tracker.wire_capability_map()["frame.build"] == 1
+    tracker.close()

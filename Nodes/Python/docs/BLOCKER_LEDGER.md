@@ -6,7 +6,7 @@ Searchable handoff for follower ports. Canonical truth remains code, tests, live
 
 ```bash
 cd PythonNode
-.venv/bin/pybitnode-db --db ./data/pybitnode.db
+.venv/bin/pybitnode-db --state-path ./data/chainstate-rocksdb
 tail -n 40 sync_batch_run.log
 ```
 

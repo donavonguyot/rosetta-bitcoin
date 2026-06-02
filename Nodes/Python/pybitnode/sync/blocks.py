@@ -287,12 +287,7 @@ def repair_validated_if_ahead(
     chain: ChainParams,
 ) -> int:
     """Rebuild validated state when tip ran ahead of stored blocks (e.g. partial manual connect)."""
-    row = list(
-        tracker.db.query(
-            "SELECT MAX(height) AS height FROM blocks",
-        )
-    )
-    max_stored = int(row[0]["height"]) if row and row[0]["height"] is not None else 0
+    max_stored = tracker.max_stored_block_height()
     validated = tracker.get_validated_height(chain.name)
     if validated <= max_stored:
         return 0
@@ -360,11 +355,7 @@ def validate_stored_blocks(
     tracker: ProjectTracker,
     block_store: BlockStore,
 ) -> int:
-    rows = list(
-        tracker.db.query(
-            "SELECT height, block_hash, file_name, file_offset, size FROM blocks ORDER BY height",
-        )
-    )
+    rows = tracker.iter_blocks()
     validated = 0
     for row in rows:
         height = int(row["height"])

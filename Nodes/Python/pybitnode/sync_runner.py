@@ -71,7 +71,7 @@ def _update_phase3(tracker: ProjectTracker, chain_name: str) -> None:
 
 async def connect_stored(settings: Settings, *, rebuild: bool = False) -> int:
     chain = get_chain(settings.chain)
-    tracker = ProjectTracker(settings.resolved_db_path())
+    tracker = ProjectTracker(settings.resolved_state_path())
     ensure_genesis(tracker, chain)
     repair_sync_state(tracker, chain)
     block_store = BlockStore(Path(settings.blocks_dir()), chain.magic)
@@ -107,7 +107,7 @@ async def connect_stored(settings: Settings, *, rebuild: bool = False) -> int:
 
 async def sync_blocks(settings: Settings) -> int:
     chain = get_chain(settings.chain)
-    tracker = ProjectTracker(settings.resolved_db_path())
+    tracker = ProjectTracker(settings.resolved_state_path())
     ensure_genesis(tracker, chain)
     repair_sync_state(tracker, chain)
     block_store = BlockStore(Path(settings.blocks_dir()), chain.magic)
@@ -214,7 +214,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="pybitnode offline/online block sync helpers")
     parser.add_argument("--chain", default=None)
     parser.add_argument("--datadir", default=None)
-    parser.add_argument("--db", default=None)
+    parser.add_argument("--state-path", default=None, help="Native RocksDB chainstate directory")
     parser.add_argument("--peers", default=None)
     parser.add_argument("--blocks-target", type=int, default=None)
     parser.add_argument("--blocks-max", type=int, default=None)
@@ -223,7 +223,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--no-header-refresh",
         action="store_true",
-        help="Skip networked header refresh; validate/download blocks using existing DB headers only",
+        help="Skip networked header refresh; validate/download blocks using existing native headers only",
     )
     parser.add_argument(
         "--rebuild",
@@ -237,8 +237,8 @@ def main(argv: list[str] | None = None) -> None:
         settings.chain = args.chain
     if args.datadir:
         settings.data_dir = args.datadir
-    if args.db:
-        settings.db_path = args.db
+    if args.state_path:
+        settings.state_path = args.state_path
     if args.peers is not None:
         settings.peers = args.peers
     if args.blocks_target is not None:

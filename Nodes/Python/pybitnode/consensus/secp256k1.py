@@ -13,6 +13,21 @@ class Secp256k1Error(ValueError):
     pass
 
 
+try:
+    from coincurve import PublicKey, PublicKeyXOnly
+except ImportError:  # pragma: no cover - native dependency proof catches this.
+    PublicKey = None  # type: ignore[assignment]
+    PublicKeyXOnly = None  # type: ignore[assignment]
+
+
+def native_crypto_backend_metadata() -> dict[str, str | bool]:
+    return {
+        "backend": "coincurve",
+        "native": PublicKey is not None and PublicKeyXOnly is not None,
+        "required_for_native_core": True,
+    }
+
+
 def _modinv(value: int, modulus: int) -> int:
     return pow(value, -1, modulus)
 
@@ -106,6 +121,11 @@ def verify_schnorr_signature(pubkey_xonly: bytes, message_hash: bytes, signature
 
     if len(pubkey_xonly) != 32 or len(message_hash) != 32 or len(signature) != 64:
         return False
+    if PublicKeyXOnly is not None:
+        try:
+            return bool(PublicKeyXOnly(pubkey_xonly).verify(signature, message_hash))
+        except Exception:
+            return False
     try:
         x_pub = int.from_bytes(pubkey_xonly, "big")
         pubkey_point = lift_x_only_pubkey(x_pub)
@@ -180,6 +200,11 @@ def sign_bip340_schnorr(secret_key_int: int, message: bytes) -> bytes:
 def verify_der_signature(pubkey: bytes, message_hash: bytes, signature: bytes) -> bool:
     if len(message_hash) != 32:
         raise Secp256k1Error("message hash must be 32 bytes")
+    if PublicKey is not None:
+        try:
+            return bool(PublicKey(pubkey).verify(signature, message_hash, hasher=None))
+        except Exception:
+            return False
     try:
         r, s = _parse_der_signature(signature)
         qx, qy = _decompress_pubkey(pubkey)

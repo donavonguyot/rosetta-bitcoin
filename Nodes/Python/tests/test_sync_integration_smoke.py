@@ -57,7 +57,7 @@ async def test_sync_blocks_skips_networked_headers_with_no_header_refresh(
     _patch_peer_manager_no_network(monkeypatch, track_header_sync=sync_header_calls)
 
     datadir = tmp_path / "node"
-    db_path = datadir / "pybitnode.db"
+    db_path = datadir / "chainstate-rocksdb"
     datadir.mkdir(parents=True)
 
     tracker = ProjectTracker(db_path)
@@ -88,7 +88,7 @@ def test_sync_runner_main_no_header_refresh_cli_skips_headers(
     _patch_peer_manager_no_network(monkeypatch, track_header_sync=sync_header_calls)
 
     datadir = tmp_path / "node"
-    db_path = datadir / "pybitnode.db"
+    db_path = datadir / "chainstate-rocksdb"
     datadir.mkdir(parents=True)
 
     tracker = ProjectTracker(db_path)

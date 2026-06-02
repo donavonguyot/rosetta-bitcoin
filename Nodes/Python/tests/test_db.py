@@ -1,28 +1,37 @@
 from __future__ import annotations
 
-import sqlite_utils
-
 from pybitnode.chain.genesis import TESTNET4_GENESIS
 from pybitnode.chain.params import TESTNET4
-from pybitnode.db.schema import SCHEMA_VERSION, init_schema
+from pybitnode.db.schema import SCHEMA_VERSION
 from pybitnode.db.tracker import ProjectTracker
 from pybitnode.messages.headers import HeadersMessage
 from pybitnode.sync.headers import ensure_genesis, genesis_locator, next_locator, persist_headers, repair_sync_state
 
 
 def test_schema_initialization(tmp_path):
-    db_path = tmp_path / "test.db"
-    db = sqlite_utils.Database(str(db_path))
-    init_schema(db)
-    assert db["meta"].count >= 1
-    rows = list(db["meta"].rows_where("key = ?", ["schema_version"]))
-    assert rows[0]["value"] == str(SCHEMA_VERSION)
-    assert db["project_phases"].count == 6
-    db.close()
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
+    assert tracker.get_meta("schema_version") == str(SCHEMA_VERSION)
+    assert len(tracker.list_phases()) == 6
+    assert tracker.get_meta("backend_name") == "rocksdb"
+    tracker.close()
+
+
+def test_native_tracker_creates_no_sqlite_artifacts(tmp_path):
+    state_path = tmp_path / "chainstate-rocksdb"
+    tracker = ProjectTracker(state_path)
+    tracker.set_validated_tip(1, "ab" * 32)
+    tracker.close()
+    forbidden = [
+        path
+        for path in tmp_path.rglob("*")
+        if path.suffix in {".db", ".sqlite", ".sqlite3"}
+        or path.name.endswith((".db-wal", ".db-shm", ".db-journal"))
+    ]
+    assert forbidden == []
 
 
 def test_tracker_project_phases_and_events(tmp_path):
-    tracker = ProjectTracker(tmp_path / "tracker.db")
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
     tracker.update_phase("phase0", status="completed", notes="wire tests pass")
     tracker.log_event("test", "hello", details={"x": 1})
     tracker.upsert_sync_state("testnet4", best_height=10, sync_status="connected")
@@ -37,7 +46,7 @@ def test_tracker_project_phases_and_events(tmp_path):
 
 
 def test_tracker_headers_ignore_duplicates(tmp_path):
-    tracker = ProjectTracker(tmp_path / "headers.db")
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
     tracker.record_header(0, "abc", "def", 123)
     tracker.record_header(0, "abc", "def", 123)
     assert tracker.header_count() == 1
@@ -50,7 +59,7 @@ def test_genesis_locator_uses_internal_hash():
 
 
 def test_next_locator_includes_genesis_at_height_zero(tmp_path):
-    tracker = ProjectTracker(tmp_path / "locator.db")
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
     ensure_genesis(tracker, TESTNET4)
     locator = next_locator(tracker, TESTNET4)
     assert TESTNET4_GENESIS.block_hash() in locator
@@ -58,7 +67,7 @@ def test_next_locator_includes_genesis_at_height_zero(tmp_path):
 
 
 def test_repair_sync_state_from_headers(tmp_path):
-    tracker = ProjectTracker(tmp_path / "repair.db")
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
     ensure_genesis(tracker, TESTNET4)
     tracker.upsert_sync_state("testnet4", best_height=0, sync_status="error")
     tracker.record_header(1, "abc123", TESTNET4.genesis_hash, 123)
@@ -70,7 +79,7 @@ def test_repair_sync_state_from_headers(tmp_path):
 
 
 def test_persist_headers_with_empty_message(tmp_path):
-    tracker = ProjectTracker(tmp_path / "sync.db")
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
     height, best_hash, stored = persist_headers(tracker, TESTNET4, HeadersMessage(headers=()))
     assert stored == 0
     assert height == 0

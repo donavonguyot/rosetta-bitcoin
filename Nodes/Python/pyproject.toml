@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Binary-compatible Bitcoin full node in Python (testnet4)"
 requires-python = ">=3.12"
 dependencies = [
-    "sqlite-utils>=3.37",
+    "coincurve==20.0.0",
+    "rocksdict>=0.3.24",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +21,7 @@ dev = [
 [project.scripts]
 pybitnode = "pybitnode.node:main"
 pybitnode-db = "pybitnode.db_status:main"
+pybitnode-rocksdb-proof = "pybitnode.storage.rocksdb_proof:main"
 pybitnode-sync = "pybitnode.sync_runner:main"
 
 [tool.hatch.build.targets.wheel]

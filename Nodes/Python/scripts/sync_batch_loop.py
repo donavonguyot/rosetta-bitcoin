@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sequential pybitnode-sync batches with fcntl exclusive lock (.sync_batch_loop.lock); read-only validated_height polls."""
+"""Sequential pybitnode-sync batches with fcntl exclusive lock and native-state height polls."""
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ def _load_sync_progress(repo_root: Path):
 
 
 def _validated_height(spr_mod, *, datadir: Path, chain: str) -> int:
-    db = (datadir / "pybitnode.db").resolve()
-    return spr_mod.read_validated_height_db(db, chain=chain)
+    state_path = (datadir / "chainstate-rocksdb").resolve()
+    return spr_mod.read_validated_height_state(state_path, chain=chain)
 
 
 def _acquire_exclusive_nonblocking(lock_path: Path) -> object:
@@ -46,9 +46,9 @@ def _acquire_exclusive_nonblocking(lock_path: Path) -> object:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run pybitnode-sync in sequential batches "
-        "(fcntl lock .sync_batch_loop.lock; polls validated_height via read-only SQLite)."
+        "(fcntl lock .sync_batch_loop.lock; polls validated_height via native RocksDB state)."
     )
-    parser.add_argument("--datadir", type=Path, required=True, help="datadir path (expects pybitnode.db inside)")
+    parser.add_argument("--datadir", type=Path, required=True, help="datadir path (expects chainstate-rocksdb inside)")
     parser.add_argument("--target", type=int, required=True, help="passed as --blocks-target")
     parser.add_argument("--blocks-max", type=int, default=200, dest="blocks_max")
     parser.add_argument(

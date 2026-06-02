@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Export SQLite tracker state to snapshots/ for version control."""
+"""Export native RocksDB tracker state to snapshots/ for version control."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,59 +16,44 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def export_snapshots(*, db_path: Path, out_dir: Path, chain: str) -> None:
+def export_snapshots(*, state_path: Path, out_dir: Path, chain: str) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    tracker = ProjectTracker(db_path)
+    tracker = ProjectTracker(state_path)
     try:
         summary = tracker.summary(chain)
         summary["exported_at"] = _utcnow()
-        (out_dir / "status.json").write_text(json.dumps(summary, indent=2) + "\n")
-        (out_dir / "phases.json").write_text(
-            json.dumps(list(tracker.list_phases()), indent=2) + "\n"
-        )
-        (out_dir / "wire.json").write_text(
-            json.dumps(tracker.wire_progress(), indent=2) + "\n"
-        )
+        (out_dir / "status.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+        (out_dir / "phases.json").write_text(json.dumps(tracker.list_phases(), indent=2, sort_keys=True) + "\n")
+        wire = tracker.wire_progress()
+        (out_dir / "wire.json").write_text(json.dumps(wire, indent=2, sort_keys=True) + "\n")
+        (out_dir / "capabilities.json").write_text(json.dumps(wire["capabilities"], indent=2, sort_keys=True) + "\n")
+        manifest = {
+            "exported_at": _utcnow(),
+            "state_path": str(state_path),
+            "chain": chain,
+            "schema_version": tracker.get_meta("schema_version"),
+            "storage_backend": "rocksdb",
+            "files": ["status.json", "phases.json", "wire.json", "capabilities.json"],
+        }
+        (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     finally:
         tracker.close()
 
-    db = sqlite3.connect(db_path)
-    db.row_factory = sqlite3.Row
-    capabilities = [dict(row) for row in db.execute(
-        "SELECT * FROM wire_capabilities ORDER BY capability_id"
-    )]
-    manifest = {
-        "exported_at": _utcnow(),
-        "db_path": str(db_path),
-        "chain": chain,
-        "schema_version": db.execute(
-            "SELECT value FROM meta WHERE key = 'schema_version'"
-        ).fetchone()[0],
-        "files": ["status.json", "phases.json", "wire.json", "capabilities.json"],
-    }
-    (out_dir / "capabilities.json").write_text(json.dumps(capabilities, indent=2) + "\n")
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    db.close()
-
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Export pybitnode tracker snapshots")
-    parser.add_argument("--db", default=None, help="SQLite database path")
+    parser = argparse.ArgumentParser(description="Export pybitnode native snapshots")
+    parser.add_argument("--state-path", default=None, help="Native RocksDB chainstate directory")
     parser.add_argument("--out", default="snapshots", help="Output directory")
     parser.add_argument("--chain", default=None)
     args = parser.parse_args()
 
     settings = Settings.from_env()
-    if args.db:
-        settings.db_path = args.db
+    if args.state_path:
+        settings.state_path = args.state_path
     if args.chain:
         settings.chain = args.chain
 
-    export_snapshots(
-        db_path=Path(settings.resolved_db_path()),
-        out_dir=Path(args.out),
-        chain=settings.chain,
-    )
+    export_snapshots(state_path=Path(settings.resolved_state_path()), out_dir=Path(args.out), chain=settings.chain)
     print(f"Exported snapshots to {Path(args.out).resolve()}")
 
 

@@ -1,0 +1,25 @@
+{
+  "atomic_batch": true,
+  "captured_at": "2026-06-02T22:21:57+00:00",
+  "category": "storage",
+  "chainstate_backend": "rocksdb",
+  "crypto_backend": {
+    "backend": "coincurve",
+    "native": true,
+    "required_for_native_core": true
+  },
+  "datadir": "data-python-rocksdb-proof",
+  "implementation": "PythonNode",
+  "local_sqlite_artifact_absent": true,
+  "machine": "arm64",
+  "native_storage": true,
+  "node_id": "pybitnode-native-rocksdb-proof",
+  "prefix_iteration": [
+    "prefix|002"
+  ],
+  "python_version": "3.14.5",
+  "restart_persisted": true,
+  "result": "passed",
+  "runtime_surface": "host_or_docker",
+  "sqlite_artifacts": []
+}

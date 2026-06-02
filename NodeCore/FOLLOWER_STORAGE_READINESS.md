@@ -22,7 +22,7 @@ dependency rule is revisited.
 | ElixirNode | `exbitnode.db` SQLite owns headers, UTXO, undo, tip, block index | Yes | Not attempted | Keep consensus progress on exqlite while planning native chainstate |
 | TypeScriptNode | Node SQLite tracker owns operational truth | Yes | Not attempted | Defer native backend until runtime-deps rule is revisited |
 | CppNode | RocksDB `NodeStateStore` owns operational state in native mode | Yes | Proof partial after RocksDB-only cutover | Rerun live staged sync and keep native builds SQLite-free |
-| PythonNode | Legacy SQLite scout store; forward path must replace it | Yes | Not attempted under native path | Build RocksDB/native-crypto/full-Docker path, then rerun blocker discovery from scratch |
+| PythonNode | RocksDB native tracker path replaces legacy SQLite scout state for forward work | Yes | Bounded proof path in progress; full replay pending | Validate native proof/supervisor, then run blocker discovery in a separate empty-datadir replay plan |
 
 ## Current Follower Notes
 
@@ -30,9 +30,9 @@ dependency rule is revisited.
   P2TR script-path at height 22830 remains a consensus blocker.
 - Cpp has a RocksDB-only operational store and native proof infrastructure, but
   staged live sync still needs to be rerun before promotion.
-- Python's old SQLite blocker trail is historical handoff evidence only. Python
-  cannot claim parity until RocksDB/native-crypto Docker runs rediscover and
-  clear blockers from an empty native datadir.
+- Python's old SQLite blocker trail is historical handoff evidence only. The
+  native-break work creates the RocksDB/native-crypto/Docker surface, but parity
+  still waits for a separate empty-datadir replay plan to rediscover blockers.
 - Storage clearance does not imply consensus clearance or Docker contract
   completion; keep those gates separate in `docs/port-status.md`.
 

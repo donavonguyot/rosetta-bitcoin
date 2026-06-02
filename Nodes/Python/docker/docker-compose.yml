@@ -9,6 +9,7 @@ services:
     environment:
       CHAIN: testnet4
       DATA_DIR: /data
+      STATE_PATH: /data/chainstate-rocksdb
       LOG_LEVEL: info
       # Inbound P2P (same semantics as CLI --listen).
       LISTEN: "1"
@@ -25,5 +26,84 @@ services:
       timeout: 5s
       retries: 3
 
+  pybitnode-rocksdb-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    user: "0:0"
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /proof/data
+      STATE_PATH: /proof/data/chainstate-rocksdb
+      LOG_LEVEL: info
+    volumes:
+      - pybitnode_proof_data:/proof
+    command:
+      [
+        "pybitnode-rocksdb-proof",
+        "--datadir",
+        "/proof/native-rocksdb-proof",
+        "--proof-path",
+        "/proof/python_rocksdb_native_storage.json"
+      ]
+
+  pybitnode-supervisor:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    user: "0:0"
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /supervisor/data
+      STATE_PATH: /supervisor/data/chainstate-rocksdb
+      LOG_LEVEL: info
+      CHECK_SEC: "${CHECK_SEC:-30}"
+    volumes:
+      - pybitnode_supervisor_data:/supervisor
+    command:
+      [
+        "python",
+        "-m",
+        "pybitnode.supervisor",
+        "run",
+        "--state-path",
+        "/supervisor/data/chainstate-rocksdb",
+        "--tick-path",
+        "/supervisor/tick.json",
+        "--stop-path",
+        "/supervisor/stop",
+        "--check-sec",
+        "${CHECK_SEC:-30}"
+      ]
+
+  pybitnode-supervisor-status:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    user: "0:0"
+    volumes:
+      - pybitnode_supervisor_data:/supervisor
+    command: ["python", "-m", "pybitnode.supervisor", "status", "--tick-path", "/supervisor/tick.json"]
+
+  pybitnode-supervisor-stop:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    user: "0:0"
+    volumes:
+      - pybitnode_supervisor_data:/supervisor
+    command: ["python", "-m", "pybitnode.supervisor", "stop", "--stop-path", "/supervisor/stop"]
+
+  pybitnode-supervisor-resume:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    user: "0:0"
+    volumes:
+      - pybitnode_supervisor_data:/supervisor
+    command: ["python", "-m", "pybitnode.supervisor", "resume", "--stop-path", "/supervisor/stop"]
+
 volumes:
   pybitnode_data:
+  pybitnode_proof_data:
+  pybitnode_supervisor_data:

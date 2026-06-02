@@ -3,7 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libffi-dev \
+    && apt-get install -y --no-install-recommends gcc libffi-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir .
 
 ENV CHAIN=testnet4
 ENV DATA_DIR=/data
+ENV STATE_PATH=/data/chainstate-rocksdb
 ENV LOG_LEVEL=info
 
 RUN useradd --create-home --uid 10001 pybitnode \

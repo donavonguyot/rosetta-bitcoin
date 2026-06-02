@@ -6,9 +6,9 @@ Deep dives on how header/block sync and persistence fit together live in [`ARCHI
 
 ---
 
-## Safe parallel work vs the live database
+## Safe parallel work vs the live native state
 
-**Single writer rule:** SQLite under `datadir` (`pybitnode.db`) must have **at most one** active writer among `pybitnode-sync`, long-running `pybitnode`, or any script that opens the tracker for mutation. Duplicate writers corrupt data or deadlock.
+**Single writer rule:** RocksDB native state under `datadir` (`chainstate-rocksdb`) must have **at most one** active writer among `pybitnode-sync`, long-running `pybitnode`, or any script that opens the tracker for mutation. Duplicate writers corrupt data or deadlock.
 
 **`pybitnode-sync` datadir lock:** Each sync run tries to take an exclusive non-blocking flock on **`<datadir>/.pybitnode-sync.lock`** (`ExclusiveDataDirSyncLock` in [`pybitnode/sync/sync_datadir_lock.py`](../pybitnode/sync/sync_datadir_lock.py)). A second concurrent **`pybitnode-sync`** against the same `--datadir` exits with *Another pybitnode-sync holds this datadir*. This does **not** stop a simultaneous long-running **`pybitnode`** process on the same disk—you must still enforce the single-writer rule operationally ([Batch block sync](#batch-block-sync-pybitnode-sync) and [**Batch loop helper**](#batch-loop-helper)).
 
@@ -22,7 +22,7 @@ Deep dives on how header/block sync and persistence fit together live in [`ARCHI
 
 ### Operational recap (single writer, lock, checkpoints)
 
-- **SQLite / datadir:** At most **one** process performing **writes** (`pybitnode-sync`, long-running **`pybitnode`**, rebuild tools) per `--datadir`/DB pair.
+- **RocksDB native state / datadir:** At most **one** process performing **writes** (`pybitnode-sync`, long-running **`pybitnode`**, rebuild tools) per `--datadir`/state path.
 - **`.pybitnode-sync.lock`:** Blocks another **`pybitnode-sync`** instance on that datadir immediately; **does not** coordinate with **`pybitnode`** or ad hoc writers—enforce the rule above separately.
 - **Between batch invocations:** Let each **`pybitnode-sync`** exit cleanly; only then start the next run—see [recommended batch workflow](#recommended-iterative-batches-toward-10k-no-header-refresh) and, after the first major milestone, [continuing toward the header tip in batches](#after-10k-validated-continue-toward-the-header-tip-batches).
 - **Snapshots / dashboards:** Export JSON **between** batches when the DB is **quiescent**—see [when to export](#when-to-export-snapshots-timing)—never rely on **`export_snapshots.py`** timing as your default **during** heavy validation flushes.
@@ -48,7 +48,7 @@ Typical iterative catch-up toward a validation height limit:
 | `--blocks-max` | Upper bound on how many blocks this **run** attempts to validate (applied per internal batching; default env `BLOCKS_MAX_PER_RUN` applies if unset). Practical batch size for long runs is often **200** for predictable wall-clock chunks. |
 | `--blocks-target` | Stop once `validated_height` reaches this height (or sooner if stalled). Maps to env `BLOCKS_TARGET_HEIGHT`. |
 | `--peers` | Optional comma-separated `host:port` list for bootstrap; otherwise discovery / defaults apply. Overrides env `PEERS`. |
-| `--datadir` / `--db` | Data directory (`./data`) or explicit SQLite path. |
+| `--datadir` / `--state-path` | Data directory (`./data`) or explicit RocksDB native state path. |
 
 **Single-node rule (recap):** Run at most **one** `pybitnode-sync` (or live `pybitnode`) against the **same** `--datadir` / DB.
 
@@ -112,8 +112,8 @@ Wrapper path: **`scripts/sync_batch_loop.sh`** → **`scripts/sync_batch_loop.py
 
 | Mechanism | What it solves |
 |-----------|----------------|
-| **`fcntl LOCK_EX`** on `<datadir>/.sync_batch_loop.lock` | Exclusive lock for exactly one scripted batch orchestrator (**no pgrep duplication checks** for the runner). Separate from **`pybitnode-sync`’s** **`<datadir>/.pybitnode-sync.lock`**, which still serializes **`pybitnode-sync`** SQLite writers per datadir. |
-| **`read_validated_height_db` via `sqlite_readonly_uri` (`mode=ro`)** inside `scripts/sync_progress_report.py` | Polling **`validated_height` between batches** does **not** open the SQLite file for mutation (avoids unintended writer locks). |
+| **`fcntl LOCK_EX`** on `<datadir>/.sync_batch_loop.lock` | Exclusive lock for exactly one scripted batch orchestrator (**no pgrep duplication checks** for the runner). Separate from **`pybitnode-sync`’s** **`<datadir>/.pybitnode-sync.lock`**, which still serializes **`pybitnode-sync`** RocksDB native state writers per datadir. |
+| **`read_validated_height_db` via `rocksdb_readonly_uri` (`mode=ro`)** inside `scripts/sync_progress_report.py` | Polling **`validated_height` between batches** does **not** open the RocksDB native state file for mutation (avoids unintended writer locks). |
 
 Illustrative usage (**replace datadir/peers/host**):
 
@@ -128,14 +128,14 @@ MAX_OUTBOUND_PEERS=1 PARALLEL_BLOCK_DOWNLOADS=0 SKIP_GETADDR=1 \
   --log ./sync_batch_run.log
 ```
 
-Pass additional **`pybitnode-sync`** flags after `--` (`./scripts/sync_batch_loop.sh … -- --some-flag`). See `scripts/sync_batch_loop.py --help`. On **consensus stall** (`validated_delta=0` with sync exit **0**), the loop logs **`=== STALL … ===`** and exits **5** instead of burning remaining **`--max-batches`**. Progress summaries from the tracker without mutating SQLite: `scripts/sync_progress_report.py … --db /path/pybitnode.db` (bare `--db` defaults to `./data/pybitnode.db`).
+Pass additional **`pybitnode-sync`** flags after `--` (`./scripts/sync_batch_loop.sh … -- --some-flag`). See `scripts/sync_batch_loop.py --help`. On **consensus stall** (`validated_delta=0` with sync exit **0**), the loop logs **`=== STALL … ===`** and exits **5** instead of burning remaining **`--max-batches`**. Progress summaries from the tracker without mutating RocksDB native state: `scripts/sync_progress_report.py … --state-path /path/chainstate-rocksdb` (bare `--state-path` defaults to `./data/chainstate-rocksdb`).
 
 ### Recommended iterative batches toward 10k (no header refresh)
 
 Use **`--no-header-refresh`** for this pattern when headers are trustworthy for the horizon you are syncing (otherwise allow normal networked header refresh). For a staged catch-up toward **`--blocks-target 10000`**:
 
 1. **Batch size:** Use **`--blocks-max 200`** per run so wall-clock chunks stay predictable ([Expected timings](#expected-timings--performance)).
-2. **Blocks vs headers:** With **`--no-header-refresh`**, **`pybitnode-sync`** trusts headers already in SQLite and follows the [**lightweight block-sync handshake**](#lightweight-block-sync-handshake-no-header-refresh)—less **`getheaders`** churn and better interoperability for historical **`getdata`**. If you need to extend headers from peers first, omit **`--no-header-refresh`** for that stretch, then resume block batches with it once stored headers cover the next target.
+2. **Blocks vs headers:** With **`--no-header-refresh`**, **`pybitnode-sync`** trusts headers already in RocksDB native state and follows the [**lightweight block-sync handshake**](#lightweight-block-sync-handshake-no-header-refresh)—less **`getheaders`** churn and better interoperability for historical **`getdata`**. If you need to extend headers from peers first, omit **`--no-header-refresh`** for that stretch, then resume block batches with it once stored headers cover the next target.
 3. **Iterate:** Repeat `pybitnode-sync` until **`validated_height`** reaches the target or progress stalls ([Stuck sync recovery](#stuck-sync-recovery)). Sequence runs on the **same** datadir: **never** overlap two writers.
 4. **Logging:** Tee each invocation into a local **`sync_batch_run.log`** with clear **batch markers** so truncated runs are easy to correlate—see [sync batch run log markers](#sync-batch-run-log-markers).
 
@@ -175,7 +175,7 @@ Use one batch index per attempt; keep UTC **`YYYY-MM-DDTHH:MM:SSZ`** timestamps 
 
 Once **`validated_height`** has passed an initial milestone (for example **10k**), **do not** assume a single long run to the tip. Keep the same operational shape: sequential **`pybitnode-sync`** invocations on one **`--datadir`**, **no** overlapping writers.
 
-1. **Set the next `--blocks-target` from the header horizon:** Advance **`--blocks-target`** toward the height your SQLite headers already represent—typically **`sync_state.best_height`** (see `pybitnode-db` / tracker meta) **or** the highest stored header (**`max(header height)`**, i.e. **`ProjectTracker.max_header_height()`**, surfaced as **`header_height`** in health JSON). Use an intermediate value for staged milestones, or the full tip height for “catch up to headers.” If **`best_height` and the stored header tip disagree**, a fresh sync start runs **`repair_sync_state`**; if confusion persists, use [Stuck sync recovery](#stuck-sync-recovery).
+1. **Set the next `--blocks-target` from the header horizon:** Advance **`--blocks-target`** toward the height your RocksDB native state headers already represent—typically **`sync_state.best_height`** (see `pybitnode-db` / tracker meta) **or** the highest stored header (**`max(header height)`**, i.e. **`ProjectTracker.max_header_height()`**, surfaced as **`header_height`** in health JSON). Use an intermediate value for staged milestones, or the full tip height for “catch up to headers.” If **`best_height` and the stored header tip disagree**, a fresh sync start runs **`repair_sync_state`**; if confusion persists, use [Stuck sync recovery](#stuck-sync-recovery).
 2. **Same `--no-header-refresh` + lightweight handshake:** As long as stored headers cover the next target, keep **`--no-header-refresh`** (and env equivalents like **`MAX_OUTBOUND_PEERS=1`**, **`PARALLEL_BLOCK_DOWNLOADS=0`**, **`SKIP_GETADDR=1`** with manual **`--peers`**) so each batch uses the [**lightweight block-sync handshake**](#lightweight-block-sync-handshake-no-header-refresh)—minimal header chatter, block-focused **`getdata`** toward witness blocks.
 3. **Batch sizing:** Retain **`--blocks-max 200`** per run unless you are deliberately tuning chunk size; repeat until **`validated_height`** reaches **`--blocks-target`** or progress stalls ([Stuck sync recovery](#stuck-sync-recovery)).
 4. **Snapshot cadence:** Export JSON **between** batches when the DB is **quiescent**—same [**when to export**](#when-to-export-snapshots-timing) / [**between batch runs**](#between-batch-runs) rules as the first phase; optional milestone cadence (e.g. every N thousand validated) for reviewable **`snapshots/`** checkpoints.
@@ -192,10 +192,10 @@ Header download runs on the first available peer in an **ordered** list: **`--pe
 
 **Recovery steps:**
 
-1. Confirm the [single-writer rule](#safe-parallel-work-vs-the-live-database); fix overlapping processes if any.
+1. Confirm the [single-writer rule](#safe-parallel-work-vs-the-live-native state); fix overlapping processes if any.
 2. Check logs for `Header sync failed via HOST:PORT`; try **stable manual peers** via `--peers` or `PEERS` (same syntax as the batch sync table above).
 3. Each sync start calls `repair_sync_state` so `sync_state` realigns with the highest row in the `headers` table—useful after a crash mid-headers.
-4. Inspect state: `DATA_DIR=./data .venv/bin/pybitnode-db` or `pybitnode-db --db ./data/pybitnode.db` for `sync_status`, `best_height`, and errors.
+4. Inspect state: `DATA_DIR=./data .venv/bin/pybitnode-db` or `pybitnode-db --state-path ./data/chainstate-rocksdb` for `sync_status`, `best_height`, and errors.
 
 **Manual peers and discovery:** When you pass manual peers, bootstrap uses **at most one outbound peer** for that run (`_effective_max_outbound = 1` when `manual_peers` is non-empty) and **does not run post-handshake `getaddr` discovery** (same path as `SKIP_GETADDR`). Manual endpoints are **still attempted even if their ban score is high** (they bypass the ban threshold filter used for stored/discovered candidates).
 
@@ -205,7 +205,7 @@ If the local header tip is within **`HEADER_SYNC_NEAR_PEER_TIP` (2)** blocks of 
 
 ### `SYNC_SKIP_HEADERS`
 
-When **`SYNC_SKIP_HEADERS=1`** (parsed in **`Settings`**), **`pybitnode-sync`** never performs networked header sync (`getheaders`): it calls **`mark_headers_current`** immediately and validates/downloads blocks against headers already stored in SQLite.
+When **`SYNC_SKIP_HEADERS=1`** (parsed in **`Settings`**), **`pybitnode-sync`** never performs networked header sync (`getheaders`): it calls **`mark_headers_current`** immediately and validates/downloads blocks against headers already stored in RocksDB native state.
 
 Otherwise, **`pybitnode/sync_runner.py`** skips `getheaders` when either **`should_skip_header_download`** succeeds for the first ordered bootstrap peer **or** the DB is **`repair_sync_state`**-aligned (local header tip matches `sync_state.best_height`) while the peer advertises a **longer** chain — continuing block validation with the stored tall header prefix instead of catch-up chatter that peers may drop mid-request.
 
@@ -224,10 +224,10 @@ On `ConnectBlockError`, block sync logs a tracker event before stopping the batc
 **CLI (last *N* rows, newest first):**
 
 ```bash
-.venv/bin/pybitnode-db --db /path/to/pybitnode.db --events 50
+.venv/bin/pybitnode-db --state-path /path/to/chainstate-rocksdb --events 50
 ```
 
-**SQLite:**
+**RocksDB native state:**
 
 ```sql
 SELECT id, category, level, message, details_json, created_at
@@ -239,7 +239,7 @@ LIMIT 20;
 
 Decode **`details_json`** in your tooling; a common consensus stub message is **`unsupported scriptPubKey template`**, emitted when the script engine does not implement that output template ([`pybitnode/consensus/script/verify.py`](../pybitnode/consensus/script/verify.py)). Other **`error`** strings come from **`ConnectBlockError`** (script failures, missing UTXOs, consensus rules, etc.).
 
-**Offline recap:** [`scripts/script_template_survey.py`](../scripts/script_template_survey.py) prints **`chain_state.validated_height`**, header tip vs stored blocks, event counts for **`unsupported scriptPubKey template`**, and (optionally) classifies output locking scripts in the next *N* **stored** blocks past the validated tip — read-only SQLite, no P2P.
+**Offline recap:** [`scripts/script_template_survey.py`](../scripts/script_template_survey.py) prints **`chain_state.validated_height`**, header tip vs stored blocks, event counts for **`unsupported scriptPubKey template`**, and (optionally) classifies output locking scripts in the next *N* **stored** blocks past the validated tip — read-only RocksDB native state, no P2P.
 
 #### Example: testnet4 block **6975** (Taproot key-path) and fix **`dd65c78`**
 
@@ -320,11 +320,11 @@ P2TR **key-path** and **script-path** verification (BIP341/342 subset) landed in
 
 #### Next consensus gaps (offline survey)
 
-When sync stalls with **`downloaded=0`** past a milestone, run the read-only template survey (no P2P, SQLite **`mode=ro`**):
+When sync stalls with **`downloaded=0`** past a milestone, run the read-only template survey (no P2P, RocksDB native state **`mode=ro`**):
 
 ```bash
 PYTHONPATH=. .venv/bin/python scripts/script_template_survey.py \
-  --db /path/to/pybitnode.db --scan-blocks 500
+  --state-path /path/to/chainstate-rocksdb --scan-blocks 500
 ```
 
 Use **`--scan-blocks`** only when stored block rows exist **past** `validated_height` (download ahead). Typical remaining gaps after P2TR (incl. tapscript timelocks) + multisig + legacy CLTV/CSV: **bare/non-template** spends. **Witness v2+** programs are detected and rejected with `unsupported witness program version N` (not yet implemented). Fix the interpreter, add a synthetic fixture in **`tests/test_script.py`**, then rerun sync batches.
@@ -333,7 +333,7 @@ Use **`--scan-blocks`** only when stored block rows exist **past** `validated_he
 
 ## Lightweight block-sync handshake (no header refresh)
 
-Use this playbook when headers are **already loaded in SQLite** (imported, prior header sync, or catch-up where `max(header height)` covers your `--blocks-target`) and you only need **witness blocks** from peers. It minimizes P2P chatter and matches the posture some implementations expect for **historical `getdata`**, not full tx relay.
+Use this playbook when headers are **already loaded in RocksDB native state** (imported, prior header sync, or catch-up where `max(header height)` covers your `--blocks-target`) and you only need **witness blocks** from peers. It minimizes P2P chatter and matches the posture some implementations expect for **historical `getdata`**, not full tx relay.
 
 ### Controls: `--no-header-refresh`, `NO_HEADER_REFRESH`, `SYNC_SKIP_HEADERS`
 
@@ -343,7 +343,7 @@ Use this playbook when headers are **already loaded in SQLite** (imported, prior
 | **`NO_HEADER_REFRESH=1`** | Same semantic as **`--no-header-refresh`** via env ([`pybitnode/config.py`](../pybitnode/config.py)). |
 | **`SYNC_SKIP_HEADERS=1`** | Harder bypass: networked header sync is **never** attempted while this env applies. Also triggers the **lightweight outbound handshake** (below), same as `no_header_refresh`. |
 
-**Choosing flags:** Prefer **`--no-header-refresh` / `NO_HEADER_REFRESH`** for “I know my DB headers are good for this batch.” Reserve **`SYNC_SKIP_HEADERS`** for automation/tests that must **never** hit `getheaders` regardless of tip alignment.
+**Choosing flags:** Prefer **`--no-header-refresh` / `NO_HEADER_REFRESH`** for “I know my native headers are good for this batch.” Reserve **`SYNC_SKIP_HEADERS`** for automation/tests that must **never** hit `getheaders` regardless of tip alignment.
 
 ### Log lines from header-refresh decisions
 
@@ -369,7 +369,7 @@ So the connection presents as **block sync–oriented**, not full mempool/relay 
 
 ### Recommended sync command (stable manual peer, block-only)
 
-One outbound, sequential block download, no `getaddr` after connect, header refresh off—good default when you supply a **known-good `HOST:PORT`** and DB headers already cover your target range:
+One outbound, sequential block download, no `getaddr` after connect, header refresh off—good default when you supply a **known-good `HOST:PORT`** and native headers already cover your target range:
 
 ```bash
 MAX_OUTBOUND_PEERS=1 PARALLEL_BLOCK_DOWNLOADS=0 SKIP_GETADDR=1 \
@@ -381,13 +381,13 @@ MAX_OUTBOUND_PEERS=1 PARALLEL_BLOCK_DOWNLOADS=0 SKIP_GETADDR=1 \
   --blocks-max 200
 ```
 
-Adjust **`--blocks-target`**, **`--blocks-max`**, and **`--datadir`**; do **not** point automation at the repository **`./data`** tree unless that is your intentional working copy (see [Safe parallel work vs the live database](#safe-parallel-work-vs-the-live-database)).
+Adjust **`--blocks-target`**, **`--blocks-max`**, and **`--datadir`**; do **not** point automation at the repository **`./data`** tree unless that is your intentional working copy (see [Safe parallel work vs the live native state](#safe-parallel-work-vs-the-live-native state)).
 
 **Cross-links:** [`PeerManager.bootstrap`](../pybitnode/p2p/manager.py) uses **only** manual targets when **`--peers` / `PEERS`** is set (no extra DNS/DB seed fan-out). Manual peer runs already cap effective outbounds and skip discovery in many cases; **`SKIP_GETADDR=1`** still applies when you rely on discovered peers and want to skip post-handshake **`getaddr`**.
 
 ### Single writer and the sync lock (recap)
 
-Keep **[one mutating process per datadir](#safe-parallel-work-vs-the-live-database)**. The **`.pybitnode-sync.lock`** file only prevents overlapping **`pybitnode-sync`** invocations; coordinate separately with **`pybitnode`** and tooling.
+Keep **[one mutating process per datadir](#safe-parallel-work-vs-the-live-native state)**. The **`.pybitnode-sync.lock`** file only prevents overlapping **`pybitnode-sync`** invocations; coordinate separately with **`pybitnode`** and tooling.
 
 ---
 
@@ -400,10 +400,10 @@ Values are read in `Settings.from_env()` ([`pybitnode/config.py`](../pybitnode/c
 | `PARALLEL_BLOCK_DOWNLOADS` | `0` | `>0`: request each missing block height from **all** connected peers in parallel; first successful `getdata` wins. Increases outbound traffic; can help on high-latency links. **`0`** keeps sequential peer rotation. Applies to **`pybitnode-sync` and live `pybitnode`** (no CLI flag). |
 | `SKIP_GETADDR` | `false` | Skip outbound `getaddr`/addr exchange after connect. Useful when peers hang during address gossip; **not used** when manual `--peers`/`PEERS` are set (that path already skips discovery). |
 | `SYNC_SKIP_HEADERS` | `false` | When **`true`**, **`pybitnode-sync`** skips networked header sync entirely; see [Lightweight block-sync handshake](#lightweight-block-sync-handshake-no-header-refresh) and the **`SYNC_SKIP_HEADERS`** subsection above. |
-| `NO_HEADER_REFRESH` | `false` | Same as **`--no-header-refresh`**: skip networked header refresh; use DB headers for block download. Enables **lightweight outbound handshake** with **`SYNC_SKIP_HEADERS`**. |
+| `NO_HEADER_REFRESH` | `false` | Same as **`--no-header-refresh`**: skip networked header refresh; use native headers for block download. Enables **lightweight outbound handshake** with **`SYNC_SKIP_HEADERS`**. |
 | `SYNC_TIMING` | `false` | When **`true`**, `connect_block` persists per-block stage timing events (`category="timing"`, `message="connect_block"`) with `utxo_load`, `script_verify`, `utxo_apply`, `commit`, and `block_connect_store_commit` milliseconds. Disabled by default to keep normal sync overhead low. |
 | `PAR_SCRIPT_VERIFY` | `true` | Phase A parallel script verification. Only inputs within one transaction are verified in parallel; transaction order, UTXO reads/writes, undo creation, and block connect remain sequential. Set to **`0`** for sequential compatibility checks. |
-| `PAR_SCRIPT_EXECUTOR` | `thread` | Executor backend for Phase A script verification. **`thread`** preserves the default behavior; **`process`** is an opt-in benchmark experiment for pure-Python crypto-heavy blocks. Workers never touch SQLite or the UTXO view. |
+| `PAR_SCRIPT_EXECUTOR` | `thread` | Executor backend for Phase A script verification. **`thread`** preserves the default behavior; **`process`** is an opt-in benchmark experiment for pure-Python crypto-heavy blocks. Workers never touch RocksDB native state or the UTXO view. |
 | `PAR_SCRIPT_THREADS` | CPU count | Maximum worker threads for parallel input verification. Values below **`1`** are clamped to **`1`**. |
 | `PAR_SCRIPT_MIN_INPUTS` | `2` | Minimum input count before the runner uses the parallel path. Values below **`1`** are clamped to **`1`**. |
 | `ENABLE_ORPHAN_POOL` | `false` | When `true`, defer transactions with unknown prevouts into an `OrphanPool` for later retry; when `false`, those txs are rejected immediately. |
@@ -426,7 +426,7 @@ To compare wall-clock sync with `PARALLEL_BLOCK_DOWNLOADS=0` vs `8` **without wr
   --chain testnet4 --blocks-max 16 --blocks-target 500000 --log-level warning
 ```
 
-- **Fair starting state:** Copy a template datadir you own to a path outside the repo, then pass `--seed-dir /path/to/template`. The script clones it into two separate run directories so header/tip state matches before timing each mode. **`chmod -R a-w` seeds are OK** — the benchmark re-applies owner-writable bits on each isolated clone so `pybitnode-sync` can open its datadir lock and write SQLite safely.
+- **Fair starting state:** Copy a template datadir you own to a path outside the repo, then pass `--seed-dir /path/to/template`. The script clones it into two separate run directories so header/tip state matches before timing each mode. **`chmod -R a-w` seeds are OK** — the benchmark re-applies owner-writable bits on each isolated clone so `pybitnode-sync` can open its datadir lock and write RocksDB native state safely.
 - **`--no-header-refresh`:** Pass this flag to benchmark **timed** runs without networked header refresh ([`sync_runner --no-header-refresh`](../pybitnode/sync_runner.py)). If you omit `--seed-dir`, the script first performs a tiny **seed materialization** pass in the temp worktree (same `--peers`/chain/target; `blocks_max=1` plus normal header sync). That subprocess still needs a peer that stays up through `getheaders`; if it fails, copy a prepared datadir elsewhere and pass `--seed-dir`.
 - **Example (testnet4, small block batch, stable peer):**
   ```bash
@@ -437,7 +437,7 @@ To compare wall-clock sync with `PARALLEL_BLOCK_DOWNLOADS=0` vs `8` **without wr
   Use a `blocks_target` just above your intended validated tip so `blocks_max` caps how many blocks each timed run pulls.
 - **Peers:** Omit `--peers` to use normal DNS/bootstrap discovery, or pass stable `host:port,host2:port` via `--peers`. Parallel mode races across **connected** peers only; with **only manual peers**, bootstrap uses a single outbound ([`PeerManager.bootstrap`](../pybitnode/p2p/manager.py)), so `PARALLEL_BLOCK_DOWNLOADS>0` mainly helps when several connections are up or you add more peer endpoints.
 - **Offline / CI:** When no peers are reachable the compare subprocess exits non-zero; validate the parallel path with `pytest tests/test_block_sync.py` (`request_block_from_peers_parallel`, `sync_blocks_batch` with `parallel_downloads>0`).
-- **Artifacts:** Use `--keep` to inspect SQLite + `blocks/` under the printed work directory.
+- **Artifacts:** Use `--keep` to inspect RocksDB native state + `blocks/` under the printed work directory.
 
 The script refuses the repository `./data` directory as `--work-root` or `--seed-dir` so benchmarks stay isolated.
 
@@ -472,7 +472,7 @@ Use `--connect-only` (without `--rebuild`) to **connect subsequent stored blocks
 Use the export script after a milestone sync (or anytime you want JSON copies of tracker state):
 
 ```bash
-.venv/bin/python scripts/export_snapshots.py --db ./data/pybitnode.db
+.venv/bin/python scripts/export_snapshots.py --state-path ./data/chainstate-rocksdb
 ```
 
 Optional: `--chain testnet4` and `--out snapshots` (default output dir).
@@ -481,27 +481,27 @@ Optional: `--chain testnet4` and `--out snapshots` (default output dir).
 
 ### When to export snapshots (timing)
 
-Treat snapshot export like a **read checkpoint on a quiet database**:
+Treat snapshot export like a **read checkpoint on a quiet native state**:
 
 | Do | Do not |
 | --- | --- |
-| Export **`after`** the sync process (**`pybitnode-sync`**) **exits cleanly** between scheduled batches—or after stopping **`pybitnode`** if you coordinate maintenance. | Start `export_snapshots.py` **while validation is actively writing** the same SQLite file (heavy batch mid-flight). WAL readers can overlap in many cases; **checkpoint JSON for CI / manifests** assumes a **quiet** tracker. |
+| Export **`after`** the sync process (**`pybitnode-sync`**) **exits cleanly** between scheduled batches—or after stopping **`pybitnode`** if you coordinate maintenance. | Start `export_snapshots.py` **while validation is actively writing** the same RocksDB native state file (heavy batch mid-flight). WAL readers can overlap in many cases; **checkpoint JSON for CI / manifests** assumes a **quiet** tracker. |
 | Use **between-batch** checkpoints when iterating **`--blocks-max`** runs ([batch workflow](#recommended-iterative-batches-toward-10k-no-header-refresh)) on one datadir. | Treat “might be fine” mid-write reads as your default **publisher** timing for `snapshots/`. |
 
 **Rule of thumb:** if you could safely start **another** `pybitnode-sync` without overlapping the previous PID, it is OK to export. If unsure, inspect **`ps`** / Activity Monitor deliberately (remember **`pgrep -f`** can false-positive shell wrappers)—or defer export until the next scripted batch completes; never export deliberately **during** overlapping writers.
 
-See also **[Operational recap](#operational-recap-single-writer-lock-checkpoints)** ([single-writer rule](#safe-parallel-work-vs-the-live-database)).
+See also **[Operational recap](#operational-recap-single-writer-lock-checkpoints)** ([single-writer rule](#safe-parallel-work-vs-the-live-native state)).
 
 ### Between batch runs
 
 When you are advancing the chain in repeated `pybitnode-sync` batches on the **same datadir**:
 
-1. **Stop** the current sync (or node) so the DB is **not mid-write**; this avoids racing the exporter and matches the [single-writer rule](#safe-parallel-work-vs-the-live-database) and [When to export](#when-to-export-snapshots-timing) guidance.
+1. **Stop** the current sync (or node) so the DB is **not mid-write**; this avoids racing the exporter and matches the [single-writer rule](#safe-parallel-work-vs-the-live-native state) and [When to export](#when-to-export-snapshots-timing) guidance.
 2. Run `export_snapshots.py` **only after** writes have quiesced to refresh `snapshots/` (or a dedicated `--out` directory per milestone).
 3. Review `git diff snapshots/` (or archive the output) so you have a **checkpoint** before the next batch.
 4. Start the next batch only after you are comfortable with the captured state.
 
-For ad-hoc exports while the node is running: SQLite read transactions often succeed, but **`export_snapshots.py` for repeatable `snapshots/` artifacts** assumes **minimal concurrent writes** ([When to export](#when-to-export-snapshots-timing)). Pause or defer export during the heaviest validation bursts if you need bite-for-bite reproducibility.
+For ad-hoc exports while the node is running: RocksDB native state read transactions often succeed, but **`export_snapshots.py` for repeatable `snapshots/` artifacts** assumes **minimal concurrent writes** ([When to export](#when-to-export-snapshots-timing)). Pause or defer export during the heaviest validation bursts if you need bite-for-bite reproducibility.
 
 See also [`snapshots/README.md`](../snapshots/README.md).
 
@@ -524,7 +524,7 @@ When **`METRICS_HTTP_PORT` > 0** on the **long-running** **`pybitnode`** process
 
 | Series | Type | Labels | Meaning |
 | ------ | ---- | ------ | ------- |
-| **`blocks_validated_total`** | counter | **`chain`** | Blocks validated and connected (same value as SQLite meta **`metric_blocks_validated_total`**, exposed under **`metrics.blocks_validated_total`** in health JSON). |
+| **`blocks_validated_total`** | counter | **`chain`** | Blocks validated and connected (same value as RocksDB native state meta **`metric_blocks_validated_total`**, exposed under **`metrics.blocks_validated_total`** in health JSON). |
 | **`txs_relayed_total`** | counter | **`chain`** | Transactions relayed toward peers (**`metric_txs_relayed_total`** / **`metrics.txs_relayed_total`**). |
 
 Implementation: [`pybitnode/metrics.py`](../pybitnode/metrics.py) (`prometheus_exposition_format`) and [`pybitnode/metrics_http.py`](../pybitnode/metrics_http.py). **Healthcheck JSON** (`python -m pybitnode.healthcheck`) is separate from this listener—see [Docker](#docker-docker-composeyml) for the full **`docker_health_document`** field list.
@@ -547,7 +547,7 @@ LISTEN=1 .venv/bin/pybitnode --datadir ./data
 
 Compose sets **`LISTEN=1`**, maps host **`48333`** → container testnet4 P2P, and runs a **healthcheck** via `python -m pybitnode.healthcheck`: one line of JSON on stdout plus process **exit code** (`1` when tracker `sync_status` is **`error`**, matching the JSON `ok`/`healthy` flags). See inline comments in the compose file.
 
-Health payload fields include **`header_height`**, **`mempool_size`** (tx count; same as **`mempool_tx_count`**), **`sync_progress_pct`** (validated height vs **`sync_state.best_height`**, capped at 100%), **`last_error`** (SQLite meta **`last_error`; JSON **`null`** if empty), and **`metrics`**: **`blocks_validated_total`**, **`txs_relayed_total`** persisted as **`metric_blocks_validated_total`** / **`metric_txs_relayed_total`** in `meta`. **`validated_height`** and **`summary`** behave as before.
+Health payload fields include **`header_height`**, **`mempool_size`** (tx count; same as **`mempool_tx_count`**), **`sync_progress_pct`** (validated height vs **`sync_state.best_height`**, capped at 100%), **`last_error`** (RocksDB native state meta **`last_error`; JSON **`null`** if empty), and **`metrics`**: **`blocks_validated_total`**, **`txs_relayed_total`** persisted as **`metric_blocks_validated_total`** / **`metric_txs_relayed_total`** in `meta`. **`validated_height`** and **`summary`** behave as before.
 
 **Prometheus scrape (live `pybitnode` only):** set **`METRICS_HTTP_PORT`** > `0` and scrape **`GET /metrics`** as in [Wire checkpoints, capabilities, and GET /metrics](#wire-checkpoints-capabilities-and-get-metrics); **`METRICS_HTTP_BIND`** defaults **`127.0.0.1`** (use **`0.0.0.0`** in Docker when the scraper is another container). Health probes still rely on **`DB_PATH`** / **`CHAIN`** for **`python -m pybitnode.healthcheck`** alone—metrics HTTP is separate.
 
@@ -555,7 +555,7 @@ Health payload fields include **`header_height`**, **`mempool_size`** (tx count;
 
 ## Expected timings & performance
 
-Throughput is dominated by peer bandwidth, SQLite fsync patterns, PoW/script validation, and batch sizes. Rough expectations:
+Throughput is dominated by peer bandwidth, RocksDB native state fsync patterns, PoW/script validation, and batch sizes. Rough expectations:
 
 | Scope | Typical observation |
 |------|----------------------|
@@ -573,7 +573,7 @@ For a bounded performance run on a quiescent datadir, enable timing explicitly:
 SYNC_TIMING=1 .venv/bin/pybitnode-sync --datadir ./data --connect-only
 ```
 
-Timing rows are stored in SQLite `events` as `category="timing"`, `message="connect_block"`. The `details_json.stages_ms` object reports UTXO load time, script verification time, UTXO apply time, SQLite commit time, and total `connect_block` wall time. With `PAR_SCRIPT_VERIFY=1`, `script_verify` is the sum of per-input worker elapsed time and can exceed wall clock; compare `block_connect_store_commit` for throughput. If validation stops on a consensus blocker, treat the timing row as a measurement of that attempted block only; do not bypass the missing rule to collect performance data.
+Timing rows are stored in RocksDB native state `events` as `category="timing"`, `message="connect_block"`. The `details_json.stages_ms` object reports UTXO load time, script verification time, UTXO apply time, RocksDB native state commit time, and total `connect_block` wall time. With `PAR_SCRIPT_VERIFY=1`, `script_verify` is the sum of per-input worker elapsed time and can exceed wall clock; compare `block_connect_store_commit` for throughput. If validation stops on a consensus blocker, treat the timing row as a measurement of that attempted block only; do not bypass the missing rule to collect performance data.
 
 Parallel script verification is intentionally narrow: prevouts are loaded sequentially, script checks run, then spends are applied sequentially only after all inputs pass. This preserves block and transaction ordering while reducing wall-clock time for heavy multi-input transactions.
 

@@ -39,7 +39,7 @@ async def run_node(settings: Settings, *, sync_only: bool = False) -> int:
     data_dir = Path(settings.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    tracker = ProjectTracker(settings.resolved_db_path())
+    tracker = ProjectTracker(settings.resolved_state_path())
     metrics_listener: asyncio.Task | None = None
     tracker.set_meta("chain", chain.name)
     tracker.set_meta("data_dir", str(data_dir))
@@ -180,7 +180,7 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="pybitnode — Python Bitcoin full node")
     parser.add_argument("--chain", default=None)
     parser.add_argument("--datadir", default=None)
-    parser.add_argument("--db", default=None, help="SQLite database path")
+    parser.add_argument("--state-path", default=None, help="Native RocksDB chainstate directory")
     parser.add_argument("--peers", default=None, help="Comma-separated host:port list")
     parser.add_argument("--log-level", default=None)
     parser.add_argument("--sync-only", action="store_true", help="Exit after header/block sync")
@@ -194,8 +194,8 @@ def main(argv: list[str] | None = None) -> None:
         settings.chain = args.chain
     if args.datadir:
         settings.data_dir = args.datadir
-    if args.db:
-        settings.db_path = args.db
+    if args.state_path:
+        settings.state_path = args.state_path
     if args.peers is not None:
         settings.peers = args.peers
     if args.log_level:

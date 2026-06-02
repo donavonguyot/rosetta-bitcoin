@@ -37,7 +37,7 @@ non_compliant
 | Java | `ports/java.docker.json` | `Nodes/Java/docker/Dockerfile` | `Nodes/Java/docker/docker-compose.yml` | `eclipse-temurin:21-jdk` / `eclipse-temurin:21-jre` | supervisor_partial | strict clean; build/proof passed 2026-06-02 | RocksDB native evidence exists; keep verifying no legacy DB dependency in native mode |
 | C# | `ports/csharp.docker.json` | `Nodes/CSharp/docker/Dockerfile` | `Nodes/CSharp/docker/docker-compose.yml` | `mcr.microsoft.com/dotnet/sdk:8.0` / `runtime:8.0` | supervisor_partial | strict clean; build/proof passed 2026-06-02 | RocksDB/native evidence exists; first-class blocker diagnostics still pending |
 | Cpp | `ports/cpp.docker.json` | `Nodes/Cpp/docker/Dockerfile` | `Nodes/Cpp/docker/docker-compose.yml` | `ubuntu:24.04` / `ubuntu:24.04` | proof_partial | strict clean; build/proof passed 2026-06-02 | proof_partial: RocksDB-only operational store and proof artifact exist; staged live sync still pending |
-| Python | `ports/python.docker.json` | `Nodes/Python/docker/Dockerfile` | `Nodes/Python/docker/docker-compose.yml` | `python:3.12-slim` | daemon_only | strict clean; build passed 2026-06-02 | legacy SQLite scout only; forward parity requires RocksDB/native-crypto/full Docker replay |
+| Python | `ports/python.docker.json` | `Nodes/Python/docker/Dockerfile` | `Nodes/Python/docker/docker-compose.yml` | `python:3.12-slim` | supervisor_partial | bounded native proof/supervisor declared; full replay pending | RocksDB/native-crypto path in progress; full replay/blocker rediscovery out of this plan |
 | TypeScript | `ports/typescript.docker.json` | `Nodes/TypeScript/docker/Dockerfile` | `Nodes/TypeScript/docker/docker-compose.yml` | `node:20-slim` | daemon_only | strict clean; build passed 2026-06-02 | SQLite-based by design; not a native Core storage claim |
 | Elixir | `ports/elixir.docker.json` | missing | missing | missing | missing | strict clean for missing status | no Docker/Core storage evidence |
 
@@ -148,8 +148,8 @@ sync_or_proof_command: missing Docker proof target
 supervisor_command: missing Docker supervisor target
 peer_strategy: daemon compose publishes 48333; proof peer strategy not defined
 dockerignore_status: present
-runtime_surface_status: daemon_only
-known_caveats: legacy SQLite scout evidence only; forward Python parity requires RocksDB/native-crypto proof and supervisor from empty native state
+runtime_surface_status: supervisor_partial
+known_caveats: bounded RocksDB/native-crypto proof and supervisor helpers only; full replay/blocker rediscovery remains a later plan
 ```
 
 ## TypeScript

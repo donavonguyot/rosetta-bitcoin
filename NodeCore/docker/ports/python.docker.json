@@ -1,7 +1,7 @@
 {
   "manifest_version": 1,
   "port": "python",
-  "status": "daemon_only",
+  "status": "supervisor_partial",
   "paths": {
     "root": "Nodes/Python",
     "dockerfile": "Nodes/Python/docker/Dockerfile",
@@ -13,30 +13,30 @@
     "runtime": "python:3.12-slim",
     "os_family": "Debian slim",
     "package_manager": "apt plus pip",
-    "native_dependencies": []
+    "native_dependencies": ["rocksdict", "coincurve", "gcc", "libffi-dev", "pkg-config"]
   },
   "volumes": {
     "data": "pybitnode_data",
-    "proof": null,
-    "supervisor": null
+    "proof": "pybitnode_proof_data",
+    "supervisor": "pybitnode_supervisor_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Python && docker compose -f docker/docker-compose.yml config",
     "docker_build": "cd Nodes/Python && docker compose -f docker/docker-compose.yml build pybitnode",
     "docker_status": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode python -m pybitnode.healthcheck",
-    "docker_proof_local": null,
+    "docker_proof_local": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-rocksdb-proof",
     "docker_probe_external": null,
-    "docker_supervisor": null,
-    "docker_supervisor_status": null,
-    "docker_supervisor_stop": null,
-    "docker_supervisor_resume": null,
-    "docker_smoke_once": null
+    "docker_supervisor": "cd Nodes/Python && docker compose -f docker/docker-compose.yml up -d pybitnode-supervisor",
+    "docker_supervisor_status": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-status",
+    "docker_supervisor_stop": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-stop",
+    "docker_supervisor_resume": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-resume",
+    "docker_smoke_once": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-rocksdb-proof"
   },
   "peer_modes": {
     "local_reference": {
-      "supported": false,
-      "command": null,
-      "peer": "not standardized for Docker proof",
+      "supported": true,
+      "command": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-rocksdb-proof",
+      "peer": "not used by bounded storage proof; replay remains out of scope",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "sync_status"]
     },
     "external_manual": {
@@ -53,18 +53,18 @@
     }
   },
   "supervisor": {
-    "stop_marker": null,
-    "resume_marker": null,
+    "stop_marker": "/supervisor/stop",
+    "resume_marker": "remove /supervisor/stop via pybitnode-supervisor-resume",
     "poll_sec": null,
-    "check_sec": null
+    "check_sec": 30
   },
   "tick_json": {
     "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
   },
   "proof_artifacts": {
     "docker_contract_result": null,
-    "storage_result": null,
-    "notes": "Docker surface is daemon/healthcheck only. Legacy SQLite scout state is historical; forward Python parity requires RocksDB/native-crypto Docker proof and supervisor from empty native state."
+    "storage_result": "NodeCore/conformance/results/python_rocksdb_native_storage_2026-06-02.json",
+    "notes": "Docker surface includes bounded RocksDB/native-crypto proof and supervisor helpers. Full replay/blocker rediscovery remains out of scope for this plan."
   },
-  "known_caveats": ["No Docker proof target", "No Docker supervisor target", "No RocksDB/native-crypto parity path yet", "Legacy SQLite scout evidence must be rerun from empty native state"]
+  "known_caveats": ["Bounded proof only; full replay and blocker rediscovery remain pending", "Legacy SQLite scout evidence must be rerun from empty native state in a later plan"]
 }

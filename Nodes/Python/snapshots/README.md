@@ -1,6 +1,6 @@
 # Tracker snapshots
 
-JSON exports of the live SQLite tracker (`data/pybitnode.db`). The database itself is gitignored; these files capture project progress for version control.
+Historical JSON exports; forward exports come from the live RocksDB native tracker (`data/chainstate-rocksdb`). The native state itself is gitignored; these files capture project progress for version control.
 
 | File | Contents |
 |------|----------|
@@ -13,13 +13,13 @@ JSON exports of the live SQLite tracker (`data/pybitnode.db`). The database itse
 ## Refresh
 
 ```bash
-.venv/bin/python scripts/export_snapshots.py --db ./data/pybitnode.db
+.venv/bin/python scripts/export_snapshots.py --state-path ./data/chainstate-rocksdb
 ```
 
 Or after syncing:
 
 ```bash
 .venv/bin/pybitnode-sync --datadir ./data --blocks-max 200
-.venv/bin/python scripts/export_snapshots.py --db ./data/pybitnode.db
+.venv/bin/python scripts/export_snapshots.py --state-path ./data/chainstate-rocksdb
 git add snapshots/ && git commit -m "Update tracker snapshots"
 ```

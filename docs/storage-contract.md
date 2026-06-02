@@ -29,9 +29,10 @@ block lookup, UTXO lookup, or status truth.
   sync volume using native chainstate.
 - TypeScript currently remains SQLite-based and is not making a native/Core
   storage claim.
-- Python's old SQLite scout path is legacy evidence only. Python parity requires
-  a full break to RocksDB-owned operational truth, native crypto, full Docker
-  proof/supervisor, and fresh blocker replay from empty native state.
+- Python's old SQLite scout path is legacy evidence only. Python native-break
+  work now targets RocksDB-owned operational truth, native crypto, and Docker
+  proof/supervisor. Fresh blocker replay from empty native state remains a
+  separate proof plan.
 - Cpp's compliance path is RocksDB-only. Cpp is not compliant unless RocksDB
   owns all operational node truth without opening SQLite.
 

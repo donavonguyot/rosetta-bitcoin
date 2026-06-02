@@ -22,6 +22,7 @@ def _env_int(name: str, default: int) -> int:
 class Settings:
     chain: str = "testnet4"
     data_dir: str = "./data"
+    state_path: str = ""
     db_path: str = ""
     listen: bool = False
     p2p_port: int = 0
@@ -80,7 +81,7 @@ class Settings:
         return cls(
             chain=os.environ.get("CHAIN", "testnet4"),
             data_dir=os.environ.get("DATA_DIR", "./data"),
-            db_path=os.environ.get("DB_PATH", ""),
+            state_path=os.environ.get("STATE_PATH", os.environ.get("DB_PATH", "")),
             listen=_env_bool("LISTEN", False),
             p2p_port=_env_int("P2P_PORT", 0),
             peers=os.environ.get("PEERS", ""),
@@ -113,10 +114,16 @@ class Settings:
             par_script_executor=par_script_executor,
         )
 
-    def resolved_db_path(self) -> str:
+    def resolved_state_path(self) -> str:
+        if self.state_path:
+            return self.state_path
         if self.db_path:
             return self.db_path
-        return f"{self.data_dir.rstrip('/')}/pybitnode.db"
+        return f"{self.data_dir.rstrip('/')}/chainstate-rocksdb"
+
+    def resolved_db_path(self) -> str:
+        """Compatibility alias for callers not yet renamed to state_path."""
+        return self.resolved_state_path()
 
     def blocks_dir(self) -> str:
         return f"{self.data_dir.rstrip('/')}/blocks"

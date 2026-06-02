@@ -9,18 +9,14 @@ from pybitnode.sync.validate import HeaderValidationError, validate_header
 
 def repair_sync_state(tracker: ProjectTracker, chain: ChainParams) -> None:
     """Align sync_state with the highest stored header (resume after crash)."""
-    row = list(
-        tracker.db.query(
-            "SELECT height, block_hash FROM headers ORDER BY height DESC LIMIT 1",
-        )
-    )
-    if not row:
+    height = tracker.max_header_height()
+    block_hash = tracker.get_header_hash(height)
+    if block_hash is None:
         return
-    best = row[0]
     tracker.upsert_sync_state(
         chain.name,
-        best_height=int(best["height"]),
-        best_hash=str(best["block_hash"]),
+        best_height=height,
+        best_hash=block_hash,
         header_count=tracker.header_count(),
         sync_status="headers_syncing",
     )
@@ -34,15 +30,7 @@ def ensure_genesis(tracker: ProjectTracker, chain: ChainParams) -> BlockHeader:
             raise HeaderValidationError(
                 f"Stored genesis hash {existing} does not match chain genesis {genesis.block_hash_hex()}"
             )
-        # Backfill wire header blob for inbound getheaders responses (migration / legacy rows).
-        tracker.db.execute(
-            """
-            UPDATE headers
-            SET header_serialized_hex = ?
-            WHERE height = 0 AND (header_serialized_hex IS NULL OR header_serialized_hex = '')
-            """,
-            [genesis.serialize().hex()],
-        )
+        tracker.backfill_header_serialized(0, genesis.serialize().hex())
         return genesis
 
     tracker.record_header(

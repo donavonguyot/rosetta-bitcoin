@@ -28,7 +28,7 @@ sbl = _load_sync_batch_loop()
 
 def _seed_datadir(datadir: Path, *, height: int = 100) -> None:
     datadir.mkdir(parents=True, exist_ok=True)
-    tracker = ProjectTracker(datadir / "pybitnode.db")
+    tracker = ProjectTracker(datadir / "chainstate-rocksdb")
     tracker.set_validated_tip(height, "abcd" * 16, chain="testnet4")
     tracker.close()
 

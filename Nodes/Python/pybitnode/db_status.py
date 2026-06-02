@@ -1,4 +1,4 @@
-"""Inspect pybitnode SQLite tracking database via sqlite-utils."""
+"""Inspect pybitnode native RocksDB chainstate."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from pybitnode.wire.capabilities import checkpoint_status
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Show pybitnode SQLite project tracker status")
+    parser = argparse.ArgumentParser(description="Show pybitnode native chainstate status")
     parser.add_argument("--chain", default=None)
-    parser.add_argument("--db", default=None)
+    parser.add_argument("--state-path", default=None, help="Native RocksDB chainstate directory")
     parser.add_argument("--phases", action="store_true", help="Show roadmap phases only")
     parser.add_argument("--wire", action="store_true", help="Show binary wire capability progress")
     parser.add_argument("--checkpoint", default=None, help="Show capabilities for one checkpoint id")
@@ -23,10 +23,10 @@ def main() -> None:
     settings = Settings.from_env()
     if args.chain:
         settings.chain = args.chain
-    if args.db:
-        settings.db_path = args.db
+    if args.state_path:
+        settings.state_path = args.state_path
 
-    tracker = ProjectTracker(settings.resolved_db_path())
+    tracker = ProjectTracker(settings.resolved_state_path())
     try:
         if args.wire:
             print(json.dumps(tracker.wire_progress(), indent=2, default=str))

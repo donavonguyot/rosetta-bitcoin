@@ -26,10 +26,9 @@ def resolve_header_record(
     height: int,
     block_store: BlockStore | None,
 ) -> BlockHeader | None:
-    rows = list(tracker.db["headers"].rows_where("height = ?", [height], limit=1))
-    if not rows:
+    row = tracker.get_header(height)
+    if row is None:
         return None
-    row = dict(rows[0])
     stored_hash_hex = row["block_hash"]
 
     serialized = row.get("header_serialized_hex") or ""
