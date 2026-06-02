@@ -17,9 +17,9 @@ Legend:
 | Height | Rule / template | Python | Java | TypeScript | C# | Elixir | C++ |
 |--------|-----------------|--------|------|------------|----|--------|-----|
 | 739 | P2WPKH / BIP143 | cleared | cleared | cleared | cleared | cleared | blocked |
-| 6,975 | P2TR key-path | cleared | cleared | unknown | not_reached | implemented_unverified | not_reached |
-| 18,675 | P2SH | cleared | cleared | unknown | not_reached | not_reached | not_reached |
-| 22,830 | P2TR script-path | cleared | cleared | unknown | not_reached | not_reached | not_reached |
+| 6,975 | P2TR key-path | cleared | cleared | unknown | cleared | implemented_unverified | not_reached |
+| 18,675 | P2SH | cleared | cleared | unknown | cleared | not_reached | not_reached |
+| 22,830 | P2TR script-path | cleared | cleared | unknown | blocked | not_reached | not_reached |
 | 25,207 | Bare `OP_1` | cleared | cleared | unknown | not_reached | not_reached | not_reached |
 | 27,042 | P2WSH | cleared | cleared | unknown | not_reached | not_reached | not_reached |
 | 27,251 | P2WSH conditionals | cleared | cleared | unknown | not_reached | not_reached | not_reached |
@@ -78,8 +78,9 @@ validated heights as they are confirmed.
 
 ### C#
 
-C# has a documented real block 739 P2WPKH fixture and sync beyond that height.
-Its next matrix entries remain `not_reached` based on available ledger evidence.
+C# has a documented real block 739 P2WPKH fixture and persistent supervisor
+evidence through `validated_height=22829`. It cleared P2TR key-path at 6975 and
+P2SH at 18675, then stopped honestly at 22830 on P2TR script-path / BIP342.
 
 ### Elixir
 

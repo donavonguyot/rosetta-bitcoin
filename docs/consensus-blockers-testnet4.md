@@ -17,6 +17,7 @@ Status values:
 |----------------|-------------------------------:|-------|
 | Python | 52,996 | Scout path; cleared 52,497 P2TR tapscript `OP_SIZE` and completed a bounded local-Core proof chunk to 52,996. |
 | Java | 136,863 | Lead follower; binary gate **passed** on Core-aligned chain (`data-java`); cleared script trail through 136,369 P2WSH OP_BOOLAND. Sync intentionally stopped (`.stop_sync`). |
+| C# | 22,829 | RocksDB/native-crypto follower; cleared 6,975 key-path and 10k+ range, now blocked at 22,830 P2TR script-path. |
 
 ## Blocker trail
 

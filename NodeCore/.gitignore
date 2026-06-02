@@ -1,0 +1,4 @@
+replay-corpus/
+__pycache__/
+*.py[cod]
+*.tmp

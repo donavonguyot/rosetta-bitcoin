@@ -1,0 +1,28 @@
+# Conformance Fixtures
+
+This directory is the neutral index for shared fixture names. Ports may keep
+large fixture bytes in their own test resource trees, but must use the fixture
+IDs from `../MANIFEST.md` in status exports and conformance results.
+
+## Current Bootstrap Fixtures
+
+```text
+blocks.block1_connect
+blocks.block2_connect
+storage.native_fresh_start
+storage.native_restart
+storage.local_sqlite_artifact_absent
+storage.project_export_observational
+sync.deferred_handshake
+sync.honest_start_height
+sync.single_writer_guard
+scripts.p2wpkh_739
+scripts.p2tr_key_path_6975
+scripts.p2tr_script_path_22830
+```
+
+## Rule
+
+Fixture names are stable cross-port contracts. Fixture bytes can move; fixture
+IDs and expected outcomes should not change without updating the manifest and
+the follower matrix together.

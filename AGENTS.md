@@ -15,6 +15,18 @@ The binary end gate for every serious node in this workspace is:
 Partial sync, headers-only sync, trusted import, matching another node without
 independent validation, or skipping unknown consensus rules does **not** pass.
 
+## Canonical read order
+
+Before editing a port, read:
+
+1. `README.md` at the workspace root.
+2. `docs/git-topology.md`.
+3. `docs/port-status.md`.
+4. `NodeCore/STATUS_CONTRACT.md`.
+5. `docs/blocker-ledger.md`.
+6. `docs/supervisor-contract.md`.
+7. The target port's README and blocker ledger.
+
 Progress can be measured with many gauges, but the gauges are not the goal:
 
 | Gauge | Meaning |

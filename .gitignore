@@ -14,3 +14,16 @@
 *.log
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
+__pycache__/
+*.py[cod]
+
+# Root-owned reporting scratch.
+/Project/project.db
+/Project/reports/generated/
+/Project/tmp/
+
+# Keep nested repository metadata out of root commits if an ignored port is
+# intentionally surfaced during audits.
+**/.git/
