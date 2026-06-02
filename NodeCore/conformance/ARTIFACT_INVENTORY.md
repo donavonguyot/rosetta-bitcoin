@@ -36,8 +36,8 @@ ports emit them.
 | Bucket | Paths / patterns | Action |
 |--------|------------------|--------|
 | Keep port-local | `docs/BLOCKER_LEDGER.md`, `snapshots/*.json`, `tests/fixtures/**` | Keep. |
-| Keep runtime | `data/` | Keep by default; primary scout datadir. |
-| Delete cruft | `connect_only_replay.log`, `forward_batch_38010.log`, `data/pybitnode.db?mode=ro` | Remove. |
+| Keep runtime | `data/` | Keep by default; historical scout datadir or native RocksDB datadir depending on generation. |
+| Delete cruft | `connect_only_replay.log`, `forward_batch_38010.log`, stale SQLite URI scratch paths | Remove. |
 | Delete if stale | `data/.batch-sync-running`, `data/.sync_fix_agent.pid`, `data/.sync_supervisor.pid`, zero-byte lock files | Remove after process check. |
 
 ## TypeScript

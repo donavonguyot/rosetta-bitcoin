@@ -160,9 +160,9 @@ finding replaces it.
 | Default ops peer | Often `89.167.10.150:48333` | **Excluded by default** (parallel runs) |
 | Fallback | — | DNS seed; falls back to `89.167.10.150` when seeds fail |
 | Datadir | `./data` | `./data-ts` |
-| SQLite DB | `pybitnode.db` | `tsbitnode.db` |
+| Operational state | `chainstate-rocksdb` | `tsbitnode.db` |
 
-**Never share datadirs or DB files between nodes or parallel agent runs.** One writer per datadir at a time.
+**Never share datadirs or operational state between nodes or parallel agent runs.** One writer per datadir at a time.
 
 ### Single writer rule (TypeScript)
 
@@ -294,7 +294,7 @@ binary_gate_status: failed | not_attempted | passed
 | **syncBatchLoop + manual tsbitnode-sync** on same datadir | Dual writer; use `.tsbitnode_sync.lock` — see [Single writer rule](#single-writer-rule-typescript) |
 | **Parallel agents** editing `peer.ts` | Merge conflicts and conflicting handshake logic |
 | Editing consensus/P2P while a sync process is live | Run may mix old state with new code; blocker diagnosis becomes muddy |
-| Treating snapshots as live truth | Snapshots can lag DB/logs; check live DB/status before conclusions |
+| Treating snapshots as live truth | Snapshots can lag state/logs; check live status before conclusions |
 | Skipping an unsupported script template | Produces false validation; stop and record the missing rule instead |
 | Porting implementation details without the blocker facts | Followers drift or overfit; use the blocker ledger |
 
@@ -372,17 +372,17 @@ npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20
 
 Key fields: **`header_height`**, **`validated_height`**, **`sync_status`**.
 
-For Python, prefer live DB/status when the node is running and snapshots after a
-settled checkpoint:
+For Python, prefer live native-state status when the node is running and
+snapshots after a settled checkpoint:
 
 ```bash
 cd Nodes/Python
-.venv/bin/pybitnode-db --db ./data/pybitnode.db
-.venv/bin/python scripts/export_snapshots.py --db ./data/pybitnode.db
+.venv/bin/pybitnode-db --state-path ./data/chainstate-rocksdb
+.venv/bin/python scripts/export_snapshots.py --state-path ./data/chainstate-rocksdb
 ```
 
 Snapshots are committed checkpoint artifacts. They are not guaranteed to reflect
-the latest live DB while sync is running.
+the latest live native state while sync is running.
 
 ---
 
@@ -430,8 +430,8 @@ sync until exact blocker -> record blocker -> implement exact missing rule
 
 ### Parallel prep checklist (consensus / sync agents)
 
-1. **Isolated datadirs** — Python `./data` + `pybitnode.db` vs TypeScript `./data-ts` + `tsbitnode.db`; never share or copy mid-write.
-2. **One SQLite writer** per datadir; survey/export tools open **read-only**.
+1. **Isolated datadirs** — Python `./data` + `chainstate-rocksdb` vs TypeScript `./data-ts` + `tsbitnode.db`; never share or copy mid-write.
+2. **One writer** per datadir; survey/export tools must not overlap active writers.
 3. **Peer exclusion** — TS excludes Python’s default ops peer (`89.167.10.150`) unless `PEERS=` overrides; avoids cross-node interference.
 4. **Honest handshake** — deferred `feefilter` / `mempool` / `sendcmpct`; conservative `start_height` (see [Critical: handshake](#critical-handshake--sync-state-too-advanced-disconnects)).
 5. **Baseline survey** — before and after batch sync: `npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20` (requires blocks downloaded past `validated_height`).
@@ -447,7 +447,7 @@ Static status here will go stale quickly. Use the commands below before making
 claims about current progress:
 
 ```bash
-cd Nodes/Python && .venv/bin/pybitnode-db --db ./data/pybitnode.db
+cd Nodes/Python && .venv/bin/pybitnode-db --state-path ./data/chainstate-rocksdb
 cd Nodes/TypeScript && npx tsbitnode-db --db ./data-ts/tsbitnode.db
 tail -n 80 Nodes/Python/sync_batch_run.log
 tail -n 80 Nodes/TypeScript/sync_batch_operational.log
@@ -523,7 +523,7 @@ Sync failing with immediate disconnect?
   └─> Check start_height vs validated_height. Simplify post-verack to sendheaders only.
 
 Running both nodes?
-  └─> ./data + pybitnode.db  vs  ./data-ts + tsbitnode.db. Never mix.
+  └─> ./data + chainstate-rocksdb  vs  ./data-ts + tsbitnode.db. Never mix.
 
 Need live cp6 / serving proof?
   └─> LISTEN mode + completeDeferredHandshake after headers_current, not in syncRunner batch.

@@ -1,6 +1,8 @@
 {
   "exported_at": "2026-05-28T01:40:20+00:00",
-  "db_path": "data/pybitnode.db",
+  "historical": true,
+  "storage_backend": "legacy_sqlite_scout",
+  "note": "Historical SQLite scout snapshot. Forward snapshots export from data/chainstate-rocksdb.",
   "chain": "testnet4",
   "schema_version": "7",
   "files": [

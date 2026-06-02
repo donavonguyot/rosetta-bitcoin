@@ -12,9 +12,10 @@ All notable milestones for the pybitnode testnet4 node. Format loosely follows [
 - Tapscript conditional branches (`OP_IF`/`OP_NOTIF`/`OP_ELSE`/`OP_ENDIF`, BIP342) unblocking block **22830** (`088ee6b`).
 - Tapscript `OP_CHECKLOCKTIMEVERIFY` and `OP_CHECKSEQUENCEVERIFY` (BIP65/BIP112 via Schnorr sighash) (`f394ad0`).
 - Explicit rejection of witness v2+ programs with version-specific error (BIP141) (`600f086`).
-- Sequential sync batch orchestrator (`scripts/sync_batch_loop.py`) with fcntl exclusive lock and read-only SQLite height polling.
-- Read-only script template survey helper for diagnosing consensus stalls.
+- Sequential sync batch orchestrator (`scripts/sync_batch_loop.py`) with fcntl exclusive lock and native-state height polling.
+- Native-state script template survey helper for diagnosing consensus stalls.
 - Wire capability registry and `GET /metrics` ops reference documentation.
+- RocksDB-backed native tracker, bounded RocksDB proof command, native `coincurve` crypto backend, and Docker proof/supervisor helpers.
 
 ### Fixed
 - Header-sync stall when refreshing headers during block catch-up (`--no-header-refresh` batch recipe).

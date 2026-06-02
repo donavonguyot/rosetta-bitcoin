@@ -29,7 +29,7 @@ trusted import, or skipping unknown consensus rules does **not** pass.
 **One writer per datadir.** Sync acquires `<DATA_DIR>/.csbitnode.lock`. A second sync
 against the same datadir exits with `datadir lock busy`.
 
-Never share datadirs or chainstate files with PythonNode (`./data/pybitnode.db`) or other followers.
+Never share datadirs or chainstate files with PythonNode (`./data/chainstate-rocksdb`) or other followers.
 CSharpNode's operational state is native RocksDB; `csbitnode.db` is treated as a retired
 SQLite artifact and native startup fails if it appears in a C# datadir.
 

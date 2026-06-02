@@ -170,7 +170,7 @@ cd /Users/donavonguyot/RB/Nodes/Python
 SYNC_TIMING=1 PAR_SCRIPT_VERIFY=1 PAR_SCRIPT_THREADS=8 \
   .venv/bin/pybitnode-sync --datadir /tmp/pybitnode-bench-data \
   --connect-only --blocks-max 1 --log-level info
-.venv/bin/pybitnode-db --db /tmp/pybitnode-bench-data/pybitnode.db --events 20
+.venv/bin/pybitnode-db --state-path /tmp/pybitnode-bench-data/chainstate-rocksdb --events 20
 ```
 
 For Java, copy `data-java` first, pass `DATA_DIR=/tmp/jbitnode-bench-data`, and
