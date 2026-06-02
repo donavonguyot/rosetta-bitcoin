@@ -3,7 +3,15 @@ defmodule Exbitnode.Consensus.Connect.ConnectBlockError do
 end
 
 defmodule Exbitnode.Consensus.Connect.ValidationBlocker do
-  defexception [:message, :height, :block_hash_hex, :txid_hex, :input_index, :spent_script_pubkey_hex, :missing_rule]
+  defexception [
+    :message,
+    :height,
+    :block_hash_hex,
+    :txid_hex,
+    :input_index,
+    :spent_script_pubkey_hex,
+    :missing_rule
+  ]
 
   @impl true
   def exception(opts) do

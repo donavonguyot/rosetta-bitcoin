@@ -1,12 +1,12 @@
 # tsbitnode
 
-Binary-compatible Bitcoin full node in **TypeScript** for **testnet4**. Node.js stdlib (`crypto`, `node:sqlite`) — no bitcoin libraries.
+Binary-compatible Bitcoin full node in **TypeScript** for **testnet4**. Core/native mode may use runtime npm dependencies only for RocksDB and `libsecp256k1` infrastructure bindings; external Bitcoin libraries remain forbidden.
 
 This project mirrors the architecture of [`PythonNode`](../PythonNode) (`pybitnode`) with idiomatic TypeScript: ESM modules, strict typing, async P2P (planned), and the same layered package layout.
 
 ## Status
 
-**Foundation + header sync + block download (cp4).** Wire framing, handshake, header sync, getdata/block download, and flat-file block storage are implemented. Consensus validation (`connectBlock`), mempool, and inbound serving remain stubbed for later phases.
+**Native/Core migration target.** The historical SQLite tracker path is being retired for Core claims. Wire framing, handshake, header sync, getdata/block download, flat-file block storage, and staged consensus validation exist, but current TypeScript Core parity requires RocksDB-owned operational truth, native crypto proof, Docker proof/supervisor support, and fresh replay from an empty native datadir.
 
 There is **no single "project done" flag**. Progress is measured hierarchically, matching PythonNode:
 

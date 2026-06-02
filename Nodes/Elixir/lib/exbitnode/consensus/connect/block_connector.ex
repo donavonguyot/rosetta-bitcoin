@@ -11,7 +11,7 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
   alias Exbitnode.Consensus.Connect.{BlockUtxoView, ConnectBlockError, ValidationBlocker}
   alias Exbitnode.Consensus.Script.{ScriptVerify, ScriptVerifyError, UnsupportedScriptRule}
   alias Exbitnode.Consensus.Tx.Transaction
-  alias Exbitnode.Db.{ProjectTracker, Sql}
+  alias Exbitnode.Db.ProjectTracker
   alias Exbitnode.Messages.BlockHeaderCodec
   alias Exbitnode.Util.Hex
 
@@ -40,11 +40,20 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
       |> Enum.reduce(view, fn tx, acc_view ->
         txid = Merkle.transaction_txid(tx)
         txid_hex = txid |> Hex.reverse() |> Hex.encode()
-        acc_view = validate_non_coinbase_transaction(acc_view, block_hash_hex, height, txid_hex, tx)
+
+        acc_view =
+          validate_non_coinbase_transaction(acc_view, block_hash_hex, height, txid_hex, tx)
 
         Enum.reduce(Enum.with_index(tx.outputs), acc_view, fn {output, vout}, inner_view ->
           if spendable_output?(output.script_pubkey) do
-            BlockUtxoView.create(inner_view, txid, vout, output.value, output.script_pubkey, false)
+            BlockUtxoView.create(
+              inner_view,
+              txid,
+              vout,
+              output.value,
+              output.script_pubkey,
+              false
+            )
           else
             inner_view
           end
@@ -57,7 +66,14 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
     view =
       Enum.reduce(Enum.with_index(coinbase.outputs), view, fn {output, vout}, acc_view ->
         if spendable_output?(output.script_pubkey) do
-          BlockUtxoView.create(acc_view, coinbase_txid, vout, output.value, output.script_pubkey, true)
+          BlockUtxoView.create(
+            acc_view,
+            coinbase_txid,
+            vout,
+            output.value,
+            output.script_pubkey,
+            true
+          )
         else
           acc_view
         end
@@ -65,11 +81,9 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
 
     undo_entries = BlockUtxoView.external_spend_undo_entries(view)
 
-    Sql.with_transaction(conn, fn tx_conn ->
-      BlockUtxoView.apply(view, tx_conn)
-      ProjectTracker.replace_utxo_undo(tx_conn, chain, height, undo_entries)
-      ProjectTracker.set_validated_tip(tx_conn, chain, height, block_hash_hex)
-    end)
+    BlockUtxoView.apply(view, conn)
+    ProjectTracker.replace_utxo_undo(conn, chain, height, undo_entries)
+    ProjectTracker.set_validated_tip(conn, chain, height, block_hash_hex)
 
     %{height: height, block_hash_hex: block_hash_hex, utxos_created: view.created_count}
   end
@@ -92,29 +106,28 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
           raise ConnectBlockError, "missing header at height #{height - 1}"
         end
 
-        Sql.with_transaction(conn, fn tx_conn ->
-          undo_entries = ProjectTracker.take_utxo_undo(tx_conn, chain, height)
-          :ok = ProjectTracker.delete_utxos_created_at_height(tx_conn, chain, height)
+        undo_entries = ProjectTracker.take_utxo_undo(conn, chain, height)
+        :ok = ProjectTracker.delete_utxos_created_at_height(conn, chain, height)
 
-          Enum.each(undo_entries, fn entry ->
-            ProjectTracker.insert_utxo(tx_conn, chain, %{
-              txid: entry.txid,
-              vout: entry.vout,
-              height: entry.utxo_height,
-              value_sats: entry.value_sats,
-              script_pubkey_hex: entry.script_pubkey_hex,
-              coinbase: entry.coinbase
-            })
-          end)
-
-          ProjectTracker.set_validated_tip(tx_conn, chain, height - 1, prev_hash_hex)
+        Enum.each(undo_entries, fn entry ->
+          ProjectTracker.insert_utxo(conn, chain, %{
+            txid: entry.txid,
+            vout: entry.vout,
+            height: entry.utxo_height,
+            value_sats: entry.value_sats,
+            script_pubkey_hex: entry.script_pubkey_hex,
+            coinbase: entry.coinbase
+          })
         end)
+
+        ProjectTracker.set_validated_tip(conn, chain, height - 1, prev_hash_hex)
 
         :ok
     end
   end
 
-  def spendable_output?(script_pubkey) when is_binary(script_pubkey), do: byte_size(script_pubkey) > 0
+  def spendable_output?(script_pubkey) when is_binary(script_pubkey),
+    do: byte_size(script_pubkey) > 0
 
   defp validate_non_coinbase_transaction(view, block_hash_hex, height, txid_hex, tx) do
     {utxo_infos, _} =
@@ -278,17 +291,17 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
       if Map.has_key?(view.overlay, key) do
         view.external_undo
       else
-          [
-            %{
-              txid: utxo.txid,
-              vout: utxo.vout,
-              utxo_height: utxo.height,
-              value_sats: utxo.value_sats,
-              script_pubkey_hex: utxo.script_pubkey_hex,
-              coinbase: utxo.coinbase
-            }
-            | view.external_undo
-          ]
+        [
+          %{
+            txid: utxo.txid,
+            vout: utxo.vout,
+            utxo_height: utxo.height,
+            value_sats: utxo.value_sats,
+            script_pubkey_hex: utxo.script_pubkey_hex,
+            coinbase: utxo.coinbase
+          }
+          | view.external_undo
+        ]
       end
 
     %{

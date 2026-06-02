@@ -66,7 +66,7 @@ lock prevents concurrent sync processes.
 - version/verack handshake with deferred post-verack (`sendheaders` only)
 - getheaders/headers download and parsing
 - Header validation: prev-hash linkage, block hash, PoW target
-- SQLite header persistence
+- RocksDB-backed native chainstate persistence
 - Datadir lock + JSON status
 
 ## M2 scope (complete)
@@ -115,9 +115,11 @@ HEADERS_MAX=0 BLOCKS_MAX=1000 make sync-local
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `DATA_DIR` | `./data-elixir` | Datadir + SQLite |
+| `DATA_DIR` | `./data-elixir` | Datadir + native chainstate |
 | `PEERS` | `127.0.0.1:48333` | Comma-separated host:port |
 | `CHAIN` | `testnet4` | Chain name |
+| `CHAINSTATE_BACKEND` | `rocksdb` | Native chainstate backend |
+| `SECP256K1_BACKEND` | `pure_elixir` | `pure_elixir` or `native` backend selector |
 | `HEADERS_MAX` | `2000` | Max headers per sync run |
 | `HEADER_BATCHES_MAX` | `50` | Max getheaders batches |
 | `BLOCKS_MAX` | `128` | Max blocks to connect per sync run |

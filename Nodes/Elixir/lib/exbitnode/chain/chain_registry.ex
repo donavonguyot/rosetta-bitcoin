@@ -17,8 +17,12 @@ defmodule Exbitnode.Chain.ChainRegistry do
 
   def get(name) when is_binary(name) do
     case Map.get(@chains, String.downcase(name)) do
-      nil -> raise ArgumentError, "Unknown chain #{name}; choose from #{Map.keys(@chains) |> Enum.join(", ")}"
-      chain -> chain
+      nil ->
+        raise ArgumentError,
+              "Unknown chain #{name}; choose from #{Map.keys(@chains) |> Enum.join(", ")}"
+
+      chain ->
+        chain
     end
   end
 

@@ -1,0 +1,15 @@
+_build/
+deps/
+data-elixir/
+data-elixir-*/
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.lock
+*.pid
+*.log
+snapshots/
+.elixir_ls/
+.DS_Store

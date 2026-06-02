@@ -40,14 +40,25 @@ defmodule Exbitnode.Wire.WireSerialize do
 
   defp read_compact_size_chunk(<<first, rest::binary>>) do
     case first do
-      n when n < 0xFD -> {n, 1}
-      0xFD -> <<value::little-unsigned-16, _rest2::binary>> = rest; {value, 3}
-      0xFE -> <<value::little-unsigned-32, _rest2::binary>> = rest; {value, 5}
-      0xFF -> <<value::little-signed-64, _rest2::binary>> = rest; {value, 9}
+      n when n < 0xFD ->
+        {n, 1}
+
+      0xFD ->
+        <<value::little-unsigned-16, _rest2::binary>> = rest
+        {value, 3}
+
+      0xFE ->
+        <<value::little-unsigned-32, _rest2::binary>> = rest
+        {value, 5}
+
+      0xFF ->
+        <<value::little-signed-64, _rest2::binary>> = rest
+        {value, 9}
     end
   end
 
-  def read_bytes(data, count, offset) when is_binary(data) and is_integer(count) and is_integer(offset) do
+  def read_bytes(data, count, offset)
+      when is_binary(data) and is_integer(count) and is_integer(offset) do
     {binary_part(data, offset, count), offset + count}
   end
 end

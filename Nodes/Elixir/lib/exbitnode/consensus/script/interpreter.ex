@@ -17,7 +17,15 @@ defmodule Exbitnode.Consensus.Script.Interpreter do
       Opcodes.op_equalverify(), Opcodes.op_checksig()>>
   end
 
-  def verify_script(script_sig, script_pubkey, tx, input_index, amount, witness, spent_prevouts \\ nil)
+  def verify_script(
+        script_sig,
+        script_pubkey,
+        tx,
+        input_index,
+        amount,
+        witness,
+        spent_prevouts \\ nil
+      )
       when is_binary(script_sig) and is_binary(script_pubkey) do
     cond do
       ScriptTemplates.is_p2pk?(script_pubkey) ->
@@ -44,8 +52,20 @@ defmodule Exbitnode.Consensus.Script.Interpreter do
         if length(pushes) != 1 or hd(pushes) == <<>> do
           false
         else
-          stack_after_sig = evaluate_script(script_sig, [], tx, input_index, script_pubkey, amount, false)
-          stack = evaluate_script(script_pubkey, stack_after_sig, tx, input_index, script_pubkey, amount, false)
+          stack_after_sig =
+            evaluate_script(script_sig, [], tx, input_index, script_pubkey, amount, false)
+
+          stack =
+            evaluate_script(
+              script_pubkey,
+              stack_after_sig,
+              tx,
+              input_index,
+              script_pubkey,
+              amount,
+              false
+            )
+
           terminal_success_strict?(stack)
         end
       rescue
@@ -149,8 +169,20 @@ defmodule Exbitnode.Consensus.Script.Interpreter do
 
   defp verify_legacy(script_sig, script_pubkey, tx, input_index, amount) do
     try do
-      stack_after_sig = evaluate_script(script_sig, [], tx, input_index, script_pubkey, amount, false)
-      stack = evaluate_script(script_pubkey, stack_after_sig, tx, input_index, script_pubkey, amount, false)
+      stack_after_sig =
+        evaluate_script(script_sig, [], tx, input_index, script_pubkey, amount, false)
+
+      stack =
+        evaluate_script(
+          script_pubkey,
+          stack_after_sig,
+          tx,
+          input_index,
+          script_pubkey,
+          amount,
+          false
+        )
+
       terminal_success_strict?(stack)
     rescue
       ScriptError -> false
@@ -161,7 +193,8 @@ defmodule Exbitnode.Consensus.Script.Interpreter do
     do_parse_push_only(script_sig, 0, [])
   end
 
-  defp do_parse_push_only(script_sig, offset, acc) when offset >= byte_size(script_sig), do: Enum.reverse(acc)
+  defp do_parse_push_only(script_sig, offset, acc) when offset >= byte_size(script_sig),
+    do: Enum.reverse(acc)
 
   defp do_parse_push_only(script_sig, offset, acc) do
     opcode = :binary.at(script_sig, offset)
@@ -177,7 +210,8 @@ defmodule Exbitnode.Consensus.Script.Interpreter do
       opcode == Opcodes.op_1negate() ->
         do_parse_push_only(script_sig, offset, [<<0x81>> | acc])
 
-      opcode >= 1 and opcode <= 75 or opcode in [Opcodes.op_pushdata1(), Opcodes.op_pushdata2(), Opcodes.op_pushdata4()] ->
+      (opcode >= 1 and opcode <= 75) or
+          opcode in [Opcodes.op_pushdata1(), Opcodes.op_pushdata2(), Opcodes.op_pushdata4()] ->
         {item, next} = read_push(script_sig, offset - 1)
         do_parse_push_only(script_sig, next, [item | acc])
 
@@ -209,7 +243,8 @@ defmodule Exbitnode.Consensus.Script.Interpreter do
         opcode == Opcodes.op_1negate() ->
           {stack ++ [<<0x81>>], offset}
 
-        opcode >= 1 and opcode <= 75 or opcode in [Opcodes.op_pushdata1(), Opcodes.op_pushdata2(), Opcodes.op_pushdata4()] ->
+        (opcode >= 1 and opcode <= 75) or
+            opcode in [Opcodes.op_pushdata1(), Opcodes.op_pushdata2(), Opcodes.op_pushdata4()] ->
           {item, next} = read_push(script, offset - 1)
           {stack ++ [item], next}
 
@@ -239,7 +274,17 @@ defmodule Exbitnode.Consensus.Script.Interpreter do
         opcode in [Opcodes.op_checksig(), Opcodes.op_checksigverify()] ->
           {pubkey, rest1} = pop_item!(stack)
           {signature, rest2} = pop_item!(rest1)
-          valid = check_ecdsa_signature(signature, pubkey, tx, input_index, script_code, amount, witness?)
+
+          valid =
+            check_ecdsa_signature(
+              signature,
+              pubkey,
+              tx,
+              input_index,
+              script_code,
+              amount,
+              witness?
+            )
 
           if opcode == Opcodes.op_checksig() do
             {rest2 ++ [encode_op_n(if(valid, do: 1, else: 0))], offset}
@@ -333,6 +378,7 @@ defmodule Exbitnode.Consensus.Script.Interpreter do
   defp terminal_success_strict?(_), do: false
 
   defp witness_empty?(tx, input_index) do
-    tx.witness == [] or input_index >= length(tx.witness) or Enum.at(tx.witness, input_index) == []
+    tx.witness == [] or input_index >= length(tx.witness) or
+      Enum.at(tx.witness, input_index) == []
   end
 end

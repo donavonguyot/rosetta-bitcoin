@@ -15,7 +15,19 @@ defmodule Exbitnode.Sync.BlockSync do
 
   def sync_from_peer(peer_pid, chain, conn, block_store, max_blocks, peer_ctx \\ nil)
       when is_pid(peer_pid) do
-    do_sync(peer_pid, chain, conn, block_store, max_blocks, 0, 0, nil, "blocks_syncing", peer_ctx, 0)
+    do_sync(
+      peer_pid,
+      chain,
+      conn,
+      block_store,
+      max_blocks,
+      0,
+      0,
+      nil,
+      "blocks_syncing",
+      peer_ctx,
+      0
+    )
   end
 
   defp do_sync(
@@ -40,7 +52,13 @@ defmodule Exbitnode.Sync.BlockSync do
 
       cond do
         is_nil(header_hash_hex) ->
-          ProjectTracker.log_event(conn, "sync", "missing header at height #{next_height}", "error")
+          ProjectTracker.log_event(
+            conn,
+            "sync",
+            "missing header at height #{next_height}",
+            "error"
+          )
+
           finish(conn, chain.name, downloaded, connected, blocker, "failed")
 
         true ->
@@ -51,7 +69,15 @@ defmodule Exbitnode.Sync.BlockSync do
             {:ok, payload, peer_pid, reconnects} ->
               downloaded = downloaded + 1
               stored = BlockStorage.store(block_store, payload)
-              :ok = ProjectTracker.record_block(conn, chain.name, next_height, header_hash_hex, stored)
+
+              :ok =
+                ProjectTracker.record_block(
+                  conn,
+                  chain.name,
+                  next_height,
+                  header_hash_hex,
+                  stored
+                )
 
               try do
                 BlockConnector.connect(
@@ -99,7 +125,16 @@ defmodule Exbitnode.Sync.BlockSync do
                 "warning"
               )
 
-              finish(conn, chain.name, downloaded, connected, blocker, "blocked", peer_pid, reconnects)
+              finish(
+                conn,
+                chain.name,
+                downloaded,
+                connected,
+                blocker,
+                "blocked",
+                peer_pid,
+                reconnects
+              )
 
             {:error, reason, peer_pid, reconnects} ->
               ProjectTracker.log_event(
@@ -109,7 +144,16 @@ defmodule Exbitnode.Sync.BlockSync do
                 "error"
               )
 
-              finish(conn, chain.name, downloaded, connected, blocker, "failed", peer_pid, reconnects)
+              finish(
+                conn,
+                chain.name,
+                downloaded,
+                connected,
+                blocker,
+                "failed",
+                peer_pid,
+                reconnects
+              )
           end
       end
     end
@@ -167,7 +211,16 @@ defmodule Exbitnode.Sync.BlockSync do
     Map.get(peer_ctx, :max_reconnects, @default_max_reconnects)
   end
 
-  defp finish(conn, chain, downloaded, connected, blocker, sync_status, _peer_pid \\ nil, _reconnects \\ 0) do
+  defp finish(
+         conn,
+         chain,
+         downloaded,
+         connected,
+         blocker,
+         sync_status,
+         _peer_pid \\ nil,
+         _reconnects \\ 0
+       ) do
     ProjectTracker.upsert_sync_state(conn, chain, %{sync_status: sync_status})
 
     %{

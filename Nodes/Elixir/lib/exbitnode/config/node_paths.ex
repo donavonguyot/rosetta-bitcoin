@@ -21,6 +21,15 @@ defmodule Exbitnode.Config.NodePaths do
     Path.join(dir, "exbitnode.db")
   end
 
+  def chainstate_backend_from_env do
+    System.get_env("CHAINSTATE_BACKEND", "rocksdb")
+  end
+
+  def rocksdb_path(data_dir \\ nil) do
+    dir = data_dir || data_dir_from_env()
+    Path.join(dir, "chainstate-rocksdb")
+  end
+
   def parse_peers(nil, default_port), do: [{"127.0.0.1", default_port}]
 
   def parse_peers(peers, default_port) when is_binary(peers) do

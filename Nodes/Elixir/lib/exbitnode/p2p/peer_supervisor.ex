@@ -15,8 +15,9 @@ defmodule Exbitnode.P2p.PeerSupervisor do
   def connect(host, port, chain, conn, start_height) do
     spec = %{
       id: {Exbitnode.P2p.PeerServer, host, port},
-      start: {Exbitnode.P2p.PeerServer, :start_link,
-              [[host: host, port: port, chain: chain, conn: conn, start_height: start_height]]},
+      start:
+        {Exbitnode.P2p.PeerServer, :start_link,
+         [[host: host, port: port, chain: chain, conn: conn, start_height: start_height]]},
       restart: :temporary
     }
 

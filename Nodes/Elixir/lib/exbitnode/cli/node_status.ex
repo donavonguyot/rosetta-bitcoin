@@ -2,29 +2,42 @@ defmodule Exbitnode.CLI.NodeStatus do
   @moduledoc false
 
   alias Exbitnode.Config.NodePaths
-  alias Exbitnode.Db.{Database, ProjectTracker, Sql}
+  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
   alias Exbitnode.Storage.DatadirLock
 
   def run(_args) do
     Application.ensure_all_started(:exbitnode)
 
     data_dir = NodePaths.data_dir_from_env()
-    db_path = NodePaths.db_path_from_env(data_dir)
     chain = NodePaths.chain_from_env()
     peer_source = System.get_env("PEERS", "127.0.0.1:48333")
 
     status =
-      if File.exists?(db_path) do
-        build_status(db_path, chain, data_dir, peer_source)
+      if File.exists?(Path.join(data_dir, "chainstate-rocksdb")) do
+        build_status(data_dir, chain, peer_source)
       else
         %{
-          runtime_status: "idle",
+          node_id: "exbitnode-native",
+          implementation: "ElixirNode",
+          runtime_surface: runtime_surface(),
+          runtime_status: "not_running",
           sync_status: "not_started",
+          chain: chain,
+          network: chain,
           datadir: data_dir,
-          db_path: db_path,
+          chainstate_backend: "rocksdb",
+          chainstate_backend_path: Path.join(data_dir, "chainstate-rocksdb"),
+          chainstate_generation_id: "",
+          chainstate_status: "missing",
+          native_crypto_backend: Exbitnode.Consensus.Script.Secp256k1.selected_backend_name(),
+          native_crypto_available:
+            Exbitnode.Consensus.Script.Secp256k1.native_backend_available?(),
+          taproot_tweak_backend:
+            Exbitnode.Consensus.Script.Secp256k1.taproot_tweak_backend_name(),
           peer_source: peer_source,
           recommendation: "run_sync_local",
-          binary_gate_status: "not_attempted"
+          binary_gate_status: "not_attempted",
+          updated_at: DateTime.utc_now() |> DateTime.to_iso8601()
         }
       end
 
@@ -32,37 +45,65 @@ defmodule Exbitnode.CLI.NodeStatus do
     0
   end
 
-  def build_status(db_path, chain, data_dir, peer_source) do
+  def build_status(data_dir, chain, peer_source) do
     {lock_busy, lock_pid, lock_cmd} = DatadirLock.inspect_lock(data_dir)
 
-    {:ok, conn} = Database.open(db_path)
+    {:ok, conn} = ChainstateSession.open_native(data_dir, chain)
 
     try do
       sync_state = ProjectTracker.get_sync_state(conn, chain)
       validated_height = ProjectTracker.get_validated_height(conn, chain)
-      header_count = ProjectTracker.header_count(conn)
+      validated_hash = ProjectTracker.get_validated_hash(conn, chain)
+      header_count = ProjectTracker.header_count(conn, chain)
       block_count = ProjectTracker.block_count(conn, chain)
       utxo_count = ProjectTracker.utxo_count(conn, chain)
-      latest_blocker = read_latest_blocker(conn, chain)
-      latest_error = read_latest_error(conn)
+      latest_blocker = ProjectTracker.latest_blocker(conn, chain)
+      latest_error = ProjectTracker.latest_error(conn)
+      stored_block = ProjectTracker.max_stored_block(conn, chain)
+      metadata = ChainstateSession.metadata(conn)
 
       runtime_status =
-        resolve_runtime_status(lock_busy, sync_state && sync_state.sync_status, latest_blocker != nil)
+        resolve_runtime_status(
+          lock_busy,
+          sync_state && sync_state.sync_status,
+          latest_blocker != nil
+        )
 
       base = %{
+        node_id: "exbitnode-native",
+        implementation: "ElixirNode",
+        runtime_surface: runtime_surface(),
         chain: chain,
+        network: chain,
         datadir: data_dir,
-        db_path: db_path,
         runtime_status: runtime_status,
-        sync_status: sync_state && sync_state.sync_status || "starting",
-        header_height: sync_state && sync_state.best_height || 0,
+        sync_status: (sync_state && sync_state.sync_status) || "starting",
+        header_height: (sync_state && sync_state.best_height) || 0,
+        header_hash: (sync_state && sync_state.best_hash) || "",
+        stored_block_height: (stored_block && stored_block.height) || -1,
+        stored_block_hash: (stored_block && stored_block.block_hash) || "",
         validated_height: validated_height,
+        validated_hash: validated_hash,
         header_count: header_count,
         block_count: block_count,
         utxo_count: utxo_count,
+        chainstate_backend: "rocksdb",
+        chainstate_backend_path: metadata["backend_path"],
+        chainstate_generation_id: metadata["generation_id"],
+        chainstate_status: metadata["status"] || "usable",
+        chainstate_utxo_count: utxo_count,
+        native_crypto_backend: Exbitnode.Consensus.Script.Secp256k1.selected_backend_name(),
+        native_crypto_available: Exbitnode.Consensus.Script.Secp256k1.native_backend_available?(),
+        taproot_tweak_backend: Exbitnode.Consensus.Script.Secp256k1.taproot_tweak_backend_name(),
+        block_gap_count:
+          max(((sync_state && sync_state.best_height) || 0) - max(validated_height, 0), 0),
+        lock_status: if(lock_busy, do: "held", else: "free"),
+        updated_at: DateTime.utc_now() |> DateTime.to_iso8601(),
         peer_source: peer_source,
-        recommendation: recommend(runtime_status, validated_height, block_count, latest_blocker != nil),
-        binary_gate_status: binary_gate_status(validated_height, sync_state && sync_state.best_height || 0)
+        recommendation:
+          recommend(runtime_status, validated_height, block_count, latest_blocker != nil),
+        binary_gate_status:
+          binary_gate_status(validated_height, (sync_state && sync_state.best_height) || 0)
       }
 
       base
@@ -71,7 +112,7 @@ defmodule Exbitnode.CLI.NodeStatus do
       |> maybe_put(:current_blocker, latest_blocker)
       |> maybe_put(:last_error, latest_error)
     after
-      Database.close(conn)
+      ChainstateSession.close(conn)
     end
   end
 
@@ -79,52 +120,19 @@ defmodule Exbitnode.CLI.NodeStatus do
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
-  defp resolve_runtime_status(_lock_busy, _sync_status, true), do: "blocked"
-  defp resolve_runtime_status(true, _sync_status, _has_blocker), do: "syncing"
-  defp resolve_runtime_status(_lock_busy, "failed", _has_blocker), do: "failed"
-  defp resolve_runtime_status(_lock_busy, "blocked", _has_blocker), do: "blocked"
-  defp resolve_runtime_status(_lock_busy, status, _has_blocker) when status in [nil, "starting", "not_started"], do: "idle"
-  defp resolve_runtime_status(_lock_busy, _sync_status, _has_blocker), do: "idle"
+  defp resolve_runtime_status(_lock_busy, _sync_status, true), do: "stopped"
+  defp resolve_runtime_status(true, _sync_status, _has_blocker), do: "running"
+  defp resolve_runtime_status(_lock_busy, _status, _has_blocker), do: "not_running"
 
   defp recommend("syncing", _, _, _), do: "leave_running"
   defp recommend("blocked", _, _, _), do: "investigate"
   defp recommend("failed", _, _, _), do: "investigate"
-  defp recommend(_, validated_height, block_count, false) when validated_height >= 0 and block_count > 0, do: "checkpoint"
+
+  defp recommend(_, validated_height, block_count, false)
+       when validated_height >= 0 and block_count > 0, do: "checkpoint"
+
   defp recommend(_, validated_height, _, _) when validated_height < 0, do: "run_sync_local"
   defp recommend(_, _, _, _), do: "run_sync_local"
-
-  defp read_latest_blocker(conn, chain) do
-    case Sql.query_one(
-           conn,
-           """
-           SELECT height, block_hash, txid, input_index, spent_script_pubkey_hex, failure, missing_rule, created_at
-           FROM blockers WHERE chain = ?1 ORDER BY id DESC LIMIT 1
-           """,
-           [chain]
-         ) do
-      [height, block_hash, txid, input_index, script_hex, failure, missing_rule, created_at] ->
-        %{
-          height: height,
-          block_hash: block_hash,
-          txid: txid,
-          input_index: input_index,
-          spent_script_pubkey_hex: script_hex,
-          failure: failure,
-          missing_rule: missing_rule,
-          created_at: created_at
-        }
-
-      _ ->
-        nil
-    end
-  end
-
-  defp read_latest_error(conn) do
-    case Sql.query_one(conn, "SELECT message FROM events WHERE severity = 'error' ORDER BY id DESC LIMIT 1", []) do
-      [message] -> message
-      _ -> nil
-    end
-  end
 
   defp binary_gate_status(validated_height, header_height) do
     cond do
@@ -132,5 +140,9 @@ defmodule Exbitnode.CLI.NodeStatus do
       validated_height >= header_height -> "passed"
       true -> "failed"
     end
+  end
+
+  defp runtime_surface do
+    System.get_env("RUNTIME_SURFACE", "host")
   end
 end

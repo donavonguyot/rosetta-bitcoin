@@ -7,8 +7,52 @@ defmodule Exbitnode.Consensus.Script.Secp256k1 do
   @gx 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
   @gy 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8
 
+  def selected_backend_name do
+    case backend() do
+      :native -> "libsecp256k1"
+      :pure_elixir -> "pure_elixir"
+    end
+  end
+
+  def taproot_tweak_backend_name, do: selected_backend_name()
+
+  def native_backend_available? do
+    Code.ensure_loaded?(:exbitnode_native_secp256k1)
+  end
+
   def verify_der_signature(pubkey, message_hash, signature)
       when is_binary(pubkey) and is_binary(message_hash) and is_binary(signature) do
+    if backend() == :native do
+      verify_native(:verify_der_signature, [pubkey, message_hash, signature])
+    else
+      verify_der_signature_pure(pubkey, message_hash, signature)
+    end
+  end
+
+  def verify_schnorr_signature(pubkey_xonly, message_hash, signature)
+      when is_binary(pubkey_xonly) and is_binary(message_hash) and is_binary(signature) do
+    if backend() == :native do
+      verify_native(:verify_schnorr_signature, [pubkey_xonly, message_hash, signature])
+    else
+      verify_schnorr_signature_pure(pubkey_xonly, message_hash, signature)
+    end
+  end
+
+  def taproot_tweak_xonly(pubkey_xonly, merkle_root \\ <<>>)
+      when is_binary(pubkey_xonly) and is_binary(merkle_root) do
+    if backend() == :native do
+      case apply(:exbitnode_native_secp256k1, :taproot_tweak_xonly, [pubkey_xonly, merkle_root]) do
+        {:ok, tweaked, parity} -> {:ok, tweaked, parity}
+        _ -> {:error, :consensus_invalid}
+      end
+    else
+      {:error, :backend_unavailable}
+    end
+  rescue
+    _ -> {:error, :backend_unavailable}
+  end
+
+  defp verify_der_signature_pure(pubkey, message_hash, signature) do
     if byte_size(message_hash) != 32 do
       false
     else
@@ -30,9 +74,9 @@ defmodule Exbitnode.Consensus.Script.Secp256k1 do
     end
   end
 
-  def verify_schnorr_signature(pubkey_xonly, message_hash, signature)
-      when is_binary(pubkey_xonly) and is_binary(message_hash) and is_binary(signature) do
-    if byte_size(pubkey_xonly) != 32 or byte_size(message_hash) != 32 or byte_size(signature) != 64 do
+  defp verify_schnorr_signature_pure(pubkey_xonly, message_hash, signature) do
+    if byte_size(pubkey_xonly) != 32 or byte_size(message_hash) != 32 or
+         byte_size(signature) != 64 do
       false
     else
       try do
@@ -75,6 +119,23 @@ defmodule Exbitnode.Consensus.Script.Secp256k1 do
     end
   end
 
+  defp backend do
+    case System.get_env("SECP256K1_BACKEND", "pure_elixir") |> String.downcase() do
+      "native" -> :native
+      _ -> :pure_elixir
+    end
+  end
+
+  defp verify_native(function, args) do
+    if native_backend_available?() do
+      apply(:exbitnode_native_secp256k1, function, args) == true
+    else
+      raise "SECP256K1_BACKEND=native requested but native secp256k1 backend is unavailable"
+    end
+  rescue
+    _ -> false
+  end
+
   def lift_x_only_pubkey(x_coord) when is_integer(x_coord) do
     if x_coord >= @p do
       {:error, :invalid}
@@ -103,6 +164,7 @@ defmodule Exbitnode.Consensus.Script.Secp256k1 do
 
     Enum.reduce_while(1..999, nil, fn nonce, _ ->
       k = nonce
+
       case scalar_mult(k, {@gx, @gy}) do
         nil ->
           {:cont, nil}
@@ -121,7 +183,11 @@ defmodule Exbitnode.Consensus.Script.Secp256k1 do
               s = if s > div(@n, 2), do: @n - s, else: s
               r_bytes = trim_integer(r, 32)
               s_bytes = trim_integer(s, 32)
-              der = <<0x30, 4 + byte_size(r_bytes) + byte_size(s_bytes), 0x02, byte_size(r_bytes), r_bytes::binary, 0x02, byte_size(s_bytes), s_bytes::binary>>
+
+              der =
+                <<0x30, 4 + byte_size(r_bytes) + byte_size(s_bytes), 0x02, byte_size(r_bytes),
+                  r_bytes::binary, 0x02, byte_size(s_bytes), s_bytes::binary>>
+
               {:halt, der}
             end
           end

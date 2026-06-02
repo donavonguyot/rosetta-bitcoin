@@ -11,7 +11,8 @@ defmodule Exbitnode.Wire.MessageFramer do
     <<magic::binary-size(4), command_raw::binary-size(12), length::little-signed-32,
       checksum::binary-size(4), _rest::binary>> = data
 
-    command = command_raw |> :binary.bin_to_list() |> Enum.take_while(&(&1 != 0)) |> List.to_string()
+    command =
+      command_raw |> :binary.bin_to_list() |> Enum.take_while(&(&1 != 0)) |> List.to_string()
 
     %{
       magic: magic,

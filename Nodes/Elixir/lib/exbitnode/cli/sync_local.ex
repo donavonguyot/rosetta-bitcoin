@@ -3,7 +3,7 @@ defmodule Exbitnode.CLI.SyncLocal do
 
   alias Exbitnode.Chain.ChainRegistry
   alias Exbitnode.Config.NodePaths
-  alias Exbitnode.Db.{Database, ProjectTracker}
+  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
   alias Exbitnode.P2p.PeerSupervisor
   alias Exbitnode.Storage.BlockStore
   alias Exbitnode.Storage.DatadirLock
@@ -15,25 +15,33 @@ defmodule Exbitnode.CLI.SyncLocal do
     chain_name = NodePaths.chain_from_env()
     chain = ChainRegistry.get(chain_name)
     {host, port} = NodePaths.parse_peers(System.get_env("PEERS"), chain.default_port) |> hd()
-    max_headers = NodePaths.parse_int(System.get_env("HEADERS_MAX"), HeaderSync.default_max_headers())
-    max_batches = NodePaths.parse_int(System.get_env("HEADER_BATCHES_MAX"), HeaderSync.default_header_batches_max())
+
+    max_headers =
+      NodePaths.parse_int(System.get_env("HEADERS_MAX"), HeaderSync.default_max_headers())
+
+    max_batches =
+      NodePaths.parse_int(
+        System.get_env("HEADER_BATCHES_MAX"),
+        HeaderSync.default_header_batches_max()
+      )
+
     max_blocks = NodePaths.parse_int(System.get_env("BLOCKS_MAX"), BlockSync.default_max_blocks())
     skip_blocks = NodePaths.parse_bool(System.get_env("SKIP_BLOCKS"), false)
 
     data_dir = NodePaths.data_dir_from_env()
-    db_path = NodePaths.db_path_from_env(data_dir)
     blocks_dir = Path.join(data_dir, "blocks")
 
     IO.puts("exbitnode sync-local")
     IO.puts("  chain=#{chain.name}")
-    IO.puts("  db=#{db_path}")
+    IO.puts("  chainstate_backend=rocksdb")
+    IO.puts("  chainstate_path=#{Path.join(data_dir, "chainstate-rocksdb")}")
     IO.puts("  peer=#{host}:#{port}")
     IO.puts("  headers_max=#{max_headers} batches_max=#{max_batches}")
     IO.puts("  blocks_max=#{max_blocks} skip_blocks=#{skip_blocks}")
 
     try do
       {:ok, lock} = DatadirLock.acquire(data_dir)
-      {:ok, conn} = Database.open(db_path)
+      {:ok, conn} = ChainstateSession.open_native(data_dir, chain.name)
       block_store = BlockStore.new(blocks_dir, chain.magic)
 
       try do
@@ -43,7 +51,8 @@ defmodule Exbitnode.CLI.SyncLocal do
         case PeerSupervisor.connect(host, port, chain, conn, start_height) do
           {:ok, peer} ->
             try do
-              header_result = HeaderSync.sync_from_peer(peer, chain, conn, max_headers, max_batches)
+              header_result =
+                HeaderSync.sync_from_peer(peer, chain, conn, max_headers, max_batches)
 
               IO.puts("  stored_headers=#{header_result.stored_total}")
               IO.puts("  header_height=#{header_result.best_height}")
@@ -51,7 +60,12 @@ defmodule Exbitnode.CLI.SyncLocal do
 
               block_result =
                 if skip_blocks do
-                  %{downloaded: 0, connected: 0, sync_status: header_result.sync_status, blocker_message: nil}
+                  %{
+                    downloaded: 0,
+                    connected: 0,
+                    sync_status: header_result.sync_status,
+                    blocker_message: nil
+                  }
                 else
                   peer_ctx = %{host: host, port: port, chain: chain, conn: conn}
                   BlockSync.sync_from_peer(peer, chain, conn, block_store, max_blocks, peer_ctx)
@@ -71,7 +85,11 @@ defmodule Exbitnode.CLI.SyncLocal do
 
               IO.puts("  validated_height=#{validated_height}")
               IO.puts("  utxo_count=#{ProjectTracker.utxo_count(conn, chain.name)}")
-              IO.puts("  binary_gate_status=#{binary_gate_status(validated_height, header_result.best_height)}")
+
+              IO.puts(
+                "  binary_gate_status=#{binary_gate_status(validated_height, header_result.best_height)}"
+              )
+
               0
             after
               PeerSupervisor.stop(peer)
@@ -85,7 +103,7 @@ defmodule Exbitnode.CLI.SyncLocal do
         end
       after
         BlockStore.close(block_store)
-        Database.close(conn)
+        ChainstateSession.close(conn)
         DatadirLock.release(lock)
       end
     rescue

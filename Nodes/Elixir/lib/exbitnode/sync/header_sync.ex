@@ -26,12 +26,33 @@ defmodule Exbitnode.Sync.HeaderSync do
 
     peer_height = PeerServer.remote_start_height(peer_pid)
     total_stored = 0
-    sync_loop(peer_pid, chain, conn, max_headers, max_batches, peer_height, total_stored, 0, genesis_hash_internal)
+
+    sync_loop(
+      peer_pid,
+      chain,
+      conn,
+      max_headers,
+      max_batches,
+      peer_height,
+      total_stored,
+      0,
+      genesis_hash_internal
+    )
   end
 
-  defp sync_loop(peer_pid, chain, conn, max_headers, max_batches, peer_height, total_stored, batches, genesis_hash_internal) do
+  defp sync_loop(
+         peer_pid,
+         chain,
+         conn,
+         max_headers,
+         max_batches,
+         peer_height,
+         total_stored,
+         batches,
+         genesis_hash_internal
+       ) do
     state = ProjectTracker.get_sync_state(conn, chain.name)
-    best_height = state && state.best_height || 0
+    best_height = (state && state.best_height) || 0
 
     if should_skip?(peer_height, best_height) do
       mark_headers_current(conn, chain.name)
@@ -41,7 +62,7 @@ defmodule Exbitnode.Sync.HeaderSync do
       remaining = max_headers - total_stored
 
       if remaining <= 0 or batches >= max_batches do
-        result(total_stored, best_height, state && state.sync_status || "headers_syncing")
+        result(total_stored, best_height, (state && state.sync_status) || "headers_syncing")
       else
         case PeerServer.request_headers(peer_pid, locator) do
           {:ok, headers} ->
@@ -57,7 +78,7 @@ defmodule Exbitnode.Sync.HeaderSync do
               total_stored = total_stored + stored
               batches = batches + 1
               state = ProjectTracker.get_sync_state(conn, chain.name)
-              best_height = state && state.best_height || tip_height
+              best_height = (state && state.best_height) || tip_height
 
               cond do
                 stored == 0 ->
@@ -70,7 +91,7 @@ defmodule Exbitnode.Sync.HeaderSync do
 
                 total_stored >= max_headers ->
                   ProjectTracker.upsert_sync_state(conn, chain.name, %{
-                    header_count: ProjectTracker.header_count(conn),
+                    header_count: ProjectTracker.header_count(conn, chain.name),
                     sync_status: "headers_syncing"
                   })
 
@@ -92,7 +113,13 @@ defmodule Exbitnode.Sync.HeaderSync do
             end
 
           {:error, reason} ->
-            ProjectTracker.log_event(conn, "sync", "header request failed: #{inspect(reason)}", "error")
+            ProjectTracker.log_event(
+              conn,
+              "sync",
+              "header request failed: #{inspect(reason)}",
+              "error"
+            )
+
             result(total_stored, best_height, "failed")
         end
       end
@@ -109,9 +136,10 @@ defmodule Exbitnode.Sync.HeaderSync do
 
   defp persist_headers(conn, chain, headers, tip_height, genesis_hash_internal) do
     state = ProjectTracker.get_sync_state(conn, chain)
-    tip_height = state && state.best_height || tip_height
+    tip_height = (state && state.best_height) || tip_height
 
-    tip_hash_hex = ProjectTracker.get_header_hash(conn, chain, tip_height) || Genesis.testnet4_hash()
+    tip_hash_hex =
+      ProjectTracker.get_header_hash(conn, chain, tip_height) || Genesis.testnet4_hash()
 
     tip_internal =
       if tip_height == 0 do
@@ -120,7 +148,8 @@ defmodule Exbitnode.Sync.HeaderSync do
         Hex.reverse(Hex.decode(tip_hash_hex))
       end
 
-    Enum.reduce(headers, {0, tip_height, tip_internal}, fn header, {stored, height, prev_internal} ->
+    Enum.reduce(headers, {0, tip_height, tip_internal}, fn header,
+                                                           {stored, height, prev_internal} ->
       try do
         :ok = HeaderValidator.validate_header(header, prev_internal)
         height = height + 1
@@ -129,7 +158,14 @@ defmodule Exbitnode.Sync.HeaderSync do
         serialized = header |> BlockHeaderCodec.serialize() |> Hex.encode()
 
         inserted? =
-          case ProjectTracker.insert_header(conn, chain, height, block_hash, prev_hash, serialized) do
+          case ProjectTracker.insert_header(
+                 conn,
+                 chain,
+                 height,
+                 block_hash,
+                 prev_hash,
+                 serialized
+               ) do
             :inserted -> true
             :exists -> false
           end
@@ -139,7 +175,7 @@ defmodule Exbitnode.Sync.HeaderSync do
             ProjectTracker.upsert_sync_state(conn, chain, %{
               best_height: height,
               best_hash: block_hash,
-              header_count: ProjectTracker.header_count(conn),
+              header_count: ProjectTracker.header_count(conn, chain),
               sync_status: "headers_syncing"
             })
 
@@ -176,7 +212,7 @@ defmodule Exbitnode.Sync.HeaderSync do
     ProjectTracker.upsert_sync_state(conn, chain, %{
       best_height: state && state.best_height,
       best_hash: state && state.best_hash,
-      header_count: ProjectTracker.header_count(conn),
+      header_count: ProjectTracker.header_count(conn, chain),
       sync_status: "headers_current"
     })
   end

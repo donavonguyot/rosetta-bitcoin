@@ -38,8 +38,8 @@ non_compliant
 | C# | `ports/csharp.docker.json` | `Nodes/CSharp/docker/Dockerfile` | `Nodes/CSharp/docker/docker-compose.yml` | `mcr.microsoft.com/dotnet/sdk:8.0` / `runtime:8.0` | supervisor_partial | strict clean; build/proof passed 2026-06-02 | RocksDB/native evidence exists; first-class blocker diagnostics still pending |
 | Cpp | `ports/cpp.docker.json` | `Nodes/Cpp/docker/Dockerfile` | `Nodes/Cpp/docker/docker-compose.yml` | `ubuntu:24.04` / `ubuntu:24.04` | proof_partial | strict clean; build/proof passed 2026-06-02 | proof_partial: RocksDB-only operational store and proof artifact exist; staged live sync still pending |
 | Python | `ports/python.docker.json` | `Nodes/Python/docker/Dockerfile` | `Nodes/Python/docker/docker-compose.yml` | `python:3.12-slim` | supervisor_partial | bounded native proof/supervisor declared; full replay pending | RocksDB/native-crypto path in progress; full replay/blocker rediscovery out of this plan |
-| TypeScript | `ports/typescript.docker.json` | `Nodes/TypeScript/docker/Dockerfile` | `Nodes/TypeScript/docker/docker-compose.yml` | `node:20-slim` | daemon_only | strict clean; build passed 2026-06-02 | SQLite-based by design; not a native Core storage claim |
-| Elixir | `ports/elixir.docker.json` | missing | missing | missing | missing | strict clean for missing status | no Docker/Core storage evidence |
+| TypeScript | `ports/typescript.docker.json` | `Nodes/TypeScript/docker/Dockerfile` | `Nodes/TypeScript/docker/docker-compose.yml` | `node:20-slim` | supervisor_partial | strict clean before native proof update; rerun after TypeScript Docker native proof changes | RocksDB/native storage proof exists; Docker proof/supervisor targets added |
+| Elixir | `ports/elixir.docker.json` | `Nodes/Elixir/docker/Dockerfile` | `Nodes/Elixir/docker/docker-compose.yml` | `elixir:1.16-otp-26` | proof_partial | strict clean; build/status/proof/smoke passed 2026-06-02 | RocksDB native storage boundary/proof exists; native secp256k1 NIF still unavailable |
 
 ## Reference
 
@@ -141,12 +141,12 @@ runtime_image: python:3.12-slim
 os_family: Debian slim
 package_manager: apt plus pip
 data_volume: pybitnode_data
-proof_volume: missing
-supervisor_volume: missing
+proof_volume: pybitnode_proof_data
+supervisor_volume: pybitnode_supervisor_data
 status_command: python -m pybitnode.healthcheck
-sync_or_proof_command: missing Docker proof target
-supervisor_command: missing Docker supervisor target
-peer_strategy: daemon compose publishes 48333; proof peer strategy not defined
+sync_or_proof_command: docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-rocksdb-proof
+supervisor_command: docker compose -f docker/docker-compose.yml up -d pybitnode-supervisor
+peer_strategy: daemon compose publishes 48333; bounded proof does not use a peer
 dockerignore_status: present
 runtime_surface_status: supervisor_partial
 known_caveats: bounded RocksDB/native-crypto proof and supervisor helpers only; full replay/blocker rediscovery remains a later plan
@@ -161,37 +161,43 @@ base_image: node:20-slim
 runtime_image: node:20-slim
 os_family: Debian slim
 package_manager: apt plus npm
+native_dependencies: rocksdb npm native binding, secp256k1 npm native binding
 data_volume: tsbitnode_data
-proof_volume: missing
-supervisor_volume: missing
-status_command: node dist/cli/healthcheck.js
-sync_or_proof_command: missing Docker proof target
-supervisor_command: missing Docker supervisor target
-peer_strategy: daemon compose publishes 48333; proof peer strategy not defined
+proof_volume: tsbitnode_proof_data or DOCKER_PROOF_VOLUME
+supervisor_volume: tsbitnode_sync_data or DOCKER_SYNC_VOLUME
+status_command: make docker-typescript-sync-status
+sync_or_proof_command: make docker-typescript-native-proof
+supervisor_command: make docker-typescript-sync-supervisor
+stop_marker: .tsbitnode_supervisor_stop
+resume_marker: .tsbitnode_supervisor_resume
+peer_strategy: host.docker.internal:48333 for local Reference proof metadata
 dockerignore_status: present
-runtime_surface_status: daemon_only
-known_caveats: SQLite-based by design; existing host single-writer rules still apply
+runtime_surface_status: supervisor_partial
+known_caveats: external network probe not standardized; native ECDSA is enabled, while Schnorr/Taproot still report pure TypeScript fallback pending a full native wrapper
 ```
 
 ## Elixir
 
 ```text
-dockerfile_path: missing
-compose_path: missing
-base_image: missing
-runtime_image: missing
-os_family: missing
-package_manager: missing
-data_volume: missing
-proof_volume: missing
-supervisor_volume: missing
-status_command: host make node-status only
-sync_or_proof_command: missing
-supervisor_command: missing
-peer_strategy: missing
-dockerignore_status: missing
-runtime_surface_status: missing
-known_caveats: no Docker/Core storage evidence
+dockerfile_path: Nodes/Elixir/docker/Dockerfile
+compose_path: Nodes/Elixir/docker/docker-compose.yml
+base_image: elixir:1.16-otp-26
+runtime_image: elixir:1.16-otp-26
+os_family: Debian-family Elixir image
+package_manager: apt plus mix
+native_dependencies: librocksdb-dev/librocksdb7.8, libsecp256k1-dev/libsecp256k1-1
+data_volume: exbitnode_data
+proof_volume: exbitnode_proof_data
+supervisor_volume: exbitnode_sync_data
+status_command: make docker-status
+sync_or_proof_command: make docker-proof-local
+supervisor_command: make docker-supervisor
+stop_marker: .exbitnode_supervisor_stop
+resume_marker: .exbitnode_supervisor_resume
+peer_strategy: host.docker.internal:48333 by default
+dockerignore_status: present
+runtime_surface_status: proof_partial
+known_caveats: native secp256k1 backend boundary exists but NIF implementation is unavailable; external probe not standardized
 ```
 
 ## Follow-Up Checklist
@@ -231,9 +237,9 @@ agents which proof commands still need to be run and recorded.
 ```text
 validator_default: passed, errors=0, warnings=0
 validator_strict: passed, errors=0, warnings=0
-compose_config: passed for Cpp, CSharp, Java, Python, Reference, TypeScript
-docker_build: passed for Cpp, CSharp, Java, Python, TypeScript
-bounded_proof: passed for Cpp RocksDB storage proof, CSharp native Docker proof, Java native Docker proof
+compose_config: passed for Cpp, CSharp, Elixir, Java, Python, Reference, TypeScript
+docker_build: passed for Cpp, CSharp, Elixir, Java, Python, TypeScript
+bounded_proof: passed for Cpp RocksDB storage proof, CSharp native Docker proof, Elixir RocksDB storage proof, Java native Docker proof
 known_warning: TypeScript image build reports an npm audit vulnerability; build exit remains 0
-not_promoted: no port was promoted to contract_passed; long-running/tip-scale proofs remain separate
+not_promoted: no port was promoted to contract_passed; Elixir native secp256k1 NIF and long-running/tip-scale proofs remain separate
 ```

@@ -1,0 +1,27 @@
+services:
+  exbitnode-sync-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      CHAINSTATE_BACKEND: rocksdb
+      PEERS: ${PEERS:-host.docker.internal:48333}
+      HEADERS_MAX: ${HEADERS_MAX:-200}
+      HEADER_BATCHES_MAX: ${HEADER_BATCHES_MAX:-1}
+      BLOCKS_MAX: ${BLOCKS_MAX:-2}
+      SECP256K1_BACKEND: ${SECP256K1_BACKEND:-native}
+      RUNTIME_SURFACE: ${RUNTIME_SURFACE:-docker}
+    volumes:
+      - exbitnode_proof_data:/data
+
+volumes:
+  exbitnode_data:
+    name: ${DOCKER_DATA_VOLUME:-exbitnode_data}
+  exbitnode_proof_data:
+    name: ${DOCKER_PROOF_VOLUME:-exbitnode_proof_data}
+  exbitnode_sync_data:
+    name: ${DOCKER_SYNC_VOLUME:-exbitnode_sync_data}

@@ -25,5 +25,46 @@ services:
       timeout: 5s
       retries: 3
 
+  tsbitnode-sync-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      PEERS: ${PEERS:-host.docker.internal:48333}
+      SECP256K1_BACKEND: ${SECP256K1_BACKEND:-native}
+    volumes:
+      - tsbitnode_proof_data:/data
+    command:
+      [
+        "node",
+        "dist/cli/storageProof.js",
+        "--datadir",
+        "/data",
+        "--proof-path",
+        "/data/typescript_storage_gate_docker.json",
+        "--node-id",
+        "typescriptnode-docker-rocksdb-storage"
+      ]
+
+  tsbitnode-sync-status:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      SECP256K1_BACKEND: ${SECP256K1_BACKEND:-native}
+    volumes:
+      - tsbitnode_sync_data:/data
+    command: ["node", "dist/cli/nativeStatus.js", "--datadir", "/data"]
+
 volumes:
   tsbitnode_data:
+  tsbitnode_proof_data:
+    name: ${DOCKER_PROOF_VOLUME:-tsbitnode_proof_data}
+  tsbitnode_sync_data:
+    name: ${DOCKER_SYNC_VOLUME:-tsbitnode_sync_data}

@@ -20,7 +20,9 @@ defmodule Exbitnode.Consensus.Tx.Transaction do
 
   defstruct [:version, :inputs, :outputs, :lock_time, :witness]
 
-  def coinbase?(%__MODULE__{inputs: [%TxIn{previous_output: %OutPoint{hash: hash, index: index}} | _]}) do
+  def coinbase?(%__MODULE__{
+        inputs: [%TxIn{previous_output: %OutPoint{hash: hash, index: index}} | _]
+      }) do
     zero_hash = :binary.copy(<<0>>, 32)
     hash == zero_hash and index == 0xFFFF_FFFF
   end

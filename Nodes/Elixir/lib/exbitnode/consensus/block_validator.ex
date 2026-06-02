@@ -10,7 +10,8 @@ defmodule Exbitnode.Consensus.BlockValidator do
   alias Exbitnode.Messages.BlockHeaderCodec
 
   def validate_block(payload, expected_prev_internal, expected_hash_internal)
-      when is_binary(payload) and is_binary(expected_prev_internal) and is_binary(expected_hash_internal) do
+      when is_binary(payload) and is_binary(expected_prev_internal) and
+             is_binary(expected_hash_internal) do
     block = BlockDeserializer.deserialize(payload)
     hash = BlockHeaderCodec.block_hash(block.header)
 

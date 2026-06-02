@@ -6,7 +6,14 @@ defmodule Exbitnode.Storage.BlockStore do
   def new(blocks_dir, magic) when is_binary(blocks_dir) and is_binary(magic) do
     File.mkdir_p!(blocks_dir)
     file_number = find_latest_file_number(blocks_dir)
-    store = %__MODULE__{blocks_dir: blocks_dir, magic: magic, file_number: file_number, file_handle: nil}
+
+    store = %__MODULE__{
+      blocks_dir: blocks_dir,
+      magic: magic,
+      file_number: file_number,
+      file_handle: nil
+    }
+
     open_current_file(store, true)
   end
 
@@ -18,7 +25,9 @@ defmodule Exbitnode.Storage.BlockStore do
     record = store.magic <> <<byte_size(payload)::little-signed-32>> <> payload
     IO.binwrite(store.file_handle, record)
     :file.sync(store.file_handle)
-    {store, %{file_number: store.file_number, file_offset: offset, block_size: byte_size(payload)}}
+
+    {store,
+     %{file_number: store.file_number, file_offset: offset, block_size: byte_size(payload)}}
   end
 
   def read_block(%__MODULE__{} = store, file_number, offset, size) do
@@ -75,7 +84,10 @@ defmodule Exbitnode.Storage.BlockStore do
         |> Enum.filter(&String.starts_with?(&1, "blk"))
         |> Enum.filter(&String.ends_with?(&1, ".dat"))
         |> Enum.map(fn name ->
-          name |> String.replace_prefix("blk", "") |> String.replace_suffix(".dat", "") |> String.to_integer()
+          name
+          |> String.replace_prefix("blk", "")
+          |> String.replace_suffix(".dat", "")
+          |> String.to_integer()
         end)
         |> Enum.max(fn -> 0 end)
 

@@ -29,6 +29,7 @@ defmodule Exbitnode.Consensus.Block.BlockDeserializer do
         end)
         |> then(fn {acc, off} -> {Enum.reverse(acc), off} end)
       end
+
     %Block{header: header, transactions: transactions}
   end
 end

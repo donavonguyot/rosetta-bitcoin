@@ -26,7 +26,10 @@ defmodule Exbitnode.Consensus.Script.Sighash do
           tx.inputs
         end
 
-      parts = [WireSerialize.pack_int32_le(tx.version), WireSerialize.write_compact_size(length(inputs))]
+      parts = [
+        WireSerialize.pack_int32_le(tx.version),
+        WireSerialize.write_compact_size(length(inputs))
+      ]
 
       parts =
         Enum.with_index(inputs)
@@ -78,7 +81,10 @@ defmodule Exbitnode.Consensus.Script.Sighash do
               ]
         end
 
-      parts = parts ++ [WireSerialize.pack_int32_le(tx.lock_time), WireSerialize.pack_int32_le(sighash_type)]
+      parts =
+        parts ++
+          [WireSerialize.pack_int32_le(tx.lock_time), WireSerialize.pack_int32_le(sighash_type)]
+
       CryptoUtil.double_sha256(IO.iodata_to_binary(parts))
     end
   end
@@ -94,7 +100,11 @@ defmodule Exbitnode.Consensus.Script.Sighash do
       else
         prevouts =
           Enum.reduce(tx.inputs, [], fn input, acc ->
-            acc ++ [input.previous_output.hash, WireSerialize.pack_int32_le(input.previous_output.index)]
+            acc ++
+              [
+                input.previous_output.hash,
+                WireSerialize.pack_int32_le(input.previous_output.index)
+              ]
           end)
 
         CryptoUtil.double_sha256(IO.iodata_to_binary(prevouts))
@@ -121,7 +131,9 @@ defmodule Exbitnode.Consensus.Script.Sighash do
           :binary.copy(<<0>>, 32)
 
         true ->
-          outputs = Enum.reduce(tx.outputs, [], fn output, acc -> acc ++ [serialize_output(output)] end)
+          outputs =
+            Enum.reduce(tx.outputs, [], fn output, acc -> acc ++ [serialize_output(output)] end)
+
           CryptoUtil.double_sha256(IO.iodata_to_binary(outputs))
       end
 
@@ -165,7 +177,12 @@ defmodule Exbitnode.Consensus.Script.Sighash do
     end
 
     annex_present = annex != nil
-    output_mode = if hash_type == @taproot_sighash_default, do: @taproot_sighash_all, else: Bitwise.band(hash_type, 0x03)
+
+    output_mode =
+      if hash_type == @taproot_sighash_default,
+        do: @taproot_sighash_all,
+        else: Bitwise.band(hash_type, 0x03)
+
     anyone_can_pay = Bitwise.band(hash_type, 0x80) != 0
 
     body = [
@@ -211,11 +228,15 @@ defmodule Exbitnode.Consensus.Script.Sighash do
     body =
       cond do
         output_mode == @taproot_sighash_all ->
-          outs_blob = Enum.reduce(tx.outputs, [], fn output, acc -> acc ++ [serialize_output(output)] end)
+          outs_blob =
+            Enum.reduce(tx.outputs, [], fn output, acc -> acc ++ [serialize_output(output)] end)
+
           body ++ [sha256_concat(outs_blob)]
 
         output_mode == @taproot_sighash_single ->
-          if input_index >= length(tx.outputs), do: raise(ArgumentError, "SIGHASH_SINGLE without matching output")
+          if input_index >= length(tx.outputs),
+            do: raise(ArgumentError, "SIGHASH_SINGLE without matching output")
+
           body
 
         true ->
@@ -245,7 +266,14 @@ defmodule Exbitnode.Consensus.Script.Sighash do
     body =
       if annex_present do
         annex_bin = annex || <<>>
-        body ++ [:crypto.hash(:sha256, WireSerialize.write_compact_size(byte_size(annex_bin)) <> annex_bin)]
+
+        body ++
+          [
+            :crypto.hash(
+              :sha256,
+              WireSerialize.write_compact_size(byte_size(annex_bin)) <> annex_bin
+            )
+          ]
       else
         body
       end

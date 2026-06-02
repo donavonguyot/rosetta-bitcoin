@@ -277,9 +277,16 @@ binary_gate_status: failed | not_attempted | passed
 ## TypeScript constraints
 
 - **NO** external Bitcoin libraries (no `bitcoinjs-lib`, etc.).
-- **NO runtime npm dependencies** — only Node built-ins: `node:sqlite`, `node:crypto`, `node:net`, `node:http`.
-- Dev deps only: TypeScript, Vitest, tsx.
-- **Docker:** generic `docker-compose`; works on OrbStack.
+- TypeScript **Core/native mode may use runtime npm dependencies** when they are
+  tightly scoped native infrastructure bindings for RocksDB and
+  `libsecp256k1`. These dependencies must not provide Bitcoin consensus, wallet,
+  P2P, transaction, script, or chain logic.
+- Pure TypeScript crypto/storage paths may remain as comparators or legacy
+  tools, but Core proofs must report the selected RocksDB and native crypto
+  backends and must not open SQLite for operational truth.
+- **Docker:** generic `docker-compose`; works on OrbStack. Native/Core Docker
+  proof paths must install the same RocksDB and `libsecp256k1` runtime
+  dependencies used by host proof paths.
 
 ---
 

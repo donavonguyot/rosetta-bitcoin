@@ -21,7 +21,6 @@ defmodule Exbitnode.MixProject do
 
   defp deps do
     [
-      {:exqlite, "~> 0.27"},
       {:jason, "~> 1.4"}
     ]
   end
@@ -29,7 +28,8 @@ defmodule Exbitnode.MixProject do
   defp aliases do
     [
       "node.status": ["run -e 'Exbitnode.CLI.NodeStatus.run([])'"],
-      "sync.local": ["run -e 'Exbitnode.CLI.SyncLocal.run([])'"]
+      "sync.local": ["run -e 'Exbitnode.CLI.SyncLocal.run([])'"],
+      "storage.proof": ["run -e 'Exbitnode.CLI.StorageProof.run([])'"]
     ]
   end
 end

@@ -5,6 +5,7 @@
 
 # Local datadir and databases
 /data-elixir/
+/data-elixir-*/
 *.db
 *.sqlite
 *.sqlite3

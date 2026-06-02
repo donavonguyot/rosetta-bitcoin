@@ -62,9 +62,11 @@ defmodule Exbitnode.Consensus.HeaderValidatorTest do
   test "pow target check uses header hash" do
     header = %{Genesis.testnet4() | nonce: 0}
 
-    assert_raise Exbitnode.Consensus.HeaderValidationError, "header does not meet proof-of-work target", fn ->
-      HeaderValidator.validate_header(header, <<0::256>>)
-    end
+    assert_raise Exbitnode.Consensus.HeaderValidationError,
+                 "header does not meet proof-of-work target",
+                 fn ->
+                   HeaderValidator.validate_header(header, <<0::256>>)
+                 end
 
     assert BlockHeaderCodec.block_hash(Genesis.testnet4()) != BlockHeaderCodec.block_hash(header)
   end
@@ -85,27 +87,28 @@ defmodule Exbitnode.Wire.WireSerializeTest do
   end
 end
 
-defmodule Exbitnode.Db.DatabaseTest do
+defmodule Exbitnode.Db.ChainstateSessionTest do
   use ExUnit.Case, async: false
 
   alias Exbitnode.Chain.Genesis
-  alias Exbitnode.Db.{Database, ProjectTracker}
+  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
 
   setup do
-    path = Path.join(System.tmp_dir!(), "exbitnode_test_#{:rand.uniform(1_000_000)}.db")
-    on_exit(fn -> File.rm(path) end)
-    {:ok, conn} = Database.open(path)
-    on_exit(fn -> Database.close(conn) end)
+    path = Path.join(System.tmp_dir!(), "exbitnode_test_#{:rand.uniform(1_000_000)}")
+    on_exit(fn -> File.rm_rf(path) end)
+    {:ok, conn} = ChainstateSession.open_native(path, "testnet4")
+    on_exit(fn -> ChainstateSession.close(conn) end)
     {:ok, conn: conn, path: path}
   end
 
-  test "schema initializes and stores genesis", %{conn: conn} do
+  test "native chainstate initializes and stores genesis", %{conn: conn, path: path} do
     ProjectTracker.ensure_genesis(conn, "testnet4", Genesis.testnet4(), Genesis.testnet4_hash())
-    assert ProjectTracker.header_count(conn) == 1
+    assert ProjectTracker.header_count(conn, "testnet4") == 1
     assert ProjectTracker.get_header_hash(conn, "testnet4", 0) == Genesis.testnet4_hash()
     state = ProjectTracker.get_sync_state(conn, "testnet4")
     assert state.best_height == 0
     assert state.sync_status == "starting"
+    refute File.exists?(Path.join(path, "exbitnode.db"))
   end
 end
 
@@ -129,17 +132,17 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
   alias Exbitnode.Consensus.Block.BlockDeserializer
   alias Exbitnode.Consensus.Connect.BlockConnector
   alias Exbitnode.Consensus.Merkle
-  alias Exbitnode.Db.{Database, ProjectTracker}
+  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
   alias Exbitnode.Messages.BlockHeaderCodec
   alias Exbitnode.Consensus.Tx.{OutPoint, Transaction, TxIn, TxOut, TransactionParser}
   alias Exbitnode.Util.Hex
   alias Exbitnode.Wire.WireSerialize
 
   setup do
-    path = Path.join(System.tmp_dir!(), "exbitnode_connect_#{:rand.uniform(1_000_000)}.db")
-    on_exit(fn -> File.rm(path) end)
-    {:ok, conn} = Database.open(path)
-    on_exit(fn -> Database.close(conn) end)
+    path = Path.join(System.tmp_dir!(), "exbitnode_connect_#{:rand.uniform(1_000_000)}")
+    on_exit(fn -> File.rm_rf(path) end)
+    {:ok, conn} = ChainstateSession.open_native(path, "testnet4")
+    on_exit(fn -> ChainstateSession.close(conn) end)
     ProjectTracker.ensure_genesis(conn, "testnet4", Genesis.testnet4(), Genesis.testnet4_hash())
     {:ok, conn: conn}
   end
@@ -161,7 +164,10 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
 
     header = %{Genesis.testnet4() | merkle_root: Merkle.block_merkle_root([coinbase])}
     tx_bytes = TransactionParser.serialize(coinbase, false)
-    payload = BlockHeaderCodec.serialize(header) <> WireSerialize.write_compact_size(1) <> tx_bytes
+
+    payload =
+      BlockHeaderCodec.serialize(header) <> WireSerialize.write_compact_size(1) <> tx_bytes
+
     block = BlockDeserializer.deserialize(payload)
     assert length(block.transactions) == 1
     assert Transaction.coinbase?(hd(block.transactions))
@@ -185,7 +191,9 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
 
     header = %{Genesis.testnet4() | merkle_root: Merkle.block_merkle_root([coinbase])}
     tx_bytes = TransactionParser.serialize(coinbase, false)
-    payload = BlockHeaderCodec.serialize(header) <> WireSerialize.write_compact_size(1) <> tx_bytes
+
+    payload =
+      BlockHeaderCodec.serialize(header) <> WireSerialize.write_compact_size(1) <> tx_bytes
 
     result =
       BlockConnector.connect(
@@ -214,16 +222,26 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
           sequence: 0xFFFF_FFFF
         }
       ],
-      outputs: [%TxOut{value: 50_000_000_000, script_pubkey: <<0x51, 0x20>> <> :binary.copy(<<0>>, 32)}],
+      outputs: [
+        %TxOut{value: 50_000_000_000, script_pubkey: <<0x51, 0x20>> <> :binary.copy(<<0>>, 32)}
+      ],
       lock_time: 0,
       witness: []
     }
 
     prev_internal = BlockHeaderCodec.block_hash(Genesis.testnet4())
-    header1 = %{Genesis.testnet4() | prev_block: prev_internal, merkle_root: Merkle.block_merkle_root([coinbase])}
+
+    header1 = %{
+      Genesis.testnet4()
+      | prev_block: prev_internal,
+        merkle_root: Merkle.block_merkle_root([coinbase])
+    }
+
     hash1_internal = BlockHeaderCodec.block_hash(header1)
     tx_bytes = TransactionParser.serialize(coinbase, false)
-    payload1 = BlockHeaderCodec.serialize(header1) <> WireSerialize.write_compact_size(1) <> tx_bytes
+
+    payload1 =
+      BlockHeaderCodec.serialize(header1) <> WireSerialize.write_compact_size(1) <> tx_bytes
 
     BlockConnector.connect(conn, "testnet4", 1, payload1, prev_internal, hash1_internal)
     assert ProjectTracker.get_validated_height(conn, "testnet4") == 1
@@ -246,18 +264,28 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
           sequence: 0xFFFF_FFFF
         }
       ],
-      outputs: [%TxOut{value: 50_000_000_000, script_pubkey: <<0x51, 0x20>> <> :binary.copy(<<0>>, 32)}],
+      outputs: [
+        %TxOut{value: 50_000_000_000, script_pubkey: <<0x51, 0x20>> <> :binary.copy(<<0>>, 32)}
+      ],
       lock_time: 0,
       witness: []
     }
 
     prev_internal = BlockHeaderCodec.block_hash(Genesis.testnet4())
-    header1 = %{Genesis.testnet4() | prev_block: prev_internal, merkle_root: Merkle.block_merkle_root([coinbase])}
+
+    header1 = %{
+      Genesis.testnet4()
+      | prev_block: prev_internal,
+        merkle_root: Merkle.block_merkle_root([coinbase])
+    }
+
     hash1_internal = BlockHeaderCodec.block_hash(header1)
     hash1_hex = hash1_internal |> Hex.reverse() |> Hex.encode()
 
     tx_bytes = TransactionParser.serialize(coinbase, false)
-    payload1 = BlockHeaderCodec.serialize(header1) <> WireSerialize.write_compact_size(1) <> tx_bytes
+
+    payload1 =
+      BlockHeaderCodec.serialize(header1) <> WireSerialize.write_compact_size(1) <> tx_bytes
 
     ProjectTracker.insert_header(conn, "testnet4", 1, hash1_hex, Genesis.testnet4_hash(), "")
     BlockConnector.connect(conn, "testnet4", 1, payload1, prev_internal, hash1_internal)
@@ -279,10 +307,18 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
       witness: []
     }
 
-    header2 = %{header1 | prev_block: hash1_internal, merkle_root: Merkle.block_merkle_root([coinbase2])}
+    header2 = %{
+      header1
+      | prev_block: hash1_internal,
+        merkle_root: Merkle.block_merkle_root([coinbase2])
+    }
+
     hash2_internal = BlockHeaderCodec.block_hash(header2)
     hash2_hex = hash2_internal |> Hex.reverse() |> Hex.encode()
-    payload2 = BlockHeaderCodec.serialize(header2) <> WireSerialize.write_compact_size(1) <> TransactionParser.serialize(coinbase2, false)
+
+    payload2 =
+      BlockHeaderCodec.serialize(header2) <>
+        WireSerialize.write_compact_size(1) <> TransactionParser.serialize(coinbase2, false)
 
     ProjectTracker.insert_header(conn, "testnet4", 2, hash2_hex, hash1_hex, "")
     BlockConnector.connect(conn, "testnet4", 2, payload2, hash1_internal, hash2_internal)
@@ -317,7 +353,9 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
 
     header = %{Genesis.testnet4() | merkle_root: Merkle.block_merkle_root([coinbase])}
     tx_bytes = TransactionParser.serialize(coinbase, false)
-    payload = BlockHeaderCodec.serialize(header) <> WireSerialize.write_compact_size(1) <> tx_bytes
+
+    payload =
+      BlockHeaderCodec.serialize(header) <> WireSerialize.write_compact_size(1) <> tx_bytes
 
     BlockConnector.connect(
       conn,
@@ -330,12 +368,7 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
   end
 
   defp snapshot_utxos(conn) do
-    Exbitnode.Db.Sql.query_all(
-      conn,
-      "SELECT txid, vout, height, value_sats FROM utxos WHERE chain = 'testnet4' ORDER BY txid, vout",
-      []
-    )
-    |> Enum.sort()
+    ProjectTracker.utxo_snapshot(conn, "testnet4")
   end
 end
 
@@ -366,7 +399,13 @@ defmodule Exbitnode.Consensus.ScriptVerifyTest do
     spent_prevouts = [{64_300_000_000, prev_spk}]
 
     assert :ok =
-             ScriptVerify.verify_transaction_input(tx, 0, prev_spk, 64_300_000_000, spent_prevouts)
+             ScriptVerify.verify_transaction_input(
+               tx,
+               0,
+               prev_spk,
+               64_300_000_000,
+               spent_prevouts
+             )
   end
 end
 
@@ -386,13 +425,13 @@ defmodule Exbitnode.Db.ProjectTrackerTest do
   use ExUnit.Case, async: false
 
   alias Exbitnode.Chain.Genesis
-  alias Exbitnode.Db.{Database, ProjectTracker, Sql}
+  alias Exbitnode.Db.{ChainstateSession, ProjectTracker}
 
   setup do
-    path = Path.join(System.tmp_dir!(), "exbitnode_tracker_#{:rand.uniform(1_000_000)}.db")
-    on_exit(fn -> File.rm(path) end)
-    {:ok, conn} = Database.open(path)
-    on_exit(fn -> Database.close(conn) end)
+    path = Path.join(System.tmp_dir!(), "exbitnode_tracker_#{:rand.uniform(1_000_000)}")
+    on_exit(fn -> File.rm_rf(path) end)
+    {:ok, conn} = ChainstateSession.open_native(path, "testnet4")
+    on_exit(fn -> ChainstateSession.close(conn) end)
     {:ok, conn: conn}
   end
 
@@ -428,12 +467,7 @@ defmodule Exbitnode.Db.ProjectTrackerTest do
 
     :ok = ProjectTracker.replace_utxo_undo(conn, "testnet4", 101, entries)
 
-    assert ["abc123", 0, 1_000, 50] =
-             Sql.query_one(
-               conn,
-               "SELECT txid, vout, value_sats, utxo_height FROM utxo_undo WHERE chain = ?1 AND height = ?2",
-               ["testnet4", 101]
-             )
+    assert ProjectTracker.take_utxo_undo(conn, "testnet4", 101) == entries
   end
 
   test "take_utxo_undo returns and clears journal rows", %{conn: conn} do
@@ -452,6 +486,6 @@ defmodule Exbitnode.Db.ProjectTrackerTest do
 
     :ok = ProjectTracker.replace_utxo_undo(conn, "testnet4", 7, entries)
     assert ProjectTracker.take_utxo_undo(conn, "testnet4", 7) == entries
-    assert [] = Sql.query_all(conn, "SELECT 1 FROM utxo_undo WHERE chain = ?1 AND height = ?2", ["testnet4", 7])
+    assert [] = ProjectTracker.take_utxo_undo(conn, "testnet4", 7)
   end
 end

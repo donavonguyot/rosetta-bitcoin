@@ -18,7 +18,12 @@ defmodule Exbitnode.P2p.PeerSession do
   ]
 
   def connect(host, port, chain, conn, start_height) do
-    case :gen_tcp.connect(String.to_charlist(host), port, [:binary, active: false, packet: 0], 30_000) do
+    case :gen_tcp.connect(
+           String.to_charlist(host),
+           port,
+           [:binary, active: false, packet: 0],
+           30_000
+         ) do
       {:ok, socket} ->
         stream = MessageStream.new(socket, chain.magic)
 
@@ -68,7 +73,8 @@ defmodule Exbitnode.P2p.PeerSession do
     end
   end
 
-  def request_block(%__MODULE__{} = session, block_hash_internal) when is_binary(block_hash_internal) do
+  def request_block(%__MODULE__{} = session, block_hash_internal)
+      when is_binary(block_hash_internal) do
     Enum.reduce_while(
       [InventoryMessages.msg_witness_block(), InventoryMessages.msg_block()],
       {:error, :notfound},
@@ -95,7 +101,11 @@ defmodule Exbitnode.P2p.PeerSession do
            InventoryMessages.serialize_getdata([inv])
          ) do
       {:ok, stream} ->
-        read_block_response(%{session | stream: stream}, block_hash_internal, System.monotonic_time(:millisecond) + 120_000)
+        read_block_response(
+          %{session | stream: stream},
+          block_hash_internal,
+          System.monotonic_time(:millisecond) + 120_000
+        )
 
       {:error, reason} ->
         {:error, reason}
