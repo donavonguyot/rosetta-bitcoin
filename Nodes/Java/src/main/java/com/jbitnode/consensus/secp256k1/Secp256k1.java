@@ -9,9 +9,6 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import org.bouncycastle.asn1.sec.SECNamedCurves;
-import org.bouncycastle.asn1.x9.X9ECParameters;
-import org.bouncycastle.math.ec.ECPoint;
 
 /** secp256k1 ECDSA verify/sign (mirrors TypeScriptNode/src/consensus/secp256k1.ts). */
 public final class Secp256k1 {
@@ -43,7 +40,6 @@ public final class Secp256k1 {
 
   public enum Backend {
     PURE_JAVA,
-    BOUNCYCASTLE,
     NATIVE
   }
 
@@ -61,18 +57,14 @@ public final class Secp256k1 {
     if ("native".equalsIgnoreCase(raw)) {
       return NativeSecp256k1.INSTANCE;
     }
-    if ("bouncycastle".equalsIgnoreCase(raw) || "bc".equalsIgnoreCase(raw)) {
-      return BouncyCastleSecp256k1Backend.INSTANCE;
-    }
     return PureJavaSecp256k1Backend.INSTANCE;
   }
 
   /**
-   * Enforces the native libsecp256k1 backend for live node runtimes. The pure-Java and
-   * BouncyCastle backends exist only as test/reference comparators; the node must not validate
-   * consensus with them. Call from node entrypoints before any block connect so the process fails
-   * fast (rather than silently mis-verifying) when native is unavailable or another backend was
-   * requested.
+   * Enforces the native libsecp256k1 backend for live node runtimes. The pure-Java backend exists
+   * only as a local test/reference comparator; the node must not validate consensus with it. Call
+   * from node entrypoints before any block connect so the process fails fast when native is
+   * unavailable or another backend was requested.
    */
   public static void ensureNativeRuntimeBackend(Map<String, String> env) {
     String requested =
@@ -81,7 +73,7 @@ public final class Secp256k1 {
       throw new Secp256k1Error(
           "node runtime requires SECP256K1_BACKEND=native (libsecp256k1); got '"
               + requested
-              + "' — pure_java/bouncycastle are test-only comparators");
+              + "' — pure_java is a test-only comparator");
     }
     if (!nativeBackendAvailable()) {
       throw new Secp256k1Error(
@@ -94,9 +86,6 @@ public final class Secp256k1 {
   public static String selectedBackendName() {
     if (backend == NativeSecp256k1.INSTANCE) {
       return "libsecp256k1-acinq";
-    }
-    if (backend == BouncyCastleSecp256k1Backend.INSTANCE) {
-      return "bouncycastle";
     }
     return "pure_java";
   }
@@ -126,7 +115,6 @@ public final class Secp256k1 {
     backend =
         switch (backendForTest) {
           case PURE_JAVA -> PureJavaSecp256k1Backend.INSTANCE;
-          case BOUNCYCASTLE -> BouncyCastleSecp256k1Backend.INSTANCE;
           case NATIVE -> NativeSecp256k1.INSTANCE;
         };
   }
@@ -472,99 +460,6 @@ public final class Secp256k1 {
     public TaprootTweakResult taprootTweakPubkeyXonly(
         byte[] internalXonly, byte[] merkleRoot, VerificationCache cache) {
       return taprootTweakPubkeyXonlyPureJava(internalXonly, merkleRoot, cache);
-    }
-  }
-
-  private enum BouncyCastleSecp256k1Backend implements Secp256k1Backend {
-    INSTANCE;
-
-    private static final X9ECParameters SECP = SECNamedCurves.getByName("secp256k1");
-    private static final org.bouncycastle.math.ec.ECCurve CURVE = SECP.getCurve();
-    private static final ECPoint G = SECP.getG();
-
-    @Override
-    public boolean verifyDerSignature(
-        byte[] pubkey, byte[] messageHash, BigInteger r, BigInteger s, VerificationCache cache) {
-      try {
-        if (messageHash.length != 32) {
-          throw new Secp256k1Error("message hash must be 32 bytes");
-        }
-        ECPoint q = CURVE.decodePoint(pubkey).normalize();
-        BigInteger z = new BigInteger(1, messageHash);
-        BigInteger w = modInv(s, N);
-        BigInteger u1 = mod(z.multiply(w), N);
-        BigInteger u2 = mod(r.multiply(w), N);
-        ECPoint combined = G.multiply(u1).add(q.multiply(u2)).normalize();
-        if (combined.isInfinity()) {
-          return false;
-        }
-        return mod(combined.getAffineXCoord().toBigInteger(), N).equals(r);
-      } catch (RuntimeException error) {
-        return false;
-      }
-    }
-
-    @Override
-    public boolean verifySchnorrSignature(
-        byte[] pubkeyXonly, byte[] messageHash, byte[] signature, VerificationCache cache) {
-      if (pubkeyXonly.length != 32 || messageHash.length != 32 || signature.length != 64) {
-        return false;
-      }
-      try {
-        byte[] compressed = new byte[33];
-        compressed[0] = 0x02;
-        System.arraycopy(pubkeyXonly, 0, compressed, 1, 32);
-        ECPoint pubkeyPoint = CURVE.decodePoint(compressed).normalize();
-        BigInteger rx = new BigInteger(1, Arrays.copyOfRange(signature, 0, 32));
-        BigInteger s = new BigInteger(1, Arrays.copyOfRange(signature, 32, 64));
-        if (rx.compareTo(P) >= 0 || s.compareTo(N) >= 0) {
-          return false;
-        }
-        byte[] challengeInput = new byte[96];
-        System.arraycopy(signature, 0, challengeInput, 0, 32);
-        System.arraycopy(pubkeyXonly, 0, challengeInput, 32, 32);
-        System.arraycopy(messageHash, 0, challengeInput, 64, 32);
-        BigInteger e =
-            mod(
-                new BigInteger(1, ScriptHash.bitcoinTaggedHash("BIP0340/challenge", challengeInput)),
-                N);
-        ECPoint rPoint = G.multiply(s).add(pubkeyPoint.multiply(mod(N.subtract(e), N))).normalize();
-        if (rPoint.isInfinity()) {
-          return false;
-        }
-        BigInteger x = rPoint.getAffineXCoord().toBigInteger();
-        BigInteger y = rPoint.getAffineYCoord().toBigInteger();
-        return !y.testBit(0) && mod(x, P).equals(mod(rx, P));
-      } catch (RuntimeException error) {
-        return false;
-      }
-    }
-
-    @Override
-    public TaprootTweakResult taprootTweakPubkeyXonly(
-        byte[] internalXonly, byte[] merkleRoot, VerificationCache cache) {
-      if (internalXonly.length != 32) {
-        throw new Secp256k1Error("internal key must be 32 bytes");
-      }
-      try {
-        BigInteger tweak = taprootTweakScalar(internalXonly, merkleRoot);
-        byte[] compressed = new byte[33];
-        compressed[0] = 0x02;
-        System.arraycopy(internalXonly, 0, compressed, 1, 32);
-        ECPoint internal = CURVE.decodePoint(compressed).normalize();
-        ECPoint tweaked = internal.add(G.multiply(tweak)).normalize();
-        if (tweaked.isInfinity()) {
-          throw new Secp256k1Error("taproot tweak failed");
-        }
-        BigInteger x = tweaked.getAffineXCoord().toBigInteger();
-        BigInteger y = tweaked.getAffineYCoord().toBigInteger();
-        int parity = y.testBit(0) ? 1 : 0;
-        return new TaprootTweakResult(parity, toFixedBytes(x, 32));
-      } catch (Secp256k1Error error) {
-        throw error;
-      } catch (RuntimeException error) {
-        throw new Secp256k1Error("invalid internal x-only key");
-      }
     }
   }
 

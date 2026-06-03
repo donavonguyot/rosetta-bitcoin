@@ -16,17 +16,11 @@
     <junit.version>5.11.4</junit.version>
     <jackson.version>2.18.2</jackson.version>
     <jacoco.version>0.8.14</jacoco.version>
-    <bouncycastle.version>1.79</bouncycastle.version>
     <rocksdb.version>10.10.1.1</rocksdb.version>
     <acinq.secp256k1.version>0.22.0</acinq.secp256k1.version>
   </properties>
 
   <dependencies>
-    <dependency>
-      <groupId>org.bouncycastle</groupId>
-      <artifactId>bcprov-jdk18on</artifactId>
-      <version>${bouncycastle.version}</version>
-    </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>

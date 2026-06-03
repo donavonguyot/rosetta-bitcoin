@@ -3,17 +3,9 @@ package com.jbitnode.consensus.script;
 import com.jbitnode.util.Hex;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.Security;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 /** Hash helpers for script evaluation (HASH160 = RIPEMD160(SHA256(x))). */
 public final class ScriptHash {
-
-  static {
-    if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-      Security.addProvider(new BouncyCastleProvider());
-    }
-  }
 
   private ScriptHash() {}
 
@@ -57,11 +49,6 @@ public final class ScriptHash {
   }
 
   static byte[] ripemd160(byte[] data) {
-    try {
-      MessageDigest digest = MessageDigest.getInstance("RIPEMD160", BouncyCastleProvider.PROVIDER_NAME);
-      return digest.digest(data);
-    } catch (NoSuchAlgorithmException | java.security.NoSuchProviderException e) {
-      throw new IllegalStateException("RIPEMD160 unavailable", e);
-    }
+    return Ripemd160.hash(data);
   }
 }

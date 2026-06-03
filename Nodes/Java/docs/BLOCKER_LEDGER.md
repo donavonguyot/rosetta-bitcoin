@@ -800,10 +800,10 @@ Landed:
 
 ```text
 Phase 1  Secp256k1 defaults to native; node entry points fail fast via
-         ensureNativeRuntimeBackend (no silent BouncyCastle/pure-Java runtime fallback).
-         pure-java/BC reachable only via useBackendForTests for comparator/vector tests.
+         ensureNativeRuntimeBackend (no silent pure-Java runtime fallback).
+         Bouncy Castle removed; pure-Java remains only as a local comparator/vector backend.
          Makefile java-node-{live,sync-catchup,sync-chunk,sync-rocksdb,rocksdb-clean-rebuild}
-         inherit native default (bouncycastle overrides removed).
+         inherit native default.
 Phase 2  listMissingBlockHeights scans from validatedHeight+1 on the forward path
          (was full rescan from height 1 every 32-block batch).
 Phase 3  one ScriptVerifyRunner (worker pool + warm secp256k1 VerificationCache) per sync run

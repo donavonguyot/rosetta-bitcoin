@@ -1,6 +1,5 @@
 package com.jbitnode.consensus.secp256k1;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -100,88 +99,6 @@ class Secp256k1Test {
       assertEquals(
           Secp256k1.verifySchnorrSignatureReference(pubkeyXonly, message, badSignature),
           Secp256k1.verifySchnorrSignature(pubkeyXonly, message, badSignature));
-    }
-  }
-
-  @Test
-  void bouncyCastleBackendMatchesPureJavaDerVerifier() {
-    Secp256k1.useBackendForTests(Secp256k1.Backend.BOUNCYCASTLE);
-    try {
-      for (int index = 1; index <= 5; index++) {
-        BigInteger privateKey = BigInteger.valueOf(index + 20);
-        byte[] digest = WireSerialize.doubleSha256(Hex.decode("0" + index + "abc123"));
-        byte[] signature = Secp256k1.signDer(privateKey, digest);
-        byte[] pubkey = Secp256k1.testPubkeySec1(privateKey);
-        assertEquals(
-            Secp256k1.verifyDerSignatureReference(pubkey, digest, signature),
-            Secp256k1.verifyDerSignature(pubkey, digest, signature));
-        assertEquals(
-            Secp256k1.verifyDerSignatureReference(pubkey, WireSerialize.doubleSha256(Hex.decode("ff")), signature),
-            Secp256k1.verifyDerSignature(pubkey, WireSerialize.doubleSha256(Hex.decode("ff")), signature));
-      }
-    } finally {
-      Secp256k1.useBackendForTests(Secp256k1.Backend.PURE_JAVA);
-    }
-  }
-
-  @Test
-  void bouncyCastleBackendMatchesPureJavaSchnorrVerifier() {
-    Secp256k1.useBackendForTests(Secp256k1.Backend.BOUNCYCASTLE);
-    try {
-      for (int index = 1; index <= 5; index++) {
-        BigInteger privateKey = BigInteger.valueOf(200 + index);
-        byte[] message = WireSerialize.doubleSha256(Hex.decode("0" + index + "beadfeed"));
-        byte[] signature = Secp256k1.signBip340Schnorr(privateKey, message);
-        byte[] pubkeyXonly = java.util.Arrays.copyOfRange(Secp256k1.testPubkeySec1(privateKey), 1, 33);
-        assertEquals(
-            Secp256k1.verifySchnorrSignatureReference(pubkeyXonly, message, signature),
-            Secp256k1.verifySchnorrSignature(pubkeyXonly, message, signature));
-        byte[] badSignature = signature.clone();
-        badSignature[31] ^= 1;
-        assertEquals(
-            Secp256k1.verifySchnorrSignatureReference(pubkeyXonly, message, badSignature),
-            Secp256k1.verifySchnorrSignature(pubkeyXonly, message, badSignature));
-      }
-      assertFalse(Secp256k1.verifySchnorrSignature(new byte[32], new byte[32], new byte[63]));
-      assertFalse(Secp256k1.verifySchnorrSignature(Hex.decode("ff".repeat(32)), new byte[32], new byte[64]));
-    } finally {
-      Secp256k1.useBackendForTests(Secp256k1.Backend.PURE_JAVA);
-    }
-  }
-
-  @Test
-  void bouncyCastleBackendMatchesPureJavaTaprootTweak() {
-    for (int index = 1; index <= 5; index++) {
-      byte[] internalXonly =
-          java.util.Arrays.copyOfRange(Secp256k1.testPubkeySec1(BigInteger.valueOf(300 + index)), 1, 33);
-      byte[] merkleRoot =
-          index % 2 == 0 ? new byte[0] : WireSerialize.doubleSha256(Hex.decode("0" + index + "c0ffee"));
-
-      Secp256k1.useBackendForTests(Secp256k1.Backend.PURE_JAVA);
-      Secp256k1.TaprootTweakResult pureJava =
-          Secp256k1.taprootTweakPubkeyXonly(internalXonly, merkleRoot);
-
-      Secp256k1.useBackendForTests(Secp256k1.Backend.BOUNCYCASTLE);
-      try {
-        Secp256k1.TaprootTweakResult bouncyCastle =
-            Secp256k1.taprootTweakPubkeyXonly(internalXonly, merkleRoot);
-        assertEquals(pureJava.parity(), bouncyCastle.parity());
-        assertArrayEquals(pureJava.outputXonly(), bouncyCastle.outputXonly());
-      } finally {
-        Secp256k1.useBackendForTests(Secp256k1.Backend.PURE_JAVA);
-      }
-    }
-  }
-
-  @Test
-  void bouncyCastleTaprootTweakRejectsInvalidInternalKey() {
-    Secp256k1.useBackendForTests(Secp256k1.Backend.BOUNCYCASTLE);
-    try {
-      assertThrows(
-          Secp256k1.Secp256k1Error.class,
-          () -> Secp256k1.taprootTweakPubkeyXonly(Hex.decode("ff".repeat(32)), new byte[0]));
-    } finally {
-      Secp256k1.useBackendForTests(Secp256k1.Backend.PURE_JAVA);
     }
   }
 

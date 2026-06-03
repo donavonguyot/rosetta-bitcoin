@@ -33,7 +33,7 @@ class NativeCryptoVectorContractTest {
 
     for (Secp256k1.Backend backend :
         new Secp256k1.Backend[] {
-          Secp256k1.Backend.PURE_JAVA, Secp256k1.Backend.BOUNCYCASTLE, Secp256k1.Backend.NATIVE
+          Secp256k1.Backend.PURE_JAVA, Secp256k1.Backend.NATIVE
         }) {
       Secp256k1.useBackendForTests(backend);
       try {
