@@ -12,11 +12,14 @@ from pybitnode.consensus.script.opcodes import (
     OP_16,
     OP_1NEGATE,
     OP_0NOTEQUAL,
+    OP_2OVER,
+    OP_2SWAP,
     OP_2DUP,
     OP_3DUP,
     OP_ABS,
     OP_ADD,
     OP_BOOLAND,
+    OP_BOOLOR,
     OP_CHECKLOCKTIMEVERIFY,
     OP_CHECKSEQUENCEVERIFY,
     OP_CHECKSIG,
@@ -28,12 +31,19 @@ from pybitnode.consensus.script.opcodes import (
     OP_EQUAL,
     OP_EQUALVERIFY,
     OP_FROMALTSTACK,
+    OP_DEPTH,
     OP_HASH160,
     OP_HASH256,
     OP_IFDUP,
     OP_NIP,
+    OP_NOP,
     OP_NOT,
+    OP_MAX,
+    OP_MIN,
+    OP_OVER,
+    OP_PICK,
     OP_RIPEMD160,
+    OP_ROLL,
     OP_ROT,
     OP_SHA1,
     OP_SHA256,
@@ -43,6 +53,7 @@ from pybitnode.consensus.script.opcodes import (
     OP_VERIFY,
     OP_SWAP,
     OP_TOALTSTACK,
+    OP_TUCK,
     OP_WITHIN,
     SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY,
     SCRIPT_VERIFY_CHECKSEQUENCEVERIFY,
@@ -87,6 +98,7 @@ VALIDATION_WEIGHT_PER_SIGOP = 50
 OP_DROP = 0x75
 OP_2DROP = 0x6D
 OP_NIP = 0x77
+OP_1SUB = 0x8C
 OP_ADD = 0x93
 OP_SUB = 0x94
 OP_NUMEQUAL = 0x9C
@@ -203,6 +215,35 @@ def _stack_item(stack: Stack, depth_from_top: int) -> bytes:
     return stack[-depth_from_top]
 
 
+def _legacy_find_and_delete(script_code: bytes, target: bytes) -> bytes:
+    """Remove push-only occurrences of a legacy signature from scriptCode."""
+    output = bytearray()
+    offset = 0
+    while offset < len(script_code):
+        start = offset
+        opcode = script_code[offset]
+        offset += 1
+        if opcode == OP_0:
+            item = b""
+        elif OP_1 <= opcode <= OP_16:
+            item = bytes([opcode - OP_1 + 1])
+        elif opcode == OP_1NEGATE:
+            item = b"\x81"
+        elif 1 <= opcode <= 75 or opcode in (OP_PUSHDATA1, OP_PUSHDATA2, OP_PUSHDATA4):
+            offset = start
+            try:
+                item, offset = _read_push(script_code, offset)
+            except ScriptError:
+                output.extend(script_code[start:])
+                break
+        else:
+            output.extend(script_code[start:offset])
+            continue
+        if item != target:
+            output.extend(script_code[start:offset])
+    return bytes(output)
+
+
 def _check_ecdsa_signature(
     *,
     signature: bytes,
@@ -226,6 +267,7 @@ def _check_ecdsa_signature(
             sighash_type=sighash_type,
         )
     else:
+        script_code = _legacy_find_and_delete(script_code, signature)
         digest = legacy_sighash(
             tx,
             input_index,
@@ -272,6 +314,10 @@ def _exec_checkmultisig(
     key_offset = 0
     remaining_sigs = n_sigs_count
     remaining_keys = n_keys_count
+    active_script_code = script_code
+    if not witness:
+        for offset in range(n_sigs_count):
+            active_script_code = _legacy_find_and_delete(active_script_code, _stack_item(stack, isig + offset))
     while success and remaining_sigs > 0:
         sig = _stack_item(stack, isig + sig_offset)
         pubkey = _stack_item(stack, ikey + key_offset)
@@ -280,7 +326,7 @@ def _exec_checkmultisig(
             pubkey=pubkey,
             tx=tx,
             input_index=input_index,
-            script_code=script_code,
+            script_code=active_script_code,
             amount=amount,
             witness=witness,
         ):
@@ -437,6 +483,14 @@ def evaluate_script(
             if len(stack) < 3:
                 raise ScriptError("stack underflow")
             stack.extend(stack[-3:])
+        elif opcode == OP_2OVER:
+            if len(stack) < 4:
+                raise ScriptError("stack underflow")
+            stack.extend(stack[-4:-2])
+        elif opcode == OP_2SWAP:
+            if len(stack) < 4:
+                raise ScriptError("stack underflow")
+            stack[-4], stack[-3], stack[-2], stack[-1] = stack[-2], stack[-1], stack[-4], stack[-3]
         elif opcode == OP_IFDUP:
             if not stack:
                 raise ScriptError("stack underflow")
@@ -446,16 +500,36 @@ def evaluate_script(
             if len(stack) < 2:
                 raise ScriptError("stack underflow")
             del stack[-2]
+        elif opcode == OP_OVER:
+            if len(stack) < 2:
+                raise ScriptError("stack underflow")
+            stack.push_item(stack[-2])
         elif opcode == OP_ROT:
             if len(stack) < 3:
                 raise ScriptError("stack underflow")
             stack.append(stack.pop(-3))
+        elif opcode == OP_TUCK:
+            if len(stack) < 2:
+                raise ScriptError("stack underflow")
+            stack.insert(len(stack) - 2, stack[-1])
         elif opcode == OP_TOALTSTACK:
             altstack.append(stack.pop_item())
         elif opcode == OP_FROMALTSTACK:
             if not altstack:
                 raise ScriptError("altstack underflow")
             stack.push_item(altstack.pop())
+        elif opcode == OP_DEPTH:
+            stack.push_item(_encode_script_num(len(stack)))
+        elif opcode == OP_PICK:
+            n = _decode_script_num(stack.pop_item())
+            if n < 0 or n >= len(stack):
+                raise ScriptError("stack underflow")
+            stack.push_item(stack[-n - 1])
+        elif opcode == OP_ROLL:
+            n = _decode_script_num(stack.pop_item())
+            if n < 0 or n >= len(stack):
+                raise ScriptError("stack underflow")
+            stack.push_item(stack.pop(-n - 1))
         elif opcode == OP_SIZE:
             if not stack:
                 raise ScriptError("stack underflow")
@@ -502,6 +576,18 @@ def evaluate_script(
             b_val = _decode_script_num(stack.pop_item())
             a_val = _decode_script_num(stack.pop_item())
             stack.push_item(_encode_op_n(int(a_val != 0 and b_val != 0)))
+        elif opcode == OP_BOOLOR:
+            b_val = _decode_script_num(stack.pop_item())
+            a_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_op_n(int(a_val != 0 or b_val != 0)))
+        elif opcode == OP_MIN:
+            b_val = _decode_script_num(stack.pop_item())
+            a_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_script_num(min(a_val, b_val), max_len=5))
+        elif opcode == OP_MAX:
+            b_val = _decode_script_num(stack.pop_item())
+            a_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_script_num(max(a_val, b_val), max_len=5))
         elif opcode == OP_WITHIN:
             max_val = _decode_script_num(stack.pop_item())
             min_val = _decode_script_num(stack.pop_item())
@@ -529,6 +615,8 @@ def evaluate_script(
         elif opcode == OP_VERIFY:
             if not _cast_to_bool(stack.pop_item()):
                 raise ScriptError("VERIFY failed")
+        elif opcode == OP_NOP:
+            pass
         elif opcode == OP_CODESEPARATOR:
             codeseparator_offset = offset
         elif opcode in (OP_CHECKSIG, OP_CHECKSIGVERIFY):
@@ -696,6 +784,26 @@ def is_p2tr(script_pubkey: bytes) -> bool:
         len(script_pubkey) == 2 + WITNESS_V1_TAPROOT_XONLY_PK_LEN
         and script_pubkey[0] == OP_1
         and script_pubkey[1] == WITNESS_V1_TAPROOT_XONLY_PK_LEN
+    )
+
+
+def is_bare_legacy_script(script_pubkey: bytes) -> bool:
+    """Bounded bare legacy script fallback for historical consensus-valid outputs."""
+    return (
+        bool(script_pubkey)
+        and len(script_pubkey) > MAX_SCRIPT_ELEMENT_SIZE_CONSENSUS
+        and len(script_pubkey) <= MAX_CONSENSUS_SCRIPT_SIZE
+        and witness_program_version(script_pubkey) is None
+        and not (
+            is_p2pk(script_pubkey)
+            or is_p2pkh(script_pubkey)
+            or is_p2sh(script_pubkey)
+            or is_p2wpkh(script_pubkey)
+            or is_p2wsh(script_pubkey)
+            or is_p2tr(script_pubkey)
+            or is_bare_op_n(script_pubkey)
+            or is_bare_multisig(script_pubkey)
+        )
     )
 
 
@@ -1405,7 +1513,7 @@ def verify_script(
         return False
 
     if redeem_candidate is None:
-        return _terminal_success_strict(stack)
+        return _terminal_success_relaxed(stack)
 
     if not _terminal_success_relaxed(stack):
         return False

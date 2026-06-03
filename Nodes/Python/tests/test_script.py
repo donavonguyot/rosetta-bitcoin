@@ -9,7 +9,7 @@ from pybitnode.consensus.block import Block
 from pybitnode.consensus.hash import hash160, hash256
 from pybitnode.consensus.script.interpreter import Stack, evaluate_script, is_p2pk, is_p2pkh, verify_script, witness_program_version
 from pybitnode.consensus.script.interpreter import _taproot_tweak_pubkey_xonly
-from pybitnode.consensus.script.sighash import tapleaf_hash, taproot_signature_hash
+from pybitnode.consensus.script.sighash import legacy_sighash, tapleaf_hash, taproot_signature_hash
 from pybitnode.consensus.script.verify import ScriptVerifyError, verify_transaction_input
 from pybitnode.consensus.secp256k1 import N, _scalar_mult, Gx, Gy, verify_der_signature
 from pybitnode.messages.transaction import OutPoint, Transaction, TxIn, TxOut
@@ -259,6 +259,102 @@ def test_batch1_hash_opcodes_available_in_legacy_path():
     stack = Stack([b"abc"])
     evaluate_script(bytes([OP_RIPEMD160]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
     assert stack == [bytes.fromhex("8eb208f7e05d987a9b044a8e98c6b087f15a0bfc")]
+
+
+def test_legacy_sighash_single_uses_null_outputs_before_signed_index():
+    tx = Transaction(
+        version=1,
+        inputs=(
+            TxIn(previous_output=OutPoint(hash=bytes.fromhex("11" * 32), index=0), script_sig=b"", sequence=0xFFFFFFFE),
+            TxIn(previous_output=OutPoint(hash=bytes.fromhex("22" * 32), index=1), script_sig=b"", sequence=0xFFFFFFFD),
+        ),
+        outputs=(
+            TxOut(value=1000, script_pubkey=b"\x51"),
+            TxOut(value=2000, script_pubkey=b"\x51"),
+        ),
+        lock_time=0,
+    )
+    script_code = p2pkh_script_pubkey(bytes.fromhex("33" * 20))
+
+    assert legacy_sighash(tx, 1, script_code, sighash_type=0x03).hex() == (
+        "a804ca67698c6d01d8dcd010b20047ea15d503e19fe375378693f6552e67d280"
+    )
+    assert legacy_sighash(tx, 1, script_code, sighash_type=0x83).hex() == (
+        "7554c4c62ff6c98e29b2aae36b04a78c514f55f5c1ce151950e7f715393f0fd8"
+    )
+
+
+def test_legacy_sighash_single_out_of_range_returns_uint256_one():
+    tx = Transaction(
+        version=1,
+        inputs=(TxIn(previous_output=OutPoint(hash=bytes.fromhex("12" * 32), index=0), script_sig=b"", sequence=0),),
+        outputs=(),
+        lock_time=0,
+    )
+
+    assert legacy_sighash(tx, 0, b"\x51", sighash_type=0x03) == b"\x01" + (b"\x00" * 31)
+
+
+def test_batch2_legacy_stack_opcode_semantics():
+    from pybitnode.consensus.script.opcodes import OP_2OVER, OP_2SWAP, OP_DEPTH, OP_NOP, OP_OVER, OP_PICK, OP_ROLL, OP_TUCK
+
+    tx = Transaction(
+        version=1,
+        inputs=(TxIn(previous_output=OutPoint(hash=bytes.fromhex("3a" * 32), index=0), script_sig=b"", sequence=0),),
+        outputs=(TxOut(value=1, script_pubkey=b"\x51"),),
+        lock_time=0,
+    )
+
+    stack = Stack([b"\x01", b"\x02", b"\x03", b"\x04"])
+    evaluate_script(bytes([OP_2OVER, OP_2SWAP]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x01", b"\x02", b"\x01", b"\x02", b"\x03", b"\x04"]
+
+    stack = Stack([b"\x01", b"\x02"])
+    evaluate_script(bytes([OP_DEPTH, OP_NOP]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x01", b"\x02", b"\x02"]
+
+    stack = Stack([b"\x01", b"\x02", b"\x03", b"\x01"])
+    evaluate_script(bytes([OP_PICK]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x01", b"\x02", b"\x03", b"\x02"]
+
+    stack = Stack([b"\x01", b"\x02", b"\x03", b"\x04", b"\x02"])
+    evaluate_script(bytes([OP_ROLL, OP_OVER, OP_TUCK]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x01", b"\x03", b"\x04", b"\x04", b"\x02", b"\x04"]
+
+
+def test_batch2_legacy_boolean_and_minmax_opcode_semantics():
+    from pybitnode.consensus.script.opcodes import OP_BOOLOR, OP_MAX, OP_MIN
+
+    tx = Transaction(
+        version=1,
+        inputs=(TxIn(previous_output=OutPoint(hash=bytes.fromhex("3c" * 32), index=0), script_sig=b"", sequence=0),),
+        outputs=(TxOut(value=1, script_pubkey=b"\x51"),),
+        lock_time=0,
+    )
+
+    stack = Stack([b"", b"\x02"])
+    evaluate_script(bytes([OP_BOOLOR]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x01"]
+
+    stack = Stack([b"\x05", b"\x03"])
+    evaluate_script(bytes([OP_MIN]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x03"]
+
+    stack = Stack([b"\x05", b"\x03"])
+    evaluate_script(bytes([OP_MAX]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x05"]
+
+
+def test_legacy_non_witness_allows_extra_stack_items_but_witness_stays_strict():
+    tx = Transaction(
+        version=1,
+        inputs=(TxIn(previous_output=OutPoint(hash=bytes.fromhex("3b" * 32), index=0), script_sig=b"", sequence=0),),
+        outputs=(TxOut(value=1, script_pubkey=b"\x51"),),
+        lock_time=0,
+    )
+
+    assert verify_script(bytes([0x51]), bytes([0x51]), tx=tx, input_index=0, amount=1)
+    assert not verify_script(b"", bytes.fromhex("0014" + "11" * 20), tx=tx, input_index=0, amount=1, witness=(b"\x01", b"\x01"))
 
 
 def test_real_testnet4_block6975_taproot_keypath_accepted():

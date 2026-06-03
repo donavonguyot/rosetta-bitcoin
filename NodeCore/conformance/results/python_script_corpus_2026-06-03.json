@@ -1,12 +1,12 @@
 {
-  "captured_at": "2026-06-03T16:19:06+00:00",
+  "captured_at": "2026-06-03T16:30:19+00:00",
   "category": "script_corpus",
-  "commit": "68a2250ef53a43cd3457f57fff041ffa031c23dc",
-  "failed": 19,
+  "commit": "cff691babbffbeb90400f352cf9bad8a4cb9817e",
+  "failed": 13,
   "fixture_count": 45,
   "implementation": "PythonNode",
   "manifest": "NodeCore/conformance/fixtures/scripts/manifest.json",
-  "passed": 26,
+  "passed": 32,
   "python_version": "3.14.5",
   "result": "failed",
   "results": [
@@ -265,8 +265,8 @@
       "txid": "d04fef455929e77e5e4a29b6708051037a11953fbec64240c3689bef9a1320cd"
     },
     {
-      "failure": "script verification failed for input 1",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2pkh_61174",
       "height": 61174,
       "input_index": 1,
@@ -274,7 +274,7 @@
       "required_rules": [
         "p2pkh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "4942f8db3e32bd1f114fbfb5c500e0f9cd06c3c235ffe77b07087750b86cc0ea"
     },
     {
@@ -434,8 +434,8 @@
       "txid": "bf0784a56eabe4ecee38125cd3734bfc9684ea217b1a77a895cc6428d08386a6"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2sh_82112",
       "height": 82112,
       "input_index": 0,
@@ -444,7 +444,7 @@
         "op_nop",
         "p2sh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "35bf3590d157faee540dfed36421d3178691ca954d3a3d399d0f7d47927c77f6"
     },
     {
@@ -597,8 +597,8 @@
       "txid": "3f827e83af1e19ca365c694209bcb347d7e0719beed1a86ae7cd6c0c5af2c2b0"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2pkh_107951",
       "height": 107951,
       "input_index": 0,
@@ -607,7 +607,7 @@
         "op_1",
         "p2pkh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "e03dcb1abb013ee01a379d2fd01822ac00acb9df0a9e483a23f162bcc2787206"
     },
     {
@@ -629,8 +629,8 @@
       "txid": "fd5ccbbdb8b12c61f382cf4f895035df14dd01cf49b6aceea681eb27c511e48d"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2sh_108972",
       "height": 108972,
       "input_index": 0,
@@ -642,12 +642,12 @@
         "op_pick",
         "p2sh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "9a3d5d60b83e3b0d0469be19e8df6510c04d6d89f7e9db14b509dbf853da79f0"
     },
     {
-      "failure": "script verification failed for input 1",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2sh_116040",
       "height": 116040,
       "input_index": 1,
@@ -656,12 +656,12 @@
         "op_ripemd160",
         "p2sh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "a0a9fcb8a99ea3517d8fac76913ec4255066e9890c5f576ae2a4efc532302120"
     },
     {
-      "failure": "unsupported scriptPubKey template",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.bare_legacy_118555",
       "height": 118555,
       "input_index": 1,
@@ -669,7 +669,7 @@
       "required_rules": [
         "bare_legacy"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "17e5b4d1bd3debce6de1f1ede70d4a663d6df6c6006464ff55ada618b6a59a98"
     },
     {

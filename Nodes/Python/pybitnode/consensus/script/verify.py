@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pybitnode.consensus.script.interpreter import (
     is_bare_multisig,
     is_bare_op_n,
+    is_bare_legacy_script,
     is_p2pk,
     is_p2pkh,
     is_p2sh,
@@ -51,6 +52,7 @@ def verify_transaction_input(
         or is_p2tr(script_pubkey)
         or is_bare_op_n(script_pubkey)
         or is_bare_multisig(script_pubkey)
+        or is_bare_legacy_script(script_pubkey)
     )
     if not known_template and witness_version != 1:
         raise ScriptVerifyError("unsupported scriptPubKey template")

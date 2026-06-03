@@ -161,7 +161,7 @@ def legacy_sighash(
     anyone_can_pay = bool(sighash_type & 0x80)
 
     if base_type == 3 and input_index >= len(transaction.outputs):
-        return (b"\x00" * 31) + b"\x01"
+        return b"\x01" + (b"\x00" * 31)
 
     if anyone_can_pay:
         inputs = [transaction.inputs[input_index]]
@@ -190,7 +190,7 @@ def legacy_sighash(
     elif base_type == 3:
         serialized += write_varint(input_index + 1)
         for _ in range(input_index):
-            serialized += TxOut(value=0, script_pubkey=b"").serialize()
+            serialized += TxOut(value=-1, script_pubkey=b"").serialize()
         serialized += transaction.outputs[input_index].serialize()
     else:
         serialized += write_varint(len(transaction.outputs))
