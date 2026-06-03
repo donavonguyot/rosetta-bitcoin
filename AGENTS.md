@@ -124,7 +124,7 @@ live-chain trail into a work queue for ports:
 
 - [`docs/consensus-blockers-testnet4.md`](docs/consensus-blockers-testnet4.md) — canonical blocker facts and fixture anchors.
 - [`docs/follower-port-matrix.md`](docs/follower-port-matrix.md) — conservative per-port status with explicit `unknown` cells.
-- [`docs/script-semantics-gotchas.md`](docs/script-semantics-gotchas.md) — language-neutral consensus traps learned from live blockers.
+- [`docs/script-semantics-gotchas.md`](docs/script-semantics-gotchas.md) — language-neutral consensus traps; includes **NodeCore script corpus triage** (stack/sighash/template vs missing opcode).
 - [`docs/port-performance-lessons.md`](docs/port-performance-lessons.md) — reusable block-connect performance patterns from Java/Python catch-up.
 - [`docs/agent-prompts.md`](docs/agent-prompts.md) — reusable prompts for porting blockers, harvesting fixtures, and updating ledgers.
 
@@ -417,6 +417,16 @@ Handshake timing is critical for cp5/cp6/cp8 even when code exists.
 ## Consensus script milestones (testnet4)
 
 Script verification applies on **spend paths** (non-coinbase transactions consuming UTXOs). Coinbase outputs require **100-block maturity** (`COINBASE_MATURITY`); first spends of early coinbases appear around height **101+**. Until then, blocks connect without exercising the interpreter on real spends.
+
+### NodeCore script corpus gate (offline)
+
+Before chasing live sync script blockers, ports should pass the shared **45-fixture**
+corpus in [`NodeCore/conformance/fixtures/scripts/manifest.json`](NodeCore/conformance/fixtures/scripts/manifest.json)
+and record JSON under [`NodeCore/conformance/results/`](NodeCore/conformance/results/).
+When a fixture fails, read **[`docs/script-semantics-gotchas.md`](docs/script-semantics-gotchas.md)
+§ NodeCore script corpus and MATRIX triage** first: failures are often loader,
+sighash, template limits, or stack semantics — not a missing opcode. Do not treat
+manifest `missing_rule` or MATRIX labels as ground truth without `ScriptError` text.
 
 | Milestone | Height / target | Notes |
 |-----------|-----------------|-------|

@@ -4,6 +4,56 @@ These are the consensus details that repeatedly caused honest stops during
 testnet4 sync. They are language-neutral notes for follower ports. Use the
 blocker catalog for exact block and transaction facts.
 
+## NodeCore script corpus and MATRIX triage
+
+Ports that run [`NodeCore/conformance/fixtures/scripts/manifest.json`](../NodeCore/conformance/fixtures/scripts/manifest.json)
+often misread failures as “add opcode X” because each fixture’s `missing_rule`
+and many MATRIX rows are **historical harvest labels** from when Java (or another
+port) was blocked. They are hints for search and grouping, not proof that the
+opcode dispatch table is empty.
+
+**Classify the failure before extending the opcode table.** Typical order:
+
+1. **Loader / prevouts** — transaction and witness bytes, witness stack order,
+   full `prevouts.json` vs a single padded prevout, `prev_spk` file vs inline
+   `spent_script_pubkey` hex.
+2. **Template gate** — bare legacy, P2SH → nested witness, P2TR key-path vs
+   script-path; an unknown `scriptPubKey` template fails before any opcode runs.
+3. **Sighash** — legacy `SIGHASH_SINGLE` / `NONE` / `ANYONECANPAY`, BIP143
+   amount and `scriptCode`, taproot sighash with tapleaf digest and codeseparator
+   position.
+4. **Stack semantics** — `CHECKSIGVERIFY` / `CHECKMULTISIGVERIFY` must not leave a
+   result on the stack; IF/ELSE inactive-branch skipping; P2SH relaxed terminal vs
+   witness strict terminal; `castToBool` (only `0x80` in the last byte is false).
+5. **Opcode surface** — only after the same fixture bytes pass on the Python
+   corpus oracle (commits `204d707` legacy batch, `07a4367` tapscript).
+
+### Common red herrings
+
+| What you see | What it often is |
+|--------------|------------------|
+| `tapscript failed final stack check` (e.g. stack size 2) | `CHECKSIGVERIFY` / `CHECKMULTISIGVERIFY` pushed a truthy value like `CHECKSIG` instead of verifying and discarding |
+| Generic `script verification failed` on a large P2TR script-path spend | Tapscript leaf rejected by the **legacy 10 000-byte script size cap** (BIP342 does not apply that cap to tapscript leaves) |
+| `CHECKSEQUENCEVERIFY negative locktime` with a disable-style operand | **Narrow integer decode**; test the disable flag on the **unsigned** operand before rejecting as negative |
+| `CHECKSIGVERIFY failed` on P2WSH scripts that use `OP_2DUP` / `OP_SWAP` / `OP_NIP` | Stack layout or ECDSA/BIP143 sighash, not a missing stack opcode |
+| `invalid Schnorr signature length` | Wrong stack item used as the signature (order or IF-branch effects), not a missing `OP_SIZE` / `OP_DEPTH` |
+
+### Corpus discipline
+
+- Run with **real signature verification** (e.g. native libsecp256k1); stub crypto
+  cannot honestly pass ECDSA/Schnorr fixtures.
+- Surface **`ScriptError` / `ScriptVerifyError` messages** in per-fixture corpus JSON;
+  a bare `verifyScript == false` hides the layer (template, sighash, stack, crypto).
+- Do not treat another port’s live sync as an oracle; use the shared bytes plus
+  Python corpus semantics on the trail above.
+- Claim progress only with a port result JSON under
+  [`NodeCore/conformance/results/`](../NodeCore/conformance/results/) and an updated
+  [`MATRIX.md`](../NodeCore/conformance/fixtures/scripts/MATRIX.md) column — `not_started`
+  does not mean 0/45.
+
+See also [`NodeCore/conformance/fixtures/scripts/README.md`](../NodeCore/conformance/fixtures/scripts/README.md)
+for runner commands and a short debugging checklist.
+
 ## Policy is not consensus
 
 Several spends are non-standard or unusual but still consensus-valid. A syncing

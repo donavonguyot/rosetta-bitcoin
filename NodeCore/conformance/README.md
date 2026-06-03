@@ -10,7 +10,16 @@ fixtures/
   README.md
   chainstate_codec_v2_vectors.json
   native_crypto_v1_vectors.json
+  scripts/
+    manifest.json
+    MATRIX.md
+    README.md
 ```
+
+**Script corpus:** [`fixtures/scripts/`](fixtures/scripts/) is the offline
+45-fixture spend-verification gate. When debugging failures, start with
+[`docs/script-semantics-gotchas.md`](../../docs/script-semantics-gotchas.md)
+(§ NodeCore script corpus and MATRIX triage), not the fixture `missing_rule` field alone.
 
 The fixture manifest is broader than the current shared byte tree. During
 bootstrap, fixture bytes may live in port-local test trees while the shared
