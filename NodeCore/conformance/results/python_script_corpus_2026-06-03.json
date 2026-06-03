@@ -1,12 +1,12 @@
 {
-  "captured_at": "2026-06-03T16:09:17+00:00",
+  "captured_at": "2026-06-03T16:19:06+00:00",
   "category": "script_corpus",
-  "commit": "f170eb0a53a58cd201901b3d45bf3c02c859e5ae",
-  "failed": 33,
+  "commit": "68a2250ef53a43cd3457f57fff041ffa031c23dc",
+  "failed": 19,
   "fixture_count": 45,
   "implementation": "PythonNode",
   "manifest": "NodeCore/conformance/fixtures/scripts/manifest.json",
-  "passed": 12,
+  "passed": 26,
   "python_version": "3.14.5",
   "result": "failed",
   "results": [
@@ -203,8 +203,8 @@
       "txid": "c62c3c4c40feb1850f17ccbd33693c26d3ce83910c5a3fe5c058f30ecec8c6e7"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2wsh_2drop_54287",
       "height": 54287,
       "input_index": 0,
@@ -215,12 +215,12 @@
         "op_hash160",
         "p2wsh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "9281b53ec58f80387161566838fb7bf54c2412bb7b59e150ae78ff5f5a413d0c"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2wsh_ifdup_csv_54297",
       "height": 54297,
       "input_index": 0,
@@ -238,12 +238,12 @@
         "op_verify",
         "p2wsh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "00b7207d21c697a183da730622117a4091ccaea238976ef0341267579ac29b12"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2wsh_mul_58173",
       "height": 58173,
       "input_index": 0,
@@ -261,7 +261,7 @@
         "op_swap",
         "p2wsh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "d04fef455929e77e5e4a29b6708051037a11953fbec64240c3689bef9a1320cd"
     },
     {
@@ -278,8 +278,8 @@
       "txid": "4942f8db3e32bd1f114fbfb5c500e0f9cd06c3c235ffe77b07087750b86cc0ea"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2wsh_rot_62754",
       "height": 62754,
       "input_index": 0,
@@ -299,12 +299,12 @@
         "op_swap",
         "p2wsh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "f4ecb76ed2bb8e4a7540a060bb97dc1d417dc3c8a54200aa7c589b74a931d82a"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2sh_3dup_63305",
       "height": 63305,
       "input_index": 0,
@@ -315,12 +315,12 @@
         "op_equalverify",
         "p2sh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "5f2ef82d267e50f4f15c4dc1c04c3b2b1ca74be0fec19697f44cb438ff85caeb"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2sh_2dup_63603",
       "height": 63603,
       "input_index": 0,
@@ -333,12 +333,12 @@
         "op_sub",
         "p2sh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "a21adb17edebeee255310e9b37c44a667e7a510bc8181efbf734a86bcac94f74"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2wsh_altstack_66241",
       "height": 66241,
       "input_index": 0,
@@ -358,7 +358,7 @@
         "op_toaltstack",
         "p2wsh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "e867dde78822d2f73a7313f4efa4a2cf280f315827cf032d23430153105a23bf"
     },
     {
@@ -464,8 +464,8 @@
       "txid": "ad4ccacf99ad0cbb491fa675426406be448e3120eb1649b2b053c7b44e3005a3"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2sh_82921",
       "height": 82921,
       "input_index": 0,
@@ -475,12 +475,12 @@
         "op_sha1",
         "p2sh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "e717bdada1619ffd40c7ddbefbafce596a1a15cfc68c7f02e305494c1b1c1bc1"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2sh_sha1_82921",
       "height": 82921,
       "input_index": 0,
@@ -490,7 +490,7 @@
         "op_sha1",
         "p2sh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "e717bdada1619ffd40c7ddbefbafce596a1a15cfc68c7f02e305494c1b1c1bc1"
     },
     {
@@ -527,8 +527,8 @@
       "txid": "1c9d50186785f776950c908e97d67648941094e2b5c4e36e08f88e5a21701f89"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2wsh_within_98025",
       "height": 98025,
       "input_index": 0,
@@ -540,12 +540,12 @@
         "op_within",
         "p2wsh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "5266048f001ffb92d5a00f0c5b197e8d103f15a94478744cbe38d96b30968f05"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2wsh_98631",
       "height": 98631,
       "input_index": 0,
@@ -559,12 +559,12 @@
         "op_swap",
         "p2wsh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "81fcef3b937234490381c3baa91f627ad80afb9d3b393bc5e376ace380b1c791"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2wsh_nip_98631",
       "height": 98631,
       "input_index": 0,
@@ -578,7 +578,7 @@
         "op_swap",
         "p2wsh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "81fcef3b937234490381c3baa91f627ad80afb9d3b393bc5e376ace380b1c791"
     },
     {
@@ -706,8 +706,8 @@
       "txid": "b8f4d614ba4b200063247ae4f3f15449e6b1b98ed718fd2a5e42239e660fa1ca"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2sh_abs_132361",
       "height": 132361,
       "input_index": 0,
@@ -716,7 +716,7 @@
         "op_abs",
         "p2sh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "56fcdf23f9619d3c107132cda9cd4db9dc610aca2e295ddd9a881b1772a5776b"
     },
     {
@@ -735,8 +735,8 @@
       "txid": "d7cf3d38458c05b40651aa89e70b0d1eb64f94f4fcbb730dc9e52f20afe5ef6c"
     },
     {
-      "failure": "script verification failed for input 0",
-      "failure_type": "ScriptVerifyError",
+      "failure": "",
+      "failure_type": "",
       "fixture_id": "scripts.p2wsh_booland_136369",
       "height": 136369,
       "input_index": 0,
@@ -751,7 +751,7 @@
         "op_swap",
         "p2wsh"
       ],
-      "result": "failed",
+      "result": "passed",
       "txid": "34bbb5793c54f9e2530c88e8b0f7c2517b875bd29ffcd505bdb8abd7f8adf1dc"
     }
   ],

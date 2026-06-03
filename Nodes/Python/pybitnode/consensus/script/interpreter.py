@@ -11,7 +11,12 @@ from pybitnode.consensus.script.opcodes import (
     OP_1,
     OP_16,
     OP_1NEGATE,
+    OP_0NOTEQUAL,
+    OP_2DUP,
+    OP_3DUP,
+    OP_ABS,
     OP_ADD,
+    OP_BOOLAND,
     OP_CHECKLOCKTIMEVERIFY,
     OP_CHECKSEQUENCEVERIFY,
     OP_CHECKSIG,
@@ -22,16 +27,23 @@ from pybitnode.consensus.script.opcodes import (
     OP_SIZE,
     OP_EQUAL,
     OP_EQUALVERIFY,
+    OP_FROMALTSTACK,
     OP_HASH160,
     OP_HASH256,
+    OP_IFDUP,
     OP_NIP,
+    OP_NOT,
     OP_RIPEMD160,
+    OP_ROT,
     OP_SHA1,
     OP_SHA256,
     OP_PUSHDATA1,
     OP_PUSHDATA2,
     OP_PUSHDATA4,
     OP_VERIFY,
+    OP_SWAP,
+    OP_TOALTSTACK,
+    OP_WITHIN,
     SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY,
     SCRIPT_VERIFY_CHECKSEQUENCEVERIFY,
     SCRIPT_VERIFY_DEFAULT,
@@ -75,7 +87,6 @@ VALIDATION_WEIGHT_PER_SIGOP = 50
 OP_DROP = 0x75
 OP_2DROP = 0x6D
 OP_NIP = 0x77
-OP_SWAP = 0x7C
 OP_ADD = 0x93
 OP_SUB = 0x94
 OP_NUMEQUAL = 0x9C
@@ -364,6 +375,7 @@ def evaluate_script(
     offset = 0
     codeseparator_offset = 0
     vf_exec: list[bool] = []
+    altstack: list[bytes] = []
     while offset < len(script):
         opcode = script[offset]
         f_exec = _legacy_f_exec(vf_exec)
@@ -414,17 +426,54 @@ def evaluate_script(
             stack.push_item(item)
         elif opcode == OP_DROP:
             stack.pop_item()
+        elif opcode == OP_2DROP:
+            stack.pop_item()
+            stack.pop_item()
+        elif opcode == OP_2DUP:
+            if len(stack) < 2:
+                raise ScriptError("stack underflow")
+            stack.extend(stack[-2:])
+        elif opcode == OP_3DUP:
+            if len(stack) < 3:
+                raise ScriptError("stack underflow")
+            stack.extend(stack[-3:])
+        elif opcode == OP_IFDUP:
+            if not stack:
+                raise ScriptError("stack underflow")
+            if _cast_to_bool(stack[-1]):
+                stack.push_item(stack[-1])
         elif opcode == OP_NIP:
             if len(stack) < 2:
                 raise ScriptError("stack underflow")
             del stack[-2]
+        elif opcode == OP_ROT:
+            if len(stack) < 3:
+                raise ScriptError("stack underflow")
+            stack.append(stack.pop(-3))
+        elif opcode == OP_TOALTSTACK:
+            altstack.append(stack.pop_item())
+        elif opcode == OP_FROMALTSTACK:
+            if not altstack:
+                raise ScriptError("altstack underflow")
+            stack.push_item(altstack.pop())
         elif opcode == OP_SIZE:
+            if not stack:
+                raise ScriptError("stack underflow")
             stack.push_item(_encode_script_num(len(stack[-1])))
         elif opcode == OP_SWAP:
             top = stack.pop_item()
             second = stack.pop_item()
             stack.push_item(top)
             stack.push_item(second)
+        elif opcode == OP_ABS:
+            value = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_script_num(abs(value), max_len=5))
+        elif opcode == OP_NOT:
+            value = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_op_n(int(value == 0)))
+        elif opcode == OP_0NOTEQUAL:
+            value = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_op_n(int(value != 0)))
         elif opcode == OP_ADD:
             b_val = _decode_script_num(stack.pop_item())
             a_val = _decode_script_num(stack.pop_item())
@@ -449,6 +498,15 @@ def evaluate_script(
             b_val = _decode_script_num(stack.pop_item())
             a_val = _decode_script_num(stack.pop_item())
             stack.push_item(_encode_op_n(int(a_val >= b_val)))
+        elif opcode == OP_BOOLAND:
+            b_val = _decode_script_num(stack.pop_item())
+            a_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_op_n(int(a_val != 0 and b_val != 0)))
+        elif opcode == OP_WITHIN:
+            max_val = _decode_script_num(stack.pop_item())
+            min_val = _decode_script_num(stack.pop_item())
+            x_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_op_n(int(min_val <= x_val < max_val)))
         elif opcode == OP_RIPEMD160:
             stack.push_item(hashlib.new("ripemd160", stack.pop_item()).digest())
         elif opcode == OP_SHA1:

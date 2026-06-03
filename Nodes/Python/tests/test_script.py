@@ -7,7 +7,7 @@ import pytest
 from pybitnode.chain.params import TESTNET4
 from pybitnode.consensus.block import Block
 from pybitnode.consensus.hash import hash160, hash256
-from pybitnode.consensus.script.interpreter import is_p2pk, is_p2pkh, verify_script, witness_program_version
+from pybitnode.consensus.script.interpreter import Stack, evaluate_script, is_p2pk, is_p2pkh, verify_script, witness_program_version
 from pybitnode.consensus.script.interpreter import _taproot_tweak_pubkey_xonly
 from pybitnode.consensus.script.sighash import tapleaf_hash, taproot_signature_hash
 from pybitnode.consensus.script.verify import ScriptVerifyError, verify_transaction_input
@@ -191,6 +191,74 @@ def test_legacy_script_op_nip_semantics_and_underflow():
 
     assert verify_script(bytes([0x51, 0x52]), bytes([OP_NIP]), tx=tx, input_index=0, amount=1)
     assert not verify_script(bytes([0x51]), bytes([OP_NIP]), tx=tx, input_index=0, amount=1)
+
+
+def test_batch1_stack_and_altstack_opcode_semantics():
+    from pybitnode.consensus.script.opcodes import (
+        OP_2DROP,
+        OP_2DUP,
+        OP_3DUP,
+        OP_FROMALTSTACK,
+        OP_IFDUP,
+        OP_ROT,
+        OP_TOALTSTACK,
+    )
+
+    tx = Transaction(
+        version=1,
+        inputs=(TxIn(previous_output=OutPoint(hash=bytes.fromhex("37" * 32), index=0), script_sig=b"", sequence=0),),
+        outputs=(TxOut(value=1, script_pubkey=b"\x51"),),
+        lock_time=0,
+    )
+    stack = Stack([b"\x01", b"\x02", b"\x03"])
+    script = bytes([OP_2DUP, OP_ROT, OP_3DUP, OP_2DROP, OP_IFDUP, OP_TOALTSTACK, OP_FROMALTSTACK])
+    evaluate_script(script, stack, tx=tx, input_index=0, script_code=script, amount=1, witness=False)
+    assert stack == [b"\x01", b"\x02", b"\x02", b"\x03", b"\x03", b"\x02", b"\x02"]
+
+
+def test_batch1_numeric_boolean_and_range_opcode_semantics():
+    from pybitnode.consensus.script.opcodes import OP_0NOTEQUAL, OP_ABS, OP_BOOLAND, OP_NOT, OP_WITHIN
+
+    tx = Transaction(
+        version=1,
+        inputs=(TxIn(previous_output=OutPoint(hash=bytes.fromhex("38" * 32), index=0), script_sig=b"", sequence=0),),
+        outputs=(TxOut(value=1, script_pubkey=b"\x51"),),
+        lock_time=0,
+    )
+
+    stack = Stack([b"\x83"])
+    evaluate_script(bytes([OP_ABS]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x03"]
+
+    stack = Stack([b"\x02", b""])
+    evaluate_script(bytes([OP_NOT, OP_0NOTEQUAL]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x02", b"\x01"]
+
+    stack = Stack([b"\x01", b"\x02"])
+    evaluate_script(bytes([OP_BOOLAND]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x01"]
+
+    stack = Stack([b"\x05", b"\x03", b"\x08"])
+    evaluate_script(bytes([OP_WITHIN]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [b"\x01"]
+
+
+def test_batch1_hash_opcodes_available_in_legacy_path():
+    from pybitnode.consensus.script.opcodes import OP_RIPEMD160, OP_SHA1
+
+    tx = Transaction(
+        version=1,
+        inputs=(TxIn(previous_output=OutPoint(hash=bytes.fromhex("39" * 32), index=0), script_sig=b"", sequence=0),),
+        outputs=(TxOut(value=1, script_pubkey=b"\x51"),),
+        lock_time=0,
+    )
+    stack = Stack([b"abc"])
+    evaluate_script(bytes([OP_SHA1]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [bytes.fromhex("a9993e364706816aba3e25717850c26c9cd0d89d")]
+
+    stack = Stack([b"abc"])
+    evaluate_script(bytes([OP_RIPEMD160]), stack, tx=tx, input_index=0, script_code=b"", amount=1, witness=False)
+    assert stack == [bytes.fromhex("8eb208f7e05d987a9b044a8e98c6b087f15a0bfc")]
 
 
 def test_real_testnet4_block6975_taproot_keypath_accepted():
