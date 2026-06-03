@@ -12,12 +12,18 @@ from pybitnode.consensus.script.opcodes import (
     OP_16,
     OP_1NEGATE,
     OP_0NOTEQUAL,
+    OP_2DROP,
     OP_2OVER,
     OP_2SWAP,
     OP_2DUP,
     OP_3DUP,
     OP_ABS,
     OP_ADD,
+    OP_SUB,
+    OP_NEGATE,
+    OP_NUMEQUAL,
+    OP_NUMEQUALVERIFY,
+    OP_NUMNOTEQUAL,
     OP_BOOLAND,
     OP_BOOLOR,
     OP_CHECKLOCKTIMEVERIFY,
@@ -102,7 +108,8 @@ OP_1SUB = 0x8C
 OP_ADD = 0x93
 OP_SUB = 0x94
 OP_NUMEQUAL = 0x9C
-OP_NUMNOTEQUAL = 0x9D
+OP_NUMEQUALVERIFY = 0x9D
+OP_NUMNOTEQUAL = 0x9E
 OP_LESSTHAN = 0x9F
 OP_GREATERTHAN = 0xA0
 OP_LESSTHANOREQUAL = 0xA1
@@ -385,15 +392,18 @@ def _exec_checksequenceverify(stack: Stack, *, tx, input_index: int) -> None:
     if tx.version < 2:
         return
 
+    seq_value = _decode_script_num(stack[-1], max_len=MAX_SCRIPTNUM_SIZE_LOCKTIME)
+    if seq_value < 0:
+        raise ScriptError("CHECKSEQUENCEVERIFY negative locktime")
+    # BIP112: operand with disable flag set behaves as NOP (Core checks stack, not input).
+    if seq_value & SEQUENCE_LOCKTIME_DISABLE_FLAG:
+        return
+
     n_sequence = tx.inputs[input_index].sequence
     if n_sequence == SEQUENCE_FINAL:
         raise ScriptError("CHECKSEQUENCEVERIFY on final sequence")
     if n_sequence & SEQUENCE_LOCKTIME_DISABLE_FLAG:
         raise ScriptError("CHECKSEQUENCEVERIFY disabled sequence")
-
-    seq_value = _decode_script_num(stack[-1], max_len=MAX_SCRIPTNUM_SIZE_LOCKTIME)
-    if seq_value < 0:
-        raise ScriptError("CHECKSEQUENCEVERIFY negative locktime")
 
     stack_type = bool(seq_value & SEQUENCE_LOCKTIME_TYPE_FLAG)
     seq_type = bool(n_sequence & SEQUENCE_LOCKTIME_TYPE_FLAG)
@@ -994,6 +1004,7 @@ def _evaluate_tapscript(
     instruction_pos = 0
     offset = 0
     vf_exec: list[bool] = []
+    altstack: list[bytes] = []
     while offset < len(script):
         instr_at = instruction_pos
         opcode = script[offset]
@@ -1076,6 +1087,87 @@ def _evaluate_tapscript(
             stack.push_item(item)
             offset += 1
             instruction_pos += 1
+        elif opcode == OP_2DUP:
+            if len(stack) < 2:
+                raise ScriptError("stack underflow")
+            stack.extend(stack[-2:])
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_3DUP:
+            if len(stack) < 3:
+                raise ScriptError("stack underflow")
+            stack.extend(stack[-3:])
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_2OVER:
+            if len(stack) < 4:
+                raise ScriptError("stack underflow")
+            stack.extend(stack[-4:-2])
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_2SWAP:
+            if len(stack) < 4:
+                raise ScriptError("stack underflow")
+            stack[-4], stack[-3], stack[-2], stack[-1] = stack[-2], stack[-1], stack[-4], stack[-3]
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_TOALTSTACK:
+            altstack.append(stack.pop_item())
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_FROMALTSTACK:
+            if not altstack:
+                raise ScriptError("altstack underflow")
+            stack.push_item(altstack.pop())
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_DEPTH:
+            stack.push_item(_encode_script_num(len(stack)))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_PICK:
+            n = _decode_script_num(stack.pop_item())
+            if n < 0 or n >= len(stack):
+                raise ScriptError("stack underflow")
+            stack.push_item(stack[-n - 1])
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_ROLL:
+            n = _decode_script_num(stack.pop_item())
+            if n < 0 or n >= len(stack):
+                raise ScriptError("stack underflow")
+            stack.append(stack.pop(-n - 1))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_TUCK:
+            if len(stack) < 2:
+                raise ScriptError("stack underflow")
+            top = stack.pop_item()
+            second = stack.pop_item()
+            stack.push_item(top)
+            stack.push_item(second)
+            stack.push_item(top)
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_OVER:
+            if len(stack) < 2:
+                raise ScriptError("stack underflow")
+            stack.push_item(stack[-2])
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_ROT:
+            if len(stack) < 3:
+                raise ScriptError("stack underflow")
+            stack.append(stack.pop(-3))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_IFDUP:
+            if not stack:
+                raise ScriptError("stack underflow")
+            if _cast_to_bool(stack[-1]):
+                stack.push_item(stack[-1])
+            offset += 1
+            instruction_pos += 1
         elif opcode == OP_SIZE:
             if not stack:
                 raise ScriptError("stack underflow")
@@ -1088,6 +1180,75 @@ def _evaluate_tapscript(
             instruction_pos += 1
         elif opcode == OP_SHA256:
             stack.push_item(sha256_digest(stack.pop_item()))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_SHA1:
+            stack.push_item(hashlib.new("sha1", stack.pop_item()).digest())
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_HASH256:
+            stack.push_item(hash256(stack.pop_item()))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_ADD:
+            b_val = _decode_script_num(stack.pop_item())
+            a_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_script_num(a_val + b_val))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_SUB:
+            b_val = _decode_script_num(stack.pop_item())
+            a_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_script_num(a_val - b_val))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_1SUB:
+            value = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_script_num(value - 1))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_NEGATE:
+            value = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_script_num(-value))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_NOT:
+            stack.push_item(_encode_op_n(int(not _cast_to_bool(stack.pop_item()))))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_0NOTEQUAL:
+            stack.push_item(_encode_op_n(int(_cast_to_bool(stack.pop_item()))))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_BOOLAND:
+            b_val = _cast_to_bool(stack.pop_item())
+            a_val = _cast_to_bool(stack.pop_item())
+            stack.push_item(_encode_op_n(int(a_val and b_val)))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_BOOLOR:
+            b_val = _cast_to_bool(stack.pop_item())
+            a_val = _cast_to_bool(stack.pop_item())
+            stack.push_item(_encode_op_n(int(a_val or b_val)))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_MIN:
+            b_val = _decode_script_num(stack.pop_item())
+            a_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_script_num(min(a_val, b_val)))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_MAX:
+            b_val = _decode_script_num(stack.pop_item())
+            a_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_script_num(max(a_val, b_val)))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_WITHIN:
+            max_val = _decode_script_num(stack.pop_item())
+            min_val = _decode_script_num(stack.pop_item())
+            x_val = _decode_script_num(stack.pop_item())
+            stack.push_item(_encode_op_n(int(min_val <= x_val < max_val)))
             offset += 1
             instruction_pos += 1
         elif opcode == OP_EQUAL:
@@ -1216,6 +1377,13 @@ def _evaluate_tapscript(
             else:
                 result = a_val >= b_val
             stack.push_item(_encode_op_n(int(result)))
+            offset += 1
+            instruction_pos += 1
+        elif opcode == OP_NUMEQUALVERIFY:
+            b_val = _decode_script_num(stack.pop_item())
+            a_val = _decode_script_num(stack.pop_item())
+            if a_val != b_val:
+                raise ScriptError("NUMEQUALVERIFY failed")
             offset += 1
             instruction_pos += 1
         elif opcode in (OP_NUMEQUAL, OP_NUMNOTEQUAL):

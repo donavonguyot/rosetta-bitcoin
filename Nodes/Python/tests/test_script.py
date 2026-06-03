@@ -345,6 +345,73 @@ def test_batch2_legacy_boolean_and_minmax_opcode_semantics():
     assert stack == [b"\x05"]
 
 
+def test_csv_operand_disable_flag_is_nop():
+    from pybitnode.consensus.script.interpreter import _exec_checksequenceverify
+
+    tx = Transaction(
+        version=2,
+        inputs=(TxIn(previous_output=OutPoint(hash=bytes.fromhex("3d" * 32), index=0), script_sig=b"", sequence=1),),
+        outputs=(TxOut(value=1, script_pubkey=b"\x51"),),
+        lock_time=0,
+    )
+    from pybitnode.consensus.script.interpreter import _encode_script_num
+
+    disabled_operand = _encode_script_num(1 << 31, max_len=5)
+    stack = Stack([disabled_operand])
+    _exec_checksequenceverify(stack, tx=tx, input_index=0)
+    assert stack == [disabled_operand]
+
+
+def test_tapscript_opcode_constants_match_bip342():
+    from pybitnode.consensus.script.opcodes import OP_NEGATE, OP_NUMEQUALVERIFY, OP_NUMNOTEQUAL
+
+    assert OP_NUMEQUALVERIFY == 0x9D
+    assert OP_NUMNOTEQUAL == 0x9E
+    assert OP_NEGATE == 0x8F
+
+
+def test_tapscript_negate_and_hash256_semantics():
+    from pybitnode.consensus.script.interpreter import _evaluate_tapscript, VALIDATION_WEIGHT_OFFSET
+    from pybitnode.consensus.script.opcodes import OP_HASH256, OP_NEGATE
+    from pybitnode.consensus.script.sighash import tapleaf_hash
+
+    tx = Transaction(
+        version=2,
+        inputs=(TxIn(previous_output=OutPoint(hash=bytes.fromhex("3e" * 32), index=0), script_sig=b"", sequence=0),),
+        outputs=(TxOut(value=1, script_pubkey=b"\x51"),),
+        lock_time=0,
+    )
+    stack = Stack([b"\x03"])
+    script = bytes([OP_NEGATE])
+    leaf = tapleaf_hash(0xC0, script)
+    _evaluate_tapscript(
+        script,
+        stack,
+        tx=tx,
+        input_index=0,
+        tapleaf_digest=leaf,
+        spent_prevouts=((1, b"\x51"),),
+        annex=None,
+        validation_budget_left=[VALIDATION_WEIGHT_OFFSET],
+    )
+    assert stack == [b"\x83"]
+
+    stack = Stack([b"abc"])
+    script = bytes([OP_HASH256])
+    leaf = tapleaf_hash(0xC0, script)
+    _evaluate_tapscript(
+        script,
+        stack,
+        tx=tx,
+        input_index=0,
+        tapleaf_digest=leaf,
+        spent_prevouts=((1, b"\x51"),),
+        annex=None,
+        validation_budget_left=[VALIDATION_WEIGHT_OFFSET],
+    )
+    assert stack[0] == hash256(b"abc")
+
+
 def test_legacy_non_witness_allows_extra_stack_items_but_witness_stays_strict():
     tx = Transaction(
         version=1,
