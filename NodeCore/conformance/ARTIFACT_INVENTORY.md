@@ -64,10 +64,10 @@ ports emit them.
 | Bucket | Paths / patterns | Action |
 |--------|------------------|--------|
 | Keep port-local | `docs/BLOCKER_LEDGER.md`, test fixtures | Keep. |
-| Keep runtime | `data-java/` | Keep by default; large active runtime state. |
+| Keep runtime | clean RocksDB-only Java datadir or selected Docker sync volume | Keep only if status reports `chainstate_backend=rocksdb` and `local_sqlite_artifact_absent=true`. Current preserved keeper: Docker volume `jbitnode_sync_full_timed_20260603T005714Z` with compact proof `NodeCore/conformance/results/java_native_crypto_docker_full_timed_sync_2026-06-03.json`. |
 | Preserve before delete | proof metrics in `data-java-*/` and `target/java-rocksdb-local-peer-proof-*` | Copy compact JSON to `NodeCore/conformance/results/` when it supports a current claim. |
 | Delete cruft | `sync_catchup_*.log`, `sync_chunk_*.log`, `sync_perf_*.log` | Remove stale logs. |
-| Delete cruft | redundant `data-java-rocksdb-*`, `data-java-native-crypto-*`, `data-java-smoke*`, replay/proof scratch dirs | Remove after preserving compact proof JSON. |
+| Delete cruft | mixed `data-java/` containing `jbitnode.db*`, `javanode.db`, `operational-leveldb`, or `utxo-leveldb`; redundant `data-java-rocksdb-*`, `data-java-native-crypto-*`, `data-java-smoke*`, replay/proof scratch dirs | Remove after preserving compact proof JSON. |
 
 ## CSharp
 
