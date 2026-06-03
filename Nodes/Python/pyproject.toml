@@ -23,6 +23,7 @@ pybitnode = "pybitnode.node:main"
 pybitnode-status = "pybitnode.chainstate_status:main"
 pybitnode-rocksdb-proof = "pybitnode.storage.rocksdb_proof:main"
 pybitnode-sync = "pybitnode.sync_runner:main"
+pybitnode-script-corpus = "pybitnode.conformance.script_corpus:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pybitnode"]

@@ -10,7 +10,7 @@ Java is the source of harvested evidence for this corpus. Other ports start as `
 | `scripts.p2wsh_cltv_32868` | 32868 |  | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | cltv,locktime,op_checklocktimeverify,p2wsh |
 | `scripts.p2sh_p2wsh_op1_only_33500` | 33500 |  | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | p2sh,p2wsh |
 | `scripts.p2pkh_sighash_single_38010` | 38010 |  | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | hash,p2pkh,sighash |
-| `scripts.p2sh_cltv_38191` | 38191 |  | incomplete | java_cleared | not_started | not_started | not_started | not_started | not_started | cltv,locktime,op_checklocktimeverify,p2sh |
+| `scripts.p2sh_cltv_38191` | 38191 |  | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | cltv,locktime,op_checklocktimeverify,p2sh |
 | `scripts.p2tr_scriptpath_44295` | 44295 |  | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_0,op_checksigverify,op_endif,op_if,op_nip,p2tr |
 | `scripts.p2tr_scriptpath_46599` | 46599 |  | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_0,op_checksigverify,op_endif,op_if,op_nip,p2tr |
 | `scripts.p2wsh_size_lessthan_46779` | 46779 |  | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | p2wsh |
@@ -25,13 +25,13 @@ Java is the source of harvested evidence for this corpus. Other ports start as `
 | `scripts.p2sh_3dup_63305` | 63305 | P2SH | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_3dup,op_add,op_equalverify,p2sh |
 | `scripts.p2sh_2dup_63603` | 63603 | P2SH | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_2dup,op_add,op_equal,op_equalverify,op_sub,p2sh |
 | `scripts.p2wsh_altstack_66241` | 66241 | P2WSH | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | altstack,op_0notequal,op_add,op_checkmultisig,op_checksequenceverify,op_checksigverify,op_endif,op_equal |
-| `scripts.p2tr_tapscript_hash256_67562` | 67562 | P2TR script-path | incomplete | java_cleared | not_started | not_started | not_started | not_started | not_started | hash,op_hash256,p2tr,p2tr script-path,tapscript |
+| `scripts.p2tr_tapscript_hash256_67562` | 67562 | P2TR script-path | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | hash,op_hash256,p2tr,p2tr script-path,tapscript |
 | `scripts.p2tr_tapscript_70924` | 70924 | P2TR script-path | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_min,op_pick,op_tuck,p2tr,p2tr script-path,tapscript |
 | `scripts.p2tr_tapscript_71267` | 71267 | P2TR script-path | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_2swap,op_3dup,op_depth,op_numequalverify,op_numnotequal,op_roll,op_rot,p2tr |
 | `scripts.p2tr_tapscript_78841` | 78841 | P2TR script-path | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_max,p2tr,p2tr script-path,tapscript |
 | `scripts.p2sh_82112` | 82112 | P2SH | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_nop,p2sh |
 | `scripts.p2tr_tapscript_82856` | 82856 | P2TR script-path | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_sha1,p2tr,p2tr script-path,tapscript |
-| `scripts.p2sh_82921` | 82921 |  | incomplete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_not,op_sha1,p2sh |
+| `scripts.p2sh_82921` | 82921 |  | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_not,op_sha1,p2sh |
 | `scripts.p2sh_sha1_82921` | 82921 | P2SH | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_not,op_sha1,p2sh |
 | `scripts.p2tr_tapscript_87214` | 87214 | P2TR script-path | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | op_ifdup,p2tr,p2tr script-path,tapscript |
 | `scripts.p2tr_tapscript_89632` | 89632 | P2TR script-path | complete | java_cleared | not_started | not_started | not_started | not_started | not_started | locktime,op_checklocktimeverify,op_checksequenceverify,p2tr,p2tr script-path,relative_locktime,tapscript |

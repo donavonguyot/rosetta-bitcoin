@@ -79,7 +79,7 @@ def classify(path: Path, prefix: str, meta_path: Path) -> str:
         return "prev_spk"
     if "scriptsig" in name:
         return "scriptsig"
-    if "redeem_script" in name:
+    if "redeem_script" in name or name.endswith("_redeem.hex"):
         return "redeem_script"
     if "witness_script" in name:
         return "witness_script"

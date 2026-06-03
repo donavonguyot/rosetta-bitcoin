@@ -855,6 +855,9 @@
       "chain": "testnet4",
       "expected_result": "valid",
       "files": {
+        "block": [
+          "scripts.p2sh_cltv_38191/block_38191.hex"
+        ],
         "meta": [
           "scripts.p2sh_cltv_38191/tx_p2sh_cltv_38191_meta.json"
         ],
@@ -907,6 +910,13 @@
         "p2sh"
       ],
       "source_files": [
+        {
+          "category": "block",
+          "path": "scripts.p2sh_cltv_38191/block_38191.hex",
+          "sha256": "2ea4b1a16794e3c3bccfeb71887d119213a7b200583944e9f8e626f4f4902a41",
+          "size_bytes": 5227,
+          "source_path": "Nodes/Java/src/test/resources/fixtures/block_38191.hex"
+        },
         {
           "category": "tx",
           "path": "scripts.p2sh_cltv_38191/tx_p2sh_cltv_38191.hex",
@@ -3047,6 +3057,9 @@
       "chain": "testnet4",
       "expected_result": "valid",
       "files": {
+        "block": [
+          "scripts.p2tr_tapscript_hash256_67562/block_67562.hex"
+        ],
         "meta": [
           "scripts.p2tr_tapscript_hash256_67562/tx_p2tr_tapscript_hash256_67562_meta.json"
         ],
@@ -3110,6 +3123,13 @@
         "tapscript"
       ],
       "source_files": [
+        {
+          "category": "block",
+          "path": "scripts.p2tr_tapscript_hash256_67562/block_67562.hex",
+          "sha256": "bee7fe5372a28286131cff311b39fc2e61ef3285ce0ce8c1bc5352cea7ab4106",
+          "size_bytes": 1157281,
+          "source_path": "Nodes/Java/src/test/resources/fixtures/block_67562.hex"
+        },
         {
           "category": "tx",
           "path": "scripts.p2tr_tapscript_hash256_67562/tx_p2tr_tapscript_hash256_67562.hex",
@@ -6071,9 +6091,6 @@
       "chain": "testnet4",
       "expected_result": "valid",
       "files": {
-        "aux": [
-          "scripts.p2sh_82921/tx_p2sh_82921_redeem.hex"
-        ],
         "block": [
           "scripts.p2sh_82921/block_82921.hex"
         ],
@@ -6085,6 +6102,9 @@
         ],
         "prevouts": [
           "scripts.p2sh_82921/tx_p2sh_82921_prevouts.json"
+        ],
+        "redeem_script": [
+          "scripts.p2sh_82921/tx_p2sh_82921_redeem.hex"
         ],
         "tx": [
           "scripts.p2sh_82921/tx_p2sh_82921.hex"
@@ -6156,7 +6176,7 @@
           "source_path": "Nodes/Java/src/test/resources/fixtures/tx_p2sh_82921_prevouts.json"
         },
         {
-          "category": "aux",
+          "category": "redeem_script",
           "path": "scripts.p2sh_82921/tx_p2sh_82921_redeem.hex",
           "sha256": "505a9a740e8d2b23a1e4a234078d8cb4c985807167fb5a5b529b407beb8e3e78",
           "size_bytes": 16,
