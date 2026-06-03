@@ -4,6 +4,7 @@ import com.jbitnode.config.ScriptVerifySettings;
 import com.jbitnode.consensus.connect.ValidationBlocker;
 import com.jbitnode.consensus.secp256k1.Secp256k1;
 import com.jbitnode.consensus.tx.Transaction;
+import com.jbitnode.util.Hex;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -37,8 +38,7 @@ public final class ScriptVerifyRunner implements AutoCloseable {
     this.executorFactory = executorFactory;
   }
 
-  public record InputVerifyTask(
-      int inputIndex, byte[] scriptPubKey, long valueSats, String scriptPubKeyHex) {}
+  public record InputVerifyTask(int inputIndex, byte[] scriptPubKey, long valueSats) {}
 
   public record VerifyContext(int height, String blockHashHex, String txidHex) {}
 
@@ -354,7 +354,7 @@ public final class ScriptVerifyRunner implements AutoCloseable {
           context.blockHashHex(),
           context.txidHex(),
           task.inputIndex(),
-          task.scriptPubKeyHex(),
+          Hex.encode(task.scriptPubKey()),
           error.getMessage(),
           error.getRule());
     } catch (ScriptVerifyError error) {
@@ -373,7 +373,7 @@ public final class ScriptVerifyRunner implements AutoCloseable {
           context.blockHashHex(),
           context.txidHex(),
           task.inputIndex(),
-          task.scriptPubKeyHex(),
+          Hex.encode(task.scriptPubKey()),
           error.getMessage(),
           "script_verification_failed");
     }

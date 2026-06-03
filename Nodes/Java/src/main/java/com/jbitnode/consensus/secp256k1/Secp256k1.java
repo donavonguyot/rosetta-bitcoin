@@ -57,7 +57,7 @@ public final class Secp256k1 {
   private static volatile Secp256k1Backend backend = selectedBackend();
 
   private static Secp256k1Backend selectedBackend() {
-    String raw = System.getenv().getOrDefault("SECP256K1_BACKEND", "pure_java");
+    String raw = System.getenv().getOrDefault("SECP256K1_BACKEND", "native");
     if ("native".equalsIgnoreCase(raw)) {
       return NativeSecp256k1.INSTANCE;
     }
@@ -65,6 +65,30 @@ public final class Secp256k1 {
       return BouncyCastleSecp256k1Backend.INSTANCE;
     }
     return PureJavaSecp256k1Backend.INSTANCE;
+  }
+
+  /**
+   * Enforces the native libsecp256k1 backend for live node runtimes. The pure-Java and
+   * BouncyCastle backends exist only as test/reference comparators; the node must not validate
+   * consensus with them. Call from node entrypoints before any block connect so the process fails
+   * fast (rather than silently mis-verifying) when native is unavailable or another backend was
+   * requested.
+   */
+  public static void ensureNativeRuntimeBackend(Map<String, String> env) {
+    String requested =
+        env.getOrDefault("SECP256K1_BACKEND", "native").trim().toLowerCase(java.util.Locale.ROOT);
+    if (!"native".equals(requested)) {
+      throw new Secp256k1Error(
+          "node runtime requires SECP256K1_BACKEND=native (libsecp256k1); got '"
+              + requested
+              + "' — pure_java/bouncycastle are test-only comparators");
+    }
+    if (!nativeBackendAvailable()) {
+      throw new Secp256k1Error(
+          "native libsecp256k1 backend is unavailable on this platform; "
+              + "enable the fr.acinq.secp256k1 JNI natives before running the node");
+    }
+    backend = NativeSecp256k1.INSTANCE;
   }
 
   public static String selectedBackendName() {

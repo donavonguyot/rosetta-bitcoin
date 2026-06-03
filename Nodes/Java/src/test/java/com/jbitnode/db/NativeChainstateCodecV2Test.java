@@ -34,11 +34,11 @@ class NativeChainstateCodecV2Test {
     JsonNode utxo = vectors.get("utxo");
     StoredUtxo storedUtxo =
         new StoredUtxo(
-            txid,
+            Hex.decode(txid),
             utxo.get("vout").asInt(),
             utxo.get("height").asInt(),
             utxo.get("value_sats").asLong(),
-            script,
+            Hex.decode(script),
             utxo.get("coinbase").asBoolean());
     assertEquals(
         utxo.get("key_hex").asText(),
@@ -48,11 +48,11 @@ class NativeChainstateCodecV2Test {
     JsonNode undo = vectors.get("undo");
     UtxoUndoEntry undoEntry =
         new UtxoUndoEntry(
-            txid,
+            Hex.decode(txid),
             utxo.get("vout").asInt(),
             utxo.get("height").asInt(),
             utxo.get("value_sats").asLong(),
-            script,
+            Hex.decode(script),
             utxo.get("coinbase").asBoolean());
     assertEquals(
         undo.get("key_hex").asText(),

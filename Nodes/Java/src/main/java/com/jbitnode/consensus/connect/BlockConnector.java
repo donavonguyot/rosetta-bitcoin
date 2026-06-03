@@ -25,6 +25,7 @@ import com.jbitnode.sync.BlockValidator.ValidateOptions;
 import com.jbitnode.util.Hex;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -71,7 +72,37 @@ public final class BlockConnector {
         payload,
         expectedPrev,
         expectedHash,
-        timingSink);
+        timingSink,
+        null);
+  }
+
+  /**
+   * Connects a block reusing a caller-owned {@link ScriptVerifyRunner}. The sync loop creates one
+   * runner (and its worker thread pool + warm secp256k1 verification cache) for the whole run and
+   * passes it here so we do not spin up and tear down a thread pool on every block.
+   */
+  public static ConnectResult connectInCurrentTransaction(
+      ProjectTracker tracker,
+      ChainstateStore chainstateStore,
+      String chain,
+      int height,
+      byte[] payload,
+      byte[] expectedPrev,
+      byte[] expectedHash,
+      TimingSink timingSink,
+      ScriptVerifyRunner scriptVerifyRunner)
+      throws ConnectBlockException, ValidationBlocker, SQLException {
+    return connectInCurrentTransaction(
+        tracker,
+        chainstateStore.utxoStore(),
+        chainstateStore,
+        chain,
+        height,
+        payload,
+        expectedPrev,
+        expectedHash,
+        timingSink,
+        scriptVerifyRunner);
   }
 
   public static ConnectResult connectInCurrentTransaction(
@@ -85,7 +116,7 @@ public final class BlockConnector {
       TimingSink timingSink)
       throws ConnectBlockException, ValidationBlocker, SQLException {
     return connectInCurrentTransaction(
-        tracker, utxoStore, null, chain, height, payload, expectedPrev, expectedHash, timingSink);
+        tracker, utxoStore, null, chain, height, payload, expectedPrev, expectedHash, timingSink, null);
   }
 
   private static ConnectResult connectInCurrentTransaction(
@@ -97,7 +128,8 @@ public final class BlockConnector {
       byte[] payload,
       byte[] expectedPrev,
       byte[] expectedHash,
-      TimingSink timingSink)
+      TimingSink timingSink,
+      ScriptVerifyRunner sharedRunner)
       throws ConnectBlockException, ValidationBlocker, SQLException {
     int validated = tracker.getValidatedHeight(chain);
     if (height != validated + 1) {
@@ -119,11 +151,32 @@ public final class BlockConnector {
     BlockShape shape = BlockShape.from(block);
     BlockUtxoView view =
         new BlockUtxoView(utxoStore, chain, height, timings, shape.spendCount(), shape.spendableOutputUpperBound());
-    ScriptVerifySettings scriptVerifySettings = ScriptVerifySettings.fromEnv();
+
+    // Phase 5b: warm the view with one batched multiGet of every non-coinbase input prevout instead
+    // of a point lookup per input. In-block-created outpoints simply miss the store here (they carry
+    // brand-new txids) and are served from the per-block created map during the connect pass.
+    long prevoutLoadStarted = System.nanoTime();
+    List<OutPoint> blockPrevouts = new ArrayList<>(Math.max(16, shape.spendCount()));
+    for (Transaction transaction : block.transactions()) {
+      if (transaction.isCoinbase()) {
+        continue;
+      }
+      for (TxIn input : transaction.inputs()) {
+        blockPrevouts.add(input.previousOutput());
+      }
+    }
+    view.prefetchExternal(blockPrevouts);
+    timings.recordStage("prevout_batch_load", System.nanoTime() - prevoutLoadStarted);
+
     long totalFees = 0;
     int inputCount = 0;
 
-    try (ScriptVerifyRunner scriptVerifyRunner = new ScriptVerifyRunner(scriptVerifySettings)) {
+    // Reuse the caller-owned runner when provided (sync loop). Only fall back to a per-call runner
+    // (and tear it down here) when no shared runner was passed, e.g. one-shot connects in tests.
+    ScriptVerifyRunner localRunner =
+        sharedRunner == null ? new ScriptVerifyRunner(ScriptVerifySettings.fromEnv()) : null;
+    ScriptVerifyRunner scriptVerifyRunner = sharedRunner != null ? sharedRunner : localRunner;
+    try {
       List<ScriptVerifyRunner.BlockInputVerifyJob> blockVerifyJobs =
           new ArrayList<>(Math.max(16, shape.spendCount()));
       for (int transactionIndex = 0; transactionIndex < block.transactions().size(); transactionIndex++) {
@@ -158,6 +211,10 @@ public final class BlockConnector {
         timings.recordStage("output_create", System.nanoTime() - outputStarted);
       }
       scriptVerifyRunner.verifyBlockInputs(blockVerifyJobs, timings::recordScriptStage);
+    } finally {
+      if (localRunner != null) {
+        localRunner.close();
+      }
     }
 
     Transaction coinbase = block.transactions().getFirst();
@@ -248,7 +305,7 @@ public final class BlockConnector {
     }
   }
 
-  private record PrevoutInfo(long valueSats, byte[] scriptPubKey, String scriptPubKeyHex) {}
+  private record PrevoutInfo(long valueSats, byte[] scriptPubKey) {}
 
   private static long prepareNonCoinbaseTransaction(
       BlockUtxoView view,
@@ -291,8 +348,7 @@ public final class BlockConnector {
                 + utxo.height()
                 + ")");
       }
-      prevoutInfos.add(
-          new PrevoutInfo(utxo.valueSats(), Hex.decode(utxo.scriptPubKeyHex()), utxo.scriptPubKeyHex()));
+      prevoutInfos.add(new PrevoutInfo(utxo.valueSats(), utxo.scriptPubKey()));
     }
 
     List<ScriptVerify.SpentPrevout> spentPrevouts = new ArrayList<>(inputSize);
@@ -305,10 +361,7 @@ public final class BlockConnector {
       PrevoutInfo prevout = prevoutInfos.get(inputIndex);
       verifyTasks.add(
           new ScriptVerifyRunner.InputVerifyTask(
-              inputIndex,
-              prevout.scriptPubKey(),
-              prevout.valueSats(),
-              prevout.scriptPubKeyHex()));
+              inputIndex, prevout.scriptPubKey(), prevout.valueSats()));
       inputTotal += prevout.valueSats();
     }
     timings.recordStage("prevout_prepare", System.nanoTime() - prepStarted);
@@ -370,6 +423,37 @@ public final class BlockConnector {
       this.spent = new HashSet<>(Math.max(16, expectedSpends * 2));
     }
 
+    void prefetchExternal(List<OutPoint> prevouts) throws SQLException {
+      if (prevouts.isEmpty()) {
+        return;
+      }
+      LinkedHashMap<UtxoKey, ProjectTracker.UtxoOutpoint> distinct = new LinkedHashMap<>();
+      for (OutPoint outpoint : prevouts) {
+        UtxoKey key = UtxoKey.fromOutPoint(outpoint);
+        if (loaded.containsKey(key) || created.containsKey(key) || distinct.containsKey(key)) {
+          continue;
+        }
+        distinct.put(key, new ProjectTracker.UtxoOutpoint(key.displayTxidHex(), (int) key.vout()));
+      }
+      if (distinct.isEmpty()) {
+        return;
+      }
+      List<UtxoKey> keys = new ArrayList<>(distinct.keySet());
+      List<ProjectTracker.UtxoOutpoint> outpoints = new ArrayList<>(distinct.values());
+      long started = System.nanoTime();
+      try {
+        List<StoredUtxo> values = utxoStore.getMany(chain, outpoints);
+        for (int i = 0; i < keys.size(); i++) {
+          StoredUtxo utxo = values.get(i);
+          if (utxo != null) {
+            loaded.put(keys.get(i), utxo);
+          }
+        }
+      } finally {
+        timings.utxoLoadNanos += System.nanoTime() - started;
+      }
+    }
+
     StoredUtxo get(OutPoint outpoint) throws SQLException {
       UtxoKey key = UtxoKey.fromOutPoint(outpoint);
       if (spent.contains(key)) {
@@ -411,14 +495,15 @@ public final class BlockConnector {
     void create(
         byte[] txidInternal, int vout, long valueSats, byte[] scriptPubKey, boolean coinbase)
         throws ConnectBlockException {
-      String txidHex = Hex.encode(Hex.reverse(txidInternal));
       UtxoKey key = UtxoKey.fromInternalTxid(txidInternal, vout);
       if (created.containsKey(key)) {
-        throw new ConnectBlockException("duplicate UTXO " + txidHex + ":" + vout);
+        throw new ConnectBlockException(
+            "duplicate UTXO " + Hex.encode(Hex.reverse(txidInternal)) + ":" + vout);
       }
+      // txid stored in display (big-endian) order to match the on-disk v2 key/undo layout.
       created.put(
           key,
-          new StoredUtxo(txidHex, vout, height, valueSats, Hex.encode(scriptPubKey), coinbase));
+          new StoredUtxo(Hex.reverse(txidInternal), vout, height, valueSats, scriptPubKey, coinbase));
     }
 
     int createdCount() {
@@ -442,7 +527,7 @@ public final class BlockConnector {
                 utxo.vout(),
                 utxo.height(),
                 utxo.valueSats(),
-                utxo.scriptPubKeyHex(),
+                utxo.scriptPubKey(),
                 utxo.coinbase()));
       }
       return entries;
@@ -483,14 +568,50 @@ public final class BlockConnector {
     }
   }
 
-  private record UtxoKey(String internalTxidHex, String displayTxidHex, long vout) {
+  // byte[]-backed map key with a cached hashCode: the connect hot path hashes/compares these for
+  // every input and created output, so this avoids two Hex.encode allocations and String hashing
+  // per outpoint that the previous hex-string key paid.
+  private static final class UtxoKey {
+    private final byte[] internalTxid;
+    private final long vout;
+    private final int hash;
+
+    private UtxoKey(byte[] internalTxid, long vout) {
+      this.internalTxid = internalTxid;
+      this.vout = vout;
+      this.hash = 31 * Arrays.hashCode(internalTxid) + Long.hashCode(vout);
+    }
+
     static UtxoKey fromOutPoint(OutPoint outpoint) {
-      byte[] hash = outpoint.hash();
-      return new UtxoKey(Hex.encode(hash), Hex.encode(Hex.reverse(hash)), outpoint.index());
+      return new UtxoKey(outpoint.hash(), outpoint.index());
     }
 
     static UtxoKey fromInternalTxid(byte[] txidInternal, int vout) {
-      return new UtxoKey(Hex.encode(txidInternal), Hex.encode(Hex.reverse(txidInternal)), vout);
+      return new UtxoKey(txidInternal, vout);
+    }
+
+    long vout() {
+      return vout;
+    }
+
+    String displayTxidHex() {
+      return Hex.encode(Hex.reverse(internalTxid));
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (this == other) {
+        return true;
+      }
+      if (!(other instanceof UtxoKey key)) {
+        return false;
+      }
+      return vout == key.vout && Arrays.equals(internalTxid, key.internalTxid);
+    }
+
+    @Override
+    public int hashCode() {
+      return hash;
     }
   }
 }

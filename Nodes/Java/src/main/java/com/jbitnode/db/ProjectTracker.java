@@ -83,7 +83,13 @@ public final class ProjectTracker implements AutoCloseable {
   public List<Integer> listMissingBlockHeights(String chain, int limit) throws SQLException {
     List<Integer> heights = new ArrayList<>();
     int headerCount = operationalStore.headerCount(chain);
-    for (int height = 1; height < headerCount && heights.size() < limit; height++) {
+    // Forward-sync hot path: blocks are stored only when connected, so nothing at or below the
+    // validated tip is ever missing. Start the scan at the validated tip + 1 instead of genesis to
+    // avoid an O(validated_height) RocksDB point-lookup rescan on every download batch (this was
+    // near-quadratic as the chain approached tip). Historical gap detection/repair still uses
+    // countBlockStorageGaps / maxStoredBlockHeight, which deliberately scan from genesis.
+    int start = Math.max(1, getValidatedHeight(chain) + 1);
+    for (int height = start; height < headerCount && heights.size() < limit; height++) {
       if (operationalStore.getBlock(chain, height).isEmpty()) {
         heights.add(height);
       }
@@ -238,19 +244,17 @@ public final class ProjectTracker implements AutoCloseable {
 
   public record UtxoOutpoint(String txidHex, int vout) {}
 
+  // txid and scriptPubKey are raw bytes (txid in display/big-endian order, matching the on-disk v2
+  // key layout) so the hot connect path never round-trips through hex strings. The persisted codec
+  // is byte-identical: v2 already stored these as raw bytes.
   public record StoredUtxo(
-      String txid,
+      byte[] txid,
       int vout,
       int height,
       long valueSats,
-      String scriptPubKeyHex,
+      byte[] scriptPubKey,
       boolean coinbase) {}
 
   public record UtxoUndoEntry(
-      String txid, int vout, int height, long valueSats, String scriptPubKeyHex, boolean coinbase) {
-
-    public UtxoUndoEntry(String txid, int vout, long valueSats, String scriptPubKeyHex) {
-      this(txid, vout, 0, valueSats, scriptPubKeyHex, false);
-    }
-  }
+      byte[] txid, int vout, int height, long valueSats, byte[] scriptPubKey, boolean coinbase) {}
 }

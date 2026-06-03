@@ -34,6 +34,15 @@ public final class SyncLocalCoreService {
   }
 
   static int run(PrintStream out, java.util.Map<String, String> env) {
+    try {
+      com.jbitnode.consensus.secp256k1.Secp256k1.ensureNativeRuntimeBackend(env);
+    } catch (com.jbitnode.consensus.secp256k1.Secp256k1.Secp256k1Error error) {
+      out.println("  sync_status=error");
+      out.println("  error=" + error.getMessage());
+      out.println("  binary_gate_status=not_attempted");
+      printExitSummary(out, 2, null, -1, "error");
+      return 2;
+    }
     String chainName = env.getOrDefault("CHAIN", NodePaths.DEFAULT_CHAIN);
     ChainParams chain = ChainRegistry.get(chainName);
     List<PeerEndpoint> peers =

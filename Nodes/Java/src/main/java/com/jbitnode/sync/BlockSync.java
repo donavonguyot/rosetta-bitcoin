@@ -1,9 +1,11 @@
 package com.jbitnode.sync;
 
 import com.jbitnode.chain.ChainParams;
+import com.jbitnode.config.ScriptVerifySettings;
 import com.jbitnode.consensus.connect.BlockConnector;
 import com.jbitnode.consensus.connect.ConnectBlockException;
 import com.jbitnode.consensus.connect.ValidationBlocker;
+import com.jbitnode.consensus.script.ScriptVerifyRunner;
 import com.jbitnode.db.ChainstateStore;
 import com.jbitnode.db.ProjectTracker;
 import com.jbitnode.db.ProjectTracker.SyncStatePatch;
@@ -24,7 +26,39 @@ public final class BlockSync {
 
   public static final int DEFAULT_BATCH_SIZE = 32;
 
+  /** Default number of blocks the background prefetcher may stay ahead of the connect loop. */
+  static final int DEFAULT_PREFETCH_DEPTH = 4;
+
+  /** Upper bound for take() so a silent/dead peer becomes an "unavailable" blocker, not a hang. */
+  private static final long PREFETCH_TAKE_TIMEOUT_MS = 300_000;
+
   private BlockSync() {}
+
+  private static int prefetchDepthFromEnv() {
+    String raw = System.getenv("BLOCK_PREFETCH_DEPTH");
+    if (raw == null || raw.isBlank()) {
+      return DEFAULT_PREFETCH_DEPTH;
+    }
+    try {
+      return Math.max(1, Math.min(64, Integer.parseInt(raw.trim())));
+    } catch (NumberFormatException ignored) {
+      return DEFAULT_PREFETCH_DEPTH;
+    }
+  }
+
+  // The per-block "Block connected" event is an operational-store write per height. During bulk
+  // catch-up it is pure overhead (progress is tracked by validated height + timing summary), so it
+  // is off by default and re-enabled with SYNC_LOG_CONNECTED_BLOCKS=1 for verbose observation.
+  private static boolean logConnectedBlocksFromEnv() {
+    String raw = System.getenv("SYNC_LOG_CONNECTED_BLOCKS");
+    if (raw == null) {
+      return false;
+    }
+    String trimmed = raw.trim();
+    return trimmed.equals("1")
+        || trimmed.equalsIgnoreCase("true")
+        || trimmed.equalsIgnoreCase("yes");
+  }
 
   public record Result(
       int downloaded,
@@ -118,7 +152,19 @@ public final class BlockSync {
     int connected = 0;
     String blockerMessage = null;
     boolean chunkLimitReached = false;
+    int prefetchDepth = prefetchDepthFromEnv();
+    boolean logConnectedBlocks = logConnectedBlocksFromEnv();
 
+    // Wire-capability puts are idempotent timestamped writes; recording them once per run (instead
+    // of once per connected block) removes a steady stream of redundant operational-store writes
+    // from the hot loop without losing the capability signal.
+    boolean downloadCapsMarked = false;
+    boolean blockStoreCapMarked = false;
+
+    // One runner (worker pool + warm secp256k1 verification cache) for the whole batch, instead of
+    // constructing and tearing down a thread pool on every connected block.
+    try (ScriptVerifyRunner scriptVerifyRunner =
+        new ScriptVerifyRunner(ScriptVerifySettings.fromEnv())) {
     while (maxBlocks <= 0 || downloaded < maxBlocks) {
       int batchLimit = maxBlocks > 0 ? Math.min(DEFAULT_BATCH_SIZE, maxBlocks - downloaded) : DEFAULT_BATCH_SIZE;
       List<Integer> missing = tracker.listMissingBlockHeights(chain.name(), batchLimit);
@@ -133,6 +179,21 @@ public final class BlockSync {
             timingCollector.summary());
       }
 
+      // Plan the download for the contiguous prefix of the batch that has headers. The background
+      // prefetcher streams these block payloads in order while this thread connects earlier blocks,
+      // overlapping network transfer with script verification. Heights without a header stop the
+      // plan; the connect loop below independently surfaces the same missing-header blocker.
+      List<BlockPrefetcher.Plan> plan = new ArrayList<>(missing.size());
+      for (int height : missing) {
+        String planHashHex = tracker.getHeaderHash(chain.name(), height);
+        if (planHashHex == null) {
+          break;
+        }
+        plan.add(new BlockPrefetcher.Plan(height, Hex.reverse(Hex.decode(planHashHex))));
+      }
+
+      try (BlockPrefetcher prefetcher =
+          new BlockPrefetcher(blockSource::requestBlock, plan, prefetchDepth)) {
       for (int height : missing) {
         if (maxBlocks > 0 && downloaded >= maxBlocks) {
           break;
@@ -156,9 +217,19 @@ public final class BlockSync {
         byte[] blockHashInternal = Hex.reverse(Hex.decode(blockHashHex));
 
         long downloadStarted = System.nanoTime();
-        byte[] payload = blockSource.requestBlock(blockHashInternal);
+        BlockPrefetcher.Fetched fetched;
+        try {
+          fetched = prefetcher.take(PREFETCH_TAKE_TIMEOUT_MS);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          throw new IOException(
+              "interrupted waiting for prefetched block at height " + height, interrupted);
+        }
         timingSink.record("block_download_wait", height, elapsedMillis(downloadStarted));
-        if (payload == null) {
+        byte[] payload = fetched == null ? null : fetched.payload();
+        if (payload == null || fetched.height() != height) {
+          tracker.markWireCapability(
+              "blocks.notfound", true, "live", "peer returned notfound for block");
           tracker.logEvent(
               "sync",
               "Block unavailable from peer",
@@ -180,17 +251,25 @@ public final class BlockSync {
                   blockStorage,
                   chainstateStore,
                   replaceBlockMetadata,
-                  timingCollector);
+                  timingCollector,
+                  scriptVerifyRunner,
+                  logConnectedBlocks);
           timingCollector.recordBlock(
               height,
               payload.length,
               result.inputCount());
-          blockSource.markBlockDownloadCapabilities();
-          tracker.markWireCapability(
-              "blocks.block.store",
-              true,
-              "live",
-              "stored block height " + height);
+          if (!downloadCapsMarked) {
+            blockSource.markBlockDownloadCapabilities();
+            downloadCapsMarked = true;
+          }
+          if (!blockStoreCapMarked) {
+            tracker.markWireCapability(
+                "blocks.block.store",
+                true,
+                "live",
+                "stored block height " + height);
+            blockStoreCapMarked = true;
+          }
           connected += 1;
           downloaded += 1;
         } catch (ValidationBlocker blocker) {
@@ -229,6 +308,7 @@ public final class BlockSync {
               timingCollector.summary());
         }
       }
+      }
 
       if (blockerMessage != null) {
         break;
@@ -237,6 +317,7 @@ public final class BlockSync {
         chunkLimitReached = true;
         break;
       }
+    }
     }
 
     if (blockerMessage != null) {
@@ -289,7 +370,9 @@ public final class BlockSync {
       BlockStorage blockStorage,
       ChainstateStore chainstateStore,
       boolean replaceBlockMetadata,
-      TimingSink timingSink)
+      TimingSink timingSink,
+      ScriptVerifyRunner scriptVerifyRunner,
+      boolean logConnectedBlock)
       throws SQLException, ConnectBlockException, ValidationBlocker {
     long started = System.nanoTime();
     BlockConnector.ConnectResult result =
@@ -302,7 +385,8 @@ public final class BlockSync {
             expectedPrev,
             expectedHash,
             (stage, timedHeight, elapsedMillis) ->
-                timingSink.record(stage, timedHeight, elapsedMillis));
+                timingSink.record(stage, timedHeight, elapsedMillis),
+            scriptVerifyRunner);
     long blockStoreStarted = System.nanoTime();
     if (replaceBlockMetadata) {
       blockStorage.storeBlockReplacingMetadata(chain, height, result.blockHashHex(), payload);
@@ -312,17 +396,19 @@ public final class BlockSync {
     timingSink.record("block_store", height, elapsedMillis(blockStoreStarted));
     timingSink.record("commit", height, 0);
     timingSink.record("block_connect_store_commit", height, elapsedMillis(started));
-    tracker.logEvent(
-        "sync",
-        "Block connected",
-        "info",
-        "{\"height\":"
-            + height
-            + ",\"block_hash\":\""
-            + result.blockHashHex()
-            + "\",\"utxos_created\":"
-            + result.utxosCreated()
-            + "}");
+    if (logConnectedBlock) {
+      tracker.logEvent(
+          "sync",
+          "Block connected",
+          "info",
+          "{\"height\":"
+              + height
+              + ",\"block_hash\":\""
+              + result.blockHashHex()
+              + "\",\"utxos_created\":"
+              + result.utxosCreated()
+              + "}");
+    }
     return result;
   }
 

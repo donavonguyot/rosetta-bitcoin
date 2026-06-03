@@ -785,6 +785,67 @@ Deferred (only if wall clock regresses on different block shapes):
 
 </details>
 
+## Perf appendix (2026-06-02 native-storage throughput batch)
+
+<details>
+<summary>Crypto/sync-loop/RocksDB hot-path optimizations (native backend)</summary>
+
+Targets the overhead *around* script verification, not the interpreter itself. Per the
+2026-05-26 appendix, `script_verify` is ~99% of connect on ~2 MB blocks (sequential ~105 s/block;
+parallel `PAR_SCRIPT_VERIFY=1` ~10.6 s/block wall clock). These changes reduce per-block thread/cache
+churn, network stalls, UTXO read/write cost, and redundant operational-store writes so the
+script-bound rate is sustained with less surrounding overhead.
+
+Landed:
+
+```text
+Phase 1  Secp256k1 defaults to native; node entry points fail fast via
+         ensureNativeRuntimeBackend (no silent BouncyCastle/pure-Java runtime fallback).
+         pure-java/BC reachable only via useBackendForTests for comparator/vector tests.
+         Makefile java-node-{live,sync-catchup,sync-chunk,sync-rocksdb,rocksdb-clean-rebuild}
+         inherit native default (bouncycastle overrides removed).
+Phase 2  listMissingBlockHeights scans from validatedHeight+1 on the forward path
+         (was full rescan from height 1 every 32-block batch).
+Phase 3  one ScriptVerifyRunner (worker pool + warm secp256k1 VerificationCache) per sync run
+         instead of per block; ScriptVerifySettings.fromEnv() parsed once.
+Phase 4  BlockPrefetcher: bounded background queue downloads next K blocks in order while the
+         connect loop verifies earlier blocks (overlaps transfer with verify). Tracker-free
+         download path; depth via BLOCK_PREFETCH_DEPTH (default 4). In-order connect, notfound/
+         timeout/hash-mismatch/blocker semantics preserved.
+Phase 5a RocksDB BlockBasedTableConfig (block cache + bloom) + larger write buffers/memtables on
+         both stores (UTXO store sized larger); optional WAL-off on chainstate during catch-up via
+         ROCKSDB_DISABLE_WAL (rebuildable via --rebuild); explicit header/block counters replace
+         O(n) countPrefix scans.
+Phase 5b UtxoStore.getMany via RocksDB multiGetAsList; BlockConnector batch-loads all external
+         prevouts in a first pass (BlockUtxoView.prefetchExternal) instead of per-input get.
+Phase 5c StoredUtxo/UtxoUndoEntry/UtxoKey carry byte[] txid+scriptPubKey end-to-end; hex
+         round-trips removed from the hot path. On-disk codec format byte-identical (verified by
+         NativeChainstateCodecV2Test golden vectors) → no datadir migration.
+Phase 5d idempotent markWireCapability puts gated behind per-run once-flags; per-block
+         "Block connected" event off by default (SYNC_LOG_CONNECTED_BLOCKS=1 to re-enable);
+         upsertSyncState already only on status transitions.
+verify:  SECP256K1_BACKEND=native mvn verify → 431 tests, 0 failures, 100% JaCoCo.
+```
+
+Expected effect: the headline script-bound wall clock (sequential ~105 s, parallel ~10.6 s) is
+unchanged because the interpreter and parallelism are untouched; the surrounding overhead
+(`block_download_wait`, `utxo_load`, `utxo_apply`, per-block pool/cache rebuild, redundant
+operational writes) shrinks, and download now overlaps verification. The largest single throughput
+lever remains native parallel script verify (Phase 3 keeps that pool/cache warm across blocks).
+
+Remaining measurement (run on a clean native datadir + live testnet4 peer; the current `data-java`
+is a legacy mixed SQLite+leveldb+rocksdb datadir and must not be benchmarked or written under the
+single-writer/native-storage contracts):
+
+```bash
+# fresh native datadir, sync into the heavy-block window with timing on
+SECP256K1_BACKEND=native SYNC_TIMING=1 PAR_SCRIPT_VERIFY=1 \
+  make java-node-sync-chunk DATA_DIR=./data-java-bench PEERS=<peer>
+# compare per-stage totals from printTimingSummary vs the 2026-05-26 @52382/@52386 baseline above
+```
+
+</details>
+
 ## Post-sync hardening notes
 
 These are operational blockers before JavaNode can claim “sync to tip and maintain

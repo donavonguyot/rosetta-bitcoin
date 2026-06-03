@@ -42,6 +42,13 @@ public final class ChainstateRebuildService {
     }
     backend = backend.toLowerCase(java.util.Locale.ROOT);
 
+    try {
+      com.jbitnode.consensus.secp256k1.Secp256k1.ensureNativeRuntimeBackend(env);
+    } catch (com.jbitnode.consensus.secp256k1.Secp256k1.Secp256k1Error error) {
+      out.println("chainstate_rebuild error=" + error.getMessage());
+      return 2;
+    }
+
     String chainName = env.getOrDefault("CHAIN", NodePaths.DEFAULT_CHAIN);
     ChainParams chain = ChainRegistry.get(chainName);
     List<PeerEndpoint> peers = PeerConfig.parsePeers(env.get("PEERS"), chain.defaultPort());

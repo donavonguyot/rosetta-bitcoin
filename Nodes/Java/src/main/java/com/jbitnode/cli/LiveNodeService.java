@@ -39,6 +39,14 @@ public final class LiveNodeService {
   }
 
   static int run(PrintStream out, Map<String, String> env, Sleeper sleeper) {
+    try {
+      com.jbitnode.consensus.secp256k1.Secp256k1.ensureNativeRuntimeBackend(env);
+    } catch (com.jbitnode.consensus.secp256k1.Secp256k1.Secp256k1Error error) {
+      out.println("  sync_status=error");
+      out.println("  error=" + error.getMessage());
+      out.println("live_exit_summary exit_code=2 reason=secp256k1_backend iterations=0");
+      return 2;
+    }
     String chainName = env.getOrDefault("CHAIN", NodePaths.DEFAULT_CHAIN);
     ChainParams chain = ChainRegistry.get(chainName);
     List<PeerEndpoint> peers = PeerConfig.parsePeers(env.get("PEERS"), chain.defaultPort());

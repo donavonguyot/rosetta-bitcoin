@@ -10,7 +10,6 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Optional;
-import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
@@ -26,19 +25,25 @@ public final class RocksDbOperationalStore implements OperationalStore {
   private static final byte EVENT_PREFIX = 'e';
   private static final byte COUNTER_PREFIX = 'c';
 
+  // Maintained counters that replace the O(n) prefix scans formerly run on every sync batch. Stored
+  // under the existing counter namespace; lazily initialised from a one-time scan for datadirs
+  // written before the counters existed, then kept current by recordHeader/recordBlock.
+  private static final String HEADER_COUNT = "header_count";
+  private static final String BLOCK_COUNT = "block_count";
+
   static {
     RocksDB.loadLibrary();
   }
 
-  private final Options options;
+  private final RocksDbTuning.Tuned tuned;
   private final RocksDB db;
 
   public RocksDbOperationalStore(Path path, boolean createIfMissing) throws IOException {
-    this.options = new Options().setCreateIfMissing(createIfMissing);
+    this.tuned = RocksDbTuning.create(createIfMissing, 64L << 20, 16L << 20, 3);
     try {
-      this.db = RocksDB.open(options, path.toString());
+      this.db = RocksDB.open(tuned.options(), path.toString());
     } catch (RocksDBException error) {
-      options.close();
+      tuned.closeResources();
       throw new IOException("failed to open RocksDB operational store at " + path, error);
     }
   }
@@ -92,7 +97,12 @@ public final class RocksDbOperationalStore implements OperationalStore {
   @Override
   public void recordHeader(HeaderRecord header) throws SQLException {
     try {
-      db.put(heightKey(HEADER_PREFIX, header.chain(), header.height()), encodeHeader(header));
+      byte[] key = heightKey(HEADER_PREFIX, header.chain(), header.height());
+      boolean isNew = db.get(key) == null;
+      db.put(key, encodeHeader(header));
+      if (isNew) {
+        bumpCounterIfPresent(HEADER_COUNT, header.chain());
+      }
     } catch (IOException | RocksDBException error) {
       throw new SQLException("rocksdb operational header encode failed", error);
     }
@@ -115,13 +125,18 @@ public final class RocksDbOperationalStore implements OperationalStore {
 
   @Override
   public int headerCount(String chain) throws SQLException {
-    return countPrefix(heightPrefix(HEADER_PREFIX, chain));
+    return maintainedCount(HEADER_COUNT, HEADER_PREFIX, chain);
   }
 
   @Override
   public void recordBlock(BlockIndexRecord block) throws SQLException {
     try {
-      db.put(heightKey(BLOCK_PREFIX, block.chain(), block.height()), encodeBlock(block));
+      byte[] key = heightKey(BLOCK_PREFIX, block.chain(), block.height());
+      boolean isNew = db.get(key) == null;
+      db.put(key, encodeBlock(block));
+      if (isNew) {
+        bumpCounterIfPresent(BLOCK_COUNT, block.chain());
+      }
     } catch (IOException | RocksDBException error) {
       throw new SQLException("rocksdb operational block index encode failed", error);
     }
@@ -139,7 +154,7 @@ public final class RocksDbOperationalStore implements OperationalStore {
 
   @Override
   public int blockCount(String chain) throws SQLException {
-    return countPrefix(heightPrefix(BLOCK_PREFIX, chain));
+    return maintainedCount(BLOCK_COUNT, BLOCK_PREFIX, chain);
   }
 
   @Override
@@ -190,7 +205,7 @@ public final class RocksDbOperationalStore implements OperationalStore {
   @Override
   public void close() throws IOException {
     db.close();
-    options.close();
+    tuned.closeResources();
   }
 
   private int countPrefix(byte[] prefix) throws SQLException {
@@ -207,6 +222,33 @@ public final class RocksDbOperationalStore implements OperationalStore {
       return count;
     } catch (RocksDBException error) {
       throw new SQLException("rocksdb operational prefix count failed", error);
+    }
+  }
+
+  private int maintainedCount(String counterName, byte recordPrefix, String chain)
+      throws SQLException {
+    byte[] key = stringKey(COUNTER_PREFIX, counterName + ":" + chain);
+    try {
+      byte[] value = db.get(key);
+      if (value != null) {
+        return (int) decodeLong(value);
+      }
+      int counted = countPrefix(heightPrefix(recordPrefix, chain));
+      db.put(key, encodeLong(counted));
+      return counted;
+    } catch (RocksDBException error) {
+      throw new SQLException("rocksdb operational maintained count failed", error);
+    }
+  }
+
+  private void bumpCounterIfPresent(String counterName, String chain)
+      throws SQLException, RocksDBException {
+    // Only adjust the counter once it has been initialised (by maintainedCount). Until then a fresh
+    // scan recomputes the true total, so a no-op here keeps legacy datadirs correct.
+    byte[] key = stringKey(COUNTER_PREFIX, counterName + ":" + chain);
+    byte[] value = db.get(key);
+    if (value != null) {
+      db.put(key, encodeLong(decodeLong(value) + 1));
     }
   }
 

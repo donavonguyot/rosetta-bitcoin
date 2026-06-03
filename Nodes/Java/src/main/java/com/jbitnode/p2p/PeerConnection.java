@@ -121,17 +121,15 @@ public final class PeerConnection implements AutoCloseable {
         "blocks.block.recv", true, "live", "received block from " + host + ":" + port);
   }
 
+  // Tracker-free so it is safe to drive from the background block-prefetch thread; the connect
+  // loop records blocks.getdata.send / blocks.block.recv (markBlockDownloadCapabilities) and the
+  // blocks.notfound capability on the main thread, keeping all operational-store writes single
+  // threaded. Returns null on notfound, hash mismatch, or timeout (caller treats as unavailable).
   private byte[] requestBlockOnce(byte[] blockHashInternal, int invType, long timeoutMs)
       throws IOException {
     InventoryVector inv = new InventoryVector(invType, blockHashInternal);
     InvMessage getdata = new InvMessage(List.of(inv));
     stream.send(GetDataMessage.COMMAND, GetDataMessage.serialize(getdata));
-    try {
-      tracker.markWireCapability(
-          "blocks.getdata.send", true, "live", "sent getdata to " + host + ":" + port);
-    } catch (SQLException e) {
-      throw new IOException("Failed to mark wire capability", e);
-    }
 
     long deadline = System.currentTimeMillis() + timeoutMs;
     while (System.currentTimeMillis() < deadline) {
@@ -142,37 +140,12 @@ public final class PeerConnection implements AutoCloseable {
         byte[] payload = BlockMessage.deserialize(message.payload());
         byte[] receivedHash = BlockMessage.blockHashFromPayload(payload);
         if (!Arrays.equals(receivedHash, blockHashInternal)) {
-          try {
-            tracker.logEvent(
-                "sync",
-                "Block hash mismatch on download",
-                "warning",
-                "{\"expected\":\""
-                    + Hex.encode(Hex.reverse(blockHashInternal))
-                    + "\",\"received\":\""
-                    + Hex.encode(Hex.reverse(receivedHash))
-                    + "\"}");
-          } catch (SQLException e) {
-            throw new IOException("Failed to log block hash mismatch", e);
-          }
           return null;
-        }
-        try {
-          tracker.markWireCapability(
-              "blocks.block.recv", true, "live", "received block from " + host + ":" + port);
-        } catch (SQLException e) {
-          throw new IOException("Failed to mark wire capability", e);
         }
         return payload;
       }
       InvMessage notfound = NotFoundMessage.deserialize(message.payload());
       if (InventoryMessages.inventoryContainsHash(notfound, blockHashInternal)) {
-        try {
-          tracker.markWireCapability(
-              "blocks.notfound", true, "live", "peer returned notfound for block");
-        } catch (SQLException e) {
-          throw new IOException("Failed to mark wire capability", e);
-        }
         return null;
       }
     }

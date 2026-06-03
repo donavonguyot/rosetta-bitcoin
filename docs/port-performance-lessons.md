@@ -187,6 +187,26 @@ PAR_SCRIPT_EXECUTOR=process
 Default remains `thread` until a copied-datadir benchmark shows that process
 workers reduce `block_connect_store_commit` on real heavy stored blocks.
 
+## Overlap, reuse, and write-reduction lessons (2026-06-02, Java)
+
+After per-input parallel script verify made script verification the wall-clock
+driver, the next reusable wins came from removing overhead *around* verification
+without touching the interpreter or the validation order:
+
+| Pattern | Why it helps | Constraint to preserve |
+|---------|--------------|------------------------|
+| Pipelined download | A bounded background queue fetches the next K blocks in order while the connect loop verifies earlier blocks, hiding `block_download_wait` behind `script_verify`. | In-order connect; keep `notfound`/timeout/hash-mismatch/blocker semantics; download stays network-read-only so single-writer is unaffected. Keep the fetch path tracker-free so only the connect thread writes operational state. |
+| Reuse the verify runner | Build one worker pool + warm script-verification cache per sync run, not per block, so thread creation and a cold cache are not paid on every height. | `close()` the runner once when the run ends; never share one runner across datadirs/writers. |
+| Batch prevout loads | Gather all external prevouts for a block and load them with one `multiGet` instead of per-input point reads. | Same-block created/spent outputs still resolve from the block-local view first. |
+| byte[] keys/values end-to-end | Carry txid + scriptPubKey as `byte[]` through the UTXO view, codec, and verify path to drop `bytes->hex->bytes` round-trips and per-key String allocation. | The on-disk codec format must stay byte-identical (only the in-memory shape changes) — verify with golden-vector fixtures so no datadir migration is needed. |
+| Once-flag bookkeeping writes | Idempotent capability marks are timestamped puts; record them once per run behind in-memory flags. Make the per-block "connected" event opt-in. | Keep real status-transition writes (`upsertSyncState` on phase change) and the validated tip write; only suppress redundant per-block puts. |
+| Native crypto fail-fast | Default the secp256k1 backend to native and refuse to start the node if native is unavailable, instead of silently falling back to a slow pure-Java/BC path mid-sync. | Keep pure-Java/BC reachable for comparator/vector tests via an explicit test-only override; never let the runtime pick a slow fallback unannounced. |
+
+Storage-engine tuning (block cache + bloom filter, larger write buffers, optional
+WAL-off for a rebuildable chainstate during bulk catch-up) is backend-specific but
+follows the same rule: measure the access pattern first, and keep durability for
+live/tip mode.
+
 ## Anti-patterns
 
 - Migrating storage engines before measuring the access pattern.

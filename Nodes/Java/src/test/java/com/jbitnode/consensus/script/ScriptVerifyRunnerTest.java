@@ -62,11 +62,7 @@ class ScriptVerifyRunnerTest {
     List<InputVerifyTask> tasks =
         List.of(
             fixture.tasks().getFirst(),
-            new InputVerifyTask(
-                1,
-                Hex.decode("5120" + "22".repeat(32)),
-                20_000,
-                "5120" + "22".repeat(32)));
+            new InputVerifyTask(1, Hex.decode("5120" + "22".repeat(32)), 20_000));
     ValidationBlocker blocker =
         assertThrows(
             ValidationBlocker.class,
@@ -91,9 +87,9 @@ class ScriptVerifyRunnerTest {
           runner.sighashCacheForTransaction(
               fixture.transaction(), fixture.spentPrevouts(), (stage, nanos) -> {});
       InputVerifyTask invalidInputZero =
-          new InputVerifyTask(0, Hex.decode("5120" + "11".repeat(32)), 30_000, "5120" + "11".repeat(32));
+          new InputVerifyTask(0, Hex.decode("5120" + "11".repeat(32)), 30_000);
       InputVerifyTask invalidInputOne =
-          new InputVerifyTask(1, Hex.decode("5120" + "22".repeat(32)), 20_000, "5120" + "22".repeat(32));
+          new InputVerifyTask(1, Hex.decode("5120" + "22".repeat(32)), 20_000);
       VerifyContext laterContext = new VerifyContext(2, "bb".repeat(32), "cc".repeat(32));
       VerifyContext earlierContext = new VerifyContext(2, "bb".repeat(32), "dd".repeat(32));
 
@@ -243,8 +239,8 @@ class ScriptVerifyRunnerTest {
             new ScriptVerify.SpentPrevout(20_000, fundingScript));
     List<InputVerifyTask> tasks =
         List.of(
-            new InputVerifyTask(0, fundingScript, 30_000, Hex.encode(fundingScript)),
-            new InputVerifyTask(1, fundingScript, 20_000, Hex.encode(fundingScript)));
+            new InputVerifyTask(0, fundingScript, 30_000),
+            new InputVerifyTask(1, fundingScript, 20_000));
     return new MultiInputFixture(transaction, spentPrevouts, tasks);
   }
 

@@ -158,7 +158,7 @@ java-node-sync-local-core:
 java-node-live:
 	HEADERS_MAX=$(or $(HEADERS_MAX),2000) HEADER_BATCHES_MAX=$(or $(HEADER_BATCHES_MAX),50) \
 	BLOCKS_MAX=$(or $(BLOCKS_MAX),64) PEERS=$(or $(PEERS),127.0.0.1:48333) \
-	PAR_SCRIPT_VERIFY=1 SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),bouncycastle) \
+	PAR_SCRIPT_VERIFY=1 SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),native) \
 	DATA_DIR=$(or $(DATA_DIR),./data-java) UTXO_BACKEND=rocksdb \
 	ROCKSDB_DIR=$(or $(ROCKSDB_DIR),$(or $(DATA_DIR),./data-java)/utxo-rocksdb) \
 	SYNC_TIMING=$(or $(SYNC_TIMING),1) LIVE_POLL_MS=$(or $(LIVE_POLL_MS),30000) \
@@ -169,7 +169,7 @@ java-node-live:
 java-node-sync-catchup:
 	HEADERS_MAX=$(or $(HEADERS_MAX),10000) HEADER_BATCHES_MAX=$(or $(HEADER_BATCHES_MAX),50) \
 	BLOCKS_MAX=$(or $(BLOCKS_MAX),0) PEERS=$(or $(PEERS),127.0.0.1:48333) \
-	SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),bouncycastle) DATA_DIR=$(or $(DATA_DIR),./data-java) \
+	SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),native) DATA_DIR=$(or $(DATA_DIR),./data-java) \
 	UTXO_BACKEND=rocksdb ROCKSDB_DIR=$(or $(ROCKSDB_DIR),$(or $(DATA_DIR),./data-java)/utxo-rocksdb) \
 	$(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.SyncLocalCore
 
@@ -178,14 +178,14 @@ java-node-sync-catchup:
 java-node-sync-chunk:
 	HEADERS_MAX=$(or $(HEADERS_MAX),10000) HEADER_BATCHES_MAX=$(or $(HEADER_BATCHES_MAX),50) \
 	BLOCKS_MAX=$(or $(BLOCKS_MAX),5000) PEERS=$(or $(PEERS),127.0.0.1:48333) \
-	PAR_SCRIPT_VERIFY=1 SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),bouncycastle) DATA_DIR=$(or $(DATA_DIR),./data-java) \
+	PAR_SCRIPT_VERIFY=1 SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),native) DATA_DIR=$(or $(DATA_DIR),./data-java) \
 	UTXO_BACKEND=rocksdb ROCKSDB_DIR=$(or $(ROCKSDB_DIR),$(or $(DATA_DIR),./data-java)/utxo-rocksdb) \
 	$(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.SyncLocalCore
 
 java-node-sync-rocksdb:
 	HEADERS_MAX=$(or $(HEADERS_MAX),10000) HEADER_BATCHES_MAX=$(or $(HEADER_BATCHES_MAX),50) \
 	BLOCKS_MAX=$(or $(BLOCKS_MAX),5000) PEERS=$(or $(PEERS),127.0.0.1:48333) \
-	PAR_SCRIPT_VERIFY=1 SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),bouncycastle) \
+	PAR_SCRIPT_VERIFY=1 SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),native) \
 	DATA_DIR=$(or $(DATA_DIR),./data-java) UTXO_BACKEND=rocksdb \
 	ROCKSDB_DIR=$(or $(ROCKSDB_DIR),$(or $(DATA_DIR),./data-java)/utxo-rocksdb) \
 	SYNC_TIMING=$(or $(SYNC_TIMING),1) \
@@ -214,7 +214,7 @@ java-node-rocksdb-clean-rebuild:
 	CHAINSTATE_REBUILD=1 UTXO_BACKEND=rocksdb \
 	ROCKSDB_DIR=$(or $(ROCKSDB_DIR),$(or $(DATA_DIR),./data-java)/utxo-rocksdb) \
 	BLOCKS_MAX=$(or $(BLOCKS_MAX),5000) PAR_SCRIPT_VERIFY=1 \
-	SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),bouncycastle) SYNC_TIMING=$(or $(SYNC_TIMING),1) \
+	SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),native) SYNC_TIMING=$(or $(SYNC_TIMING),1) \
 	$(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ChainstateRebuild
 
 java-node-native-crypto-test:

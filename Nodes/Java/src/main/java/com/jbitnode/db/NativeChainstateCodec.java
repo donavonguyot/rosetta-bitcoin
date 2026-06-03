@@ -41,8 +41,11 @@ final class NativeChainstateCodec {
   }
 
   static byte[] utxoKeyV2(String chain, String txidHex, int vout) {
+    return utxoKeyV2(chain, Hex.decode(txidHex), vout);
+  }
+
+  static byte[] utxoKeyV2(String chain, byte[] txidBytes, int vout) {
     byte[] prefix = chainPrefix(UTXO_PREFIX, chain);
-    byte[] txidBytes = Hex.decode(txidHex);
     ByteArrayOutputStream out = new ByteArrayOutputStream(prefix.length + txidBytes.length + 4);
     try {
       out.write(prefix);
@@ -172,21 +175,8 @@ final class NativeChainstateCodec {
     return out.toByteArray();
   }
 
-  static byte[] encodeUtxo(StoredUtxo utxo) throws IOException {
-    byte[] script = utxo.scriptPubKeyHex().getBytes(StandardCharsets.US_ASCII);
-    ByteArrayOutputStream bytes = new ByteArrayOutputStream(4 + 8 + 1 + 4 + script.length);
-    try (DataOutputStream out = new DataOutputStream(bytes)) {
-      out.writeInt(utxo.height());
-      out.writeLong(utxo.valueSats());
-      out.writeBoolean(utxo.coinbase());
-      out.writeInt(script.length);
-      out.write(script);
-    }
-    return bytes.toByteArray();
-  }
-
   static byte[] encodeUtxoV2(StoredUtxo utxo) throws IOException {
-    byte[] script = Hex.decode(utxo.scriptPubKeyHex());
+    byte[] script = utxo.scriptPubKey();
     ByteArrayOutputStream bytes = new ByteArrayOutputStream(4 + 8 + 1 + 4 + script.length);
     try (DataOutputStream out = new DataOutputStream(bytes)) {
       out.writeInt(utxo.height());
@@ -197,30 +187,13 @@ final class NativeChainstateCodec {
     return bytes.toByteArray();
   }
 
-  static StoredUtxo decodeUtxo(String txidHex, int vout, byte[] value) throws SQLException {
-    try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(value))) {
-      int height = in.readInt();
-      long valueSats = in.readLong();
-      boolean coinbase = in.readBoolean();
-      int scriptLength = in.readInt();
-      byte[] script = in.readNBytes(scriptLength);
-      if (script.length != scriptLength) {
-        throw new IOException("truncated script");
-      }
-      return new StoredUtxo(
-          txidHex, vout, height, valueSats, new String(script, StandardCharsets.US_ASCII), coinbase);
-    } catch (IOException error) {
-      throw new SQLException("native chainstate UTXO decode failed", error);
-    }
-  }
-
-  static StoredUtxo decodeUtxoV2(String txidHex, int vout, byte[] value) throws SQLException {
+  static StoredUtxo decodeUtxoV2(byte[] txid, int vout, byte[] value) throws SQLException {
     try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(value))) {
       int height = in.readInt();
       long valueSats = in.readLong();
       boolean coinbase = (in.readUnsignedByte() & 1) != 0;
       byte[] script = readBytes(in);
-      return new StoredUtxo(txidHex, vout, height, valueSats, Hex.encode(script), coinbase);
+      return new StoredUtxo(txid, vout, height, valueSats, script, coinbase);
     } catch (IOException error) {
       throw new SQLException("native chainstate v2 UTXO decode failed", error);
     }
@@ -265,51 +238,20 @@ final class NativeChainstateCodec {
     }
   }
 
-  static byte[] encodeUndo(List<UtxoUndoEntry> entries) throws IOException {
-    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-    try (DataOutputStream out = new DataOutputStream(bytes)) {
-      out.writeInt(entries.size());
-      for (UtxoUndoEntry entry : entries) {
-        writeString(out, entry.txid());
-        out.writeInt(entry.vout());
-        out.writeInt(entry.height());
-        out.writeLong(entry.valueSats());
-        writeString(out, entry.scriptPubKeyHex());
-        out.writeBoolean(entry.coinbase());
-      }
-    }
-    return bytes.toByteArray();
-  }
-
   static byte[] encodeUndoV2(List<UtxoUndoEntry> entries) throws IOException {
     ByteArrayOutputStream bytes = new ByteArrayOutputStream();
     try (DataOutputStream out = new DataOutputStream(bytes)) {
       out.writeInt(entries.size());
       for (UtxoUndoEntry entry : entries) {
-        out.write(Hex.decode(entry.txid()));
+        out.write(entry.txid());
         out.writeInt(entry.vout());
         out.writeInt(entry.height());
         out.writeLong(entry.valueSats());
         out.writeByte(entry.coinbase() ? 1 : 0);
-        writeBytes(out, Hex.decode(entry.scriptPubKeyHex()));
+        writeBytes(out, entry.scriptPubKey());
       }
     }
     return bytes.toByteArray();
-  }
-
-  static List<UtxoUndoEntry> decodeUndo(byte[] value) throws SQLException {
-    try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(value))) {
-      int count = in.readInt();
-      ArrayList<UtxoUndoEntry> entries = new ArrayList<>(count);
-      for (int index = 0; index < count; index++) {
-        entries.add(
-            new UtxoUndoEntry(
-                readString(in), in.readInt(), in.readInt(), in.readLong(), readString(in), in.readBoolean()));
-      }
-      return entries;
-    } catch (IOException error) {
-      throw new SQLException("native chainstate undo decode failed", error);
-    }
   }
 
   static List<UtxoUndoEntry> decodeUndoV2(byte[] value) throws SQLException {
@@ -325,10 +267,8 @@ final class NativeChainstateCodec {
         int height = in.readInt();
         long valueSats = in.readLong();
         boolean coinbase = (in.readUnsignedByte() & 1) != 0;
-        String scriptPubKeyHex = Hex.encode(readBytes(in));
-        entries.add(
-            new UtxoUndoEntry(
-                Hex.encode(txid), vout, height, valueSats, scriptPubKeyHex, coinbase));
+        byte[] script = readBytes(in);
+        entries.add(new UtxoUndoEntry(txid, vout, height, valueSats, script, coinbase));
       }
       return entries;
     } catch (IOException error) {
