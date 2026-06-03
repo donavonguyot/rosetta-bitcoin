@@ -17,7 +17,7 @@ defmodule Exbitnode.Consensus.Script.Secp256k1 do
   def taproot_tweak_backend_name, do: selected_backend_name()
 
   def native_backend_available? do
-    Code.ensure_loaded?(:exbitnode_native_secp256k1)
+    Code.ensure_loaded(:exbitnode_native_secp256k1) == {:module, :exbitnode_native_secp256k1}
   end
 
   def verify_der_signature(pubkey, message_hash, signature)
@@ -41,7 +41,9 @@ defmodule Exbitnode.Consensus.Script.Secp256k1 do
   def taproot_tweak_xonly(pubkey_xonly, merkle_root \\ <<>>)
       when is_binary(pubkey_xonly) and is_binary(merkle_root) do
     if backend() == :native do
-      case apply(:exbitnode_native_secp256k1, :taproot_tweak_xonly, [pubkey_xonly, merkle_root]) do
+      tweak = Exbitnode.Util.CryptoUtil.bitcoin_tagged_hash("TapTweak", pubkey_xonly <> merkle_root)
+
+      case apply(:exbitnode_native_secp256k1, :taproot_tweak_xonly, [pubkey_xonly, tweak]) do
         {:ok, tweaked, parity} -> {:ok, tweaked, parity}
         _ -> {:error, :consensus_invalid}
       end
@@ -120,7 +122,7 @@ defmodule Exbitnode.Consensus.Script.Secp256k1 do
   end
 
   defp backend do
-    case System.get_env("SECP256K1_BACKEND", "pure_elixir") |> String.downcase() do
+    case System.get_env("SECP256K1_BACKEND", "native") |> String.downcase() do
       "native" -> :native
       _ -> :pure_elixir
     end
@@ -132,8 +134,6 @@ defmodule Exbitnode.Consensus.Script.Secp256k1 do
     else
       raise "SECP256K1_BACKEND=native requested but native secp256k1 backend is unavailable"
     end
-  rescue
-    _ -> false
   end
 
   def lift_x_only_pubkey(x_coord) when is_integer(x_coord) do

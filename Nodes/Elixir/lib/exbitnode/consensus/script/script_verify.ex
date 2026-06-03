@@ -18,9 +18,8 @@ defmodule Exbitnode.Consensus.Script.ScriptVerify do
 
   alias Exbitnode.Consensus.Script.{
     Interpreter,
-    ScriptTemplates,
-    ScriptVerifyError,
-    UnsupportedScriptRule
+    ScriptError,
+    ScriptVerifyError
   }
 
   def verify_transaction_input(tx, input_index, script_pubkey, amount, spent_prevouts \\ nil)
@@ -35,17 +34,6 @@ defmodule Exbitnode.Consensus.Script.ScriptVerify do
       raise ScriptVerifyError, "unsupported witness program version #{witness_version}"
     end
 
-    unless supported_template?(script_pubkey) do
-      raise ScriptVerifyError, "unsupported scriptPubKey template"
-    end
-
-    if ScriptTemplates.is_p2wsh?(script_pubkey) or ScriptTemplates.is_p2sh?(script_pubkey) do
-      raise UnsupportedScriptRule,
-        rule: "script_interpreter_not_implemented",
-        message:
-          "script verification not yet implemented for template #{ScriptTemplates.describe(script_pubkey)}"
-    end
-
     input = Enum.at(tx.inputs, input_index)
 
     witness =
@@ -55,26 +43,24 @@ defmodule Exbitnode.Consensus.Script.ScriptVerify do
         []
       end
 
-    if Interpreter.verify_script(
-         input.script_sig,
-         script_pubkey,
-         tx,
-         input_index,
-         amount,
-         witness,
-         spent_prevouts
-       ) do
-      :ok
-    else
-      raise ScriptVerifyError, "script verification failed for input #{input_index}"
+    try do
+      if Interpreter.verify_script(
+           input.script_sig,
+           script_pubkey,
+           tx,
+           input_index,
+           amount,
+           witness,
+           spent_prevouts
+         ) do
+        :ok
+      else
+        raise ScriptVerifyError, "script verification failed for input #{input_index}"
+      end
+    rescue
+      e in ScriptError ->
+        raise ScriptVerifyError, e.message
     end
-  end
-
-  defp supported_template?(script_pubkey) do
-    ScriptTemplates.is_p2pk?(script_pubkey) or ScriptTemplates.is_p2pkh?(script_pubkey) or
-      ScriptTemplates.is_p2wpkh?(script_pubkey) or ScriptTemplates.is_p2wsh?(script_pubkey) or
-      ScriptTemplates.is_p2sh?(script_pubkey) or ScriptTemplates.is_p2tr?(script_pubkey) or
-      ScriptTemplates.is_bare_op_n?(script_pubkey)
   end
 
   defp witness_program_version(script) when byte_size(script) < 2, do: nil

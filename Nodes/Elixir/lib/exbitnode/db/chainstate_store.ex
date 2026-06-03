@@ -10,15 +10,17 @@ defmodule Exbitnode.Db.ChainstateStore do
   @callback get_sync_state(term(), String.t()) :: map() | nil
   @callback upsert_sync_state(term(), String.t(), map()) :: :ok
   @callback insert_header(term(), String.t(), integer(), String.t(), String.t(), String.t()) ::
-              :inserted | :exists
+              :inserted | :exists | :updated
   @callback get_header_hash(term(), String.t(), integer()) :: String.t() | nil
   @callback get_header(term(), String.t(), integer()) :: map() | nil
   @callback header_count(term(), String.t()) :: integer()
   @callback record_block(term(), String.t(), integer(), String.t(), map()) :: :ok
+  @callback commit_block(term(), String.t(), map()) :: :ok
   @callback get_block(term(), String.t(), integer()) :: map() | nil
   @callback block_count(term(), String.t()) :: integer()
   @callback max_stored_block(term(), String.t()) :: map() | nil
   @callback get_utxo(term(), String.t(), String.t(), integer()) :: map() | nil
+  @callback get_utxos(term(), String.t(), list()) :: list(map() | nil)
   @callback insert_utxo(term(), String.t(), map()) :: :ok
   @callback delete_utxo(term(), String.t(), String.t(), integer()) :: :ok
   @callback replace_utxo_undo(term(), String.t(), integer(), list(map())) :: :ok

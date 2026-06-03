@@ -135,6 +135,7 @@ defmodule Exbitnode.Chainstate.Tracker do
   end
 
   def get_utxo(store, chain, txid, vout), do: store.__struct__.get_utxo(store, chain, txid, vout)
+  def get_utxos(store, chain, outpoints), do: store.__struct__.get_utxos(store, chain, outpoints)
   def insert_utxo(store, chain, utxo), do: store.__struct__.insert_utxo(store, chain, utxo)
 
   def delete_utxo(store, chain, txid, vout),
@@ -151,6 +152,10 @@ defmodule Exbitnode.Chainstate.Tracker do
 
   def record_block(store, chain, height, block_hash, stored) do
     store.__struct__.record_block(store, chain, height, block_hash, stored)
+  end
+
+  def commit_block(store, chain, opts) do
+    store.__struct__.commit_block(store, chain, opts)
   end
 
   def max_stored_block(store, chain), do: store.__struct__.max_stored_block(store, chain)

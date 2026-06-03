@@ -1,0 +1,80 @@
+{
+  "category": "storage",
+  "commands": [
+    "DATA_DIR=/tmp/exbitnode-proof-cutLuL mix storage.proof"
+  ],
+  "chain": "testnet4",
+  "node_id": "exbitnode-native-storage",
+  "captured_at": "2026-06-03T19:48:48.249200Z",
+  "chainstate_backend": "rocksdb",
+  "chainstate_status": "usable",
+  "commit": "",
+  "datadir": "/tmp/exbitnode-proof-cutLuL",
+  "forbidden_local_db_artifact_absent": true,
+  "header_height": 2,
+  "implementation": "ElixirNode",
+  "native_crypto_available": true,
+  "native_crypto_backend": "libsecp256k1",
+  "native_storage": true,
+  "project_export": {
+    "result": "not_exported_observational_only",
+    "node_id": "exbitnode-native-storage",
+    "project_db": "Project/project.db"
+  },
+  "results": [
+    {
+      "failure": "",
+      "result": "passed",
+      "chain": "testnet4",
+      "chainstate_backend": "rocksdb",
+      "validated_hash": "",
+      "validated_height": 1,
+      "duration_ms": 0,
+      "fixture_id": "storage.native_fresh_start"
+    },
+    {
+      "failure": "",
+      "result": "passed",
+      "chain": "testnet4",
+      "chainstate_backend": "rocksdb",
+      "validated_hash": "",
+      "validated_height": 2,
+      "duration_ms": 0,
+      "fixture_id": "storage.native_restart"
+    },
+    {
+      "failure": "",
+      "result": "passed",
+      "chain": "testnet4",
+      "chainstate_backend": "rocksdb",
+      "validated_hash": "",
+      "validated_height": 2,
+      "duration_ms": 0,
+      "fixture_id": "storage.forbidden_local_db_artifact_absent"
+    },
+    {
+      "failure": "",
+      "result": "passed",
+      "chain": "testnet4",
+      "chainstate_backend": "rocksdb",
+      "validated_hash": "",
+      "validated_height": 2,
+      "duration_ms": 0,
+      "fixture_id": "storage.native_crypto_available"
+    },
+    {
+      "failure": "",
+      "result": "passed",
+      "chain": "testnet4",
+      "chainstate_backend": "rocksdb",
+      "validated_hash": "",
+      "validated_height": 2,
+      "duration_ms": 0,
+      "fixture_id": "storage.project_export_observational"
+    }
+  ],
+  "stored_block_height": 2,
+  "taproot_tweak_backend": "libsecp256k1",
+  "validated_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+  "validated_height": 2
+}

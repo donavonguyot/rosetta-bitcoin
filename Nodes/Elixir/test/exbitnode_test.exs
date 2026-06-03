@@ -116,6 +116,199 @@ defmodule Exbitnode.Db.ChainstateSessionTest do
     assert state.best_height == 0
     assert state.sync_status == "starting"
     refute File.exists?(Path.join(path, "exbitnode.db"))
+    assert File.exists?(Path.join(path, "chainstate-rocksdb/.exbitnode_storage_native"))
+    refute File.exists?(Path.join(path, "chainstate-rocksdb/chainstate.term"))
+  end
+
+  test "native chainstate persists through restart" do
+    path = Path.join(System.tmp_dir!(), "exbitnode_restart_#{:rand.uniform(1_000_000)}")
+    on_exit(fn -> File.rm_rf(path) end)
+
+    {:ok, conn} = ChainstateSession.open_native(path, "testnet4")
+
+    ChainstateTracker.ensure_genesis(
+      conn,
+      "testnet4",
+      Genesis.testnet4(),
+      Genesis.testnet4_hash()
+    )
+
+    ChainstateSession.close(conn)
+
+    {:ok, restarted} = ChainstateSession.open_native(path, "testnet4")
+    on_exit(fn -> ChainstateSession.close(restarted) end)
+
+    assert ChainstateTracker.header_count(restarted, "testnet4") == 1
+    assert ChainstateTracker.get_header_hash(restarted, "testnet4", 0) == Genesis.testnet4_hash()
+    assert ChainstateSession.metadata(restarted)["backend_name"] == "rocksdb"
+  end
+
+  test "forbidden local DB artifacts fail closed" do
+    path = Path.join(System.tmp_dir!(), "exbitnode_forbidden_db_#{:rand.uniform(1_000_000)}")
+    File.mkdir_p!(path)
+    on_exit(fn -> File.rm_rf(path) end)
+
+    File.write!(Path.join(path, "exbitnode.db"), "")
+
+    assert_raise ArgumentError, ~r/refuses local DB artifacts/, fn ->
+      ChainstateSession.open_native(path, "testnet4")
+    end
+
+    {status, code} = Exbitnode.CLI.NodeStatus.status_result(path, "testnet4", "127.0.0.1:48333")
+    assert code == 1
+    assert status.chainstate_status == "misaligned"
+    assert status.sync_status == "error"
+    assert status.binary_gate_status == "failed"
+    assert status.last_error =~ "forbidden local DB artifacts"
+  end
+end
+
+defmodule Exbitnode.RuntimeStatusTest do
+  use ExUnit.Case, async: false
+
+  alias Exbitnode.CLI.NodeStatus
+  alias Exbitnode.RuntimeStatus
+  alias Exbitnode.Storage.DatadirLock
+
+  setup do
+    path = Path.join(System.tmp_dir!(), "exbitnode_runtime_status_#{:rand.uniform(1_000_000)}")
+    File.mkdir_p!(Path.join(path, "chainstate-rocksdb"))
+    on_exit(fn -> File.rm_rf(path) end)
+    {:ok, path: path}
+  end
+
+  test "status snapshot writes atomically and reads back required fields", %{path: path} do
+    :ok =
+      RuntimeStatus.write_snapshot(path, %{
+        runtime_surface: "docker_supervisor",
+        peer_source: "host.docker.internal:48333",
+        validated_height: 7,
+        validated_hash: "aa",
+        header_height: 9,
+        header_hash: "bb",
+        stored_block_height: 7,
+        stored_block_hash: "cc",
+        block_count: 8,
+        utxo_count: 11,
+        sync_status: "blocks_syncing",
+        current_blocker: nil,
+        last_error: nil
+      })
+
+    assert {:ok, snapshot} = RuntimeStatus.read_snapshot(path)
+    assert snapshot["runtime_surface"] == "docker_supervisor"
+    assert snapshot["peer_source"] == "host.docker.internal:48333"
+    assert snapshot["validated_height"] == 7
+    assert snapshot["header_height"] == 9
+    assert snapshot["sync_status"] == "blocks_syncing"
+    assert is_binary(snapshot["updated_at"])
+  end
+
+  test "node status reads snapshot when datadir lock is held", %{path: path} do
+    :ok =
+      RuntimeStatus.write_snapshot(path, %{
+        runtime_surface: "docker_supervisor",
+        peer_source: "host.docker.internal:48333",
+        validated_height: 100,
+        validated_hash: "valid-hash",
+        header_height: 120,
+        header_hash: "header-hash",
+        stored_block_height: 100,
+        stored_block_hash: "stored-hash",
+        block_count: 101,
+        utxo_count: 22,
+        sync_status: "blocks_syncing"
+      })
+
+    {:ok, lock} = DatadirLock.acquire(path)
+
+    try do
+      {status, code} = NodeStatus.status_result(path, "testnet4", "fallback-peer")
+
+      assert code == 0
+      assert status.runtime_status == "running"
+      assert status.sync_status == "blocks_syncing"
+      assert status.lock_status == "held"
+      assert status.validated_height == 100
+      assert status.header_height == 120
+      assert status.stored_block_height == 100
+      assert status.peer_source == "host.docker.internal:48333"
+      assert status.recommendation == "leave_running"
+    after
+      DatadirLock.release(lock)
+    end
+  end
+
+  test "node status returns valid JSON fields when locked before first snapshot", %{path: path} do
+    {:ok, lock} = DatadirLock.acquire(path)
+
+    try do
+      {status, code} = NodeStatus.status_result(path, "testnet4", "fallback-peer")
+
+      assert code == 0
+      assert status.runtime_status == "running"
+      assert status.sync_status == "running"
+      assert status.lock_status == "held"
+      assert status.validated_height == -1
+      assert status.header_height == -1
+      assert status.recommendation == "wait_for_status_snapshot"
+      assert status.peer_source == "fallback-peer"
+    after
+      DatadirLock.release(lock)
+    end
+  end
+
+  test "supervisor tick field helper includes monitoring contract fields" do
+    tick =
+      RuntimeStatus.required_tick_fields(
+        %{
+          "runtime_surface" => "docker_supervisor",
+          "peer_source" => "host.docker.internal:48333",
+          "validated_height" => 10,
+          "header_height" => 12,
+          "stored_block_height" => 10,
+          "sync_status" => "blocks_syncing",
+          "current_blocker" => nil
+        },
+        "syncing",
+        true,
+        7
+      )
+
+    assert tick.phase == "syncing"
+    assert tick.runtime_surface == "docker_supervisor"
+    assert tick.peer == "host.docker.internal:48333"
+    assert tick.validated_height == 10
+    assert tick.header_height == 12
+    assert tick.stored_block_height == 10
+    assert tick.delta_since_last == 3
+    assert tick.process_running == true
+    assert Map.has_key?(tick, :current_blocker)
+  end
+end
+
+defmodule Exbitnode.RuntimeNoLocalDbStoreGuardTest do
+  use ExUnit.Case, async: true
+
+  test "runtime code does not reintroduce local database store dependencies" do
+    forbidden =
+      ~r/(legacy_sqlite_path|reject_sqlite_artifacts|sqlite_artifacts_absent|Ecto\.Adapters\.SQLite|:sqlite|SQLite3|sqlite_ecto|Sqlite|SQLite)/
+
+    files = Path.wildcard("lib/**/*.ex")
+
+    offenders =
+      files
+      |> Enum.flat_map(fn file ->
+        file
+        |> File.read!()
+        |> String.split("\n")
+        |> Enum.with_index(1)
+        |> Enum.flat_map(fn {line, number} ->
+          if line =~ forbidden, do: ["#{file}:#{number}:#{line}"], else: []
+        end)
+      end)
+
+    assert offenders == []
   end
 end
 
@@ -221,8 +414,12 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
       )
 
     assert result.height == 0
+    assert is_integer(result.timing.utxo_load)
+    assert is_integer(result.timing.block_connect_store_commit)
     assert ChainstateTracker.get_validated_height(conn, "testnet4") == 0
-    assert ChainstateTracker.block_count(conn, "testnet4") == 0
+    assert ChainstateTracker.block_count(conn, "testnet4") == 1
+    assert ChainstateTracker.get_header_hash(conn, "testnet4", 0) == BlockHeaderCodec.block_hash_hex(header)
+    assert ChainstateTracker.max_stored_block(conn, "testnet4").block_hash == BlockHeaderCodec.block_hash_hex(header)
   end
 
   test "disconnect rewinds tip and removes block utxos", %{conn: conn} do
@@ -390,6 +587,9 @@ end
 defmodule Exbitnode.Consensus.ScriptVerifyTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureIO
+
+  alias Exbitnode.CLI.ScriptCorpus
   alias Exbitnode.Consensus.Script.ScriptVerify
   alias Exbitnode.Consensus.Tx.TransactionParser
   alias Exbitnode.Util.Hex
@@ -422,6 +622,37 @@ defmodule Exbitnode.Consensus.ScriptVerifyTest do
                spent_prevouts
              )
   end
+
+  test "script corpus fixture filter uses prev_spk fallback when prevouts are absent" do
+    result_path =
+      Path.join(System.tmp_dir!(), "elixir_script_corpus_fixture_#{:rand.uniform(1_000_000)}.json")
+
+    on_exit(fn -> File.rm(result_path) end)
+
+    manifest =
+      Path.expand("../../NodeCore/conformance/fixtures/scripts/manifest.json", File.cwd!())
+
+    code =
+      capture_io(fn ->
+        ScriptCorpus.run([
+          "--manifest",
+          manifest,
+          "--fixture",
+          "scripts.p2sh_116040",
+          "--stop-on-failure",
+          "--result-path",
+          result_path
+        ])
+      end)
+
+    assert code =~ "\"passed\": 1"
+
+    result = result_path |> File.read!() |> Jason.decode!()
+    assert result["fixture_count"] == 1
+    assert result["passed"] == 1
+    assert result["failed"] == 0
+    assert hd(result["results"])["fixture_id"] == "scripts.p2sh_116040"
+  end
 end
 
 defmodule Exbitnode.Util.CryptoUtilTest do
@@ -434,6 +665,45 @@ defmodule Exbitnode.Util.CryptoUtilTest do
     assert byte_size(CryptoUtil.hash160(data)) == 20
     assert CryptoUtil.hash160(data) != :crypto.hash(:sha256, data)
   end
+end
+
+defmodule Exbitnode.Consensus.ScriptVerifyRunnerTest do
+  use ExUnit.Case, async: false
+
+  alias Exbitnode.Consensus.Script.ScriptVerifyRunner
+
+  setup do
+    old_parallel = System.get_env("PAR_SCRIPT_VERIFY")
+    old_min = System.get_env("PAR_SCRIPT_MIN_INPUTS")
+    old_threads = System.get_env("PAR_SCRIPT_THREADS")
+
+    System.put_env("PAR_SCRIPT_VERIFY", "1")
+    System.put_env("PAR_SCRIPT_MIN_INPUTS", "1")
+    System.put_env("PAR_SCRIPT_THREADS", "2")
+
+    on_exit(fn ->
+      restore_env("PAR_SCRIPT_VERIFY", old_parallel)
+      restore_env("PAR_SCRIPT_MIN_INPUTS", old_min)
+      restore_env("PAR_SCRIPT_THREADS", old_threads)
+    end)
+
+    :ok
+  end
+
+  test "parallel verification reports deterministic lowest input failure" do
+    jobs = [%{input_index: 2}, %{input_index: 1}, %{input_index: 0}]
+
+    assert_raise RuntimeError, "input zero failed", fn ->
+      ScriptVerifyRunner.run(jobs, fn
+        %{input_index: 0} -> raise "input zero failed"
+        %{input_index: 1} -> raise "input one failed"
+        _job -> :ok
+      end)
+    end
+  end
+
+  defp restore_env(key, nil), do: System.delete_env(key)
+  defp restore_env(key, value), do: System.put_env(key, value)
 end
 
 defmodule Exbitnode.Chainstate.TrackerTest do
@@ -488,7 +758,7 @@ defmodule Exbitnode.Chainstate.TrackerTest do
 
     entries = [
       %{
-        txid: "abc123",
+        txid: "abc123" <> String.duplicate("00", 29),
         vout: 0,
         utxo_height: 50,
         value_sats: 1_000,
@@ -512,7 +782,7 @@ defmodule Exbitnode.Chainstate.TrackerTest do
 
     entries = [
       %{
-        txid: "deadbeef",
+        txid: "deadbeef" <> String.duplicate("00", 28),
         vout: 1,
         utxo_height: 42,
         value_sats: 9_000,
@@ -524,5 +794,70 @@ defmodule Exbitnode.Chainstate.TrackerTest do
     :ok = ChainstateTracker.replace_utxo_undo(conn, "testnet4", 7, entries)
     assert ChainstateTracker.take_utxo_undo(conn, "testnet4", 7) == entries
     assert [] = ChainstateTracker.take_utxo_undo(conn, "testnet4", 7)
+  end
+
+  test "commit_block batches block index, utxos, undo, and tip", %{conn: conn} do
+    spent_txid = "11" <> String.duplicate("00", 31)
+    created_txid = "22" <> String.duplicate("00", 31)
+    block_hash = "33" <> String.duplicate("00", 31)
+
+    :ok =
+      ChainstateTracker.insert_utxo(conn, "testnet4", %{
+        txid: spent_txid,
+        vout: 0,
+        height: 10,
+        value_sats: 1_000,
+        script_pubkey_hex: "51",
+        coinbase: false
+      })
+
+    assert ChainstateTracker.utxo_count(conn, "testnet4") == 1
+
+    missing_txid = "44" <> String.duplicate("00", 31)
+
+    assert [%{txid: ^spent_txid}, nil] =
+             ChainstateTracker.get_utxos(conn, "testnet4", [
+               {spent_txid, 0},
+               {missing_txid, 0}
+             ])
+
+    undo = [
+      %{
+        txid: spent_txid,
+        vout: 0,
+        utxo_height: 10,
+        value_sats: 1_000,
+        script_pubkey_hex: "51",
+        coinbase: false
+      }
+    ]
+
+    :ok =
+      ChainstateTracker.commit_block(conn, "testnet4", %{
+        height: 11,
+        block_hash: block_hash,
+        stored: %{file_number: 0, file_offset: 80, block_size: 120},
+        spent: [{spent_txid, 0}],
+        created: [
+          %{
+            txid: created_txid,
+            vout: 1,
+            height: 11,
+            value_sats: 900,
+            script_pubkey_hex: "51",
+            coinbase: false
+          }
+        ],
+        undo: undo
+      })
+
+    assert ChainstateTracker.get_validated_height(conn, "testnet4") == 11
+    assert ChainstateTracker.get_validated_hash(conn, "testnet4") == block_hash
+    assert ChainstateTracker.block_count(conn, "testnet4") == 12
+    assert ChainstateTracker.utxo_count(conn, "testnet4") == 1
+    assert ChainstateTracker.max_stored_block(conn, "testnet4").height == 11
+    assert ChainstateTracker.get_utxo(conn, "testnet4", spent_txid, 0) == nil
+    assert ChainstateTracker.get_utxo(conn, "testnet4", created_txid, 1).value_sats == 900
+    assert ChainstateTracker.take_utxo_undo(conn, "testnet4", 11) == undo
   end
 end

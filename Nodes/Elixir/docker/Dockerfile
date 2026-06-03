@@ -1,13 +1,14 @@
 FROM elixir:1.16-otp-26 AS build
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential git librocksdb-dev libsecp256k1-dev \
+  && apt-get install -y --no-install-recommends build-essential git pkg-config librocksdb-dev libsecp256k1-dev \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 COPY mix.exs ./
 RUN mix local.hex --force && mix local.rebar --force && mix deps.get --only prod
 COPY lib ./lib
+COPY c_src ./c_src
 RUN MIX_ENV=prod mix compile
 
 FROM elixir:1.16-otp-26

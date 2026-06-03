@@ -16,11 +16,6 @@ defmodule Exbitnode.Config.NodePaths do
     System.get_env("CHAIN", @default_chain)
   end
 
-  def legacy_sqlite_path(data_dir \\ nil) do
-    dir = data_dir || data_dir_from_env()
-    Path.join(dir, "exbitnode.db")
-  end
-
   def chainstate_backend_from_env do
     System.get_env("CHAINSTATE_BACKEND", "rocksdb")
   end

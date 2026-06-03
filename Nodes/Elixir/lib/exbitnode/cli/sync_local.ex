@@ -6,6 +6,7 @@ defmodule Exbitnode.CLI.SyncLocal do
   alias Exbitnode.Db.ChainstateSession
   alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
   alias Exbitnode.P2p.PeerSupervisor
+  alias Exbitnode.RuntimeStatus
   alias Exbitnode.Storage.BlockStore
   alias Exbitnode.Storage.DatadirLock
   alias Exbitnode.Sync.{BlockSync, HeaderSync}
@@ -47,6 +48,11 @@ defmodule Exbitnode.CLI.SyncLocal do
 
       try do
         ChainstateTracker.repair_sync_state_from_headers(conn, chain.name)
+        RuntimeStatus.write_store_snapshot(conn, data_dir, chain.name, %{
+          peer_source: "#{host}:#{port}",
+          sync_status: "starting"
+        })
+
         start_height = ChainstateTracker.bootstrap_start_height(conn, chain.name)
 
         case PeerSupervisor.connect(host, port, chain, conn, start_height) do
@@ -59,6 +65,11 @@ defmodule Exbitnode.CLI.SyncLocal do
               IO.puts("  header_height=#{header_result.best_height}")
               IO.puts("  sync_status=#{header_result.sync_status}")
 
+              RuntimeStatus.write_store_snapshot(conn, data_dir, chain.name, %{
+                peer_source: "#{host}:#{port}",
+                sync_status: header_result.sync_status
+              })
+
               block_result =
                 if skip_blocks do
                   %{
@@ -68,7 +79,7 @@ defmodule Exbitnode.CLI.SyncLocal do
                     blocker_message: nil
                   }
                 else
-                  peer_ctx = %{host: host, port: port, chain: chain, conn: conn}
+                  peer_ctx = %{host: host, port: port, chain: chain, conn: conn, data_dir: data_dir}
                   BlockSync.sync_from_peer(peer, chain, conn, block_store, max_blocks, peer_ctx)
                 end
 
@@ -84,6 +95,13 @@ defmodule Exbitnode.CLI.SyncLocal do
 
               validated_height = ChainstateTracker.get_validated_height(conn, chain.name)
 
+              RuntimeStatus.write_store_snapshot(conn, data_dir, chain.name, %{
+                peer_source: "#{host}:#{port}",
+                sync_status: block_result.sync_status,
+                current_blocker: block_result.blocker_message,
+                last_error: nil
+              })
+
               IO.puts("  validated_height=#{validated_height}")
               IO.puts("  utxo_count=#{ChainstateTracker.utxo_count(conn, chain.name)}")
 
@@ -97,6 +115,12 @@ defmodule Exbitnode.CLI.SyncLocal do
             end
 
           {:error, reason} ->
+            RuntimeStatus.write_store_snapshot(conn, data_dir, chain.name, %{
+              peer_source: "#{host}:#{port}",
+              sync_status: "error",
+              last_error: inspect(reason)
+            })
+
             IO.puts("  sync_status=error")
             IO.puts("  error=#{inspect(reason)}")
             IO.puts("  binary_gate_status=not_attempted")
@@ -109,12 +133,50 @@ defmodule Exbitnode.CLI.SyncLocal do
       end
     rescue
       e in DatadirLock.BusyError ->
+        RuntimeStatus.write_snapshot(data_dir, %{
+          runtime_surface: System.get_env("RUNTIME_SURFACE", "host"),
+          peer_source: "#{host}:#{port}",
+          chain: chain.name,
+          network: chain.name,
+          datadir: data_dir,
+          validated_height: -1,
+          validated_hash: "",
+          header_height: 0,
+          header_hash: "",
+          stored_block_height: -1,
+          stored_block_hash: "",
+          block_count: 0,
+          utxo_count: 0,
+          sync_status: "error",
+          current_blocker: nil,
+          last_error: Exception.message(e)
+        })
+
         IO.puts("  sync_status=error")
         IO.puts("  error=#{Exception.message(e)}")
         IO.puts("  binary_gate_status=not_attempted")
         2
     catch
       kind, reason ->
+        RuntimeStatus.write_snapshot(data_dir, %{
+          runtime_surface: System.get_env("RUNTIME_SURFACE", "host"),
+          peer_source: "#{host}:#{port}",
+          chain: chain.name,
+          network: chain.name,
+          datadir: data_dir,
+          validated_height: -1,
+          validated_hash: "",
+          header_height: 0,
+          header_hash: "",
+          stored_block_height: -1,
+          stored_block_hash: "",
+          block_count: 0,
+          utxo_count: 0,
+          sync_status: "error",
+          current_blocker: nil,
+          last_error: inspect({kind, reason})
+        })
+
         IO.puts("  sync_status=error")
         IO.puts("  error=#{inspect({kind, reason})}")
         IO.puts("  binary_gate_status=not_attempted")

@@ -11,6 +11,8 @@ defmodule Exbitnode.Db.ChainstateCodecV2 do
   @header_prefix 0x68
   @event_prefix 0x65
   @blocker_prefix 0x78
+  @sync_state_prefix 0x73
+  @peer_prefix 0x70
 
   def codec_version, do: "2"
 
@@ -20,6 +22,8 @@ defmodule Exbitnode.Db.ChainstateCodecV2 do
   def undo_key(chain, height), do: <<@undo_prefix>> <> chain_key(chain) <> u32(height)
   def tip_key(chain), do: <<@tip_prefix>> <> chain_key(chain)
   def metadata_key(name), do: <<@metadata_prefix>> <> length_prefixed_string(name)
+  def sync_state_key(chain), do: <<@sync_state_prefix>> <> chain_key(chain)
+  def peer_key(id), do: <<@peer_prefix, id::unsigned-big-64>>
 
   def block_index_key(chain, height),
     do: <<@block_index_prefix>> <> chain_key(chain) <> u32(height)
@@ -27,6 +31,13 @@ defmodule Exbitnode.Db.ChainstateCodecV2 do
   def header_key(chain, height), do: <<@header_prefix>> <> chain_key(chain) <> u32(height)
   def event_key(id), do: <<@event_prefix, id::unsigned-big-64>>
   def blocker_key(chain), do: <<@blocker_prefix>> <> chain_key(chain)
+
+  def utxo_prefix(chain), do: <<@utxo_prefix>> <> chain_key(chain)
+  def undo_prefix(chain), do: <<@undo_prefix>> <> chain_key(chain)
+  def block_index_prefix(chain), do: <<@block_index_prefix>> <> chain_key(chain)
+  def header_prefix(chain), do: <<@header_prefix>> <> chain_key(chain)
+  def event_prefix, do: <<@event_prefix>>
+  def peer_prefix, do: <<@peer_prefix>>
 
   def encode_utxo(%{height: height, value_sats: value_sats, script_pubkey_hex: script_hex} = utxo) do
     script = Hex.decode(script_hex)

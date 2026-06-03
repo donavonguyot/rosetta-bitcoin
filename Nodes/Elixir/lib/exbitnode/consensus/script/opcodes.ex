@@ -2,16 +2,78 @@ defmodule Exbitnode.Consensus.Script.Opcodes do
   @moduledoc false
 
   def op_0, do: 0x00
-  def op_1, do: 0x51
-  def op_16, do: 0x60
-  def op_1negate, do: 0x4F
   def op_pushdata1, do: 0x4C
   def op_pushdata2, do: 0x4D
   def op_pushdata4, do: 0x4E
+  def op_1negate, do: 0x4F
+  def op_1, do: 0x51
+  def op_16, do: 0x60
+  def op_nop, do: 0x61
+  def op_if, do: 0x63
+  def op_notif, do: 0x64
+  def op_else, do: 0x67
+  def op_endif, do: 0x68
+  def op_verify, do: 0x69
+  def op_toaltstack, do: 0x6B
+  def op_fromaltstack, do: 0x6C
+  def op_2drop, do: 0x6D
+  def op_2dup, do: 0x6E
+  def op_3dup, do: 0x6F
+  def op_2over, do: 0x70
+  def op_2swap, do: 0x72
+  def op_ifdup, do: 0x73
+  def op_depth, do: 0x74
+  def op_drop, do: 0x75
   def op_dup, do: 0x76
-  def op_equal, do: 0x87
-  def op_equalverify, do: 0x88
+  def op_nip, do: 0x77
+  def op_over, do: 0x78
+  def op_pick, do: 0x79
+  def op_roll, do: 0x7A
+  def op_rot, do: 0x7B
+  def op_swap, do: 0x7C
+  def op_tuck, do: 0x7D
+  def op_size, do: 0x82
+  def op_1sub, do: 0x8C
+  def op_negate, do: 0x8F
+  def op_abs, do: 0x90
+  def op_not, do: 0x91
+  def op_0notequal, do: 0x92
+  def op_add, do: 0x93
+  def op_sub, do: 0x94
+  def op_booland, do: 0x9A
+  def op_boolor, do: 0x9B
+  def op_numequal, do: 0x9C
+  def op_numequalverify, do: 0x9D
+  def op_numnotequal, do: 0x9E
+  def op_lessthan, do: 0x9F
+  def op_greaterthan, do: 0xA0
+  def op_lessthanorequal, do: 0xA1
+  def op_greaterthanorequal, do: 0xA2
+  def op_min, do: 0xA3
+  def op_max, do: 0xA4
+  def op_within, do: 0xA5
+  def op_ripemd160, do: 0xA6
+  def op_sha1, do: 0xA7
+  def op_sha256, do: 0xA8
+  def op_hash160, do: 0xA9
+  def op_hash256, do: 0xAA
+  def op_codeseparator, do: 0xAB
   def op_checksig, do: 0xAC
   def op_checksigverify, do: 0xAD
-  def op_hash160, do: 0xA9
+  def op_checkmultisig, do: 0xAE
+  def op_checkmultisigverify, do: 0xAF
+  def op_checklocktimeverify, do: 0xB1
+  def op_checksequenceverify, do: 0xB2
+  def op_checksigadd, do: 0xBA
+  def op_equal, do: 0x87
+  def op_equalverify, do: 0x88
+
+  def max_p2sh_redeem_push, do: 520
+  def max_consensus_script_size, do: 10_000
+  def max_pubkeys_per_multisig, do: 20
+  def max_tapscript_stack_elements, do: 1_000
+  def max_script_element_size_consensus, do: 520
+  def taproot_leaf_version_tapscript, do: 0xC0
+  def validation_weight_offset, do: 50
+  def validation_weight_per_sigop, do: 50
 end

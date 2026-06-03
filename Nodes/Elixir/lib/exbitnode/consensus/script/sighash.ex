@@ -7,7 +7,6 @@ defmodule Exbitnode.Consensus.Script.Sighash do
 
   @taproot_sighash_default 0
   @taproot_sighash_all 1
-  @taproot_sighash_none 2
   @taproot_sighash_single 3
 
   def legacy_sighash(%Transaction{} = tx, input_index, script_code, sighash_type \\ 1)
@@ -16,8 +15,7 @@ defmodule Exbitnode.Consensus.Script.Sighash do
     anyone_can_pay = Bitwise.band(sighash_type, 0x80) != 0
 
     if base_type == 3 and input_index >= length(tx.outputs) do
-      invalid = :binary.copy(<<0>>, 31) <> <<1>>
-      invalid
+      <<1>> <> :binary.copy(<<0>>, 31)
     else
       inputs =
         if anyone_can_pay do
@@ -44,7 +42,7 @@ defmodule Exbitnode.Consensus.Script.Sighash do
             end
 
           sequence =
-            if anyone_can_pay or base_type == 1 do
+            if anyone_can_pay or base_type == 1 or source_index == input_index do
               WireSerialize.pack_int32_le(Enum.at(tx.inputs, source_index).sequence)
             else
               <<0, 0, 0, 0>>
@@ -65,7 +63,14 @@ defmodule Exbitnode.Consensus.Script.Sighash do
             parts ++ [WireSerialize.write_compact_size(0)]
 
           base_type == 3 ->
-            outputs = Enum.take(tx.outputs, input_index + 1)
+            placeholders =
+              if input_index == 0 do
+                []
+              else
+                Enum.map(1..input_index, fn _ -> %TxOut{value: -1, script_pubkey: <<>>} end)
+              end
+
+            outputs = placeholders ++ [Enum.at(tx.outputs, input_index)]
 
             parts ++
               [
@@ -163,10 +168,38 @@ defmodule Exbitnode.Consensus.Script.Sighash do
       WireSerialize.write_compact_size(byte_size(script)) <> script
   end
 
+  def tapleaf_hash(leaf_version, tapscript_bytes)
+      when is_integer(leaf_version) and is_binary(tapscript_bytes) do
+    CryptoUtil.bitcoin_tagged_hash(
+      "TapLeaf",
+      <<Bitwise.band(leaf_version, 0xFF)>> <>
+        WireSerialize.write_compact_size(byte_size(tapscript_bytes)) <> tapscript_bytes
+    )
+  end
+
+  def tapbranch_hash(left, right) when is_binary(left) and is_binary(right) do
+    pair = if left < right, do: left <> right, else: right <> left
+    CryptoUtil.bitcoin_tagged_hash("TapBranch", pair)
+  end
+
+  def taproot_merkle_root_from_branch(branch_nodes, leaf_hash)
+      when is_list(branch_nodes) and is_binary(leaf_hash) do
+    Enum.reduce(branch_nodes, leaf_hash, fn sibling, acc -> tapbranch_hash(acc, sibling) end)
+  end
+
+  def serialized_witness_stack_bytes(stack) when is_list(stack) do
+    Enum.reduce(stack, WireSerialize.write_compact_size(length(stack)), fn item, acc ->
+      acc <> WireSerialize.write_compact_size(byte_size(item)) <> item
+    end)
+  end
+
   def taproot_signature_hash(%Transaction{} = tx, input_index, spent_prevouts, opts \\ [])
       when is_list(spent_prevouts) do
     hash_type = Keyword.get(opts, :hash_type, @taproot_sighash_default)
     annex = Keyword.get(opts, :annex)
+    ext_flag = Keyword.get(opts, :ext_flag, 0)
+    tapleaf_hash_value = Keyword.get(opts, :tapleaf_hash)
+    codeseparator_pos = Keyword.get(opts, :tapscript_codeseparator_pos, 0xFFFF_FFFF)
 
     if length(spent_prevouts) != length(tx.inputs) do
       raise ArgumentError, "spent_prevouts length mismatch"
@@ -177,6 +210,14 @@ defmodule Exbitnode.Consensus.Script.Sighash do
     end
 
     annex_present = annex != nil
+
+    if ext_flag not in [0, 1] do
+      raise ArgumentError, "invalid taproot ext_flag"
+    end
+
+    if ext_flag == 1 and (not is_binary(tapleaf_hash_value) or byte_size(tapleaf_hash_value) != 32) do
+      raise ArgumentError, "tapscript sighash requires 32-byte tapleaf_hash"
+    end
 
     output_mode =
       if hash_type == @taproot_sighash_default,
@@ -243,7 +284,7 @@ defmodule Exbitnode.Consensus.Script.Sighash do
           body
       end
 
-    spend_type = Bitwise.bsl(0, 1) + if(annex_present, do: 1, else: 0)
+    spend_type = Bitwise.bsl(ext_flag, 1) + if(annex_present, do: 1, else: 0)
     body = body ++ [<<spend_type>>]
 
     body =
@@ -285,6 +326,13 @@ defmodule Exbitnode.Consensus.Script.Sighash do
         body
       end
 
+    body =
+      if ext_flag == 1 do
+        body ++ [tapleaf_hash_value, <<0>>, pack_uint32_le(codeseparator_pos)]
+      else
+        body
+      end
+
     sigmsg = <<0>> <> IO.iodata_to_binary(body)
     CryptoUtil.bitcoin_tagged_hash("TapSighash", sigmsg)
   end
@@ -296,4 +344,6 @@ defmodule Exbitnode.Consensus.Script.Sighash do
   defp sha256_concat(parts) do
     :crypto.hash(:sha256, IO.iodata_to_binary(parts))
   end
+
+  defp pack_uint32_le(value), do: <<Bitwise.band(value, 0xFFFF_FFFF)::little-unsigned-32>>
 end

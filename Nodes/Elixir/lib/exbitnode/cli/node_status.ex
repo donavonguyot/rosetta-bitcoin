@@ -4,6 +4,7 @@ defmodule Exbitnode.CLI.NodeStatus do
   alias Exbitnode.Config.NodePaths
   alias Exbitnode.Db.ChainstateSession
   alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
+  alias Exbitnode.RuntimeStatus
   alias Exbitnode.Storage.DatadirLock
 
   def run(_args) do
@@ -13,42 +14,65 @@ defmodule Exbitnode.CLI.NodeStatus do
     chain = NodePaths.chain_from_env()
     peer_source = System.get_env("PEERS", "127.0.0.1:48333")
 
-    status =
-      if File.exists?(Path.join(data_dir, "chainstate-rocksdb")) do
-        build_status(data_dir, chain, peer_source)
-      else
-        %{
-          node_id: "exbitnode-native",
-          implementation: "ElixirNode",
-          runtime_surface: runtime_surface(),
-          runtime_status: "not_running",
-          sync_status: "not_started",
-          chain: chain,
-          network: chain,
-          datadir: data_dir,
-          chainstate_backend: "rocksdb",
-          chainstate_backend_path: Path.join(data_dir, "chainstate-rocksdb"),
-          chainstate_generation_id: "",
-          chainstate_status: "missing",
-          native_crypto_backend: Exbitnode.Consensus.Script.Secp256k1.selected_backend_name(),
-          native_crypto_available:
-            Exbitnode.Consensus.Script.Secp256k1.native_backend_available?(),
-          taproot_tweak_backend:
-            Exbitnode.Consensus.Script.Secp256k1.taproot_tweak_backend_name(),
-          peer_source: peer_source,
-          recommendation: "run_sync_local",
-          binary_gate_status: "not_attempted",
-          updated_at: DateTime.utc_now() |> DateTime.to_iso8601()
-        }
-      end
+    {status, exit_code} = status_result(data_dir, chain, peer_source)
 
     IO.puts(Jason.encode!(status, pretty: true))
-    0
+    exit_code
+  end
+
+  def status_result(data_dir, chain, peer_source) do
+    artifacts = ChainstateSession.forbidden_local_db_artifacts(data_dir)
+    native_crypto_available = Exbitnode.Consensus.Script.Secp256k1.native_backend_available?()
+
+    cond do
+      artifacts != [] ->
+        reason = "forbidden local DB artifacts present: #{Enum.join(artifacts, ", ")}"
+
+        {base_status(data_dir, chain, peer_source)
+         |> Map.merge(%{
+           runtime_status: "not_running",
+           sync_status: "error",
+           chainstate_status: "misaligned",
+           last_error: reason,
+           forbidden_local_db_artifacts: artifacts,
+           binary_gate_status: "failed",
+           recommendation: "remove_forbidden_local_db_artifacts"
+         }), 1}
+
+      not native_crypto_available ->
+        {base_status(data_dir, chain, peer_source)
+         |> Map.merge(%{
+           runtime_status: "not_running",
+           sync_status: "error",
+           chainstate_status: chainstate_status_for_path(data_dir),
+           last_error: "native secp256k1 backend unavailable",
+           binary_gate_status: "failed",
+           recommendation: "build_native_crypto_backend"
+         }), 1}
+
+      File.exists?(Path.join(data_dir, "chainstate-rocksdb")) ->
+        status = build_status(data_dir, chain, peer_source)
+        {status, status_exit_code(status)}
+
+      true ->
+        {base_status(data_dir, chain, peer_source), 0}
+    end
   end
 
   def build_status(data_dir, chain, peer_source) do
     {lock_busy, lock_pid, lock_cmd} = DatadirLock.inspect_lock(data_dir)
 
+    if lock_busy do
+      snapshot_status(data_dir, chain, peer_source, lock_pid, lock_cmd)
+    else
+      do_build_status(data_dir, chain, peer_source, lock_busy, lock_pid, lock_cmd)
+    end
+  rescue
+    MatchError ->
+      snapshot_status(data_dir, chain, peer_source, nil, nil)
+  end
+
+  defp do_build_status(data_dir, chain, peer_source, lock_busy, lock_pid, lock_cmd) do
     {:ok, conn} = ChainstateSession.open_native(data_dir, chain)
 
     try do
@@ -70,7 +94,7 @@ defmodule Exbitnode.CLI.NodeStatus do
           latest_blocker != nil
         )
 
-      base = %{
+      %{
         node_id: "exbitnode-native",
         implementation: "ElixirNode",
         runtime_surface: runtime_surface(),
@@ -103,23 +127,108 @@ defmodule Exbitnode.CLI.NodeStatus do
         peer_source: peer_source,
         recommendation:
           recommend(runtime_status, validated_height, block_count, latest_blocker != nil),
-        binary_gate_status:
-          binary_gate_status(validated_height, (sync_state && sync_state.best_height) || 0)
+        current_blocker: latest_blocker,
+        last_error: latest_error,
+        active_writer_pid: if(lock_busy, do: lock_pid, else: nil),
+        active_writer_command: if(lock_busy, do: lock_cmd, else: nil),
+        binary_gate_status: binary_gate_status(latest_blocker, latest_error)
       }
-
-      base
-      |> maybe_put(:active_writer_pid, lock_busy && lock_pid)
-      |> maybe_put(:active_writer_command, lock_busy && lock_cmd)
-      |> maybe_put(:current_blocker, latest_blocker)
-      |> maybe_put(:last_error, latest_error)
     after
       ChainstateSession.close(conn)
     end
   end
 
-  defp maybe_put(map, _key, false), do: map
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+  defp snapshot_status(data_dir, chain, peer_source, lock_pid, lock_cmd) do
+    snapshot_result = RuntimeStatus.read_snapshot(data_dir)
+
+    snapshot =
+      case snapshot_result do
+        {:ok, value} -> value
+        {:error, _reason} -> RuntimeStatus.empty_running_snapshot(data_dir, chain, peer_source)
+      end
+
+    base_status(data_dir, chain, peer_source)
+    |> Map.merge(%{
+      runtime_status: "running",
+      sync_status: Map.get(snapshot, "sync_status", "running"),
+      chainstate_status: chainstate_status_for_path(data_dir),
+      header_height: Map.get(snapshot, "header_height", 0),
+      header_hash: Map.get(snapshot, "header_hash", ""),
+      stored_block_height: Map.get(snapshot, "stored_block_height", -1),
+      stored_block_hash: Map.get(snapshot, "stored_block_hash", ""),
+      validated_height: Map.get(snapshot, "validated_height", -1),
+      validated_hash: Map.get(snapshot, "validated_hash", ""),
+      block_count: Map.get(snapshot, "block_count", 0),
+      utxo_count: Map.get(snapshot, "utxo_count", 0),
+      chainstate_utxo_count: Map.get(snapshot, "utxo_count", 0),
+      block_gap_count:
+        max(
+          Map.get(snapshot, "header_height", 0) -
+            max(Map.get(snapshot, "validated_height", -1), 0),
+          0
+        ),
+      lock_status: "held",
+      active_writer_pid: lock_pid,
+      active_writer_command: lock_cmd,
+      peer_source: Map.get(snapshot, "peer_source", peer_source),
+      current_blocker: Map.get(snapshot, "current_blocker"),
+      last_error: Map.get(snapshot, "last_error"),
+      recommendation:
+        if(snapshot_result == {:error, :enoent},
+          do: "wait_for_status_snapshot",
+          else: "leave_running"
+        ),
+      updated_at: Map.get(snapshot, "updated_at", DateTime.utc_now() |> DateTime.to_iso8601()),
+      binary_gate_status:
+        binary_gate_status(Map.get(snapshot, "current_blocker"), Map.get(snapshot, "last_error"))
+    })
+  end
+
+  defp base_status(data_dir, chain, peer_source) do
+    {lock_busy, lock_pid, lock_cmd} = DatadirLock.inspect_lock(data_dir)
+
+    %{
+      node_id: "exbitnode-native",
+      implementation: "ElixirNode",
+      runtime_surface: runtime_surface(),
+      runtime_status: if(lock_busy, do: "running", else: "not_running"),
+      sync_status: "not_started",
+      chain: chain,
+      network: chain,
+      datadir: data_dir,
+      chainstate_backend: "rocksdb",
+      chainstate_backend_path: Path.join(data_dir, "chainstate-rocksdb"),
+      chainstate_generation_id: "",
+      chainstate_status: chainstate_status_for_path(data_dir),
+      header_height: 0,
+      header_hash: "",
+      stored_block_height: -1,
+      stored_block_hash: "",
+      validated_height: -1,
+      validated_hash: "",
+      header_count: 0,
+      block_count: 0,
+      utxo_count: 0,
+      chainstate_utxo_count: 0,
+      block_gap_count: 0,
+      lock_status: if(lock_busy, do: "held", else: "free"),
+      active_writer_pid: if(lock_busy, do: lock_pid, else: nil),
+      active_writer_command: if(lock_busy, do: lock_cmd, else: nil),
+      native_crypto_backend: Exbitnode.Consensus.Script.Secp256k1.selected_backend_name(),
+      native_crypto_available: Exbitnode.Consensus.Script.Secp256k1.native_backend_available?(),
+      taproot_tweak_backend: Exbitnode.Consensus.Script.Secp256k1.taproot_tweak_backend_name(),
+      current_blocker: nil,
+      last_error: nil,
+      peer_source: peer_source,
+      recommendation: "run_sync_local",
+      binary_gate_status: "not_attempted",
+      updated_at: DateTime.utc_now() |> DateTime.to_iso8601()
+    }
+  end
+
+  defp chainstate_status_for_path(data_dir) do
+    if File.exists?(Path.join(data_dir, "chainstate-rocksdb")), do: "usable", else: "missing"
+  end
 
   defp resolve_runtime_status(_lock_busy, _sync_status, true), do: "stopped"
   defp resolve_runtime_status(true, _sync_status, _has_blocker), do: "running"
@@ -135,13 +244,16 @@ defmodule Exbitnode.CLI.NodeStatus do
   defp recommend(_, validated_height, _, _) when validated_height < 0, do: "run_sync_local"
   defp recommend(_, _, _, _), do: "run_sync_local"
 
-  defp binary_gate_status(validated_height, header_height) do
-    cond do
-      validated_height < 0 -> "not_attempted"
-      validated_height >= header_height -> "passed"
-      true -> "failed"
-    end
-  end
+  defp binary_gate_status(blocker, _last_error) when not is_nil(blocker), do: "failed"
+  defp binary_gate_status(_blocker, last_error) when not is_nil(last_error), do: "failed"
+  defp binary_gate_status(_blocker, _last_error), do: "not_attempted"
+
+  defp status_exit_code(%{sync_status: "error"}), do: 1
+  defp status_exit_code(%{chainstate_status: "misaligned"}), do: 1
+  defp status_exit_code(%{native_crypto_available: false}), do: 1
+  defp status_exit_code(%{current_blocker: blocker}) when not is_nil(blocker), do: 1
+  defp status_exit_code(%{last_error: last_error}) when not is_nil(last_error), do: 1
+  defp status_exit_code(_status), do: 0
 
   defp runtime_surface do
     System.get_env("RUNTIME_SURFACE", "host")

@@ -2,8 +2,10 @@
 /_build/
 /deps/
 *.ez
+/priv/*.so
+/priv/*.dylib
 
-# Local datadir and databases
+# Local datadir and forbidden DB artifacts
 /data-elixir/
 /data-elixir-*/
 *.db
