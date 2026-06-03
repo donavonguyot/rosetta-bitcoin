@@ -208,9 +208,11 @@ public final class LiveNodeService {
               blockStorage,
               session.chainstateStore(),
               maxBlocks,
-              syncTiming ? SyncLocalCoreService.timingEventSink(tracker) : BlockSync.TimingSink.none(),
+              BlockSync.TimingSink.none(),
               false);
-      SyncLocalCoreService.printTimingSummary(out, blockResult.timingSummary());
+      if (syncTiming) {
+        SyncLocalCoreService.printTimingSummary(out, blockResult.timingSummary());
+      }
       int after = tracker.getValidatedHeight(chain.name());
       ChainstateStatus chainstateStatus =
           ChainstateStatus.capture(session.chainstateStore(), chain.name());

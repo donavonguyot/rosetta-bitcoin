@@ -88,12 +88,14 @@ public final class ChainstateRebuildService {
                 blockStorage,
                 chainstateStore,
                 maxBlocks,
-                syncTiming ? SyncLocalCoreService.timingEventSink(tracker) : BlockSync.TimingSink.none(),
+                BlockSync.TimingSink.none(),
                 true);
         out.println("  downloaded_blocks=" + result.downloaded());
         out.println("  connected_blocks=" + result.connected());
         out.println("  sync_status=" + result.syncStatus());
-        SyncLocalCoreService.printTimingSummary(out, result.timingSummary());
+        if (syncTiming) {
+          SyncLocalCoreService.printTimingSummary(out, result.timingSummary());
+        }
         if (result.blockerMessage() != null) {
           out.println("  current_blocker=" + result.blockerMessage());
         }

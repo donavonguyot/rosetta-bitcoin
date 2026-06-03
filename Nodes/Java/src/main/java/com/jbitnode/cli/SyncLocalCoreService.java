@@ -100,12 +100,14 @@ public final class SyncLocalCoreService {
                   session.blockStorage(),
                   session.chainstateStore(),
                   maxBlocks,
-                  syncTiming ? timingEventSink(tracker) : BlockSync.TimingSink.none(),
+                  BlockSync.TimingSink.none(),
                   false);
           out.println("  downloaded_blocks=" + blockResult.downloaded());
           out.println("  connected_blocks=" + blockResult.connected());
           out.println("  sync_status=" + blockResult.syncStatus());
-          printTimingSummary(out, blockResult.timingSummary());
+          if (syncTiming) {
+            printTimingSummary(out, blockResult.timingSummary());
+          }
           if (blockResult.blockerMessage() != null) {
             out.println("  current_blocker=" + blockResult.blockerMessage());
           }
@@ -400,20 +402,5 @@ public final class SyncLocalCoreService {
     } catch (IllegalStateException ignored) {
       // Hook already running during shutdown.
     }
-  }
-
-  static BlockSync.TimingSink timingEventSink(ProjectTracker tracker) {
-    return (stage, height, elapsedMillis) ->
-        tracker.logEvent(
-            "timing",
-            "sync timing " + stage,
-            "info",
-            "{\"height\":"
-                + height
-                + ",\"stage\":\""
-                + stage
-                + "\",\"elapsed_ms\":"
-                + elapsedMillis
-                + "}");
   }
 }
