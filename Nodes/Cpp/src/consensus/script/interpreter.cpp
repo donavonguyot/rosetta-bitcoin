@@ -7,6 +7,8 @@
 #include "cpbitnode/consensus/sha256.hpp"
 #include "cpbitnode/consensus/script/sighash.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace cpbitnode::consensus::script {
@@ -20,14 +22,6 @@ constexpr std::uint8_t ANNEX_TAG = 0x50;
 constexpr std::uint8_t TAPROOT_LEAF_VERSION_TAPSCRIPT = 0xC0;
 constexpr int VALIDATION_WEIGHT_OFFSET = 50;
 constexpr int VALIDATION_WEIGHT_PER_SIGOP = 50;
-constexpr std::uint8_t OP_SWAP = 0x7C;
-constexpr std::uint8_t OP_SUB = 0x94;
-constexpr std::uint8_t OP_GREATERTHAN = 0xA0;
-constexpr std::uint8_t OP_RIPEMD160 = 0xA6;
-constexpr std::uint8_t OP_SHA1 = 0xA7;
-constexpr std::uint8_t OP_SHA256 = 0xA8;
-constexpr std::uint8_t OP_HASH256 = 0xAA;
-constexpr std::uint8_t OP_CODESEPARATOR = 0xAB;
 constexpr int MAX_PUBKEYS_PER_MULTISIG = 20;
 constexpr std::uint32_t LOCKTIME_THRESHOLD = 500'000'000;
 constexpr std::uint32_t SEQUENCE_FINAL = 0xFFFFFFFF;
@@ -95,9 +89,12 @@ std::pair<std::vector<std::uint8_t>, std::size_t> readPush(std::span<const std::
 }
 
 bool castToBool(const std::vector<std::uint8_t>& item) {
-    for (const auto byte : item) {
+    for (std::size_t index = 0; index < item.size(); ++index) {
+        const auto byte = item[index];
         if (byte != 0) {
-            if (byte == 0x80) return false;
+            if (index == item.size() - 1 && byte == 0x80) {
+                return false;
+            }
             return true;
         }
     }
@@ -112,38 +109,57 @@ std::vector<std::uint8_t> encodeOpN(int value) {
     throw ScriptError("cannot encode numeric");
 }
 
-int decodeScriptNum(const std::vector<std::uint8_t>& item, int maxLen = 4) {
+std::int64_t decodeScriptNum(const std::vector<std::uint8_t>& item, int maxLen = 4) {
     if (static_cast<int>(item.size()) > maxLen) {
         throw ScriptError("script number overflow");
     }
-    if (item.empty()) return 0;
-    if (item.back() & 0x80) {
-        throw ScriptError("negative script numbers unsupported");
+    if (item.empty()) {
+        return 0;
     }
-    int result = 0;
+    if (item.back() & 0x80) {
+        std::vector<std::uint8_t> magnitude(item.begin(), item.end());
+        magnitude.back() &= 0x7F;
+        bool allZero = true;
+        for (const auto byte : magnitude) {
+            if (byte != 0) {
+                allZero = false;
+                break;
+            }
+        }
+        if (allZero) {
+            return 0;
+        }
+        std::int64_t result = 0;
+        for (std::size_t i = 0; i < magnitude.size(); ++i) {
+            result |= static_cast<std::int64_t>(magnitude[i]) << (8 * static_cast<int>(i));
+        }
+        return -result;
+    }
+    std::int64_t result = 0;
     for (std::size_t i = 0; i < item.size(); ++i) {
-        result |= static_cast<int>(item[i]) << (8 * static_cast<int>(i));
+        result |= static_cast<std::int64_t>(item[i]) << (8 * static_cast<int>(i));
     }
     return result;
 }
 
-std::vector<std::uint8_t> encodeScriptNum(int value) {
+std::vector<std::uint8_t> encodeScriptNum(int value, int maxLen = 4) {
     if (value == 0) {
         return {};
     }
     bool neg = value < 0;
-    if (neg) {
-        value = -value;
-    }
+    int absValue = neg ? -value : value;
     std::vector<std::uint8_t> out;
-    while (value > 0) {
-        out.push_back(static_cast<std::uint8_t>(value & 0xff));
-        value >>= 8;
+    while (absValue > 0) {
+        out.push_back(static_cast<std::uint8_t>(absValue & 0xff));
+        absValue >>= 8;
     }
     if (out.back() & 0x80) {
         out.push_back(neg ? static_cast<std::uint8_t>(0x80) : static_cast<std::uint8_t>(0x00));
     } else if (neg) {
         out.back() |= 0x80;
+    }
+    if (static_cast<int>(out.size()) > maxLen) {
+        throw ScriptError("script number overflow");
     }
     return out;
 }
@@ -153,6 +169,43 @@ const std::vector<std::uint8_t>& stackItem(const Stack& stack, std::size_t depth
         throw ScriptError("stack underflow");
     }
     return stack[stack.size() - depthFromTop];
+}
+
+std::vector<std::uint8_t> legacyFindAndDelete(std::span<const std::uint8_t> scriptCode,
+                                              std::span<const std::uint8_t> target) {
+    std::vector<std::uint8_t> output;
+    std::size_t offset = 0;
+    while (offset < scriptCode.size()) {
+        const std::size_t start = offset;
+        const auto opcode = scriptCode[offset++];
+        std::vector<std::uint8_t> item;
+        if (opcode == OP_0) {
+            item = {};
+        } else if (opcode >= OP_1 && opcode <= OP_16) {
+            item = {static_cast<std::uint8_t>(opcode - OP_1 + 1)};
+        } else if (opcode == OP_1NEGATE) {
+            item = {0x81};
+        } else if ((opcode >= 1 && opcode <= 75) || opcode == OP_PUSHDATA1 || opcode == OP_PUSHDATA2 ||
+                   opcode == OP_PUSHDATA4) {
+            offset = start;
+            try {
+                std::tie(item, offset) = readPush(scriptCode, offset);
+            } catch (const ScriptError&) {
+                output.insert(output.end(), scriptCode.begin() + static_cast<std::ptrdiff_t>(start),
+                              scriptCode.end());
+                break;
+            }
+        } else {
+            output.insert(output.end(), scriptCode.begin() + static_cast<std::ptrdiff_t>(start),
+                          scriptCode.begin() + static_cast<std::ptrdiff_t>(offset));
+            continue;
+        }
+        if (item != std::vector<std::uint8_t>(target.begin(), target.end())) {
+            output.insert(output.end(), scriptCode.begin() + static_cast<std::ptrdiff_t>(start),
+                          scriptCode.begin() + static_cast<std::ptrdiff_t>(offset));
+        }
+    }
+    return output;
 }
 
 bool checkEcdsaSignature(const std::vector<std::uint8_t>& signature, const std::vector<std::uint8_t>& pubkey,
@@ -165,7 +218,8 @@ bool checkEcdsaSignature(const std::vector<std::uint8_t>& signature, const std::
     if (witness) {
         digest = bip143Sighash(tx, inputIndex, scriptCode, amount, sighashType);
     } else {
-        digest = legacySighash(tx, inputIndex, scriptCode, sighashType);
+        const auto trimmed = legacyFindAndDelete(scriptCode, signature);
+        digest = legacySighash(tx, inputIndex, trimmed, sighashType);
     }
     return verifyDerSignature(pubkey, digest, sigDer);
 }
@@ -204,10 +258,17 @@ void execCheckmultisig(Stack& stack, std::uint8_t opcode, const messages::Transa
     int keyOffset = 0;
     int remainingSigs = nSigsCount;
     int remainingKeys = nKeysCount;
+    std::vector<std::uint8_t> activeScriptCode(scriptCode.begin(), scriptCode.end());
+    if (!witness) {
+        for (int offset = 0; offset < nSigsCount; ++offset) {
+            activeScriptCode =
+                legacyFindAndDelete(activeScriptCode, stackItem(stack, isig + static_cast<std::size_t>(offset)));
+        }
+    }
     while (success && remainingSigs > 0) {
         const auto& sig = stackItem(stack, isig + static_cast<std::size_t>(sigOffset));
         const auto& pubkey = stackItem(stack, ikey + static_cast<std::size_t>(keyOffset));
-        if (checkEcdsaSignature(sig, pubkey, tx, inputIndex, scriptCode, amount, witness)) {
+        if (checkEcdsaSignature(sig, pubkey, tx, inputIndex, activeScriptCode, amount, witness)) {
             ++sigOffset;
             --remainingSigs;
         }
@@ -227,8 +288,9 @@ void execCheckmultisig(Stack& stack, std::uint8_t opcode, const messages::Transa
         throw ScriptError("CHECKMULTISIG missing dummy");
     }
     popItem(stack);
-    pushItem(stack, encodeOpN(success ? 1 : 0));
-    if (opcode == OP_CHECKMULTISIGVERIFY && !success) {
+    if (opcode == OP_CHECKMULTISIG) {
+        pushItem(stack, encodeOpN(success ? 1 : 0));
+    } else if (!success) {
         throw ScriptError("CHECKMULTISIGVERIFY failed");
     }
 }
@@ -246,12 +308,12 @@ void execChecklocktimeverify(Stack& stack, const messages::Transaction& tx) {
         throw ScriptError("CHECKLOCKTIMEVERIFY stack empty");
     }
     if (tx.version < 2) {
-        throw ScriptError("CHECKLOCKTIMEVERIFY requires tx version >= 2");
+        return;
     }
     if (txIsFinalForCltv(tx)) {
         throw ScriptError("CHECKLOCKTIMEVERIFY on final tx");
     }
-    const int locktimeValue = decodeScriptNum(stack.back(), MAX_SCRIPTNUM_SIZE_LOCKTIME);
+    const auto locktimeValue = decodeScriptNum(stack.back(), MAX_SCRIPTNUM_SIZE_LOCKTIME);
     if (locktimeValue < 0) {
         throw ScriptError("CHECKLOCKTIMEVERIFY negative locktime");
     }
@@ -269,7 +331,14 @@ void execChecksequenceverify(Stack& stack, const messages::Transaction& tx, std:
         throw ScriptError("CHECKSEQUENCEVERIFY stack empty");
     }
     if (tx.version < 2) {
-        throw ScriptError("CHECKSEQUENCEVERIFY requires tx version >= 2");
+        return;
+    }
+    const auto seqValue = decodeScriptNum(stack.back(), MAX_SCRIPTNUM_SIZE_LOCKTIME);
+    if ((static_cast<std::uint32_t>(seqValue) & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0) {
+        return;
+    }
+    if (seqValue < 0) {
+        throw ScriptError("CHECKSEQUENCEVERIFY negative locktime");
     }
     const auto nSequence = tx.inputs[inputIndex].sequence;
     if (nSequence == SEQUENCE_FINAL) {
@@ -277,10 +346,6 @@ void execChecksequenceverify(Stack& stack, const messages::Transaction& tx, std:
     }
     if (nSequence & SEQUENCE_LOCKTIME_DISABLE_FLAG) {
         throw ScriptError("CHECKSEQUENCEVERIFY disabled sequence");
-    }
-    const int seqValue = decodeScriptNum(stack.back(), MAX_SCRIPTNUM_SIZE_LOCKTIME);
-    if (seqValue < 0) {
-        throw ScriptError("CHECKSEQUENCEVERIFY negative locktime");
     }
     const bool stackType = (static_cast<std::uint32_t>(seqValue) & SEQUENCE_LOCKTIME_TYPE_FLAG) != 0;
     const bool seqType = (nSequence & SEQUENCE_LOCKTIME_TYPE_FLAG) != 0;
@@ -292,12 +357,80 @@ void execChecksequenceverify(Stack& stack, const messages::Transaction& tx, std:
     }
 }
 
+bool legacyFExec(const std::vector<bool>& vfExec) {
+    for (const bool flag : vfExec) {
+        if (!flag) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::size_t tapscriptAdvanceOpcode(std::span<const std::uint8_t> script, std::size_t offset) {
+    const auto opcode = script[offset];
+    if (opcode == OP_0 || (opcode >= OP_1 && opcode <= OP_16) || opcode == OP_1NEGATE) {
+        return offset + 1;
+    }
+    if (opcode >= 1 && opcode <= 75) {
+        return offset + 1 + opcode;
+    }
+    if (opcode == OP_PUSHDATA1 || opcode == OP_PUSHDATA2 || opcode == OP_PUSHDATA4) {
+        const auto [ignored, next] = readPush(script, offset);
+        (void)ignored;
+        return next;
+    }
+    return offset + 1;
+}
+
 void evaluateScriptImpl(std::span<const std::uint8_t> script, Stack& stack, const messages::Transaction& tx,
-                    std::size_t inputIndex, std::span<const std::uint8_t> scriptCode, std::int64_t amount,
-                    bool witness, int verifyFlags = SCRIPT_VERIFY_DEFAULT) {
+                        std::size_t inputIndex, std::span<const std::uint8_t> scriptCode, std::int64_t amount,
+                        bool witness, int verifyFlags = SCRIPT_VERIFY_DEFAULT) {
     std::size_t offset = 0;
+    std::size_t codeseparatorOffset = 0;
+    std::vector<bool> vfExec;
+    Stack altstack;
     while (offset < script.size()) {
-        const auto opcode = script[offset++];
+        const auto opcode = script[offset];
+        const bool fExec = legacyFExec(vfExec);
+
+        if (opcode == OP_IF || opcode == OP_NOTIF) {
+            if (fExec) {
+                if (stack.empty()) {
+                    throw ScriptError("OP_IF stack empty");
+                }
+                bool branch = castToBool(popItem(stack));
+                if (opcode == OP_NOTIF) {
+                    branch = !branch;
+                }
+                vfExec.push_back(branch);
+            } else {
+                vfExec.push_back(false);
+            }
+            ++offset;
+            continue;
+        }
+        if (opcode == OP_ELSE) {
+            if (vfExec.empty()) {
+                throw ScriptError("unbalanced conditional");
+            }
+            vfExec.back() = !vfExec.back();
+            ++offset;
+            continue;
+        }
+        if (opcode == OP_ENDIF) {
+            if (vfExec.empty()) {
+                throw ScriptError("unbalanced conditional");
+            }
+            vfExec.pop_back();
+            ++offset;
+            continue;
+        }
+        if (!fExec) {
+            offset = tapscriptAdvanceOpcode(script, offset);
+            continue;
+        }
+
+        ++offset;
         if (opcode == OP_0) {
             pushItem(stack, {});
         } else if (opcode >= OP_1 && opcode <= OP_16) {
@@ -316,19 +449,112 @@ void evaluateScriptImpl(std::span<const std::uint8_t> script, Stack& stack, cons
             pushItem(stack, item);
         } else if (opcode == OP_DROP) {
             popItem(stack);
+        } else if (opcode == OP_2DROP) {
+            popItem(stack);
+            popItem(stack);
+        } else if (opcode == OP_2DUP) {
+            if (stack.size() < 2) throw ScriptError("stack underflow");
+            stack.insert(stack.end(), stack.end() - 2, stack.end());
+        } else if (opcode == OP_3DUP) {
+            if (stack.size() < 3) throw ScriptError("stack underflow");
+            stack.insert(stack.end(), stack.end() - 3, stack.end());
+        } else if (opcode == OP_2OVER) {
+            if (stack.size() < 4) throw ScriptError("stack underflow");
+            stack.insert(stack.end(), stack.end() - 4, stack.end() - 2);
+        } else if (opcode == OP_2SWAP) {
+            if (stack.size() < 4) throw ScriptError("stack underflow");
+            std::swap(stack[stack.size() - 4], stack[stack.size() - 2]);
+            std::swap(stack[stack.size() - 3], stack[stack.size() - 1]);
+        } else if (opcode == OP_IFDUP) {
+            if (stack.empty()) throw ScriptError("stack underflow");
+            if (castToBool(stack.back())) {
+                pushItem(stack, stack.back());
+            }
+        } else if (opcode == OP_NIP) {
+            if (stack.size() < 2) throw ScriptError("stack underflow");
+            stack.erase(stack.end() - 2);
+        } else if (opcode == OP_OVER) {
+            if (stack.size() < 2) throw ScriptError("stack underflow");
+            pushItem(stack, stack[stack.size() - 2]);
+        } else if (opcode == OP_ROT) {
+            if (stack.size() < 3) throw ScriptError("stack underflow");
+            auto item = stack[stack.size() - 3];
+            stack.erase(stack.end() - 3);
+            pushItem(stack, item);
+        } else if (opcode == OP_TUCK) {
+            if (stack.size() < 2) throw ScriptError("stack underflow");
+            stack.insert(stack.begin() + static_cast<std::ptrdiff_t>(stack.size()) - 2, stack.back());
+        } else if (opcode == OP_TOALTSTACK) {
+            altstack.push_back(popItem(stack));
+        } else if (opcode == OP_FROMALTSTACK) {
+            if (altstack.empty()) throw ScriptError("altstack underflow");
+            pushItem(stack, altstack.back());
+            altstack.pop_back();
+        } else if (opcode == OP_DEPTH) {
+            pushItem(stack, encodeScriptNum(static_cast<int>(stack.size())));
+        } else if (opcode == OP_PICK) {
+            const int n = decodeScriptNum(popItem(stack));
+            if (n < 0 || static_cast<std::size_t>(n) >= stack.size()) throw ScriptError("stack underflow");
+            pushItem(stack, stack[stack.size() - static_cast<std::size_t>(n) - 1]);
+        } else if (opcode == OP_ROLL) {
+            const int n = decodeScriptNum(popItem(stack));
+            if (n < 0 || static_cast<std::size_t>(n) >= stack.size()) throw ScriptError("stack underflow");
+            auto item = stack[stack.size() - static_cast<std::size_t>(n) - 1];
+            stack.erase(stack.end() - static_cast<std::size_t>(n) - 1);
+            pushItem(stack, item);
+        } else if (opcode == OP_SIZE) {
+            if (stack.empty()) throw ScriptError("stack underflow");
+            pushItem(stack, encodeScriptNum(static_cast<int>(stack.back().size())));
         } else if (opcode == OP_SWAP) {
             auto top = popItem(stack);
             auto second = popItem(stack);
             pushItem(stack, std::move(top));
             pushItem(stack, std::move(second));
+        } else if (opcode == OP_ABS) {
+            pushItem(stack, encodeScriptNum(std::abs(decodeScriptNum(popItem(stack))), 5));
+        } else if (opcode == OP_NOT) {
+            pushItem(stack, encodeOpN(decodeScriptNum(popItem(stack)) == 0 ? 1 : 0));
+        } else if (opcode == OP_0NOTEQUAL) {
+            pushItem(stack, encodeOpN(decodeScriptNum(popItem(stack)) != 0 ? 1 : 0));
+        } else if (opcode == OP_ADD) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            pushItem(stack, encodeScriptNum(aVal + bVal, 5));
         } else if (opcode == OP_SUB) {
             const int bVal = decodeScriptNum(popItem(stack));
             const int aVal = decodeScriptNum(popItem(stack));
             pushItem(stack, encodeScriptNum(aVal - bVal));
-        } else if (opcode == OP_GREATERTHAN) {
+        } else if (opcode == OP_LESSTHAN || opcode == OP_GREATERTHAN || opcode == OP_LESSTHANOREQUAL ||
+                   opcode == OP_GREATERTHANOREQUAL) {
             const int bVal = decodeScriptNum(popItem(stack));
             const int aVal = decodeScriptNum(popItem(stack));
-            pushItem(stack, encodeOpN(aVal > bVal ? 1 : 0));
+            bool result = false;
+            if (opcode == OP_LESSTHAN) result = aVal < bVal;
+            else if (opcode == OP_GREATERTHAN) result = aVal > bVal;
+            else if (opcode == OP_LESSTHANOREQUAL) result = aVal <= bVal;
+            else result = aVal >= bVal;
+            pushItem(stack, encodeOpN(result ? 1 : 0));
+        } else if (opcode == OP_BOOLAND) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            pushItem(stack, encodeOpN((aVal != 0 && bVal != 0) ? 1 : 0));
+        } else if (opcode == OP_BOOLOR) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            pushItem(stack, encodeOpN((aVal != 0 || bVal != 0) ? 1 : 0));
+        } else if (opcode == OP_MIN) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            pushItem(stack, encodeScriptNum(std::min(aVal, bVal), 5));
+        } else if (opcode == OP_MAX) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            pushItem(stack, encodeScriptNum(std::max(aVal, bVal), 5));
+        } else if (opcode == OP_WITHIN) {
+            const int maxVal = decodeScriptNum(popItem(stack));
+            const int minVal = decodeScriptNum(popItem(stack));
+            const int xVal = decodeScriptNum(popItem(stack));
+            pushItem(stack, encodeOpN((minVal <= xVal && xVal < maxVal) ? 1 : 0));
         } else if (opcode == OP_RIPEMD160) {
             pushItem(stack, ripemd160Digest(popItem(stack)));
         } else if (opcode == OP_SHA1) {
@@ -353,17 +579,24 @@ void evaluateScriptImpl(std::span<const std::uint8_t> script, Stack& stack, cons
             if (!castToBool(popItem(stack))) {
                 throw ScriptError("VERIFY failed");
             }
+        } else if (opcode == 0x61) {
+            // OP_NOP
+        } else if (opcode == OP_CODESEPARATOR) {
+            codeseparatorOffset = offset;
         } else if (opcode == OP_CHECKSIG || opcode == OP_CHECKSIGVERIFY) {
             auto pubkey = popItem(stack);
             auto signature = popItem(stack);
+            const auto activeScript = scriptCode.subspan(codeseparatorOffset);
             const bool valid =
-                checkEcdsaSignature(signature, pubkey, tx, inputIndex, scriptCode, amount, witness);
-            pushItem(stack, encodeOpN(valid ? 1 : 0));
-            if (opcode == OP_CHECKSIGVERIFY && !valid) {
+                checkEcdsaSignature(signature, pubkey, tx, inputIndex, activeScript, amount, witness);
+            if (opcode == OP_CHECKSIG) {
+                pushItem(stack, encodeOpN(valid ? 1 : 0));
+            } else if (!valid) {
                 throw ScriptError("CHECKSIGVERIFY failed");
             }
         } else if (opcode == OP_CHECKMULTISIG || opcode == OP_CHECKMULTISIGVERIFY) {
-            execCheckmultisig(stack, opcode, tx, inputIndex, scriptCode, amount, witness);
+            const auto activeScript = scriptCode.subspan(codeseparatorOffset);
+            execCheckmultisig(stack, opcode, tx, inputIndex, activeScript, amount, witness);
         } else if (opcode == OP_CHECKLOCKTIMEVERIFY) {
             if (verifyFlags & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY) {
                 execChecklocktimeverify(stack, tx);
@@ -428,9 +661,53 @@ void evaluateTapscript(std::span<const std::uint8_t> script, Stack& stack, const
     std::uint32_t codeseparatorPos = 0xFFFFFFFF;
     std::uint32_t instructionPos = 0;
     std::size_t offset = 0;
+    std::vector<bool> vfExec;
+    Stack altstack;
     while (offset < script.size()) {
         const auto instrAt = instructionPos;
         const auto opcode = script[offset];
+        const bool fExec = legacyFExec(vfExec);
+
+        if (opcode == OP_IF || opcode == OP_NOTIF) {
+            if (fExec) {
+                if (stack.empty()) {
+                    throw ScriptError("OP_IF stack empty");
+                }
+                bool branch = castToBool(popItem(stack));
+                if (opcode == OP_NOTIF) {
+                    branch = !branch;
+                }
+                vfExec.push_back(branch);
+            } else {
+                vfExec.push_back(false);
+            }
+            ++offset;
+            ++instructionPos;
+            continue;
+        }
+        if (opcode == OP_ELSE) {
+            if (vfExec.empty()) {
+                throw ScriptError("unbalanced conditional");
+            }
+            vfExec.back() = !vfExec.back();
+            ++offset;
+            ++instructionPos;
+            continue;
+        }
+        if (opcode == OP_ENDIF) {
+            if (vfExec.empty()) {
+                throw ScriptError("unbalanced conditional");
+            }
+            vfExec.pop_back();
+            ++offset;
+            ++instructionPos;
+            continue;
+        }
+        if (!fExec) {
+            offset = tapscriptAdvanceOpcode(script, offset);
+            ++instructionPos;
+            continue;
+        }
 
         if (opcode == OP_0) {
             pushItem(stack, {});
@@ -561,8 +838,9 @@ void evaluateTapscript(std::span<const std::uint8_t> script, Stack& stack, const
                 }
             }
 
-            pushItem(stack, encodeOpN(valid ? 1 : 0));
-            if (opcode == OP_CHECKSIGVERIFY && !valid) {
+            if (opcode == OP_CHECKSIG) {
+                pushItem(stack, encodeOpN(valid ? 1 : 0));
+            } else if (!valid) {
                 throw ScriptError("CHECKSIGVERIFY failed");
             }
             ++offset;
@@ -573,6 +851,238 @@ void evaluateTapscript(std::span<const std::uint8_t> script, Stack& stack, const
             ++instructionPos;
         } else if (opcode == OP_CHECKSEQUENCEVERIFY) {
             execChecksequenceverify(stack, tx, inputIndex);
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_SHA256) {
+            pushItem(stack, sha256Digest(popItem(stack)));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_HASH256) {
+            pushItem(stack, doubleSha256(popItem(stack)));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_SHA1) {
+            pushItem(stack, sha1Digest(popItem(stack)));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_RIPEMD160) {
+            pushItem(stack, ripemd160Digest(popItem(stack)));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_2DROP) {
+            popItem(stack);
+            popItem(stack);
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_NIP) {
+            if (stack.size() < 2) throw ScriptError("stack underflow");
+            stack.erase(stack.end() - 2);
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_2DUP) {
+            if (stack.size() < 2) throw ScriptError("stack underflow");
+            stack.insert(stack.end(), stack.end() - 2, stack.end());
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_3DUP) {
+            if (stack.size() < 3) throw ScriptError("stack underflow");
+            stack.insert(stack.end(), stack.end() - 3, stack.end());
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_2OVER) {
+            if (stack.size() < 4) throw ScriptError("stack underflow");
+            stack.insert(stack.end(), stack.end() - 4, stack.end() - 2);
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_2SWAP) {
+            if (stack.size() < 4) throw ScriptError("stack underflow");
+            std::swap(stack[stack.size() - 4], stack[stack.size() - 2]);
+            std::swap(stack[stack.size() - 3], stack[stack.size() - 1]);
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_TOALTSTACK) {
+            altstack.push_back(popItem(stack));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_FROMALTSTACK) {
+            if (altstack.empty()) {
+                throw ScriptError("altstack underflow");
+            }
+            pushItem(stack, altstack.back());
+            altstack.pop_back();
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_TUCK) {
+            if (stack.size() < 2) throw ScriptError("stack underflow");
+            auto top = popItem(stack);
+            auto second = popItem(stack);
+            pushItem(stack, top);
+            pushItem(stack, std::move(second));
+            pushItem(stack, std::move(top));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_DEPTH) {
+            pushItem(stack, encodeScriptNum(static_cast<int>(stack.size())));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_PICK) {
+            const int n = static_cast<int>(decodeScriptNum(popItem(stack)));
+            if (n < 0 || static_cast<std::size_t>(n) >= stack.size()) throw ScriptError("stack underflow");
+            pushItem(stack, stack[stack.size() - static_cast<std::size_t>(n) - 1]);
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_ROLL) {
+            const int n = decodeScriptNum(popItem(stack));
+            if (n < 0 || static_cast<std::size_t>(n) >= stack.size()) throw ScriptError("stack underflow");
+            auto item = stack[stack.size() - static_cast<std::size_t>(n) - 1];
+            stack.erase(stack.end() - static_cast<std::size_t>(n) - 1);
+            pushItem(stack, item);
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_ROT) {
+            if (stack.size() < 3) throw ScriptError("stack underflow");
+            auto item = stack[stack.size() - 3];
+            stack.erase(stack.end() - 3);
+            pushItem(stack, item);
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_OVER) {
+            if (stack.size() < 2) throw ScriptError("stack underflow");
+            pushItem(stack, stack[stack.size() - 2]);
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_IFDUP) {
+            if (stack.empty()) throw ScriptError("stack underflow");
+            if (castToBool(stack.back())) {
+                pushItem(stack, stack.back());
+            }
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_SIZE) {
+            if (stack.empty()) throw ScriptError("stack underflow");
+            pushItem(stack, encodeScriptNum(static_cast<int>(stack.back().size())));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_ADD || opcode == OP_SUB) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            pushItem(stack, encodeScriptNum(opcode == OP_ADD ? aVal + bVal : aVal - bVal));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_NEGATE) {
+            pushItem(stack, encodeScriptNum(-decodeScriptNum(popItem(stack))));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_1SUB) {
+            pushItem(stack, encodeScriptNum(decodeScriptNum(popItem(stack)) - 1));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_NOT) {
+            pushItem(stack, encodeOpN(castToBool(popItem(stack)) ? 0 : 1));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_0NOTEQUAL) {
+            pushItem(stack, encodeOpN(castToBool(popItem(stack)) ? 1 : 0));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_BOOLAND || opcode == OP_BOOLOR) {
+            const bool bVal = castToBool(popItem(stack));
+            const bool aVal = castToBool(popItem(stack));
+            pushItem(stack, encodeOpN((opcode == OP_BOOLAND ? (aVal && bVal) : (aVal || bVal)) ? 1 : 0));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_MIN || opcode == OP_MAX) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            pushItem(stack, encodeScriptNum(opcode == OP_MIN ? std::min(aVal, bVal) : std::max(aVal, bVal), 5));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_WITHIN) {
+            const int maxVal = decodeScriptNum(popItem(stack));
+            const int minVal = decodeScriptNum(popItem(stack));
+            const int xVal = decodeScriptNum(popItem(stack));
+            pushItem(stack, encodeOpN((minVal <= xVal && xVal < maxVal) ? 1 : 0));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_NUMEQUAL || opcode == OP_NUMNOTEQUAL) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            const bool result = opcode == OP_NUMEQUAL ? aVal == bVal : aVal != bVal;
+            pushItem(stack, encodeOpN(result ? 1 : 0));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_NUMEQUALVERIFY) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            if (aVal != bVal) {
+                throw ScriptError("NUMEQUALVERIFY failed");
+            }
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_LESSTHAN || opcode == OP_GREATERTHAN || opcode == OP_LESSTHANOREQUAL ||
+                   opcode == OP_GREATERTHANOREQUAL) {
+            const int bVal = decodeScriptNum(popItem(stack));
+            const int aVal = decodeScriptNum(popItem(stack));
+            bool result = false;
+            if (opcode == OP_LESSTHAN) result = aVal < bVal;
+            else if (opcode == OP_GREATERTHAN) result = aVal > bVal;
+            else if (opcode == OP_LESSTHANOREQUAL) result = aVal <= bVal;
+            else result = aVal >= bVal;
+            pushItem(stack, encodeOpN(result ? 1 : 0));
+            ++offset;
+            ++instructionPos;
+        } else if (opcode == OP_CHECKSIGADD) {
+            auto pubkey = popItem(stack);
+            auto nItem = popItem(stack);
+            auto signature = popItem(stack);
+            if (pubkey.empty()) {
+                throw ScriptError("empty pubkey in tapscript checksigadd");
+            }
+            int n = decodeScriptNum(nItem);
+            auto consumeSigop = [&]() {
+                if (!signature.empty()) {
+                    validationBudgetLeft -= VALIDATION_WEIGHT_PER_SIGOP;
+                    if (validationBudgetLeft < 0) {
+                        throw ScriptError("tapscript validation weight exceeded");
+                    }
+                }
+            };
+            if (pubkey.size() != 32) {
+                if (!signature.empty()) {
+                    consumeSigop();
+                    pushItem(stack, encodeScriptNum(n + 1));
+                } else {
+                    pushItem(stack, encodeScriptNum(n));
+                }
+                ++offset;
+                ++instructionPos;
+                continue;
+            }
+            if (signature.empty()) {
+                pushItem(stack, encodeScriptNum(n));
+            } else {
+                consumeSigop();
+                bool valid = false;
+                int hashType = TAPROOT_SIGHASH_DEFAULT;
+                std::span<const std::uint8_t> sig64 = signature;
+                std::vector<std::uint8_t> sig64Storage;
+                if (signature.size() == 65) {
+                    hashType = signature[64];
+                    if (hashType == TAPROOT_SIGHASH_DEFAULT) {
+                        throw ScriptError("invalid tap hashtype byte");
+                    }
+                    sig64Storage.assign(signature.begin(), signature.begin() + 64);
+                    sig64 = sig64Storage;
+                } else if (signature.size() != 64) {
+                    throw ScriptError("invalid Schnorr signature length");
+                }
+                const auto digest = taprootSignatureHash(tx, inputIndex, spentPrevouts, hashType, annex, 1,
+                                                         tapleafDigest, codeseparatorPos);
+                valid = verifySchnorrSignature(std::span<const std::uint8_t, 32>(pubkey.data(), 32),
+                                               std::span<const std::uint8_t, 32>(digest.data(), 32),
+                                               std::span<const std::uint8_t, 64>(sig64.data(), 64));
+                pushItem(stack, encodeScriptNum(n + (valid ? 1 : 0)));
+            }
             ++offset;
             ++instructionPos;
         } else {
@@ -601,7 +1111,8 @@ bool verifyP2trScriptPath(std::span<const std::uint8_t> scriptPubkey,
     std::vector<std::vector<std::uint8_t>> stackItems(witnessItemsWithoutAnnex.begin(),
                                                       witnessItemsWithoutAnnex.end() - 2);
 
-    if (scriptBytes.empty() || static_cast<int>(scriptBytes.size()) > MAX_CONSENSUS_SCRIPT_SIZE) return false;
+    // BIP342: the legacy 10_000-byte script size cap does not apply to tapscript leaves.
+    if (scriptBytes.empty()) return false;
     const auto ctlLen = control.size();
     if (ctlLen < 33 || ctlLen > 33 + 128 * 32 || (ctlLen - 33) % 32 != 0) return false;
 
@@ -640,9 +1151,12 @@ bool verifyP2trScriptPath(std::span<const std::uint8_t> scriptPubkey,
         int budget = VALIDATION_WEIGHT_OFFSET + static_cast<int>(serializedWitnessForWeight.size());
         Stack execStack = stackItems;
         evaluateTapscript(scriptBytes, execStack, tx, inputIndex, leafDigest, spentPrevouts, annex, budget);
-        return terminalSuccessStrict(execStack);
+        if (!terminalSuccessStrict(execStack)) {
+            throw ScriptError("tapscript failed final stack check");
+        }
+        return true;
     } catch (const ScriptError&) {
-        return false;
+        throw;
     } catch (const Secp256k1Error&) {
         return false;
     }
@@ -690,6 +1204,71 @@ std::vector<std::vector<std::uint8_t>> parsePushOnlyScriptSig(std::span<const st
     return pushes;
 }
 
+bool isEcdsaPubkey(std::span<const std::uint8_t> item) {
+    if (item.size() == 33) {
+        return item[0] == 0x02 || item[0] == 0x03;
+    }
+    if (item.size() == 65) {
+        return item[0] == 0x04;
+    }
+    return false;
+}
+
+bool isBareOpN(std::span<const std::uint8_t> scriptPubkey) {
+    return scriptPubkey.size() == 1 &&
+           ((scriptPubkey[0] >= OP_1 && scriptPubkey[0] <= OP_16) || scriptPubkey[0] == OP_1NEGATE);
+}
+
+bool isBareMultisig(std::span<const std::uint8_t> scriptPubkey) {
+    if (scriptPubkey.size() < 4) {
+        return false;
+    }
+    std::size_t offset = 0;
+    const auto mOpcode = scriptPubkey[offset++];
+    if (mOpcode < OP_1 || mOpcode > OP_16) {
+        return false;
+    }
+    const int required = mOpcode - OP_1 + 1;
+    std::vector<std::vector<std::uint8_t>> pubkeys;
+    try {
+        while (offset < scriptPubkey.size()) {
+            const auto opcode = scriptPubkey[offset];
+            if (opcode >= OP_1 && opcode <= OP_16) {
+                break;
+            }
+            auto [item, next] = readPush(scriptPubkey, offset);
+            offset = next;
+            if (!isEcdsaPubkey(item)) {
+                return false;
+            }
+            pubkeys.push_back(std::move(item));
+            if (static_cast<int>(pubkeys.size()) > MAX_PUBKEYS_PER_MULTISIG) {
+                return false;
+            }
+        }
+    } catch (const ScriptError&) {
+        return false;
+    }
+    if (static_cast<int>(pubkeys.size()) < required || pubkeys.empty()) {
+        return false;
+    }
+    if (offset >= scriptPubkey.size()) {
+        return false;
+    }
+    const auto nOpcode = scriptPubkey[offset++];
+    if (nOpcode < OP_1 || nOpcode > OP_16) {
+        return false;
+    }
+    if (nOpcode - OP_1 + 1 != static_cast<int>(pubkeys.size())) {
+        return false;
+    }
+    if (offset >= scriptPubkey.size() || scriptPubkey[offset] != OP_CHECKMULTISIG) {
+        return false;
+    }
+    ++offset;
+    return offset == scriptPubkey.size();
+}
+
 bool isP2pk(std::span<const std::uint8_t> scriptPubkey) {
     if (scriptPubkey.size() == 35) {
         return scriptPubkey[0] == 33 && scriptPubkey.back() == OP_CHECKSIG;
@@ -721,6 +1300,13 @@ bool isP2wsh(std::span<const std::uint8_t> scriptPubkey) {
 bool isP2tr(std::span<const std::uint8_t> scriptPubkey) {
     return scriptPubkey.size() == 2 + WITNESS_V1_TAPROOT_XONLY_PK_LEN && scriptPubkey[0] == OP_1 &&
            scriptPubkey[1] == WITNESS_V1_TAPROOT_XONLY_PK_LEN;
+}
+
+bool isBareLegacyScript(std::span<const std::uint8_t> scriptPubkey) {
+    return !scriptPubkey.empty() && scriptPubkey.size() > MAX_SCRIPT_ELEMENT_SIZE_CONSENSUS &&
+           scriptPubkey.size() <= MAX_CONSENSUS_SCRIPT_SIZE && !witnessProgramVersion(scriptPubkey).has_value() &&
+           !isP2pk(scriptPubkey) && !isP2pkh(scriptPubkey) && !isP2sh(scriptPubkey) && !isP2wpkh(scriptPubkey) &&
+           !isP2wsh(scriptPubkey) && !isP2tr(scriptPubkey) && !isBareOpN(scriptPubkey) && !isBareMultisig(scriptPubkey);
 }
 
 std::optional<int> witnessProgramVersion(std::span<const std::uint8_t> scriptPubkey) {
@@ -826,9 +1412,12 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
         try {
             evaluateScript(witnessScript, stack, tx, inputIndex, witnessScript, amount, true);
         } catch (const ScriptError&) {
-            return false;
+            throw;
         }
-        return terminalSuccessStrict(stack);
+        if (!terminalSuccessStrict(stack)) {
+            throw ScriptError("P2WSH witness script failed final stack check");
+        }
+        return true;
     }
 
     if (isP2tr(scriptPubkey)) {
@@ -902,7 +1491,7 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
     try {
         evaluateScript(scriptSig, stackSig, tx, inputIndex, scriptPubkey, amount, false);
     } catch (const ScriptError&) {
-        return false;
+        throw;
     }
 
     if (!redeemCandidate.empty() && (stackSig.empty() || stackSig.back() != redeemCandidate)) {
@@ -913,17 +1502,48 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
     try {
         evaluateScript(scriptPubkey, stack, tx, inputIndex, scriptPubkey, amount, false);
     } catch (const ScriptError&) {
-        return false;
+        throw;
     }
 
     if (redeemCandidate.empty()) {
-        return terminalSuccessStrict(stack);
+        return terminalSuccessRelaxed(stack);
     }
     if (!terminalSuccessRelaxed(stack)) return false;
 
     const auto expectedH160 = std::span<const std::uint8_t>(scriptPubkey.data() + 2, 20);
     if (hash160(redeemCandidate) != std::vector<std::uint8_t>(expectedH160.begin(), expectedH160.end())) {
         return false;
+    }
+
+    if (isP2wpkh(redeemCandidate)) {
+        if (witness.size() != 2) return false;
+        const auto scriptCode = p2pkhScriptCode(std::span<const std::uint8_t>(redeemCandidate.data() + 2, 20));
+        Stack inner(witness);
+        try {
+            evaluateScript(scriptCode, inner, tx, inputIndex, scriptCode, amount, true);
+        } catch (const ScriptError&) {
+            return false;
+        }
+        return terminalSuccessStrict(inner);
+    }
+
+    if (isP2wsh(redeemCandidate)) {
+        if (witness.size() < 1) return false;
+        const std::vector<std::uint8_t> witnessProgram(redeemCandidate.begin() + 2, redeemCandidate.end());
+        const auto& witnessScript = witness.back();
+        if (witnessScript.empty() || static_cast<int>(witnessScript.size()) > MAX_CONSENSUS_SCRIPT_SIZE) {
+            return false;
+        }
+        if (sha256Digest(witnessScript) != std::vector<std::uint8_t>(witnessProgram.begin(), witnessProgram.end())) {
+            return false;
+        }
+        Stack inner(witness.begin(), witness.end() - 1);
+        try {
+            evaluateScript(witnessScript, inner, tx, inputIndex, witnessScript, amount, true);
+        } catch (const ScriptError&) {
+            return false;
+        }
+        return terminalSuccessStrict(inner);
     }
 
     Stack inner(stackSig.begin(), stackSig.end() - 1);

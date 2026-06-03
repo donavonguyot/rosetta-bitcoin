@@ -30,6 +30,9 @@ bool isP2wpkh(std::span<const std::uint8_t> scriptPubkey);
 bool isP2sh(std::span<const std::uint8_t> scriptPubkey);
 bool isP2wsh(std::span<const std::uint8_t> scriptPubkey);
 bool isP2tr(std::span<const std::uint8_t> scriptPubkey);
+bool isBareOpN(std::span<const std::uint8_t> scriptPubkey);
+bool isBareMultisig(std::span<const std::uint8_t> scriptPubkey);
+bool isBareLegacyScript(std::span<const std::uint8_t> scriptPubkey);
 std::optional<int> witnessProgramVersion(std::span<const std::uint8_t> scriptPubkey);
 
 void evaluateScript(std::span<const std::uint8_t> script, ScriptStack& stack, const messages::Transaction& tx,

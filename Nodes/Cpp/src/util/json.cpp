@@ -63,7 +63,7 @@ std::string jsonArray(const std::vector<std::string>& items) {
         if (i > 0) {
             out += ",";
         }
-        out += items[i];
+        out += jsonString(items[i]);
     }
     out += "]";
     return out;

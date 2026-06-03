@@ -25,13 +25,20 @@ void verifyTransactionInput(
         throw ScriptVerifyError("unsupported witness program version " + std::to_string(*version));
     }
 
-    if (!isP2pk(scriptPubkey) && !isP2pkh(scriptPubkey) && !isP2wpkh(scriptPubkey) && !isP2sh(scriptPubkey) &&
-        !isP2wsh(scriptPubkey) && !isP2tr(scriptPubkey)) {
+    const bool knownTemplate = isP2pk(scriptPubkey) || isP2pkh(scriptPubkey) || isP2wpkh(scriptPubkey) ||
+                               isP2sh(scriptPubkey) || isP2wsh(scriptPubkey) || isP2tr(scriptPubkey) ||
+                               isBareOpN(scriptPubkey) || isBareMultisig(scriptPubkey) ||
+                               isBareLegacyScript(scriptPubkey);
+    if (!knownTemplate) {
         throw ScriptVerifyError("unsupported scriptPubKey template");
     }
 
-    if (!verifyScript(txIn.scriptSig, scriptPubkey, transaction, inputIndex, amount, witness, spentPrevouts)) {
-        throw ScriptVerifyError("script verification failed for input " + std::to_string(inputIndex));
+    try {
+        if (!verifyScript(txIn.scriptSig, scriptPubkey, transaction, inputIndex, amount, witness, spentPrevouts)) {
+            throw ScriptVerifyError("script verification failed for input " + std::to_string(inputIndex));
+        }
+    } catch (const ScriptError& error) {
+        throw ScriptVerifyError(std::string(error.what()) + " (input " + std::to_string(inputIndex) + ")");
     }
 }
 

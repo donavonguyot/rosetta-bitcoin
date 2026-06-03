@@ -220,7 +220,7 @@ std::vector<std::uint8_t> legacySighash(const messages::Transaction& transaction
 
     if (baseType == 3 && inputIndex >= transaction.outputs.size()) {
         std::vector<std::uint8_t> special(32, 0x00);
-        special[31] = 0x01;
+        special[0] = 0x01;
         return special;
     }
 
@@ -246,7 +246,7 @@ std::vector<std::uint8_t> legacySighash(const messages::Transaction& transaction
         } else {
             serialized.push_back(0x00);
         }
-        if (anyoneCanPay || baseType == 1) {
+        if (anyoneCanPay || baseType == 1 || sourceIndex == inputIndex) {
             const auto seq = wire::packUint32Le(transaction.inputs[sourceIndex].sequence);
             serialized.insert(serialized.end(), seq.begin(), seq.end());
         } else {
@@ -259,10 +259,14 @@ std::vector<std::uint8_t> legacySighash(const messages::Transaction& transaction
     } else if (baseType == 3) {
         auto outCount = wire::writeVarint(inputIndex + 1);
         serialized.insert(serialized.end(), outCount.begin(), outCount.end());
-        for (std::size_t i = 0; i <= inputIndex; ++i) {
-            const auto outSer = transaction.outputs[i].serialize();
+        for (std::size_t i = 0; i < inputIndex; ++i) {
+            messages::TxOut nullOut;
+            nullOut.value = -1;
+            const auto outSer = nullOut.serialize();
             serialized.insert(serialized.end(), outSer.begin(), outSer.end());
         }
+        const auto outSer = transaction.outputs[inputIndex].serialize();
+        serialized.insert(serialized.end(), outSer.begin(), outSer.end());
     } else {
         auto outCount = wire::writeVarint(transaction.outputs.size());
         serialized.insert(serialized.end(), outCount.begin(), outCount.end());

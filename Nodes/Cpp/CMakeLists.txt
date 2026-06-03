@@ -85,6 +85,7 @@ set(CPBITNODE_LIB_SOURCES
     src/config/settings.cpp
     src/endpoint_parse.cpp
     src/util/json.cpp
+    src/conformance/script_corpus.cpp
     src/healthcheck.cpp
     src/p2p/transport.cpp
     src/p2p/peer.cpp
@@ -140,6 +141,16 @@ add_executable(cpbitnode-export-snapshots cli/cpbitnode_export_snapshots.cpp)
 add_executable(cpbitnode-sync cli/cpbitnode_sync.cpp)
 add_executable(cpbitnode-storage-proof cli/cpbitnode_storage_proof.cpp)
 add_executable(cpbitnode-blocker-inspect cli/cpbitnode_blocker_inspect.cpp)
+if(CPBITNODE_USE_NATIVE_SECP256K1)
+    add_executable(cpbitnode-script-corpus cli/cpbitnode_script_corpus.cpp)
+    target_link_libraries(cpbitnode-script-corpus PRIVATE cpbitnode_lib)
+    target_compile_definitions(cpbitnode-script-corpus PRIVATE CPBITNODE_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    add_test(
+        NAME nodecore_script_corpus
+        COMMAND cpbitnode-script-corpus
+            --result-path ${CMAKE_CURRENT_SOURCE_DIR}/../../NodeCore/conformance/results/cpp_script_corpus_2026-06-03.json
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+endif()
 foreach(_exe cpbitnode cpbitnode-db cpbitnode-healthcheck cpbitnode-export-snapshots cpbitnode-sync cpbitnode-storage-proof cpbitnode-blocker-inspect)
     set(_use_native_lib OFF)
     if(CPBITNODE_USE_ROCKSDB AND (_exe STREQUAL "cpbitnode-db" OR _exe STREQUAL "cpbitnode-sync" OR _exe STREQUAL "cpbitnode-storage-proof"))
@@ -185,8 +196,17 @@ add_executable(cpbitnode_tests
     tests/test_node.cpp
     tests/test_cli_smoke.cpp
     tests/test_native_crypto.cpp
+    tests/test_nodecore_script_corpus.cpp
     tests/script_helpers.cpp
 )
-target_link_libraries(cpbitnode_tests PRIVATE cpbitnode_lib)
-target_compile_definitions(cpbitnode_tests PRIVATE CPBITNODE_BUILD_DIR="${CMAKE_BINARY_DIR}")
+if(CPBITNODE_USE_NATIVE_SECP256K1)
+    target_link_libraries(cpbitnode_tests PRIVATE cpbitnode_lib)
+    target_compile_definitions(cpbitnode_tests PRIVATE
+        CPBITNODE_USE_NATIVE_SECP256K1=1
+        CPBITNODE_BUILD_DIR="${CMAKE_BINARY_DIR}"
+        CPBITNODE_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/../..")
+else()
+    target_link_libraries(cpbitnode_tests PRIVATE cpbitnode_lib)
+    target_compile_definitions(cpbitnode_tests PRIVATE CPBITNODE_BUILD_DIR="${CMAKE_BINARY_DIR}")
+endif()
 add_test(NAME cpbitnode_tests COMMAND cpbitnode_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

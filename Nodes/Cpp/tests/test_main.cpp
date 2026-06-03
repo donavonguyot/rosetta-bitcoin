@@ -31,6 +31,7 @@ void registerServerDiscoveryTests();
 void registerNodeTests();
 void registerCliSmokeTests();
 void registerNativeCryptoTests();
+void registerNodecoreScriptCorpusTests();
 
 int main() {
     registerWireTests();
@@ -63,6 +64,7 @@ int main() {
     registerNodeTests();
     registerCliSmokeTests();
     registerNativeCryptoTests();
+    registerNodecoreScriptCorpusTests();
     if (g_failures != 0) {
         std::cerr << g_failures << " test failures\n";
         return 1;
