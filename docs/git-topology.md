@@ -38,6 +38,7 @@ These are normal tracked directories in the root repository:
 - `Nodes/Java/` — lead follower / proof surface.
 - `Nodes/Cpp/` — systems follower.
 - `Nodes/CSharp/` — RocksDB/native-crypto follower.
+- `Nodes/Rust/` — Core-native scaffold follower.
 - `Nodes/Elixir/` — supervised follower.
 - `Nodes/Reference/` — local Bitcoin Core testnet4 recipe.
 

@@ -1,0 +1,10 @@
+data-rust/
+data-rust-*/
+chainstate-rocksdb/
+target/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.pid
+/.rsbitnode.lock

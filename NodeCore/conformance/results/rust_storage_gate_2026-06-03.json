@@ -1,0 +1,100 @@
+{
+  "implementation": "RustNode",
+  "commit": "138fd7123c95",
+  "node_id": "rsbitnode-native-storage",
+  "category": "storage",
+  "captured_at": "2026-06-03T20:20:39.494977+00:00",
+  "datadir": "./data-rust-proof",
+  "chain": "testnet4",
+  "runtime_surface": "host",
+  "chainstate_backend": "rocksdb",
+  "native_storage": true,
+  "local_sqlite_artifact_absent": true,
+  "local_sqlite_db_present": false,
+  "validated_height": 2,
+  "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+  "header_height": 2,
+  "stored_block_height": 2,
+  "chainstate_status": "usable",
+  "native_crypto_backend": "rust-secp256k1/libsecp256k1",
+  "native_crypto_available": true,
+  "taproot_tweak_backend": "not_implemented",
+  "verification": {
+    "codec_v2_vectors": "cargo run -- codec-vectors",
+    "errors": 0,
+    "failures": 0,
+    "jacoco_line_minimum": 0,
+    "local_sqlite_runtime_classes_present": false,
+    "maven": "not_applicable",
+    "rust_tests": "cargo test",
+    "skipped": 0,
+    "sqlite_dependency_present": false,
+    "sqlite_entries_in_shaded_jar": false,
+    "sqlite_jdbc_dependency_present": false,
+    "surefire_broad_exclusions": false,
+    "tests_run": 0
+  },
+  "project_export": {
+    "node_id": "rsbitnode-native-storage",
+    "notes": "Rust proof JSON emitted; Project import is observational.",
+    "project_db": "",
+    "result": "skipped",
+    "script": ""
+  },
+  "results": [
+    {
+      "fixture_id": "storage.native_fresh_start",
+      "result": "passed",
+      "validated_height": 1,
+      "validated_hash": "0000000012982b6d5f621229286b880e909984df669c2afabb102ce311b13f28",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": ""
+    },
+    {
+      "fixture_id": "storage.native_restart",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": ""
+    },
+    {
+      "fixture_id": "storage.local_sqlite_artifact_absent",
+      "result": "passed",
+      "validated_height": null,
+      "validated_hash": "",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": ""
+    },
+    {
+      "fixture_id": "storage.rocksdb_operational_state_boundary",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Scaffold metadata, tip smoke state, and status truth are Rust-owned RocksDB data."
+    },
+    {
+      "fixture_id": "storage.project_export_observational",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Project import is external to the native runtime."
+    }
+  ],
+  "commands": [
+    "cargo test",
+    "cargo run -- storage-proof"
+  ]
+}

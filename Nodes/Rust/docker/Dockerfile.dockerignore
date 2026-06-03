@@ -1,0 +1,9 @@
+.git
+target
+data-rust
+data-rust-*
+*.db
+*.sqlite
+*.sqlite3
+*.log
+.DS_Store

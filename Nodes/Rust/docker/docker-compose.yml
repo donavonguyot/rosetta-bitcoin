@@ -1,0 +1,51 @@
+services:
+  rsbitnode:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+    volumes:
+      - rsbitnode_data:/data
+    command: ["rsbitnode", "status", "--datadir", "/data", "--runtime-surface", "docker"]
+
+  rsbitnode-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+    volumes:
+      - ${DOCKER_PROOF_VOLUME:-rsbitnode_proof_data}:/data
+      - ../../../NodeCore/conformance/results:/results
+    command:
+      [
+        "rsbitnode",
+        "storage-proof",
+        "--datadir",
+        "/data",
+        "--result-path",
+        "/results/rust_storage_gate_docker.json",
+        "--runtime-surface",
+        "docker"
+      ]
+
+  rsbitnode-supervisor:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      POLL_SEC: ${POLL_SEC:-1}
+      CHECK_SEC: ${CHECK_SEC:-1}
+    volumes:
+      - ${DOCKER_SYNC_VOLUME:-rsbitnode_sync_data}:/data
+    command: ["rsbitnode-supervisor-once"]
+
+volumes:
+  rsbitnode_data:
+  rsbitnode_proof_data:
+  rsbitnode_sync_data:

@@ -1,0 +1,70 @@
+{
+  "manifest_version": 1,
+  "port": "rust",
+  "status": "proof_partial",
+  "paths": {
+    "root": "Nodes/Rust",
+    "dockerfile": "Nodes/Rust/docker/Dockerfile",
+    "compose": "Nodes/Rust/docker/docker-compose.yml",
+    "dockerignore": "Nodes/Rust/docker/.dockerignore"
+  },
+  "images": {
+    "base": "rust:1-bookworm",
+    "runtime": "debian:bookworm-slim",
+    "os_family": "Debian",
+    "package_manager": "apt plus cargo",
+    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "rust-secp256k1/libsecp256k1 vector plumbing"]
+  },
+  "volumes": {
+    "data": "rsbitnode_data",
+    "proof": "rsbitnode_proof_data",
+    "supervisor": "rsbitnode_sync_data"
+  },
+  "commands": {
+    "docker_config": "cd Nodes/Rust && make docker-config",
+    "docker_build": "cd Nodes/Rust && make docker-build",
+    "docker_status": "cd Nodes/Rust && make docker-status",
+    "docker_proof_local": "cd Nodes/Rust && make docker-proof-local",
+    "docker_probe_external": null,
+    "docker_supervisor": "cd Nodes/Rust && make docker-smoke-once",
+    "docker_supervisor_status": "cd Nodes/Rust && make docker-status",
+    "docker_supervisor_stop": null,
+    "docker_supervisor_resume": null,
+    "docker_smoke_once": "cd Nodes/Rust && make docker-smoke-once"
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+    }
+  },
+  "supervisor": {
+    "stop_marker": ".rsbitnode_supervisor_stop",
+    "resume_marker": ".rsbitnode_supervisor_resume",
+    "poll_sec": 120,
+    "check_sec": 5
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": "NodeCore/conformance/results/rust_storage_gate_2026-06-03.json",
+    "notes": "Rust initial milestone is proof_partial: storage/status/Docker smoke and script corpus loader exist; live sync and independent script verification are follow-up work."
+  },
+  "known_caveats": ["No live P2P sync or local-reference network proof yet", "Script corpus command loads all 45 fixtures but records not_implemented until Rust has an independent verifier"]
+}

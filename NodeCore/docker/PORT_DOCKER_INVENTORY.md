@@ -39,6 +39,7 @@ non_compliant
 | Cpp | `ports/cpp.docker.json` | `Nodes/Cpp/docker/Dockerfile` | `Nodes/Cpp/docker/docker-compose.yml` | `ubuntu:24.04` / `ubuntu:24.04` | proof_partial | strict clean; build/proof passed 2026-06-02 | proof_partial: RocksDB-only operational store and proof artifact exist; staged live sync still pending |
 | Python | `ports/python.docker.json` | `Nodes/Python/docker/Dockerfile` | `Nodes/Python/docker/docker-compose.yml` | `python:3.12-slim` | supervisor_partial | bounded native proof/supervisor declared; full replay pending | RocksDB/native-crypto path in progress; full replay/blocker rediscovery out of this plan |
 | TypeScript | `ports/typescript.docker.json` | `Nodes/TypeScript/docker/Dockerfile` | `Nodes/TypeScript/docker/docker-compose.yml` | `node:20-slim` | supervisor_partial | strict clean before native proof update; rerun after TypeScript Docker native proof changes | RocksDB/native storage proof exists; Docker proof/supervisor targets added |
+| Rust | `ports/rust.docker.json` | `Nodes/Rust/docker/Dockerfile` | `Nodes/Rust/docker/docker-compose.yml` | `rust:1-bookworm` / `debian:bookworm-slim` | proof_partial | manifest added; build/proof pending | RocksDB storage proof scaffold exists; script corpus harness loads all 45 fixtures as not_implemented |
 | Elixir | `ports/elixir.docker.json` | `Nodes/Elixir/docker/Dockerfile` | `Nodes/Elixir/docker/docker-compose.yml` | `elixir:1.16-otp-26` | proof_partial | strict clean; build/status/proof/smoke passed 2026-06-02 | RocksDB native storage boundary/proof exists; native secp256k1 NIF still unavailable |
 
 ## Reference
@@ -174,6 +175,30 @@ peer_strategy: host.docker.internal:48333 for local Reference proof metadata
 dockerignore_status: present
 runtime_surface_status: supervisor_partial
 known_caveats: external network probe not standardized; native ECDSA is enabled, while Schnorr/Taproot still report pure TypeScript fallback pending a full native wrapper
+```
+
+## Rust
+
+```text
+dockerfile_path: Nodes/Rust/docker/Dockerfile
+compose_path: Nodes/Rust/docker/docker-compose.yml
+base_image: rust:1-bookworm
+runtime_image: debian:bookworm-slim
+os_family: Debian
+package_manager: apt plus cargo
+native_dependencies: librocksdb-dev/librocksdb7.8, rust-secp256k1/libsecp256k1 vector plumbing
+data_volume: rsbitnode_data
+proof_volume: rsbitnode_proof_data
+supervisor_volume: rsbitnode_sync_data
+status_command: make docker-status
+sync_or_proof_command: make docker-proof-local
+supervisor_command: make docker-smoke-once
+stop_marker: .rsbitnode_supervisor_stop
+resume_marker: .rsbitnode_supervisor_resume
+peer_strategy: no network proof yet; initial proof is storage/status only
+dockerignore_status: present
+runtime_surface_status: proof_partial
+known_caveats: script corpus command loads all 45 fixtures and records not_implemented rows; live sync and independent script verification remain follow-up work
 ```
 
 ## Elixir
