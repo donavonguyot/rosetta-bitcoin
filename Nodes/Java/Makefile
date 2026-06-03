@@ -60,7 +60,7 @@ docker-java-native-crypto-long-sync-proof:
 	  TARGET_HEADER_HEIGHT=$(DOCKER_LONG_HEADERS_MAX) TARGET_BLOCK_HEIGHT=$(DOCKER_LONG_BLOCKS_MAX) \
 	  LOCAL_REFERENCE_TIP_HEIGHT="$(LOCAL_REFERENCE_TIP_HEIGHT)" LOCAL_REFERENCE_TIP_HASH="$(LOCAL_REFERENCE_TIP_HASH)" \
 	  PROOF_PATH=$(DOCKER_LONG_PROOF_PATH) PROOF_COMMAND="$(or $(PROOF_COMMAND),$(MAKE) docker-java-native-crypto-long-sync-proof)" \
-	  python3 scripts/capture_docker_native_long_sync_proof.py .docker-java-native-long-status.json .docker-java-native-long-sync-exit
+	  python3 ../NodeCore/conformance/tools/proofs/capture_docker_native_long_sync_proof.py .docker-java-native-long-status.json .docker-java-native-long-sync-exit
 	@rm -f .docker-java-native-long-status.json .docker-java-native-long-sync-exit
 	@docker run --rm -v $(DOCKER_LONG_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/jbitnode.db
 

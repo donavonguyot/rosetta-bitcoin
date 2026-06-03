@@ -16,6 +16,13 @@ The fixture manifest is broader than the current shared byte tree. During
 bootstrap, fixture bytes may live in port-local test trees while the shared
 fixture ID and expected outcome remain documented in `MANIFEST.md`.
 
+## Shared Tooling
+
+Fixture harvesters and proof-capture helpers live under `tools/`. They are
+shared project tooling, not port runtime code. Some bootstrap harvesters still
+write bytes into port-local test resource trees until those fixtures are fully
+promoted into this conformance area.
+
 ## Required Test Categories
 
 - genesis initialization
