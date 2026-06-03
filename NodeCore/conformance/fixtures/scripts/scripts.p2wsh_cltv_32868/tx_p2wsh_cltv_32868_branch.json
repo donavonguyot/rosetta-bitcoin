@@ -1,0 +1,11 @@
+{
+  "height": 32868,
+  "txid": "8add2663f689111add26c4bc52a2f6060d48e41750c143cdfa8564ac114d97dc",
+  "branch_selector_hex": "",
+  "branch_taken": "ELSE (CLTV)",
+  "locktime_value": 1719894876,
+  "nLockTime": 1719894876,
+  "pubkey_hex": "023610a0b6e5e69aff2c2f0aedfe58cde5e0bcb221c41f2a71f63f6e2668336277",
+  "python_test_synthetic": "test_p2wsh_cltv_roundtrip",
+  "python_test_related": "test_real_testnet4_block30695_p2wsh_if_hashlock_op_size_accepted"
+}

@@ -51,6 +51,34 @@ scripts.p2tr_key_path_6975
 scripts.p2tr_script_path_22830
 ```
 
+## Script Corpus Fixtures
+
+The Java-cleared script corpus is the bulk import of real testnet4 spend-path
+fixtures that Java has already cleared. The corpus lives under
+[`fixtures/scripts/`](fixtures/scripts/) and is indexed by
+[`fixtures/scripts/manifest.json`](fixtures/scripts/manifest.json).
+
+Script fixture IDs are stable cross-port contracts with this form:
+
+```text
+scripts.<template_or_family>_<rule_or_shape>_<height>
+```
+
+Each entry records the source Java metadata, copied fixture files, provenance,
+expected result, required rule tags, and a `portability_status`.
+
+```text
+raw_imported     copied from Java and indexed, no cross-port loader guarantee
+normalized       manifest shape and required files are structurally complete
+loader_verified  at least one non-Java fixture loader can read it
+cross_port_ready ready for follower implementation batches
+absorbed         implemented and tested by a target follower port
+```
+
+Java may be the first port to prove these fixtures on live chain, but follower
+ports pass only when they independently load the NodeCore fixture ID and record
+their own result.
+
 ## Cross-Port Fixture Naming
 
 Fixture IDs are the portable contract. A port may store fixture bytes in a

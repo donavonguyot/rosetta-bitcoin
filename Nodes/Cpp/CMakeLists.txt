@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# System SQLite (no vendored amalgamation in Gate 0). See third_party/sqlite/README.md.
+# System SQLite remains a build dependency until the Cpp native chainstate path is fully promoted.
 find_package(SQLite3 REQUIRED)
 
 option(CPBITNODE_USE_ROCKSDB "Build with RocksDB native chainstate support" OFF)

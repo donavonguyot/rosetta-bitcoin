@@ -1,0 +1,18 @@
+[
+  {
+    "txid": "b8dd90191b88de1ff863670ccc3f144d8bd753045eef952e6464345488e0fdc5",
+    "vout": 3,
+    "amount": 0,
+    "spk": "51206ac8aea43b56713338ada9a0e365d77c2a4b7ab81265eb7bc6138132f0799d4c",
+    "height": 119566,
+    "input_index": 0
+  },
+  {
+    "txid": "dc20d025dd74bb4e557474b19e8cde4c73f9110de96ac70d5d71b78d4b65dc98",
+    "vout": 0,
+    "amount": 90000000,
+    "spk": "5120425234aa84d17bf59beff833cb9c2ddf7b433df2c5a29e266be002095ab838b5",
+    "height": 119413,
+    "input_index": 1
+  }
+]

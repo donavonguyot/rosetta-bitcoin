@@ -1,0 +1,17 @@
+{
+  "height": 38010,
+  "block_hash": "000000000000001287d6f4d832f330d1d9cddb3bb3741b25a4aeb8263a57a626",
+  "txid": "ba32ba8e2d812d93317a0503d37d505a826517343f7fec3b8c2e0c715f142eb6",
+  "input_index": 0,
+  "prev_txid": "95fe33f9f3222dfa74e306089e492d25b90ed8abbe9feedfb09e4edb9841e0c3",
+  "prev_vout": 0,
+  "prev_amount_sats": 85922406945143,
+  "missing_rule": "SIGHASH_SINGLE (0x03) with nSequence 0xfffffffd in legacy sighash",
+  "python_test": "test_real_testnet4_block38010_p2pkh_sighash_single_sequence_accepted",
+  "scriptsig_hex": "4730440220646ec8d2de9071b56db28360419e67fa3cff82c252f095dd29172aa4d8b2ab8902206263044bd60fb29247245eab482460c5344930efbaed8822c747fc72445e131d0321030c5d72e18c004dbd15f236d07f936aff3fea431973d140684e99fcaa8fd63f47",
+  "scriptsig_asm": "30440220646ec8d2de9071b56db28360419e67fa3cff82c252f095dd29172aa4d8b2ab8902206263044bd60fb29247245eab482460c5344930efbaed8822c747fc72445e131d[SINGLE] 030c5d72e18c004dbd15f236d07f936aff3fea431973d140684e99fcaa8fd63f47",
+  "nsequence": 4294967293,
+  "nsequence_hex": "fffffffd",
+  "sighash_type": "SIGHASH_SINGLE (0x03)",
+  "scriptsig_hashtype_byte": "47"
+}

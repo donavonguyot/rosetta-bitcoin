@@ -1,0 +1,13 @@
+{
+  "height": 54287,
+  "block_hash": "00000000000ad11895995f451dacfac802d36986ea2086d599b3afe4aefcb178",
+  "txid": "9281b53ec58f80387161566838fb7bf54c2412bb7b59e150ae78ff5f5a413d0c",
+  "input_index": 0,
+  "spent_script_pubkey": "002098836c6761bf75dcbf74729b4a245c61cce68e89039e38ce2a389d3f23656038",
+  "prev_amount_sats": 1500,
+  "template": "P2WSH",
+  "witness_script_hex": "6da9140bfbcadae145d870428db173412d2d860b9acf5e87",
+  "witness_script_asm": "OP_2DROP OP_HASH160 0bfbcadae145d870428db173412d2d860b9acf5e OP_EQUAL",
+  "witness_stack_len": 4,
+  "missing_rule": "OP_2DROP (0x6d) in P2WSH witness script evaluation"
+}

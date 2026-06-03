@@ -1,0 +1,16 @@
+{
+  "height": 62754,
+  "block_hash": "00000000bd2dfde90fcd03b269ac02845925a01011eb053b0a7f9a7e62c48b96",
+  "txid": "f4ecb76ed2bb8e4a7540a060bb97dc1d417dc3c8a54200aa7c589b74a931d82a",
+  "input_index": 0,
+  "spent_script_pubkey": "002055cec8793c26a9cbcf8cdfb1c715ce567fe451a47deb114df9efa31218d5b2ac",
+  "prev_amount_sats": 19000,
+  "template": "P2WSH",
+  "witness_script_hex": "827ca91440154182c0333b3b0cb0a578b0ca41be2cdfd44887632103a548b84e51e6b42468b84c98c56d225c4a1198659051c61b7b02e62bf2b955ca012051672103f110d54ce888d265d341583f673599398e95fd4afdc7f6c7f06d5513f585810300013c68b2757b88ac",
+  "witness_script_asm": "OP_SIZE OP_SWAP OP_HASH160 40154182c0333b3b0cb0a578b0ca41be2cdfd448 OP_EQUAL OP_IF 03a548b84e51e6b42468b84c98c56d225c4a1198659051c61b7b02e62bf2b955ca 32 1 OP_ELSE 03f110d54ce888d265d341583f673599398e95fd4afdc7f6c7f06d5513f5858103 0 60 OP_ENDIF OP_CHECKSEQUENCEVERIFY OP_DROP OP_ROT OP_EQUALVERIFY OP_CHECKSIG",
+  "witness_stack_len": 3,
+  "input_sequence": 60,
+  "tx_version": 2,
+  "locktime": 0,
+  "missing_rule": "OP_ROT (0x7b) in P2WSH witness script after OP_DROP"
+}

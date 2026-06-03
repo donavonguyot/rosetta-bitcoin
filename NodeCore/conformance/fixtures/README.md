@@ -21,6 +21,34 @@ scripts.p2tr_key_path_6975
 scripts.p2tr_script_path_22830
 ```
 
+## Script Corpus
+
+The Java-cleared script corpus is stored under:
+
+```text
+scripts/
+  manifest.json
+  MATRIX.md
+  scripts.<fixture_id_suffix>/
+    block_*.hex
+    tx_*.hex
+    *_meta.json
+    *_prevouts.json
+    *_prev_spk.hex
+    *_scriptsig.hex
+    *_witness*.hex
+    ...
+```
+
+The copied files intentionally preserve their Java source filenames. Ports
+should not depend on Java code or Java test names; they should consume
+`manifest.json`, load fixture bytes by `fixture_id`, and report their own
+results for that ID.
+
+The initial corpus status is `raw_imported`. A fixture becomes cross-port ready
+only after a non-Java loader verifies that the manifest and byte files map cleanly
+into that port's script verification API.
+
 ## Rule
 
 Fixture names are stable cross-port contracts. Fixture bytes can move; fixture
