@@ -174,8 +174,12 @@ async function syncBlocks(settings: Settings): Promise<number> {
       markHeadersCurrent(tracker, chain);
       console.error(headerRefreshLogMessage(refreshAction));
     } else {
-      await manager.syncHeaders({
+      const headerOptions = {
         bestEffortIfHeadersCoverFollowupBlocks: localsCoverFollowup,
+        ...(blocksTargetHeight > 0 ? { stopHeight: blocksTargetHeight } : {}),
+      };
+      await manager.syncHeaders({
+        ...headerOptions,
       });
     }
 

@@ -3,12 +3,13 @@
 `gobitnode` is a Go follower port for the RosettaBitcoin workspace. The current
 milestone is an offline/Core-native proof surface: status, storage proof,
 native crypto reporting, Docker smoke surfaces, native Shared script corpus,
-and local-reference stored-block replay.
+local-reference stored-block replay, and a bounded local Reference P2P
+comparator for the 5k supporting gate.
 
 The binary gate remains unchanged: from empty local state on Bitcoin testnet4,
 the node must reach and maintain tip while independently validating every stored
 connected block. This Go milestone does not claim live P2P sync, tip
-maintenance, or binary-gate completion.
+tip maintenance, or binary-gate completion.
 
 ## Commands
 
@@ -36,7 +37,7 @@ Native state lives under the selected datadir:
 No SQLite artifact is allowed in the Go native datadir. Status and storage proof
 read the Go chainstate directly.
 
-## Local Reference Sync Probe
+## Local Reference Proofs
 
 `gobitnode-sync` fetches raw blocks from the local Bitcoin Core RPC reference,
 verifies block header hash, PoW target, previous-block linkage, and transaction
@@ -51,8 +52,27 @@ view, batch prevout loads, binary UTXO codec v2, and timing evidence in the
 result JSON. The staged fetch-then-connect mode remains available with
 `--mode staged`.
 
-The current Docker local-reference proof starts from a fresh Docker volume,
-stores blocks through height 10000, and validates/connects through height 10000:
+`docker-proof-local` is the official 5k local Reference P2P comparator. It
+speaks Bitcoin P2P to `host.docker.internal:48333`, fetches headers and blocks
+through `getheaders`/`getdata`, then uses the same Go storage/connect pipeline.
+`docker-proof-rpc-replay` preserves the older local Reference RPC replay lane.
+
+The current Docker P2P 5k comparator starts from a fresh Docker volume, stores
+and validates through height 5000, and is classified by Project as comparable:
+
+```text
+result_path: Nodes/Shared/conformance/results/go_docker_supporting_5k_benchmark_2026-06-04.json
+runtime_surface: docker
+peer_mode: local_reference
+validated_height: 5000
+validated_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
+sync_status: blocks_current
+current_blocker: null
+native_crypto_backend: libsecp256k1
+```
+
+The historical Docker RPC replay proof started from a fresh Docker volume,
+stored blocks through height 10000, and validated/connected through height 10000:
 
 ```text
 result_path: Nodes/Shared/conformance/results/go_local_reference_docker_sync_2026-06-03.json
@@ -64,8 +84,9 @@ current_blocker: null
 native_crypto_backend: libsecp256k1
 ```
 
-Do not promote this to the workspace binary gate: it is a bounded local
-reference RPC proof, not live P2P sync to current testnet4 tip.
+Do not promote either bounded proof to the workspace binary gate: the 5k P2P
+path is a comparator harness, and the 10k RPC replay path is evidence-only. Go
+still needs persistent live P2P tip maintenance for binary-gate-adjacent work.
 
 ## Docker
 
@@ -76,13 +97,12 @@ make docker-status
 make docker-storage-proof
 make docker-script-corpus
 make docker-proof-local
+make docker-proof-rpc-replay
 make docker-smoke-once
 ```
 
-`docker-proof-local` is Go's current local Reference RPC replay proof. In
-Project mission control it is exposed as `docker_proof_rpc_replay`, not the
-official comparable `docker_proof_local` P2P lane. It uses a fresh named Docker
-volume, talks to host Core RPC at `host.docker.internal:48332`, runs the
-pipelined proof path by default, then writes compact evidence under
-`Nodes/Shared/conformance/results/`. Docker proof and supervisor volumes are
-separate from host datadirs.
+`docker-proof-local` uses a fresh named Docker volume, talks to host Core P2P at
+`host.docker.internal:48333`, and writes compact official 5k evidence under
+`Nodes/Shared/conformance/results/`. `docker-proof-rpc-replay` keeps the old
+host Core RPC path at `host.docker.internal:48332` as explicit replay evidence.
+Docker proof and supervisor volumes are separate from host datadirs.

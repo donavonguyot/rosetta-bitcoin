@@ -14,6 +14,7 @@ import (
 
 	"rosettabitcoin/nodes/go/internal/connect"
 	"rosettabitcoin/nodes/go/internal/crypto"
+	p2psync "rosettabitcoin/nodes/go/internal/p2p"
 	"rosettabitcoin/nodes/go/internal/refsync"
 	"rosettabitcoin/nodes/go/internal/status"
 	"rosettabitcoin/nodes/go/internal/storage"
@@ -26,28 +27,49 @@ func main() {
 	rpcURL := flag.String("rpc-url", "http://127.0.0.1:48332", "Bitcoin Core RPC URL")
 	rpcUser := flag.String("rpc-user", "rosetta", "Bitcoin Core RPC user")
 	rpcPassword := flag.String("rpc-password", "rosetta-dev-only", "Bitcoin Core RPC password")
+	p2pPeer := flag.String("peer", "127.0.0.1:48333", "Bitcoin Core P2P peer")
 	resultPath := flag.String("result-path", "", "proof result path")
 	progress := flag.Int("progress", 1000, "progress interval")
 	mode := flag.String("mode", "pipeline", "proof mode: pipeline or staged")
+	byteSource := flag.String("byte-source", "rpc", "byte source: p2p or rpc")
 	flag.Parse()
 
 	started := time.Now().UTC()
+	peerMode := "local_reference_rpc"
+	peer := *rpcURL
+	proofMode := *mode
+	byteSourceValue := "local_reference_rpc"
+	benchmarkLane := "supporting_5k_rpc_replay"
+	if *byteSource == "p2p" {
+		peerMode = "local_reference"
+		peer = *p2pPeer
+		proofMode = "p2p_sync"
+		byteSourceValue = "local_reference_p2p"
+		benchmarkLane = "supporting_5k_p2p"
+	}
 	doc := map[string]any{
 		"implementation":             "GoNode",
 		"category":                   "local_reference_sync",
 		"runtime_surface":            surface.RuntimeSurface(),
 		"captured_at":                started.Format(time.RFC3339),
 		"chain":                      "testnet4",
-		"peer_mode":                  "local_reference_rpc",
-		"peer":                       *rpcURL,
+		"peer_mode":                  peerMode,
+		"peer":                       peer,
 		"docker_volume":              firstNonEmpty(os.Getenv("DOCKER_LOCAL_PROOF_VOLUME"), os.Getenv("DOCKER_PROOF_VOLUME")),
 		"datadir":                    *datadir,
 		"target_height":              *target,
+		"header_target_height":       *target,
 		"target_label":               targetLabel(*target),
+		"reference_start_height":     0,
+		"reference_start_hash":       "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
+		"reference_finish_height":    *target,
 		"benchmark_contract_version": 1,
-		"benchmark_kind":             benchmarkKind(*target),
+		"benchmark_kind":             benchmarkKind(*target, *byteSource),
+		"benchmark_lane":             benchmarkLane,
+		"byte_source":                byteSourceValue,
 		"resume_supported":           true,
-		"proof_mode":                 *mode,
+		"fresh_state":                true,
+		"proof_mode":                 proofMode,
 		"result":                     "failed",
 		"failures":                   []string{},
 	}
@@ -57,6 +79,11 @@ func main() {
 	var connectSummary connect.Summary
 	var err error
 	if *mode == "staged" {
+		if *byteSource == "p2p" {
+			fail(doc, "staged mode is only supported for RPC replay")
+			profiler.stop(doc)
+			finish(doc, *resultPath, 1)
+		}
 		syncSummary, err = refsync.Run(refsync.Options{
 			DataDir:  *datadir,
 			Target:   *target,
@@ -77,7 +104,11 @@ func main() {
 			Progress: *progress,
 		})
 	} else {
-		syncSummary, connectSummary, err = runPipeline(*datadir, *target, *rpcURL, *rpcUser, *rpcPassword, *progress)
+		if *byteSource == "p2p" {
+			syncSummary, connectSummary, err = runP2PPipeline(*datadir, *target, *p2pPeer, *progress)
+		} else {
+			syncSummary, connectSummary, err = runPipeline(*datadir, *target, *rpcURL, *rpcUser, *rpcPassword, *progress)
+		}
 		doc["sync_summary"] = syncSummary
 		doc["prefetch_depth"] = prefetchDepth()
 		doc["timing_summary"] = connectSummary.TimingSummary
@@ -95,6 +126,7 @@ func main() {
 	} else {
 		doc["status"] = statusDoc
 		doc["header_height"] = statusDoc.HeaderHeight
+		doc["reference_finish_hash"] = statusDoc.HeaderHash
 		doc["validated_height"] = statusDoc.ValidatedHeight
 		doc["validated_hash"] = statusDoc.ValidatedHash
 		doc["stored_block_height"] = statusDoc.StoredBlockHeight
@@ -187,25 +219,25 @@ func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string
 	fetched := 0
 	for block := range blocks {
 		if block.err != nil {
-			return syncSummary(target, block.height, rpcURL, started, fetched, lastConnect), lastConnect, fmt.Errorf("height %d: %w", block.height, block.err)
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, fmt.Errorf("height %d: %w", block.height, block.err)
 		}
 		storeStart := time.Now()
 		if err := store.RecordBlock(block.height, block.hash, block.raw); err != nil {
-			return syncSummary(target, block.height, rpcURL, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, err
 		}
 		meta, err := metadataAfterStore(store, block.height, block.hash, started)
 		if err != nil {
-			return syncSummary(target, block.height, rpcURL, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, err
 		}
 		if err := store.PutMetadata(meta); err != nil {
-			return syncSummary(target, block.height, rpcURL, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, err
 		}
 		aggregate.StageTotalsMillis["block_store"] += time.Since(storeStart).Milliseconds()
 		connectStart := time.Now()
 		lastConnect, err = connect.RunStore(store, connect.Options{Target: block.height, Progress: progress, Quiet: true})
 		aggregate.StageTotalsMillis["block_connect_store_commit"] += time.Since(connectStart).Milliseconds()
 		if err != nil {
-			return syncSummary(target, block.height, rpcURL, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, err
 		}
 		mergeTiming(&aggregate, lastConnect.TimingSummary)
 		fetched++
@@ -220,7 +252,66 @@ func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string
 	lastConnect.StartedAt = started.Format(time.RFC3339)
 	lastConnect.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	lastConnect.TimingSummary = aggregate
-	return syncSummary(target, target, rpcURL, started, fetched, lastConnect), lastConnect, nil
+	return syncSummary(target, target, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, nil
+}
+
+func runP2PPipeline(datadir string, target int, peer string, progress int) (refsync.Summary, connect.Summary, error) {
+	if target < 0 {
+		return refsync.Summary{}, connect.Summary{}, fmt.Errorf("target must be >= 0")
+	}
+	if progress <= 0 {
+		progress = 1000
+	}
+	started := time.Now().UTC()
+	store, err := storage.Open(datadir)
+	if err != nil {
+		return refsync.Summary{}, connect.Summary{}, err
+	}
+	defer store.Close()
+	blocks := p2psync.FetchBlocks(p2psync.FetchOptions{
+		Peer:     peer,
+		Target:   target,
+		Prefetch: prefetchDepth(),
+	})
+	aggregate := connect.TimingSummary{StageTotalsMillis: map[string]int64{}}
+	var lastConnect connect.Summary
+	fetched := 0
+	for block := range blocks {
+		if block.Err != nil {
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, fmt.Errorf("height %d: %w", block.Height, block.Err)
+		}
+		storeStart := time.Now()
+		if err := store.RecordBlock(block.Height, block.Hash, block.Raw); err != nil {
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, err
+		}
+		meta, err := metadataAfterStore(store, block.Height, block.Hash, started)
+		if err != nil {
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, err
+		}
+		if err := store.PutMetadata(meta); err != nil {
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, err
+		}
+		aggregate.StageTotalsMillis["block_store"] += time.Since(storeStart).Milliseconds()
+		connectStart := time.Now()
+		lastConnect, err = connect.RunStore(store, connect.Options{Target: block.Height, Progress: progress, Quiet: true})
+		aggregate.StageTotalsMillis["block_connect_store_commit"] += time.Since(connectStart).Milliseconds()
+		if err != nil {
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, err
+		}
+		mergeTiming(&aggregate, lastConnect.TimingSummary)
+		fetched++
+		if block.Height%progress == 0 || block.Height == target {
+			fmt.Printf("gobitnode-local-reference-proof p2p height=%d hash=%s txs=%d utxos=%d\n", block.Height, block.Hash, block.Info.TxCount, lastConnect.ChainstateUTXOs)
+		}
+	}
+	aggregate.TotalMillis = time.Since(started).Milliseconds()
+	lastConnect.Mode = "local_reference_p2p_connect"
+	lastConnect.TargetHeight = target
+	lastConnect.BlocksConnected = fetched
+	lastConnect.StartedAt = started.Format(time.RFC3339)
+	lastConnect.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	lastConnect.TimingSummary = aggregate
+	return syncSummary(target, target, "local_reference", peer, started, fetched, lastConnect), lastConnect, nil
 }
 
 func metadataAfterStore(store *storage.Store, height int, hash string, started time.Time) (storage.Metadata, error) {
@@ -259,12 +350,12 @@ func metadataAfterStore(store *storage.Store, height int, hash string, started t
 	return meta, nil
 }
 
-func syncSummary(target int, storedHeight int, rpcURL string, started time.Time, fetched int, connectSummary connect.Summary) refsync.Summary {
+func syncSummary(target int, storedHeight int, peerMode string, peer string, started time.Time, fetched int, connectSummary connect.Summary) refsync.Summary {
 	return refsync.Summary{
 		Implementation:    "GoNode",
 		RuntimeSurface:    surface.RuntimeSurface(),
-		PeerMode:          "local_reference_rpc",
-		Peer:              rpcURL,
+		PeerMode:          peerMode,
+		Peer:              peer,
 		TargetHeight:      target,
 		HeaderHeight:      storedHeight,
 		StoredBlockHeight: storedHeight,
@@ -331,7 +422,15 @@ func targetLabel(target int) string {
 	}
 }
 
-func benchmarkKind(target int) string {
+func benchmarkKind(target int, byteSource string) string {
+	if byteSource == "p2p" {
+		switch target {
+		case 5000:
+			return "supporting_5k_p2p"
+		default:
+			return "local_reference_p2p"
+		}
+	}
 	switch target {
 	case 5000:
 		return "supporting_5k_durable_local_reference_replay"

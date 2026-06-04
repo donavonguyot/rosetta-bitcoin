@@ -2,24 +2,25 @@
 
 Go has no current blocker inside the bounded local-reference proof through
 height 10000. The current milestone remains offline/Core-native proof plus
-bounded local-reference replay; this is not live P2P sync or binary-gate
-completion.
+bounded local-reference replay and a 5k local Reference P2P comparator; this is
+not live P2P tip maintenance or binary-gate completion.
 
 ## Last recorded evidence
 
 ```text
 runtime_surface: docker
-peer_mode: local_reference_rpc
-peer: http://host.docker.internal:48332
-header_height: 10000
-stored_block_height: 10000
-validated_height: 10000
-validated_hash: 000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466
+peer_mode: local_reference
+peer: host.docker.internal:48333
+evidence_lane: supporting_5k_p2p
+header_height: 5000
+stored_block_height: 5000
+validated_height: 5000
+validated_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
 sync_status: blocks_current
 current_blocker: null
 chainstate_backend: rocksdb
 native_crypto_backend: libsecp256k1
-proof_result: Nodes/Shared/conformance/results/go_local_reference_docker_sync_2026-06-03.json
+proof_result: Nodes/Shared/conformance/results/go_docker_supporting_5k_benchmark_2026-06-04.json
 ```
 
 ## Cleared: height 739 — first spend-path script verification
@@ -54,7 +55,7 @@ source_port: Go
 source_fixture: local Core RPC raw blocks through 10000
 port_fix: native Go Taproot/Tapscript verifier backed by libsecp256k1 Schnorr and x-only tweak support
 test_fixture: Shared script corpus plus Docker local-reference replay through height 10000
-follower_notes: Docker replay crossed height 7000 and completed height 10000 with current_blocker=null.
+follower_notes: Docker replay crossed height 7000 and completed height 10000 with current_blocker=null. The 5k P2P comparator is a separate Project benchmark lane.
 ```
 
 ## Template

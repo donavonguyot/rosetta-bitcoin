@@ -111,9 +111,11 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
         markHeadersCurrent(tracker, chain);
         tracker.logEvent("sync", headerRefreshLogMessage(refreshAction), "info");
       } else {
-        stored = await manager.syncHeaders({
+        const headerOptions = {
           bestEffortIfHeadersCoverFollowupBlocks: localsCoverFollowup,
-        });
+          ...(settings.blocksTargetHeight > 0 ? { stopHeight: settings.blocksTargetHeight } : {}),
+        };
+        stored = await manager.syncHeaders(headerOptions);
       }
     }
 

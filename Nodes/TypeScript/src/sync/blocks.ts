@@ -134,7 +134,7 @@ function maybeMarkParallelSync(tracker: NativeNodeState, parallelDownloads: numb
     PARALLEL_CAP_ID,
     true,
     "code",
-    "prototype parallel height + peer races",
+    "batched P2P block prefetch window",
   );
 }
 
@@ -234,37 +234,48 @@ export async function syncBlocksBatch(
       }
 
       outer: for (const chunk of chunks) {
-        const fetched = await Promise.all(
-          chunk.map(async ([height, blockHashHex, blockHashRev, expectedPrev]) => {
-            const outcome = await requestBlockFromPeersParallel(peers, blockHashRev);
-            return { height, blockHashHex, blockHashRev, expectedPrev, outcome };
-          }),
-        );
+        const peer = peers.find((candidate) => candidate.isConnected);
+        if (peer === undefined) {
+          tracker.logEvent("sync", "No connected peer available for batched block download", "warning");
+          break;
+        }
+        let payloads: Array<Buffer | null>;
+        try {
+          payloads = await peer.requestBlocks(chunk.map(([, , blockHashRev]) => blockHashRev));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          tracker.logEvent("sync", "Batched block download failed", "warning", {
+            error: message,
+            peer: `${peer.host}:${peer.port}`,
+          });
+          break;
+        }
 
-        for (const row of fetched) {
-          if (row.outcome === null) {
+        for (let index = 0; index < chunk.length; index += 1) {
+          const [height, blockHashHex, blockHashRev, expectedPrev] = chunk[index]!;
+          const payload = payloads[index] ?? null;
+          if (payload === null) {
             tracker.logEvent("sync", "Block unavailable from peers", "warning", {
-              height: row.height,
-              block_hash: row.blockHashHex,
+              height,
+              block_hash: blockHashHex,
             });
             break outer;
           }
-          const [payload, peer] = row.outcome;
           try {
             await connectDownloadedBlock(tracker, chain, payload, {
-              height: row.height,
-              expectedPrev: row.expectedPrev,
-              expectedHash: row.blockHashRev,
-              blockHashHex: row.blockHashHex,
+              height,
+              expectedPrev,
+              expectedHash: blockHashRev,
+              blockHashHex,
               blockStore,
               scriptVerifyRunner: options.scriptVerifyRunner,
             });
             peer.markBlockDownloadCapabilities();
-            await broadcastWitnessBlockInv(peers, row.blockHashRev, tracker);
+            await broadcastWitnessBlockInv(peers, blockHashRev, tracker);
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             tracker.logEvent("sync", "Rejected invalid block", "warning", {
-              height: row.height,
+              height,
               error: message,
             });
             break outer;
@@ -273,7 +284,7 @@ export async function syncBlocksBatch(
             "blocks.block.store",
             true,
             "live",
-            `stored block height ${row.height}`,
+            `stored block height ${height}`,
           );
           downloaded += 1;
         }

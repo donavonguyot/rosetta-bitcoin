@@ -126,7 +126,10 @@ export class PeerManager {
     }
   }
 
-  async syncHeaders(options?: { bestEffortIfHeadersCoverFollowupBlocks?: boolean }): Promise<number> {
+  async syncHeaders(options?: {
+    bestEffortIfHeadersCoverFollowupBlocks?: boolean;
+    stopHeight?: number;
+  }): Promise<number> {
     if (this.settings.syncSkipHeaders || this.settings.noHeaderRefresh) {
       markHeadersCurrent(this.tracker, this.chain);
       return 0;
@@ -140,7 +143,9 @@ export class PeerManager {
     let lastError: Error | null = null;
     for (const peer of peers) {
       try {
-        return await peer.syncHeaders();
+        return await peer.syncHeaders(
+          options?.stopHeight === undefined ? {} : { stopHeight: options.stopHeight },
+        );
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         this.tracker.logEvent(

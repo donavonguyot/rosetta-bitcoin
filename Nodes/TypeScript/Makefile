@@ -4,7 +4,8 @@ DOCKER_PROOF_VOLUME ?= tsbitnode_proof_data
 DOCKER_SYNC_VOLUME ?= tsbitnode_sync_data
 DOCKER_REBUILD ?= 0
 DOCKER_SYNC_TARGET ?= 5000
-DOCKER_SYNC_BLOCKS_MAX ?= 5001
+DOCKER_SYNC_BLOCKS_MAX ?= 5000
+DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/typescript_docker_supporting_5k_benchmark_$(shell date +%F).json
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
@@ -36,6 +37,7 @@ docker-typescript-native-proof:
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=native \
 	  DOCKER_SYNC_TARGET=$(DOCKER_SYNC_TARGET) DOCKER_SYNC_BLOCKS_MAX=$(DOCKER_SYNC_BLOCKS_MAX) \
+	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) \
 	  DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
 	  scripts/docker_5k_benchmark.sh
 	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/tsbitnode.db

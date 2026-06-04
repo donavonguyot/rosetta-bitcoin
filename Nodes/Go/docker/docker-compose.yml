@@ -64,8 +64,9 @@ services:
       DATA_DIR: /data
       GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-docker}
       DOCKER_PROOF_VOLUME: ${DOCKER_LOCAL_PROOF_VOLUME:-gobitnode_local_reference_proof_data}
-      GOBITNODE_PAR_SCRIPT_VERIFY: ${GOBITNODE_PAR_SCRIPT_VERIFY:-0}
+      GOBITNODE_PAR_SCRIPT_VERIFY: ${GOBITNODE_PAR_SCRIPT_VERIFY:-1}
       GOBITNODE_PAR_SCRIPT_THREADS: ${GOBITNODE_PAR_SCRIPT_THREADS:-}
+      GOBITNODE_BLOCK_PREFETCH_DEPTH: ${GOBITNODE_BLOCK_PREFETCH_DEPTH:-4}
       GOBITNODE_ROCKSDB_BLOCK_CACHE_MB: ${GOBITNODE_ROCKSDB_BLOCK_CACHE_MB:-256}
       GOBITNODE_PROFILE: ${GOBITNODE_PROFILE:-0}
     extra_hosts:
@@ -80,15 +81,13 @@ services:
         "--datadir",
         "/data",
         "--target",
-        "10000",
-        "--rpc-url",
-        "http://host.docker.internal:48332",
-        "--rpc-user",
-        "rosetta",
-        "--rpc-password",
-        "rosetta-dev-only",
+        "5000",
+        "--byte-source",
+        "p2p",
+        "--peer",
+        "host.docker.internal:48333",
         "--result-path",
-        "/results/go_local_reference_docker_sync.json"
+        "/results/go_docker_supporting_5k_benchmark.json"
       ]
 
   gobitnode-supervisor:

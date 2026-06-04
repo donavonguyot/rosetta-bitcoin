@@ -36,6 +36,8 @@ services:
       DATA_DIR: /data
       PEERS: ${PEERS:-host.docker.internal:48333}
       SECP256K1_BACKEND: ${SECP256K1_BACKEND:-native}
+      PARALLEL_BLOCK_DOWNLOADS: ${PARALLEL_BLOCK_DOWNLOADS:-4}
+      PAR_SCRIPT_VERIFY: ${PAR_SCRIPT_VERIFY:-1}
     volumes:
       - tsbitnode_proof_data:/data
     command:

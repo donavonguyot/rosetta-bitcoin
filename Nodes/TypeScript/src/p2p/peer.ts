@@ -380,8 +380,11 @@ export class PeerConnection {
     return HeadersMessageCodec.deserialize(payload);
   }
 
-  async syncHeaders(): Promise<number> {
-    const stored = await syncHeadersToTip(this);
+  async syncHeaders(options: { stopHeight?: number } = {}): Promise<number> {
+    const stored = await syncHeadersToTip(
+      this,
+      options.stopHeight === undefined ? {} : { stopHeight: options.stopHeight },
+    );
     if (stored > 0) {
       const state = this.tracker.getSyncState(this.chain.name);
       this.tracker.logEvent(
@@ -402,6 +405,35 @@ export class PeerConnection {
         if (payload !== null) {
           result = payload;
           return;
+        }
+      }
+    });
+    this.requestChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    await run;
+    return result;
+  }
+
+  async requestBlocks(blockHashes: Buffer[], timeoutSeconds = 120): Promise<Array<Buffer | null>> {
+    const result: Array<Buffer | null> = new Array(blockHashes.length).fill(null);
+    const run = this.requestChain.then(async () => {
+      for (const invType of [MSG_WITNESS_BLOCK, MSG_BLOCK]) {
+        const pending: Buffer[] = [];
+        const pendingIndexes: number[] = [];
+        for (let index = 0; index < blockHashes.length; index += 1) {
+          if (result[index] !== null) continue;
+          pending.push(blockHashes[index]!);
+          pendingIndexes.push(index);
+        }
+        if (pending.length === 0) return;
+        const payloads = await this.requestBlocksOnce(pending, invType, timeoutSeconds);
+        for (let index = 0; index < payloads.length; index += 1) {
+          const payload = payloads[index];
+          if (payload !== null && payload !== undefined) {
+            result[pendingIndexes[index]!] = payload;
+          }
         }
       }
     });
@@ -498,6 +530,84 @@ export class PeerConnection {
       await this.dispatch(command, payload);
     }
     return null;
+  }
+
+  private async requestBlocksOnce(
+    blockHashes: Buffer[],
+    invType: number,
+    timeoutSeconds: number,
+  ): Promise<Array<Buffer | null>> {
+    const result: Array<Buffer | null> = new Array(blockHashes.length).fill(null);
+    const pending = new Set(blockHashes.map((_, index) => index));
+    const inventory = blockHashes.map((hash): InventoryVector => ({ type: invType, hash }));
+
+    await this.send(GetDataMessageCodec.COMMAND, GetDataMessageCodec.serialize({ inventory }));
+    this.tracker.markWireCapability(
+      "blocks.getdata.send",
+      true,
+      "live",
+      `sent getdata batch=${inventory.length} to ${this.host}:${this.port}`,
+    );
+
+    const deadline = Date.now() + timeoutSeconds * 1000;
+    while (pending.size > 0 && Date.now() < deadline) {
+      const remainingMs = deadline - Date.now();
+      const [command, payload] = await withTimeout(
+        this.readMessage(remainingMs / 1000),
+        remainingMs,
+        BlockMessageCodec.COMMAND,
+      );
+      this.touchActivity();
+      if (command === BlockMessageCodec.COMMAND) {
+        const receivedHash = blockHashFromPayload(payload);
+        const index = blockHashes.findIndex((hash, candidateIndex) =>
+          pending.has(candidateIndex) && hash.equals(receivedHash),
+        );
+        if (index === -1) {
+          this.tracker.logEvent("sync", "Unexpected block hash in batched download", "warning", {
+            received: Buffer.from(receivedHash).reverse().toString("hex"),
+          });
+          continue;
+        }
+        result[index] = payload;
+        pending.delete(index);
+        this.tracker.markWireCapability(
+          "blocks.block.recv",
+          true,
+          "live",
+          `received block from ${this.host}:${this.port}`,
+        );
+        continue;
+      }
+      if (command === NotFoundMessageCodec.COMMAND) {
+        const missing = NotFoundMessageCodec.deserialize(payload);
+        for (const item of missing.inventory) {
+          const index = blockHashes.findIndex((hash, candidateIndex) =>
+            pending.has(candidateIndex) && hash.equals(item.hash),
+          );
+          if (index !== -1) {
+            pending.delete(index);
+            this.tracker.markWireCapability(
+              "blocks.notfound",
+              true,
+              "live",
+              `peer returned notfound for block at ${this.host}:${this.port}`,
+            );
+          }
+        }
+        continue;
+      }
+      if (command === GetHeadersMessageCodec.COMMAND) {
+        continue;
+      }
+      if (command === PING_COMMAND) {
+        const nonce = deserializePing(payload);
+        await this.send(PONG_COMMAND, serializePong(nonce));
+        continue;
+      }
+      await this.dispatch(command, payload);
+    }
+    return result;
   }
 
   async close(): Promise<void> {

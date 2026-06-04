@@ -247,18 +247,40 @@ export function markHeadersCurrent(tracker: NativeNodeState, chain: ChainParams)
 
 export async function syncHeadersToTip(
   connection: PeerConnection,
-  options: { peerHeight?: number } = {},
+  options: { peerHeight?: number; stopHeight?: number } = {},
 ): Promise<number> {
   const chain = connection.chain;
   const tracker = connection.tracker;
-  const targetHeight =
+  let targetHeight =
     options.peerHeight ??
     connection.remoteVersion?.startHeight ??
     -1;
+  const boundedTarget =
+    options.stopHeight !== undefined &&
+    options.stopHeight > 0 &&
+    (targetHeight < 0 || options.stopHeight < targetHeight);
+  if (boundedTarget) {
+    targetHeight = options.stopHeight!;
+  }
 
   ensureGenesis(tracker, chain);
 
-  if (shouldSkipHeaderDownload(tracker, chain, targetHeight)) {
+  const targetCovered = () => {
+    if (!boundedTarget) {
+      return shouldSkipHeaderDownload(tracker, chain, targetHeight);
+    }
+    return localHeaderTipHeight(tracker, chain) >= targetHeight &&
+      tracker.getHeaderHash(chain.name, targetHeight) !== null;
+  };
+
+  if (targetCovered()) {
+    if (!boundedTarget) {
+      markHeadersCurrent(tracker, chain);
+    }
+    return 0;
+  }
+
+  if (!boundedTarget && shouldSkipHeaderDownload(tracker, chain, targetHeight)) {
     markHeadersCurrent(tracker, chain);
     return 0;
   }
@@ -270,16 +292,27 @@ export async function syncHeadersToTip(
     const bestHeight = state?.bestHeight ?? 0;
     const locator = nextLocator(tracker, chain);
 
-    if (shouldSkipHeaderDownload(tracker, chain, targetHeight)) {
-      markHeadersCurrent(tracker, chain);
+    if (targetCovered()) {
+      if (!boundedTarget) {
+        markHeadersCurrent(tracker, chain);
+      }
       return totalStored;
     }
 
     const message = await connection.requestHeaders(locator);
+    if (
+      boundedTarget &&
+      bestHeight < targetHeight &&
+      bestHeight + message.headers.length > targetHeight
+    ) {
+      message.headers = message.headers.slice(0, targetHeight - bestHeight);
+    }
     const batchCount = message.headers.length;
 
     if (headersSyncDone(bestHeight, targetHeight, batchCount)) {
-      markHeadersCurrent(tracker, chain);
+      if (!boundedTarget) {
+        markHeadersCurrent(tracker, chain);
+      }
       break;
     }
 
@@ -293,8 +326,13 @@ export async function syncHeadersToTip(
 
     const refreshed = tracker.getSyncState(chain.name);
     const updatedHeight = refreshed?.bestHeight ?? bestHeight;
+    if (boundedTarget && updatedHeight >= targetHeight) {
+      break;
+    }
     if (headersSyncDone(updatedHeight, targetHeight, batchCount)) {
-      markHeadersCurrent(tracker, chain);
+      if (!boundedTarget) {
+        markHeadersCurrent(tracker, chain);
+      }
       break;
     }
   }

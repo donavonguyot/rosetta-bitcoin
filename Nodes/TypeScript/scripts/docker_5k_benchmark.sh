@@ -4,7 +4,8 @@ cd "$(dirname "$0")/.."
 
 VOLUME="${DOCKER_PROOF_VOLUME:-tsbitnode_proof_data}"
 TARGET="${DOCKER_SYNC_TARGET:-5000}"
-BLOCKS_MAX="${DOCKER_SYNC_BLOCKS_MAX:-5001}"
+BLOCKS_MAX="${DOCKER_SYNC_BLOCKS_MAX:-5000}"
+PREFETCH_DEPTH="${DOCKER_BENCHMARK_PREFETCH_DEPTH:-4}"
 RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/typescript_docker_supporting_5k_benchmark_$(date +%F).json}"
 PEER="${PEERS:-host.docker.internal:48333}"
 BACKEND="${SECP256K1_BACKEND:-native}"
@@ -29,6 +30,7 @@ REFERENCE_FINISH_HASH="${REFERENCE_FINISH_HASH:-$(reference_hash "$REFERENCE_FIN
 start_ms="$(now_ms)"
 set +e
 DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" PEERS="$PEER" \
+  PARALLEL_BLOCK_DOWNLOADS="$PREFETCH_DEPTH" PAR_SCRIPT_VERIFY=1 \
   docker compose -f docker/docker-compose.yml run --rm --no-deps tsbitnode-sync-proof \
     node dist/cli/syncRunner.js \
       --datadir /data \
@@ -56,6 +58,7 @@ START_MS="$start_ms" \
 END_MS="$end_ms" \
 TARGET="$TARGET" \
 BLOCKS_MAX="$BLOCKS_MAX" \
+PREFETCH_DEPTH="$PREFETCH_DEPTH" \
 PEER="$PEER" \
 VOLUME="$VOLUME" \
 BACKEND="$BACKEND" \
@@ -123,10 +126,12 @@ block_count = as_int(status.get("block_count"), max(0, validated_height + 1))
 
 doc = {
     "benchmark_contract_version": 1,
-    "benchmark_kind": "supporting_5k_durable_local_reference_replay",
+    "benchmark_kind": "supporting_5k_p2p",
     "benchmark_gate": "supporting_5k",
+    "benchmark_lane": "supporting_5k_p2p",
     "target_label": target_label(target),
     "target_height": target,
+    "header_target_height": target,
     "category": "local_reference_sync",
     "result": "passed" if passed else "failed",
     "failures": failures,
@@ -135,6 +140,8 @@ doc = {
     "node": "TypeScriptNode",
     "runtime_surface": "docker",
     "peer_mode": "local_reference",
+    "byte_source": "local_reference_p2p",
+    "proof_mode": "p2p_sync",
     "peer": os.environ.get("PEER", "host.docker.internal:48333"),
     "docker_volume": os.environ.get("VOLUME", "tsbitnode_proof_data"),
     "datadir": "/data",
@@ -154,8 +161,8 @@ doc = {
     "header_hash": status.get("header_hash"),
     "stored_block_height": stored_block_height,
     "stored_block_hash": status.get("stored_block_hash"),
-    "blocks_fetched": block_count,
-    "blocks_connected": max(0, validated_height + 1),
+    "blocks_fetched": stored_block_height if stored_block_height >= 0 else max(0, block_count - 1),
+    "blocks_connected": max(0, validated_height),
     "current_blocker": current_blocker,
     "chainstate_backend": status.get("chainstate_backend", "rocksdb"),
     "chainstate_backend_path": status.get("chainstate_backend_path", "/data/chainstate-rocksdb"),
@@ -165,9 +172,10 @@ doc = {
     "native_crypto_backend": status.get("native_crypto_backend") or os.environ.get("BACKEND", "native"),
     "native_crypto_available": bool(status.get("native_crypto_available", False)),
     "taproot_tweak_backend": status.get("taproot_tweak_backend"),
-    "script_runner_mode": "single",
-    "prefetch_depth": 0,
+    "script_runner_mode": "parallel",
+    "prefetch_depth": as_int(os.environ.get("PREFETCH_DEPTH"), 4),
     "rocksdb_wal_disabled": False,
+    "fresh_state": True,
     "resume_supported": True,
     "timing_summary": {
         "total_ms": elapsed_ms,
