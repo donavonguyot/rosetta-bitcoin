@@ -28,8 +28,8 @@
     "docker_status": "cd Nodes/Rust && make docker-status",
     "docker_storage_proof": "cd Nodes/Rust && make docker-storage-proof",
     "docker_script_corpus": "cd Nodes/Rust && make docker-script-corpus",
-    "docker_proof_local": null,
-    "docker_proof_rpc_replay": "cd Nodes/Rust && make docker-proof-local",
+    "docker_proof_local": "cd Nodes/Rust && make docker-proof-local",
+    "docker_proof_rpc_replay": "cd Nodes/Rust && make docker-proof-rpc-replay",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Rust && make docker-smoke-once",
     "docker_supervisor_status": "cd Nodes/Rust && make docker-status",
@@ -39,14 +39,14 @@
   },
   "peer_modes": {
     "local_reference": {
-      "supported": false,
-      "command": null,
-      "peer": null,
+      "supported": true,
+      "command": "cd Nodes/Rust && make docker-proof-local",
+      "peer": "host.docker.internal:48333",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "local_reference_rpc": {
       "supported": true,
-      "command": "cd Nodes/Rust && make docker-proof-local",
+      "command": "cd Nodes/Rust && make docker-proof-rpc-replay",
       "peer": "http://host.docker.internal:48332",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
@@ -77,7 +77,7 @@
     "storage_result": "Nodes/Shared/conformance/results/rust_storage_gate_docker_2026-06-03.json",
     "script_corpus_result": "Nodes/Shared/conformance/results/rust_script_corpus_docker_2026-06-03.json",
     "local_reference_result": "Nodes/Shared/conformance/results/rust_local_reference_docker_sync_2026-06-03.json",
-    "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, and bounded local-reference RPC replay through height 10000 pass. docker_proof_local is intentionally unset until a local Reference P2P comparator exists; live P2P sync, tip maintenance, and binary-gate completion remain follow-up work."
+    "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, bounded local-reference RPC replay through height 10000, and a narrow local Reference P2P comparator for the 5k supporting gate. The P2P comparator uses Bitcoin P2P getheaders/getdata for block bytes and Rust's existing storage/connect pipeline."
   },
-  "known_caveats": ["No live P2P sync or tip maintenance claim yet", "Bounded local-reference RPC proof is not live P2P sync or tip maintenance", "Binary gate remains not_attempted"]
+  "known_caveats": ["The local Reference P2P comparator is a bounded proof harness, not live tip maintenance", "Bounded local-reference RPC proof is not live P2P sync or tip maintenance", "Binary gate remains not_attempted"]
 }

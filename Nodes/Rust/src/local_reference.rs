@@ -7,7 +7,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::{connect, refsync, status, storage};
+use crate::{connect, p2p, refsync, status, storage};
 
 pub struct LocalReferenceOptions<'a> {
     pub datadir: &'a Path,
@@ -15,36 +15,73 @@ pub struct LocalReferenceOptions<'a> {
     pub rpc_url: &'a str,
     pub rpc_user: &'a str,
     pub rpc_password: &'a str,
+    pub peer: &'a str,
     pub result_path: Option<&'a Path>,
     pub progress: u32,
     pub mode: &'a str,
+    pub byte_source: &'a str,
     pub runtime_surface: &'a str,
 }
 
 pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
     let started = Utc::now();
+    let p2p_source = opts.byte_source == "p2p";
+    let peer_mode = if p2p_source {
+        "local_reference"
+    } else {
+        "local_reference_rpc"
+    };
+    let peer = if p2p_source { opts.peer } else { opts.rpc_url };
+    let byte_source = if p2p_source {
+        "local_reference_p2p"
+    } else {
+        "local_reference_rpc"
+    };
+    let proof_mode = if p2p_source { "p2p_sync" } else { opts.mode };
+    let benchmark_lane = if p2p_source {
+        "supporting_5k_p2p"
+    } else {
+        "supporting_5k_rpc_replay"
+    };
     let mut doc = Map::new();
     doc.insert("implementation".into(), "RustNode".into());
     doc.insert("category".into(), "local_reference_sync".into());
     doc.insert("runtime_surface".into(), opts.runtime_surface.into());
     doc.insert("captured_at".into(), started.to_rfc3339().into());
     doc.insert("chain".into(), "testnet4".into());
-    doc.insert("peer_mode".into(), "local_reference_rpc".into());
-    doc.insert("peer".into(), opts.rpc_url.into());
+    doc.insert("peer_mode".into(), peer_mode.into());
+    doc.insert("peer".into(), peer.into());
     doc.insert(
         "datadir".into(),
         opts.datadir.to_string_lossy().to_string().into(),
     );
     doc.insert("target_height".into(), opts.target.into());
+    doc.insert("header_target_height".into(), opts.target.into());
     doc.insert("target_label".into(), target_label(opts.target).into());
+    doc.insert("reference_start_height".into(), 0.into());
+    doc.insert(
+        "reference_start_hash".into(),
+        "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043".into(),
+    );
+    doc.insert("reference_finish_height".into(), opts.target.into());
     doc.insert("benchmark_contract_version".into(), 1.into());
-    doc.insert("benchmark_kind".into(), benchmark_kind(opts.target).into());
+    doc.insert(
+        "benchmark_kind".into(),
+        benchmark_kind(opts.target, opts.byte_source).into(),
+    );
+    doc.insert("benchmark_lane".into(), benchmark_lane.into());
+    doc.insert("byte_source".into(), byte_source.into());
     doc.insert("resume_supported".into(), true.into());
-    doc.insert("proof_mode".into(), opts.mode.into());
+    doc.insert("fresh_state".into(), true.into());
+    doc.insert("proof_mode".into(), proof_mode.into());
+    doc.insert("prefetch_depth".into(), (prefetch_depth() as i64).into());
     doc.insert("result".into(), "failed".into());
     doc.insert("failures".into(), Value::Array(Vec::new()));
 
     let (sync_summary, connect_summary, pipeline_timing_summary) = if opts.mode == "staged" {
+        if p2p_source {
+            bail!("staged mode is only supported for RPC replay");
+        }
         let sync = refsync::run(refsync::SyncOptions {
             datadir: opts.datadir,
             target: opts.target,
@@ -67,7 +104,11 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
             Value::Null,
         )
     } else if opts.mode == "pipeline" {
-        run_pipeline(&opts)?
+        if p2p_source {
+            run_p2p_pipeline(&opts)?
+        } else {
+            run_pipeline(&opts)?
+        }
     } else {
         bail!("proof mode must be pipeline or staged");
     };
@@ -85,6 +126,10 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
     let status_doc = status::build(opts.datadir, opts.runtime_surface)?;
     doc.insert("status".into(), serde_json::to_value(&status_doc)?);
     doc.insert("header_height".into(), status_doc.header_height.into());
+    doc.insert(
+        "reference_finish_hash".into(),
+        status_doc.header_hash.clone().into(),
+    );
     doc.insert(
         "validated_height".into(),
         status_doc.validated_height.into(),
@@ -200,7 +245,13 @@ fn target_label(target: u32) -> &'static str {
     }
 }
 
-fn benchmark_kind(target: u32) -> &'static str {
+fn benchmark_kind(target: u32, byte_source: &str) -> &'static str {
+    if byte_source == "p2p" {
+        return match target {
+            5000 => "supporting_5k_p2p",
+            _ => "local_reference_p2p",
+        };
+    }
     match target {
         5000 => "supporting_5k_durable_local_reference_replay",
         10000 => "supporting_10k_durable_local_reference_replay",
@@ -208,6 +259,155 @@ fn benchmark_kind(target: u32) -> &'static str {
         100000 => "primary_100k_durable_local_reference_replay",
         _ => "local_reference_replay",
     }
+}
+
+fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value)> {
+    let store = storage::Store::open(opts.datadir)?;
+    let meta = store
+        .metadata()
+        .unwrap_or_else(|_| storage::missing_metadata());
+    let start_height = if meta.validated_height == 0 && meta.validated_hash.is_empty() {
+        0
+    } else {
+        u32::try_from(meta.validated_height + 1).unwrap_or(0)
+    };
+    let resumed_from_height = if start_height == 0 {
+        Value::Null
+    } else {
+        Value::from(meta.validated_height)
+    };
+    let started = Utc::now().to_rfc3339();
+    let mut timing = PipelineTiming::new(prefetch_depth());
+    let mut last_connect = Value::Null;
+    let mut fetched = 0u32;
+    let mut connected = 0u32;
+    let receiver = p2p::fetch_blocks(p2p::FetchOptions {
+        peer: opts.peer.to_string(),
+        target: opts.target,
+        prefetch: timing.prefetch_depth,
+    });
+
+    for expected_height in start_height..=opts.target {
+        let block = receiver
+            .recv()
+            .context("local-reference P2P fetcher stopped early")?
+            .with_context(|| format!("height {expected_height}"))?;
+        if block.height < start_height {
+            continue;
+        }
+        if block.height != expected_height {
+            bail!(
+                "P2P height ordering mismatch: got {} want {}",
+                block.height,
+                expected_height
+            );
+        }
+        let block_started = Instant::now();
+        let parse_started = Instant::now();
+        let expected_prev = if block.height == 0 {
+            None
+        } else {
+            store
+                .metadata()
+                .ok()
+                .map(|meta| meta.validated_hash)
+                .filter(|hash| !hash.is_empty())
+        };
+        let (info, txs) =
+            refsync::decode_block(&block.raw, Some(&block.hash), expected_prev.as_deref())?;
+        timing.add("block_parse_validate", parse_started.elapsed());
+        let store_started = Instant::now();
+        store.record_block(block.height, &info.hash, &block.raw)?;
+        timing.add("block_store", store_started.elapsed());
+        if block.height == 0
+            || block.height % opts.progress.max(1) == 0
+            || block.height == opts.target
+        {
+            let meta_started = Instant::now();
+            let meta = refsync::metadata_after_store(
+                store.metadata().ok(),
+                block.height,
+                &info.hash,
+                &started,
+            );
+            store.put_metadata(&meta)?;
+            timing.add("metadata_store", meta_started.elapsed());
+        }
+
+        let connect_started = Instant::now();
+        let connect = connect::connect_decoded_block(
+            &store,
+            block.height,
+            opts.target,
+            &info,
+            &txs,
+            opts.runtime_surface,
+        )?;
+        timing.add("connect_total", connect_started.elapsed());
+        timing.merge_connect(&connect);
+        connected += connect.blocks_connected;
+        last_connect = serde_json::to_value(&connect)?;
+        fetched += 1;
+        let elapsed_block = block_started.elapsed();
+        timing.record_block(block.height, elapsed_block);
+        if block.height % opts.progress.max(1) == 0 || block.height == opts.target {
+            println!(
+                "rsbitnode-local-reference-proof p2p progress {}",
+                serde_json::json!({
+                    "height": block.height,
+                    "target_height": opts.target,
+                    "start_height": start_height,
+                    "resumed_from_height": resumed_from_height,
+                    "percent": ((block.height as f64 / opts.target.max(1) as f64) * 100.0),
+                    "hash": info.hash,
+                    "txs": info.tx_count,
+                    "utxos": connect.chainstate_utxo_count,
+                    "blocks_fetched": fetched,
+                    "blocks_connected": connected,
+                    "prefetch_depth": timing.prefetch_depth,
+                    "elapsed_ms": timing.started.elapsed().as_millis() as i64,
+                    "last_block_ms": elapsed_block.as_millis() as i64,
+                    "blocks_per_second": connected as f64 / timing.started.elapsed().as_secs_f64().max(0.001),
+                    "script_runner_mode": connect.script_runner_mode,
+                    "sync_status": &connect.sync_status,
+                    "current_blocker": &connect.current_blocker,
+                })
+            );
+        }
+        if connect.current_blocker.is_some() {
+            let meta_started = Instant::now();
+            let mut meta = store.metadata()?;
+            meta.header_height = block.height as i64;
+            meta.header_hash = info.hash.clone();
+            meta.stored_block_height = block.height as i64;
+            meta.stored_block_hash = info.hash;
+            store.put_metadata(&meta)?;
+            timing.add("metadata_store", meta_started.elapsed());
+            break;
+        }
+    }
+    let sync = serde_json::json!({
+        "implementation": "RustNode",
+        "runtime_surface": opts.runtime_surface,
+        "peer_mode": "local_reference",
+        "peer": opts.peer,
+        "target_height": opts.target,
+        "start_height": start_height,
+        "resumed_from_height": resumed_from_height,
+        "header_height": if fetched == 0 { meta.header_height } else { i64::from(start_height + fetched - 1) },
+        "stored_block_height": if fetched == 0 { meta.stored_block_height } else { i64::from(start_height + fetched - 1) },
+        "validated_height": last_connect["validated_height"],
+        "sync_status": last_connect["sync_status"],
+        "current_blocker": last_connect["current_blocker"],
+        "binary_gate_status": "not_attempted",
+        "started_at": started,
+        "updated_at": Utc::now().to_rfc3339(),
+        "blocks_fetched": fetched,
+        "blocks_connected": connected,
+    });
+    timing.blocks_fetched = fetched;
+    timing.blocks_connected = connected;
+    Ok((sync, last_connect, timing.as_json()))
 }
 
 fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value)> {

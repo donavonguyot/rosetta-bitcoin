@@ -1,15 +1,17 @@
 # rsbitnode
 
 `rsbitnode` is the Rust follower port for the RosettaBitcoin workspace. The
-current milestone is a Core-native scaffold plus bounded local-reference replay:
+current milestone is a Core-native scaffold plus bounded local-reference proof:
 RocksDB-owned storage metadata, status JSON, storage proof output, Chainstate
 Codec v2 vector checks, native crypto vector checks, Docker smoke/proof
 surfaces, raw block/transaction parsing, and a Rust script-corpus harness for
-the shared 45-fixture Shared corpus.
+the shared 45-fixture Shared corpus. Rust also exposes a narrow local Reference
+P2P comparator for the 5k supporting gate.
 
 This milestone does not claim live P2P sync, testnet4 tip maintenance, or
 binary-gate progress. Host and Docker local-reference replay currently reach
-height 10000 with `binary_gate_status=not_attempted`.
+height 10000 with `binary_gate_status=not_attempted`; the official comparable
+5k lane uses local Reference P2P block acquisition.
 
 ## Commands
 
@@ -53,10 +55,14 @@ as deterministic parallel jobs by default; set
 Progress output includes JSON telemetry with height, percent, elapsed time,
 block rate, last-block time, fetched/connected counts, UTXO count, prefetch
 depth, and script runner mode. Proof JSON includes `pipeline_timing_summary`
-with wall time, RPC fetch, parse/validate, store, connect, script, prevout,
+with wall time, byte fetch, parse/validate, store, connect, script, prevout,
 commit, and UTXO timing fields. The top-level `blocks_fetched` and
 `blocks_connected` fields are full proof counts; `connect_summary` is the final
 block/connect snapshot.
+
+`--byte-source p2p` speaks Bitcoin P2P to local Reference Core using
+`getheaders`/`getdata`; `--byte-source rpc` keeps the historical Core RPC replay
+lane. Both paths use the same Rust storage/connect pipeline.
 
 The `*-fast` targets set `RSBITNODE_ROCKSDB_DISABLE_WAL=1` for disposable proof
 runs only. Default runtime and proof commands keep RocksDB WAL enabled.
@@ -77,11 +83,12 @@ make docker-status
 make docker-storage-proof
 make docker-script-corpus
 make docker-proof-local
+make docker-proof-rpc-replay
 make docker-proof-local-fast
 make docker-smoke-once
 ```
 
-`docker-proof-local` is Rust's current local Reference RPC replay proof. In
-Project mission control it is exposed as `docker_proof_rpc_replay`, not the
-official comparable `docker_proof_local` P2P lane. `docker-proof-local-fast`
-keeps its WAL-off diagnostic role and must not be benchmark-ranked.
+`docker-proof-local` is the official local Reference P2P 5k comparator and is
+exposed to Project as `docker_proof_local`. `docker-proof-rpc-replay` preserves
+the older Core RPC replay lane as evidence-only. `docker-proof-local-fast` keeps
+its WAL-off diagnostic role and must not be benchmark-ranked.

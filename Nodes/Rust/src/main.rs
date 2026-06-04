@@ -6,6 +6,7 @@ mod codec;
 mod connect;
 mod crypto_vectors;
 mod local_reference;
+mod p2p;
 mod refsync;
 mod repo;
 mod script_corpus;
@@ -95,11 +96,15 @@ enum Command {
         #[arg(long)]
         rpc_password: Option<String>,
         #[arg(long)]
+        peer: Option<String>,
+        #[arg(long)]
         result_path: Option<PathBuf>,
         #[arg(long, default_value_t = 1000)]
         progress: u32,
         #[arg(long, default_value = "pipeline")]
         mode: String,
+        #[arg(long, default_value = "rpc")]
+        byte_source: String,
         #[arg(long, default_value = "host")]
         runtime_surface: String,
     },
@@ -183,9 +188,11 @@ fn main() -> Result<()> {
             rpc_url,
             rpc_user,
             rpc_password,
+            peer,
             result_path,
             progress,
             mode,
+            byte_source,
             runtime_surface,
         } => {
             let docker = runtime_surface == "docker";
@@ -193,6 +200,13 @@ fn main() -> Result<()> {
             let rpc_url = rpc_url.unwrap_or_else(|| default_url.to_string());
             let rpc_user = rpc_user.unwrap_or_else(|| default_user.to_string());
             let rpc_password = rpc_password.unwrap_or_else(|| default_pass.to_string());
+            let peer = peer.unwrap_or_else(|| {
+                if docker {
+                    "host.docker.internal:48333".to_string()
+                } else {
+                    "127.0.0.1:48333".to_string()
+                }
+            });
             print_json(&local_reference::run(
                 local_reference::LocalReferenceOptions {
                     datadir: &datadir,
@@ -200,9 +214,11 @@ fn main() -> Result<()> {
                     rpc_url: &rpc_url,
                     rpc_user: &rpc_user,
                     rpc_password: &rpc_password,
+                    peer: &peer,
                     result_path: result_path.as_deref(),
                     progress,
                     mode: &mode,
+                    byte_source: &byte_source,
                     runtime_surface: &runtime_surface,
                 },
             )?)

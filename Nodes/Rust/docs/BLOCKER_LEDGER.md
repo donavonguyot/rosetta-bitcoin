@@ -7,6 +7,10 @@ implementation: RustNode
 node_id: rsbitnode-native-storage
 validated_height: 2 in bounded storage proof only
 local_reference_validated_height: 10000 in host and Docker Core RPC replay
+supporting_5k_p2p: passed in Docker local Reference P2P proof
+supporting_5k_p2p_artifact: Nodes/Shared/conformance/results/rust_docker_supporting_5k_benchmark_2026-06-04.json
+supporting_5k_p2p_validated_height: 5000
+supporting_5k_p2p_validated_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
 binary_gate_status: not_attempted
 current_blocker: none for bounded local-reference target 10000
 ```
@@ -17,7 +21,9 @@ The Rust scaffold now fetches raw blocks from local Reference Core, validates
 header hash, proof-of-work, previous links, merkle roots, parses transactions,
 and connects UTXOs through the optimized RocksDB batch commit path. It now
 passes the bounded local-reference target through height 10000 without using
-another port or Core as a validation oracle.
+another port or Core as a validation oracle. The 5k P2P comparator uses local
+Reference Core only as a byte source over Bitcoin P2P; it remains a bounded
+proof harness, not live tip maintenance.
 
 The previous first Taproot blocker is cleared:
 
