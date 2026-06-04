@@ -16,6 +16,7 @@
 #include "cpbitnode/wire/frame.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <random>
 #include <stdexcept>
 
@@ -23,6 +24,11 @@ namespace cpbitnode::p2p {
 namespace {
 
 using Clock = std::chrono::steady_clock;
+
+std::atomic<std::uint64_t> gP2PFramesRead{0};
+std::atomic<std::uint64_t> gP2PBytesRead{0};
+std::atomic<std::uint64_t> gP2PHeaderReadUs{0};
+std::atomic<std::uint64_t> gP2PPayloadReadUs{0};
 
 double feefilterWireSatKvbFromSettings(const config::Settings& settings) {
     if (settings.minRelayFeerateSatVb <= 0) {
@@ -43,6 +49,15 @@ messages::NetworkAddress blankAddress() {
 }
 
 }  // namespace
+
+P2PReadTelemetry p2pReadTelemetrySnapshot() {
+    return P2PReadTelemetry{
+        gP2PFramesRead.load(std::memory_order_relaxed),
+        gP2PBytesRead.load(std::memory_order_relaxed),
+        gP2PHeaderReadUs.load(std::memory_order_relaxed),
+        gP2PPayloadReadUs.load(std::memory_order_relaxed),
+    };
+}
 
 PeerConnection::PeerConnection(Options options) : options_(std::move(options)) {
     if (options_.chain == nullptr || options_.tracker == nullptr) {
@@ -144,26 +159,50 @@ std::pair<std::string, std::vector<std::uint8_t>> PeerConnection::readMessage(do
     if (!transport_ || !transport_->isOpen()) {
         throw std::runtime_error("Peer is not connected");
     }
-    while (true) {
-        if (buffer_.size() >= wire::kHeaderSize) {
-            const auto header = wire::parseHeader(buffer_);
-            const std::size_t total = wire::kHeaderSize + header.length;
-            if (buffer_.size() >= total) {
-                std::vector<std::uint8_t> frame(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(total));
-                buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(total));
-                const auto payload = std::span<const std::uint8_t>(frame.data() + wire::kHeaderSize, header.length);
-                if (header.magic != options_.chain->magic) {
-                    throw std::runtime_error("Unexpected network magic");
-                }
-                if (!wire::verifyChecksum(payload, header.checksum)) {
-                    throw std::runtime_error("Checksum mismatch");
-                }
-                return {header.command, std::vector<std::uint8_t>(payload.begin(), payload.end())};
-            }
+
+    const auto deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(
+                                              std::chrono::duration<double>(timeoutSeconds));
+    auto remainingSeconds = [&]() {
+        const double remaining = std::chrono::duration<double>(deadline - Clock::now()).count();
+        if (remaining <= 0) {
+            throw std::runtime_error("read timeout");
         }
-        const auto chunk = transport_->readExact(1, timeoutSeconds);
+        return remaining;
+    };
+    auto ensureBuffered = [&](std::size_t size, bool headerRead) {
+        if (buffer_.size() >= size) {
+            return;
+        }
+        const auto started = Clock::now();
+        const auto chunk = transport_->readExact(size - buffer_.size(), remainingSeconds());
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - started).count();
+        if (headerRead) {
+            gP2PHeaderReadUs.fetch_add(static_cast<std::uint64_t>(std::max<long long>(0, elapsed)),
+                                       std::memory_order_relaxed);
+        } else {
+            gP2PPayloadReadUs.fetch_add(static_cast<std::uint64_t>(std::max<long long>(0, elapsed)),
+                                        std::memory_order_relaxed);
+        }
+        gP2PBytesRead.fetch_add(static_cast<std::uint64_t>(chunk.size()), std::memory_order_relaxed);
         buffer_.insert(buffer_.end(), chunk.begin(), chunk.end());
+    };
+
+    ensureBuffered(wire::kHeaderSize, true);
+    const auto header = wire::parseHeader(buffer_);
+    const std::size_t total = wire::kHeaderSize + header.length;
+    ensureBuffered(total, false);
+
+    std::vector<std::uint8_t> frame(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(total));
+    buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(total));
+    const auto payload = std::span<const std::uint8_t>(frame.data() + wire::kHeaderSize, header.length);
+    if (header.magic != options_.chain->magic) {
+        throw std::runtime_error("Unexpected network magic");
     }
+    if (!wire::verifyChecksum(payload, header.checksum)) {
+        throw std::runtime_error("Checksum mismatch");
+    }
+    gP2PFramesRead.fetch_add(1, std::memory_order_relaxed);
+    return {header.command, std::vector<std::uint8_t>(payload.begin(), payload.end())};
 }
 
 void PeerConnection::keepaliveTick() {

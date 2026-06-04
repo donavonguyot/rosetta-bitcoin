@@ -133,6 +133,10 @@ def parse_run_log(path):
     current_blocker = None
     pipeline_blocks_fetched = 0
     pipeline_blocks_connected = 0
+    pipeline_p2p_frames_read = 0
+    pipeline_p2p_bytes_read = 0
+    pipeline_p2p_header_read_us = 0
+    pipeline_p2p_payload_read_us = 0
     script_threads = 1
     for line in raw.splitlines():
         stripped = line.strip()
@@ -178,6 +182,10 @@ def parse_run_log(path):
                 pipeline_totals_us[stage] = pipeline_totals_us.get(stage, 0) + as_int(pairs.get(stage))
             pipeline_blocks_fetched += as_int(pairs.get("blocks_fetched"))
             pipeline_blocks_connected += as_int(pairs.get("blocks_connected"))
+            pipeline_p2p_frames_read += as_int(pairs.get("p2p_frames_read"))
+            pipeline_p2p_bytes_read += as_int(pairs.get("p2p_bytes_read"))
+            pipeline_p2p_header_read_us += as_int(pairs.get("p2p_header_read_us"))
+            pipeline_p2p_payload_read_us += as_int(pairs.get("p2p_payload_read_us"))
             script_threads = max(script_threads, as_int(pairs.get("script_threads"), 1))
         elif "Block sync complete:" in stripped:
             pairs = dict(re.findall(r"([A-Za-z0-9_]+)=([^ ]+)", stripped))
@@ -192,6 +200,10 @@ def parse_run_log(path):
     pipeline_summary["blocks_fetched"] = pipeline_blocks_fetched
     pipeline_summary["blocks_connected"] = pipeline_blocks_connected
     pipeline_summary["script_threads"] = script_threads
+    pipeline_summary["p2p_frames_read"] = pipeline_p2p_frames_read
+    pipeline_summary["p2p_bytes_read"] = pipeline_p2p_bytes_read
+    pipeline_summary["p2p_header_read_us"] = pipeline_p2p_header_read_us
+    pipeline_summary["p2p_payload_read_us"] = pipeline_p2p_payload_read_us
     return raw, stage_totals_ms, pipeline_summary, slow_blocks[:10], sync_summary, current_blocker
 
 
@@ -246,12 +258,17 @@ if pipeline_summary.get("prevout_batch_load", 0) == 0:
     pipeline_summary["prevout_batch_load"] = stage_totals.get("utxo_load", 0)
 pipeline_summary.setdefault("status_writes", 0)
 pipeline_summary.setdefault("idle_wait", 0)
+pipeline_summary.setdefault("p2p_frames_read", 0)
+pipeline_summary.setdefault("p2p_bytes_read", 0)
+pipeline_summary.setdefault("p2p_header_read_us", 0)
+pipeline_summary.setdefault("p2p_payload_read_us", 0)
 
 doc = {
     "benchmark_contract_version": 1,
     "benchmark_kind": "supporting_5k_p2p",
     "benchmark_gate": "supporting_5k",
     "benchmark_lane": "supporting_5k_p2p",
+    "utxo_accounting_policy": "core_spendable_v1",
     "target_label": target_label(target),
     "target_height": target,
     "header_target_height": target,

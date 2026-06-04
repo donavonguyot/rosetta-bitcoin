@@ -52,6 +52,7 @@ public:
 
     std::vector<std::uint8_t> readExact(std::size_t count, double timeoutSeconds) override {
         (void)timeoutSeconds;
+        readRequests_.push_back(count);
         if (readQueue_.empty()) {
             throw std::runtime_error("read timeout");
         }
@@ -74,11 +75,13 @@ public:
     void enqueueRead(std::vector<std::uint8_t> bytes) { readQueue_.push_back(std::move(bytes)); }
 
     const std::vector<std::vector<std::uint8_t>>& writes() const { return writes_; }
+    const std::vector<std::size_t>& readRequests() const { return readRequests_; }
 
 private:
     bool open_ = true;
     std::deque<std::vector<std::uint8_t>> readQueue_;
     std::vector<std::vector<std::uint8_t>> writes_;
+    std::vector<std::size_t> readRequests_;
 };
 
 class FailingWriteTransport final : public MockTransport {

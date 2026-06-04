@@ -41,8 +41,17 @@ struct BlockRequestStats {
     bool receivedNotFound = false;
 };
 
+struct P2PReadTelemetry {
+    std::uint64_t framesRead = 0;
+    std::uint64_t bytesRead = 0;
+    std::uint64_t headerReadUs = 0;
+    std::uint64_t payloadReadUs = 0;
+};
+
 using StreamingBlockCallback =
     std::function<bool(std::size_t index, std::vector<std::uint8_t> payload, long long fetchWaitUs)>;
+
+P2PReadTelemetry p2pReadTelemetrySnapshot();
 
 void broadcastWitnessBlockInv(const std::vector<PeerConnection*>& peers, const std::vector<std::uint8_t>& blockHash,
                               db::NodeStateStore& tracker);

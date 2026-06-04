@@ -44,6 +44,10 @@ struct PipelineTiming {
     int blocksConnected = 0;
     int prefetchDepth = 1;
     std::size_t scriptThreads = 1;
+    std::uint64_t p2pFramesRead = 0;
+    std::uint64_t p2pBytesRead = 0;
+    std::uint64_t p2pHeaderReadUs = 0;
+    std::uint64_t p2pPayloadReadUs = 0;
 };
 
 long long elapsedUs(Clock::time_point start) {
@@ -88,7 +92,19 @@ void emitPipelineTiming(const PipelineTiming& timing) {
               << " blocks_connected=" << timing.blocksConnected
               << " prefetch_depth=" << timing.prefetchDepth
               << " script_threads=" << timing.scriptThreads
+              << " p2p_frames_read=" << timing.p2pFramesRead
+              << " p2p_bytes_read=" << timing.p2pBytesRead
+              << " p2p_header_read_us=" << timing.p2pHeaderReadUs
+              << " p2p_payload_read_us=" << timing.p2pPayloadReadUs
               << "\n";
+}
+
+void applyP2PReadTelemetryDelta(PipelineTiming& timing, const p2p::P2PReadTelemetry& started) {
+    const auto ended = p2p::p2pReadTelemetrySnapshot();
+    timing.p2pFramesRead = ended.framesRead - started.framesRead;
+    timing.p2pBytesRead = ended.bytesRead - started.bytesRead;
+    timing.p2pHeaderReadUs = ended.headerReadUs - started.headerReadUs;
+    timing.p2pPayloadReadUs = ended.payloadReadUs - started.payloadReadUs;
 }
 
 std::vector<std::uint8_t> expectedPrevHash(const db::NodeStateStore& tracker, int height) {
@@ -500,6 +516,7 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     PipelineTiming pipeline;
     pipeline.prefetchDepth = prefetchDepthFromEnv(parallelDownloads);
     pipeline.scriptThreads = scriptRunner != nullptr ? scriptRunner->threadCount() : 1;
+    const auto p2pReadStarted = p2p::p2pReadTelemetrySnapshot();
 
     const int limit = maxBlocks == 0 ? batchSize : std::min(batchSize, maxBlocks);
     const auto work = buildOrderedBlockWork(tracker, chainstate, chain, limit, blocksTargetHeight);
@@ -519,6 +536,7 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
         tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_current");
         pipeline.statusWrites += elapsedUs(statusStarted);
         pipeline.totalWall = elapsedUs(batchStarted);
+        applyP2PReadTelemetryDelta(pipeline, p2pReadStarted);
         emitPipelineTiming(pipeline);
         return 0;
     }
@@ -616,6 +634,7 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
         pipeline.statusWrites += elapsedUs(finalStatusStarted);
     }
     pipeline.totalWall = elapsedUs(batchStarted);
+    applyP2PReadTelemetryDelta(pipeline, p2pReadStarted);
     emitPipelineTiming(pipeline);
     return downloaded;
 }

@@ -71,6 +71,21 @@ cpbitnode::p2p::PeerConnection makePeer(cpbitnode::db::NodeStateStore& store,
     return peer;
 }
 
+cpbitnode::p2p::PeerConnection makeTransportPeer(cpbitnode::db::NodeStateStore& store,
+                                                 const cpbitnode::chain::ChainParams& chain,
+                                                 cpbitnode::testp2p::MockTransport** transportOut) {
+    cpbitnode::p2p::PeerConnection::Options options;
+    options.host = "127.0.0.1";
+    options.port = chain.defaultPort;
+    options.chain = &chain;
+    options.tracker = &store;
+    cpbitnode::p2p::PeerConnection peer(options);
+    auto transport = std::make_unique<cpbitnode::testp2p::MockTransport>();
+    *transportOut = transport.get();
+    peer.setTransportForTest(std::move(transport));
+    return peer;
+}
+
 bool hasEventMessage(cpbitnode::db::NodeStateStore& store, const std::string& needle) {
     for (const auto& row : store.recentEvents(50)) {
         const auto it = row.find("message");
@@ -226,6 +241,90 @@ void testQuietStreamingFetchReturnsOutOfOrderBlocksWithoutTrackerWrites() {
     std::filesystem::remove_all(dir);
 }
 
+void testReadMessageBulkReadsHeaderAndPayload() {
+    const auto dir = tempSyncDir("cpbitnode_sync_hot_path_read_bulk");
+    auto store = cpbitnode::db::openRocksDbNodeStateStore(dir.string());
+    const auto& chain = cpbitnode::chain::testnet4();
+    cpbitnode::testp2p::MockTransport* transport = nullptr;
+    auto peer = makeTransportPeer(*store, chain, &transport);
+
+    const std::vector<std::uint8_t> payload{'o', 'k'};
+    transport->enqueueRead(cpbitnode::testp2p::framedMessage(chain.magic, "ping", payload));
+    const auto before = cpbitnode::p2p::p2pReadTelemetrySnapshot();
+    const auto [command, decoded] = peer.readMessage(5.0);
+    const auto after = cpbitnode::p2p::p2pReadTelemetrySnapshot();
+
+    EXPECT_EQ(command, std::string("ping"));
+    EXPECT_BYTES_EQ(decoded, payload);
+    EXPECT_EQ(transport->readRequests().size(), static_cast<std::size_t>(2));
+    EXPECT_EQ(transport->readRequests()[0], cpbitnode::wire::kHeaderSize);
+    EXPECT_EQ(transport->readRequests()[1], payload.size());
+    EXPECT_EQ(after.framesRead - before.framesRead, static_cast<std::uint64_t>(1));
+    EXPECT_EQ(after.bytesRead - before.bytesRead,
+              static_cast<std::uint64_t>(cpbitnode::wire::kHeaderSize + payload.size()));
+
+    std::filesystem::remove_all(dir);
+}
+
+void testReadMessageEmptyPayloadReadsHeaderOnly() {
+    const auto dir = tempSyncDir("cpbitnode_sync_hot_path_read_empty");
+    auto store = cpbitnode::db::openRocksDbNodeStateStore(dir.string());
+    const auto& chain = cpbitnode::chain::testnet4();
+    cpbitnode::testp2p::MockTransport* transport = nullptr;
+    auto peer = makeTransportPeer(*store, chain, &transport);
+
+    transport->enqueueRead(cpbitnode::testp2p::framedMessage(chain.magic, "verack", {}));
+    const auto [command, decoded] = peer.readMessage(5.0);
+
+    EXPECT_EQ(command, std::string("verack"));
+    EXPECT_TRUE(decoded.empty());
+    EXPECT_EQ(transport->readRequests().size(), static_cast<std::size_t>(1));
+    EXPECT_EQ(transport->readRequests()[0], cpbitnode::wire::kHeaderSize);
+
+    std::filesystem::remove_all(dir);
+}
+
+void testReadMessageRejectsChecksumMismatch() {
+    const auto dir = tempSyncDir("cpbitnode_sync_hot_path_read_checksum");
+    auto store = cpbitnode::db::openRocksDbNodeStateStore(dir.string());
+    const auto& chain = cpbitnode::chain::testnet4();
+    cpbitnode::testp2p::MockTransport* transport = nullptr;
+    auto peer = makeTransportPeer(*store, chain, &transport);
+
+    auto frame = cpbitnode::testp2p::framedMessage(chain.magic, "block", std::vector<std::uint8_t>{1, 2, 3});
+    frame.back() ^= 0xff;
+    transport->enqueueRead(std::move(frame));
+    bool threw = false;
+    try {
+        (void)peer.readMessage(5.0);
+    } catch (const std::runtime_error& exc) {
+        threw = std::string(exc.what()) == "Checksum mismatch";
+    }
+    EXPECT_TRUE(threw);
+
+    std::filesystem::remove_all(dir);
+}
+
+void testReadMessageRejectsUnexpectedMagic() {
+    const auto dir = tempSyncDir("cpbitnode_sync_hot_path_read_magic");
+    auto store = cpbitnode::db::openRocksDbNodeStateStore(dir.string());
+    const auto& chain = cpbitnode::chain::testnet4();
+    cpbitnode::testp2p::MockTransport* transport = nullptr;
+    auto peer = makeTransportPeer(*store, chain, &transport);
+
+    const std::vector<std::uint8_t> wrongMagic{0, 0, 0, 0};
+    transport->enqueueRead(cpbitnode::testp2p::framedMessage(wrongMagic, "ping", {}));
+    bool threw = false;
+    try {
+        (void)peer.readMessage(5.0);
+    } catch (const std::runtime_error& exc) {
+        threw = std::string(exc.what()) == "Unexpected network magic";
+    }
+    EXPECT_TRUE(threw);
+
+    std::filesystem::remove_all(dir);
+}
+
 }  // namespace
 
 void registerSyncHotPathTests() {
@@ -234,4 +333,8 @@ void registerSyncHotPathTests() {
     RUN_TEST(testQuietBatchedFetchRecordsNoTrackerWrites);
     RUN_TEST(testDefaultBatchedFetchStillRecordsTrackerWrites);
     RUN_TEST(testQuietStreamingFetchReturnsOutOfOrderBlocksWithoutTrackerWrites);
+    RUN_TEST(testReadMessageBulkReadsHeaderAndPayload);
+    RUN_TEST(testReadMessageEmptyPayloadReadsHeaderOnly);
+    RUN_TEST(testReadMessageRejectsChecksumMismatch);
+    RUN_TEST(testReadMessageRejectsUnexpectedMagic);
 }
