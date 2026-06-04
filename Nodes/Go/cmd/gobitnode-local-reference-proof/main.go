@@ -33,19 +33,23 @@ func main() {
 
 	started := time.Now().UTC()
 	doc := map[string]any{
-		"implementation":  "GoNode",
-		"category":        "local_reference_sync",
-		"runtime_surface": surface.RuntimeSurface(),
-		"captured_at":     started.Format(time.RFC3339),
-		"chain":           "testnet4",
-		"peer_mode":       "local_reference_rpc",
-		"peer":            *rpcURL,
-		"docker_volume":   firstNonEmpty(os.Getenv("DOCKER_LOCAL_PROOF_VOLUME"), os.Getenv("DOCKER_PROOF_VOLUME")),
-		"datadir":         *datadir,
-		"target_height":   *target,
-		"proof_mode":      *mode,
-		"result":          "failed",
-		"failures":        []string{},
+		"implementation":             "GoNode",
+		"category":                   "local_reference_sync",
+		"runtime_surface":            surface.RuntimeSurface(),
+		"captured_at":                started.Format(time.RFC3339),
+		"chain":                      "testnet4",
+		"peer_mode":                  "local_reference_rpc",
+		"peer":                       *rpcURL,
+		"docker_volume":              firstNonEmpty(os.Getenv("DOCKER_LOCAL_PROOF_VOLUME"), os.Getenv("DOCKER_PROOF_VOLUME")),
+		"datadir":                    *datadir,
+		"target_height":              *target,
+		"target_label":               targetLabel(*target),
+		"benchmark_contract_version": 1,
+		"benchmark_kind":             benchmarkKind(*target),
+		"resume_supported":           true,
+		"proof_mode":                 *mode,
+		"result":                     "failed",
+		"failures":                   []string{},
 	}
 	profiler := startProfiler(*datadir)
 
@@ -101,7 +105,6 @@ func main() {
 		doc["chainstate_status"] = statusDoc.ChainstateStatus
 		doc["chainstate_utxo_count"] = statusDoc.ChainstateUTXOCount
 		doc["native_storage"] = statusDoc.ChainstateBackend == "rocksdb"
-		doc["local_sqlite_artifact_absent"] = storage.LocalSQLiteAbsent(*datadir)
 		doc["binary_gate_status"] = statusDoc.BinaryGateStatus
 	}
 
@@ -311,6 +314,36 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func targetLabel(target int) string {
+	switch target {
+	case 5000:
+		return "5k"
+	case 10000:
+		return "10k"
+	case 50000:
+		return "50k"
+	case 100000:
+		return "100k"
+	default:
+		return ""
+	}
+}
+
+func benchmarkKind(target int) string {
+	switch target {
+	case 5000:
+		return "supporting_5k_durable_local_reference_replay"
+	case 10000:
+		return "supporting_10k_durable_local_reference_replay"
+	case 50000:
+		return "supporting_50k_durable_local_reference_replay"
+	case 100000:
+		return "primary_100k_durable_local_reference_replay"
+	default:
+		return "local_reference_replay"
+	}
 }
 
 func fail(doc map[string]any, message string) {

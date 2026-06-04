@@ -1,0 +1,203 @@
+{
+  "benchmark_contract_version": 1,
+  "benchmark_kind": "supporting_5k_durable_local_reference_replay",
+  "binary_gate_status": "not_attempted",
+  "blocks_connected": 5001,
+  "blocks_fetched": 5001,
+  "captured_at": "2026-06-04T18:58:16.027326539+00:00",
+  "category": "local_reference_sync",
+  "chain": "testnet4",
+  "chainstate_backend": "rocksdb",
+  "chainstate_backend_path": "/data/chainstate-rocksdb",
+  "chainstate_status": "usable",
+  "chainstate_utxo_count": 9232,
+  "connect_summary": {
+    "blocks_connected": 1,
+    "chainstate_utxo_count": 9232,
+    "current_blocker": null,
+    "header_height": 5000,
+    "implementation": "RustNode",
+    "mode": "decoded_block_connect",
+    "reached_target": true,
+    "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+    "rocksdb_wal_disabled": false,
+    "runtime_surface": "docker",
+    "script_runner_mode": "parallel",
+    "started_at": "2026-06-04T18:58:18.846217627+00:00",
+    "storage_codec_version": 2,
+    "stored_block_height": 5000,
+    "sync_status": "blocks_current",
+    "target_height": 5000,
+    "timing_summary": {
+      "slow_blocks": [
+        {
+          "height": 5000,
+          "ms": 0
+        }
+      ],
+      "stage_totals_ms": {
+        "commit": 0,
+        "prevout_batch_load": 0,
+        "script_verify": 0,
+        "utxo_load": 0
+      },
+      "total_ms": 0
+    },
+    "updated_at": "2026-06-04T18:58:18.847171511+00:00",
+    "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "validated_height": 5000
+  },
+  "connect_summary_kind": "final_connect_snapshot",
+  "current_blocker": null,
+  "datadir": "/data",
+  "failures": [],
+  "header_height": 5000,
+  "implementation": "RustNode",
+  "local_reference_status": "target_reached",
+  "native_crypto_available": true,
+  "native_crypto_backend": "rust-secp256k1",
+  "native_storage": true,
+  "peer": "http://host.docker.internal:48332",
+  "peer_mode": "local_reference_rpc",
+  "pipeline_timing_summary": {
+    "block_parse_validate": 51,
+    "block_store": 110,
+    "blocks_connected": 5001,
+    "blocks_fetched": 5001,
+    "commit": 0,
+    "connect_total": 1751,
+    "metadata_store": 0,
+    "prefetch_depth": 8,
+    "prevout_batch_load": 0,
+    "rpc_getblock": 1604,
+    "rpc_getblockhash": 979,
+    "script_verify": 303,
+    "slow_blocks": [
+      {
+        "height": 739,
+        "ms": 44
+      },
+      {
+        "height": 51,
+        "ms": 11
+      },
+      {
+        "height": 2212,
+        "ms": 8
+      },
+      {
+        "height": 2208,
+        "ms": 6
+      },
+      {
+        "height": 4409,
+        "ms": 6
+      },
+      {
+        "height": 2202,
+        "ms": 5
+      },
+      {
+        "height": 2221,
+        "ms": 5
+      },
+      {
+        "height": 2222,
+        "ms": 5
+      },
+      {
+        "height": 2227,
+        "ms": 5
+      },
+      {
+        "height": 4340,
+        "ms": 5
+      }
+    ],
+    "stage_totals_ms": {
+      "block_parse_validate": 51,
+      "block_store": 110,
+      "commit": 0,
+      "connect_total": 1751,
+      "metadata_store": 0,
+      "prevout_batch_load": 0,
+      "rpc_getblock": 1604,
+      "rpc_getblockhash": 979,
+      "script_verify": 303,
+      "utxo_load": 0
+    },
+    "total_wall": 2792,
+    "utxo_apply": 0,
+    "utxo_load": 0
+  },
+  "proof_mode": "pipeline",
+  "result": "passed",
+  "resume_supported": true,
+  "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+  "rocksdb_wal_disabled": false,
+  "runtime_surface": "docker",
+  "schnorr_backend": "rust-secp256k1",
+  "script_runner_mode": "parallel",
+  "status": {
+    "active_writer_pid": null,
+    "binary_gate_status": "not_attempted",
+    "block_gap_count": 0,
+    "chain": "testnet4",
+    "chainstate_backend": "rocksdb",
+    "chainstate_backend_path": "/data/chainstate-rocksdb",
+    "chainstate_generation_id": "rust-reference-sync",
+    "chainstate_status": "usable",
+    "chainstate_utxo_count": 9232,
+    "current_blocker": null,
+    "datadir": "/data",
+    "header_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "header_height": 5000,
+    "implementation": "RustNode",
+    "last_error": "",
+    "lock_status": "unlocked",
+    "native_crypto_available": true,
+    "native_crypto_backend": "rust-secp256k1",
+    "network": "testnet4",
+    "node_id": "rsbitnode-native-storage",
+    "ok": true,
+    "runtime_status": "not_running",
+    "runtime_status_detail": "scaffold",
+    "runtime_surface": "docker",
+    "schnorr_backend": "rust-secp256k1",
+    "stored_block_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "stored_block_height": 5000,
+    "sync_status": "blocks_current",
+    "taproot_tweak_backend": "rust-secp256k1",
+    "updated_at": "2026-06-04T18:58:18.847085635+00:00",
+    "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "validated_height": 5000
+  },
+  "storage_codec_version": 2,
+  "stored_block_height": 5000,
+  "sync_status": "blocks_current",
+  "sync_summary": {
+    "binary_gate_status": "not_attempted",
+    "blocks_connected": 5001,
+    "blocks_fetched": 5001,
+    "current_blocker": null,
+    "header_height": 5000,
+    "implementation": "RustNode",
+    "peer": "http://host.docker.internal:48332",
+    "peer_mode": "local_reference_rpc",
+    "resumed_from_height": null,
+    "runtime_surface": "docker",
+    "start_height": 0,
+    "started_at": "2026-06-04T18:58:16.054814335+00:00",
+    "stored_block_height": 5000,
+    "sync_status": "blocks_current",
+    "target_height": 5000,
+    "updated_at": "2026-06-04T18:58:18.847194386+00:00",
+    "validated_height": 5000
+  },
+  "taproot_tweak_backend": "rust-secp256k1",
+  "target_height": 5000,
+  "target_label": "5k",
+  "updated_at": "2026-06-04T18:58:18.962227949+00:00",
+  "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "validated_height": 5000
+}

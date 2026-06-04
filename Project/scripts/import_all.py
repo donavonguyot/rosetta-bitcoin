@@ -15,7 +15,7 @@ import re
 import shutil
 import sqlite3
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from io import StringIO
 from pathlib import Path
 from typing import Any, Iterable
@@ -669,7 +669,19 @@ def result_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def import_json_artifact(connection: sqlite3.Connection, root: Path, path: Path, payload: dict[str, Any]) -> None:
     artifact = make_artifact(path, root, payload)
-    if artifact_exists(connection, artifact.artifact_id):
+    existing = connection.execute(
+        """
+        SELECT artifact_id, source_sha256
+        FROM artifacts
+        WHERE path = ?
+        """,
+        (artifact.rel_path,),
+    ).fetchone()
+    if existing:
+        artifact = replace(artifact, artifact_id=text(existing[0]))
+        if text(existing[1]) == artifact.source_sha256:
+            return
+    elif artifact_exists(connection, artifact.artifact_id):
         return
     upsert_artifact(connection, artifact)
     implementation, language, role = implementation_for_node(artifact.node_id, payload)
@@ -1044,6 +1056,30 @@ def import_blocker_row(
 def markdown_artifact(connection: sqlite3.Connection, root: Path, path: Path, kind: str) -> str:
     source_sha = file_sha256(path)
     rel_path = rel(path, root)
+    existing = connection.execute(
+        """
+        SELECT artifact_id
+        FROM artifacts
+        WHERE path = ?
+        """,
+        (rel_path,),
+    ).fetchone()
+    if existing:
+        artifact_id = text(existing[0])
+        connection.execute(
+            """
+            UPDATE artifacts
+            SET source_sha256 = ?,
+                kind = CASE WHEN kind = '' THEN ? ELSE kind END
+            WHERE artifact_id = ?
+              AND (
+                source_sha256 <> ?
+                OR (kind = '' AND ? <> '')
+              )
+            """,
+            (source_sha, kind, artifact_id, source_sha, kind),
+        )
+        return artifact_id
     artifact_id = stable_id(rel_path, source_sha)
     if artifact_exists(connection, artifact_id):
         return artifact_id

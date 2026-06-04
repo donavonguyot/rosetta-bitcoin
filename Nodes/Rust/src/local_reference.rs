@@ -36,6 +36,10 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
         opts.datadir.to_string_lossy().to_string().into(),
     );
     doc.insert("target_height".into(), opts.target.into());
+    doc.insert("target_label".into(), target_label(opts.target).into());
+    doc.insert("benchmark_contract_version".into(), 1.into());
+    doc.insert("benchmark_kind".into(), benchmark_kind(opts.target).into());
+    doc.insert("resume_supported".into(), true.into());
     doc.insert("proof_mode".into(), opts.mode.into());
     doc.insert("result".into(), "failed".into());
     doc.insert("failures".into(), Value::Array(Vec::new()));
@@ -115,10 +119,6 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
         "native_storage".into(),
         (status_doc.chainstate_backend == "rocksdb").into(),
     );
-    doc.insert(
-        "local_sqlite_artifact_absent".into(),
-        storage::local_sqlite_absent(opts.datadir).into(),
-    );
     doc.insert("binary_gate_status".into(), "not_attempted".into());
     doc.insert("native_crypto_backend".into(), "rust-secp256k1".into());
     doc.insert("native_crypto_available".into(), true.into());
@@ -190,9 +190,31 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
     Ok(value)
 }
 
+fn target_label(target: u32) -> &'static str {
+    match target {
+        5000 => "5k",
+        10000 => "10k",
+        50000 => "50k",
+        100000 => "100k",
+        _ => "",
+    }
+}
+
+fn benchmark_kind(target: u32) -> &'static str {
+    match target {
+        5000 => "supporting_5k_durable_local_reference_replay",
+        10000 => "supporting_10k_durable_local_reference_replay",
+        50000 => "supporting_50k_durable_local_reference_replay",
+        100000 => "primary_100k_durable_local_reference_replay",
+        _ => "local_reference_replay",
+    }
+}
+
 fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value)> {
     let store = storage::Store::open(opts.datadir)?;
-    let meta = store.metadata()?;
+    let meta = store
+        .metadata()
+        .unwrap_or_else(|_| storage::missing_metadata());
     let start_height = if meta.validated_height == 0 && meta.validated_hash.is_empty() {
         0
     } else {
