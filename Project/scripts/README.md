@@ -49,6 +49,26 @@ python3 Project/scripts/report.py --db Project/project.db --section docker-cover
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-gates
 ```
 
+Preflight a benchmark gate before starting a port run:
+
+```bash
+python3 Project/scripts/preflight_benchmark_gate.py \
+  --db Project/project.db \
+  --gate supporting_5k \
+  --port go
+
+python3 Project/scripts/preflight_benchmark_gate.py \
+  --db Project/project.db \
+  --gate supporting_5k \
+  --all
+```
+
+The preflight is read-only. It checks Project mission-control rows for the
+preferred command surface, Docker contract posture, local-reference mode,
+durable proof volume, and required metadata stance such as
+`rocksdb_wal_disabled=false`. It does not fail merely because a port has no gate
+result yet; missing evidence means the run still needs to happen.
+
 Project exposes stable projection views for direct queries:
 
 ```bash

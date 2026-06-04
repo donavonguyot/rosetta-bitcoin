@@ -92,6 +92,33 @@ docker_proof_local
 Ports may keep idiomatic target names, but Project records the command through
 `port_command_surface` and records 5k evidence through `benchmark_gate_matrix`.
 
+### Preflight Before Each Run
+
+Before starting any official supporting-gate or benchmark run, preflight the
+target port through Project:
+
+```bash
+python3 Project/scripts/preflight_benchmark_gate.py \
+  --db Project/project.db \
+  --gate supporting_5k \
+  --port <port>
+```
+
+For a whole-port readiness sweep:
+
+```bash
+python3 Project/scripts/preflight_benchmark_gate.py \
+  --db Project/project.db \
+  --gate supporting_5k \
+  --all
+```
+
+The preflight is read-only. It confirms that Project knows the preferred Docker
+command, Docker contract status, local-reference mode, durable proof volume, and
+required artifact metadata before a run starts. It also enforces the official
+WAL stance: `rocksdb_wal_disabled=false`. A missing current result is not a
+preflight failure; it means that port still needs the run.
+
 ## Diagnostic Runs
 
 Ports may still run disposable diagnostics while tuning, for example WAL-off
