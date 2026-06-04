@@ -112,6 +112,7 @@ sqlite-utils query Project/project.db \
 |------------------|---------|
 | `docker-config` | Validate compose configuration. |
 | `docker-build` | Build the proof/runtime image from a clean context. |
+| `docker-warm` | Warm the campaign image/cache before benchmark or supervisor runs. |
 | `docker-status` | Run status from inside the container/runtime surface. |
 | `docker-proof-local` | Run bounded proof against local Reference peer. |
 | `docker-probe-external` | Run bounded probe against actual network peer(s). |
@@ -124,6 +125,12 @@ sqlite-utils query Project/project.db \
 Status and proof commands should follow the native naming contract: use
 `status` for runtime/chainstate inspection, `storage-proof` for bounded storage
 proofs, and `legacy-sqlite` for old evidence or fail-closed guards only.
+
+Benchmark campaigns should use warm Docker runtimes and fresh proof state:
+run `docker-warm` before the campaign, keep images/build cache until the
+campaign checkpoint is complete, and reset only the proof volume for each fresh
+gate run. Proof targets should not force an image rebuild by default; use
+`DOCKER_REBUILD=1` when the operator intentionally wants a clean rebuild.
 
 ## Required Smoke Checks
 
@@ -146,6 +153,10 @@ supervisor_tick:
 
 fresh_volume_proof:
   proof command uses a fresh proof volume separate from operational state
+
+warm_image_reuse:
+  proof and supervisor commands can reuse a previously built image unless
+  DOCKER_REBUILD=1 is set
 
 persistent_supervisor:
   long-running supervisor uses a persistent supervisor volume separate from

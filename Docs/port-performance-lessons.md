@@ -80,9 +80,10 @@ turnover; use a separate `CHECK_SEC`.
 ## Primary benchmark
 
 Use `Nodes/Shared/conformance/BENCHMARK_CONTRACT.md` for the cross-port benchmark
-rule. There is one official benchmark: durable local-reference replay to height
-`100000`, with WAL and normal durability enabled, a preserved resumable datadir,
-and local Reference Core used only as a block source.
+rule. Comparable benchmark lanes use durable local-reference P2P sync to a fixed
+target, with WAL and normal durability enabled, a preserved resumable datadir,
+and local Reference Core used as a P2P peer. Local Reference RPC replay remains
+useful evidence, but it is not ranked against P2P sync runs.
 
 | Target | Role |
 |--------|------|
@@ -92,9 +93,10 @@ and local Reference Core used only as a block source.
 | `100000` | Primary performance benchmark. |
 | `tip` | Occasional end-to-end confidence run, not a routine benchmark target. |
 
-Disposable WAL-off, profiler, copied-datadir, or single-block runs are
-diagnostics. They can guide optimization, but they are not benchmark evidence
-and should not be compared directly against the primary `100k` durable run.
+Disposable WAL-off, profiler, copied-datadir, single-block, and nonstandard
+knob runs are diagnostics. They can guide optimization, but they are not
+comparable benchmark evidence and should not be compared directly against the
+primary durable P2P run.
 
 ## Safe parallelism boundary
 

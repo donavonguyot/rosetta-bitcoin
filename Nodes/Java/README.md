@@ -106,11 +106,12 @@ The `jbitnode` service connects to host Core at `host.docker.internal:48333`
 
 Host JVM sync and container sync are separate verification gates. Host `mvn`
 or Make runs prove the Java code path on the workstation. `docker-java-sync-proof`
-and `docker-java-native-crypto-proof` are fast 2-block packaging smokes from a
-fresh Docker volume. `docker-java-native-crypto-long-sync-proof` is the
-meaningful Docker native-crypto validation run; it targets 10,000 headers and
-10,000 connected blocks by default, and records either target reach or the exact
-next blocker in a Shared proof artifact. `docker-java-native-crypto-50k-sync-proof`
+is a fast 2-block packaging smoke from a fresh Docker volume.
+`docker-java-native-crypto-proof` is the Project-facing supporting 5k Docker
+benchmark with native secp256k1, WAL enabled, and a fresh proof volume.
+`docker-java-native-crypto-long-sync-proof` targets 10,000 headers and 10,000
+connected blocks by default, and records either target reach or the exact next
+blocker in a Shared proof artifact. `docker-java-native-crypto-50k-sync-proof`
 is the next larger bounded gate, using a separate Docker volume and proof
 artifact to test validation through height 50,000 without overwriting the 10k
 evidence. `docker-java-native-crypto-tip-sync-proof` queries the local Core tip
@@ -149,8 +150,9 @@ targets as the normal blocker-hunting loop.
 | `make test` | Run JUnit 5 tests (73 tests) |
 | `make coverage` | Run tests + JaCoCo 100% line gate |
 | `make docker-config` | Validate `docker-compose.yml` |
-| `make docker-java-sync-proof` | Build/run JavaNode in Docker against local Core from a fresh RocksDB proof volume |
-| `make docker-java-native-crypto-proof` | Run the Docker sync proof with `SECP256K1_BACKEND=native` |
+| `make docker-warm` | Warm the Docker image/cache before a benchmark campaign |
+| `make docker-java-sync-proof` | Run a 2-block Docker packaging smoke against local Core from a fresh RocksDB proof volume |
+| `make docker-java-native-crypto-proof` | Run the supporting 5k Docker benchmark with `SECP256K1_BACKEND=native` |
 | `make docker-java-native-crypto-long-sync-proof` | Run the long Docker native crypto proof (`HEADERS_MAX=10000`, `BLOCKS_MAX=10000`) into a distinct proof artifact |
 | `make docker-java-native-crypto-50k-sync-proof` | Run the 50k Docker native crypto proof into `java_native_crypto_docker_50k_sync_2026-06-01.json` |
 | `make docker-java-native-crypto-tip-sync-proof` | Run the fresh Docker native crypto proof through the current local Core tip |
@@ -176,7 +178,8 @@ targets as the normal blocker-hunting loop.
 
 | Tier | Artifact / target |
 |------|-------------------|
-| 2-block smoke | `docker-java-sync-proof`, `docker-java-native-crypto-proof` |
+| 2-block smoke | `docker-java-sync-proof` |
+| Supporting 5k Docker benchmark | `java_docker_supporting_5k_benchmark_<date>.json`, `docker-java-native-crypto-proof` |
 | Codec v2 replay | `java_rocksdb_codec_v2_storage_2026-06-01.json`, `java_rocksdb_codec_v2_storage_shared_2026-06-01.json` |
 | Native crypto gate | `java_native_crypto_host_replay_2026-06-01.json` and local native-vector tests |
 | 10k bounded Docker sync | `java_native_crypto_docker_long_sync_2026-06-01.json` |

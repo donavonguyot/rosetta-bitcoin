@@ -23,8 +23,10 @@
   "commands": {
     "docker_config": "cd Nodes/Go && make docker-config",
     "docker_build": "cd Nodes/Go && make docker-build",
+    "docker_warm": "cd Nodes/Go && make docker-warm",
     "docker_status": "cd Nodes/Go && make docker-status",
-    "docker_proof_local": "cd Nodes/Go && make docker-proof-local",
+    "docker_proof_local": null,
+    "docker_proof_rpc_replay": "cd Nodes/Go && make docker-proof-local",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Go && make docker-smoke-once",
     "docker_supervisor_status": "cd Nodes/Go && make docker-status",
@@ -34,9 +36,15 @@
   },
   "peer_modes": {
     "local_reference": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+    },
+    "local_reference_rpc": {
       "supported": true,
       "command": "cd Nodes/Go && make docker-proof-local",
-      "peer": "host.docker.internal:48332",
+      "peer": "http://host.docker.internal:48332",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {
@@ -66,7 +74,7 @@
     "storage_result": "Nodes/Shared/conformance/results/go_storage_gate_2026-06-03.json",
     "local_reference_result": "Nodes/Shared/conformance/results/go_local_reference_docker_sync_2026-06-03.json",
     "script_corpus_result": "Nodes/Shared/conformance/results/go_script_corpus_docker_2026-06-03.json",
-    "notes": "Go is proof_partial: Docker storage/status/smoke, native 45/45 script corpus, and bounded local-reference replay through height 10000 pass; optimized replay uses atomic RocksDB block commits, batch prevout loads, binary UTXO codec v2, and pipelined timing evidence; live P2P sync and tip maintenance remain follow-up work."
+    "notes": "Go is proof_partial: Docker storage/status/smoke, native 45/45 script corpus, and bounded local-reference RPC replay through height 10000 pass; optimized replay uses atomic RocksDB block commits, batch prevout loads, binary UTXO codec v2, and pipelined timing evidence. docker_proof_local is intentionally unset until a local Reference P2P comparator exists."
   },
   "known_caveats": ["Bounded local-reference RPC proof is not live P2P sync or tip maintenance", "Persistent live P2P supervisor is still a follow-up surface"]
 }

@@ -79,8 +79,10 @@ make docker-proof-local
 make docker-smoke-once
 ```
 
-`docker-proof-local` mirrors Java's bounded local-reference Docker proof shape:
-it uses a fresh named Docker volume, talks to host Core RPC at
-`host.docker.internal:48332`, runs the pipelined proof path by default, then
-writes compact evidence under `Nodes/Shared/conformance/results/`. Docker proof and
-supervisor volumes are separate from host datadirs.
+`docker-proof-local` is Go's current local Reference RPC replay proof. In
+Project mission control it is exposed as `docker_proof_rpc_replay`, not the
+official comparable `docker_proof_local` P2P lane. It uses a fresh named Docker
+volume, talks to host Core RPC at `host.docker.internal:48332`, runs the
+pipelined proof path by default, then writes compact evidence under
+`Nodes/Shared/conformance/results/`. Docker proof and supervisor volumes are
+separate from host datadirs.

@@ -47,6 +47,7 @@ python3 Project/scripts/report.py --db Project/project.db --section command-surf
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-gates
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-comparability
 ```
 
 Preflight a benchmark gate before starting a port run:
@@ -64,10 +65,30 @@ python3 Project/scripts/preflight_benchmark_gate.py \
 ```
 
 The preflight is read-only. It checks Project mission-control rows for the
-preferred command surface, Docker contract posture, local-reference mode,
+preferred command surface, Docker contract posture, local-reference P2P mode,
 durable proof volume, and required metadata stance such as
-`rocksdb_wal_disabled=false`. It does not fail merely because a port has no gate
-result yet; missing evidence means the run still needs to happen.
+`rocksdb_wal_disabled=false`, `header_target_height=5000`, `prefetch_depth=4`,
+`script_runner_mode=parallel`, and `fresh_state=true`. It does not fail merely
+because a port has no gate result yet; missing evidence means the run still
+needs to happen.
+
+Warm the port image before a benchmark campaign, then run fresh proof volumes
+without rebuilding unless a clean rebuild is intentional:
+
+```bash
+sqlite-utils query Project/project.db \
+  "select port, command from port_command_surface where command_key='docker_warm' order by port"
+
+cd Nodes/<Port> && make docker-warm
+sqlite-utils query Project/project.db \
+  "select port, command from port_command_surface where command_key='docker_proof_local' order by port"
+# Run docker_proof_local only for the official local Reference P2P lane.
+# Add DOCKER_REBUILD=1 only for an intentional rebuild.
+
+sqlite-utils query Project/project.db \
+  "select port, command from port_command_surface where command_key='docker_proof_rpc_replay' order by port"
+# RPC replay proof is evidence-only and is not ranked against P2P sync runs.
+```
 
 Project exposes stable projection views for direct queries:
 
@@ -86,6 +107,9 @@ sqlite-utils query Project/project.db \
 
 sqlite-utils query Project/project.db \
   "select * from benchmark_gate_matrix order by target_height, port"
+
+sqlite-utils query Project/project.db \
+  "select * from benchmark_comparability order by target_height, port"
 ```
 
 Generated reports are stdout-only. Do not add or commit a generated

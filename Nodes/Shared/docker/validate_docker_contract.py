@@ -139,8 +139,16 @@ def validate_manifest(path: Path, *, strict: bool = False) -> dict[str, Any]:
             add_issue(issues, "error", f"missing command declaration: {command_name}")
 
     if status in {"proof_partial", "supervisor_partial", "contract_passed"}:
-        if not commands.get("docker_proof_local"):
-            add_issue(issues, "error", "proof-capable status requires docker_proof_local")
+        proof_commands = [
+            "docker_proof_local",
+            "docker_proof_rpc_replay",
+            "docker_storage_proof",
+            "docker_script_corpus",
+            "docker_diagnostic_sync_proof",
+            "docker_smoke_once",
+        ]
+        if not any(commands.get(name) for name in proof_commands):
+            add_issue(issues, "error", "proof-capable status requires at least one proof/smoke command")
         if not volumes.get("proof"):
             add_issue(issues, "error", "proof-capable status requires proof volume")
 

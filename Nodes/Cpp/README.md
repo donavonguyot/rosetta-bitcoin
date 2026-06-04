@@ -150,12 +150,20 @@ Defaults: `CHAIN=testnet4`, data dir `./data-cpp`, chainstate backend `rocksdb`.
 
 ```bash
 make docker-config
+make docker-warm
+make docker-cpp-supporting-5k-proof
 make docker-cpp-rocksdb-storage-proof
 make docker-cpp-sync-supervisor
 make docker-cpp-sync-status
 make docker-cpp-sync-stop
 make docker-cpp-sync-resume
 ```
+
+`docker-cpp-supporting-5k-proof` is the Project-facing supporting 5k Docker
+benchmark. It uses a fresh proof volume, local Reference Core at
+`host.docker.internal:48333`, RocksDB-owned state, native secp256k1, WAL enabled,
+and writes compact evidence under `Nodes/Shared/conformance/results/`.
+`docker-cpp-rocksdb-storage-proof` remains the smaller storage/codec proof.
 
 ## Intentionally limited in CI
 

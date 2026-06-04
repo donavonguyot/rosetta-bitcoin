@@ -14,10 +14,12 @@ OUT ?= snapshots
 DOCKER_PROOF_VOLUME ?= pybitnode_proof_data
 DOCKER_SUPERVISOR_VOLUME ?= pybitnode_supervisor_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/python_rocksdb_native_storage_2026-06-02.json
+DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+DOCKER_REBUILD ?= 0
 
 SYNC_ENV = MAX_OUTBOUND_PEERS=1 PARALLEL_BLOCK_DOWNLOADS=0 SKIP_GETADDR=1
 
-.PHONY: python-node-status python-node-preflight python-node-rocksdb-proof docker-python-rocksdb-proof docker-python-supervisor docker-python-supervisor-status docker-python-supervisor-stop docker-python-supervisor-resume python-node-sync-local-reference python-node-sync-chunk python-node-sync-chunk-overnight python-node-sync-supervisor python-node-export-snapshots python-node-survey-scripts test
+.PHONY: python-node-status python-node-preflight python-node-rocksdb-proof docker-build docker-warm docker-python-rocksdb-proof docker-python-supervisor docker-python-supervisor-status docker-python-supervisor-stop docker-python-supervisor-resume python-node-sync-local-reference python-node-sync-chunk python-node-sync-chunk-overnight python-node-sync-supervisor python-node-export-snapshots python-node-survey-scripts test
 
 test:
 	$(PYTHON) -m pytest -q
@@ -57,17 +59,23 @@ python-node-export-snapshots:
 python-node-survey-scripts:
 	PYTHONPATH=. $(PYTHON) scripts/script_template_survey.py --state-path $(STATE_PATH) --scan-blocks $(SCAN_BLOCKS)
 
+docker-build:
+	$(DOCKER_COMPOSE) build pybitnode pybitnode-rocksdb-proof pybitnode-supervisor pybitnode-supervisor-status
+
+docker-warm: docker-build
+
 docker-python-rocksdb-proof:
-	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-rocksdb-proof
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(MAKE) docker-build; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps pybitnode-rocksdb-proof
 
 docker-python-supervisor:
-	DOCKER_SUPERVISOR_VOLUME=$(DOCKER_SUPERVISOR_VOLUME) docker compose -f docker/docker-compose.yml up -d pybitnode-supervisor
+	DOCKER_SUPERVISOR_VOLUME=$(DOCKER_SUPERVISOR_VOLUME) $(DOCKER_COMPOSE) up -d pybitnode-supervisor
 
 docker-python-supervisor-status:
-	DOCKER_SUPERVISOR_VOLUME=$(DOCKER_SUPERVISOR_VOLUME) docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-status
+	DOCKER_SUPERVISOR_VOLUME=$(DOCKER_SUPERVISOR_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps pybitnode-supervisor-status
 
 docker-python-supervisor-stop:
-	DOCKER_SUPERVISOR_VOLUME=$(DOCKER_SUPERVISOR_VOLUME) docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-stop
+	DOCKER_SUPERVISOR_VOLUME=$(DOCKER_SUPERVISOR_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps pybitnode-supervisor-stop
 
 docker-python-supervisor-resume:
-	DOCKER_SUPERVISOR_VOLUME=$(DOCKER_SUPERVISOR_VOLUME) docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-resume
+	DOCKER_SUPERVISOR_VOLUME=$(DOCKER_SUPERVISOR_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps pybitnode-supervisor-resume

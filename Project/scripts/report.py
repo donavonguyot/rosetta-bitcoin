@@ -18,6 +18,7 @@ SECTIONS = (
     "blocker-catalog",
     "blocker-matrix",
     "benchmark-gates",
+    "benchmark-comparability",
     "benchmark-summary",
     "decisions",
 )
@@ -28,6 +29,7 @@ SECTION_ALIASES = {
     "commands": "command-surface",
     "blockers": "blocker-catalog",
     "gates": "benchmark-gates",
+    "comparability": "benchmark-comparability",
     "benchmarks": "benchmark-summary",
 }
 
@@ -239,23 +241,84 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
         connection,
         """
         select gate_id, target_label, target_height, benchmark_kind, role,
-               preferred_runtime_surface, preferred_command_key
+               preferred_runtime_surface, preferred_command_key, official_lane
         from benchmark_gates
         order by target_height
         """,
     )
-    print(table(("gate", "label", "target", "kind", "role", "surface", "command"), gates))
+    print(table(("gate", "label", "target", "kind", "role", "surface", "command", "official_lane"), gates))
     print()
     matrix = rows(
         connection,
         """
-        select gate_id, port, gate_status, validated_height,
-               runtime_surface, peer_mode, rocksdb_wal_disabled, captured_at
+        select gate_id, port, gate_status, comparability_status, evidence_lane,
+               validated_height, header_target_height, runtime_surface, peer_mode,
+               prefetch_depth, script_runner_mode, rocksdb_wal_disabled,
+               fresh_state, comparability_notes, captured_at
         from benchmark_gate_matrix
         order by target_height, port
         """,
     )
-    print(table(("gate", "port", "status", "validated", "surface", "peer_mode", "wal_off", "captured"), matrix))
+    print(
+        table(
+            (
+                "gate",
+                "port",
+                "status",
+                "comparable",
+                "lane",
+                "validated",
+                "headers",
+                "surface",
+                "peer_mode",
+                "prefetch",
+                "runner",
+                "wal_off",
+                "fresh",
+                "notes",
+                "captured",
+            ),
+            matrix,
+        )
+    )
+
+
+def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
+    print("## Benchmark Comparability")
+    print()
+    data = rows(
+        connection,
+        """
+        select port, gate_id, gate_status, comparability_status, evidence_lane,
+               validated_height, header_target_height, peer_mode, byte_source,
+               proof_mode, prefetch_depth, script_runner_mode,
+               rocksdb_wal_disabled, fresh_state, comparability_notes
+        from benchmark_comparability
+        order by target_height, port, captured_at
+        """,
+    )
+    print(
+        table(
+            (
+                "port",
+                "gate",
+                "status",
+                "comparable",
+                "lane",
+                "validated",
+                "headers",
+                "peer_mode",
+                "byte_source",
+                "proof_mode",
+                "prefetch",
+                "runner",
+                "wal_off",
+                "fresh",
+                "notes",
+            ),
+            data,
+        )
+    )
 
 
 def print_decisions(connection: sqlite3.Connection) -> None:
@@ -274,6 +337,7 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "blocker-catalog": print_blocker_catalog,
     "blocker-matrix": print_blocker_matrix,
     "benchmark-gates": print_benchmark_gates,
+    "benchmark-comparability": print_benchmark_comparability,
     "benchmark-summary": print_benchmark_summary,
     "decisions": print_decisions,
 }

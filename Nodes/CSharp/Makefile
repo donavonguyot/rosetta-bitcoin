@@ -17,14 +17,20 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+DOCKER_REBUILD ?= 0
 
-.PHONY: build test docker-config node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
+.PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
 
 build:
 	$(DOTNET) build $(PROJECT) -c Release
 
 docker-config:
 	$(DOCKER_COMPOSE) config
+
+docker-build:
+	$(DOCKER_COMPOSE) build csbitnode-sync-proof
+
+docker-warm: docker-build
 
 test:
 	$(DOTNET) test $(TEST_PROJECT) -c Release
@@ -62,7 +68,7 @@ csharp-node-rocksdb-replay-proof:
 	$(MAKE) csharp-node-storage-proof DATA_DIR=$(DATA_DIR) NODE_ID=$(or $(NODE_ID),csharpnode-rocksdb-codec-v2)
 
 docker-csharp-native-crypto-proof:
-	$(DOCKER_COMPOSE) build csbitnode-sync-proof
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build csbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=native \
 	  HEADERS_MAX=$(DOCKER_HEADERS_MAX) HEADER_BATCHES_MAX=$(DOCKER_HEADER_BATCHES_MAX) BLOCKS_MAX=$(DOCKER_BLOCKS_MAX) \
@@ -82,6 +88,7 @@ docker-csharp-native-crypto-bounded-sync-proof:
 
 docker-csharp-sync-supervisor:
 	DOCKER_PROOF_VOLUME=$(DOCKER_SYNC_VOLUME) SECP256K1_BACKEND=native \
+	  DOCKER_REBUILD=$(DOCKER_REBUILD) \
 	  HEADERS_MAX=$(DOCKER_SYNC_HEADERS_MAX) HEADER_BATCHES_MAX=$(DOCKER_SYNC_HEADER_BATCHES_MAX) \
 	  BLOCKS_MAX=$(DOCKER_SYNC_BLOCKS_MAX) POLL_SEC=$(DOCKER_SYNC_POLL_SEC) CHECK_SEC=$(DOCKER_SYNC_CHECK_SEC) \
 	  scripts/docker_sync_supervisor.sh

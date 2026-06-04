@@ -22,9 +22,10 @@
   },
   "commands": {
     "docker_config": "cd Nodes/Cpp && make docker-config",
-    "docker_build": "cd Nodes/Cpp && docker compose -f docker/docker-compose.yml build cpbitnode-sync-proof",
+    "docker_build": "cd Nodes/Cpp && make docker-build",
+    "docker_warm": "cd Nodes/Cpp && make docker-warm",
     "docker_status": "cd Nodes/Cpp && make docker-cpp-sync-status",
-    "docker_proof_local": "cd Nodes/Cpp && make docker-cpp-rocksdb-storage-proof",
+    "docker_proof_local": "cd Nodes/Cpp && make docker-cpp-supporting-5k-proof",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Cpp && make docker-cpp-sync-supervisor",
     "docker_supervisor_status": "cd Nodes/Cpp && make docker-cpp-sync-status",
@@ -35,8 +36,8 @@
   "peer_modes": {
     "local_reference": {
       "supported": true,
-      "command": "cd Nodes/Cpp && make docker-cpp-rocksdb-storage-proof",
-      "peer": "127.0.0.1:48333 currently; should be host.docker.internal:48333 or Reference service",
+      "command": "cd Nodes/Cpp && make docker-cpp-supporting-5k-proof",
+      "peer": "host.docker.internal:48333",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {
@@ -64,7 +65,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/cpp_rocksdb_codec_v2_storage_2026-06-02.json",
-    "notes": "Cpp compliance backend is RocksDB-only; Docker proof must show RocksDB owns all operational state and no cpbitnode.db is opened or created."
+    "notes": "docker_proof_local runs the supporting 5k local-reference Docker benchmark with native secp256k1, RocksDB, WAL enabled, and a fresh proof volume."
   },
-  "known_caveats": ["Docker peer strategy still needs host.docker.internal or Reference service", "External network probe command not standardized", "Rerun Docker proof after RocksDB-only cutover before promoting status"]
+  "known_caveats": ["External network probe command not standardized"]
 }

@@ -102,25 +102,36 @@ BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
         "gate_id": "supporting_5k",
         "target_height": 5000,
         "target_label": "5k",
-        "benchmark_kind": "supporting_5k_durable_local_reference_replay",
+        "benchmark_kind": "supporting_5k_p2p",
         "role": "first readiness gate",
         "preferred_runtime_surface": "docker",
         "preferred_command_key": "docker_proof_local",
+        "official_lane": "supporting_5k_p2p",
+        "official_byte_source": "local_reference_p2p",
+        "official_peer_mode": "local_reference",
+        "official_proof_mode": "p2p_sync",
+        "official_header_target_height": 5000,
+        "official_prefetch_depth": 4,
+        "official_script_runner_mode": "parallel",
+        "fresh_state_required": 1,
         "local_reference_required": 1,
         "durable_required": 1,
         "wal_disabled_required": 0,
         "resume_supported_required": 1,
         "binary_gate_status": "not_attempted",
         "result_name_pattern": "<port>_<surface>_supporting_5k_benchmark_<YYYY-MM-DD>.json",
-        "notes": "Proves Docker/local-reference wiring, native storage ownership, status/proof artifacts, and the first spend/script path around block 739.",
+        "notes": "Official comparable 5k lane: Docker, local Reference P2P, fixed knobs, WAL enabled, and fresh proof volume. RPC replay evidence remains valid but is not cross-ranked here.",
     },
 )
 
 COMMAND_PURPOSES: dict[str, str] = {
     "docker_config": "validate compose configuration",
     "docker_build": "build the Docker runtime/proof image",
+    "docker_warm": "warm Docker images before a benchmark campaign",
     "docker_status": "read status from inside the Docker runtime surface",
-    "docker_proof_local": "run bounded proof against local Reference",
+    "docker_proof_local": "run official Docker/local-reference P2P proof",
+    "docker_proof_rpc_replay": "run Docker/local-reference RPC replay proof",
+    "docker_diagnostic_sync_proof": "run nonstandard diagnostic Docker sync proof",
     "docker_probe_external": "run bounded probe against external peers",
     "docker_supervisor": "start persistent Docker supervisor",
     "docker_supervisor_status": "read persistent supervisor status",
@@ -277,13 +288,13 @@ def benchmark_kind_for_payload(payload: dict[str, Any]) -> str:
         return explicit
     target_height = integer(payload.get("target_height"), None)
     if target_height == 5000:
-        return "supporting_5k_durable_local_reference_replay"
+        return "supporting_5k_p2p"
     if target_height == 10000:
-        return "supporting_10k_durable_local_reference_replay"
+        return "supporting_10k_p2p"
     if target_height == 50000:
-        return "supporting_50k_durable_local_reference_replay"
+        return "supporting_50k_p2p"
     if target_height == 100000:
-        return "primary_100k_durable_local_reference_replay"
+        return "primary_100k_p2p"
     return text(payload.get("category") or payload.get("artifact_kind"))
 
 
@@ -487,13 +498,23 @@ def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Pat
     artifact = make_artifact(path, root, payload)
     port = text(payload.get("port"), path.stem.split(".")[0])
     commands = payload.get("commands") if isinstance(payload.get("commands"), dict) else {}
-    if artifact_exists(connection, artifact.artifact_id) and docker_manifest_already_imported(
-        connection,
-        artifact.artifact_id,
-        port,
-        len(commands),
-    ):
-        return len(commands)
+    existing = connection.execute(
+        """
+        SELECT artifact_id, source_sha256
+        FROM artifacts
+        WHERE path = ?
+        """,
+        (artifact.rel_path,),
+    ).fetchone()
+    if existing:
+        artifact = replace(artifact, artifact_id=text(existing[0]))
+        if text(existing[1]) == artifact.source_sha256 and docker_manifest_already_imported(
+            connection,
+            artifact.artifact_id,
+            port,
+            len(commands),
+        ):
+            return len(commands)
     upsert_artifact(connection, artifact)
     node_id, implementation, language, role = node_for_port(port)
     paths = payload.get("paths") if isinstance(payload.get("paths"), dict) else {}
@@ -562,10 +583,14 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
             INSERT INTO benchmark_gates(
               gate_id, target_height, target_label, benchmark_kind, role,
               preferred_runtime_surface, preferred_command_key,
+              official_lane, official_byte_source, official_peer_mode,
+              official_proof_mode, official_header_target_height,
+              official_prefetch_depth, official_script_runner_mode,
+              fresh_state_required,
               local_reference_required, durable_required, wal_disabled_required,
               resume_supported_required, binary_gate_status, result_name_pattern,
               notes
-            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(gate_id) DO UPDATE SET
               target_height = excluded.target_height,
               target_label = excluded.target_label,
@@ -573,6 +598,14 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
               role = excluded.role,
               preferred_runtime_surface = excluded.preferred_runtime_surface,
               preferred_command_key = excluded.preferred_command_key,
+              official_lane = excluded.official_lane,
+              official_byte_source = excluded.official_byte_source,
+              official_peer_mode = excluded.official_peer_mode,
+              official_proof_mode = excluded.official_proof_mode,
+              official_header_target_height = excluded.official_header_target_height,
+              official_prefetch_depth = excluded.official_prefetch_depth,
+              official_script_runner_mode = excluded.official_script_runner_mode,
+              fresh_state_required = excluded.fresh_state_required,
               local_reference_required = excluded.local_reference_required,
               durable_required = excluded.durable_required,
               wal_disabled_required = excluded.wal_disabled_required,
@@ -587,6 +620,14 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
               benchmark_gates.role <> excluded.role OR
               benchmark_gates.preferred_runtime_surface <> excluded.preferred_runtime_surface OR
               benchmark_gates.preferred_command_key <> excluded.preferred_command_key OR
+              benchmark_gates.official_lane <> excluded.official_lane OR
+              benchmark_gates.official_byte_source <> excluded.official_byte_source OR
+              benchmark_gates.official_peer_mode <> excluded.official_peer_mode OR
+              benchmark_gates.official_proof_mode <> excluded.official_proof_mode OR
+              benchmark_gates.official_header_target_height <> excluded.official_header_target_height OR
+              benchmark_gates.official_prefetch_depth <> excluded.official_prefetch_depth OR
+              benchmark_gates.official_script_runner_mode <> excluded.official_script_runner_mode OR
+              benchmark_gates.fresh_state_required <> excluded.fresh_state_required OR
               benchmark_gates.local_reference_required <> excluded.local_reference_required OR
               benchmark_gates.durable_required <> excluded.durable_required OR
               benchmark_gates.wal_disabled_required <> excluded.wal_disabled_required OR
@@ -603,6 +644,14 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
                 gate["role"],
                 gate["preferred_runtime_surface"],
                 gate["preferred_command_key"],
+                gate["official_lane"],
+                gate["official_byte_source"],
+                gate["official_peer_mode"],
+                gate["official_proof_mode"],
+                gate["official_header_target_height"],
+                gate["official_prefetch_depth"],
+                gate["official_script_runner_mode"],
+                gate["fresh_state_required"],
                 gate["local_reference_required"],
                 gate["durable_required"],
                 gate["wal_disabled_required"],
@@ -871,6 +920,26 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
     target_height = integer(payload.get("target_height"), None)
     target_label = target_label_for_payload(payload)
     validated_height = integer(payload.get("validated_height") or payload.get("header_height"), None)
+    header_target_height = integer(first(payload, "header_target_height", "header_height", default=None), None)
+    peer_mode = text(payload.get("peer_mode")).strip()
+    byte_source = text(payload.get("byte_source")).strip()
+    if not byte_source:
+        if peer_mode == "local_reference_rpc":
+            byte_source = "local_reference_rpc"
+        elif peer_mode == "local_reference":
+            byte_source = "local_reference_p2p"
+    proof_mode = text(payload.get("proof_mode")).strip()
+    if not proof_mode:
+        if peer_mode == "local_reference_rpc":
+            proof_mode = "rpc_replay"
+        elif peer_mode == "local_reference":
+            proof_mode = "p2p_sync"
+    benchmark_lane = text(payload.get("benchmark_lane")).strip()
+    if not benchmark_lane and target_height == 5000:
+        if peer_mode == "local_reference_rpc" or byte_source == "local_reference_rpc":
+            benchmark_lane = "supporting_5k_rpc_replay"
+        elif peer_mode == "local_reference":
+            benchmark_lane = "supporting_5k_p2p"
     benchmark_id = stable_id("benchmark", artifact.artifact_id)
     connection.execute(
         """
@@ -904,23 +973,47 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                         key: payload[key]
                         for key in (
                             "benchmark_contract_version",
-                            "peer_mode",
                             "runtime_surface",
+                            "peer_mode",
+                            "peer",
+                            "byte_source",
+                            "proof_mode",
+                            "benchmark_lane",
                             "prefetch_depth",
                             "script_threads",
                             "script_runner_mode",
                             "crypto_context_mode",
                             "rocksdb_wal_disabled",
                             "resume_supported",
+                            "fresh_state",
+                            "docker_volume",
                         )
                         if key in payload
                     },
                     **({"benchmark_kind": benchmark_kind} if benchmark_kind else {}),
                     **({"target_height": target_height} if target_height is not None else {}),
                     **({"target_label": target_label} if target_label else {}),
+                    **({"header_target_height": header_target_height} if header_target_height is not None else {}),
+                    **({"byte_source": byte_source} if byte_source else {}),
+                    **({"proof_mode": proof_mode} if proof_mode else {}),
+                    **({"benchmark_lane": benchmark_lane} if benchmark_lane else {}),
+                    **({"binary_gate_status": text(payload.get("binary_gate_status"))} if "binary_gate_status" in payload else {}),
                 }
             ),
-            pretty_json({key: payload[key] for key in ("sync_timing", "stage_totals_ms", "pipeline_timing_summary", "timings_ms", "connect_summary") if key in payload}),
+            pretty_json(
+                {
+                    key: payload[key]
+                    for key in (
+                        "sync_timing",
+                        "stage_totals_ms",
+                        "pipeline_timing_summary",
+                        "timing_summary",
+                        "timings_ms",
+                        "connect_summary",
+                    )
+                    if key in payload
+                }
+            ),
             pretty_json(
                 {
                     **{
@@ -931,7 +1024,12 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                             "binary_gate_status",
                             "long_sync_status",
                             "elapsed_ms",
+                            "header_height",
+                            "stored_block_height",
+                            "blocks_fetched",
+                            "blocks_connected",
                             "current_blocker",
+                            "failures",
                         )
                         if key in payload
                     },

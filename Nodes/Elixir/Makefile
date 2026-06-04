@@ -3,6 +3,7 @@ DATA_DIR ?= ./data-elixir
 PEERS ?= 127.0.0.1:48333
 DOCKER_COMPOSE ?= docker compose -f docker/docker-compose.yml
 DOCKER_PEERS ?= host.docker.internal:48333
+DOCKER_REBUILD ?= 0
 DOCKER_PROOF_VOLUME ?= exbitnode_proof_data
 DOCKER_SYNC_VOLUME ?= exbitnode_sync_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/elixir_rocksdb_codec_v2_storage.json
@@ -22,7 +23,7 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-status docker-proof-local docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
+.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-proof-local docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 
 test:
 	$(MIX) test
@@ -50,11 +51,13 @@ docker-config:
 docker-build:
 	$(DOCKER_COMPOSE) build exbitnode-sync-proof
 
+docker-warm: docker-build
+
 docker-status:
 	DOCKER_PROOF_VOLUME=$(DOCKER_SYNC_VOLUME) RUNTIME_SURFACE=docker $(DOCKER_COMPOSE) run --rm --no-deps exbitnode-sync-proof mix node.status
 
 docker-proof-local:
-	$(DOCKER_COMPOSE) build exbitnode-sync-proof
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build exbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) RUNTIME_SURFACE=docker PROOF_PATH=/tmp/elixir_storage_proof.json \
 	  $(DOCKER_COMPOSE) run --rm --no-deps exbitnode-sync-proof mix storage.proof

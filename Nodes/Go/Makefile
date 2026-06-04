@@ -11,6 +11,7 @@ DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_PROOF_VOLUME ?= gobitnode_proof_data
 DOCKER_LOCAL_PROOF_VOLUME ?= gobitnode_local_reference_proof_data
 DOCKER_SYNC_VOLUME ?= gobitnode_sync_data
+DOCKER_REBUILD ?= 0
 
 SYNC_TARGET ?= 10000
 CONNECT_TARGET ?= 2
@@ -20,7 +21,7 @@ RPC_PASSWORD ?= rosetta-dev-only
 DOCKER_SYNC_TARGET ?= 10000
 DOCKER_RPC_URL ?= http://host.docker.internal:48332
 
-.PHONY: build test go-node-status go-node-storage-proof go-node-script-corpus go-node-sync-local go-node-connect-local go-node-native-crypto-test docker-config docker-build docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-smoke-once clean
+.PHONY: build test go-node-status go-node-storage-proof go-node-script-corpus go-node-sync-local go-node-connect-local go-node-native-crypto-test docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-smoke-once clean
 
 build:
 	$(GO) build ./cmd/...
@@ -51,6 +52,8 @@ docker-config:
 
 docker-build:
 	$(DOCKER_COMPOSE) build gobitnode
+
+docker-warm: docker-build
 
 docker-status:
 	GOBITNODE_RUNTIME_SURFACE=docker $(DOCKER_COMPOSE) run --rm --no-deps gobitnode gobitnode status --datadir /data

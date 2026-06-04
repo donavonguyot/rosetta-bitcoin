@@ -14,17 +14,19 @@ block.
 
 ## Primary Benchmark
 
-There is one official benchmark:
+There is one official comparable benchmark family:
 
 ```text
-durable local-reference replay to height 100000
+durable local-reference P2P sync to fixed target height
 ```
 
 Required conditions:
 
 - start from an empty port-owned datadir or Docker volume;
+- reuse warm Docker images/build cache during a benchmark campaign unless
+  `DOCKER_REBUILD=1` is explicitly requested;
 - keep WAL and normal durability settings enabled;
-- use local Reference Core only as a block source;
+- use local Reference Core as a P2P peer for comparable runs;
 - independently parse, validate, store, and connect every block;
 - connect blocks in height order;
 - enforce one writer per datadir;
@@ -60,37 +62,67 @@ the exact Reference height/hash at start and finish.
 The first standardized gate for port-by-port work is:
 
 ```text
-supporting_5k_durable_local_reference_replay
+supporting_5k_p2p
 ```
 
 Required metadata:
 
 ```text
 benchmark_contract_version = 1
-benchmark_kind = supporting_5k_durable_local_reference_replay
+benchmark_kind = supporting_5k_p2p
+benchmark_lane = supporting_5k_p2p
 target_height = 5000
+header_target_height = 5000
 target_label = 5k
 runtime_surface = docker
-peer_mode = local_reference or local_reference_rpc
+peer_mode = local_reference
+peer = host.docker.internal:48333 or Reference service:48333
+byte_source = local_reference_p2p
+proof_mode = p2p_sync
+prefetch_depth = 4
+script_runner_mode = parallel
 rocksdb_wal_disabled = false
+fresh_state = true
 resume_supported = true
 binary_gate_status = not_attempted
 ```
 
 The gate passes only when `validated_height >= 5000`, `current_blocker = null`,
 and the final validated hash matches the port-validated block at height `5000`.
-It is a readiness gate for Docker/local-reference wiring, native storage
-ownership, status/proof artifacts, and the first spend/script path around block
-739. It is not live P2P sync proof and not binary-gate evidence.
+It is the official comparable readiness gate for Docker/local-reference P2P
+wiring, native storage ownership, status/proof artifacts, and the first
+spend/script path around block 739. It is still not binary-gate evidence.
+
+### Replay Evidence Lane
+
+Local Reference RPC replay remains valuable consensus and storage evidence, but
+it is a separate lane:
+
+```text
+benchmark_lane = supporting_5k_rpc_replay
+peer_mode = local_reference_rpc
+byte_source = local_reference_rpc
+proof_mode = rpc_replay
+```
+
+Replay artifacts may pass the target gate, and Project should retain them as
+evidence. They must not be cross-ranked against P2P sync artifacts unless a
+separate RPC replay report is requested.
 
 Preferred Docker command surface:
 
 ```text
+docker_warm
 docker_proof_local
+docker_proof_rpc_replay
 ```
 
-Ports may keep idiomatic target names, but Project records the command through
-`port_command_surface` and records 5k evidence through `benchmark_gate_matrix`.
+Run `docker_warm` before a benchmark campaign. Use `docker_proof_local` only for
+the official local Reference P2P comparable lane. Use explicit replay command
+keys such as `docker_proof_rpc_replay` for RPC byte-source proof. Ports may keep
+idiomatic target names, but Project records the command through
+`port_command_surface` and records 5k evidence through
+`benchmark_gate_matrix` and `benchmark_comparability`.
 
 ### Preflight Before Each Run
 
@@ -114,10 +146,13 @@ python3 Project/scripts/preflight_benchmark_gate.py \
 ```
 
 The preflight is read-only. It confirms that Project knows the preferred Docker
-command, Docker contract status, local-reference mode, durable proof volume, and
-required artifact metadata before a run starts. It also enforces the official
-WAL stance: `rocksdb_wal_disabled=false`. A missing current result is not a
-preflight failure; it means that port still needs the run.
+command, Docker contract status, local-reference P2P mode, durable proof volume,
+and required artifact metadata before a run starts. It also enforces the
+official WAL stance: `rocksdb_wal_disabled=false`. A missing current result is
+not a preflight failure; it means that port still needs the run. A replay,
+WAL-off, wrong-header-target, wrong-prefetch, single-runner, non-Docker, or
+missing-fresh-state artifact is rejected as non-comparable even when it remains
+valid evidence.
 
 ## Diagnostic Runs
 
@@ -139,8 +174,12 @@ applicable:
 implementation
 runtime_surface
 benchmark_contract_version
+benchmark_lane
+byte_source
+proof_mode
 benchmark_kind
 target_height
+header_target_height
 target_label
 reference_start_height
 reference_start_hash
@@ -155,9 +194,12 @@ binary_gate_status
 chainstate_backend
 chainstate_utxo_count
 native_crypto_backend
+peer_mode
+peer
 script_runner_mode
 rocksdb_wal_disabled
 prefetch_depth
+fresh_state
 resume_supported
 result
 failures
@@ -167,9 +209,12 @@ Required benchmark values:
 
 ```text
 benchmark_contract_version = 1
-benchmark_kind = primary_100k_durable_local_reference_replay
+benchmark_kind = primary_100k_p2p
 target_height = 100000
 target_label = 100k
+peer_mode = local_reference
+byte_source = local_reference_p2p
+proof_mode = p2p_sync
 rocksdb_wal_disabled = false
 resume_supported = true
 binary_gate_status = not_attempted

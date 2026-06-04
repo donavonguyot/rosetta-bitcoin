@@ -26,9 +26,12 @@ REQUIRED_ARTIFACT_FIELDS = (
     "implementation",
     "runtime_surface",
     "benchmark_contract_version",
+    "benchmark_lane",
     "benchmark_kind",
     "target_height",
     "target_label",
+    "header_target_height",
+    "byte_source",
     "reference_start_height",
     "reference_start_hash",
     "reference_finish_height",
@@ -42,10 +45,14 @@ REQUIRED_ARTIFACT_FIELDS = (
     "chainstate_backend",
     "chainstate_utxo_count",
     "native_crypto_backend",
+    "proof_mode",
+    "peer_mode",
+    "peer",
     "script_runner_mode",
     "rocksdb_wal_disabled",
     "prefetch_depth",
     "resume_supported",
+    "fresh_state",
     "result",
     "failures",
 )
@@ -133,11 +140,18 @@ def required_metadata(gate: dict[str, Any]) -> dict[str, Any]:
     return {
         "benchmark_contract_version": 1,
         "benchmark_kind": gate["benchmark_kind"],
+        "benchmark_lane": gate["official_lane"],
         "target_height": gate["target_height"],
         "target_label": gate["target_label"],
+        "header_target_height": gate["official_header_target_height"],
         "runtime_surface": gate["preferred_runtime_surface"],
-        "peer_mode": "local_reference or local_reference_rpc",
+        "peer_mode": gate["official_peer_mode"],
+        "byte_source": gate["official_byte_source"],
+        "proof_mode": gate["official_proof_mode"],
+        "prefetch_depth": gate["official_prefetch_depth"],
+        "script_runner_mode": gate["official_script_runner_mode"],
         "rocksdb_wal_disabled": False,
+        "fresh_state": bool(gate["fresh_state_required"]),
         "resume_supported": bool(gate["resume_supported_required"]),
         "binary_gate_status": gate["binary_gate_status"],
         "result_name_pattern": gate["result_name_pattern"],
@@ -202,6 +216,12 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
             errors.append(f"preferred command {command_key!r} is not supported")
         if not str(command["command"]).strip():
             errors.append(f"preferred command {command_key!r} has no command text")
+        command_text = str(command["command"]).strip().lower()
+        if any(marker in command_text for marker in ("rpc-replay", "replay-local", "storage-proof")):
+            errors.append(
+                f"preferred command {command_key!r} looks like replay/storage proof, "
+                "but official 5k requires local Reference P2P"
+            )
 
     if gate["preferred_runtime_surface"] != "docker":
         errors.append(
@@ -238,13 +258,20 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
             f"{imported_wal!r}; official runs require false"
         )
 
+    if gate_row and gate_row.get("comparability_status") not in (None, "", "missing", "comparable"):
+        warnings.append(
+            "latest imported gate evidence is "
+            f"{gate_row['comparability_status']} ({gate_row.get('evidence_lane', '')}); "
+            f"notes={gate_row.get('comparability_notes', '') or 'none'}"
+        )
+
     if gate_row and gate_row["runtime_surface"] and gate_row["runtime_surface"] != "docker":
         warnings.append(
             f"latest imported gate evidence runtime_surface={gate_row['runtime_surface']!r}; "
             "next official run should report docker"
         )
 
-    if gate_row and gate_row["peer_mode"] and not str(gate_row["peer_mode"]).startswith("local_reference"):
+    if gate_row and gate_row["peer_mode"] and gate_row["peer_mode"] != gate["official_peer_mode"]:
         warnings.append(
             f"latest imported gate evidence peer_mode={gate_row['peer_mode']!r}; "
             "next official run should report local_reference"
@@ -256,6 +283,9 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         "node_id": contract["node_id"],
         "docker_status": docker_status,
         "gate_status": gate_row["gate_status"] if gate_row else "unknown",
+        "comparability_status": gate_row["comparability_status"] if gate_row else "unknown",
+        "evidence_lane": gate_row["evidence_lane"] if gate_row else "",
+        "comparability_notes": gate_row["comparability_notes"] if gate_row else "",
         "validated_height": gate_row["validated_height"] if gate_row else -1,
         "command_key": command_key,
         "command": command["command"] if command else "",
@@ -278,6 +308,7 @@ def print_text(results: list[dict[str, Any]]) -> None:
             f"gate={result['gate']} "
             f"port={result['port']} "
             f"gate_status={result['gate_status']} "
+            f"comparability={result.get('comparability_status', 'unknown')} "
             f"errors={len(result['errors'])} "
             f"warnings={len(result['warnings'])}"
         )
@@ -287,6 +318,10 @@ def print_text(results: list[dict[str, Any]]) -> None:
             print(f"  docker_status={result['docker_status']}")
         if "validated_height" in result:
             print(f"  latest_gate_validated_height={result['validated_height']}")
+        if result.get("evidence_lane"):
+            print(f"  latest_evidence_lane={result['evidence_lane']}")
+        if result.get("comparability_notes"):
+            print(f"  comparability_notes={result['comparability_notes']}")
         if result.get("command_key"):
             print(f"  command_key={result['command_key']}")
         if result.get("command"):

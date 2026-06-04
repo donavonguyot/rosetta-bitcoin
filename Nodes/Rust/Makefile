@@ -16,8 +16,9 @@ STORAGE_RESULT ?= ../Shared/conformance/results/rust_storage_gate_$(RESULT_DATE)
 SCRIPT_RESULT ?= ../Shared/conformance/results/rust_script_corpus_$(RESULT_DATE).json
 LOCAL_REFERENCE_RESULT ?= ../Shared/conformance/results/rust_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+DOCKER_REBUILD ?= 0
 
-.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-local-fast docker-smoke-once clean
+.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-local-fast docker-smoke-once clean
 
 build:
 	$(CARGO) build
@@ -57,6 +58,8 @@ docker-config:
 
 docker-build:
 	$(DOCKER_COMPOSE) build
+
+docker-warm: docker-build
 
 docker-status:
 	$(DOCKER_COMPOSE) run --rm --no-deps rsbitnode rsbitnode status --datadir /data --runtime-surface docker

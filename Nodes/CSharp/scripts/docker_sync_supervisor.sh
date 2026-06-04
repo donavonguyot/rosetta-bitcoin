@@ -135,7 +135,11 @@ pause_until_fix() {
   done
 }
 
-build_image
+if [[ "${DOCKER_REBUILD:-0}" == "1" ]]; then
+  build_image
+else
+  log_line "supervisor build skipped reason=warm_image_reuse rebuild_with=DOCKER_REBUILD=1"
+fi
 SOURCE_SIG="$(source_signature)"
 last_height="$(emit_tick starting 0)"
 log_line "supervisor start volume=$VOLUME headers_max=$HEADERS_MAX header_batches_max=$HEADER_BATCHES_MAX blocks_max=$BLOCKS_MAX poll_sec=$POLL_SEC check_sec=$CHECK_SEC"

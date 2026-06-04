@@ -23,8 +23,10 @@
   "commands": {
     "docker_config": "cd Nodes/Elixir && make docker-config",
     "docker_build": "cd Nodes/Elixir && make docker-build",
+    "docker_warm": "cd Nodes/Elixir && make docker-warm",
     "docker_status": "cd Nodes/Elixir && make docker-status",
-    "docker_proof_local": "cd Nodes/Elixir && make docker-proof-local",
+    "docker_proof_local": null,
+    "docker_storage_proof": "cd Nodes/Elixir && make docker-proof-local",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Elixir && make docker-supervisor",
     "docker_supervisor_status": "cd Nodes/Elixir && make docker-supervisor-status",
@@ -34,9 +36,9 @@
   },
   "peer_modes": {
     "local_reference": {
-      "supported": true,
-      "command": "cd Nodes/Elixir && make docker-proof-local",
-      "peer": "host.docker.internal:48333",
+      "supported": false,
+      "command": null,
+      "peer": null,
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {
@@ -64,7 +66,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/elixir_rocksdb_codec_v2_storage.json",
-    "notes": "Docker build, status, bounded storage proof, and one-shot supervisor smoke pass; native secp256k1 NIF remains unavailable in status."
+    "notes": "Docker build, status, bounded storage proof, and one-shot supervisor smoke pass. docker_proof_local is intentionally unset until a local Reference P2P comparator harness exists; native secp256k1 NIF remains unavailable in status."
   },
   "known_caveats": ["Native secp256k1 backend boundary exists but NIF implementation is unavailable", "RocksDB store abstraction is isolated for native binding replacement", "External network probe command not standardized"]
 }

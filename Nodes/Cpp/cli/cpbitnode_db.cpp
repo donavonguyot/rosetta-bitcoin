@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <cstdlib>
 #include <stdexcept>
 #include <sstream>
 
@@ -40,6 +41,14 @@ std::string nowUnknown() {
     return "";
 }
 
+std::string runtimeSurface() {
+    const char* raw = std::getenv("RUNTIME_SURFACE");
+    if (raw != nullptr && *raw != '\0') {
+        return raw;
+    }
+    return "host";
+}
+
 std::string statusJson(const cpbitnode::config::Settings& settings, cpbitnode::db::NodeStateStore& tracker,
                        cpbitnode::db::ChainstateStore& chainstate) {
     const auto meta = chainstate.metadata();
@@ -56,7 +65,7 @@ std::string statusJson(const cpbitnode::config::Settings& settings, cpbitnode::d
     out << "{";
     out << "\"node_id\":\"cpp\",";
     out << "\"implementation\":\"Cpp\",";
-    out << "\"runtime_surface\":\"host\",";
+    out << "\"runtime_surface\":" << cpbitnode::util::jsonString(runtimeSurface()) << ",";
     out << "\"chain\":" << cpbitnode::util::jsonString(settings.chain) << ",";
     out << "\"network\":\"testnet4\",";
     out << "\"sync_status\":" << cpbitnode::util::jsonString(sync) << ",";

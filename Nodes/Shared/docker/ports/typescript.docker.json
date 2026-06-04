@@ -23,6 +23,7 @@
   "commands": {
     "docker_config": "cd Nodes/TypeScript && docker compose -f docker/docker-compose.yml config",
     "docker_build": "cd Nodes/TypeScript && make docker-build",
+    "docker_warm": "cd Nodes/TypeScript && make docker-warm",
     "docker_status": "cd Nodes/TypeScript && make docker-typescript-sync-status",
     "docker_proof_local": "cd Nodes/TypeScript && make docker-typescript-native-proof",
     "docker_probe_external": null,
@@ -37,7 +38,7 @@
       "supported": true,
       "command": "cd Nodes/TypeScript && make docker-typescript-native-proof",
       "peer": "host.docker.internal:48333",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "sync_status"]
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {
       "supported": false,
@@ -64,7 +65,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/typescript_storage_gate_2026-06-02.json",
-    "notes": "TypeScript native proof path uses RocksDB and native secp256k1 ECDSA with pure TS Schnorr/Taproot fallback reported in proof metadata."
+    "notes": "TypeScript docker_proof_local runs a durable 5k local-reference replay on RocksDB with WAL enabled and native secp256k1 ECDSA; pure TS Schnorr/Taproot fallback is reported in proof metadata."
   },
   "known_caveats": ["External network probe command not standardized", "Schnorr/Taproot still use pure TypeScript fallback until a full native libsecp256k1 wrapper lands"]
 }

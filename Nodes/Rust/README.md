@@ -80,3 +80,8 @@ make docker-proof-local
 make docker-proof-local-fast
 make docker-smoke-once
 ```
+
+`docker-proof-local` is Rust's current local Reference RPC replay proof. In
+Project mission control it is exposed as `docker_proof_rpc_replay`, not the
+official comparable `docker_proof_local` P2P lane. `docker-proof-local-fast`
+keeps its WAL-off diagnostic role and must not be benchmark-ranked.

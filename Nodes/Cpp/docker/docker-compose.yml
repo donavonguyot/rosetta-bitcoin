@@ -10,6 +10,7 @@ services:
       CHAIN: testnet4
       DATA_DIR: /data
       LOG_LEVEL: info
+      RUNTIME_SURFACE: docker
       # Inbound P2P (same semantics as CLI --listen).
       LISTEN: "1"
     volumes:
@@ -32,11 +33,12 @@ services:
       DATA_DIR: /data
       CHAINSTATE_BACKEND: rocksdb
       LOG_LEVEL: info
+      RUNTIME_SURFACE: docker
       PEERS: ${PEERS:-127.0.0.1:48333}
       BLOCKS_TARGET: ${BLOCKS_MAX:-2}
       BLOCKS_MAX: ${BLOCKS_MAX:-2}
     volumes:
-      - ${DOCKER_PROOF_VOLUME:-cpbitnode_proof_data}:/data
+      - cpbitnode_proof_data:/data
     command:
       - cpbitnode-sync
       - --datadir
@@ -52,5 +54,8 @@ services:
 
 volumes:
   cpbitnode_data:
+    name: ${CPBITNODE_DATA_VOLUME:-cpbitnode_data}
   cpbitnode_proof_data:
+    name: ${DOCKER_PROOF_VOLUME:-cpbitnode_proof_data}
   cpbitnode_sync_data:
+    name: ${DOCKER_SYNC_VOLUME:-cpbitnode_sync_data}

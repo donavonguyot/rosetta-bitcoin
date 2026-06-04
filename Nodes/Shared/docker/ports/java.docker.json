@@ -22,7 +22,8 @@
   },
   "commands": {
     "docker_config": "cd Nodes/Java && docker compose -f docker/docker-compose.yml config",
-    "docker_build": "cd Nodes/Java && docker compose -f docker/docker-compose.yml build jbitnode-sync-proof",
+    "docker_build": "cd Nodes/Java && make docker-build",
+    "docker_warm": "cd Nodes/Java && make docker-warm",
     "docker_status": "cd Nodes/Java && DOCKER_PROOF_VOLUME=jbitnode_sync_data SECP256K1_BACKEND=native docker compose -f docker/docker-compose.yml run --rm --no-deps jbitnode-sync-proof com.jbitnode.cli.DbStatus",
     "docker_proof_local": "cd Nodes/Java && make docker-java-native-crypto-proof",
     "docker_probe_external": null,
@@ -64,7 +65,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/java_rocksdb_docker_local_peer_sync_2026-06-01.json",
-    "notes": "Strongest current Docker proof surface; still needs standard target aliases and one-shot smoke target."
+    "notes": "docker_proof_local runs the supporting 5k local-reference Docker benchmark with native secp256k1, RocksDB, WAL enabled, and a fresh proof volume."
   },
   "known_caveats": ["External network probe command not standardized", "One-shot supervisor smoke target missing"]
 }

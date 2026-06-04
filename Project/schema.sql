@@ -200,6 +200,14 @@ CREATE TABLE IF NOT EXISTS benchmark_gates (
   role TEXT NOT NULL,
   preferred_runtime_surface TEXT NOT NULL,
   preferred_command_key TEXT NOT NULL,
+  official_lane TEXT NOT NULL DEFAULT '',
+  official_byte_source TEXT NOT NULL DEFAULT '',
+  official_peer_mode TEXT NOT NULL DEFAULT '',
+  official_proof_mode TEXT NOT NULL DEFAULT '',
+  official_header_target_height INTEGER NOT NULL DEFAULT -1,
+  official_prefetch_depth INTEGER NOT NULL DEFAULT -1,
+  official_script_runner_mode TEXT NOT NULL DEFAULT '',
+  fresh_state_required INTEGER NOT NULL DEFAULT 1,
   local_reference_required INTEGER NOT NULL DEFAULT 1,
   durable_required INTEGER NOT NULL DEFAULT 1,
   wal_disabled_required INTEGER NOT NULL DEFAULT 0,
@@ -485,6 +493,135 @@ FROM benchmarks b
 JOIN project_node_ports np ON np.node_id = b.node_id
 GROUP BY np.port, b.node_id, b.benchmark_name, b.backend;
 
+CREATE VIEW IF NOT EXISTS benchmark_comparability AS
+WITH benchmark_rows AS (
+  SELECT
+    bg.gate_id,
+    bg.target_label,
+    bg.target_height,
+    bg.benchmark_kind AS gate_benchmark_kind,
+    bg.preferred_runtime_surface,
+    bg.preferred_command_key,
+    bg.official_lane,
+    bg.official_byte_source,
+    bg.official_peer_mode,
+    bg.official_proof_mode,
+    bg.official_header_target_height,
+    bg.official_prefetch_depth,
+    bg.official_script_runner_mode,
+    bg.fresh_state_required,
+    bg.wal_disabled_required,
+    bg.resume_supported_required,
+    bg.binary_gate_status AS required_binary_gate_status,
+    np.port,
+    b.node_id,
+    b.benchmark_name,
+    coalesce(json_extract(b.result_json, '$.validated_height'), b.height, -1) AS validated_height,
+    coalesce(json_extract(b.result_json, '$.header_height'), json_extract(b.settings_json, '$.header_target_height'), -1) AS header_target_height,
+    coalesce(json_extract(b.result_json, '$.result'), '') AS result,
+    coalesce(json_extract(b.result_json, '$.binary_gate_status'), json_extract(b.settings_json, '$.binary_gate_status'), '') AS binary_gate_status,
+    coalesce(json_extract(b.settings_json, '$.benchmark_lane'), '') AS reported_lane,
+    coalesce(json_extract(b.settings_json, '$.byte_source'), '') AS byte_source,
+    coalesce(json_extract(b.settings_json, '$.proof_mode'), '') AS proof_mode,
+    coalesce(json_extract(b.settings_json, '$.runtime_surface'), '') AS runtime_surface,
+    coalesce(json_extract(b.settings_json, '$.peer_mode'), '') AS peer_mode,
+    coalesce(json_extract(b.settings_json, '$.peer'), '') AS peer,
+    coalesce(json_extract(b.settings_json, '$.prefetch_depth'), -1) AS prefetch_depth,
+    lower(coalesce(json_extract(b.settings_json, '$.script_runner_mode'), '')) AS script_runner_mode,
+    lower(coalesce(cast(json_extract(b.settings_json, '$.rocksdb_wal_disabled') AS TEXT), '')) AS rocksdb_wal_disabled_text,
+    lower(coalesce(cast(json_extract(b.settings_json, '$.resume_supported') AS TEXT), '')) AS resume_supported_text,
+    lower(coalesce(cast(json_extract(b.settings_json, '$.fresh_state') AS TEXT), '')) AS fresh_state_text,
+    coalesce(json_extract(b.result_json, '$.current_blocker'), '') AS current_blocker,
+    b.captured_at,
+    b.source_artifact_id
+  FROM benchmark_gates bg
+  JOIN benchmarks b ON b.height = bg.target_height
+  JOIN project_node_ports np ON np.node_id = b.node_id
+),
+classified AS (
+  SELECT
+    *,
+    CASE
+      WHEN peer_mode = 'local_reference_rpc' OR byte_source = 'local_reference_rpc' OR proof_mode IN ('rpc_replay', 'pipeline') THEN 'supporting_5k_rpc_replay'
+      WHEN peer_mode = 'local_reference' OR byte_source = 'local_reference_p2p' THEN 'supporting_5k_p2p'
+      ELSE coalesce(nullif(reported_lane, ''), 'diagnostic')
+    END AS evidence_lane,
+    CASE
+      WHEN rocksdb_wal_disabled_text IN ('1', 'true', 'yes', 'on') THEN 1
+      ELSE 0
+    END AS rocksdb_wal_disabled,
+    CASE
+      WHEN resume_supported_text IN ('1', 'true', 'yes', 'on') THEN 1
+      ELSE 0
+    END AS resume_supported,
+    CASE
+      WHEN fresh_state_text IN ('1', 'true', 'yes', 'on') THEN 1
+      ELSE 0
+    END AS fresh_state
+  FROM benchmark_rows
+),
+scored AS (
+  SELECT
+    *,
+    trim(
+      CASE WHEN runtime_surface <> preferred_runtime_surface THEN 'runtime_surface;' ELSE '' END ||
+      CASE WHEN evidence_lane <> official_lane THEN 'lane;' ELSE '' END ||
+      CASE WHEN byte_source <> official_byte_source THEN 'byte_source;' ELSE '' END ||
+      CASE WHEN peer_mode <> official_peer_mode THEN 'peer_mode;' ELSE '' END ||
+      CASE WHEN proof_mode <> official_proof_mode THEN 'proof_mode;' ELSE '' END ||
+      CASE WHEN peer NOT IN ('host.docker.internal:48333', 'reference:48333', 'rosetta-bitcoin-core-testnet4:48333') THEN 'peer;' ELSE '' END ||
+      CASE WHEN header_target_height <> official_header_target_height THEN 'header_target_height;' ELSE '' END ||
+      CASE WHEN prefetch_depth <> official_prefetch_depth THEN 'prefetch_depth;' ELSE '' END ||
+      CASE WHEN script_runner_mode <> official_script_runner_mode THEN 'script_runner_mode;' ELSE '' END ||
+      CASE WHEN rocksdb_wal_disabled <> wal_disabled_required THEN 'rocksdb_wal;' ELSE '' END ||
+      CASE WHEN resume_supported <> resume_supported_required THEN 'resume_supported;' ELSE '' END ||
+      CASE WHEN fresh_state_required = 1 AND fresh_state <> 1 THEN 'fresh_state;' ELSE '' END ||
+      CASE WHEN binary_gate_status <> required_binary_gate_status THEN 'binary_gate_status;' ELSE '' END
+    ) AS comparability_notes
+  FROM classified
+)
+SELECT
+  gate_id,
+  target_label,
+  target_height,
+  gate_benchmark_kind AS benchmark_kind,
+  preferred_runtime_surface,
+  preferred_command_key,
+  official_lane,
+  port,
+  node_id,
+  benchmark_name,
+  CASE
+    WHEN validated_height >= target_height AND result IN ('passed', 'target_reached', 'ok', 'success') THEN 'passed'
+    WHEN validated_height >= target_height AND result = '' THEN 'recorded'
+    ELSE coalesce(nullif(result, ''), 'recorded')
+  END AS gate_status,
+  CASE
+    WHEN validated_height < target_height OR result IN ('failed', 'blocked', 'error') THEN 'failed'
+    WHEN evidence_lane = 'supporting_5k_rpc_replay' THEN 'evidence_only'
+    WHEN comparability_notes = '' THEN 'comparable'
+    WHEN rocksdb_wal_disabled <> wal_disabled_required OR runtime_surface <> preferred_runtime_surface THEN 'diagnostic'
+    ELSE 'evidence_only'
+  END AS comparability_status,
+  evidence_lane,
+  validated_height,
+  header_target_height,
+  runtime_surface,
+  peer_mode,
+  byte_source,
+  proof_mode,
+  peer,
+  prefetch_depth,
+  script_runner_mode,
+  rocksdb_wal_disabled,
+  resume_supported,
+  fresh_state,
+  binary_gate_status,
+  comparability_notes,
+  captured_at,
+  source_artifact_id
+FROM scored;
+
 CREATE VIEW IF NOT EXISTS benchmark_gate_matrix AS
 WITH ports AS (
   SELECT port
@@ -493,27 +630,14 @@ WITH ports AS (
 ),
 ranked_results AS (
   SELECT
-    bg.gate_id,
-    np.port,
-    b.node_id,
-    b.benchmark_name,
-    b.height AS target_height,
-    coalesce(json_extract(b.result_json, '$.validated_height'), b.height, -1) AS validated_height,
-    coalesce(json_extract(b.result_json, '$.result'), '') AS result,
-    coalesce(json_extract(b.settings_json, '$.runtime_surface'), '') AS runtime_surface,
-    coalesce(json_extract(b.settings_json, '$.peer_mode'), '') AS peer_mode,
-    coalesce(json_extract(b.settings_json, '$.rocksdb_wal_disabled'), '') AS rocksdb_wal_disabled,
-    b.captured_at,
-    b.source_artifact_id,
+    bc.*,
     row_number() OVER (
-      PARTITION BY bg.gate_id, np.port
-      ORDER BY coalesce(json_extract(b.result_json, '$.validated_height'), -1) DESC,
-               b.captured_at DESC,
-               b.source_artifact_id
+      PARTITION BY bc.gate_id, bc.port
+      ORDER BY bc.validated_height DESC,
+               bc.captured_at DESC,
+               bc.source_artifact_id
     ) AS rn
-  FROM benchmark_gates bg
-  JOIN benchmarks b ON b.height = bg.target_height
-  JOIN project_node_ports np ON np.node_id = b.node_id
+  FROM benchmark_comparability bc
 )
 SELECT
   bg.gate_id,
@@ -526,14 +650,21 @@ SELECT
   p.port,
   CASE
     WHEN rr.node_id IS NULL THEN 'missing'
-    WHEN rr.validated_height >= bg.target_height AND rr.result IN ('passed', 'target_reached', 'ok', 'success') THEN 'passed'
-    WHEN rr.validated_height >= bg.target_height AND rr.result = '' THEN 'recorded'
-    ELSE coalesce(rr.result, 'recorded')
+    ELSE rr.gate_status
   END AS gate_status,
+  coalesce(rr.comparability_status, 'missing') AS comparability_status,
+  coalesce(rr.evidence_lane, '') AS evidence_lane,
   coalesce(rr.validated_height, -1) AS validated_height,
+  coalesce(rr.header_target_height, -1) AS header_target_height,
   coalesce(rr.runtime_surface, '') AS runtime_surface,
   coalesce(rr.peer_mode, '') AS peer_mode,
+  coalesce(rr.byte_source, '') AS byte_source,
+  coalesce(rr.proof_mode, '') AS proof_mode,
+  coalesce(rr.prefetch_depth, -1) AS prefetch_depth,
+  coalesce(rr.script_runner_mode, '') AS script_runner_mode,
   coalesce(rr.rocksdb_wal_disabled, '') AS rocksdb_wal_disabled,
+  coalesce(rr.fresh_state, 0) AS fresh_state,
+  coalesce(rr.comparability_notes, '') AS comparability_notes,
   coalesce(rr.captured_at, '') AS captured_at,
   rr.source_artifact_id
 FROM benchmark_gates bg
