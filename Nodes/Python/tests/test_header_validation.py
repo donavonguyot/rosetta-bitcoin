@@ -77,3 +77,38 @@ def test_persist_headers_rejects_unlinked_header(tmp_path):
     assert height == 0
     assert tracker.header_count() == 1  # genesis only
     tracker.close()
+
+
+def _synthetic_header(prev: bytes, timestamp: int) -> BlockHeader:
+    nonce = 0
+    while True:
+        header = BlockHeader(
+            version=1,
+            prev_block=prev,
+            merkle_root=timestamp.to_bytes(32, "little"),
+            timestamp=timestamp,
+            bits=0x207FFFFF,
+            nonce=nonce,
+        )
+        if header_meets_target(header):
+            return header
+        nonce += 1
+
+
+def test_persist_headers_stops_at_max_height(tmp_path):
+    tracker = ProjectTracker(tmp_path / "bounded-chainstate")
+    ensure_genesis(tracker, TESTNET4)
+    h1 = _synthetic_header(TESTNET4_GENESIS.block_hash(), 1_714_777_862)
+    h2 = _synthetic_header(h1.block_hash(), 1_714_777_863)
+    height, best_hash, stored = persist_headers(
+        tracker,
+        TESTNET4,
+        HeadersMessage(headers=(h1, h2)),
+        max_height=1,
+    )
+    assert stored == 1
+    assert height == 1
+    assert best_hash == h1.block_hash_hex()
+    assert tracker.get_header_hash(1) == h1.block_hash_hex()
+    assert tracker.get_header_hash(2) is None
+    tracker.close()

@@ -60,6 +60,8 @@ def persist_headers(
     tracker: ProjectTracker,
     chain: ChainParams,
     message: HeadersMessage,
+    *,
+    max_height: int = 0,
 ) -> tuple[int, str, int]:
     """Validate and store headers. Returns (best_height, best_hash_hex, stored_count)."""
     ensure_genesis(tracker, chain)
@@ -70,6 +72,8 @@ def persist_headers(
 
     stored = 0
     for header in message.headers:
+        if max_height > 0 and tip_height >= max_height:
+            break
         try:
             validate_header(header, expected_prev=tip_internal)
         except HeaderValidationError as exc:
@@ -130,8 +134,10 @@ def _locator_heights(tip: int) -> list[int]:
     return heights
 
 
-def headers_sync_done(*, best_height: int, peer_height: int, batch_count: int) -> bool:
+def headers_sync_done(*, best_height: int, peer_height: int, batch_count: int, max_height: int = 0) -> bool:
     """Return True when header sync should stop."""
+    if max_height > 0 and best_height >= max_height:
+        return True
     if batch_count == 0:
         return True
     return peer_height >= 0 and best_height >= peer_height
@@ -210,7 +216,7 @@ def mark_headers_current(tracker: ProjectTracker, chain: ChainParams) -> None:
     )
 
 
-async def sync_headers_to_tip(connection, *, peer_height: int | None = None) -> int:
+async def sync_headers_to_tip(connection, *, peer_height: int | None = None, max_height: int = 0) -> int:
     """Download and validate headers until tip or peer height is reached."""
     from pybitnode.p2p.peer import PeerConnection
 
@@ -222,6 +228,8 @@ async def sync_headers_to_tip(connection, *, peer_height: int | None = None) -> 
     target_height = peer_height if peer_height is not None else (
         connection.remote_version.start_height if connection.remote_version else -1
     )
+    if max_height > 0:
+        target_height = max_height if target_height < 0 else min(target_height, max_height)
 
     ensure_genesis(tracker, chain)
 
@@ -241,11 +249,16 @@ async def sync_headers_to_tip(connection, *, peer_height: int | None = None) -> 
         message = await connection.request_headers(locator)
         batch_count = len(message.headers)
 
-        if headers_sync_done(best_height=best_height, peer_height=target_height, batch_count=batch_count):
+        if headers_sync_done(
+            best_height=best_height,
+            peer_height=target_height,
+            batch_count=batch_count,
+            max_height=max_height,
+        ):
             mark_headers_current(tracker, chain)
             break
 
-        _, _, stored = persist_headers(tracker, chain, message)
+        _, _, stored = persist_headers(tracker, chain, message, max_height=max_height)
         total_stored += stored
 
         if stored == 0:
@@ -254,9 +267,13 @@ async def sync_headers_to_tip(connection, *, peer_height: int | None = None) -> 
 
         state = tracker.get_sync_state(chain.name) or {}
         best_height = int(state.get("best_height", 0))
-        if headers_sync_done(best_height=best_height, peer_height=target_height, batch_count=batch_count):
+        if headers_sync_done(
+            best_height=best_height,
+            peer_height=target_height,
+            batch_count=batch_count,
+            max_height=max_height,
+        ):
             mark_headers_current(tracker, chain)
             break
 
     return total_stored
-

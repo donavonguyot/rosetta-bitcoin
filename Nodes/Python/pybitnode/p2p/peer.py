@@ -328,7 +328,10 @@ class PeerConnection:
         if self._header_sync_lock is None:
             raise RuntimeError("Peer is not connected")
         async with self._header_sync_lock:
-            stored = await sync_headers_to_tip(self)
+            stored = await sync_headers_to_tip(
+                self,
+                max_height=self.settings.blocks_target_height,
+            )
             if stored:
                 logger.info(
                     "Header sync stored %s headers (tip height %s)",
