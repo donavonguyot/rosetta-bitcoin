@@ -29,5 +29,7 @@ void validateHeader(const messages::BlockHeader& header, std::span<const std::ui
 
 consensus::Block validateBlock(std::span<const std::uint8_t> payload, std::span<const std::uint8_t> expectedPrev,
                                const std::vector<std::uint8_t>* expectedHash = nullptr);
+void validateDecodedBlock(const consensus::Block& block, std::span<const std::uint8_t> expectedPrev,
+                          const std::vector<std::uint8_t>* expectedHash = nullptr);
 
 }  // namespace cpbitnode::sync

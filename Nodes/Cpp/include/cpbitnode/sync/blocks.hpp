@@ -5,6 +5,7 @@
 
 #include "cpbitnode/chain/params.hpp"
 #include "cpbitnode/config/settings.hpp"
+#include "cpbitnode/consensus/script/verify.hpp"
 #include "cpbitnode/db/chainstate.hpp"
 #include "cpbitnode/db/node_state.hpp"
 #include "cpbitnode/p2p/peer.hpp"
@@ -40,6 +41,10 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
 int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
                     db::ChainstateStore& chainstate, const chain::ChainParams& chain, storage::BlockStore& blockStore,
                     int batchSize, int maxBlocks, int parallelDownloads = 0, int blocksTargetHeight = 0);
+int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
+                    db::ChainstateStore& chainstate, const chain::ChainParams& chain, storage::BlockStore& blockStore,
+                    int batchSize, int maxBlocks, int parallelDownloads, int blocksTargetHeight,
+                    consensus::script::ScriptVerifyRunner* scriptRunner);
 
 int syncBlocksToTip(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
                     const chain::ChainParams& chain, storage::BlockStore& blockStore, const config::Settings& settings);

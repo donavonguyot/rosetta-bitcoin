@@ -95,22 +95,8 @@ void validateHeader(const messages::BlockHeader& header, std::span<const std::ui
     }
 }
 
-consensus::Block validateBlock(std::span<const std::uint8_t> payload, std::span<const std::uint8_t> expectedPrev,
-                               const std::vector<std::uint8_t>* expectedHash) {
-    if (payload.size() < kMinBlockPayloadBytes) {
-        throw BlockValidationError("block payload too small: " + std::to_string(payload.size()) + " bytes");
-    }
-    if (payload.size() > kMaxBlockPayloadBytes) {
-        throw BlockValidationError("block payload too large: " + std::to_string(payload.size()) + " bytes");
-    }
-
-    consensus::Block block;
-    try {
-        block = consensus::Block::deserialize(payload);
-    } catch (const std::exception& exc) {
-        throw BlockValidationError(exc.what());
-    }
-
+void validateDecodedBlock(const consensus::Block& block, std::span<const std::uint8_t> expectedPrev,
+                          const std::vector<std::uint8_t>* expectedHash) {
     try {
         validateHeader(block.header, expectedPrev);
     } catch (const HeaderValidationError& exc) {
@@ -137,6 +123,25 @@ consensus::Block validateBlock(std::span<const std::uint8_t> payload, std::span<
         throw BlockValidationError("merkle root mismatch: expected " + displayHex(block.header.merkleRoot) +
                                    ", computed " + displayHex(merkleRoot));
     }
+}
+
+consensus::Block validateBlock(std::span<const std::uint8_t> payload, std::span<const std::uint8_t> expectedPrev,
+                               const std::vector<std::uint8_t>* expectedHash) {
+    if (payload.size() < kMinBlockPayloadBytes) {
+        throw BlockValidationError("block payload too small: " + std::to_string(payload.size()) + " bytes");
+    }
+    if (payload.size() > kMaxBlockPayloadBytes) {
+        throw BlockValidationError("block payload too large: " + std::to_string(payload.size()) + " bytes");
+    }
+
+    consensus::Block block;
+    try {
+        block = consensus::Block::deserialize(payload);
+    } catch (const std::exception& exc) {
+        throw BlockValidationError(exc.what());
+    }
+
+    validateDecodedBlock(block, expectedPrev, expectedHash);
 
     return block;
 }

@@ -15,6 +15,7 @@
 #include "cpbitnode/util/json.hpp"
 #include "cpbitnode/wire/frame.hpp"
 
+#include <algorithm>
 #include <random>
 #include <stdexcept>
 
@@ -119,14 +120,21 @@ void PeerConnection::close() {
 }
 
 void PeerConnection::send(const std::string& command, std::span<const std::uint8_t> payload) {
+    sendInternal(command, payload, true);
+}
+
+void PeerConnection::sendInternal(const std::string& command, std::span<const std::uint8_t> payload,
+                                  bool recordTrackerEvent) {
     if (!transport_ || !transport_->isOpen()) {
         throw std::runtime_error("Peer is not connected");
     }
     const auto frame = wire::buildMessage(options_.chain->magic, command, payload);
     transport_->write(frame);
-    options_.tracker->logEvent("p2p", "Sent " + command,
-                               "info", "{\"host\":" + util::jsonString(options_.host) + ",\"port\":" +
-                                           std::to_string(options_.port) + "}");
+    if (recordTrackerEvent) {
+        options_.tracker->logEvent("p2p", "Sent " + command,
+                                   "info", "{\"host\":" + util::jsonString(options_.host) + ",\"port\":" +
+                                               std::to_string(options_.port) + "}");
+    }
 }
 
 std::pair<std::string, std::vector<std::uint8_t>> PeerConnection::readMessage(double timeoutSeconds) {
@@ -302,7 +310,8 @@ std::optional<std::vector<std::uint8_t>> PeerConnection::requestBlockOnce(const 
 }
 
 std::vector<std::optional<std::vector<std::uint8_t>>> PeerConnection::requestBlocks(
-    const std::vector<std::vector<std::uint8_t>>& blockHashes, double timeoutSeconds) {
+    const std::vector<std::vector<std::uint8_t>>& blockHashes, double timeoutSeconds,
+    BlockRequestOptions options, BlockRequestStats* stats) {
     if (!isConnected()) {
         throw std::runtime_error("Peer is not connected");
     }
@@ -330,10 +339,15 @@ std::vector<std::optional<std::vector<std::uint8_t>>> PeerConnection::requestBlo
             break;
         }
 
-        send(messages::GetDataMessage::kCommand, getdata.serialize());
-        options_.tracker->markWireCapability("blocks.getdata.send", true, "live",
-                                             "sent batched getdata to " + options_.host + ":" +
-                                                 std::to_string(options_.port));
+        sendInternal(messages::GetDataMessage::kCommand, getdata.serialize(), options.recordTrackerEvents);
+        if (stats != nullptr) {
+            stats->sentGetData = true;
+        }
+        if (options.recordTrackerEvents) {
+            options_.tracker->markWireCapability("blocks.getdata.send", true, "live",
+                                                 "sent batched getdata to " + options_.host + ":" +
+                                                     std::to_string(options_.port));
+        }
 
         const auto deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(
                                                   std::chrono::duration<double>(timeoutSeconds));
@@ -355,13 +369,162 @@ std::vector<std::optional<std::vector<std::uint8_t>>> PeerConnection::requestBlo
                     pending[index] = false;
                     pendingCount -= 1;
                     matched = true;
-                    options_.tracker->markWireCapability("blocks.block.recv", true, "live",
-                                                         "received batched block from " + options_.host + ":" +
-                                                             std::to_string(options_.port));
+                    if (stats != nullptr) {
+                        stats->receivedBlock = true;
+                    }
+                    if (options.recordTrackerEvents) {
+                        options_.tracker->markWireCapability("blocks.block.recv", true, "live",
+                                                             "received batched block from " + options_.host + ":" +
+                                                                 std::to_string(options_.port));
+                    }
                     break;
                 }
                 if (!matched) {
-                    options_.tracker->logEvent("sync", "Unexpected block hash in batched download", "warning",
+                    if (options.recordTrackerEvents) {
+                        options_.tracker->logEvent("sync", "Unexpected block hash in batched download", "warning",
+                                                   "{\"host\":" + util::jsonString(options_.host) + "}");
+                    }
+                }
+                continue;
+            }
+            if (command == messages::NotFoundMessage::kCommand) {
+                const auto missing = messages::NotFoundMessage::deserialize(payload);
+                for (const auto& item : missing.inventory) {
+                    for (std::size_t index = 0; index < blockHashes.size(); ++index) {
+                        if (!pending[index] || item.hash != blockHashes[index]) {
+                            continue;
+                        }
+                        pending[index] = false;
+                        pendingCount -= 1;
+                        if (stats != nullptr) {
+                            stats->receivedNotFound = true;
+                        }
+                        if (options.recordTrackerEvents) {
+                            options_.tracker->markWireCapability("blocks.notfound", true, "live",
+                                                                 "peer returned batched notfound");
+                        }
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (command == messages::GetHeadersMessage::kCommand) {
+                continue;
+            }
+            if (command == messages::PingMessage::kCommand) {
+                const auto ping = messages::PingMessage::deserialize(payload);
+                const auto pong = messages::PongMessage{ping.nonce};
+                sendInternal(messages::PongMessage::kCommand, pong.serialize(), options.recordTrackerEvents);
+                continue;
+            }
+            if (options.recordTrackerEvents) {
+                dispatchMessage(command, payload);
+            }
+        }
+    }
+    return results;
+}
+
+bool PeerConnection::requestBlocksStreaming(const std::vector<std::vector<std::uint8_t>>& blockHashes,
+                                            std::size_t windowSize, const StreamingBlockCallback& onBlock,
+                                            double timeoutSeconds, BlockRequestOptions options,
+                                            BlockRequestStats* stats) {
+    if (!isConnected()) {
+        throw std::runtime_error("Peer is not connected");
+    }
+    if (blockHashes.empty()) {
+        return true;
+    }
+    if (!onBlock) {
+        throw std::invalid_argument("requestBlocksStreaming requires a callback");
+    }
+
+    const std::size_t window = std::max<std::size_t>(1, std::min<std::size_t>(16, windowSize));
+    std::vector<bool> completed(blockHashes.size(), false);
+    std::size_t completedCount = 0;
+
+    for (const auto invType : {messages::MSG_WITNESS_BLOCK, messages::MSG_BLOCK}) {
+        std::vector<bool> pending(blockHashes.size(), false);
+        std::size_t nextToRequest = 0;
+        std::size_t pendingCount = 0;
+
+        auto queueWindow = [&]() {
+            messages::GetDataMessage getdata;
+            while (pendingCount < window && nextToRequest < blockHashes.size()) {
+                const std::size_t index = nextToRequest++;
+                if (completed[index]) {
+                    continue;
+                }
+                messages::InventoryVector inv;
+                inv.type = invType;
+                inv.hash = blockHashes[index];
+                getdata.inventory.push_back(std::move(inv));
+                pending[index] = true;
+                pendingCount += 1;
+            }
+            if (getdata.inventory.empty()) {
+                return;
+            }
+            sendInternal(messages::GetDataMessage::kCommand, getdata.serialize(), options.recordTrackerEvents);
+            if (stats != nullptr) {
+                stats->sentGetData = true;
+            }
+            if (options.recordTrackerEvents) {
+                options_.tracker->markWireCapability("blocks.getdata.send", true, "live",
+                                                     "sent streaming getdata to " + options_.host + ":" +
+                                                         std::to_string(options_.port));
+            }
+        };
+
+        queueWindow();
+        const auto deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(
+                                                  std::chrono::duration<double>(timeoutSeconds));
+        while (completedCount < blockHashes.size() && Clock::now() < deadline) {
+            if (pendingCount == 0) {
+                queueWindow();
+                if (pendingCount == 0) {
+                    break;
+                }
+            }
+
+            const double remaining = std::chrono::duration<double>(deadline - Clock::now()).count();
+            if (remaining <= 0) {
+                break;
+            }
+            const auto readStarted = Clock::now();
+            const auto [command, payload] = readMessage(remaining);
+            const long long readWaitUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                                             Clock::now() - readStarted)
+                                             .count();
+            touchActivity();
+            if (command == messages::BlockMessage::kCommand) {
+                const auto receivedHash = messages::blockHashFromPayload(payload);
+                bool matched = false;
+                for (std::size_t index = 0; index < blockHashes.size(); ++index) {
+                    if (!pending[index] || receivedHash != blockHashes[index]) {
+                        continue;
+                    }
+                    pending[index] = false;
+                    pendingCount -= 1;
+                    completed[index] = true;
+                    completedCount += 1;
+                    matched = true;
+                    if (stats != nullptr) {
+                        stats->receivedBlock = true;
+                    }
+                    if (options.recordTrackerEvents) {
+                        options_.tracker->markWireCapability("blocks.block.recv", true, "live",
+                                                             "received streaming block from " + options_.host + ":" +
+                                                                 std::to_string(options_.port));
+                    }
+                    if (!onBlock(index, std::vector<std::uint8_t>(payload.begin(), payload.end()), readWaitUs)) {
+                        return false;
+                    }
+                    queueWindow();
+                    break;
+                }
+                if (!matched && options.recordTrackerEvents) {
+                    options_.tracker->logEvent("sync", "Unexpected block hash in streaming download", "warning",
                                                "{\"host\":" + util::jsonString(options_.host) + "}");
                 }
                 continue;
@@ -375,11 +538,17 @@ std::vector<std::optional<std::vector<std::uint8_t>>> PeerConnection::requestBlo
                         }
                         pending[index] = false;
                         pendingCount -= 1;
-                        options_.tracker->markWireCapability("blocks.notfound", true, "live",
-                                                             "peer returned batched notfound");
+                        if (stats != nullptr) {
+                            stats->receivedNotFound = true;
+                        }
+                        if (options.recordTrackerEvents) {
+                            options_.tracker->markWireCapability("blocks.notfound", true, "live",
+                                                                 "peer returned streaming notfound");
+                        }
                         break;
                     }
                 }
+                queueWindow();
                 continue;
             }
             if (command == messages::GetHeadersMessage::kCommand) {
@@ -388,13 +557,19 @@ std::vector<std::optional<std::vector<std::uint8_t>>> PeerConnection::requestBlo
             if (command == messages::PingMessage::kCommand) {
                 const auto ping = messages::PingMessage::deserialize(payload);
                 const auto pong = messages::PongMessage{ping.nonce};
-                send(messages::PongMessage::kCommand, pong.serialize());
+                sendInternal(messages::PongMessage::kCommand, pong.serialize(), options.recordTrackerEvents);
                 continue;
             }
-            dispatchMessage(command, payload);
+            if (options.recordTrackerEvents) {
+                dispatchMessage(command, payload);
+            }
+        }
+
+        if (completedCount == blockHashes.size()) {
+            return true;
         }
     }
-    return results;
+    return completedCount == blockHashes.size();
 }
 
 void PeerConnection::consumeMessages(const MessageHandler& handler, double readTimeoutSeconds) {

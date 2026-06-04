@@ -2,16 +2,27 @@
 
 #include "cpbitnode/consensus/connect.hpp"
 #include "cpbitnode/messages/inventory.hpp"
+#include "cpbitnode/sync/validate.hpp"
 #include "cpbitnode/util/json.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdlib>
 #include <future>
+#include <map>
+#include <iostream>
 #include <mutex>
+#include <queue>
+#include <string_view>
+#include <thread>
 
 namespace cpbitnode::sync {
 namespace {
 
 constexpr const char* kParallelCapId = "blocks.parallel";
+using Clock = std::chrono::steady_clock;
 
 struct WorkItem {
     int height = 0;
@@ -19,6 +30,66 @@ struct WorkItem {
     std::vector<std::uint8_t> blockHash;
     std::vector<std::uint8_t> expectedPrev;
 };
+
+struct PipelineTiming {
+    long long totalWall = 0;
+    long long blockFetchWait = 0;
+    long long blockParseValidate = 0;
+    long long blockStore = 0;
+    long long metadataStore = 0;
+    long long connectTotal = 0;
+    long long statusWrites = 0;
+    long long idleWait = 0;
+    int blocksFetched = 0;
+    int blocksConnected = 0;
+    int prefetchDepth = 1;
+    std::size_t scriptThreads = 1;
+};
+
+long long elapsedUs(Clock::time_point start) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
+}
+
+bool syncTimingEnabled() {
+    const char* raw = std::getenv("CPBITNODE_SYNC_TIMING");
+    return raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0";
+}
+
+int prefetchDepthFromEnv(int parallelDownloads) {
+    int depth = parallelDownloads > 0 ? parallelDownloads : 4;
+    const char* raw = std::getenv("CPBITNODE_BLOCK_PREFETCH_DEPTH");
+    if (raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0") {
+        depth = std::stoi(raw);
+    }
+    return std::max(1, std::min(16, depth));
+}
+
+void emitPipelineTiming(const PipelineTiming& timing) {
+    if (!syncTimingEnabled()) {
+        return;
+    }
+    std::cerr << "cpbitnode_pipeline_timing"
+              << " unit=us"
+              << " total_wall=" << timing.totalWall
+              << " block_fetch_wait=" << timing.blockFetchWait
+              << " block_parse_validate=" << timing.blockParseValidate
+              << " block_store=" << timing.blockStore
+              << " metadata_store=" << timing.metadataStore
+              << " connect_total=" << timing.connectTotal
+              << " utxo_load=0"
+              << " prevout_batch_load=0"
+              << " script_verify=0"
+              << " script_verify_worker_cpu=0"
+              << " utxo_apply=0"
+              << " commit=0"
+              << " status_writes=" << timing.statusWrites
+              << " idle_wait=" << timing.idleWait
+              << " blocks_fetched=" << timing.blocksFetched
+              << " blocks_connected=" << timing.blocksConnected
+              << " prefetch_depth=" << timing.prefetchDepth
+              << " script_threads=" << timing.scriptThreads
+              << "\n";
+}
 
 std::vector<std::uint8_t> expectedPrevHash(const db::NodeStateStore& tracker, int height) {
     const auto prevHex = tracker.getHeaderHash(height - 1);
@@ -73,6 +144,179 @@ std::vector<WorkItem> buildOrderedBlockWork(const db::NodeStateStore& tracker,
     }
     return work;
 }
+
+struct PrefetchedBlock {
+    WorkItem item;
+    std::vector<std::uint8_t> payload;
+    consensus::Block decoded;
+    long long fetchWaitUs = 0;
+    long long parseValidateUs = 0;
+    std::string error;
+};
+
+class BlockPrefetcher {
+public:
+    BlockPrefetcher(const std::vector<p2p::PeerConnection*>& peers, std::vector<WorkItem> work, int depth)
+        : peers_(peers), work_(std::move(work)), depth_(std::max(1, std::min(16, depth))) {}
+
+    ~BlockPrefetcher() { join(); }
+
+    void start() {
+        worker_ = std::thread([this]() {
+            try {
+                run();
+            } catch (const std::exception& exc) {
+                PrefetchedBlock failed;
+                failed.error = exc.what();
+                push(std::move(failed));
+            }
+            {
+                std::lock_guard lock(mutex_);
+                done_ = true;
+            }
+            cv_.notify_all();
+        });
+    }
+
+    std::optional<PrefetchedBlock> pop(long long* idleWaitUs) {
+        const auto started = Clock::now();
+        std::unique_lock lock(mutex_);
+        cv_.wait(lock, [this]() { return !queue_.empty() || done_; });
+        if (idleWaitUs != nullptr) {
+            *idleWaitUs += elapsedUs(started);
+        }
+        if (queue_.empty()) {
+            return std::nullopt;
+        }
+        auto item = std::move(queue_.front());
+        queue_.pop();
+        cv_.notify_all();
+        return item;
+    }
+
+    void cancel() {
+        {
+            std::lock_guard lock(mutex_);
+            cancelled_ = true;
+        }
+        cv_.notify_all();
+    }
+
+    void join() {
+        cancel();
+        if (worker_.joinable()) {
+            worker_.join();
+        }
+    }
+
+    const p2p::BlockRequestStats& stats() const { return stats_; }
+
+private:
+    bool push(PrefetchedBlock block) {
+        std::unique_lock lock(mutex_);
+        cv_.wait(lock, [this]() { return cancelled_ || queue_.size() < static_cast<std::size_t>(depth_); });
+        if (cancelled_) {
+            return false;
+        }
+        queue_.push(std::move(block));
+        cv_.notify_all();
+        return true;
+    }
+
+    void run() {
+        if (work_.empty()) {
+            return;
+        }
+        if (peers_.empty() || peers_.front() == nullptr || !peers_.front()->isConnected()) {
+            PrefetchedBlock failed;
+            failed.item = work_.front();
+            failed.error = "block unavailable from peers";
+            (void)push(std::move(failed));
+            return;
+        }
+
+        std::vector<std::vector<std::uint8_t>> hashes;
+        hashes.reserve(work_.size());
+        for (const auto& item : work_) {
+            hashes.push_back(item.blockHash);
+        }
+
+        std::map<std::size_t, PrefetchedBlock> ready;
+        std::size_t nextToPush = 0;
+        bool stoppedByCallback = false;
+
+        auto flushContiguous = [&]() -> bool {
+            while (true) {
+                auto it = ready.find(nextToPush);
+                if (it == ready.end()) {
+                    return true;
+                }
+                const bool hasError = !it->second.error.empty();
+                PrefetchedBlock block = std::move(it->second);
+                ready.erase(it);
+                nextToPush += 1;
+                if (!push(std::move(block))) {
+                    return false;
+                }
+                if (hasError) {
+                    return false;
+                }
+            }
+        };
+
+        const auto callback = [&](std::size_t index, std::vector<std::uint8_t> payload,
+                                  long long fetchWaitUs) -> bool {
+            if (cancelled_.load() || index >= work_.size()) {
+                return false;
+            }
+            PrefetchedBlock out;
+            out.item = work_[index];
+            out.fetchWaitUs = fetchWaitUs;
+            out.payload = std::move(payload);
+            const auto parseStarted = Clock::now();
+            try {
+                out.decoded = validateBlock(out.payload, out.item.expectedPrev, &out.item.blockHash);
+            } catch (const BlockValidationError& exc) {
+                out.parseValidateUs = elapsedUs(parseStarted);
+                out.error = exc.what();
+                stoppedByCallback = true;
+            }
+            if (out.parseValidateUs == 0) {
+                out.parseValidateUs = elapsedUs(parseStarted);
+            }
+            ready[index] = std::move(out);
+            if (!flushContiguous()) {
+                stoppedByCallback = true;
+                return false;
+            }
+            return !stoppedByCallback && !cancelled_.load();
+        };
+
+        const bool completed = peers_.front()->requestBlocksStreaming(
+            hashes, static_cast<std::size_t>(depth_), callback, 120.0, p2p::BlockRequestOptions{false}, &stats_);
+        if (!completed && !cancelled_.load()) {
+            (void)flushContiguous();
+            if (nextToPush < work_.size()) {
+                PrefetchedBlock failed;
+                failed.item = work_[nextToPush];
+                failed.error = stoppedByCallback ? "block validation failed during streaming fetch"
+                                                 : "block unavailable from peers";
+                (void)push(std::move(failed));
+            }
+        }
+    }
+
+    const std::vector<p2p::PeerConnection*>& peers_;
+    std::vector<WorkItem> work_;
+    int depth_;
+    std::thread worker_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    std::queue<PrefetchedBlock> queue_;
+    p2p::BlockRequestStats stats_;
+    bool done_ = false;
+    std::atomic<bool> cancelled_ = false;
+};
 
 }  // namespace
 
@@ -240,9 +484,22 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
 int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
                     db::ChainstateStore& chainstate, const chain::ChainParams& chain, storage::BlockStore& blockStore,
                     int batchSize, int maxBlocks, int parallelDownloads, int blocksTargetHeight) {
+    return syncBlocksBatch(peers, tracker, chainstate, chain, blockStore, batchSize, maxBlocks, parallelDownloads,
+                           blocksTargetHeight, nullptr);
+}
+
+int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
+                    db::ChainstateStore& chainstate, const chain::ChainParams& chain, storage::BlockStore& blockStore,
+                    int batchSize, int maxBlocks, int parallelDownloads, int blocksTargetHeight,
+                    consensus::script::ScriptVerifyRunner* scriptRunner) {
     if (peers.empty()) {
         return 0;
     }
+
+    const auto batchStarted = Clock::now();
+    PipelineTiming pipeline;
+    pipeline.prefetchDepth = prefetchDepthFromEnv(parallelDownloads);
+    pipeline.scriptThreads = scriptRunner != nullptr ? scriptRunner->threadCount() : 1;
 
     const int limit = maxBlocks == 0 ? batchSize : std::min(batchSize, maxBlocks);
     const auto work = buildOrderedBlockWork(tracker, chainstate, chain, limit, blocksTargetHeight);
@@ -258,29 +515,40 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     const int validated = chainstate.readTip(chain.name).height;
     const bool unbounded = blocksTargetHeight <= 0;
     if (unbounded && validated >= tracker.maxHeaderHeight()) {
+        const auto statusStarted = Clock::now();
         tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_current");
+        pipeline.statusWrites += elapsedUs(statusStarted);
+        pipeline.totalWall = elapsedUs(batchStarted);
+        emitPipelineTiming(pipeline);
         return 0;
     }
 
+    auto statusStarted = Clock::now();
     tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_syncing");
+    pipeline.statusWrites += elapsedUs(statusStarted);
     int downloaded = 0;
 
-    auto connectDownloaded = [&](const WorkItem& item, const std::vector<std::uint8_t>& payload) -> bool {
-        const auto written = blockStore.write(payload);
+    auto connectDownloaded = [&](const PrefetchedBlock& prefetched) -> bool {
+        const auto storeStarted = Clock::now();
+        const auto written = blockStore.write(prefetched.payload);
+        pipeline.blockStore += elapsedUs(storeStarted);
         consensus::ConnectBlockOptions options;
-        options.height = item.height;
-        options.expectedPrev = item.expectedPrev;
-        options.expectedHash = item.blockHash;
+        options.height = prefetched.item.height;
+        options.expectedPrev = prefetched.item.expectedPrev;
+        options.expectedHash = prefetched.item.blockHash;
         options.hasExpectedHash = true;
         options.chainName = chain.name;
+        options.scriptRunner = scriptRunner;
         options.blockIndex =
-            db::StoredBlockRow{item.height, item.blockHashHex, written.fileName, static_cast<int>(written.offset),
-                               static_cast<int>(written.size)};
+            db::StoredBlockRow{prefetched.item.height, prefetched.item.blockHashHex, written.fileName,
+                               static_cast<int>(written.offset), static_cast<int>(written.size)};
         try {
-            consensus::connectBlock(tracker, chainstate, payload, options);
+            const auto connectStarted = Clock::now();
+            consensus::connectDecodedBlock(tracker, chainstate, prefetched.decoded, options);
+            pipeline.connectTotal += elapsedUs(connectStarted);
         } catch (const consensus::ConnectBlockError& exc) {
             tracker.logEvent("sync", "Rejected invalid block", "warning",
-                             "{\"height\":" + std::to_string(item.height) + ",\"error\":" +
+                             "{\"height\":" + std::to_string(prefetched.item.height) + ",\"error\":" +
                                  util::jsonString(exc.what()) + "}");
             return false;
         }
@@ -288,99 +556,67 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
         return true;
     };
 
-    auto fetchOne = [&](const WorkItem& item) -> std::optional<std::vector<std::uint8_t>> {
-        const auto outcome =
-            parallelDownloads > 0 ? requestBlockFromPeersParallel(peers, item.blockHash)
-                                  : requestBlockFromPeers(peers, item.blockHash);
-        if (!outcome.has_value()) {
+    maybeMarkParallelSync(tracker, pipeline.prefetchDepth);
+    BlockPrefetcher prefetcher(peers, work, pipeline.prefetchDepth);
+    prefetcher.start();
+    while (maxBlocks <= 0 || downloaded < maxBlocks) {
+        auto prefetched = prefetcher.pop(&pipeline.idleWait);
+        if (!prefetched.has_value()) {
+            break;
+        }
+        pipeline.blockFetchWait += prefetched->fetchWaitUs;
+        pipeline.blockParseValidate += prefetched->parseValidateUs;
+        if (!prefetched->error.empty()) {
             tracker.logEvent("sync", "Block unavailable from peers", "warning",
-                             "{\"height\":" + std::to_string(item.height) + ",\"block_hash\":" +
-                                 util::jsonString(item.blockHashHex) + "}");
-            return std::nullopt;
+                             "{\"height\":" + std::to_string(prefetched->item.height) + ",\"block_hash\":" +
+                                 util::jsonString(prefetched->item.blockHashHex) + ",\"error\":" +
+                                 util::jsonString(prefetched->error) + "}");
+            break;
         }
-        return outcome->first;
-    };
+        pipeline.blocksFetched += 1;
+        if (!connectDownloaded(*prefetched)) {
+            break;
+        }
+        pipeline.blocksConnected += 1;
+    }
+    prefetcher.join();
+    const auto fetchStats = prefetcher.stats();
 
-    // The old async path races blocking reads on shared PeerConnection sockets.
-    // Use batched getdata prefetch until a scheduler owns one connection per worker.
-    const bool parallelFetchEnabled = false;
-    if (parallelFetchEnabled) {
-        if (!work.empty()) {
-            maybeMarkParallelSync(tracker, parallelDownloads);
-            for (std::size_t index = 0; index < work.size(); index += static_cast<std::size_t>(parallelDownloads)) {
-                const std::size_t end =
-                    std::min(work.size(), index + static_cast<std::size_t>(parallelDownloads));
-                std::vector<std::future<std::optional<std::vector<std::uint8_t>>>> chunkTasks;
-                for (std::size_t j = index; j < end; ++j) {
-                    chunkTasks.push_back(std::async(std::launch::async, [&work, j, &fetchOne]() {
-                        return fetchOne(work[j]);
-                    }));
-                }
-                bool failed = false;
-                for (std::size_t j = index; j < end; ++j) {
-                    const auto payload = chunkTasks[j - index].get();
-                    if (!payload.has_value() || !connectDownloaded(work[j], *payload)) {
-                        failed = true;
-                        break;
-                    }
-                }
-                if (failed) {
-                    break;
-                }
-            }
+    if (fetchStats.sentGetData || fetchStats.receivedBlock || fetchStats.receivedNotFound || downloaded > 0) {
+        const auto metaStarted = Clock::now();
+        if (fetchStats.sentGetData) {
+            tracker.markWireCapability("blocks.getdata.send", true, "live",
+                                       "sent streaming getdata during block sync batch");
         }
-    } else {
-        if (parallelDownloads > 0 && !peers.empty()) {
-            maybeMarkParallelSync(tracker, parallelDownloads);
-            for (std::size_t index = 0; index < work.size(); index += static_cast<std::size_t>(parallelDownloads)) {
-                if (maxBlocks > 0 && downloaded >= maxBlocks) {
-                    break;
-                }
-                const std::size_t end =
-                    std::min(work.size(), index + static_cast<std::size_t>(parallelDownloads));
-                std::vector<std::vector<std::uint8_t>> hashes;
-                hashes.reserve(end - index);
-                for (std::size_t j = index; j < end; ++j) {
-                    hashes.push_back(work[j].blockHash);
-                }
-                const auto payloads = peers.front()->requestBlocks(hashes);
-                bool failed = false;
-                for (std::size_t j = index; j < end; ++j) {
-                    const auto& payload = payloads[j - index];
-                    if (!payload.has_value() || !connectDownloaded(work[j], *payload)) {
-                        failed = true;
-                        break;
-                    }
-                }
-                if (failed) {
-                    break;
-                }
-            }
-        } else {
-            for (const auto& item : work) {
-                if (maxBlocks > 0 && downloaded >= maxBlocks) {
-                    break;
-                }
-                const auto payload = fetchOne(item);
-                if (!payload.has_value() || !connectDownloaded(item, *payload)) {
-                    break;
-                }
-            }
+        if (fetchStats.receivedBlock) {
+            tracker.markWireCapability("blocks.block.recv", true, "live",
+                                       "received streaming blocks during block sync batch");
         }
+        if (fetchStats.receivedNotFound) {
+            tracker.markWireCapability("blocks.notfound", true, "live",
+                                       "peer returned notfound during block sync batch");
+        }
+        pipeline.metadataStore += elapsedUs(metaStarted);
     }
 
     if (downloaded > 0) {
         const int toHeight = work[std::min(downloaded, static_cast<int>(work.size())) - 1].height;
         tracker.logEvent("sync", "Downloaded " + std::to_string(downloaded) + " blocks", "info",
-                         "{\"from_height\":" + std::to_string(work.front().height) + ",\"to_height\":" +
-                             std::to_string(toHeight) + "}");
+                             "{\"from_height\":" + std::to_string(work.front().height) + ",\"to_height\":" +
+                                 std::to_string(toHeight) + "}");
+        const auto metaStarted = Clock::now();
         tracker.markWireCapability("blocks.block.store", true, "live",
                                    "stored blocks through height " + std::to_string(toHeight));
+        pipeline.metadataStore += elapsedUs(metaStarted);
     }
 
     if (blocksTargetHeight <= 0 && chainstate.readTip(chain.name).height >= tracker.maxHeaderHeight()) {
+        const auto finalStatusStarted = Clock::now();
         tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_current");
+        pipeline.statusWrites += elapsedUs(finalStatusStarted);
     }
+    pipeline.totalWall = elapsedUs(batchStarted);
+    emitPipelineTiming(pipeline);
     return downloaded;
 }
 
@@ -395,6 +631,7 @@ int syncBlocksToTip(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
                     db::ChainstateStore& chainstate, const chain::ChainParams& chain,
                     storage::BlockStore& blockStore, const config::Settings& settings) {
     int total = 0;
+    consensus::script::ScriptVerifyRunner scriptRunner(consensus::script::scriptVerifyThreadCountFromEnv());
     while (true) {
         const int validated = chainstate.readTip(chain.name).height;
         if (settings.blocksTargetHeight > 0 && validated >= settings.blocksTargetHeight) {
@@ -416,7 +653,8 @@ int syncBlocksToTip(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
         }
         const int downloaded = syncBlocksBatch(peers, tracker, chainstate, chain, blockStore, batchLimit,
                                                settings.blocksMaxPerRun > 0 ? batchLimit : 0,
-                                               settings.parallelBlockDownloads, settings.blocksTargetHeight);
+                                               settings.parallelBlockDownloads, settings.blocksTargetHeight,
+                                               &scriptRunner);
         if (downloaded == 0) {
             break;
         }

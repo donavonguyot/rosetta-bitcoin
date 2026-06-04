@@ -9,6 +9,7 @@
 
 #include "cpbitnode/chain/params.hpp"
 #include "cpbitnode/consensus/block.hpp"
+#include "cpbitnode/consensus/script/verify.hpp"
 #include "cpbitnode/db/chainstate.hpp"
 #include "cpbitnode/db/node_state.hpp"
 
@@ -26,12 +27,15 @@ struct ConnectBlockOptions {
     bool hasExpectedHash = false;
     std::string chainName = "testnet4";
     std::optional<db::StoredBlockRow> blockIndex;
+    script::ScriptVerifyRunner* scriptRunner = nullptr;
 };
 
 Block connectBlock(db::NodeStateStore& tracker, std::span<const std::uint8_t> payload,
                    const ConnectBlockOptions& options);
 Block connectBlock(db::NodeStateStore& tracker, db::ChainstateStore& chainstate,
                    std::span<const std::uint8_t> payload, const ConnectBlockOptions& options);
+Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chainstate, const Block& block,
+                          const ConnectBlockOptions& options);
 void disconnectBlock(db::NodeStateStore& tracker, int height, const chain::ChainParams& chain);
 void disconnectBlock(db::NodeStateStore& tracker, db::ChainstateStore& chainstate, int height,
                      const chain::ChainParams& chain);

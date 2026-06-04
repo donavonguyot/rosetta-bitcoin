@@ -31,6 +31,19 @@ inline constexpr std::size_t kMaxGetdataTxBatch = 1024;
 using MessageHandler = std::function<void(const std::string& command, std::span<const std::uint8_t> payload)>;
 using RelayTxAcceptedFn = std::function<void(const messages::Transaction&, PeerConnection&)>;
 
+struct BlockRequestOptions {
+    bool recordTrackerEvents = true;
+};
+
+struct BlockRequestStats {
+    bool sentGetData = false;
+    bool receivedBlock = false;
+    bool receivedNotFound = false;
+};
+
+using StreamingBlockCallback =
+    std::function<bool(std::size_t index, std::vector<std::uint8_t> payload, long long fetchWaitUs)>;
+
 void broadcastWitnessBlockInv(const std::vector<PeerConnection*>& peers, const std::vector<std::uint8_t>& blockHash,
                               db::NodeStateStore& tracker);
 
@@ -72,7 +85,12 @@ public:
     virtual std::optional<std::vector<std::uint8_t>> requestBlock(const std::vector<std::uint8_t>& blockHash,
                                                                   double timeoutSeconds = 120.0);
     virtual std::vector<std::optional<std::vector<std::uint8_t>>> requestBlocks(
-        const std::vector<std::vector<std::uint8_t>>& blockHashes, double timeoutSeconds = 120.0);
+        const std::vector<std::vector<std::uint8_t>>& blockHashes, double timeoutSeconds = 120.0,
+        BlockRequestOptions options = {}, BlockRequestStats* stats = nullptr);
+    virtual bool requestBlocksStreaming(const std::vector<std::vector<std::uint8_t>>& blockHashes,
+                                        std::size_t windowSize, const StreamingBlockCallback& onBlock,
+                                        double timeoutSeconds = 120.0, BlockRequestOptions options = {},
+                                        BlockRequestStats* stats = nullptr);
 
     const chain::ChainParams& chain() const { return *options_.chain; }
     db::NodeStateStore& tracker() { return *options_.tracker; }
@@ -112,6 +130,7 @@ private:
     void postVerackNegotiation(bool outbound);
     bool deferAdvancedNegotiation() const;
     void runAdvancedNegotiation(bool outbound);
+    void sendInternal(const std::string& command, std::span<const std::uint8_t> payload, bool recordTrackerEvent);
     std::vector<std::uint8_t> readUntilCommand(const std::string& command, double timeoutSeconds);
     std::optional<std::vector<std::uint8_t>> requestBlockOnce(const std::vector<std::uint8_t>& blockHash,
                                                               std::uint32_t invType, double timeoutSeconds);

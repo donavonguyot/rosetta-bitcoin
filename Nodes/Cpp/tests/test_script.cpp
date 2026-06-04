@@ -949,6 +949,20 @@ void testWitnessProgramVersionPushData2And4() {
     EXPECT_TRUE(consensus::script::witnessProgramVersion(spk4).value_or(-1) == 1);
 }
 
+void testScriptVerifyRunnerReportsLowestInputFailure() {
+    messages::Transaction tx;
+    consensus::script::ScriptVerifyRunner runner(4);
+    const std::vector<consensus::script::VerifyInputJob> jobs = {
+        consensus::script::VerifyInputJob{&tx, 5, {consensus::script::OP_1}, 1, nullptr},
+        consensus::script::VerifyInputJob{&tx, 2, {consensus::script::OP_1}, 1, nullptr},
+        consensus::script::VerifyInputJob{&tx, 7, {consensus::script::OP_1}, 1, nullptr},
+    };
+    const auto result = runner.verify(jobs);
+    EXPECT_TRUE(result.error.has_value());
+    EXPECT_EQ(result.failedInputIndex, 2u);
+    EXPECT_TRUE(result.workerCpuUs >= 0);
+}
+
 }  // namespace
 
 void registerScriptTests() {
@@ -1014,4 +1028,5 @@ void registerScriptTests() {
     RUN_TEST(testEvaluateScriptCheckmultisigUnderflow);
     RUN_TEST(testCastToBoolRejectsNegativeZero);
     RUN_TEST(testWitnessProgramVersionPushData2And4);
+    RUN_TEST(testScriptVerifyRunnerReportsLowestInputFailure);
 }

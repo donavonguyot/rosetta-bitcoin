@@ -97,10 +97,11 @@ int main(int argc, char** argv) {
         json << "\"chainstate_codec_v2_vectors_run\":" << (codecVectorsRun ? "true" : "false") << ",";
         json << "\"codec_version\":2,";
         json << "\"rocksdb_tuning\":{";
-        json << "\"block_cache_bytes\":134217728,";
+        json << "\"block_cache_bytes\":536870912,";
         json << "\"bloom_filter_bits_per_key\":10,";
-        json << "\"write_buffer_size\":134217728,";
+        json << "\"write_buffer_size\":67108864,";
         json << "\"max_write_buffer_number\":4,";
+        json << "\"max_background_jobs\":4,";
         json << "\"wal\":\"" << (std::getenv("CPBITNODE_ROCKSDB_DISABLE_WAL") ? "disabled" : "enabled") << "\"";
         json << "},";
         json << "\"project_export\":{\"project_db\":\"Project/project.db\",\"node_id\":"

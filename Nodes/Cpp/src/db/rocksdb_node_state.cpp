@@ -29,6 +29,10 @@ namespace cpbitnode::db {
 namespace {
 
 constexpr std::string_view kDefaultChain = "testnet4";
+constexpr std::size_t kRocksDbBlockCacheBytes = 512ULL * 1024ULL * 1024ULL;
+constexpr std::size_t kRocksDbWriteBufferBytes = 64ULL * 1024ULL * 1024ULL;
+constexpr int kRocksDbMaxWriteBuffers = 4;
+constexpr int kRocksDbMaxBackgroundJobs = 4;
 
 std::string utcNow() {
     const auto now = std::chrono::system_clock::now();
@@ -247,13 +251,13 @@ public:
         std::filesystem::create_directories(path);
         rocksdb::Options options;
         options.create_if_missing = true;
-        options.write_buffer_size = 128 * 1024 * 1024;
-        options.max_write_buffer_number = 4;
-        options.max_background_jobs = std::max(2u, std::thread::hardware_concurrency());
+        options.write_buffer_size = kRocksDbWriteBufferBytes;
+        options.max_write_buffer_number = kRocksDbMaxWriteBuffers;
+        options.max_background_jobs = kRocksDbMaxBackgroundJobs;
         options.IncreaseParallelism(options.max_background_jobs);
         options.OptimizeLevelStyleCompaction();
         rocksdb::BlockBasedTableOptions tableOptions;
-        tableOptions.block_cache = rocksdb::NewLRUCache(128 * 1024 * 1024);
+        tableOptions.block_cache = rocksdb::NewLRUCache(kRocksDbBlockCacheBytes);
         tableOptions.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
         options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(tableOptions));
         disableWal_ = envFlag("CPBITNODE_ROCKSDB_DISABLE_WAL");
@@ -935,11 +939,11 @@ private:
         setCodecMetadata(batch, "updated_at", now);
         setCodecMetadata(batch, "tip_height", "-1");
         setCodecMetadata(batch, "tip_hash", "");
-        setCodecMetadata(batch, "rocksdb_block_cache_bytes", std::to_string(128 * 1024 * 1024));
+        setCodecMetadata(batch, "rocksdb_block_cache_bytes", std::to_string(kRocksDbBlockCacheBytes));
         setCodecMetadata(batch, "rocksdb_bloom_filter_bits_per_key", "10");
-        setCodecMetadata(batch, "rocksdb_write_buffer_size", std::to_string(128 * 1024 * 1024));
-        setCodecMetadata(batch, "rocksdb_max_write_buffer_number", "4");
-        setCodecMetadata(batch, "rocksdb_max_background_jobs", std::to_string(std::max(2u, std::thread::hardware_concurrency())));
+        setCodecMetadata(batch, "rocksdb_write_buffer_size", std::to_string(kRocksDbWriteBufferBytes));
+        setCodecMetadata(batch, "rocksdb_max_write_buffer_number", std::to_string(kRocksDbMaxWriteBuffers));
+        setCodecMetadata(batch, "rocksdb_max_background_jobs", std::to_string(kRocksDbMaxBackgroundJobs));
         setCodecMetadata(batch, "rocksdb_wal", disableWal_ ? "disabled" : "enabled");
         checkStatus(db_->Write(writeOptions(), &batch), "initialize codec v2 metadata");
     }

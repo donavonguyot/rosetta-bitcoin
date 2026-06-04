@@ -10,15 +10,13 @@
 #include "cpbitnode/sync/validate.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdlib>
-#include <future>
 #include <iostream>
 #include <optional>
-#include <set>
 #include <sstream>
 #include <string_view>
-#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -31,27 +29,15 @@ using Clock = std::chrono::steady_clock;
 struct ConnectTiming {
     long long utxoLoad = 0;
     long long scriptVerify = 0;
+    long long scriptVerifyWorkerCpu = 0;
     long long utxoApply = 0;
     long long commit = 0;
+    long long blockConnectStoreCommit = 0;
 };
 
 bool syncTimingEnabled() {
     const char* raw = std::getenv("CPBITNODE_SYNC_TIMING");
     return raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0";
-}
-
-bool scriptVerifyParallelEnabled() {
-    const char* raw = std::getenv("CPBITNODE_SCRIPT_VERIFY_PARALLEL");
-    return raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0";
-}
-
-std::size_t scriptVerifyParallelism() {
-    const char* raw = std::getenv("CPBITNODE_SCRIPT_VERIFY_PARALLELISM");
-    if (raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0") {
-        const int parsed = std::stoi(raw);
-        return parsed > 0 ? static_cast<std::size_t>(parsed) : 1;
-    }
-    return std::max(2u, std::thread::hardware_concurrency());
 }
 
 long long elapsedUs(Clock::time_point start) {
@@ -70,16 +56,10 @@ std::string displayHex(std::span<const std::uint8_t> bytes) {
 }
 
 struct OutpointKey {
-    std::vector<std::uint8_t> txid;
+    std::array<std::uint8_t, 32> txid{};
     std::uint32_t vout = 0;
 
     bool operator==(const OutpointKey& other) const { return vout == other.vout && txid == other.txid; }
-    bool operator<(const OutpointKey& other) const {
-        if (txid != other.txid) {
-            return txid < other.txid;
-        }
-        return vout < other.vout;
-    }
 };
 
 struct OutpointKeyHash {
@@ -93,7 +73,25 @@ struct OutpointKeyHash {
 };
 
 OutpointKey outpointKey(const messages::OutPoint& outpoint) {
-    return {outpoint.hash, outpoint.index};
+    OutpointKey key;
+    if (outpoint.hash.size() == key.txid.size()) {
+        std::copy(outpoint.hash.begin(), outpoint.hash.end(), key.txid.begin());
+    }
+    key.vout = outpoint.index;
+    return key;
+}
+
+OutpointKey outpointKey(std::span<const std::uint8_t> txid, int vout) {
+    OutpointKey key;
+    if (txid.size() == key.txid.size()) {
+        std::copy(txid.begin(), txid.end(), key.txid.begin());
+    }
+    key.vout = static_cast<std::uint32_t>(vout);
+    return key;
+}
+
+std::vector<std::uint8_t> keyTxidVector(const OutpointKey& key) {
+    return std::vector<std::uint8_t>(key.txid.begin(), key.txid.end());
 }
 
 class BlockUtxoView {
@@ -105,7 +103,7 @@ public:
         external.reserve(outpoints.size());
         std::unordered_set<OutpointKey, OutpointKeyHash> seen;
         for (const auto& outpoint : outpoints) {
-            const auto key = OutpointKey{outpoint.txid, static_cast<std::uint32_t>(outpoint.vout)};
+            const auto key = outpointKey(outpoint.txid, outpoint.vout);
             if (created_.contains(key)) {
                 continue;
             }
@@ -116,8 +114,7 @@ public:
         const auto loaded = chainstate_.getUtxos(external);
         for (std::size_t index = 0; index < external.size(); ++index) {
             if (loaded[index].has_value()) {
-                loaded_.emplace(OutpointKey{external[index].txid, static_cast<std::uint32_t>(external[index].vout)},
-                                *loaded[index]);
+                loaded_.emplace(outpointKey(external[index].txid, external[index].vout), *loaded[index]);
             }
         }
     }
@@ -162,7 +159,7 @@ public:
 
     void create(const std::vector<std::uint8_t>& txid, int vout, std::int64_t value,
                 const std::vector<std::uint8_t>& scriptPubkey, bool coinbase) {
-        const OutpointKey key{txid, static_cast<std::uint32_t>(vout)};
+        const auto key = outpointKey(txid, vout);
         if (created_.contains(key) || chainstate_.getUtxo(txid, vout).has_value()) {
             throw ConnectBlockError("duplicate UTXO " + displayHex(txid) + ":" + std::to_string(vout));
         }
@@ -181,7 +178,7 @@ public:
             if (created_.contains(key)) {
                 continue;
             }
-            chainstate_.spendUtxo(key.txid, static_cast<int>(key.vout));
+            chainstate_.spendUtxo(keyTxidVector(key), static_cast<int>(key.vout));
         }
         for (const auto& [key, utxo] : created_) {
             if (spent_.contains(key)) {
@@ -191,7 +188,7 @@ public:
         }
     }
 
-    const std::set<OutpointKey>& spent() const { return spent_; }
+    const std::unordered_set<OutpointKey, OutpointKeyHash>& spent() const { return spent_; }
     const std::unordered_map<OutpointKey, db::StoredUtxo, OutpointKeyHash>& created() const { return created_; }
     const std::vector<db::StoredUtxo>& externalUndo() const { return externalUndo_; }
     int height() const { return height_; }
@@ -202,7 +199,7 @@ private:
     std::unordered_map<OutpointKey, db::StoredUtxo, OutpointKeyHash> created_;
     std::unordered_map<OutpointKey, db::StoredUtxo, OutpointKeyHash> loaded_;
     std::vector<db::StoredUtxo> externalUndo_;
-    std::set<OutpointKey> spent_;
+    std::unordered_set<OutpointKey, OutpointKeyHash> spent_;
 };
 
 std::vector<db::StoredUtxo> externalSpendUndoEntries(const BlockUtxoView& view, db::ChainstateStore& chainstate) {
@@ -238,8 +235,9 @@ bool blockHasWitness(const Block& block) {
     return false;
 }
 
-std::int64_t validateNonCoinbaseInputs(BlockUtxoView& view, const messages::Transaction& tx) {
-    std::set<OutpointKey> seenPrevouts;
+std::int64_t validateNonCoinbaseInputs(BlockUtxoView& view, const messages::Transaction& tx,
+                                       script::ScriptVerifyRunner* runner, ConnectTiming* timing) {
+    std::unordered_set<OutpointKey, OutpointKeyHash> seenPrevouts;
     std::vector<db::StoredUtxo> utxoInfos;
     utxoInfos.reserve(tx.inputs.size());
 
@@ -269,29 +267,19 @@ std::int64_t validateNonCoinbaseInputs(BlockUtxoView& view, const messages::Tran
         spentPrevouts.emplace_back(utxo.value, utxo.scriptPubkey);
     }
 
-    if (scriptVerifyParallelEnabled() && tx.inputs.size() > 1) {
-        const auto parallelism = std::max<std::size_t>(1, scriptVerifyParallelism());
-        for (std::size_t base = 0; base < tx.inputs.size(); base += parallelism) {
-            const auto end = std::min(tx.inputs.size(), base + parallelism);
-            std::vector<std::future<std::optional<std::string>>> tasks;
-            tasks.reserve(end - base);
-            for (std::size_t inputIndex = base; inputIndex < end; ++inputIndex) {
-                tasks.push_back(std::async(std::launch::async, [&tx, &utxoInfos, &spentPrevouts, inputIndex]() {
-                    const auto& utxo = utxoInfos[inputIndex];
-                    try {
-                        script::verifyTransactionInput(tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts);
-                        return std::optional<std::string>{};
-                    } catch (const script::ScriptVerifyError& exc) {
-                        return std::optional<std::string>{exc.what()};
-                    }
-                }));
-            }
-            for (std::size_t inputIndex = base; inputIndex < end; ++inputIndex) {
-                const auto failure = tasks[inputIndex - base].get();
-                if (failure.has_value()) {
-                    throw ConnectBlockError(*failure);
-                }
-            }
+    if (runner != nullptr && tx.inputs.size() > 1) {
+        std::vector<script::VerifyInputJob> jobs;
+        jobs.reserve(tx.inputs.size());
+        for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
+            const auto& utxo = utxoInfos[inputIndex];
+            jobs.push_back(script::VerifyInputJob{&tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts});
+        }
+        const auto result = runner->verify(jobs);
+        if (timing != nullptr) {
+            timing->scriptVerifyWorkerCpu += result.workerCpuUs;
+        }
+        if (result.error.has_value()) {
+            throw ConnectBlockError(*result.error);
         }
     } else {
         for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
@@ -322,9 +310,10 @@ void emitTiming(int height, const ConnectTiming& timing) {
               << " unit=us"
               << " utxo_load=" << timing.utxoLoad
               << " script_verify=" << timing.scriptVerify
+              << " script_verify_worker_cpu=" << timing.scriptVerifyWorkerCpu
               << " utxo_apply=" << timing.utxoApply
               << " commit=" << timing.commit
-              << " block_connect_store_commit=" << timing.commit
+              << " block_connect_store_commit=" << timing.blockConnectStoreCommit
               << "\n";
 }
 
@@ -348,6 +337,25 @@ Block connectBlock(db::NodeStateStore& tracker, db::ChainstateStore& chainstate,
     try {
         block = sync::validateBlock(payload, options.expectedPrev,
                                     options.hasExpectedHash ? &options.expectedHash : nullptr);
+    } catch (const sync::BlockValidationError& exc) {
+        throw ConnectBlockError(exc.what());
+    }
+
+    auto connected = connectDecodedBlock(tracker, chainstate, block, options);
+    return connected;
+}
+
+Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chainstate, const Block& block,
+                          const ConnectBlockOptions& options) {
+    const auto fullStart = detail::Clock::now();
+    const auto tip = chainstate.readTip(options.chainName);
+    if (options.height != tip.height + 1) {
+        throw ConnectBlockError("cannot connect height " + std::to_string(options.height) +
+                                " on top of validated tip " + std::to_string(tip.height));
+    }
+
+    try {
+        sync::validateDecodedBlock(block, options.expectedPrev, options.hasExpectedHash ? &options.expectedHash : nullptr);
     } catch (const sync::BlockValidationError& exc) {
         throw ConnectBlockError(exc.what());
     }
@@ -376,7 +384,7 @@ Block connectBlock(db::NodeStateStore& tracker, db::ChainstateStore& chainstate,
             continue;
         }
         timerStart = detail::Clock::now();
-        const auto inputTotal = detail::validateNonCoinbaseInputs(view, tx);
+        const auto inputTotal = detail::validateNonCoinbaseInputs(view, tx, options.scriptRunner, &timing);
         if (timingEnabled) {
             timing.scriptVerify += detail::elapsedUs(timerStart);
         }
@@ -435,7 +443,7 @@ Block connectBlock(db::NodeStateStore& tracker, db::ChainstateStore& chainstate,
         if (view.created().contains(key)) {
             continue;
         }
-        commit.spends.push_back(db::Outpoint{key.txid, static_cast<int>(key.vout)});
+        commit.spends.push_back(db::Outpoint{detail::keyTxidVector(key), static_cast<int>(key.vout)});
     }
     for (const auto& [key, utxo] : view.created()) {
         if (view.spent().contains(key)) {
@@ -451,6 +459,7 @@ Block connectBlock(db::NodeStateStore& tracker, db::ChainstateStore& chainstate,
     chainstate.commitBlock(commit);
     if (timingEnabled) {
         timing.commit += detail::elapsedUs(timerStart);
+        timing.blockConnectStoreCommit = detail::elapsedUs(fullStart);
         detail::emitTiming(options.height, timing);
     }
     return block;
@@ -498,7 +507,7 @@ std::int64_t validateNonCoinbaseInputs(db::NodeStateStore& tracker, int height,
                                        const messages::Transaction& tx) {
     db::NodeStateChainstateStore chainstate(tracker);
     detail::BlockUtxoView view(chainstate, height);
-    return detail::validateNonCoinbaseInputs(view, tx);
+    return detail::validateNonCoinbaseInputs(view, tx, nullptr, nullptr);
 }
 
 void validateCoinbaseAtHeight(const messages::Transaction& coinbase, int height, std::int64_t totalFees) {

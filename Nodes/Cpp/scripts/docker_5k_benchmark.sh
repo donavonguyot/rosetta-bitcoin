@@ -27,6 +27,8 @@ REFERENCE_START_HASH="${REFERENCE_START_HASH:-$(reference_hash "$REFERENCE_START
 REFERENCE_FINISH_HEIGHT="${REFERENCE_FINISH_HEIGHT:-$TARGET}"
 REFERENCE_FINISH_HASH="${REFERENCE_FINISH_HASH:-$(reference_hash "$REFERENCE_FINISH_HEIGHT")}"
 
+python3 scripts/target_readiness_check.py --target "$TARGET"
+
 start_ms="$(now_ms)"
 set +e
 set +o pipefail
@@ -34,6 +36,8 @@ DOCKER_PROOF_VOLUME="$VOLUME" PEERS="$PEERS" BLOCKS_MAX="$BLOCKS_MAX" BLOCKS_TAR
   docker compose -f docker/docker-compose.yml run --rm --no-deps \
     -e CPBITNODE_SYNC_TIMING=1 \
     -e CPBITNODE_SCRIPT_VERIFY_PARALLEL=1 \
+    -e CPBITNODE_SCRIPT_VERIFY_THREADS="${CPBITNODE_SCRIPT_VERIFY_THREADS:-}" \
+    -e CPBITNODE_BLOCK_PREFETCH_DEPTH="$PREFETCH_DEPTH" \
     -e PARALLEL_BLOCK_DOWNLOADS="$PREFETCH_DEPTH" \
     cpbitnode-sync-proof 2>&1 | tee "$RUN_LOG_TMP"
 sync_exit=${PIPESTATUS[0]}
@@ -105,21 +109,31 @@ def parse_timing_line(line):
     stages_us = {
         "utxo_load": as_int(pairs.get("utxo_load")),
         "script_verify": as_int(pairs.get("script_verify")),
+        "script_verify_worker_cpu": as_int(pairs.get("script_verify_worker_cpu")),
         "utxo_apply": as_int(pairs.get("utxo_apply")),
         "commit": as_int(pairs.get("commit")),
+        "block_connect_store_commit": as_int(pairs.get("block_connect_store_commit")),
     }
-    # The C++ log line currently repeats commit as block_connect_store_commit,
-    # so compute an aggregate bucket from the real stage fields.
-    stages_us["block_connect_store_commit"] = sum(stages_us.values())
+    if stages_us["block_connect_store_commit"] == 0:
+        stages_us["block_connect_store_commit"] = (
+            stages_us["utxo_load"]
+            + stages_us["script_verify"]
+            + stages_us["utxo_apply"]
+            + stages_us["commit"]
+        )
     return height, stages_us
 
 
 def parse_run_log(path):
     raw = path.read_text(errors="replace")
     stage_totals_us = {}
+    pipeline_totals_us = {}
     slow_blocks = []
     sync_summary = {}
     current_blocker = None
+    pipeline_blocks_fetched = 0
+    pipeline_blocks_connected = 0
+    script_threads = 1
     for line in raw.splitlines():
         stripped = line.strip()
         if stripped.startswith("cpbitnode_sync_timing "):
@@ -136,10 +150,35 @@ def parse_run_log(path):
                     "block_connect_store_commit_ms": round(block_total_us / 1000),
                     "utxo_load_ms": round(stages_us["utxo_load"] / 1000),
                     "script_verify_ms": round(stages_us["script_verify"] / 1000),
+                    "script_verify_worker_cpu_ms": round(stages_us["script_verify_worker_cpu"] / 1000),
                     "utxo_apply_ms": round(stages_us["utxo_apply"] / 1000),
                     "commit_ms": round(stages_us["commit"] / 1000),
                 }
             )
+        elif stripped.startswith("cpbitnode_pipeline_timing "):
+            pairs = dict(re.findall(r"([A-Za-z0-9_]+)=([^ ]+)", stripped))
+            if pairs.get("unit") != "us":
+                continue
+            for stage in [
+                "total_wall",
+                "block_fetch_wait",
+                "block_parse_validate",
+                "block_store",
+                "metadata_store",
+                "connect_total",
+                "utxo_load",
+                "prevout_batch_load",
+                "script_verify",
+                "script_verify_worker_cpu",
+                "utxo_apply",
+                "commit",
+                "status_writes",
+                "idle_wait",
+            ]:
+                pipeline_totals_us[stage] = pipeline_totals_us.get(stage, 0) + as_int(pairs.get(stage))
+            pipeline_blocks_fetched += as_int(pairs.get("blocks_fetched"))
+            pipeline_blocks_connected += as_int(pairs.get("blocks_connected"))
+            script_threads = max(script_threads, as_int(pairs.get("script_threads"), 1))
         elif "Block sync complete:" in stripped:
             pairs = dict(re.findall(r"([A-Za-z0-9_]+)=([^ ]+)", stripped))
             sync_summary = pairs
@@ -149,7 +188,11 @@ def parse_run_log(path):
     for index, item in enumerate(slow_blocks[:10], start=1):
         item["rank"] = index
     stage_totals_ms = {stage: round(value / 1000) for stage, value in stage_totals_us.items()}
-    return raw, stage_totals_ms, slow_blocks[:10], sync_summary, current_blocker
+    pipeline_summary = {stage: round(value / 1000) for stage, value in pipeline_totals_us.items()}
+    pipeline_summary["blocks_fetched"] = pipeline_blocks_fetched
+    pipeline_summary["blocks_connected"] = pipeline_blocks_connected
+    pipeline_summary["script_threads"] = script_threads
+    return raw, stage_totals_ms, pipeline_summary, slow_blocks[:10], sync_summary, current_blocker
 
 
 status_raw = Path(os.environ["STATUS_PATH"]).read_text(errors="replace")
@@ -158,7 +201,7 @@ try:
 except json.JSONDecodeError:
     status = {}
 
-_, stage_totals, slow_blocks, sync_summary, log_blocker = parse_run_log(Path(os.environ["RUN_LOG_PATH"]))
+_, stage_totals, pipeline_summary, slow_blocks, sync_summary, log_blocker = parse_run_log(Path(os.environ["RUN_LOG_PATH"]))
 
 sync_exit = as_int(os.environ.get("SYNC_EXIT"))
 status_exit = as_int(os.environ.get("STATUS_EXIT"))
@@ -189,6 +232,20 @@ passed = not failures
 captured_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 if not stage_totals:
     stage_totals = {"block_connect_store_commit": elapsed_ms}
+if not pipeline_summary.get("total_wall"):
+    pipeline_summary["total_wall"] = elapsed_ms
+pipeline_summary.setdefault("block_fetch_wait", 0)
+pipeline_summary.setdefault("block_parse_validate", 0)
+pipeline_summary.setdefault("block_store", 0)
+pipeline_summary.setdefault("metadata_store", 0)
+pipeline_summary.setdefault("connect_total", stage_totals.get("block_connect_store_commit", 0))
+for stage in ["utxo_load", "script_verify", "script_verify_worker_cpu", "utxo_apply", "commit"]:
+    if pipeline_summary.get(stage, 0) == 0:
+        pipeline_summary[stage] = stage_totals.get(stage, 0)
+if pipeline_summary.get("prevout_batch_load", 0) == 0:
+    pipeline_summary["prevout_batch_load"] = stage_totals.get("utxo_load", 0)
+pipeline_summary.setdefault("status_writes", 0)
+pipeline_summary.setdefault("idle_wait", 0)
 
 doc = {
     "benchmark_contract_version": 1,
@@ -238,8 +295,11 @@ doc = {
     "native_crypto_backend": status.get("native_crypto_backend") or "libsecp256k1",
     "native_crypto_available": bool(status.get("native_crypto_available", False)),
     "taproot_tweak_backend": status.get("taproot_tweak_backend"),
-    "script_runner_mode": "parallel",
+    "script_runner_mode": "parallel" if pipeline_summary.get("script_threads", 1) > 1 else "sequential",
+    "script_threads": as_int(pipeline_summary.get("script_threads"), 1),
+    "crypto_context_mode": status.get("native_crypto_backend") or "libsecp256k1",
     "prefetch_depth": as_int(os.environ.get("PREFETCH_DEPTH"), 4),
+    "rocksdb_tuning": "block_cache=512MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
     "rocksdb_wal_disabled": False,
     "fresh_state": True,
     "resume_supported": True,
@@ -248,6 +308,7 @@ doc = {
         "stage_totals_ms": stage_totals,
         "slow_blocks": slow_blocks,
     },
+    "pipeline_timing_summary": pipeline_summary,
     "elapsed_ms": elapsed_ms,
     "captured_at": captured_at,
     "updated_at": captured_at,
