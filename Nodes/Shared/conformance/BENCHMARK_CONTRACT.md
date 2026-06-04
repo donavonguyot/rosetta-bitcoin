@@ -55,6 +55,43 @@ Tip runs remain useful for milestone confidence or binary-gate-adjacent work,
 but a moving tip is not the routine benchmark target. A tip artifact must record
 the exact Reference height/hash at start and finish.
 
+## 5k Supporting Gate
+
+The first standardized gate for port-by-port work is:
+
+```text
+supporting_5k_durable_local_reference_replay
+```
+
+Required metadata:
+
+```text
+benchmark_contract_version = 1
+benchmark_kind = supporting_5k_durable_local_reference_replay
+target_height = 5000
+target_label = 5k
+runtime_surface = docker
+peer_mode = local_reference or local_reference_rpc
+rocksdb_wal_disabled = false
+resume_supported = true
+binary_gate_status = not_attempted
+```
+
+The gate passes only when `validated_height >= 5000`, `current_blocker = null`,
+and the final validated hash matches the port-validated block at height `5000`.
+It is a readiness gate for Docker/local-reference wiring, native storage
+ownership, status/proof artifacts, and the first spend/script path around block
+739. It is not live P2P sync proof and not binary-gate evidence.
+
+Preferred Docker command surface:
+
+```text
+docker_proof_local
+```
+
+Ports may keep idiomatic target names, but Project records the command through
+`port_command_surface` and records 5k evidence through `benchmark_gate_matrix`.
+
 ## Diagnostic Runs
 
 Ports may still run disposable diagnostics while tuning, for example WAL-off
@@ -169,6 +206,12 @@ cpp_docker_primary_100k_benchmark_2026-06-04.json
 
 Existing legacy filenames remain valid historical evidence, but new benchmark
 work should use this naming shape when practical.
+
+Use this result name for 5k supporting-gate artifacts:
+
+```text
+<port>_<surface>_supporting_5k_benchmark_<YYYY-MM-DD>.json
+```
 
 ## Non-Goals
 

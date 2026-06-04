@@ -31,7 +31,8 @@ python3 Project/scripts/report.py --db Project/project.db --section blocker-matr
 - `blocker-ledger.md` - blocker record shape and classification rules.
 - `port-performance-lessons.md` - reusable performance lessons.
 - `../Nodes/Shared/conformance/BENCHMARK_CONTRACT.md` - the primary cross-port
-  `100k` durable benchmark, timing buckets, and artifact naming.
+  `100k` durable benchmark, the 5k supporting gate, timing buckets, and artifact
+  naming.
 - `checkpoint-strategy.md` - checkpoint and snapshot guidance.
 - `native-crypto-contract.md` - native crypto expectations.
 - `agent-prompts.md` - reusable prompts for agents.

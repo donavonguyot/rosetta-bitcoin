@@ -192,6 +192,23 @@ CREATE TABLE IF NOT EXISTS benchmarks (
   source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id)
 );
 
+CREATE TABLE IF NOT EXISTS benchmark_gates (
+  gate_id TEXT PRIMARY KEY,
+  target_height INTEGER NOT NULL,
+  target_label TEXT NOT NULL,
+  benchmark_kind TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL,
+  preferred_runtime_surface TEXT NOT NULL,
+  preferred_command_key TEXT NOT NULL,
+  local_reference_required INTEGER NOT NULL DEFAULT 1,
+  durable_required INTEGER NOT NULL DEFAULT 1,
+  wal_disabled_required INTEGER NOT NULL DEFAULT 0,
+  resume_supported_required INTEGER NOT NULL DEFAULT 1,
+  binary_gate_status TEXT NOT NULL DEFAULT 'not_attempted',
+  result_name_pattern TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS timing_samples (
   sample_id TEXT PRIMARY KEY,
   node_id TEXT NOT NULL REFERENCES nodes(node_id),
@@ -467,3 +484,58 @@ SELECT
 FROM benchmarks b
 JOIN project_node_ports np ON np.node_id = b.node_id
 GROUP BY np.port, b.node_id, b.benchmark_name, b.backend;
+
+CREATE VIEW IF NOT EXISTS benchmark_gate_matrix AS
+WITH ports AS (
+  SELECT port
+  FROM docker_contracts
+  WHERE port <> 'reference'
+),
+ranked_results AS (
+  SELECT
+    bg.gate_id,
+    np.port,
+    b.node_id,
+    b.benchmark_name,
+    b.height AS target_height,
+    coalesce(json_extract(b.result_json, '$.validated_height'), b.height, -1) AS validated_height,
+    coalesce(json_extract(b.result_json, '$.result'), '') AS result,
+    coalesce(json_extract(b.settings_json, '$.runtime_surface'), '') AS runtime_surface,
+    coalesce(json_extract(b.settings_json, '$.peer_mode'), '') AS peer_mode,
+    coalesce(json_extract(b.settings_json, '$.rocksdb_wal_disabled'), '') AS rocksdb_wal_disabled,
+    b.captured_at,
+    b.source_artifact_id,
+    row_number() OVER (
+      PARTITION BY bg.gate_id, np.port
+      ORDER BY coalesce(json_extract(b.result_json, '$.validated_height'), -1) DESC,
+               b.captured_at DESC,
+               b.source_artifact_id
+    ) AS rn
+  FROM benchmark_gates bg
+  JOIN benchmarks b ON b.height = bg.target_height
+  JOIN project_node_ports np ON np.node_id = b.node_id
+)
+SELECT
+  bg.gate_id,
+  bg.target_label,
+  bg.target_height,
+  bg.benchmark_kind,
+  bg.role,
+  bg.preferred_runtime_surface,
+  bg.preferred_command_key,
+  p.port,
+  CASE
+    WHEN rr.node_id IS NULL THEN 'missing'
+    WHEN rr.validated_height >= bg.target_height AND rr.result IN ('passed', 'target_reached', 'ok', 'success') THEN 'passed'
+    WHEN rr.validated_height >= bg.target_height AND rr.result = '' THEN 'recorded'
+    ELSE coalesce(rr.result, 'recorded')
+  END AS gate_status,
+  coalesce(rr.validated_height, -1) AS validated_height,
+  coalesce(rr.runtime_surface, '') AS runtime_surface,
+  coalesce(rr.peer_mode, '') AS peer_mode,
+  coalesce(rr.rocksdb_wal_disabled, '') AS rocksdb_wal_disabled,
+  coalesce(rr.captured_at, '') AS captured_at,
+  rr.source_artifact_id
+FROM benchmark_gates bg
+CROSS JOIN ports p
+LEFT JOIN ranked_results rr ON rr.gate_id = bg.gate_id AND rr.port = p.port AND rr.rn = 1;

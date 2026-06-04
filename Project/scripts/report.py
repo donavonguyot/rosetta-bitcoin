@@ -17,6 +17,7 @@ SECTIONS = (
     "conformance",
     "blocker-catalog",
     "blocker-matrix",
+    "benchmark-gates",
     "benchmark-summary",
     "decisions",
 )
@@ -26,6 +27,7 @@ SECTION_ALIASES = {
     "docker": "docker-coverage",
     "commands": "command-surface",
     "blockers": "blocker-catalog",
+    "gates": "benchmark-gates",
     "benchmarks": "benchmark-summary",
 }
 
@@ -72,6 +74,7 @@ def print_summary(connection: sqlite3.Connection) -> None:
         union all select 'nodes', count(*) from nodes
         union all select 'docker_contracts', count(*) from docker_contracts
         union all select 'port_commands', count(*) from port_commands
+        union all select 'benchmark_gates', count(*) from benchmark_gates
         union all select 'status_snapshots', count(*) from status_snapshots
         union all select 'blockers', count(*) from blockers
         union all select 'conformance_results', count(*) from conformance_results
@@ -229,6 +232,32 @@ def print_benchmark_summary(connection: sqlite3.Connection) -> None:
     print(table(("port", "node", "benchmark", "max_height", "backend", "samples", "latest"), data))
 
 
+def print_benchmark_gates(connection: sqlite3.Connection) -> None:
+    print("## Benchmark Gates")
+    print()
+    gates = rows(
+        connection,
+        """
+        select gate_id, target_label, target_height, benchmark_kind, role,
+               preferred_runtime_surface, preferred_command_key
+        from benchmark_gates
+        order by target_height
+        """,
+    )
+    print(table(("gate", "label", "target", "kind", "role", "surface", "command"), gates))
+    print()
+    matrix = rows(
+        connection,
+        """
+        select gate_id, port, gate_status, validated_height,
+               runtime_surface, peer_mode, rocksdb_wal_disabled, captured_at
+        from benchmark_gate_matrix
+        order by target_height, port
+        """,
+    )
+    print(table(("gate", "port", "status", "validated", "surface", "peer_mode", "wal_off", "captured"), matrix))
+
+
 def print_decisions(connection: sqlite3.Connection) -> None:
     print("## Decisions")
     print()
@@ -244,6 +273,7 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "conformance": print_conformance,
     "blocker-catalog": print_blocker_catalog,
     "blocker-matrix": print_blocker_matrix,
+    "benchmark-gates": print_benchmark_gates,
     "benchmark-summary": print_benchmark_summary,
     "decisions": print_decisions,
 }

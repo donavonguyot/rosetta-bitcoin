@@ -97,6 +97,25 @@ DECISIONS: tuple[dict[str, str], ...] = (
     },
 )
 
+BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
+    {
+        "gate_id": "supporting_5k",
+        "target_height": 5000,
+        "target_label": "5k",
+        "benchmark_kind": "supporting_5k_durable_local_reference_replay",
+        "role": "first readiness gate",
+        "preferred_runtime_surface": "docker",
+        "preferred_command_key": "docker_proof_local",
+        "local_reference_required": 1,
+        "durable_required": 1,
+        "wal_disabled_required": 0,
+        "resume_supported_required": 1,
+        "binary_gate_status": "not_attempted",
+        "result_name_pattern": "<port>_<surface>_supporting_5k_benchmark_<YYYY-MM-DD>.json",
+        "notes": "Proves Docker/local-reference wiring, native storage ownership, status/proof artifacts, and the first spend/script path around block 739.",
+    },
+)
+
 COMMAND_PURPOSES: dict[str, str] = {
     "docker_config": "validate compose configuration",
     "docker_build": "build the Docker runtime/proof image",
@@ -250,6 +269,36 @@ def implementation_for_node(node_id: str, payload: dict[str, Any]) -> tuple[str,
 
 def captured_at_for_payload(payload: dict[str, Any]) -> str:
     return text(first(payload, "captured_at", "updated_at", "started_at", "finished_at", default=""))
+
+
+def benchmark_kind_for_payload(payload: dict[str, Any]) -> str:
+    explicit = text(payload.get("benchmark_kind")).strip()
+    if explicit:
+        return explicit
+    target_height = integer(payload.get("target_height"), None)
+    if target_height == 5000:
+        return "supporting_5k_durable_local_reference_replay"
+    if target_height == 10000:
+        return "supporting_10k_durable_local_reference_replay"
+    if target_height == 50000:
+        return "supporting_50k_durable_local_reference_replay"
+    if target_height == 100000:
+        return "primary_100k_durable_local_reference_replay"
+    return text(payload.get("category") or payload.get("artifact_kind"))
+
+
+def target_label_for_payload(payload: dict[str, Any]) -> str:
+    explicit = text(payload.get("target_label")).strip()
+    if explicit:
+        return explicit
+    target_height = integer(payload.get("target_height"), None)
+    labels = {
+        5000: "5k",
+        10000: "10k",
+        50000: "50k",
+        100000: "100k",
+    }
+    return labels.get(target_height, "")
 
 
 def artifact_kind(path: Path, payload: dict[str, Any]) -> str:
@@ -506,6 +555,65 @@ def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Pat
     return len(commands)
 
 
+def import_benchmark_gates(connection: sqlite3.Connection) -> None:
+    for gate in BENCHMARK_GATES:
+        connection.execute(
+            """
+            INSERT INTO benchmark_gates(
+              gate_id, target_height, target_label, benchmark_kind, role,
+              preferred_runtime_surface, preferred_command_key,
+              local_reference_required, durable_required, wal_disabled_required,
+              resume_supported_required, binary_gate_status, result_name_pattern,
+              notes
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(gate_id) DO UPDATE SET
+              target_height = excluded.target_height,
+              target_label = excluded.target_label,
+              benchmark_kind = excluded.benchmark_kind,
+              role = excluded.role,
+              preferred_runtime_surface = excluded.preferred_runtime_surface,
+              preferred_command_key = excluded.preferred_command_key,
+              local_reference_required = excluded.local_reference_required,
+              durable_required = excluded.durable_required,
+              wal_disabled_required = excluded.wal_disabled_required,
+              resume_supported_required = excluded.resume_supported_required,
+              binary_gate_status = excluded.binary_gate_status,
+              result_name_pattern = excluded.result_name_pattern,
+              notes = excluded.notes
+            WHERE
+              benchmark_gates.target_height <> excluded.target_height OR
+              benchmark_gates.target_label <> excluded.target_label OR
+              benchmark_gates.benchmark_kind <> excluded.benchmark_kind OR
+              benchmark_gates.role <> excluded.role OR
+              benchmark_gates.preferred_runtime_surface <> excluded.preferred_runtime_surface OR
+              benchmark_gates.preferred_command_key <> excluded.preferred_command_key OR
+              benchmark_gates.local_reference_required <> excluded.local_reference_required OR
+              benchmark_gates.durable_required <> excluded.durable_required OR
+              benchmark_gates.wal_disabled_required <> excluded.wal_disabled_required OR
+              benchmark_gates.resume_supported_required <> excluded.resume_supported_required OR
+              benchmark_gates.binary_gate_status <> excluded.binary_gate_status OR
+              benchmark_gates.result_name_pattern <> excluded.result_name_pattern OR
+              benchmark_gates.notes <> excluded.notes
+            """,
+            (
+                gate["gate_id"],
+                gate["target_height"],
+                gate["target_label"],
+                gate["benchmark_kind"],
+                gate["role"],
+                gate["preferred_runtime_surface"],
+                gate["preferred_command_key"],
+                gate["local_reference_required"],
+                gate["durable_required"],
+                gate["wal_disabled_required"],
+                gate["resume_supported_required"],
+                gate["binary_gate_status"],
+                gate["result_name_pattern"],
+                gate["notes"],
+            ),
+        )
+
+
 def result_from_payload(payload: dict[str, Any]) -> str:
     if isinstance(payload.get("passed"), bool):
         return "passed" if payload["passed"] else "failed"
@@ -740,10 +848,17 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
             "connect_summary",
             "slow_blocks",
             "resource_samples",
+            "benchmark_kind",
+            "target_height",
+            "target_label",
         )
     )
     if not benchmark_like:
         return
+    benchmark_kind = benchmark_kind_for_payload(payload)
+    target_height = integer(payload.get("target_height"), None)
+    target_label = target_label_for_payload(payload)
+    validated_height = integer(payload.get("validated_height") or payload.get("header_height"), None)
     benchmark_id = stable_id("benchmark", artifact.artifact_id)
     connection.execute(
         """
@@ -763,17 +878,56 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
           result_json = excluded.result_json,
           captured_at = excluded.captured_at
         """,
-        (
+            (
             benchmark_id,
             artifact.node_id,
-            text(payload.get("category") or payload.get("artifact_kind") or artifact.path.stem),
+            benchmark_kind or text(payload.get("category") or payload.get("artifact_kind") or artifact.path.stem),
             text(payload.get("chain")),
-            integer(payload.get("validated_height") or payload.get("header_height"), None),
+            target_height if target_height is not None else validated_height,
             text(payload.get("validated_hash")),
             text(payload.get("chainstate_backend") or payload.get("storage_backend")),
-            pretty_json({key: payload[key] for key in ("peer_mode", "runtime_surface", "prefetch_depth", "script_threads", "script_runner_mode", "crypto_context_mode") if key in payload}),
+            pretty_json(
+                {
+                    **{
+                        key: payload[key]
+                        for key in (
+                            "benchmark_contract_version",
+                            "peer_mode",
+                            "runtime_surface",
+                            "prefetch_depth",
+                            "script_threads",
+                            "script_runner_mode",
+                            "crypto_context_mode",
+                            "rocksdb_wal_disabled",
+                            "resume_supported",
+                        )
+                        if key in payload
+                    },
+                    **({"benchmark_kind": benchmark_kind} if benchmark_kind else {}),
+                    **({"target_height": target_height} if target_height is not None else {}),
+                    **({"target_label": target_label} if target_label else {}),
+                }
+            ),
             pretty_json({key: payload[key] for key in ("sync_timing", "stage_totals_ms", "pipeline_timing_summary", "timings_ms", "connect_summary") if key in payload}),
-            pretty_json({key: payload[key] for key in ("result", "bounded_gate_status", "binary_gate_status", "long_sync_status", "elapsed_ms") if key in payload}),
+            pretty_json(
+                {
+                    **{
+                        key: payload[key]
+                        for key in (
+                            "result",
+                            "bounded_gate_status",
+                            "binary_gate_status",
+                            "long_sync_status",
+                            "elapsed_ms",
+                            "current_blocker",
+                        )
+                        if key in payload
+                    },
+                    **({"validated_height": validated_height} if validated_height is not None else {}),
+                    **({"target_height": target_height} if target_height is not None else {}),
+                    **({"target_label": target_label} if target_label else {}),
+                }
+            ),
             artifact.captured_at,
             artifact.artifact_id,
         ),
@@ -1038,6 +1192,7 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         "blocker_ledgers": 0,
         "blocker_rows": 0,
         "decisions": len(DECISIONS),
+        "benchmark_gates": len(BENCHMARK_GATES),
         "port_commands": 0,
     }
     with sqlite3.connect(db_path) as connection:
@@ -1045,6 +1200,7 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         init_db(connection, root / "Project/schema.sql")
         connection.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('schema', 'mission-control-baseline')")
         connection.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('sqlite_utils_cli', 'required')")
+        import_benchmark_gates(connection)
 
         docker_dir = root / args.docker_dir
         for path in sorted(docker_dir.glob("*.docker.json")):

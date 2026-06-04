@@ -46,6 +46,7 @@ python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section command-surface
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-gates
 ```
 
 Project exposes stable projection views for direct queries:
@@ -62,6 +63,9 @@ sqlite-utils query Project/project.db \
 
 sqlite-utils query Project/project.db \
   "select * from follower_blocker_matrix order by height, port"
+
+sqlite-utils query Project/project.db \
+  "select * from benchmark_gate_matrix order by target_height, port"
 ```
 
 Generated reports are stdout-only. Do not add or commit a generated
