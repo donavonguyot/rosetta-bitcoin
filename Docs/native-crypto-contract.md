@@ -21,9 +21,15 @@ taproot_tweak_backend
 - Taproot x-only tweak behavior must report whether it is native-backed or
   managed; this field matters for P2TR key-path and script-path confidence.
 
-## Current Evidence
+## Evidence Lookup
 
-- JavaNode uses ACINQ JNI bindings for native secp256k1 proofs.
-- CSharpNode uses `Secp256k1.Net` for native secp256k1 proofs.
-- Proof artifacts are categorized as smoke, storage gate, native crypto gate,
-  bounded sync, and binary gate attempt.
+Current native-crypto proof artifacts are indexed by Project:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section conformance
+sqlite-utils query Project/project.db \
+  "select port, category, result, result_count from conformance_summary where category like '%crypto%' order by port, result"
+```
+
+The durable shared API and vector contract lives in
+`Nodes/Shared/consensus/NATIVE_CRYPTO.md`.

@@ -8,36 +8,39 @@ commands that use explicit Docker volumes.
 This contract prevents ports from rediscovering base-image, package, volume,
 and peer-routing problems during blocker work.
 
-## Required Inventory Fields
+## Required Manifest Fields
 
-Every port must have an inventory row in
-[`PORT_DOCKER_INVENTORY.md`](PORT_DOCKER_INVENTORY.md) with:
+Every port must have a JSON manifest under `Nodes/Shared/docker/ports/` with
+these declared surfaces:
 
 ```text
+manifest_version
 port
-dockerfile_path
-compose_path
-base_image
-runtime_image
-os_family
-package_manager
-native_dependencies
-data_volume
-proof_volume
-supervisor_volume
-status_command
-sync_or_proof_command
-supervisor_command
-stop_marker
-resume_marker
-peer_strategy
-dockerignore_status
-runtime_surface_status
+status
+paths.root
+paths.dockerfile
+paths.compose
+paths.dockerignore
+images.base
+images.runtime
+images.os_family
+images.package_manager
+images.native_dependencies
+volumes.data
+volumes.proof
+volumes.supervisor
+commands
+peer_modes
+supervisor.stop_marker
+supervisor.resume_marker
+tick_json.required_fields
+proof_artifacts
 known_caveats
 ```
 
-If a port does not have Docker support, the row must say `missing`. Silence is
-not acceptable.
+If a port does not have Docker support, its manifest status must say `missing`.
+Silence is not acceptable. `PORT_DOCKER_INVENTORY.md` is now a projection guide;
+current per-port rows come from manifests and Project views.
 
 ## Machine-Readable Manifests
 
@@ -95,6 +98,15 @@ runtime; the legacy SQLite scout daemon surface is historical evidence only.
 Ports should eventually expose these target names. Existing port-specific names
 may remain during migration, but the manifest must map the contract command to
 the current command.
+
+Project imports the manifest command map into `Project/project.db` so operators
+can compare run surfaces without reading every port directory:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section command-surface
+sqlite-utils query Project/project.db \
+  "select port, command_key, supported, command from port_command_surface order by port, command_key"
+```
 
 | Contract command | Meaning |
 |------------------|---------|

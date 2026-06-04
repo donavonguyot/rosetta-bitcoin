@@ -24,6 +24,7 @@ Project SQLite is allowed and preferred for mission-control observations:
 - conformance results
 - benchmark results
 - Docker contract state
+- standardized port command surfaces
 - architecture decisions
 
 Project SQLite must not store operational truth used by node runtimes:
@@ -55,6 +56,7 @@ Mission-control projections are also available through the report script:
 python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
+python3 Project/scripts/report.py --db Project/project.db --section command-surface
 ```
 
 Rebuild mission control from canonical evidence:

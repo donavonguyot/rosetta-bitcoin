@@ -84,9 +84,12 @@ The comparison must cover success, invalid-input failure, and consensus-invalid
 failure. A library result that is merely "close" or accepts extra encodings is a
 chain-split risk.
 
-## Current Port Posture
+## Historical Port Posture
 
-| Port | Current authority | Library use | Next backend work |
+This table records the posture at the time this decision was written. Query
+Project conformance results for current imported crypto proof evidence.
+
+| Port | Historical authority | Library use | Then-next backend work |
 |------|-------------------|-------------|-------------------|
 | PythonNode | Pure Python secp256k1 | none for EC | Keep as readable scout/reference and fixture producer |
 | TypeScriptNode | Pure TypeScript secp256k1 | `node:crypto` for hashing only | Preserve no-runtime-deps posture unless explicitly changed |

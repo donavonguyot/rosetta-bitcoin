@@ -11,8 +11,8 @@ root-owned monorepo. There is exactly one Git repository, at the workspace root.
 4. [`Docs/port-status.md`](Docs/port-status.md) — Project status projection guide.
 5. [`Nodes/Shared/SPEC.md`](Nodes/Shared/SPEC.md) — shared contracts and gate intent.
 6. [`Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`](Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md) — Docker runtime/proof rules.
-7. [`Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md`](Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md) — current per-port Docker inventory.
-8. `Nodes/Shared/docker/ports/<port>.docker.json` — executable Docker contract declaration for the target port.
+7. `Nodes/Shared/docker/ports/<port>.docker.json` — executable Docker contract declaration for the target port.
+8. [`Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md`](Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md) — Project query guide for Docker coverage and command surfaces.
 9. [`Docs/artifact-retention.md`](Docs/artifact-retention.md) — proof/log/datadir retention rules.
 10. Port README for the implementation being changed.
 
@@ -31,8 +31,8 @@ root-owned monorepo. There is exactly one Git repository, at the workspace root.
 Core Node compliance requires separate evidence for consensus progress, native
 storage, status import, and Docker runtime/proof behavior. A port must not claim
 Core compliance if native mode depends on port-local SQLite for operational node
-truth or if its Docker runtime surface is not documented in the Shared Docker
-inventory. `Project/project.db` is allowed mission-control SQLite and is not a
+truth or if its Docker runtime surface is not declared in the Shared Docker
+manifest. `Project/project.db` is allowed mission-control SQLite and is not a
 runtime dependency.
 Docker contract declarations are validated with:
 

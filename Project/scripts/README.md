@@ -43,6 +43,7 @@ Print an on-demand Markdown summary:
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section all
 python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section command-surface
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 ```
@@ -55,6 +56,9 @@ sqlite-utils query Project/project.db \
 
 sqlite-utils query Project/project.db \
   "select * from docker_coverage order by port"
+
+sqlite-utils query Project/project.db \
+  "select port, command_key, supported, command from port_command_surface order by port, command_key"
 
 sqlite-utils query Project/project.db \
   "select * from follower_blocker_matrix order by height, port"

@@ -70,6 +70,21 @@ CREATE TABLE IF NOT EXISTS docker_contracts (
   source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id)
 );
 
+CREATE TABLE IF NOT EXISTS port_commands (
+  command_id TEXT PRIMARY KEY,
+  port TEXT NOT NULL REFERENCES docker_contracts(port),
+  node_id TEXT NOT NULL REFERENCES nodes(node_id),
+  command_key TEXT NOT NULL,
+  purpose TEXT NOT NULL DEFAULT '',
+  command TEXT NOT NULL DEFAULT '',
+  supported INTEGER NOT NULL DEFAULT 0,
+  source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+  UNIQUE(port, command_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_port_commands_key
+  ON port_commands(command_key, port);
+
 CREATE TABLE IF NOT EXISTS runs (
   run_id TEXT PRIMARY KEY,
   node_id TEXT NOT NULL REFERENCES nodes(node_id),
@@ -303,6 +318,31 @@ SELECT
   dc.root_path,
   dc.source_artifact_id
 FROM docker_contracts dc;
+
+CREATE VIEW IF NOT EXISTS port_command_surface AS
+SELECT
+  pc.port,
+  pc.node_id,
+  dc.status AS docker_status,
+  pc.command_key,
+  pc.purpose,
+  pc.supported,
+  pc.command,
+  dc.root_path,
+  pc.source_artifact_id
+FROM port_commands pc
+JOIN docker_contracts dc ON dc.port = pc.port;
+
+CREATE VIEW IF NOT EXISTS port_command_coverage AS
+SELECT
+  command_key,
+  purpose,
+  count(*) AS declared_ports,
+  sum(CASE WHEN supported = 1 THEN 1 ELSE 0 END) AS supported_ports,
+  group_concat(CASE WHEN supported = 1 THEN port END) AS supporting_ports,
+  group_concat(CASE WHEN supported = 0 THEN port END) AS unsupported_ports
+FROM port_command_surface
+GROUP BY command_key, purpose;
 
 CREATE VIEW IF NOT EXISTS conformance_summary AS
 SELECT

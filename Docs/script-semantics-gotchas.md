@@ -47,9 +47,9 @@ opcode dispatch table is empty.
 - Do not treat another port’s live sync as an oracle; use the shared bytes plus
   Python corpus semantics on the trail above.
 - Claim progress only with a port result JSON under
-  [`Nodes/Shared/conformance/results/`](../Nodes/Shared/conformance/results/) and an updated
-  [`MATRIX.md`](../Nodes/Shared/conformance/fixtures/scripts/MATRIX.md) column — `not_started`
-  does not mean 0/45.
+  [`Nodes/Shared/conformance/results/`](../Nodes/Shared/conformance/results/) and Project
+  conformance rows. [`MATRIX.md`](../Nodes/Shared/conformance/fixtures/scripts/MATRIX.md)
+  is structural fixture guidance, not port pass/fail truth.
 
 See also [`Nodes/Shared/conformance/fixtures/scripts/README.md`](../Nodes/Shared/conformance/fixtures/scripts/README.md)
 for runner commands and a short debugging checklist.

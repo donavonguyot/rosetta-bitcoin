@@ -149,5 +149,12 @@ The root all-port workflow is:
 1. Run each port's own status command or status exporter.
 2. Normalize missing optional fields to empty strings, `-1`, or `unknown`.
 3. Import the JSON with `Project/scripts/import_status_snapshot.py`.
-4. Refresh `Docs/port-status.md` from imported snapshots and durable proof
-   artifacts, not from chat memory.
+4. Rebuild or refresh Project imports.
+5. Query Project projections instead of editing status Markdown:
+
+```bash
+python3 Project/scripts/import_all.py --db Project/project.db --rebuild
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+sqlite-utils query Project/project.db \
+  "select * from latest_port_status order by port"
+```

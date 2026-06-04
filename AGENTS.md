@@ -27,8 +27,8 @@ Before editing a port, read:
 6. `Nodes/Shared/storage/STORAGE_GATE.md`.
 7. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
 8. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
-9. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md`.
-10. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
+9. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
+10. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` for Project Docker query examples.
 11. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
 12. `Docs/blocker-ledger.md`.
 13. `Docs/supervisor-contract.md`.
@@ -55,7 +55,7 @@ port-local SQLite for operational node truth such as headers, block index, sync
 state, validated tip, UTXO, undo, chainstate metadata, blocker state, or status
 fields. `Project/project.db` is allowed and preferred for mission-control
 imports and reports, but node runtimes must not read it for operational truth.
-Docker compliance requires an inventory row and the runtime contract in
+Docker compliance requires a manifest and the runtime contract in
 `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`. Before changing Docker behavior,
 read the port manifest and run the report-only validator:
 

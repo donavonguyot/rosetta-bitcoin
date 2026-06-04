@@ -13,9 +13,9 @@ discarding validated state between code fixes.
 - Support an explicit stop marker.
 - Report live status from inside the runtime surface, especially for Docker.
 - For Docker supervisors, follow
-  [`../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`](../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md)
-  and keep the port row current in
-  [`../Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md`](../Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md).
+  [`../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`](../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md),
+  update the port manifest in `Nodes/Shared/docker/ports/`, and query Project
+  Docker coverage instead of hand-maintaining Markdown rows.
 
 ## Cadence Rule
 

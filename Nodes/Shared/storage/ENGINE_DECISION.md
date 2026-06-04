@@ -96,10 +96,10 @@ codec v2 conformance
   -> operational default
 ```
 
-## Current Java Evidence
+## Historical Java Evidence
 
 JavaNode's first LevelDB/RocksDB replay used the same stored block range and
-shared native chainstate keyspace:
+shared native chainstate keyspace. This is decision context, not current status:
 
 ```text
 backend  height_after  blocks_connected  utxo_count  elapsed_ms  size_bytes

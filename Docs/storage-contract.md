@@ -31,21 +31,14 @@ or status truth.
   before opening mutable state.
 - Rebuild/replay tools must hold the same writer lock as sync.
 
-## Current Evidence
+## Evidence Lookup
 
-- JavaNode has RocksDB/native-storage proof artifacts under
-  `Nodes/Shared/conformance/results/`.
-- CSharpNode has RocksDB codec/storage proof artifacts and a persistent Docker
-  sync volume using native chainstate.
-- TypeScript has a RocksDB `ChainstateStore` proof path and native status/proof
-  commands. Legacy SQLite tracker surfaces are non-Core compatibility only.
-- Python's old SQLite scout path is legacy evidence only. Python native-break
-  work now targets RocksDB-owned operational truth, native crypto, and Docker
-  proof/supervisor. Fresh blocker replay from empty native state remains a
-  separate proof plan.
-- Cpp's compliance path is RocksDB-only. Cpp is not compliant unless RocksDB
-  owns all operational node truth without opening SQLite.
-- Elixir has a RocksDB chainstate boundary and bounded proof path. Native
-  secp256k1 and empty-datadir replay remain pending.
+Current storage evidence is indexed by Project:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section conformance
+sqlite-utils query Project/project.db \
+  "select port, category, result, result_count, max_validated_height from conformance_summary order by port, category, result"
+```
 
 See `Nodes/Shared/storage/STORAGE_GATE.md` for the portable fixture contract.

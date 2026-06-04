@@ -13,6 +13,7 @@ SECTIONS = (
     "summary",
     "port-status",
     "docker-coverage",
+    "command-surface",
     "conformance",
     "blocker-catalog",
     "blocker-matrix",
@@ -23,6 +24,7 @@ SECTIONS = (
 SECTION_ALIASES = {
     "status": "port-status",
     "docker": "docker-coverage",
+    "commands": "command-surface",
     "blockers": "blocker-catalog",
     "benchmarks": "benchmark-summary",
 }
@@ -69,6 +71,7 @@ def print_summary(connection: sqlite3.Connection) -> None:
         select 'artifacts' as table_name, count(*) as count from artifacts
         union all select 'nodes', count(*) from nodes
         union all select 'docker_contracts', count(*) from docker_contracts
+        union all select 'port_commands', count(*) from port_commands
         union all select 'status_snapshots', count(*) from status_snapshots
         union all select 'blockers', count(*) from blockers
         union all select 'conformance_results', count(*) from conformance_results
@@ -127,6 +130,30 @@ def print_docker_coverage(connection: sqlite3.Connection) -> None:
             data,
         )
     )
+
+
+def print_command_surface(connection: sqlite3.Connection) -> None:
+    print("## Command Surface")
+    print()
+    coverage = rows(
+        connection,
+        """
+        select command_key, supported_ports, declared_ports, unsupported_ports
+        from port_command_coverage
+        order by command_key
+        """,
+    )
+    print(table(("command", "supported", "declared", "unsupported_ports"), coverage))
+    print()
+    commands = rows(
+        connection,
+        """
+        select port, command_key, supported, command
+        from port_command_surface
+        order by port, command_key
+        """,
+    )
+    print(table(("port", "command", "supported", "run"), commands))
 
 
 def print_conformance(connection: sqlite3.Connection) -> None:
@@ -213,6 +240,7 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "summary": print_summary,
     "port-status": print_port_status,
     "docker-coverage": print_docker_coverage,
+    "command-surface": print_command_surface,
     "conformance": print_conformance,
     "blocker-catalog": print_blocker_catalog,
     "blocker-matrix": print_blocker_matrix,

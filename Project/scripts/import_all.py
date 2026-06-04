@@ -97,6 +97,21 @@ DECISIONS: tuple[dict[str, str], ...] = (
     },
 )
 
+COMMAND_PURPOSES: dict[str, str] = {
+    "docker_config": "validate compose configuration",
+    "docker_build": "build the Docker runtime/proof image",
+    "docker_status": "read status from inside the Docker runtime surface",
+    "docker_proof_local": "run bounded proof against local Reference",
+    "docker_probe_external": "run bounded probe against external peers",
+    "docker_supervisor": "start persistent Docker supervisor",
+    "docker_supervisor_status": "read persistent supervisor status",
+    "docker_supervisor_stop": "write the supervisor stop marker",
+    "docker_supervisor_resume": "write the supervisor resume marker",
+    "docker_smoke_once": "run one-shot Docker supervisor smoke",
+    "docker_storage_proof": "run storage proof alias",
+    "docker_script_corpus": "run shared script corpus alias",
+}
+
 
 @dataclass(frozen=True)
 class Artifact:
@@ -364,12 +379,73 @@ def upsert_node(
     )
 
 
-def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Path, payload: dict[str, Any]) -> None:
+def docker_manifest_already_imported(
+    connection: sqlite3.Connection,
+    artifact_id: str,
+    port: str,
+    command_count: int,
+) -> bool:
+    contract = connection.execute(
+        "SELECT 1 FROM docker_contracts WHERE port = ? AND source_artifact_id = ?",
+        (port, artifact_id),
+    ).fetchone()
+    if contract is None:
+        return False
+    commands = connection.execute(
+        "SELECT count(*) FROM port_commands WHERE port = ? AND source_artifact_id = ?",
+        (port, artifact_id),
+    ).fetchone()[0]
+    return commands >= command_count
+
+
+def import_port_commands(
+    connection: sqlite3.Connection,
+    port: str,
+    node_id: str,
+    commands: dict[str, Any],
+    source_artifact_id: str,
+) -> None:
+    connection.execute("DELETE FROM port_commands WHERE port = ?", (port,))
+    for command_key, command in sorted(commands.items()):
+        command_text = text(command)
+        connection.execute(
+            """
+            INSERT INTO port_commands(
+              command_id, port, node_id, command_key, purpose, command,
+              supported, source_artifact_id
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(port, command_key) DO UPDATE SET
+              node_id = excluded.node_id,
+              purpose = excluded.purpose,
+              command = excluded.command,
+              supported = excluded.supported,
+              source_artifact_id = excluded.source_artifact_id
+            """,
+            (
+                stable_id("port_command", port, command_key),
+                port,
+                node_id,
+                command_key,
+                COMMAND_PURPOSES.get(command_key, ""),
+                command_text,
+                1 if command_text else 0,
+                source_artifact_id,
+            ),
+        )
+
+
+def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Path, payload: dict[str, Any]) -> int:
     artifact = make_artifact(path, root, payload)
-    if artifact_exists(connection, artifact.artifact_id):
-        return
-    upsert_artifact(connection, artifact)
     port = text(payload.get("port"), path.stem.split(".")[0])
+    commands = payload.get("commands") if isinstance(payload.get("commands"), dict) else {}
+    if artifact_exists(connection, artifact.artifact_id) and docker_manifest_already_imported(
+        connection,
+        artifact.artifact_id,
+        port,
+        len(commands),
+    ):
+        return len(commands)
+    upsert_artifact(connection, artifact)
     node_id, implementation, language, role = node_for_port(port)
     paths = payload.get("paths") if isinstance(payload.get("paths"), dict) else {}
     volumes = payload.get("volumes") if isinstance(payload.get("volumes"), dict) else {}
@@ -426,6 +502,8 @@ def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Pat
             artifact.artifact_id,
         ),
     )
+    import_port_commands(connection, port, node_id, commands, artifact.artifact_id)
+    return len(commands)
 
 
 def result_from_payload(payload: dict[str, Any]) -> str:
@@ -960,6 +1038,7 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         "blocker_ledgers": 0,
         "blocker_rows": 0,
         "decisions": len(DECISIONS),
+        "port_commands": 0,
     }
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -969,7 +1048,7 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
 
         docker_dir = root / args.docker_dir
         for path in sorted(docker_dir.glob("*.docker.json")):
-            import_docker_manifest(connection, root, path, read_json(path))
+            counts["port_commands"] += import_docker_manifest(connection, root, path, read_json(path))
             counts["docker_manifests"] += 1
 
         results_dir = root / args.results_dir

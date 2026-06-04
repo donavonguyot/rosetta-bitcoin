@@ -39,8 +39,9 @@ blocked the harvesting port at import time, not what your interpreter lacks toda
 3. Classify: loader/prevouts → template → sighash → stack/terminal → crypto → opcode.
 4. Cross-check the same `fixture_id` against the Python corpus runner (must pass
    on the trail oracle before you declare the opcode missing).
-5. Update the port column in `MATRIX.md` only after the full manifest passes
-   (45/45 for the current corpus).
+5. Write a compact result JSON under `Nodes/Shared/conformance/results/` only
+   after the full manifest passes.
+6. Rebuild Project and query `conformance_summary` for current port results.
 
 ### Quick symptom map
 

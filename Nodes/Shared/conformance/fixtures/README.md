@@ -4,7 +4,7 @@ This directory is the neutral index for shared fixture names. Ports may keep
 large fixture bytes in their own test resource trees, but must use the fixture
 IDs from `../MANIFEST.md` in status exports and conformance results.
 
-## Current Bootstrap Fixtures
+## Bootstrap Fixture IDs
 
 ```text
 blocks.block1_connect
