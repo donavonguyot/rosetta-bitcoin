@@ -3,15 +3,26 @@
 This directory holds shared workspace documentation. Prefer updating one of the
 canonical docs below instead of adding a one-off plan file.
 
-## Canonical Status And Policy
+## Project Projections
 
-- `port-status.md` - current all-port baseline; status claims must stay
-  conservative and proof-backed.
+- `port-status.md` - how to query Project for the current all-port projection.
+- `follower-port-matrix.md` - how to query Project for the blocker matrix.
+
+These pages do not own repeated status rows. Rebuild/import Project and query
+`Project/project.db` for mission-control status:
+
+```bash
+python3 Project/scripts/import_all.py --db Project/project.db --rebuild
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+```
+
+## Canonical Policy
+
 - `git-topology.md` - root repository, port directory, and artifact ownership.
 - `artifact-retention.md` - proof/log/datadir retention policy.
 - `storage-contract.md` - project-level storage compliance rules.
 - `supervisor-contract.md` - durable supervisor behavior and tick expectations.
-- `follower-port-matrix.md` - conservative blocker-clearance matrix.
 
 ## Durable Lessons
 

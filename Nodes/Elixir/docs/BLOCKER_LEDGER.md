@@ -3,7 +3,7 @@
 Handoff notes for exbitnode. Canonical scout trail remains
 [PythonNode/docs/BLOCKER_LEDGER.md](../../PythonNode/docs/BLOCKER_LEDGER.md).
 
-## Live status
+## Last recorded evidence
 
 ```bash
 cd ElixirNode
@@ -16,7 +16,7 @@ make status
 |-------|-------|
 | milestone | M1 header sync |
 | peer | `127.0.0.1:48333` (local Bitcoin Core testnet4) |
-| scope | version/verack, sendheaders, getheaders/headers, header validation, historical SQLite persistence; current native path uses RocksDB chainstate |
+| scope | version/verack, sendheaders, getheaders/headers, header validation, historical port-local SQLite persistence; current native path uses RocksDB chainstate |
 | validated_height | `-1` at M1 completion (blocks not connected yet) |
 | missing_rule | `block_connect_not_implemented` |
 | follower_notes | Resolved in M2 |

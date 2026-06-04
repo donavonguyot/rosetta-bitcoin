@@ -1,6 +1,6 @@
 # RustNode Blocker Ledger
 
-## Current Status
+## Last recorded evidence
 
 ```text
 implementation: RustNode

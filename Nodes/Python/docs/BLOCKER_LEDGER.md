@@ -1,8 +1,9 @@
 # Blocker ledger (testnet4 scout)
 
-Searchable handoff for follower ports. Canonical truth remains code, tests, live DB, and reproducible sync commands — not this file alone.
+Searchable handoff for follower ports. Canonical truth remains code, tests,
+native state, and reproducible sync commands -- not this file alone.
 
-**Live status:**
+**Status query:**
 
 ```bash
 cd PythonNode

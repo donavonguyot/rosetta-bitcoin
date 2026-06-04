@@ -4,7 +4,7 @@ Every consensus unblock and live-chain stall must leave enough information for f
 ports to reproduce it without archaeology. Copy this template into issues, PR descriptions,
 or run logs when recording a blocker.
 
-## Live status (2026-05-29)
+## Historical checkpoint (2026-05-29)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **binary gate passed @136863; sync stopped via `.stop_sync`**:
 
@@ -47,7 +47,7 @@ follower_notes: P2WSH witness script OP_SIZE 32 OP_EQUALVERIFY OP_RIPEMD160 … 
 witness_script_asm: OP_SIZE 32 OP_EQUALVERIFY OP_RIPEMD160 bb90f8acbd268b662c4074acb3877c711ce5dfef OP_EQUAL OP_SWAP 03f80b6154f42255428717741e6f8fef9be87511ff9120d51bfad279eedea42998 OP_CHECKSIG OP_BOOLAND
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **P2TR tapscript CSV stack disable-flag @133634 cleared; next blocker @136369**:
 
@@ -68,7 +68,7 @@ follower_notes: tapscript PUSH(5) 0100008000 OP_CHECKSEQUENCEVERIFY OP_DROP x-on
 tapscript_asm: 0100008000 OP_CHECKSEQUENCEVERIFY OP_DROP 8fb09f84… OP_CHECKSIG
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **legacy P2SH OP_ABS @132361 cleared; resume pending**:
 
@@ -101,7 +101,7 @@ java_test: P2shAbs132361RegressionTest (PASSING)
 follower_notes: scriptSig pushes 1 -1 + redeem; redeem OP_2DUP OP_EQUAL OP_NOT OP_VERIFY OP_ABS OP_SWAP OP_ABS OP_EQUAL; empty witness; prevout 100_000 sats; harvest scripts/harvest_block132361_fixtures.py @127.0.0.1:48332
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **P2TR tapscript OP_2OVER/OP_OVER @126975 cleared; resume in flight**:
 
@@ -134,7 +134,7 @@ java_test: P2trTapscript126975RegressionTest, ScriptInterpreterTest#opOverCopies
 follower_notes: Two-input tx (540-item witness stack + 769KB tapscript); prevout 420 sats; altstack/IF/HASH160/OP_OVER mega-choreography; harvest scripts/harvest_block126975_fixtures.py @127.0.0.1:48332
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **P2TR tapscript OP_BOOLOR @121035 cleared; resume in flight**:
 
@@ -167,7 +167,7 @@ java_test: P2trTapscript121035RegressionTest (PASSING)
 follower_notes: Two-input tx (552-item witness stack + 233KB tapscript); prevout 0 sats; IF/altstack/OP_PICK/OP_BOOLOR/OP_BOOLAND mega-choreography; harvest scripts/harvest_block121035_fixtures.py @127.0.0.1:48332
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **bare legacy mega-script @118555 cleared; resume in flight**:
 
@@ -200,7 +200,7 @@ java_test: BareLegacy118555RegressionTest (PASSING)
 follower_notes: Segwit-encapsulated tx (marker 00 01), input 1 empty witness; scriptSig 50 pushes; prevout 8000 sats; SIGHASH_ALL b3a29cef574d19524a11845ae92d5a45bc5ecbcfe43fe8fba8577bdd840586cb; harvest scripts/harvest_block118555_fixtures.py @127.0.0.1:48332
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **P2SH OP_RIPEMD160 @116040 cleared; resume pending**:
 
@@ -256,7 +256,7 @@ follower_notes: scriptSig pushes five OP_1 + redeem OP_IF OP_2SWAP OP_PICK OP_2O
 redeem_script_asm: OP_IF OP_2SWAP OP_PICK OP_2OVER OP_DEPTH OP_3DUP OP_ELSE OP_2SWAP OP_NOP OP_2OVER OP_ENDIF OP_PICK
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **tapscript OP_1SUB @108508 cleared; resume advanced +464; next blocker @108972 (P2SH)**:
 
@@ -359,7 +359,7 @@ java_test: P2wshWithin98025RegressionTest, ScriptInterpreterTest#opWithinChecksM
 follower_notes: P2WSH witness script `OP_SIZE 61 70 OP_WITHIN OP_VERIFY <33B pubkey> OP_CHECKSIG`; sig len 69; witness len 2; prevout 61_700 sats; harvest scripts/harvest_block98025_fixtures.py @127.0.0.1:48332
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **tapscript CLTV/CSV v1 no-op @89632 fix landed; resume sync pending**:
 
@@ -413,7 +413,7 @@ java_test: P2trTapscript87214RegressionTest (PASSING)
 follower_notes: tapscript `CHECKSIG CHECKSIGADD 2 NUMEQUAL IFDUP NOTIF CHECKSIGVERIFY CSV ENDIF`; witness len 5; prevout 150_000 sats; harvest scripts/harvest_block87214_fixtures.py
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 ```text
 checkpoint_height: 82921
@@ -448,7 +448,7 @@ java_test: P2shSha182921RegressionTest (PASSING)
 follower_notes: SHAttered-style redeem `OP_2DUP OP_EQUAL OP_NOT OP_VERIFY OP_SHA1 OP_SWAP OP_SHA1 OP_EQUAL`; empty witness; harvest scripts/harvest_block82921_fixtures.py
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **tapscript OP_SHA1 @82856 fix landed; resume sync pending**:
 
@@ -485,7 +485,7 @@ java_test: P2trTapscript82856RegressionTest (PASSING)
 follower_notes: tiny script `OP_SHA1 <20-byte digest> OP_EQUAL`; witness len 3; prevout 1_000 sats; harvest scripts/harvest_block82856_fixtures.py
 ```
 
-## Live status (2026-05-29, superseded)
+## Historical checkpoint (2026-05-29, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **legacy P2SH OP_NOP @82112 fix landed; resume sync pending**:
 
@@ -522,7 +522,7 @@ java_test: P2shNop82112RegressionTest (PASSING)
 follower_notes: scriptSig pushes -2184 97 + redeem OP_NOP; empty witness; harvest scripts/harvest_block82112_fixtures.py
 ```
 
-## Live status (2026-05-28)
+## Historical checkpoint (2026-05-28)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **tapscript OP_MAX @78841 fix landed; resume sync pending**:
 
@@ -593,7 +593,7 @@ java_test: P2trTapscript70924RegressionTest (PASSING)
 follower_notes: ~4.6KB tapscript, witness len 139; harvest scripts/harvest_block70924_fixtures.py
 ```
 
-## Live status (2026-05-27, superseded)
+## Historical checkpoint (2026-05-27, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **OP_HASH256 @67562 fix landed; resume sync pending**:
 
@@ -634,7 +634,7 @@ java_fix: OP_HASH256 = SHA256(SHA256(x)) in Tapscript.evaluate (distinct from OP
 follower_notes: Witness stack len 6: two Schnorr sigs, ASCII-hex preimage, branch selector 0x01, tapscript, control block. Harvest via scripts/harvest_block67562_fixtures.py (Core RPC or mempool.space fallback). Supervisor session +740 blocks (66821→67561) before blocker.
 ```
 
-## Live status (2026-05-26, superseded)
+## Historical checkpoint (2026-05-26, superseded)
 
 Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **OP_TOALTSTACK / OP_FROMALTSTACK @66241 fix landed; resume sync pending**:
 
@@ -705,7 +705,11 @@ Rare unlimited run (debug only): `make java-node-sync-catchup BLOCKS_MAX=0`.
 ## Perf appendix (2026-05-26 investigation)
 
 <details>
-<summary>SQLite UTXO + parallel script verify benchmarks (reference only)</summary>
+<summary>Legacy port-local SQLite UTXO + parallel script verify benchmarks (historical reference only)</summary>
+
+This appendix documents the pre-cutover Java port-local SQLite runtime path.
+It is historical evidence only. Java native/Core runtime now uses RocksDB, and
+Project SQLite remains observational mission-control state.
 
 Stall context: ~2 MB blocks @52348–52353 (`block_size` ~1.97–2.03 MB), ~1.45M UTXOs, ~99% CPU, ~1–2 min/block before manual stop.
 
@@ -716,7 +720,7 @@ utxo_index: UNIQUE(chain, txid, vout) → EXPLAIN QUERY PLAN uses SEARCH utxos U
 journal_mode: wal (already set)
 cache_size: 2000 pages (~8 MiB) — below working set for 1.5M-row UTXO table
 timing_events: none (SYNC_TIMING not used on last run)
-hot_path_issue: ProjectTracker.getUtxo/spendUtxo/addUtxo allocated new PreparedStatement per call
+hot_path_issue: legacy ProjectTracker.getUtxo/spendUtxo/addUtxo allocated new PreparedStatement per call
 ```
 
 Root-cause hypothesis: **JDBC + SQLite overhead dominates** on heavy blocks — thousands of per-input UTXO lookups and per-spend/create DELETE/INSERT each compiling a new prepared statement, amplified by a small page cache on a ~1.5M-row table. Script verification is also costly on multi-tx blocks but was unmeasured until granular timing landed.
@@ -725,7 +729,7 @@ Root-cause hypothesis: **JDBC + SQLite overhead dominates** on heavy blocks — 
 
 ```text
 BlockUtxoView.loaded: connect-time cache; externalSpendUndoEntries reuses loaded map (eliminates double-fetch)
-ProjectTracker: spendUtxosBatch + addUtxosBatch (executeBatch on reused prepared statements)
+legacy ProjectTracker: spendUtxosBatch + addUtxosBatch (executeBatch on reused prepared statements)
 Database.open: PRAGMA synchronous=NORMAL, temp_store=MEMORY, cache_size=-131072 (~128 MiB), mmap_size=268435456 (~256 MiB)
 BlockConnector: block-level SYNC_TIMING stages utxo_load, script_verify, utxo_apply, commit
 BlockSync: per-height "Block connected" info event + commit timing
@@ -745,7 +749,7 @@ utxo_load + utxo_apply + commit: 531 ms  (gate <10s: PASS)
 sustained wall clock: ~107 s/block     (gate <30s: FAIL — script_verify bound)
 ```
 
-**Conclusion:** SQLite UTXO tuning succeeded; remaining wall-clock cost is script verification on ~2 MB multi-input blocks. Next perf tranche (if needed): parallel per-tx script verify (Phase 6 fallback). Catch-up can proceed at script-bound rate.
+**Conclusion:** Legacy port-local SQLite UTXO tuning succeeded; remaining wall-clock cost is script verification on ~2 MB multi-input blocks. Next perf tranche (if needed): parallel per-tx script verify (Phase 6 fallback). Catch-up can proceed at script-bound rate.
 
 ### Parallel script verify @52386 (PAR_SCRIPT_VERIFY=1, block_size=1974160)
 
@@ -780,7 +784,7 @@ Deferred (only if wall clock regresses on different block shapes):
 
 ```text
 - Block-wide script verify queue across transactions (Phase B)
-- Process-lifetime in-memory UTXO index (SQLite remains durable chainstate)
+- Process-lifetime in-memory UTXO index (legacy port-local SQLite remained durable chainstate in this historical path)
 ```
 
 </details>

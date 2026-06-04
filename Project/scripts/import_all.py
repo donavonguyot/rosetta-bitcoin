@@ -59,7 +59,7 @@ DECISIONS: tuple[dict[str, str], ...] = (
         "decision_id": "project-sqlite-mission-control",
         "title": "Project SQLite is mission control",
         "status": "accepted",
-        "context": "SQLite was overcorrected from forbidden port runtime state into forbidden coordination state.",
+        "context": "SQLite was overcorrected from forbidden port-local operational state into forbidden coordination state.",
         "decision": "Project/project.db is a tracked mission-control database for observations, indexes, reports, and decisions.",
         "consequences": "Ports may export observations into Project, but may not read Project SQLite for operational node truth.",
         "source_path": "Project/README.md",

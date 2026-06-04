@@ -3,7 +3,7 @@
 Handoff notes for csbitnode. Canonical scout trail remains
 [PythonNode/docs/BLOCKER_LEDGER.md](../../PythonNode/docs/BLOCKER_LEDGER.md).
 
-## Live status
+## Last recorded evidence
 
 ```bash
 cd CSharpNode

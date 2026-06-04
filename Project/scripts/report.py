@@ -1,12 +1,31 @@
 #!/usr/bin/env python3
-"""Print compact Project mission-control reports."""
+"""Print Project mission-control projections from Project/project.db."""
 
 from __future__ import annotations
 
 import argparse
 import sqlite3
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
+
+
+SECTIONS = (
+    "summary",
+    "port-status",
+    "docker-coverage",
+    "conformance",
+    "blocker-catalog",
+    "blocker-matrix",
+    "benchmark-summary",
+    "decisions",
+)
+
+SECTION_ALIASES = {
+    "status": "port-status",
+    "docker": "docker-coverage",
+    "blockers": "blocker-catalog",
+    "benchmarks": "benchmark-summary",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -14,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db", default="Project/project.db", help="Project SQLite DB path")
     parser.add_argument(
         "--section",
-        choices=("summary", "docker", "status", "conformance", "blockers", "benchmarks", "decisions", "all"),
+        choices=(*SECTIONS, *SECTION_ALIASES.keys(), "all"),
         default="summary",
         help="Report section to print",
     )
@@ -61,33 +80,53 @@ def print_summary(connection: sqlite3.Connection) -> None:
     print(table(("table", "count"), ((row["table_name"], row["count"]) for row in data)))
 
 
-def print_docker(connection: sqlite3.Connection) -> None:
-    print("## Docker Contracts")
-    print()
-    data = rows(connection, "select port, status, supervisor_volume from docker_contracts order by port")
-    print(table(("port", "status", "supervisor_volume"), data))
-
-
-def print_status(connection: sqlite3.Connection) -> None:
-    print("## Latest Status")
+def print_port_status(connection: sqlite3.Connection) -> None:
+    print("## Port Status")
     print()
     data = rows(
         connection,
         """
-        with ranked as (
-          select *, row_number() over (
-            partition by node_id order by validated_height desc, captured_at desc
-          ) as rn
-          from status_snapshots
-        )
-        select node_id, sync_status, binary_gate_status, header_height,
-               stored_block_height, validated_height, chainstate_backend
-        from ranked
-        where rn = 1
-        order by node_id
+        select
+          lps.port,
+          lps.role,
+          lps.sync_status,
+          lps.binary_gate_status,
+          lps.header_height,
+          lps.stored_block_height,
+          lps.validated_height,
+          lps.chainstate_backend,
+          dc.docker_status
+        from latest_port_status lps
+        left join docker_coverage dc on dc.port = lps.port
+        order by lps.port
         """,
     )
-    print(table(("node", "sync", "binary", "headers", "stored", "validated", "backend"), data))
+    print(
+        table(
+            ("port", "role", "sync", "binary", "headers", "stored", "validated", "backend", "docker"),
+            data,
+        )
+    )
+
+
+def print_docker_coverage(connection: sqlite3.Connection) -> None:
+    print("## Docker Coverage")
+    print()
+    data = rows(
+        connection,
+        """
+        select port, docker_status, has_dockerfile, has_compose,
+               has_dockerignore, data_volume, proof_volume, supervisor_volume
+        from docker_coverage
+        order by port
+        """,
+    )
+    print(
+        table(
+            ("port", "status", "dockerfile", "compose", "ignore", "data_volume", "proof_volume", "supervisor_volume"),
+            data,
+        )
+    )
 
 
 def print_conformance(connection: sqlite3.Connection) -> None:
@@ -96,42 +135,71 @@ def print_conformance(connection: sqlite3.Connection) -> None:
     data = rows(
         connection,
         """
-        select node_id, category, result, count(*) as count
-        from conformance_results
-        group by node_id, category, result
-        order by node_id, category, result
+        select port, node_id, category, result, result_count,
+               max_validated_height, latest_captured_at
+        from conformance_summary
+        order by port, node_id, category, result
         """,
     )
-    print(table(("node", "category", "result", "count"), data))
+    print(table(("port", "node", "category", "result", "count", "max_height", "latest"), data))
 
 
-def print_blockers(connection: sqlite3.Connection) -> None:
-    print("## Blockers")
+def print_blocker_catalog(connection: sqlite3.Connection) -> None:
+    print("## Blocker Catalog")
     print()
     data = rows(
         connection,
         """
-        select height, missing_rule, status, source_port
-        from blockers
-        order by height, missing_rule
-        limit 40
+        select height, missing_rule, status, sources
+        from current_blocker_state
+        order by height
         """,
     )
-    print(table(("height", "missing_rule", "status", "source"), data))
+    print(table(("height", "missing_rule", "status", "sources"), data))
 
 
-def print_benchmarks(connection: sqlite3.Connection) -> None:
-    print("## Benchmarks")
+def print_blocker_matrix(connection: sqlite3.Connection) -> None:
+    print("## Blocker Matrix")
+    print()
+    ports = [
+        row["port"]
+        for row in rows(
+            connection,
+            "select distinct port from follower_blocker_matrix order by port",
+        )
+    ]
+    matrix_rows = rows(
+        connection,
+        """
+        select height, missing_rule, port, blocker_status
+        from follower_blocker_matrix
+        order by height, port
+        """,
+    )
+    grouped: dict[tuple[int, str], dict[str, str]] = {}
+    for row in matrix_rows:
+        key = (row["height"], row["missing_rule"])
+        grouped.setdefault(key, {port: "unknown" for port in ports})
+        grouped[key][row["port"]] = row["blocker_status"]
+    rendered = []
+    for (height, missing_rule), statuses in grouped.items():
+        rendered.append((height, missing_rule, *(statuses[port] for port in ports)))
+    print(table(("height", "missing_rule", *ports), rendered))
+
+
+def print_benchmark_summary(connection: sqlite3.Connection) -> None:
+    print("## Benchmark Summary")
     print()
     data = rows(
         connection,
         """
-        select node_id, benchmark_name, height, backend, captured_at
-        from benchmarks
-        order by node_id, benchmark_name
+        select port, node_id, benchmark_name, max_height, backend,
+               sample_count, latest_captured_at
+        from benchmark_summary
+        order by port, node_id, benchmark_name
         """,
     )
-    print(table(("node", "benchmark", "height", "backend", "captured_at"), data))
+    print(table(("port", "node", "benchmark", "max_height", "backend", "samples", "latest"), data))
 
 
 def print_decisions(connection: sqlite3.Connection) -> None:
@@ -141,17 +209,29 @@ def print_decisions(connection: sqlite3.Connection) -> None:
     print(table(("decision_id", "status", "title"), data))
 
 
+REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
+    "summary": print_summary,
+    "port-status": print_port_status,
+    "docker-coverage": print_docker_coverage,
+    "conformance": print_conformance,
+    "blocker-catalog": print_blocker_catalog,
+    "blocker-matrix": print_blocker_matrix,
+    "benchmark-summary": print_benchmark_summary,
+    "decisions": print_decisions,
+}
+
+
 def main() -> int:
     args = parse_args()
     db_path = Path(args.db)
+    section = SECTION_ALIASES.get(args.section, args.section)
+    selected = list(SECTIONS) if section == "all" else [section]
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
-        sections = ["summary", "docker", "status", "conformance", "blockers", "benchmarks", "decisions"]
-        selected = sections if args.section == "all" else [args.section]
-        for index, section in enumerate(selected):
+        for index, name in enumerate(selected):
             if index:
                 print()
-            globals()[f"print_{section}"](connection)
+            REPORTS[name](connection)
     return 0
 
 

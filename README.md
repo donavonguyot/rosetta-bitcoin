@@ -8,7 +8,7 @@ root-owned monorepo. There is exactly one Git repository, at the workspace root.
 1. [`AGENTS.md`](AGENTS.md) — operating rules and current sync cautions.
 2. [`Docs/README.md`](Docs/README.md) — documentation ownership and cleanup index.
 3. [`Docs/git-topology.md`](Docs/git-topology.md) — root vs port ownership.
-4. [`Docs/port-status.md`](Docs/port-status.md) — current all-port baseline.
+4. [`Docs/port-status.md`](Docs/port-status.md) — Project status projection guide.
 5. [`Nodes/Shared/SPEC.md`](Nodes/Shared/SPEC.md) — shared contracts and gate intent.
 6. [`Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`](Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md) — Docker runtime/proof rules.
 7. [`Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md`](Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md) — current per-port Docker inventory.
@@ -20,7 +20,7 @@ root-owned monorepo. There is exactly one Git repository, at the workspace root.
 
 | Path | Purpose |
 |------|---------|
-| `Docs/` | Shared lessons, blocker handoffs, port matrix, topology |
+| `Docs/` | Shared lessons, blocker handoffs, Project query guides, topology |
 | `Nodes/Shared/` | Cross-port contracts, fixtures, conformance manifests/results |
 | `Project/` | Tracked mission-control SQLite DB, observational imports, and reports |
 | `Nodes/` | Root-owned node implementation directories |

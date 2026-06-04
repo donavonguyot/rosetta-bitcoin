@@ -22,7 +22,7 @@ Before editing a port, read:
 1. `README.md` at the workspace root.
 2. `Docs/README.md`.
 3. `Docs/git-topology.md`.
-4. `Docs/port-status.md`.
+4. `Docs/port-status.md` and Project reports for current imported status.
 5. `Nodes/Shared/STATUS_CONTRACT.md`.
 6. `Nodes/Shared/storage/STORAGE_GATE.md`.
 7. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
@@ -67,6 +67,15 @@ Artifact cleanup follows `Docs/artifact-retention.md` and
 `Nodes/Shared/conformance/ARTIFACT_INVENTORY.md`: canonical proof JSON belongs in
 `Nodes/Shared/conformance/results/`, while live datadirs, logs, DBs, build outputs,
 and Docker volumes stay ignored and port-local.
+
+For mission-control status, blocker matrices, Docker coverage, conformance
+summaries, and benchmark summaries, query `Project/project.db` instead of
+hand-maintained Markdown tables:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+```
 
 This workspace has exactly one Git repository: `/Users/donavonguyot/RB/.git`.
 All `Nodes/<Port>/` directories are root-owned source directories. Nested
@@ -124,8 +133,8 @@ messages were sent.
 Shared coordination docs turn the historical Python SQLite-scout trail and Java
 live-chain trail into a work queue for ports:
 
-- [`Docs/consensus-blockers-testnet4.md`](Docs/consensus-blockers-testnet4.md) — canonical blocker facts and fixture anchors.
-- [`Docs/follower-port-matrix.md`](Docs/follower-port-matrix.md) — conservative per-port status with explicit `unknown` cells.
+- [`Docs/consensus-blockers-testnet4.md`](Docs/consensus-blockers-testnet4.md) — durable blocker facts and fixture anchors.
+- [`Docs/follower-port-matrix.md`](Docs/follower-port-matrix.md) — Project query guide for the generated blocker matrix.
 - [`Docs/script-semantics-gotchas.md`](Docs/script-semantics-gotchas.md) — language-neutral consensus traps; includes **Shared script corpus triage** (stack/sighash/template vs missing opcode).
 - [`Docs/port-performance-lessons.md`](Docs/port-performance-lessons.md) — reusable block-connect performance patterns from Java/Python catch-up.
 - [`Docs/agent-prompts.md`](Docs/agent-prompts.md) — reusable prompts for porting blockers, harvesting fixtures, and updating ledgers.

@@ -147,8 +147,13 @@ java_fix:
 test_fixture:
 follower_notes:
 
-Also update /Users/donavonguyot/RB/Docs/follower-port-matrix.md if this is a
-root coordination pass; otherwise report that the root matrix needs updating.
+If this is a root coordination pass, import Project and verify the generated
+blocker matrix instead of editing matrix Markdown:
+
+```bash
+python3 Project/scripts/import_all.py --db Project/project.db --rebuild
+python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+```
 
 Rules:
 - Do not overstate completion; report validated height and binary gate status.
@@ -172,10 +177,17 @@ Tasks:
 3. If a script survey tool exists, run it in read-only mode only.
 4. Compare the next few blocker heights against
    /Users/donavonguyot/RB/Docs/consensus-blockers-testnet4.md.
+5. For project-level status context, query Project reports instead of
+   hand-maintained Markdown:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+```
 
 Rules:
 - Do not start sync.
-- Do not write to the DB.
+- Do not write to port-local operational DBs or datadirs.
 - Do not remove lock files.
 - Do not treat snapshots as live truth when DB is available.
 ```

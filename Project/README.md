@@ -46,7 +46,15 @@ Use SQLite Utils for Project inspection:
 ```bash
 sqlite-utils tables Project/project.db --counts
 sqlite-utils query Project/project.db \
-  "select port, status from docker_contracts order by port"
+  "select * from latest_port_status order by port"
+```
+
+Mission-control projections are also available through the report script:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 ```
 
 Rebuild mission control from canonical evidence:

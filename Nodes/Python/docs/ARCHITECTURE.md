@@ -34,7 +34,7 @@ flowchart TB
     end
 
     subgraph persist["RocksDB native state"]
-        DB[db / ProjectTracker]
+        State[db / native chainstate services]
     end
 
     CLI --> Node
@@ -47,9 +47,9 @@ flowchart TB
     Sync --> Sto
     P2P --> Mpool
     Mpool --> Cons
-    Mpool --> DB
-    Sync --> DB
-    P2P --> DB
+    Mpool --> State
+    Sync --> State
+    P2P --> State
     Msg --> Wire
     Cons --> Msg
     Cons --> Chain
@@ -68,10 +68,10 @@ flowchart TB
 | Sync | `pybitnode/sync` | Header pipeline, block download orchestration, structural block/header validation hooks into consensus. |
 | Consensus | `pybitnode/consensus` | Proof-of-work checks, merkle/witness, transaction scripts, **UTXO connect/disconnect** (`connect.py`), subsidies, coinbase rules. |
 | Storage | `pybitnode/storage` | Raw block files (`blocks/*.dat`) keyed by chain magic. |
-| DB | `pybitnode/db` | RocksDB native state schema and `ProjectTracker`: headers, block file pointers, UTXO set, undo data, sync state, phases, wire-capability mirror, event log. |
+| Native state | `pybitnode/db` | RocksDB native state schema and chainstate services: headers, block file pointers, UTXO set, undo data, sync state, phases, wire-capability mirror, event log. |
 | Mempool | `pybitnode/mempool` | In-memory transaction pool; admission policy and relay helpers; uses live UTXO view from the tracker for validation. |
 
-Application code (`node.py`, `sync_runner.py`) wires settings, opens the datadir, constructs `PeerManager` / `BlockStore` / `ProjectTracker`, and runs asyncio tasks.
+Application code (`node.py`, `sync_runner.py`) wires settings, opens the datadir, constructs `PeerManager` / `BlockStore` / native chainstate services, and runs asyncio tasks.
 
 ## Data flows
 
@@ -80,7 +80,7 @@ Application code (`node.py`, `sync_runner.py`) wires settings, opens the datadir
 1. **P2P** connects and completes handshake (`p2p/peer.py`, `messages/handshake.py`).
 2. **Sync** builds a block locator from RocksDB native state via `sync/headers.py` (`next_locator`).
 3. The local node sends **`getheaders`**; the payload on the **`headers`** message is deserialized as `HeadersMessage` (`messages/headers.py`).
-4. Each header is validated (`sync/validate.py`) and appended through `persist_headers`, which writes to **`db`/tracker** and updates `sync_state` (`best_height`, `best_hash`, `sync_status`).
+4. Each header is validated (`sync/validate.py`) and appended through `persist_headers`, which writes to **native state** and updates `sync_state` (`best_height`, `best_hash`, `sync_status`).
 5. When the batch is empty or the local tip catches the peer height, sync status moves to **`headers_current`**.
 
 Operational context: retries across peers when `getheaders` fails, preference for **`PEERS` / `--peers` endpoints**, the **`HEADER_SYNC_NEAR_PEER_TIP` “skip at tip” shortcut**, optional **`SYNC_SKIP_HEADERS`** / **`sync_runner`** align-with-DB skips, **Stuck sync recovery** in [OPERATIONS.md](OPERATIONS.md#stuck-sync-recovery). When headers are already sufficient in RocksDB native state, **`--no-header-refresh` / `NO_HEADER_REFRESH`** skips networked header refresh and uses the **lightweight outbound handshake** (no `sendheaders` / `feefilter` / `mempool` on that outbound)—see [OPERATIONS.md — Lightweight block-sync handshake](OPERATIONS.md#lightweight-block-sync-handshake-no-header-refresh).
@@ -143,7 +143,9 @@ Checkpoints group binary wire/compatibility criteria. Each checkpoint declares a
 | `cp7_keepalive` | ping/pong + stale disconnect | `phase0` |
 | `cp8_extensions` | Optional protocol extensions (compact blocks, v2 transport, …) | `phase5` |
 
-Implementations mark capabilities in code and via **`ProjectTracker`** chainstate records; aggregates are computed with **`checkpoint_status`** and exposed through **`pybitnode-status --wire`**.
+Implementations mark capabilities in code and via native chainstate records;
+aggregates are computed with **`checkpoint_status`** and exposed through
+**`pybitnode-status --wire`**.
 
 ## Key CLI tools
 

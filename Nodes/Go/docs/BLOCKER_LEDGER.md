@@ -5,7 +5,7 @@ height 10000. The current milestone remains offline/Core-native proof plus
 bounded local-reference replay; this is not live P2P sync or binary-gate
 completion.
 
-## Current status
+## Last recorded evidence
 
 ```text
 runtime_surface: docker

@@ -16,7 +16,7 @@ Every port must prove:
 ```text
 fresh_start:
   a clean datadir initializes native operational storage
-  no forbidden local SQLite database is created
+  no forbidden port-local SQLite database is created
 
 restart:
   a second run resumes from native operational storage only

@@ -42,7 +42,26 @@ Print an on-demand Markdown summary:
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section all
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 ```
+
+Project exposes stable projection views for direct queries:
+
+```bash
+sqlite-utils query Project/project.db \
+  "select * from latest_port_status order by port"
+
+sqlite-utils query Project/project.db \
+  "select * from docker_coverage order by port"
+
+sqlite-utils query Project/project.db \
+  "select * from follower_blocker_matrix order by height, port"
+```
+
+Generated reports are stdout-only. Do not add or commit a generated
+`Project/reports/` tree.
 
 ## Conformance Import
 
