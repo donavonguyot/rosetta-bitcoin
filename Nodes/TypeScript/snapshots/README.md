@@ -24,5 +24,5 @@ npm run build && npm run export:snapshots -- --db ./data-ts/tsbitnode.db
 | `wire.json` | Wire capability progress and checkpoints |
 | `capabilities.json` | Per-capability implementation/verification state |
 
-Use native proof JSON under `NodeCore/conformance/results/` for Core storage
+Use native proof JSON under `Nodes/Shared/conformance/results/` for Core storage
 evidence.

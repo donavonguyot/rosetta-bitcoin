@@ -630,7 +630,7 @@ defmodule Exbitnode.Consensus.ScriptVerifyTest do
     on_exit(fn -> File.rm(result_path) end)
 
     manifest =
-      Path.expand("../../NodeCore/conformance/fixtures/scripts/manifest.json", File.cwd!())
+      Path.expand("../Shared/conformance/fixtures/scripts/manifest.json", File.cwd!())
 
     code =
       capture_io(fn ->

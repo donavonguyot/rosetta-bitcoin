@@ -34,7 +34,7 @@ func TestReusableVerifierVectors(t *testing.T) {
 			Expected     string `json:"expected"`
 		} `json:"vectors"`
 	}{}
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "NodeCore", "conformance", "fixtures", "native_crypto_v1_vectors.json"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "Shared", "conformance", "fixtures", "native_crypto_v1_vectors.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

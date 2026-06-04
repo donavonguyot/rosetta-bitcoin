@@ -180,11 +180,11 @@ defmodule Exbitnode.CLI.ScriptCorpus do
   end
 
   defp default_manifest_path do
-    Path.expand("../../NodeCore/conformance/fixtures/scripts/manifest.json", File.cwd!())
+    Path.expand("../Shared/conformance/fixtures/scripts/manifest.json", File.cwd!())
   end
 
   defp default_result_path do
     date = Date.utc_today() |> Date.to_iso8601(:basic)
-    Path.expand("../../NodeCore/conformance/results/elixir_script_corpus_#{date}.json", File.cwd!())
+    Path.expand("../Shared/conformance/results/elixir_script_corpus_#{date}.json", File.cwd!())
   end
 end

@@ -32,7 +32,7 @@ def main() -> int:
     proof_path = pathlib.Path(
         os.environ.get(
             "PROOF_PATH",
-            "../NodeCore/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json",
+            "../Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json",
         )
     )
     artifact = {

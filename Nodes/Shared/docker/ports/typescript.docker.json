@@ -1,0 +1,70 @@
+{
+  "manifest_version": 1,
+  "port": "typescript",
+  "status": "supervisor_partial",
+  "paths": {
+    "root": "Nodes/TypeScript",
+    "dockerfile": "Nodes/TypeScript/docker/Dockerfile",
+    "compose": "Nodes/TypeScript/docker/docker-compose.yml",
+    "dockerignore": "Nodes/TypeScript/docker/.dockerignore"
+  },
+  "images": {
+    "base": "node:20-slim",
+    "runtime": "node:20-slim",
+    "os_family": "Debian slim",
+    "package_manager": "apt plus npm",
+    "native_dependencies": ["rocksdb npm native binding", "secp256k1 npm native binding"]
+  },
+  "volumes": {
+    "data": "tsbitnode_data",
+    "proof": "tsbitnode_proof_data",
+    "supervisor": "tsbitnode_sync_data"
+  },
+  "commands": {
+    "docker_config": "cd Nodes/TypeScript && docker compose -f docker/docker-compose.yml config",
+    "docker_build": "cd Nodes/TypeScript && make docker-build",
+    "docker_status": "cd Nodes/TypeScript && make docker-typescript-sync-status",
+    "docker_proof_local": "cd Nodes/TypeScript && make docker-typescript-native-proof",
+    "docker_probe_external": null,
+    "docker_supervisor": "cd Nodes/TypeScript && make docker-typescript-sync-supervisor",
+    "docker_supervisor_status": "cd Nodes/TypeScript && make docker-typescript-sync-status",
+    "docker_supervisor_stop": "cd Nodes/TypeScript && make docker-typescript-sync-stop",
+    "docker_supervisor_resume": "cd Nodes/TypeScript && make docker-typescript-sync-resume",
+    "docker_smoke_once": "cd Nodes/TypeScript && make docker-smoke-once"
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": true,
+      "command": "cd Nodes/TypeScript && make docker-typescript-native-proof",
+      "peer": "host.docker.internal:48333",
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "sync_status"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+    }
+  },
+  "supervisor": {
+    "stop_marker": ".tsbitnode_supervisor_stop",
+    "resume_marker": ".tsbitnode_supervisor_resume",
+    "poll_sec": 120,
+    "check_sec": 5
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": "Nodes/Shared/conformance/results/typescript_storage_gate_2026-06-02.json",
+    "notes": "TypeScript native proof path uses RocksDB and native secp256k1 ECDSA with pure TS Schnorr/Taproot fallback reported in proof metadata."
+  },
+  "known_caveats": ["External network probe command not standardized", "Schnorr/Taproot still use pure TypeScript fallback until a full native libsecp256k1 wrapper lands"]
+}

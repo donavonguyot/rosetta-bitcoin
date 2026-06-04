@@ -19,7 +19,7 @@ services:
       DATA_DIR: /data
     volumes:
       - ${DOCKER_PROOF_VOLUME:-rsbitnode_proof_data}:/data
-      - ../../../NodeCore/conformance/results:/results
+      - ../../Shared/conformance/results:/results
     command:
       [
         "rsbitnode",
@@ -39,14 +39,14 @@ services:
     environment:
       CHAIN: testnet4
     volumes:
-      - ../../../NodeCore/conformance/results:/results
-      - ../../../NodeCore/conformance/fixtures:/workspace/NodeCore/conformance/fixtures:ro
+      - ../../Shared/conformance/results:/results
+      - ../../Shared/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
     command:
       [
         "rsbitnode",
         "script-corpus",
         "--manifest",
-        "/workspace/NodeCore/conformance/fixtures/scripts/manifest.json",
+        "/workspace/Shared/conformance/fixtures/scripts/manifest.json",
         "--result-path",
         "/results/rust_script_corpus_docker.json",
         "--runtime-surface",
@@ -65,7 +65,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ${DOCKER_LOCAL_PROOF_VOLUME:-rsbitnode_local_reference_data}:/data
-      - ../../../NodeCore/conformance/results:/results
+      - ../../Shared/conformance/results:/results
     command:
       [
         "rsbitnode",

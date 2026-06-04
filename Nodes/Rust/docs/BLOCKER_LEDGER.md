@@ -32,7 +32,7 @@ missing_rule: P2TR key-path/script verification
 status: cleared by Rust-native P2TR key-path/script verification
 ```
 
-The shared 45-fixture NodeCore script corpus now passes `45/45` through a
+The shared 45-fixture Shared script corpus now passes `45/45` through a
 Rust-native verifier. Covered shared blocker semantics include P2SH/nested
 witness, P2WSH, bare multisig, CLTV/CSV, legacy/BIP143/Taproot sighash, P2TR
 key-path, tapscript control-block validation, and blocker opcodes through the

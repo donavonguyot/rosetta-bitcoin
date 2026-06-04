@@ -120,7 +120,7 @@ make docker-typescript-sync-resume
 make docker-smoke-once
 ```
 
-The Docker manifest is `NodeCore/docker/ports/typescript.docker.json`. Keep it
+The Docker manifest is `Nodes/Shared/docker/ports/typescript.docker.json`. Keep it
 in sync whenever command names, volumes, or proof artifacts change.
 
 ## Legacy SQLite Evidence

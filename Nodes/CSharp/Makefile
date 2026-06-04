@@ -6,7 +6,7 @@ DATA_DIR ?= ./data-csharp
 PEERS ?= 127.0.0.1:48333
 
 DOCKER_PROOF_VOLUME ?= csbitnode_proof_data
-DOCKER_PROOF_PATH ?= ../../NodeCore/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json
+DOCKER_PROOF_PATH ?= ../Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json
 DOCKER_HEADERS_MAX ?= 200
 DOCKER_HEADER_BATCHES_MAX ?= 1
 DOCKER_BLOCKS_MAX ?= 2
@@ -75,7 +75,7 @@ docker-csharp-native-crypto-proof:
 docker-csharp-native-crypto-bounded-sync-proof:
 	$(MAKE) docker-csharp-native-crypto-proof \
 	  DOCKER_PROOF_VOLUME=csbitnode_native_bounded_sync_data \
-	  DOCKER_PROOF_PATH=../../NodeCore/conformance/results/csharp_native_crypto_docker_bounded_sync_2026-06-01.json \
+	  DOCKER_PROOF_PATH=../Shared/conformance/results/csharp_native_crypto_docker_bounded_sync_2026-06-01.json \
 	  DOCKER_HEADERS_MAX=$(or $(DOCKER_HEADERS_MAX),10000) \
 	  DOCKER_HEADER_BATCHES_MAX=$(or $(DOCKER_HEADER_BATCHES_MAX),50) \
 	  DOCKER_BLOCKS_MAX=$(or $(DOCKER_BLOCKS_MAX),10000)

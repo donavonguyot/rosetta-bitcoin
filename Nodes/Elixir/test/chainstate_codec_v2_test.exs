@@ -5,11 +5,11 @@ defmodule Exbitnode.Db.ChainstateCodecV2Test do
   alias Exbitnode.Util.Hex
 
   @vectors_path Path.expand(
-                  "../../../NodeCore/conformance/fixtures/chainstate_codec_v2_vectors.json",
+                  "../../Shared/conformance/fixtures/chainstate_codec_v2_vectors.json",
                   __DIR__
                 )
 
-  test "matches shared NodeCore golden vectors" do
+  test "matches shared Shared golden vectors" do
     vectors = @vectors_path |> File.read!() |> Jason.decode!()
     chain = vectors["chain"]
     txid_internal = Hex.decode(vectors["txid_internal_hex"])

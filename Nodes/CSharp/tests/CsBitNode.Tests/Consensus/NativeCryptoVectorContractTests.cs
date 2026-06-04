@@ -11,7 +11,7 @@ public class NativeCryptoVectorContractTests
     {
         Environment.SetEnvironmentVariable("SECP256K1_BACKEND", "native");
         using var doc = JsonDocument.Parse(File.ReadAllText(
-            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "NodeCore", "conformance", "fixtures", "native_crypto_v1_vectors.json"))));
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "Shared", "conformance", "fixtures", "native_crypto_v1_vectors.json"))));
         var root = doc.RootElement;
         Assert.Equal(1, root.GetProperty("version").GetInt32());
         Assert.Equal("libsecp256k1", root.GetProperty("target_backend").GetString());

@@ -30,13 +30,13 @@ class ScriptCorpusCase:
 
 def repo_root() -> Path:
     for parent in Path(__file__).resolve().parents:
-        if (parent / "NodeCore").exists() and (parent / "Nodes" / "Python").exists():
+        if (parent / "Nodes" / "Shared").exists() and (parent / "Nodes" / "Python").exists():
             return parent
     raise RuntimeError("could not locate repository root")
 
 
 def default_manifest_path() -> Path:
-    return repo_root() / "NodeCore/conformance/fixtures/scripts/manifest.json"
+    return repo_root() / "Nodes/Shared/conformance/fixtures/scripts/manifest.json"
 
 
 def load_manifest(path: Path | None = None) -> dict[str, Any]:
@@ -218,11 +218,11 @@ def run_corpus(*, manifest_path: Path | None = None) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run Python against the NodeCore script corpus.")
+    parser = argparse.ArgumentParser(description="Run Python against the Shared script corpus.")
     parser.add_argument("--manifest", default="")
     parser.add_argument(
         "--result-path",
-        default=str(repo_root() / "NodeCore/conformance/results/python_script_corpus_2026-06-03.json"),
+        default=str(repo_root() / "Nodes/Shared/conformance/results/python_script_corpus_2026-06-03.json"),
     )
     args = parser.parse_args(argv)
 

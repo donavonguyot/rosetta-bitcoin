@@ -2,9 +2,9 @@ GO ?= go
 DATA_DIR ?= ./data-go
 PROOF_DATA_DIR ?= ./data-go-proof
 RESULT_DATE ?= $(shell date +%F)
-SCRIPT_RESULT ?= ../../NodeCore/conformance/results/go_script_corpus_$(RESULT_DATE).json
-STORAGE_RESULT ?= ../../NodeCore/conformance/results/go_storage_gate_$(RESULT_DATE).json
-DOCKER_SCRIPT_RESULT ?= /nodecore/conformance/results/go_script_corpus_docker_$(RESULT_DATE).json
+SCRIPT_RESULT ?= ../Shared/conformance/results/go_script_corpus_$(RESULT_DATE).json
+STORAGE_RESULT ?= ../Shared/conformance/results/go_storage_gate_$(RESULT_DATE).json
+DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/go_script_corpus_docker_$(RESULT_DATE).json
 DOCKER_STORAGE_RESULT ?= /results/go_storage_gate_docker_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= /results/go_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
@@ -64,7 +64,7 @@ docker-storage-proof:
 docker-script-corpus:
 	GOBITNODE_RUNTIME_SURFACE=docker $(DOCKER_COMPOSE) run --rm --no-deps gobitnode-script-corpus \
 	  gobitnode script-corpus \
-	  --manifest /nodecore/conformance/fixtures/scripts/manifest.json \
+	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
 	  --result-path $(DOCKER_SCRIPT_RESULT)
 
 docker-proof-local:

@@ -344,7 +344,7 @@ fn compare_u256(left: &[u8; 32], right: &[u8; 32]) -> Ordering {
 
 pub fn default_result_path(name: &str) -> Result<std::path::PathBuf> {
     Ok(crate::repo::root()?.join(format!(
-        "NodeCore/conformance/results/rust_{name}_{}.json",
+        "Nodes/Shared/conformance/results/rust_{name}_{}.json",
         Utc::now().format("%F")
     )))
 }

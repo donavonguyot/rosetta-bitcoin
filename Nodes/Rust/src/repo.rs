@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 pub fn root() -> Result<PathBuf> {
     let mut dir = std::env::current_dir()?;
     loop {
-        if dir.join("AGENTS.md").is_file() && dir.join("NodeCore").is_dir() {
+        if dir.join("AGENTS.md").is_file() && dir.join("Shared").is_dir() {
             return Ok(dir);
         }
         if !dir.pop() {

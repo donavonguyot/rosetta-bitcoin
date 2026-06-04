@@ -53,7 +53,7 @@ public final class ChainstateBackendReplayService {
         Path.of(
                 env.getOrDefault(
                     "PROOF_PATH",
-                    "../NodeCore/conformance/results/java_rocksdb_codec_v2_storage_2026-06-01.json"))
+                    "../Shared/conformance/results/java_rocksdb_codec_v2_storage_2026-06-01.json"))
             .toAbsolutePath()
             .normalize();
     int replayTargetHeight = parseInt(env.get("BLOCKS_MAX"), 2);

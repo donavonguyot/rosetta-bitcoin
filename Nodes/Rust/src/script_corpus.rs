@@ -87,7 +87,7 @@ pub fn run(
 ) -> Result<ScriptCorpusReport> {
     let manifest_path = match manifest_path {
         Some(path) => path.to_path_buf(),
-        None => repo::root()?.join("NodeCore/conformance/fixtures/scripts/manifest.json"),
+        None => repo::root()?.join("Nodes/Shared/conformance/fixtures/scripts/manifest.json"),
     };
     let base_dir = manifest_path
         .parent()
@@ -136,7 +136,7 @@ pub fn run(
             "engine": "rust_native",
             "crypto_backend": "rust-secp256k1",
             "source": "Nodes/Rust/src/script_verify.rs",
-            "note": "Rust runs an independent native script verifier over the shared NodeCore corpus.",
+            "note": "Rust runs an independent native script verifier over the shared Shared corpus.",
             "delegated": false
         }),
         results,
@@ -342,7 +342,7 @@ fn default_result_path() -> PathBuf {
     repo::root()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join(format!(
-            "NodeCore/conformance/results/rust_script_corpus_{}.json",
+            "Nodes/Shared/conformance/results/rust_script_corpus_{}.json",
             Utc::now().format("%F")
         ))
 }

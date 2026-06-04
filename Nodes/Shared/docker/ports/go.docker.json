@@ -1,0 +1,72 @@
+{
+  "manifest_version": 1,
+  "port": "go",
+  "status": "proof_partial",
+  "paths": {
+    "root": "Nodes/Go",
+    "dockerfile": "Nodes/Go/docker/Dockerfile",
+    "compose": "Nodes/Go/docker/docker-compose.yml",
+    "dockerignore": "Nodes/Go/docker/.dockerignore"
+  },
+  "images": {
+    "base": "golang:1.23-bookworm",
+    "runtime": "debian:bookworm-slim",
+    "os_family": "Debian",
+    "package_manager": "apt plus go",
+    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "libsecp256k1-dev/libsecp256k1-1"]
+  },
+  "volumes": {
+    "data": "gobitnode_data",
+    "proof": "gobitnode_proof_data",
+    "supervisor": "gobitnode_sync_data"
+  },
+  "commands": {
+    "docker_config": "cd Nodes/Go && make docker-config",
+    "docker_build": "cd Nodes/Go && make docker-build",
+    "docker_status": "cd Nodes/Go && make docker-status",
+    "docker_proof_local": "cd Nodes/Go && make docker-proof-local",
+    "docker_probe_external": null,
+    "docker_supervisor": "cd Nodes/Go && make docker-smoke-once",
+    "docker_supervisor_status": "cd Nodes/Go && make docker-status",
+    "docker_supervisor_stop": null,
+    "docker_supervisor_resume": null,
+    "docker_smoke_once": "cd Nodes/Go && make docker-smoke-once"
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": true,
+      "command": "cd Nodes/Go && make docker-proof-local",
+      "peer": "host.docker.internal:48332",
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+    }
+  },
+  "supervisor": {
+    "stop_marker": ".gobitnode_supervisor_stop",
+    "resume_marker": ".gobitnode_supervisor_resume",
+    "poll_sec": 120,
+    "check_sec": 5
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": "Nodes/Shared/conformance/results/go_storage_gate_2026-06-03.json",
+    "local_reference_result": "Nodes/Shared/conformance/results/go_local_reference_docker_sync_2026-06-03.json",
+    "script_corpus_result": "Nodes/Shared/conformance/results/go_script_corpus_docker_2026-06-03.json",
+    "notes": "Go is proof_partial: Docker storage/status/smoke, native 45/45 script corpus, and bounded local-reference replay through height 10000 pass; optimized replay uses atomic RocksDB block commits, batch prevout loads, binary UTXO codec v2, and pipelined timing evidence; live P2P sync and tip maintenance remain follow-up work."
+  },
+  "known_caveats": ["Bounded local-reference RPC proof is not live P2P sync or tip maintenance", "Persistent live P2P supervisor is still a follow-up surface"]
+}

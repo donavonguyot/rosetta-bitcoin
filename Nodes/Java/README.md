@@ -110,7 +110,7 @@ and `docker-java-native-crypto-proof` are fast 2-block packaging smokes from a
 fresh Docker volume. `docker-java-native-crypto-long-sync-proof` is the
 meaningful Docker native-crypto validation run; it targets 10,000 headers and
 10,000 connected blocks by default, and records either target reach or the exact
-next blocker in a NodeCore proof artifact. `docker-java-native-crypto-50k-sync-proof`
+next blocker in a Shared proof artifact. `docker-java-native-crypto-50k-sync-proof`
 is the next larger bounded gate, using a separate Docker volume and proof
 artifact to test validation through height 50,000 without overwriting the 10k
 evidence. `docker-java-native-crypto-tip-sync-proof` queries the local Core tip

@@ -65,8 +65,8 @@ recommendation.
 ## Native crypto
 
 Set `SECP256K1_BACKEND=native` to use the `Secp256k1.Net` libsecp256k1 wrapper for
-ECDSA, Schnorr, and Taproot x-only tweak proof paths. Shared NodeCore vectors live at
-`../NodeCore/conformance/fixtures/native_crypto_v1_vectors.json` and are exercised by
+ECDSA, Schnorr, and Taproot x-only tweak proof paths. Shared Shared vectors live at
+`../Shared/conformance/fixtures/native_crypto_v1_vectors.json` and are exercised by
 `make csharp-node-native-crypto-test`.
 
 ## Local Core sync
@@ -154,7 +154,7 @@ Implemented surface:
 - Value-in/value-out accounting for non-coinbase paths (stops before script execution)
 - Honest stop on unsupported script/consensus rules
 - RocksDB chainstate + `make node-status`
-- Native crypto proof fields and shared NodeCore vector execution
+- Native crypto proof fields and shared Shared vector execution
 - Docker proof targets with 2-minute in-container progress reporting
 - Persistent Docker supervisor with separate `POLL_SEC` report cadence and
   `CHECK_SEC` fast chunk-completion checks

@@ -5,7 +5,7 @@ current milestone is a Core-native scaffold plus bounded local-reference replay:
 RocksDB-owned storage metadata, status JSON, storage proof output, Chainstate
 Codec v2 vector checks, native crypto vector checks, Docker smoke/proof
 surfaces, raw block/transaction parsing, and a Rust script-corpus harness for
-the shared 45-fixture NodeCore corpus.
+the shared 45-fixture Shared corpus.
 
 This milestone does not claim live P2P sync, testnet4 tip maintenance, or
 binary-gate progress. Host and Docker local-reference replay currently reach
@@ -64,7 +64,7 @@ runs only. Default runtime and proof commands keep RocksDB WAL enabled.
 ## Script Corpus
 
 `rsbitnode script-corpus` loads all 45 entries from
-`NodeCore/conformance/fixtures/scripts/manifest.json` and runs a Rust-native
+`Nodes/Shared/conformance/fixtures/scripts/manifest.json` and runs a Rust-native
 script verifier. Current coverage clears the shared `45/45` corpus without
 delegating to another port or to Core validation.
 

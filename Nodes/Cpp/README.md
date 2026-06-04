@@ -135,7 +135,7 @@ Defaults: `CHAIN=testnet4`, data dir `./data-cpp`, chainstate backend `rocksdb`.
 ./build-core-native/cpbitnode-storage-proof \
   --datadir /tmp/cpbitnode-storage-proof \
   --chainstate-backend rocksdb \
-  --proof-path ../../NodeCore/conformance/results/cpp_rocksdb_codec_v2_storage.json
+  --proof-path ../Shared/conformance/results/cpp_rocksdb_codec_v2_storage.json
 
 ./build-core-native/cpbitnode-blocker-inspect --height 739
 ```

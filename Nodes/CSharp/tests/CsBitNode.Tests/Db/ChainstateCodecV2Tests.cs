@@ -7,10 +7,10 @@ namespace CsBitNode.Tests.Db;
 public class ChainstateCodecV2Tests
 {
     [Fact]
-    public void MatchesNodeCoreGoldenVectors()
+    public void MatchesSharedGoldenVectors()
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(
-            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "NodeCore", "conformance", "fixtures", "chainstate_codec_v2_vectors.json"))));
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "Shared", "conformance", "fixtures", "chainstate_codec_v2_vectors.json"))));
         var root = doc.RootElement;
         var chain = root.GetProperty("chain").GetString()!;
         var txid = root.GetProperty("txid_internal_hex").GetString()!;

@@ -3,7 +3,7 @@ PEERS ?= 127.0.0.1:48333
 BUILD_DIR ?= build-core
 
 DOCKER_PROOF_VOLUME ?= cpbitnode_proof_data
-DOCKER_PROOF_PATH ?= ../../NodeCore/conformance/results/cpp_rocksdb_codec_v2_storage.json
+DOCKER_PROOF_PATH ?= ../Shared/conformance/results/cpp_rocksdb_codec_v2_storage.json
 DOCKER_HEADERS_MAX ?= 200
 DOCKER_BLOCKS_MAX ?= 2
 DOCKER_SYNC_VOLUME ?= cpbitnode_sync_data
@@ -32,7 +32,7 @@ sync-local:
 	$(BUILD_DIR)/cpbitnode-sync --datadir $(DATA_DIR) --chainstate-backend rocksdb --peers $(PEERS) --blocks-target $(or $(BLOCKS_TARGET),$(DOCKER_BLOCKS_MAX)) --blocks-max $(or $(BLOCKS_MAX),$(DOCKER_BLOCKS_MAX))
 
 cpp-node-storage-proof:
-	$(BUILD_DIR)/cpbitnode-storage-proof --datadir $(DATA_DIR) --chainstate-backend rocksdb --proof-path $(or $(PROOF_PATH),../../NodeCore/conformance/results/cpp_rocksdb_codec_v2_storage.json)
+	$(BUILD_DIR)/cpbitnode-storage-proof --datadir $(DATA_DIR) --chainstate-backend rocksdb --proof-path $(or $(PROOF_PATH),../Shared/conformance/results/cpp_rocksdb_codec_v2_storage.json)
 
 cpp-node-native-crypto-test:
 	cmake -S . -B $(BUILD_DIR)-native -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -DCPBITNODE_USE_NATIVE_SECP256K1=ON

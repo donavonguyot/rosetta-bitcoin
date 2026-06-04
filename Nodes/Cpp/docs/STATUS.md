@@ -18,9 +18,9 @@ Coverage: report-only (see README).
 |----------|--------|----------|
 | status_contract | passed | `cpbitnode-db --chainstate-backend rocksdb`; storage proof reports `chainstate_backend=rocksdb` |
 | storage_gate | passed | storage proof reports `local_sqlite_artifact_absent=true`, `codec_version=2`, and `chainstate_codec_v2_vectors_run=true` |
-| codec_v2_records | passed | UTXO, undo, tip, block index, header, and metadata records use NodeCore Chainstate Codec v2 binary keys/values |
+| codec_v2_records | passed | UTXO, undo, tip, block index, header, and metadata records use Shared Chainstate Codec v2 binary keys/values |
 | native_crypto_vectors | passed | `ctest --test-dir build-core-native --output-on-failure` |
-| docker_supervisor_contract | proof_partial | `Makefile`, `docker/docker-compose.yml`, `scripts/docker_sync_supervisor.sh`; see `NodeCore/docker/PORT_DOCKER_INVENTORY.md` |
+| docker_supervisor_contract | proof_partial | `Makefile`, `docker/docker-compose.yml`, `scripts/docker_sync_supervisor.sh`; see `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` |
 | blocker_diagnostics_contract | present | `cpbitnode-blocker-inspect --height 739` |
 | project_import | observational_only | status snapshot and conformance results imported into `Project/project.db`, but imports do not prove Core compliance |
 

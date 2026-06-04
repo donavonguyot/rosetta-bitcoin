@@ -73,7 +73,7 @@ persisting `ValidationBlockerRecord` instead of serializing the raw
 | next_test_fixture | First-class C# fixture/diagnostic for block 22830 before implementing tapscript. |
 | follower_notes | Do not use the one-off Python scanner as the recurring workflow. C# status/diagnostics should report witness shape and key-path vs script-path classification. |
 
-Diagnostic contract: `../../NodeCore/diagnostics/BLOCKER_DIAGNOSTICS.md`.
+Diagnostic contract: `../../Shared/diagnostics/BLOCKER_DIAGNOSTICS.md`.
 
 ## Supervisor lessons
 

@@ -23,7 +23,7 @@ function defaultProofPath(): string {
     process.cwd(),
     "..",
     "..",
-    "NodeCore",
+    "Shared",
     "conformance",
     "results",
     `typescript_storage_gate_${new Date().toISOString().slice(0, 10)}.json`,

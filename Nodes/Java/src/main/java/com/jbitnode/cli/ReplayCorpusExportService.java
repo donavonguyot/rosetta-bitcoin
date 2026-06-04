@@ -33,7 +33,7 @@ public final class ReplayCorpusExportService {
             .toAbsolutePath()
             .normalize();
     Path corpusDir =
-        Path.of(env.getOrDefault("REPLAY_CORPUS_DIR", "../NodeCore/replay-corpus/testnet4"))
+        Path.of(env.getOrDefault("REPLAY_CORPUS_DIR", "../Shared/replay-corpus/testnet4"))
             .toAbsolutePath()
             .normalize();
     int blocksMax = parseInt(env.get("BLOCKS_MAX"), 100);

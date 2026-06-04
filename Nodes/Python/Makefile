@@ -13,7 +13,7 @@ SCAN_BLOCKS ?= 20
 OUT ?= snapshots
 DOCKER_PROOF_VOLUME ?= pybitnode_proof_data
 DOCKER_SUPERVISOR_VOLUME ?= pybitnode_supervisor_data
-DOCKER_PROOF_PATH ?= ../../NodeCore/conformance/results/python_rocksdb_native_storage_2026-06-02.json
+DOCKER_PROOF_PATH ?= ../Shared/conformance/results/python_rocksdb_native_storage_2026-06-02.json
 
 SYNC_ENV = MAX_OUTBOUND_PEERS=1 PARALLEL_BLOCK_DOWNLOADS=0 SKIP_GETADDR=1
 

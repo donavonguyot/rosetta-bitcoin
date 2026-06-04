@@ -1,14 +1,36 @@
 # Project Scripts
 
-Scripts in this directory should import observations into `Project/project.db`
-or generate reports from it.
+Scripts in this directory import observations into `Project/project.db` or
+generate reports from it. `Project/project.db` is the tracked mission-control
+database; port-local operational SQLite remains forbidden for native/Core node
+truth.
 
 They must not mutate node operational datadirs.
 
-## Expected Script Types
+Use SQLite Utils as the operator interface:
+
+```bash
+sqlite-utils tables Project/project.db --counts
+sqlite-utils query Project/project.db \
+  "select node_id, max(validated_height) as validated_height from status_snapshots group by node_id order by node_id"
+```
+
+## Import Everything
+
+Rebuild Project from canonical Shared results, Docker manifests, selected status
+exports, blocker ledgers, and seeded decisions:
+
+```bash
+python3 Project/scripts/import_all.py --db Project/project.db --rebuild
+```
+
+The importer is deterministic and idempotent. Running it again without
+`--rebuild` should leave row counts stable.
+
+## Script Types
 
 ```text
-init_project_db
+import_all
 import_status_snapshot
 import_blocker_ledger
 import_conformance_results
@@ -16,24 +38,30 @@ import_benchmark_results
 generate_reports
 ```
 
+Print an on-demand Markdown summary:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section all
+```
+
 ## Conformance Import
 
-Import a NodeCore result JSON after a port has completed its local proof:
+Import a Shared result JSON after a port has completed its local proof:
 
 ```bash
 python3 Project/scripts/import_conformance_results.py \
   --db Project/project.db \
-  NodeCore/conformance/results/java_rocksdb_codec_v2_storage_shared_2026-06-01.json
+  Nodes/Shared/conformance/results/java_rocksdb_codec_v2_storage_shared_2026-06-01.json
 ```
 
 Aggregate storage-gate files are expanded so each entry in `results[]` becomes
-one row in `conformance_results`. The original exported JSON remains preserved
-in `raw_json`.
+one row in `conformance_results`. Script-corpus files are expanded from
+`fixtures[]`. The original exported JSON remains indexed in `artifacts.raw_json`.
 
 Canonical proof files should live under:
 
 ```text
-NodeCore/conformance/results/<port>_<gate>_<surface>_<YYYY-MM-DD>.json
+Nodes/Shared/conformance/results/<port>_<gate>_<surface>_<YYYY-MM-DD>.json
 ```
 
 Do not import directly from port-local scratch datadirs when a canonical result
@@ -54,7 +82,8 @@ from the status JSON when present, and otherwise infers them from `--node-id`.
 If `current_blocker` is present, it also records a blocker row keyed by
 `node_id:height:txid:input_index`.
 
-Node runtimes should emit JSON and let Project scripts perform SQLite writes.
+Node runtimes should emit JSON and let Project scripts perform Project SQLite
+writes. Runtime code should not write `Project/project.db` directly.
 
 ## Import Boundary
 

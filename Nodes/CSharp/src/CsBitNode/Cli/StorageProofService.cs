@@ -106,7 +106,7 @@ public static class StorageProofService
                 "..",
                 "..",
                 "..",
-                "NodeCore",
+                "Shared",
                 "conformance",
                 "results",
                 $"csharp_storage_gate_{DateTimeOffset.UtcNow:yyyy-MM-dd}.json"));

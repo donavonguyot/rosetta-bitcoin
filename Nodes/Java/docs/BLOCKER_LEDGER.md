@@ -23,11 +23,11 @@ peer: 127.0.0.1:48333
 
 Shared root docs now carry the reusable Java lessons:
 
-- `../../docs/blocker-ledger.md` for the canonical blocker handoff format.
-- `../../docs/storage-contract.md` for RocksDB/native chainstate boundaries.
-- `../../docs/native-crypto-contract.md` for backend reporting and vector rules.
-- `../../docs/supervisor-contract.md` for durable sync supervisor behavior.
-- `../../docs/taproot-tapscript-lessons.md` for Taproot key-path vs script-path
+- `../../../Docs/blocker-ledger.md` for the canonical blocker handoff format.
+- `../../../Docs/storage-contract.md` for RocksDB/native chainstate boundaries.
+- `../../../Docs/native-crypto-contract.md` for backend reporting and vector rules.
+- `../../../Docs/supervisor-contract.md` for durable sync supervisor behavior.
+- `../../../Docs/taproot-tapscript-lessons.md` for Taproot key-path vs script-path
   guidance.
 
 ### P2WSH witness OP_BOOLAND live @136369 (passed)

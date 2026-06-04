@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
                                                       : std::filesystem::path(manifestArg);
         const auto defaultResult =
             cpbitnode::conformance::repoRoot() /
-            "NodeCore/conformance/results/cpp_script_corpus_2026-06-03.json";
+            "Nodes/Shared/conformance/results/cpp_script_corpus_2026-06-03.json";
         const auto resultPath = argValue(argc, argv, "--result-path", defaultResult.string());
 
         const auto run = cpbitnode::conformance::runCorpus(manifestPath);

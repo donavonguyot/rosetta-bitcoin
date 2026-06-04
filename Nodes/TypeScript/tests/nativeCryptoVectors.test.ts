@@ -19,7 +19,7 @@ function loadFixture(): NativeCryptoFixture {
     "..",
     "..",
     "..",
-    "NodeCore",
+    "Shared",
     "conformance",
     "fixtures",
     "native_crypto_v1_vectors.json",
@@ -36,7 +36,7 @@ describe("native crypto vector contract", () => {
     expect(nativeSecp256k1Available()).toBe(true);
   });
 
-  it("matches NodeCore native_crypto_v1 vectors", () => {
+  it("matches Shared native_crypto_v1 vectors", () => {
     const outcomes = loadFixture().vectors.map(evaluateNativeCryptoVector);
     expect(outcomes).toEqual(
       outcomes.map((outcome) => ({

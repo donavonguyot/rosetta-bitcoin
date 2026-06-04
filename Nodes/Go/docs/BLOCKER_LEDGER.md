@@ -19,7 +19,7 @@ sync_status: blocks_current
 current_blocker: null
 chainstate_backend: rocksdb
 native_crypto_backend: libsecp256k1
-proof_result: NodeCore/conformance/results/go_local_reference_docker_sync_2026-06-03.json
+proof_result: Nodes/Shared/conformance/results/go_local_reference_docker_sync_2026-06-03.json
 ```
 
 ## Cleared: height 739 — first spend-path script verification
@@ -40,7 +40,7 @@ missing_rule: script_verify_not_implemented
 source_port: Go
 source_fixture: local Core RPC raw blocks through 10000
 port_fix: native Go spend-path script verification and atomic spend/output staging
-test_fixture: NodeCore script corpus plus local-reference replay through 10000
+test_fixture: Shared script corpus plus local-reference replay through 10000
 follower_notes: Cleared by Docker local-reference proof through height 10000; do not treat as live P2P tip proof.
 ```
 
@@ -53,7 +53,7 @@ missing_rule: taproot_key_path_verification
 source_port: Go
 source_fixture: local Core RPC raw blocks through 10000
 port_fix: native Go Taproot/Tapscript verifier backed by libsecp256k1 Schnorr and x-only tweak support
-test_fixture: NodeCore script corpus plus Docker local-reference replay through height 10000
+test_fixture: Shared script corpus plus Docker local-reference replay through height 10000
 follower_notes: Docker replay crossed height 7000 and completed height 10000 with current_blocker=null.
 ```
 

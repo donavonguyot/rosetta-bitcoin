@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
         auto settings = cpbitnode::config::Settings::fromArgs(argc, argv);
         settings.chainstateBackend = "rocksdb";
         const auto proofPath = argValue(argc, argv, "--proof-path",
-                                        "../../NodeCore/conformance/results/cpp_rocksdb_codec_v2_storage.json");
+                                        "../Shared/conformance/results/cpp_rocksdb_codec_v2_storage.json");
         const auto nodeId = argValue(argc, argv, "--node-id", "cppnode-rocksdb-codec-v2");
         const bool codecVectorsRun = cpbitnode::db::codec_v2::selfTestGoldenVector();
 

@@ -36,7 +36,7 @@ elapsed rebuild time, directory size, and key timing averages.
 
 ## Historical Benchmark Note
 
-Earlier comparator evidence is superseded by the NodeCore engine decision:
+Earlier comparator evidence is superseded by the Shared engine decision:
 serious ports use RocksDB with Codec v2. New Java evidence should be collected
 through the RocksDB replay proof and local-peer sync proof.
 

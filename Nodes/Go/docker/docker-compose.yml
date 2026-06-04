@@ -23,7 +23,7 @@ services:
       GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-docker}
     volumes:
       - gobitnode_proof_data:/data
-      - ../../../NodeCore/conformance/results:/results
+      - ../../Shared/conformance/results:/results
     command:
       [
         "gobitnode",
@@ -43,15 +43,15 @@ services:
       CHAIN: testnet4
       GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-docker}
     volumes:
-      - ../../../NodeCore/conformance:/nodecore/conformance
+      - ../../Shared/conformance:/shared/conformance
     command:
       [
         "gobitnode",
         "script-corpus",
         "--manifest",
-        "/nodecore/conformance/fixtures/scripts/manifest.json",
+        "/shared/conformance/fixtures/scripts/manifest.json",
         "--result-path",
-        "/nodecore/conformance/results/go_script_corpus_docker.json"
+        "/shared/conformance/results/go_script_corpus_docker.json"
       ]
 
   gobitnode-local-reference-proof:
@@ -72,7 +72,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - gobitnode_local_reference_proof_data:/data
-      - ../../../NodeCore/conformance/results:/results
+      - ../../Shared/conformance/results:/results
     command:
       [
         "gobitnode",

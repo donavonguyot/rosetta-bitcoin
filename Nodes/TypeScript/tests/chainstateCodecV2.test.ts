@@ -74,7 +74,7 @@ function loadFixture(): ChainstateCodecFixture {
     "..",
     "..",
     "..",
-    "NodeCore",
+    "Shared",
     "conformance",
     "fixtures",
     "chainstate_codec_v2_vectors.json",

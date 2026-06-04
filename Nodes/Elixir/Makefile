@@ -5,9 +5,9 @@ DOCKER_COMPOSE ?= docker compose -f docker/docker-compose.yml
 DOCKER_PEERS ?= host.docker.internal:48333
 DOCKER_PROOF_VOLUME ?= exbitnode_proof_data
 DOCKER_SYNC_VOLUME ?= exbitnode_sync_data
-DOCKER_PROOF_PATH ?= ../../NodeCore/conformance/results/elixir_rocksdb_codec_v2_storage.json
+DOCKER_PROOF_PATH ?= ../Shared/conformance/results/elixir_rocksdb_codec_v2_storage.json
 DOCKER_LONG_PROOF_VOLUME ?= exbitnode_native_10k_sync_data
-DOCKER_LONG_PROOF_PATH ?= ../../NodeCore/conformance/results/elixir_native_docker_10k_sync_20260603.json
+DOCKER_LONG_PROOF_PATH ?= ../Shared/conformance/results/elixir_native_docker_10k_sync_20260603.json
 DOCKER_LONG_HEADERS_MAX ?= 10000
 DOCKER_LONG_HEADER_BATCHES_MAX ?= 50
 DOCKER_LONG_BLOCKS_MAX ?= 10000
@@ -39,10 +39,10 @@ sync-local:
 	$(MIX) sync.local
 
 storage-proof:
-	DATA_DIR=$(DATA_DIR) PROOF_PATH=$(or $(PROOF_PATH),../../NodeCore/conformance/results/elixir_rocksdb_codec_v2_storage.json) $(MIX) storage.proof
+	DATA_DIR=$(DATA_DIR) PROOF_PATH=$(or $(PROOF_PATH),../Shared/conformance/results/elixir_rocksdb_codec_v2_storage.json) $(MIX) storage.proof
 
 script-corpus:
-	$(MIX) script.corpus -- --manifest $(or $(MANIFEST),../../NodeCore/conformance/fixtures/scripts/manifest.json) --result-path $(or $(RESULT_PATH),../../NodeCore/conformance/results/elixir_script_corpus.json)
+	$(MIX) script.corpus -- --manifest $(or $(MANIFEST),../Shared/conformance/fixtures/scripts/manifest.json) --result-path $(or $(RESULT_PATH),../Shared/conformance/results/elixir_script_corpus.json)
 
 docker-config:
 	$(DOCKER_COMPOSE) config
@@ -79,7 +79,7 @@ docker-long-sync-proof:
 	DOCKER_PROOF_VOLUME=$(DOCKER_LONG_PROOF_VOLUME) \
 	  TARGET_HEADER_HEIGHT=$(DOCKER_LONG_TARGET_HEADER_HEIGHT) TARGET_BLOCK_HEIGHT=$(DOCKER_LONG_TARGET_BLOCK_HEIGHT) \
 	  PROOF_PATH=$(DOCKER_LONG_PROOF_PATH) PROOF_COMMAND="$(or $(PROOF_COMMAND),$(MAKE) docker-long-sync-proof)" \
-	  python3 ../../NodeCore/conformance/tools/proofs/capture_elixir_docker_long_sync_proof.py .docker-elixir-long-status.json .docker-elixir-long-sync-exit
+	  python3 ../Shared/conformance/tools/proofs/capture_elixir_docker_long_sync_proof.py .docker-elixir-long-status.json .docker-elixir-long-sync-exit
 	@rm -f .docker-elixir-long-status.json .docker-elixir-long-sync-exit
 	@docker run --rm -v $(DOCKER_LONG_PROOF_VOLUME):/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
 
@@ -91,7 +91,7 @@ docker-10k-sync-proof:
 	  DOCKER_LONG_TARGET_HEADER_HEIGHT=10000 \
 	  DOCKER_LONG_TARGET_BLOCK_HEIGHT=10000 \
 	  DOCKER_LONG_PROOF_VOLUME=exbitnode_native_10k_sync_data \
-	  DOCKER_LONG_PROOF_PATH=../../NodeCore/conformance/results/elixir_native_docker_10k_sync_20260603.json \
+	  DOCKER_LONG_PROOF_PATH=../Shared/conformance/results/elixir_native_docker_10k_sync_20260603.json \
 	  PROOF_COMMAND="$(MAKE) docker-10k-sync-proof"
 
 docker-supervisor:

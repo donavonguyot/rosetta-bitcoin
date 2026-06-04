@@ -539,7 +539,7 @@ std::filesystem::path repoRoot() {
 #else
     auto dir = std::filesystem::current_path();
     for (int depth = 0; depth < 8; ++depth) {
-        if (std::filesystem::exists(dir / "NodeCore") && std::filesystem::exists(dir / "Nodes" / "Cpp")) {
+        if (std::filesystem::exists(dir / "Shared") && std::filesystem::exists(dir / "Nodes" / "Cpp")) {
             return dir;
         }
         if (!dir.has_parent_path()) {
@@ -552,7 +552,7 @@ std::filesystem::path repoRoot() {
 }
 
 std::filesystem::path defaultManifestPath() {
-    return repoRoot() / "NodeCore/conformance/fixtures/scripts/manifest.json";
+    return repoRoot() / "Nodes/Shared/conformance/fixtures/scripts/manifest.json";
 }
 
 std::vector<ScriptCorpusCase> loadCases(const std::filesystem::path& manifestPath) {

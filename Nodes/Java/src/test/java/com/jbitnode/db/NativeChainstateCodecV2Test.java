@@ -15,14 +15,14 @@ import org.junit.jupiter.api.Test;
 class NativeChainstateCodecV2Test {
 
   @Test
-  void matchesNodeCoreGoldenVectors() throws Exception {
+  void matchesSharedGoldenVectors() throws Exception {
     JsonNode vectors =
         new ObjectMapper()
             .readTree(
                 Files.readString(
                     Path.of(
                         "..",
-                        "NodeCore",
+                        "Shared",
                         "conformance",
                         "fixtures",
                         "chainstate_codec_v2_vectors.json")));

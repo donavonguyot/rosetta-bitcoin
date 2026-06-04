@@ -18,7 +18,7 @@ namespace {
 
 std::string readFixture() {
     const auto path = std::filesystem::path(CPBITNODE_REPO_ROOT) /
-                      "NodeCore/conformance/fixtures/chainstate_codec_v2_vectors.json";
+                      "Nodes/Shared/conformance/fixtures/chainstate_codec_v2_vectors.json";
     std::ifstream in(path);
     if (!in) {
         throw std::runtime_error("failed to open codec fixture: " + path.string());

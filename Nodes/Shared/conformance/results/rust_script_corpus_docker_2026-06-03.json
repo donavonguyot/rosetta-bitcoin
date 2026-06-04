@@ -1,0 +1,425 @@
+{
+  "complete_count": 44,
+  "fixture_count": 45,
+  "fixtures": [
+    {
+      "errors": [],
+      "fixture_id": "scripts.bare_multisig_27840",
+      "height": 27840,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_op1_only_31842",
+      "height": 31842,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_numequal_32712",
+      "height": 32712,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_cltv_32868",
+      "height": 32868,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_p2wsh_op1_only_33500",
+      "height": 33500,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2pkh_sighash_single_38010",
+      "height": 38010,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_cltv_38191",
+      "height": 38191,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_scriptpath_44295",
+      "height": 44295,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_scriptpath_46599",
+      "height": 46599,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_size_lessthan_46779",
+      "height": 46779,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_add_51340",
+      "height": 51340,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2SH",
+      "warnings": []
+    },
+    {
+      "errors": [
+        "size mismatch for referenced file: scripts.p2tr_tapscript_sha256_52024/tx_p2tr_tapscript_sha256_52024_prevouts.json"
+      ],
+      "fixture_id": "scripts.p2tr_tapscript_sha256_52024",
+      "height": 52024,
+      "portability_status": "raw_imported",
+      "structural_status": "incomplete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_size_52497",
+      "height": 52497,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_2drop_54287",
+      "height": 54287,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2WSH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_ifdup_csv_54297",
+      "height": 54297,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2WSH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_mul_58173",
+      "height": 58173,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2WSH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2pkh_61174",
+      "height": 61174,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2PKH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_rot_62754",
+      "height": 62754,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2WSH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_3dup_63305",
+      "height": 63305,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2SH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_2dup_63603",
+      "height": 63603,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2SH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_altstack_66241",
+      "height": 66241,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2WSH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_hash256_67562",
+      "height": 67562,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_70924",
+      "height": 70924,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_71267",
+      "height": 71267,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_78841",
+      "height": 78841,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_82112",
+      "height": 82112,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2SH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_82856",
+      "height": 82856,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_82921",
+      "height": 82921,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_sha1_82921",
+      "height": 82921,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2SH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_87214",
+      "height": 87214,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_89632",
+      "height": 89632,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_within_98025",
+      "height": 98025,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2WSH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_98631",
+      "height": 98631,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2WSH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_nip_98631",
+      "height": 98631,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2WSH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_100372",
+      "height": 100372,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2pkh_107951",
+      "height": 107951,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2PKH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_108508",
+      "height": 108508,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_108972",
+      "height": 108972,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2SH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_116040",
+      "height": 116040,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2SH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.bare_legacy_118555",
+      "height": 118555,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "bare_legacy",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_121035",
+      "height": 121035,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_126975",
+      "height": 126975,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2sh_abs_132361",
+      "height": 132361,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2SH",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2tr_tapscript_133634",
+      "height": 133634,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2TR script-path",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "fixture_id": "scripts.p2wsh_booland_136369",
+      "height": 136369,
+      "portability_status": "raw_imported",
+      "structural_status": "complete",
+      "template": "P2WSH",
+      "warnings": []
+    }
+  ],
+  "incomplete_count": 1,
+  "manifest": "Nodes/Shared/conformance/fixtures/scripts/manifest.json",
+  "result": "failed",
+  "schema": "shared.script_fixtures.validation.v1",
+  "templates": {
+    "bare_legacy": 1,
+    "p2pkh": 2,
+    "p2sh": 8,
+    "p2tr script-path": 12,
+    "p2wsh": 9,
+    "unknown": 13
+  }
+}

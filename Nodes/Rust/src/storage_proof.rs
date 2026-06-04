@@ -229,7 +229,7 @@ fn default_result_path() -> PathBuf {
     repo::root()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join(format!(
-            "NodeCore/conformance/results/rust_storage_gate_{}.json",
+            "Nodes/Shared/conformance/results/rust_storage_gate_{}.json",
             Utc::now().format("%F")
         ))
 }

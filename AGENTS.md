@@ -20,18 +20,18 @@ independent validation, or skipping unknown consensus rules does **not** pass.
 Before editing a port, read:
 
 1. `README.md` at the workspace root.
-2. `docs/README.md`.
-3. `docs/git-topology.md`.
-4. `docs/port-status.md`.
-5. `NodeCore/STATUS_CONTRACT.md`.
-6. `NodeCore/storage/STORAGE_GATE.md`.
-7. `NodeCore/chainstate/CHAINSTATE_STORE.md`.
-8. `NodeCore/docker/DOCKER_RUNTIME_CONTRACT.md`.
-9. `NodeCore/docker/PORT_DOCKER_INVENTORY.md`.
-10. The target port manifest in `NodeCore/docker/ports/<port>.docker.json` before Docker work.
-11. `docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
-12. `docs/blocker-ledger.md`.
-13. `docs/supervisor-contract.md`.
+2. `Docs/README.md`.
+3. `Docs/git-topology.md`.
+4. `Docs/port-status.md`.
+5. `Nodes/Shared/STATUS_CONTRACT.md`.
+6. `Nodes/Shared/storage/STORAGE_GATE.md`.
+7. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
+8. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
+9. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md`.
+10. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
+11. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
+12. `Docs/blocker-ledger.md`.
+13. `Docs/supervisor-contract.md`.
 14. The target port's README and blocker ledger.
 
 Progress can be measured with many gauges, but the gauges are not the goal:
@@ -51,19 +51,21 @@ it addresses, and what remains blocked.
 Core Node compliance is not a single green test. Keep consensus progress,
 native storage compliance, Docker runtime compliance, and Project imports
 separate. Native/Core mode is non-compliant if it creates, reads, or requires
-SQLite for operational node truth such as headers, block index, sync state,
-validated tip, UTXO, undo, chainstate metadata, blocker state, or status fields.
+port-local SQLite for operational node truth such as headers, block index, sync
+state, validated tip, UTXO, undo, chainstate metadata, blocker state, or status
+fields. `Project/project.db` is allowed and preferred for mission-control
+imports and reports, but node runtimes must not read it for operational truth.
 Docker compliance requires an inventory row and the runtime contract in
-`NodeCore/docker/DOCKER_RUNTIME_CONTRACT.md`. Before changing Docker behavior,
+`Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`. Before changing Docker behavior,
 read the port manifest and run the report-only validator:
 
 ```bash
-python3 NodeCore/docker/validate_docker_contract.py
+python3 Nodes/Shared/docker/validate_docker_contract.py
 ```
 
-Artifact cleanup follows `docs/artifact-retention.md` and
-`NodeCore/conformance/ARTIFACT_INVENTORY.md`: canonical proof JSON belongs in
-`NodeCore/conformance/results/`, while live datadirs, logs, DBs, build outputs,
+Artifact cleanup follows `Docs/artifact-retention.md` and
+`Nodes/Shared/conformance/ARTIFACT_INVENTORY.md`: canonical proof JSON belongs in
+`Nodes/Shared/conformance/results/`, while live datadirs, logs, DBs, build outputs,
 and Docker volumes stay ignored and port-local.
 
 This workspace has exactly one Git repository: `/Users/donavonguyot/RB/.git`.
@@ -122,11 +124,11 @@ messages were sent.
 Shared coordination docs turn the historical Python SQLite-scout trail and Java
 live-chain trail into a work queue for ports:
 
-- [`docs/consensus-blockers-testnet4.md`](docs/consensus-blockers-testnet4.md) — canonical blocker facts and fixture anchors.
-- [`docs/follower-port-matrix.md`](docs/follower-port-matrix.md) — conservative per-port status with explicit `unknown` cells.
-- [`docs/script-semantics-gotchas.md`](docs/script-semantics-gotchas.md) — language-neutral consensus traps; includes **NodeCore script corpus triage** (stack/sighash/template vs missing opcode).
-- [`docs/port-performance-lessons.md`](docs/port-performance-lessons.md) — reusable block-connect performance patterns from Java/Python catch-up.
-- [`docs/agent-prompts.md`](docs/agent-prompts.md) — reusable prompts for porting blockers, harvesting fixtures, and updating ledgers.
+- [`Docs/consensus-blockers-testnet4.md`](Docs/consensus-blockers-testnet4.md) — canonical blocker facts and fixture anchors.
+- [`Docs/follower-port-matrix.md`](Docs/follower-port-matrix.md) — conservative per-port status with explicit `unknown` cells.
+- [`Docs/script-semantics-gotchas.md`](Docs/script-semantics-gotchas.md) — language-neutral consensus traps; includes **Shared script corpus triage** (stack/sighash/template vs missing opcode).
+- [`Docs/port-performance-lessons.md`](Docs/port-performance-lessons.md) — reusable block-connect performance patterns from Java/Python catch-up.
+- [`Docs/agent-prompts.md`](Docs/agent-prompts.md) — reusable prompts for porting blockers, harvesting fixtures, and updating ledgers.
 
 Ports copy blocker facts and tests from this trail, not trust outcomes. Python
 itself must also reprove blockers under its forward RocksDB/native-crypto path.
@@ -418,13 +420,13 @@ Handshake timing is critical for cp5/cp6/cp8 even when code exists.
 
 Script verification applies on **spend paths** (non-coinbase transactions consuming UTXOs). Coinbase outputs require **100-block maturity** (`COINBASE_MATURITY`); first spends of early coinbases appear around height **101+**. Until then, blocks connect without exercising the interpreter on real spends.
 
-### NodeCore script corpus gate (offline)
+### Shared script corpus gate (offline)
 
 Before chasing live sync script blockers, ports should pass the shared **45-fixture**
-corpus in [`NodeCore/conformance/fixtures/scripts/manifest.json`](NodeCore/conformance/fixtures/scripts/manifest.json)
-and record JSON under [`NodeCore/conformance/results/`](NodeCore/conformance/results/).
-When a fixture fails, read **[`docs/script-semantics-gotchas.md`](docs/script-semantics-gotchas.md)
-§ NodeCore script corpus and MATRIX triage** first: failures are often loader,
+corpus in [`Nodes/Shared/conformance/fixtures/scripts/manifest.json`](Nodes/Shared/conformance/fixtures/scripts/manifest.json)
+and record JSON under [`Nodes/Shared/conformance/results/`](Nodes/Shared/conformance/results/).
+When a fixture fails, read **[`Docs/script-semantics-gotchas.md`](Docs/script-semantics-gotchas.md)
+§ Shared script corpus and MATRIX triage** first: failures are often loader,
 sighash, template limits, or stack semantics — not a missing opcode. Do not treat
 manifest `missing_rule` or MATRIX labels as ground truth without `ScriptError` text.
 

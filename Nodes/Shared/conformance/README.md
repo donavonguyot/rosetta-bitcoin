@@ -1,0 +1,105 @@
+# Conformance Suite
+
+The conformance suite is the portability proof for Shared. Every language port
+must consume the same fixtures and produce the same status/failure results.
+
+## Fixture Areas
+
+```text
+fixtures/
+  README.md
+  chainstate_codec_v2_vectors.json
+  native_crypto_v1_vectors.json
+  scripts/
+    manifest.json
+    MATRIX.md
+    README.md
+```
+
+**Script corpus:** [`fixtures/scripts/`](fixtures/scripts/) is the offline
+45-fixture spend-verification gate. When debugging failures, start with
+[`Docs/script-semantics-gotchas.md`](../../Docs/script-semantics-gotchas.md)
+(§ Shared script corpus and MATRIX triage), not the fixture `missing_rule` field alone.
+
+The fixture manifest is broader than the current shared byte tree. During
+bootstrap, fixture bytes may live in port-local test trees while the shared
+fixture ID and expected outcome remain documented in `MANIFEST.md`.
+
+## Benchmark Contract
+
+Cross-port performance and replay proofs use
+[`BENCHMARK_CONTRACT.md`](BENCHMARK_CONTRACT.md). There is one official
+benchmark: durable local-reference replay to height `100000`, with WAL and
+normal durability enabled, a preserved resumable datadir, and local Reference
+Core used only as a block source.
+
+`5000` is the first readiness gate, `10000` is an early consensus checkpoint,
+and `50000` is a midrange regression gate. They are not the primary benchmark.
+Tip runs remain useful milestone confidence checks. Local-reference proofs
+remain block-source proofs only; they do not imply live P2P sync or binary-gate
+completion.
+
+## Shared Tooling
+
+Fixture harvesters and proof-capture helpers live under `tools/`. They are
+shared project tooling, not port runtime code. Some bootstrap harvesters still
+write bytes into port-local test resource trees until those fixtures are fully
+promoted into this conformance area.
+
+## Required Test Categories
+
+- genesis initialization
+- header proof-of-work and chain linkage
+- block 1 and block 2 connection
+- UTXO spend/add invariants
+- same-block spend behavior
+- undo write/read contract
+- atomic commit failure simulation
+- known script blocker fixtures
+- rebuild and promote verification
+- status JSON expected output
+- live loop transitions: current tip, new headers, catch-up, disconnect, blocker
+
+## Runner Contract
+
+Each port should expose a local conformance runner that accepts a fixture path
+and emits JSON:
+
+```text
+implementation
+commit
+fixture_id
+result
+validated_height
+validated_hash
+chainstate_backend
+timings
+failure
+```
+
+The runner may export results to `Project/project.db`, but conformance execution
+must not depend on the project DB.
+
+## Result Retention
+
+Canonical project evidence is compact JSON under:
+
+```text
+Nodes/Shared/conformance/results/
+```
+
+Use the naming convention from `Docs/artifact-retention.md`:
+
+```text
+<port>_<gate>_<surface>_<YYYY-MM-DD>.json
+```
+
+Do not store live datadirs, DBs, block files, full logs, or proof scratch
+directories in `Nodes/Shared/conformance/`. Preserve only compact proof summaries
+that support a project claim.
+
+## Java Extraction Notes
+
+Initial fixtures should be harvested from Java's current tests and blocker
+history, especially block 1/2 connect tests, script blocker regressions, live
+loop mock-peer tests, and rebuild tests.

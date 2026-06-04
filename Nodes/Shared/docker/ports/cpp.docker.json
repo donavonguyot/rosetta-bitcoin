@@ -1,0 +1,70 @@
+{
+  "manifest_version": 1,
+  "port": "cpp",
+  "status": "proof_partial",
+  "paths": {
+    "root": "Nodes/Cpp",
+    "dockerfile": "Nodes/Cpp/docker/Dockerfile",
+    "compose": "Nodes/Cpp/docker/docker-compose.yml",
+    "dockerignore": "Nodes/Cpp/docker/.dockerignore"
+  },
+  "images": {
+    "base": "ubuntu:24.04",
+    "runtime": "ubuntu:24.04",
+    "os_family": "Ubuntu",
+    "package_manager": "apt",
+    "native_dependencies": ["librocksdb-dev", "libsecp256k1-dev"]
+  },
+  "volumes": {
+    "data": "cpbitnode_data",
+    "proof": "cpbitnode_proof_data",
+    "supervisor": "cpbitnode_sync_data"
+  },
+  "commands": {
+    "docker_config": "cd Nodes/Cpp && make docker-config",
+    "docker_build": "cd Nodes/Cpp && docker compose -f docker/docker-compose.yml build cpbitnode-sync-proof",
+    "docker_status": "cd Nodes/Cpp && make docker-cpp-sync-status",
+    "docker_proof_local": "cd Nodes/Cpp && make docker-cpp-rocksdb-storage-proof",
+    "docker_probe_external": null,
+    "docker_supervisor": "cd Nodes/Cpp && make docker-cpp-sync-supervisor",
+    "docker_supervisor_status": "cd Nodes/Cpp && make docker-cpp-sync-status",
+    "docker_supervisor_stop": "cd Nodes/Cpp && make docker-cpp-sync-stop",
+    "docker_supervisor_resume": "cd Nodes/Cpp && make docker-cpp-sync-resume",
+    "docker_smoke_once": "cd Nodes/Cpp && SUPERVISOR_ONCE=1 POLL_SEC=1 CHECK_SEC=1 BLOCKS_MAX=0 scripts/docker_sync_supervisor.sh"
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": true,
+      "command": "cd Nodes/Cpp && make docker-cpp-rocksdb-storage-proof",
+      "peer": "127.0.0.1:48333 currently; should be host.docker.internal:48333 or Reference service",
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+    }
+  },
+  "supervisor": {
+    "stop_marker": ".cpbitnode_supervisor_stop",
+    "resume_marker": ".cpbitnode_supervisor_resume",
+    "poll_sec": 120,
+    "check_sec": 5
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": "Nodes/Shared/conformance/results/cpp_rocksdb_codec_v2_storage_2026-06-02.json",
+    "notes": "Cpp compliance backend is RocksDB-only; Docker proof must show RocksDB owns all operational state and no cpbitnode.db is opened or created."
+  },
+  "known_caveats": ["Docker peer strategy still needs host.docker.internal or Reference service", "External network probe command not standardized", "Rerun Docker proof after RocksDB-only cutover before promoting status"]
+}

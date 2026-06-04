@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	manifest := flag.String("manifest", "", "NodeCore script corpus manifest")
+	manifest := flag.String("manifest", "", "Shared script corpus manifest")
 	resultPath := flag.String("result-path", "", "result JSON path")
 	fixtureID := flag.String("fixture-id", "", "single fixture id")
 	flag.Parse()

@@ -21,7 +21,7 @@ class NativeCryptoVectorContractTest {
                 Files.readString(
                     Path.of(
                         "..",
-                        "NodeCore",
+                        "Shared",
                         "conformance",
                         "fixtures",
                         "native_crypto_v1_vectors.json")));

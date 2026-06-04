@@ -121,9 +121,9 @@ if(CPBITNODE_USE_NATIVE_SECP256K1)
     target_link_libraries(cpbitnode-script-corpus PRIVATE cpbitnode_lib)
     target_compile_definitions(cpbitnode-script-corpus PRIVATE CPBITNODE_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/../..")
     add_test(
-        NAME nodecore_script_corpus
+        NAME shared_script_corpus
         COMMAND cpbitnode-script-corpus
-            --result-path ${CMAKE_CURRENT_SOURCE_DIR}/../../NodeCore/conformance/results/cpp_script_corpus_2026-06-03.json
+            --result-path ${CMAKE_CURRENT_SOURCE_DIR}/../Shared/conformance/results/cpp_script_corpus_2026-06-03.json
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif()
 foreach(_exe cpbitnode cpbitnode-db cpbitnode-healthcheck cpbitnode-sync cpbitnode-storage-proof cpbitnode-blocker-inspect)
@@ -149,7 +149,7 @@ add_executable(cpbitnode_tests
     tests/test_json.cpp
     tests/test_cli_smoke.cpp
     tests/test_native_crypto.cpp
-    tests/test_nodecore_script_corpus.cpp
+    tests/test_shared_script_corpus.cpp
     tests/script_helpers.cpp
 )
 if(CPBITNODE_USE_NATIVE_SECP256K1)

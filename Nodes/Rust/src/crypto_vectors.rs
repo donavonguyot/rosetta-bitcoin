@@ -182,5 +182,5 @@ fn tap_tweak_hash(internal: &[u8; 32], merkle_root: &[u8]) -> [u8; 32] {
 }
 
 fn default_fixture() -> Result<PathBuf> {
-    Ok(repo::root()?.join("NodeCore/conformance/fixtures/native_crypto_v1_vectors.json"))
+    Ok(repo::root()?.join("Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json"))
 }

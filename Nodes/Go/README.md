@@ -2,7 +2,7 @@
 
 `gobitnode` is a Go follower port for the RosettaBitcoin workspace. The current
 milestone is an offline/Core-native proof surface: status, storage proof,
-native crypto reporting, Docker smoke surfaces, native NodeCore script corpus,
+native crypto reporting, Docker smoke surfaces, native Shared script corpus,
 and local-reference stored-block replay.
 
 The binary gate remains unchanged: from empty local state on Bitcoin testnet4,
@@ -55,7 +55,7 @@ The current Docker local-reference proof starts from a fresh Docker volume,
 stores blocks through height 10000, and validates/connects through height 10000:
 
 ```text
-result_path: NodeCore/conformance/results/go_local_reference_docker_sync_2026-06-03.json
+result_path: Nodes/Shared/conformance/results/go_local_reference_docker_sync_2026-06-03.json
 runtime_surface: docker
 validated_height: 10000
 validated_hash: 000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466
@@ -82,5 +82,5 @@ make docker-smoke-once
 `docker-proof-local` mirrors Java's bounded local-reference Docker proof shape:
 it uses a fresh named Docker volume, talks to host Core RPC at
 `host.docker.internal:48332`, runs the pipelined proof path by default, then
-writes compact evidence under `NodeCore/conformance/results/`. Docker proof and
+writes compact evidence under `Nodes/Shared/conformance/results/`. Docker proof and
 supervisor volumes are separate from host datadirs.

@@ -42,6 +42,7 @@
 /reports/
 *.log
 *.db
+!/Project/project.db
 *.sqlite
 *.sqlite3
 *.db-journal
@@ -64,6 +65,4 @@ deps/
 venv/
 
 # Root-owned reporting scratch.
-/Project/project.db
-/Project/reports/generated/
 /Project/tmp/

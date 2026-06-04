@@ -85,7 +85,7 @@ func DefaultManifest() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(root, "NodeCore", "conformance", "fixtures", "scripts", "manifest.json"), nil
+	return filepath.Join(root, "Shared", "conformance", "fixtures", "scripts", "manifest.json"), nil
 }
 
 func DefaultResultPath() (string, error) {
@@ -93,7 +93,7 @@ func DefaultResultPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(root, "NodeCore", "conformance", "results", "go_script_corpus_"+time.Now().UTC().Format("2006-01-02")+".json"), nil
+	return filepath.Join(root, "Shared", "conformance", "results", "go_script_corpus_"+time.Now().UTC().Format("2006-01-02")+".json"), nil
 }
 
 func Run(manifestPath, resultPath, fixtureID string) (Summary, error) {
@@ -102,13 +102,13 @@ func Run(manifestPath, resultPath, fixtureID string) (Summary, error) {
 		if rootErr != nil {
 			return Summary{}, rootErr
 		}
-		manifestPath = filepath.Join(root, "NodeCore", "conformance", "fixtures", "scripts", "manifest.json")
+		manifestPath = filepath.Join(root, "Shared", "conformance", "fixtures", "scripts", "manifest.json")
 	}
 	if resultPath == "" {
 		if rootErr != nil {
 			return Summary{}, rootErr
 		}
-		resultPath = filepath.Join(root, "NodeCore", "conformance", "results", "go_script_corpus_"+time.Now().UTC().Format("2006-01-02")+".json")
+		resultPath = filepath.Join(root, "Shared", "conformance", "results", "go_script_corpus_"+time.Now().UTC().Format("2006-01-02")+".json")
 	}
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {

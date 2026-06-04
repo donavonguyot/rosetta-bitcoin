@@ -4,7 +4,7 @@ MAVEN_OPTS ?= -Xmx4g -XX:+ExitOnOutOfMemoryError
 export MAVEN_OPTS
 DOCKER_PROOF_VOLUME ?= jbitnode_proof_data
 DOCKER_LONG_PROOF_VOLUME ?= jbitnode_native_long_sync_data
-DOCKER_LONG_PROOF_PATH ?= ../../NodeCore/conformance/results/java_native_crypto_docker_long_sync_2026-06-01.json
+DOCKER_LONG_PROOF_PATH ?= ../Shared/conformance/results/java_native_crypto_docker_long_sync_2026-06-01.json
 DOCKER_LONG_HEADERS_MAX ?= 10000
 DOCKER_LONG_HEADER_BATCHES_MAX ?= 50
 DOCKER_LONG_BLOCKS_MAX ?= 10000
@@ -60,7 +60,7 @@ docker-java-native-crypto-long-sync-proof:
 	  TARGET_HEADER_HEIGHT=$(DOCKER_LONG_HEADERS_MAX) TARGET_BLOCK_HEIGHT=$(DOCKER_LONG_BLOCKS_MAX) \
 	  LOCAL_REFERENCE_TIP_HEIGHT="$(LOCAL_REFERENCE_TIP_HEIGHT)" LOCAL_REFERENCE_TIP_HASH="$(LOCAL_REFERENCE_TIP_HASH)" \
 	  PROOF_PATH=$(DOCKER_LONG_PROOF_PATH) PROOF_COMMAND="$(or $(PROOF_COMMAND),$(MAKE) docker-java-native-crypto-long-sync-proof)" \
-	  python3 ../NodeCore/conformance/tools/proofs/capture_docker_native_long_sync_proof.py .docker-java-native-long-status.json .docker-java-native-long-sync-exit
+	  python3 ../Shared/conformance/tools/proofs/capture_docker_native_long_sync_proof.py .docker-java-native-long-status.json .docker-java-native-long-sync-exit
 	@rm -f .docker-java-native-long-status.json .docker-java-native-long-sync-exit
 	@docker run --rm -v $(DOCKER_LONG_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/jbitnode.db
 
@@ -70,7 +70,7 @@ docker-java-native-crypto-50k-sync-proof:
 	  DOCKER_LONG_HEADER_BATCHES_MAX=50 \
 	  DOCKER_LONG_BLOCKS_MAX=50000 \
 	  DOCKER_LONG_PROOF_VOLUME=jbitnode_native_50k_sync_data \
-	  DOCKER_LONG_PROOF_PATH=../../NodeCore/conformance/results/java_native_crypto_docker_50k_sync_2026-06-01.json \
+	  DOCKER_LONG_PROOF_PATH=../Shared/conformance/results/java_native_crypto_docker_50k_sync_2026-06-01.json \
 	  PROOF_COMMAND="$(MAKE) docker-java-native-crypto-50k-sync-proof"
 
 docker-java-native-crypto-tip-sync-proof:
@@ -83,7 +83,7 @@ docker-java-native-crypto-tip-sync-proof:
 	  DOCKER_LONG_HEADER_BATCHES_MAX=100 \
 	  DOCKER_LONG_BLOCKS_MAX=$$TARGET \
 	  DOCKER_LONG_PROOF_VOLUME=jbitnode_native_tip_sync_data \
-	  DOCKER_LONG_PROOF_PATH=../../NodeCore/conformance/results/java_native_crypto_docker_tip_sync_2026-06-01.json \
+	  DOCKER_LONG_PROOF_PATH=../Shared/conformance/results/java_native_crypto_docker_tip_sync_2026-06-01.json \
 	  LOCAL_REFERENCE_TIP_HEIGHT=$$LOCAL_TIP_HEIGHT \
 	  LOCAL_REFERENCE_TIP_HASH=$$LOCAL_TIP_HASH \
 	  PROOF_COMMAND="$(MAKE) docker-java-native-crypto-tip-sync-proof"
@@ -225,7 +225,7 @@ java-node-chainstate-backend-replay:
 	ROCKSDB_DIR=$(or $(ROCKSDB_DIR),$(or $(DATA_DIR),./data-java-rocksdb-replay)/utxo-rocksdb) \
 	FIXTURE_BLOCKS_DIR=$(or $(FIXTURE_BLOCKS_DIR),src/test/resources/fixtures) \
 	REPLAY_CORPUS_DIR=$(REPLAY_CORPUS_DIR) \
-	PROOF_PATH=$(or $(PROOF_PATH),../../NodeCore/conformance/results/java_rocksdb_codec_v2_storage_2026-06-01.json) \
+	PROOF_PATH=$(or $(PROOF_PATH),../Shared/conformance/results/java_rocksdb_codec_v2_storage_2026-06-01.json) \
 	SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),pure_java) \
 	BLOCKS_MAX=$(or $(BLOCKS_MAX),2) \
 	$(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ChainstateBackendReplay
@@ -233,12 +233,12 @@ java-node-chainstate-backend-replay:
 java-node-chainstate-backend-replay-native-crypto:
 	$(MAKE) java-node-chainstate-backend-replay SECP256K1_BACKEND=native \
 	  DATA_DIR=$(or $(DATA_DIR),./data-java-native-crypto-replay-$$(date +%Y%m%d%H%M%S)) \
-	  PROOF_PATH=$(or $(PROOF_PATH),../../NodeCore/conformance/results/java_native_crypto_host_replay_2026-06-01.json)
+	  PROOF_PATH=$(or $(PROOF_PATH),../Shared/conformance/results/java_native_crypto_host_replay_2026-06-01.json)
 
 java-node-replay-corpus-export:
 	SOURCE_DATA_DIR=$(or $(SOURCE_DATA_DIR),./data-java) \
 	FIXTURE_BLOCKS_DIR=$(FIXTURE_BLOCKS_DIR) \
-	REPLAY_CORPUS_DIR=$(or $(REPLAY_CORPUS_DIR),../NodeCore/replay-corpus/testnet4) \
+	REPLAY_CORPUS_DIR=$(or $(REPLAY_CORPUS_DIR),../Shared/replay-corpus/testnet4) \
 	REPLAY_CORPUS_ID=$(or $(REPLAY_CORPUS_ID),testnet4-h1-$(or $(BLOCKS_MAX),100)) \
 	BLOCKS_MAX=$(or $(BLOCKS_MAX),100) \
 	$(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ReplayCorpusExport

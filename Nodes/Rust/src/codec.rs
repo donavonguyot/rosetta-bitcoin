@@ -186,7 +186,7 @@ pub fn run_vectors(path: Option<&Path>) -> Result<VectorReport> {
 }
 
 fn default_fixture() -> Result<PathBuf> {
-    Ok(repo::root()?.join("NodeCore/conformance/fixtures/chainstate_codec_v2_vectors.json"))
+    Ok(repo::root()?.join("Nodes/Shared/conformance/fixtures/chainstate_codec_v2_vectors.json"))
 }
 
 fn check(name: &str, actual: Vec<u8>, expected_hex: &str) -> VectorResult {

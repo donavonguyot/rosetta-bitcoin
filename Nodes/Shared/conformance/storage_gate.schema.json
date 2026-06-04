@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared.local/conformance/storage_gate.schema.json",
+  "title": "Shared Storage Gate Result",
+  "type": "object",
+  "required": [
+    "implementation",
+    "commit",
+    "node_id",
+    "category",
+    "captured_at",
+    "datadir",
+    "chain",
+    "chainstate_backend",
+    "native_storage",
+    "local_sqlite_artifact_absent",
+    "validated_height",
+    "validated_hash",
+    "header_height",
+    "stored_block_height",
+    "chainstate_status",
+    "verification",
+    "project_export",
+    "results",
+    "commands"
+  ],
+  "properties": {
+    "implementation": { "type": "string", "minLength": 1 },
+    "commit": { "type": "string", "minLength": 1 },
+    "node_id": { "type": "string", "minLength": 1 },
+    "category": { "const": "storage" },
+    "captured_at": { "type": "string", "format": "date-time" },
+    "datadir": { "type": "string", "minLength": 1 },
+    "chain": { "const": "testnet4" },
+    "chainstate_backend": { "type": "string", "minLength": 1 },
+    "native_storage": { "type": "boolean" },
+    "local_sqlite_artifact_absent": { "type": "boolean" },
+    "local_sqlite_db_present": { "type": "boolean" },
+    "validated_height": { "type": "integer", "minimum": 0 },
+    "validated_hash": { "type": "string" },
+    "header_height": { "type": "integer", "minimum": 0 },
+    "stored_block_height": { "type": "integer", "minimum": 0 },
+    "chainstate_status": { "type": "string", "minLength": 1 },
+    "verification": {
+      "type": "object",
+      "required": [
+        "maven",
+        "tests_run",
+        "failures",
+        "errors",
+        "skipped",
+        "jacoco_line_minimum",
+        "surefire_broad_exclusions",
+        "sqlite_jdbc_dependency_present",
+        "sqlite_entries_in_shaded_jar",
+        "local_sqlite_runtime_classes_present"
+      ],
+      "properties": {
+        "maven": { "type": "string" },
+        "tests_run": { "type": "integer", "minimum": 0 },
+        "failures": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "jacoco_line_minimum": { "type": "number", "minimum": 0, "maximum": 1 },
+        "surefire_broad_exclusions": { "type": "boolean" },
+        "sqlite_jdbc_dependency_present": { "type": "boolean" },
+        "sqlite_entries_in_shaded_jar": { "type": "boolean" },
+        "local_sqlite_runtime_classes_present": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "project_export": {
+      "type": "object",
+      "required": ["project_db", "node_id", "script", "result"],
+      "properties": {
+        "project_db": { "type": "string" },
+        "node_id": { "type": "string" },
+        "script": { "type": "string" },
+        "result": { "enum": ["passed", "failed", "skipped"] }
+      },
+      "additionalProperties": true
+    },
+    "results": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "fixture_id",
+          "result",
+          "validated_height",
+          "validated_hash",
+          "chainstate_backend",
+          "failure"
+        ],
+        "properties": {
+          "fixture_id": { "type": "string", "minLength": 1 },
+          "result": { "enum": ["passed", "failed", "skipped"] },
+          "validated_height": { "type": ["integer", "null"], "minimum": 0 },
+          "validated_hash": { "type": "string" },
+          "chainstate_backend": { "type": "string" },
+          "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+          "failure": { "type": "string" },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}

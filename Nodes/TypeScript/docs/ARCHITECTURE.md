@@ -102,7 +102,7 @@ flowchart TB
 
 `tsbitnode-storage-proof` starts from a fresh datadir, rejects `tsbitnode.db`, writes
 RocksDB chainstate records, records proof metadata, and emits proof JSON under
-`NodeCore/conformance/results/`.
+`Nodes/Shared/conformance/results/`.
 
 ## CLI Tools
 
