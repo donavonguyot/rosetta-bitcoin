@@ -28,6 +28,7 @@ import {
   metadataValue,
   tipKey,
   undoKey,
+  undoPrefixKey,
   utxoKey,
   utxoPrefixKey,
 } from "../storage/chainstateCodecV2.js";
@@ -231,6 +232,26 @@ export class RocksDbChainstateStore implements ChainstateStore {
       { type: "put", key: metadataKey("updated_at"), value: metadataValue(updatedAt) },
     ]);
     this.currentMetadata = { ...this.currentMetadata, tipHeight: height, tipHash: blockHash, updatedAt };
+  }
+
+  async resetValidatedChain(chain: string, genesisHash: string): Promise<void> {
+    const deleteKeys = await this.keysForPrefixes([
+      utxoPrefixKey(chain),
+      undoPrefixKey(chain),
+    ]);
+    const updatedAt = utcNowIso();
+    const resetOperations: RocksDbBatchOperation[] = [
+      ...deleteKeys.map((key) => ({ type: "del" as const, key })),
+      { type: "put", key: tipKey(chain), value: encodeTip({ height: 0, blockHashInternal: hex32(genesisHash, "genesis_hash") }) },
+      { type: "put", key: metadataKey("tip_height"), value: metadataValue("0") },
+      { type: "put", key: metadataKey("tip_hash"), value: metadataValue(genesisHash) },
+      { type: "put", key: metadataKey("updated_at"), value: metadataValue(updatedAt) },
+      { type: "put", key: utxoCounterKey(chain), value: countValue(0) },
+    ];
+    for (let index = 0; index < resetOperations.length; index += 1000) {
+      await this.batch(resetOperations.slice(index, index + 1000));
+    }
+    this.currentMetadata = { ...this.currentMetadata, tipHeight: 0, tipHash: genesisHash, updatedAt };
   }
 
   async getSyncState(chain: string): Promise<ChainstateSyncState | null> {
@@ -607,6 +628,16 @@ export class RocksDbChainstateStore implements ChainstateStore {
       if (key.subarray(0, prefix.length).equals(prefix)) count += 1;
     });
     return count;
+  }
+
+  private async keysForPrefixes(prefixes: readonly Buffer[]): Promise<Buffer[]> {
+    const keys: Buffer[] = [];
+    await this.forEachKey((key) => {
+      if (prefixes.some((prefix) => key.subarray(0, prefix.length).equals(prefix))) {
+        keys.push(Buffer.from(key));
+      }
+    });
+    return keys;
   }
 
   private async maxHeightForPrefix(prefix: Buffer): Promise<number> {

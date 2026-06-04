@@ -167,7 +167,7 @@ void maybeMarkParallelSync(db::NodeStateStore& tracker, int parallelDownloads) {
         tracker.wireCapabilityMap().at(kParallelCapId) == 1) {
         return;
     }
-    tracker.markWireCapability(kParallelCapId, true, "code", "prototype parallel height + peer races");
+    tracker.markWireCapability(kParallelCapId, true, "code", "batched P2P block prefetch window");
 }
 
 std::optional<std::pair<std::vector<std::uint8_t>, p2p::PeerConnection*>> requestBlockFromPeers(
@@ -301,7 +301,10 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
         return outcome->first;
     };
 
-    if (parallelDownloads > 0) {
+    // The old async path races blocking reads on shared PeerConnection sockets.
+    // Use batched getdata prefetch until a scheduler owns one connection per worker.
+    const bool parallelFetchEnabled = false;
+    if (parallelFetchEnabled) {
         if (!work.empty()) {
             maybeMarkParallelSync(tracker, parallelDownloads);
             for (std::size_t index = 0; index < work.size(); index += static_cast<std::size_t>(parallelDownloads)) {
@@ -327,13 +330,41 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
             }
         }
     } else {
-        for (const auto& item : work) {
-            if (maxBlocks > 0 && downloaded >= maxBlocks) {
-                break;
+        if (parallelDownloads > 0 && !peers.empty()) {
+            maybeMarkParallelSync(tracker, parallelDownloads);
+            for (std::size_t index = 0; index < work.size(); index += static_cast<std::size_t>(parallelDownloads)) {
+                if (maxBlocks > 0 && downloaded >= maxBlocks) {
+                    break;
+                }
+                const std::size_t end =
+                    std::min(work.size(), index + static_cast<std::size_t>(parallelDownloads));
+                std::vector<std::vector<std::uint8_t>> hashes;
+                hashes.reserve(end - index);
+                for (std::size_t j = index; j < end; ++j) {
+                    hashes.push_back(work[j].blockHash);
+                }
+                const auto payloads = peers.front()->requestBlocks(hashes);
+                bool failed = false;
+                for (std::size_t j = index; j < end; ++j) {
+                    const auto& payload = payloads[j - index];
+                    if (!payload.has_value() || !connectDownloaded(work[j], *payload)) {
+                        failed = true;
+                        break;
+                    }
+                }
+                if (failed) {
+                    break;
+                }
             }
-            const auto payload = fetchOne(item);
-            if (!payload.has_value() || !connectDownloaded(item, *payload)) {
-                break;
+        } else {
+            for (const auto& item : work) {
+                if (maxBlocks > 0 && downloaded >= maxBlocks) {
+                    break;
+                }
+                const auto payload = fetchOne(item);
+                if (!payload.has_value() || !connectDownloaded(item, *payload)) {
+                    break;
+                }
             }
         }
     }

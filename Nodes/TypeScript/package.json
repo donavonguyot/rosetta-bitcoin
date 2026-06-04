@@ -18,7 +18,9 @@
     "dist"
   ],
   "scripts": {
+    "install": "node-gyp-build || node-gyp rebuild",
     "build": "tsc -p tsconfig.build.json",
+    "native:build": "node-gyp rebuild",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/cli/node.ts",
     "test": "vitest run",
@@ -42,11 +44,13 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.15.3",
+    "node-gyp": "^12.3.0",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "vitest": "^3.1.2"
   },
   "dependencies": {
+    "node-gyp-build": "^4.8.4",
     "rocksdb": "^5.2.1",
     "secp256k1": "^5.0.1"
   }

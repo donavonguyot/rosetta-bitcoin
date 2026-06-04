@@ -2,10 +2,14 @@ DATA_DIR ?= ./data-ts-native
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_PROOF_VOLUME ?= tsbitnode_proof_data
 DOCKER_SYNC_VOLUME ?= tsbitnode_sync_data
+DOCKER_REBUILD ?= 0
+DOCKER_SYNC_TARGET ?= 5000
+DOCKER_SYNC_BLOCKS_MAX ?= 5001
+DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/typescript_docker_supporting_5k_benchmark_$(shell date +%F).json
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: build test native-status storage-proof docker-config docker-build docker-typescript-native-proof docker-typescript-sync-status docker-typescript-sync-supervisor docker-typescript-sync-stop docker-typescript-sync-resume docker-smoke-once
+.PHONY: build test native-status storage-proof docker-config docker-build docker-warm docker-typescript-native-proof docker-typescript-sync-status docker-typescript-sync-supervisor docker-typescript-sync-stop docker-typescript-sync-resume docker-smoke-once
 
 build:
 	npm run build
@@ -25,11 +29,15 @@ docker-config:
 docker-build:
 	$(DOCKER_COMPOSE) build tsbitnode-sync-proof tsbitnode-sync-status
 
+docker-warm: docker-build
+
 docker-typescript-native-proof:
-	$(DOCKER_COMPOSE) build tsbitnode-sync-proof tsbitnode-sync-status
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build tsbitnode-sync-proof tsbitnode-sync-status; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=native \
-	  $(DOCKER_COMPOSE) run --rm --no-deps tsbitnode-sync-proof
+	  DOCKER_SYNC_TARGET=$(DOCKER_SYNC_TARGET) DOCKER_SYNC_BLOCKS_MAX=$(DOCKER_SYNC_BLOCKS_MAX) \
+	  DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
+	  scripts/docker_5k_benchmark.sh
 	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/tsbitnode.db
 
 docker-typescript-sync-status:
@@ -38,6 +46,7 @@ docker-typescript-sync-status:
 
 docker-typescript-sync-supervisor:
 	DOCKER_SYNC_VOLUME=$(DOCKER_SYNC_VOLUME) SECP256K1_BACKEND=native \
+	  DOCKER_REBUILD=$(DOCKER_REBUILD) \
 	  POLL_SEC=$(DOCKER_SYNC_POLL_SEC) CHECK_SEC=$(DOCKER_SYNC_CHECK_SEC) \
 	  scripts/docker_sync_supervisor.sh
 

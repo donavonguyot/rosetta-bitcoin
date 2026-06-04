@@ -6,7 +6,7 @@ VOLUME="${DOCKER_PROOF_VOLUME:-cpbitnode_proof_data}"
 TARGET="${DOCKER_BENCHMARK_TARGET:-5000}"
 BLOCKS_MAX="${DOCKER_BENCHMARK_BLOCKS_MAX:-5000}"
 PEERS="${DOCKER_BENCHMARK_PEERS:-host.docker.internal:48333}"
-PREFETCH_DEPTH="${DOCKER_BENCHMARK_PREFETCH_DEPTH:-1}"
+PREFETCH_DEPTH="${DOCKER_BENCHMARK_PREFETCH_DEPTH:-4}"
 RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/cpp_docker_supporting_5k_benchmark_$(date +%F).json}"
 REFERENCE_START_HEIGHT="${REFERENCE_START_HEIGHT:-0}"
 
@@ -33,6 +33,7 @@ set +o pipefail
 DOCKER_PROOF_VOLUME="$VOLUME" PEERS="$PEERS" BLOCKS_MAX="$BLOCKS_MAX" BLOCKS_TARGET="$TARGET" \
   docker compose -f docker/docker-compose.yml run --rm --no-deps \
     -e CPBITNODE_SYNC_TIMING=1 \
+    -e CPBITNODE_SCRIPT_VERIFY_PARALLEL=1 \
     -e PARALLEL_BLOCK_DOWNLOADS="$PREFETCH_DEPTH" \
     cpbitnode-sync-proof 2>&1 | tee "$RUN_LOG_TMP"
 sync_exit=${PIPESTATUS[0]}
@@ -191,10 +192,12 @@ if not stage_totals:
 
 doc = {
     "benchmark_contract_version": 1,
-    "benchmark_kind": "supporting_5k_durable_local_reference_replay",
+    "benchmark_kind": "supporting_5k_p2p",
     "benchmark_gate": "supporting_5k",
+    "benchmark_lane": "supporting_5k_p2p",
     "target_label": target_label(target),
     "target_height": target,
+    "header_target_height": target,
     "category": "local_reference_sync",
     "result": "passed" if passed else "failed",
     "failures": failures,
@@ -203,6 +206,8 @@ doc = {
     "node": "Cpp",
     "runtime_surface": "docker",
     "peer_mode": "local_reference",
+    "byte_source": "local_reference_p2p",
+    "proof_mode": "p2p_sync",
     "peer": os.environ.get("PEERS", "host.docker.internal:48333"),
     "docker_volume": os.environ.get("VOLUME", "cpbitnode_proof_data"),
     "datadir": "/data",
@@ -233,9 +238,10 @@ doc = {
     "native_crypto_backend": status.get("native_crypto_backend") or "libsecp256k1",
     "native_crypto_available": bool(status.get("native_crypto_available", False)),
     "taproot_tweak_backend": status.get("taproot_tweak_backend"),
-    "script_runner_mode": "single",
-    "prefetch_depth": as_int(os.environ.get("PREFETCH_DEPTH"), 1),
+    "script_runner_mode": "parallel",
+    "prefetch_depth": as_int(os.environ.get("PREFETCH_DEPTH"), 4),
     "rocksdb_wal_disabled": False,
+    "fresh_state": True,
     "resume_supported": True,
     "timing_summary": {
         "total_ms": elapsed_ms,

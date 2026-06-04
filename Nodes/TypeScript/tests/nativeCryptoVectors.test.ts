@@ -18,7 +18,6 @@ function loadFixture(): NativeCryptoFixture {
     import.meta.dirname,
     "..",
     "..",
-    "..",
     "Shared",
     "conformance",
     "fixtures",
@@ -31,8 +30,11 @@ describe("native crypto vector contract", () => {
   it("reports backend metadata", () => {
     const info = secp256k1BackendInfo();
     expect(info.selected_backend).toBe("native");
-    expect(info.native_package).toBe("secp256k1");
+    expect(info.native_package).toBe("libsecp256k1");
     expect(typeof info.native_package_version).toBe("string");
+    expect(info.ecdsa_backend).toBe("native_libsecp256k1");
+    expect(info.schnorr_backend).toBe("native_libsecp256k1");
+    expect(info.taproot_tweak_backend).toBe("native_libsecp256k1");
     expect(nativeSecp256k1Available()).toBe(true);
   });
 

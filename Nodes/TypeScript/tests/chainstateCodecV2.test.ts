@@ -73,7 +73,6 @@ function loadFixture(): ChainstateCodecFixture {
     import.meta.dirname,
     "..",
     "..",
-    "..",
     "Shared",
     "conformance",
     "fixtures",

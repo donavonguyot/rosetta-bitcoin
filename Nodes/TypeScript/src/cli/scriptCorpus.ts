@@ -44,12 +44,12 @@ function currentFileDir(): string {
 
 export function repoRoot(): string {
   for (let dir = currentFileDir(); dir !== dirname(dir); dir = dirname(dir)) {
-    if (existsSync(join(dir, "Shared")) && existsSync(join(dir, "Nodes", "TypeScript"))) {
+    if (existsSync(join(dir, "Nodes", "Shared")) && existsSync(join(dir, "Nodes", "TypeScript"))) {
       return dir;
     }
   }
   for (let dir = process.cwd(); dir !== dirname(dir); dir = dirname(dir)) {
-    if (existsSync(join(dir, "Shared")) && existsSync(join(dir, "Nodes", "TypeScript"))) {
+    if (existsSync(join(dir, "Nodes", "Shared")) && existsSync(join(dir, "Nodes", "TypeScript"))) {
       return dir;
     }
   }
@@ -61,12 +61,13 @@ function todayStamp(): string {
 }
 
 export function defaultManifestPath(): string {
-  return join(repoRoot(), "Shared", "conformance", "fixtures", "scripts", "manifest.json");
+  return join(repoRoot(), "Nodes", "Shared", "conformance", "fixtures", "scripts", "manifest.json");
 }
 
 export function defaultResultPath(): string {
   return join(
     repoRoot(),
+    "Nodes",
     "Shared",
     "conformance",
     "results",

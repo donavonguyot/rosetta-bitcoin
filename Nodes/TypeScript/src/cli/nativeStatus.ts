@@ -43,7 +43,9 @@ export interface NativeStatusDocument {
   chainstate_utxo_count: number;
   native_crypto_backend: string;
   native_crypto_available: boolean;
+  schnorr_backend: string;
   taproot_tweak_backend: string;
+  crypto_context_mode: string;
   lock_status: "locked" | "stale" | "unlocked";
   active_writer_pid: number | null;
   current_blocker: Record<string, unknown> | null;
@@ -109,7 +111,9 @@ export async function nativeStatusDocument(settings: Settings): Promise<NativeSt
       chainstate_utxo_count: await session.store.utxoCount(chain.name),
       native_crypto_backend: String(cryptoInfo.ecdsa_backend ?? cryptoInfo.selected_backend ?? "unknown"),
       native_crypto_available: Boolean(cryptoInfo.native_available),
+      schnorr_backend: String(cryptoInfo.schnorr_backend ?? "unknown"),
       taproot_tweak_backend: String(cryptoInfo.taproot_tweak_backend ?? "unknown"),
+      crypto_context_mode: String(cryptoInfo.crypto_context_mode ?? "unknown"),
       lock_status: lockMetadata === null ? "unlocked" : lockAlive ? "locked" : "stale",
       active_writer_pid: activeWriterPid,
       current_blocker: currentBlocker,

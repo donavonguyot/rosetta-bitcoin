@@ -77,6 +77,7 @@ export interface ChainstateStore {
   getValidatedHeight(chain: string): Promise<number>;
   getValidatedHash(chain: string): Promise<string | null>;
   setValidatedTip(chain: string, height: number, blockHash: string): Promise<void>;
+  resetValidatedChain(chain: string, genesisHash: string): Promise<void>;
 
   getSyncState(chain: string): Promise<ChainstateSyncState | null>;
   upsertSyncState(chain: string, patch: Partial<ChainstateSyncState>): Promise<void>;

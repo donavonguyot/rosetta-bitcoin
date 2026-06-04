@@ -539,7 +539,7 @@ std::filesystem::path repoRoot() {
 #else
     auto dir = std::filesystem::current_path();
     for (int depth = 0; depth < 8; ++depth) {
-        if (std::filesystem::exists(dir / "Shared") && std::filesystem::exists(dir / "Nodes" / "Cpp")) {
+        if (std::filesystem::exists(dir / "Nodes" / "Shared") && std::filesystem::exists(dir / "Nodes" / "Cpp")) {
             return dir;
         }
         if (!dir.has_parent_path()) {

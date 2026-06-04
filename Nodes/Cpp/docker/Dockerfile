@@ -22,6 +22,11 @@ COPY --from=build /src/build/cpbitnode-sync /usr/local/bin/cpbitnode-sync
 COPY --from=build /src/build/cpbitnode-storage-proof /usr/local/bin/cpbitnode-storage-proof
 COPY --from=build /src/build/cpbitnode-blocker-inspect /usr/local/bin/cpbitnode-blocker-inspect
 COPY --from=build /src/build/cpbitnode_tests /usr/local/bin/cpbitnode_tests
+COPY --from=build /src/build/cpbitnode /src/build/cpbitnode
+COPY --from=build /src/build/cpbitnode-db /src/build/cpbitnode-db
+COPY --from=build /src/build/cpbitnode-healthcheck /src/build/cpbitnode-healthcheck
+COPY --from=build /src/build/cpbitnode-sync /src/build/cpbitnode-sync
+COPY --from=build /src/tests/fixtures /src/tests/fixtures
 
 ENV CHAIN=testnet4
 ENV DATA_DIR=/data
@@ -29,8 +34,8 @@ ENV CHAINSTATE_BACKEND=rocksdb
 ENV LOG_LEVEL=info
 
 RUN useradd --create-home --uid 10001 cpbitnode \
-    && mkdir -p /data \
-    && chown -R cpbitnode:cpbitnode /data
+    && mkdir -p /data /src/tests/fixtures/blocks /Nodes/Cpp \
+    && chown -R cpbitnode:cpbitnode /data /src
 
 USER cpbitnode
 VOLUME ["/data"]

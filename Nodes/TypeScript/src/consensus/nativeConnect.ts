@@ -10,7 +10,13 @@ import { CoinbaseError, isSpendableOutput, validateBip34Height } from "./coinbas
 import { ConnectBlockError } from "./connect.js";
 import { COINBASE_MATURITY } from "./constants.js";
 import { transactionTxid } from "./merkle.js";
-import { ScriptVerifyError, verifyTransactionInput } from "./script/verify.js";
+import { ScriptVerifyError } from "./script/verify.js";
+import {
+  ScriptVerifyRunner,
+  ScriptVerifySettings,
+  type ScriptVerifyBlockJob,
+  type ScriptVerifyTask,
+} from "./script/scriptVerifyRunner.js";
 import { blockSubsidy } from "./subsidy.js";
 import { blockHasWitness, validateWitnessCommitment } from "./witness.js";
 
@@ -254,11 +260,11 @@ async function preloadBlockPrevouts(view: NativeBlockUtxoView, block: Block): Pr
   view.seedLoaded(outpoints, utxos);
 }
 
-async function validateNonCoinbaseInputs(
+async function stageNonCoinbaseTransaction(
   view: NativeBlockUtxoView,
   tx: Transaction,
-  timings: Record<string, number>,
-): Promise<number> {
+  transactionIndex: number,
+): Promise<{ inputTotal: number; verifyJob: ScriptVerifyBlockJob }> {
   const seenPrevouts = new Set<string>();
   const utxoInfos: NativeViewUtxo[] = [];
   for (const txIn of tx.inputs) {
@@ -279,36 +285,62 @@ async function validateNonCoinbaseInputs(
       );
     }
     utxoInfos.push(utxo);
+    await view.spend(outpoint);
   }
 
   let inputTotal = 0;
   const spentPrevouts = utxoInfos.map(
     (utxo) => [utxo.value, utxo.scriptPubKey] as const,
   );
+  const verifyTasks: ScriptVerifyTask[] = [];
   for (let inputIndex = 0; inputIndex < tx.inputs.length; inputIndex += 1) {
     const utxo = utxoInfos[inputIndex]!;
-    try {
-      timeSync(timings, "script_verify", () => {
-        verifyTransactionInput(tx, inputIndex, {
-          scriptPubKey: utxo.scriptPubKey,
-          amount: utxo.value,
-          spentPrevouts,
-        });
-      });
-    } catch (error) {
-      if (error instanceof ScriptVerifyError) {
-        throw new ConnectBlockError(error.message);
-      }
-      throw error;
-    }
+    verifyTasks.push({
+      inputIndex,
+      scriptPubKey: utxo.scriptPubKey,
+      amount: utxo.value,
+    });
     inputTotal += utxo.value;
   }
+  return {
+    inputTotal,
+    verifyJob: {
+      transactionIndex,
+      transaction: tx,
+      spentPrevouts,
+      tasks: verifyTasks,
+    },
+  };
+}
 
-  for (const txIn of tx.inputs) {
-    await view.spend(txIn.previousOutput);
+async function verifyBlockScriptJobs(
+  jobs: readonly ScriptVerifyBlockJob[],
+  timings: Record<string, number>,
+  scriptVerifyRunner: ScriptVerifyRunner | null,
+): Promise<void> {
+  const localRunner = scriptVerifyRunner === null
+    ? new ScriptVerifyRunner(new ScriptVerifySettings(false, 1, Number.MAX_SAFE_INTEGER))
+    : null;
+  const runner = scriptVerifyRunner ?? localRunner!;
+  try {
+    const stats = await runner.verifyBlockInputs(jobs);
+    addTiming(timings, "script_verify", stats.elapsedMs);
+    if (syncTimingEnabled()) {
+      for (const [stage, elapsed] of Object.entries(stats.details)) {
+        addTiming(timings, stage, elapsed);
+      }
+      timings.script_verify_mode = stats.mode === "native_block_parallel" ? 4 : stats.mode === "block_parallel" ? 3 : stats.mode === "tx_parallel" ? 2 : 1;
+    }
+  } catch (error) {
+    if (error instanceof ScriptVerifyError) {
+      throw new ConnectBlockError(error.message);
+    }
+    throw error;
+  } finally {
+    if (localRunner !== null) {
+      await localRunner.close();
+    }
   }
-
-  return inputTotal;
 }
 
 export interface NativeConnectBlockOptions {
@@ -316,6 +348,7 @@ export interface NativeConnectBlockOptions {
   expectedPrev: Buffer;
   expectedHash?: Buffer;
   chainName?: string;
+  scriptVerifyRunner?: ScriptVerifyRunner | undefined | undefined;
 }
 
 export async function connectBlockNative(
@@ -365,13 +398,16 @@ export async function connectBlockNative(
 
   const view = new NativeBlockUtxoView(session, chainName, options.height);
   let totalFees = 0;
+  const verifyJobs: ScriptVerifyBlockJob[] = [];
   try {
     await timeAsync(timings, "utxo_load", () => preloadBlockPrevouts(view, block));
-    for (const tx of block.transactions) {
+    for (let transactionIndex = 0; transactionIndex < block.transactions.length; transactionIndex += 1) {
+      const tx = block.transactions[transactionIndex]!;
       if (transactionIsCoinbase(tx)) {
         continue;
       }
-      const inputTotal = await validateNonCoinbaseInputs(view, tx, timings);
+      const { inputTotal, verifyJob } = await stageNonCoinbaseTransaction(view, tx, transactionIndex);
+      verifyJobs.push(verifyJob);
       const outputTotal = tx.outputs.reduce((sum, output) => sum + output.value, 0);
       if (inputTotal < outputTotal) {
         throw new ConnectBlockError("transaction outputs exceed inputs");
@@ -388,6 +424,8 @@ export async function connectBlockNative(
         });
       }
     }
+
+    await verifyBlockScriptJobs(verifyJobs, timings, options.scriptVerifyRunner ?? null);
 
     const coinbase = block.transactions[0]!;
     validateCoinbase(coinbase, options.height, totalFees);

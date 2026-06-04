@@ -1,6 +1,7 @@
 import type { ChainParams } from "../chain/params.js";
 import { connectBlock, ConnectBlockError } from "../consensus/connect.js";
 import { connectBlockNative } from "../consensus/nativeConnect.js";
+import type { ScriptVerifyRunner } from "../consensus/script/scriptVerifyRunner.js";
 import type { NativeNodeState } from "../runtime/nodeState.js";
 import { broadcastWitnessBlockInv, type PeerConnection } from "../p2p/peer.js";
 import type { BlockStore } from "../storage/blocks.js";
@@ -12,6 +13,7 @@ interface BatchOptions {
   batchSize: number;
   maxBlocks: number;
   parallelDownloads?: number;
+  scriptVerifyRunner?: ScriptVerifyRunner | undefined | undefined;
 }
 
 interface TipOptions {
@@ -19,10 +21,19 @@ interface TipOptions {
   maxBlocks?: number;
   targetHeight?: number;
   parallelDownloads?: number;
+  scriptVerifyRunner?: ScriptVerifyRunner | undefined | undefined;
+}
+
+interface ConnectOptions {
+  scriptVerifyRunner?: ScriptVerifyRunner | undefined | undefined;
 }
 
 function looksLikeBlockStore(value: unknown): value is BlockStore {
   return typeof value === "object" && value !== null && "read" in value && "write" in value;
+}
+
+function looksLikeChainParams(value: unknown): value is ChainParams {
+  return typeof value === "object" && value !== null && "name" in value && "genesisHash" in value;
 }
 
 function resolveBatchArgs(
@@ -40,15 +51,20 @@ function resolveBatchArgs(
 
 function resolveChainStoreArgs(
   blockStoreOrChain: BlockStore | ChainParams,
-  maybeChain?: ChainParams,
-): { blockStore: BlockStore | null; chain: ChainParams } {
+  maybeChainOrOptions?: ChainParams | ConnectOptions,
+  maybeOptions?: ConnectOptions,
+): { blockStore: BlockStore | null; chain: ChainParams; options: ConnectOptions } {
   if (looksLikeBlockStore(blockStoreOrChain)) {
-    if (maybeChain === undefined) {
+    if (!looksLikeChainParams(maybeChainOrOptions)) {
       throw new ConnectBlockError("chain parameters missing");
     }
-    return { blockStore: blockStoreOrChain, chain: maybeChain };
+    return { blockStore: blockStoreOrChain, chain: maybeChainOrOptions, options: maybeOptions ?? {} };
   }
-  return { blockStore: null, chain: blockStoreOrChain };
+  return {
+    blockStore: null,
+    chain: blockStoreOrChain,
+    options: looksLikeChainParams(maybeChainOrOptions) ? maybeOptions ?? {} : maybeChainOrOptions ?? {},
+  };
 }
 
 function expectedPrevHash(tracker: NativeNodeState, chain: string, height: number): Buffer | null {
@@ -132,6 +148,7 @@ async function connectDownloadedBlock(
     expectedHash: Buffer;
     blockHashHex: string;
     blockStore: BlockStore | null;
+    scriptVerifyRunner?: ScriptVerifyRunner | undefined | undefined;
   },
 ): Promise<void> {
   if (tracker.session !== null) {
@@ -140,6 +157,7 @@ async function connectDownloadedBlock(
       expectedPrev: options.expectedPrev,
       expectedHash: options.expectedHash,
       chainName: chain.name,
+      scriptVerifyRunner: options.scriptVerifyRunner,
     });
     tracker.refreshValidatedTip(options.height, options.blockHashHex);
     const stored = await tracker.session.store.getBlock(chain.name, options.height);
@@ -239,6 +257,7 @@ export async function syncBlocksBatch(
               expectedHash: row.blockHashRev,
               blockHashHex: row.blockHashHex,
               blockStore,
+              scriptVerifyRunner: options.scriptVerifyRunner,
             });
             peer.markBlockDownloadCapabilities();
             await broadcastWitnessBlockInv(peers, row.blockHashRev, tracker);
@@ -286,6 +305,7 @@ export async function syncBlocksBatch(
           expectedHash: blockHash,
           blockHashHex,
           blockStore,
+          scriptVerifyRunner: options.scriptVerifyRunner,
         });
         peer.markBlockDownloadCapabilities();
         await broadcastWitnessBlockInv(peers, blockHash, tracker);
@@ -364,6 +384,7 @@ export async function syncBlocksToTip(
       batchSize: batchLimit,
       maxBlocks: maxBlocks > 0 ? batchLimit : 0,
       parallelDownloads,
+      scriptVerifyRunner: options.scriptVerifyRunner,
     };
     const downloaded = blockStore === null
       ? await syncBlocksBatch(peers, tracker, chain, batchOptions)
@@ -396,9 +417,10 @@ export function validateStoredBlocks(
 export async function connectStoredBlocks(
   tracker: NativeNodeState,
   blockStoreOrChain: BlockStore | ChainParams,
-  maybeChain?: ChainParams,
+  maybeChainOrOptions?: ChainParams | ConnectOptions,
+  maybeOptions?: ConnectOptions,
 ): Promise<{ connected: number; newHashes: Buffer[] }> {
-  const { blockStore, chain } = resolveChainStoreArgs(blockStoreOrChain, maybeChain);
+  const { blockStore, chain, options } = resolveChainStoreArgs(blockStoreOrChain, maybeChainOrOptions, maybeOptions);
   let connected = 0;
   const newHashes: Buffer[] = [];
   while (true) {
@@ -418,6 +440,7 @@ export async function connectStoredBlocks(
         expectedPrev,
         expectedHash: blockHash,
         chainName: chain.name,
+        scriptVerifyRunner: options.scriptVerifyRunner,
       });
       tracker.refreshValidatedTip(height, String(row.block_hash));
       const stored = await tracker.session.store.getBlock(chain.name, height);
@@ -439,9 +462,10 @@ export async function connectStoredBlocks(
 export function rebuildValidatedChain(
   tracker: NativeNodeState,
   blockStoreOrChain: BlockStore | ChainParams,
-  maybeChain?: ChainParams,
+  maybeChainOrOptions?: ChainParams | ConnectOptions,
+  maybeOptions?: ConnectOptions,
 ): number | Promise<number> {
-  const { blockStore, chain } = resolveChainStoreArgs(blockStoreOrChain, maybeChain);
+  const { blockStore, chain, options } = resolveChainStoreArgs(blockStoreOrChain, maybeChainOrOptions, maybeOptions);
   tracker.resetValidatedChain(chain.name, chain.genesisHash);
 
   if (tracker.session === null) {
@@ -467,13 +491,17 @@ export function rebuildValidatedChain(
     return total;
   }
 
-  return rebuildNativeValidatedChain(tracker, chain);
+  return rebuildNativeValidatedChain(tracker, chain, options);
 }
 
 async function rebuildNativeValidatedChain(
   tracker: NativeNodeState,
   chain: ChainParams,
+  options: ConnectOptions,
 ): Promise<number> {
+  if (tracker.session === null) throw new ConnectBlockError("native session unavailable");
+  await tracker.session.store.resetValidatedChain(chain.name, chain.genesisHash);
+  tracker.refreshValidatedTip(0, chain.genesisHash);
   let total = 0;
   while (true) {
     const height = tracker.getValidatedHeight(chain.name) + 1;
@@ -481,7 +509,6 @@ async function rebuildNativeValidatedChain(
     if (!row) break;
     const expectedPrev = expectedPrevHash(tracker, chain.name, height);
     if (expectedPrev === null) break;
-    if (tracker.session === null) throw new ConnectBlockError("native session unavailable");
     const fileName = `blk${String(row.file_number).padStart(5, "0")}.dat`;
     const payload = tracker.session.blockStore.read(fileName, Number(row.file_offset), Number(row.block_size));
     const blockHash = Buffer.from(String(row.block_hash), "hex").reverse();
@@ -490,6 +517,7 @@ async function rebuildNativeValidatedChain(
       expectedPrev,
       expectedHash: blockHash,
       chainName: chain.name,
+      scriptVerifyRunner: options.scriptVerifyRunner,
     });
     tracker.refreshValidatedTip(height, String(row.block_hash));
     total += 1;

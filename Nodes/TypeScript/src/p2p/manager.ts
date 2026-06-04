@@ -1,6 +1,7 @@
 import type { ChainParams } from "../chain/params.js";
 import type { Settings } from "../config/settings.js";
 import { transactionWtxid } from "../consensus/witness.js";
+import type { ScriptVerifyRunner } from "../consensus/script/scriptVerifyRunner.js";
 import type { NativeNodeState } from "../runtime/nodeState.js";
 import {
   InvMessageCodec,
@@ -171,7 +172,7 @@ export class PeerManager {
     throw lastError ?? new Error("Header sync failed on all peers");
   }
 
-  async syncBlocks(): Promise<number> {
+  async syncBlocks(options: { scriptVerifyRunner?: ScriptVerifyRunner | undefined } = {}): Promise<number> {
     const peers = this.orderedSyncPeers();
     if (peers.length === 0) {
       throw new Error("No connected peers available for block sync");
@@ -181,6 +182,7 @@ export class PeerManager {
       maxBlocks: this.settings.blocksMaxPerRun,
       targetHeight: this.settings.blocksTargetHeight,
       parallelDownloads: this.settings.parallelBlockDownloads,
+      scriptVerifyRunner: options.scriptVerifyRunner,
     });
   }
 

@@ -102,7 +102,10 @@ int runNode(
                 sync::markHeadersCurrent(tracker, chain);
                 tracker.logEvent("sync", sync::headerRefreshLogMessage(refreshAction), "info");
             } else {
-                stored = manager.syncHeaders(localsCoverFollowup);
+                const auto stopHeight = settings.blocksTargetHeight > 0
+                                            ? std::optional<int>(settings.blocksTargetHeight)
+                                            : std::nullopt;
+                stored = manager.syncHeaders(localsCoverFollowup, stopHeight);
             }
         }
 

@@ -301,6 +301,102 @@ std::optional<std::vector<std::uint8_t>> PeerConnection::requestBlockOnce(const 
     return std::nullopt;
 }
 
+std::vector<std::optional<std::vector<std::uint8_t>>> PeerConnection::requestBlocks(
+    const std::vector<std::vector<std::uint8_t>>& blockHashes, double timeoutSeconds) {
+    if (!isConnected()) {
+        throw std::runtime_error("Peer is not connected");
+    }
+    std::vector<std::optional<std::vector<std::uint8_t>>> results(blockHashes.size());
+    if (blockHashes.empty()) {
+        return results;
+    }
+
+    for (const auto invType : {messages::MSG_WITNESS_BLOCK, messages::MSG_BLOCK}) {
+        messages::GetDataMessage getdata;
+        std::vector<bool> pending(blockHashes.size(), false);
+        std::size_t pendingCount = 0;
+        for (std::size_t index = 0; index < blockHashes.size(); ++index) {
+            if (results[index].has_value()) {
+                continue;
+            }
+            messages::InventoryVector inv;
+            inv.type = invType;
+            inv.hash = blockHashes[index];
+            getdata.inventory.push_back(std::move(inv));
+            pending[index] = true;
+            pendingCount += 1;
+        }
+        if (pendingCount == 0) {
+            break;
+        }
+
+        send(messages::GetDataMessage::kCommand, getdata.serialize());
+        options_.tracker->markWireCapability("blocks.getdata.send", true, "live",
+                                             "sent batched getdata to " + options_.host + ":" +
+                                                 std::to_string(options_.port));
+
+        const auto deadline = Clock::now() + std::chrono::duration_cast<Clock::duration>(
+                                                  std::chrono::duration<double>(timeoutSeconds));
+        while (pendingCount > 0 && Clock::now() < deadline) {
+            const double remaining = std::chrono::duration<double>(deadline - Clock::now()).count();
+            if (remaining <= 0) {
+                break;
+            }
+            const auto [command, payload] = readMessage(remaining);
+            touchActivity();
+            if (command == messages::BlockMessage::kCommand) {
+                const auto receivedHash = messages::blockHashFromPayload(payload);
+                bool matched = false;
+                for (std::size_t index = 0; index < blockHashes.size(); ++index) {
+                    if (!pending[index] || receivedHash != blockHashes[index]) {
+                        continue;
+                    }
+                    results[index] = std::vector<std::uint8_t>(payload.begin(), payload.end());
+                    pending[index] = false;
+                    pendingCount -= 1;
+                    matched = true;
+                    options_.tracker->markWireCapability("blocks.block.recv", true, "live",
+                                                         "received batched block from " + options_.host + ":" +
+                                                             std::to_string(options_.port));
+                    break;
+                }
+                if (!matched) {
+                    options_.tracker->logEvent("sync", "Unexpected block hash in batched download", "warning",
+                                               "{\"host\":" + util::jsonString(options_.host) + "}");
+                }
+                continue;
+            }
+            if (command == messages::NotFoundMessage::kCommand) {
+                const auto missing = messages::NotFoundMessage::deserialize(payload);
+                for (const auto& item : missing.inventory) {
+                    for (std::size_t index = 0; index < blockHashes.size(); ++index) {
+                        if (!pending[index] || item.hash != blockHashes[index]) {
+                            continue;
+                        }
+                        pending[index] = false;
+                        pendingCount -= 1;
+                        options_.tracker->markWireCapability("blocks.notfound", true, "live",
+                                                             "peer returned batched notfound");
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (command == messages::GetHeadersMessage::kCommand) {
+                continue;
+            }
+            if (command == messages::PingMessage::kCommand) {
+                const auto ping = messages::PingMessage::deserialize(payload);
+                const auto pong = messages::PongMessage{ping.nonce};
+                send(messages::PongMessage::kCommand, pong.serialize());
+                continue;
+            }
+            dispatchMessage(command, payload);
+        }
+    }
+    return results;
+}
+
 void PeerConnection::consumeMessages(const MessageHandler& handler, double readTimeoutSeconds) {
     running_ = true;
     while (running_) {

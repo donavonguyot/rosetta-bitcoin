@@ -256,7 +256,11 @@ int syncHeadersToTip(p2p::PeerConnection& connection, std::optional<int> peerHei
             return totalStored;
         }
 
-        const auto message = connection.requestHeaders(locator);
+        auto message = connection.requestHeaders(locator);
+        if (boundedTarget && bestHeight < targetHeight &&
+            bestHeight + static_cast<int>(message.headers.size()) > targetHeight) {
+            message.headers.resize(static_cast<std::size_t>(targetHeight - bestHeight));
+        }
         const int batchCount = static_cast<int>(message.headers.size());
 
         if (headersSyncDone(bestHeight, targetHeight, batchCount)) {
@@ -280,6 +284,9 @@ int syncHeadersToTip(p2p::PeerConnection& connection, std::optional<int> peerHei
 
         const auto refreshed = tracker.getSyncState(chain.name);
         const int updatedHeight = refreshed.has_value() ? std::stoi((*refreshed).at("best_height")) : bestHeight;
+        if (boundedTarget && updatedHeight >= targetHeight) {
+            break;
+        }
         if (headersSyncDone(updatedHeight, targetHeight, batchCount)) {
             if (!boundedTarget) {
                 markHeadersCurrent(tracker, chain);

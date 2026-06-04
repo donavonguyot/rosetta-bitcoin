@@ -75,7 +75,11 @@ wait_for_chunk() {
   done
 }
 
-docker compose -f docker/docker-compose.yml build tsbitnode-sync-proof tsbitnode-sync-status >/dev/null
+if [[ "${DOCKER_REBUILD:-0}" == "1" ]]; then
+  docker compose -f docker/docker-compose.yml build tsbitnode-sync-proof tsbitnode-sync-status >/dev/null
+else
+  log_line "supervisor build skipped reason=warm_image_reuse rebuild_with=DOCKER_REBUILD=1"
+fi
 last_height="$(emit_tick starting 0)"
 log_line "supervisor start volume=$VOLUME poll_sec=$POLL_SEC check_sec=$CHECK_SEC"
 

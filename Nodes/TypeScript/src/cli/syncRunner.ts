@@ -5,6 +5,8 @@ import { getChain } from "../chain/params.js";
 import { resolveManualPeers } from "../config/peers.js";
 import { Settings } from "../config/settings.js";
 import { ConnectBlockError } from "../consensus/connect.js";
+import { ensureNativeSecp256k1Available } from "../consensus/cryptoBackend.js";
+import { ScriptVerifyRunner } from "../consensus/script/scriptVerifyRunner.js";
 import { NativeNodeState } from "../runtime/nodeState.js";
 import { configureLogging } from "../node.js";
 import { PeerManager } from "../p2p/manager.js";
@@ -66,6 +68,7 @@ const settings = Settings.fromEnv({
 });
 
 configureLogging(settings.logLevel);
+ensureNativeSecp256k1Available();
 
 function syncRunnerLockOptions(): AcquireSyncLockOptions {
   const parentPid = parseSyncLockParentPid(process.env.TSBITNODE_SYNC_LOCK_PARENT_PID);
@@ -87,24 +90,25 @@ async function connectStored(settings: Settings, rebuild: boolean): Promise<numb
   const chain = getChain(settings.chain);
   mkdirSync(settings.dataDir, { recursive: true });
   const tracker = await NativeNodeState.open(settings, chain, { acquireLock: false });
+  const scriptVerifyRunner = new ScriptVerifyRunner();
   ensureGenesis(tracker, chain);
   repairSyncState(tracker, chain);
   try {
     await repairValidatedIfAhead(tracker, chain);
     let connected = 0;
     if (rebuild) {
-      connected = await rebuildValidatedChain(tracker, chain);
+      connected = await rebuildValidatedChain(tracker, chain, { scriptVerifyRunner });
       console.error(
-        `Rebuilt validated chain from stored blocks (height=${tracker.getValidatedHeight(chain.name)}, utxos=${tracker.utxoCount(chain.name)})`,
+        `Rebuilt validated chain from stored blocks (height=${tracker.getValidatedHeight(chain.name)}, utxos=${await tracker.nativeUtxoCount(chain.name)})`,
       );
     } else {
-      const outcome = await connectStoredBlocks(tracker, chain);
+      const outcome = await connectStoredBlocks(tracker, chain, { scriptVerifyRunner });
       connected = outcome.connected;
     }
     if (connected > 0) {
       updatePhase3(tracker, chain.name);
       console.error(
-        `Connected ${connected} stored blocks (validated height=${tracker.getValidatedHeight(chain.name)}, utxos=${tracker.utxoCount(chain.name)})`,
+        `Connected ${connected} stored blocks (validated height=${tracker.getValidatedHeight(chain.name)}, utxos=${await tracker.nativeUtxoCount(chain.name)})`,
       );
     }
     return 0;
@@ -114,6 +118,7 @@ async function connectStored(settings: Settings, rebuild: boolean): Promise<numb
     }
     throw error;
   } finally {
+    await scriptVerifyRunner.close();
     await tracker.close();
   }
 }
@@ -122,6 +127,7 @@ async function syncBlocks(settings: Settings): Promise<number> {
   const chain = getChain(settings.chain);
   mkdirSync(settings.dataDir, { recursive: true });
   const tracker = await NativeNodeState.open(settings, chain, { acquireLock: false });
+  const scriptVerifyRunner = new ScriptVerifyRunner();
   ensureGenesis(tracker, chain);
   repairSyncState(tracker, chain);
   const port = settings.p2pPort || chain.defaultPort;
@@ -131,15 +137,15 @@ async function syncBlocks(settings: Settings): Promise<number> {
   try {
     await repairValidatedIfAhead(tracker, chain);
     if (settings.rebuildValidatedChain) {
-      const connected = await rebuildValidatedChain(tracker, chain);
+      const connected = await rebuildValidatedChain(tracker, chain, { scriptVerifyRunner });
       console.error(
-        `Rebuilt validated chain before download (height=${tracker.getValidatedHeight(chain.name)}, utxos=${tracker.utxoCount(chain.name)})`,
+        `Rebuilt validated chain before download (height=${tracker.getValidatedHeight(chain.name)}, utxos=${await tracker.nativeUtxoCount(chain.name)})`,
       );
       if (connected > 0) {
         updatePhase3(tracker, chain.name);
       }
     } else {
-      const { connected } = await connectStoredBlocks(tracker, chain);
+      const { connected } = await connectStoredBlocks(tracker, chain, { scriptVerifyRunner });
       if (connected > 0) {
         updatePhase3(tracker, chain.name);
         console.error(`Connected ${connected} stored blocks before download`);
@@ -178,7 +184,7 @@ async function syncBlocks(settings: Settings): Promise<number> {
       await manager.completeDeferredHandshake();
     }
 
-    const downloaded = await manager.syncBlocks();
+    const downloaded = await manager.syncBlocks({ scriptVerifyRunner });
     const validated = tracker.getValidatedHeight(chain.name);
     if (downloaded > 0 || validated > 0) {
       tracker.updatePhase(
@@ -188,7 +194,7 @@ async function syncBlocks(settings: Settings): Promise<number> {
       );
       updatePhase3(tracker, chain.name);
       console.error(
-        `Block sync complete: downloaded=${downloaded} stored=${tracker.blockCount(chain.name)} validated=${validated} utxos=${tracker.utxoCount(chain.name)}`,
+        `Block sync complete: downloaded=${downloaded} stored=${tracker.blockCount(chain.name)} validated=${validated} utxos=${await tracker.nativeUtxoCount(chain.name)}`,
       );
     }
     return 0;
@@ -198,6 +204,7 @@ async function syncBlocks(settings: Settings): Promise<number> {
     }
     throw error;
   } finally {
+    await scriptVerifyRunner.close();
     await manager.close();
     await tracker.close();
   }

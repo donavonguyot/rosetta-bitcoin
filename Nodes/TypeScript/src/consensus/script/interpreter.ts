@@ -1,5 +1,9 @@
 import { hash160, hash256, ripemd160Digest, sha1Digest, sha256Digest } from "../hash.js";
-import { taprootTweakPubkeyXonly, verifyDerSignature, verifySchnorrSignature } from "../secp256k1.js";
+import {
+  taprootTweakWithSelectedBackend,
+  verifyEcdsaWithSelectedBackend,
+  verifySchnorrWithSelectedBackend,
+} from "../cryptoBackend.js";
 import {
   ANNEX_TAG,
   MAX_CONSENSUS_SCRIPT_SIZE,
@@ -90,6 +94,7 @@ import {
   tapleafHash,
   taprootMerkleRootFromBranch,
   taprootSignatureHash,
+  type TransactionSighashCache,
 } from "./sighash.js";
 import type { Transaction } from "../../messages/transaction.js";
 
@@ -210,20 +215,17 @@ function checkEcdsaSignature(options: {
   scriptCode: Buffer;
   amount: number;
   witness: boolean;
+  sighashCache?: TransactionSighashCache | undefined;
 }): boolean {
   if (options.signature.length === 0) return false;
   const sighashType = options.signature[options.signature.length - 1]!;
   const sigDer = options.signature.subarray(0, -1);
   const digest = options.witness
-    ? bip143Sighash(
-        options.tx,
-        options.inputIndex,
-        options.scriptCode,
-        options.amount,
-        sighashType,
-      )
-    : legacySighash(options.tx, options.inputIndex, options.scriptCode, sighashType);
-  return verifyDerSignature(options.pubkey, digest, sigDer);
+    ? options.sighashCache?.bip143Sighash(options.inputIndex, options.scriptCode, options.amount, sighashType) ??
+      bip143Sighash(options.tx, options.inputIndex, options.scriptCode, options.amount, sighashType)
+    : options.sighashCache?.legacySighash(options.inputIndex, options.scriptCode, sighashType) ??
+      legacySighash(options.tx, options.inputIndex, options.scriptCode, sighashType);
+  return verifyEcdsaWithSelectedBackend(options.pubkey, digest, sigDer) === "valid";
 }
 
 function txIsFinalForCltv(tx: Transaction): boolean {
@@ -287,6 +289,7 @@ function execCheckmultisig(
     scriptCode: Buffer;
     amount: number;
     witness: boolean;
+    sighashCache?: TransactionSighashCache | undefined;
   },
 ): void {
   let i = 1;
@@ -332,6 +335,7 @@ function execCheckmultisig(
         scriptCode: options.scriptCode,
         amount: options.amount,
         witness: options.witness,
+        sighashCache: options.sighashCache,
       })
     ) {
       sigOffset += 1;
@@ -377,6 +381,7 @@ interface EvalOptions {
   witness: boolean;
   verifyFlags?: number;
   codeSeparatorOffset?: { value: number };
+  sighashCache?: TransactionSighashCache | undefined;
 }
 
 function isPushOpcode(opcode: number): boolean {
@@ -894,6 +899,7 @@ function evaluateTapscript(
     spentPrevouts: readonly (readonly [number, Buffer])[];
     annex: Buffer | null;
     validationBudgetLeft: { value: number };
+    sighashCache?: TransactionSighashCache | undefined;
   },
 ): void {
   if (tapscriptPrescanOpSuccess(script)) {
@@ -1025,14 +1031,16 @@ function evaluateTapscript(
           throw new ScriptError("invalid Schnorr signature length");
         }
         try {
-          const digest = taprootSignatureHash(options.tx, options.inputIndex, options.spentPrevouts, {
+          const hashOptions = {
             hashType,
             annex: options.annex,
             extFlag: 1,
             tapleafHash: options.tapleafDigest,
             tapscriptCodeseparatorPos: codeseparatorPos,
-          });
-          valid = verifySchnorrSignature(pubkey, digest, sig64);
+          };
+          const digest = options.sighashCache?.taprootSignatureHash(options.inputIndex, hashOptions) ??
+            taprootSignatureHash(options.tx, options.inputIndex, options.spentPrevouts, hashOptions);
+          valid = verifySchnorrWithSelectedBackend(pubkey, digest, sig64) === "valid";
         } catch (error) {
           throw new ScriptError(error instanceof Error ? error.message : "tapscript sighash failed");
         }
@@ -1078,14 +1086,16 @@ function evaluateTapscript(
         } else if (signature.length !== 64) {
           throw new ScriptError("invalid Schnorr signature length");
         }
-        const digest = taprootSignatureHash(options.tx, options.inputIndex, options.spentPrevouts, {
+        const hashOptions = {
           hashType,
           annex: options.annex,
           extFlag: 1,
           tapleafHash: options.tapleafDigest,
           tapscriptCodeseparatorPos: codeseparatorPos,
-        });
-        increment = verifySchnorrSignature(pubkey, digest, sig64);
+        };
+        const digest = options.sighashCache?.taprootSignatureHash(options.inputIndex, hashOptions) ??
+          taprootSignatureHash(options.tx, options.inputIndex, options.spentPrevouts, hashOptions);
+        increment = verifySchnorrWithSelectedBackend(pubkey, digest, sig64) === "valid";
       }
       stack.pushItem(encodeScriptNum(n + (increment ? 1 : 0)));
       offset += 1;
@@ -1118,6 +1128,7 @@ function verifyP2trScriptPath(options: {
   inputIndex: number;
   spentPrevouts: readonly (readonly [number, Buffer])[];
   serializedWitnessForWeight: Buffer;
+  sighashCache?: TransactionSighashCache | undefined;
 }): boolean {
   if (options.spentPrevouts.length !== options.tx.inputs.length) {
     throw new ScriptError("spent_prevouts length mismatch");
@@ -1156,7 +1167,12 @@ function verifyP2trScriptPath(options: {
   try {
     leafDigest = tapleafHash(leafMasked, scriptBytes);
     const merkleRoot = taprootMerkleRootFromBranch(merkleBranch, leafDigest);
-    [parityOut, outX] = taprootTweakPubkeyXonly(internalX, merkleRoot);
+    const tweak = taprootTweakWithSelectedBackend(internalX, merkleRoot);
+    if (tweak.result !== "valid") {
+      throw new ScriptError("taproot tweak failed");
+    }
+    parityOut = tweak.parity;
+    outX = tweak.outputXonly;
   } catch (error) {
     throw new ScriptError(error instanceof Error ? error.message : "taproot tweak failed");
   }
@@ -1193,6 +1209,7 @@ function verifyP2trScriptPath(options: {
     spentPrevouts: options.spentPrevouts,
     annex: options.annex,
     validationBudgetLeft: budget,
+    sighashCache: options.sighashCache,
   });
 
   if (!terminalSuccessStrict(execStack)) {
@@ -1218,6 +1235,7 @@ export function assertVerifyScript(
     amount: number;
     witness?: readonly Buffer[];
     spentPrevouts?: readonly (readonly [number, Buffer])[];
+    sighashCache?: TransactionSighashCache | undefined;
   },
 ): void {
   const witness = options.witness ?? [];
@@ -1233,6 +1251,7 @@ export function assertVerifyScript(
       scriptCode: scriptPubKey,
       amount: options.amount,
       witness: false,
+      sighashCache: options.sighashCache,
     });
     const stack = new Stack(...stackSig);
     const codeSeparatorOffset = { value: 0 };
@@ -1243,6 +1262,7 @@ export function assertVerifyScript(
       amount: options.amount,
       witness: false,
       codeSeparatorOffset,
+      sighashCache: options.sighashCache,
     });
     if (!terminalSuccessStrict(stack)) throw new ScriptError(`P2PK final stack check failed (size ${stack.length})`);
     return;
@@ -1260,6 +1280,7 @@ export function assertVerifyScript(
       scriptCode,
       amount: options.amount,
       witness: true,
+      sighashCache: options.sighashCache,
     });
     if (!terminalSuccessStrict(stack)) throw new ScriptError(`P2WPKH final stack check failed (size ${stack.length})`);
     return;
@@ -1283,6 +1304,7 @@ export function assertVerifyScript(
       amount: options.amount,
       witness: true,
       codeSeparatorOffset,
+      sighashCache: options.sighashCache,
     });
     if (!terminalSuccessStrict(stack)) throw new ScriptError(`P2WSH final stack check failed (size ${stack.length})`);
     return;
@@ -1311,6 +1333,7 @@ export function assertVerifyScript(
         inputIndex: options.inputIndex,
         spentPrevouts: options.spentPrevouts,
         serializedWitnessForWeight: witSerializedForWeight,
+        sighashCache: options.sighashCache,
       });
       return;
     }
@@ -1333,11 +1356,12 @@ export function assertVerifyScript(
       }
       sig64 = sigblob.subarray(0, 64);
     }
-    const msg = taprootSignatureHash(options.tx, options.inputIndex, options.spentPrevouts, {
-      hashType,
-      annex,
-    });
-    if (!verifySchnorrSignature(outputKeyX, msg, sig64)) throw new ScriptError("taproot key-path signature failed");
+    const hashOptions = { hashType, annex };
+    const msg = options.sighashCache?.taprootSignatureHash(options.inputIndex, hashOptions) ??
+      taprootSignatureHash(options.tx, options.inputIndex, options.spentPrevouts, hashOptions);
+    if (verifySchnorrWithSelectedBackend(outputKeyX, msg, sig64) !== "valid") {
+      throw new ScriptError("taproot key-path signature failed");
+    }
     return;
   }
 
@@ -1364,6 +1388,7 @@ export function assertVerifyScript(
     scriptCode: scriptPubKey,
     amount: options.amount,
     witness: false,
+    sighashCache: options.sighashCache,
   });
 
   if (redeemCandidate !== null && (stackSig.length === 0 || !stackSig[stackSig.length - 1]!.equals(redeemCandidate))) {
@@ -1379,6 +1404,7 @@ export function assertVerifyScript(
     amount: options.amount,
     witness: false,
     codeSeparatorOffset,
+    sighashCache: options.sighashCache,
   });
 
   if (redeemCandidate === null) {
@@ -1399,6 +1425,7 @@ export function assertVerifyScript(
     amount: options.amount,
     witness: false,
     codeSeparatorOffset: innerCodeSeparatorOffset,
+    sighashCache: options.sighashCache,
   });
   if (!terminalSuccessRelaxed(inner)) throw new ScriptError(`P2SH inner final stack check failed (size ${inner.length})`);
 }
@@ -1412,6 +1439,7 @@ export function verifyScript(
     amount: number;
     witness?: readonly Buffer[];
     spentPrevouts?: readonly (readonly [number, Buffer])[];
+    sighashCache?: TransactionSighashCache | undefined;
   },
 ): boolean {
   try {

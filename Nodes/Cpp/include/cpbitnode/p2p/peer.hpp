@@ -71,6 +71,8 @@ public:
                                             const std::vector<std::uint8_t>& hashStop = std::vector<std::uint8_t>(32, 0));
     virtual std::optional<std::vector<std::uint8_t>> requestBlock(const std::vector<std::uint8_t>& blockHash,
                                                                   double timeoutSeconds = 120.0);
+    virtual std::vector<std::optional<std::vector<std::uint8_t>>> requestBlocks(
+        const std::vector<std::vector<std::uint8_t>>& blockHashes, double timeoutSeconds = 120.0);
 
     const chain::ChainParams& chain() const { return *options_.chain; }
     db::NodeStateStore& tracker() { return *options_.tracker; }

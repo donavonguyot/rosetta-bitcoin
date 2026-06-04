@@ -10,7 +10,7 @@ DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/cpp_docker_supporting_5
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_PEERS ?= host.docker.internal:48333
-DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 1
+DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
 DOCKER_HEADERS_MAX ?= 200
 DOCKER_BLOCKS_MAX ?= 2
 DOCKER_SYNC_VOLUME ?= cpbitnode_sync_data
@@ -53,7 +53,9 @@ cpp-node-native-crypto-test:
 
 docker-cpp-native-crypto-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
-	$(DOCKER_COMPOSE) run --rm --no-deps cpbitnode-sync-proof cpbitnode_tests
+	$(DOCKER_COMPOSE) run --rm --no-deps \
+	  -v $(abspath ../Shared/conformance/fixtures):/Nodes/Shared/conformance/fixtures:ro \
+	  cpbitnode-sync-proof cpbitnode_tests
 
 docker-cpp-supporting-5k-proof:
 	@for i in $$(seq 1 60); do \

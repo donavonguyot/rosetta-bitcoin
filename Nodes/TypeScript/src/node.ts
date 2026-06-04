@@ -4,6 +4,8 @@ import type { Server } from "node:net";
 import { getChain } from "./chain/params.js";
 import type { Settings } from "./config/settings.js";
 import { ConnectBlockError } from "./consensus/connect.js";
+import { ensureNativeSecp256k1Available } from "./consensus/cryptoBackend.js";
+import { ScriptVerifyRunner } from "./consensus/script/scriptVerifyRunner.js";
 import { NativeNodeState } from "./runtime/nodeState.js";
 import { resolveManualPeers } from "./config/peers.js";
 import { clearLastError, recordLastError } from "./metrics.js";
@@ -35,6 +37,7 @@ function configureLogging(level: string): void {
 }
 
 export async function runNode(settings: Settings, options: RunNodeOptions = {}): Promise<number> {
+  ensureNativeSecp256k1Available();
   const chain = getChain(settings.chain);
   mkdirSync(settings.dataDir, { recursive: true });
 
@@ -77,6 +80,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
   }
   const handshakeHeight = resolveBootstrapStartHeight(tracker, chain, settings);
   const manager = new PeerManager(chain, tracker, settings);
+  const scriptVerifyRunner = new ScriptVerifyRunner();
   let inboundServer: Server | null = null;
 
   try {
@@ -133,7 +137,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
     try {
       await repairValidatedIfAhead(tracker, chain);
       if (settings.rebuildValidatedChain) {
-        const rebuilt = await rebuildValidatedChain(tracker, chain);
+        const rebuilt = await rebuildValidatedChain(tracker, chain, { scriptVerifyRunner });
         if (rebuilt > 0) {
           tracker.updatePhase(
             "phase3",
@@ -142,7 +146,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
           );
         }
       } else {
-        const { connected, newHashes } = await connectStoredBlocks(tracker, chain);
+        const { connected, newHashes } = await connectStoredBlocks(tracker, chain, { scriptVerifyRunner });
         for (const blockHash of newHashes) {
           await broadcastWitnessBlockInv(manager.connections, blockHash, tracker);
         }
@@ -162,7 +166,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
       throw error;
     }
 
-    const blocksDownloaded = await manager.syncBlocks();
+    const blocksDownloaded = await manager.syncBlocks({ scriptVerifyRunner });
     const validated = tracker.getValidatedHeight(chain.name);
     if (blocksDownloaded > 0 || validated > 0 || tracker.blockCount(chain.name) > 0) {
       tracker.updatePhase(
@@ -220,6 +224,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
     if (inboundServer) {
       await new Promise<void>((resolve) => inboundServer!.close(() => resolve()));
     }
+    await scriptVerifyRunner.close();
     await manager.close();
     await metricsServer?.close();
     await tracker.close();

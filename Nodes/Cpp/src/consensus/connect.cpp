@@ -12,10 +12,13 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <future>
 #include <iostream>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -35,6 +38,20 @@ struct ConnectTiming {
 bool syncTimingEnabled() {
     const char* raw = std::getenv("CPBITNODE_SYNC_TIMING");
     return raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0";
+}
+
+bool scriptVerifyParallelEnabled() {
+    const char* raw = std::getenv("CPBITNODE_SCRIPT_VERIFY_PARALLEL");
+    return raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0";
+}
+
+std::size_t scriptVerifyParallelism() {
+    const char* raw = std::getenv("CPBITNODE_SCRIPT_VERIFY_PARALLELISM");
+    if (raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0") {
+        const int parsed = std::stoi(raw);
+        return parsed > 0 ? static_cast<std::size_t>(parsed) : 1;
+    }
+    return std::max(2u, std::thread::hardware_concurrency());
 }
 
 long long elapsedUs(Clock::time_point start) {
@@ -252,14 +269,43 @@ std::int64_t validateNonCoinbaseInputs(BlockUtxoView& view, const messages::Tran
         spentPrevouts.emplace_back(utxo.value, utxo.scriptPubkey);
     }
 
-    std::int64_t inputTotal = 0;
-    for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
-        const auto& utxo = utxoInfos[inputIndex];
-        try {
-            script::verifyTransactionInput(tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts);
-        } catch (const script::ScriptVerifyError& exc) {
-            throw ConnectBlockError(exc.what());
+    if (scriptVerifyParallelEnabled() && tx.inputs.size() > 1) {
+        const auto parallelism = std::max<std::size_t>(1, scriptVerifyParallelism());
+        for (std::size_t base = 0; base < tx.inputs.size(); base += parallelism) {
+            const auto end = std::min(tx.inputs.size(), base + parallelism);
+            std::vector<std::future<std::optional<std::string>>> tasks;
+            tasks.reserve(end - base);
+            for (std::size_t inputIndex = base; inputIndex < end; ++inputIndex) {
+                tasks.push_back(std::async(std::launch::async, [&tx, &utxoInfos, &spentPrevouts, inputIndex]() {
+                    const auto& utxo = utxoInfos[inputIndex];
+                    try {
+                        script::verifyTransactionInput(tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts);
+                        return std::optional<std::string>{};
+                    } catch (const script::ScriptVerifyError& exc) {
+                        return std::optional<std::string>{exc.what()};
+                    }
+                }));
+            }
+            for (std::size_t inputIndex = base; inputIndex < end; ++inputIndex) {
+                const auto failure = tasks[inputIndex - base].get();
+                if (failure.has_value()) {
+                    throw ConnectBlockError(*failure);
+                }
+            }
         }
+    } else {
+        for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
+            const auto& utxo = utxoInfos[inputIndex];
+            try {
+                script::verifyTransactionInput(tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts);
+            } catch (const script::ScriptVerifyError& exc) {
+                throw ConnectBlockError(exc.what());
+            }
+        }
+    }
+
+    std::int64_t inputTotal = 0;
+    for (const auto& utxo : utxoInfos) {
         inputTotal += utxo.value;
     }
 

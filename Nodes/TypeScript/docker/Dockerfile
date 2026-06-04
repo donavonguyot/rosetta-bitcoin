@@ -3,10 +3,11 @@ FROM node:20-slim AS build
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ \
+    && apt-get install -y --no-install-recommends python3 make g++ pkg-config libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json binding.gyp ./
+COPY native ./native
 RUN npm ci
 
 COPY tsconfig.json tsconfig.build.json ./
@@ -22,10 +23,14 @@ ENV DATA_DIR=/data
 ENV LOG_LEVEL=info
 
 RUN useradd --create-home --uid 10001 tsbitnode \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends libsecp256k1-1 \
+    && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data \
     && chown -R tsbitnode:tsbitnode /data /app
 
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/build ./build
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/package-lock.json ./package-lock.json
 COPY --from=build /app/node_modules ./node_modules

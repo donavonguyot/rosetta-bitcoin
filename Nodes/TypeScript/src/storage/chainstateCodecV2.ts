@@ -153,6 +153,10 @@ export function undoKey(chain: string, height: number): Buffer {
   return Buffer.concat([Buffer.from([PREFIX.undo]), chainBytes(chain), u32be(height)]);
 }
 
+export function undoPrefixKey(chain: string): Buffer {
+  return Buffer.concat([Buffer.from([PREFIX.undo]), chainBytes(chain)]);
+}
+
 export function encodeUndo(entries: readonly CodecUndoEntry[]): Buffer {
   return Buffer.concat([
     u32be(entries.length),
