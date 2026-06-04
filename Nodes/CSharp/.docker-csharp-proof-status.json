@@ -18,7 +18,7 @@
   "chainstate_backend": "rocksdb",
   "chainstate_backend_path": "/data/chainstate-rocksdb",
   "codec_version": "2",
-  "chainstate_generation_id": "rocksdb-dce6ea3c-59d6-4565-b201-02d6dd96c009",
+  "chainstate_generation_id": "rocksdb-dca1ed67-76c9-4243-9246-eb4c562a2d2d",
   "chainstate_status": "usable",
   "native_crypto_backend": "libsecp256k1-secp256k1.net",
   "native_crypto_available": true,
@@ -28,45 +28,45 @@
     "Stages": {
       "block_store": {
         "Count": 5000,
-        "TotalMicros": 232120,
-        "P50Micros": 28,
-        "P95Micros": 89,
-        "MaxMicros": 23036
+        "TotalMicros": 40555,
+        "P50Micros": 6,
+        "P95Micros": 20,
+        "MaxMicros": 242
       },
       "utxo_load": {
         "Count": 5000,
-        "TotalMicros": 535809,
-        "P50Micros": 8,
-        "P95Micros": 357,
-        "MaxMicros": 30320
+        "TotalMicros": 213790,
+        "P50Micros": 4,
+        "P95Micros": 150,
+        "MaxMicros": 7570
       },
       "script_verify": {
         "Count": 5000,
-        "TotalMicros": 5295990,
+        "TotalMicros": 1987854,
         "P50Micros": 0,
-        "P95Micros": 4902,
-        "MaxMicros": 103448
+        "P95Micros": 1708,
+        "MaxMicros": 77448
       },
       "utxo_apply": {
         "Count": 5000,
-        "TotalMicros": 55023,
-        "P50Micros": 5,
-        "P95Micros": 19,
-        "MaxMicros": 10715
+        "TotalMicros": 25278,
+        "P50Micros": 2,
+        "P95Micros": 12,
+        "MaxMicros": 600
       },
       "commit": {
         "Count": 5000,
-        "TotalMicros": 1510575,
-        "P50Micros": 186,
-        "P95Micros": 752,
-        "MaxMicros": 61407
+        "TotalMicros": 445901,
+        "P50Micros": 49,
+        "P95Micros": 268,
+        "MaxMicros": 4133
       },
       "block_connect_store_commit": {
         "Count": 5000,
-        "TotalMicros": 9534890,
-        "P50Micros": 717,
-        "P95Micros": 7361,
-        "MaxMicros": 121703
+        "TotalMicros": 3235822,
+        "P50Micros": 177,
+        "P95Micros": 2418,
+        "MaxMicros": 93705
       }
     }
   },

@@ -16,6 +16,10 @@ Latest durable supervisor frontier:
 validated_height: 22829
 current_blocker: 22830 P2TR script-path / BIP342
 sync_surface: Docker persistent supervisor, RocksDB chainstate, native crypto
+supporting_5k_p2p: passed in Docker local Reference P2P proof
+supporting_5k_p2p_artifact: Nodes/Shared/conformance/results/csharp_docker_supporting_5k_benchmark_2026-06-04.json
+supporting_5k_p2p_validated_height: 5000
+supporting_5k_p2p_validated_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
 binary_gate_status: not_attempted
 ```
 

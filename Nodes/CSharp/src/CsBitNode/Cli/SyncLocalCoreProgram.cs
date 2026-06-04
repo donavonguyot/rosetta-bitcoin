@@ -21,8 +21,12 @@ public static class SyncLocalCoreService
         var maxHeaders = PeerConfig.ParseInt(env.GetValueOrDefault("HEADERS_MAX"), HeaderSync.DefaultMaxHeaders);
         var maxBatches = PeerConfig.ParseInt(env.GetValueOrDefault("HEADER_BATCHES_MAX"), HeaderSync.DefaultHeaderBatchesMax);
         var maxBlocks = PeerConfig.ParseInt(env.GetValueOrDefault("BLOCKS_MAX"), 128);
+        var blockPrefetchDepth = PeerConfig.ParseInt(env.GetValueOrDefault("BLOCK_PREFETCH_DEPTH"), 1);
         var skipBlocks = PeerConfig.ParseBool(env.GetValueOrDefault("SKIP_BLOCKS"), false);
         var syncTiming = PeerConfig.ParseBool(env.GetValueOrDefault("CSBITNODE_SYNC_TIMING"), false);
+        var syncTimingLog = PeerConfig.ParseBool(env.GetValueOrDefault("CSBITNODE_SYNC_TIMING_LOG"), false);
+        var scriptRunnerMode = (env.GetValueOrDefault("SCRIPT_RUNNER_MODE") ?? "sequential").Trim().ToLowerInvariant();
+        var parallelScriptRunner = scriptRunnerMode == "parallel";
         var fixtureBlocksDir = env.GetValueOrDefault("FIXTURE_BLOCKS_DIR");
 
         var dataDir = NodePaths.DataDirFromEnv(env.GetValueOrDefault("DATA_DIR"));
@@ -33,11 +37,11 @@ public static class SyncLocalCoreService
         output.WriteLine("  storage=native-rocksdb");
         output.WriteLine($"  peer={peer.Host}:{peer.Port}");
         output.WriteLine($"  headers_max={maxHeaders} batches_max={maxBatches}");
-        output.WriteLine($"  blocks_max={maxBlocks} skip_blocks={skipBlocks}");
+        output.WriteLine($"  blocks_max={maxBlocks} block_prefetch_depth={blockPrefetchDepth} script_runner_mode={scriptRunnerMode} skip_blocks={skipBlocks}");
 
         try
         {
-            return RunNative(output, chain, peer, maxHeaders, maxBatches, maxBlocks, skipBlocks, dataDir, fixtureBlocksDir, syncTiming);
+            return RunNative(output, chain, peer, maxHeaders, maxBatches, maxBlocks, blockPrefetchDepth, parallelScriptRunner, skipBlocks, dataDir, fixtureBlocksDir, syncTiming, syncTimingLog);
         }
         catch (DatadirLockBusyException ex)
         {
@@ -64,21 +68,24 @@ public static class SyncLocalCoreService
         int maxHeaders,
         int maxBatches,
         int maxBlocks,
+        int blockPrefetchDepth,
+        bool parallelScriptRunner,
         bool skipBlocks,
         string dataDir,
         string? fixtureBlocksDir,
-        bool syncTiming)
+        bool syncTiming,
+        bool syncTimingLog)
     {
         using var session = ChainstateSession.OpenNative(dataDir, chain);
         var tracker = session.Store;
-        var timingSink = syncTiming ? new ConsoleTimingSink(output) : null;
+        var timingSink = syncTiming ? new ConsoleTimingSink(output, syncTimingLog) : null;
         if (!string.IsNullOrWhiteSpace(fixtureBlocksDir))
         {
             var fixtureExitCode = 0;
             SeedFixtureHeaders(tracker, chain, fixtureBlocksDir);
             if (!skipBlocks)
             {
-                var result = BlockSync.SyncFromBlockSource(new FixtureBlockSource(fixtureBlocksDir), chain, tracker, session.BlockStorage, maxBlocks, timingSink);
+                var result = BlockSync.SyncFromBlockSource(new FixtureBlockSource(fixtureBlocksDir), chain, tracker, session.BlockStorage, maxBlocks, timingSink, blockPrefetchDepth, parallelScriptRunner);
                 output.WriteLine($"  downloaded_blocks={result.Downloaded}");
                 output.WriteLine($"  connected_blocks={result.Connected}");
                 output.WriteLine($"  sync_status={result.SyncStatus}");
@@ -105,7 +112,7 @@ public static class SyncLocalCoreService
         var syncExitCode = 0;
         if (!skipBlocks)
         {
-            var blockResult = BlockSync.SyncFromBlockSource(connection, chain, tracker, session.BlockStorage, maxBlocks, timingSink);
+            var blockResult = BlockSync.SyncFromBlockSource(connection, chain, tracker, session.BlockStorage, maxBlocks, timingSink, blockPrefetchDepth, parallelScriptRunner);
             output.WriteLine($"  downloaded_blocks={blockResult.Downloaded}");
             output.WriteLine($"  connected_blocks={blockResult.Connected}");
             output.WriteLine($"  sync_status={blockResult.SyncStatus}");
@@ -192,13 +199,19 @@ public static class SyncLocalCoreService
     private sealed class ConsoleTimingSink : SyncTimingCollector
     {
         private readonly TextWriter _output;
+        private readonly bool _verbose;
 
-        public ConsoleTimingSink(TextWriter output) => _output = output;
+        public ConsoleTimingSink(TextWriter output, bool verbose)
+        {
+            _output = output;
+            _verbose = verbose;
+        }
 
         public override void Record(string stage, int height, long elapsedTicks)
         {
             base.Record(stage, height, elapsedTicks);
-            _output.WriteLine($"  timing stage={stage} height={height} elapsed_us={TicksToMicros(elapsedTicks)} elapsed_ms={TicksToMillis(elapsedTicks)}");
+            if (_verbose)
+                _output.WriteLine($"  timing stage={stage} height={height} elapsed_us={TicksToMicros(elapsedTicks)} elapsed_ms={TicksToMillis(elapsedTicks)}");
         }
     }
 }

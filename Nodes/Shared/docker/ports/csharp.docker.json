@@ -25,7 +25,7 @@
     "docker_build": "cd Nodes/CSharp && make docker-build",
     "docker_warm": "cd Nodes/CSharp && make docker-warm",
     "docker_status": "cd Nodes/CSharp && DOCKER_PROOF_VOLUME=csbitnode_sync_data SECP256K1_BACKEND=native docker compose -f docker/docker-compose.yml run --rm --no-deps csbitnode-sync-proof status",
-    "docker_proof_local": null,
+    "docker_proof_local": "cd Nodes/CSharp && make docker-proof-local",
     "docker_diagnostic_sync_proof": "cd Nodes/CSharp && make docker-csharp-native-crypto-proof",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/CSharp && make docker-csharp-sync-supervisor",
@@ -36,9 +36,9 @@
   },
   "peer_modes": {
     "local_reference": {
-      "supported": false,
-      "command": null,
-      "peer": null,
+      "supported": true,
+      "command": "cd Nodes/CSharp && make docker-proof-local",
+      "peer": "host.docker.internal:48333",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {
@@ -66,7 +66,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json",
-    "notes": "Persistent Docker supervisor exists; C# has a diagnostic Docker sync proof, but docker_proof_local is intentionally unset until the harness emits official 5k P2P comparator metadata and fixed knobs."
+    "notes": "Persistent Docker supervisor exists; docker_proof_local runs the supporting 5k local-reference Docker benchmark with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, and a fresh proof volume."
   },
   "known_caveats": ["External network probe command not standardized", "One-shot supervisor smoke target missing", "No daemon data volume in current compose"]
 }

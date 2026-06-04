@@ -21,7 +21,8 @@ public static class BlockConnector
         byte[] expectedHashInternal,
         Action<string, int, long>? timingSink = null,
         int? expectedValidatedHeight = null,
-        ChainstateBlockStorageIndex? storedBlock = null)
+        ChainstateBlockStorageIndex? storedBlock = null,
+        bool parallelScriptRunner = false)
     {
         var validated = expectedValidatedHeight ?? store.GetValidatedHeight(chain);
         if (height != validated + 1)
@@ -57,7 +58,7 @@ public static class BlockConnector
                 continue;
             var txid = txids[transactionIndex];
             var txidHex = Hex.Encode(Hex.Reverse(txid));
-            scriptVerifyElapsed += ValidateNonCoinbaseTransaction(view, blockHashHex, height, txidHex, transaction);
+            scriptVerifyElapsed += ValidateNonCoinbaseTransaction(view, blockHashHex, height, txidHex, transaction, parallelScriptRunner);
             for (var vout = 0; vout < transaction.Outputs.Count; vout++)
             {
                 var output = transaction.Outputs[vout];
@@ -112,7 +113,8 @@ public static class BlockConnector
         string blockHashHex,
         int height,
         string txidHex,
-        Transaction transaction)
+        Transaction transaction,
+        bool parallelScriptRunner)
     {
         var seen = new HashSet<ViewOutpoint>();
         var utxoInfos = new List<ViewUtxo>();
@@ -135,29 +137,52 @@ public static class BlockConnector
 
         long inputTotal = 0;
         var scriptStarted = System.Diagnostics.Stopwatch.StartNew();
+        if (parallelScriptRunner && transaction.Inputs.Count > 1)
+        {
+            var errors = new Exception?[transaction.Inputs.Count];
+            Parallel.For(0, transaction.Inputs.Count, inputIndex =>
+            {
+                var utxo = utxoInfos[inputIndex];
+                try
+                {
+                    ScriptVerify.VerifyTransactionInput(
+                        transaction,
+                        inputIndex,
+                        new ScriptVerify.VerifyInputOptions(utxo.ScriptPubKey, utxo.ValueSats, spentPrevouts));
+                }
+                catch (Exception error) when (error is UnsupportedScriptRule or ScriptVerifyError)
+                {
+                    errors[inputIndex] = error;
+                }
+            });
+            for (var inputIndex = 0; inputIndex < errors.Length; inputIndex++)
+            {
+                if (errors[inputIndex] is null)
+                    continue;
+                ThrowScriptFailure(errors[inputIndex]!, height, blockHashHex, txidHex, inputIndex, utxoInfos[inputIndex].ScriptPubKey);
+            }
+        }
+        else
+        {
+            for (var inputIndex = 0; inputIndex < transaction.Inputs.Count; inputIndex++)
+            {
+                var utxo = utxoInfos[inputIndex];
+                try
+                {
+                    ScriptVerify.VerifyTransactionInput(
+                        transaction,
+                        inputIndex,
+                        new ScriptVerify.VerifyInputOptions(utxo.ScriptPubKey, utxo.ValueSats, spentPrevouts));
+                }
+                catch (Exception error) when (error is UnsupportedScriptRule or ScriptVerifyError)
+                {
+                    ThrowScriptFailure(error, height, blockHashHex, txidHex, inputIndex, utxo.ScriptPubKey);
+                }
+            }
+        }
         for (var inputIndex = 0; inputIndex < transaction.Inputs.Count; inputIndex++)
         {
             var utxo = utxoInfos[inputIndex];
-            var scriptPubKey = utxo.ScriptPubKey;
-            try
-            {
-                ScriptVerify.VerifyTransactionInput(
-                    transaction,
-                    inputIndex,
-                    new ScriptVerify.VerifyInputOptions(scriptPubKey, utxo.ValueSats, spentPrevouts));
-            }
-            catch (UnsupportedScriptRule error)
-            {
-                throw new ValidationBlocker(height, blockHashHex, txidHex, inputIndex, Hex.Encode(utxo.ScriptPubKey), error.Message, error.Rule);
-            }
-            catch (ScriptVerifyError error)
-            {
-                if (error.Message.Contains("unsupported scriptPubKey template", StringComparison.Ordinal))
-                {
-                    throw ValidationBlocker.FromUnsupportedTemplate(height, blockHashHex, txidHex, inputIndex, scriptPubKey);
-                }
-                throw new ValidationBlocker(height, blockHashHex, txidHex, inputIndex, Hex.Encode(utxo.ScriptPubKey), error.Message, "script_verification_failed");
-            }
             inputTotal += utxo.ValueSats;
         }
         scriptStarted.Stop();
@@ -169,6 +194,24 @@ public static class BlockConnector
         foreach (var input in transaction.Inputs)
             view.Spend(input.PreviousOutput);
         return scriptStarted.ElapsedTicks;
+    }
+
+    private static void ThrowScriptFailure(
+        Exception error,
+        int height,
+        string blockHashHex,
+        string txidHex,
+        int inputIndex,
+        byte[] scriptPubKey)
+    {
+        if (error is UnsupportedScriptRule unsupported)
+            throw new ValidationBlocker(height, blockHashHex, txidHex, inputIndex, Hex.Encode(scriptPubKey), unsupported.Message, unsupported.Rule);
+        if (error is ScriptVerifyError verifyError)
+        {
+            if (verifyError.Message.Contains("unsupported scriptPubKey template", StringComparison.Ordinal))
+                throw ValidationBlocker.FromUnsupportedTemplate(height, blockHashHex, txidHex, inputIndex, scriptPubKey);
+            throw new ValidationBlocker(height, blockHashHex, txidHex, inputIndex, Hex.Encode(scriptPubKey), verifyError.Message, "script_verification_failed");
+        }
     }
 }
 

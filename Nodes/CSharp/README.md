@@ -95,10 +95,17 @@ for bounded gates and should stay separate from operational blocker hunting.
 
 ```bash
 make docker-config
+make docker-proof-local
 make docker-csharp-native-crypto-proof
 # Larger bounded proof after smoke reporting is verified:
 make docker-csharp-native-crypto-bounded-sync-proof
 ```
+
+`make docker-proof-local` is the Project-comparable 5k lane: Docker runtime,
+fresh proof volume, local Reference Core over P2P, block prefetch depth 4,
+parallel script verification, WAL enabled, and compact evidence under
+`../Shared/conformance/results/`. The `docker-csharp-native-crypto-*` targets
+remain diagnostic/bounded proof surfaces.
 
 ## Docker blocker hunting
 
