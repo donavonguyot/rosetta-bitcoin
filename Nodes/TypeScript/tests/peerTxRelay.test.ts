@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { TESTNET4 } from "../src/chain/params.js";
 import { transactionWtxid } from "../src/consensus/witness.js";
 import { Settings } from "../src/config/settings.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import { FeeFilterMessageCodec } from "../src/messages/feeFilter.js";
 import {
   GetDataMessageCodec,
@@ -51,7 +51,7 @@ describe("tx inventory helpers", () => {
 describe("PeerConnection tx relay dispatch", () => {
   it("sends getdata for missing witness tx inv", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-inv-tx-"));
-    const tracker = new ProjectTracker(join(dir, "inv.db"));
+    const tracker = new NativeNodeState(join(dir, "inv.stateDir"));
     const pool = new Mempool();
     const peer = new PeerConnection({
       host: "127.0.0.1",
@@ -86,7 +86,7 @@ describe("PeerConnection tx relay dispatch", () => {
 
   it("stores peer feefilter from wire message", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-feefilter-"));
-    const tracker = new ProjectTracker(join(dir, "ff.db"));
+    const tracker = new NativeNodeState(join(dir, "ff.stateDir"));
     const peer = new PeerConnection({
       host: "127.0.0.1",
       port: 48_333,
@@ -107,7 +107,7 @@ describe("PeerConnection tx relay dispatch", () => {
 describe("PeerManager.relayAcceptedTransaction", () => {
   it("relays inv to peers except source", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-relay-mgr-"));
-    const tracker = new ProjectTracker(join(dir, "relay.db"));
+    const tracker = new NativeNodeState(join(dir, "relay.stateDir"));
     const mgr = new PeerManager(TESTNET4, tracker, Settings.fromEnv());
     const source = new RelayPeerStub() as unknown as PeerConnection;
     const sink = new RelayPeerStub() as unknown as PeerConnection;
@@ -130,7 +130,7 @@ describe("PeerManager.relayAcceptedTransaction", () => {
 
   it("skips peers whose feefilter exceeds transaction feerate", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-relay-ff-"));
-    const tracker = new ProjectTracker(join(dir, "relay-ff.db"));
+    const tracker = new NativeNodeState(join(dir, "relay-ff.stateDir"));
     const mgr = new PeerManager(TESTNET4, tracker, Settings.fromEnv());
     const source = new RelayPeerStub() as unknown as PeerConnection;
     const sink = new RelayPeerStub() as unknown as PeerConnection;

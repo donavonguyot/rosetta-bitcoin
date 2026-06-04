@@ -1,0 +1,117 @@
+services:
+  gobitnode:
+    image: gobitnode:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-docker}
+    volumes:
+      - gobitnode_data:/data
+    command: ["gobitnode", "status", "--datadir", "/data"]
+
+  gobitnode-proof:
+    image: gobitnode:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-docker}
+    volumes:
+      - gobitnode_proof_data:/data
+      - ../../../NodeCore/conformance/results:/results
+    command:
+      [
+        "gobitnode",
+        "storage-proof",
+        "--datadir",
+        "/data",
+        "--result-path",
+        "/results/go_storage_gate_docker.json"
+      ]
+
+  gobitnode-script-corpus:
+    image: gobitnode:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-docker}
+    volumes:
+      - ../../../NodeCore/conformance:/nodecore/conformance
+    command:
+      [
+        "gobitnode",
+        "script-corpus",
+        "--manifest",
+        "/nodecore/conformance/fixtures/scripts/manifest.json",
+        "--result-path",
+        "/nodecore/conformance/results/go_script_corpus_docker.json"
+      ]
+
+  gobitnode-local-reference-proof:
+    image: gobitnode:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-docker}
+      DOCKER_PROOF_VOLUME: ${DOCKER_LOCAL_PROOF_VOLUME:-gobitnode_local_reference_proof_data}
+      GOBITNODE_PAR_SCRIPT_VERIFY: ${GOBITNODE_PAR_SCRIPT_VERIFY:-0}
+      GOBITNODE_PAR_SCRIPT_THREADS: ${GOBITNODE_PAR_SCRIPT_THREADS:-}
+      GOBITNODE_ROCKSDB_BLOCK_CACHE_MB: ${GOBITNODE_ROCKSDB_BLOCK_CACHE_MB:-256}
+      GOBITNODE_PROFILE: ${GOBITNODE_PROFILE:-0}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - gobitnode_local_reference_proof_data:/data
+      - ../../../NodeCore/conformance/results:/results
+    command:
+      [
+        "gobitnode",
+        "local-reference-proof",
+        "--datadir",
+        "/data",
+        "--target",
+        "10000",
+        "--rpc-url",
+        "http://host.docker.internal:48332",
+        "--rpc-user",
+        "rosetta",
+        "--rpc-password",
+        "rosetta-dev-only",
+        "--result-path",
+        "/results/go_local_reference_docker_sync.json"
+      ]
+
+  gobitnode-supervisor:
+    image: gobitnode:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-supervisor}
+      POLL_SEC: ${POLL_SEC:-1}
+      CHECK_SEC: ${CHECK_SEC:-1}
+    volumes:
+      - gobitnode_sync_data:/data
+    command: ["gobitnode-supervisor-once"]
+
+volumes:
+  gobitnode_data:
+    name: ${DOCKER_DATA_VOLUME:-gobitnode_data}
+  gobitnode_proof_data:
+    name: ${DOCKER_PROOF_VOLUME:-gobitnode_proof_data}
+  gobitnode_local_reference_proof_data:
+    name: ${DOCKER_LOCAL_PROOF_VOLUME:-gobitnode_local_reference_proof_data}
+  gobitnode_sync_data:
+    name: ${DOCKER_SYNC_VOLUME:-gobitnode_sync_data}

@@ -23,6 +23,18 @@ export function sha256Digest(data: Buffer): Buffer {
   return createHash("sha256").update(data).digest();
 }
 
+export function sha1Digest(data: Buffer): Buffer {
+  return createHash("sha1").update(data).digest();
+}
+
+export function ripemd160Digest(data: Buffer): Buffer {
+  return createHash("ripemd160").update(data).digest();
+}
+
 export function hash160(data: Buffer): Buffer {
-  return createHash("ripemd160").update(sha256Digest(data)).digest();
+  return ripemd160Digest(sha256Digest(data));
+}
+
+export function hash256(data: Buffer): Buffer {
+  return sha256Digest(sha256Digest(data));
 }

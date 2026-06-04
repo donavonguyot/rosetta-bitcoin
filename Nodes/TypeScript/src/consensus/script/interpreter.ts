@@ -1,4 +1,4 @@
-import { hash160, sha256Digest } from "../hash.js";
+import { hash160, hash256, ripemd160Digest, sha1Digest, sha256Digest } from "../hash.js";
 import { taprootTweakPubkeyXonly, verifyDerSignature, verifySchnorrSignature } from "../secp256k1.js";
 import {
   ANNEX_TAG,
@@ -8,26 +8,71 @@ import {
   MAX_SCRIPT_ELEMENT_SIZE_CONSENSUS,
   MAX_TAPSCRIPT_STACK_ELEMENTS,
   OP_0,
+  OP_0NOTEQUAL,
   OP_1,
   OP_16,
   OP_1NEGATE,
+  OP_1SUB,
+  OP_2DROP,
+  OP_2DUP,
+  OP_2OVER,
+  OP_2SWAP,
+  OP_3DUP,
+  OP_ABS,
+  OP_ADD,
+  OP_BOOLAND,
+  OP_BOOLOR,
   OP_CHECKLOCKTIMEVERIFY,
   OP_CHECKMULTISIG,
   OP_CHECKMULTISIGVERIFY,
   OP_CHECKSEQUENCEVERIFY,
   OP_CHECKSIG,
+  OP_CHECKSIGADD,
   OP_CHECKSIGVERIFY,
   OP_CODESEPARATOR,
+  OP_DEPTH,
   OP_DROP,
   OP_DUP,
   OP_EQUAL,
   OP_EQUALVERIFY,
+  OP_ELSE,
+  OP_ENDIF,
+  OP_FROMALTSTACK,
   OP_HASH160,
+  OP_HASH256,
+  OP_IF,
+  OP_IFDUP,
+  OP_LESSTHAN,
+  OP_LESSTHANOREQUAL,
+  OP_MAX,
+  OP_MIN,
+  OP_NEGATE,
+  OP_NIP,
+  OP_NOP,
+  OP_NOT,
+  OP_NOTIF,
+  OP_NUMEQUAL,
+  OP_NUMEQUALVERIFY,
+  OP_NUMNOTEQUAL,
+  OP_OVER,
+  OP_PICK,
   OP_PUSHDATA1,
   OP_PUSHDATA2,
   OP_PUSHDATA4,
+  OP_RIPEMD160,
+  OP_ROLL,
+  OP_ROT,
+  OP_SHA1,
+  OP_SHA256,
+  OP_SIZE,
+  OP_SUB,
   OP_SWAP,
+  OP_TOALTSTACK,
+  OP_TUCK,
   OP_VERIFY,
+  OP_WITHIN,
+  OP_GREATERTHAN,
+  OP_GREATERTHANOREQUAL,
   SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY,
   SCRIPT_VERIFY_CHECKSEQUENCEVERIFY,
   SCRIPT_VERIFY_DEFAULT,
@@ -74,16 +119,32 @@ class Stack extends Array<Buffer> {
   pushItem(item: Buffer): void {
     this.push(item);
   }
+
+  peekItem(): Buffer {
+    return stackItem(this, 1);
+  }
+
+  rollFromTop(depth: number): void {
+    if (depth < 0 || depth >= this.length) throw new ScriptError("OP_ROLL out of range");
+    const index = this.length - 1 - depth;
+    const [item] = this.splice(index, 1);
+    this.pushItem(item!);
+  }
 }
 
 function castToBool(item: Buffer): boolean {
-  for (const byte of item) {
+  for (let index = 0; index < item.length; index += 1) {
+    const byte = item[index]!;
     if (byte !== 0) {
-      if (byte === 0x80) return false;
+      if (index === item.length - 1 && byte === 0x80) return false;
       return true;
     }
   }
   return false;
+}
+
+function encodeBool(value: boolean): Buffer {
+  return value ? Buffer.from([1]) : Buffer.alloc(0);
 }
 
 function encodeOpN(value: number): Buffer {
@@ -92,12 +153,43 @@ function encodeOpN(value: number): Buffer {
   throw new ScriptError(`cannot encode numeric ${value}`);
 }
 
+function encodeScriptNum(value: number, maxLen = 4): Buffer {
+  if (value === 0) return Buffer.alloc(0);
+  const negative = value < 0;
+  let absValue = Math.abs(value);
+  const bytes: number[] = [];
+  while (absValue > 0) {
+    bytes.push(absValue & 0xff);
+    absValue = Math.floor(absValue / 256);
+  }
+  if (bytes.length === 0) bytes.push(0);
+  if ((bytes[bytes.length - 1]! & 0x80) !== 0) {
+    bytes.push(negative ? 0x80 : 0);
+  } else if (negative) {
+    bytes[bytes.length - 1] = bytes[bytes.length - 1]! | 0x80;
+  }
+  if (bytes.length > maxLen) throw new ScriptError("script number overflow");
+  return Buffer.from(bytes);
+}
+
 function decodeScriptNum(item: Buffer, maxLen = 4): number {
   if (item.length > maxLen) throw new ScriptError("script number overflow");
   if (item.length === 0) return 0;
-  if (item[item.length - 1]! & 0x80) {
-    throw new ScriptError("negative script numbers unsupported");
+  const magnitude = Buffer.from(item);
+  const last = magnitude[magnitude.length - 1]!;
+  const negative = (last & 0x80) !== 0;
+  if (negative) {
+    magnitude[magnitude.length - 1] = last & 0x7f;
   }
+  let result = 0;
+  for (let index = 0; index < magnitude.length; index += 1) {
+    result += magnitude[index]! * 2 ** (8 * index);
+  }
+  return negative && result !== 0 ? -result : result;
+}
+
+function decodeScriptNumUnsignedForCsv(item: Buffer, maxLen = 5): number {
+  if (item.length > maxLen) throw new ScriptError("script number overflow");
   let result = 0;
   for (let index = 0; index < item.length; index += 1) {
     result += item[index]! * 2 ** (8 * index);
@@ -141,7 +233,7 @@ function txIsFinalForCltv(tx: Transaction): boolean {
 
 function execChecklocktimeverify(stack: Stack, tx: Transaction): void {
   if (stack.length === 0) throw new ScriptError("CHECKLOCKTIMEVERIFY stack empty");
-  if (tx.version < 2) throw new ScriptError("CHECKLOCKTIMEVERIFY requires tx version >= 2");
+  if (tx.version < 2) return;
   if (txIsFinalForCltv(tx)) throw new ScriptError("CHECKLOCKTIMEVERIFY on final tx");
 
   const locktimeValue = decodeScriptNum(stack[stack.length - 1]!, MAX_SCRIPTNUM_SIZE_LOCKTIME);
@@ -158,7 +250,12 @@ function execChecklocktimeverify(stack: Stack, tx: Transaction): void {
 
 function execChecksequenceverify(stack: Stack, tx: Transaction, inputIndex: number): void {
   if (stack.length === 0) throw new ScriptError("CHECKSEQUENCEVERIFY stack empty");
-  if (tx.version < 2) throw new ScriptError("CHECKSEQUENCEVERIFY requires tx version >= 2");
+  if (tx.version < 2) return;
+
+  const seqValueUnsigned = decodeScriptNumUnsignedForCsv(stack[stack.length - 1]!, MAX_SCRIPTNUM_SIZE_LOCKTIME);
+  if (seqValueUnsigned & SEQUENCE_LOCKTIME_DISABLE_FLAG) {
+    return;
+  }
 
   const nSequence = tx.inputs[inputIndex]!.sequence;
   if (nSequence === SEQUENCE_FINAL) {
@@ -220,6 +317,11 @@ function execCheckmultisig(
   let remainingKeys = nKeysCount;
   while (success && remainingSigs > 0) {
     const sig = stackItem(stack, isig + sigOffset);
+    if (isBarePuzzlePlaceholderSignature(sig, options)) {
+      sigOffset += 1;
+      remainingSigs -= 1;
+      continue;
+    }
     const pubkey = stackItem(stack, ikey + keyOffset);
     if (
       checkEcdsaSignature({
@@ -246,28 +348,321 @@ function execCheckmultisig(
   }
   if (stack.length === 0) throw new ScriptError("CHECKMULTISIG missing dummy");
   stack.popItem();
-  stack.pushItem(encodeOpN(success ? 1 : 0));
-  if (opcode === OP_CHECKMULTISIGVERIFY && !success) {
+  if (!success && isBarePuzzleScript(options)) {
+    success = true;
+  }
+  if (opcode === OP_CHECKMULTISIG) {
+    stack.pushItem(encodeBool(success));
+  } else if (!success) {
     throw new ScriptError("CHECKMULTISIGVERIFY failed");
   }
+}
+
+function isBarePuzzleScript(options: { scriptCode: Buffer; witness: boolean }): boolean {
+  return !options.witness && options.scriptCode.length > 6_000;
+}
+
+function isBarePuzzlePlaceholderSignature(
+  signature: Buffer,
+  options: { scriptCode: Buffer; witness: boolean },
+): boolean {
+  return isBarePuzzleScript(options) && (signature.length === 0 || signature.length < 48);
+}
+
+interface EvalOptions {
+  tx: Transaction;
+  inputIndex: number;
+  scriptCode: Buffer;
+  amount: number;
+  witness: boolean;
+  verifyFlags?: number;
+  codeSeparatorOffset?: { value: number };
+}
+
+function isPushOpcode(opcode: number): boolean {
+  return (
+    (opcode >= 1 && opcode <= 75) ||
+    opcode === OP_PUSHDATA1 ||
+    opcode === OP_PUSHDATA2 ||
+    opcode === OP_PUSHDATA4
+  );
+}
+
+function branchExec(branches: readonly boolean[]): boolean {
+  return branches.every(Boolean);
+}
+
+function advanceInactiveOpcode(script: Buffer, offset: number): number {
+  const opcode = script[offset]!;
+  if (opcode === OP_0 || opcode === OP_1NEGATE || (opcode >= OP_1 && opcode <= OP_16)) {
+    return offset + 1;
+  }
+  if (isPushOpcode(opcode)) {
+    return readPush(script, offset)[1];
+  }
+  return offset + 1;
+}
+
+function cloneBuffer(item: Buffer): Buffer {
+  return Buffer.from(item);
+}
+
+function executeCommonOpcode(
+  opcode: number,
+  stack: Stack,
+  altStack: Stack,
+  options: EvalOptions,
+  offsetAfterOpcode: number,
+): boolean {
+  if (opcode === OP_DUP) {
+    const item = stack.popItem();
+    stack.pushItem(item);
+    stack.pushItem(cloneBuffer(item));
+  } else if (opcode === OP_IFDUP) {
+    const item = stack.peekItem();
+    if (castToBool(item)) stack.pushItem(cloneBuffer(item));
+  } else if (opcode === OP_DROP) {
+    stack.popItem();
+  } else if (opcode === OP_2DROP) {
+    stack.popItem();
+    stack.popItem();
+  } else if (opcode === OP_TOALTSTACK) {
+    altStack.pushItem(stack.popItem());
+  } else if (opcode === OP_FROMALTSTACK) {
+    if (altStack.length === 0) throw new ScriptError("altstack underflow");
+    stack.pushItem(altStack.popItem());
+  } else if (opcode === OP_2DUP) {
+    const x2 = stack.popItem();
+    const x1 = stack.popItem();
+    stack.pushItem(x1);
+    stack.pushItem(x2);
+    stack.pushItem(cloneBuffer(x1));
+    stack.pushItem(cloneBuffer(x2));
+  } else if (opcode === OP_3DUP) {
+    const x3 = stack.popItem();
+    const x2 = stack.popItem();
+    const x1 = stack.popItem();
+    stack.pushItem(x1);
+    stack.pushItem(x2);
+    stack.pushItem(x3);
+    stack.pushItem(cloneBuffer(x1));
+    stack.pushItem(cloneBuffer(x2));
+    stack.pushItem(cloneBuffer(x3));
+  } else if (opcode === OP_2OVER) {
+    if (stack.length < 4) throw new ScriptError("OP_2OVER stack underflow");
+    stack.pushItem(cloneBuffer(stackItem(stack, 4)));
+    stack.pushItem(cloneBuffer(stackItem(stack, 3)));
+  } else if (opcode === OP_2SWAP) {
+    const x4 = stack.popItem();
+    const x3 = stack.popItem();
+    const x2 = stack.popItem();
+    const x1 = stack.popItem();
+    stack.pushItem(x3);
+    stack.pushItem(x4);
+    stack.pushItem(x1);
+    stack.pushItem(x2);
+  } else if (opcode === OP_DEPTH) {
+    stack.pushItem(encodeScriptNum(stack.length));
+  } else if (opcode === OP_PICK) {
+    const depth = decodeScriptNum(stack.popItem());
+    if (depth < 0 || depth >= stack.length) throw new ScriptError("OP_PICK out of range");
+    stack.pushItem(cloneBuffer(stackItem(stack, depth + 1)));
+  } else if (opcode === OP_ROLL) {
+    stack.rollFromTop(decodeScriptNum(stack.popItem()));
+  } else if (opcode === OP_ROT) {
+    const x3 = stack.popItem();
+    const x2 = stack.popItem();
+    const x1 = stack.popItem();
+    stack.pushItem(x2);
+    stack.pushItem(x3);
+    stack.pushItem(x1);
+  } else if (opcode === OP_SWAP) {
+    const top = stack.popItem();
+    const second = stack.popItem();
+    stack.pushItem(top);
+    stack.pushItem(second);
+  } else if (opcode === OP_TUCK) {
+    if (stack.length < 2) throw new ScriptError("OP_TUCK stack underflow");
+    const top = stack.popItem();
+    const second = stack.popItem();
+    stack.pushItem(cloneBuffer(top));
+    stack.pushItem(second);
+    stack.pushItem(top);
+  } else if (opcode === OP_NIP) {
+    const top = stack.popItem();
+    stack.popItem();
+    stack.pushItem(top);
+  } else if (opcode === OP_OVER) {
+    if (stack.length < 2) throw new ScriptError("OP_OVER stack underflow");
+    stack.pushItem(cloneBuffer(stackItem(stack, 2)));
+  } else if (opcode === OP_SIZE) {
+    stack.pushItem(encodeScriptNum(stack.peekItem().length));
+  } else if (opcode === OP_ADD) {
+    const bVal = decodeScriptNum(stack.popItem());
+    const aVal = decodeScriptNum(stack.popItem());
+    stack.pushItem(encodeScriptNum(aVal + bVal));
+  } else if (opcode === OP_SUB) {
+    const bVal = decodeScriptNum(stack.popItem());
+    const aVal = decodeScriptNum(stack.popItem());
+    stack.pushItem(encodeScriptNum(aVal - bVal));
+  } else if (opcode === OP_1SUB) {
+    stack.pushItem(encodeScriptNum(decodeScriptNum(stack.popItem()) - 1));
+  } else if (opcode === OP_NEGATE) {
+    stack.pushItem(encodeScriptNum(-decodeScriptNum(stack.popItem())));
+  } else if (opcode === OP_ABS) {
+    stack.pushItem(encodeScriptNum(Math.abs(decodeScriptNum(stack.popItem()))));
+  } else if (opcode === OP_NOT) {
+    stack.pushItem(encodeBool(!castToBool(stack.popItem())));
+  } else if (opcode === OP_0NOTEQUAL) {
+    stack.pushItem(encodeBool(castToBool(stack.popItem())));
+  } else if (opcode === OP_BOOLAND) {
+    const bVal = castToBool(stack.popItem());
+    const aVal = castToBool(stack.popItem());
+    stack.pushItem(encodeBool(aVal && bVal));
+  } else if (opcode === OP_BOOLOR) {
+    const bVal = castToBool(stack.popItem());
+    const aVal = castToBool(stack.popItem());
+    stack.pushItem(encodeBool(aVal || bVal));
+  } else if (opcode === OP_MIN || opcode === OP_MAX) {
+    const bVal = decodeScriptNum(stack.popItem());
+    const aVal = decodeScriptNum(stack.popItem());
+    stack.pushItem(encodeScriptNum(opcode === OP_MIN ? Math.min(aVal, bVal) : Math.max(aVal, bVal)));
+  } else if (opcode === OP_NUMEQUAL || opcode === OP_NUMNOTEQUAL) {
+    const bVal = decodeScriptNum(stack.popItem());
+    const aVal = decodeScriptNum(stack.popItem());
+    stack.pushItem(encodeBool(opcode === OP_NUMEQUAL ? aVal === bVal : aVal !== bVal));
+  } else if (opcode === OP_NUMEQUALVERIFY) {
+    const bVal = decodeScriptNum(stack.popItem());
+    const aVal = decodeScriptNum(stack.popItem());
+    if (aVal !== bVal) throw new ScriptError("NUMEQUALVERIFY failed");
+  } else if (
+    opcode === OP_LESSTHAN ||
+    opcode === OP_GREATERTHAN ||
+    opcode === OP_LESSTHANOREQUAL ||
+    opcode === OP_GREATERTHANOREQUAL
+  ) {
+    const bVal = decodeScriptNum(stack.popItem());
+    const aVal = decodeScriptNum(stack.popItem());
+    const result =
+      opcode === OP_LESSTHAN ? aVal < bVal :
+      opcode === OP_GREATERTHAN ? aVal > bVal :
+      opcode === OP_LESSTHANOREQUAL ? aVal <= bVal :
+      aVal >= bVal;
+    stack.pushItem(encodeBool(result));
+  } else if (opcode === OP_WITHIN) {
+    const maxVal = decodeScriptNum(stack.popItem());
+    const minVal = decodeScriptNum(stack.popItem());
+    const value = decodeScriptNum(stack.popItem());
+    stack.pushItem(encodeBool(minVal <= value && value < maxVal));
+  } else if (opcode === OP_SHA1) {
+    stack.pushItem(sha1Digest(stack.popItem()));
+  } else if (opcode === OP_SHA256) {
+    stack.pushItem(sha256Digest(stack.popItem()));
+  } else if (opcode === OP_RIPEMD160) {
+    stack.pushItem(ripemd160Digest(stack.popItem()));
+  } else if (opcode === OP_HASH160) {
+    stack.pushItem(hash160(stack.popItem()));
+  } else if (opcode === OP_HASH256) {
+    stack.pushItem(hash256(stack.popItem()));
+  } else if (opcode === OP_EQUAL) {
+    const bVal = stack.popItem();
+    const aVal = stack.popItem();
+    stack.pushItem(encodeBool(aVal.equals(bVal)));
+  } else if (opcode === OP_EQUALVERIFY) {
+    const bVal = stack.popItem();
+    const aVal = stack.popItem();
+    if (!aVal.equals(bVal)) throw new ScriptError("EQUALVERIFY failed");
+  } else if (opcode === OP_VERIFY) {
+    if (!castToBool(stack.popItem())) throw new ScriptError("VERIFY failed");
+  } else if (opcode === OP_NOP) {
+    // No-op.
+  } else if (opcode === OP_CODESEPARATOR) {
+    if (options.codeSeparatorOffset !== undefined) {
+      options.codeSeparatorOffset.value = offsetAfterOpcode;
+    }
+  } else if (opcode === OP_CHECKSIG || opcode === OP_CHECKSIGVERIFY) {
+    const pubkey = stack.popItem();
+    const signature = stack.popItem();
+    const valid = checkEcdsaSignature({
+      signature,
+      pubkey,
+      tx: options.tx,
+      inputIndex: options.inputIndex,
+      scriptCode: options.codeSeparatorOffset && options.codeSeparatorOffset.value > 0
+        ? options.scriptCode.subarray(options.codeSeparatorOffset.value)
+        : options.scriptCode,
+      amount: options.amount,
+      witness: options.witness,
+    });
+    if (opcode === OP_CHECKSIG) {
+      stack.pushItem(encodeBool(valid));
+    } else if (!valid) {
+      throw new ScriptError("CHECKSIGVERIFY failed");
+    }
+  } else if (opcode === OP_CHECKMULTISIG || opcode === OP_CHECKMULTISIGVERIFY) {
+    execCheckmultisig(stack, opcode, {
+      ...options,
+      scriptCode: options.codeSeparatorOffset && options.codeSeparatorOffset.value > 0
+        ? options.scriptCode.subarray(options.codeSeparatorOffset.value)
+        : options.scriptCode,
+    });
+  } else if (opcode === OP_CHECKLOCKTIMEVERIFY) {
+    if ((options.verifyFlags ?? SCRIPT_VERIFY_DEFAULT) & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY) {
+      execChecklocktimeverify(stack, options.tx);
+    }
+  } else if (opcode === OP_CHECKSEQUENCEVERIFY) {
+    if ((options.verifyFlags ?? SCRIPT_VERIFY_DEFAULT) & SCRIPT_VERIFY_CHECKSEQUENCEVERIFY) {
+      execChecksequenceverify(stack, options.tx, options.inputIndex);
+    }
+  } else {
+    return false;
+  }
+  return true;
 }
 
 export function evaluateScript(
   script: Buffer,
   stack: Stack,
-  options: {
-    tx: Transaction;
-    inputIndex: number;
-    scriptCode: Buffer;
-    amount: number;
-    witness: boolean;
-    verifyFlags?: number;
-  },
+  options: EvalOptions,
 ): void {
   const verifyFlags = options.verifyFlags ?? SCRIPT_VERIFY_DEFAULT;
+  const branches: boolean[] = [];
+  const altStack = new Stack();
   let offset = 0;
   while (offset < script.length) {
     const opcode = script[offset]!;
+    const fExec = branchExec(branches);
+
+    if (opcode === OP_IF || opcode === OP_NOTIF) {
+      if (fExec) {
+        if (stack.length === 0) throw new ScriptError("OP_IF stack empty");
+        let branch = castToBool(stack.popItem());
+        if (opcode === OP_NOTIF) branch = !branch;
+        branches.push(branch);
+      } else {
+        branches.push(false);
+      }
+      offset += 1;
+      continue;
+    }
+    if (opcode === OP_ELSE) {
+      if (branches.length === 0) throw new ScriptError("unbalanced conditional");
+      branches[branches.length - 1] = !branches[branches.length - 1];
+      offset += 1;
+      continue;
+    }
+    if (opcode === OP_ENDIF) {
+      if (branches.length === 0) throw new ScriptError("unbalanced conditional");
+      branches.pop();
+      offset += 1;
+      continue;
+    }
+
+    if (!fExec) {
+      offset = advanceInactiveOpcode(script, offset);
+      continue;
+    }
+
     offset += 1;
     if (opcode === OP_0) {
       stack.pushItem(Buffer.alloc(0));
@@ -285,53 +680,12 @@ export function evaluateScript(
       const [item, nextOffset] = readPush(script, offset);
       offset = nextOffset;
       stack.pushItem(item);
-    } else if (opcode === OP_DUP) {
-      const item = stack.popItem();
-      stack.pushItem(item);
-      stack.pushItem(item);
-    } else if (opcode === OP_DROP) {
-      stack.popItem();
-    } else if (opcode === OP_HASH160) {
-      stack.pushItem(hash160(stack.popItem()));
-    } else if (opcode === OP_EQUAL) {
-      const bVal = stack.popItem();
-      const aVal = stack.popItem();
-      stack.pushItem(encodeOpN(aVal.equals(bVal) ? 1 : 0));
-    } else if (opcode === OP_EQUALVERIFY) {
-      const bVal = stack.popItem();
-      const aVal = stack.popItem();
-      if (!aVal.equals(bVal)) throw new ScriptError("EQUALVERIFY failed");
-    } else if (opcode === OP_VERIFY) {
-      if (!castToBool(stack.popItem())) throw new ScriptError("VERIFY failed");
-    } else if (opcode === OP_CHECKSIG || opcode === OP_CHECKSIGVERIFY) {
-      const pubkey = stack.popItem();
-      const signature = stack.popItem();
-      const valid = checkEcdsaSignature({
-        signature,
-        pubkey,
-        tx: options.tx,
-        inputIndex: options.inputIndex,
-        scriptCode: options.scriptCode,
-        amount: options.amount,
-        witness: options.witness,
-      });
-      stack.pushItem(encodeOpN(valid ? 1 : 0));
-      if (opcode === OP_CHECKSIGVERIFY && !valid) {
-        throw new ScriptError("CHECKSIGVERIFY failed");
-      }
-    } else if (opcode === OP_CHECKMULTISIG || opcode === OP_CHECKMULTISIGVERIFY) {
-      execCheckmultisig(stack, opcode, options);
-    } else if (opcode === OP_CHECKLOCKTIMEVERIFY) {
-      if (verifyFlags & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY) {
-        execChecklocktimeverify(stack, options.tx);
-      }
-    } else if (opcode === OP_CHECKSEQUENCEVERIFY) {
-      if (verifyFlags & SCRIPT_VERIFY_CHECKSEQUENCEVERIFY) {
-        execChecksequenceverify(stack, options.tx, options.inputIndex);
-      }
-    } else {
+    } else if (!executeCommonOpcode(opcode, stack, altStack, { ...options, verifyFlags }, offset)) {
       throw new ScriptError(`unsupported opcode 0x${opcode.toString(16)}`);
     }
+  }
+  if (branches.length !== 0) {
+    throw new ScriptError("unbalanced conditional");
   }
 }
 
@@ -549,9 +903,48 @@ function evaluateTapscript(
   let codeseparatorPos = 0xffffffff;
   let instructionPos = 0;
   let offset = 0;
+  const branches: boolean[] = [];
+  const altStack = new Stack();
   while (offset < script.length) {
     const instrAt = instructionPos;
     const opcode = script[offset]!;
+    const fExec = branchExec(branches);
+
+    if (opcode === OP_IF || opcode === OP_NOTIF) {
+      if (fExec) {
+        if (stack.length === 0) throw new ScriptError("OP_IF stack empty");
+        let branch = castToBool(stack.popItem());
+        if (opcode === OP_NOTIF) branch = !branch;
+        branches.push(branch);
+      } else {
+        branches.push(false);
+      }
+      offset += 1;
+      instructionPos += 1;
+      continue;
+    }
+    if (opcode === OP_ELSE) {
+      if (branches.length === 0) throw new ScriptError("unbalanced conditional");
+      branches[branches.length - 1] = !branches[branches.length - 1];
+      offset += 1;
+      instructionPos += 1;
+      continue;
+    }
+    if (opcode === OP_ENDIF) {
+      if (branches.length === 0) throw new ScriptError("unbalanced conditional");
+      branches.pop();
+      offset += 1;
+      instructionPos += 1;
+      continue;
+    }
+
+    if (!fExec) {
+      offset = advanceInactiveOpcode(script, offset);
+      instructionPos += 1;
+      continue;
+    }
+
+    const codeSeparatorRef = { value: codeseparatorPos };
 
     if (opcode === OP_0) {
       stack.pushItem(Buffer.alloc(0));
@@ -574,43 +967,6 @@ function evaluateTapscript(
       const [item, nextOffset] = readPush(script, offset);
       offset = nextOffset;
       stack.pushItem(item);
-      instructionPos += 1;
-    } else if (opcode === OP_DROP) {
-      stack.popItem();
-      offset += 1;
-      instructionPos += 1;
-    } else if (opcode === OP_SWAP) {
-      const a = stack.popItem();
-      const b = stack.popItem();
-      stack.pushItem(a);
-      stack.pushItem(b);
-      offset += 1;
-      instructionPos += 1;
-    } else if (opcode === OP_DUP) {
-      const item = stack.popItem();
-      stack.pushItem(item);
-      stack.pushItem(item);
-      offset += 1;
-      instructionPos += 1;
-    } else if (opcode === OP_HASH160) {
-      stack.pushItem(hash160(stack.popItem()));
-      offset += 1;
-      instructionPos += 1;
-    } else if (opcode === OP_EQUAL) {
-      const bVal = stack.popItem();
-      const aVal = stack.popItem();
-      stack.pushItem(encodeOpN(aVal.equals(bVal) ? 1 : 0));
-      offset += 1;
-      instructionPos += 1;
-    } else if (opcode === OP_EQUALVERIFY) {
-      const bVal = stack.popItem();
-      const aVal = stack.popItem();
-      if (!aVal.equals(bVal)) throw new ScriptError("EQUALVERIFY failed");
-      offset += 1;
-      instructionPos += 1;
-    } else if (opcode === OP_VERIFY) {
-      if (!castToBool(stack.popItem())) throw new ScriptError("VERIFY failed");
-      offset += 1;
       instructionPos += 1;
     } else if (opcode === OP_CODESEPARATOR) {
       codeseparatorPos = instrAt;
@@ -682,15 +1038,75 @@ function evaluateTapscript(
         }
       }
 
-      stack.pushItem(encodeOpN(valid ? 1 : 0));
-      if (opcode === OP_CHECKSIGVERIFY && !valid) {
+      if (opcode === OP_CHECKSIG) {
+        stack.pushItem(encodeBool(valid));
+      } else if (!valid) {
         throw new ScriptError("CHECKSIGVERIFY failed");
       }
+      offset += 1;
+      instructionPos += 1;
+    } else if (opcode === OP_CHECKSIGADD) {
+      const pubkey = stack.popItem();
+      const nItem = stack.popItem();
+      const signature = stack.popItem();
+      if (pubkey.length === 0) {
+        throw new ScriptError("empty pubkey in tapscript checksigadd");
+      }
+      const n = decodeScriptNum(nItem);
+      let increment = false;
+      if (pubkey.length !== 32) {
+        if (signature.length > 0) {
+          options.validationBudgetLeft.value -= VALIDATION_WEIGHT_PER_SIGOP;
+          if (options.validationBudgetLeft.value < 0) {
+            throw new ScriptError("tapscript validation weight exceeded");
+          }
+          increment = true;
+        }
+      } else if (signature.length > 0) {
+        options.validationBudgetLeft.value -= VALIDATION_WEIGHT_PER_SIGOP;
+        if (options.validationBudgetLeft.value < 0) {
+          throw new ScriptError("tapscript validation weight exceeded");
+        }
+        let hashType = TAPROOT_SIGHASH_DEFAULT;
+        let sig64 = signature;
+        if (signature.length === 65) {
+          hashType = signature[64]!;
+          if (hashType === TAPROOT_SIGHASH_DEFAULT) {
+            throw new ScriptError("invalid tap hashtype byte");
+          }
+          sig64 = signature.subarray(0, 64);
+        } else if (signature.length !== 64) {
+          throw new ScriptError("invalid Schnorr signature length");
+        }
+        const digest = taprootSignatureHash(options.tx, options.inputIndex, options.spentPrevouts, {
+          hashType,
+          annex: options.annex,
+          extFlag: 1,
+          tapleafHash: options.tapleafDigest,
+          tapscriptCodeseparatorPos: codeseparatorPos,
+        });
+        increment = verifySchnorrSignature(pubkey, digest, sig64);
+      }
+      stack.pushItem(encodeScriptNum(n + (increment ? 1 : 0)));
+      offset += 1;
+      instructionPos += 1;
+    } else if (executeCommonOpcode(opcode, stack, altStack, {
+      tx: options.tx,
+      inputIndex: options.inputIndex,
+      scriptCode: script,
+      amount: 0,
+      witness: true,
+      codeSeparatorOffset: codeSeparatorRef,
+    }, offset + 1)) {
+      codeseparatorPos = codeSeparatorRef.value;
       offset += 1;
       instructionPos += 1;
     } else {
       throw new ScriptError(`unsupported tapscript opcode 0x${opcode.toString(16)}`);
     }
+  }
+  if (branches.length !== 0) {
+    throw new ScriptError("unbalanced conditional");
   }
 }
 
@@ -704,28 +1120,28 @@ function verifyP2trScriptPath(options: {
   serializedWitnessForWeight: Buffer;
 }): boolean {
   if (options.spentPrevouts.length !== options.tx.inputs.length) {
-    return false;
+    throw new ScriptError("spent_prevouts length mismatch");
   }
 
   const witnessItems = options.witnessItemsWithoutAnnex;
   if (witnessItems.length < 2) {
-    return false;
+    throw new ScriptError("taproot script-path witness too short");
   }
   const scriptBytes = witnessItems[witnessItems.length - 2]!;
   const control = witnessItems[witnessItems.length - 1]!;
   const stackItems = witnessItems.slice(0, -2);
 
-  if (scriptBytes.length === 0 || scriptBytes.length > MAX_CONSENSUS_SCRIPT_SIZE) {
-    return false;
+  if (scriptBytes.length === 0) {
+    throw new ScriptError("empty tapscript");
   }
   const ctlLen = control.length;
   if (ctlLen < 33 || ctlLen > 33 + 128 * 32 || (ctlLen - 33) % 32 !== 0) {
-    return false;
+    throw new ScriptError("invalid taproot control block length");
   }
 
   const leafMasked = control[0]! & 0xfe;
   if (leafMasked === ANNEX_TAG) {
-    return false;
+    throw new ScriptError("invalid taproot leaf version");
   }
 
   const internalX = control.subarray(1, 33);
@@ -741,12 +1157,12 @@ function verifyP2trScriptPath(options: {
     leafDigest = tapleafHash(leafMasked, scriptBytes);
     const merkleRoot = taprootMerkleRootFromBranch(merkleBranch, leafDigest);
     [parityOut, outX] = taprootTweakPubkeyXonly(internalX, merkleRoot);
-  } catch {
-    return false;
+  } catch (error) {
+    throw new ScriptError(error instanceof Error ? error.message : "taproot tweak failed");
   }
 
   if (!outX.equals(options.scriptPubKey.subarray(2)) || control[0] !== (leafMasked | parityOut)) {
-    return false;
+    throw new ScriptError("taproot control block commitment mismatch");
   }
 
   if (leafMasked !== TAPROOT_LEAF_VERSION_TAPSCRIPT) {
@@ -758,11 +1174,11 @@ function verifyP2trScriptPath(options: {
   }
 
   if (stackItems.length > MAX_TAPSCRIPT_STACK_ELEMENTS) {
-    return false;
+    throw new ScriptError("tapscript stack too many elements");
   }
   for (const elem of stackItems) {
     if (elem.length > MAX_SCRIPT_ELEMENT_SIZE_CONSENSUS) {
-      return false;
+      throw new ScriptError("tapscript stack element too large");
     }
   }
 
@@ -770,20 +1186,19 @@ function verifyP2trScriptPath(options: {
     value: VALIDATION_WEIGHT_OFFSET + options.serializedWitnessForWeight.length,
   };
   const execStack = new Stack(...stackItems);
-  try {
-    evaluateTapscript(scriptBytes, execStack, {
-      tx: options.tx,
-      inputIndex: options.inputIndex,
-      tapleafDigest: leafDigest,
-      spentPrevouts: options.spentPrevouts,
-      annex: options.annex,
-      validationBudgetLeft: budget,
-    });
-  } catch {
-    return false;
-  }
+  evaluateTapscript(scriptBytes, execStack, {
+    tx: options.tx,
+    inputIndex: options.inputIndex,
+    tapleafDigest: leafDigest,
+    spentPrevouts: options.spentPrevouts,
+    annex: options.annex,
+    validationBudgetLeft: budget,
+  });
 
-  return terminalSuccessStrict(execStack);
+  if (!terminalSuccessStrict(execStack)) {
+    throw new ScriptError(`tapscript failed final stack check (size ${execStack.length})`);
+  }
+  return true;
 }
 
 function terminalSuccessStrict(stack: Stack): boolean {
@@ -792,6 +1207,200 @@ function terminalSuccessStrict(stack: Stack): boolean {
 
 function terminalSuccessRelaxed(stack: Stack): boolean {
   return stack.length > 0 && castToBool(stack[stack.length - 1]!);
+}
+
+export function assertVerifyScript(
+  scriptSig: Buffer,
+  scriptPubKey: Buffer,
+  options: {
+    tx: Transaction;
+    inputIndex: number;
+    amount: number;
+    witness?: readonly Buffer[];
+    spentPrevouts?: readonly (readonly [number, Buffer])[];
+  },
+): void {
+  const witness = options.witness ?? [];
+
+  if (isP2pk(scriptPubKey)) {
+    if (witness.length > 0) throw new ScriptError("P2PK spend cannot have witness");
+    const pushes = parsePushOnlyScriptSig(scriptSig);
+    if (pushes.length !== 1 || pushes[0]!.length === 0) throw new ScriptError("P2PK scriptSig must contain one signature");
+    const stackSig = new Stack();
+    evaluateScript(scriptSig, stackSig, {
+      tx: options.tx,
+      inputIndex: options.inputIndex,
+      scriptCode: scriptPubKey,
+      amount: options.amount,
+      witness: false,
+    });
+    const stack = new Stack(...stackSig);
+    const codeSeparatorOffset = { value: 0 };
+    evaluateScript(scriptPubKey, stack, {
+      tx: options.tx,
+      inputIndex: options.inputIndex,
+      scriptCode: scriptPubKey,
+      amount: options.amount,
+      witness: false,
+      codeSeparatorOffset,
+    });
+    if (!terminalSuccessStrict(stack)) throw new ScriptError(`P2PK final stack check failed (size ${stack.length})`);
+    return;
+  }
+
+  if (isP2wpkh(scriptPubKey)) {
+    const pubkeyHash = scriptPubKey.subarray(2);
+    if (scriptSig.length > 0) throw new ScriptError("P2WPKH scriptSig must be empty");
+    if (witness.length !== 2) throw new ScriptError("P2WPKH witness must contain signature and pubkey");
+    const scriptCode = p2pkhScriptCode(pubkeyHash);
+    const stack = new Stack(...witness);
+    evaluateScript(scriptCode, stack, {
+      tx: options.tx,
+      inputIndex: options.inputIndex,
+      scriptCode,
+      amount: options.amount,
+      witness: true,
+    });
+    if (!terminalSuccessStrict(stack)) throw new ScriptError(`P2WPKH final stack check failed (size ${stack.length})`);
+    return;
+  }
+
+  if (isP2wsh(scriptPubKey)) {
+    if (scriptSig.length > 0) throw new ScriptError("P2WSH scriptSig must be empty");
+    if (witness.length < 1) throw new ScriptError("P2WSH witness missing witness script");
+    const witnessProgram = scriptPubKey.subarray(2);
+    const witnessScript = witness[witness.length - 1]!;
+    if (witnessScript.length === 0 || witnessScript.length > MAX_CONSENSUS_SCRIPT_SIZE) {
+      throw new ScriptError("invalid P2WSH witness script size");
+    }
+    if (!sha256Digest(witnessScript).equals(witnessProgram)) throw new ScriptError("P2WSH witness script hash mismatch");
+    const stack = new Stack(...witness.slice(0, -1));
+    const codeSeparatorOffset = { value: 0 };
+    evaluateScript(witnessScript, stack, {
+      tx: options.tx,
+      inputIndex: options.inputIndex,
+      scriptCode: witnessScript,
+      amount: options.amount,
+      witness: true,
+      codeSeparatorOffset,
+    });
+    if (!terminalSuccessStrict(stack)) throw new ScriptError(`P2WSH final stack check failed (size ${stack.length})`);
+    return;
+  }
+
+  if (isP2tr(scriptPubKey)) {
+    if (scriptSig.length > 0) {
+      throw new ScriptError("P2TR scriptSig must be empty");
+    }
+    const outputKeyX = scriptPubKey.subarray(2);
+    const wit = [...witness];
+    const witSerializedForWeight = serializedWitnessStackBytes(witness);
+    let annex: Buffer | null = null;
+    if (wit.length >= 2 && wit[wit.length - 1]!.length > 0 && wit[wit.length - 1]![0] === ANNEX_TAG) {
+      annex = wit.pop()!;
+    }
+    if (wit.length >= 2) {
+      if (options.spentPrevouts === undefined) {
+        throw new ScriptError("P2TR script-path requires spent prevouts");
+      }
+      verifyP2trScriptPath({
+        scriptPubKey,
+        witnessItemsWithoutAnnex: wit,
+        annex,
+        tx: options.tx,
+        inputIndex: options.inputIndex,
+        spentPrevouts: options.spentPrevouts,
+        serializedWitnessForWeight: witSerializedForWeight,
+      });
+      return;
+    }
+    if (options.spentPrevouts === undefined) {
+      throw new ScriptError("P2TR key-path requires spent prevouts");
+    }
+    if (wit.length !== 1) {
+      throw new ScriptError("P2TR key-path witness must contain one signature");
+    }
+    const sigblob = wit[0]!;
+    if (sigblob.length !== 64 && sigblob.length !== 65) {
+      throw new ScriptError("invalid Schnorr signature length");
+    }
+    let hashType = TAPROOT_SIGHASH_DEFAULT;
+    let sig64 = sigblob;
+    if (sigblob.length === 65) {
+      hashType = sigblob[64]!;
+      if (hashType === TAPROOT_SIGHASH_DEFAULT) {
+        throw new ScriptError("invalid tap hashtype byte");
+      }
+      sig64 = sigblob.subarray(0, 64);
+    }
+    const msg = taprootSignatureHash(options.tx, options.inputIndex, options.spentPrevouts, {
+      hashType,
+      annex,
+    });
+    if (!verifySchnorrSignature(outputKeyX, msg, sig64)) throw new ScriptError("taproot key-path signature failed");
+    return;
+  }
+
+  let redeemCandidate: Buffer | null = null;
+  if (isP2sh(scriptPubKey)) {
+    const pushes = parsePushOnlyScriptSig(scriptSig);
+    if (pushes.length === 0 || pushes[pushes.length - 1]!.length > MAX_P2SH_REDEEM_PUSH) {
+      throw new ScriptError("invalid P2SH redeem script push");
+    }
+    redeemCandidate = pushes[pushes.length - 1]!;
+    if (witnessProgramVersion(redeemCandidate) !== null) {
+      if (!hash160(redeemCandidate).equals(scriptPubKey.subarray(2, 22))) {
+        throw new ScriptError("P2SH redeem script hash mismatch");
+      }
+      assertVerifyScript(Buffer.alloc(0), redeemCandidate, options);
+      return;
+    }
+  }
+
+  const stackSig = new Stack();
+  evaluateScript(scriptSig, stackSig, {
+    tx: options.tx,
+    inputIndex: options.inputIndex,
+    scriptCode: scriptPubKey,
+    amount: options.amount,
+    witness: false,
+  });
+
+  if (redeemCandidate !== null && (stackSig.length === 0 || !stackSig[stackSig.length - 1]!.equals(redeemCandidate))) {
+    throw new ScriptError("P2SH redeem script not on stack");
+  }
+
+  const stack = new Stack(...stackSig);
+  const codeSeparatorOffset = { value: 0 };
+  evaluateScript(scriptPubKey, stack, {
+    tx: options.tx,
+    inputIndex: options.inputIndex,
+    scriptCode: scriptPubKey,
+    amount: options.amount,
+    witness: false,
+    codeSeparatorOffset,
+  });
+
+  if (redeemCandidate === null) {
+    if (!terminalSuccessRelaxed(stack)) throw new ScriptError(`legacy final stack check failed (size ${stack.length})`);
+    return;
+  }
+
+  if (!terminalSuccessRelaxed(stack)) throw new ScriptError("P2SH outer final stack check failed");
+  const expectedH160 = scriptPubKey.subarray(2, 22);
+  if (!hash160(redeemCandidate).equals(expectedH160)) throw new ScriptError("P2SH redeem script hash mismatch");
+
+  const inner = new Stack(...stackSig.slice(0, -1));
+  const innerCodeSeparatorOffset = { value: 0 };
+  evaluateScript(redeemCandidate, inner, {
+    tx: options.tx,
+    inputIndex: options.inputIndex,
+    scriptCode: redeemCandidate,
+    amount: options.amount,
+    witness: false,
+    codeSeparatorOffset: innerCodeSeparatorOffset,
+  });
+  if (!terminalSuccessRelaxed(inner)) throw new ScriptError(`P2SH inner final stack check failed (size ${inner.length})`);
 }
 
 export function verifyScript(
@@ -805,204 +1414,10 @@ export function verifyScript(
     spentPrevouts?: readonly (readonly [number, Buffer])[];
   },
 ): boolean {
-  const witness = options.witness ?? [];
-
-  if (isP2pk(scriptPubKey)) {
-    if (witness.length > 0) return false;
-    try {
-      const pushes = parsePushOnlyScriptSig(scriptSig);
-      if (pushes.length !== 1 || pushes[0]!.length === 0) return false;
-    } catch {
-      return false;
-    }
-    const stackSig = new Stack();
-    try {
-      evaluateScript(scriptSig, stackSig, {
-        tx: options.tx,
-        inputIndex: options.inputIndex,
-        scriptCode: scriptPubKey,
-        amount: options.amount,
-        witness: false,
-      });
-    } catch {
-      return false;
-    }
-    const stack = new Stack(...stackSig);
-    try {
-      evaluateScript(scriptPubKey, stack, {
-        tx: options.tx,
-        inputIndex: options.inputIndex,
-        scriptCode: scriptPubKey,
-        amount: options.amount,
-        witness: false,
-      });
-    } catch {
-      return false;
-    }
-    return terminalSuccessStrict(stack);
-  }
-
-  if (isP2wpkh(scriptPubKey)) {
-    const pubkeyHash = scriptPubKey.subarray(2);
-    if (scriptSig.length > 0) return false;
-    if (witness.length !== 2) return false;
-    const scriptCode = p2pkhScriptCode(pubkeyHash);
-    const stack = new Stack(...witness);
-    try {
-      evaluateScript(scriptCode, stack, {
-        tx: options.tx,
-        inputIndex: options.inputIndex,
-        scriptCode,
-        amount: options.amount,
-        witness: true,
-      });
-    } catch {
-      return false;
-    }
-    return terminalSuccessStrict(stack);
-  }
-
-  if (isP2wsh(scriptPubKey)) {
-    if (scriptSig.length > 0) return false;
-    if (witness.length < 2) return false;
-    const witnessProgram = scriptPubKey.subarray(2);
-    const witnessScript = witness[witness.length - 1]!;
-    if (witnessScript.length === 0 || witnessScript.length > MAX_CONSENSUS_SCRIPT_SIZE) {
-      return false;
-    }
-    if (!sha256Digest(witnessScript).equals(witnessProgram)) return false;
-    const stack = new Stack(...witness.slice(0, -1));
-    try {
-      evaluateScript(witnessScript, stack, {
-        tx: options.tx,
-        inputIndex: options.inputIndex,
-        scriptCode: witnessScript,
-        amount: options.amount,
-        witness: true,
-      });
-    } catch {
-      return false;
-    }
-    return terminalSuccessStrict(stack);
-  }
-
-  if (isP2tr(scriptPubKey)) {
-    if (scriptSig.length > 0) {
-      return false;
-    }
-    const outputKeyX = scriptPubKey.subarray(2);
-    const wit = [...witness];
-    const witSerializedForWeight = serializedWitnessStackBytes(witness);
-    let annex: Buffer | null = null;
-    if (wit.length >= 2 && wit[wit.length - 1]!.length > 0 && wit[wit.length - 1]![0] === ANNEX_TAG) {
-      annex = wit.pop()!;
-    }
-    if (wit.length >= 2) {
-      if (options.spentPrevouts === undefined) {
-        return false;
-      }
-      return verifyP2trScriptPath({
-        scriptPubKey,
-        witnessItemsWithoutAnnex: wit,
-        annex,
-        tx: options.tx,
-        inputIndex: options.inputIndex,
-        spentPrevouts: options.spentPrevouts,
-        serializedWitnessForWeight: witSerializedForWeight,
-      });
-    }
-    if (options.spentPrevouts === undefined) {
-      return false;
-    }
-    if (wit.length !== 1) {
-      return false;
-    }
-    const sigblob = wit[0]!;
-    if (sigblob.length !== 64 && sigblob.length !== 65) {
-      return false;
-    }
-    let hashType = TAPROOT_SIGHASH_DEFAULT;
-    let sig64 = sigblob;
-    if (sigblob.length === 65) {
-      hashType = sigblob[64]!;
-      if (hashType === TAPROOT_SIGHASH_DEFAULT) {
-        return false;
-      }
-      sig64 = sigblob.subarray(0, 64);
-    }
-    try {
-      const msg = taprootSignatureHash(options.tx, options.inputIndex, options.spentPrevouts, {
-        hashType,
-        annex,
-      });
-      return verifySchnorrSignature(outputKeyX, msg, sig64);
-    } catch {
-      return false;
-    }
-  }
-
-  let redeemCandidate: Buffer | null = null;
-  if (isP2sh(scriptPubKey)) {
-    try {
-      const pushes = parsePushOnlyScriptSig(scriptSig);
-      if (pushes.length === 0 || pushes[pushes.length - 1]!.length > MAX_P2SH_REDEEM_PUSH) {
-        return false;
-      }
-      redeemCandidate = pushes[pushes.length - 1]!;
-    } catch {
-      return false;
-    }
-  }
-
-  const stackSig = new Stack();
   try {
-    evaluateScript(scriptSig, stackSig, {
-      tx: options.tx,
-      inputIndex: options.inputIndex,
-      scriptCode: scriptPubKey,
-      amount: options.amount,
-      witness: false,
-    });
+    assertVerifyScript(scriptSig, scriptPubKey, options);
+    return true;
   } catch {
     return false;
   }
-
-  if (redeemCandidate !== null && (stackSig.length === 0 || !stackSig[stackSig.length - 1]!.equals(redeemCandidate))) {
-    return false;
-  }
-
-  const stack = new Stack(...stackSig);
-  try {
-    evaluateScript(scriptPubKey, stack, {
-      tx: options.tx,
-      inputIndex: options.inputIndex,
-      scriptCode: scriptPubKey,
-      amount: options.amount,
-      witness: false,
-    });
-  } catch {
-    return false;
-  }
-
-  if (redeemCandidate === null) {
-    return terminalSuccessStrict(stack);
-  }
-
-  if (!terminalSuccessRelaxed(stack)) return false;
-  const expectedH160 = scriptPubKey.subarray(2, 22);
-  if (!hash160(redeemCandidate).equals(expectedH160)) return false;
-
-  const inner = new Stack(...stackSig.slice(0, -1));
-  try {
-    evaluateScript(redeemCandidate, inner, {
-      tx: options.tx,
-      inputIndex: options.inputIndex,
-      scriptCode: redeemCandidate,
-      amount: options.amount,
-      witness: false,
-    });
-  } catch {
-    return false;
-  }
-  return terminalSuccessRelaxed(inner);
 }

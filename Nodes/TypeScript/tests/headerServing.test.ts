@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { TESTNET4_GENESIS } from "../src/chain/genesis.js";
 import { TESTNET4 } from "../src/chain/params.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import { BlockHeaderCodec } from "../src/messages/headers.js";
 import {
   buildHeadersResponse,
@@ -31,7 +31,7 @@ function headerAfter(
 describe("buildHeadersResponse", () => {
   it("returns genesis when unknown locator matches only genesis chain", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-hs-gen-"));
-    const tracker = new ProjectTracker(join(dir, "gen.db"));
+    const tracker = new NativeNodeState(join(dir, "gen.stateDir"));
     ensureGenesis(tracker, TESTNET4);
     const reply = buildHeadersResponse(
       tracker,
@@ -51,7 +51,7 @@ describe("buildHeadersResponse", () => {
 
   it("returns successors after locator fork", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-hs-succ-"));
-    const tracker = new ProjectTracker(join(dir, "succ.db"));
+    const tracker = new NativeNodeState(join(dir, "succ.stateDir"));
     const genesis = ensureGenesis(tracker, TESTNET4);
     const h1 = headerAfter(genesis, 0x12, 1);
     tracker.recordHeader(TESTNET4.name, {
@@ -103,7 +103,7 @@ describe("buildHeadersResponse", () => {
 
   it("truncates at HEADER_BATCH_MAX", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-hs-batch-"));
-    const tracker = new ProjectTracker(join(dir, "batch.db"));
+    const tracker = new NativeNodeState(join(dir, "batch.stateDir"));
     const genesis = ensureGenesis(tracker, TESTNET4);
     let prev = genesis;
     let prevHex = TESTNET4.genesisHash;
@@ -137,7 +137,7 @@ describe("buildHeadersResponse", () => {
 
   it("returns empty for null locator with zero hash stop", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-hs-null-"));
-    const tracker = new ProjectTracker(join(dir, "null.db"));
+    const tracker = new NativeNodeState(join(dir, "null.stateDir"));
     ensureGenesis(tracker, TESTNET4);
     const reply = buildHeadersResponse(
       tracker,
@@ -152,7 +152,7 @@ describe("buildHeadersResponse", () => {
 
   it("stops at missing intermediate height", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-hs-hole-"));
-    const tracker = new ProjectTracker(join(dir, "hole.db"));
+    const tracker = new NativeNodeState(join(dir, "hole.stateDir"));
     const genesis = ensureGenesis(tracker, TESTNET4);
     const h1 = headerAfter(genesis, 0xab, 1);
     const h2 = headerAfter(h1, 0xcd, 1);

@@ -8,10 +8,11 @@
   "bin": {
     "tsbitnode": "./dist/cli/node.js",
     "tsbitnode-sync": "./dist/cli/syncRunner.js",
-    "tsbitnode-legacy-db": "./dist/cli/dbStatus.js",
     "tsbitnode-healthcheck": "./dist/cli/healthcheck.js",
     "tsbitnode-status": "./dist/cli/nativeStatus.js",
-    "tsbitnode-storage-proof": "./dist/cli/storageProof.js"
+    "tsbitnode-storage-proof": "./dist/cli/storageProof.js",
+    "tsbitnode-script-corpus": "./dist/cli/scriptCorpus.js",
+    "tsbitnode-blocker-inspect": "./dist/cli/blockerInspect.js"
   },
   "files": [
     "dist"
@@ -22,14 +23,12 @@
     "dev": "tsx src/cli/node.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "export:snapshots": "node dist/scripts/exportSnapshots.js",
     "sync:batch": "node dist/scripts/syncBatchLoop.js",
-    "sync:progress": "node dist/scripts/syncProgressReport.js",
-    "survey:scripts": "node dist/scripts/scriptTemplateSurvey.js",
     "status": "node dist/cli/nativeStatus.js",
     "native:status": "node dist/cli/nativeStatus.js",
-    "legacy:db": "node dist/cli/dbStatus.js",
-    "storage:proof": "node dist/cli/storageProof.js"
+    "storage:proof": "node dist/cli/storageProof.js",
+    "script:corpus": "node dist/cli/scriptCorpus.js",
+    "blocker:inspect": "node dist/cli/blockerInspect.js"
   },
   "engines": {
     "node": ">=20"

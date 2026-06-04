@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TESTNET4 } from "../src/chain/params.js";
 import { Settings } from "../src/config/settings.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import {
   buildVersionMessage,
   deserializeVersion,
@@ -109,7 +109,7 @@ describe("PeerConnection handshake", () => {
   it("completes outbound version/verack/sendheaders against a mock peer", async () => {
     mock = await startMockPeer();
     tempDir = mkdtempSync(join(tmpdir(), "tsbitnode-peer-"));
-    const tracker = new ProjectTracker(join(tempDir, "peer.db"));
+    const tracker = new NativeNodeState(join(tempDir, "peer.stateDir"));
     const settings = Settings.fromEnv({ userAgent: "/tsbitnode:0.1.0/" });
 
     const peer = new PeerConnection({
@@ -135,7 +135,7 @@ describe("PeerConnection handshake", () => {
   it("defers feefilter and mempool until completeDeferredHandshake", async () => {
     mock = await startMockPeer();
     tempDir = mkdtempSync(join(tmpdir(), "tsbitnode-peer-defer-"));
-    const tracker = new ProjectTracker(join(tempDir, "peer-defer.db"));
+    const tracker = new NativeNodeState(join(tempDir, "peer-defer.stateDir"));
     const settings = Settings.fromEnv({ userAgent: "/tsbitnode:0.1.0/" });
 
     const peer = new PeerConnection({

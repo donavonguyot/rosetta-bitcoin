@@ -65,7 +65,7 @@ public:
     std::pair<std::string, std::vector<std::uint8_t>> readMessage(double timeoutSeconds = 60.0);
     void keepaliveTick();
     virtual void discoverPeers();
-    virtual int syncHeaders();
+    virtual int syncHeaders(std::optional<int> stopHeight = std::nullopt);
 
     messages::HeadersMessage requestHeaders(const std::vector<std::vector<std::uint8_t>>& locator,
                                             const std::vector<std::uint8_t>& hashStop = std::vector<std::uint8_t>(32, 0));

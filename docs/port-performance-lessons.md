@@ -77,6 +77,25 @@ between chunks is part of supervisor throughput, so measure per-chunk validation
 time and inter-chunk delay separately. `POLL_SEC` must not throttle chunk
 turnover; use a separate `CHECK_SEC`.
 
+## Primary benchmark
+
+Use `NodeCore/conformance/BENCHMARK_CONTRACT.md` for the cross-port benchmark
+rule. There is one official benchmark: durable local-reference replay to height
+`100000`, with WAL and normal durability enabled, a preserved resumable datadir,
+and local Reference Core used only as a block source.
+
+| Target | Role |
+|--------|------|
+| `5000` | First readiness gate, not the primary benchmark. |
+| `10000` | Early consensus checkpoint, not the primary benchmark. |
+| `50000` | Midrange regression gate, not the primary benchmark. |
+| `100000` | Primary performance benchmark. |
+| `tip` | Occasional end-to-end confidence run, not a routine benchmark target. |
+
+Disposable WAL-off, profiler, copied-datadir, or single-block runs are
+diagnostics. They can guide optimization, but they are not benchmark evidence
+and should not be compared directly against the primary `100k` durable run.
+
 ## Safe parallelism boundary
 
 The safe first parallel step is per-transaction input verification:
@@ -206,6 +225,28 @@ Storage-engine tuning (block cache + bloom filter, larger write buffers, optiona
 WAL-off for a rebuildable chainstate during bulk catch-up) is backend-specific but
 follows the same rule: measure the access pattern first, and keep durability for
 live/tip mode.
+
+## Go 10k replay lesson (2026-06-03)
+
+Go reproduced the same storage-shape lesson at the 10k local-reference proof
+surface. The initial scaffold independently validated through height 10000 but
+took roughly 22 minutes in Docker because every block connect scanned/pruned the
+full UTXO set and then wrote each spend/create/metadata update separately.
+
+The optimized Go path keeps the same consensus checks but changes the hot shape:
+
+- block-local `created`/`loaded`/`spent` view;
+- RocksDB `multi_get` for distinct block prevouts;
+- one RocksDB `WriteBatch` for spends, created UTXOs, undo, and validated tip;
+- binary UTXO codec v2 with script bytes carried into verification;
+- bounded local-reference RPC prefetch with ordered store/connect;
+- aggregate timing in the proof JSON.
+
+Host proof from an empty scratch datadir to height 10000 passed in about 14.6
+seconds with `validated_hash =
+000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466`,
+`chainstate_utxo_count = 19100`, native `libsecp256k1`, and no blocker. This is
+bounded local-reference evidence, not a live P2P/tip-maintenance claim.
 
 ## Anti-patterns
 

@@ -113,11 +113,11 @@ std::tuple<int, std::string, int> persistHeaders(db::NodeStateStore& state, cons
     auto tipInternal = hashHexToInternal(tipHashHex);
 
     int stored = 0;
+    std::vector<db::HeaderRecord> records;
+    records.reserve(message.headers.size());
     for (const auto& header : message.headers) {
         try {
             validateHeader(header, tipInternal);
-            state.markWireCapability("headers.pow", true, "code", "header PoW validated");
-            state.markWireCapability("headers.chain_link", true, "code", "header chain link validated");
         } catch (const HeaderValidationError& exc) {
             state.logEvent("sync", "Header rejected at height " + std::to_string(tipHeight + 1) + ": " + exc.what(),
                            "warning");
@@ -133,19 +133,23 @@ std::tuple<int, std::string, int> persistHeaders(db::NodeStateStore& state, cons
             std::snprintf(buf, sizeof(buf), "%02x", *it);
             prevHash += buf;
         }
-        state.recordHeader(tipHeight, blockHash, prevHash, static_cast<int>(header.timestamp),
-                           bytesToHex(header.serialize()));
+        records.push_back(db::HeaderRecord{tipHeight, blockHash, prevHash, static_cast<int>(header.timestamp),
+                                           bytesToHex(header.serialize())});
         tipInternal = header.blockHash();
         stored += 1;
     }
 
     if (stored > 0) {
-        tipHashHex = state.getHeaderHash(tipHeight).value_or(chain.genesisHash);
+        state.recordHeaders(records);
+        tipHashHex = records.back().blockHash;
         state.upsertSyncState(chain.name, tipHeight, tipHashHex, state.headerCount(), "headers_syncing");
+        state.markWireCapability("headers.pow", true, "code", "header PoW validated");
+        state.markWireCapability("headers.chain_link", true, "code", "header chain link validated");
         state.markWireCapability("headers.persist", true, stored > 0 ? "live" : "code",
                                  "stored " + std::to_string(stored) + " headers");
     }
-    return {tipHeight, state.getHeaderHash(tipHeight).value_or(chain.genesisHash), stored};
+    return {tipHeight, stored > 0 ? records.back().blockHash : state.getHeaderHash(tipHeight).value_or(chain.genesisHash),
+            stored};
 }
 
 bool headersSyncDone(int bestHeight, int peerHeight, int batchCount) {
@@ -163,9 +167,8 @@ int localHeaderTipHeight(const db::NodeStateStore& state, const chain::ChainPara
 
 int requiredHeaderTipForBlockFollowup(const db::NodeStateStore& state, const chain::ChainParams& chain,
                                       int blocksTargetHeight) {
-    const auto missing = state.listMissingBlockHeights(1);
     const int validated = state.getValidatedHeight(chain.name);
-    int need = missing.empty() ? validated + 1 : missing.front();
+    int need = validated + 1;
     if (blocksTargetHeight > 0) {
         need = std::max(need, blocksTargetHeight);
     }
@@ -213,17 +216,30 @@ int resolveBootstrapStartHeight(const db::NodeStateStore& state, const chain::Ch
     return localHeaderTipHeight(state, chain);
 }
 
-int syncHeadersToTip(p2p::PeerConnection& connection, std::optional<int> peerHeight) {
+int syncHeadersToTip(p2p::PeerConnection& connection, std::optional<int> peerHeight, std::optional<int> stopHeight) {
     const auto& chain = connection.chain();
     auto& tracker = connection.tracker();
-    const int targetHeight =
+    int targetHeight =
         peerHeight.has_value() ? *peerHeight
                                : (connection.remoteVersion() ? connection.remoteVersion()->startHeight : -1);
+    const bool boundedTarget = stopHeight.has_value() && *stopHeight > 0 &&
+                               (targetHeight < 0 || *stopHeight < targetHeight);
+    if (boundedTarget) {
+        targetHeight = *stopHeight;
+    }
+    auto targetCovered = [&]() {
+        if (!boundedTarget) {
+            return shouldSkipHeaderDownload(tracker, chain, targetHeight);
+        }
+        return localHeaderTipHeight(tracker, chain) >= targetHeight && tracker.getHeaderHash(targetHeight).has_value();
+    };
 
     ensureGenesis(tracker, chain);
 
-    if (shouldSkipHeaderDownload(tracker, chain, targetHeight)) {
-        markHeadersCurrent(tracker, chain);
+    if (targetCovered()) {
+        if (!boundedTarget) {
+            markHeadersCurrent(tracker, chain);
+        }
         return 0;
     }
 
@@ -233,8 +249,10 @@ int syncHeadersToTip(p2p::PeerConnection& connection, std::optional<int> peerHei
         const int bestHeight = state.has_value() ? std::stoi((*state).at("best_height")) : 0;
         const auto locator = nextLocator(tracker, chain);
 
-        if (shouldSkipHeaderDownload(tracker, chain, targetHeight)) {
-            markHeadersCurrent(tracker, chain);
+        if (targetCovered()) {
+            if (!boundedTarget) {
+                markHeadersCurrent(tracker, chain);
+            }
             return totalStored;
         }
 
@@ -242,7 +260,9 @@ int syncHeadersToTip(p2p::PeerConnection& connection, std::optional<int> peerHei
         const int batchCount = static_cast<int>(message.headers.size());
 
         if (headersSyncDone(bestHeight, targetHeight, batchCount)) {
-            markHeadersCurrent(tracker, chain);
+            if (!boundedTarget) {
+                markHeadersCurrent(tracker, chain);
+            }
             break;
         }
 
@@ -252,14 +272,18 @@ int syncHeadersToTip(p2p::PeerConnection& connection, std::optional<int> peerHei
         totalStored += stored;
 
         if (stored == 0) {
-            markHeadersCurrent(tracker, chain);
+            if (!boundedTarget) {
+                markHeadersCurrent(tracker, chain);
+            }
             break;
         }
 
         const auto refreshed = tracker.getSyncState(chain.name);
         const int updatedHeight = refreshed.has_value() ? std::stoi((*refreshed).at("best_height")) : bestHeight;
         if (headersSyncDone(updatedHeight, targetHeight, batchCount)) {
-            markHeadersCurrent(tracker, chain);
+            if (!boundedTarget) {
+                markHeadersCurrent(tracker, chain);
+            }
             break;
         }
     }

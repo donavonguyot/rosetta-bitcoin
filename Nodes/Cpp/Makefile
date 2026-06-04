@@ -26,10 +26,10 @@ docker-config:
 	docker compose -f docker/docker-compose.yml config
 
 node-status:
-	CHAINSTATE_BACKEND=$(or $(CHAINSTATE_BACKEND),sqlite) $(BUILD_DIR)/cpbitnode-db --datadir $(DATA_DIR)
+	$(BUILD_DIR)/cpbitnode-db --datadir $(DATA_DIR) --chainstate-backend rocksdb
 
 sync-local:
-	CHAINSTATE_BACKEND=$(or $(CHAINSTATE_BACKEND),rocksdb) $(BUILD_DIR)/cpbitnode-sync --datadir $(DATA_DIR) --chainstate-backend $(or $(CHAINSTATE_BACKEND),rocksdb) --peers $(PEERS) --blocks-target $(or $(BLOCKS_TARGET),$(DOCKER_BLOCKS_MAX)) --blocks-max $(or $(BLOCKS_MAX),$(DOCKER_BLOCKS_MAX))
+	$(BUILD_DIR)/cpbitnode-sync --datadir $(DATA_DIR) --chainstate-backend rocksdb --peers $(PEERS) --blocks-target $(or $(BLOCKS_TARGET),$(DOCKER_BLOCKS_MAX)) --blocks-max $(or $(BLOCKS_MAX),$(DOCKER_BLOCKS_MAX))
 
 cpp-node-storage-proof:
 	$(BUILD_DIR)/cpbitnode-storage-proof --datadir $(DATA_DIR) --chainstate-backend rocksdb --proof-path $(or $(PROOF_PATH),../../NodeCore/conformance/results/cpp_rocksdb_codec_v2_storage.json)

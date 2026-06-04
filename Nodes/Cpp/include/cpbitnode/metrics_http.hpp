@@ -1,7 +1,7 @@
 #pragma once
 
 #include "cpbitnode/config/settings.hpp"
-#include "cpbitnode/db/tracker.hpp"
+#include "cpbitnode/db/node_state.hpp"
 
 #include <atomic>
 #include <memory>
@@ -34,7 +34,7 @@ struct MetricsServerHandle {
     MetricsServerHandle& operator=(const MetricsServerHandle&) = delete;
 };
 
-MetricsServerHandle startMetricsServer(const config::Settings& settings, db::ProjectTracker& tracker);
+MetricsServerHandle startMetricsServer(const config::Settings& settings, db::NodeStateStore& tracker);
 void stopMetricsServer(MetricsServerHandle& handle);
 
 }  // namespace cpbitnode::metrics_http

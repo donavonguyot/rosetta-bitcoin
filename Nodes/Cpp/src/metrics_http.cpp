@@ -29,7 +29,7 @@ std::string httpResponse(int statusCode, const char* statusText, const std::stri
     return out.str();
 }
 
-void serveClient(int clientFd, db::ProjectTracker& tracker, const std::string& chain) {
+void serveClient(int clientFd, db::NodeStateStore& tracker, const std::string& chain) {
     char buffer[4096];
     const auto n = ::recv(clientFd, buffer, sizeof(buffer) - 1, 0);
     if (n <= 0) {
@@ -69,7 +69,7 @@ void serveClient(int clientFd, db::ProjectTracker& tracker, const std::string& c
 
 }  // namespace
 
-MetricsServerHandle startMetricsServer(const config::Settings& settings, db::ProjectTracker& tracker) {
+MetricsServerHandle startMetricsServer(const config::Settings& settings, db::NodeStateStore& tracker) {
     MetricsServerHandle handle;
     if (settings.metricsHttpPort <= 0) {
         return handle;

@@ -2,7 +2,7 @@ import { createServer, type Server, type Socket } from "node:net";
 
 import type { ChainParams } from "../chain/params.js";
 import type { Settings } from "../config/settings.js";
-import type { ProjectTracker } from "../db/tracker.js";
+import type { NativeNodeState } from "../runtime/nodeState.js";
 import { transactionTxid } from "../consensus/merkle.js";
 import {
   FEEFILTER_MIN_VERSION,
@@ -52,7 +52,7 @@ function normalizePeerAddress(remote: Socket["remoteAddress"] | undefined, remot
 
 export async function handleInboundGetdata(
   peer: PeerConnection,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
   blockStore: BlockStore,
   payload: Buffer,
@@ -108,7 +108,7 @@ export async function handleInboundGetdata(
 export async function dispatchInboundMessage(
   peer: PeerConnection,
   options: {
-    tracker: ProjectTracker;
+    tracker: NativeNodeState;
     chain: ChainParams;
     blockStore: BlockStore;
     mempool?: Mempool | null;
@@ -143,14 +143,18 @@ export async function serveInboundSession(
   socket: Socket,
   options: {
     chain: ChainParams;
-    tracker: ProjectTracker;
+    tracker: NativeNodeState;
     settings: Settings;
-    blockStore: BlockStore;
+    blockStore?: BlockStore;
     mempool?: Mempool | null;
     relayTxAccepted?: RelayTxAcceptedFn | null;
   },
 ): Promise<void> {
-  const { chain, tracker, settings, blockStore, mempool = null, relayTxAccepted = null } = options;
+  const { chain, tracker, settings, mempool = null, relayTxAccepted = null } = options;
+  const blockStore = options.blockStore ?? tracker.session?.blockStore;
+  if (!blockStore) {
+    throw new Error("native block store unavailable");
+  }
   const [host, port] = normalizePeerAddress(socket.remoteAddress, socket.remotePort);
   const state = tracker.getSyncState(chain.name);
   const peer = new PeerConnection({
@@ -202,13 +206,17 @@ export async function serveInboundSession(
 
 export function serveInbound(options: {
   chain: ChainParams;
-  tracker: ProjectTracker;
+  tracker: NativeNodeState;
   settings: Settings;
-  blockStore: BlockStore;
+  blockStore?: BlockStore;
   mempool?: Mempool | null;
   relayTxAccepted?: RelayTxAcceptedFn | null;
 }): Promise<Server> {
-  const { chain, tracker, settings, blockStore, mempool = null, relayTxAccepted = null } = options;
+  const { chain, tracker, settings, mempool = null, relayTxAccepted = null } = options;
+  const blockStore = options.blockStore ?? tracker.session?.blockStore;
+  if (!blockStore) {
+    return Promise.reject(new Error("native block store unavailable"));
+  }
   const bindPort = settings.p2pPort || chain.defaultPort;
   const bindHost = "0.0.0.0";
 

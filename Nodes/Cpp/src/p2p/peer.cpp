@@ -188,12 +188,12 @@ void PeerConnection::discoverPeers() {
     }
 }
 
-int PeerConnection::syncHeaders() {
+int PeerConnection::syncHeaders(std::optional<int> stopHeight) {
     if (!isConnected()) {
         throw std::runtime_error("Peer is not connected");
     }
     const int peerHeight = remoteVersion_.has_value() ? remoteVersion_->startHeight : -1;
-    const int stored = sync::syncHeadersToTip(*this, peerHeight);
+    const int stored = sync::syncHeadersToTip(*this, peerHeight, stopHeight);
     if (stored > 0) {
         const auto state = options_.tracker->getSyncState(options_.chain->name);
         const int tip = state.has_value() ? std::stoi((*state).at("best_height")) : 0;

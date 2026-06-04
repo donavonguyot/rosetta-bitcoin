@@ -46,6 +46,7 @@ async def test_post_verack_outbound_announces_fee_and_requests_mempool(tmp_path)
     recv = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     frm = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     tracker = ProjectTracker(tmp_path / "nego-chainstate")
+    tracker.upsert_sync_state(TESTNET4.name, sync_status="headers_current")
 
     peer = PeerConnection(
         host="127.0.0.1",
@@ -79,11 +80,44 @@ async def test_post_verack_outbound_announces_fee_and_requests_mempool(tmp_path)
 
 
 @pytest.mark.asyncio
+async def test_post_verack_initial_sync_defers_relay_messages(tmp_path):
+    recv = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
+    frm = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
+    tracker = ProjectTracker(tmp_path / "defer-chainstate")
+    tracker.upsert_sync_state(TESTNET4.name, sync_status="headers_syncing")
+
+    peer = PeerConnection(
+        host="127.0.0.1",
+        port=1,
+        chain=TESTNET4,
+        tracker=tracker,
+        protocol_version=70016,
+        user_agent="/pybitnode:test/",
+        settings=Settings(min_relay_feerate_sat_vb=2),
+    )
+    peer.remote_version = VersionMessage.build(
+        protocol_version=70016,
+        services=NODE_NETWORK,
+        addr_recv=recv,
+        addr_from=frm,
+        user_agent="/remote/",
+        relay=True,
+    )
+
+    peer.send = AsyncMock()
+    await peer._post_verack_negotiation(outbound=True)
+
+    peer.send.assert_not_awaited()
+    tracker.close()
+
+
+@pytest.mark.asyncio
 async def test_post_verack_skips_fee_on_inbound(tmp_path):
     recv = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     frm = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
 
     tracker = ProjectTracker(tmp_path / "nego_in-chainstate")
+    tracker.upsert_sync_state(TESTNET4.name, sync_status="headers_current")
     peer = PeerConnection(
         host="127.0.0.1",
         port=2,
@@ -114,6 +148,7 @@ async def test_post_verack_peer_relay_disabled_skips_mempool(tmp_path):
     recv = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     frm = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     tracker = ProjectTracker(tmp_path / "norelay-chainstate")
+    tracker.upsert_sync_state(TESTNET4.name, sync_status="headers_current")
 
     peer = PeerConnection(
         host="127.0.0.2",
@@ -145,6 +180,7 @@ async def test_post_verack_legacy_peer_skips_feefilter(tmp_path):
     recv = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     frm = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
     tracker = ProjectTracker(tmp_path / "legacy-chainstate")
+    tracker.upsert_sync_state(TESTNET4.name, sync_status="headers_current")
 
     peer = PeerConnection(
         host="127.0.0.3",

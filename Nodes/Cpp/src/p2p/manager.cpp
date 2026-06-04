@@ -124,7 +124,7 @@ std::vector<PeerConnection*> PeerManager::orderedSyncPeers() const {
     return peers;
 }
 
-int PeerManager::syncHeaders(bool bestEffortIfHeadersCoverFollowupBlocks) {
+int PeerManager::syncHeaders(bool bestEffortIfHeadersCoverFollowupBlocks, std::optional<int> stopHeight) {
     const auto peers = orderedSyncPeers();
     if (peers.empty()) {
         throw std::runtime_error("No connected peers available for header sync");
@@ -132,7 +132,7 @@ int PeerManager::syncHeaders(bool bestEffortIfHeadersCoverFollowupBlocks) {
     std::exception_ptr lastError;
     for (auto* peer : peers) {
         try {
-            return peer->syncHeaders();
+            return peer->syncHeaders(stopHeight);
         } catch (const std::exception& exc) {
             lastError = std::current_exception();
             tracker_.logEvent("sync", "Header sync failed via " + peer->host() + ":" + std::to_string(peer->port()),

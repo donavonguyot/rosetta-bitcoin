@@ -2,7 +2,7 @@ import { connect, type Socket } from "node:net";
 
 import type { ChainParams } from "../chain/params.js";
 import { Settings } from "../config/settings.js";
-import type { ProjectTracker } from "../db/tracker.js";
+import type { NativeNodeState } from "../runtime/nodeState.js";
 import { transactionTxid } from "../consensus/merkle.js";
 import {
   buildVersionMessage,
@@ -87,7 +87,7 @@ export interface PeerConnectionOptions {
   host: string;
   port: number;
   chain: ChainParams;
-  tracker: ProjectTracker;
+  tracker: NativeNodeState;
   protocolVersion: number;
   userAgent: string;
   startHeight?: number;
@@ -163,7 +163,7 @@ export function txInventoryNeedGetdata(
 export async function replyGetdataTxInventory(
   peer: PeerConnection,
   mempool: Mempool | null,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   inventory: InventoryVector[],
 ): Promise<void> {
   if (inventory.length === 0) {
@@ -201,7 +201,7 @@ export async function replyGetdataTxInventory(
 export async function broadcastWitnessBlockInv(
   peers: PeerConnection[],
   blockHash: Buffer,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
 ): Promise<void> {
   const payload = InvMessageCodec.serialize({
     inventory: [{ type: MSG_WITNESS_BLOCK, hash: blockHash }],
@@ -230,7 +230,7 @@ export class PeerConnection {
   readonly host: string;
   readonly port: number;
   readonly chain: ChainParams;
-  readonly tracker: ProjectTracker;
+  readonly tracker: NativeNodeState;
   readonly protocolVersion: number;
   readonly userAgent: string;
   readonly startHeight: number;

@@ -26,7 +26,7 @@ public:
     void connectPeers(const std::vector<std::pair<std::string, int>>& targets, int startHeight = 0,
                       bool discoverPeerAddresses = true);
     void bootstrap(const std::vector<std::pair<std::string, int>>& manualPeers, int startHeight = 0);
-    int syncHeaders(bool bestEffortIfHeadersCoverFollowupBlocks = false);
+    int syncHeaders(bool bestEffortIfHeadersCoverFollowupBlocks = false, std::optional<int> stopHeight = std::nullopt);
     int syncBlocks(storage::BlockStore& blockStore);
     int syncBlocks(storage::BlockStore& blockStore, db::ChainstateStore& chainstate);
     void completeDeferredHandshake();

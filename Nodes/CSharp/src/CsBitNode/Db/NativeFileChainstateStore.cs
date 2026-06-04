@@ -2,6 +2,7 @@ using System.Text.Json;
 using CsBitNode.Consensus;
 using CsBitNode.Consensus.Connect;
 using CsBitNode.Messages;
+using CsBitNode.Sync;
 using CsBitNode.Util;
 
 namespace CsBitNode.Db;
@@ -69,6 +70,12 @@ public sealed class NativeFileChainstateStore : IChainstateStore
                 patch.SyncStatus ?? existing?.SyncStatus ?? "starting"));
     }
 
+    public SyncTimingSummary? GetSyncTimingSummary(string chain) =>
+        ReadJson<SyncTimingSummary>(SyncTimingPath(chain));
+
+    public void SetSyncTimingSummary(string chain, SyncTimingSummary summary) =>
+        WriteJson(SyncTimingPath(chain), summary);
+
     public void EnsureGenesis(string chain, BlockHeader genesis, string genesisHash)
     {
         if (GetHeaderHash(chain, 0) is null)
@@ -115,6 +122,9 @@ public sealed class NativeFileChainstateStore : IChainstateStore
     public StoredUtxo? GetUtxo(string chain, string txid, int vout) =>
         ReadJson<StoredUtxo>(UtxoPath(chain, txid, vout));
 
+    public IReadOnlyList<StoredUtxo?> GetUtxos(string chain, IReadOnlyList<UtxoOutpoint> outpoints) =>
+        outpoints.Select(outpoint => GetUtxo(chain, outpoint.Txid, outpoint.Vout)).ToList();
+
     public ChainstateCommitResult CommitBlock(ChainstateBlockCommit commit)
     {
         WriteJson(CommitJournalPath(), CommitJournal.FromCommit(commit));
@@ -134,6 +144,16 @@ public sealed class NativeFileChainstateStore : IChainstateStore
         foreach (var utxo in commit.CreatedUtxos)
             WriteJson(UtxoPath(commit.Chain, utxo.Txid, utxo.Vout), utxo);
         WriteJson(UndoPath(commit.Chain, commit.Height), commit.UndoEntries);
+        if (commit.StoredBlock is not null)
+            WriteJson(
+                BlockPath(commit.Chain, commit.Height),
+                new ChainstateBlockIndex(
+                    commit.Chain,
+                    commit.Height,
+                    commit.BlockHashHex,
+                    commit.StoredBlock.FileNumber,
+                    commit.StoredBlock.FileOffset,
+                    commit.StoredBlock.BlockSize));
         SetValidatedTip(commit.Chain, commit.Height, commit.BlockHashHex);
     }
 
@@ -218,6 +238,7 @@ public sealed class NativeFileChainstateStore : IChainstateStore
     private string CommitJournalPath() => Path.Combine(_root, "commit_pending.json");
     private string TipPath(string chain) => Path.Combine(_root, $"validated_tip_{chain}.json");
     private string SyncStatePath(string chain) => Path.Combine(_root, $"sync_state_{chain}.json");
+    private string SyncTimingPath(string chain) => Path.Combine(_root, $"sync_timing_{chain}.json");
     private string HeadersDir(string chain) => Path.Combine(_root, "headers", chain);
     private string BlocksDir(string chain) => Path.Combine(_root, "blocks", chain);
     private string UtxosDir(string chain) => Path.Combine(_root, "utxos", chain);
@@ -255,7 +276,8 @@ public sealed class NativeFileChainstateStore : IChainstateStore
         string BlockHashHex,
         List<UtxoOutpoint> SpentOutpoints,
         List<StoredUtxo> CreatedUtxos,
-        List<UtxoUndoEntry> UndoEntries)
+        List<UtxoUndoEntry> UndoEntries,
+        ChainstateBlockStorageIndex? StoredBlock)
     {
         public static CommitJournal FromCommit(ChainstateBlockCommit commit) =>
             new(
@@ -264,9 +286,10 @@ public sealed class NativeFileChainstateStore : IChainstateStore
                 commit.BlockHashHex,
                 commit.SpentOutpoints.ToList(),
                 commit.CreatedUtxos.ToList(),
-                commit.UndoEntries.ToList());
+                commit.UndoEntries.ToList(),
+                commit.StoredBlock);
 
         public ChainstateBlockCommit ToCommit() =>
-            new(Chain, Height, BlockHashHex, SpentOutpoints, CreatedUtxos, UndoEntries);
+            new(Chain, Height, BlockHashHex, SpentOutpoints, CreatedUtxos, UndoEntries, StoredBlock);
     }
 }

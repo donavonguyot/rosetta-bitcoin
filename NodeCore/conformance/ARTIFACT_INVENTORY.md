@@ -16,6 +16,10 @@ Current canonical result files include Java, C#, and Cpp storage/native-crypto
 proofs. Docker contract result JSONs are expected to use the same directory once
 ports emit them.
 
+Cross-port benchmark JSON belongs in the same directory when it follows
+`NodeCore/conformance/BENCHMARK_CONTRACT.md`. Keep the compact JSON evidence,
+not live datadirs, RocksDB directories, Docker volumes, or long logs.
+
 ## Cross-Port Rules
 
 | Pattern | Classification | Action |

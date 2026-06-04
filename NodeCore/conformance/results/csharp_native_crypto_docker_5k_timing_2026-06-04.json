@@ -1,0 +1,78 @@
+{
+  "implementation": "CSharpNode",
+  "category": "docker_native_crypto_sync",
+  "captured_at": "2026-06-04T00:58:15.337724+00:00",
+  "datadir": "/data",
+  "chain": "testnet4",
+  "target_header_height": 5000,
+  "target_block_height": 5000,
+  "header_height": 5000,
+  "validated_height": 5000,
+  "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "stored_block_height": 5000,
+  "sync_status": "blocks_syncing",
+  "chainstate_backend": "rocksdb",
+  "codec_version": "2",
+  "chainstate_status": "usable",
+  "native_storage": true,
+  "local_sqlite_artifact_absent": true,
+  "native_crypto_backend": "libsecp256k1-secp256k1.net",
+  "native_crypto_available": true,
+  "taproot_tweak_backend": "libsecp256k1-secp256k1.net",
+  "sync_timing": {
+    "Unit": "microseconds",
+    "Stages": {
+      "block_store": {
+        "Count": 5000,
+        "TotalMicros": 232120,
+        "P50Micros": 28,
+        "P95Micros": 89,
+        "MaxMicros": 23036
+      },
+      "utxo_load": {
+        "Count": 5000,
+        "TotalMicros": 535809,
+        "P50Micros": 8,
+        "P95Micros": 357,
+        "MaxMicros": 30320
+      },
+      "script_verify": {
+        "Count": 5000,
+        "TotalMicros": 5295990,
+        "P50Micros": 0,
+        "P95Micros": 4902,
+        "MaxMicros": 103448
+      },
+      "utxo_apply": {
+        "Count": 5000,
+        "TotalMicros": 55023,
+        "P50Micros": 5,
+        "P95Micros": 19,
+        "MaxMicros": 10715
+      },
+      "commit": {
+        "Count": 5000,
+        "TotalMicros": 1510575,
+        "P50Micros": 186,
+        "P95Micros": 752,
+        "MaxMicros": 61407
+      },
+      "block_connect_store_commit": {
+        "Count": 5000,
+        "TotalMicros": 9534890,
+        "P50Micros": 717,
+        "P95Micros": 7361,
+        "MaxMicros": 121703
+      }
+    }
+  },
+  "sync_exit_code": 0,
+  "bounded_gate_status": "passed",
+  "binary_gate_status": "not_attempted",
+  "verification": {
+    "command": "make docker-csharp-native-crypto-proof",
+    "docker_volume": "csbitnode_5k_timing_data",
+    "live_progress_reporting": true,
+    "progress_interval_seconds": 15
+  }
+}

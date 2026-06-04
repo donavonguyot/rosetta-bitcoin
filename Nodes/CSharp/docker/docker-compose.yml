@@ -13,6 +13,7 @@ services:
       HEADER_BATCHES_MAX: ${HEADER_BATCHES_MAX:-1}
       BLOCKS_MAX: ${BLOCKS_MAX:-2}
       SECP256K1_BACKEND: ${SECP256K1_BACKEND:-native}
+      CSBITNODE_SYNC_TIMING: ${CSBITNODE_SYNC_TIMING:-0}
     command: ["sync"]
     volumes:
       - csbitnode_proof_data:/data

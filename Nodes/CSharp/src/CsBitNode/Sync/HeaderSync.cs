@@ -70,7 +70,8 @@ public static class HeaderSync
 
             if (totalStored >= maxHeaders)
             {
-                tracker.UpsertSyncState(chain.Name, new SyncStatePatch(null, null, tracker.HeaderCount(chain.Name), "headers_syncing"));
+                var currentState = tracker.GetSyncState(chain.Name);
+                tracker.UpsertSyncState(chain.Name, new SyncStatePatch(null, null, (currentState?.BestHeight ?? 0) + 1, "headers_syncing"));
                 break;
             }
         }
@@ -100,9 +101,7 @@ public static class HeaderSync
             ? genesisHashInternal
             : Hex.Reverse(Hex.Decode(tipHashHex));
 
-        var chainWork = tipHeight == 0
-            ? HeaderValidator.ChainWorkForHeader(Genesis.ForChain(chain.Name))
-            : ChainWorkThroughHeight(chain, tracker, tipHeight);
+        var chainWork = BigInteger.Zero;
 
         var stored = 0;
         foreach (var header in headers)
@@ -118,36 +117,16 @@ public static class HeaderSync
             }
 
             tipHeight += 1;
-            chainWork += HeaderValidator.ChainWorkForHeader(header);
             var blockHash = BlockHeaderCodec.BlockHashHex(header);
             var prevHash = Hex.Encode(Hex.Reverse(header.PrevBlock));
             tracker.InsertHeader(chain.Name, tipHeight, blockHash, prevHash, Hex.Encode(BlockHeaderCodec.Serialize(header)));
             tracker.UpsertSyncState(
                 chain.Name,
-                new SyncStatePatch(tipHeight, blockHash, tracker.HeaderCount(chain.Name), "headers_syncing"));
+                new SyncStatePatch(tipHeight, blockHash, tipHeight + 1, "headers_syncing"));
             tipInternal = BlockHeaderCodec.BlockHash(header);
             stored += 1;
         }
         return stored;
-    }
-
-    private static BigInteger ChainWorkThroughHeight(ChainParams chain, IChainstateStore tracker, int height)
-    {
-        var work = HeaderValidator.ChainWorkForHeader(Genesis.ForChain(chain.Name));
-        for (var h = 1; h <= height; h++)
-        {
-            var hex = tracker.GetHeaderHash(chain.Name, h);
-            if (hex is null)
-                break;
-            // Re-parse stored header for chainwork accumulation would be expensive; approximate by reading serialized hex
-            var bytes = Hex.Decode(tracker.GetHeaderSerializedHex(chain.Name, h) ?? "");
-            if (bytes.Length == 0)
-                continue;
-            var offset = 0;
-            var header = BlockHeaderCodec.Deserialize(bytes, ref offset);
-            work += HeaderValidator.ChainWorkForHeader(header);
-        }
-        return work;
     }
 
     private static void MarkHeadersCurrent(ChainParams chain, IChainstateStore tracker)
@@ -155,6 +134,6 @@ public static class HeaderSync
         var state = tracker.GetSyncState(chain.Name);
         tracker.UpsertSyncState(
             chain.Name,
-            new SyncStatePatch(state?.BestHeight, state?.BestHash, tracker.HeaderCount(chain.Name), "headers_current"));
+            new SyncStatePatch(state?.BestHeight, state?.BestHash, (state?.BestHeight ?? 0) + 1, "headers_current"));
     }
 }

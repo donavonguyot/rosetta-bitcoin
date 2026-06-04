@@ -36,7 +36,7 @@ Settings Settings::fromEnv() {
     s.chain = envStr("CHAIN", "testnet4");
     s.dataDir = envStr("DATA_DIR", "./data-cpp");
     s.dbPath = envStr("DB_PATH", "");
-    s.chainstateBackend = envStr("CHAINSTATE_BACKEND", "sqlite");
+    s.chainstateBackend = envStr("CHAINSTATE_BACKEND", "rocksdb");
     s.listen = envBool("LISTEN", false);
     s.p2pPort = envInt("P2P_PORT", 0);
     s.peers = envStr("PEERS", "");
@@ -74,7 +74,8 @@ Settings Settings::fromArgs(int argc, char** argv) {
         } else if (arg == "--chain" && i + 1 < argc) {
             s.chain = argv[++i];
         } else if (arg == "--db" && i + 1 < argc) {
-            s.dbPath = argv[++i];
+            ++i;
+            throw std::runtime_error("--db is not supported in Cpp Core-native mode");
         } else if (arg == "--chainstate-backend" && i + 1 < argc) {
             s.chainstateBackend = argv[++i];
         } else if (arg == "--listen") {
@@ -83,7 +84,7 @@ Settings Settings::fromArgs(int argc, char** argv) {
             s.syncOnly = true;
         } else if (arg == "--help" || arg == "-h") {
             throw std::runtime_error(
-                "usage: cpbitnode [--datadir PATH] [--chain NAME] [--db PATH] [--listen] [--sync-only]");
+                "usage: cpbitnode [--datadir PATH] [--chain NAME] [--listen] [--sync-only]");
         }
     }
     return s;
@@ -98,7 +99,8 @@ Settings Settings::fromSyncArgs(int argc, char** argv) {
         } else if (arg == "--chain" && i + 1 < argc) {
             s.chain = argv[++i];
         } else if (arg == "--db" && i + 1 < argc) {
-            s.dbPath = argv[++i];
+            ++i;
+            throw std::runtime_error("--db is not supported in Cpp Core-native mode");
         } else if (arg == "--chainstate-backend" && i + 1 < argc) {
             s.chainstateBackend = argv[++i];
         } else if (arg == "--peers" && i + 1 < argc) {
@@ -117,7 +119,7 @@ Settings Settings::fromSyncArgs(int argc, char** argv) {
             s.rebuildValidatedChain = true;
         } else if (arg == "--help" || arg == "-h") {
             throw std::runtime_error(
-                "usage: cpbitnode-sync [--datadir PATH] [--chain NAME] [--db PATH] [--peers HOST:PORT,...] "
+                "usage: cpbitnode-sync [--datadir PATH] [--chain NAME] [--peers HOST:PORT,...] "
                 "[--blocks-target N] [--blocks-max N] [--connect-only] [--no-header-refresh] [--rebuild]");
         }
     }

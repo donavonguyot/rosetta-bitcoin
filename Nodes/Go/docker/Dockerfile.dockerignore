@@ -1,0 +1,7 @@
+.git
+bin
+data-go*
+*.db
+*.log
+coverage
+.DS_Store

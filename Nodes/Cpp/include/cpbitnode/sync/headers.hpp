@@ -39,6 +39,7 @@ void markHeadersCurrent(db::NodeStateStore& state, const chain::ChainParams& cha
 int resolveBootstrapStartHeight(const db::NodeStateStore& state, const chain::ChainParams& chain,
                                 const config::Settings& settings);
 
-int syncHeadersToTip(p2p::PeerConnection& connection, std::optional<int> peerHeight = std::nullopt);
+int syncHeadersToTip(p2p::PeerConnection& connection, std::optional<int> peerHeight = std::nullopt,
+                     std::optional<int> stopHeight = std::nullopt);
 
 }  // namespace cpbitnode::sync

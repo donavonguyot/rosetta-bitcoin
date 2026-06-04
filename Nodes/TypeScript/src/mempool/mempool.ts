@@ -2,7 +2,7 @@ import { Settings } from "../config/settings.js";
 import { transactionTxid } from "../consensus/merkle.js";
 import { ScriptVerifyError, verifyTransactionInput } from "../consensus/script/verify.js";
 import { transactionWtxid } from "../consensus/witness.js";
-import type { ProjectTracker } from "../db/tracker.js";
+import type { NativeNodeState } from "../runtime/nodeState.js";
 import { MSG_TX, MSG_WITNESS_TX } from "../messages/inventory.js";
 import {
   transactionIsCoinbase,
@@ -35,7 +35,7 @@ export interface AcceptTransactionOptions {
 
 export interface MempoolOptions {
   maxSizeBytes?: number;
-  tracker?: ProjectTracker | null;
+  tracker?: NativeNodeState | null;
   orphanPool?: OrphanPool | null;
   mempoolMaxCount?: number | null;
   mempoolMaxAgeSeconds?: number | null;
@@ -52,7 +52,7 @@ export function estimateTxVirtualSizeScaffold(tx: Transaction): number {
 
 function transactionFeeKnownPrevouts(
   tx: Transaction,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: string,
 ): number | null {
   if (transactionIsCoinbase(tx)) {
@@ -71,7 +71,7 @@ function transactionFeeKnownPrevouts(
 }
 
 function effectiveUtxoRow(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: string,
   mempoolUtxoOverlay: ReadonlyMap<string, UtxoOverlayRow> | null | undefined,
   txIn: TxIn,
@@ -96,7 +96,7 @@ function effectiveUtxoRow(
 
 export function collectMissingPrevouts(
   tx: Transaction,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   options: {
     chain?: string;
     mempoolUtxoOverlay?: ReadonlyMap<string, UtxoOverlayRow> | null;
@@ -141,7 +141,7 @@ function missingPrevoutTuples(missing: Set<string>): Array<[Buffer, number]> {
 
 export function acceptTransaction(
   tx: Transaction,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   options: AcceptTransactionOptions = {},
 ): boolean {
   const settings = options.settings;
@@ -289,7 +289,7 @@ export function acceptTransaction(
 
 export function transactionMeetsPeerFeefilter(
   tx: Transaction,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   peerFeeFilterSatKvb: number | null,
   chain?: string,
 ): boolean {
@@ -311,7 +311,7 @@ export class Mempool {
   private readonly maxSizeBytes: number;
   private readonly maxTxCount: number;
   private readonly maxAgeSeconds: number;
-  private readonly tracker: ProjectTracker | null;
+  private readonly tracker: NativeNodeState | null;
   private readonly orphanPool: OrphanPool | null;
 
   private readonly txById = new Map<string, MempoolEntry>();

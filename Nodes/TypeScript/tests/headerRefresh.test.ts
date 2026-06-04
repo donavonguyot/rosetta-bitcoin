@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { TESTNET4 } from "../src/chain/params.js";
 import { Settings } from "../src/config/settings.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import {
   HeaderRefreshAction,
   decideHeaderRefreshAction,
@@ -13,7 +13,7 @@ import {
 } from "../src/sync/headerRefresh.js";
 import { HEADER_SYNC_NEAR_PEER_TIP, ensureGenesis, resolveBootstrapStartHeight } from "../src/sync/headers.js";
 
-function seedHeadersThrough(tracker: ProjectTracker, through: number): void {
+function seedHeadersThrough(tracker: NativeNodeState, through: number): void {
   ensureGenesis(tracker, TESTNET4);
   for (let height = 1; height <= through; height += 1) {
     const prev = tracker.getHeaderHash(TESTNET4.name, height - 1) ?? TESTNET4.genesisHash;
@@ -40,10 +40,10 @@ describe("header refresh decisions", () => {
     dirs.length = 0;
   });
 
-  function tempTracker(): ProjectTracker {
+  function tempTracker(): NativeNodeState {
     const dir = mkdtempSync(join(tmpdir(), "ts-header-refresh-"));
     dirs.push(dir);
-    return new ProjectTracker(join(dir, "refresh.db"));
+    return new NativeNodeState(join(dir, "refresh.stateDir"));
   }
 
   it("skips when noHeaderRefresh is set", () => {

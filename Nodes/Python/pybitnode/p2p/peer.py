@@ -460,8 +460,14 @@ class PeerConnection:
         """Block-sync connections: skip mempool/feefilter/sendheaders that break historical getdata on some peers."""
         return bool(self.settings.no_header_refresh or self.settings.sync_skip_headers)
 
+    def _relay_negotiation_ready(self) -> bool:
+        state = self.tracker.get_sync_state(self.chain.name) or {}
+        return state.get("sync_status") in {"headers_current", "blocks_syncing", "blocks_current", "running"}
+
     async def _post_verack_negotiation(self, *, outbound: bool) -> None:
         if outbound and self._lightweight_outbound_handshake():
+            return
+        if not self._relay_negotiation_ready():
             return
         remote = self.remote_version
         relay_on = remote is None or remote.relay

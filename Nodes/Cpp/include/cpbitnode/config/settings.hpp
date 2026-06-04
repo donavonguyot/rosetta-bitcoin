@@ -9,7 +9,7 @@ struct Settings {
     std::string chain = "testnet4";
     std::string dataDir = "./data-cpp";
     std::string dbPath;
-    std::string chainstateBackend = "sqlite";
+    std::string chainstateBackend = "rocksdb";
     bool listen = false;
     int p2pPort = 0;
     std::string peers;

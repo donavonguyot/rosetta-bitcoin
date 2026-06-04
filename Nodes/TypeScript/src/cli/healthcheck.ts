@@ -1,4 +1,4 @@
 #!/usr/bin/env node
 import { runHealthcheck } from "../healthcheck.js";
 
-process.exitCode = runHealthcheck();
+process.exitCode = await runHealthcheck();

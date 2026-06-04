@@ -1,0 +1,86 @@
+{
+  "artifact_kind": "nodecore.replay_telemetry",
+  "captured_at": "2026-06-03T21:45:28Z",
+  "chain": "testnet4",
+  "chainstate_backend": "rocksdb",
+  "chainstate_utxo_count": 23688090,
+  "command": [],
+  "current_blocker": null,
+  "docker_volume": "gobitnode_local_reference_proof_data",
+  "elapsed_ms": 2724993,
+  "header_height": 137742,
+  "implementation": "GoNode",
+  "peer": "http://host.docker.internal:48332",
+  "peer_mode": "local_reference_rpc",
+  "port": "go",
+  "prefetch_depth": 4,
+  "progress_samples": [],
+  "replay_mode": "pipeline",
+  "resource_samples": [],
+  "result": "passed",
+  "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+  "rocksdb_wal_disabled": false,
+  "run_id": "go-docker-pipeline-137742-780f48a832",
+  "runtime_surface": "docker",
+  "schema_version": 1,
+  "script_runner_mode": "sequential",
+  "slow_blocks": [
+    {
+      "height": 73946,
+      "ms": 9074
+    },
+    {
+      "height": 20888,
+      "ms": 8389
+    },
+    {
+      "height": 73945,
+      "ms": 8342
+    },
+    {
+      "height": 73944,
+      "ms": 5964
+    },
+    {
+      "height": 73947,
+      "ms": 3249
+    },
+    {
+      "height": 21209,
+      "ms": 2797
+    },
+    {
+      "height": 51493,
+      "ms": 2644
+    },
+    {
+      "height": 51478,
+      "ms": 2628
+    },
+    {
+      "height": 51481,
+      "ms": 2595
+    },
+    {
+      "height": 51485,
+      "ms": 2552
+    }
+  ],
+  "source_artifact": "NodeCore/conformance/results/go_local_reference_docker_sync_tip_137742_2026-06-03.json",
+  "stage_totals_ms": {
+    "block_connect_store_commit": 2534953,
+    "block_parse_validate": 18468,
+    "block_read": 495,
+    "block_store": 2330,
+    "commit": 88668,
+    "prevout_batch_load": 523072,
+    "script_verify": 1367368
+  },
+  "started_at": "2026-06-03T21:45:28Z",
+  "storage_codec_version": 2,
+  "stored_block_height": 137742,
+  "target_height": 137742,
+  "updated_at": "2026-06-03T22:30:54Z",
+  "validated_hash": "000000000054e6876a7d1c713aa7547d4854ad4c87b9bc98d51ae3105290f75e",
+  "validated_height": 137742
+}

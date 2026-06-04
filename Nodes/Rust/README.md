@@ -1,13 +1,15 @@
 # rsbitnode
 
 `rsbitnode` is the Rust follower port for the RosettaBitcoin workspace. The
-first milestone is a Core-native scaffold: RocksDB-owned storage metadata,
-status JSON, storage proof output, Chainstate Codec v2 vector checks, native
-crypto vector plumbing, Docker smoke/proof surfaces, and a Rust script-corpus
-harness for the shared 45-fixture NodeCore corpus.
+current milestone is a Core-native scaffold plus bounded local-reference replay:
+RocksDB-owned storage metadata, status JSON, storage proof output, Chainstate
+Codec v2 vector checks, native crypto vector checks, Docker smoke/proof
+surfaces, raw block/transaction parsing, and a Rust script-corpus harness for
+the shared 45-fixture NodeCore corpus.
 
-This milestone does not claim live sync, block connection, script verification
-clearance, or binary-gate progress.
+This milestone does not claim live P2P sync, testnet4 tip maintenance, or
+binary-gate progress. Host and Docker local-reference replay currently reach
+height 10000 with `binary_gate_status=not_attempted`.
 
 ## Commands
 
@@ -19,6 +21,10 @@ make rust-node-storage-proof
 make rust-node-codec-vectors
 make rust-node-native-crypto-vectors
 make rust-node-script-corpus
+make rust-node-sync-local
+make rust-node-connect-local
+make rust-node-local-reference-proof
+make rust-node-local-reference-proof-fast
 ```
 
 ## Native/Core State
@@ -34,13 +40,33 @@ Native state lives under the selected datadir:
 No SQLite artifact is allowed in the Rust native datadir. Status and storage
 proof read Rust-owned RocksDB metadata directly.
 
+## Local-Reference Proof Pipeline
+
+`local-reference-proof --mode pipeline` fetches from local Reference Core,
+decodes and validates each block in Rust, and connects the already-decoded block
+directly in strict height order. Fetch and parse work is bounded-prefetched by
+`RSBITNODE_BLOCK_PREFETCH_DEPTH` (default `4`, capped at `16`); UTXO mutation
+and RocksDB commit remain single-threaded and ordered. Script verification runs
+as deterministic parallel jobs by default; set
+`RSBITNODE_SCRIPT_VERIFY_PARALLEL=0` to force sequential verification.
+
+Progress output includes JSON telemetry with height, percent, elapsed time,
+block rate, last-block time, fetched/connected counts, UTXO count, prefetch
+depth, and script runner mode. Proof JSON includes `pipeline_timing_summary`
+with wall time, RPC fetch, parse/validate, store, connect, script, prevout,
+commit, and UTXO timing fields. The top-level `blocks_fetched` and
+`blocks_connected` fields are full proof counts; `connect_summary` is the final
+block/connect snapshot.
+
+The `*-fast` targets set `RSBITNODE_ROCKSDB_DISABLE_WAL=1` for disposable proof
+runs only. Default runtime and proof commands keep RocksDB WAL enabled.
+
 ## Script Corpus
 
 `rsbitnode script-corpus` loads all 45 entries from
-`NodeCore/conformance/fixtures/scripts/manifest.json` and verifies that the
-referenced fixture files are present and readable. Until Rust has an independent
-script verifier, each fixture row is recorded as `not_implemented`; this is a
-harness proof, not script conformance clearance.
+`NodeCore/conformance/fixtures/scripts/manifest.json` and runs a Rust-native
+script verifier. Current coverage clears the shared `45/45` corpus without
+delegating to another port or to Core validation.
 
 ## Docker
 
@@ -48,6 +74,9 @@ harness proof, not script conformance clearance.
 make docker-config
 make docker-build
 make docker-status
+make docker-storage-proof
+make docker-script-corpus
 make docker-proof-local
+make docker-proof-local-fast
 make docker-smoke-once
 ```

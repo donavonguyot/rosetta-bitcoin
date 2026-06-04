@@ -1,0 +1,220 @@
+{
+  "binary_gate_status": "not_attempted",
+  "blocks_connected": 10001,
+  "blocks_fetched": 10001,
+  "captured_at": "2026-06-03T21:27:33Z",
+  "category": "local_reference_sync",
+  "chain": "testnet4",
+  "chainstate_backend": "rocksdb",
+  "chainstate_backend_path": "/data/chainstate-rocksdb",
+  "chainstate_status": "usable",
+  "chainstate_utxo_count": 19100,
+  "connect_summary": {
+    "implementation": "GoNode",
+    "runtime_surface": "docker",
+    "mode": "local_reference_pipeline_connect",
+    "target_height": 10000,
+    "header_height": 10000,
+    "stored_block_height": 10000,
+    "validated_height": 10000,
+    "validated_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+    "chainstate_utxo_count": 19100,
+    "sync_status": "blocks_current",
+    "current_blocker": null,
+    "reached_target": true,
+    "started_at": "2026-06-03T21:27:33Z",
+    "updated_at": "2026-06-03T21:27:48Z",
+    "blocks_connected": 10001,
+    "script_runner_mode": "sequential",
+    "storage_codec_version": 2,
+    "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+    "rocksdb_wal_disabled": false,
+    "timing_summary": {
+      "total_ms": 14657,
+      "stage_totals_ms": {
+        "block_connect_store_commit": 9574,
+        "block_parse_validate": 15,
+        "block_read": 3,
+        "block_store": 4,
+        "commit": 12,
+        "prevout_batch_load": 29,
+        "script_verify": 6005
+      },
+      "slow_blocks": [
+        {
+          "height": 739,
+          "ms": 65
+        },
+        {
+          "height": 5327,
+          "ms": 17
+        },
+        {
+          "height": 4340,
+          "ms": 16
+        },
+        {
+          "height": 5324,
+          "ms": 16
+        },
+        {
+          "height": 5284,
+          "ms": 15
+        },
+        {
+          "height": 6113,
+          "ms": 15
+        },
+        {
+          "height": 6182,
+          "ms": 15
+        },
+        {
+          "height": 2199,
+          "ms": 14
+        },
+        {
+          "height": 5347,
+          "ms": 14
+        },
+        {
+          "height": 5595,
+          "ms": 14
+        }
+      ]
+    }
+  },
+  "current_blocker": null,
+  "datadir": "/data",
+  "docker_volume": "gobitnode_local_reference_proof_data",
+  "failures": [],
+  "header_height": 10000,
+  "implementation": "GoNode",
+  "local_reference_status": "target_reached",
+  "local_sqlite_artifact_absent": true,
+  "native_crypto_available": true,
+  "native_crypto_backend": "libsecp256k1",
+  "native_storage": true,
+  "peer": "http://host.docker.internal:48332",
+  "peer_mode": "local_reference_rpc",
+  "prefetch_depth": 4,
+  "proof_mode": "pipeline",
+  "result": "passed",
+  "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+  "rocksdb_wal_disabled": false,
+  "runtime_surface": "docker",
+  "script_runner_mode": "sequential",
+  "status": {
+    "ok": true,
+    "node_id": "gobitnode-local-reference-sync",
+    "implementation": "GoNode",
+    "runtime_surface": "docker",
+    "runtime_status": "not_running",
+    "chain": "testnet4",
+    "network": "testnet4",
+    "datadir": "/data",
+    "binary_gate_status": "not_attempted",
+    "sync_status": "blocks_current",
+    "header_height": 10000,
+    "header_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+    "stored_block_height": 10000,
+    "stored_block_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+    "validated_height": 10000,
+    "validated_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+    "chainstate_backend": "rocksdb",
+    "chainstate_backend_path": "/data/chainstate-rocksdb",
+    "chainstate_generation_id": "go-reference-sync",
+    "chainstate_status": "usable",
+    "chainstate_utxo_count": 19100,
+    "storage_codec_version": 2,
+    "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+    "rocksdb_wal_disabled": false,
+    "native_crypto_backend": "libsecp256k1",
+    "native_crypto_available": true,
+    "taproot_tweak_backend": "libsecp256k1",
+    "block_gap_count": 0,
+    "current_blocker": null,
+    "last_error": "",
+    "active_writer_pid": null,
+    "lock_status": "unlocked",
+    "updated_at": "2026-06-03T21:27:48Z"
+  },
+  "storage_codec_version": 2,
+  "stored_block_height": 10000,
+  "sync_status": "blocks_current",
+  "sync_summary": {
+    "implementation": "GoNode",
+    "runtime_surface": "docker",
+    "peer_mode": "local_reference_rpc",
+    "peer": "http://host.docker.internal:48332",
+    "target_height": 10000,
+    "header_height": 10000,
+    "stored_block_height": 10000,
+    "validated_height": 10000,
+    "sync_status": "blocks_current",
+    "current_blocker": null,
+    "binary_gate_status": "not_attempted",
+    "started_at": "2026-06-03T21:27:33Z",
+    "updated_at": "2026-06-03T21:27:48Z",
+    "blocks_fetched": 10001
+  },
+  "taproot_tweak_backend": "libsecp256k1",
+  "target_height": 10000,
+  "timing_summary": {
+    "total_ms": 14657,
+    "stage_totals_ms": {
+      "block_connect_store_commit": 9574,
+      "block_parse_validate": 15,
+      "block_read": 3,
+      "block_store": 4,
+      "commit": 12,
+      "prevout_batch_load": 29,
+      "script_verify": 6005
+    },
+    "slow_blocks": [
+      {
+        "height": 739,
+        "ms": 65
+      },
+      {
+        "height": 5327,
+        "ms": 17
+      },
+      {
+        "height": 4340,
+        "ms": 16
+      },
+      {
+        "height": 5324,
+        "ms": 16
+      },
+      {
+        "height": 5284,
+        "ms": 15
+      },
+      {
+        "height": 6113,
+        "ms": 15
+      },
+      {
+        "height": 6182,
+        "ms": 15
+      },
+      {
+        "height": 2199,
+        "ms": 14
+      },
+      {
+        "height": 5347,
+        "ms": 14
+      },
+      {
+        "height": 5595,
+        "ms": 14
+      }
+    ]
+  },
+  "updated_at": "2026-06-03T21:27:48Z",
+  "validated_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+  "validated_height": 10000
+}

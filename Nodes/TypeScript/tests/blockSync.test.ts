@@ -14,7 +14,7 @@ vi.mock("../src/consensus/connect.js", async (importOriginal) => {
 });
 
 import { TESTNET4 } from "../src/chain/params.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import { BlockMessageCodec } from "../src/messages/block.js";
 import {
   GetDataMessageCodec,
@@ -84,7 +84,7 @@ describe("block storage", () => {
 describe("missing block heights", () => {
   it("lists headers without stored blocks", () => {
     const dir = mkdtempSync(join(tmpdir(), "tsbitnode-missing-"));
-    const tracker = new ProjectTracker(join(dir, "blocks.db"));
+    const tracker = new NativeNodeState(join(dir, "blocks.stateDir"));
     try {
       ensureGenesis(tracker, TESTNET4);
       tracker.recordHeader(TESTNET4.name, {
@@ -153,7 +153,7 @@ describe("block download helpers", () => {
 
   it("stops sync at blocks-target using stored height", async () => {
     const dir = mkdtempSync(join(tmpdir(), "tsbitnode-target-"));
-    const tracker = new ProjectTracker(join(dir, "target.db"));
+    const tracker = new NativeNodeState(join(dir, "target.stateDir"));
     const store = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
     try {
       ensureGenesis(tracker, TESTNET4);

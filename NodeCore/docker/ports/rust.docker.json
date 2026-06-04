@@ -13,17 +13,20 @@
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
     "package_manager": "apt plus cargo",
-    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "rust-secp256k1/libsecp256k1 vector plumbing"]
+    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "rust-secp256k1"]
   },
   "volumes": {
     "data": "rsbitnode_data",
     "proof": "rsbitnode_proof_data",
-    "supervisor": "rsbitnode_sync_data"
+    "supervisor": "rsbitnode_sync_data",
+    "local_reference": "rsbitnode_local_reference_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Rust && make docker-config",
     "docker_build": "cd Nodes/Rust && make docker-build",
     "docker_status": "cd Nodes/Rust && make docker-status",
+    "docker_storage_proof": "cd Nodes/Rust && make docker-storage-proof",
+    "docker_script_corpus": "cd Nodes/Rust && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Rust && make docker-proof-local",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Rust && make docker-smoke-once",
@@ -34,9 +37,9 @@
   },
   "peer_modes": {
     "local_reference": {
-      "supported": false,
-      "command": null,
-      "peer": null,
+      "supported": true,
+      "command": "cd Nodes/Rust && make docker-proof-local",
+      "peer": "host.docker.internal:48332",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {
@@ -63,8 +66,10 @@
   },
   "proof_artifacts": {
     "docker_contract_result": null,
-    "storage_result": "NodeCore/conformance/results/rust_storage_gate_2026-06-03.json",
-    "notes": "Rust initial milestone is proof_partial: storage/status/Docker smoke and script corpus loader exist; live sync and independent script verification are follow-up work."
+    "storage_result": "NodeCore/conformance/results/rust_storage_gate_docker_2026-06-03.json",
+    "script_corpus_result": "NodeCore/conformance/results/rust_script_corpus_docker_2026-06-03.json",
+    "local_reference_result": "NodeCore/conformance/results/rust_local_reference_docker_sync_2026-06-03.json",
+    "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, and bounded local-reference replay through height 10000 pass. Live P2P sync, tip maintenance, and binary-gate completion remain follow-up work."
   },
-  "known_caveats": ["No live P2P sync or local-reference network proof yet", "Script corpus command loads all 45 fixtures but records not_implemented until Rust has an independent verifier"]
+  "known_caveats": ["No live P2P sync or tip maintenance claim yet", "Bounded local-reference RPC proof is not live P2P sync or tip maintenance", "Binary gate remains not_attempted"]
 }

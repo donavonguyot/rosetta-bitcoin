@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CsBitNode.Chain;
 using CsBitNode.Consensus.Block;
 using CsBitNode.Config;
@@ -21,6 +22,7 @@ public static class SyncLocalCoreService
         var maxBatches = PeerConfig.ParseInt(env.GetValueOrDefault("HEADER_BATCHES_MAX"), HeaderSync.DefaultHeaderBatchesMax);
         var maxBlocks = PeerConfig.ParseInt(env.GetValueOrDefault("BLOCKS_MAX"), 128);
         var skipBlocks = PeerConfig.ParseBool(env.GetValueOrDefault("SKIP_BLOCKS"), false);
+        var syncTiming = PeerConfig.ParseBool(env.GetValueOrDefault("CSBITNODE_SYNC_TIMING"), false);
         var fixtureBlocksDir = env.GetValueOrDefault("FIXTURE_BLOCKS_DIR");
 
         var dataDir = NodePaths.DataDirFromEnv(env.GetValueOrDefault("DATA_DIR"));
@@ -35,7 +37,7 @@ public static class SyncLocalCoreService
 
         try
         {
-            return RunNative(output, chain, peer, maxHeaders, maxBatches, maxBlocks, skipBlocks, dataDir, fixtureBlocksDir);
+            return RunNative(output, chain, peer, maxHeaders, maxBatches, maxBlocks, skipBlocks, dataDir, fixtureBlocksDir, syncTiming);
         }
         catch (DatadirLockBusyException ex)
         {
@@ -64,20 +66,23 @@ public static class SyncLocalCoreService
         int maxBlocks,
         bool skipBlocks,
         string dataDir,
-        string? fixtureBlocksDir)
+        string? fixtureBlocksDir,
+        bool syncTiming)
     {
         using var session = ChainstateSession.OpenNative(dataDir, chain);
         var tracker = session.Store;
+        var timingSink = syncTiming ? new ConsoleTimingSink(output) : null;
         if (!string.IsNullOrWhiteSpace(fixtureBlocksDir))
         {
             var fixtureExitCode = 0;
             SeedFixtureHeaders(tracker, chain, fixtureBlocksDir);
             if (!skipBlocks)
             {
-                var result = BlockSync.SyncFromBlockSource(new FixtureBlockSource(fixtureBlocksDir), chain, tracker, session.BlockStorage, maxBlocks);
+                var result = BlockSync.SyncFromBlockSource(new FixtureBlockSource(fixtureBlocksDir), chain, tracker, session.BlockStorage, maxBlocks, timingSink);
                 output.WriteLine($"  downloaded_blocks={result.Downloaded}");
                 output.WriteLine($"  connected_blocks={result.Connected}");
                 output.WriteLine($"  sync_status={result.SyncStatus}");
+                PersistTimingSummary(tracker, chain.Name, timingSink, output);
                 if (result.SyncStatus is "blocked" or "failed")
                     fixtureExitCode = 3;
             }
@@ -100,10 +105,11 @@ public static class SyncLocalCoreService
         var syncExitCode = 0;
         if (!skipBlocks)
         {
-            var blockResult = BlockSync.SyncFromPeer(connection, chain, tracker, session.BlockStorage, maxBlocks);
+            var blockResult = BlockSync.SyncFromBlockSource(connection, chain, tracker, session.BlockStorage, maxBlocks, timingSink);
             output.WriteLine($"  downloaded_blocks={blockResult.Downloaded}");
             output.WriteLine($"  connected_blocks={blockResult.Connected}");
             output.WriteLine($"  sync_status={blockResult.SyncStatus}");
+            PersistTimingSummary(tracker, chain.Name, timingSink, output);
             if (blockResult.BlockerMessage is not null)
                 output.WriteLine($"  current_blocker={blockResult.BlockerMessage}");
             syncExitCode = blockResult.SyncStatus is "blocked" or "failed" ? 3 : 0;
@@ -114,6 +120,15 @@ public static class SyncLocalCoreService
         output.WriteLine($"chainstate_check backend={tracker.Metadata.BackendName} validated_height={tracker.GetValidatedHeight(chain.Name)} validated_hash={tracker.GetValidatedHash(chain.Name) ?? ""} chainstate_status={tracker.Metadata.Status} generation_id={tracker.Metadata.GenerationId} backend_utxo_count={tracker.UtxoCount(chain.Name)}");
         output.WriteLine("  binary_gate_status=not_attempted");
         return syncExitCode;
+    }
+
+    private static void PersistTimingSummary(IChainstateStore tracker, string chain, ConsoleTimingSink? timingSink, TextWriter output)
+    {
+        if (timingSink is null)
+            return;
+        var summary = timingSink.Snapshot();
+        tracker.SetSyncTimingSummary(chain, summary);
+        output.WriteLine($"  timing_summary_json={JsonSerializer.Serialize(summary)}");
     }
 
     private static void PrintBestEffortStatus(TextWriter output, string chain, string dataDir)
@@ -171,6 +186,19 @@ public static class SyncLocalCoreService
                     return payload;
             }
             return null;
+        }
+    }
+
+    private sealed class ConsoleTimingSink : SyncTimingCollector
+    {
+        private readonly TextWriter _output;
+
+        public ConsoleTimingSink(TextWriter output) => _output = output;
+
+        public override void Record(string stage, int height, long elapsedTicks)
+        {
+            base.Record(stage, height, elapsedTicks);
+            _output.WriteLine($"  timing stage={stage} height={height} elapsed_us={TicksToMicros(elapsedTicks)} elapsed_ms={TicksToMillis(elapsedTicks)}");
         }
     }
 }

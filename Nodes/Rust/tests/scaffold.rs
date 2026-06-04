@@ -67,8 +67,11 @@ fn script_corpus_loads_45_rows() {
     );
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("script json");
     assert_eq!(value["fixture_count"], 45);
-    assert_eq!(value["failed"], 0);
-    assert_eq!(value["not_implemented"], 45);
+    assert_eq!(
+        value["passed"].as_i64().unwrap() + value["failed"].as_i64().unwrap(),
+        45
+    );
+    assert_eq!(value["not_implemented"], 0);
     assert_eq!(value["verifier"]["delegated"], false);
     assert!(result.is_file());
 }

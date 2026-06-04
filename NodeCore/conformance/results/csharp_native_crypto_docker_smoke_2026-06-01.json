@@ -1,7 +1,7 @@
 {
   "implementation": "CSharpNode",
   "category": "docker_native_crypto_sync",
-  "captured_at": "2026-06-02T21:19:28.760601+00:00",
+  "captured_at": "2026-06-03T21:33:34.783725+00:00",
   "datadir": "/data",
   "chain": "testnet4",
   "target_header_height": 200,
@@ -26,6 +26,6 @@
     "command": "make docker-csharp-native-crypto-proof",
     "docker_volume": "csbitnode_proof_data",
     "live_progress_reporting": true,
-    "progress_interval_seconds": 120
+    "progress_interval_seconds": 5
   }
 }

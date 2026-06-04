@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Summarize block sync batch progress from sync_batch_run.log (and optionally chain_state.db)."""
+"""Summarize block sync batch progress from sync_batch_run.log and native RocksDB status."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
-import sqlite3
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,44 +85,37 @@ def pct_to_target(height: int, target: int) -> float:
     return min(100.0, round(100.0 * height / target, 2))
 
 
-def sqlite_readonly_uri(db_path: Path) -> str:
-    """Return a SQLite URI that always opens read-only (see https://www.sqlite.org/uri.html)."""
-    p = db_path.expanduser().resolve()
-    base = p.as_uri()
-    sep = "&" if "?" in base else "?"
-    return f"{base}{sep}mode=ro"
-
-
-def read_validated_height_db(db_path: Path, *, chain: str) -> int:
-    p = db_path.expanduser().resolve()
-    if not p.is_file():
-        return 0
-    conn = sqlite3.connect(sqlite_readonly_uri(p), uri=True)
-    try:
-        row = conn.execute(
-            "SELECT validated_height FROM chain_state WHERE chain = ? LIMIT 1",
-            (chain,),
-        ).fetchone()
-    finally:
-        conn.close()
-    if row is None:
-        return 0
-    return int(row[0])
+def read_validated_height_status(status_bin: Path, datadir: Path) -> int:
+    proc = subprocess.run(
+        [
+            str(status_bin.expanduser()),
+            "--datadir",
+            str(datadir.expanduser()),
+            "--chainstate-backend",
+            "rocksdb",
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    status = json.loads(proc.stdout)
+    return int(status.get("validated_height", 0))
 
 
 def build_report(
     *,
     log_path: Path,
     target: int,
-    db_path: Path | None,
-    chain: str,
+    datadir: Path | None,
+    status_bin: Path,
 ) -> tuple[str, ...]:
     text = log_path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
     last_start, last_end = parse_batch_log_lines(lines)
 
-    if db_path is not None:
-        vh = read_validated_height_db(db_path, chain=chain)
+    if datadir is not None:
+        vh = read_validated_height_status(status_bin, datadir)
     else:
         vh_o = validated_height_from_log(last_start, last_end)
         if vh_o is None:
@@ -144,7 +138,7 @@ def build_report(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Report sync batch progress from log (optional read-only DB).")
+    parser = argparse.ArgumentParser(description="Report sync batch progress from log and optional native status.")
     parser.add_argument(
         "--log",
         type=Path,
@@ -158,18 +152,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Target height for %% progress (default: 10000)",
     )
     parser.add_argument(
-        "--chain",
-        default="testnet4",
-        help="Chain name when reading chain_state from --db (default: testnet4)",
-    )
-    parser.add_argument(
-        "--db",
+        "--datadir",
         nargs="?",
-        const=Path("data-cpp/cpbitnode.db"),
+        const=Path("data-cpp"),
         default=None,
         type=Path,
-        help="Read validated_height read-only from this SQLite DB "
-        "(default path when flag is bare: ./data-cpp/cpbitnode.db)",
+        help="Read validated_height from RocksDB-native cpbitnode-db status "
+        "(default path when flag is bare: ./data-cpp)",
+    )
+    parser.add_argument(
+        "--status-bin",
+        type=Path,
+        default=Path("build/cpbitnode-db"),
+        help="cpbitnode-db executable (default: build/cpbitnode-db)",
     )
 
     ns = parser.parse_args(argv)
@@ -178,11 +173,11 @@ def main(argv: list[str] | None = None) -> int:
         for line in build_report(
             log_path=ns.log,
             target=ns.target,
-            db_path=ns.db,
-            chain=ns.chain,
+            datadir=ns.datadir,
+            status_bin=ns.status_bin,
         ):
             print(line)
-    except (OSError, ValueError, sqlite3.Error) as e:
+    except (OSError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     return 0

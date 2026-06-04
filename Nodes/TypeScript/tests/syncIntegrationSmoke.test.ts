@@ -5,14 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TESTNET4 } from "../src/chain/params.js";
 import { Settings } from "../src/config/settings.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import { runNode } from "../src/node.js";
 import { PeerConnection } from "../src/p2p/peer.js";
 import { PeerManager } from "../src/p2p/manager.js";
-import type { BlockStore } from "../src/storage/blocks.js";
 import { ensureGenesis, repairSyncState } from "../src/sync/headers.js";
 
-function seedHeadersAfterGenesis(tracker: ProjectTracker): void {
+function seedHeadersAfterGenesis(tracker: NativeNodeState): void {
   tracker.recordHeader(TESTNET4.name, {
     height: 1,
     blockHash: "hash1",
@@ -67,17 +66,8 @@ describe("sync integration smoke", () => {
 
     const dir = mkdtempSync(join(tmpdir(), "ts-sync-smoke-"));
     mkdirSync(dir, { recursive: true });
-    const dbPath = join(dir, "tsbitnode.db");
-
-    const tracker = new ProjectTracker(dbPath);
-    ensureGenesis(tracker, TESTNET4);
-    seedHeadersAfterGenesis(tracker);
-    repairSyncState(tracker, TESTNET4);
-    tracker.close();
-
     const settings = new Settings();
     settings.dataDir = dir;
-    settings.dbPath = dbPath;
     settings.peers = "127.0.0.1:48333";
     settings.noHeaderRefresh = true;
     settings.skipGetaddr = true;
@@ -97,7 +87,7 @@ describe("sync integration smoke", () => {
     });
 
     const dir = mkdtempSync(join(tmpdir(), "ts-sync-mgr-"));
-    const tracker = new ProjectTracker(join(dir, "mgr.db"));
+    const tracker = new NativeNodeState(join(dir, "mgr.stateDir"));
     ensureGenesis(tracker, TESTNET4);
     seedHeadersAfterGenesis(tracker);
 
@@ -124,28 +114,17 @@ describe("sync integration smoke", () => {
   });
 
   it("runNode sync-only completes block sync path with mocked peers", async () => {
-    const syncBlockCalls: BlockStore[] = [];
+    const syncBlockCalls: number[] = [];
     patchPeerManagerNoNetwork([]);
-    vi.spyOn(PeerManager.prototype, "syncBlocks").mockImplementation(async function (
-      this: PeerManager,
-      blockStore: BlockStore,
-    ) {
-      syncBlockCalls.push(blockStore);
+    vi.spyOn(PeerManager.prototype, "syncBlocks").mockImplementation(async function (this: PeerManager) {
+      syncBlockCalls.push(1);
       return 0;
     });
 
     const dir = mkdtempSync(join(tmpdir(), "ts-sync-blocks-"));
     mkdirSync(dir, { recursive: true });
-    const dbPath = join(dir, "tsbitnode.db");
-
-    const tracker = new ProjectTracker(dbPath);
-    ensureGenesis(tracker, TESTNET4);
-    repairSyncState(tracker, TESTNET4);
-    tracker.close();
-
     const settings = new Settings();
     settings.dataDir = dir;
-    settings.dbPath = dbPath;
     settings.peers = "127.0.0.1:48333";
     settings.noHeaderRefresh = true;
     settings.skipGetaddr = true;

@@ -3,12 +3,17 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 mod codec;
+mod connect;
 mod crypto_vectors;
+mod local_reference;
+mod refsync;
 mod repo;
 mod script_corpus;
+mod script_verify;
 mod status;
 mod storage;
 mod storage_proof;
+mod tx;
 
 #[derive(Parser)]
 #[command(name = "rsbitnode")]
@@ -49,6 +54,58 @@ enum Command {
         result_path: Option<PathBuf>,
         #[arg(long)]
         fixture_id: Option<String>,
+        #[arg(long, default_value = "host")]
+        runtime_surface: String,
+    },
+    Sync {
+        #[arg(long, default_value = "./data-rust-sync")]
+        datadir: PathBuf,
+        #[arg(long, default_value_t = 10000)]
+        target: u32,
+        #[arg(long)]
+        rpc_url: Option<String>,
+        #[arg(long)]
+        rpc_user: Option<String>,
+        #[arg(long)]
+        rpc_password: Option<String>,
+        #[arg(long, default_value_t = 1000)]
+        progress: u32,
+        #[arg(long, default_value = "host")]
+        runtime_surface: String,
+    },
+    Connect {
+        #[arg(long, default_value = "./data-rust-sync")]
+        datadir: PathBuf,
+        #[arg(long, default_value_t = 10000)]
+        target: u32,
+        #[arg(long, default_value_t = 100)]
+        progress: u32,
+        #[arg(long, default_value = "host")]
+        runtime_surface: String,
+    },
+    LocalReferenceProof {
+        #[arg(long, default_value = "./data-rust-docker-proof")]
+        datadir: PathBuf,
+        #[arg(long, default_value_t = 10000)]
+        target: u32,
+        #[arg(long)]
+        rpc_url: Option<String>,
+        #[arg(long)]
+        rpc_user: Option<String>,
+        #[arg(long)]
+        rpc_password: Option<String>,
+        #[arg(long)]
+        result_path: Option<PathBuf>,
+        #[arg(long, default_value_t = 1000)]
+        progress: u32,
+        #[arg(long, default_value = "pipeline")]
+        mode: String,
+        #[arg(long, default_value = "host")]
+        runtime_surface: String,
+    },
+    BlockerInspect {
+        #[arg(long, default_value = "./data-rust-sync")]
+        datadir: PathBuf,
     },
 }
 
@@ -78,11 +135,92 @@ fn main() -> Result<()> {
             manifest,
             result_path,
             fixture_id,
+            runtime_surface,
         } => print_json(&script_corpus::run(
             manifest.as_deref(),
             result_path.as_deref(),
             fixture_id.as_deref(),
+            &runtime_surface,
         )?),
+        Command::Sync {
+            datadir,
+            target,
+            rpc_url,
+            rpc_user,
+            rpc_password,
+            progress,
+            runtime_surface,
+        } => {
+            let (default_url, default_user, default_pass) = refsync::rpc_defaults(false);
+            let rpc_url = rpc_url.unwrap_or_else(|| default_url.to_string());
+            let rpc_user = rpc_user.unwrap_or_else(|| default_user.to_string());
+            let rpc_password = rpc_password.unwrap_or_else(|| default_pass.to_string());
+            print_json(&refsync::run(refsync::SyncOptions {
+                datadir: &datadir,
+                target,
+                rpc_url: &rpc_url,
+                rpc_user: &rpc_user,
+                rpc_password: &rpc_password,
+                progress,
+                runtime_surface: &runtime_surface,
+            })?)
+        }
+        Command::Connect {
+            datadir,
+            target,
+            progress,
+            runtime_surface,
+        } => print_json(&connect::run(connect::ConnectOptions {
+            datadir: &datadir,
+            target,
+            progress,
+            quiet: false,
+            runtime_surface: &runtime_surface,
+        })?),
+        Command::LocalReferenceProof {
+            datadir,
+            target,
+            rpc_url,
+            rpc_user,
+            rpc_password,
+            result_path,
+            progress,
+            mode,
+            runtime_surface,
+        } => {
+            let docker = runtime_surface == "docker";
+            let (default_url, default_user, default_pass) = refsync::rpc_defaults(docker);
+            let rpc_url = rpc_url.unwrap_or_else(|| default_url.to_string());
+            let rpc_user = rpc_user.unwrap_or_else(|| default_user.to_string());
+            let rpc_password = rpc_password.unwrap_or_else(|| default_pass.to_string());
+            print_json(&local_reference::run(
+                local_reference::LocalReferenceOptions {
+                    datadir: &datadir,
+                    target,
+                    rpc_url: &rpc_url,
+                    rpc_user: &rpc_user,
+                    rpc_password: &rpc_password,
+                    result_path: result_path.as_deref(),
+                    progress,
+                    mode: &mode,
+                    runtime_surface: &runtime_surface,
+                },
+            )?)
+        }
+        Command::BlockerInspect { datadir } => {
+            let meta =
+                storage::read_metadata(&datadir).unwrap_or_else(|_| storage::missing_metadata());
+            print_json(&serde_json::json!({
+                "implementation": "RustNode",
+                "category": "blocker_inspect",
+                "datadir": datadir,
+                "current_blocker": meta.current_blocker,
+                "validated_height": meta.validated_height,
+                "validated_hash": meta.validated_hash,
+                "sync_status": meta.sync_status,
+                "binary_gate_status": "not_attempted"
+            }))
+        }
     }
 }
 

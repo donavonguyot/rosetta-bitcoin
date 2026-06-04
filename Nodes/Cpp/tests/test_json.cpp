@@ -30,7 +30,7 @@ void testJsonObjectCommaSeparation() {
 }
 
 void testJsonArrayCommaSeparation() {
-    EXPECT_EQ(jsonArray({"1", "2"}), "[1,2]");
+    EXPECT_EQ(jsonArray({"1", "2"}), "[\"1\",\"2\"]");
     EXPECT_EQ(jsonArray({}), "[]");
 }
 

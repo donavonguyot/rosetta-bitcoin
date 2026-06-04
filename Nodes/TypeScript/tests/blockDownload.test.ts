@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { TESTNET4 } from "../src/chain/params.js";
 import { Settings } from "../src/config/settings.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import {
   buildVersionMessage,
   deserializeVersion,
@@ -138,7 +138,7 @@ describe("PeerConnection block download", () => {
     const blockPayload = syntheticBlockPayload(TESTNET4.genesisHash);
     mock = await startBlockServingPeer(blockPayload);
     tempDir = mkdtempSync(join(tmpdir(), "tsbitnode-block-peer-"));
-    const tracker = new ProjectTracker(join(tempDir, "peer.db"));
+    const tracker = new NativeNodeState(join(tempDir, "peer.stateDir"));
     const settings = Settings.fromEnv({ userAgent: "/tsbitnode:0.1.0/" });
 
     const peer = new PeerConnection({

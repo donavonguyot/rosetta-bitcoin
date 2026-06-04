@@ -1,11 +1,5 @@
 import {
-  isP2pk,
-  isP2pkh,
-  isP2sh,
-  isP2tr,
-  isP2wpkh,
-  isP2wsh,
-  verifyScript,
+  assertVerifyScript,
   witnessProgramVersion,
 } from "./interpreter.js";
 import type { Transaction } from "../../messages/transaction.js";
@@ -39,19 +33,6 @@ export function verifyTransactionInput(
     throw new ScriptVerifyError(`unsupported witness program version ${witnessVersion}`);
   }
 
-  if (
-    !(
-      isP2pk(options.scriptPubKey) ||
-      isP2pkh(options.scriptPubKey) ||
-      isP2wpkh(options.scriptPubKey) ||
-      isP2sh(options.scriptPubKey) ||
-      isP2wsh(options.scriptPubKey) ||
-      isP2tr(options.scriptPubKey)
-    )
-  ) {
-    throw new ScriptVerifyError("unsupported scriptPubKey template");
-  }
-
   const verifyOptions: {
     tx: Transaction;
     inputIndex: number;
@@ -68,7 +49,10 @@ export function verifyTransactionInput(
     verifyOptions.spentPrevouts = options.spentPrevouts;
   }
 
-  if (!verifyScript(txIn.scriptSig, options.scriptPubKey, verifyOptions)) {
-    throw new ScriptVerifyError(`script verification failed for input ${inputIndex}`);
+  try {
+    assertVerifyScript(txIn.scriptSig, options.scriptPubKey, verifyOptions);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new ScriptVerifyError(`input ${inputIndex}: ${detail}`);
   }
 }

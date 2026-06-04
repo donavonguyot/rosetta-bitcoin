@@ -189,17 +189,19 @@ void testSettingsFromEnvNumericOverrides() {
     EXPECT_EQ(settings.metricsHttpPort, 9090);
 }
 
-void testSettingsFromArgsDbAndListenFlags() {
-    const auto dir = (std::filesystem::temp_directory_path() / "cpbitnode_settings_db_listen").string();
+void testSettingsFromArgsRejectsDbFlag() {
     std::vector<std::string> argsStore = {"cpbitnode", "--db", "/tmp/custom.db", "--listen"};
     std::vector<char*> argv;
     for (auto& arg : argsStore) {
         argv.push_back(arg.data());
     }
-    const Settings settings = Settings::fromArgs(static_cast<int>(argv.size()), argv.data());
-    EXPECT_EQ(settings.dbPath, "/tmp/custom.db");
-    EXPECT_TRUE(settings.listen);
-    (void)dir;
+    bool threw = false;
+    try {
+        (void)Settings::fromArgs(static_cast<int>(argv.size()), argv.data());
+    } catch (const std::runtime_error& exc) {
+        threw = std::string(exc.what()).find("--db is not supported") != std::string::npos;
+    }
+    EXPECT_TRUE(threw);
 }
 
 void testSettingsFromSyncArgsHelpThrows() {
@@ -246,7 +248,7 @@ void registerEndpointSettingsTests() {
     RUN_TEST(testHostPortRejectsAmbiguousMappedIpv6);
     RUN_TEST(testSettingsFromEnvBoolVariants);
     RUN_TEST(testSettingsFromEnvNumericOverrides);
-    RUN_TEST(testSettingsFromArgsDbAndListenFlags);
+    RUN_TEST(testSettingsFromArgsRejectsDbFlag);
     RUN_TEST(testSettingsFromSyncArgsHelpThrows);
     RUN_TEST(testSettingsBlocksDirStripsTrailingSlash);
     RUN_TEST(testSettingsLightweightOutboundHandshake);

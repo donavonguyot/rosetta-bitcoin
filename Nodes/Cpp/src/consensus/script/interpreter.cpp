@@ -1215,8 +1215,30 @@ bool isEcdsaPubkey(std::span<const std::uint8_t> item) {
 }
 
 bool isBareOpN(std::span<const std::uint8_t> scriptPubkey) {
-    return scriptPubkey.size() == 1 &&
-           ((scriptPubkey[0] >= OP_1 && scriptPubkey[0] <= OP_16) || scriptPubkey[0] == OP_1NEGATE);
+    if (scriptPubkey.empty()) {
+        return false;
+    }
+    const auto opcode = scriptPubkey[0];
+    if (!((opcode >= OP_1 && opcode <= OP_16) || opcode == OP_1NEGATE)) {
+        return false;
+    }
+    if (scriptPubkey.size() == 1) {
+        return true;
+    }
+    if (isP2tr(scriptPubkey) || isP2wpkh(scriptPubkey) || isP2wsh(scriptPubkey)) {
+        return false;
+    }
+    const auto pushOpcode = scriptPubkey[1];
+    if (pushOpcode == OP_0 || (pushOpcode >= OP_1 && pushOpcode <= OP_16) || pushOpcode == OP_1NEGATE) {
+        return false;
+    }
+    try {
+        const auto [item, next] = readPush(scriptPubkey, 1);
+        (void)item;
+        return next == scriptPubkey.size();
+    } catch (const ScriptError&) {
+        return false;
+    }
 }
 
 bool isBareMultisig(std::span<const std::uint8_t> scriptPubkey) {

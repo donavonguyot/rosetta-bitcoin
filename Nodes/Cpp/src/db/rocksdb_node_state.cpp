@@ -1,26 +1,34 @@
 #include "cpbitnode/db/node_state.hpp"
 
+#include "cpbitnode/db/codec_v2.hpp"
+#include "cpbitnode/messages/block_header.hpp"
 #include "cpbitnode/util/json.hpp"
 #include "cpbitnode/wire/capabilities.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <thread>
+#include <unordered_map>
 
-#ifdef CPBITNODE_USE_ROCKSDB
+#include <rocksdb/cache.h>
 #include <rocksdb/db.h>
+#include <rocksdb/filter_policy.h>
 #include <rocksdb/iterator.h>
 #include <rocksdb/options.h>
+#include <rocksdb/table.h>
 #include <rocksdb/version.h>
 #include <rocksdb/write_batch.h>
-#endif
 
 namespace cpbitnode::db {
 namespace {
+
+constexpr std::string_view kDefaultChain = "testnet4";
 
 std::string utcNow() {
     const auto now = std::chrono::system_clock::now();
@@ -135,7 +143,7 @@ std::string jsonMapOfStringMaps(const std::map<std::string, std::map<std::string
 
 std::string encodeUtxo(const StoredUtxo& utxo) {
     return encodeMap({
-        {"txid", utxo.txid},
+        {"txid", txidDisplayHex(utxo.txid)},
         {"vout", std::to_string(utxo.vout)},
         {"height", std::to_string(utxo.height)},
         {"value", std::to_string(utxo.value)},
@@ -147,7 +155,7 @@ std::string encodeUtxo(const StoredUtxo& utxo) {
 StoredUtxo decodeUtxo(const std::string& encoded) {
     const auto fields = decodeMap(encoded);
     StoredUtxo utxo;
-    utxo.txid = fields.at("txid");
+    utxo.txid = displayHexToInternal(fields.at("txid"));
     utxo.vout = std::stoi(fields.at("vout"));
     utxo.height = std::stoi(fields.at("height"));
     utxo.value = std::stoll(fields.at("value"));
@@ -192,18 +200,20 @@ StoredBlockRow decodeBlockRow(const std::string& encoded) {
     return row;
 }
 
-std::string encodeBlockRow(const StoredBlockRow& row) {
-    return encodeMap({
-        {"height", std::to_string(row.height)},
-        {"block_hash", row.blockHash},
-        {"file_name", row.fileName},
-        {"file_offset", std::to_string(row.fileOffset)},
-        {"size", std::to_string(row.size)},
-        {"received_at", utcNow()},
-    });
+int blockFileNumber(const std::string& fileName) {
+    if (fileName.rfind("blk", 0) != 0) {
+        return 0;
+    }
+    const auto dot = fileName.find('.');
+    const auto number = fileName.substr(3, dot == std::string::npos ? std::string::npos : dot - 3);
+    return number.empty() ? 0 : std::stoi(number);
 }
 
-#ifdef CPBITNODE_USE_ROCKSDB
+std::string encodeBlockRow(const StoredBlockRow& row) {
+    return codec_v2::encodeBlockIndexValue(codec_v2::displayHexToInternal(row.blockHash), blockFileNumber(row.fileName),
+                                           row.fileOffset, row.size);
+}
+
 void checkStatus(const rocksdb::Status& status, const std::string& action) {
     if (!status.ok()) {
         throw std::runtime_error(action + ": " + status.ToString());
@@ -214,12 +224,39 @@ bool keyStartsWith(const rocksdb::Slice& key, const std::string& prefix) {
     return key.size() >= prefix.size() && std::string_view(key.data(), prefix.size()) == prefix;
 }
 
+struct DbOutpointKey {
+    std::vector<std::uint8_t> txid;
+    int vout = 0;
+
+    bool operator==(const DbOutpointKey& other) const { return vout == other.vout && txid == other.txid; }
+};
+
+struct DbOutpointKeyHash {
+    std::size_t operator()(const DbOutpointKey& key) const {
+        std::size_t hash = static_cast<std::size_t>(key.vout);
+        for (const auto byte : key.txid) {
+            hash = hash * 131 + byte;
+        }
+        return hash;
+    }
+};
+
 class RocksDbNodeStateStore final : public NodeStateStore {
 public:
     explicit RocksDbNodeStateStore(const std::filesystem::path& path) : path_(path.string()) {
         std::filesystem::create_directories(path);
         rocksdb::Options options;
         options.create_if_missing = true;
+        options.write_buffer_size = 128 * 1024 * 1024;
+        options.max_write_buffer_number = 4;
+        options.max_background_jobs = std::max(2u, std::thread::hardware_concurrency());
+        options.IncreaseParallelism(options.max_background_jobs);
+        options.OptimizeLevelStyleCompaction();
+        rocksdb::BlockBasedTableOptions tableOptions;
+        tableOptions.block_cache = rocksdb::NewLRUCache(128 * 1024 * 1024);
+        tableOptions.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+        options.table_factory.reset(rocksdb::NewBlockBasedTableFactory(tableOptions));
+        disableWal_ = envFlag("CPBITNODE_ROCKSDB_DISABLE_WAL");
 #if ROCKSDB_MAJOR >= 10
         checkStatus(rocksdb::DB::Open(options, path_, &db_), "open rocksdb node state");
 #else
@@ -227,35 +264,38 @@ public:
         checkStatus(rocksdb::DB::Open(options, path_, &raw), "open rocksdb node state");
         db_.reset(raw);
 #endif
-        std::string generation;
-        const auto status = db_->Get(rocksdb::ReadOptions(), "meta/generation_id", &generation);
-        if (status.IsNotFound()) {
-            generation = "rocksdb-cpp";
-            checkStatus(db_->Put(rocksdb::WriteOptions(), "meta/generation_id", generation),
-                        "write rocksdb generation");
-            checkStatus(db_->Put(rocksdb::WriteOptions(), "meta/schema_version", "1"), "write rocksdb schema");
+        const auto codec = getCodecMetadata("codec_version");
+        if (!codec.has_value()) {
+            if (hasAnyRecord()) {
+                throw std::runtime_error(
+                    "incompatible Cpp RocksDB chainstate generation: missing codec_version=2 metadata; rebuild required");
+            }
+            initializeCodecMetadata();
             seedPhases();
-        } else {
-            checkStatus(status, "read rocksdb generation");
+        } else if (*codec != "2") {
+            throw std::runtime_error("unsupported Cpp RocksDB codec_version=" + *codec + "; rebuild required");
         }
+        activeChain_ = getCodecMetadata("chain").value_or(std::string(kDefaultChain));
+        initializeCachedState();
     }
 
     NodeStateMetadata nodeStateMetadata() const override {
         NodeStateMetadata meta;
         meta.backendName = "rocksdb";
         meta.backendPath = path_;
-        meta.status = "usable";
-        meta.generationId = getString("meta/generation_id").value_or("");
-        meta.schemaVersion = getString("meta/schema_version").value_or("1");
+        meta.status = getCodecMetadata("status").value_or("usable");
+        meta.generationId = getCodecMetadata("generation_id").value_or("");
+        meta.schemaVersion = getCodecMetadata("schema_version").value_or("2");
         return meta;
     }
 
     void setMeta(const std::string& key, const std::string& value) override {
-        checkStatus(db_->Put(rocksdb::WriteOptions(), "meta/user/" + key, value), "write meta");
+        checkStatus(db_->Put(writeOptions(), codec_v2::keyMetadata("user." + key), codec_v2::encodeMetadataValue(value)),
+                    "write meta");
     }
 
     std::optional<std::string> getMeta(const std::string& key) const override {
-        return getString("meta/user/" + key);
+        return getCodecMetadata("user." + key);
     }
 
     void updatePhase(const std::string& phase, const std::optional<std::string>& status = std::nullopt,
@@ -271,7 +311,7 @@ public:
             (*row)["notes"] = *notes;
         }
         (*row)["updated_at"] = utcNow();
-        checkStatus(db_->Put(rocksdb::WriteOptions(), phaseKey(phase), encodeMap(*row)), "write phase");
+        checkStatus(db_->Put(writeOptions(), phaseKey(phase), encodeMap(*row)), "write phase");
     }
 
     std::vector<std::map<std::string, std::string>> listPhases() const override {
@@ -281,7 +321,7 @@ public:
     void logEvent(const std::string& category, const std::string& message, const std::string& level = "info",
                   const std::string& detailsJson = "{}") override {
         const int next = nextCounter("counter/event_id");
-        checkStatus(db_->Put(rocksdb::WriteOptions(), "event/" + padInt(next),
+        checkStatus(db_->Put(writeOptions(), "event/" + padInt(next),
                              encodeMap({{"id", std::to_string(next)},
                                         {"category", category},
                                         {"level", level},
@@ -311,7 +351,7 @@ public:
             row["sync_status"] = *syncStatus;
         }
         row["updated_at"] = utcNow();
-        checkStatus(db_->Put(rocksdb::WriteOptions(), "sync/" + chain, encodeMap(row)), "write sync state");
+        checkStatus(db_->Put(writeOptions(), "sync/" + chain, encodeMap(row)), "write sync state");
     }
 
     std::optional<std::map<std::string, std::string>> getSyncState(const std::string& chain) const override {
@@ -321,7 +361,7 @@ public:
     int recordPeerConnected(const std::string& host, int port, const std::string& userAgent = "",
                             const std::string& direction = "outbound") override {
         const int id = nextCounter("counter/peer_id");
-        checkStatus(db_->Put(rocksdb::WriteOptions(), "peer/" + padInt(id),
+        checkStatus(db_->Put(writeOptions(), "peer/" + padInt(id),
                              encodeMap({{"id", std::to_string(id)},
                                         {"host", host},
                                         {"port", std::to_string(port)},
@@ -346,7 +386,7 @@ public:
         }
         (*row)["disconnected_at"] = utcNow();
         (*row)["status"] = "disconnected";
-        checkStatus(db_->Put(rocksdb::WriteOptions(), "peer/" + padInt(peerId), encodeMap(*row)), "disconnect peer");
+        checkStatus(db_->Put(writeOptions(), "peer/" + padInt(peerId), encodeMap(*row)), "disconnect peer");
     }
 
     void touchPeer(int peerId) override {
@@ -355,7 +395,7 @@ public:
             return;
         }
         (*row)["last_seen_at"] = utcNow();
-        checkStatus(db_->Put(rocksdb::WriteOptions(), "peer/" + padInt(peerId), encodeMap(*row)), "touch peer");
+        checkStatus(db_->Put(writeOptions(), "peer/" + padInt(peerId), encodeMap(*row)), "touch peer");
     }
 
     void recordPeerAddress(const std::string& host, int port, std::uint64_t services = 0,
@@ -367,7 +407,7 @@ public:
         row["services"] = std::to_string(services);
         row["source"] = source;
         row["last_seen_at"] = utcNow();
-        checkStatus(db_->Put(rocksdb::WriteOptions(), key, encodeMap(row)), "write peer address");
+        checkStatus(db_->Put(writeOptions(), key, encodeMap(row)), "write peer address");
     }
 
     int getPeerEndpointBanScore(const std::string& host, int port) const override {
@@ -382,7 +422,7 @@ public:
         recordPeerAddress(host, port, 0, "ban");
         auto row = getMap(peerAddressKey(host, port)).value();
         row["ban_score"] = std::to_string(next);
-        checkStatus(db_->Put(rocksdb::WriteOptions(), peerAddressKey(host, port), encodeMap(row)), "write ban score");
+        checkStatus(db_->Put(writeOptions(), peerAddressKey(host, port), encodeMap(row)), "write ban score");
         return next;
     }
 
@@ -404,56 +444,116 @@ public:
 
     void recordHeader(int height, const std::string& blockHash, const std::string& prevHash, int timestamp,
                       const std::string& headerSerializedHex = "") override {
-        const auto row = encodeMap({{"height", std::to_string(height)},
-                                    {"block_hash", blockHash},
-                                    {"prev_hash", prevHash},
-                                    {"timestamp", std::to_string(timestamp)},
-                                    {"received_at", utcNow()},
-                                    {"header_serialized_hex", headerSerializedHex}});
+        recordHeaders({HeaderRecord{height, blockHash, prevHash, timestamp, headerSerializedHex}});
+    }
+
+    void recordHeaders(const std::vector<HeaderRecord>& headers) override {
+        if (headers.empty()) {
+            return;
+        }
         rocksdb::WriteBatch batch;
-        batch.Put(headerHeightKey(height), row);
-        batch.Put("header/by_hash/" + blockHash, std::to_string(height));
-        checkStatus(db_->Write(rocksdb::WriteOptions(), &batch), "write header");
+        int nextHeaderCount = cachedHeaderCount_;
+        for (const auto& header : headers) {
+            (void)header.blockHash;
+            (void)header.prevHash;
+            (void)header.timestamp;
+            const auto serialized = header.headerSerializedHex.empty()
+                                        ? std::vector<std::uint8_t>{}
+                                        : codec_v2::hexToBytes(header.headerSerializedHex);
+            batch.Put(headerHeightKey(header.height), codec_v2::encodeHeaderValue(serialized));
+            nextHeaderCount = std::max(nextHeaderCount, header.height + 1);
+        }
+        setCounter(batch, "counter/header_count", nextHeaderCount);
+        checkStatus(db_->Write(writeOptions(), &batch), "write headers");
+        cachedHeaderCount_ = nextHeaderCount;
+        for (const auto& header : headers) {
+            cachedHeaderHashes_[header.height] = header.blockHash;
+            cachedMaxHeaderHeight_ = std::max(cachedMaxHeaderHeight_, header.height);
+        }
     }
 
     std::optional<int> lookupHeaderHeight(const std::string& blockHashHex) const override {
-        const auto raw = getString("header/by_hash/" + blockHashHex);
-        return raw ? std::optional<int>(std::stoi(*raw)) : std::nullopt;
+        const auto target = codec_v2::displayHexToInternal(blockHashHex);
+        std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(rocksdb::ReadOptions()));
+        const auto prefix = headerPrefix();
+        for (it->Seek(prefix); it->Valid() && keyStartsWith(it->key(), prefix); it->Next()) {
+            const auto serialized = codec_v2::decodeHeaderValue(it->value().ToString());
+            if (serialized.empty()) {
+                continue;
+            }
+            const auto [header, next] = messages::deserializeBlockHeader(serialized);
+            (void)next;
+            if (header.blockHash() == target) {
+                return codec_v2::heightFromKey(it->key().ToString());
+            }
+        }
+        checkStatus(it->status(), "lookup header height");
+        return std::nullopt;
     }
 
     std::optional<std::string> getHeaderSerializedHex(int height) const override {
-        const auto row = getMap(headerHeightKey(height));
-        if (!row || !row->contains("header_serialized_hex") || row->at("header_serialized_hex").empty()) {
+        const auto encoded = getString(headerHeightKey(height));
+        if (!encoded) {
             return std::nullopt;
         }
-        return row->at("header_serialized_hex");
+        const auto serialized = codec_v2::decodeHeaderValue(*encoded);
+        if (serialized.empty()) {
+            return std::nullopt;
+        }
+        return codec_v2::bytesToHex(serialized);
     }
 
     std::optional<StoredBlockRow> getStoredBlockForHashHex(const std::string& blockHashHex) const override {
-        const auto height = getString("block/by_hash/" + blockHashHex);
-        if (!height) {
-            return std::nullopt;
+        std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(rocksdb::ReadOptions()));
+        const auto prefix = blockPrefix();
+        for (it->Seek(prefix); it->Valid() && keyStartsWith(it->key(), prefix); it->Next()) {
+            const auto height = codec_v2::heightFromKey(it->key().ToString());
+            auto row = codec_v2::decodeBlockIndexValue(height, it->value().ToString());
+            if (row.blockHash == blockHashHex) {
+                return row;
+            }
         }
-        return getBlock(std::stoi(*height));
+        checkStatus(it->status(), "lookup block by hash");
+        return std::nullopt;
     }
 
-    int headerCount() const override { return countPrefix("header/by_height/"); }
-    int blockCount() const override { return countPrefix("block/by_height/"); }
-    int utxoCount() const override { return countPrefix("utxo/"); }
+    int headerCount() const override { return cachedHeaderCount_; }
+    int blockCount() const override { return countPrefix(blockPrefix()); }
+    int utxoCount() const override { return cachedUtxoCount_; }
     int getValidatedHeight(const std::string& chain) const override {
-        return std::stoi(getString("tip/" + chain + "/height").value_or("-1"));
+        if (chain == activeChain_) {
+            return cachedTipHeight_;
+        }
+        const auto tip = getString(codec_v2::keyTip(chain));
+        if (!tip) {
+            return -1;
+        }
+        return codec_v2::decodeTipValue(*tip).first;
     }
     std::string getValidatedHash(const std::string& chain) const override {
-        return getString("tip/" + chain + "/hash").value_or("");
+        if (chain == activeChain_) {
+            return cachedTipHash_;
+        }
+        const auto tip = getString(codec_v2::keyTip(chain));
+        if (!tip) {
+            return "";
+        }
+        return codec_v2::internalToDisplayHex(codec_v2::decodeTipValue(*tip).second);
     }
-    int maxHeaderHeight() const override { return maxHeightForPrefix("header/by_height/"); }
+    int maxHeaderHeight() const override { return cachedMaxHeaderHeight_; }
 
     void setValidatedTip(int height, const std::string& blockHashHex,
                          const std::string& chain = "testnet4") override {
         rocksdb::WriteBatch batch;
-        batch.Put("tip/" + chain + "/height", std::to_string(height));
-        batch.Put("tip/" + chain + "/hash", blockHashHex);
-        checkStatus(db_->Write(rocksdb::WriteOptions(), &batch), "write validated tip");
+        batch.Put(codec_v2::keyTip(chain), codec_v2::encodeTipValue(height, codec_v2::displayHexToInternal(blockHashHex)));
+        setCodecMetadata(batch, "tip_height", std::to_string(height));
+        setCodecMetadata(batch, "tip_hash", blockHashHex);
+        setCodecMetadata(batch, "updated_at", utcNow());
+        checkStatus(db_->Write(writeOptions(), &batch), "write validated tip");
+        if (chain == activeChain_) {
+            cachedTipHeight_ = height;
+            cachedTipHash_ = blockHashHex;
+        }
     }
 
     void recordBlock(int height, const std::string& blockHash, const std::string& fileName, int fileOffset,
@@ -461,34 +561,73 @@ public:
         StoredBlockRow row{height, blockHash, fileName, fileOffset, size};
         rocksdb::WriteBatch batch;
         batch.Put(blockHeightKey(height), encodeBlockRow(row));
-        batch.Put("block/by_hash/" + blockHash, std::to_string(height));
-        checkStatus(db_->Write(rocksdb::WriteOptions(), &batch), "write block index");
+        checkStatus(db_->Write(writeOptions(), &batch), "write block index");
     }
 
     void addUtxo(const std::vector<std::uint8_t>& txid, int vout, int height, std::int64_t value,
                  const std::vector<std::uint8_t>& scriptPubkey, bool coinbase) override {
-        if (txid.size() != 32) {
-            throw std::invalid_argument("txid must be 32 bytes");
-        }
-        StoredUtxo utxo{txidDisplayHex(txid), vout, height, value, scriptPubkey, coinbase};
-        checkStatus(db_->Put(rocksdb::WriteOptions(), utxoKey(txid, vout), encodeUtxo(utxo)), "write utxo");
+        StoredUtxo utxo{txid, vout, height, value, scriptPubkey, coinbase};
+        rocksdb::WriteBatch batch;
+        const auto key = utxoKey(txid, vout);
+        batch.Put(key, codec_v2::encodeUtxoValue(utxo));
+        batch.Put(createdHeightKey(height, key), "");
+        const int nextUtxoCount = cachedUtxoCount_ + 1;
+        setCounter(batch, "counter/utxo_count", nextUtxoCount);
+        checkStatus(db_->Write(writeOptions(), &batch), "write utxo");
+        cachedUtxoCount_ = nextUtxoCount;
     }
 
     std::optional<StoredUtxo> getUtxo(const std::vector<std::uint8_t>& txid, int vout) const override {
         const auto encoded = getString(utxoKey(txid, vout));
-        return encoded ? std::optional<StoredUtxo>(decodeUtxo(*encoded)) : std::nullopt;
+        return encoded ? std::optional<StoredUtxo>(codec_v2::decodeUtxoValue(txid, vout, *encoded)) : std::nullopt;
+    }
+
+    std::vector<std::optional<StoredUtxo>> getUtxos(const std::vector<Outpoint>& outpoints) const override {
+        if (outpoints.empty()) {
+            return {};
+        }
+        std::vector<std::string> keys;
+        keys.reserve(outpoints.size());
+        for (const auto& outpoint : outpoints) {
+            keys.push_back(utxoKey(outpoint.txid, outpoint.vout));
+        }
+        std::vector<rocksdb::Slice> slices;
+        slices.reserve(keys.size());
+        for (const auto& key : keys) {
+            slices.emplace_back(key);
+        }
+        std::vector<std::string> values(keys.size());
+        const auto statuses = db_->MultiGet(rocksdb::ReadOptions(), slices, &values);
+        std::vector<std::optional<StoredUtxo>> out;
+        out.reserve(outpoints.size());
+        for (std::size_t index = 0; index < outpoints.size(); ++index) {
+            if (statuses[index].IsNotFound()) {
+                out.push_back(std::nullopt);
+                continue;
+            }
+            checkStatus(statuses[index], "read rocksdb utxo");
+            out.push_back(codec_v2::decodeUtxoValue(outpoints[index].txid, outpoints[index].vout, values[index]));
+        }
+        return out;
     }
 
     void spendUtxo(const std::vector<std::uint8_t>& txid, int vout) override {
         const auto key = utxoKey(txid, vout);
-        if (!getString(key)) {
+        const auto existing = getUtxo(txid, vout);
+        if (!existing) {
             throw std::runtime_error("UTXO not found");
         }
-        checkStatus(db_->Delete(rocksdb::WriteOptions(), key), "delete utxo");
+        rocksdb::WriteBatch batch;
+        batch.Delete(key);
+        batch.Delete(createdHeightKey(existing->height, key));
+        const int nextUtxoCount = std::max(0, cachedUtxoCount_ - 1);
+        setCounter(batch, "counter/utxo_count", nextUtxoCount);
+        checkStatus(db_->Write(writeOptions(), &batch), "delete utxo");
+        cachedUtxoCount_ = nextUtxoCount;
     }
 
     void replaceUtxoUndo(const std::string& chain, int height, const std::vector<StoredUtxo>& entries) override {
-        checkStatus(db_->Put(rocksdb::WriteOptions(), undoKey(chain, height), encodeUndo(entries)), "write undo");
+        checkStatus(db_->Put(writeOptions(), undoKey(chain, height), codec_v2::encodeUndoValue(entries)), "write undo");
     }
 
     std::vector<StoredUtxo> takeUtxoUndo(const std::string& chain, int height) override {
@@ -497,50 +636,127 @@ public:
         if (!encoded) {
             throw std::runtime_error("missing rocksdb undo");
         }
-        checkStatus(db_->Delete(rocksdb::WriteOptions(), key), "delete undo");
-        return decodeUndo(*encoded);
+        checkStatus(db_->Delete(writeOptions(), key), "delete undo");
+        return codec_v2::decodeUndoValue(*encoded);
     }
 
     void deleteUtxosCreatedAtHeight(int height) override {
         rocksdb::WriteBatch batch;
+        int deleted = 0;
+        const auto prefix = createdHeightPrefix(height);
         std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(rocksdb::ReadOptions()));
-        for (it->Seek("utxo/"); it->Valid() && keyStartsWith(it->key(), "utxo/"); it->Next()) {
-            if (decodeUtxo(it->value().ToString()).height == height) {
-                batch.Delete(it->key());
-            }
+        for (it->Seek(prefix); it->Valid() && keyStartsWith(it->key(), prefix); it->Next()) {
+            const auto indexKey = it->key().ToString();
+            const auto key = indexKey.substr(prefix.size());
+            batch.Delete(key);
+            batch.Delete(indexKey);
+            deleted += 1;
         }
         checkStatus(it->status(), "iterate utxos by height");
-        checkStatus(db_->Write(rocksdb::WriteOptions(), &batch), "delete created utxos");
+        const int nextUtxoCount = std::max(0, cachedUtxoCount_ - deleted);
+        setCounter(batch, "counter/utxo_count", nextUtxoCount);
+        checkStatus(db_->Write(writeOptions(), &batch), "delete created utxos");
+        cachedUtxoCount_ = nextUtxoCount;
     }
 
     void resetValidatedChain(const std::string& chain, const std::string& genesisHash) override {
         rocksdb::WriteBatch batch;
-        deletePrefix(batch, "utxo/");
-        deletePrefix(batch, "undo/" + chain + "/");
-        batch.Put("tip/" + chain + "/height", "0");
-        batch.Put("tip/" + chain + "/hash", genesisHash);
-        checkStatus(db_->Write(rocksdb::WriteOptions(), &batch), "reset validated chain");
+        deletePrefix(batch, utxoPrefix(chain));
+        deletePrefix(batch, "utxo_by_height/");
+        deletePrefix(batch, codec_v2::prefixUndo(chain));
+        batch.Put(codec_v2::keyTip(chain), codec_v2::encodeTipValue(0, codec_v2::displayHexToInternal(genesisHash)));
+        setCounter(batch, "counter/utxo_count", 0);
+        setCodecMetadata(batch, "chain", chain);
+        setCodecMetadata(batch, "network", chain);
+        setCodecMetadata(batch, "tip_height", "0");
+        setCodecMetadata(batch, "tip_hash", genesisHash);
+        setCodecMetadata(batch, "updated_at", utcNow());
+        checkStatus(db_->Write(writeOptions(), &batch), "reset validated chain");
+        activeChain_ = chain;
+        cachedUtxoCount_ = 0;
+        cachedTipHeight_ = 0;
+        cachedTipHash_ = genesisHash;
+    }
+
+    void commitBlock(const BlockCommit& commit) override {
+        rocksdb::WriteBatch batch;
+        std::unordered_map<DbOutpointKey, StoredUtxo, DbOutpointKeyHash> undoByOutpoint;
+        for (const auto& entry : commit.undo) {
+            validateTxid(entry.txid);
+            undoByOutpoint[DbOutpointKey{entry.txid, entry.vout}] = entry;
+        }
+        for (const auto& spend : commit.spends) {
+            const auto key = utxoKey(spend.txid, spend.vout);
+            batch.Delete(key);
+            const auto undo = undoByOutpoint.find(DbOutpointKey{spend.txid, spend.vout});
+            if (undo != undoByOutpoint.end()) {
+                batch.Delete(createdHeightKey(undo->second.height, key));
+            }
+        }
+        for (const auto& create : commit.creates) {
+            StoredUtxo utxo{create.txid, create.vout, create.height, create.value, create.scriptPubkey,
+                            create.coinbase};
+            const auto key = utxoKey(create.txid, create.vout);
+            batch.Put(key, codec_v2::encodeUtxoValue(utxo));
+            batch.Put(createdHeightKey(create.height, key), "");
+        }
+        batch.Put(undoKey(commit.chain, commit.height), codec_v2::encodeUndoValue(commit.undo));
+        batch.Put(codec_v2::keyTip(commit.chain),
+                  codec_v2::encodeTipValue(commit.height, codec_v2::displayHexToInternal(commit.blockHash)));
+        if (commit.blockIndex.has_value()) {
+            batch.Put(blockHeightKey(commit.blockIndex->height), encodeBlockRow(*commit.blockIndex));
+        }
+        const int nextUtxoCount = std::max(0, cachedUtxoCount_ - static_cast<int>(commit.spends.size()) +
+                                                  static_cast<int>(commit.creates.size()));
+        setCounter(batch, "counter/utxo_count", nextUtxoCount);
+        const int validatedTotal = cachedValidatedTotal_ + 1;
+        setCodecMetadata(batch, "user.metric_blocks_validated_total", std::to_string(validatedTotal));
+        setCodecMetadata(batch, "tip_height", std::to_string(commit.height));
+        setCodecMetadata(batch, "tip_hash", commit.blockHash);
+        setCodecMetadata(batch, "updated_at", utcNow());
+        checkStatus(db_->Write(writeOptions(), &batch), "commit block");
+        cachedUtxoCount_ = nextUtxoCount;
+        cachedValidatedTotal_ = validatedTotal;
+        if (commit.chain == activeChain_) {
+            cachedTipHeight_ = commit.height;
+            cachedTipHash_ = commit.blockHash;
+        }
     }
 
     std::optional<std::string> getHeaderHash(int height) const override {
-        const auto row = getMap(headerHeightKey(height));
-        return row ? std::optional<std::string>(row->at("block_hash")) : std::nullopt;
+        const auto cached = cachedHeaderHashes_.find(height);
+        if (cached != cachedHeaderHashes_.end()) {
+            return cached->second;
+        }
+        const auto encoded = getString(headerHeightKey(height));
+        if (!encoded) {
+            return std::nullopt;
+        }
+        const auto serialized = codec_v2::decodeHeaderValue(*encoded);
+        if (serialized.empty()) {
+            return std::nullopt;
+        }
+        const auto [header, next] = messages::deserializeBlockHeader(serialized);
+        (void)next;
+        const auto hash = header.blockHashHex();
+        cachedHeaderHashes_[height] = hash;
+        return hash;
     }
 
     std::optional<StoredBlockRow> getBlock(int height) const override {
         const auto encoded = getString(blockHeightKey(height));
-        return encoded ? std::optional<StoredBlockRow>(decodeBlockRow(*encoded)) : std::nullopt;
+        return encoded ? std::optional<StoredBlockRow>(codec_v2::decodeBlockIndexValue(height, *encoded))
+                       : std::nullopt;
     }
 
-    int maxStoredBlockHeight() const override { return maxHeightForPrefix("block/by_height/"); }
+    int maxStoredBlockHeight() const override { return maxHeightForPrefix(blockPrefix()); }
 
     std::vector<int> listMissingBlockHeights(int limit = 32) const override {
         std::vector<int> missing;
         std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(rocksdb::ReadOptions()));
-        for (it->Seek("header/by_height/"); it->Valid() && keyStartsWith(it->key(), "header/by_height/");
-             it->Next()) {
-            const auto key = it->key().ToString();
-            const int height = std::stoi(key.substr(std::string("header/by_height/").size()));
+        const auto prefix = headerPrefix();
+        for (it->Seek(prefix); it->Valid() && keyStartsWith(it->key(), prefix); it->Next()) {
+            const int height = codec_v2::heightFromKey(it->key().ToString());
             if (height == 0) {
                 continue;
             }
@@ -586,7 +802,7 @@ public:
             throw std::runtime_error("Unknown wire capability " + capabilityId);
         }
         const auto row = wireRow(*found, implemented ? 1 : 0, std::nullopt, verifiedBy, notes);
-        checkStatus(db_->Put(rocksdb::WriteOptions(), "wire/" + capabilityId, encodeMap(row)), "write wire cap");
+        checkStatus(db_->Put(writeOptions(), "wire/" + capabilityId, encodeMap(row)), "write wire cap");
     }
 
     std::map<std::string, int> wireCapabilityMap() const override {
@@ -648,7 +864,30 @@ public:
                                  {"wire", wireProgressJson()}});
     }
 
+    int peerCount() const override { return countPrefix("peer/"); }
+
+    int connectedPeerCount() const override {
+        int count = 0;
+        for (const auto& row : listMapPrefix("peer/")) {
+            if (row.contains("status") && row.at("status") == "connected") {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
 private:
+    static bool envFlag(const char* name) {
+        const char* raw = std::getenv(name);
+        return raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0";
+    }
+
+    rocksdb::WriteOptions writeOptions() const {
+        rocksdb::WriteOptions options;
+        options.disableWAL = disableWal_;
+        return options;
+    }
+
     std::optional<std::string> getString(const std::string& key) const {
         std::string value;
         const auto status = db_->Get(rocksdb::ReadOptions(), key, &value);
@@ -662,6 +901,94 @@ private:
     std::optional<std::map<std::string, std::string>> getMap(const std::string& key) const {
         const auto value = getString(key);
         return value ? std::optional<std::map<std::string, std::string>>(decodeMap(*value)) : std::nullopt;
+    }
+
+    std::optional<std::string> getCodecMetadata(const std::string& name) const {
+        const auto raw = getString(codec_v2::keyMetadata(name));
+        return raw ? std::optional<std::string>(codec_v2::decodeMetadataValue(*raw)) : std::nullopt;
+    }
+
+    static void setCodecMetadata(rocksdb::WriteBatch& batch, const std::string& name, const std::string& value) {
+        batch.Put(codec_v2::keyMetadata(name), codec_v2::encodeMetadataValue(value));
+    }
+
+    bool hasAnyRecord() const {
+        std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(rocksdb::ReadOptions()));
+        it->SeekToFirst();
+        const bool any = it->Valid();
+        checkStatus(it->status(), "inspect rocksdb generation");
+        return any;
+    }
+
+    void initializeCodecMetadata() {
+        const auto now = utcNow();
+        rocksdb::WriteBatch batch;
+        setCodecMetadata(batch, "codec_version", "2");
+        setCodecMetadata(batch, "backend_name", "rocksdb");
+        setCodecMetadata(batch, "backend_version", rocksdb::GetRocksVersionAsString());
+        setCodecMetadata(batch, "schema_version", "2");
+        setCodecMetadata(batch, "chain", std::string(kDefaultChain));
+        setCodecMetadata(batch, "network", std::string(kDefaultChain));
+        setCodecMetadata(batch, "generation_id", "cpp-rocksdb-codec-v2-" + now);
+        setCodecMetadata(batch, "status", "usable");
+        setCodecMetadata(batch, "created_at", now);
+        setCodecMetadata(batch, "updated_at", now);
+        setCodecMetadata(batch, "tip_height", "-1");
+        setCodecMetadata(batch, "tip_hash", "");
+        setCodecMetadata(batch, "rocksdb_block_cache_bytes", std::to_string(128 * 1024 * 1024));
+        setCodecMetadata(batch, "rocksdb_bloom_filter_bits_per_key", "10");
+        setCodecMetadata(batch, "rocksdb_write_buffer_size", std::to_string(128 * 1024 * 1024));
+        setCodecMetadata(batch, "rocksdb_max_write_buffer_number", "4");
+        setCodecMetadata(batch, "rocksdb_max_background_jobs", std::to_string(std::max(2u, std::thread::hardware_concurrency())));
+        setCodecMetadata(batch, "rocksdb_wal", disableWal_ ? "disabled" : "enabled");
+        checkStatus(db_->Write(writeOptions(), &batch), "initialize codec v2 metadata");
+    }
+
+    void initializeCachedState() {
+        rocksdb::WriteBatch batch;
+        bool shouldPersist = false;
+
+        const auto headerCounter = readCounter("counter/header_count");
+        if (headerCounter.has_value()) {
+            cachedHeaderCount_ = *headerCounter;
+        } else {
+            cachedHeaderCount_ = countPrefix(headerPrefix());
+            setCounter(batch, "counter/header_count", cachedHeaderCount_);
+            shouldPersist = true;
+        }
+        cachedMaxHeaderHeight_ = maxHeightForPrefix(headerPrefix());
+
+        const auto utxoCounter = readCounter("counter/utxo_count");
+        if (utxoCounter.has_value()) {
+            cachedUtxoCount_ = *utxoCounter;
+        } else {
+            cachedUtxoCount_ = countPrefix(utxoPrefix());
+            setCounter(batch, "counter/utxo_count", cachedUtxoCount_);
+            shouldPersist = true;
+        }
+
+        const auto validatedTotal = getCodecMetadata("user.metric_blocks_validated_total");
+        if (validatedTotal.has_value()) {
+            cachedValidatedTotal_ = std::stoi(*validatedTotal);
+        } else {
+            cachedValidatedTotal_ = 0;
+            setCodecMetadata(batch, "user.metric_blocks_validated_total", "0");
+            shouldPersist = true;
+        }
+
+        const auto tip = getString(codec_v2::keyTip(activeChain_));
+        if (tip.has_value()) {
+            const auto decoded = codec_v2::decodeTipValue(*tip);
+            cachedTipHeight_ = decoded.first;
+            cachedTipHash_ = codec_v2::internalToDisplayHex(decoded.second);
+        } else {
+            cachedTipHeight_ = -1;
+            cachedTipHash_.clear();
+        }
+
+        if (shouldPersist) {
+            checkStatus(db_->Write(writeOptions(), &batch), "initialize cached counters");
+        }
     }
 
     std::vector<std::map<std::string, std::string>> listMapPrefix(const std::string& prefix) const {
@@ -688,7 +1015,7 @@ private:
         int maxHeight = -1;
         std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(rocksdb::ReadOptions()));
         for (it->Seek(prefix); it->Valid() && keyStartsWith(it->key(), prefix); it->Next()) {
-            maxHeight = std::max(maxHeight, std::stoi(it->key().ToString().substr(prefix.size())));
+            maxHeight = std::max(maxHeight, codec_v2::heightFromKey(it->key().ToString()));
         }
         checkStatus(it->status(), "max height " + prefix);
         return maxHeight;
@@ -696,8 +1023,20 @@ private:
 
     int nextCounter(const std::string& key) {
         const int next = std::stoi(getString(key).value_or("0")) + 1;
-        checkStatus(db_->Put(rocksdb::WriteOptions(), key, std::to_string(next)), "write counter");
+        checkStatus(db_->Put(writeOptions(), key, std::to_string(next)), "write counter");
         return next;
+    }
+
+    std::optional<int> readCounter(const std::string& key) const {
+        const auto raw = getString(key);
+        if (!raw) {
+            return std::nullopt;
+        }
+        return std::stoi(*raw);
+    }
+
+    static void setCounter(rocksdb::WriteBatch& batch, const std::string& key, int value) {
+        batch.Put(key, std::to_string(std::max(0, value)));
     }
 
     void deletePrefix(rocksdb::WriteBatch& batch, const std::string& prefix) {
@@ -721,7 +1060,7 @@ private:
         for (const auto& row : rows) {
             batch.Put(phaseKey(row.at("phase")), encodeMap(row));
         }
-        checkStatus(db_->Write(rocksdb::WriteOptions(), &batch), "seed phases");
+        checkStatus(db_->Write(writeOptions(), &batch), "seed phases");
     }
 
     static std::map<std::string, std::string> phaseSeed(const std::string& phase, const std::string& title,
@@ -734,16 +1073,31 @@ private:
     }
 
     static std::string phaseKey(const std::string& phase) { return "phase/" + phase; }
-    static std::string headerHeightKey(int height) { return "header/by_height/" + padInt(height); }
-    static std::string blockHeightKey(int height) { return "block/by_height/" + padInt(height); }
+    std::string activeChain() const { return activeChain_; }
+    std::string utxoPrefix() const { return utxoPrefix(activeChain()); }
+    static std::string utxoPrefix(const std::string& chain) { return codec_v2::prefixUtxo(chain); }
+    std::string headerPrefix() const { return codec_v2::prefixHeader(activeChain()); }
+    std::string blockPrefix() const { return codec_v2::prefixBlockIndex(activeChain()); }
+    std::string headerHeightKey(int height) const { return codec_v2::keyHeader(activeChain(), height); }
+    std::string blockHeightKey(int height) const { return codec_v2::keyBlockIndex(activeChain(), height); }
     static std::string peerAddressKey(const std::string& host, int port) {
         return "peeraddr/" + host + "/" + std::to_string(port);
     }
-    static std::string utxoKey(const std::vector<std::uint8_t>& txid, int vout) {
-        return "utxo/" + txidDisplayHex(txid) + "/" + std::to_string(vout);
+    std::string utxoKey(const std::vector<std::uint8_t>& txid, int vout) const {
+        validateTxid(txid);
+        return codec_v2::keyUtxo(activeChain(), txid, vout);
+    }
+    static void validateTxid(const std::vector<std::uint8_t>& txid) {
+        if (txid.size() != 32) {
+            throw std::invalid_argument("txid must be 32 bytes");
+        }
+    }
+    static std::string createdHeightPrefix(int height) { return "utxo_by_height/" + padInt(height) + "/"; }
+    static std::string createdHeightKey(int height, const std::string& key) {
+        return createdHeightPrefix(height) + key;
     }
     static std::string undoKey(const std::string& chain, int height) {
-        return "undo/" + chain + "/" + std::to_string(height);
+        return codec_v2::keyUndo(chain, height);
     }
 
     static const wire::WireCapability* findWireCapability(const std::string& id) {
@@ -781,18 +1135,21 @@ private:
 
     std::string path_;
     std::unique_ptr<rocksdb::DB> db_;
+    bool disableWal_ = false;
+    std::string activeChain_ = std::string(kDefaultChain);
+    int cachedHeaderCount_ = 0;
+    int cachedUtxoCount_ = 0;
+    int cachedValidatedTotal_ = 0;
+    int cachedTipHeight_ = -1;
+    std::string cachedTipHash_;
+    int cachedMaxHeaderHeight_ = -1;
+    mutable std::unordered_map<int, std::string> cachedHeaderHashes_;
 };
-#endif
 
 }  // namespace
 
 std::unique_ptr<NodeStateStore> openRocksDbNodeStateStore(const std::string& dataDir) {
-#ifdef CPBITNODE_USE_ROCKSDB
     return std::make_unique<RocksDbNodeStateStore>(std::filesystem::path(dataDir) / "chainstate-rocksdb");
-#else
-    (void)dataDir;
-    throw std::runtime_error("RocksDB support is not compiled in");
-#endif
 }
 
 }  // namespace cpbitnode::db

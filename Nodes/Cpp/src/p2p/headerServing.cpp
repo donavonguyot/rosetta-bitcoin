@@ -34,7 +34,7 @@ bool isZeroHash(std::span<const std::uint8_t> hash) {
 
 }  // namespace
 
-int findCommonForkHeight(const db::ProjectTracker& tracker,
+int findCommonForkHeight(const db::NodeStateStore& tracker,
                          const std::vector<std::vector<std::uint8_t>>& locatorHashes) {
     for (const auto& internalHash : locatorHashes) {
         if (internalHash.size() != 32) {
@@ -48,7 +48,7 @@ int findCommonForkHeight(const db::ProjectTracker& tracker,
     return -1;
 }
 
-std::optional<messages::BlockHeader> resolveHeaderRecord(const db::ProjectTracker& tracker,
+std::optional<messages::BlockHeader> resolveHeaderRecord(const db::NodeStateStore& tracker,
                                                          const chain::ChainParams& chain, int height,
                                                          const storage::BlockStore* blockStore) {
     const auto hashHex = tracker.getHeaderHash(height);
@@ -94,7 +94,7 @@ std::optional<messages::BlockHeader> resolveHeaderRecord(const db::ProjectTracke
     }
 }
 
-messages::HeadersMessage buildHeadersResponse(const db::ProjectTracker& tracker, const chain::ChainParams& chain,
+messages::HeadersMessage buildHeadersResponse(const db::NodeStateStore& tracker, const chain::ChainParams& chain,
                                               const messages::GetHeadersMessage& message,
                                               const storage::BlockStore* blockStore) {
     const bool zeroStop = message.hashStop.size() == 32 && isZeroHash(message.hashStop);

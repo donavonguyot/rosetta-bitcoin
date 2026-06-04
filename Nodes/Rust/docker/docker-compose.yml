@@ -32,6 +32,60 @@ services:
         "docker"
       ]
 
+  rsbitnode-script-corpus:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+    volumes:
+      - ../../../NodeCore/conformance/results:/results
+      - ../../../NodeCore/conformance/fixtures:/workspace/NodeCore/conformance/fixtures:ro
+    command:
+      [
+        "rsbitnode",
+        "script-corpus",
+        "--manifest",
+        "/workspace/NodeCore/conformance/fixtures/scripts/manifest.json",
+        "--result-path",
+        "/results/rust_script_corpus_docker.json",
+        "--runtime-surface",
+        "docker"
+      ]
+
+  rsbitnode-local-reference-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      CHAIN: testnet4
+      DATA_DIR: /data
+      RSBITNODE_BLOCK_PREFETCH_DEPTH: ${RSBITNODE_BLOCK_PREFETCH_DEPTH:-4}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${DOCKER_LOCAL_PROOF_VOLUME:-rsbitnode_local_reference_data}:/data
+      - ../../../NodeCore/conformance/results:/results
+    command:
+      [
+        "rsbitnode",
+        "local-reference-proof",
+        "--datadir",
+        "/data",
+        "--target",
+        "${SYNC_TARGET:-10000}",
+        "--rpc-url",
+        "${RPC_URL:-http://host.docker.internal:48332}",
+        "--rpc-user",
+        "${RPC_USER:-rosetta}",
+        "--rpc-password",
+        "${RPC_PASSWORD:-rosetta-dev-only}",
+        "--result-path",
+        "/results/rust_local_reference_docker_sync.json",
+        "--runtime-surface",
+        "docker"
+      ]
+
   rsbitnode-supervisor:
     build:
       context: ..
@@ -48,4 +102,5 @@ services:
 volumes:
   rsbitnode_data:
   rsbitnode_proof_data:
+  rsbitnode_local_reference_data:
   rsbitnode_sync_data:

@@ -9,7 +9,6 @@ const options = parseCli(
   {
     chain: { type: "string" },
     datadir: { type: "string" },
-    db: { type: "string" },
     peers: { type: "string" },
     "log-level": { type: "string" },
     "sync-only": { type: "boolean", default: false },
@@ -26,7 +25,6 @@ const blocksMax = parseOptionalInt(options["blocks-max"]);
 const settings = Settings.fromEnv({
   ...(typeof options.chain === "string" ? { chain: options.chain } : {}),
   ...(typeof options.datadir === "string" ? { dataDir: options.datadir } : {}),
-  ...(typeof options.db === "string" ? { dbPath: options.db } : {}),
   ...(typeof options.peers === "string" ? { peers: options.peers } : {}),
   ...(typeof options["log-level"] === "string" ? { logLevel: options["log-level"] } : {}),
   ...(blocksTarget !== undefined ? { blocksTargetHeight: blocksTarget } : {}),

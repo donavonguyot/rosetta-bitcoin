@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -24,6 +25,7 @@ struct ConnectBlockOptions {
     std::vector<std::uint8_t> expectedHash;
     bool hasExpectedHash = false;
     std::string chainName = "testnet4";
+    std::optional<db::StoredBlockRow> blockIndex;
 };
 
 Block connectBlock(db::NodeStateStore& tracker, std::span<const std::uint8_t> payload,

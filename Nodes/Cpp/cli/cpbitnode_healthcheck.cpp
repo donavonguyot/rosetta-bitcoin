@@ -1,14 +1,14 @@
 #include "cpbitnode/config/settings.hpp"
-#include "cpbitnode/db/tracker.hpp"
 #include "cpbitnode/healthcheck.hpp"
+#include "cpbitnode/db/node_state.hpp"
 
 #include <iostream>
 
 int main(int argc, char** argv) {
     try {
         const auto settings = cpbitnode::config::Settings::fromArgs(argc, argv);
-        cpbitnode::db::ProjectTracker tracker(settings.resolvedDbPath());
-        const auto doc = cpbitnode::healthcheck::buildHealthcheckDocument(settings, tracker);
+        auto state = cpbitnode::db::openRocksDbNodeStateStore(settings.dataDir);
+        const auto doc = cpbitnode::healthcheck::buildHealthcheckDocument(settings, *state);
         try {
             cpbitnode::healthcheck::validateHealthcheckPayload(doc);
         } catch (const std::exception& ex) {

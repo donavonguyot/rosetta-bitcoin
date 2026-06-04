@@ -37,7 +37,7 @@ std::optional<db::StoredUtxo> effectiveUtxoRow(
         return std::nullopt;
     }
     db::StoredUtxo synthetic;
-    synthetic.txid = bytesToHex(key.first);
+    synthetic.txid = key.first;
     synthetic.vout = key.second;
     synthetic.value = it->second.value;
     synthetic.scriptPubkey = it->second.scriptPubkey;

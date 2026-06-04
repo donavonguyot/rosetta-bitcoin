@@ -1,0 +1,144 @@
+{
+  "implementation": "RustNode",
+  "commit": "unknown",
+  "node_id": "rsbitnode-native-storage",
+  "category": "storage",
+  "captured_at": "2026-06-04T01:02:45.529653997+00:00",
+  "datadir": "/data",
+  "chain": "testnet4",
+  "runtime_surface": "docker",
+  "chainstate_backend": "rocksdb",
+  "native_storage": true,
+  "local_sqlite_artifact_absent": true,
+  "local_sqlite_db_present": false,
+  "validated_height": 2,
+  "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+  "header_height": 2,
+  "stored_block_height": 2,
+  "chainstate_status": "usable",
+  "native_crypto_backend": "rust-secp256k1",
+  "native_crypto_available": true,
+  "schnorr_backend": "rust-secp256k1",
+  "taproot_tweak_backend": "rust-secp256k1",
+  "timings_ms": {
+    "block_connect_store_commit": 0,
+    "commit": 0,
+    "prevout_batch_load": 0,
+    "script_verify": 0,
+    "utxo_apply": 0,
+    "utxo_load": 0
+  },
+  "verification": {
+    "atomic_commit_exercised": true,
+    "batch_prevout_order_preserved": true,
+    "block_connect_store_commit_ms": 0,
+    "block_local_view_exercised": true,
+    "codec_v2_vectors": "cargo run -- codec-vectors",
+    "connect_proof": "storage-proof deterministic two-block batch commit",
+    "errors": 0,
+    "failures": 0,
+    "jacoco_line_minimum": 0,
+    "local_sqlite_runtime_classes_present": false,
+    "maven": "not_applicable",
+    "rust_tests": "cargo test",
+    "skipped": 0,
+    "sqlite_dependency_present": false,
+    "sqlite_entries_in_shaded_jar": false,
+    "sqlite_jdbc_dependency_present": false,
+    "surefire_broad_exclusions": false,
+    "tests_run": 0
+  },
+  "project_export": {
+    "node_id": "rsbitnode-native-storage",
+    "notes": "Rust proof JSON emitted; Project import is observational.",
+    "project_db": "",
+    "result": "skipped",
+    "script": ""
+  },
+  "results": [
+    {
+      "fixture_id": "storage.native_fresh_start",
+      "result": "passed",
+      "validated_height": 1,
+      "validated_hash": "0000000012982b6d5f621229286b880e909984df669c2afabb102ce311b13f28",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": ""
+    },
+    {
+      "fixture_id": "storage.native_restart",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": ""
+    },
+    {
+      "fixture_id": "storage.local_sqlite_artifact_absent",
+      "result": "passed",
+      "validated_height": null,
+      "validated_hash": "",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": ""
+    },
+    {
+      "fixture_id": "storage.rocksdb_operational_state_boundary",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Scaffold metadata, tip smoke state, and status truth are Rust-owned RocksDB data."
+    },
+    {
+      "fixture_id": "storage.batch_prevout_load_order",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Proof requests missing/present/missing prevouts and verifies ordered results."
+    },
+    {
+      "fixture_id": "storage.atomic_writebatch_commit",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Spends, creates, undo, tip, metadata, and counters are committed through one batch per proof block."
+    },
+    {
+      "fixture_id": "storage.block_local_utxo_view",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Proof uses created/loaded/spent view state before committing durable chainstate."
+    },
+    {
+      "fixture_id": "storage.project_export_observational",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Project import is external to the native runtime."
+    }
+  ],
+  "commands": [
+    "cargo test",
+    "cargo run -- storage-proof"
+  ]
+}

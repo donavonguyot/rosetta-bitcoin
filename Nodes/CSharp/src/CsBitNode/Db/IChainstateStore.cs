@@ -1,5 +1,6 @@
 using CsBitNode.Consensus;
 using CsBitNode.Consensus.Connect;
+using CsBitNode.Sync;
 
 namespace CsBitNode.Db;
 
@@ -12,6 +13,8 @@ public interface IChainstateStore : IDisposable
     string? GetValidatedHash(string chain);
     SyncState? GetSyncState(string chain);
     void UpsertSyncState(string chain, SyncStatePatch patch);
+    SyncTimingSummary? GetSyncTimingSummary(string chain);
+    void SetSyncTimingSummary(string chain, SyncTimingSummary summary);
 
     void EnsureGenesis(string chain, BlockHeader genesis, string genesisHash);
     string? GetHeaderHash(string chain, int height);
@@ -21,6 +24,7 @@ public interface IChainstateStore : IDisposable
     List<byte[]> NextLocator(string chain, int bestHeight, byte[] genesisHashInternal);
 
     StoredUtxo? GetUtxo(string chain, string txid, int vout);
+    IReadOnlyList<StoredUtxo?> GetUtxos(string chain, IReadOnlyList<UtxoOutpoint> outpoints);
     ChainstateCommitResult CommitBlock(ChainstateBlockCommit commit);
     IReadOnlyList<UtxoUndoEntry> ReadUndo(string chain, int height);
 
@@ -58,10 +62,13 @@ public sealed record ChainstateBlockIndex(
     int FileOffset,
     int BlockSize);
 
+public sealed record ChainstateBlockStorageIndex(int FileNumber, int FileOffset, int BlockSize);
+
 public sealed record ChainstateBlockCommit(
     string Chain,
     int Height,
     string BlockHashHex,
     IReadOnlyList<UtxoOutpoint> SpentOutpoints,
     IReadOnlyList<StoredUtxo> CreatedUtxos,
-    IReadOnlyList<UtxoUndoEntry> UndoEntries);
+    IReadOnlyList<UtxoUndoEntry> UndoEntries,
+    ChainstateBlockStorageIndex? StoredBlock = null);

@@ -7,12 +7,14 @@ import { TESTNET4_GENESIS } from "../src/chain/genesis.js";
 import { TESTNET4 } from "../src/chain/params.js";
 import { blockDeserialize } from "../src/consensus/block.js";
 import { connectBlock, ConnectBlockError, disconnectBlock } from "../src/consensus/connect.js";
+import { connectBlockNative } from "../src/consensus/nativeConnect.js";
 import { decodeBip34Height } from "../src/consensus/coinbase.js";
 import { blockMerkleRoot, merkleRoot, transactionTxid } from "../src/consensus/merkle.js";
 import { blockSubsidy } from "../src/consensus/subsidy.js";
 import { validateWitnessCommitment } from "../src/consensus/witness.js";
 import { isP2pkh, verifyScript } from "../src/consensus/script/interpreter.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
+import { ChainstateSession } from "../src/chainstate/chainstateSession.js";
 import { BlockHeaderCodec } from "../src/messages/headers.js";
 import { transactionDeserialize } from "../src/messages/transaction.js";
 import { BlockStore } from "../src/storage/blocks.js";
@@ -81,7 +83,7 @@ describe("consensus validation", () => {
   it("connects block1 and creates coinbase utxo", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-consensus-"));
     try {
-      const tracker = new ProjectTracker(join(dir, "connect.db"));
+      const tracker = new NativeNodeState(join(dir, "connect.stateDir"));
       ensureGenesis(tracker, TESTNET4);
       tracker.recordHeader(TESTNET4.name, {
         height: 1,
@@ -109,10 +111,41 @@ describe("consensus validation", () => {
     }
   });
 
+  it("connects block1 through native RocksDB chainstate", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ts-consensus-native-"));
+    try {
+      const session = await ChainstateSession.openNative(dir, TESTNET4, { acquireLock: false });
+      try {
+        await session.store.setValidatedTip(TESTNET4.name, 0, TESTNET4.genesisHash);
+        const block = await connectBlockNative(session, readFixtureBlock(0), {
+          height: 1,
+          expectedPrev: BlockHeaderCodec.blockHash(TESTNET4_GENESIS),
+          expectedHash: Buffer.from(
+            "0000000012982b6d5f621229286b880e909984df669c2afabb102ce311b13f28",
+            "hex",
+          ).reverse(),
+          chainName: TESTNET4.name,
+        });
+        expect(await session.store.getValidatedHeight(TESTNET4.name)).toBe(1);
+        expect(await session.store.utxoCount(TESTNET4.name)).toBe(1);
+        expect(await session.store.blockCount(TESTNET4.name)).toBe(1);
+        expect(await session.store.currentBlocker(TESTNET4.name)).toBeNull();
+        const coinbaseTxid = transactionTxid(block.transactions[0]!).toString("hex");
+        const utxo = await session.store.getUtxo(TESTNET4.name, coinbaseTxid, 0);
+        expect(utxo?.value).toBe(50_0000_0000n);
+        expect(utxo?.coinbase).toBe(true);
+      } finally {
+        await session.close();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("requires sequential connect height", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-consensus-"));
     try {
-      const tracker = new ProjectTracker(join(dir, "order.db"));
+      const tracker = new NativeNodeState(join(dir, "order.stateDir"));
       ensureGenesis(tracker, TESTNET4);
       tracker.recordHeader(TESTNET4.name, {
         height: 1,
@@ -135,7 +168,7 @@ describe("consensus validation", () => {
   it("disconnect and reconnect block2", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-consensus-"));
     try {
-      const tracker = new ProjectTracker(join(dir, "reorg.db"));
+      const tracker = new NativeNodeState(join(dir, "reorg.stateDir"));
       ensureGenesis(tracker, TESTNET4);
       const hashes = [
         "0000000012982b6d5f621229286b880e909984df669c2afabb102ce311b13f28",
@@ -182,7 +215,7 @@ describe("consensus validation", () => {
   it("connects stored blocks 1 through 5", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-consensus-"));
     try {
-      const tracker = new ProjectTracker(join(dir, "chain.db"));
+      const tracker = new NativeNodeState(join(dir, "chain.stateDir"));
       ensureGenesis(tracker, TESTNET4);
       const localStore = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
       const offsets = [0, 266, 532, 798, 1064];
@@ -225,7 +258,7 @@ describe("consensus validation", () => {
   it("rebuilds validated chain from stored blocks", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-consensus-"));
     try {
-      const tracker = new ProjectTracker(join(dir, "rebuild.db"));
+      const tracker = new NativeNodeState(join(dir, "rebuild.stateDir"));
       ensureGenesis(tracker, TESTNET4);
       const localStore = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
       const payload = readFixtureBlock(0);
@@ -276,7 +309,7 @@ describe("consensus validation", () => {
   it("preserves sibling vouts when spending one output from the same tx", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-consensus-"));
     try {
-      const tracker = new ProjectTracker(join(dir, "sibling-vout.db"));
+      const tracker = new NativeNodeState(join(dir, "sibling-vout.stateDir"));
       ensureGenesis(tracker, TESTNET4);
       const txid = Buffer.from("11".repeat(32), "hex");
       const scriptPubKey = Buffer.from("0014" + "ab".repeat(20), "hex");
@@ -304,7 +337,7 @@ describe("consensus validation", () => {
   it("rolls back utxo writes when validated tip update fails", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-consensus-"));
     try {
-      const tracker = new ProjectTracker(join(dir, "rollback.db"));
+      const tracker = new NativeNodeState(join(dir, "rollback.stateDir"));
       ensureGenesis(tracker, TESTNET4);
       tracker.recordHeader(TESTNET4.name, {
         height: 1,

@@ -39,7 +39,7 @@ export function legacySighash(
   const anyoneCanPay = (sighashType & 0x80) !== 0;
 
   if (baseType === 3 && inputIndex >= transaction.outputs.length) {
-    return Buffer.concat([Buffer.alloc(31, 0), Buffer.from([0x01])]);
+    return Buffer.concat([Buffer.from([0x01]), Buffer.alloc(31, 0)]);
   }
 
   const inputs = anyoneCanPay ? [transaction.inputs[inputIndex]!] : transaction.inputs;
@@ -55,7 +55,7 @@ export function legacySighash(
     } else {
       parts.push(Buffer.from([0x00]));
     }
-    if (anyoneCanPay || baseType === 1) {
+    if (baseType === 1 || sourceIndex === inputIndex) {
       parts.push(packInt32Le(transaction.inputs[sourceIndex]!.sequence));
     } else {
       parts.push(Buffer.alloc(4));
@@ -66,9 +66,10 @@ export function legacySighash(
     parts.push(writeCompactSize(0));
   } else if (baseType === 3) {
     parts.push(writeCompactSize(inputIndex + 1));
-    for (const output of transaction.outputs.slice(0, inputIndex + 1)) {
-      parts.push(txOutSerialize(output));
+    for (let index = 0; index < inputIndex; index += 1) {
+      parts.push(txOutSerialize({ value: -1, scriptPubKey: Buffer.alloc(0) }));
     }
+    parts.push(txOutSerialize(transaction.outputs[inputIndex]!));
   } else {
     parts.push(writeCompactSize(transaction.outputs.length));
     for (const output of transaction.outputs) {

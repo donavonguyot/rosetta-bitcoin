@@ -54,6 +54,7 @@ export interface ChainstateBlockCommit {
   chain: string;
   height: number;
   blockHash: string;
+  blockIndex?: ChainstateBlockIndexRecord;
   spentOutpoints: readonly ChainstateOutpoint[];
   createdUtxos: readonly ChainstateStoredUtxo[];
   undoEntries: readonly ChainstateUndoEntry[];
@@ -79,6 +80,10 @@ export interface ChainstateStore {
 
   getSyncState(chain: string): Promise<ChainstateSyncState | null>;
   upsertSyncState(chain: string, patch: Partial<ChainstateSyncState>): Promise<void>;
+  currentBlocker(chain: string): Promise<Record<string, unknown> | null>;
+  setCurrentBlocker(chain: string, blocker: Record<string, unknown> | null): Promise<void>;
+  lastError(chain: string): Promise<string | null>;
+  setLastError(chain: string, message: string | null): Promise<void>;
 
   insertHeader(chain: string, record: ChainstateHeaderRecord): Promise<void>;
   getHeaderHash(chain: string, height: number): Promise<string | null>;
@@ -91,6 +96,7 @@ export interface ChainstateStore {
   maxStoredBlockHeight(chain: string): Promise<number>;
 
   getUtxo(chain: string, txid: string, vout: number): Promise<ChainstateStoredUtxo | null>;
+  getUtxos(chain: string, outpoints: readonly ChainstateOutpoint[]): Promise<Array<ChainstateStoredUtxo | null>>;
   commitBlock(commit: ChainstateBlockCommit): Promise<ChainstateCommitResult>;
   readUndo(chain: string, height: number): Promise<ChainstateUndoEntry[]>;
   utxoCount(chain: string): Promise<number>;

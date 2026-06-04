@@ -1,0 +1,199 @@
+{
+  "binary_gate_status": "not_attempted",
+  "blocks_connected": 55001,
+  "blocks_fetched": 55001,
+  "captured_at": "2026-06-04T03:22:16.721689677+00:00",
+  "category": "local_reference_sync",
+  "chain": "testnet4",
+  "chainstate_backend": "rocksdb",
+  "chainstate_backend_path": "/data/chainstate-rocksdb",
+  "chainstate_status": "usable",
+  "chainstate_utxo_count": 721727,
+  "connect_summary": {
+    "blocks_connected": 1,
+    "chainstate_utxo_count": 721727,
+    "current_blocker": null,
+    "header_height": 55000,
+    "implementation": "RustNode",
+    "mode": "decoded_block_connect",
+    "reached_target": true,
+    "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+    "rocksdb_wal_disabled": true,
+    "runtime_surface": "docker",
+    "script_runner_mode": "parallel",
+    "started_at": "2026-06-04T03:24:51.829205801+00:00",
+    "storage_codec_version": 2,
+    "stored_block_height": 55000,
+    "sync_status": "blocks_current",
+    "target_height": 55000,
+    "timing_summary": {
+      "slow_blocks": [
+        {
+          "height": 55000,
+          "ms": 0
+        }
+      ],
+      "stage_totals_ms": {
+        "commit": 0,
+        "prevout_batch_load": 0,
+        "script_verify": 0,
+        "utxo_load": 0
+      },
+      "total_ms": 0
+    },
+    "updated_at": "2026-06-04T03:24:51.829927678+00:00",
+    "validated_hash": "00000000008f28fd0f55dd587b0850e2417d1db9d23b009d5c65535b848d93d3",
+    "validated_height": 55000
+  },
+  "connect_summary_kind": "final_connect_snapshot",
+  "current_blocker": null,
+  "datadir": "/data",
+  "failures": [],
+  "header_height": 55000,
+  "implementation": "RustNode",
+  "local_reference_status": "target_reached",
+  "local_sqlite_artifact_absent": true,
+  "native_crypto_available": true,
+  "native_crypto_backend": "rust-secp256k1",
+  "native_storage": true,
+  "peer": "http://host.docker.internal:48332",
+  "peer_mode": "local_reference_rpc",
+  "pipeline_timing_summary": {
+    "block_parse_validate": 2339,
+    "block_store": 1748,
+    "blocks_connected": 55001,
+    "blocks_fetched": 55001,
+    "commit": 4321,
+    "connect_total": 142517,
+    "metadata_store": 1,
+    "prefetch_depth": 12,
+    "prevout_batch_load": 4955,
+    "rpc_getblock": 38961,
+    "rpc_getblockhash": 11749,
+    "script_verify": 107755,
+    "slow_blocks": [
+      {
+        "height": 20888,
+        "ms": 4422
+      },
+      {
+        "height": 26643,
+        "ms": 1550
+      },
+      {
+        "height": 21209,
+        "ms": 1474
+      },
+      {
+        "height": 24553,
+        "ms": 794
+      },
+      {
+        "height": 21238,
+        "ms": 655
+      },
+      {
+        "height": 51634,
+        "ms": 462
+      },
+      {
+        "height": 28102,
+        "ms": 443
+      },
+      {
+        "height": 47265,
+        "ms": 417
+      },
+      {
+        "height": 53916,
+        "ms": 416
+      },
+      {
+        "height": 53890,
+        "ms": 413
+      }
+    ],
+    "stage_totals_ms": {
+      "block_parse_validate": 2339,
+      "block_store": 1748,
+      "commit": 4321,
+      "connect_total": 142517,
+      "metadata_store": 1,
+      "prevout_batch_load": 4955,
+      "rpc_getblock": 38961,
+      "rpc_getblockhash": 11749,
+      "script_verify": 107755,
+      "utxo_apply": 986,
+      "utxo_load": 0
+    },
+    "total_wall": 155095,
+    "utxo_apply": 986,
+    "utxo_load": 0
+  },
+  "proof_mode": "pipeline",
+  "result": "passed",
+  "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+  "rocksdb_wal_disabled": true,
+  "runtime_surface": "docker",
+  "schnorr_backend": "rust-secp256k1",
+  "script_runner_mode": "sequential",
+  "status": {
+    "active_writer_pid": null,
+    "binary_gate_status": "not_attempted",
+    "block_gap_count": 0,
+    "chain": "testnet4",
+    "chainstate_backend": "rocksdb",
+    "chainstate_backend_path": "/data/chainstate-rocksdb",
+    "chainstate_generation_id": "rust-reference-sync",
+    "chainstate_status": "usable",
+    "chainstate_utxo_count": 721727,
+    "current_blocker": null,
+    "datadir": "/data",
+    "header_hash": "00000000008f28fd0f55dd587b0850e2417d1db9d23b009d5c65535b848d93d3",
+    "header_height": 55000,
+    "implementation": "RustNode",
+    "last_error": "",
+    "lock_status": "unlocked",
+    "native_crypto_available": true,
+    "native_crypto_backend": "rust-secp256k1",
+    "network": "testnet4",
+    "node_id": "rsbitnode-native-storage",
+    "ok": true,
+    "runtime_status": "not_running",
+    "runtime_status_detail": "scaffold",
+    "runtime_surface": "docker",
+    "schnorr_backend": "rust-secp256k1",
+    "stored_block_hash": "00000000008f28fd0f55dd587b0850e2417d1db9d23b009d5c65535b848d93d3",
+    "stored_block_height": 55000,
+    "sync_status": "blocks_current",
+    "taproot_tweak_backend": "rust-secp256k1",
+    "updated_at": "2026-06-04T03:24:51.829858386+00:00",
+    "validated_hash": "00000000008f28fd0f55dd587b0850e2417d1db9d23b009d5c65535b848d93d3",
+    "validated_height": 55000
+  },
+  "storage_codec_version": 2,
+  "stored_block_height": 55000,
+  "sync_status": "blocks_current",
+  "sync_summary": {
+    "binary_gate_status": "not_attempted",
+    "blocks_connected": 55001,
+    "blocks_fetched": 55001,
+    "current_blocker": null,
+    "header_height": 55000,
+    "implementation": "RustNode",
+    "peer": "http://host.docker.internal:48332",
+    "peer_mode": "local_reference_rpc",
+    "runtime_surface": "docker",
+    "started_at": "2026-06-04T03:22:16.734444966+00:00",
+    "stored_block_height": 55000,
+    "sync_status": "blocks_current",
+    "target_height": 55000,
+    "updated_at": "2026-06-04T03:24:51.829975803+00:00",
+    "validated_height": 55000
+  },
+  "taproot_tweak_backend": "rust-secp256k1",
+  "target_height": 55000,
+  "updated_at": "2026-06-04T03:24:51.878187745+00:00",
+  "validated_hash": "00000000008f28fd0f55dd587b0850e2417d1db9d23b009d5c65535b848d93d3",
+  "validated_height": 55000
+}

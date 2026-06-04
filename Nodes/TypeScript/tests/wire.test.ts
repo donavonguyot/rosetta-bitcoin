@@ -1,19 +1,16 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
 import { getChain, TESTNET4 } from "../src/chain/params.js";
-import { INIT_SCHEMA_SQL } from "../src/db/schema.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import { splitManualPeerList } from "../src/endpointParse.js";
 import {
   CAPABILITIES,
   CHECKPOINTS,
   checkpointStatus,
   fullNodeWireProgress,
-  seedWireCapabilities,
 } from "../src/wire/capabilities.js";
 import { buildMessage, parseHeader, verifyChecksum } from "../src/wire/frame.js";
 import { messageChecksum, readCompactSize, writeCompactSize } from "../src/wire/serialize.js";
@@ -115,9 +112,9 @@ describe("wire capability registry", () => {
 describe("project tracker wire seeding", () => {
   it("seeds wire_capabilities from registry on init", () => {
     const dir = mkdtempSync(join(tmpdir(), "tsbitnode-test-"));
-    const dbPath = join(dir, "test.db");
+    const statePath = join(dir, "test.stateDir");
     try {
-      const tracker = new ProjectTracker(dbPath);
+      const tracker = new NativeNodeState(statePath);
       const progress = tracker.wireProgress();
       expect(progress.capabilities).toHaveLength(CAPABILITIES.length);
       expect(progress.summary.required_total).toBe(43);
@@ -136,9 +133,9 @@ describe("project tracker wire seeding", () => {
 
   it("summary matches Python hierarchical shape", () => {
     const dir = mkdtempSync(join(tmpdir(), "tsbitnode-summary-"));
-    const dbPath = join(dir, "summary.db");
+    const statePath = join(dir, "summary.stateDir");
     try {
-      const tracker = new ProjectTracker(dbPath);
+      const tracker = new NativeNodeState(statePath);
       tracker.upsertSyncState("testnet4", { syncStatus: "headers_current", bestHeight: 100 });
       const summary = tracker.summary("testnet4");
       expect(summary.chain).toBe("testnet4");
@@ -147,27 +144,6 @@ describe("project tracker wire seeding", () => {
       expect(summary.checkpoints.cp6_serving?.required_pass).toBe(false);
       expect(Array.isArray(summary.recent_events)).toBe(true);
       tracker.close();
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("upserts registry defaults on reseed", () => {
-    const dir = mkdtempSync(join(tmpdir(), "tsbitnode-reseed-"));
-    const dbPath = join(dir, "reseed.db");
-    try {
-      const db = new DatabaseSync(dbPath);
-      db.exec(INIT_SCHEMA_SQL);
-      seedWireCapabilities(db);
-      db
-        .prepare(`UPDATE wire_capabilities SET implemented = 0 WHERE capability_id = ?`)
-        .run("frame.build");
-      seedWireCapabilities(db);
-      const row = db
-        .prepare(`SELECT implemented FROM wire_capabilities WHERE capability_id = ?`)
-        .get("frame.build") as { implemented: number };
-      expect(row.implemented).toBe(1);
-      db.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

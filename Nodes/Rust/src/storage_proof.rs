@@ -26,7 +26,9 @@ pub struct StorageProof {
     chainstate_status: String,
     native_crypto_backend: &'static str,
     native_crypto_available: bool,
+    schnorr_backend: &'static str,
     taproot_tweak_backend: &'static str,
+    timings_ms: serde_json::Value,
     verification: serde_json::Value,
     project_export: serde_json::Value,
     results: Vec<ProofResult>,
@@ -50,7 +52,8 @@ pub fn run(
     result_path: Option<&Path>,
     runtime_surface: &str,
 ) -> Result<StorageProof> {
-    let meta = storage::seed_two_block_proof(datadir)?;
+    let proof = storage::seed_connect_proof(datadir)?;
+    let meta = proof.metadata;
     let local_sqlite_absent = storage::local_sqlite_absent(datadir);
     let doc = StorageProof {
         implementation: "RustNode",
@@ -70,9 +73,11 @@ pub fn run(
         header_height: meta.header_height,
         stored_block_height: meta.stored_block_height,
         chainstate_status: meta.chainstate_status.clone(),
-        native_crypto_backend: "rust-secp256k1/libsecp256k1",
+        native_crypto_backend: "rust-secp256k1",
         native_crypto_available: true,
-        taproot_tweak_backend: "not_implemented",
+        schnorr_backend: "rust-secp256k1",
+        taproot_tweak_backend: "rust-secp256k1",
+        timings_ms: proof.timings.as_json(),
         verification: serde_json::json!({
             "maven": "not_applicable",
             "tests_run": 0,
@@ -86,6 +91,11 @@ pub fn run(
             "local_sqlite_runtime_classes_present": false,
             "rust_tests": "cargo test",
             "codec_v2_vectors": "cargo run -- codec-vectors",
+            "connect_proof": "storage-proof deterministic two-block batch commit",
+            "batch_prevout_order_preserved": proof.batch_prevout_order_preserved,
+            "atomic_commit_exercised": proof.atomic_commit_exercised,
+            "block_local_view_exercised": proof.block_local_view_exercised,
+            "block_connect_store_commit_ms": proof.timings.millis("block_connect_store_commit"),
             "sqlite_dependency_present": false
         }),
         project_export: serde_json::json!({
@@ -131,6 +141,33 @@ pub fn run(
                 &meta.chainstate_backend,
                 "",
                 "Scaffold metadata, tip smoke state, and status truth are Rust-owned RocksDB data.",
+            ),
+            result(
+                "storage.batch_prevout_load_order",
+                proof.batch_prevout_order_preserved,
+                Some(meta.validated_height),
+                &meta.validated_hash,
+                &meta.chainstate_backend,
+                "RocksDB multi_get did not preserve requested prevout order",
+                "Proof requests missing/present/missing prevouts and verifies ordered results.",
+            ),
+            result(
+                "storage.atomic_writebatch_commit",
+                proof.atomic_commit_exercised,
+                Some(meta.validated_height),
+                &meta.validated_hash,
+                &meta.chainstate_backend,
+                "deterministic proof did not exercise atomic WriteBatch commit",
+                "Spends, creates, undo, tip, metadata, and counters are committed through one batch per proof block.",
+            ),
+            result(
+                "storage.block_local_utxo_view",
+                proof.block_local_view_exercised,
+                Some(meta.validated_height),
+                &meta.validated_hash,
+                &meta.chainstate_backend,
+                "deterministic proof did not exercise block-local UTXO view",
+                "Proof uses created/loaded/spent view state before committing durable chainstate.",
             ),
             result(
                 "storage.project_export_observational",

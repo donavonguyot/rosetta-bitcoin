@@ -53,9 +53,7 @@ void testCpbitnodeDbPrintsSummaryJson() {
     std::filesystem::create_directories(dir);
     std::string output;
     std::string cmd = exePath("cpbitnode-db") + " --datadir " + shellQuote(dir.string());
-#ifdef CPBITNODE_USE_ROCKSDB
     cmd += " --chainstate-backend rocksdb";
-#endif
     const int rc = runCommand(cmd, &output);
     EXPECT_TRUE(WIFEXITED(rc));
     EXPECT_EQ(WEXITSTATUS(rc), 0);
@@ -82,14 +80,6 @@ void testCpbitnodeSyncHelpExitsNonZero() {
     EXPECT_TRUE(output.find("cpbitnode-sync") != std::string::npos);
 }
 
-void testCpbitnodeExportSnapshotsHelpExitsZero() {
-    std::string output;
-    const int rc = runCommand(exePath("cpbitnode-export-snapshots") + " --help", &output);
-    EXPECT_TRUE(WIFEXITED(rc));
-    EXPECT_EQ(WEXITSTATUS(rc), 0);
-    EXPECT_TRUE(output.find("usage:") != std::string::npos);
-}
-
 }  // namespace
 
 void registerCliSmokeTests() {
@@ -97,5 +87,4 @@ void registerCliSmokeTests() {
     RUN_TEST(testCpbitnodeDbPrintsSummaryJson);
     RUN_TEST(testCpbitnodeHealthcheckPrintsJson);
     RUN_TEST(testCpbitnodeSyncHelpExitsNonZero);
-    RUN_TEST(testCpbitnodeExportSnapshotsHelpExitsZero);
 }

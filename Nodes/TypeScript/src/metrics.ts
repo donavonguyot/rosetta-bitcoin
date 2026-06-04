@@ -1,4 +1,4 @@
-import type { ProjectTracker } from "./db/tracker.js";
+import type { NativeNodeState } from "./runtime/nodeState.js";
 
 export const META_BLOCKS_VALIDATED_TOTAL = "metric_blocks_validated_total";
 export const META_TXS_RELAYED_TOTAL = "metric_txs_relayed_total";
@@ -10,23 +10,23 @@ function readInt(metaValue: string | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-export function snapshotCounters(tracker: ProjectTracker): Record<string, number> {
+export function snapshotCounters(tracker: NativeNodeState): Record<string, number> {
   return {
     blocks_validated_total: readInt(tracker.getMeta(META_BLOCKS_VALIDATED_TOTAL)),
     txs_relayed_total: readInt(tracker.getMeta(META_TXS_RELAYED_TOTAL)),
   };
 }
 
-export function incrMetaCounter(tracker: ProjectTracker, key: string, delta = 1): void {
+export function incrMetaCounter(tracker: NativeNodeState, key: string, delta = 1): void {
   const current = Number.parseInt(tracker.getMeta(key) ?? "0", 10);
   tracker.setMeta(key, String(current + delta));
 }
 
-export function recordLastError(tracker: ProjectTracker, message: string): void {
+export function recordLastError(tracker: NativeNodeState, message: string): void {
   tracker.setMeta(META_LAST_ERROR, message.slice(0, 4000));
 }
 
-export function clearLastError(tracker: ProjectTracker): void {
+export function clearLastError(tracker: NativeNodeState): void {
   tracker.setMeta(META_LAST_ERROR, "");
 }
 
@@ -42,13 +42,13 @@ function escapePrometheusLabelValue(raw: string): string {
 }
 
 export function prometheusExpositionFormat(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   options: { chain: string },
 ): string {
   const chainEsc = escapePrometheusLabelValue(options.chain);
   const counters = snapshotCounters(tracker);
   const summary = tracker.summary(options.chain);
-  const sync = summary.sync;
+  const sync = summary.sync as Record<string, unknown>;
   const syncStatus =
     typeof sync.sync_status === "string" ? sync.sync_status : "unknown";
   const syncStatusEsc = escapePrometheusLabelValue(syncStatus);

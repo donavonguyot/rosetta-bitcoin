@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import type { Settings } from "./config/settings.js";
-import type { ProjectTracker } from "./db/tracker.js";
+import type { NativeNodeState } from "./runtime/nodeState.js";
 import { prometheusExpositionFormat } from "./metrics.js";
 
 const CONTENT_TYPE_PROM = "text/plain; charset=utf-8; version=0.0.4";
@@ -30,7 +30,7 @@ function writePlainResponse(
 export function serveMetricsHttpRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   settings: Settings,
 ): void {
   const path = (req.url ?? "").split("?", 1)[0] ?? "";
@@ -49,7 +49,7 @@ export function serveMetricsHttpRequest(
 }
 
 export function createMetricsHttpServer(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   settings: Settings,
 ): Server {
   return createServer((req, res) => {
@@ -59,7 +59,7 @@ export function createMetricsHttpServer(
 
 export function startMetricsServer(
   settings: Settings,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
 ): MetricsServerHandle | null {
   if (settings.metricsHttpPort <= 0) {
     return null;

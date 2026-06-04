@@ -25,6 +25,20 @@ The fixture manifest is broader than the current shared byte tree. During
 bootstrap, fixture bytes may live in port-local test trees while the shared
 fixture ID and expected outcome remain documented in `MANIFEST.md`.
 
+## Benchmark Contract
+
+Cross-port performance and replay proofs use
+[`BENCHMARK_CONTRACT.md`](BENCHMARK_CONTRACT.md). There is one official
+benchmark: durable local-reference replay to height `100000`, with WAL and
+normal durability enabled, a preserved resumable datadir, and local Reference
+Core used only as a block source.
+
+`5000` is the first readiness gate, `10000` is an early consensus checkpoint,
+and `50000` is a midrange regression gate. They are not the primary benchmark.
+Tip runs remain useful milestone confidence checks. Local-reference proofs
+remain block-source proofs only; they do not imply live P2P sync or binary-gate
+completion.
+
 ## Shared Tooling
 
 Fixture harvesters and proof-capture helpers live under `tools/`. They are

@@ -7,7 +7,7 @@ import {
   PYTHON_NODE_DEFAULT_PEER,
   TESTNET4_FALLBACK_PEER_ENDPOINTS,
 } from "../config/peers.js";
-import type { ProjectTracker } from "../db/tracker.js";
+import type { NativeNodeState } from "../runtime/nodeState.js";
 import { hostPortIsWellFormedEndpoint } from "../endpointParse.js";
 import type { PeerEndpoint } from "../types/index.js";
 
@@ -100,7 +100,7 @@ export function mergePeerCandidates(
 /** Resolve DNS seeds and manual peers into connection targets. */
 export async function bootstrapPeerTargets(
   chain: ChainParams,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   settings: Settings,
   manualPeers: readonly PeerEndpoint[],
 ): Promise<readonly PeerEndpoint[]> {

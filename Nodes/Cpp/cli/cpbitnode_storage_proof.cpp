@@ -1,6 +1,7 @@
 #include "cpbitnode/chain/params.hpp"
 #include "cpbitnode/config/settings.hpp"
 #include "cpbitnode/db/chainstate.hpp"
+#include "cpbitnode/db/codec_v2.hpp"
 #include "cpbitnode/db/node_state.hpp"
 #include "cpbitnode/util/json.hpp"
 
@@ -8,6 +9,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <cstdlib>
 
 namespace {
 
@@ -38,6 +40,7 @@ int main(int argc, char** argv) {
         const auto proofPath = argValue(argc, argv, "--proof-path",
                                         "../../NodeCore/conformance/results/cpp_rocksdb_codec_v2_storage.json");
         const auto nodeId = argValue(argc, argv, "--node-id", "cppnode-rocksdb-codec-v2");
+        const bool codecVectorsRun = cpbitnode::db::codec_v2::selfTestGoldenVector();
 
         std::filesystem::remove_all(std::filesystem::path(settings.dataDir) / "chainstate-rocksdb");
         std::filesystem::create_directories(settings.dataDir);
@@ -54,7 +57,7 @@ int main(int argc, char** argv) {
         const std::vector<std::uint8_t> txid(32, 0x42);
         chainstate->addUtxo(txid, 0, 1, 5000, {0x51}, true);
         cpbitnode::db::StoredUtxo undo;
-        undo.txid = std::string(64, '2');
+        undo.txid = std::vector<std::uint8_t>(32, 0x22);
         undo.vout = 1;
         undo.height = 1;
         undo.value = 1000;
@@ -91,6 +94,15 @@ int main(int argc, char** argv) {
         json << "\"header_height\":" << state->maxHeaderHeight() << ",";
         json << "\"stored_block_height\":" << state->maxStoredBlockHeight() << ",";
         json << "\"chainstate_status\":" << cpbitnode::util::jsonString(meta.status) << ",";
+        json << "\"chainstate_codec_v2_vectors_run\":" << (codecVectorsRun ? "true" : "false") << ",";
+        json << "\"codec_version\":2,";
+        json << "\"rocksdb_tuning\":{";
+        json << "\"block_cache_bytes\":134217728,";
+        json << "\"bloom_filter_bits_per_key\":10,";
+        json << "\"write_buffer_size\":134217728,";
+        json << "\"max_write_buffer_number\":4,";
+        json << "\"wal\":\"" << (std::getenv("CPBITNODE_ROCKSDB_DISABLE_WAL") ? "disabled" : "enabled") << "\"";
+        json << "},";
         json << "\"project_export\":{\"project_db\":\"Project/project.db\",\"node_id\":"
              << cpbitnode::util::jsonString(nodeId) << ",\"result\":\"not_imported\"},";
         json << "\"results\":[";
@@ -108,6 +120,10 @@ int main(int argc, char** argv) {
              << (restartOk ? "passed" : "failed")
              << "\",\"validated_height\":2,\"validated_hash\":\"\",\"chainstate_backend\":\"rocksdb\","
                 "\"duration_ms\":0,\"failure\":\"\"},";
+        json << "{\"fixture_id\":\"storage.chainstate_codec_v2_vectors\",\"category\":\"storage\",\"result\":\""
+             << (codecVectorsRun ? "passed" : "failed")
+             << "\",\"validated_height\":2,\"validated_hash\":\"\",\"chainstate_backend\":\"rocksdb\","
+                "\"duration_ms\":0,\"failure\":\"\"},";
         json << "{\"fixture_id\":\"storage.project_export_observational\",\"category\":\"storage\",\"result\":\"passed\","
                 "\"validated_height\":2,\"validated_hash\":\"\",\"chainstate_backend\":\"rocksdb\",\"duration_ms\":0,"
                 "\"failure\":\"\"}";
@@ -115,7 +131,7 @@ int main(int argc, char** argv) {
 
         writeFile(proofPath, json.str());
         std::cout << json.str() << '\n';
-        return sqliteAbsent && restartOk ? 0 : 2;
+        return sqliteAbsent && restartOk && codecVectorsRun ? 0 : 2;
     } catch (const std::exception& exc) {
         std::cerr << exc.what() << '\n';
         return 1;

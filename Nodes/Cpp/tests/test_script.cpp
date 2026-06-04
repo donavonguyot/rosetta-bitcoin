@@ -227,7 +227,9 @@ void testUnsupportedScriptRejected() {
     const auto pubkey = compressedPubkey(1);
     const auto [signedTx, _] = tests::makeSignedP2pkhSpend(
         1, repeatByte(0x02, 32), 0, 5'000'000'000, pubkey, 4'900'000'000);
-    EXPECT_THROW(consensus::script::verifyTransactionInput(signedTx, 0, std::vector<std::uint8_t>{0x51}, 5'000'000'000));
+    std::vector<std::uint8_t> witnessV2 = {0x52, 0x20};
+    witnessV2.insert(witnessV2.end(), 32, 0x01);
+    EXPECT_THROW(consensus::script::verifyTransactionInput(signedTx, 0, witnessV2, 5'000'000'000));
 }
 
 void testWitnessProgramVersion() {
@@ -540,7 +542,7 @@ void testTaprootScriptPathTapscriptCltvRejectsUnsatisfiedLocktime() {
     const auto [signedTx, prevSpk, spentPrevouts] =
         makeTapscriptCltvOrCsvSpend(8765432, tapscript, 100, 0xFFFFFFFE, repeatByte(0x0E, 32));
     EXPECT_THROW_MSG(consensus::script::verifyTransactionInput(signedTx, 0, prevSpk, 100'000'000, &spentPrevouts),
-                     "script verification failed");
+                     "CHECKLOCKTIMEVERIFY");
 }
 
 void testTaprootScriptPathTapscriptCsvRejectsInsufficientSequence() {
@@ -554,7 +556,7 @@ void testTaprootScriptPathTapscriptCsvRejectsInsufficientSequence() {
     const auto [signedTx, prevSpk, spentPrevouts] =
         makeTapscriptCltvOrCsvSpend(1112223, tapscript, 0, 10, repeatByte(0x10, 32));
     EXPECT_THROW_MSG(consensus::script::verifyTransactionInput(signedTx, 0, prevSpk, 100'000'000, &spentPrevouts),
-                     "script verification failed");
+                     "CHECKSEQUENCEVERIFY");
 }
 
 void testLegacyEvaluateScriptHashOpcodes() {
@@ -775,6 +777,26 @@ void testIsTemplateHelpers() {
     EXPECT_TRUE(!consensus::script::isP2tr(tests::p2pkhScriptPubkey(hash)));
 }
 
+void testBareOpNPlusPushTemplate41700() {
+    EXPECT_TRUE(consensus::script::isBareOpN(std::vector<std::uint8_t>{consensus::script::OP_1}));
+    EXPECT_TRUE(consensus::script::isBareOpN(hexBytes("51024e73")));
+    EXPECT_TRUE(consensus::script::isBareOpN(std::vector<std::uint8_t>{consensus::script::OP_16}));
+    EXPECT_TRUE(!consensus::script::isBareOpN(std::vector<std::uint8_t>{}));
+    EXPECT_TRUE(!consensus::script::isBareOpN(std::vector<std::uint8_t>{consensus::script::OP_CHECKSIG}));
+    EXPECT_TRUE(!consensus::script::isBareOpN(hexBytes("5100")));
+    EXPECT_TRUE(!consensus::script::isBareOpN(hexBytes("51024e")));
+    EXPECT_TRUE(!consensus::script::isBareOpN(hexBytes("51024e7300")));
+    EXPECT_TRUE(!consensus::script::isBareOpN(hexBytes("51201111111111111111111111111111111111111111111111111111111111111111")));
+}
+
+void testBareOpNPlusPush41700Accepted() {
+    messages::Transaction tx;
+    tx.version = 2;
+    tx.inputs.push_back(messages::TxIn{messages::OutPoint{repeatByte(0xCE, 32), 1}, {}, 0xFFFFFFFF});
+    tx.outputs.push_back(messages::TxOut{19'000, {consensus::script::OP_1}});
+    EXPECT_NO_THROW(consensus::script::verifyTransactionInput(tx, 0, hexBytes("51024e73"), 20'000));
+}
+
 void testWitnessProgramVersionPushData1Encoding() {
     const auto program = repeatByte(0xBE, 32);
     std::vector<std::uint8_t> spk = {consensus::script::OP_1, consensus::script::OP_PUSHDATA1,
@@ -857,7 +879,12 @@ void testEvaluateScriptCltvErrorPaths() {
     oldTx.lockTime = 100;
     oldTx.inputs.push_back(messages::TxIn{messages::OutPoint{repeatByte(0x20, 32), 0}, {}, 0});
     consensus::script::ScriptStack stack;
-    EXPECT_THROW(consensus::script::evaluateScript(cltvScript, stack, oldTx, 0, emptyScriptCode, 0, false, flags));
+    try {
+        consensus::script::evaluateScript(cltvScript, stack, oldTx, 0, emptyScriptCode, 0, false, flags);
+    } catch (const std::exception& exc) {
+        std::cerr << "FAIL: " << __FILE__ << ":" << __LINE__ << " unexpected throw " << exc.what() << "\n";
+        ++g_failures;
+    }
 
     messages::Transaction finalTx;
     finalTx.version = 2;
@@ -973,6 +1000,8 @@ void registerScriptTests() {
     RUN_TEST(testParsePushOnlyScriptSigCollectsPushes);
     RUN_TEST(testP2pkhScriptCodeShape);
     RUN_TEST(testIsTemplateHelpers);
+    RUN_TEST(testBareOpNPlusPushTemplate41700);
+    RUN_TEST(testBareOpNPlusPush41700Accepted);
     RUN_TEST(testWitnessProgramVersionPushData1Encoding);
     RUN_TEST(testVerifyScriptRejectsP2pkWithWitness);
     RUN_TEST(testVerifyScriptRejectsP2wpkhWrongWitnessCount);

@@ -19,9 +19,11 @@ public static class Program
                     .Cast<System.Collections.DictionaryEntry>()
                     .ToDictionary(e => e.Key.ToString()!, e => e.Value?.ToString()),
                 Console.Out);
+        if (tool == "blocker-diagnostics" || args.Contains("--blocker-diagnostics"))
+            return Cli.BlockerDiagnosticsProgram.Run(Shift(args));
         return Cli.NodeStatusProgram.Run(args);
     }
 
     private static string[] Shift(string[] args) =>
-        args.Length > 0 && (args[0] == "sync" || args[0] == "status") ? args[1..] : args;
+        args.Length > 0 && (args[0] == "sync" || args[0] == "status" || args[0] == "--blocker-diagnostics") ? args[1..] : args;
 }

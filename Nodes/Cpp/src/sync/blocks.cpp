@@ -13,6 +13,13 @@ namespace {
 
 constexpr const char* kParallelCapId = "blocks.parallel";
 
+struct WorkItem {
+    int height = 0;
+    std::string blockHashHex;
+    std::vector<std::uint8_t> blockHash;
+    std::vector<std::uint8_t> expectedPrev;
+};
+
 std::vector<std::uint8_t> expectedPrevHash(const db::NodeStateStore& tracker, int height) {
     const auto prevHex = tracker.getHeaderHash(height - 1);
     if (!prevHex.has_value()) {
@@ -35,6 +42,36 @@ std::vector<std::uint8_t> hashHexToInternal(const std::string& hex) {
     }
     std::reverse(out.begin(), out.end());
     return out;
+}
+
+std::vector<WorkItem> buildOrderedBlockWork(const db::NodeStateStore& tracker,
+                                            const db::ChainstateStore& chainstate,
+                                            const chain::ChainParams& chain,
+                                            int limit,
+                                            int blocksTargetHeight) {
+    std::vector<WorkItem> work;
+    if (limit <= 0) {
+        return work;
+    }
+    const int validated = chainstate.readTip(chain.name).height;
+    const int headerTip = tracker.maxHeaderHeight();
+    int endHeight = headerTip;
+    if (blocksTargetHeight > 0) {
+        endHeight = std::min(endHeight, blocksTargetHeight);
+    }
+    endHeight = std::min(endHeight, validated + limit);
+    for (int height = validated + 1; height <= endHeight; ++height) {
+        const auto blockHashHex = tracker.getHeaderHash(height);
+        if (!blockHashHex.has_value()) {
+            break;
+        }
+        const auto expectedPrev = expectedPrevHash(tracker, height);
+        if (expectedPrev.size() != 32) {
+            break;
+        }
+        work.push_back(WorkItem{height, *blockHashHex, hashHexToInternal(*blockHashHex), std::move(expectedPrev)});
+    }
+    return work;
 }
 
 }  // namespace
@@ -194,21 +231,33 @@ std::optional<std::pair<std::vector<std::uint8_t>, p2p::PeerConnection*>> reques
 
 int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
                     const chain::ChainParams& chain, storage::BlockStore& blockStore, int batchSize, int maxBlocks,
-                    int parallelDownloads) {
+                    int parallelDownloads, int blocksTargetHeight) {
     db::NodeStateChainstateStore chainstate(tracker);
-    return syncBlocksBatch(peers, tracker, chainstate, chain, blockStore, batchSize, maxBlocks, parallelDownloads);
+    return syncBlocksBatch(peers, tracker, chainstate, chain, blockStore, batchSize, maxBlocks, parallelDownloads,
+                           blocksTargetHeight);
 }
 
 int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
                     db::ChainstateStore& chainstate, const chain::ChainParams& chain, storage::BlockStore& blockStore,
-                    int batchSize, int maxBlocks, int parallelDownloads) {
+                    int batchSize, int maxBlocks, int parallelDownloads, int blocksTargetHeight) {
     if (peers.empty()) {
         return 0;
     }
 
     const int limit = maxBlocks == 0 ? batchSize : std::min(batchSize, maxBlocks);
-    const auto missing = tracker.listMissingBlockHeights(limit);
-    if (missing.empty()) {
+    const auto work = buildOrderedBlockWork(tracker, chainstate, chain, limit, blocksTargetHeight);
+    if (work.empty()) {
+        const bool unbounded = blocksTargetHeight <= 0;
+        const int validated = chainstate.readTip(chain.name).height;
+        const int headerTip = tracker.maxHeaderHeight();
+        if (unbounded && validated >= headerTip) {
+            tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_current");
+        }
+        return 0;
+    }
+    const int validated = chainstate.readTip(chain.name).height;
+    const bool unbounded = blocksTargetHeight <= 0;
+    if (unbounded && validated >= tracker.maxHeaderHeight()) {
         tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_current");
         return 0;
     }
@@ -216,20 +265,17 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_syncing");
     int downloaded = 0;
 
-    struct WorkItem {
-        int height = 0;
-        std::string blockHashHex;
-        std::vector<std::uint8_t> blockHash;
-        std::vector<std::uint8_t> expectedPrev;
-    };
-
     auto connectDownloaded = [&](const WorkItem& item, const std::vector<std::uint8_t>& payload) -> bool {
+        const auto written = blockStore.write(payload);
         consensus::ConnectBlockOptions options;
         options.height = item.height;
         options.expectedPrev = item.expectedPrev;
         options.expectedHash = item.blockHash;
         options.hasExpectedHash = true;
         options.chainName = chain.name;
+        options.blockIndex =
+            db::StoredBlockRow{item.height, item.blockHashHex, written.fileName, static_cast<int>(written.offset),
+                               static_cast<int>(written.size)};
         try {
             consensus::connectBlock(tracker, chainstate, payload, options);
         } catch (const consensus::ConnectBlockError& exc) {
@@ -238,11 +284,6 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
                                  util::jsonString(exc.what()) + "}");
             return false;
         }
-        const auto written = blockStore.write(payload);
-        tracker.recordBlock(item.height, item.blockHashHex, written.fileName, static_cast<int>(written.offset),
-                            static_cast<int>(written.size));
-        tracker.markWireCapability("blocks.block.store", true, "live",
-                                   "stored block at height " + std::to_string(item.height));
         downloaded += 1;
         return true;
     };
@@ -261,22 +302,6 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     };
 
     if (parallelDownloads > 0) {
-        std::vector<WorkItem> work;
-        for (const int height : missing) {
-            if (maxBlocks > 0 && static_cast<int>(work.size()) >= maxBlocks) {
-                break;
-            }
-            const auto blockHashHex = tracker.getHeaderHash(height);
-            if (!blockHashHex.has_value()) {
-                continue;
-            }
-            const auto expectedPrev = expectedPrevHash(tracker, height);
-            if (expectedPrev.size() != 32) {
-                continue;
-            }
-            work.push_back(
-                WorkItem{height, *blockHashHex, hashHexToInternal(*blockHashHex), std::move(expectedPrev)});
-        }
         if (!work.empty()) {
             maybeMarkParallelSync(tracker, parallelDownloads);
             for (std::size_t index = 0; index < work.size(); index += static_cast<std::size_t>(parallelDownloads)) {
@@ -302,19 +327,10 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
             }
         }
     } else {
-        for (const int height : missing) {
+        for (const auto& item : work) {
             if (maxBlocks > 0 && downloaded >= maxBlocks) {
                 break;
             }
-            const auto blockHashHex = tracker.getHeaderHash(height);
-            if (!blockHashHex.has_value()) {
-                continue;
-            }
-            const auto expectedPrev = expectedPrevHash(tracker, height);
-            if (expectedPrev.size() != 32) {
-                continue;
-            }
-            WorkItem item{height, *blockHashHex, hashHexToInternal(*blockHashHex), std::move(expectedPrev)};
             const auto payload = fetchOne(item);
             if (!payload.has_value() || !connectDownloaded(item, *payload)) {
                 break;
@@ -323,13 +339,15 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     }
 
     if (downloaded > 0) {
-        const int toHeight = missing[std::min(downloaded, static_cast<int>(missing.size())) - 1];
+        const int toHeight = work[std::min(downloaded, static_cast<int>(work.size())) - 1].height;
         tracker.logEvent("sync", "Downloaded " + std::to_string(downloaded) + " blocks", "info",
-                         "{\"from_height\":" + std::to_string(missing.front()) + ",\"to_height\":" +
+                         "{\"from_height\":" + std::to_string(work.front().height) + ",\"to_height\":" +
                              std::to_string(toHeight) + "}");
+        tracker.markWireCapability("blocks.block.store", true, "live",
+                                   "stored blocks through height " + std::to_string(toHeight));
     }
 
-    if (tracker.listMissingBlockHeights(1).empty()) {
+    if (blocksTargetHeight <= 0 && chainstate.readTip(chain.name).height >= tracker.maxHeaderHeight()) {
         tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_current");
     }
     return downloaded;
@@ -367,7 +385,7 @@ int syncBlocksToTip(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
         }
         const int downloaded = syncBlocksBatch(peers, tracker, chainstate, chain, blockStore, batchLimit,
                                                settings.blocksMaxPerRun > 0 ? batchLimit : 0,
-                                               settings.parallelBlockDownloads);
+                                               settings.parallelBlockDownloads, settings.blocksTargetHeight);
         if (downloaded == 0) {
             break;
         }

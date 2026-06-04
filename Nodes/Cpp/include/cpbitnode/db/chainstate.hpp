@@ -3,6 +3,7 @@
 #include "cpbitnode/db/node_state.hpp"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -16,7 +17,7 @@ struct ChainstateTip {
 };
 
 struct ChainstateMetadata {
-    std::string backendName = "sqlite";
+    std::string backendName = "rocksdb";
     std::string backendPath;
     std::string status = "usable";
     std::string generationId;
@@ -32,6 +33,7 @@ public:
     virtual void setTip(const std::string& chain, int height, const std::string& blockHashHex) = 0;
     virtual int utxoCount() const = 0;
     virtual std::optional<StoredUtxo> getUtxo(const std::vector<std::uint8_t>& txid, int vout) const = 0;
+    virtual std::vector<std::optional<StoredUtxo>> getUtxos(const std::vector<Outpoint>& outpoints) const = 0;
     virtual void addUtxo(const std::vector<std::uint8_t>& txid, int vout, int height, std::int64_t value,
                          const std::vector<std::uint8_t>& scriptPubkey, bool coinbase) = 0;
     virtual void spendUtxo(const std::vector<std::uint8_t>& txid, int vout) = 0;
@@ -39,6 +41,7 @@ public:
     virtual std::vector<StoredUtxo> takeUtxoUndo(const std::string& chain, int height) = 0;
     virtual void deleteUtxosCreatedAtHeight(int height) = 0;
     virtual void resetValidatedChain(const std::string& chain, const std::string& genesisHash) = 0;
+    virtual void commitBlock(const BlockCommit& commit) = 0;
 };
 
 class NodeStateChainstateStore final : public ChainstateStore {
@@ -50,6 +53,7 @@ public:
     void setTip(const std::string& chain, int height, const std::string& blockHashHex) override;
     int utxoCount() const override;
     std::optional<StoredUtxo> getUtxo(const std::vector<std::uint8_t>& txid, int vout) const override;
+    std::vector<std::optional<StoredUtxo>> getUtxos(const std::vector<Outpoint>& outpoints) const override;
     void addUtxo(const std::vector<std::uint8_t>& txid, int vout, int height, std::int64_t value,
                  const std::vector<std::uint8_t>& scriptPubkey, bool coinbase) override;
     void spendUtxo(const std::vector<std::uint8_t>& txid, int vout) override;
@@ -57,6 +61,7 @@ public:
     std::vector<StoredUtxo> takeUtxoUndo(const std::string& chain, int height) override;
     void deleteUtxosCreatedAtHeight(int height) override;
     void resetValidatedChain(const std::string& chain, const std::string& genesisHash) override;
+    void commitBlock(const BlockCommit& commit) override;
 
 private:
     NodeStateStore& state_;

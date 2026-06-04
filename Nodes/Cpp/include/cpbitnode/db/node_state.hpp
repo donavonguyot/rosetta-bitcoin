@@ -9,8 +9,16 @@
 
 namespace cpbitnode::db {
 
+struct StoredBlockRow {
+    int height = 0;
+    std::string blockHash;
+    std::string fileName;
+    int fileOffset = 0;
+    int size = 0;
+};
+
 struct StoredUtxo {
-    std::string txid;
+    std::vector<std::uint8_t> txid;
     int vout = 0;
     int height = 0;
     std::int64_t value = 0;
@@ -18,12 +26,36 @@ struct StoredUtxo {
     bool coinbase = false;
 };
 
-struct StoredBlockRow {
+struct Outpoint {
+    std::vector<std::uint8_t> txid;
+    int vout = 0;
+};
+
+struct HeaderRecord {
     int height = 0;
     std::string blockHash;
-    std::string fileName;
-    int fileOffset = 0;
-    int size = 0;
+    std::string prevHash;
+    int timestamp = 0;
+    std::string headerSerializedHex;
+};
+
+struct UtxoCreate {
+    std::vector<std::uint8_t> txid;
+    int vout = 0;
+    int height = 0;
+    std::int64_t value = 0;
+    std::vector<std::uint8_t> scriptPubkey;
+    bool coinbase = false;
+};
+
+struct BlockCommit {
+    std::string chain;
+    int height = 0;
+    std::string blockHash;
+    std::vector<Outpoint> spends;
+    std::vector<UtxoCreate> creates;
+    std::vector<StoredUtxo> undo;
+    std::optional<StoredBlockRow> blockIndex;
 };
 
 struct NodeStateMetadata {
@@ -69,6 +101,7 @@ public:
 
     virtual void recordHeader(int height, const std::string& blockHash, const std::string& prevHash, int timestamp,
                               const std::string& headerSerializedHex = "") = 0;
+    virtual void recordHeaders(const std::vector<HeaderRecord>& headers) = 0;
     virtual std::optional<int> lookupHeaderHeight(const std::string& blockHashHex) const = 0;
     virtual std::optional<std::string> getHeaderSerializedHex(int height) const = 0;
     virtual std::optional<StoredBlockRow> getStoredBlockForHashHex(const std::string& blockHashHex) const = 0;
@@ -86,11 +119,13 @@ public:
     virtual void addUtxo(const std::vector<std::uint8_t>& txid, int vout, int height, std::int64_t value,
                          const std::vector<std::uint8_t>& scriptPubkey, bool coinbase) = 0;
     virtual std::optional<StoredUtxo> getUtxo(const std::vector<std::uint8_t>& txid, int vout) const = 0;
+    virtual std::vector<std::optional<StoredUtxo>> getUtxos(const std::vector<Outpoint>& outpoints) const = 0;
     virtual void spendUtxo(const std::vector<std::uint8_t>& txid, int vout) = 0;
     virtual void replaceUtxoUndo(const std::string& chain, int height, const std::vector<StoredUtxo>& entries) = 0;
     virtual std::vector<StoredUtxo> takeUtxoUndo(const std::string& chain, int height) = 0;
     virtual void deleteUtxosCreatedAtHeight(int height) = 0;
     virtual void resetValidatedChain(const std::string& chain, const std::string& genesisHash) = 0;
+    virtual void commitBlock(const BlockCommit& commit) = 0;
     virtual std::optional<std::string> getHeaderHash(int height) const = 0;
     virtual std::optional<StoredBlockRow> getBlock(int height) const = 0;
     virtual int maxStoredBlockHeight() const = 0;
@@ -106,6 +141,8 @@ public:
 
     virtual std::vector<std::map<std::string, std::string>> recentEvents(int limit = 20) const = 0;
     virtual std::string summaryJson(const std::string& chain) const = 0;
+    virtual int peerCount() const = 0;
+    virtual int connectedPeerCount() const = 0;
 };
 
 std::unique_ptr<NodeStateStore> openRocksDbNodeStateStore(const std::string& dataDir);

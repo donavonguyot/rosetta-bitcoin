@@ -1,9 +1,9 @@
 {
   "implementation": "RustNode",
-  "commit": "138fd7123c95",
+  "commit": "0a14d22a8e34",
   "node_id": "rsbitnode-native-storage",
   "category": "storage",
-  "captured_at": "2026-06-03T20:20:39.494977+00:00",
+  "captured_at": "2026-06-04T00:25:31.558101+00:00",
   "datadir": "./data-rust-proof",
   "chain": "testnet4",
   "runtime_surface": "host",
@@ -16,11 +16,25 @@
   "header_height": 2,
   "stored_block_height": 2,
   "chainstate_status": "usable",
-  "native_crypto_backend": "rust-secp256k1/libsecp256k1",
+  "native_crypto_backend": "rust-secp256k1",
   "native_crypto_available": true,
-  "taproot_tweak_backend": "not_implemented",
+  "schnorr_backend": "rust-secp256k1",
+  "taproot_tweak_backend": "rust-secp256k1",
+  "timings_ms": {
+    "block_connect_store_commit": 0,
+    "commit": 0,
+    "prevout_batch_load": 0,
+    "script_verify": 0,
+    "utxo_apply": 0,
+    "utxo_load": 0
+  },
   "verification": {
+    "atomic_commit_exercised": true,
+    "batch_prevout_order_preserved": true,
+    "block_connect_store_commit_ms": 0,
+    "block_local_view_exercised": true,
     "codec_v2_vectors": "cargo run -- codec-vectors",
+    "connect_proof": "storage-proof deterministic two-block batch commit",
     "errors": 0,
     "failures": 0,
     "jacoco_line_minimum": 0,
@@ -81,6 +95,36 @@
       "duration_ms": 0,
       "failure": "",
       "notes": "Scaffold metadata, tip smoke state, and status truth are Rust-owned RocksDB data."
+    },
+    {
+      "fixture_id": "storage.batch_prevout_load_order",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Proof requests missing/present/missing prevouts and verifies ordered results."
+    },
+    {
+      "fixture_id": "storage.atomic_writebatch_commit",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Spends, creates, undo, tip, metadata, and counters are committed through one batch per proof block."
+    },
+    {
+      "fixture_id": "storage.block_local_utxo_view",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
+      "chainstate_backend": "rocksdb",
+      "duration_ms": 0,
+      "failure": "",
+      "notes": "Proof uses created/loaded/spent view state before committing durable chainstate."
     },
     {
       "fixture_id": "storage.project_export_observational",

@@ -3,9 +3,6 @@
 #include "cpbitnode/consensus/connect.hpp"
 #include "cpbitnode/db/chainstate.hpp"
 #include "cpbitnode/db/node_state.hpp"
-#ifndef CPBITNODE_USE_ROCKSDB
-#include "cpbitnode/db/tracker.hpp"
-#endif
 #include "cpbitnode/endpoint_parse.hpp"
 #include "cpbitnode/p2p/manager.hpp"
 #include "cpbitnode/storage/blocks.hpp"
@@ -18,6 +15,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 
 namespace {
 
@@ -25,9 +23,6 @@ using cpbitnode::chain::getChain;
 using cpbitnode::config::Settings;
 using cpbitnode::consensus::ConnectBlockError;
 using cpbitnode::db::NodeStateStore;
-#ifndef CPBITNODE_USE_ROCKSDB
-using cpbitnode::db::ProjectTracker;
-#endif
 using cpbitnode::p2p::PeerManager;
 using cpbitnode::storage::BlockStore;
 using cpbitnode::sync::connectStoredBlocks;
@@ -43,18 +38,10 @@ using cpbitnode::sync::repairValidatedIfAhead;
 using cpbitnode::sync::resolveBootstrapStartHeight;
 
 std::unique_ptr<NodeStateStore> openNodeState(const Settings& settings) {
-    if (settings.chainstateBackend == "rocksdb") {
-        const auto sqlitePath = std::filesystem::path(settings.resolvedDbPath());
-        if (std::filesystem::exists(sqlitePath)) {
-            throw std::runtime_error("rocksdb mode refuses legacy SQLite artifact: " + sqlitePath.string());
-        }
-        return cpbitnode::db::openRocksDbNodeStateStore(settings.dataDir);
+    if (settings.chainstateBackend != "rocksdb") {
+        throw std::runtime_error("Cpp Core-native mode only supports --chainstate-backend rocksdb");
     }
-#ifdef CPBITNODE_USE_ROCKSDB
-    throw std::runtime_error("native RocksDB build only supports --chainstate-backend rocksdb");
-#else
-    return std::make_unique<ProjectTracker>(settings.resolvedDbPath());
-#endif
+    return cpbitnode::db::openRocksDbNodeStateStore(settings.dataDir);
 }
 
 void updatePhase3(NodeStateStore& tracker, const std::string& chainName) {
@@ -150,7 +137,9 @@ int syncBlocksRun(const Settings& settings) {
             markHeadersCurrent(*state, chain);
             std::cerr << headerRefreshLogMessage(refreshAction) << '\n';
         } else {
-            manager.syncHeaders(localsCoverFollowup);
+            const std::optional<int> headerStop =
+                settings.blocksTargetHeight > 0 ? std::optional<int>(settings.blocksTargetHeight) : std::nullopt;
+            manager.syncHeaders(localsCoverFollowup, headerStop);
         }
 
         const int downloaded = manager.syncBlocks(blockStore, *chainstate);

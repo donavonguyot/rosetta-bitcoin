@@ -1,7 +1,6 @@
 export interface SettingsOptions {
   chain?: string;
   dataDir?: string;
-  dbPath?: string;
   listen?: boolean;
   p2pPort?: number;
   peers?: string;
@@ -52,7 +51,6 @@ function envFloat(name: string, defaultValue: number): number {
 export class Settings {
   chain = "testnet4";
   dataDir = "./data-ts";
-  dbPath = "";
   listen = false;
   p2pPort = 0;
   peers = "";
@@ -85,7 +83,6 @@ export class Settings {
     const settings = new Settings();
     settings.chain = process.env.CHAIN ?? settings.chain;
     settings.dataDir = process.env.DATA_DIR ?? settings.dataDir;
-    settings.dbPath = process.env.DB_PATH ?? settings.dbPath;
     settings.listen = envBool("LISTEN", settings.listen);
     settings.p2pPort = envInt("P2P_PORT", settings.p2pPort);
     settings.peers = process.env.PEERS ?? settings.peers;
@@ -120,11 +117,6 @@ export class Settings {
     );
     Object.assign(settings, overrides);
     return settings;
-  }
-
-  resolvedDbPath(): string {
-    if (this.dbPath) return this.dbPath;
-    return `${this.dataDir.replace(/\/$/, "")}/tsbitnode.db`;
   }
 
   blocksDir(): string {

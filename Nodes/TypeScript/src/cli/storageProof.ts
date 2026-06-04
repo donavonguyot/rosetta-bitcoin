@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { getChain } from "../chain/params.js";
 import { Settings } from "../config/settings.js";
 import { secp256k1BackendInfo } from "../consensus/cryptoBackend.js";
-import { ChainstateSession, TSBITNODE_SQLITE_DB } from "../chainstate/chainstateSession.js";
+import { ChainstateSession, LEGACY_LOCAL_DB_NAME } from "../chainstate/chainstateSession.js";
 import { VERSION } from "../version.js";
 import { parseCli } from "./args.js";
 
@@ -133,7 +133,7 @@ export async function runStorageProof(settings: Settings, proofPath: string, nod
   await seedTwoBlockStorageProof(settings);
   const session = await ChainstateSession.openNative(settings.dataDir, chain, { acquireLock: false });
   try {
-    const sqlitePresent = existsSync(resolve(settings.dataDir, TSBITNODE_SQLITE_DB));
+    const legacyLocalDbPresent = existsSync(resolve(settings.dataDir, LEGACY_LOCAL_DB_NAME));
     const backend = session.store.metadata.backendName;
     const validatedHeight = await session.store.getValidatedHeight(chain.name);
     const validatedHash = (await session.store.getValidatedHash(chain.name)) ?? "";
@@ -153,8 +153,8 @@ export async function runStorageProof(settings: Settings, proofPath: string, nod
       chainstate_backend_version: session.store.metadata.backendVersion,
       codec_version: session.store.metadata.codecVersion,
       native_storage: true,
-      local_sqlite_artifact_absent: !sqlitePresent,
-      local_sqlite_db_present: sqlitePresent,
+      local_sqlite_artifact_absent: !legacyLocalDbPresent,
+      local_sqlite_db_present: legacyLocalDbPresent,
       validated_height: validatedHeight,
       validated_hash: validatedHash,
       header_height: headerHeight,
@@ -200,7 +200,7 @@ export async function runStorageProof(settings: Settings, proofPath: string, nod
       results: [
         result("storage.native_fresh_start", validatedHeight >= 1, Math.min(validatedHeight, 1), HEIGHT_1_HASH, backend, "validated_height < 1"),
         result("storage.native_restart", validatedHeight >= 2, validatedHeight, validatedHash, backend, "validated_height < 2"),
-        result("storage.local_sqlite_artifact_absent", !sqlitePresent, null, "", backend, "local SQLite artifact exists in native datadir"),
+        result("storage.local_sqlite_artifact_absent", !legacyLocalDbPresent, null, "", backend, "legacy local DB artifact exists in native datadir"),
         result("storage.project_export_observational", true, validatedHeight, validatedHash, backend, "", "Project import is external to the native runtime."),
       ],
       commands: [

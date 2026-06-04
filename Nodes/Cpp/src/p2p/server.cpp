@@ -38,7 +38,7 @@ bool isTxInventoryType(std::uint32_t type) {
 
 }  // namespace
 
-void handleInboundGetdata(PeerConnection& peer, db::ProjectTracker& tracker, const chain::ChainParams& chain,
+void handleInboundGetdata(PeerConnection& peer, db::NodeStateStore& tracker, const chain::ChainParams& chain,
                           storage::BlockStore& blockStore, std::span<const std::uint8_t> payload,
                           mempool::Mempool* mempool) {
     const auto getdata = messages::GetDataMessage::deserialize(payload);
@@ -104,7 +104,7 @@ void handleInboundGetdata(PeerConnection& peer, db::ProjectTracker& tracker, con
     }
 }
 
-void dispatchInboundMessage(PeerConnection& peer, db::ProjectTracker& tracker, const chain::ChainParams& chain,
+void dispatchInboundMessage(PeerConnection& peer, db::NodeStateStore& tracker, const chain::ChainParams& chain,
                             const config::Settings& settings, storage::BlockStore& blockStore,
                             mempool::Mempool* mempool, const std::string& command,
                             std::span<const std::uint8_t> payload) {
@@ -125,7 +125,7 @@ void dispatchInboundMessage(PeerConnection& peer, db::ProjectTracker& tracker, c
 }
 
 void serveInboundSession(std::unique_ptr<Transport> transport, const std::string& host, int port,
-                         const chain::ChainParams& chain, db::ProjectTracker& tracker,
+                         const chain::ChainParams& chain, db::NodeStateStore& tracker,
                          const config::Settings& settings, storage::BlockStore& blockStore,
                          mempool::Mempool* mempool, RelayTxAcceptedFn relayTxAccepted) {
     PeerConnection::Options options;
@@ -164,7 +164,7 @@ void serveInboundSession(std::unique_ptr<Transport> transport, const std::string
     peer.close();
 }
 
-int startInboundListener(const chain::ChainParams& chain, db::ProjectTracker& tracker,
+int startInboundListener(const chain::ChainParams& chain, db::NodeStateStore& tracker,
                          const config::Settings& settings) {
     if (!settings.listen) {
         return -1;
@@ -194,7 +194,7 @@ int startInboundListener(const chain::ChainParams& chain, db::ProjectTracker& tr
     return fd;
 }
 
-InboundServerHandle startInboundServer(const chain::ChainParams& chain, db::ProjectTracker& tracker,
+InboundServerHandle startInboundServer(const chain::ChainParams& chain, db::NodeStateStore& tracker,
                                        const config::Settings& settings, storage::BlockStore& blockStore,
                                        mempool::Mempool* mempool, RelayTxAcceptedFn relayTxAccepted) {
     InboundServerHandle handle;

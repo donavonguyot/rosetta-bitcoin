@@ -8,7 +8,6 @@ export {
   checkpointStatus,
   fullNodeWireProgress,
   seedCapabilityRecords,
-  seedWireCapabilities,
   type FullNodeWireProgress,
   type WireCapability,
   type WireCheckpoint,

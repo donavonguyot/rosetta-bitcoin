@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { TESTNET4 } from "../src/chain/params.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import {
   AddrMessageCodec,
   GetAddrMessageCodec,
@@ -35,7 +35,7 @@ describe("address messages", () => {
 describe("peer address tracker", () => {
   it("records and lists peer addresses", () => {
     const dir = mkdtempSync(join(tmpdir(), "tsbitnode-addr-"));
-    const tracker = new ProjectTracker(join(dir, "peers.db"));
+    const tracker = new NativeNodeState(join(dir, "peers.stateDir"));
     tracker.recordPeerAddress("203.0.113.10", 48_333, { services: 1, source: "getaddr" });
     tracker.recordPeerAddress("198.51.100.4", 48_333, { source: "addr" });
     const endpoints = tracker.listPeerAddressEndpoints(10);
@@ -46,7 +46,7 @@ describe("peer address tracker", () => {
 
   it("excludes the PythonNode default peer from storage", () => {
     const dir = mkdtempSync(join(tmpdir(), "tsbitnode-addr-exclude-"));
-    const tracker = new ProjectTracker(join(dir, "peers.db"));
+    const tracker = new NativeNodeState(join(dir, "peers.stateDir"));
     tracker.recordPeerAddress("89.167.10.150", 48_333, { source: "getaddr" });
     tracker.recordPeerAddress("203.0.113.10", 48_333, { source: "getaddr" });
     const endpoints = tracker.listPeerAddressEndpoints(10);

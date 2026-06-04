@@ -334,7 +334,7 @@ describe("taproot script verification", () => {
         amount: amt,
         spentPrevouts,
       }),
-    ).toThrow(/script verification failed/);
+    ).toThrow(/taproot control block commitment mismatch/);
   });
 });
 
@@ -564,7 +564,7 @@ describe("legacy script verification", () => {
     ).toBe(false);
   });
 
-  it("rejects unsupported scriptPubKey template", () => {
+  it("accepts bare consensus scriptPubKey templates", () => {
     const pubkey = testPubkeySec1(1n);
     const [signed] = makeSignedP2pkhSpend({
       privateKey: 1n,
@@ -578,7 +578,7 @@ describe("legacy script verification", () => {
         scriptPubKey: Buffer.from([OP_1]),
         amount: prevAmount,
       }),
-    ).toThrow(/unsupported scriptPubKey/);
+    ).not.toThrow();
   });
 
   it("rejects P2SH scriptPubKey hash mismatch", () => {
@@ -656,7 +656,7 @@ describe("legacy script verification", () => {
     });
     expect(() =>
       verifyTransactionInput(signed, 0, { scriptPubKey, amount: prevAmount }),
-    ).toThrow(/script verification failed/);
+    ).toThrow(/CHECKMULTISIG stack underflow/);
   });
 
   it("rejects P2SH multisig when signature order does not match pubkeys", () => {
@@ -701,7 +701,7 @@ describe("legacy script verification", () => {
     };
     expect(() =>
       verifyTransactionInput(badTx, 0, { scriptPubKey, amount: prevAmount }),
-    ).toThrow(/script verification failed/);
+    ).toThrow(/P2SH inner final stack check failed/);
   });
 
   it("rejects P2SH CLTV when locktime is unsatisfied", () => {
@@ -718,7 +718,7 @@ describe("legacy script verification", () => {
     });
     expect(() =>
       verifyTransactionInput(signed, 0, { scriptPubKey, amount: prevAmount }),
-    ).toThrow(/script verification failed/);
+    ).toThrow(/CHECKLOCKTIMEVERIFY negative locktime/);
   });
 
   it("rejects P2SH CSV when input sequence is insufficient", () => {
@@ -734,7 +734,7 @@ describe("legacy script verification", () => {
     });
     expect(() =>
       verifyTransactionInput(signed, 0, { scriptPubKey, amount: prevAmount }),
-    ).toThrow(/script verification failed/);
+    ).toThrow(/CHECKSEQUENCEVERIFY unsatisfied locktime/);
   });
 
   it("rejects witness v2 program spend", () => {

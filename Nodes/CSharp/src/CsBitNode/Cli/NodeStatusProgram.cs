@@ -18,6 +18,7 @@ public static class NodeStatusService
         using var session = ChainstateSession.OpenNative(dataDir, chainParams, acquireLock: false);
         var store = session.Store;
         var syncState = store.GetSyncState(chain);
+        var syncTiming = store.GetSyncTimingSummary(chain);
         var validatedHeight = store.GetValidatedHeight(chain);
         var storedBlockHeight = store.MaxStoredBlockHeight(chain);
         var hasSqliteArtifact = File.Exists(Path.Combine(dataDir, NodePaths.DbFileName));
@@ -52,6 +53,7 @@ public static class NodeStatusService
             ["native_crypto_backend"] = Secp256k1.SelectedBackendName(),
             ["native_crypto_available"] = Secp256k1.NativeBackendAvailable(),
             ["taproot_tweak_backend"] = Secp256k1.TaprootTweakBackendName(),
+            ["sync_timing"] = syncTiming is null ? null : JsonSerializer.SerializeToNode(syncTiming),
             ["current_blocker"] = currentBlocker,
             ["active_writer_pid"] = lockInfo.Pid,
             ["active_writer_command"] = lockInfo.Command,

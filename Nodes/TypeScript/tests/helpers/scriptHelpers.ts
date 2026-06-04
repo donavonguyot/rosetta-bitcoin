@@ -13,7 +13,7 @@ import {
   OP_HASH160,
 } from "../../src/consensus/script/opcodes.js";
 import { Gx, Gy, scalarMult, signDer } from "../../src/consensus/secp256k1.js";
-import type { ProjectTracker } from "../../src/db/tracker.js";
+import type { NativeNodeState } from "../../src/runtime/nodeState.js";
 import { TESTNET4 } from "../../src/chain/params.js";
 import type { Transaction } from "../../src/messages/transaction.js";
 
@@ -99,7 +99,7 @@ export function testPubkeySec1(privateKey = 1n): Buffer {
 }
 
 export function fundP2pkhUtxo(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   prevout: Buffer,
   pubkey: Buffer,
   value: number,
@@ -112,7 +112,7 @@ export function fundP2pkhUtxo(
   });
 }
 
-export function fundUtxo(tracker: ProjectTracker, prevout: Buffer, value: number): void {
+export function fundUtxo(tracker: NativeNodeState, prevout: Buffer, value: number): void {
   tracker.addUtxo(TESTNET4.name, prevout, 0, {
     height: 12,
     value,

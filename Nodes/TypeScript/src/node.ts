@@ -4,14 +4,13 @@ import type { Server } from "node:net";
 import { getChain } from "./chain/params.js";
 import type { Settings } from "./config/settings.js";
 import { ConnectBlockError } from "./consensus/connect.js";
-import { ProjectTracker } from "./db/tracker.js";
+import { NativeNodeState } from "./runtime/nodeState.js";
 import { resolveManualPeers } from "./config/peers.js";
 import { clearLastError, recordLastError } from "./metrics.js";
 import { startMetricsServer, type MetricsServerHandle } from "./metricsHttp.js";
 import { PeerManager } from "./p2p/manager.js";
 import { broadcastWitnessBlockInv } from "./p2p/peer.js";
 import { serveInbound } from "./p2p/server.js";
-import { BlockStore } from "./storage/blocks.js";
 import {
   SyncLockHeldError,
   acquireSyncLock,
@@ -46,7 +45,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
     throw error;
   }
 
-  const tracker = new ProjectTracker(settings.resolvedDbPath());
+  const tracker = await NativeNodeState.open(settings, chain, { acquireLock: false });
   const metricsServer: MetricsServerHandle | null = startMetricsServer(settings, tracker);
   tracker.setMeta("chain", chain.name);
   tracker.setMeta("data_dir", settings.dataDir);
@@ -55,7 +54,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
 
   ensureGenesis(tracker, chain);
   repairSyncState(tracker, chain);
-  repairValidatedIfAhead(tracker, new BlockStore(settings.blocksDir(), chain.magic), chain);
+  await repairValidatedIfAhead(tracker, chain);
 
   const port = settings.p2pPort || chain.defaultPort;
   const manualPeers = resolveManualPeers(settings.peers, port);
@@ -131,11 +130,10 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
       "info",
     );
 
-    const blockStore = new BlockStore(settings.blocksDir(), chain.magic);
     try {
-      repairValidatedIfAhead(tracker, blockStore, chain);
+      await repairValidatedIfAhead(tracker, chain);
       if (settings.rebuildValidatedChain) {
-        const rebuilt = rebuildValidatedChain(tracker, blockStore, chain);
+        const rebuilt = await rebuildValidatedChain(tracker, chain);
         if (rebuilt > 0) {
           tracker.updatePhase(
             "phase3",
@@ -144,7 +142,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
           );
         }
       } else {
-        const { connected, newHashes } = await connectStoredBlocks(tracker, blockStore, chain);
+        const { connected, newHashes } = await connectStoredBlocks(tracker, chain);
         for (const blockHash of newHashes) {
           await broadcastWitnessBlockInv(manager.connections, blockHash, tracker);
         }
@@ -164,7 +162,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
       throw error;
     }
 
-    const blocksDownloaded = await manager.syncBlocks(blockStore);
+    const blocksDownloaded = await manager.syncBlocks();
     const validated = tracker.getValidatedHeight(chain.name);
     if (blocksDownloaded > 0 || validated > 0 || tracker.blockCount(chain.name) > 0) {
       tracker.updatePhase(
@@ -205,7 +203,6 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
         chain,
         tracker,
         settings,
-        blockStore,
         mempool: manager.mempool,
         relayTxAccepted: (tx, source) => manager.relayAcceptedTransaction(tx, source),
       });
@@ -225,7 +222,7 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
     }
     await manager.close();
     await metricsServer?.close();
-    tracker.close();
+    await tracker.close();
     if (syncLock !== null) {
       releaseSyncLock(syncLock);
     }

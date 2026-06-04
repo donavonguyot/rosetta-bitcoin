@@ -11,8 +11,8 @@ export type {
 } from "./chainstate.js";
 export {
   ChainstateSession,
+  LEGACY_LOCAL_DB_NAME,
   TSBITNODE_NATIVE_MARKER,
-  TSBITNODE_SQLITE_DB,
 } from "./chainstateSession.js";
 export {
   ROCKSDB_BACKEND_NAME,

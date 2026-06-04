@@ -5,10 +5,9 @@ import { getChain } from "../chain/params.js";
 import { resolveManualPeers } from "../config/peers.js";
 import { Settings } from "../config/settings.js";
 import { ConnectBlockError } from "../consensus/connect.js";
-import { ProjectTracker } from "../db/tracker.js";
+import { NativeNodeState } from "../runtime/nodeState.js";
 import { configureLogging } from "../node.js";
 import { PeerManager } from "../p2p/manager.js";
-import { BlockStore } from "../storage/blocks.js";
 import {
   SyncLockHeldError,
   acquireSyncLock,
@@ -41,7 +40,6 @@ const options = parseCli(
   {
     chain: { type: "string" },
     datadir: { type: "string" },
-    db: { type: "string" },
     peers: { type: "string" },
     "log-level": { type: "string" },
     "blocks-target": { type: "string" },
@@ -59,7 +57,6 @@ const blocksMax = parseOptionalInt(options["blocks-max"]);
 const settings = Settings.fromEnv({
   ...(typeof options.chain === "string" ? { chain: options.chain } : {}),
   ...(typeof options.datadir === "string" ? { dataDir: options.datadir } : {}),
-  ...(typeof options.db === "string" ? { dbPath: options.db } : {}),
   ...(typeof options.peers === "string" ? { peers: options.peers } : {}),
   ...(typeof options["log-level"] === "string" ? { logLevel: options["log-level"] } : {}),
   ...(blocksTarget !== undefined ? { blocksTargetHeight: blocksTarget } : {}),
@@ -78,7 +75,7 @@ function syncRunnerLockOptions(): AcquireSyncLockOptions {
   return { holder: "syncRunner" };
 }
 
-function updatePhase3(tracker: ProjectTracker, chainName: string): void {
+function updatePhase3(tracker: NativeNodeState, chainName: string): void {
   tracker.updatePhase(
     "phase3",
     "in_progress",
@@ -89,20 +86,19 @@ function updatePhase3(tracker: ProjectTracker, chainName: string): void {
 async function connectStored(settings: Settings, rebuild: boolean): Promise<number> {
   const chain = getChain(settings.chain);
   mkdirSync(settings.dataDir, { recursive: true });
-  const tracker = new ProjectTracker(settings.resolvedDbPath());
+  const tracker = await NativeNodeState.open(settings, chain, { acquireLock: false });
   ensureGenesis(tracker, chain);
   repairSyncState(tracker, chain);
-  const blockStore = new BlockStore(settings.blocksDir(), chain.magic);
   try {
-    repairValidatedIfAhead(tracker, blockStore, chain);
+    await repairValidatedIfAhead(tracker, chain);
     let connected = 0;
     if (rebuild) {
-      connected = rebuildValidatedChain(tracker, blockStore, chain);
+      connected = await rebuildValidatedChain(tracker, chain);
       console.error(
         `Rebuilt validated chain from stored blocks (height=${tracker.getValidatedHeight(chain.name)}, utxos=${tracker.utxoCount(chain.name)})`,
       );
     } else {
-      const outcome = await connectStoredBlocks(tracker, blockStore, chain);
+      const outcome = await connectStoredBlocks(tracker, chain);
       connected = outcome.connected;
     }
     if (connected > 0) {
@@ -118,25 +114,24 @@ async function connectStored(settings: Settings, rebuild: boolean): Promise<numb
     }
     throw error;
   } finally {
-    tracker.close();
+    await tracker.close();
   }
 }
 
 async function syncBlocks(settings: Settings): Promise<number> {
   const chain = getChain(settings.chain);
   mkdirSync(settings.dataDir, { recursive: true });
-  const tracker = new ProjectTracker(settings.resolvedDbPath());
+  const tracker = await NativeNodeState.open(settings, chain, { acquireLock: false });
   ensureGenesis(tracker, chain);
   repairSyncState(tracker, chain);
-  const blockStore = new BlockStore(settings.blocksDir(), chain.magic);
   const port = settings.p2pPort || chain.defaultPort;
   const manualPeers = resolveManualPeers(settings.peers, port);
   const manager = new PeerManager(chain, tracker, settings);
 
   try {
-    repairValidatedIfAhead(tracker, blockStore, chain);
+    await repairValidatedIfAhead(tracker, chain);
     if (settings.rebuildValidatedChain) {
-      const connected = rebuildValidatedChain(tracker, blockStore, chain);
+      const connected = await rebuildValidatedChain(tracker, chain);
       console.error(
         `Rebuilt validated chain before download (height=${tracker.getValidatedHeight(chain.name)}, utxos=${tracker.utxoCount(chain.name)})`,
       );
@@ -144,7 +139,7 @@ async function syncBlocks(settings: Settings): Promise<number> {
         updatePhase3(tracker, chain.name);
       }
     } else {
-      const { connected } = await connectStoredBlocks(tracker, blockStore, chain);
+      const { connected } = await connectStoredBlocks(tracker, chain);
       if (connected > 0) {
         updatePhase3(tracker, chain.name);
         console.error(`Connected ${connected} stored blocks before download`);
@@ -183,7 +178,7 @@ async function syncBlocks(settings: Settings): Promise<number> {
       await manager.completeDeferredHandshake();
     }
 
-    const downloaded = await manager.syncBlocks(blockStore);
+    const downloaded = await manager.syncBlocks();
     const validated = tracker.getValidatedHeight(chain.name);
     if (downloaded > 0 || validated > 0) {
       tracker.updatePhase(
@@ -204,7 +199,7 @@ async function syncBlocks(settings: Settings): Promise<number> {
     throw error;
   } finally {
     await manager.close();
-    tracker.close();
+    await tracker.close();
   }
 }
 

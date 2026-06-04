@@ -31,7 +31,7 @@ public static class StorageProofService
         var firstBlock = BlockDeserializer.Deserialize(source.Block(1));
         var firstCoinbaseTxid = Hex.Encode(Hex.Reverse(MerkleComputer.TransactionTxid(firstBlock.Transactions[0])));
 
-        var timingSink = new ReplayTimingSink();
+        var timingSink = new SyncTimingCollector();
         var connected = 0;
         using (var session = ChainstateSession.OpenNative(dataDir, chain))
         {
@@ -70,17 +70,17 @@ public static class StorageProofService
             source.AvailableHeight,
             connected,
             RecursiveSize(Path.Combine(dataDir, "chainstate-rocksdb")),
-            timingSink.Total("block_connect_store_commit"),
-            connected == 0 ? 0 : timingSink.Total("block_connect_store_commit") / connected,
-            Percentile(timingSink.Values("block_connect_store_commit"), 50),
-            Percentile(timingSink.Values("block_connect_store_commit"), 95),
-            timingSink.Values("block_connect_store_commit").DefaultIfEmpty(0).Max(),
-            Percentile(timingSink.Values("utxo_load"), 50),
-            Percentile(timingSink.Values("utxo_apply"), 50),
-            Percentile(timingSink.Values("block_store"), 50),
-            Percentile(timingSink.Values("block_connect_store_commit"), 50),
-            Percentile(timingSink.Values("block_connect_store_commit"), 95),
-            timingSink.Values("block_connect_store_commit").DefaultIfEmpty(0).Max(),
+            TotalMs(timingSink, "block_connect_store_commit"),
+            connected == 0 ? 0 : TotalMs(timingSink, "block_connect_store_commit") / connected,
+            PercentileMs(timingSink, "block_connect_store_commit", 50),
+            PercentileMs(timingSink, "block_connect_store_commit", 95),
+            MaxMs(timingSink, "block_connect_store_commit"),
+            PercentileMs(timingSink, "utxo_load", 50),
+            PercentileMs(timingSink, "utxo_apply", 50),
+            PercentileMs(timingSink, "block_store", 50),
+            PercentileMs(timingSink, "block_connect_store_commit", 50),
+            PercentileMs(timingSink, "block_connect_store_commit", 95),
+            MaxMs(timingSink, "block_connect_store_commit"),
             utxoLookupMs,
             utxoLookupMs,
             startupInvariantMs,
@@ -330,6 +330,15 @@ public static class StorageProofService
         return sorted[Math.Clamp(index, 0, sorted.Length - 1)];
     }
 
+    private static long TotalMs(SyncTimingCollector timingSink, string stage) =>
+        timingSink.TotalMicros(stage) / 1000;
+
+    private static long PercentileMs(SyncTimingCollector timingSink, string stage, int percentile) =>
+        Percentile(timingSink.ValuesMicros(stage), percentile) / 1000;
+
+    private static long MaxMs(SyncTimingCollector timingSink, string stage) =>
+        timingSink.ValuesMicros(stage).DefaultIfEmpty(0).Max() / 1000;
+
     private sealed record ReplayMetrics(
         string FixtureReplayStatus,
         int ReplayTargetHeight,
@@ -353,26 +362,6 @@ public static class StorageProofService
         string ReplayCorpusId,
         string ReplayCorpusSource,
         bool UtxoLookupHit);
-
-    private sealed class ReplayTimingSink : ITimingSink
-    {
-        private readonly Dictionary<string, List<long>> _values = new();
-
-        public void Record(string stage, int height, long elapsedMillis)
-        {
-            if (!_values.TryGetValue(stage, out var values))
-            {
-                values = [];
-                _values[stage] = values;
-            }
-            values.Add(elapsedMillis);
-        }
-
-        public IReadOnlyList<long> Values(string stage) =>
-            _values.TryGetValue(stage, out var values) ? values : [];
-
-        public long Total(string stage) => Values(stage).Sum();
-    }
 
     private static IReplayBlockSource OpenReplaySource(
         IReadOnlyDictionary<string, string?> env,

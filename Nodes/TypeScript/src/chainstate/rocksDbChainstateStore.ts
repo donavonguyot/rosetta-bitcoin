@@ -50,6 +50,15 @@ const rocksdbPackage = require("rocksdb/package.json") as { version?: string };
 export const ROCKSDB_BACKEND_NAME = "rocksdb";
 export const ROCKSDB_SCHEMA_VERSION = "2";
 export const ROCKSDB_CODEC_VERSION = "2";
+const ROCKSDB_OPEN_OPTIONS = {
+  createIfMissing: true,
+  cacheSize: 64 << 20,
+  writeBufferSize: 64 << 20,
+  blockSize: 16 << 10,
+  maxOpenFiles: 1024,
+  maxFileSize: 64 << 20,
+  compression: true,
+};
 
 function utcNowIso(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -86,8 +95,36 @@ function syncStateKey(chain: string): Buffer {
   return metadataKey(`sync_state:${chain}`);
 }
 
+function currentBlockerKey(chain: string): Buffer {
+  return metadataKey(`current_blocker:${chain}`);
+}
+
+function lastErrorKey(chain: string): Buffer {
+  return metadataKey(`last_error:${chain}`);
+}
+
+function headerCounterKey(chain: string): Buffer {
+  return metadataKey(`counter:headers:${chain}`);
+}
+
+function blockCounterKey(chain: string): Buffer {
+  return metadataKey(`counter:blocks:${chain}`);
+}
+
+function utxoCounterKey(chain: string): Buffer {
+  return metadataKey(`counter:utxos:${chain}`);
+}
+
+function maxStoredBlockHeightKey(chain: string): Buffer {
+  return metadataKey(`max_stored_block_height:${chain}`);
+}
+
 function jsonValue(value: unknown): Buffer {
   return Buffer.from(JSON.stringify(value), "utf8");
+}
+
+function countValue(value: number): Buffer {
+  return metadataValue(String(Math.max(0, value)));
 }
 
 function parseJson<T>(value: Buffer): T {
@@ -151,10 +188,11 @@ export class RocksDbChainstateStore implements ChainstateStore {
     const resolved = resolve(path);
     mkdirSync(resolved, { recursive: true });
     const db = rocksdb(resolved);
-    await callbackVoid((callback) => db.open({ createIfMissing: true }, callback));
+    await callbackVoid((callback) => db.open(ROCKSDB_OPEN_OPTIONS, callback));
     const existing = await RocksDbChainstateStore.readMetadataFromDb(db, chain, resolved);
     const store = new RocksDbChainstateStore(resolved, chain, db, existing);
     await store.writeMetadata(existing);
+    await store.ensureCounters(chain);
     return store;
   }
 
@@ -211,13 +249,49 @@ export class RocksDbChainstateStore implements ChainstateStore {
     await this.put(syncStateKey(chain), jsonValue(next));
   }
 
+  async currentBlocker(chain: string): Promise<Record<string, unknown> | null> {
+    const value = await this.get(currentBlockerKey(chain));
+    return value === null ? null : parseJson<Record<string, unknown>>(value);
+  }
+
+  async setCurrentBlocker(chain: string, blocker: Record<string, unknown> | null): Promise<void> {
+    if (blocker === null) {
+      await this.del(currentBlockerKey(chain));
+      return;
+    }
+    await this.put(currentBlockerKey(chain), jsonValue(blocker));
+  }
+
+  async lastError(chain: string): Promise<string | null> {
+    const value = await this.get(lastErrorKey(chain));
+    return value === null ? null : decodeMetadataValue(value);
+  }
+
+  async setLastError(chain: string, message: string | null): Promise<void> {
+    if (message === null) {
+      await this.del(lastErrorKey(chain));
+      return;
+    }
+    await this.put(lastErrorKey(chain), metadataValue(message));
+  }
+
   async insertHeader(chain: string, record: ChainstateHeaderRecord): Promise<void> {
-    await this.put(headerKey(chain, record.height), encodeHeader(Buffer.from(record.headerSerializedHex, "hex")));
-    await this.upsertSyncState(chain, {
+    const key = headerKey(chain, record.height);
+    const existingHeader = await this.get(key);
+    const headerCount = await this.headerCount(chain);
+    const nextHeaderCount = headerCount + (existingHeader === null ? 1 : 0);
+    const existingSync = await this.getSyncState(chain);
+    const nextSync: ChainstateSyncState = {
       bestHeight: record.height,
       bestHash: record.blockHash,
-      headerCount: await this.headerCount(chain),
-    });
+      headerCount: nextHeaderCount,
+      syncStatus: existingSync?.syncStatus ?? "starting",
+    };
+    await this.batch([
+      { type: "put", key, value: encodeHeader(Buffer.from(record.headerSerializedHex, "hex")) },
+      { type: "put", key: headerCounterKey(chain), value: countValue(nextHeaderCount) },
+      { type: "put", key: syncStateKey(chain), value: jsonValue(nextSync) },
+    ]);
   }
 
   async getHeaderHash(chain: string, height: number): Promise<string | null> {
@@ -234,19 +308,16 @@ export class RocksDbChainstateStore implements ChainstateStore {
   }
 
   async headerCount(chain: string): Promise<number> {
-    return this.countPrefix(keyPrefixForHeightKey(headerKey(chain, 0)));
+    return this.readCounter(
+      headerCounterKey(chain),
+      () => this.countPrefix(keyPrefixForHeightKey(headerKey(chain, 0))),
+    );
   }
 
   async recordBlock(chain: string, record: ChainstateBlockIndexRecord): Promise<void> {
-    await this.put(
-      blockIndexKey(chain, record.height),
-      encodeBlockIndex({
-        blockHashInternal: hex32(record.blockHash, "block_hash"),
-        fileNumber: record.fileNumber,
-        fileOffset: record.fileOffset,
-        blockSize: record.blockSize,
-      }),
-    );
+    const operations: RocksDbBatchOperation[] = [];
+    await this.addBlockIndexOperations(chain, record, operations);
+    await this.batch(operations);
   }
 
   async getBlock(chain: string, height: number): Promise<ChainstateBlockIndexRecord | null> {
@@ -263,11 +334,17 @@ export class RocksDbChainstateStore implements ChainstateStore {
   }
 
   async blockCount(chain: string): Promise<number> {
-    return this.countPrefix(keyPrefixForHeightKey(blockIndexKey(chain, 0)));
+    return this.readCounter(
+      blockCounterKey(chain),
+      () => this.countPrefix(keyPrefixForHeightKey(blockIndexKey(chain, 0))),
+    );
   }
 
   async maxStoredBlockHeight(chain: string): Promise<number> {
-    return this.maxHeightForPrefix(keyPrefixForHeightKey(blockIndexKey(chain, 0)));
+    return this.readCounter(
+      maxStoredBlockHeightKey(chain),
+      () => this.maxHeightForPrefix(keyPrefixForHeightKey(blockIndexKey(chain, 0))),
+    );
   }
 
   async getUtxo(chain: string, txid: string, vout: number): Promise<ChainstateStoredUtxo | null> {
@@ -275,9 +352,22 @@ export class RocksDbChainstateStore implements ChainstateStore {
     return value === null ? null : decodeStoredUtxo(txid, vout, value);
   }
 
+  async getUtxos(chain: string, outpoints: readonly { txid: string; vout: number }[]): Promise<Array<ChainstateStoredUtxo | null>> {
+    if (outpoints.length === 0) return [];
+    const values = await this.getMany(outpoints.map((outpoint) => utxoKey(chain, hex32(outpoint.txid, "txid"), outpoint.vout)));
+    return values.map((value, index) => {
+      if (value === null) return null;
+      const outpoint = outpoints[index]!;
+      return decodeStoredUtxo(outpoint.txid, outpoint.vout, value);
+    });
+  }
+
   async commitBlock(commit: ChainstateBlockCommit): Promise<ChainstateCommitResult> {
     const updatedAt = utcNowIso();
     const operations: RocksDbBatchOperation[] = [];
+    if (commit.blockIndex !== undefined) {
+      await this.addBlockIndexOperations(commit.chain, commit.blockIndex, operations);
+    }
     for (const outpoint of commit.spentOutpoints) {
       operations.push({ type: "del", key: utxoKey(commit.chain, hex32(outpoint.txid, "spent txid"), outpoint.vout) });
     }
@@ -310,6 +400,9 @@ export class RocksDbChainstateStore implements ChainstateStore {
     operations.push({ type: "put", key: metadataKey("tip_height"), value: metadataValue(String(commit.height)) });
     operations.push({ type: "put", key: metadataKey("tip_hash"), value: metadataValue(commit.blockHash) });
     operations.push({ type: "put", key: metadataKey("updated_at"), value: metadataValue(updatedAt) });
+    const currentUtxoCount = await this.utxoCount(commit.chain);
+    const nextUtxoCount = currentUtxoCount + commit.createdUtxos.length - commit.spentOutpoints.length;
+    operations.push({ type: "put", key: utxoCounterKey(commit.chain), value: countValue(nextUtxoCount) });
     await this.batch(operations);
     this.currentMetadata = {
       ...this.currentMetadata,
@@ -331,7 +424,10 @@ export class RocksDbChainstateStore implements ChainstateStore {
   }
 
   async utxoCount(chain: string): Promise<number> {
-    return this.countPrefix(utxoPrefixKey(chain));
+    return this.readCounter(
+      utxoCounterKey(chain),
+      () => this.countPrefix(utxoPrefixKey(chain)),
+    );
   }
 
   async logEvent(category: string, message: string, severity = "info", detailsJson: string | undefined = undefined): Promise<void> {
@@ -395,6 +491,81 @@ export class RocksDbChainstateStore implements ChainstateStore {
     return { height: this.currentMetadata.tipHeight, blockHash: this.currentMetadata.tipHash };
   }
 
+  private async ensureCounters(chain: string): Promise<void> {
+    const counterKeys = [
+      headerCounterKey(chain),
+      blockCounterKey(chain),
+      utxoCounterKey(chain),
+      maxStoredBlockHeightKey(chain),
+    ];
+    const existing = await this.getMany(counterKeys);
+    if (existing.every((value) => value !== null)) return;
+    await this.batch([
+      {
+        type: "put",
+        key: headerCounterKey(chain),
+        value: countValue(await this.countPrefix(keyPrefixForHeightKey(headerKey(chain, 0)))),
+      },
+      {
+        type: "put",
+        key: blockCounterKey(chain),
+        value: countValue(await this.countPrefix(keyPrefixForHeightKey(blockIndexKey(chain, 0)))),
+      },
+      {
+        type: "put",
+        key: utxoCounterKey(chain),
+        value: countValue(await this.countPrefix(utxoPrefixKey(chain))),
+      },
+      {
+        type: "put",
+        key: maxStoredBlockHeightKey(chain),
+        value: countValue(await this.maxHeightForPrefix(keyPrefixForHeightKey(blockIndexKey(chain, 0)))),
+      },
+    ]);
+  }
+
+  private async readCounter(key: Buffer, fallback: () => Promise<number>): Promise<number> {
+    const value = await this.get(key);
+    if (value !== null) {
+      const parsed = Number.parseInt(decodeMetadataValue(value), 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    const count = await fallback();
+    await this.put(key, countValue(count));
+    return count;
+  }
+
+  private async addBlockIndexOperations(
+    chain: string,
+    record: ChainstateBlockIndexRecord,
+    operations: RocksDbBatchOperation[],
+  ): Promise<void> {
+    const key = blockIndexKey(chain, record.height);
+    const existingBlock = await this.get(key);
+    const blockCount = await this.blockCount(chain);
+    const maxStoredBlockHeight = await this.maxStoredBlockHeight(chain);
+    operations.push({
+      type: "put",
+      key,
+      value: encodeBlockIndex({
+        blockHashInternal: hex32(record.blockHash, "block_hash"),
+        fileNumber: record.fileNumber,
+        fileOffset: record.fileOffset,
+        blockSize: record.blockSize,
+      }),
+    });
+    operations.push({
+      type: "put",
+      key: blockCounterKey(chain),
+      value: countValue(blockCount + (existingBlock === null ? 1 : 0)),
+    });
+    operations.push({
+      type: "put",
+      key: maxStoredBlockHeightKey(chain),
+      value: countValue(Math.max(maxStoredBlockHeight, record.height)),
+    });
+  }
+
   private get(key: Buffer): Promise<Buffer | null> {
     return new Promise((resolvePromise, reject) => {
       this.db.get(key, {}, (error, value) => {
@@ -405,8 +576,21 @@ export class RocksDbChainstateStore implements ChainstateStore {
     });
   }
 
+  private getMany(keys: readonly Buffer[]): Promise<Array<Buffer | null>> {
+    return new Promise((resolvePromise, reject) => {
+      this.db.getMany(keys, {}, (error, values) => {
+        if (error) reject(error);
+        else resolvePromise((values ?? []).map((value) => value ?? null));
+      });
+    });
+  }
+
   private put(key: Buffer, value: Buffer): Promise<void> {
     return callbackVoid((callback) => this.db.put(key, value, {}, callback));
+  }
+
+  private del(key: Buffer): Promise<void> {
+    return callbackVoid((callback) => this.db.del(key, {}, callback));
   }
 
   private batch(operations: readonly RocksDbBatchOperation[]): Promise<void> {

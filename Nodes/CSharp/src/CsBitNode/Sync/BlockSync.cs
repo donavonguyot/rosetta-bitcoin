@@ -37,10 +37,12 @@ public static class BlockSync
         var connected = 0;
         ValidationBlocker? blocker = null;
         string syncStatus = "blocks_syncing";
+        var validatedHeight = tracker.GetValidatedHeight(chain.Name);
+        var prevHashHex = validatedHeight >= 0 ? tracker.GetValidatedHash(chain.Name) : null;
 
         while (maxBlocks <= 0 || connected < maxBlocks)
         {
-            var nextHeight = tracker.GetValidatedHeight(chain.Name) + 1;
+            var nextHeight = validatedHeight + 1;
             var headerHashHex = tracker.GetHeaderHash(chain.Name, nextHeight)
                 ?? throw new InvalidOperationException($"missing header at height {nextHeight}");
 
@@ -49,7 +51,7 @@ public static class BlockSync
                 prevInternal = new byte[32];
             else
             {
-                var prevHashHex = tracker.GetHeaderHash(chain.Name, nextHeight - 1)
+                prevHashHex ??= tracker.GetHeaderHash(chain.Name, nextHeight - 1)
                     ?? throw new InvalidOperationException($"missing prev header at {nextHeight - 1}");
                 prevInternal = Hex.Reverse(Hex.Decode(prevHashHex));
             }
@@ -69,21 +71,25 @@ public static class BlockSync
             var storeStarted = System.Diagnostics.Stopwatch.StartNew();
             var stored = blockStorage.Store(payload);
             storeStarted.Stop();
-            timingSink?.Record("block_store", nextHeight, storeStarted.ElapsedMilliseconds);
-            tracker.RecordBlock(chain.Name, nextHeight, headerHashHex, stored.FileNumber, stored.FileOffset, stored.BlockSize);
+            timingSink?.Record("block_store", nextHeight, storeStarted.ElapsedTicks);
 
             try
             {
-                BlockConnector.Connect(
+                var connectResult = BlockConnector.Connect(
                     tracker,
                     chain.Name,
                     nextHeight,
                     payload,
                     prevInternal,
-                    blockHashInternal);
+                    blockHashInternal,
+                    (stage, height, elapsedTicks) => timingSink?.Record(stage, height, elapsedTicks),
+                    expectedValidatedHeight: validatedHeight,
+                    storedBlock: new ChainstateBlockStorageIndex(stored.FileNumber, stored.FileOffset, stored.BlockSize));
                 blockStarted.Stop();
-                timingSink?.Record("block_connect_store_commit", nextHeight, blockStarted.ElapsedMilliseconds);
+                timingSink?.Record("block_connect_store_commit", nextHeight, blockStarted.ElapsedTicks);
                 connected += 1;
+                validatedHeight = connectResult.Height;
+                prevHashHex = connectResult.BlockHashHex;
             }
             catch (ValidationBlocker validationBlocker)
             {
@@ -111,8 +117,3 @@ public static class BlockSync
 }
 
 public sealed record BlockSyncResult(int Downloaded, int Connected, string SyncStatus, string? BlockerMessage);
-
-public interface ITimingSink
-{
-    void Record(string stage, int height, long elapsedMillis);
-}

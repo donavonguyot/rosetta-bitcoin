@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { TESTNET4 } from "../src/chain/params.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import {
   bitcoinShortTransactionId,
   BlockTxnMessageCodec,
@@ -220,7 +220,7 @@ describe("compact block codecs", () => {
 describe("PeerConnection compact block dispatch", () => {
   it("marks cmpctblock capability on parse-only dispatch", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-cmpct-parse-"));
-    const tracker = new ProjectTracker(join(dir, "cmpct.db"));
+    const tracker = new NativeNodeState(join(dir, "cmpct.stateDir"));
     const peer = new PeerConnection({
       host: "127.0.0.1",
       port: 48_333,
@@ -243,7 +243,7 @@ describe("PeerConnection compact block dispatch", () => {
 
   it("reconstructs cmpctblock from mempool short ids", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-cmpct-mx-"));
-    const tracker = new ProjectTracker(join(dir, "cmpct-mx.db"));
+    const tracker = new NativeNodeState(join(dir, "cmpct-mx.stateDir"));
     const header = dummyHeader();
     const nonce = 771_771;
     const coinbase = minimalCoinbase();
@@ -278,7 +278,7 @@ describe("PeerConnection compact block dispatch", () => {
 
   it("sends getblocktxn then accepts blocktxn", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-cmpct-gettxn-"));
-    const tracker = new ProjectTracker(join(dir, "cmpct-gettxn.db"));
+    const tracker = new NativeNodeState(join(dir, "cmpct-gettxn.stateDir"));
     const header = dummyHeader();
     const nonce = 424_242;
     const coinbase = minimalCoinbase();
@@ -326,7 +326,7 @@ describe("PeerConnection compact block dispatch", () => {
 
   it("parses inbound reject", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-reject-"));
-    const tracker = new ProjectTracker(join(dir, "reject.db"));
+    const tracker = new NativeNodeState(join(dir, "reject.stateDir"));
     const peer = new PeerConnection({
       host: "127.0.0.1",
       port: 48_333,

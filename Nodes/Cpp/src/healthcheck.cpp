@@ -1,12 +1,12 @@
 #include "cpbitnode/healthcheck.hpp"
 
 #include "cpbitnode/config/settings.hpp"
-#include "cpbitnode/db/tracker.hpp"
+#include "cpbitnode/db/node_state.hpp"
 #include "cpbitnode/metrics.hpp"
 #include "cpbitnode/util/json.hpp"
 
+#include <algorithm>
 #include <cmath>
-#include <sqlite3.h>
 #include <sstream>
 #include <stdexcept>
 
@@ -24,7 +24,7 @@ std::optional<double> syncProgressPct(int validatedHeight, int peerTipHeight) {
     return std::round(pct * 100.0) / 100.0;
 }
 
-std::optional<std::string> lastErrorValue(const db::ProjectTracker& tracker) {
+std::optional<std::string> lastErrorValue(const db::NodeStateStore& tracker) {
     const auto raw = tracker.getMeta(metrics::kMetaLastError);
     if (!raw || raw->empty()) {
         return std::nullopt;
@@ -101,7 +101,7 @@ void validateHealthcheckPayload(const HealthcheckDocument& doc) {
     }
 }
 
-HealthcheckDocument buildHealthcheckDocument(const config::Settings& settings, db::ProjectTracker& tracker) {
+HealthcheckDocument buildHealthcheckDocument(const config::Settings& settings, db::NodeStateStore& tracker) {
     const std::string summary = tracker.summaryJson(settings.chain);
     const auto sync = tracker.getSyncState(settings.chain);
     const std::string syncStatus = sync ? sync->at("sync_status") : "unknown";
@@ -115,27 +115,10 @@ HealthcheckDocument buildHealthcheckDocument(const config::Settings& settings, d
         peerTipHeight = parseIntField(sync->at("best_height"));
     }
 
-    const int validatedHeight = tracker.getValidatedHeight(settings.chain);
-    const int headerHeight = tracker.maxHeaderHeight();
+    const int validatedHeight = std::max(0, tracker.getValidatedHeight(settings.chain));
+    const int headerHeight = std::max(0, tracker.maxHeaderHeight());
     const int blockCount = tracker.blockCount();
     const int utxoCount = tracker.utxoCount();
-
-    sqlite3_stmt* peerCountStmt = nullptr;
-    sqlite3_prepare_v2(tracker.handle(), "SELECT COUNT(*) FROM peers WHERE status = 'connected'", -1, &peerCountStmt,
-                       nullptr);
-    int connectedPeers = 0;
-    if (sqlite3_step(peerCountStmt) == SQLITE_ROW) {
-        connectedPeers = sqlite3_column_int(peerCountStmt, 0);
-    }
-    sqlite3_finalize(peerCountStmt);
-
-    sqlite3_stmt* peerRecordsStmt = nullptr;
-    sqlite3_prepare_v2(tracker.handle(), "SELECT COUNT(*) FROM peers", -1, &peerRecordsStmt, nullptr);
-    int peerRecordsTotal = 0;
-    if (sqlite3_step(peerRecordsStmt) == SQLITE_ROW) {
-        peerRecordsTotal = sqlite3_column_int(peerRecordsStmt, 0);
-    }
-    sqlite3_finalize(peerRecordsStmt);
 
     const bool ok = syncStatus != "error";
     HealthcheckDocument doc;
@@ -147,8 +130,8 @@ HealthcheckDocument buildHealthcheckDocument(const config::Settings& settings, d
     doc.headerHeight = headerHeight;
     doc.blockCount = blockCount;
     doc.utxoCount = utxoCount;
-    doc.peerCount = connectedPeers;
-    doc.peerRecordsTotal = peerRecordsTotal;
+    doc.peerCount = tracker.connectedPeerCount();
+    doc.peerRecordsTotal = tracker.peerCount();
     doc.mempoolTxCount = mempoolTxCount;
     doc.mempoolSize = mempoolTxCount;
     doc.mempoolSizeBytes = parseIntField(mempoolBytesRaw.value_or("0"));

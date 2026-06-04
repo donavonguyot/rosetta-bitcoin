@@ -9,7 +9,7 @@ struct Settings;
 }
 
 namespace cpbitnode::db {
-class ProjectTracker;
+class NodeStateStore;
 }
 
 namespace cpbitnode::healthcheck {
@@ -35,7 +35,7 @@ struct HealthcheckDocument {
 };
 
 void validateHealthcheckPayload(const HealthcheckDocument& doc);
-HealthcheckDocument buildHealthcheckDocument(const config::Settings& settings, db::ProjectTracker& tracker);
+HealthcheckDocument buildHealthcheckDocument(const config::Settings& settings, db::NodeStateStore& tracker);
 std::string serializeHealthcheckDocument(const HealthcheckDocument& doc);
 
 }  // namespace cpbitnode::healthcheck

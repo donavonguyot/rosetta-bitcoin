@@ -29,7 +29,7 @@ std::atomic<bool> g_shutdownRequested{false};
 
 void onSignal(int) { g_shutdownRequested.store(true); }
 
-void updatePhase3(db::ProjectTracker& tracker, const std::string& chainName) {
+void updatePhase3(db::NodeStateStore& tracker, const std::string& chainName) {
     tracker.updatePhase("phase3", "in_progress",
                         "Validated through height " + std::to_string(tracker.getValidatedHeight(chainName)) + " (" +
                             std::to_string(tracker.utxoCount()) + " UTXOs)");
@@ -39,13 +39,14 @@ void updatePhase3(db::ProjectTracker& tracker, const std::string& chainName) {
 
 int runNode(
     const config::Settings& settings,
-    std::function<std::unique_ptr<p2p::PeerConnection>(const std::string&, int, db::ProjectTracker&)>
+    std::function<std::unique_ptr<p2p::PeerConnection>(const std::string&, int, db::NodeStateStore&)>
         peerFactoryForTest) {
     const auto chain = chain::getChain(settings.chain);
     std::filesystem::create_directories(settings.dataDir);
     sync::ExclusiveDataDirSyncLock lock(settings.dataDir);
 
-    db::ProjectTracker tracker(settings.resolvedDbPath());
+    auto state = db::openRocksDbNodeStateStore(settings.dataDir);
+    db::NodeStateStore& tracker = *state;
     metrics_http::MetricsServerHandle metricsHandle = metrics_http::startMetricsServer(settings, tracker);
     tracker.setMeta("chain", chain.name);
     tracker.setMeta("data_dir", settings.dataDir);

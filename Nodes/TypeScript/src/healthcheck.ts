@@ -1,5 +1,6 @@
 import { Settings } from "./config/settings.js";
-import { ProjectTracker } from "./db/tracker.js";
+import { getChain } from "./chain/params.js";
+import { NativeNodeState } from "./runtime/nodeState.js";
 import { META_LAST_ERROR, snapshotCounters } from "./metrics.js";
 
 export interface HealthcheckPayload {
@@ -29,7 +30,7 @@ function syncProgressPct(validatedHeight: number, peerTipHeight: number): number
   return Math.round(Math.min(100, (100 * validatedHeight) / peerTipHeight) * 100) / 100;
 }
 
-function lastErrorValue(tracker: ProjectTracker): string | null {
+function lastErrorValue(tracker: NativeNodeState): string | null {
   const raw = tracker.getMeta(META_LAST_ERROR);
   if (raw === undefined || raw.trim() === "") return null;
   return raw;
@@ -121,17 +122,17 @@ export function validateHealthcheckPayload(doc: HealthcheckPayload): void {
 
 export function dockerHealthDocument(
   settings: Settings,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
 ): HealthcheckPayload {
   const summary = tracker.summary(settings.chain);
-  const sync = summary.sync;
+  const sync = summary.sync as Record<string, unknown>;
   const syncStatus =
     typeof sync.sync_status === "string" ? sync.sync_status : "unknown";
   const mempoolTxCount = Number.parseInt(tracker.getMeta("mempool_tx_count") ?? "0", 10);
   const mempoolSizeBytes = Number.parseInt(tracker.getMeta("mempool_size_bytes") ?? "0", 10);
   const peerTipHeight =
     typeof sync.best_height === "number" ? sync.best_height : Number(sync.best_height ?? 0);
-  const validatedHeight = summary.validated_height;
+  const validatedHeight = Number(summary.validated_height ?? 0);
   const metrics = snapshotCounters(tracker);
   const ok = syncStatus !== "error";
 
@@ -142,10 +143,10 @@ export function dockerHealthDocument(
     chain: settings.chain,
     validated_height: validatedHeight,
     header_height: tracker.maxHeaderHeight(),
-    block_count: summary.block_count,
-    utxo_count: summary.utxo_count,
-    peer_count: summary.connected_peers,
-    peer_records_total: summary.peer_count,
+    block_count: Number(summary.block_count ?? 0),
+    utxo_count: Number(summary.utxo_count ?? 0),
+    peer_count: Number(summary.connected_peers ?? 0),
+    peer_records_total: Number(summary.peer_count ?? 0),
     mempool_tx_count: mempoolTxCount,
     mempool_size: mempoolTxCount,
     mempool_size_bytes: mempoolSizeBytes,
@@ -156,9 +157,9 @@ export function dockerHealthDocument(
   };
 }
 
-export function runHealthcheck(): number {
+export async function runHealthcheck(): Promise<number> {
   const settings = Settings.fromEnv();
-  const tracker = new ProjectTracker(settings.resolvedDbPath());
+  const tracker = await NativeNodeState.open(settings, getChain(settings.chain), { acquireLock: false });
   try {
     const payload = dockerHealthDocument(settings, tracker);
     try {
@@ -175,6 +176,6 @@ export function runHealthcheck(): number {
     }
     return 0;
   } finally {
-    tracker.close();
+    await tracker.close();
   }
 }

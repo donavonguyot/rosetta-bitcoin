@@ -1,5 +1,4 @@
 import type { VerifiedBy, WireCapabilityRecord } from "../types/index.js";
-import type { DatabaseSync } from "node:sqlite";
 
 export interface WireCheckpoint {
   readonly id: string;
@@ -315,7 +314,7 @@ export const CAPABILITIES: readonly WireCapability[] = [
     id: "headers.persist",
     checkpoint: "cp3_headers",
     category: "headers",
-    name: "Persist headers to SQLite",
+    name: "Persist headers to native chainstate",
     description: "Store height, hash, prev_hash, timestamp for each header.",
     required: true,
     implemented: true,
@@ -360,7 +359,7 @@ export const CAPABILITIES: readonly WireCapability[] = [
     id: "headers.resume",
     checkpoint: "cp3_headers",
     category: "headers",
-    name: "Resume header sync from SQLite",
+    name: "Resume header sync from native chainstate",
     description: "On restart, continue from stored best_height without re-fetching.",
     required: true,
     implemented: true,
@@ -642,39 +641,3 @@ export function seedCapabilityRecords(): WireCapabilityRecord[] {
     return record;
   });
 }
-
-/** Upsert registry defaults into wire_capabilities — mirrors pybitnode/db/schema.seed_wire_capabilities. */
-export function seedWireCapabilities(db: Pick<DatabaseSync, "prepare">): void {
-  const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const upsert = db.prepare(
-    `INSERT INTO wire_capabilities(
-       capability_id, checkpoint, category, name, description, required,
-       implemented, verified_by, verified_at, notes
-     ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(capability_id) DO UPDATE SET
-       checkpoint = excluded.checkpoint,
-       category = excluded.category,
-       name = excluded.name,
-       description = excluded.description,
-       required = excluded.required,
-       implemented = excluded.implemented,
-       verified_by = excluded.verified_by,
-       verified_at = excluded.verified_at,
-       notes = excluded.notes`,
-  );
-  for (const cap of CAPABILITIES) {
-    upsert.run(
-      cap.id,
-      cap.checkpoint,
-      cap.category,
-      cap.name,
-      cap.description,
-      cap.required ? 1 : 0,
-      cap.implemented ? 1 : 0,
-      cap.implemented ? "code" : "",
-      cap.implemented ? now : "",
-      "",
-    );
-  }
-}
-

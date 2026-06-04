@@ -36,10 +36,10 @@ std::optional<std::pair<std::vector<std::uint8_t>, p2p::PeerConnection*>> reques
 
 int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
                     const chain::ChainParams& chain, storage::BlockStore& blockStore, int batchSize, int maxBlocks,
-                    int parallelDownloads = 0);
+                    int parallelDownloads = 0, int blocksTargetHeight = 0);
 int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
                     db::ChainstateStore& chainstate, const chain::ChainParams& chain, storage::BlockStore& blockStore,
-                    int batchSize, int maxBlocks, int parallelDownloads = 0);
+                    int batchSize, int maxBlocks, int parallelDownloads = 0, int blocksTargetHeight = 0);
 
 int syncBlocksToTip(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
                     const chain::ChainParams& chain, storage::BlockStore& blockStore, const config::Settings& settings);

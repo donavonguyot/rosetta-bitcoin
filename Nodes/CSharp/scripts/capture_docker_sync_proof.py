@@ -56,6 +56,7 @@ def main() -> int:
         "native_crypto_backend": status.get("native_crypto_backend", ""),
         "native_crypto_available": status.get("native_crypto_available", False),
         "taproot_tweak_backend": status.get("taproot_tweak_backend", ""),
+        "sync_timing": status.get("sync_timing"),
         "sync_exit_code": exit_code,
         "bounded_gate_status": "passed" if reached_target else "failed",
         "binary_gate_status": "not_attempted",

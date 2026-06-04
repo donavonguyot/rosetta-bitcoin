@@ -14,6 +14,11 @@ declare module "rocksdb" {
     open(options: Record<string, unknown>, callback: (error?: Error | null) => void): void;
     close(callback: (error?: Error | null) => void): void;
     get(key: Buffer, options: Record<string, unknown>, callback: (error: Error | null, value?: Buffer) => void): void;
+    getMany(
+      keys: readonly Buffer[],
+      options: Record<string, unknown>,
+      callback: (error: Error | null, values?: Array<Buffer | undefined>) => void,
+    ): void;
     put(key: Buffer, value: Buffer, options: Record<string, unknown>, callback: (error?: Error | null) => void): void;
     del(key: Buffer, options: Record<string, unknown>, callback: (error?: Error | null) => void): void;
     batch(

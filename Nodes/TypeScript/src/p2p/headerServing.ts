@@ -1,13 +1,13 @@
 import type { ChainParams } from "../chain/params.js";
 import { genesisHeaderFor } from "../chain/genesis.js";
-import type { ProjectTracker } from "../db/tracker.js";
+import type { NativeNodeState } from "../runtime/nodeState.js";
 import { BlockHeaderCodec, HEADER_SIZE, type GetHeadersMessage } from "../messages/headers.js";
 import type { BlockStore } from "../storage/blocks.js";
 import type { BlockHeader } from "../types/index.js";
 
 export const HEADER_BATCH_MAX = 2000;
 
-function findCommonForkHeight(tracker: ProjectTracker, chain: string, locatorHashes: Buffer[]): number {
+function findCommonForkHeight(tracker: NativeNodeState, chain: string, locatorHashes: Buffer[]): number {
   for (const internalHash of locatorHashes) {
     const display = Buffer.from(internalHash).reverse().toString("hex");
     const height = tracker.lookupHeaderHeight(chain, display);
@@ -19,7 +19,7 @@ function findCommonForkHeight(tracker: ProjectTracker, chain: string, locatorHas
 }
 
 function resolveHeaderRecord(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
   height: number,
   blockStore: BlockStore | null,
@@ -61,7 +61,7 @@ function resolveHeaderRecord(
 }
 
 export function buildHeadersResponse(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
   message: GetHeadersMessage,
   blockStore: BlockStore | null = null,

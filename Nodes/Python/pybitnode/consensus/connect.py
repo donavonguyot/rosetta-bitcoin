@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from os import environ
 from time import perf_counter
@@ -99,6 +100,22 @@ class _BlockUtxoView:
     external_loaded: dict[tuple[bytes, int], dict | None] = field(default_factory=dict)
     timings: dict[str, float] | None = None
 
+    def load_external(self, outpoints: Iterable[OutPoint]) -> None:
+        missing: list[tuple[bytes, int]] = []
+        seen: set[tuple[bytes, int]] = set()
+        for outpoint in outpoints:
+            key = (outpoint.hash, outpoint.index)
+            if key in seen or key in self.spent or key in self.created or key in self.external_loaded:
+                continue
+            seen.add(key)
+            missing.append(key)
+        if not missing:
+            return
+        started = perf_counter() if self.timings is not None else 0.0
+        self.external_loaded.update(self.tracker.get_utxos_many(missing))
+        if self.timings is not None:
+            self.timings["utxo_load"] = self.timings.get("utxo_load", 0.0) + (perf_counter() - started)
+
     def get(self, outpoint: OutPoint) -> dict | None:
         key = (outpoint.hash, outpoint.index)
         if key in self.spent:
@@ -165,7 +182,7 @@ class _BlockUtxoView:
 
     def apply(self) -> None:
         external_spends = [(txid, vout) for txid, vout in self.spent if (txid, vout) not in self.created]
-        self.tracker.spend_utxos(external_spends)
+        self.tracker.delete_known_utxos(external_spends)
         unspent_created = [
             utxo
             for key, utxo in self.created.items()
@@ -208,6 +225,10 @@ def _validate_non_coinbase_inputs(
             raise ConnectBlockError(f"double spend of {outpoint.hash[::-1].hex()}:{outpoint.index}")
         seen_prevouts.add(key)
 
+    view.load_external(tx_in.previous_output for tx_in in tx.inputs)
+
+    for tx_in in tx.inputs:
+        outpoint = tx_in.previous_output
         utxo = view.get(outpoint)
         if utxo is None:
             raise ConnectBlockError(f"missing UTXO {outpoint.hash[::-1].hex()}:{outpoint.index}")
@@ -389,14 +410,15 @@ def disconnect_block(
             f"missing UTXO undo data for height {height}; reconnect this block or replay the chain "
             "(undo is recorded during connect)"
         ) from exc
-    tracker.delete_utxos_created_at_height(height)
-    for entry in undo_entries:
-        tracker.add_utxo(
-            bytes.fromhex(entry["txid"])[::-1],
-            int(entry["vout"]),
-            height=int(entry["height"]),
-            value=int(entry["value"]),
-            script_pubkey=bytes.fromhex(entry["script_pubkey"]),
-            coinbase=bool(entry["coinbase"]),
-        )
-    tracker.set_validated_tip(height - 1, prev_hash_hex, chain=chain_name)
+    with tracker.transaction():
+        tracker.delete_utxos_created_at_height(height)
+        for entry in undo_entries:
+            tracker.add_utxo(
+                bytes.fromhex(entry["txid"])[::-1],
+                int(entry["vout"]),
+                height=int(entry["height"]),
+                value=int(entry["value"]),
+                script_pubkey=bytes.fromhex(entry["script_pubkey"]),
+                coinbase=bool(entry["coinbase"]),
+            )
+        tracker.set_validated_tip(height - 1, prev_hash_hex, chain=chain_name)

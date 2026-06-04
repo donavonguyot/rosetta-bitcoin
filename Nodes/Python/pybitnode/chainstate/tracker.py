@@ -27,6 +27,15 @@ else:
 
 SCHEMA_VERSION = 1
 NATIVE_MARKER = "pybitnode-native-chainstate-v1"
+STATS_KEY = "default"
+STATS_VERSION = 1
+STAT_FIELDS = (
+    "utxo_count",
+    "header_count",
+    "block_count",
+    "max_header_height",
+    "max_stored_block_height",
+)
 
 DEFAULT_PHASES = (
     ("phase0", "Wire + handshake", "in_progress", "Message framing, version/verack, Docker scaffold"),
@@ -184,6 +193,12 @@ class ProjectTracker:
             self.set_meta("backend_name", "rocksdb")
             self.set_meta("backend_version", self.rocksdb_version())
             self.set_meta("generation_id", _utcnow())
+        if self.get_meta("codec_version") is None:
+            self.set_meta("codec_version", "1")
+        if self.get_meta("optimized_stats") is None:
+            self.set_meta("optimized_stats", "true")
+        if self.get_meta("native_multi_get") is None:
+            self.set_meta("native_multi_get", "false")
         for phase, title, status, notes in DEFAULT_PHASES:
             if self._get("phase", phase) is None:
                 self._put(
@@ -215,6 +230,8 @@ class ProjectTracker:
                         "notes": "",
                     },
                 )
+        if self._get("stats", STATS_KEY) is None:
+            self.recompute_stats()
 
     def rocksdb_version(self) -> str:
         return getattr(self._db, "rocksdb_version", lambda: "unknown")()
@@ -225,6 +242,68 @@ class ProjectTracker:
     def get_meta(self, key: str, default: str | None = None) -> str | None:
         value = self._get("meta", key)
         return default if value is None else str(value)
+
+    def _empty_stats(self) -> dict[str, int | str]:
+        return {
+            "stats_version": STATS_VERSION,
+            "updated_at": _utcnow(),
+            "utxo_count": 0,
+            "header_count": 0,
+            "block_count": 0,
+            "max_header_height": 0,
+            "max_stored_block_height": 0,
+        }
+
+    def _stats_row(self) -> dict[str, int | str]:
+        row = None
+        if self._txn_ops is not None:
+            stats_key = self._key("stats", STATS_KEY)
+            for op, key, raw in reversed(self._txn_ops):
+                if key == stats_key:
+                    row = _json_loads(raw) if op == "put" else None
+                    break
+        if row is None:
+            row = self._get("stats", STATS_KEY)
+        if row is None:
+            return self.recompute_stats()
+        out = self._empty_stats()
+        out.update(row)
+        for field in STAT_FIELDS:
+            out[field] = int(out.get(field, 0) or 0)
+        return out
+
+    def _put_stats(self, stats: dict[str, int | str]) -> None:
+        row = dict(stats)
+        row["stats_version"] = STATS_VERSION
+        row["updated_at"] = _utcnow()
+        self._put("stats", STATS_KEY, value=row)
+
+    def _adjust_stat(self, field: str, delta: int = 0, *, max_value: int | None = None) -> None:
+        stats = self._stats_row()
+        if delta:
+            stats[field] = max(0, int(stats.get(field, 0) or 0) + delta)
+        if max_value is not None:
+            stats[field] = max(int(stats.get(field, 0) or 0), max_value)
+        self._put_stats(stats)
+
+    def stats(self) -> dict[str, int | str]:
+        return dict(self._stats_row())
+
+    def recompute_stats(self) -> dict[str, int | str]:
+        headers = self._all("header_by_height")
+        blocks = self._all("block_by_height")
+        stats = self._empty_stats()
+        stats.update(
+            {
+                "utxo_count": self._count("utxo"),
+                "header_count": len(headers),
+                "block_count": len(blocks),
+                "max_header_height": max((int(row["height"]) for row in headers), default=0),
+                "max_stored_block_height": max((int(row["height"]) for row in blocks), default=0),
+            }
+        )
+        self._put_stats(stats)
+        return stats
 
     def update_phase(self, phase: str, *, status: str | None = None, notes: str | None = None) -> None:
         row = self._get("phase", phase)
@@ -429,12 +508,16 @@ class ProjectTracker:
         )
 
     def reset_validated_chain(self, *, chain: str = "testnet4", genesis_hash: str) -> None:
-        for key, _ in list(self._iter_prefix("utxo")):
-            if key.startswith(b"utxo|"):
+        with self.transaction():
+            for key, _ in list(self._iter_prefix("utxo")):
+                if key.startswith(b"utxo|"):
+                    self._delete_key(key)
+            for key, _row in list(self._iter_prefix("utxo_undo", chain)):
                 self._delete_key(key)
-        for key, row in list(self._iter_prefix("utxo_undo", chain)):
-            self._delete_key(key)
-        self.set_validated_tip(0, genesis_hash, chain=chain)
+            stats = self._stats_row()
+            stats["utxo_count"] = 0
+            self._put_stats(stats)
+            self.set_validated_tip(0, genesis_hash, chain=chain)
 
     def _delete_key(self, key: bytes) -> None:
         if self._txn_ops is not None:
@@ -460,11 +543,17 @@ class ProjectTracker:
         return list(row.get("entries") or []) if row else None
 
     def delete_utxos_created_at_height(self, height: int) -> None:
+        deleted = 0
         for key, row in list(self._iter_prefix("utxo")):
             if int(row.get("height", -1)) == height:
                 self._delete_key(key)
+                deleted += 1
+        if deleted:
+            self._adjust_stat("utxo_count", -deleted)
 
     def add_utxo(self, txid: bytes, vout: int, *, height: int, value: int, script_pubkey: bytes, coinbase: bool) -> None:
+        if self.get_utxo(txid, vout) is not None:
+            raise KeyError(f"UTXO already exists: {txid[::-1].hex()}:{vout}")
         self._put(
             "utxo",
             txid[::-1].hex(),
@@ -479,32 +568,64 @@ class ProjectTracker:
                 "created_at": _utcnow(),
             },
         )
+        self._adjust_stat("utxo_count", 1)
 
     def add_utxos(self, utxos: Iterable[dict]) -> None:
+        added = 0
+        seen: set[tuple[str, int]] = set()
         for row in utxos:
-            self._put("utxo", row["txid"], int(row["vout"]), value={**row, "created_at": _utcnow()})
+            txid = str(row["txid"])
+            vout = int(row["vout"])
+            key = (txid, vout)
+            if key in seen:
+                raise KeyError(f"duplicate UTXO in batch: {txid}:{vout}")
+            seen.add(key)
+            if self._get("utxo", txid, vout) is not None:
+                raise KeyError(f"UTXO already exists: {txid}:{vout}")
+            self._put("utxo", txid, vout, value={**row, "created_at": _utcnow()})
+            added += 1
+        if added:
+            self._adjust_stat("utxo_count", added)
 
     def spend_utxo(self, txid: bytes, vout: int) -> None:
         if self.get_utxo(txid, vout) is None:
             raise KeyError(f"UTXO not found: {txid[::-1].hex()}:{vout}")
         self._delete("utxo", txid[::-1].hex(), vout)
+        self._adjust_stat("utxo_count", -1)
 
     def spend_utxos(self, outpoints: Iterable[tuple[bytes, int]]) -> None:
         for txid, vout in outpoints:
             self.spend_utxo(txid, int(vout))
 
+    def delete_known_utxos(self, outpoints: Iterable[tuple[bytes, int]]) -> None:
+        deleted = 0
+        for txid, vout in outpoints:
+            self._delete("utxo", txid[::-1].hex(), int(vout))
+            deleted += 1
+        if deleted:
+            self._adjust_stat("utxo_count", -deleted)
+
     def get_utxo(self, txid: bytes, vout: int) -> dict | None:
         row = self._get("utxo", txid[::-1].hex(), int(vout))
         return dict(row) if row else None
+
+    def get_utxos_many(self, outpoints: Iterable[tuple[bytes, int]]) -> dict[tuple[bytes, int], dict | None]:
+        out: dict[tuple[bytes, int], dict | None] = {}
+        for txid, vout in dict.fromkeys((txid, int(vout)) for txid, vout in outpoints):
+            out[(txid, vout)] = self.get_utxo(txid, vout)
+        return out
 
     def list_utxos(self) -> list[dict]:
         return sorted(self._all("utxo"), key=lambda row: (row["txid"], int(row["vout"])))
 
     def delete_utxo_by_hex(self, txid_hex: str, vout: int) -> None:
+        if self._get("utxo", txid_hex, int(vout)) is None:
+            return
         self._delete("utxo", txid_hex, int(vout))
+        self._adjust_stat("utxo_count", -1)
 
     def utxo_count(self) -> int:
-        return self._count("utxo")
+        return int(self._stats_row()["utxo_count"])
 
     def record_header(
         self,
@@ -527,6 +648,10 @@ class ProjectTracker:
         }
         self._put("header_by_height", height, value=row)
         self._put("header_height_by_hash", block_hash, value=height)
+        stats = self._stats_row()
+        stats["header_count"] = int(stats["header_count"]) + 1
+        stats["max_header_height"] = max(int(stats["max_header_height"]), height)
+        self._put_stats(stats)
 
     def get_header(self, height: int) -> dict | None:
         row = self._get("header_by_height", height)
@@ -540,7 +665,7 @@ class ProjectTracker:
         self._put("header_by_height", height, value=row)
 
     def header_count(self) -> int:
-        return self._count("header_by_height")
+        return int(self._stats_row()["header_count"])
 
     def get_header_hash(self, height: int) -> str | None:
         row = self.get_header(height)
@@ -551,8 +676,7 @@ class ProjectTracker:
         return int(value) if value is not None else None
 
     def max_header_height(self) -> int:
-        heights = [int(row["height"]) for row in self._all("header_by_height")]
-        return max(heights) if heights else 0
+        return int(self._stats_row()["max_header_height"])
 
     def record_block(self, height: int, block_hash: str, file_name: str, file_offset: int, size: int) -> None:
         if self._get("block_by_height", height) is not None:
@@ -567,6 +691,10 @@ class ProjectTracker:
         }
         self._put("block_by_height", height, value=row)
         self._put("block_height_by_hash", block_hash, value=height)
+        stats = self._stats_row()
+        stats["block_count"] = int(stats["block_count"]) + 1
+        stats["max_stored_block_height"] = max(int(stats["max_stored_block_height"]), height)
+        self._put_stats(stats)
 
     def update_block_location(self, height: int, *, file_name: str, file_offset: int, size: int) -> None:
         row = self.get_block(height)
@@ -587,11 +715,10 @@ class ProjectTracker:
         return self.get_block(height) is not None
 
     def block_count(self) -> int:
-        return self._count("block_by_height")
+        return int(self._stats_row()["block_count"])
 
     def max_stored_block_height(self) -> int:
-        heights = [int(row["height"]) for row in self._all("block_by_height")]
-        return max(heights) if heights else 0
+        return int(self._stats_row()["max_stored_block_height"])
 
     def list_missing_block_heights(self, *, limit: int = 32) -> list[int]:
         out: list[int] = []

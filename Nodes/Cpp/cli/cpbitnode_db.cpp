@@ -1,9 +1,6 @@
 #include "cpbitnode/config/settings.hpp"
 #include "cpbitnode/db/chainstate.hpp"
 #include "cpbitnode/db/node_state.hpp"
-#ifndef CPBITNODE_USE_ROCKSDB
-#include "cpbitnode/db/tracker.hpp"
-#endif
 #include "cpbitnode/util/json.hpp"
 
 #include <filesystem>
@@ -15,18 +12,10 @@
 namespace {
 
 std::unique_ptr<cpbitnode::db::NodeStateStore> openNodeState(const cpbitnode::config::Settings& settings) {
-    if (settings.chainstateBackend == "rocksdb") {
-        const auto sqlitePath = std::filesystem::path(settings.resolvedDbPath());
-        if (std::filesystem::exists(sqlitePath)) {
-            throw std::runtime_error("rocksdb mode refuses legacy SQLite artifact: " + sqlitePath.string());
-        }
-        return cpbitnode::db::openRocksDbNodeStateStore(settings.dataDir);
+    if (settings.chainstateBackend != "rocksdb") {
+        throw std::runtime_error("Cpp Core-native mode only supports --chainstate-backend rocksdb");
     }
-#ifdef CPBITNODE_USE_ROCKSDB
-    throw std::runtime_error("native RocksDB build only supports --chainstate-backend rocksdb");
-#else
-    return std::make_unique<cpbitnode::db::ProjectTracker>(settings.resolvedDbPath());
-#endif
+    return cpbitnode::db::openRocksDbNodeStateStore(settings.dataDir);
 }
 
 std::string syncStatus(const cpbitnode::db::NodeStateStore& tracker, const std::string& chain) {

@@ -1,7 +1,7 @@
 import { genesisHeaderFor } from "../chain/genesis.js";
 import type { ChainParams } from "../chain/params.js";
 import type { Settings } from "../config/settings.js";
-import type { ProjectTracker } from "../db/tracker.js";
+import type { NativeNodeState } from "../runtime/nodeState.js";
 import { BlockHeaderCodec, type HeadersMessage } from "../messages/headers.js";
 import type { PeerConnection } from "../p2p/peer.js";
 import type { BlockHeader } from "../types/index.js";
@@ -9,7 +9,7 @@ import { HeaderValidationError, validateHeader } from "./validate.js";
 
 export const HEADER_SYNC_NEAR_PEER_TIP = 2;
 
-export function repairSyncState(tracker: ProjectTracker, chain: ChainParams): void {
+export function repairSyncState(tracker: NativeNodeState, chain: ChainParams): void {
   const row = tracker.dbQuery<{ height: number; block_hash: string }>(
     `SELECT height, block_hash FROM headers WHERE chain = ? ORDER BY height DESC LIMIT 1`,
     [chain.name],
@@ -23,7 +23,7 @@ export function repairSyncState(tracker: ProjectTracker, chain: ChainParams): vo
   });
 }
 
-export function ensureGenesis(tracker: ProjectTracker, chain: ChainParams): BlockHeader {
+export function ensureGenesis(tracker: NativeNodeState, chain: ChainParams): BlockHeader {
   const existing = tracker.getHeaderHash(chain.name, 0);
   const genesis = genesisHeaderFor(chain.name);
   const genesisHash = BlockHeaderCodec.blockHashHex(genesis);
@@ -38,7 +38,7 @@ export function ensureGenesis(tracker: ProjectTracker, chain: ChainParams): Bloc
     if (tracker.getValidatedHash(chain.name) === null) {
       tracker.setValidatedTip(chain.name, 0, genesisHash);
     }
-    tracker.markWireCapability("headers.genesis", true, "code", "genesis header present in SQLite");
+    tracker.markWireCapability("headers.genesis", true, "code", "genesis header present in native chainstate");
     return genesis;
   }
 
@@ -77,7 +77,7 @@ export function locatorHeights(tip: number): number[] {
   return heights;
 }
 
-export function nextLocator(tracker: ProjectTracker, chain: ChainParams): Buffer[] {
+export function nextLocator(tracker: NativeNodeState, chain: ChainParams): Buffer[] {
   ensureGenesis(tracker, chain);
   const state = tracker.getSyncState(chain.name);
   const bestHeight = state?.bestHeight ?? 0;
@@ -96,7 +96,7 @@ export function nextLocator(tracker: ProjectTracker, chain: ChainParams): Buffer
 }
 
 export function persistHeaders(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
   message: HeadersMessage,
 ): [number, string, number] {
@@ -165,14 +165,14 @@ export function headersSyncDone(bestHeight: number, peerHeight: number, batchCou
   return peerHeight >= 0 && bestHeight >= peerHeight;
 }
 
-export function localHeaderTipHeight(tracker: ProjectTracker, chain: ChainParams): number {
+export function localHeaderTipHeight(tracker: NativeNodeState, chain: ChainParams): number {
   const state = tracker.getSyncState(chain.name);
   const bestState = state?.bestHeight ?? 0;
   return Math.max(bestState, tracker.maxHeaderHeight(chain.name));
 }
 
 export function requiredHeaderTipForBlockFollowup(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
   blocksTargetHeight: number,
 ): number {
@@ -188,7 +188,7 @@ export function requiredHeaderTipForBlockFollowup(
 }
 
 export function localHeadersCoverBlockFollowup(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
   blocksTargetHeight: number,
 ): boolean {
@@ -199,7 +199,7 @@ export function localHeadersCoverBlockFollowup(
 }
 
 function headersChainReadyForFullHandshake(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
 ): boolean {
   const state = tracker.getSyncState(chain.name);
@@ -209,7 +209,7 @@ function headersChainReadyForFullHandshake(
 
 /** Version handshake start_height: validated tip during early sync; header tip once headers are current. */
 export function resolveBootstrapStartHeight(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
   settings: Settings,
 ): number {
@@ -224,7 +224,7 @@ export function resolveBootstrapStartHeight(
 }
 
 export function shouldSkipHeaderDownload(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
   peerTipHeight: number,
 ): boolean {
@@ -233,7 +233,7 @@ export function shouldSkipHeaderDownload(
   return tipLocal >= peerTipHeight - HEADER_SYNC_NEAR_PEER_TIP;
 }
 
-export function markHeadersCurrent(tracker: ProjectTracker, chain: ChainParams): void {
+export function markHeadersCurrent(tracker: NativeNodeState, chain: ChainParams): void {
   const state = tracker.getSyncState(chain.name);
   tracker.upsertSyncState(chain.name, {
     bestHeight: state?.bestHeight ?? 0,
@@ -242,7 +242,7 @@ export function markHeadersCurrent(tracker: ProjectTracker, chain: ChainParams):
     syncStatus: "headers_current",
   });
   tracker.markWireCapability("headers.sync_to_tip", true, "live", "header chain at network tip");
-  tracker.markWireCapability("headers.resume", true, "code", "resume header sync from SQLite");
+  tracker.markWireCapability("headers.resume", true, "code", "resume header sync from native chainstate");
 }
 
 export async function syncHeadersToTip(

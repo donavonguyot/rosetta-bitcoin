@@ -7,7 +7,7 @@ import { TESTNET4 } from "../src/chain/params.js";
 import { transactionTxid } from "../src/consensus/merkle.js";
 import { transactionWtxid } from "../src/consensus/witness.js";
 import { Settings } from "../src/config/settings.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import {
   FeeFilterMessageCodec,
   feefilterWireSatKvbFromSettings,
@@ -38,10 +38,10 @@ import {
   testPubkeySec1,
 } from "./helpers/scriptHelpers.js";
 
-function withTracker(run: (tracker: ProjectTracker, dir: string) => void): void {
+function withTracker(run: (tracker: NativeNodeState, dir: string) => void): void {
   const dir = mkdtempSync(join(tmpdir(), "ts-mempool-"));
   try {
-    const tracker = new ProjectTracker(join(dir, "mempool.db"));
+    const tracker = new NativeNodeState(join(dir, "mempool.stateDir"));
     run(tracker, dir);
     tracker.close();
   } finally {

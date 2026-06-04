@@ -1,7 +1,7 @@
 FROM ubuntu:24.04 AS build
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential cmake libsqlite3-dev libssl-dev librocksdb-dev libsecp256k1-dev \
+    && apt-get install -y --no-install-recommends build-essential cmake libssl-dev librocksdb-dev libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -12,7 +12,7 @@ RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -D
 FROM ubuntu:24.04
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libsqlite3-0 librocksdb8.9 libsecp256k1-1 \
+    && apt-get install -y --no-install-recommends librocksdb8.9 libsecp256k1-1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /src/build/cpbitnode /usr/local/bin/cpbitnode

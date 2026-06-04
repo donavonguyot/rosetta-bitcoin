@@ -3,8 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { TESTNET4 } from "../src/chain/params.js";
 import { Settings } from "../src/config/settings.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import {
   dockerHealthDocument,
   runHealthcheck,
@@ -15,6 +16,8 @@ import {
 const tempDirs: string[] = [];
 
 afterEach(() => {
+  delete process.env.DATA_DIR;
+  delete process.env.CHAIN;
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) rmSync(dir, { recursive: true, force: true });
@@ -50,9 +53,9 @@ function basePayload(overrides: Partial<HealthcheckPayload> = {}): HealthcheckPa
 
 describe("healthcheck", () => {
   it("builds docker health document from tracker state", () => {
-    const db = tempDb("hc.db");
-    const settings = Settings.fromEnv({ chain: "testnet4", dbPath: db });
-    const tracker = new ProjectTracker(settings.resolvedDbPath());
+    const stateDir = tempDb("hc.stateDir");
+    const settings = Settings.fromEnv({ chain: "testnet4", dataDir: stateDir });
+    const tracker = new NativeNodeState(settings.dataDir);
 
     tracker.upsertSyncState("testnet4", { bestHeight: 100, syncStatus: "connected" });
     tracker.setMeta("mempool_tx_count", "3");
@@ -97,34 +100,34 @@ describe("healthcheck", () => {
     );
   });
 
-  it("exits 0 with JSON on stdout when healthy", () => {
-    const db = tempDb("ok.db");
-    process.env.DB_PATH = db;
+  it("exits 0 with JSON on stdout when healthy", async () => {
+    const stateDir = tempDb("ok.stateDir");
+    process.env.DATA_DIR = stateDir;
     process.env.CHAIN = "testnet4";
 
-    const tracker = new ProjectTracker(db);
+    const tracker = await NativeNodeState.open(Settings.fromEnv({ dataDir: stateDir }), TESTNET4, { acquireLock: false });
     tracker.upsertSyncState("testnet4", { syncStatus: "headers_current" });
-    tracker.close();
+    await tracker.close();
 
-    expect(runHealthcheck()).toBe(0);
+    expect(await runHealthcheck()).toBe(0);
   });
 
-  it("exits 1 when sync_status is error", () => {
-    const db = tempDb("bad.db");
-    process.env.DB_PATH = db;
+  it("exits 1 when sync_status is error", async () => {
+    const stateDir = tempDb("bad.stateDir");
+    process.env.DATA_DIR = stateDir;
     process.env.CHAIN = "testnet4";
 
-    const tracker = new ProjectTracker(db);
+    const tracker = await NativeNodeState.open(Settings.fromEnv({ dataDir: stateDir }), TESTNET4, { acquireLock: false });
     tracker.upsertSyncState("testnet4", { syncStatus: "error" });
-    tracker.close();
+    await tracker.close();
 
-    expect(runHealthcheck()).toBe(1);
+    expect(await runHealthcheck()).toBe(1);
   });
 
   it("includes last_error from meta", () => {
-    const db = tempDb("le.db");
-    const settings = Settings.fromEnv({ chain: "testnet4", dbPath: db });
-    const tracker = new ProjectTracker(settings.resolvedDbPath());
+    const stateDir = tempDb("le.stateDir");
+    const settings = Settings.fromEnv({ chain: "testnet4", dataDir: stateDir });
+    const tracker = new NativeNodeState(settings.dataDir);
     tracker.upsertSyncState("testnet4", { bestHeight: 1, syncStatus: "running" });
     tracker.setMeta("last_error", "connection reset");
 

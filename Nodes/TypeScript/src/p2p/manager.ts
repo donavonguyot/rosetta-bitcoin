@@ -1,7 +1,7 @@
 import type { ChainParams } from "../chain/params.js";
 import type { Settings } from "../config/settings.js";
 import { transactionWtxid } from "../consensus/witness.js";
-import type { ProjectTracker } from "../db/tracker.js";
+import type { NativeNodeState } from "../runtime/nodeState.js";
 import {
   InvMessageCodec,
   MSG_WITNESS_TX,
@@ -13,7 +13,6 @@ import { META_TXS_RELAYED_TOTAL, incrMetaCounter } from "../metrics.js";
 import { syncBlocksToTip } from "../sync/blocks.js";
 import { localHeadersCoverBlockFollowup, markHeadersCurrent } from "../sync/headers.js";
 import type { PeerEndpoint } from "../types/index.js";
-import type { BlockStore } from "../storage/blocks.js";
 import { bootstrapPeerTargets, BAN_HANDSHAKE_FAIL } from "./discovery.js";
 import { PeerConnection } from "./peer.js";
 
@@ -27,7 +26,7 @@ export class PeerManager {
 
   constructor(
     readonly chain: ChainParams,
-    readonly tracker: ProjectTracker,
+    readonly tracker: NativeNodeState,
     readonly settings: Settings,
   ) {
     this.effectiveMaxOutbound = settings.maxOutboundPeers;
@@ -172,12 +171,12 @@ export class PeerManager {
     throw lastError ?? new Error("Header sync failed on all peers");
   }
 
-  async syncBlocks(blockStore: BlockStore): Promise<number> {
+  async syncBlocks(): Promise<number> {
     const peers = this.orderedSyncPeers();
     if (peers.length === 0) {
       throw new Error("No connected peers available for block sync");
     }
-    return syncBlocksToTip(peers, this.tracker, this.chain, blockStore, {
+    return syncBlocksToTip(peers, this.tracker, this.chain, {
       batchSize: this.settings.blocksBatchSize,
       maxBlocks: this.settings.blocksMaxPerRun,
       targetHeight: this.settings.blocksTargetHeight,

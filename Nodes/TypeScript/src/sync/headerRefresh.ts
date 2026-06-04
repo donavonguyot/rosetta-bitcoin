@@ -1,6 +1,6 @@
 import type { ChainParams } from "../chain/params.js";
 import type { Settings } from "../config/settings.js";
-import type { ProjectTracker } from "../db/tracker.js";
+import type { NativeNodeState } from "../runtime/nodeState.js";
 import {
   HEADER_SYNC_NEAR_PEER_TIP,
   localHeaderTipHeight,
@@ -23,7 +23,7 @@ export function dbHeadersAlignedWithSyncState(syncBestHeight: number, localTip: 
 
 export function decideHeaderRefreshAction(
   settings: Settings,
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   chain: ChainParams,
   options: { syncBestHeight: number; advertisedPeerHeight: number },
 ): HeaderRefreshAction {

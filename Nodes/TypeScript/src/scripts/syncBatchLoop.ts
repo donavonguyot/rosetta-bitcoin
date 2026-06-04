@@ -11,7 +11,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 
-import { readValidatedHeightDb } from "./syncProgressReport.js";
+import { getChain } from "../chain/params.js";
+import { ChainstateSession } from "../chainstate/chainstateSession.js";
 import {
   SYNC_LOCK_PARENT_ENV,
   SyncLockHeldError,
@@ -132,10 +133,10 @@ function printHelp(): void {
   console.log(`Usage: sync-batch-loop --datadir <path> --target <height> [options] [-- sync flags]
 
 Run tsbitnode-sync in sequential batches (exclusive <datadir>/.tsbitnode_sync.lock;
-polls validated_height via read-only SQLite).
+polls validated_height from native chainstate).
 
 Options:
-  --datadir <path>       Datadir path (expects tsbitnode.db inside)
+  --datadir <path>       Native datadir path
   --target <n>           Passed as --blocks-target
   --blocks-max <n>       Blocks per batch (default: 200)
   --log <path>           Append log target (default: <repo>/sync_batch_run.log)
@@ -149,9 +150,14 @@ Options:
 Extras after -- are forwarded to tsbitnode-sync (example: -- --connect-only).`);
 }
 
-function validatedHeight(datadir: string, chain: string): number {
-  const dbPath = join(resolve(datadir), "tsbitnode.db");
-  return readValidatedHeightDb(dbPath, chain);
+async function validatedHeight(datadir: string, chainName: string): Promise<number> {
+  const chain = getChain(chainName);
+  const session = await ChainstateSession.openNative(resolve(datadir), chain, { acquireLock: false });
+  try {
+    return Math.max(0, await session.store.getValidatedHeight(chain.name));
+  } finally {
+    await session.close();
+  }
 }
 
 function appendLine(logPath: string, line: string): void {
@@ -233,7 +239,7 @@ async function runSyncBatch(
     });
   });
 
-  const after = validatedHeight(options.datadir, options.chain);
+  const after = await validatedHeight(options.datadir, options.chain);
   const validatedDelta = after - before;
   const tsEnd = utcTimestamp();
   const endLine =
@@ -265,7 +271,7 @@ export async function runBatchLoop(options: BatchLoopOptions): Promise<number> {
     }
 
     for (let batchNum = 1; batchNum <= options.maxBatches; batchNum += 1) {
-      const before = validatedHeight(options.datadir, options.chain);
+      const before = await validatedHeight(options.datadir, options.chain);
       if (before >= options.target) {
         console.log(`done: validated_height=${before} (>= target ${options.target})`);
         return 0;
@@ -274,7 +280,7 @@ export async function runBatchLoop(options: BatchLoopOptions): Promise<number> {
       await runSyncBatch(options, batchNum, before, options.logPath);
     }
 
-    const after = validatedHeight(options.datadir, options.chain);
+    const after = await validatedHeight(options.datadir, options.chain);
     console.error(
       `error: max batches reached (${options.maxBatches}); validated_height=${after} target=${options.target}`,
     );

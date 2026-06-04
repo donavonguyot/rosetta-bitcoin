@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Settings } from "../src/config/settings.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import {
   META_BLOCKS_VALIDATED_TOTAL,
   META_TXS_RELAYED_TOTAL,
@@ -57,9 +57,9 @@ function fetchMetrics(port: number, path: string): Promise<{ statusCode: number;
 
 describe("metrics HTTP", () => {
   it("prometheus exposition shape includes counters and tracker gauges", () => {
-    const db = tempDb("m.db");
-    const settings = Settings.fromEnv({ chain: "testnet4", dbPath: db });
-    const tracker = new ProjectTracker(settings.resolvedDbPath());
+    const stateDir = tempDb("m.stateDir");
+    const settings = Settings.fromEnv({ chain: "testnet4", dataDir: stateDir });
+    const tracker = new NativeNodeState(settings.dataDir);
     tracker.setMeta(META_BLOCKS_VALIDATED_TOTAL, "101");
     tracker.setMeta(META_TXS_RELAYED_TOTAL, "7");
     tracker.setMeta("mempool_tx_count", "3");
@@ -91,9 +91,9 @@ describe("metrics HTTP", () => {
   });
 
   it("GET /metrics returns Prometheus text", async () => {
-    const db = tempDb("mh.db");
-    const settings = Settings.fromEnv({ chain: "testnet4", dbPath: db });
-    const tracker = new ProjectTracker(settings.resolvedDbPath());
+    const stateDir = tempDb("mh.stateDir");
+    const settings = Settings.fromEnv({ chain: "testnet4", dataDir: stateDir });
+    const tracker = new NativeNodeState(settings.dataDir);
     tracker.setMeta(META_BLOCKS_VALIDATED_TOTAL, "42");
     tracker.setMeta(META_TXS_RELAYED_TOTAL, "9");
 
@@ -119,9 +119,9 @@ describe("metrics HTTP", () => {
   });
 
   it("returns 404 for unknown paths", async () => {
-    const db = tempDb("nf.db");
-    const settings = Settings.fromEnv({ chain: "testnet4", dbPath: db });
-    const tracker = new ProjectTracker(settings.resolvedDbPath());
+    const stateDir = tempDb("nf.stateDir");
+    const settings = Settings.fromEnv({ chain: "testnet4", dataDir: stateDir });
+    const tracker = new NativeNodeState(settings.dataDir);
 
     const server = createMetricsHttpServer(tracker, settings);
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

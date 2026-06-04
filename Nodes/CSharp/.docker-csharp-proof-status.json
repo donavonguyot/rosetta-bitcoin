@@ -7,22 +7,69 @@
   "local_sqlite_db_present": false,
   "runtime_status": "idle",
   "sync_status": "blocks_syncing",
-  "header_height": 200,
-  "validated_height": 2,
-  "validated_hash": "000000001fed1a914651afc36574003c5300cac5df738c3976f28d54f7096253",
-  "header_count": 201,
-  "block_count": 2,
-  "stored_block_height": 2,
+  "header_height": 5000,
+  "validated_height": 5000,
+  "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "header_count": 5001,
+  "block_count": 5000,
+  "stored_block_height": 5000,
   "stored_minus_validated": 0,
-  "utxo_count": 4,
+  "utxo_count": 9232,
   "chainstate_backend": "rocksdb",
   "chainstate_backend_path": "/data/chainstate-rocksdb",
   "codec_version": "2",
-  "chainstate_generation_id": "rocksdb-55dedcb0-6c09-4729-9b46-780aee64db8f",
+  "chainstate_generation_id": "rocksdb-dce6ea3c-59d6-4565-b201-02d6dd96c009",
   "chainstate_status": "usable",
   "native_crypto_backend": "libsecp256k1-secp256k1.net",
   "native_crypto_available": true,
   "taproot_tweak_backend": "libsecp256k1-secp256k1.net",
+  "sync_timing": {
+    "Unit": "microseconds",
+    "Stages": {
+      "block_store": {
+        "Count": 5000,
+        "TotalMicros": 232120,
+        "P50Micros": 28,
+        "P95Micros": 89,
+        "MaxMicros": 23036
+      },
+      "utxo_load": {
+        "Count": 5000,
+        "TotalMicros": 535809,
+        "P50Micros": 8,
+        "P95Micros": 357,
+        "MaxMicros": 30320
+      },
+      "script_verify": {
+        "Count": 5000,
+        "TotalMicros": 5295990,
+        "P50Micros": 0,
+        "P95Micros": 4902,
+        "MaxMicros": 103448
+      },
+      "utxo_apply": {
+        "Count": 5000,
+        "TotalMicros": 55023,
+        "P50Micros": 5,
+        "P95Micros": 19,
+        "MaxMicros": 10715
+      },
+      "commit": {
+        "Count": 5000,
+        "TotalMicros": 1510575,
+        "P50Micros": 186,
+        "P95Micros": 752,
+        "MaxMicros": 61407
+      },
+      "block_connect_store_commit": {
+        "Count": 5000,
+        "TotalMicros": 9534890,
+        "P50Micros": 717,
+        "P95Micros": 7361,
+        "MaxMicros": 121703
+      }
+    }
+  },
   "current_blocker": null,
   "active_writer_pid": null,
   "active_writer_command": null,

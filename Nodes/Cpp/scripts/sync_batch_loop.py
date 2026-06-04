@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Sequential pybitnode-sync batches with fcntl exclusive lock (.sync_batch_loop.lock); read-only validated_height polls."""
+"""Sequential cpbitnode-sync batches with fcntl exclusive lock and native status polls."""
 
 from __future__ import annotations
 
 import argparse
 import datetime as _dt
 import fcntl
-import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -21,19 +21,16 @@ def _utc_ts() -> str:
     return _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _load_sync_progress(repo_root: Path):
-    path = repo_root / "scripts" / "sync_progress_report.py"
-    spec = importlib.util.spec_from_file_location("sync_progress_report", path)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def _validated_height(spr_mod, *, datadir: Path, chain: str) -> int:
-    db = (datadir / "cpbitnode.db").resolve()
-    return spr_mod.read_validated_height_db(db, chain=chain)
+def _validated_height(status_bin: Path, *, datadir: Path) -> int:
+    proc = subprocess.run(
+        [os.fspath(status_bin), "--datadir", os.fspath(datadir), "--chainstate-backend", "rocksdb"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    status = json.loads(proc.stdout)
+    return int(status.get("validated_height", 0))
 
 
 def _acquire_exclusive_nonblocking(lock_path: Path) -> object:
@@ -46,9 +43,9 @@ def _acquire_exclusive_nonblocking(lock_path: Path) -> object:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Run cpbitnode-sync in sequential batches "
-        "(fcntl lock .sync_batch_loop.lock; polls validated_height via read-only SQLite)."
+        "(fcntl lock .sync_batch_loop.lock; polls validated_height through cpbitnode-db)."
     )
-    parser.add_argument("--datadir", type=Path, required=True, help="datadir path (expects cpbitnode.db inside)")
+    parser.add_argument("--datadir", type=Path, required=True, help="RocksDB-native datadir path")
     parser.add_argument("--target", type=int, required=True, help="passed as --blocks-target")
     parser.add_argument("--blocks-max", type=int, default=200, dest="blocks_max")
     parser.add_argument(
@@ -58,8 +55,13 @@ def main(argv: list[str] | None = None) -> int:
         help="append tee target (default: <repo>/sync_batch_run.log)",
     )
     parser.add_argument("--max-batches", type=int, default=1000)
-    parser.add_argument("--chain", default="testnet4", help="chain_state.chain for RO height queries")
     parser.add_argument("--sync", type=Path, default=None, help="cpbitnode-sync executable (default: build/cpbitnode-sync)")
+    parser.add_argument(
+        "--status-bin",
+        type=Path,
+        default=None,
+        help="cpbitnode-db executable (default: build/cpbitnode-db)",
+    )
     parser.add_argument(
         "--peers",
         default="",
@@ -68,25 +70,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-header-refresh",
         action="store_true",
-        help="pass --no-header-refresh to pybitnode-sync",
+        help="pass --no-header-refresh to cpbitnode-sync",
     )
     parser.add_argument(
         "sync_extra",
         nargs=argparse.REMAINDER,
-        help="extras forwarded to pybitnode-sync; start with `--` "
+        help="extras forwarded to cpbitnode-sync; start with `--` "
         "(example: `./scripts/sync_batch_loop.sh … -- --connect-only`)",
     )
     ns = parser.parse_args(argv)
 
     repo_root = _repo_root()
-    spr_mod = _load_sync_progress(repo_root)
     sync_bin = ns.sync if ns.sync is not None else repo_root / "build" / "cpbitnode-sync"
+    status_bin = ns.status_bin if ns.status_bin is not None else repo_root / "build" / "cpbitnode-db"
     datadir = ns.datadir.expanduser().resolve()
     lock_path = datadir / ".sync_batch_loop.lock"
     log_path = (ns.log if ns.log is not None else repo_root / "sync_batch_run.log").expanduser()
 
     if not sync_bin.exists():
         print(f"error: cpbitnode-sync missing: {sync_bin}", file=sys.stderr)
+        return 1
+    if not status_bin.exists():
+        print(f"error: cpbitnode-db missing: {status_bin}", file=sys.stderr)
         return 1
     extra = ns.sync_extra
     if extra and extra[0] == "--":
@@ -105,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
             "SKIP_GETADDR": os.environ.get("SKIP_GETADDR", "1"),
         }
         for batch_num in range(1, ns.max_batches + 1):
-            before = _validated_height(spr_mod, datadir=datadir, chain=ns.chain)
+            before = _validated_height(status_bin, datadir=datadir)
             if before >= ns.target:
                 print(f"done: validated_height={before} (>= target {ns.target})")
                 return 0
@@ -149,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
                     sys.stdout.write(chunk)
                     lf.write(chunk)
             exit_code = int(proc.wait())
-            after = _validated_height(spr_mod, datadir=datadir, chain=ns.chain)
+            after = _validated_height(status_bin, datadir=datadir)
             vd = after - before
             ts_end = _utc_ts()
             end_line = (
@@ -171,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 return 5
 
-        after = _validated_height(spr_mod, datadir=datadir, chain=ns.chain)
+        after = _validated_height(status_bin, datadir=datadir)
         print(
             f"error: max batches reached ({ns.max_batches}); validated_height={after} target={ns.target}",
             file=sys.stderr,

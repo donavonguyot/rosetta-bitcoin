@@ -2,7 +2,7 @@
 
 #include "cpbitnode/chain/params.hpp"
 #include "cpbitnode/config/settings.hpp"
-#include "cpbitnode/db/tracker.hpp"
+#include "cpbitnode/db/node_state.hpp"
 #include "cpbitnode/mempool/mempool.hpp"
 #include "cpbitnode/p2p/peer.hpp"
 #include "cpbitnode/storage/blocks.hpp"
@@ -16,22 +16,22 @@
 
 namespace cpbitnode::p2p {
 
-void handleInboundGetdata(PeerConnection& peer, db::ProjectTracker& tracker, const chain::ChainParams& chain,
+void handleInboundGetdata(PeerConnection& peer, db::NodeStateStore& tracker, const chain::ChainParams& chain,
                           storage::BlockStore& blockStore, std::span<const std::uint8_t> payload,
                           mempool::Mempool* mempool = nullptr);
 
-void dispatchInboundMessage(PeerConnection& peer, db::ProjectTracker& tracker, const chain::ChainParams& chain,
+void dispatchInboundMessage(PeerConnection& peer, db::NodeStateStore& tracker, const chain::ChainParams& chain,
                             const config::Settings& settings, storage::BlockStore& blockStore,
                             mempool::Mempool* mempool, const std::string& command,
                             std::span<const std::uint8_t> payload);
 
 void serveInboundSession(std::unique_ptr<Transport> transport, const std::string& host, int port,
-                         const chain::ChainParams& chain, db::ProjectTracker& tracker,
+                         const chain::ChainParams& chain, db::NodeStateStore& tracker,
                          const config::Settings& settings, storage::BlockStore& blockStore,
                          mempool::Mempool* mempool = nullptr, RelayTxAcceptedFn relayTxAccepted = {});
 
 /** Start TCP listener when settings.listen is true. Returns listen fd or -1. */
-int startInboundListener(const chain::ChainParams& chain, db::ProjectTracker& tracker,
+int startInboundListener(const chain::ChainParams& chain, db::NodeStateStore& tracker,
                          const config::Settings& settings);
 
 struct InboundServerHandle {
@@ -67,7 +67,7 @@ struct InboundServerHandle {
     InboundServerHandle& operator=(const InboundServerHandle&) = delete;
 };
 
-InboundServerHandle startInboundServer(const chain::ChainParams& chain, db::ProjectTracker& tracker,
+InboundServerHandle startInboundServer(const chain::ChainParams& chain, db::NodeStateStore& tracker,
                                        const config::Settings& settings, storage::BlockStore& blockStore,
                                        mempool::Mempool* mempool, RelayTxAcceptedFn relayTxAccepted);
 

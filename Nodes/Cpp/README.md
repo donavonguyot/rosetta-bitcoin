@@ -8,13 +8,12 @@ Follower implementation: P2P, sync, consensus validation, mempool, metrics HTTP,
 
 Cpp's Core compliance path is **RocksDB-only**. Native mode must use RocksDB for
 headers, block index, sync state, validated tip, UTXO, undo, metadata, blocker
-state, and status truth. SQLite is legacy/dev only and is not allowed in the
-RocksDB compliance path.
+state, and status truth. SQLite support has been removed from Cpp.
 
 Quality bar (current):
 
 - all normal unit tests pass (`ctest`);
-- RocksDB/native secp256k1 builds pass (`CPBITNODE_USE_ROCKSDB=ON`, `CPBITNODE_USE_NATIVE_SECP256K1=ON`), with native status/sync/proof targets linked through a SQLite-free RocksDB library;
+- RocksDB/native secp256k1 builds pass (`CPBITNODE_USE_ROCKSDB=ON`, `CPBITNODE_USE_NATIVE_SECP256K1=ON`), with native status/sync/proof targets linked through one RocksDB library;
 - new consensus fixes include focused regression tests;
 - no silent consensus skips — stop honestly on missing rules;
 - live sync progress is the primary forward gate.
@@ -25,22 +24,22 @@ Coverage is **monitored, not gated**: `./scripts/coverage_report.sh` prints gcov
 
 - C++20 compiler (Clang 15+ or GCC 12+)
 - CMake 3.20+
-- SQLite 3 development library (`libsqlite3-dev` on Debian/Ubuntu) for legacy/dev builds only
-- RocksDB and libsecp256k1 for Cpp Core proof builds (`librocksdb-dev`, `libsecp256k1-dev`)
+- RocksDB and libsecp256k1 (`librocksdb-dev`, `libsecp256k1-dev`)
 
-Default builds keep legacy SQLite tooling available. Core Node proof builds
-intentionally use RocksDB and libsecp256k1; the native `cpbitnode-db`,
-`cpbitnode-sync`, and `cpbitnode-storage-proof` executables are linked through a
-SQLite-free native library.
+Default builds are RocksDB-native. `CPBITNODE_USE_ROCKSDB=OFF` is rejected at
+configure time; `cpbitnode-db`, `cpbitnode-sync`, and
+`cpbitnode-storage-proof` all read and write native state.
 
 ## Build
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCPBITNODE_USE_ROCKSDB=ON \
+  -DCPBITNODE_USE_NATIVE_SECP256K1=ON
 cmake --build build
 ```
 
-Binaries: `build/cpbitnode`, `build/cpbitnode-db`, `build/cpbitnode-healthcheck`, `build/cpbitnode-export-snapshots`, `build/cpbitnode-sync`, `build/cpbitnode_tests`.
+Binaries: `build/cpbitnode`, `build/cpbitnode-db`, `build/cpbitnode-healthcheck`, `build/cpbitnode-sync`, `build/cpbitnode-storage-proof`, `build/cpbitnode-blocker-inspect`, `build/cpbitnode_tests`.
 
 Native proof build:
 
@@ -128,7 +127,7 @@ Connect-only pass over stored blocks (no network):
 ./build/cpbitnode-healthcheck --datadir ./data-cpp
 ```
 
-Defaults: `CHAIN=testnet4`, data dir `./data-cpp`, database `cpbitnode.db`.
+Defaults: `CHAIN=testnet4`, data dir `./data-cpp`, chainstate backend `rocksdb`.
 
 ## Partial Native Proofs
 
@@ -136,7 +135,7 @@ Defaults: `CHAIN=testnet4`, data dir `./data-cpp`, database `cpbitnode.db`.
 ./build-core-native/cpbitnode-storage-proof \
   --datadir /tmp/cpbitnode-storage-proof \
   --chainstate-backend rocksdb \
-  --proof-path ../../NodeCore/conformance/results/cpp_rocksdb_codec_v2_storage_2026-06-02.json
+  --proof-path ../../NodeCore/conformance/results/cpp_rocksdb_codec_v2_storage.json
 
 ./build-core-native/cpbitnode-blocker-inspect --height 739
 ```
@@ -144,8 +143,8 @@ Defaults: `CHAIN=testnet4`, data dir `./data-cpp`, database `cpbitnode.db`.
 `cpbitnode-db` emits shared status contract fields, including `validated_height`,
 `validated_hash`, `chainstate_backend`, `chainstate_utxo_count`,
 `native_crypto_backend`, `current_blocker`, `active_writer_pid`, and
-`lock_status`. In RocksDB builds, this status path reads from RocksDB state and
-refuses a legacy `cpbitnode.db` artifact in the datadir.
+`lock_status`. This status path reads from RocksDB state and refuses a legacy
+`cpbitnode.db` artifact in the datadir.
 
 ## Docker
 
@@ -158,17 +157,7 @@ make docker-cpp-sync-stop
 make docker-cpp-sync-resume
 ```
 
-## SQLite
-
-Uses **system SQLite** via CMake for legacy/dev metadata/header/block-index state.
-That path is explicitly non-compliant. Cpp Core mode is RocksDB-only, and the
-RocksDB compliance executables must not open, create, or require `cpbitnode.db`.
-
 ## Intentionally limited in CI
 
 - Live testnet4 sync (offline unit tests only)
-- Full healthcheck live peer/mempool counts when node is not running (reads tracker DB)
-
-## Schema
-
-`SCHEMA_VERSION = 7` (canonical with PythonNode `pybitnode/db/schema.py`).
+- Full healthcheck live peer/mempool counts when node is not running

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { TESTNET4_GENESIS } from "../src/chain/genesis.js";
 import { TESTNET4 } from "../src/chain/params.js";
 import { filterExcludedPeers, PYTHON_NODE_DEFAULT_PEER_ENDPOINT } from "../src/config/peers.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import {
   BlockHeaderCodec,
   GetHeadersMessageCodec,
@@ -109,7 +109,7 @@ describe("header sync helpers", () => {
 
   it("seeds genesis and builds locator", () => {
     tempDir = mkdtempSync(join(tmpdir(), "tsbitnode-headers-"));
-    const tracker = new ProjectTracker(join(tempDir, "headers.db"));
+    const tracker = new NativeNodeState(join(tempDir, "headers.stateDir"));
     ensureGenesis(tracker, TESTNET4);
     const locator = nextLocator(tracker, TESTNET4);
     expect(locator).toHaveLength(1);
@@ -121,7 +121,7 @@ describe("header sync helpers", () => {
 
   it("persists linked headers and marks current", () => {
     tempDir = mkdtempSync(join(tmpdir(), "tsbitnode-headers-"));
-    const tracker = new ProjectTracker(join(tempDir, "persist.db"));
+    const tracker = new NativeNodeState(join(tempDir, "persist.stateDir"));
     ensureGenesis(tracker, TESTNET4);
 
     const bad = {

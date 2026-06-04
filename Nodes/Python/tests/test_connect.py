@@ -70,6 +70,54 @@ def test_connect_block1_adds_utxo(tmp_path, block1_payload: bytes):
     tracker.close()
 
 
+def test_tracker_stats_are_maintained_for_headers_blocks_and_utxos(tmp_path):
+    tracker = ProjectTracker(tmp_path / "stats-chainstate")
+    ensure_genesis(tracker, TESTNET4)
+    tracker.record_header(1, "aa", TESTNET4.genesis_hash, 1)
+    tracker.record_header(3, "cc", "bb", 3)
+    tracker.record_block(1, "aa", "blk00000.dat", 0, 258)
+    tracker.add_utxo(b"\x11" * 32, 0, height=1, value=1, script_pubkey=b"\x51", coinbase=False)
+    tracker.add_utxo(b"\x22" * 32, 1, height=3, value=2, script_pubkey=b"\x51", coinbase=False)
+
+    stats = tracker.stats()
+    assert stats["header_count"] == 3  # genesis + two explicit headers
+    assert stats["max_header_height"] == 3
+    assert stats["block_count"] == 1
+    assert stats["max_stored_block_height"] == 1
+    assert stats["utxo_count"] == 2
+
+    tracker.spend_utxo(b"\x11" * 32, 0)
+    assert tracker.utxo_count() == 1
+    tracker.close()
+
+
+def test_missing_v1_stats_are_backfilled_once_and_read_without_scans(tmp_path, monkeypatch):
+    state_path = tmp_path / "old-v1-chainstate"
+    tracker = ProjectTracker(state_path)
+    ensure_genesis(tracker, TESTNET4)
+    tracker.record_header(2, "bb", TESTNET4.genesis_hash, 2)
+    tracker.record_block(2, "bb", "blk00000.dat", 0, 258)
+    tracker.add_utxo(b"\x33" * 32, 0, height=2, value=3, script_pubkey=b"\x51", coinbase=False)
+    tracker._delete("stats", "default")
+    tracker.close()
+
+    reopened = ProjectTracker(state_path)
+    assert reopened.stats()["utxo_count"] == 1
+    assert reopened.header_count() == 2
+    assert reopened.block_count() == 1
+
+    def fail_iter_prefix(*_args, **_kwargs):
+        raise AssertionError("stats reads should not scan after backfill")
+
+    monkeypatch.setattr(reopened, "_iter_prefix", fail_iter_prefix)
+    assert reopened.utxo_count() == 1
+    assert reopened.header_count() == 2
+    assert reopened.max_header_height() == 2
+    assert reopened.block_count() == 1
+    assert reopened.max_stored_block_height() == 2
+    reopened.close()
+
+
 def test_connect_block_requires_sequential_height(tmp_path, block1_payload: bytes):
     tracker = ProjectTracker(tmp_path / "order-chainstate")
     ensure_genesis(tracker, TESTNET4)
@@ -262,6 +310,34 @@ def test_block_utxo_view_caches_external_reads(tmp_path, monkeypatch):
     tracker.close()
 
 
+def test_block_utxo_view_loads_external_prevouts_in_one_deduped_batch(tmp_path, monkeypatch):
+    from pybitnode.consensus.connect import _BlockUtxoView
+    from pybitnode.messages.transaction import OutPoint
+
+    tracker = ProjectTracker(tmp_path / "batch-load-chainstate")
+    ensure_genesis(tracker, TESTNET4)
+    txid = b"\xda" * 32
+    tracker.add_utxo(txid, 0, height=1, value=5000, script_pubkey=b"\x51", coinbase=False)
+    calls: list[tuple[tuple[bytes, int], ...]] = []
+    original_get_many = tracker.get_utxos_many
+
+    def counted_get_many(outpoints):
+        rows = tuple(outpoints)
+        calls.append(rows)
+        return original_get_many(rows)
+
+    monkeypatch.setattr(tracker, "get_utxos_many", counted_get_many)
+    view = _BlockUtxoView(tracker, height=2, timings={})
+    outpoint = OutPoint(hash=txid, index=0)
+
+    view.load_external([outpoint, outpoint])
+    assert view.get(outpoint) is not None
+    view.load_external([outpoint])
+
+    assert calls == [((txid, 0),)]
+    tracker.close()
+
+
 def test_block_utxo_view_does_not_persist_same_block_spent_outputs(tmp_path):
     from pybitnode.consensus.connect import _BlockUtxoView
     from pybitnode.messages.transaction import OutPoint
@@ -293,6 +369,51 @@ def test_block_utxo_view_rejects_duplicate_persisted_output(tmp_path):
         view.create(txid, 0, value=4000, script_pubkey=b"\x51", coinbase=False)
 
     assert tracker.get_utxo(txid, 0) is not None
+    tracker.close()
+
+
+def test_block_utxo_view_apply_deletes_loaded_spends_without_re_read(tmp_path, monkeypatch):
+    from pybitnode.consensus.connect import _BlockUtxoView
+    from pybitnode.messages.transaction import OutPoint
+
+    tracker = ProjectTracker(tmp_path / "delete-known-chainstate")
+    ensure_genesis(tracker, TESTNET4)
+    txid = b"\xbe" * 32
+    tracker.add_utxo(txid, 0, height=1, value=5000, script_pubkey=b"\x51", coinbase=False)
+    view = _BlockUtxoView(tracker, height=2)
+    view.load_external([OutPoint(hash=txid, index=0)])
+    view.spend(OutPoint(hash=txid, index=0))
+
+    def fail_get_utxo(*_args, **_kwargs):
+        raise AssertionError("apply should not re-read validated spends")
+
+    monkeypatch.setattr(tracker, "get_utxo", fail_get_utxo)
+    view.apply()
+
+    assert tracker.utxo_count() == 0
+    tracker.close()
+
+
+def test_block_utxo_view_apply_combines_spends_and_creates_in_one_stats_transaction(tmp_path):
+    from pybitnode.consensus.connect import _BlockUtxoView
+    from pybitnode.messages.transaction import OutPoint
+
+    tracker = ProjectTracker(tmp_path / "stats-transaction-chainstate")
+    ensure_genesis(tracker, TESTNET4)
+    spent_txid = b"\x44" * 32
+    created_txid = b"\x55" * 32
+    tracker.add_utxo(spent_txid, 0, height=1, value=5000, script_pubkey=b"\x51", coinbase=False)
+    view = _BlockUtxoView(tracker, height=2)
+    view.load_external([OutPoint(hash=spent_txid, index=0)])
+    view.spend(OutPoint(hash=spent_txid, index=0))
+    view.create(created_txid, 0, value=4000, script_pubkey=b"\x51", coinbase=False)
+
+    with tracker.transaction():
+        view.apply()
+
+    assert tracker.utxo_count() == 1
+    assert tracker.get_utxo(spent_txid, 0) is None
+    assert tracker.get_utxo(created_txid, 0) is not None
     tracker.close()
 
 

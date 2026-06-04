@@ -1,4 +1,6 @@
 .DS_Store
+.claude/
+.pytest_cache/
 
 # Node implementation directories are root-owned source. Ignore only generated
 # runtime/build/dependency artifacts under them.
@@ -32,6 +34,7 @@
 /Nodes/*/*.db-wal
 /Nodes/*/*.db-shm
 /Nodes/*/*.lock
+!/Nodes/Elixir/mix.lock
 /Nodes/*/*.pid
 
 # Shared scratch, if any lands at the workspace root.
@@ -64,4 +67,3 @@ venv/
 /Project/project.db
 /Project/reports/generated/
 /Project/tmp/
-

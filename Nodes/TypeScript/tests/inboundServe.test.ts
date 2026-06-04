@@ -8,7 +8,7 @@ import { TESTNET4_GENESIS } from "../src/chain/genesis.js";
 import { TESTNET4 } from "../src/chain/params.js";
 import { Settings } from "../src/config/settings.js";
 import { transactionWtxid } from "../src/consensus/witness.js";
-import { ProjectTracker } from "../src/db/tracker.js";
+import { NativeNodeState } from "../src/runtime/nodeState.js";
 import { BlockMessageCodec } from "../src/messages/block.js";
 import {
   BlockHeaderCodec,
@@ -49,7 +49,7 @@ function height1BlockWire(genesisHeader = TESTNET4_GENESIS): [Buffer, ReturnType
   return [Buffer.concat([headerBytes, Buffer.from([0x00])]), BlockHeaderCodec.blockHash(header)];
 }
 
-function peerConn(tracker: ProjectTracker): PeerConnection {
+function peerConn(tracker: NativeNodeState): PeerConnection {
   const peer = new PeerConnection({
     host: "127.0.0.1",
     port: 49_200,
@@ -65,7 +65,7 @@ function peerConn(tracker: ProjectTracker): PeerConnection {
 describe("inbound getheaders serving", () => {
   it("buildHeadersResponse returns headers after locator fork", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-gh-"));
-    const tracker = new ProjectTracker(join(dir, "gh.db"));
+    const tracker = new NativeNodeState(join(dir, "gh.stateDir"));
     ensureGenesis(tracker, TESTNET4);
     const header = {
       version: TESTNET4_GENESIS.version,
@@ -100,7 +100,7 @@ describe("inbound getheaders serving", () => {
 
   it("dispatchInboundMessage marks serve.getheaders", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-dgh-"));
-    const tracker = new ProjectTracker(join(dir, "dgh.db"));
+    const tracker = new NativeNodeState(join(dir, "dgh.stateDir"));
     const genesis = ensureGenesis(tracker, TESTNET4);
     const h1 = {
       version: genesis.version,
@@ -146,7 +146,7 @@ describe("inbound getheaders serving", () => {
 describe("inbound getdata block serving", () => {
   it("serves stored block bytes from BlockStore", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-gdb-"));
-    const tracker = new ProjectTracker(join(dir, "gdb.db"));
+    const tracker = new NativeNodeState(join(dir, "gdb.stateDir"));
     ensureGenesis(tracker, TESTNET4);
     const [payload, blockHash] = height1BlockWire();
     const blockStore = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
@@ -190,7 +190,7 @@ describe("inbound getdata block serving", () => {
 
   it("returns notfound for unknown witness block hash", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-gdnf-"));
-    const tracker = new ProjectTracker(join(dir, "gdnf.db"));
+    const tracker = new NativeNodeState(join(dir, "gdnf.stateDir"));
     const blockStore = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
     const peer = peerConn(tracker);
     const want = { type: MSG_WITNESS_BLOCK, hash: Buffer.alloc(32, 0xaa) };
@@ -213,7 +213,7 @@ describe("inbound getdata block serving", () => {
 
   it("does not send when inventory is empty", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-gd-empty-"));
-    const tracker = new ProjectTracker(join(dir, "gd-empty.db"));
+    const tracker = new NativeNodeState(join(dir, "gd-empty.stateDir"));
     const blockStore = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
     const peer = peerConn(tracker);
 
@@ -232,7 +232,7 @@ describe("inbound getdata block serving", () => {
 
   it("returns notfound when BlockStore read fails", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-gd-read-"));
-    const tracker = new ProjectTracker(join(dir, "gd-read.db"));
+    const tracker = new NativeNodeState(join(dir, "gd-read.stateDir"));
     ensureGenesis(tracker, TESTNET4);
     const [payload, blockHash] = height1BlockWire();
     const blockStore = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
@@ -278,7 +278,7 @@ describe("inbound getdata block serving", () => {
 
   it("returns notfound when requested hash does not match stored block", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-gd-mismatch-"));
-    const tracker = new ProjectTracker(join(dir, "gd-mis.db"));
+    const tracker = new NativeNodeState(join(dir, "gd-mis.stateDir"));
     ensureGenesis(tracker, TESTNET4);
     const [payload, blockHash] = height1BlockWire();
     const blockStore = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
@@ -320,7 +320,7 @@ describe("inbound getdata block serving", () => {
 
   it("serves first block then notfound for missing second item", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-gd-mix-"));
-    const tracker = new ProjectTracker(join(dir, "gd-mix.db"));
+    const tracker = new NativeNodeState(join(dir, "gd-mix.stateDir"));
     ensureGenesis(tracker, TESTNET4);
     const [payload, blockHash] = height1BlockWire();
     const blockStore = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
@@ -363,7 +363,7 @@ describe("inbound getdata block serving", () => {
 
   it("returns notfound for tx without mempool", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-gd-ntx-"));
-    const tracker = new ProjectTracker(join(dir, "gd-ntx.db"));
+    const tracker = new NativeNodeState(join(dir, "gd-ntx.stateDir"));
     const blockStore = new BlockStore(join(dir, "blocks"), TESTNET4.magic);
     const peer = peerConn(tracker);
     const want = { type: MSG_TX, hash: Buffer.alloc(32, 0xaa) };
@@ -384,7 +384,7 @@ describe("inbound getdata block serving", () => {
 
   it("serves witness tx from mempool with witness serialization", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-gd-wtx-"));
-    const tracker = new ProjectTracker(join(dir, "gd-wtx.db"));
+    const tracker = new NativeNodeState(join(dir, "gd-wtx.stateDir"));
     const pool = new Mempool();
     const tx = {
       version: 2,
@@ -430,7 +430,7 @@ describe("inbound getdata block serving", () => {
 describe("serveInboundSession", () => {
   it("dispatches mocked getheaders over inbound session", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-sess-gh-"));
-    const tracker = new ProjectTracker(join(dir, "sess.db"));
+    const tracker = new NativeNodeState(join(dir, "sess.stateDir"));
     const genesis = ensureGenesis(tracker, TESTNET4);
     const h1 = {
       version: genesis.version,
@@ -488,7 +488,7 @@ describe("serveInboundSession", () => {
 
   it("increments ban score when inbound handshake fails for known endpoint", async () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-sess-ban-"));
-    const tracker = new ProjectTracker(join(dir, "sess-ban.db"));
+    const tracker = new NativeNodeState(join(dir, "sess-ban.stateDir"));
     const spy = vi.spyOn(tracker, "incrementPeerBanScore");
 
     vi.spyOn(PeerConnection.prototype, "acceptInbound").mockRejectedValue(new Error("handshake failed"));
@@ -518,7 +518,7 @@ describe("serveInboundSession", () => {
 describe("cp6 capability marking", () => {
   it("marks all cp6 required capabilities when exercised", () => {
     const dir = mkdtempSync(join(tmpdir(), "ts-cp6-"));
-    const tracker = new ProjectTracker(join(dir, "cp6.db"));
+    const tracker = new NativeNodeState(join(dir, "cp6.stateDir"));
     tracker.markWireCapability("serve.getheaders", true, "unit", "mock");
     tracker.markWireCapability("serve.getdata.blocks", true, "unit", "mock");
     tracker.markWireCapability("serve.getdata.txs", true, "unit", "mock");

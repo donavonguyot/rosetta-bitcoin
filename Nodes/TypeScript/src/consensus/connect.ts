@@ -1,5 +1,5 @@
 import type { ChainParams } from "../chain/params.js";
-import type { ProjectTracker } from "../db/tracker.js";
+import type { NativeNodeState } from "../runtime/nodeState.js";
 import { META_BLOCKS_VALIDATED_TOTAL, incrMetaCounter } from "../metrics.js";
 import { blockDeserialize, type Block } from "./block.js";
 import { CoinbaseError, isSpendableOutput, validateBip34Height } from "./coinbase.js";
@@ -42,7 +42,7 @@ class BlockUtxoView {
   readonly spent = new Set<string>();
 
   constructor(
-    readonly tracker: ProjectTracker,
+    readonly tracker: NativeNodeState,
     readonly chain: string,
     readonly height: number,
   ) {}
@@ -230,7 +230,7 @@ export interface ConnectBlockOptions {
 }
 
 export function connectBlock(
-  tracker: ProjectTracker,
+  tracker: NativeNodeState,
   payload: Buffer,
   options: ConnectBlockOptions,
 ): Block {
@@ -312,7 +312,7 @@ export function connectBlock(
   return block;
 }
 
-export function disconnectBlock(tracker: ProjectTracker, height: number, chain: ChainParams): void {
+export function disconnectBlock(tracker: NativeNodeState, height: number, chain: ChainParams): void {
   const chainName = chain.name;
   const validated = tracker.getValidatedHeight(chainName);
   if (validated !== height) {
