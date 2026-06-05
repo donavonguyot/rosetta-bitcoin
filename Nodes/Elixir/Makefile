@@ -71,7 +71,6 @@ docker-storage-proof:
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) RUNTIME_SURFACE=docker PROOF_PATH=/tmp/elixir_storage_proof.json \
 	  $(DOCKER_COMPOSE) run --rm --no-deps exbitnode-sync-proof mix storage.proof
-	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
 
 docker-script-corpus:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build exbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
@@ -110,7 +109,6 @@ docker-proof-local:
 	    PEER=$(DOCKER_PEERS) PROOF_PATH=$(DOCKER_BENCHMARK_RESULT) \
 	    python3 ../Shared/conformance/tools/proofs/capture_elixir_docker_5k_benchmark.py $$status_json $$sync_log $$exit_file; \
 	  rm -f $$sync_log $$status_json $$exit_file
-	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
 
 docker-proof-10k:
 	$(MAKE) docker-proof-local \
@@ -147,7 +145,6 @@ docker-proof-50k:
 	  PEER=$(DOCKER_PEERS) PROOF_PATH=$(DOCKER_50K_BENCHMARK_RESULT) \
 	  python3 ../Shared/conformance/tools/proofs/capture_elixir_docker_5k_benchmark.py .docker-elixir-50k-status.json /dev/null .docker-elixir-50k-sync-exit
 	@rm -f .docker-elixir-50k-status.json .docker-elixir-50k-sync-exit
-	@docker run --rm -v exbitnode_50k_proof_data:/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
 
 docker-long-sync-proof:
 	@for i in $$(seq 1 60); do \
@@ -173,7 +170,6 @@ docker-long-sync-proof:
 	  PROOF_PATH=$(DOCKER_LONG_PROOF_PATH) PROOF_COMMAND="$(or $(PROOF_COMMAND),$(MAKE) docker-long-sync-proof)" \
 	  python3 ../Shared/conformance/tools/proofs/capture_elixir_docker_long_sync_proof.py .docker-elixir-long-status.json .docker-elixir-long-sync-exit
 	@rm -f .docker-elixir-long-status.json .docker-elixir-long-sync-exit
-	@docker run --rm -v $(DOCKER_LONG_PROOF_VOLUME):/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
 
 docker-10k-sync-proof:
 	$(MAKE) docker-long-sync-proof \

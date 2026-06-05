@@ -148,8 +148,7 @@ Defaults: `CHAIN=testnet4`, data dir `./data-cpp`, chainstate backend `rocksdb`.
 `cpbitnode-db` emits shared status contract fields, including `validated_height`,
 `validated_hash`, `chainstate_backend`, `chainstate_utxo_count`,
 `native_crypto_backend`, `current_blocker`, `active_writer_pid`, and
-`lock_status`. This status path reads from RocksDB state and refuses a legacy
-`cpbitnode.db` artifact in the datadir.
+`lock_status`. This status path reads from RocksDB state.
 
 ## Docker
 

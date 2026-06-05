@@ -98,7 +98,6 @@ docker-csharp-native-crypto-proof:
 	  PROOF_COMMAND="$(or $(PROOF_COMMAND),make docker-csharp-native-crypto-proof)" \
 	  POLL_SEC=$(or $(POLL_SEC),120) \
 	  python3 scripts/capture_docker_sync_proof.py .docker-csharp-proof-status.json .docker-csharp-proof-exit
-	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/csbitnode.db
 
 docker-script-corpus:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build csbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi

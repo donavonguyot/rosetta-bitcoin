@@ -53,6 +53,24 @@ pub const NativeVerifier = struct {
             tweak32,
         ) == 1;
     }
+
+    pub fn taprootTweakPubkeyXOnly(
+        self: *NativeVerifier,
+        internal_xonly: []const u8,
+        tweak32: *const [32]u8,
+    ) ?struct { output_xonly: [32]u8, parity: u8 } {
+        if (internal_xonly.len != 32) return null;
+        var internal: c.secp256k1_xonly_pubkey = undefined;
+        if (c.secp256k1_xonly_pubkey_parse(self.ctx, &internal, internal_xonly.ptr) != 1) return null;
+        var output_pubkey: c.secp256k1_pubkey = undefined;
+        if (c.secp256k1_xonly_pubkey_tweak_add(self.ctx, &output_pubkey, &internal, tweak32) != 1) return null;
+        var output_xonly_pubkey: c.secp256k1_xonly_pubkey = undefined;
+        var parity_c: c_int = 0;
+        if (c.secp256k1_xonly_pubkey_from_pubkey(self.ctx, &output_xonly_pubkey, &parity_c, &output_pubkey) != 1) return null;
+        var output_xonly: [32]u8 = undefined;
+        if (c.secp256k1_xonly_pubkey_serialize(self.ctx, &output_xonly, &output_xonly_pubkey) != 1) return null;
+        return .{ .output_xonly = output_xonly, .parity = @intCast(parity_c) };
+    }
 };
 
 pub fn available() bool {
@@ -104,6 +122,17 @@ pub fn ripemd160(data: []const u8) [20]u8 {
 pub fn hash160(data: []const u8) [20]u8 {
     const sha = sha256(data);
     return ripemd160(sha[0..]);
+}
+
+pub fn taggedHash(tag: []const u8, data: []const u8) [32]u8 {
+    const tag_hash = sha256(tag);
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+    hasher.update(tag_hash[0..]);
+    hasher.update(tag_hash[0..]);
+    hasher.update(data);
+    var out: [32]u8 = undefined;
+    hasher.final(&out);
+    return out;
 }
 
 pub fn displayHashAlloc(allocator: std.mem.Allocator, internal_hash: []const u8) ![]u8 {

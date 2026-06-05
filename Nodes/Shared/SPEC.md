@@ -7,9 +7,9 @@ must implement independently. It standardizes durable state, validation progress
 status reporting, blocker records, rebuild semantics, and conformance fixtures.
 
 The contract is extracted from the JavaNode experiment. Java proved that a port
-can validate far beyond early testnet4 blockers, but it also exposed the risk of
-mixing a SQLite metadata truth with a separate hot UTXO backend. Shared exists
-to prevent that class of split-brain state from being copied into other ports.
+can validate far beyond early testnet4 blockers, and it made the durable storage
+rule obvious: serious ports use one RocksDB runtime truth for node-local state.
+Shared exists so every port starts from that rule instead of rediscovering it.
 
 ## Binary Gate
 

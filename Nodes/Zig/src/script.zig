@@ -5,6 +5,7 @@ const tx = @import("tx.zig");
 const OP_0 = 0x00;
 const OP_PUSHDATA1 = 0x4c;
 const OP_PUSHDATA2 = 0x4d;
+const OP_PUSHDATA4 = 0x4e;
 const OP_1NEGATE = 0x4f;
 const OP_1 = 0x51;
 const OP_16 = 0x60;
@@ -74,6 +75,13 @@ const SIGHASH_ALL = 0x01;
 const SIGHASH_NONE = 0x02;
 const SIGHASH_SINGLE = 0x03;
 const SIGHASH_ANYONECANPAY = 0x80;
+const TAPROOT_SIGHASH_DEFAULT = 0x00;
+const TAPROOT_LEAF_TAPSCRIPT = 0xc0;
+const TAPROOT_ANNEX_TAG = 0x50;
+const MAX_SCRIPT_ELEMENT_SIZE = 520;
+const MAX_TAPSCRIPT_STACK_ITEMS = 1000;
+const TAP_VALIDATION_OFFSET: i32 = 50;
+const TAP_VALIDATION_PER_SIGOP: i32 = 50;
 const LOCKTIME_THRESHOLD = 500_000_000;
 const SEQUENCE_LOCKTIME_DISABLE_FLAG: u32 = 1 << 31;
 const SEQUENCE_LOCKTIME_TYPE_FLAG: u32 = 1 << 22;
@@ -84,7 +92,7 @@ pub const SpentPrevout = struct {
     script_pubkey: []const u8,
 };
 
-const VerifyMode = enum { legacy, witness_v0 };
+const VerifyMode = enum { legacy, witness_v0, tapscript };
 
 const EvalContext = struct {
     transaction: tx.Transaction,
@@ -94,6 +102,10 @@ const EvalContext = struct {
     mode: VerifyMode,
     verifier: *crypto.NativeVerifier,
     code_separator_offset: usize = 0,
+    spent_prevouts: []const SpentPrevout = &.{},
+    annex: ?[]const u8 = null,
+    tapleaf_hash: ?[32]u8 = null,
+    sigop_budget: ?*i32 = null,
 };
 
 pub fn verifyInput(
@@ -130,7 +142,7 @@ pub fn verifyInput(
         return;
     }
     if (isP2TR(script_pubkey)) {
-        return error.SignatureVerifierNotImplemented;
+        return verifyP2TR(allocator, transaction, input_index, transaction.inputs[input_index].script_sig, script_pubkey, witness, spent_prevouts, &verifier);
     }
     return error.UnsupportedScriptTemplate;
 }
@@ -253,6 +265,124 @@ fn verifyP2WSHWitnessProgram(
     if (!terminalStrict(&stack)) return error.ScriptTerminalFalse;
 }
 
+fn verifyP2TR(
+    allocator: std.mem.Allocator,
+    transaction: tx.Transaction,
+    input_index: usize,
+    script_sig: []const u8,
+    script_pubkey: []const u8,
+    witness_in: []const []const u8,
+    spent_prevouts: []const SpentPrevout,
+    verifier: *crypto.NativeVerifier,
+) !void {
+    if (script_sig.len != 0) return error.TaprootScriptSigNotEmpty;
+    if (spent_prevouts.len != transaction.inputs.len) return error.SpentPrevoutsLengthMismatch;
+    var witness = witness_in;
+    const serialized_witness = try serializedWitnessStack(allocator, witness_in);
+    defer allocator.free(serialized_witness);
+    var annex: ?[]const u8 = null;
+    if (witness.len >= 2 and witness[witness.len - 1].len > 0 and witness[witness.len - 1][0] == TAPROOT_ANNEX_TAG) {
+        return error.InvalidTaprootAnnexPosition;
+    }
+    if (witness.len >= 3 and witness[witness.len - 3].len > 0 and witness[witness.len - 3][0] == TAPROOT_ANNEX_TAG) {
+        annex = witness[witness.len - 3];
+        var trimmed = try allocator.alloc([]const u8, witness.len - 1);
+        defer allocator.free(trimmed);
+        @memcpy(trimmed[0 .. witness.len - 3], witness[0 .. witness.len - 3]);
+        trimmed[witness.len - 3] = witness[witness.len - 2];
+        trimmed[witness.len - 2] = witness[witness.len - 1];
+        witness = trimmed;
+        return verifyTaprootAfterAnnex(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier);
+    }
+    return verifyTaprootAfterAnnex(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier);
+}
+
+fn verifyTaprootAfterAnnex(
+    allocator: std.mem.Allocator,
+    transaction: tx.Transaction,
+    input_index: usize,
+    script_pubkey: []const u8,
+    witness: []const []const u8,
+    annex: ?[]const u8,
+    serialized_witness: []const u8,
+    spent_prevouts: []const SpentPrevout,
+    verifier: *crypto.NativeVerifier,
+) !void {
+    if (witness.len >= 2) return verifyTaprootScriptPath(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier);
+    if (witness.len != 1) return error.InvalidTaprootKeyPathWitness;
+    const sig_blob = witness[0];
+    if (sig_blob.len != 64 and sig_blob.len != 65) return error.InvalidSchnorrSignatureLength;
+    var hash_type: u8 = TAPROOT_SIGHASH_DEFAULT;
+    var sig64 = sig_blob;
+    if (sig_blob.len == 65) {
+        hash_type = sig_blob[64];
+        if (hash_type == TAPROOT_SIGHASH_DEFAULT) return error.InvalidTaprootHashType;
+        sig64 = sig_blob[0..64];
+    }
+    const digest = try taprootSighash(allocator, transaction, input_index, spent_prevouts, .{
+        .hash_type = hash_type,
+        .annex = annex,
+        .ext_flag = 0,
+        .code_separator_pos = 0xffff_ffff,
+    });
+    if (!verifier.verifySchnorr(script_pubkey[2..34], sig64, digest[0..])) return error.TaprootKeyPathSignatureFailed;
+}
+
+fn verifyTaprootScriptPath(
+    allocator: std.mem.Allocator,
+    transaction: tx.Transaction,
+    input_index: usize,
+    script_pubkey: []const u8,
+    witness: []const []const u8,
+    annex: ?[]const u8,
+    serialized_witness: []const u8,
+    spent_prevouts: []const SpentPrevout,
+    verifier: *crypto.NativeVerifier,
+) !void {
+    if (witness.len < 2) return error.InvalidTaprootScriptPathWitness;
+    const script = witness[witness.len - 2];
+    const control = witness[witness.len - 1];
+    if (script.len == 0 or control.len < 33 or control.len > 33 + 128 * 32 or (control.len - 33) % 32 != 0) return error.InvalidTaprootControlBlock;
+    const leaf_version = control[0] & 0xfe;
+    if (leaf_version == TAPROOT_ANNEX_TAG) return error.InvalidTaprootLeafVersion;
+    const internal_x = control[1..33];
+    const leaf = try tapleafHash(allocator, leaf_version, script);
+    var root = leaf;
+    var branch_offset: usize = 33;
+    while (branch_offset < control.len) : (branch_offset += 32) {
+        root = try tapbranchHash(allocator, root, control[branch_offset .. branch_offset + 32]);
+    }
+    const tweak = try tapTweakHash(allocator, internal_x, root[0..]);
+    const tweaked = verifier.taprootTweakPubkeyXOnly(internal_x, &tweak) orelse return error.TaprootTweakFailed;
+    if (!std.mem.eql(u8, tweaked.output_xonly[0..], script_pubkey[2..34]) or control[0] != (leaf_version | tweaked.parity)) return error.TaprootControlBlockMismatch;
+    if (leaf_version != TAPROOT_LEAF_TAPSCRIPT) return;
+    if (try prescanOpSuccess(script)) return;
+    const stack_items = witness[0 .. witness.len - 2];
+    if (stack_items.len > MAX_TAPSCRIPT_STACK_ITEMS) return error.TapscriptStackTooDeep;
+    for (stack_items) |item| {
+        if (item.len > MAX_SCRIPT_ELEMENT_SIZE) return error.TapscriptElementTooLarge;
+    }
+    var stack = Stack.init(allocator);
+    defer stack.deinit();
+    for (stack_items) |item| try stack.push(item);
+    var budget: i32 = TAP_VALIDATION_OFFSET + @as(i32, @intCast(serialized_witness.len));
+    var context = EvalContext{
+        .transaction = transaction,
+        .input_index = input_index,
+        .amount = spent_prevouts[input_index].amount,
+        .script_code = script,
+        .mode = .tapscript,
+        .verifier = verifier,
+        .code_separator_offset = 0xffff_ffff,
+        .spent_prevouts = spent_prevouts,
+        .annex = annex,
+        .tapleaf_hash = leaf,
+        .sigop_budget = &budget,
+    };
+    try evaluate(allocator, script, &stack, &context);
+    if (!terminalStrict(&stack)) return error.ScriptTerminalFalse;
+}
+
 fn evaluate(allocator: std.mem.Allocator, script: []const u8, stack: *Stack, context: ?*EvalContext) !void {
     var offset: usize = 0;
     var alt = Stack.init(allocator);
@@ -289,6 +419,12 @@ fn evaluate(allocator: std.mem.Allocator, script: []const u8, stack: *Stack, con
             if (offset + 3 + len > script.len) return error.TruncatedPush;
             if (active) try stack.push(script[offset + 3 .. offset + 3 + len]);
             offset += 3 + len;
+        } else if (opcode == OP_PUSHDATA4) {
+            if (offset + 5 > script.len) return error.TruncatedPush;
+            const len = std.mem.readInt(u32, script[offset + 1 ..][0..4], .little);
+            if (offset + 5 + len > script.len) return error.TruncatedPush;
+            if (active) try stack.push(script[offset + 5 .. offset + 5 + len]);
+            offset += 5 + len;
         } else if (opcode == OP_IF or opcode == OP_NOTIF) {
             const parent_active = active;
             var branch_active = false;
@@ -310,7 +446,9 @@ fn evaluate(allocator: std.mem.Allocator, script: []const u8, stack: *Stack, con
             _ = conditions.pop();
             offset += 1;
         } else if (opcode == OP_CODESEPARATOR) {
-            if (active and context != null) context.?.code_separator_offset = offset + 1;
+            if (active and context != null) {
+                context.?.code_separator_offset = if (context.?.mode == .tapscript) offset else offset + 1;
+            }
             offset += 1;
         } else {
             if (active) try evalOpcode(allocator, opcode, stack, &alt, context);
@@ -593,11 +731,19 @@ fn evalOpcode(allocator: std.mem.Allocator, opcode: u8, stack: *Stack, alt: *Sta
         OP_NOP => {},
         OP_CHECKSIG, OP_CHECKSIGVERIFY => {
             if (context == null) return error.SignatureVerifierNotImplemented;
-            const pubkey = try stack.pop();
-            defer stack.allocator.free(pubkey);
-            const signature = try stack.pop();
-            defer stack.allocator.free(signature);
-            const valid = try checkSignature(allocator, context.?, signature, pubkey);
+            const valid = if (context.?.mode == .tapscript) blk: {
+                const pubkey = try stack.pop();
+                defer stack.allocator.free(pubkey);
+                const signature = try stack.pop();
+                defer stack.allocator.free(signature);
+                break :blk try checkTapSignature(allocator, context.?, signature, pubkey);
+            } else blk: {
+                const pubkey = try stack.pop();
+                defer stack.allocator.free(pubkey);
+                const signature = try stack.pop();
+                defer stack.allocator.free(signature);
+                break :blk try checkSignature(allocator, context.?, signature, pubkey);
+            };
             if (opcode == OP_CHECKSIGVERIFY) {
                 if (!valid) return error.ChecksigVerifyFailed;
             } else {
@@ -606,6 +752,7 @@ fn evalOpcode(allocator: std.mem.Allocator, opcode: u8, stack: *Stack, alt: *Sta
         },
         OP_CHECKMULTISIG, OP_CHECKMULTISIGVERIFY => {
             if (context == null) return error.SignatureVerifierNotImplemented;
+            if (context.?.mode == .tapscript) return error.TapscriptCheckmultisigDisabled;
             const valid = try checkMultiSig(allocator, context.?, stack);
             if (opcode == OP_CHECKMULTISIGVERIFY) {
                 if (!valid) return error.CheckmultisigVerifyFailed;
@@ -621,7 +768,18 @@ fn evalOpcode(allocator: std.mem.Allocator, opcode: u8, stack: *Stack, alt: *Sta
             if (context == null) return error.SignatureVerifierNotImplemented;
             try checkSequence(context.?, stack);
         },
-        OP_CHECKSIGADD => return error.SignatureVerifierNotImplemented,
+        OP_CHECKSIGADD => {
+            if (context == null or context.?.mode != .tapscript) return error.SignatureVerifierNotImplemented;
+            const pubkey = try stack.pop();
+            defer stack.allocator.free(pubkey);
+            const n_item = try stack.pop();
+            defer stack.allocator.free(n_item);
+            const signature = try stack.pop();
+            defer stack.allocator.free(signature);
+            var n = try decodeScriptNumMax(n_item, 4);
+            if (signature.len != 0 and try checkTapSignature(allocator, context.?, signature, pubkey)) n += 1;
+            try stack.pushNum(n);
+        },
         else => return error.UnsupportedOpcode,
     }
 }
@@ -677,13 +835,45 @@ fn checkSignature(allocator: std.mem.Allocator, context: *const EvalContext, sig
     const digest = switch (context.mode) {
         .legacy => try legacySighash(allocator, context.transaction, context.input_index, effective_script_code, signature, sighash_type),
         .witness_v0 => try bip143Sighash(allocator, context.transaction, context.input_index, effective_script_code, context.amount, sighash_type),
+        .tapscript => return error.SignatureVerifierNotImplemented,
     };
     return context.verifier.verifyEcdsaDer(pubkey, sig_der, &digest);
 }
 
+fn checkTapSignature(allocator: std.mem.Allocator, context: *const EvalContext, signature: []const u8, pubkey: []const u8) !bool {
+    if (pubkey.len == 0) return error.EmptyTapscriptPubkey;
+    if (signature.len != 0) {
+        if (context.sigop_budget) |budget| {
+            budget.* -= TAP_VALIDATION_PER_SIGOP;
+            if (budget.* < 0) return error.TapscriptValidationBudgetExceeded;
+        }
+    }
+    if (pubkey.len != 32) return signature.len != 0;
+    if (signature.len == 0) return false;
+    var hash_type: u8 = TAPROOT_SIGHASH_DEFAULT;
+    var sig64 = signature;
+    if (signature.len == 65) {
+        hash_type = signature[64];
+        if (hash_type == TAPROOT_SIGHASH_DEFAULT) return error.InvalidTaprootHashType;
+        sig64 = signature[0..64];
+    } else if (signature.len != 64) {
+        return error.InvalidSchnorrSignatureLength;
+    }
+    const leaf = context.tapleaf_hash orelse return error.MissingTapleafHash;
+    const code_sep: u32 = if (context.code_separator_offset == 0xffff_ffff) 0xffff_ffff else @intCast(context.code_separator_offset);
+    const digest = try taprootSighash(allocator, context.transaction, context.input_index, context.spent_prevouts, .{
+        .hash_type = hash_type,
+        .annex = context.annex,
+        .ext_flag = 1,
+        .tapleaf_hash = leaf,
+        .code_separator_pos = code_sep,
+    });
+    return context.verifier.verifySchnorr(pubkey, sig64, digest[0..]);
+}
+
 fn checkLockTime(context: *const EvalContext, stack: *Stack) !void {
     const item = try stack.peek();
-    const lock_time = try decodeScriptNum(item);
+    const lock_time = try decodeScriptNumMax(item, 5);
     if (lock_time < 0) return error.NegativeLockTime;
     const lock_time_u: u32 = @intCast(lock_time);
     if ((lock_time_u < LOCKTIME_THRESHOLD and context.transaction.lock_time >= LOCKTIME_THRESHOLD) or
@@ -697,7 +887,7 @@ fn checkLockTime(context: *const EvalContext, stack: *Stack) !void {
 
 fn checkSequence(context: *const EvalContext, stack: *Stack) !void {
     const item = try stack.peek();
-    const sequence = try decodeScriptNum(item);
+    const sequence = try decodeScriptNumMax(item, 5);
     if (sequence < 0) return error.NegativeSequence;
     const sequence_u: u32 = @intCast(sequence);
     if ((sequence_u & SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0) return;
@@ -851,6 +1041,91 @@ fn bip143Sighash(
     return crypto.doubleSha256(out.items);
 }
 
+const TaprootOptions = struct {
+    hash_type: u8,
+    annex: ?[]const u8 = null,
+    ext_flag: u8 = 0,
+    tapleaf_hash: ?[32]u8 = null,
+    code_separator_pos: u32 = 0xffff_ffff,
+};
+
+fn taprootSighash(
+    allocator: std.mem.Allocator,
+    transaction: tx.Transaction,
+    input_index: usize,
+    spent_prevouts: []const SpentPrevout,
+    options: TaprootOptions,
+) ![32]u8 {
+    if (spent_prevouts.len != transaction.inputs.len) return error.SpentPrevoutsLengthMismatch;
+    if (input_index >= transaction.inputs.len) return error.InputIndexOutOfRange;
+    if (!taprootAllowedHashType(options.hash_type)) return error.InvalidTaprootHashType;
+    if (options.ext_flag != 0 and options.ext_flag != 1) return error.InvalidTaprootExtFlag;
+    var output_mode = options.hash_type;
+    if (output_mode == TAPROOT_SIGHASH_DEFAULT) output_mode = SIGHASH_ALL;
+    output_mode &= 0x03;
+    const anyone = (options.hash_type & SIGHASH_ANYONECANPAY) != 0;
+    const zero32 = [_]u8{0} ** 32;
+    const hash_prevouts = if (!anyone) try tapShaPrevouts(allocator, transaction) else zero32;
+    const hash_amounts = if (!anyone) try tapShaAmounts(allocator, spent_prevouts) else zero32;
+    const hash_script_pubkeys = if (!anyone) try tapShaScriptPubKeys(allocator, spent_prevouts) else zero32;
+    const hash_sequences = if (!anyone) try tapShaSequences(allocator, transaction) else zero32;
+    const hash_outputs = if (output_mode == SIGHASH_ALL)
+        try tapShaOutputsAll(allocator, transaction)
+    else
+        zero32;
+    if (output_mode == SIGHASH_SINGLE and input_index >= transaction.outputs.len) return error.SighashSingleMissingOutput;
+
+    var body: std.ArrayList(u8) = .empty;
+    defer body.deinit(allocator);
+    try body.append(allocator, options.hash_type);
+    try appendU32(allocator, &body, @bitCast(transaction.version));
+    try appendU32(allocator, &body, transaction.lock_time);
+    if (!anyone) {
+        try body.appendSlice(allocator, hash_prevouts[0..]);
+        try body.appendSlice(allocator, hash_amounts[0..]);
+        try body.appendSlice(allocator, hash_script_pubkeys[0..]);
+        try body.appendSlice(allocator, hash_sequences[0..]);
+    }
+    if (output_mode == SIGHASH_ALL) try body.appendSlice(allocator, hash_outputs[0..]);
+    const spend_type: u8 = (options.ext_flag << 1) + if (options.annex != null) @as(u8, 1) else 0;
+    try body.append(allocator, spend_type);
+    if (anyone) {
+        const input = transaction.inputs[input_index];
+        const prevout = spent_prevouts[input_index];
+        try body.appendSlice(allocator, input.previous_output.hash[0..]);
+        try appendU32(allocator, &body, input.previous_output.index);
+        try appendU64(allocator, &body, @bitCast(prevout.amount));
+        try tx.writeCompactSize(allocator, &body, prevout.script_pubkey.len);
+        try body.appendSlice(allocator, prevout.script_pubkey);
+        try appendU32(allocator, &body, input.sequence);
+    } else {
+        try appendU32(allocator, &body, @intCast(input_index));
+    }
+    if (options.annex) |annex| {
+        var encoded: std.ArrayList(u8) = .empty;
+        defer encoded.deinit(allocator);
+        try tx.writeCompactSize(allocator, &encoded, annex.len);
+        try encoded.appendSlice(allocator, annex);
+        const annex_hash = crypto.sha256(encoded.items);
+        try body.appendSlice(allocator, annex_hash[0..]);
+    }
+    if (output_mode == SIGHASH_SINGLE) {
+        const single = try tapShaSingleOutput(allocator, transaction.outputs[input_index]);
+        try body.appendSlice(allocator, single[0..]);
+    }
+    if (options.ext_flag == 1) {
+        const leaf = options.tapleaf_hash orelse return error.MissingTapleafHash;
+        try body.appendSlice(allocator, leaf[0..]);
+        try body.append(allocator, 0);
+        try appendU32(allocator, &body, options.code_separator_pos);
+    }
+    var msg: std.ArrayList(u8) = .empty;
+    defer msg.deinit(allocator);
+    try msg.append(allocator, 0);
+    try msg.appendSlice(allocator, body.items);
+    return crypto.taggedHash("TapSighash", msg.items);
+}
+
 fn appendLegacyInput(allocator: std.mem.Allocator, out: *std.ArrayList(u8), input: tx.TxIn, script: []const u8, zero_sequence: bool) !void {
     try out.appendSlice(allocator, input.previous_output.hash[0..]);
     try appendU32(allocator, out, input.previous_output.index);
@@ -894,6 +1169,140 @@ fn hashSingleOutput(allocator: std.mem.Allocator, output: tx.TxOut) ![32]u8 {
     defer out.deinit(allocator);
     try appendOutput(allocator, &out, output);
     return crypto.doubleSha256(out.items);
+}
+
+fn tapShaPrevouts(allocator: std.mem.Allocator, transaction: tx.Transaction) ![32]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+    for (transaction.inputs) |input| {
+        try out.appendSlice(allocator, input.previous_output.hash[0..]);
+        try appendU32(allocator, &out, input.previous_output.index);
+    }
+    return crypto.sha256(out.items);
+}
+
+fn tapShaAmounts(allocator: std.mem.Allocator, prevouts: []const SpentPrevout) ![32]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+    for (prevouts) |prevout| try appendU64(allocator, &out, @bitCast(prevout.amount));
+    return crypto.sha256(out.items);
+}
+
+fn tapShaScriptPubKeys(allocator: std.mem.Allocator, prevouts: []const SpentPrevout) ![32]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+    for (prevouts) |prevout| {
+        try tx.writeCompactSize(allocator, &out, prevout.script_pubkey.len);
+        try out.appendSlice(allocator, prevout.script_pubkey);
+    }
+    return crypto.sha256(out.items);
+}
+
+fn tapShaSequences(allocator: std.mem.Allocator, transaction: tx.Transaction) ![32]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+    for (transaction.inputs) |input| try appendU32(allocator, &out, input.sequence);
+    return crypto.sha256(out.items);
+}
+
+fn tapShaOutputsAll(allocator: std.mem.Allocator, transaction: tx.Transaction) ![32]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+    for (transaction.outputs) |output| try appendOutput(allocator, &out, output);
+    return crypto.sha256(out.items);
+}
+
+fn tapShaSingleOutput(allocator: std.mem.Allocator, output: tx.TxOut) ![32]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+    try appendOutput(allocator, &out, output);
+    return crypto.sha256(out.items);
+}
+
+fn taprootAllowedHashType(hash_type: u8) bool {
+    return hash_type <= 0x03 or (hash_type >= 0x81 and hash_type <= 0x83);
+}
+
+fn tapleafHash(allocator: std.mem.Allocator, leaf_version: u8, script: []const u8) ![32]u8 {
+    var msg: std.ArrayList(u8) = .empty;
+    defer msg.deinit(allocator);
+    try msg.append(allocator, leaf_version);
+    try tx.writeCompactSize(allocator, &msg, script.len);
+    try msg.appendSlice(allocator, script);
+    return crypto.taggedHash("TapLeaf", msg.items);
+}
+
+fn tapbranchHash(allocator: std.mem.Allocator, left: [32]u8, right: []const u8) ![32]u8 {
+    if (right.len != 32) return error.InvalidTaprootBranchNode;
+    var msg: std.ArrayList(u8) = .empty;
+    defer msg.deinit(allocator);
+    if (std.mem.order(u8, left[0..], right) == .lt) {
+        try msg.appendSlice(allocator, left[0..]);
+        try msg.appendSlice(allocator, right);
+    } else {
+        try msg.appendSlice(allocator, right);
+        try msg.appendSlice(allocator, left[0..]);
+    }
+    return crypto.taggedHash("TapBranch", msg.items);
+}
+
+fn tapTweakHash(allocator: std.mem.Allocator, internal_x: []const u8, merkle_root: []const u8) ![32]u8 {
+    if (internal_x.len != 32 or merkle_root.len != 32) return error.InvalidTaprootTweakInput;
+    var msg: std.ArrayList(u8) = .empty;
+    defer msg.deinit(allocator);
+    try msg.appendSlice(allocator, internal_x);
+    try msg.appendSlice(allocator, merkle_root);
+    return crypto.taggedHash("TapTweak", msg.items);
+}
+
+fn serializedWitnessStack(allocator: std.mem.Allocator, witness: []const []const u8) ![]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    try tx.writeCompactSize(allocator, &out, witness.len);
+    for (witness) |item| {
+        try tx.writeCompactSize(allocator, &out, item.len);
+        try out.appendSlice(allocator, item);
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn prescanOpSuccess(script: []const u8) !bool {
+    var offset: usize = 0;
+    while (offset < script.len) {
+        const opcode = script[offset];
+        if (opcode == OP_0 or opcode == OP_1NEGATE or (opcode >= OP_1 and opcode <= OP_16)) {
+            offset += 1;
+        } else if (opcode > 0 and opcode < OP_PUSHDATA1) {
+            if (offset + 1 + opcode > script.len) return error.TruncatedPush;
+            offset += 1 + opcode;
+        } else if (opcode == OP_PUSHDATA1) {
+            if (offset + 2 > script.len) return error.TruncatedPush;
+            const len = script[offset + 1];
+            if (offset + 2 + len > script.len) return error.TruncatedPush;
+            offset += 2 + len;
+        } else if (opcode == OP_PUSHDATA2) {
+            if (offset + 3 > script.len) return error.TruncatedPush;
+            const len = std.mem.readInt(u16, script[offset + 1 ..][0..2], .little);
+            if (offset + 3 + len > script.len) return error.TruncatedPush;
+            offset += 3 + len;
+        } else if (opcode == OP_PUSHDATA4) {
+            if (offset + 5 > script.len) return error.TruncatedPush;
+            const len = std.mem.readInt(u32, script[offset + 1 ..][0..4], .little);
+            if (offset + 5 + len > script.len) return error.TruncatedPush;
+            offset += 5 + len;
+        } else {
+            if (opcodeIsSuccess(opcode)) return true;
+            offset += 1;
+        }
+    }
+    return false;
+}
+
+fn opcodeIsSuccess(opcode: u8) bool {
+    return opcode == 0x50 or opcode == 0x62 or (opcode >= 0x7e and opcode <= 0x81) or
+        (opcode >= 0x83 and opcode <= 0x86) or (opcode >= 0x89 and opcode <= 0x8a) or
+        (opcode >= 0x8d and opcode <= 0x8e) or (opcode >= 0x95 and opcode <= 0x99) or
+        (opcode >= 0xbb and opcode <= 0xfe);
 }
 
 fn appendU32(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: u32) !void {
@@ -1022,7 +1431,11 @@ fn encodeScriptNum(buf: *[8]u8, value: i64) []const u8 {
 }
 
 fn decodeScriptNum(item: []const u8) !i64 {
-    if (item.len > 8) return error.ScriptNumTooWide;
+    return decodeScriptNumMax(item, 8);
+}
+
+fn decodeScriptNumMax(item: []const u8, max_len: usize) !i64 {
+    if (item.len > max_len) return error.ScriptNumTooWide;
     if (item.len == 0) return 0;
     var result: i64 = 0;
     for (item, 0..) |byte, i| result |= @as(i64, byte) << @intCast(8 * i);

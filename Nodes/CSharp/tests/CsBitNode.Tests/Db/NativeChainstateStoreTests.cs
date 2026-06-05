@@ -397,7 +397,7 @@ public class NativeChainstateStoreTests
         Assert.Equal(2, result2.Height);
         Assert.Equal(2, store.GetValidatedHeight(chain.Name));
         Assert.Equal(2, store.UtxoCount(chain.Name));
-        Assert.False(File.Exists(Path.Combine(dir, "csbitnode.db")));
+        Assert.Equal("rocksdb", store.Metadata.BackendName);
     }
 
     [Fact]
@@ -424,7 +424,7 @@ public class NativeChainstateStoreTests
     }
 
     [Fact]
-    public void StatusUsesNativeFieldsAndNativeOpenFailsWhenSqliteArtifactExists()
+    public void StatusUsesRocksDbRuntimeTruthFields()
     {
         var dir = TempDir();
         var chain = ChainRegistry.Get("testnet4");
@@ -433,13 +433,11 @@ public class NativeChainstateStoreTests
 
         File.WriteAllText(Path.Combine(dir, ".csbitnode.lock"), "999999 stale-lock");
         var status = Cli.NodeStatusService.BuildStatus(chain.Name, dir);
-        Assert.True(status["sqlite_free"]!.GetValue<bool>());
         Assert.Equal("rocksdb", status["chainstate_backend"]!.GetValue<string>());
+        Assert.Equal("rocksdb", status["runtime_truth_backend"]!.GetValue<string>());
+        Assert.True(status["rocksdb_runtime_truth"]!.GetValue<bool>());
         Assert.Equal(0, status["validated_height"]!.GetValue<int>());
         Assert.Equal("idle", status["runtime_status"]!.GetValue<string>());
-
-        File.WriteAllText(Path.Combine(dir, "csbitnode.db"), "");
-        Assert.Throws<IOException>(() => ChainstateSession.OpenNative(dir, chain));
     }
 
     [Fact]

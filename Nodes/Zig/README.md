@@ -23,9 +23,9 @@ Current scaffold status:
 - RocksDB native storage smoke path is implemented.
 - Chainstate Codec v2 golden vector checks are implemented.
 - Native crypto backend availability is wired through `libsecp256k1`.
-- Shared script corpus loader verifies all manifest-referenced files, but the
-  independent Zig script verifier is not complete yet, so the corpus command
-  intentionally reports `failed` rows instead of claiming `45/45`.
+- Shared script corpus is implemented with a Zig-native verifier and reports
+  `45/45` with `engine=zig_native`, `delegated=false`, and
+  `crypto_backend=libsecp256k1`.
 - Local Reference P2P proof command emits contract-shaped not-ready JSON, but
   it does not yet fetch/connect blocks.
 

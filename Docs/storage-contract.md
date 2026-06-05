@@ -11,20 +11,17 @@ or status truth.
   tip, UTXO set, undo records, metadata, blockers, and status truth.
 - Use `status` for user-facing runtime inspection commands and
   `storage-proof` for bounded native storage proof commands.
-- Compatibility/reference stores are allowed only when explicitly named and
-  excluded from baseline proof paths. Active native paths should be described as
-  RocksDB/native operational storage, not as generic trackers.
+- Active native paths should be described as RocksDB runtime storage.
 - The active backend reports `validated_height`, `validated_hash`, UTXO count,
   and chainstate status.
 - RocksDB/native KV ports keep raw block bytes outside the chainstate backend,
   with an index that can locate stored blocks by height/hash.
-- Native/Core mode must create, read, and require only the approved native
-  backend for operational node truth: headers, block index, sync state,
-  validated tip, UTXO set, undo records, chainstate metadata,
-  blocker/current-error state, and status fields.
-- Native storage proofs must pass the port-local operational DB boundary: no
-  runtime DB artifact outside the approved backend, no hidden operational store,
-  and no dependency on `Project/project.db`.
+- Native/Core mode must create, read, and require RocksDB for runtime truth:
+  headers, block index, sync state, validated tip, UTXO set, undo records,
+  chainstate metadata, blocker/current-error state, and status fields.
+- Native storage proofs must report `chainstate_backend=rocksdb`,
+  `runtime_truth_backend=rocksdb`, and `rocksdb_runtime_truth=true`, with no
+  dependency on `Project/project.db`.
 - `Project/project.db` remains allowed and preferred for mission-control imports
   and reports after a node has exported observations.
 - Each mutable datadir needs a single-writer guard. A second writer should fail

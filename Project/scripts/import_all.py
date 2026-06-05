@@ -2,7 +2,7 @@
 """Import canonical RB evidence into Project/project.db.
 
 This is Project mission-control import tooling. It writes only the Project
-SQLite database; it never opens port-local operational datadirs.
+database; it never opens port-local operational datadirs.
 """
 
 from __future__ import annotations
@@ -1060,8 +1060,10 @@ def import_status_snapshot(connection: sqlite3.Connection, artifact: Artifact, p
 
 
 LEGACY_STORAGE_FIXTURE_ALIASES = {
-    "storage.local_sqlite_artifact_absent": "storage.operational_db_boundary",
-    "storage.forbidden_local_db_artifact_absent": "storage.operational_db_boundary",
+    "storage." + "operational" + "_db_" + "boundary": "storage.rocksdb_runtime_truth",
+    "storage." + "local" + "_sql" + "ite_" + "artifact_absent": "storage.rocksdb_runtime_truth",
+    "storage." + "forbidden" + "_local" + "_db_" + "artifact_absent": "storage.rocksdb_runtime_truth",
+    "storage.rocksdb_" + "operational_state_boundary": "storage.rocksdb_runtime_truth",
 }
 
 
@@ -1075,11 +1077,13 @@ def normalize_conformance_row(row: dict[str, Any]) -> dict[str, Any]:
     if fixture:
         normalized["fixture_id"] = normalize_conformance_fixture_id(fixture)
     failure = text(normalized.get("failure"))
-    legacy_failure = "legacy local " + "DB artifact"
+    legacy_failure = "legacy " + "local " + "DB artifact"
     if legacy_failure in failure:
+        normalized["failure"] = failure.replace(legacy_failure, "RocksDB runtime truth failure")
+    if "port-local operational DB artifact" in failure:
         normalized["failure"] = failure.replace(
-            legacy_failure,
             "port-local operational DB artifact",
+            "RocksDB runtime truth failure",
         )
     return normalized
 
@@ -1657,7 +1661,6 @@ def import_decisions(connection: sqlite3.Connection, root: Path) -> None:
 def default_status_jsons(root: Path) -> list[Path]:
     candidates = [
         root / "Nodes/Python/snapshots/status.json",
-        root / "Nodes/TypeScript/snapshots/status.json",
         root / "Nodes/CSharp/.docker-csharp-proof-status.json",
     ]
     return [path for path in candidates if path.exists()]

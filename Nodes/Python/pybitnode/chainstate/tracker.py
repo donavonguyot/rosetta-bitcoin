@@ -104,14 +104,13 @@ class ProjectTracker:
         if Rdict is None:
             raise RuntimeError(
                 "pybitnode native mode requires the 'rocksdict' package; "
-                "SQLite fallback is intentionally disabled"
+                "official runtime storage is RocksDB"
             ) from _ROCKSDB_IMPORT_ERROR
 
         path = Path(state_path)
         if path.name == "pybitnode.db" or path.suffix in {".sqlite", ".sqlite3"}:
             raise RuntimeError(
-                f"refusing unapproved operational DB path for native mode: {path}; "
-                "use a chainstate-rocksdb directory"
+                f"native mode requires a chainstate-rocksdb directory: {path}"
             )
         path.mkdir(parents=True, exist_ok=True)
         marker = path / "PYBITNODE_NATIVE_CHAINSTATE"

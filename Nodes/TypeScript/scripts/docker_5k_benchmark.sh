@@ -104,7 +104,6 @@ try:
 except (OSError, json.JSONDecodeError):
     status = {}
 
-status.pop("local_sqlite_artifact_absent", None)
 
 sync_exit = as_int(os.environ.get("SYNC_EXIT"))
 status_exit = as_int(os.environ.get("STATUS_EXIT"))

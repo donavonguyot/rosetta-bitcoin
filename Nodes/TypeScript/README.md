@@ -8,17 +8,14 @@ bindings; external Bitcoin libraries remain forbidden.
 
 ## Current Status
 
-Native/Core parity requires RocksDB-owned operational truth, native crypto proof,
+Native/Core parity requires RocksDB runtime truth, native crypto proof,
 Docker proof/supervisor support, and fresh replay from an empty native datadir.
-Historical compatibility trackers are handoff evidence only and must not be used
-for Core claims.
 
 | Surface | Canonical command | Notes |
 |---------|-------------------|-------|
 | Native status | `npx tsbitnode-status --datadir ./data-ts` | Reads RocksDB chainstate without acquiring the writer lock. |
 | Native storage proof | `npx tsbitnode-storage-proof --datadir ./data-ts-proof` | Bounded RocksDB/native crypto proof. |
 | Sync runner | `npx tsbitnode-sync --datadir ./data-ts` | Uses the active sync lock for mutable state. |
-| Compatibility status | `npx tsbitnode-legacy-db --db ./data-ts/tsbitnode.db` | Historical evidence/repair only; not a native/Core proof. |
 
 ## Native Chainstate
 
@@ -30,10 +27,6 @@ Native operational state lives under the selected datadir:
   chainstate-rocksdb/
   blocks/
 ```
-
-`ChainstateSession` rejects a native datadir that already contains
-`tsbitnode.db`. This fail-closed guard prevents accidentally treating old
-compatibility state as native operational truth.
 
 Canonical native modules are under `src/chainstate/`:
 
@@ -89,8 +82,8 @@ npx tsbitnode-status --datadir ./data-ts
 ```
 
 Key fields are `validated_height`, `header_height`, `stored_block_height`,
-`sync_status`, `chainstate_backend`, `codec_version`, and
-`operational_db_artifact_absent`.
+`sync_status`, `chainstate_backend`, `runtime_truth_backend`,
+`rocksdb_runtime_truth`, and `codec_version`.
 
 ## Single Writer Rule
 
@@ -123,16 +116,7 @@ make docker-smoke-once
 The Docker manifest is `Nodes/Shared/docker/ports/typescript.docker.json`. Keep it
 in sync whenever command names, volumes, or proof artifacts change.
 
-## Legacy SQLite Evidence
-
-SQLite-era artifacts remain useful only as historical handoff or repair evidence:
-
-- `tsbitnode.db` snapshots around `validated_height=5578`.
-- The 5579 dual-writer repair lesson.
-- Legacy survey/export tools that still read the old tracker.
-
-Use `tsbitnode-legacy-db` only when intentionally inspecting that evidence. New
-native/Core work must use `tsbitnode-status`, `ChainstateSession`, and RocksDB
+Native/Core work must use `tsbitnode-status`, `ChainstateSession`, and RocksDB
 chainstate.
 
 ## Binary Gate

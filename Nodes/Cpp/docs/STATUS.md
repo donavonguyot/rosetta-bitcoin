@@ -21,5 +21,5 @@ Durable Cpp evidence remains in:
 - `Nodes/Shared/conformance/results/` for compact proof JSON.
 
 Cpp native/Core compliance remains RocksDB-only: headers, block index, sync
-state, blocker state, status truth, UTXO, undo, metadata, and validated tip must
-not depend on port-local operational SQLite.
+state, blocker state, status truth, UTXO, undo, metadata, and validated tip are
+RocksDB runtime truth.

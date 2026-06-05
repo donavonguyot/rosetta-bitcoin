@@ -187,7 +187,6 @@ try:
     status = extract_json_object(status_raw)
 except json.JSONDecodeError:
     status = {}
-status.pop("local_sqlite_artifact_absent", None)
 
 _, stage_totals, slow_blocks, exit_summary, log_blocker = parse_run_log(
     Path(os.environ["RUN_LOG_PATH"])

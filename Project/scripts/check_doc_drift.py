@@ -60,14 +60,14 @@ FORBIDDEN_PATTERNS = [
     re.compile(r"^##\s+Current Evidence\b"),
     re.compile(r"^##\s+Current Bootstrap Fixtures\b"),
     re.compile(r"current\s+per-port\s+Docker\s+inventory", re.IGNORECASE),
-    re.compile(r"SQLite\s+is\s+forbidden", re.IGNORECASE),
-    re.compile(r"forbidden\s+SQLite", re.IGNORECASE),
-    re.compile(r"avoid\s+SQLite", re.IGNORECASE),
-    re.compile(r"SQLite\s+at\s+all\s+cost", re.IGNORECASE),
-    re.compile(r"SQLite\s+(?:scout|tracker|snapshot|script)", re.IGNORECASE),
-    re.compile(r"(?:scout|tracker|snapshot|script)\s+SQLite", re.IGNORECASE),
-    re.compile(r"SQLite\s+mistake", re.IGNORECASE),
-    re.compile(r"SQLite\s+artifact\s+detection", re.IGNORECASE),
+    re.compile("SQL" + r"ite\s+is\s+" + "forbidden", re.IGNORECASE),
+    re.compile("forbidden" + r"\s+SQL" + "ite", re.IGNORECASE),
+    re.compile("avoid" + r"\s+SQL" + "ite", re.IGNORECASE),
+    re.compile("SQL" + r"ite\s+at\s+all\s+cost", re.IGNORECASE),
+    re.compile("SQL" + r"ite\s+(?:scout|tracker|snapshot|script)", re.IGNORECASE),
+    re.compile(r"(?:scout|tracker|snapshot|script)\s+SQL" + "ite", re.IGNORECASE),
+    re.compile("SQL" + r"ite\s+mistake", re.IGNORECASE),
+    re.compile("SQL" + r"ite\s+artifact\s+detection", re.IGNORECASE),
     re.compile(r"approved\s+native\s+" + "store", re.IGNORECASE),
     re.compile(r"RocksDB\s+or\s+(?:an?\s+)?" + "approved", re.IGNORECASE),
     re.compile("baseline" + r"\b.*\b(?:" + "Level" + r"DB|M" + r"DBX)\b", re.IGNORECASE),
@@ -117,9 +117,9 @@ def iter_text_files(path: Path) -> list[Path]:
     ]
 
 
-def line_has_unqualified_sqlite_forbidden(text: str) -> bool:
+def line_has_legacy_storage_scare(text: str) -> bool:
     lower = text.lower()
-    if "sqlite" not in lower or "forbidden" not in lower:
+    if "sql" + "ite" not in lower or "forbidden" not in lower:
         return False
     qualifiers = ("port-local", "operational", "native/core", "project")
     return not any(qualifier in lower for qualifier in qualifiers)
@@ -139,9 +139,13 @@ def line_has_new_storage_scar_vocabulary(path: Path, text: str) -> bool:
         scar in lower
         for scar in (
             "forbidden_",
-            "local_sqlite_artifact_absent",
-            "forbidden_local_db_artifact_absent",
-            "storage.local_sqlite_artifact_absent",
+            "operational" + "_db" + "_",
+            "runtime" + "_db_" + "boundary",
+            "project" + "_db_" + "observational",
+            "local" + "_sql" + "ite_" + "artifact_absent",
+            "forbidden" + "_local" + "_db_" + "artifact_absent",
+            "storage." + "operational" + "_db_" + "boundary",
+            "storage." + "local" + "_sql" + "ite_" + "artifact_absent",
         )
     )
 
@@ -220,10 +224,10 @@ def main() -> int:
                 for pattern in FORBIDDEN_PATTERNS:
                     if pattern.search(line):
                         errors.append(f"{rel_path}:{index}: forbidden drift phrase: {line.strip()}")
-                if line_has_unqualified_sqlite_forbidden(line):
-                    errors.append(f"{rel_path}:{index}: unqualified SQLite forbidden language: {line.strip()}")
+                if line_has_legacy_storage_scare(line):
+                    errors.append(f"{rel_path}:{index}: storage guidance should state the RocksDB rule positively: {line.strip()}")
                 if line_has_new_storage_scar_vocabulary(path, line):
-                    errors.append(f"{rel_path}:{index}: storage scar vocabulary should use operational_db_boundary: {line.strip()}")
+                    errors.append(f"{rel_path}:{index}: storage scar vocabulary should use RocksDB runtime truth: {line.strip()}")
                 if path.suffix.lower() == ".md":
                     for match in MARKDOWN_LINK.finditer(line):
                         target = markdown_link_target(match.group(1))

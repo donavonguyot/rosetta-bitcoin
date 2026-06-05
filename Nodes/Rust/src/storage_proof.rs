@@ -16,11 +16,9 @@ pub struct StorageProof {
     chain: String,
     runtime_surface: String,
     chainstate_backend: String,
+    runtime_truth_backend: &'static str,
+    rocksdb_runtime_truth: bool,
     native_storage: bool,
-    operational_db_artifact_absent: bool,
-    runtime_db_boundary_passed: bool,
-    project_db_observational_only: bool,
-    runtime_db_artifact_present: bool,
     validated_height: i64,
     validated_hash: String,
     header_height: i64,
@@ -56,7 +54,6 @@ pub fn run(
 ) -> Result<StorageProof> {
     let proof = storage::seed_connect_proof(datadir)?;
     let meta = proof.metadata;
-    let operational_db_absent = storage::operational_db_artifact_absent(datadir);
     let doc = StorageProof {
         implementation: "RustNode",
         commit: repo::git_commit(),
@@ -67,11 +64,9 @@ pub fn run(
         chain: meta.chain.clone(),
         runtime_surface: runtime_surface.to_string(),
         chainstate_backend: meta.chainstate_backend.clone(),
+        runtime_truth_backend: "rocksdb",
+        rocksdb_runtime_truth: meta.chainstate_backend == "rocksdb",
         native_storage: true,
-        operational_db_artifact_absent: operational_db_absent,
-        runtime_db_boundary_passed: operational_db_absent,
-        project_db_observational_only: true,
-        runtime_db_artifact_present: !operational_db_absent,
         validated_height: meta.validated_height,
         validated_hash: meta.validated_hash.clone(),
         header_height: meta.header_height,
@@ -90,7 +85,6 @@ pub fn run(
             "skipped": 0,
             "jacoco_line_minimum": 0,
             "surefire_broad_exclusions": false,
-            "external_runtime_db_dependency_present": false,
             "rust_tests": "cargo test",
             "codec_v2_vectors": "cargo run -- codec-vectors",
             "connect_proof": "storage-proof deterministic two-block batch commit",
@@ -127,21 +121,12 @@ pub fn run(
                 "",
             ),
             result(
-                "storage.operational_db_boundary",
-                operational_db_absent,
-                None,
-                "",
-                &meta.chainstate_backend,
-                "port-local operational DB artifact exists outside the approved backend",
-                "",
-            ),
-            result(
-                "storage.rocksdb_operational_state_boundary",
-                true,
+                "storage.rocksdb_runtime_truth",
+                meta.chainstate_backend == "rocksdb",
                 Some(meta.validated_height),
                 &meta.validated_hash,
                 &meta.chainstate_backend,
-                "",
+                "chainstate_backend is not rocksdb",
                 "Scaffold metadata, tip smoke state, and status truth are Rust-owned RocksDB data.",
             ),
             result(

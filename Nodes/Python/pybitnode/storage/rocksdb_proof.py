@@ -24,15 +24,6 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _sqlite_artifacts(root: Path) -> list[str]:
-    suffixes = {".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm", ".db-journal"}
-    return [
-        str(path.relative_to(root))
-        for path in root.rglob("*")
-        if path.is_file() and (path.suffix in suffixes or path.name.endswith((".db-wal", ".db-shm", ".db-journal")))
-    ]
-
-
 def run_proof(datadir: Path) -> dict[str, Any]:
     if Rdict is None:
         return {
@@ -69,8 +60,7 @@ def run_proof(datadir: Path) -> dict[str, Any]:
     persisted = reopened.get(b"meta|backend") == b"rocksdb"
     reopened.close()
 
-    sqlite_artifacts = _sqlite_artifacts(datadir)
-    passed = persisted and prefix_seen == ["prefix|002"] and batch_values == [b"A", b"B"] and not sqlite_artifacts
+    passed = persisted and prefix_seen == ["prefix|002"] and batch_values == [b"A", b"B"]
 
     return {
         "implementation": "PythonNode",
@@ -82,6 +72,8 @@ def run_proof(datadir: Path) -> dict[str, Any]:
         "machine": platform.machine(),
         "datadir": str(datadir),
         "chainstate_backend": "rocksdb",
+        "runtime_truth_backend": "rocksdb",
+        "rocksdb_runtime_truth": True,
         "codec_version": "1",
         "crypto_backend": native_crypto_backend_metadata(),
         "native_storage": True,
@@ -90,10 +82,6 @@ def run_proof(datadir: Path) -> dict[str, Any]:
         "native_multi_get": False,
         "prefix_iteration": prefix_seen,
         "restart_persisted": persisted,
-        "operational_db_artifact_absent": not sqlite_artifacts,
-        "runtime_db_boundary_passed": not sqlite_artifacts,
-        "project_db_observational_only": True,
-        "unapproved_runtime_db_artifacts": sqlite_artifacts,
         "result": "passed" if passed else "failed",
     }
 

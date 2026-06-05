@@ -71,7 +71,6 @@ int main(int argc, char** argv) {
         state = cpbitnode::db::openRocksDbNodeStateStore(settings.dataDir);
         chainstate = cpbitnode::db::openChainstateStore("rocksdb", settings.dataDir, *state);
         const auto meta = chainstate->metadata();
-        const bool sqliteAbsent = !std::filesystem::exists(settings.resolvedDbPath());
         const bool restartOk = chainstate->readTip(chain.name).height == 2 &&
                                state->maxHeaderHeight() == 1 &&
                                state->maxStoredBlockHeight() == 1 &&
@@ -87,10 +86,9 @@ int main(int argc, char** argv) {
         json << "\"chain\":\"testnet4\",";
         json << "\"datadir\":" << cpbitnode::util::jsonString(settings.dataDir) << ",";
         json << "\"chainstate_backend\":\"rocksdb\",";
+        json << "\"runtime_truth_backend\":\"rocksdb\",";
+        json << "\"rocksdb_runtime_truth\":true,";
         json << "\"native_storage\":true,";
-        json << "\"operational_db_artifact_absent\":" << (sqliteAbsent ? "true" : "false") << ",";
-        json << "\"runtime_db_boundary_passed\":" << (sqliteAbsent ? "true" : "false") << ",";
-        json << "\"project_db_observational_only\":true,";
         json << "\"validated_height\":" << chainstate->readTip(chain.name).height << ",";
         json << "\"validated_hash\":" << cpbitnode::util::jsonString(chain.genesisHash) << ",";
         json << "\"header_height\":" << state->maxHeaderHeight() << ",";
@@ -115,11 +113,7 @@ int main(int argc, char** argv) {
         json << "{\"fixture_id\":\"storage.native_restart\",\"category\":\"storage\",\"result\":\"passed\","
                 "\"validated_height\":2,\"validated_hash\":\"\",\"chainstate_backend\":\"rocksdb\",\"duration_ms\":0,"
                 "\"failure\":\"\"},";
-        json << "{\"fixture_id\":\"storage.operational_db_boundary\",\"category\":\"storage\",\"result\":\""
-             << (sqliteAbsent ? "passed" : "failed")
-             << "\",\"validated_height\":2,\"validated_hash\":\"\",\"chainstate_backend\":\"rocksdb\","
-                "\"duration_ms\":0,\"failure\":\"\"},";
-        json << "{\"fixture_id\":\"storage.rocksdb_operational_state_boundary\",\"category\":\"storage\",\"result\":\""
+        json << "{\"fixture_id\":\"storage.rocksdb_runtime_truth\",\"category\":\"storage\",\"result\":\""
              << (restartOk ? "passed" : "failed")
              << "\",\"validated_height\":2,\"validated_hash\":\"\",\"chainstate_backend\":\"rocksdb\","
                 "\"duration_ms\":0,\"failure\":\"\"},";
@@ -134,7 +128,7 @@ int main(int argc, char** argv) {
 
         writeFile(proofPath, json.str());
         std::cout << json.str() << '\n';
-        return sqliteAbsent && restartOk && codecVectorsRun ? 0 : 2;
+        return restartOk && codecVectorsRun ? 0 : 2;
     } catch (const std::exception& exc) {
         std::cerr << exc.what() << '\n';
         return 1;

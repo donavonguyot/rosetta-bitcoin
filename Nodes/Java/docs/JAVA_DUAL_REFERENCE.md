@@ -1,6 +1,6 @@
-# Java Runtime Storage Boundary
+# Java RocksDB Runtime
 
-JavaNode has completed the clean runtime cutover: normal sync, live, rebuild, and status commands use native operational state only. A port-local operational DB outside the approved native backend is no longer a supported Java runtime path.
+JavaNode normal sync, live, rebuild, and status commands use RocksDB runtime state.
 
 ## Runtime State
 
@@ -50,6 +50,5 @@ fresh sync validated_height=1
 restart sync validated_height=2
 chainstate_backend=rocksdb
 chainstate_status=usable
-jbitnode.db absent
 Project status import performed by Project/scripts/import_status_snapshot.py
 ```

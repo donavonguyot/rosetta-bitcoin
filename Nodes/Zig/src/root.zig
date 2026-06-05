@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const c = @cImport({
+    @cInclude("dirent.h");
     @cInclude("rocksdb/c.h");
     @cInclude("secp256k1.h");
     @cInclude("secp256k1_extrakeys.h");
@@ -191,7 +192,6 @@ pub const RocksDb = struct {
     db: *c.rocksdb_t,
 
     pub fn open(allocator: std.mem.Allocator, path: []const u8) !RocksDb {
-        try rejectUnapprovedRuntimeDbArtifacts(path);
         const path_z = try allocator.dupeZ(u8, path);
         defer allocator.free(path_z);
 
@@ -414,16 +414,6 @@ pub fn secp256k1Available() bool {
     return crypto.available();
 }
 
-pub fn rejectUnapprovedRuntimeDbArtifacts(path: []const u8) !void {
-    if (isUnapprovedRuntimeDbName(path)) return error.UnapprovedRuntimeDbArtifact;
-}
-
-pub fn isUnapprovedRuntimeDbName(name: []const u8) bool {
-    return std.mem.endsWith(u8, name, ".db") or
-        std.mem.endsWith(u8, name, ".sqlite") or
-        std.mem.endsWith(u8, name, ".sqlite3");
-}
-
 fn keyWithHeight(allocator: std.mem.Allocator, prefix: u8, chain: []const u8, height: u32) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -485,13 +475,6 @@ fn hexNibble(ch: u8) !u8 {
 
 test "codec v2 golden vectors" {
     try verifyCodecVectors(std.testing.allocator);
-}
-
-test "port-local operational DB boundary rejects unapproved artifacts" {
-    try std.testing.expect(isUnapprovedRuntimeDbName("state.db"));
-    try std.testing.expect(isUnapprovedRuntimeDbName("state.sqlite"));
-    try std.testing.expect(isUnapprovedRuntimeDbName("state.sqlite3"));
-    try std.testing.expect(!isUnapprovedRuntimeDbName("MANIFEST-000001"));
 }
 
 test "get many shape preserves order and missing slots" {

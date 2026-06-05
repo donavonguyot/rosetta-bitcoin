@@ -77,7 +77,6 @@ docker-cpp-supporting-5k-proof:
 	  DOCKER_BENCHMARK_BLOCKS_MAX=$(DOCKER_BENCHMARK_BLOCKS_MAX) DOCKER_BENCHMARK_PEERS=$(DOCKER_BENCHMARK_PEERS) \
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
 		  scripts/docker_5k_benchmark.sh
-	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/cpbitnode.db
 
 docker-cpp-supporting-10k-proof:
 	$(MAKE) docker-cpp-supporting-5k-proof \
@@ -106,7 +105,6 @@ docker-cpp-rocksdb-storage-proof:
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) PROOF_PATH=$(DOCKER_PROOF_PATH) \
 	  $(DOCKER_COMPOSE) run --rm --no-deps cpbitnode-sync-proof \
 	  cpbitnode-storage-proof --datadir /data --chainstate-backend rocksdb --proof-path /tmp/cpp_storage_proof.json
-	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/cpbitnode.db
 
 docker-script-corpus:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi

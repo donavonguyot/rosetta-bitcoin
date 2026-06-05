@@ -61,9 +61,6 @@ type Store struct {
 }
 
 func Open(datadir string) (*Store, error) {
-	if UnapprovedRuntimeDBArtifactPresent(datadir) {
-		return nil, errors.New("native datadir contains an unapproved port-local operational DB artifact")
-	}
 	if err := os.MkdirAll(filepath.Join(datadir, "blocks"), 0o755); err != nil {
 		return nil, err
 	}
@@ -941,20 +938,6 @@ func ReadMetadata(datadir string) (Metadata, error) {
 	}
 	defer store.Close()
 	return store.Metadata()
-}
-
-func OperationalDBArtifactAbsent(datadir string) bool {
-	return !UnapprovedRuntimeDBArtifactPresent(datadir)
-}
-
-func UnapprovedRuntimeDBArtifactPresent(datadir string) bool {
-	for _, pattern := range []string{"*.db", "*.sqlite", "*.sqlite3"} {
-		matches, _ := filepath.Glob(filepath.Join(datadir, pattern))
-		if len(matches) > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func rocksDBBlockCacheMB() int {

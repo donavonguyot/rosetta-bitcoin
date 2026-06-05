@@ -23,7 +23,7 @@ A follower is storage-ready for serious Core/native work only when imported
 evidence shows:
 
 - an explicit native chainstate backend;
-- no port-local operational SQLite dependency in native/Core paths;
+- RocksDB runtime truth in native/Core paths;
 - restart/rebuild behavior covered by the storage gate;
 - status truth reported from the active backend;
 - Docker proof or supervisor coverage when claiming Docker readiness;

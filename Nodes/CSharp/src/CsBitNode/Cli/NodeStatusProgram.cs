@@ -21,7 +21,6 @@ public static class NodeStatusService
         var syncTiming = store.GetSyncTimingSummary(chain);
         var validatedHeight = store.GetValidatedHeight(chain);
         var storedBlockHeight = store.MaxStoredBlockHeight(chain);
-        var hasSqliteArtifact = File.Exists(Path.Combine(dataDir, NodePaths.DbFileName));
         var blockerJson = store.CurrentBlockerJson(chain);
         JsonNode? currentBlocker = null;
         if (!string.IsNullOrWhiteSpace(blockerJson))
@@ -33,9 +32,8 @@ public static class NodeStatusService
             ["datadir"] = dataDir,
             ["utxo_accounting_policy"] = "core_spendable_v1",
             ["native_storage"] = true,
-            ["sqlite_free"] = !hasSqliteArtifact,
-            ["local_sqlite_artifact_absent"] = !hasSqliteArtifact,
-            ["local_sqlite_db_present"] = hasSqliteArtifact,
+            ["runtime_truth_backend"] = RocksDbChainstateStore.BackendName,
+            ["rocksdb_runtime_truth"] = store.Metadata.BackendName == RocksDbChainstateStore.BackendName,
             ["runtime_status"] = lockInfo.Busy ? "syncing" : "idle",
             ["sync_status"] = syncState?.SyncStatus ?? "not_started",
             ["header_height"] = syncState?.BestHeight ?? 0,

@@ -34,8 +34,8 @@ docker compose -f docker/docker-compose.yml up -d pybitnode-supervisor
 docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-status
 ```
 
-Do not reuse `./data`, copied SQLite state, old snapshots, or any imported
-chainstate as replay proof.
+Do not reuse `./data`, copied state, old snapshots, or any imported chainstate
+as replay proof.
 
 ## Required Replay Facts
 

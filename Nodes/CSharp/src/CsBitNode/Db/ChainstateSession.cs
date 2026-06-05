@@ -1,5 +1,4 @@
 using CsBitNode.Chain;
-using CsBitNode.Config;
 using CsBitNode.Storage;
 
 namespace CsBitNode.Db;
@@ -28,8 +27,6 @@ public sealed class ChainstateSession : IDisposable
     {
         dataDir = Path.GetFullPath(dataDir);
         Directory.CreateDirectory(dataDir);
-        if (File.Exists(Path.Combine(dataDir, NodePaths.DbFileName)))
-            throw new IOException("native CSharpNode datadir must not contain csbitnode.db");
 
         var dirLock = acquireLock ? DatadirLock.Acquire(dataDir) : DatadirLock.Noop(dataDir);
         try

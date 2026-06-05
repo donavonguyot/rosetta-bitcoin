@@ -1,7 +1,6 @@
 package com.jbitnode.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -37,9 +36,10 @@ class DbStatusNativeTest {
     ObjectNode status = DbStatusService.summaryFromDataDir(dataDir, "testnet4");
 
     assertEquals("rocksdb", status.get("chainstate_backend").asText());
+    assertEquals("rocksdb", status.get("runtime_truth_backend").asText());
+    assertTrue(status.get("rocksdb_runtime_truth").asBoolean());
     assertEquals(1, status.get("validated_height").asInt());
     assertEquals(BLOCK_1_HASH, status.get("validated_hash").asText());
     assertTrue(Files.exists(ChainstateSession.nativeStorageMarker(dataDir)));
-    assertFalse(Files.exists(dataDir.resolve("jbitnode.db")));
   }
 }

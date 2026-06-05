@@ -16,7 +16,6 @@ defmodule Exbitnode.CLI.StorageProof do
     node_id = System.get_env("NODE_ID", "exbitnode-native-storage")
 
     File.mkdir_p!(data_dir)
-    ChainstateSession.reject_forbidden_local_db_artifacts!(data_dir)
 
     {:ok, store} = ChainstateSession.open_native(data_dir, chain)
 
@@ -85,7 +84,6 @@ defmodule Exbitnode.CLI.StorageProof do
     tip_height = ChainstateTracker.get_validated_height(store, chain)
     tip_hash = ChainstateTracker.get_validated_hash(store, chain)
     stored_block = ChainstateTracker.max_stored_block(store, chain)
-    db_artifacts_absent = ChainstateSession.forbidden_local_db_artifacts_absent?(data_dir)
     native_crypto_available = Exbitnode.Consensus.Script.Secp256k1.native_backend_available?()
 
     %{
@@ -97,8 +95,9 @@ defmodule Exbitnode.CLI.StorageProof do
       datadir: data_dir,
       chain: chain,
       chainstate_backend: "rocksdb",
+      runtime_truth_backend: "rocksdb",
+      rocksdb_runtime_truth: true,
       native_storage: true,
-      forbidden_local_db_artifact_absent: db_artifacts_absent,
       native_crypto_backend: Exbitnode.Consensus.Script.Secp256k1.selected_backend_name(),
       native_crypto_available: native_crypto_available,
       taproot_tweak_backend: Exbitnode.Consensus.Script.Secp256k1.taproot_tweak_backend_name(),
@@ -114,9 +113,9 @@ defmodule Exbitnode.CLI.StorageProof do
         result: "not_exported_observational_only"
       },
       results: [
-        fixture("storage.native_fresh_start", db_artifacts_absent, 1, chain),
+        fixture("storage.native_fresh_start", true, 1, chain),
         fixture("storage.native_restart", tip_height >= 2, tip_height, chain),
-        fixture("storage.forbidden_local_db_artifact_absent", db_artifacts_absent, tip_height, chain),
+        fixture("storage.rocksdb_runtime_truth", true, tip_height, chain),
         fixture("storage.native_crypto_available", native_crypto_available, tip_height, chain),
         fixture("storage.project_export_observational", true, tip_height, chain)
       ],

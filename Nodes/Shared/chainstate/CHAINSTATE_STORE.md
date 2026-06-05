@@ -113,11 +113,8 @@ codec v2 vector conformance
   -> operational default
 ```
 
-SQLite or file stores may be bootstrap/reference backends, but they must not
-become the authoritative serious-port chainstate by accident. They also must
-not remain as hidden side stores in native/Core proof mode. Other storage
-engines are research-only until the port has already cleared the RocksDB
-baseline.
+Other storage engines are research-only until the port has already cleared the
+RocksDB baseline. They do not count as comparable chainstate evidence.
 
 ## Python Full-Break Target
 

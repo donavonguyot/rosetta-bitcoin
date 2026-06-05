@@ -13,11 +13,11 @@ block_hash:
 txid:
 input_index:
 spent_script_pubkey:
-failure: Zig script corpus loader is present, but the Zig-native verifier is not implemented.
-missing_rule: script interpreter, sighash, template dispatch, Taproot/Tapscript, CLTV/CSV, multisig, and blocker opcodes
+failure: cleared by Zig-native script verifier
+missing_rule:
 python_fix: see Nodes/Shared/consensus runway and port references
 test_fixture: Nodes/Shared/conformance/fixtures/scripts/manifest.json
-follower_notes: Must pass 45/45 with engine=zig_native and delegated=false before 5k baseline readiness.
+follower_notes: Current proof reports 45/45 with engine=zig_native, delegated=false, and crypto_backend=libsecp256k1. Keep this entry as the regression anchor before 5k baseline work.
 ```
 
 ### Local Reference P2P 5k Gate

@@ -11,7 +11,6 @@ export type {
 } from "./chainstate.js";
 export {
   ChainstateSession,
-  LEGACY_LOCAL_DB_NAME,
   TSBITNODE_NATIVE_MARKER,
 } from "./chainstateSession.js";
 export {

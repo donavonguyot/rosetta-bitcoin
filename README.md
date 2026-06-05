@@ -24,7 +24,7 @@ root-owned monorepo. There is exactly one Git repository, at the workspace root.
 |------|---------|
 | `Docs/` | Shared lessons, blocker handoffs, Project query guides, topology |
 | `Nodes/Shared/` | Cross-port contracts, fixtures, conformance manifests/results |
-| `Project/` | Tracked mission-control SQLite DB, observational imports, and reports |
+| `Project/` | Tracked mission-control DB, observational imports, and reports |
 | `Nodes/` | Root-owned node implementation directories |
 | `Nodes/Reference/` | Local Bitcoin Core testnet4 reference peer recipe |
 
@@ -34,10 +34,9 @@ The first comparable readiness standard is the 5k baseline: RocksDB runtime
 truth, native crypto, the shared `45/45` script corpus, Docker local Reference P2P proof, fixed benchmark knobs, `core_spendable_v1` UTXO accounting, and
 Project-importable artifacts. See [`Docs/port-baseline-5k.md`](Docs/port-baseline-5k.md).
 
-Core Node compliance requires separate evidence for consensus progress, native
-storage, status import, and Docker runtime/proof behavior. Port runtime truth
-must not depend on port-local operational SQLite. `Project/project.db` is allowed
-mission-control SQLite and is not a runtime dependency.
+Core Node compliance requires separate evidence for consensus progress, RocksDB
+runtime truth, status import, and Docker runtime/proof behavior. Project
+mission control is not a runtime dependency.
 Docker contract declarations are validated with:
 
 ```bash

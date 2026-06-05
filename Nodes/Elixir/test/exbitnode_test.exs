@@ -116,7 +116,6 @@ defmodule Exbitnode.Db.ChainstateSessionTest do
     state = ChainstateTracker.get_sync_state(conn, "testnet4")
     assert state.best_height == 0
     assert state.sync_status == "starting"
-    refute File.exists?(Path.join(path, "exbitnode.db"))
     assert File.exists?(Path.join(path, "chainstate-rocksdb/.exbitnode_storage_native"))
     refute File.exists?(Path.join(path, "chainstate-rocksdb/chainstate.term"))
   end
@@ -181,25 +180,6 @@ defmodule Exbitnode.Db.ChainstateSessionTest do
 
     assert ChainstateTracker.header_count(restarted, "testnet4") == 2
     assert ChainstateTracker.get_header_hash(restarted, "testnet4", 1) == hash
-  end
-
-  test "forbidden local DB artifacts fail closed" do
-    path = Path.join(System.tmp_dir!(), "exbitnode_forbidden_db_#{:rand.uniform(1_000_000)}")
-    File.mkdir_p!(path)
-    on_exit(fn -> File.rm_rf(path) end)
-
-    File.write!(Path.join(path, "exbitnode.db"), "")
-
-    assert_raise ArgumentError, ~r/refuses local DB artifacts/, fn ->
-      ChainstateSession.open_native(path, "testnet4")
-    end
-
-    {status, code} = Exbitnode.CLI.NodeStatus.status_result(path, "testnet4", "127.0.0.1:48333")
-    assert code == 1
-    assert status.chainstate_status == "misaligned"
-    assert status.sync_status == "error"
-    assert status.binary_gate_status == "failed"
-    assert status.last_error =~ "forbidden local DB artifacts"
   end
 end
 

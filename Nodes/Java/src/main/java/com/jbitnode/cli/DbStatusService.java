@@ -37,10 +37,8 @@ public final class DbStatusService {
       root.put("db_path", "");
       root.put("data_dir", dataDir.toString());
       root.put("native_storage", true);
-      boolean operationalDbArtifactAbsent = !java.nio.file.Files.exists(dataDir.resolve("jbitnode.db"));
-      root.put("operational_db_artifact_absent", operationalDbArtifactAbsent);
-      root.put("runtime_db_boundary_passed", operationalDbArtifactAbsent);
-      root.put("project_db_observational_only", true);
+      root.put("runtime_truth_backend", "rocksdb");
+      root.put("rocksdb_runtime_truth", true);
       root.put("native_crypto_backend", Secp256k1.selectedBackendName());
       root.put("native_crypto_available", Secp256k1.nativeBackendAvailable());
       root.put("taproot_tweak_backend", Secp256k1.taprootTweakBackendName());
@@ -73,6 +71,7 @@ public final class DbStatusService {
       root.put("validated_hash", tip.hash() == null ? "" : tip.hash());
       root.put("utxo_accounting_policy", "core_spendable_v1");
       root.put("chainstate_backend", metadata.backendName());
+      root.put("rocksdb_runtime_truth", "rocksdb".equals(metadata.backendName()));
       root.put("chainstate_backend_path", metadata.backendPath().toString());
       root.put("chainstate_status", metadata.status());
       root.put("chainstate_generation_id", metadata.generationId());

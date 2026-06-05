@@ -12,10 +12,9 @@
     "datadir",
     "chain",
     "chainstate_backend",
+    "runtime_truth_backend",
+    "rocksdb_runtime_truth",
     "native_storage",
-    "operational_db_artifact_absent",
-    "runtime_db_boundary_passed",
-    "project_db_observational_only",
     "validated_height",
     "validated_hash",
     "header_height",
@@ -35,15 +34,9 @@
     "datadir": { "type": "string", "minLength": 1 },
     "chain": { "const": "testnet4" },
     "chainstate_backend": { "type": "string", "minLength": 1 },
+    "runtime_truth_backend": { "const": "rocksdb" },
+    "rocksdb_runtime_truth": { "type": "boolean" },
     "native_storage": { "type": "boolean" },
-    "operational_db_artifact_absent": { "type": "boolean" },
-    "runtime_db_boundary_passed": { "type": "boolean" },
-    "project_db_observational_only": { "type": "boolean" },
-    "runtime_db_artifact_present": { "type": "boolean" },
-    "local_sqlite_artifact_absent": { "type": "boolean" },
-    "local_sqlite_db_present": { "type": "boolean" },
-    "local_db_artifact_absent": { "type": "boolean" },
-    "forbidden_local_db_artifact_absent": { "type": "boolean" },
     "validated_height": { "type": "integer", "minimum": 0 },
     "validated_hash": { "type": "string" },
     "header_height": { "type": "integer", "minimum": 0 },
@@ -68,11 +61,8 @@
         "skipped": { "type": "integer", "minimum": 0 },
         "jacoco_line_minimum": { "type": "number", "minimum": 0, "maximum": 1 },
         "surefire_broad_exclusions": { "type": "boolean" },
-        "external_runtime_db_dependency_present": { "type": "boolean" },
         "compatibility_db_dependency_present": { "type": "boolean" },
-        "sqlite_jdbc_dependency_present": { "type": "boolean" },
-        "sqlite_entries_in_shaded_jar": { "type": "boolean" },
-        "local_sqlite_runtime_classes_present": { "type": "boolean" }
+        "rocksdb_dependency_present": { "type": "boolean" }
       },
       "additionalProperties": true
     },
@@ -118,11 +108,5 @@
       "items": { "type": "string" }
     }
   },
-  "anyOf": [
-    { "required": ["operational_db_artifact_absent"] },
-    { "required": ["local_sqlite_artifact_absent"] },
-    { "required": ["local_db_artifact_absent"] },
-    { "required": ["forbidden_local_db_artifact_absent"] }
-  ],
   "additionalProperties": true
 }

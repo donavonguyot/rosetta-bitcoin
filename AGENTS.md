@@ -251,12 +251,6 @@ npx tsbitnode-sync --datadir ./data-ts --connect-only --rebuild
 Rebuild must hold the exclusive lock and exit **0** before resuming batches.
 
 **Verify before batches:** `validated_height >= 5579` and UTXO count sane.
-For legacy repair evidence, inspect the old tracker explicitly:
-
-```bash
-npx tsbitnode-legacy-db --db ./data-ts/tsbitnode.db
-```
-
 For native state, use:
 
 ```bash
@@ -330,7 +324,7 @@ binary_gate_status: failed | not_attempted | passed
   P2P, transaction, script, or chain logic.
 - Pure TypeScript crypto/storage paths may remain as comparators or legacy
   tools, but Core proofs must report the selected RocksDB and native crypto
-  backends and must not open any unapproved operational DB for runtime truth.
+  backends. Official TypeScript runtime truth is RocksDB.
 - **Docker:** generic `docker-compose`; works on OrbStack. Native/Core Docker
   proof paths must install the same RocksDB and `libsecp256k1` runtime
   dependencies used by host proof paths.
@@ -417,11 +411,6 @@ npx tsbitnode-status --datadir ./data-ts
 # Sync report
 npm run sync:progress
 
-# Retired compatibility capability/wire snapshots only
-npm run export:snapshots -- --db ./data-ts/tsbitnode.db
-
-# Retired compatibility script template survey (read-only; optional block scan ahead of tip)
-npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20
 ```
 
 Key fields: **`header_height`**, **`validated_height`**, **`sync_status`**.
@@ -515,10 +504,9 @@ record exact blocker -> add/link Shared fixture and rule card
 2. **One writer** per datadir; survey/export tools must not overlap active writers.
 3. **Peer exclusion** — TS excludes Python’s default ops peer (`89.167.10.150`) unless `PEERS=` overrides; avoids cross-node interference.
 4. **Honest handshake** — deferred `feefilter` / `mempool` / `sendcmpct`; conservative `start_height` (see [Critical: handshake](#critical-handshake--sync-state-too-advanced-disconnects)).
-5. **Optional compatibility survey** — only when inspecting historical TypeScript tracker data: `npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20` (requires blocks downloaded past `validated_height`).
-6. **Target heights** — use testnet4 milestones above; not mainnet activation heights.
-7. **Blocker ledger** — capture exact height/tx/input/template before implementing.
-8. **Repo hygiene** — commit source/tests/docs/snapshots; do not commit live DBs or generated output.
+5. **Target heights** — use testnet4 milestones above; not mainnet activation heights.
+6. **Blocker ledger** — capture exact height/tx/input/template before implementing.
+7. **Repo hygiene** — commit source/tests/docs/snapshots; do not commit live DBs or generated output.
 
 ---
 

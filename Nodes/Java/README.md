@@ -24,7 +24,6 @@ separate operational work.
 |------|---------|
 | Datadir | `./data-java/` (gitignored) |
 | Active chainstate | RocksDB under `./data-java/chainstate-rocksdb/` |
-| Legacy/observer DB | `./data-java/jbitnode.db` only where explicitly documented |
 | Chain | `testnet4` (`CHAIN` env override) |
 
 Override paths with `DATA_DIR` or proof-specific environment variables. **One
@@ -400,24 +399,13 @@ make java-node-status
 | `com.jbitnode.consensus.merkle` | Tx merkle root vs block header |
 | `com.jbitnode.consensus.block` | Block payload deserialize (header + txs) |
 | `com.jbitnode.consensus.script` | Opcode constants, stack machine scaffold (M9/M10 prep) |
-| `com.jbitnode.cli.ExportSnapshotsService` | Retired legacy snapshot-export stub |
-| `com.jbitnode.cli.ScriptTemplateSurveyService` | Retired legacy survey stub |
+| `com.jbitnode.cli.ExportSnapshotsService` | Retired snapshot-export stub |
+| `com.jbitnode.cli.ScriptTemplateSurveyService` | Retired survey stub |
 | `com.jbitnode.chain` | testnet4 params and genesis fixture |
-| `com.jbitnode.db` | RocksDB operational and chainstate stores; `ProjectTracker` is the compatibility abstraction over operational storage |
+| `com.jbitnode.db` | RocksDB operational and chainstate stores |
 
 Harvested hex/block fixtures live under `src/test/resources/fixtures/` (see
 `fixtures/README.md` for Python/TypeScript sources).
-
-## Schema
-
-Historical compatibility tracker tables mirrored the old TypeScript tracker.
-Current runtime truth is native chainstate; this schema is legacy context only:
-
-`meta`, `project_phases`, `sync_state`, `peers`, `peer_addresses`, `headers`,
-`blocks`, `utxos`, `utxo_undo`, `validated_tip`, `wire_capabilities`, `events`
-
-Wire capabilities seed from `src/main/resources/wire/capabilities.json` (ported
-from the historical registry).
 
 ## Requirements
 

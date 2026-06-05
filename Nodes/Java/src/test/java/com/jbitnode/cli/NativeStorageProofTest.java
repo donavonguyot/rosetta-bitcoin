@@ -1,11 +1,8 @@
 package com.jbitnode.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.jbitnode.chain.ChainRegistry;
-import com.jbitnode.db.ChainstateSession;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -16,25 +13,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class NativeStorageBoundaryTest {
-
-  @Test
-  void nonNativeBackendFailsAtOpenBoundary(@TempDir Path tempDir) {
-    var chain = ChainRegistry.get("testnet4");
-
-    IOException error =
-        assertThrows(
-            IOException.class,
-            () ->
-                ChainstateSession.openReadWrite(
-                    tempDir.resolve("data-java"),
-                    tempDir.resolve("ignored.db"),
-                    chain,
-                    Map.of("UTXO_BACKEND", "sqlite"),
-                    false));
-
-    assertTrue(error.getMessage().contains("native UTXO backend"));
-  }
+class NativeStorageProofTest {
 
   @Test
   void snapshotExportReportsNativeUnsupported() {
@@ -74,8 +53,10 @@ class NativeStorageBoundaryTest {
                 "BLOCKS_MAX",
                 "2"));
 
+    String proofJson = Files.readString(proof);
     assertEquals(0, exitCode);
     assertTrue(Files.exists(proof));
-    assertTrue(Files.readString(proof).contains("\"fixture_replay_status\" : \"passed\""));
+    assertTrue(proofJson.contains("\"fixture_replay_status\" : \"passed\""));
+    assertTrue(proofJson.contains("\"rocksdb_runtime_truth\" : true"));
   }
 }

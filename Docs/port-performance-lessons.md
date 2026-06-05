@@ -18,10 +18,10 @@ instrument -> cache prevouts -> batch writes -> atomic connect
   -> parallelize pure script checks -> benchmark -> resume blocker loop
 ```
 
-Java showed that SQLite itself was not the first bottleneck. The expensive shape
-was per-input SQL, duplicate UTXO fetches, per-row writes, and a small cache on a
-large UTXO table. After that was fixed, script verification became the wall-clock
-driver on large blocks.
+Java showed that the expensive shape was per-input durable lookups, duplicate
+UTXO fetches, per-row writes, and a small cache on a large UTXO table. After
+that was fixed, script verification became the wall-clock driver on large
+blocks.
 
 ## Safe block-connect shape
 
@@ -259,7 +259,7 @@ are not comparable `chainstate_utxo_count` values.
 
 - Migrating storage engines before measuring the access pattern.
 - Running two writers on one datadir.
-- Sharing one SQLite connection across script worker threads.
+- Sharing one mutable storage handle across script worker threads.
 - Parallelizing UTXO mutation.
 - Reordering block transactions.
 - Treating summed parallel `script_verify` CPU time as wall-clock time.
@@ -274,7 +274,7 @@ are not comparable `chainstate_utxo_count` values.
 Java's 52k investigation provides the clearest measured example:
 
 - UTXO load/apply/commit dropped to sub-second scale after connect-time caching,
-  batch writes, reused prepared statements, SQLite pragmas, and atomic connect.
+  batch writes, prepared write paths, RocksDB tuning, and atomic connect.
 - Remaining sequential script verification took roughly 105 seconds on a heavy
   block.
 - Per-transaction input parallelism reduced wall-clock connect time to roughly

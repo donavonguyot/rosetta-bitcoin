@@ -32,8 +32,7 @@ trusted import, or skipping unknown consensus rules does **not** pass.
 against the same datadir exits with `datadir lock busy`.
 
 Never share datadirs or chainstate files with Python (`./data/chainstate-rocksdb`) or other followers.
-CSharp's operational state is native RocksDB; `csbitnode.db` is treated as a retired
-SQLite artifact and native startup fails if it appears in a C# datadir.
+CSharp's operational state is RocksDB.
 
 ## Deferred handshake
 

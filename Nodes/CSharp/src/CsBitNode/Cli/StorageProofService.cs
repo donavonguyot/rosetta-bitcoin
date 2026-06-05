@@ -120,7 +120,6 @@ public static class StorageProofService
         var validatedHeight = Math.Max(0, store.GetValidatedHeight(chain));
         var validatedHash = store.GetValidatedHash(chain) ?? "";
         var syncState = store.GetSyncState(chain);
-        var localSqliteDbPresent = File.Exists(Path.Combine(dataDir, NodePaths.DbFileName));
         var backend = store.Metadata.BackendName;
         var heightOneHash = store.GetHeaderHash(chain, 1) ?? validatedHash;
         var replayMetrics = ReadReplayMetrics(dataDir);
@@ -143,8 +142,8 @@ public static class StorageProofService
             ["available_input_height"] = replayMetrics?.AvailableInputHeight ?? 0,
             ["blocks_connected"] = replayMetrics?.BlocksConnected ?? 0,
             ["native_storage"] = true,
-            ["local_sqlite_artifact_absent"] = !localSqliteDbPresent,
-            ["local_sqlite_db_present"] = localSqliteDbPresent,
+            ["runtime_truth_backend"] = RocksDbChainstateStore.BackendName,
+            ["rocksdb_runtime_truth"] = backend == RocksDbChainstateStore.BackendName,
             ["native_crypto_backend"] = Secp256k1.SelectedBackendName(),
             ["native_crypto_available"] = Secp256k1.NativeBackendAvailable(),
             ["taproot_tweak_backend"] = Secp256k1.TaprootTweakBackendName(),
@@ -180,10 +179,6 @@ public static class StorageProofService
                 ["skipped"] = ParseInt(env.GetValueOrDefault("TEST_SKIPPED"), 0),
                 ["jacoco_line_minimum"] = 0,
                 ["surefire_broad_exclusions"] = false,
-                ["sqlite_jdbc_dependency_present"] = false,
-                ["sqlite_entries_in_shaded_jar"] = false,
-                ["local_sqlite_runtime_classes_present"] = false,
-                ["microsoft_data_sqlite_dependency_present"] = false,
                 ["rocksdb_dependency_present"] = true,
                 ["rocksdb_default_backend"] = backend == RocksDbChainstateStore.BackendName,
                 ["chainstate_codec_v2_vectors_run"] = true,
@@ -210,7 +205,7 @@ public static class StorageProofService
             {
                 Result("storage.native_fresh_start", validatedHeight >= 1 ? "passed" : "failed", Math.Min(validatedHeight, 1), heightOneHash, backend, validatedHeight >= 1 ? "" : "validated_height < 1"),
                 Result("storage.native_restart", validatedHeight >= 2 ? "passed" : "failed", validatedHeight, validatedHash, backend, validatedHeight >= 2 ? "" : "validated_height < 2"),
-                Result("storage.local_sqlite_artifact_absent", !localSqliteDbPresent ? "passed" : "failed", null, "", backend, localSqliteDbPresent ? "local SQLite artifact exists in native datadir" : ""),
+                Result("storage.rocksdb_runtime_truth", backend == RocksDbChainstateStore.BackendName ? "passed" : "failed", validatedHeight, validatedHash, backend, backend == RocksDbChainstateStore.BackendName ? "" : "chainstate_backend is not rocksdb", "Runtime status, tip, and chainstate are RocksDB-owned."),
                 Result("storage.project_export_observational", env.GetValueOrDefault("PROJECT_EXPORT_RESULT") ?? "skipped", validatedHeight, validatedHash, backend, "", "Project import is external to the native runtime.")
             },
             ["commands"] = new JsonArray
@@ -306,8 +301,8 @@ public static class StorageProofService
             throw new InvalidOperationException("replay proof codec_version is not 2");
         if (proof["native_storage"]?.GetValue<bool>() != true)
             throw new InvalidOperationException("storage proof native_storage is not true");
-        if (proof["local_sqlite_artifact_absent"]?.GetValue<bool>() != true)
-            throw new InvalidOperationException("storage proof local_sqlite_artifact_absent is not true");
+        if (proof["rocksdb_runtime_truth"]?.GetValue<bool>() != true)
+            throw new InvalidOperationException("storage proof rocksdb_runtime_truth is not true");
         if (proof["fixture_replay_status"]?.GetValue<string>() != "passed")
             throw new InvalidOperationException("replay proof fixture_replay_status is not passed");
         if ((proof["db_size_bytes"]?.GetValue<long>() ?? 0) <= 0)

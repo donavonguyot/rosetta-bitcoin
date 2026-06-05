@@ -174,7 +174,8 @@ def main() -> int:
             }
         )
     else:
-        artifact["local_sqlite_artifact_absent"] = status.get("local_sqlite_artifact_absent", False)
+        artifact["runtime_truth_backend"] = "rocksdb"
+        artifact["rocksdb_runtime_truth"] = status.get("chainstate_backend") == "rocksdb"
     proof_path.parent.mkdir(parents=True, exist_ok=True)
     proof_path.write_text(json.dumps(artifact, indent=2) + "\n")
     print(proof_path)

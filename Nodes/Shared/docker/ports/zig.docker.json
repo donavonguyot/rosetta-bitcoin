@@ -71,10 +71,10 @@
     "local_reference_result": "Nodes/Shared/conformance/results/zig_docker_supporting_5k_benchmark_<YYYY-MM-DD>.json",
     "supporting_10k_result": "Nodes/Shared/conformance/results/zig_docker_supporting_10k_benchmark_<YYYY-MM-DD>.json",
     "supporting_50k_result": "Nodes/Shared/conformance/results/zig_docker_supporting_50k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Zig proof_partial scaffold owns native RocksDB and Docker surfaces. The script corpus verifier and local Reference P2P connect path remain explicit blockers until implemented."
+    "notes": "Zig proof_partial scaffold owns native RocksDB and Docker surfaces. The script corpus verifier is 45/45; local Reference P2P connect remains the explicit baseline blocker."
   },
   "known_caveats": [
-    "Zig script corpus loader is present but the native verifier is not yet 45/45",
+    "Zig script corpus is 45/45 with engine=zig_native and delegated=false",
     "Local Reference P2P proof command is contract-shaped but does not yet connect blocks",
     "Binary gate remains not_attempted"
   ]

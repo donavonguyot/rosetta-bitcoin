@@ -102,17 +102,12 @@ def main() -> int:
         "last_error": last_error,
         "chainstate_backend": status.get("chainstate_backend", ""),
         "chainstate_status": status.get("chainstate_status", ""),
+        "runtime_truth_backend": "rocksdb",
+        "rocksdb_runtime_truth": status.get("chainstate_backend") == "rocksdb",
         "native_crypto_backend": status.get("native_crypto_backend", ""),
         "native_crypto_available": bool(status.get("native_crypto_available")),
         "taproot_tweak_backend": status.get("taproot_tweak_backend", ""),
         "rocksdb_disable_wal": status.get("rocksdb_disable_wal", "false"),
-        "operational_db_artifact_absent": not bool(
-            status.get("unapproved_runtime_db_artifacts", status.get("forbidden_local_db_artifacts"))
-        ),
-        "runtime_db_boundary_passed": not bool(
-            status.get("unapproved_runtime_db_artifacts", status.get("forbidden_local_db_artifacts"))
-        ),
-        "project_db_observational_only": True,
         "binary_gate_status": "passed" if reached_target else "not_attempted",
         "bounded_gate_status": status.get("binary_gate_status", "not_attempted"),
         "passed": reached_target,

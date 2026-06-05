@@ -160,9 +160,8 @@ public final class ChainstateBackendReplayService {
     root.put("available_input_height", availableInputHeight);
     root.put("blocks_connected", result.connected());
     root.put("native_storage", true);
-    root.put("operational_db_artifact_absent", true);
-    root.put("runtime_db_boundary_passed", true);
-    root.put("project_db_observational_only", true);
+    root.put("runtime_truth_backend", "rocksdb");
+    root.put("rocksdb_runtime_truth", true);
     root.put("validated_height", validatedHeight);
     root.put("validated_hash", validatedHash == null ? "" : validatedHash);
     root.put("stored_block_height", validatedHeight);

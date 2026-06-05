@@ -21,24 +21,9 @@ defmodule Exbitnode.CLI.NodeStatus do
   end
 
   def status_result(data_dir, chain, peer_source) do
-    artifacts = ChainstateSession.forbidden_local_db_artifacts(data_dir)
     native_crypto_available = Exbitnode.Consensus.Script.Secp256k1.native_backend_available?()
 
     cond do
-      artifacts != [] ->
-        reason = "forbidden local DB artifacts present: #{Enum.join(artifacts, ", ")}"
-
-        {base_status(data_dir, chain, peer_source)
-         |> Map.merge(%{
-           runtime_status: "not_running",
-           sync_status: "error",
-           chainstate_status: "misaligned",
-           last_error: reason,
-           forbidden_local_db_artifacts: artifacts,
-           binary_gate_status: "failed",
-           recommendation: "remove_forbidden_local_db_artifacts"
-         }), 1}
-
       not native_crypto_available ->
         {base_status(data_dir, chain, peer_source)
          |> Map.merge(%{

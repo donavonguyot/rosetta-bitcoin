@@ -12,7 +12,6 @@ import type { ChainstateStore } from "./chainstate.js";
 import { RocksDbChainstateStore } from "./rocksDbChainstateStore.js";
 
 export const TSBITNODE_NATIVE_MARKER = ".tsbitnode_native_storage";
-export const LEGACY_LOCAL_DB_NAME = ["tsbitnode", "db"].join(".");
 
 export interface ChainstateSessionOptions {
   acquireLock?: boolean;
@@ -42,10 +41,6 @@ export class ChainstateSession {
   ): Promise<ChainstateSession> {
     const resolved = resolve(dataDir);
     mkdirSync(resolved, { recursive: true });
-    const legacyLocalDbPath = join(resolved, LEGACY_LOCAL_DB_NAME);
-    if (existsSync(legacyLocalDbPath)) {
-      throw new Error(`native TypeScript datadir contains an unapproved port-local operational DB artifact: ${legacyLocalDbPath}`);
-    }
 
     const lockHandle =
       options.acquireLock === false

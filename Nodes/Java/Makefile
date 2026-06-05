@@ -64,7 +64,6 @@ docker-java-sync-proof:
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),pure_java) $(DOCKER_COMPOSE) run --rm jbitnode-sync-proof
 	$(MAKE) docker-java-proof-status
-	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/jbitnode.db
 
 docker-java-native-crypto-proof:
 	$(MAKE) docker-java-supporting-5k-proof DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=native
@@ -82,7 +81,6 @@ docker-java-supporting-5k-proof:
 	  DOCKER_BENCHMARK_HEADERS_MAX=$(DOCKER_BENCHMARK_HEADERS_MAX) DOCKER_BENCHMARK_HEADER_BATCHES_MAX=$(DOCKER_BENCHMARK_HEADER_BATCHES_MAX) \
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
 		  scripts/docker_5k_benchmark.sh
-	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/jbitnode.db
 
 docker-java-supporting-10k-proof:
 	$(MAKE) docker-java-supporting-5k-proof \
@@ -131,7 +129,6 @@ docker-java-native-crypto-long-sync-proof:
 	  PROOF_PATH=$(DOCKER_LONG_PROOF_PATH) PROOF_COMMAND="$(or $(PROOF_COMMAND),$(MAKE) docker-java-native-crypto-long-sync-proof)" \
 	  python3 ../Shared/conformance/tools/proofs/capture_docker_native_long_sync_proof.py .docker-java-native-long-status.json .docker-java-native-long-sync-exit
 	@rm -f .docker-java-native-long-status.json .docker-java-native-long-sync-exit
-	@docker run --rm -v $(DOCKER_LONG_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/jbitnode.db
 
 docker-java-native-crypto-50k-sync-proof:
 	$(MAKE) docker-java-native-crypto-long-sync-proof \
@@ -183,11 +180,7 @@ java-node-status:
 	@DATA_DIR=$(or $(DATA_DIR),./data-java) $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.DbStatus
 
 java-node-native-status:
-	@test ! -f "$(or $(DATA_DIR),./data-java-rocksdb)/jbitnode.db" || \
-	  (echo "error: native datadir contains jbitnode.db" >&2; exit 1)
 	@DATA_DIR=$(or $(DATA_DIR),./data-java-rocksdb) $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.DbStatus
-	@test ! -f "$(or $(DATA_DIR),./data-java-rocksdb)/jbitnode.db" || \
-	  (echo "error: native status created jbitnode.db" >&2; exit 1)
 
 java-node-script-corpus:
 	SECP256K1_BACKEND=native $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ScriptCorpus -Dexec.args="--result-path $(SCRIPT_RESULT)"
@@ -203,8 +196,6 @@ java-node-native-sync:
 	ROCKSDB_DIR=$(or $(ROCKSDB_DIR),$(or $(DATA_DIR),./data-java-rocksdb)/utxo-rocksdb) \
 	PEERS=$(or $(PEERS),127.0.0.1:48333) BLOCKS_MAX=$(or $(BLOCKS_MAX),64) \
 	$(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.SyncLocalCore
-	@test ! -f "$(or $(DATA_DIR),./data-java-rocksdb)/jbitnode.db" || \
-	  (echo "error: native sync created jbitnode.db" >&2; exit 1)
 	@test -f "$(or $(DATA_DIR),./data-java-rocksdb)/.jbitnode_native_storage" || \
 	  (echo "error: native storage marker missing" >&2; exit 1)
 

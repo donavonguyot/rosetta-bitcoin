@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 import { getChain } from "../chain/params.js";
 import { Settings } from "../config/settings.js";
 import { secp256k1BackendInfo } from "../consensus/cryptoBackend.js";
-import { ChainstateSession, LEGACY_LOCAL_DB_NAME } from "../chainstate/chainstateSession.js";
+import { ChainstateSession } from "../chainstate/chainstateSession.js";
 import { VERSION } from "../version.js";
 import { parseCli } from "./args.js";
 
@@ -133,7 +133,6 @@ export async function runStorageProof(settings: Settings, proofPath: string, nod
   await seedTwoBlockStorageProof(settings);
   const session = await ChainstateSession.openNative(settings.dataDir, chain, { acquireLock: false });
   try {
-    const legacyLocalDbPresent = existsSync(resolve(settings.dataDir, LEGACY_LOCAL_DB_NAME));
     const backend = session.store.metadata.backendName;
     const validatedHeight = await session.store.getValidatedHeight(chain.name);
     const validatedHash = (await session.store.getValidatedHash(chain.name)) ?? "";
@@ -150,13 +149,11 @@ export async function runStorageProof(settings: Settings, proofPath: string, nod
       datadir: resolve(settings.dataDir),
       chain: chain.name,
       chainstate_backend: backend,
+      runtime_truth_backend: "rocksdb",
+      rocksdb_runtime_truth: backend === "rocksdb",
       chainstate_backend_version: session.store.metadata.backendVersion,
       codec_version: session.store.metadata.codecVersion,
       native_storage: true,
-      operational_db_artifact_absent: !legacyLocalDbPresent,
-      runtime_db_boundary_passed: !legacyLocalDbPresent,
-      project_db_observational_only: true,
-      runtime_db_artifact_present: legacyLocalDbPresent,
       validated_height: validatedHeight,
       validated_hash: validatedHash,
       header_height: headerHeight,
@@ -178,7 +175,6 @@ export async function runStorageProof(settings: Settings, proofPath: string, nod
         skipped: 0,
         jacoco_line_minimum: 0,
         surefire_broad_exclusions: false,
-        external_runtime_db_dependency_present: false,
         compatibility_db_dependency_present: false,
         rocksdb_dependency_present: true,
         rocksdb_default_backend: backend === "rocksdb",
@@ -200,7 +196,7 @@ export async function runStorageProof(settings: Settings, proofPath: string, nod
       results: [
         result("storage.native_fresh_start", validatedHeight >= 1, Math.min(validatedHeight, 1), HEIGHT_1_HASH, backend, "validated_height < 1"),
         result("storage.native_restart", validatedHeight >= 2, validatedHeight, validatedHash, backend, "validated_height < 2"),
-        result("storage.operational_db_boundary", !legacyLocalDbPresent, null, "", backend, "port-local operational DB artifact exists outside the approved backend"),
+        result("storage.rocksdb_runtime_truth", backend === "rocksdb", validatedHeight, validatedHash, backend, "chainstate_backend is not rocksdb", "Runtime status, tip, and chainstate are RocksDB-owned."),
         result("storage.project_export_observational", true, validatedHeight, validatedHash, backend, "", "Project import is external to the native runtime."),
       ],
       commands: [

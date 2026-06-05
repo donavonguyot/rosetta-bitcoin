@@ -28,8 +28,8 @@ export interface NativeStatusDocument {
   chainstate_generation_id: string;
   chainstate_status: string;
   native_storage: true;
-  operational_db_artifact_absent: true;
-  runtime_db_boundary_passed: true;
+  runtime_truth_backend: "rocksdb";
+  rocksdb_runtime_truth: boolean;
   generation_id: string;
   sync_status: string;
   validated_height: number;
@@ -98,8 +98,8 @@ export async function nativeStatusDocument(settings: Settings): Promise<NativeSt
       chainstate_generation_id: session.store.metadata.generationId,
       chainstate_status: session.store.metadata.status,
       native_storage: true,
-      operational_db_artifact_absent: true,
-      runtime_db_boundary_passed: true,
+      runtime_truth_backend: "rocksdb",
+      rocksdb_runtime_truth: session.store.metadata.backendName === "rocksdb",
       generation_id: session.store.metadata.generationId,
       sync_status: syncStatus,
       validated_height: validatedHeight,

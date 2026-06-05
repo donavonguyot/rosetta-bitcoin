@@ -18,18 +18,16 @@ def test_chainstate_initialization(tmp_path):
     tracker.close()
 
 
-def test_native_tracker_creates_no_sqlite_artifacts(tmp_path):
+def test_native_tracker_persists_rocksdb_tip(tmp_path):
     state_path = tmp_path / "chainstate-rocksdb"
     tracker = ProjectTracker(state_path)
     tracker.set_validated_tip(1, "ab" * 32)
     tracker.close()
-    forbidden = [
-        path
-        for path in tmp_path.rglob("*")
-        if path.suffix in {".db", ".sqlite", ".sqlite3"}
-        or path.name.endswith((".db-wal", ".db-shm", ".db-journal"))
-    ]
-    assert forbidden == []
+    assert (state_path / "rocksdb").exists()
+    reopened = ProjectTracker(state_path)
+    assert reopened.get_validated_height() == 1
+    assert reopened.get_meta("backend_name") == "rocksdb"
+    reopened.close()
 
 
 def test_legacy_db_env_is_rejected(monkeypatch):

@@ -41,7 +41,6 @@ pub struct Store {
 
 impl Store {
     pub fn open(datadir: &Path) -> Result<Self> {
-        reject_unapproved_runtime_db_artifacts(datadir)?;
         std::fs::create_dir_all(datadir)?;
         std::fs::write(datadir.join(MARKER_NAME), b"rsbitnode native storage\n")?;
         let options = tuned_options();
@@ -367,34 +366,6 @@ pub fn backend_path(datadir: &Path) -> PathBuf {
 
 pub fn lock_path(datadir: &Path) -> PathBuf {
     datadir.join(LOCK_NAME)
-}
-
-pub fn operational_db_artifact_absent(datadir: &Path) -> bool {
-    !has_unapproved_runtime_db_artifact(datadir)
-}
-
-pub fn reject_unapproved_runtime_db_artifacts(datadir: &Path) -> Result<()> {
-    if has_unapproved_runtime_db_artifact(datadir) {
-        bail!("native datadir contains an unapproved port-local operational DB artifact");
-    }
-    Ok(())
-}
-
-fn has_unapproved_runtime_db_artifact(datadir: &Path) -> bool {
-    let Ok(entries) = std::fs::read_dir(datadir) else {
-        return false;
-    };
-    entries.flatten().any(|entry| {
-        let path = entry.path();
-        if !path.is_file() {
-            return false;
-        }
-        let name = path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default();
-        name.ends_with(".db") || name.ends_with(".sqlite") || name.ends_with(".sqlite3")
-    })
 }
 
 pub fn seed_connect_proof(datadir: &Path) -> Result<ConnectProof> {

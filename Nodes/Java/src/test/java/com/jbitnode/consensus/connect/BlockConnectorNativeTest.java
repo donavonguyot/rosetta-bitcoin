@@ -126,7 +126,6 @@ class BlockConnectorNativeTest {
       assertEquals(2, session.chainstateStore().stats().utxoCount());
       assertTrue(session.chainstateStore().readUndo(chain.name(), 2).isEmpty());
       assertTrue(Files.exists(ChainstateSession.nativeStorageMarker(dataDir)));
-      assertTrue(Files.notExists(dataDir.resolve("jbitnode.db")));
     }
   }
 

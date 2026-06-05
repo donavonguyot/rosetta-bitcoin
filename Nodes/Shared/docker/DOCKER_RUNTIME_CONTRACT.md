@@ -123,8 +123,8 @@ sqlite-utils query Project/project.db \
 | `docker-smoke-once` | One-shot supervisor loop smoke; no peer reachability required. |
 
 Status and proof commands should follow the native naming contract: use
-`status` for runtime/chainstate inspection, `storage-proof` for bounded storage
-proofs, and `legacy-sqlite` for old evidence or fail-closed guards only.
+`status` for runtime/chainstate inspection and `storage-proof` for bounded
+storage proofs.
 
 Benchmark campaigns should use warm Docker runtimes and fresh proof state:
 run `docker-warm` before the campaign, keep images/build cache until the
@@ -252,8 +252,7 @@ build artifacts.
 ## Native/Core Storage Rule
 
 Docker proof mode must obey the same native storage rules as host proof mode.
-If native mode uses RocksDB, LevelDB, MDBX, or another KV store, Docker status,
-sync, and proof commands must not instantiate SQLite for operational node truth.
+Official Docker status, sync, and proof commands use RocksDB for runtime truth.
 
 See [`../storage/STORAGE_GATE.md`](../storage/STORAGE_GATE.md) and
 [`../chainstate/CHAINSTATE_STORE.md`](../chainstate/CHAINSTATE_STORE.md).
@@ -288,8 +287,7 @@ The result schema is
 Contract/tooling lands before implementation fixes. Ratchet ports in this order:
 
 1. Java and C#, because they already have local proof and supervisor patterns.
-2. Cpp after RocksDB owns every operational state family with no SQLite
-   operational dependency.
+2. Cpp after RocksDB owns every operational state family.
 3. Python and TypeScript as native proof/supervisor surfaces that still need
    empty-datadir replay before parity claims.
 4. Elixir after its proof-partial Docker surface grows real native RocksDB/NIF

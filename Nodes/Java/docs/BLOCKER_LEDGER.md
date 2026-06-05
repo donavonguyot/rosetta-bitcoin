@@ -774,21 +774,14 @@ commit: 21 ms
 
 Implementation: [`ScriptVerifyRunner`](../src/main/java/com/jbitnode/consensus/script/ScriptVerifyRunner.java) + [`ScriptVerifySettings`](../src/main/java/com/jbitnode/config/ScriptVerifySettings.java); parallel only within each tx (`inputs >= PAR_SCRIPT_MIN_INPUTS`). `java-node-sync-chunk` sets `PAR_SCRIPT_VERIFY=1`.
 
-Historical SQLite timing query from the old path:
-
-```bash
-sqlite3 ./data-java/jbitnode.db \
-  "SELECT details_json FROM events WHERE source='timing' ORDER BY id DESC LIMIT 20;"
-```
-
-Do not use this as current Java native-runtime guidance. Current benchmark
-timing belongs in Project-importable proof artifacts and Project timing reports.
+Current benchmark timing belongs in Project-importable proof artifacts and
+Project timing reports.
 
 Deferred (only if wall clock regresses on different block shapes):
 
 ```text
 - Block-wide script verify queue across transactions (Phase B)
-- Process-lifetime in-memory UTXO index (legacy port-local SQLite remained durable chainstate in this historical path)
+- Process-lifetime in-memory UTXO index.
 ```
 
 </details>
@@ -841,9 +834,7 @@ unchanged because the interpreter and parallelism are untouched; the surrounding
 operational writes) shrinks, and download now overlaps verification. The largest single throughput
 lever remains native parallel script verify (Phase 3 keeps that pool/cache warm across blocks).
 
-Remaining measurement (run on a clean native datadir + live testnet4 peer; the current `data-java`
-is a legacy mixed SQLite+leveldb+rocksdb datadir and must not be benchmarked or written under the
-single-writer/native-storage contracts):
+Remaining measurement (run on a clean native datadir + live testnet4 peer):
 
 ```bash
 # fresh native datadir, sync into the heavy-block window with timing on

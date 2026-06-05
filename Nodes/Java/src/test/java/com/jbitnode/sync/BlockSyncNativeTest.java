@@ -55,7 +55,6 @@ class BlockSyncNativeTest {
       assertEquals(2, restarted.chainstateStore().tip().height());
       assertEquals("blocks_current", restarted.tracker().getSyncState(chain.name()).orElseThrow().syncStatus());
       assertTrue(Files.exists(ChainstateSession.nativeStorageMarker(dataDir)));
-      assertTrue(Files.notExists(dataDir.resolve("jbitnode.db")));
     }
   }
 

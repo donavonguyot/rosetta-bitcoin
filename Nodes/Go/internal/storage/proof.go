@@ -20,30 +20,29 @@ type ProofResult struct {
 }
 
 type ProofDocument struct {
-	Implementation              string        `json:"implementation"`
-	Commit                      string        `json:"commit"`
-	NodeID                      string        `json:"node_id"`
-	Category                    string        `json:"category"`
-	CapturedAt                  string        `json:"captured_at"`
-	Datadir                     string        `json:"datadir"`
-	Chain                       string        `json:"chain"`
-	ChainstateBackend           string        `json:"chainstate_backend"`
-	NativeStorage               bool          `json:"native_storage"`
-	OperationalDBArtifactAbsent bool          `json:"operational_db_artifact_absent"`
-	RuntimeDBBoundaryPassed     bool          `json:"runtime_db_boundary_passed"`
-	ProjectDBObservationalOnly  bool          `json:"project_db_observational_only"`
-	ValidatedHeight             int           `json:"validated_height"`
-	ValidatedHash               string        `json:"validated_hash"`
-	HeaderHeight                int           `json:"header_height"`
-	StoredBlockHeight           int           `json:"stored_block_height"`
-	ChainstateStatus            string        `json:"chainstate_status"`
-	NativeCryptoBackend         string        `json:"native_crypto_backend"`
-	NativeCryptoAvailable       bool          `json:"native_crypto_available"`
-	TaprootTweakBackend         string        `json:"taproot_tweak_backend"`
-	Verification                any           `json:"verification"`
-	ProjectExport               any           `json:"project_export"`
-	Results                     []ProofResult `json:"results"`
-	Commands                    []string      `json:"commands"`
+	Implementation        string        `json:"implementation"`
+	Commit                string        `json:"commit"`
+	NodeID                string        `json:"node_id"`
+	Category              string        `json:"category"`
+	CapturedAt            string        `json:"captured_at"`
+	Datadir               string        `json:"datadir"`
+	Chain                 string        `json:"chain"`
+	ChainstateBackend     string        `json:"chainstate_backend"`
+	RuntimeTruthBackend   string        `json:"runtime_truth_backend"`
+	RocksDBRuntimeTruth   bool          `json:"rocksdb_runtime_truth"`
+	NativeStorage         bool          `json:"native_storage"`
+	ValidatedHeight       int           `json:"validated_height"`
+	ValidatedHash         string        `json:"validated_hash"`
+	HeaderHeight          int           `json:"header_height"`
+	StoredBlockHeight     int           `json:"stored_block_height"`
+	ChainstateStatus      string        `json:"chainstate_status"`
+	NativeCryptoBackend   string        `json:"native_crypto_backend"`
+	NativeCryptoAvailable bool          `json:"native_crypto_available"`
+	TaprootTweakBackend   string        `json:"taproot_tweak_backend"`
+	Verification          any           `json:"verification"`
+	ProjectExport         any           `json:"project_export"`
+	Results               []ProofResult `json:"results"`
+	Commands              []string      `json:"commands"`
 }
 
 func RunProof(datadir, resultPath string) (ProofDocument, error) {
@@ -53,26 +52,25 @@ func RunProof(datadir, resultPath string) (ProofDocument, error) {
 	}
 	info := crypto.Info()
 	doc := ProofDocument{
-		Implementation:              "GoNode",
-		Commit:                      os.Getenv("GIT_COMMIT"),
-		NodeID:                      "gobitnode-native-storage",
-		Category:                    "storage",
-		CapturedAt:                  time.Now().UTC().Format(time.RFC3339),
-		Datadir:                     datadir,
-		Chain:                       meta.Chain,
-		ChainstateBackend:           meta.ChainstateBackend,
-		NativeStorage:               true,
-		OperationalDBArtifactAbsent: OperationalDBArtifactAbsent(datadir),
-		RuntimeDBBoundaryPassed:     OperationalDBArtifactAbsent(datadir),
-		ProjectDBObservationalOnly:  true,
-		ValidatedHeight:             meta.ValidatedHeight,
-		ValidatedHash:               meta.ValidatedHash,
-		HeaderHeight:                meta.HeaderHeight,
-		StoredBlockHeight:           meta.StoredBlockHeight,
-		ChainstateStatus:            meta.ChainstateStatus,
-		NativeCryptoBackend:         info.ECDSABackend,
-		NativeCryptoAvailable:       info.NativeAvailable,
-		TaprootTweakBackend:         info.TaprootTweakBackend,
+		Implementation:        "GoNode",
+		Commit:                os.Getenv("GIT_COMMIT"),
+		NodeID:                "gobitnode-native-storage",
+		Category:              "storage",
+		CapturedAt:            time.Now().UTC().Format(time.RFC3339),
+		Datadir:               datadir,
+		Chain:                 meta.Chain,
+		ChainstateBackend:     meta.ChainstateBackend,
+		RuntimeTruthBackend:   "rocksdb",
+		RocksDBRuntimeTruth:   meta.ChainstateBackend == "rocksdb",
+		NativeStorage:         true,
+		ValidatedHeight:       meta.ValidatedHeight,
+		ValidatedHash:         meta.ValidatedHash,
+		HeaderHeight:          meta.HeaderHeight,
+		StoredBlockHeight:     meta.StoredBlockHeight,
+		ChainstateStatus:      meta.ChainstateStatus,
+		NativeCryptoBackend:   info.ECDSABackend,
+		NativeCryptoAvailable: info.NativeAvailable,
+		TaprootTweakBackend:   info.TaprootTweakBackend,
 		Verification: map[string]any{
 			"go_test":                             "go test ./...",
 			"rocksdb_dependency_present":          true,
@@ -88,7 +86,7 @@ func RunProof(datadir, resultPath string) (ProofDocument, error) {
 		Results: []ProofResult{
 			result("storage.native_fresh_start", meta.ValidatedHeight >= 1, 1, "0000000012982b6d5f621229286b880e909984df669c2afabb102ce311b13f28", meta.ChainstateBackend, "validated_height < 1", ""),
 			result("storage.native_restart", meta.ValidatedHeight >= 2, meta.ValidatedHeight, meta.ValidatedHash, meta.ChainstateBackend, "validated_height < 2", ""),
-			result("storage.operational_db_boundary", OperationalDBArtifactAbsent(datadir), nil, "", meta.ChainstateBackend, "port-local operational DB artifact exists outside the approved backend", ""),
+			result("storage.rocksdb_runtime_truth", meta.ChainstateBackend == "rocksdb", meta.ValidatedHeight, meta.ValidatedHash, meta.ChainstateBackend, "chainstate_backend is not rocksdb", "Runtime status, tip, and chainstate are RocksDB-owned."),
 			result("storage.project_export_observational", true, meta.ValidatedHeight, meta.ValidatedHash, meta.ChainstateBackend, "", "Project import is external to the native runtime."),
 		},
 		Commands: []string{

@@ -55,7 +55,6 @@ docker-typescript-native-proof:
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) \
 	  DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
 		  scripts/docker_5k_benchmark.sh
-	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/tsbitnode.db
 
 docker-typescript-native-10k-proof:
 	$(MAKE) docker-typescript-native-proof \

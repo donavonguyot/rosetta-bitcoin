@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import rocksdb from "rocksdb";
@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 import { TESTNET4 } from "../src/chain/params.js";
 import {
   ChainstateSession,
-  LEGACY_LOCAL_DB_NAME,
   TSBITNODE_NATIVE_MARKER,
 } from "../src/chainstate/chainstateSession.js";
 import { Settings } from "../src/config/settings.js";
@@ -49,18 +48,6 @@ async function deleteNativeCounterMetadata(dir: string, chain: string): Promise<
 }
 
 describe("RocksDB chainstate session", () => {
-  it("fails closed when a native datadir contains an unapproved operational DB artifact", async () => {
-    const dir = tempDatadir();
-    try {
-      writeFileSync(join(dir, LEGACY_LOCAL_DB_NAME), "");
-      await expect(ChainstateSession.openNative(dir, TESTNET4, { acquireLock: false })).rejects.toThrow(
-        "unapproved port-local operational DB artifact",
-      );
-    } finally {
-      cleanup(dir);
-    }
-  });
-
   it("creates native marker and persists metadata", async () => {
     const dir = tempDatadir();
     try {
@@ -466,8 +453,8 @@ describe("RocksDB chainstate session", () => {
       expect(status.binary_gate_status).toBe("failed");
       expect(status.current_blocker).toMatchObject({ height: 6975 });
       expect(status.last_error).toBe("script verification failed");
-      expect(status.operational_db_artifact_absent).toBe(true);
-      expect(status.runtime_db_boundary_passed).toBe(true);
+      expect(status.runtime_truth_backend).toBe("rocksdb");
+      expect(status.rocksdb_runtime_truth).toBe(true);
       expect(status.native_crypto_backend).toBeTruthy();
       expect(status.taproot_tweak_backend).toBeTruthy();
     } finally {

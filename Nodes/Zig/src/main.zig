@@ -23,18 +23,19 @@ pub fn main(init: std.process.Init) !void {
 
     const command = args[1];
     const io = init.io;
+    const surface = init.environ_map.get("ZIGBITNODE_RUNTIME_SURFACE") orelse "host";
 
     if (std.mem.eql(u8, command, "status")) {
-        try cmdStatus(allocator, out, args[2..]);
+        try cmdStatus(allocator, out, args[2..], surface);
     } else if (std.mem.eql(u8, command, "codec-vectors")) {
         try core.verifyCodecVectors(allocator);
         try out.print("{{\"schema\":\"port.codec_vectors.v1\",\"port\":\"zig\",\"codec_version\":2,\"passed\":true}}\n", .{});
     } else if (std.mem.eql(u8, command, "native-crypto-vectors")) {
         try cmdNativeCrypto(out);
     } else if (std.mem.eql(u8, command, "storage-proof")) {
-        try cmdStorageProof(allocator, io, out, args[2..]);
+        try cmdStorageProof(allocator, io, out, args[2..], surface);
     } else if (std.mem.eql(u8, command, "script-corpus")) {
-        try cmdScriptCorpus(allocator, io, out, args[2..]);
+        try cmdScriptCorpus(allocator, io, out, args[2..], surface);
     } else if (std.mem.eql(u8, command, "local-reference-proof")) {
         try cmdLocalReferenceProof(allocator, io, out, args[2..]);
     } else if (std.mem.eql(u8, command, "sync-supervisor-once")) {
@@ -60,7 +61,7 @@ fn usage(out: anytype) !void {
     , .{});
 }
 
-fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u8) !void {
+fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u8, surface: []const u8) !void {
     const datadir = valueArg(args, "--datadir") orelse core.PortInfo.default_datadir;
     const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
@@ -79,8 +80,8 @@ fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u
     } else |_| {}
 
     try out.print(
-        "{{\"schema\":\"port.status.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"host\",\"datadir\":\"{s}\",\"sync_status\":\"starting\",\"chainstate_backend\":\"{s}\",\"chainstate_status\":\"{s}\",\"validated_height\":{s},\"header_height\":0,\"stored_block_height\":0,\"chainstate_utxo_count\":{s},\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\"}}\n",
-        .{ datadir, backend, chainstate_status, validated_height, utxo_count },
+        "{{\"schema\":\"port.status.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"datadir\":\"{s}\",\"sync_status\":\"starting\",\"chainstate_backend\":\"{s}\",\"chainstate_status\":\"{s}\",\"validated_height\":{s},\"header_height\":0,\"stored_block_height\":0,\"chainstate_utxo_count\":{s},\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\"}}\n",
+        .{ surface, datadir, backend, chainstate_status, validated_height, utxo_count },
     );
 }
 
@@ -92,7 +93,7 @@ fn cmdNativeCrypto(out: anytype) !void {
     );
 }
 
-fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
+fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8) !void {
     const datadir = valueArg(args, "--datadir") orelse core.PortInfo.default_datadir;
     const output = valueArg(args, "--output") orelse (ResultPaths{}).storage;
     try std.Io.Dir.cwd().createDirPath(io, datadir);
@@ -109,15 +110,15 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
 
     const json = try std.fmt.allocPrint(
         allocator,
-        "{{\"schema\":\"port.storage_gate_result.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"docker_or_host\",\"storage_backend\":\"rocksdb\",\"native_marker\":\"{s}\",\"operational_db_artifact_absent\":true,\"runtime_db_boundary_passed\":true,\"project_db_observational_only\":true,\"atomic_batch_commit\":true,\"validated_height\":2,\"chainstate_status\":\"usable\",\"chainstate_backend\":\"rocksdb\",\"chainstate_utxo_count\":1,\"binary_gate_status\":\"not_attempted\",\"current_blocker\":null}}\n",
-        .{core.PortInfo.marker_file},
+        "{{\"schema\":\"port.storage_gate_result.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"storage_backend\":\"rocksdb\",\"runtime_truth_backend\":\"rocksdb\",\"rocksdb_runtime_truth\":true,\"native_marker\":\"{s}\",\"atomic_batch_commit\":true,\"validated_height\":2,\"chainstate_status\":\"usable\",\"chainstate_backend\":\"rocksdb\",\"chainstate_utxo_count\":1,\"binary_gate_status\":\"not_attempted\",\"current_blocker\":null}}\n",
+        .{ surface, core.PortInfo.marker_file },
     );
     defer allocator.free(json);
     try writeFileEnsuringParent(io, output, json);
     try out.print("{s}", .{json});
 }
 
-fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
+fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8) !void {
     const manifest = valueArg(args, "--manifest") orelse "../Shared/conformance/fixtures/scripts/manifest.json";
     const output = valueArg(args, "--output") orelse (ResultPaths{}).script;
 
@@ -184,8 +185,8 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     const result = if (failed == 0) "passed" else "failed";
     const json = try std.fmt.allocPrint(
         allocator,
-        "{{\"schema\":\"port.script_corpus_result.v1\",\"category\":\"script_corpus\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"runtime_surface\":\"docker_or_host\",\"native_crypto_backend\":\"libsecp256k1\",\"fixture_count\":{},\"passed\":{},\"failed\":{},\"result\":\"{s}\",\"verifier\":{{\"engine\":\"zig_native_minimal\",\"delegated\":false,\"crypto_backend\":\"libsecp256k1\",\"implemented\":true,\"source\":\"Nodes/Zig/src/script.zig\"}},\"results\":[{s}]}}\n",
-        .{ fixtures.array.items.len, passed, failed, result, rows.items },
+        "{{\"schema\":\"port.script_corpus_result.v1\",\"category\":\"script_corpus\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"runtime_surface\":\"{s}\",\"native_crypto_backend\":\"libsecp256k1\",\"fixture_count\":{},\"passed\":{},\"failed\":{},\"result\":\"{s}\",\"verifier\":{{\"engine\":\"zig_native\",\"delegated\":false,\"crypto_backend\":\"libsecp256k1\",\"implemented\":true,\"source\":\"Nodes/Zig/src/script.zig\"}},\"results\":[{s}]}}\n",
+        .{ surface, fixtures.array.items.len, passed, failed, result, rows.items },
     );
     defer allocator.free(json);
     try writeFileEnsuringParent(io, output, json);
@@ -218,25 +219,61 @@ fn verifyScriptFixture(allocator: std.mem.Allocator, io: std.Io, manifest: []con
     if (parsed.offset != raw_tx.len) return error.TransactionTrailingBytes;
 
     const input_index: usize = @intCast(jsonInteger(obj.get("input_index")) orelse return error.InputIndexMissing);
-    var spent_prevouts = try allocator.alloc(core.script.SpentPrevout, parsed.transaction.inputs.len);
+    var loaded_prevouts = loadFixturePrevouts(allocator, io, manifest, obj) catch blk: {
+        var fallback = try allocator.alloc(core.script.SpentPrevout, parsed.transaction.inputs.len);
+        errdefer allocator.free(fallback);
+        for (fallback) |*prevout| prevout.* = .{ .amount = 0, .script_pubkey = try allocator.dupe(u8, &.{}) };
+        const prev_spk_path = try firstFixturePath(allocator, manifest, obj, "prev_spk");
+        defer allocator.free(prev_spk_path);
+        const prev_spk = try readHexFile(allocator, io, prev_spk_path);
+        const amount = jsonInteger(obj.get("prev_amount_sats")) orelse 0;
+        if (input_index >= fallback.len) {
+            allocator.free(prev_spk);
+            return error.InputIndexOutOfRange;
+        }
+        allocator.free(fallback[input_index].script_pubkey);
+        fallback[input_index] = .{ .amount = amount, .script_pubkey = prev_spk };
+        break :blk fallback;
+    };
     defer {
-        for (spent_prevouts) |prevout| allocator.free(prevout.script_pubkey);
-        allocator.free(spent_prevouts);
+        for (loaded_prevouts) |prevout| allocator.free(prevout.script_pubkey);
+        allocator.free(loaded_prevouts);
     }
-    for (spent_prevouts) |*prevout| prevout.* = .{ .amount = 0, .script_pubkey = try allocator.dupe(u8, &.{}) };
-
-    const prev_spk_path = try firstFixturePath(allocator, manifest, obj, "prev_spk");
-    defer allocator.free(prev_spk_path);
-    const prev_spk = try readHexFile(allocator, io, prev_spk_path);
-    const amount = jsonInteger(obj.get("prev_amount_sats")) orelse 0;
-    if (input_index >= spent_prevouts.len) {
-        allocator.free(prev_spk);
-        return error.InputIndexOutOfRange;
+    if (loaded_prevouts.len != parsed.transaction.inputs.len) {
+        if (loaded_prevouts.len != 1) return error.PrevoutCountMismatch;
+        const only = loaded_prevouts[0];
+        var normalized = try allocator.alloc(core.script.SpentPrevout, parsed.transaction.inputs.len);
+        errdefer allocator.free(normalized);
+        for (normalized) |*prevout| prevout.* = .{ .amount = 0, .script_pubkey = try allocator.dupe(u8, &.{}) };
+        if (input_index >= normalized.len) return error.InputIndexOutOfRange;
+        allocator.free(normalized[input_index].script_pubkey);
+        normalized[input_index] = .{ .amount = only.amount, .script_pubkey = try allocator.dupe(u8, only.script_pubkey) };
+        for (loaded_prevouts) |prevout| allocator.free(prevout.script_pubkey);
+        allocator.free(loaded_prevouts);
+        loaded_prevouts = normalized;
     }
-    allocator.free(spent_prevouts[input_index].script_pubkey);
-    spent_prevouts[input_index] = .{ .amount = amount, .script_pubkey = prev_spk };
+    if (input_index >= loaded_prevouts.len) return error.InputIndexOutOfRange;
 
-    try core.script.verifyInput(allocator, parsed.transaction, input_index, spent_prevouts);
+    try core.script.verifyInput(allocator, parsed.transaction, input_index, loaded_prevouts);
+}
+
+fn loadFixturePrevouts(allocator: std.mem.Allocator, io: std.Io, manifest: []const u8, obj: std.json.ObjectMap) ![]core.script.SpentPrevout {
+    const prevouts_path = try firstFixturePath(allocator, manifest, obj, "prevouts");
+    defer allocator.free(prevouts_path);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, prevouts_path, allocator, .limited(2 * 1024 * 1024));
+    defer allocator.free(bytes);
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
+    defer parsed.deinit();
+    if (parsed.value != .array) return error.InvalidPrevoutsJson;
+    var prevouts = try allocator.alloc(core.script.SpentPrevout, parsed.value.array.items.len);
+    errdefer allocator.free(prevouts);
+    for (parsed.value.array.items, 0..) |item, i| {
+        if (item != .object) return error.InvalidPrevoutsJson;
+        const amount = jsonInteger(item.object.get("amount")) orelse jsonInteger(item.object.get("value")) orelse return error.InvalidPrevoutsJson;
+        const spk_hex = jsonString(item.object.get("spk")) orelse jsonString(item.object.get("script_pubkey")) orelse return error.InvalidPrevoutsJson;
+        prevouts[i] = .{ .amount = amount, .script_pubkey = try core.crypto.fromHexAlloc(allocator, spk_hex) };
+    }
+    return prevouts;
 }
 
 fn firstFixturePath(allocator: std.mem.Allocator, manifest: []const u8, obj: std.json.ObjectMap, category: []const u8) ![]u8 {

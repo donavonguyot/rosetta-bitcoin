@@ -11,7 +11,7 @@ unless they have been promoted to a canonical result.
 | Canonical project evidence | Root | `Nodes/Shared/conformance/results/` | Yes | Compact JSON proof that supports a project-level claim. |
 | Shared schemas/manifests | Root | `Nodes/Shared/conformance/`, `Nodes/Shared/docker/` | Yes | Contracts, fixture IDs, Docker manifests, validators. |
 | Port durable evidence | Root | `Nodes/<Port>/docs/`, `Nodes/<Port>/tests/fixtures/`, intentional `snapshots/` | Yes | Blocker facts, fixtures, and settled checkpoint exports. |
-| Mission-control aggregate | Root | `Project/project.db` | Yes | Tracked SQLite index rebuilt from canonical JSON, manifests, status exports, ledgers, and decisions. |
+| Mission-control aggregate | Root | `Project/project.db` | Yes | Tracked Project index rebuilt from canonical JSON, manifests, status exports, ledgers, and decisions. |
 | Runtime state | Port-local | `data*`, `blocks/`, RocksDB/LevelDB dirs, local DB files | No | Live truth for a port, never a root-owned artifact. |
 | Generated build output | Port-local | `build*/`, `target/`, `dist/`, `_build/`, `deps/`, `node_modules/`, `.venv/` | No | Regenerate from source. |
 | Legacy cruft | None | N/A | No | Stale logs, duplicate proof dirs, temp observer DBs, crash dumps, stale pid/lock files, nested `.git/` metadata. |
@@ -35,7 +35,7 @@ Result JSON should be small, machine-readable, and self-describing:
 
 - implementation / node id
 - chain and runtime surface
-- backend and storage boundary
+- RocksDB runtime backend
 - validated/header/stored-block heights
 - peer mode, when relevant
 - command or fixture id
@@ -73,8 +73,8 @@ state. They may be large, but they are not legacy cruft by default.
 
 ## Project Import Boundary
 
-`Project/project.db` is a tracked mission-control SQLite database. Project
-scripts may import canonical result JSON, Docker manifests, blocker ledgers, and
+`Project/project.db` is the tracked mission-control database. Project scripts
+may import canonical result JSON, Docker manifests, blocker ledgers, and
 exported status JSON. Node runtimes and proof paths must not depend on
 `Project/project.db` for sync, validation, chainstate, UTXO, block lookup,
 blocker enforcement, or status truth.
