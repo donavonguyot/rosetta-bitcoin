@@ -23,25 +23,53 @@ pub struct LocalReferenceOptions<'a> {
     pub runtime_surface: &'a str,
 }
 
-pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
-    let started = Utc::now();
-    let p2p_source = opts.byte_source == "p2p";
-    let peer_mode = if p2p_source {
+fn is_p2p_source(opts: &LocalReferenceOptions<'_>) -> bool {
+    matches!(opts.byte_source, "p2p" | "external_p2p")
+}
+
+fn is_external_manual(opts: &LocalReferenceOptions<'_>) -> bool {
+    opts.byte_source == "external_p2p"
+}
+
+fn peer_mode_for(opts: &LocalReferenceOptions<'_>) -> &'static str {
+    if is_external_manual(opts) {
+        "external_manual"
+    } else if is_p2p_source(opts) {
         "local_reference"
     } else {
         "local_reference_rpc"
-    };
-    let peer = if p2p_source { opts.peer } else { opts.rpc_url };
-    let byte_source = if p2p_source {
+    }
+}
+
+fn byte_source_for(opts: &LocalReferenceOptions<'_>) -> &'static str {
+    if is_external_manual(opts) {
+        "external_testnet4_p2p"
+    } else if is_p2p_source(opts) {
         "local_reference_p2p"
     } else {
         "local_reference_rpc"
-    };
+    }
+}
+
+pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
+    let started = Utc::now();
+    let p2p_source = is_p2p_source(&opts);
+    let peer_mode = peer_mode_for(&opts);
+    let peer = if p2p_source { opts.peer } else { opts.rpc_url };
+    let byte_source = byte_source_for(&opts);
     let proof_mode = if p2p_source { "p2p_sync" } else { opts.mode };
-    let benchmark_lane = supporting_lane(opts.target, p2p_source);
+    let benchmark_lane = benchmark_lane_for(&opts);
     let mut doc = Map::new();
     doc.insert("implementation".into(), "RustNode".into());
-    doc.insert("category".into(), "local_reference_sync".into());
+    doc.insert(
+        "category".into(),
+        if is_external_manual(&opts) {
+            "external_peer_sync"
+        } else {
+            "local_reference_sync"
+        }
+        .into(),
+    );
     doc.insert("runtime_surface".into(), opts.runtime_surface.into());
     doc.insert("captured_at".into(), started.to_rfc3339().into());
     doc.insert("chain".into(), "testnet4".into());
@@ -61,10 +89,7 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
     );
     doc.insert("reference_finish_height".into(), opts.target.into());
     doc.insert("benchmark_contract_version".into(), 1.into());
-    doc.insert(
-        "benchmark_kind".into(),
-        benchmark_kind(opts.target, opts.byte_source).into(),
-    );
+    doc.insert("benchmark_kind".into(), benchmark_kind(&opts).into());
     doc.insert("benchmark_lane".into(), benchmark_lane.into());
     doc.insert("utxo_accounting_policy".into(), "core_spendable_v1".into());
     doc.insert("byte_source".into(), byte_source.into());
@@ -74,6 +99,17 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
     doc.insert("prefetch_depth".into(), (prefetch_depth() as i64).into());
     doc.insert("result".into(), "failed".into());
     doc.insert("failures".into(), Value::Array(Vec::new()));
+    if is_external_manual(&opts) {
+        doc.insert("selected_peer".into(), opts.peer.into());
+        doc.insert("disconnects".into(), 0.into());
+        doc.insert("advertised_start_height".into(), 0.into());
+        doc.insert("fallback_peer".into(), Value::Null);
+        doc.insert("fallback_used".into(), false.into());
+        doc.insert(
+            "deferred_handshake_state".into(),
+            "minimal_handshake_no_deferred_messages".into(),
+        );
+    }
 
     let (sync_summary, connect_summary, pipeline_timing_summary) = if opts.mode == "staged" {
         if p2p_source {
@@ -131,7 +167,10 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
         "validated_height".into(),
         status_doc.validated_height.into(),
     );
-    doc.insert("validated_hash".into(), status_doc.validated_hash.into());
+    doc.insert(
+        "validated_hash".into(),
+        status_doc.validated_hash.clone().into(),
+    );
     doc.insert(
         "stored_block_height".into(),
         status_doc.stored_block_height.into(),
@@ -199,10 +238,16 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
     );
     doc.insert("updated_at".into(), Utc::now().to_rfc3339().into());
 
+    let expected_external_5k_hash =
+        "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2";
     let reached = connect_summary["reached_target"].as_bool().unwrap_or(false)
         && status_doc.validated_height >= opts.target as i64
         && status_doc.current_blocker.is_none();
-    if reached {
+    let external_5k_reached = !is_external_manual(&opts)
+        || opts.target != 5000
+        || (status_doc.validated_hash == expected_external_5k_hash
+            && status_doc.chainstate_utxo_count == 4574);
+    if reached && external_5k_reached {
         doc.insert("result".into(), "passed".into());
         doc.insert("local_reference_status".into(), "target_reached".into());
     } else {
@@ -214,6 +259,12 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
             &mut doc,
             "connect stopped before target or has current_blocker",
         );
+        if is_external_manual(&opts) && opts.target == 5000 && !external_5k_reached {
+            add_failure(
+                &mut doc,
+                "external 5k probe reached unexpected hash or UTXO count",
+            );
+        }
     }
 
     let value = Value::Object(doc);
@@ -242,9 +293,15 @@ fn target_label(target: u32) -> &'static str {
     }
 }
 
-fn benchmark_kind(target: u32, byte_source: &str) -> &'static str {
-    if byte_source == "p2p" {
-        return match target {
+fn benchmark_kind(opts: &LocalReferenceOptions<'_>) -> &'static str {
+    if is_external_manual(opts) {
+        return match opts.target {
+            5000 => "diagnostic_external_5k_p2p",
+            _ => "diagnostic_external_p2p",
+        };
+    }
+    if is_p2p_source(opts) {
+        return match opts.target {
             5000 => "supporting_5k_p2p",
             10000 => "supporting_10k_p2p",
             50000 => "supporting_50k_p2p",
@@ -252,7 +309,7 @@ fn benchmark_kind(target: u32, byte_source: &str) -> &'static str {
             _ => "local_reference_p2p",
         };
     }
-    match target {
+    match opts.target {
         5000 => "supporting_5k_durable_local_reference_replay",
         10000 => "supporting_10k_durable_local_reference_replay",
         50000 => "supporting_50k_durable_local_reference_replay",
@@ -261,8 +318,14 @@ fn benchmark_kind(target: u32, byte_source: &str) -> &'static str {
     }
 }
 
-fn supporting_lane(target: u32, p2p_source: bool) -> &'static str {
-    match (target, p2p_source) {
+fn benchmark_lane_for(opts: &LocalReferenceOptions<'_>) -> &'static str {
+    if is_external_manual(opts) {
+        return match opts.target {
+            5000 => "diagnostic_external_5k_p2p",
+            _ => "diagnostic_external_p2p",
+        };
+    }
+    match (opts.target, is_p2p_source(opts)) {
         (5000, true) => "supporting_5k_p2p",
         (10000, true) => "supporting_10k_p2p",
         (50000, true) => "supporting_50k_p2p",
@@ -296,6 +359,8 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
     let mut last_connect = Value::Null;
     let mut fetched = 0u32;
     let mut connected = 0u32;
+    let mut last_tick_height = start_height.saturating_sub(1);
+    let mut last_tick_elapsed = Duration::ZERO;
     let receiver = p2p::fetch_blocks(p2p::FetchOptions {
         peer: opts.peer.to_string(),
         target: opts.target,
@@ -317,6 +382,10 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
                 expected_height
             );
         }
+        timing.add(
+            "p2p_fetch",
+            Duration::from_millis(block.fetch_ms.max(0) as u64),
+        );
         let block_started = Instant::now();
         let parse_started = Instant::now();
         let expected_prev = if block.height == 0 {
@@ -361,10 +430,14 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
         timing.add("connect_total", connect_started.elapsed());
         timing.merge_connect(&connect);
         connected += connect.blocks_connected;
+        let mut block_shape = connect::block_shape_summary(&txs);
+        if let Some(slow_block) = connect.timing_summary.slow_blocks.first() {
+            block_shape.spent_prevout_script_types = slow_block.spent_prevout_script_types.clone();
+        }
         last_connect = serde_json::to_value(&connect)?;
         fetched += 1;
         let elapsed_block = block_started.elapsed();
-        timing.record_block(block.height, elapsed_block);
+        timing.record_block(block.height, elapsed_block, block_shape);
         if block.height % opts.progress.max(1) == 0 || block.height == opts.target {
             println!(
                 "rsbitnode-local-reference-proof p2p progress {}",
@@ -388,6 +461,21 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
                     "current_blocker": &connect.current_blocker,
                 })
             );
+            emit_telemetry_tick(
+                opts,
+                "p2p_sync",
+                block.height,
+                &info.hash,
+                info.tx_count,
+                connect.chainstate_utxo_count,
+                connected,
+                &connect.sync_status,
+                &connect.current_blocker,
+                elapsed_block,
+                &timing,
+                &mut last_tick_height,
+                &mut last_tick_elapsed,
+            );
         }
         if connect.current_blocker.is_some() {
             let meta_started = Instant::now();
@@ -404,7 +492,7 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
     let sync = serde_json::json!({
         "implementation": "RustNode",
         "runtime_surface": opts.runtime_surface,
-        "peer_mode": "local_reference",
+        "peer_mode": peer_mode_for(opts),
         "peer": opts.peer,
         "target_height": opts.target,
         "start_height": start_height,
@@ -415,6 +503,7 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
         "sync_status": last_connect["sync_status"],
         "current_blocker": last_connect["current_blocker"],
         "binary_gate_status": "not_attempted",
+        "byte_source": byte_source_for(opts),
         "started_at": started,
         "updated_at": Utc::now().to_rfc3339(),
         "blocks_fetched": fetched,
@@ -450,6 +539,8 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
     let mut last_connect = Value::Null;
     let mut fetched = 0u32;
     let mut connected = 0u32;
+    let mut last_tick_height = start_height.saturating_sub(1);
+    let mut last_tick_elapsed = Duration::ZERO;
     let (sender, receiver) = mpsc::sync_channel(timing.prefetch_depth);
     let rpc_url = opts.rpc_url.to_string();
     let rpc_user = opts.rpc_user.to_string();
@@ -519,6 +610,10 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
         timing.add("connect_total", connect_started.elapsed());
         timing.merge_connect(&connect);
         connected += connect.blocks_connected;
+        let mut block_shape = connect::block_shape_summary(&block.txs);
+        if let Some(slow_block) = connect.timing_summary.slow_blocks.first() {
+            block_shape.spent_prevout_script_types = slow_block.spent_prevout_script_types.clone();
+        }
         last_connect = serde_json::to_value(&connect)?;
         fetched += 1;
         let block_ms = block
@@ -526,7 +621,7 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
             .total()
             .saturating_add(connect_started.elapsed());
         let elapsed_block = block_started.elapsed().max(block_ms);
-        timing.record_block(block.height, elapsed_block);
+        timing.record_block(block.height, elapsed_block, block_shape);
         if block.height % opts.progress.max(1) == 0 || block.height == opts.target {
             println!(
                 "rsbitnode-local-reference-proof progress {}",
@@ -549,6 +644,21 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
                     "sync_status": &connect.sync_status,
                     "current_blocker": &connect.current_blocker,
                 })
+            );
+            emit_telemetry_tick(
+                opts,
+                "rpc_replay",
+                block.height,
+                &block.info.hash,
+                block.info.tx_count,
+                connect.chainstate_utxo_count,
+                connected,
+                &connect.sync_status,
+                &connect.current_blocker,
+                elapsed_block,
+                &timing,
+                &mut last_tick_height,
+                &mut last_tick_elapsed,
             );
         }
         if connect.current_blocker.is_some() {
@@ -679,6 +789,11 @@ impl PipelineTiming {
                     "block_read" => "block_read",
                     "block_parse_validate" => "block_parse_validate",
                     "block_connect_store_commit" => "block_connect_store_commit",
+                    "utxo_delete_prepare" => "utxo_delete_prepare",
+                    "utxo_put_prepare" => "utxo_put_prepare",
+                    "undo_put_prepare" => "undo_put_prepare",
+                    "metadata_put_prepare" => "metadata_put_prepare",
+                    "rocksdb_write" => "rocksdb_write",
                     _ => "connect_other",
                 },
                 Duration::from_millis(*millis as u64),
@@ -686,10 +801,17 @@ impl PipelineTiming {
         }
     }
 
-    fn record_block(&mut self, height: u32, elapsed: Duration) {
+    fn record_block(&mut self, height: u32, elapsed: Duration, shape: connect::BlockShapeSummary) {
         self.slow_blocks.push(serde_json::json!({
             "height": height,
             "ms": elapsed.as_millis() as i64,
+            "tx_count": shape.tx_count,
+            "vin_count": shape.vin_count,
+            "vout_count": shape.vout_count,
+            "script_input_count": shape.script_input_count,
+            "input_shape_counts": shape.input_shape_counts,
+            "spent_prevout_script_types": shape.spent_prevout_script_types,
+            "output_script_types": shape.output_script_types,
         }));
         self.slow_blocks
             .sort_by_key(|value| -value["ms"].as_i64().unwrap_or_default());
@@ -711,9 +833,14 @@ impl PipelineTiming {
         doc.insert("prefetch_depth".into(), (self.prefetch_depth as i64).into());
         doc.insert("blocks_fetched".into(), self.blocks_fetched.into());
         doc.insert("blocks_connected".into(), self.blocks_connected.into());
+        doc.insert(
+            "telemetry_schema".into(),
+            "benchmark.telemetry_tick.v1".into(),
+        );
         for stage in [
             "rpc_getblockhash",
             "rpc_getblock",
+            "p2p_fetch",
             "block_parse_validate",
             "block_store",
             "metadata_store",
@@ -724,6 +851,11 @@ impl PipelineTiming {
             "commit",
             "utxo_apply",
             "block_connect_store_commit",
+            "utxo_delete_prepare",
+            "utxo_put_prepare",
+            "undo_put_prepare",
+            "metadata_put_prepare",
+            "rocksdb_write",
         ] {
             doc.insert(
                 stage.into(),
@@ -748,6 +880,115 @@ impl PipelineTiming {
         );
         doc.insert("slow_blocks".into(), Value::Array(self.slow_blocks.clone()));
         Value::Object(doc)
+    }
+
+    fn timing_buckets_json(&self) -> Value {
+        let mut buckets = Map::new();
+        let p2p_fetch = self
+            .stage_totals
+            .get("p2p_fetch")
+            .copied()
+            .unwrap_or_default()
+            + self
+                .stage_totals
+                .get("rpc_getblockhash")
+                .copied()
+                .unwrap_or_default()
+            + self
+                .stage_totals
+                .get("rpc_getblock")
+                .copied()
+                .unwrap_or_default();
+        buckets.insert("p2p_fetch".into(), (p2p_fetch.as_millis() as i64).into());
+        for stage in [
+            "block_parse_validate",
+            "utxo_load",
+            "prevout_batch_load",
+            "script_verify",
+            "utxo_apply",
+            "commit",
+            "block_connect_store_commit",
+            "utxo_delete_prepare",
+            "utxo_put_prepare",
+            "undo_put_prepare",
+            "metadata_put_prepare",
+            "rocksdb_write",
+        ] {
+            buckets.insert(
+                stage.into(),
+                (self
+                    .stage_totals
+                    .get(stage)
+                    .copied()
+                    .unwrap_or_default()
+                    .as_millis() as i64)
+                    .into(),
+            );
+        }
+        Value::Object(buckets)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_telemetry_tick(
+    opts: &LocalReferenceOptions<'_>,
+    phase: &str,
+    height: u32,
+    hash: &str,
+    tx_count: usize,
+    utxos: i64,
+    connected: u32,
+    sync_status: &str,
+    current_blocker: &Option<Value>,
+    last_block_elapsed: Duration,
+    timing: &PipelineTiming,
+    last_tick_height: &mut u32,
+    last_tick_elapsed: &mut Duration,
+) {
+    let elapsed = timing.started.elapsed();
+    let elapsed_delta = elapsed.saturating_sub(*last_tick_elapsed);
+    let height_delta = height.saturating_sub(*last_tick_height);
+    let recent_rate = height_delta as f64 / elapsed_delta.as_secs_f64().max(0.001);
+    let total_rate = connected as f64 / elapsed.as_secs_f64().max(0.001);
+    *last_tick_height = height;
+    *last_tick_elapsed = elapsed;
+    println!(
+        "benchmark.telemetry_tick {}",
+        serde_json::json!({
+            "schema": "benchmark.telemetry_tick.v1",
+            "port": "rust",
+            "gate": gate_id_for(opts),
+            "benchmark_lane": benchmark_lane_for(opts),
+            "target": target_label(opts.target),
+            "target_height": opts.target,
+            "height": height,
+            "percent": ((height as f64 / opts.target.max(1) as f64) * 100.0),
+            "hash": hash,
+            "tx_count": tx_count,
+            "elapsed_ms": elapsed.as_millis() as i64,
+            "rate_recent_blocks_per_second": recent_rate,
+            "rate_total_blocks_per_second": total_rate,
+            "phase": phase,
+            "utxos": utxos,
+            "last_block_ms": last_block_elapsed.as_millis() as i64,
+            "slow_blocks": timing.slow_blocks,
+            "current_blocker": current_blocker,
+            "sync_status": sync_status,
+            "timing_buckets_ms": timing.timing_buckets_json(),
+        })
+    );
+}
+
+fn gate_id_for(opts: &LocalReferenceOptions<'_>) -> &'static str {
+    if is_external_manual(opts) {
+        return "diagnostic_external_5k";
+    }
+    match opts.target {
+        5000 => "supporting_5k",
+        10000 => "supporting_10k",
+        50000 => "supporting_50k",
+        100000 => "primary_100k",
+        _ => "diagnostic",
     }
 }
 

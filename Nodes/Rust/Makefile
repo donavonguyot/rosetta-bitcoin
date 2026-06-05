@@ -16,15 +16,21 @@ STORAGE_RESULT ?= ../Shared/conformance/results/rust_storage_gate_$(RESULT_DATE)
 SCRIPT_RESULT ?= ../Shared/conformance/results/rust_script_corpus_$(RESULT_DATE).json
 LOCAL_REFERENCE_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_5k_benchmark_$(RESULT_DATE).json
 LOCAL_REFERENCE_10K_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_10k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_50K_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_50k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_100K_RESULT ?= ../Shared/conformance/results/rust_docker_primary_100k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_RESULT ?= /results/rust_docker_supporting_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_10K_RESULT ?= /results/rust_docker_supporting_10k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_50K_RESULT ?= /results/rust_docker_supporting_50k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_100K_RESULT ?= /results/rust_docker_primary_100k_benchmark_$(RESULT_DATE).json
 RPC_REPLAY_RESULT ?= ../Shared/conformance/results/rust_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
 DOCKER_P2P_PEER ?= host.docker.internal:48333
 DOCKER_LOCAL_PROOF_VOLUME ?= rsbitnode_proof_data
+DOCKER_EXTERNAL_P2P_PEER ?=
+DOCKER_EXTERNAL_PROBE_VOLUME ?= rsbitnode_external_5k_probe_data
 
-.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-rpc-replay docker-proof-local-fast docker-smoke-once clean
+.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-rpc-replay docker-probe-external docker-proof-local-fast docker-smoke-once clean
 
 build:
 	$(CARGO) build
@@ -92,6 +98,18 @@ docker-proof-10k:
 	  SYNC_TARGET=10000 \
 	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_10K_RESULT)
 
+docker-proof-50k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_50k_proof_data \
+	  SYNC_TARGET=50000 \
+	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_50K_RESULT)
+
+docker-proof-100k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_100k_proof_data \
+	  SYNC_TARGET=100000 \
+	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_100K_RESULT)
+
 docker-proof-rpc-replay:
 	@for i in $$(seq 1 60); do \
 	  nc -z 127.0.0.1 48332 && break; \
@@ -100,6 +118,11 @@ docker-proof-rpc-replay:
 	done
 	@docker volume rm -f rsbitnode_local_reference_data docker_rsbitnode_local_reference_data >/dev/null 2>&1 || true
 	$(DOCKER_COMPOSE) run --rm --no-deps -e RSBITNODE_RPC_RETRIES=$(RPC_RETRIES) -e RSBITNODE_BLOCK_PREFETCH_DEPTH=$(PREFETCH_DEPTH) rsbitnode-local-reference-proof rsbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --byte-source rpc --rpc-url http://host.docker.internal:48332 --rpc-user $(RPC_USER) --rpc-password $(RPC_PASSWORD) --progress $(PROGRESS) --result-path /results/rust_local_reference_docker_sync_$(RESULT_DATE).json --runtime-surface docker
+
+docker-probe-external:
+	@[ -n "$(DOCKER_EXTERNAL_P2P_PEER)" ] || { echo "error: set DOCKER_EXTERNAL_P2P_PEER=<host:48333>" >&2; exit 1; }
+	@docker volume rm -f $(DOCKER_EXTERNAL_PROBE_VOLUME) docker_$(DOCKER_EXTERNAL_PROBE_VOLUME) >/dev/null 2>&1 || true
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_EXTERNAL_PROBE_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps -e RSBITNODE_BLOCK_PREFETCH_DEPTH=$(PREFETCH_DEPTH) rsbitnode-local-reference-proof rsbitnode external-peer-proof --datadir /data --target 5000 --peer $(DOCKER_EXTERNAL_P2P_PEER) --progress $(PROGRESS) --result-path /results/rust_docker_external_5k_probe_$(RESULT_DATE).json --runtime-surface docker
 
 docker-proof-local-fast:
 	@docker volume rm -f rsbitnode_local_reference_data docker_rsbitnode_local_reference_data >/dev/null 2>&1 || true

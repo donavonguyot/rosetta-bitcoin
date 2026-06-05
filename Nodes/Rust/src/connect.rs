@@ -3,7 +3,7 @@ use chrono::Utc;
 use rayon::prelude::*;
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -25,6 +25,24 @@ pub struct TimingSummary {
 pub struct SlowBlock {
     pub height: u32,
     pub ms: i64,
+    pub tx_count: usize,
+    pub vin_count: usize,
+    pub vout_count: usize,
+    pub script_input_count: usize,
+    pub input_shape_counts: BTreeMap<String, usize>,
+    pub spent_prevout_script_types: BTreeMap<String, usize>,
+    pub output_script_types: BTreeMap<String, usize>,
+}
+
+#[derive(Serialize, Clone, Default)]
+pub struct BlockShapeSummary {
+    pub tx_count: usize,
+    pub vin_count: usize,
+    pub vout_count: usize,
+    pub script_input_count: usize,
+    pub input_shape_counts: BTreeMap<String, usize>,
+    pub spent_prevout_script_types: BTreeMap<String, usize>,
+    pub output_script_types: BTreeMap<String, usize>,
 }
 
 #[derive(Serialize)]
@@ -146,7 +164,8 @@ pub fn run_store(
         prev_hash = info.hash.clone();
         connected += 1;
         meta = store.metadata()?;
-        timing.record_block(height, block_started.elapsed());
+        timing.add_stage("block_connect_store_commit", block_started.elapsed());
+        timing.record_block(height, block_started.elapsed(), block_shape_summary(&txs));
         if !quiet && (height % progress == 0 || height == target) {
             println!(
                 "rsbitnode-connect height={} hash={} txs={} utxos={}",
@@ -228,7 +247,8 @@ pub fn connect_decoded_block(
     }
 
     let meta = store.metadata()?;
-    timing.record_block(height, block_started.elapsed());
+    timing.add_stage("block_connect_store_commit", block_started.elapsed());
+    timing.record_block(height, block_started.elapsed(), block_shape_summary(txs));
     let mut summary = summary_from(
         meta,
         target,
@@ -252,6 +272,12 @@ struct ScriptVerifyJob {
     spent_prevouts: Vec<SpentPrevout>,
 }
 
+struct ScriptVerifyTask {
+    job_index: usize,
+    tx_index: usize,
+    input_index: usize,
+}
+
 fn connect_transactions(
     store: &Store,
     timing: &mut TimingCollector,
@@ -271,10 +297,11 @@ fn connect_transactions(
     }
 
     let prevouts = gather_prevouts(txs);
-    let loaded = timing.measure_value("prevout_batch_load", || {
-        store.get_many_utxos("testnet4", &prevouts)
-    })?;
-    timing.add_stage("utxo_load", Duration::ZERO);
+    let load_started = Instant::now();
+    let loaded = store.get_many_utxos("testnet4", &prevouts)?;
+    let load_elapsed = load_started.elapsed();
+    timing.add_stage("prevout_batch_load", load_elapsed);
+    timing.add_stage("utxo_load", load_elapsed);
     let mut view = BlockView::new();
     for (outpoint, utxo) in prevouts.into_iter().zip(loaded) {
         if let Some(utxo) = utxo {
@@ -356,8 +383,9 @@ fn connect_transactions(
         }
         script_jobs.push(ScriptVerifyJob {
             tx_index,
-            spent_prevouts,
+            spent_prevouts: spent_prevouts.clone(),
         });
+        view.add_spent_prevout_script_types(&spent_prevouts);
         for (input_index, outpoint) in input_outpoints.iter().copied().enumerate() {
             view.mark_spent(outpoint, input_utxos[input_index].clone());
         }
@@ -371,6 +399,7 @@ fn connect_transactions(
     let failure = timing.measure("script_verify", || {
         Ok(verify_script_jobs(txs, &script_jobs))
     })?;
+    timing.set_spent_prevout_script_types(view.spent_prevout_script_types.clone());
     if let Some((tx_index, input, failure)) = failure {
         return Ok(ConnectOutcome::Blocker(blocker(
             height,
@@ -396,29 +425,60 @@ fn verify_script_jobs(
     txs: &[Transaction],
     jobs: &[ScriptVerifyJob],
 ) -> Option<(usize, usize, String)> {
-    if script_parallel_enabled() && jobs.len() > 1 {
-        jobs.par_iter()
-            .filter_map(|job| verify_script_job(txs, job))
-            .min_by_key(|(tx_index, input_index, _)| (*tx_index, *input_index))
+    let tasks = script_verify_tasks(jobs);
+    if script_parallel_enabled() && tasks.len() > 1 {
+        first_failure_by_order(
+            tasks
+                .par_iter()
+                .filter_map(|task| verify_script_task(txs, jobs, task))
+                .collect::<Vec<_>>(),
+        )
     } else {
-        jobs.iter().find_map(|job| verify_script_job(txs, job))
+        tasks
+            .iter()
+            .find_map(|task| verify_script_task(txs, jobs, task))
     }
 }
 
-fn verify_script_job(txs: &[Transaction], job: &ScriptVerifyJob) -> Option<(usize, usize, String)> {
-    let transaction = &txs[job.tx_index];
-    for input_index in 0..job.spent_prevouts.len() {
-        if let Err(err) = script_verify::verify_transaction_input_borrowed(
-            transaction,
-            input_index,
-            &job.spent_prevouts[input_index].script_pubkey,
-            job.spent_prevouts[input_index].amount,
-            &job.spent_prevouts,
-        ) {
-            return Some((job.tx_index, input_index, err.to_string()));
+fn script_verify_tasks(jobs: &[ScriptVerifyJob]) -> Vec<ScriptVerifyTask> {
+    let total_inputs = jobs.iter().map(|job| job.spent_prevouts.len()).sum();
+    let mut tasks = Vec::with_capacity(total_inputs);
+    for (job_index, job) in jobs.iter().enumerate() {
+        for input_index in 0..job.spent_prevouts.len() {
+            tasks.push(ScriptVerifyTask {
+                job_index,
+                tx_index: job.tx_index,
+                input_index,
+            });
         }
     }
-    None
+    tasks
+}
+
+fn verify_script_task(
+    txs: &[Transaction],
+    jobs: &[ScriptVerifyJob],
+    task: &ScriptVerifyTask,
+) -> Option<(usize, usize, String)> {
+    let job = &jobs[task.job_index];
+    let transaction = &txs[task.tx_index];
+    script_verify::verify_transaction_input_borrowed(
+        transaction,
+        task.input_index,
+        &job.spent_prevouts[task.input_index].script_pubkey,
+        job.spent_prevouts[task.input_index].amount,
+        &job.spent_prevouts,
+    )
+    .err()
+    .map(|err| (task.tx_index, task.input_index, err.to_string()))
+}
+
+fn first_failure_by_order(
+    failures: impl IntoIterator<Item = (usize, usize, String)>,
+) -> Option<(usize, usize, String)> {
+    failures
+        .into_iter()
+        .min_by_key(|(tx_index, input_index, _)| (*tx_index, *input_index))
 }
 
 fn script_parallel_enabled() -> bool {
@@ -430,6 +490,7 @@ struct BlockView {
     loaded: HashMap<UtxoOutpoint, StoredUtxo>,
     created: HashMap<UtxoOutpoint, StoredUtxo>,
     spent: HashMap<UtxoOutpoint, UtxoUndoEntry>,
+    spent_prevout_script_types: BTreeMap<String, usize>,
 }
 
 impl BlockView {
@@ -455,6 +516,15 @@ impl BlockView {
             return;
         }
         self.spent.insert(outpoint, undo_from(utxo));
+    }
+
+    fn add_spent_prevout_script_types(&mut self, spent_prevouts: &[SpentPrevout]) {
+        for prevout in spent_prevouts {
+            *self
+                .spent_prevout_script_types
+                .entry(script_pubkey_type(&prevout.script_pubkey).to_string())
+                .or_default() += 1;
+        }
     }
 
     fn created_utxos(&self) -> Vec<StoredUtxo> {
@@ -541,10 +611,80 @@ fn is_spendable_output(script_pubkey: &[u8]) -> bool {
     !script_pubkey.is_empty() && script_pubkey[0] != 0x6a
 }
 
+pub fn block_shape_summary(txs: &[Transaction]) -> BlockShapeSummary {
+    let mut summary = BlockShapeSummary {
+        tx_count: txs.len(),
+        ..BlockShapeSummary::default()
+    };
+    for (tx_index, transaction) in txs.iter().enumerate() {
+        summary.vin_count += transaction.inputs.len();
+        summary.vout_count += transaction.outputs.len();
+        for (input_index, input) in transaction.inputs.iter().enumerate() {
+            let kind = if tx_index == 0 && transaction.is_coinbase() {
+                "coinbase"
+            } else if !input.script_sig.is_empty() {
+                "legacy_scriptsig"
+            } else if transaction
+                .witness
+                .get(input_index)
+                .is_some_and(|stack| !stack.is_empty())
+            {
+                "witness"
+            } else {
+                "empty_spend"
+            };
+            if kind != "coinbase" {
+                summary.script_input_count += 1;
+            }
+            *summary
+                .input_shape_counts
+                .entry(kind.to_string())
+                .or_default() += 1;
+        }
+        for output in &transaction.outputs {
+            *summary
+                .output_script_types
+                .entry(script_pubkey_type(&output.script_pubkey).to_string())
+                .or_default() += 1;
+        }
+    }
+    summary
+}
+
+fn script_pubkey_type(script: &[u8]) -> &'static str {
+    if script.is_empty() {
+        "empty"
+    } else if script[0] == 0x6a {
+        "op_return"
+    } else if script.len() == 25
+        && script[0] == 0x76
+        && script[1] == 0xa9
+        && script[2] == 0x14
+        && script[23] == 0x88
+        && script[24] == 0xac
+    {
+        "p2pkh"
+    } else if script.len() == 23 && script[0] == 0xa9 && script[1] == 0x14 && script[22] == 0x87 {
+        "p2sh"
+    } else if script.len() == 22 && script[0] == 0x00 && script[1] == 0x14 {
+        "p2wpkh"
+    } else if script.len() == 34 && script[0] == 0x00 && script[1] == 0x20 {
+        "p2wsh"
+    } else if script.len() == 34 && script[0] == 0x51 && script[1] == 0x20 {
+        "p2tr"
+    } else if script.len() == 35 && (script[0] == 0x02 || script[0] == 0x03) && script[34] == 0xac {
+        "p2pk_compressed"
+    } else if script.len() == 67 && script[0] == 0x04 && script[66] == 0xac {
+        "p2pk_uncompressed"
+    } else {
+        "other"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tx::TxOut;
+    use crate::tx::{OutPoint, TxIn, TxOut};
 
     #[test]
     fn outputs_for_skips_core_unspendable_outputs() {
@@ -573,6 +713,72 @@ mod tests {
         assert_eq!(utxos.len(), 1);
         assert_eq!(utxos[0].value_sats, 3);
         assert_eq!(utxos[0].outpoint.vout, 2);
+    }
+
+    #[test]
+    fn parallel_failure_reduction_keeps_lowest_tx_input_order() {
+        let failures = vec![
+            (4, 3, "later".to_string()),
+            (2, 9, "wrong".to_string()),
+            (2, 1, "first".to_string()),
+        ];
+
+        let selected = first_failure_by_order(failures).expect("selected failure");
+        assert_eq!(selected.0, 2);
+        assert_eq!(selected.1, 1);
+        assert_eq!(selected.2, "first");
+    }
+
+    #[test]
+    fn block_shape_summary_counts_spend_and_output_families() {
+        let txs = vec![
+            Transaction {
+                version: 1,
+                inputs: vec![TxIn {
+                    previous_output: OutPoint {
+                        hash: [0; 32],
+                        index: u32::MAX,
+                    },
+                    script_sig: vec![0x51],
+                    sequence: 0xffff_ffff,
+                }],
+                outputs: vec![TxOut {
+                    value: 1,
+                    script_pubkey: vec![0x6a, 0x01, 0x01],
+                }],
+                lock_time: 0,
+                witness: vec![],
+            },
+            Transaction {
+                version: 1,
+                inputs: vec![TxIn {
+                    previous_output: OutPoint {
+                        hash: [1; 32],
+                        index: 0,
+                    },
+                    script_sig: vec![0x01, 0x01],
+                    sequence: 0xffff_ffff,
+                }],
+                outputs: vec![TxOut {
+                    value: 2,
+                    script_pubkey: vec![
+                        0x76, 0xa9, 0x14, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                        1, 0x88, 0xac,
+                    ],
+                }],
+                lock_time: 0,
+                witness: vec![],
+            },
+        ];
+
+        let summary = block_shape_summary(&txs);
+        assert_eq!(summary.tx_count, 2);
+        assert_eq!(summary.vin_count, 2);
+        assert_eq!(summary.script_input_count, 1);
+        assert_eq!(summary.input_shape_counts["coinbase"], 1);
+        assert_eq!(summary.input_shape_counts["legacy_scriptsig"], 1);
+        assert_eq!(summary.output_script_types["op_return"], 1);
+        assert_eq!(summary.output_script_types["p2pkh"], 1);
     }
 }
 
@@ -642,6 +848,7 @@ struct TimingCollector {
     started: Instant,
     stage_totals: HashMap<String, Duration>,
     slow_blocks: Vec<SlowBlock>,
+    spent_prevout_script_types: BTreeMap<String, usize>,
 }
 
 impl TimingCollector {
@@ -650,6 +857,7 @@ impl TimingCollector {
             started: Instant::now(),
             stage_totals: HashMap::new(),
             slow_blocks: Vec::new(),
+            spent_prevout_script_types: BTreeMap::new(),
         }
     }
 
@@ -660,18 +868,28 @@ impl TimingCollector {
         result
     }
 
-    fn measure_value<T>(&mut self, stage: &str, f: impl FnOnce() -> Result<T>) -> Result<T> {
-        self.measure(stage, f)
-    }
-
     fn add_stage(&mut self, stage: &str, elapsed: Duration) {
         *self.stage_totals.entry(stage.to_string()).or_default() += elapsed;
     }
 
-    fn record_block(&mut self, height: u32, elapsed: Duration) {
+    fn set_spent_prevout_script_types(&mut self, counts: BTreeMap<String, usize>) {
+        self.spent_prevout_script_types = counts;
+    }
+
+    fn record_block(&mut self, height: u32, elapsed: Duration, mut shape: BlockShapeSummary) {
+        if shape.spent_prevout_script_types.is_empty() {
+            shape.spent_prevout_script_types = self.spent_prevout_script_types.clone();
+        }
         self.slow_blocks.push(SlowBlock {
             height,
             ms: elapsed.as_millis() as i64,
+            tx_count: shape.tx_count,
+            vin_count: shape.vin_count,
+            vout_count: shape.vout_count,
+            script_input_count: shape.script_input_count,
+            input_shape_counts: shape.input_shape_counts,
+            spent_prevout_script_types: shape.spent_prevout_script_types,
+            output_script_types: shape.output_script_types,
         });
         self.slow_blocks.sort_by_key(|block| -block.ms);
         self.slow_blocks.truncate(10);
@@ -698,6 +916,11 @@ fn merge_storage_timings(timing: &mut TimingCollector, storage_timings: &Connect
         "commit",
         "block_connect_store_commit",
         "script_verify",
+        "utxo_delete_prepare",
+        "utxo_put_prepare",
+        "undo_put_prepare",
+        "metadata_put_prepare",
+        "rocksdb_write",
     ] {
         let millis = storage_timings.millis(stage);
         if millis > 0 {

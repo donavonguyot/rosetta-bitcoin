@@ -83,6 +83,7 @@ make docker-status
 make docker-storage-proof
 make docker-script-corpus
 make docker-proof-local
+make docker-probe-external
 make docker-proof-rpc-replay
 make docker-proof-local-fast
 make docker-smoke-once
@@ -92,3 +93,5 @@ make docker-smoke-once
 exposed to Project as `docker_proof_local`. `docker-proof-rpc-replay` preserves
 the older Core RPC replay lane as evidence-only. `docker-proof-local-fast` keeps
 its WAL-off diagnostic role and must not be benchmark-ranked.
+`docker-probe-external` requires `DOCKER_EXTERNAL_P2P_PEER=<host:48333>` and
+records diagnostic public testnet4 peer evidence only.

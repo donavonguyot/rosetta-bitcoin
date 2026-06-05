@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::tx;
 
@@ -24,6 +24,7 @@ pub struct P2PBlock {
     pub height: u32,
     pub hash: String,
     pub raw: Vec<u8>,
+    pub fetch_ms: i64,
 }
 
 pub fn fetch_blocks(opts: FetchOptions) -> Receiver<Result<P2PBlock>> {
@@ -37,11 +38,22 @@ pub fn fetch_blocks(opts: FetchOptions) -> Receiver<Result<P2PBlock>> {
             let mut start = 0usize;
             while start <= opts.target as usize {
                 let end = (start + prefetch).min(opts.target as usize + 1);
+                let fetch_started = Instant::now();
                 let blocks = client.request_blocks(&hashes[start..end])?;
+                let fetch_ms = (fetch_started.elapsed().as_millis() as i64)
+                    / i64::try_from(blocks.len().max(1)).unwrap_or(1);
                 for (offset, raw) in blocks.into_iter().enumerate() {
                     let height = (start + offset) as u32;
                     let hash = tx::display_hash(&tx::double_sha(&raw[..80]));
-                    if sender.send(Ok(P2PBlock { height, hash, raw })).is_err() {
+                    if sender
+                        .send(Ok(P2PBlock {
+                            height,
+                            hash,
+                            raw,
+                            fetch_ms,
+                        }))
+                        .is_err()
+                    {
                         return Ok(());
                     }
                 }

@@ -808,7 +808,14 @@ ranked_results AS (
     bc.*,
     row_number() OVER (
       PARTITION BY bc.gate_id, bc.port
-      ORDER BY bc.validated_height DESC,
+      ORDER BY CASE bc.comparability_status
+                 WHEN 'comparable' THEN 0
+                 WHEN 'evidence_only' THEN 1
+                 WHEN 'diagnostic' THEN 2
+                 WHEN 'failed' THEN 3
+                 ELSE 4
+               END,
+               bc.validated_height DESC,
                bc.captured_at DESC,
                bc.source_artifact_id
     ) AS rn

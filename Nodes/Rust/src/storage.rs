@@ -129,6 +129,9 @@ impl Store {
         chain: &str,
         outpoints: &[UtxoOutpoint],
     ) -> Result<Vec<Option<StoredUtxo>>> {
+        if outpoints.len() >= 64 {
+            return self.get_many_utxos_deduped(chain, outpoints);
+        }
         let keys = outpoints
             .iter()
             .map(|outpoint| codec::utxo_key(chain, &outpoint.txid_internal, outpoint.vout))
@@ -143,6 +146,47 @@ impl Store {
                     .transpose()
             })
             .collect()
+    }
+
+    fn get_many_utxos_deduped(
+        &self,
+        chain: &str,
+        outpoints: &[UtxoOutpoint],
+    ) -> Result<Vec<Option<StoredUtxo>>> {
+        let mut unique = Vec::with_capacity(outpoints.len());
+        let mut unique_index = HashMap::with_capacity(outpoints.len());
+        let mut order = Vec::with_capacity(outpoints.len());
+        for outpoint in outpoints {
+            let index = match unique_index.get(outpoint) {
+                Some(index) => *index,
+                None => {
+                    let index = unique.len();
+                    unique.push(*outpoint);
+                    unique_index.insert(*outpoint, index);
+                    index
+                }
+            };
+            order.push(index);
+        }
+        let keys = unique
+            .iter()
+            .map(|outpoint| codec::utxo_key(chain, &outpoint.txid_internal, outpoint.vout))
+            .collect::<Vec<_>>();
+        let decoded = self
+            .db
+            .multi_get(keys)
+            .into_iter()
+            .zip(unique.iter())
+            .map(|(value, outpoint)| {
+                value?
+                    .map(|bytes| decode_utxo(outpoint, &bytes))
+                    .transpose()
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(order
+            .into_iter()
+            .map(|index| decoded[index].clone())
+            .collect())
     }
 
     pub fn commit_block(
@@ -190,6 +234,7 @@ impl Store {
 
         let mut batch = WriteBatch::default();
         let apply_started = Instant::now();
+        let delete_started = Instant::now();
         for outpoint in &commit.spent_external {
             batch.delete(codec::utxo_key(
                 &commit.chain,
@@ -197,6 +242,8 @@ impl Store {
                 outpoint.vout,
             ));
         }
+        timings.add("utxo_delete_prepare", delete_started.elapsed());
+        let put_started = Instant::now();
         for utxo in &commit.created_utxos {
             batch.put(
                 codec::utxo_key(
@@ -212,17 +259,24 @@ impl Store {
                 ),
             );
         }
+        timings.add("utxo_put_prepare", put_started.elapsed());
+        let undo_started = Instant::now();
         batch.put(
             codec::height_key(b'd', &commit.chain, commit.height),
             encode_undo_entries(&commit.undo_entries),
         );
+        timings.add("undo_put_prepare", undo_started.elapsed());
+        let metadata_started = Instant::now();
         batch.put(
             codec::chain_key(b't', &commit.chain),
             codec::tip_value(commit.height, &commit.block_hash_internal),
         );
         put_metadata_batch(&mut batch, &meta)?;
+        timings.add("metadata_put_prepare", metadata_started.elapsed());
         timings.add("utxo_apply", apply_started.elapsed());
+        let rocksdb_write_started = Instant::now();
         self.write_batch(batch)?;
+        timings.add("rocksdb_write", rocksdb_write_started.elapsed());
         timings.add("commit", commit_started.elapsed());
 
         Ok(ChainstateCommitResult {

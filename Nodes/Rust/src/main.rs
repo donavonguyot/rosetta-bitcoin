@@ -108,6 +108,20 @@ enum Command {
         #[arg(long, default_value = "host")]
         runtime_surface: String,
     },
+    ExternalPeerProof {
+        #[arg(long, default_value = "./data-rust-external-proof")]
+        datadir: PathBuf,
+        #[arg(long, default_value_t = 5000)]
+        target: u32,
+        #[arg(long)]
+        peer: String,
+        #[arg(long)]
+        result_path: Option<PathBuf>,
+        #[arg(long, default_value_t = 1000)]
+        progress: u32,
+        #[arg(long, default_value = "host")]
+        runtime_surface: String,
+    },
     BlockerInspect {
         #[arg(long, default_value = "./data-rust-sync")]
         datadir: PathBuf,
@@ -223,6 +237,28 @@ fn main() -> Result<()> {
                 },
             )?)
         }
+        Command::ExternalPeerProof {
+            datadir,
+            target,
+            peer,
+            result_path,
+            progress,
+            runtime_surface,
+        } => print_json(&local_reference::run(
+            local_reference::LocalReferenceOptions {
+                datadir: &datadir,
+                target,
+                rpc_url: "",
+                rpc_user: "",
+                rpc_password: "",
+                peer: &peer,
+                result_path: result_path.as_deref(),
+                progress,
+                mode: "pipeline",
+                byte_source: "external_p2p",
+                runtime_surface: &runtime_surface,
+            },
+        )?),
         Command::BlockerInspect { datadir } => {
             let meta =
                 storage::read_metadata(&datadir).unwrap_or_else(|_| storage::missing_metadata());

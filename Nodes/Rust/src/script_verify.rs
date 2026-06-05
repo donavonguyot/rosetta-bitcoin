@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, ensure, Result};
 use ripemd::{Digest, Ripemd160};
 use secp256k1::{ecdsa::Signature as EcdsaSignature, schnorr, Message, Parity, PublicKey, Scalar};
-use secp256k1::{Secp256k1, XOnlyPublicKey};
+use secp256k1::{Secp256k1, VerifyOnly, XOnlyPublicKey};
 use sha1::Sha1;
 use sha2::Sha256;
 
@@ -89,6 +89,10 @@ const TAP_VALIDATION_PER_SIGOP: i32 = 50;
 const TAPROOT_SIGHASH_DEFAULT: u8 = 0;
 const TAPROOT_SIGHASH_ALL: u8 = 1;
 const TAPROOT_SIGHASH_SINGLE: u8 = 3;
+
+thread_local! {
+    static SECP_VERIFY: Secp256k1<VerifyOnly> = Secp256k1::verification_only();
+}
 
 #[derive(Clone, Debug)]
 pub struct SpentPrevout {
@@ -1949,7 +1953,6 @@ fn verify_tap_signature(
 }
 
 fn verify_ecdsa(pubkey: &[u8], digest: &[u8; 32], sig_der: &[u8]) -> bool {
-    let secp = Secp256k1::verification_only();
     let Ok(pubkey) = PublicKey::from_slice(pubkey) else {
         return false;
     };
@@ -1959,15 +1962,16 @@ fn verify_ecdsa(pubkey: &[u8], digest: &[u8; 32], sig_der: &[u8]) -> bool {
     let Ok(msg) = Message::from_digest_slice(digest) else {
         return false;
     };
-    if secp.verify_ecdsa(&msg, &sig, &pubkey).is_ok() {
-        return true;
-    }
-    sig.normalize_s();
-    secp.verify_ecdsa(&msg, &sig, &pubkey).is_ok()
+    SECP_VERIFY.with(|secp| {
+        if secp.verify_ecdsa(&msg, &sig, &pubkey).is_ok() {
+            return true;
+        }
+        sig.normalize_s();
+        secp.verify_ecdsa(&msg, &sig, &pubkey).is_ok()
+    })
 }
 
 fn verify_schnorr(pubkey_xonly: &[u8], digest: &[u8; 32], sig64: &[u8]) -> bool {
-    let secp = Secp256k1::verification_only();
     let Ok(pubkey) = XOnlyPublicKey::from_slice(pubkey_xonly) else {
         return false;
     };
@@ -1977,14 +1981,15 @@ fn verify_schnorr(pubkey_xonly: &[u8], digest: &[u8; 32], sig64: &[u8]) -> bool 
     let Ok(msg) = Message::from_digest_slice(digest) else {
         return false;
     };
-    secp.verify_schnorr(&sig, &msg, &pubkey).is_ok()
+    SECP_VERIFY.with(|secp| secp.verify_schnorr(&sig, &msg, &pubkey).is_ok())
 }
 
 fn taproot_tweak_pubkey_xonly(internal_xonly: &[u8], tweak32: &[u8; 32]) -> Option<([u8; 32], u8)> {
-    let secp = Secp256k1::verification_only();
     let internal = XOnlyPublicKey::from_slice(internal_xonly).ok()?;
     let tweak = Scalar::from_be_bytes(*tweak32).ok()?;
-    let (tweaked, parity) = internal.add_tweak(&secp, &tweak).ok()?;
+    let (tweaked, parity) = SECP_VERIFY
+        .with(|secp| internal.add_tweak(secp, &tweak))
+        .ok()?;
     let parity = match parity {
         Parity::Even => 0,
         Parity::Odd => 1,
