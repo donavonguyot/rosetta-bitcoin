@@ -48,6 +48,7 @@ STANDARD_COMMANDS = [
     "docker_build",
     "docker_status",
     "docker_proof_local",
+    "docker_proof_10k",
     "docker_probe_external",
     "docker_supervisor",
     "docker_supervisor_status",

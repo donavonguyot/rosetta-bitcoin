@@ -27,6 +27,7 @@
     "docker_status": "cd Nodes/Cpp && make docker-cpp-sync-status",
     "docker_script_corpus": "cd Nodes/Cpp && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Cpp && make docker-cpp-supporting-5k-proof",
+    "docker_proof_10k": "cd Nodes/Cpp && make docker-cpp-supporting-10k-proof",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Cpp && make docker-cpp-sync-supervisor",
     "docker_supervisor_status": "cd Nodes/Cpp && make docker-cpp-sync-status",

@@ -78,6 +78,7 @@
         "docker_build": { "type": ["string", "null"] },
         "docker_status": { "type": ["string", "null"] },
         "docker_proof_local": { "type": ["string", "null"] },
+        "docker_proof_10k": { "type": ["string", "null"] },
         "docker_probe_external": { "type": ["string", "null"] },
         "docker_supervisor": { "type": ["string", "null"] },
         "docker_supervisor_status": { "type": ["string", "null"] },

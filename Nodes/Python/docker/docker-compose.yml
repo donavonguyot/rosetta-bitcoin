@@ -61,7 +61,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - pybitnode_proof_data:/proof
+      - ${DOCKER_PROOF_VOLUME:-pybitnode_proof_data}:/proof
       - ../../Shared/conformance/results:/results
     command:
       [
@@ -73,7 +73,7 @@ services:
         "--result-path",
         "${PYBITNODE_BENCHMARK_RESULT:-/results/python_docker_supporting_5k_benchmark.json}",
         "--target",
-        "5000",
+        "${PYBITNODE_BENCHMARK_TARGET:-5000}",
         "--peer",
         "${PYBITNODE_BENCHMARK_PEER:-host.docker.internal:48333}",
         "--prefetch-depth",

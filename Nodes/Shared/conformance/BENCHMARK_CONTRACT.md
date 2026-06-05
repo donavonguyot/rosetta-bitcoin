@@ -138,15 +138,54 @@ Preferred Docker command surface:
 ```text
 docker_warm
 docker_proof_local
+docker_proof_10k
 docker_proof_rpc_replay
 ```
 
 Run `docker_warm` before a benchmark campaign. Use `docker_proof_local` only for
-the official local Reference P2P comparable lane. Use explicit replay command
-keys such as `docker_proof_rpc_replay` for RPC byte-source proof. Ports may keep
-idiomatic target names, but Project records the command through
-`port_command_surface` and records 5k evidence through
+the official local Reference P2P 5k comparable lane. Use `docker_proof_10k` for
+the official local Reference P2P 10k comparable lane. Use explicit replay
+command keys such as `docker_proof_rpc_replay` for RPC byte-source proof. Ports
+may keep idiomatic target names, but Project records the command through
+`port_command_surface` and records benchmark evidence through
 `benchmark_gate_matrix` and `benchmark_comparability`.
+
+## 10k Supporting Gate
+
+The first standardized performance gate is:
+
+```text
+supporting_10k_p2p
+```
+
+This lane deliberately reuses the 5k stance so the extra 5,000 blocks measure
+port behavior rather than harness drift:
+
+```text
+benchmark_contract_version = 1
+benchmark_kind = supporting_10k_p2p
+benchmark_lane = supporting_10k_p2p
+utxo_accounting_policy = core_spendable_v1
+target_height = 10000
+header_target_height = 10000
+target_label = 10k
+runtime_surface = docker
+peer_mode = local_reference
+peer = host.docker.internal:48333 or Reference service:48333
+byte_source = local_reference_p2p
+proof_mode = p2p_sync
+prefetch_depth = 4
+script_runner_mode = parallel
+rocksdb_wal_disabled = false
+fresh_state = true
+resume_supported = true
+binary_gate_status = not_attempted
+```
+
+At height `10000`, the expected `core_spendable_v1`
+`chainstate_utxo_count` is `19100`. Historical long-sync or RPC replay artifacts
+that reached 10k remain useful evidence, but Project should classify them as
+evidence-only unless they match the lane above.
 
 ### Preflight Before Each Run
 
@@ -158,6 +197,11 @@ python3 Project/scripts/preflight_benchmark_gate.py \
   --db Project/project.db \
   --gate supporting_5k \
   --port <port>
+
+python3 Project/scripts/preflight_benchmark_gate.py \
+  --db Project/project.db \
+  --gate supporting_10k \
+  --port <port>
 ```
 
 For a whole-port readiness sweep:
@@ -165,7 +209,7 @@ For a whole-port readiness sweep:
 ```bash
 python3 Project/scripts/preflight_benchmark_gate.py \
   --db Project/project.db \
-  --gate supporting_5k \
+  --gate supporting_10k \
   --all
 ```
 
@@ -317,6 +361,12 @@ Use this result name for 5k supporting-gate artifacts:
 
 ```text
 <port>_<surface>_supporting_5k_benchmark_<YYYY-MM-DD>.json
+```
+
+Use this result name for 10k supporting-gate artifacts:
+
+```text
+<port>_<surface>_supporting_10k_benchmark_<YYYY-MM-DD>.json
 ```
 
 ## Non-Goals

@@ -98,6 +98,12 @@ def preflight_port(conn: sqlite3.Connection, port: str, stage: str) -> dict[str,
         errors.append(f"5k baseline is not passed: {row.get('baseline_5k_status') or 'missing'}")
 
     target_height = int(row.get("target_height") or -1)
+    if stage == "10k" and row.get("runway_status") != "passed":
+        errors.append(
+            "missing comparable 10k benchmark gate proof "
+            f"(stage_gate_status={row.get('stage_gate_status') or 'missing'}, "
+            f"stage_gate_comparability={row.get('stage_gate_comparability') or 'missing'})"
+        )
     if stage in {"10k", "50k", "100k"} and int(row.get("max_validated_height") or -1) < target_height:
         errors.append(
             f"missing {stage} stage proof: max_validated_height={row.get('max_validated_height')} "
@@ -124,6 +130,8 @@ def preflight_port(conn: sqlite3.Connection, port: str, stage: str) -> dict[str,
         "script_runtime_surface": row.get("script_runtime_surface"),
         "script_native_crypto_backend": row.get("script_native_crypto_backend"),
         "baseline_5k_status": row.get("baseline_5k_status"),
+        "stage_gate_status": row.get("stage_gate_status"),
+        "stage_gate_comparability": row.get("stage_gate_comparability"),
         "max_validated_height": row.get("max_validated_height"),
         "header_height": row.get("header_height"),
         "sync_status": row.get("sync_status"),
@@ -156,6 +164,12 @@ def print_text(results: list[dict[str, Any]]) -> None:
             f"native_crypto={result.get('script_native_crypto_backend') or ''}"
         )
         print(f"  baseline_5k={result.get('baseline_5k_status') or ''}")
+        if result.get("stage") in {"10k", "50k", "100k"}:
+            print(
+                "  stage_gate="
+                f"{result.get('stage_gate_status') or ''} "
+                f"comparability={result.get('stage_gate_comparability') or ''}"
+            )
         print(
             "  sync="
             f"{result.get('sync_status') or ''} "

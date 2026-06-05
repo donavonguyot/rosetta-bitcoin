@@ -63,17 +63,22 @@ python3 Project/scripts/preflight_benchmark_gate.py \
 
 python3 Project/scripts/preflight_benchmark_gate.py \
   --db Project/project.db \
-  --gate supporting_5k \
+  --gate supporting_10k \
+  --port go
+
+python3 Project/scripts/preflight_benchmark_gate.py \
+  --db Project/project.db \
+  --gate supporting_10k \
   --all
 ```
 
 The preflight is read-only. It checks Project mission-control rows for the
 preferred command surface, Docker contract posture, local-reference P2P mode,
 durable proof volume, and required metadata stance such as
-`rocksdb_wal_disabled=false`, `header_target_height=5000`, `prefetch_depth=4`,
-`script_runner_mode=parallel`, and `fresh_state=true`. It does not fail merely
-because a port has no gate result yet; missing evidence means the run still
-needs to happen.
+`rocksdb_wal_disabled=false`, the gate-specific `header_target_height`,
+`prefetch_depth=4`, `script_runner_mode=parallel`, and `fresh_state=true`. It
+does not fail merely because a port has no gate result yet; missing evidence
+means the run still needs to happen.
 
 Preflight the full 5k baseline after importing evidence:
 

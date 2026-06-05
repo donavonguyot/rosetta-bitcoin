@@ -395,8 +395,9 @@ def print_consensus_runway(connection: sqlite3.Connection) -> None:
         select port, stage, runway_status, target_height,
                has_clean_script_corpus, script_passed, script_failed,
                script_runtime_surface, script_native_crypto_backend,
-               baseline_5k_status, max_validated_height, header_height,
-               sync_status, open_blocker_count, open_blocker_heights
+               baseline_5k_status, stage_gate_status, stage_gate_comparability,
+               max_validated_height, header_height, sync_status,
+               open_blocker_count, open_blocker_heights
         from consensus_runway
         order by port,
           case stage
@@ -423,6 +424,8 @@ def print_consensus_runway(connection: sqlite3.Connection) -> None:
                 "script_surface",
                 "script_crypto",
                 "5k",
+                "stage_gate",
+                "stage_cmp",
                 "validated",
                 "headers",
                 "sync",

@@ -38,11 +38,7 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
         "local_reference_rpc"
     };
     let proof_mode = if p2p_source { "p2p_sync" } else { opts.mode };
-    let benchmark_lane = if p2p_source {
-        "supporting_5k_p2p"
-    } else {
-        "supporting_5k_rpc_replay"
-    };
+    let benchmark_lane = supporting_lane(opts.target, p2p_source);
     let mut doc = Map::new();
     doc.insert("implementation".into(), "RustNode".into());
     doc.insert("category".into(), "local_reference_sync".into());
@@ -250,6 +246,9 @@ fn benchmark_kind(target: u32, byte_source: &str) -> &'static str {
     if byte_source == "p2p" {
         return match target {
             5000 => "supporting_5k_p2p",
+            10000 => "supporting_10k_p2p",
+            50000 => "supporting_50k_p2p",
+            100000 => "primary_100k_p2p",
             _ => "local_reference_p2p",
         };
     }
@@ -259,6 +258,21 @@ fn benchmark_kind(target: u32, byte_source: &str) -> &'static str {
         50000 => "supporting_50k_durable_local_reference_replay",
         100000 => "primary_100k_durable_local_reference_replay",
         _ => "local_reference_replay",
+    }
+}
+
+fn supporting_lane(target: u32, p2p_source: bool) -> &'static str {
+    match (target, p2p_source) {
+        (5000, true) => "supporting_5k_p2p",
+        (10000, true) => "supporting_10k_p2p",
+        (50000, true) => "supporting_50k_p2p",
+        (100000, true) => "primary_100k_p2p",
+        (5000, false) => "supporting_5k_rpc_replay",
+        (10000, false) => "supporting_10k_rpc_replay",
+        (50000, false) => "supporting_50k_rpc_replay",
+        (100000, false) => "primary_100k_rpc_replay",
+        (_, true) => "local_reference_p2p",
+        (_, false) => "local_reference_rpc",
     }
 }
 

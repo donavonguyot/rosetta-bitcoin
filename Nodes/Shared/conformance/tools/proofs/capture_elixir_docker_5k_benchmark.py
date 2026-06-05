@@ -117,6 +117,11 @@ def main() -> int:
       failures.append(str(last_error))
 
     passed = not failures
+    labels = {5000: "5k", 10000: "10k", 50000: "50k", 100000: "100k"}
+    target_label = labels.get(target_height, "")
+    benchmark_gate = f"supporting_{target_label}" if target_label else "local_reference"
+    benchmark_kind = f"supporting_{target_label}_p2p" if target_label else "local_reference_p2p"
+
     artifact = {
         "implementation": "ElixirNode",
         "node": "ElixirNode",
@@ -127,12 +132,12 @@ def main() -> int:
         "runtime_surface": "docker",
         "datadir": status.get("datadir", "/data"),
         "benchmark_contract_version": 1,
-        "benchmark_gate": "supporting_5k",
-        "benchmark_kind": "supporting_5k_p2p",
-        "benchmark_lane": "supporting_5k_p2p",
+        "benchmark_gate": benchmark_gate,
+        "benchmark_kind": benchmark_kind,
+        "benchmark_lane": benchmark_kind,
         "utxo_accounting_policy": "core_spendable_v1",
         "target_height": target_height,
-        "target_label": "5k",
+        "target_label": target_label,
         "header_target_height": header_target_height,
         "byte_source": "local_reference_p2p",
         "proof_mode": "p2p_sync",

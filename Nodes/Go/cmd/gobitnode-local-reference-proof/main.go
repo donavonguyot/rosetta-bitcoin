@@ -39,13 +39,13 @@ func main() {
 	peer := *rpcURL
 	proofMode := *mode
 	byteSourceValue := "local_reference_rpc"
-	benchmarkLane := "supporting_5k_rpc_replay"
+	benchmarkLane := supportingLane(*target, "rpc_replay")
 	if *byteSource == "p2p" {
 		peerMode = "local_reference"
 		peer = *p2pPeer
 		proofMode = "p2p_sync"
 		byteSourceValue = "local_reference_p2p"
-		benchmarkLane = "supporting_5k_p2p"
+		benchmarkLane = supportingLane(*target, "p2p")
 	}
 	doc := map[string]any{
 		"implementation":             "GoNode",
@@ -428,6 +428,12 @@ func benchmarkKind(target int, byteSource string) string {
 		switch target {
 		case 5000:
 			return "supporting_5k_p2p"
+		case 10000:
+			return "supporting_10k_p2p"
+		case 50000:
+			return "supporting_50k_p2p"
+		case 100000:
+			return "primary_100k_p2p"
 		default:
 			return "local_reference_p2p"
 		}
@@ -444,6 +450,20 @@ func benchmarkKind(target int, byteSource string) string {
 	default:
 		return "local_reference_replay"
 	}
+}
+
+func supportingLane(target int, lane string) string {
+	label := targetLabel(target)
+	if label == "" {
+		if lane == "p2p" {
+			return "local_reference_p2p"
+		}
+		return "local_reference_rpc"
+	}
+	if lane == "p2p" {
+		return "supporting_" + label + "_p2p"
+	}
+	return "supporting_" + label + "_rpc_replay"
 }
 
 func fail(doc map[string]any, message string) {

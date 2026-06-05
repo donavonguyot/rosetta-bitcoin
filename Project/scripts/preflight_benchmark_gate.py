@@ -223,7 +223,7 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         if any(marker in command_text for marker in ("rpc-replay", "replay-local", "storage-proof")):
             errors.append(
                 f"preferred command {command_key!r} looks like replay/storage proof, "
-                "but official 5k requires local Reference P2P"
+                f"but official {gate['target_label']} requires local Reference P2P"
             )
 
     if gate["preferred_runtime_surface"] != "docker":
@@ -254,24 +254,44 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
     if gate["wal_disabled_required"] != 0:
         errors.append("gate requires WAL disabled; official benchmark gates must keep WAL enabled")
 
+    imported_row_claims_official_lane = bool(
+        gate_row
+        and (
+            gate_row.get("comparability_status") == "comparable"
+            or gate_row.get("evidence_lane") == gate["official_lane"]
+        )
+    )
+
     imported_wal = gate_row["rocksdb_wal_disabled"] if gate_row else ""
     if not is_falseish(imported_wal):
-        errors.append(
+        message = (
             "latest imported gate evidence has rocksdb_wal_disabled="
             f"{imported_wal!r}; official runs require false"
         )
+        if imported_row_claims_official_lane:
+            errors.append(message)
+        else:
+            warnings.append(message)
 
     if gate_row and gate_row["utxo_accounting_policy"] and gate_row["utxo_accounting_policy"] != gate["official_utxo_accounting_policy"]:
-        errors.append(
+        message = (
             "latest imported gate evidence has utxo_accounting_policy="
             f"{gate_row['utxo_accounting_policy']!r}; expected {gate['official_utxo_accounting_policy']!r}"
         )
+        if imported_row_claims_official_lane:
+            errors.append(message)
+        else:
+            warnings.append(message)
 
     if gate_row and int(gate_row["chainstate_utxo_count"]) >= 0 and int(gate_row["chainstate_utxo_count"]) != int(gate["official_chainstate_utxo_count"]):
-        errors.append(
+        message = (
             "latest imported gate evidence has chainstate_utxo_count="
             f"{gate_row['chainstate_utxo_count']}; expected {gate['official_chainstate_utxo_count']}"
         )
+        if imported_row_claims_official_lane:
+            errors.append(message)
+        else:
+            warnings.append(message)
 
     if gate_row and gate_row.get("comparability_status") not in (None, "", "missing", "comparable"):
         warnings.append(

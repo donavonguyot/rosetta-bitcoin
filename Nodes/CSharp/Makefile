@@ -9,6 +9,7 @@ DOCKER_PROOF_VOLUME ?= csbitnode_proof_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json
 RESULT_DATE ?= $(shell date +%F)
 SUPPORTING_5K_RESULT ?= ../Shared/conformance/results/csharp_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+SUPPORTING_10K_RESULT ?= ../Shared/conformance/results/csharp_docker_supporting_10k_benchmark_$(RESULT_DATE).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/csharp_script_corpus_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/csharp_script_corpus_docker_$(RESULT_DATE).json
 DOCKER_HEADERS_MAX ?= 200
@@ -26,7 +27,7 @@ DOCKER_SYNC_CHECK_SEC ?= 5
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
 
-.PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
+.PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-proof-10k docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
 
 build:
 	$(DOTNET) build $(PROJECT) -c Release
@@ -123,6 +124,25 @@ docker-proof-local:
 	  CSBITNODE_SYNC_TIMING=1 \
 	  STANDARD_BENCHMARK_ARTIFACT=1 \
 	  PROOF_COMMAND="make docker-proof-local" \
+	  POLL_SEC=15
+
+docker-proof-10k:
+	@for i in $$(seq 1 60); do \
+	  nc -z 127.0.0.1 48333 && break; \
+	  sleep 2; \
+	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
+	done
+	$(MAKE) docker-csharp-native-crypto-proof \
+	  DOCKER_PROOF_VOLUME=csbitnode_10k_proof_data \
+	  DOCKER_PROOF_PATH=$(SUPPORTING_10K_RESULT) \
+	  DOCKER_HEADERS_MAX=10000 \
+	  DOCKER_HEADER_BATCHES_MAX=50 \
+	  DOCKER_BLOCKS_MAX=10000 \
+	  DOCKER_PREFETCH_DEPTH=4 \
+	  DOCKER_SCRIPT_RUNNER_MODE=parallel \
+	  CSBITNODE_SYNC_TIMING=1 \
+	  STANDARD_BENCHMARK_ARTIFACT=1 \
+	  PROOF_COMMAND="make docker-proof-10k" \
 	  POLL_SEC=15
 
 docker-csharp-native-crypto-bounded-sync-proof:

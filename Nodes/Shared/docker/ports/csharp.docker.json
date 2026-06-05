@@ -27,6 +27,7 @@
     "docker_status": "cd Nodes/CSharp && DOCKER_PROOF_VOLUME=csbitnode_sync_data SECP256K1_BACKEND=native docker compose -f docker/docker-compose.yml run --rm --no-deps csbitnode-sync-proof status",
     "docker_script_corpus": "cd Nodes/CSharp && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/CSharp && make docker-proof-local",
+    "docker_proof_10k": "cd Nodes/CSharp && make docker-proof-10k",
     "docker_diagnostic_sync_proof": "cd Nodes/CSharp && make docker-csharp-native-crypto-proof",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/CSharp && make docker-csharp-sync-supervisor",

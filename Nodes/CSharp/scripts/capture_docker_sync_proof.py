@@ -62,6 +62,16 @@ def target_label(height: int) -> str:
     return labels.get(height, "")
 
 
+def supporting_gate(height: int) -> str:
+    label = target_label(height)
+    return f"supporting_{label}" if label else "local_reference"
+
+
+def supporting_p2p_kind(height: int) -> str:
+    label = target_label(height)
+    return f"supporting_{label}_p2p" if label else "local_reference_p2p"
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("usage: capture_docker_sync_proof.py STATUS_JSON EXIT_FILE", file=sys.stderr)
@@ -128,8 +138,9 @@ def main() -> int:
         artifact.update(
             {
                 "benchmark_contract_version": 1,
-                "benchmark_kind": "supporting_5k_p2p" if target_block_height == 5000 else "local_reference_p2p",
-                "benchmark_lane": "supporting_5k_p2p",
+                "benchmark_kind": supporting_p2p_kind(target_block_height),
+                "benchmark_gate": supporting_gate(target_block_height),
+                "benchmark_lane": supporting_p2p_kind(target_block_height),
                 "utxo_accounting_policy": "core_spendable_v1",
                 "byte_source": "local_reference_p2p",
                 "proof_mode": "p2p_sync",

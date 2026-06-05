@@ -124,6 +124,32 @@ BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
         "result_name_pattern": "<port>_<surface>_supporting_5k_benchmark_<YYYY-MM-DD>.json",
         "notes": "Official comparable 5k lane: Docker, local Reference P2P, fixed knobs, WAL enabled, and fresh proof volume. RPC replay evidence remains valid but is not cross-ranked here.",
     },
+    {
+        "gate_id": "supporting_10k",
+        "target_height": 10000,
+        "target_label": "10k",
+        "benchmark_kind": "supporting_10k_p2p",
+        "role": "first standardized performance gate",
+        "preferred_runtime_surface": "docker",
+        "preferred_command_key": "docker_proof_10k",
+        "official_lane": "supporting_10k_p2p",
+        "official_byte_source": "local_reference_p2p",
+        "official_peer_mode": "local_reference",
+        "official_proof_mode": "p2p_sync",
+        "official_header_target_height": 10000,
+        "official_prefetch_depth": 4,
+        "official_script_runner_mode": "parallel",
+        "official_utxo_accounting_policy": "core_spendable_v1",
+        "official_chainstate_utxo_count": 19100,
+        "fresh_state_required": 1,
+        "local_reference_required": 1,
+        "durable_required": 1,
+        "wal_disabled_required": 0,
+        "resume_supported_required": 1,
+        "binary_gate_status": "not_attempted",
+        "result_name_pattern": "<port>_<surface>_supporting_10k_benchmark_<YYYY-MM-DD>.json",
+        "notes": "Official comparable 10k lane: same Docker/local Reference P2P posture as 5k, retargeted to height 10000. Older RPC replay and long-sync artifacts remain evidence-only unless they match this lane.",
+    },
 )
 
 COMMAND_PURPOSES: dict[str, str] = {
@@ -132,6 +158,7 @@ COMMAND_PURPOSES: dict[str, str] = {
     "docker_warm": "warm Docker images before a benchmark campaign",
     "docker_status": "read status from inside the Docker runtime surface",
     "docker_proof_local": "run official Docker/local-reference P2P proof",
+    "docker_proof_10k": "run official Docker/local-reference P2P 10k proof",
     "docker_proof_rpc_replay": "run Docker/local-reference RPC replay proof",
     "docker_diagnostic_sync_proof": "run nonstandard diagnostic Docker sync proof",
     "docker_probe_external": "run bounded probe against external peers",
@@ -1088,11 +1115,11 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
         elif peer_mode == "local_reference":
             proof_mode = "p2p_sync"
     benchmark_lane = text(payload.get("benchmark_lane")).strip()
-    if not benchmark_lane and target_height == 5000:
+    if not benchmark_lane and target_label:
         if peer_mode == "local_reference_rpc" or byte_source == "local_reference_rpc":
-            benchmark_lane = "supporting_5k_rpc_replay"
+            benchmark_lane = f"supporting_{target_label}_rpc_replay"
         elif peer_mode == "local_reference":
-            benchmark_lane = "supporting_5k_p2p"
+            benchmark_lane = f"supporting_{target_label}_p2p"
     benchmark_id = stable_id("benchmark", artifact.artifact_id)
     connection.execute(
         """

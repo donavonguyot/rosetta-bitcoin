@@ -26,6 +26,7 @@
     "docker_warm": "cd Nodes/Python && make docker-warm",
     "docker_status": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode python -m pybitnode.healthcheck",
     "docker_proof_local": "cd Nodes/Python && make docker-proof-local",
+    "docker_proof_10k": "cd Nodes/Python && make docker-proof-10k",
     "docker_storage_proof": "cd Nodes/Python && make docker-python-rocksdb-proof",
     "docker_script_corpus": "cd Nodes/Python && make docker-script-corpus",
     "docker_probe_external": null,

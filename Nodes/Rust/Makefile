@@ -15,12 +15,16 @@ RESULT_DATE ?= $(shell date +%F)
 STORAGE_RESULT ?= ../Shared/conformance/results/rust_storage_gate_$(RESULT_DATE).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/rust_script_corpus_$(RESULT_DATE).json
 LOCAL_REFERENCE_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_10K_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_10k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_RESULT ?= /results/rust_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_10K_RESULT ?= /results/rust_docker_supporting_10k_benchmark_$(RESULT_DATE).json
 RPC_REPLAY_RESULT ?= ../Shared/conformance/results/rust_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
 DOCKER_P2P_PEER ?= host.docker.internal:48333
+DOCKER_LOCAL_PROOF_VOLUME ?= rsbitnode_proof_data
 
-.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-rpc-replay docker-proof-local-fast docker-smoke-once clean
+.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-rpc-replay docker-proof-local-fast docker-smoke-once clean
 
 build:
 	$(CARGO) build
@@ -79,8 +83,14 @@ docker-proof-local:
 	  sleep 2; \
 	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
 	done
-	@docker volume rm -f rsbitnode_proof_data docker_rsbitnode_proof_data >/dev/null 2>&1 || true
-	DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_proof_data $(DOCKER_COMPOSE) run --rm --no-deps -e RSBITNODE_BLOCK_PREFETCH_DEPTH=$(PREFETCH_DEPTH) rsbitnode-local-reference-proof rsbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --byte-source p2p --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path /results/rust_docker_supporting_5k_benchmark_$(RESULT_DATE).json --runtime-surface docker
+	@docker volume rm -f $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps -e RSBITNODE_BLOCK_PREFETCH_DEPTH=$(PREFETCH_DEPTH) rsbitnode-local-reference-proof rsbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --byte-source p2p --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker
+
+docker-proof-10k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_10k_proof_data \
+	  SYNC_TARGET=10000 \
+	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_10K_RESULT)
 
 docker-proof-rpc-replay:
 	@for i in $$(seq 1 60); do \

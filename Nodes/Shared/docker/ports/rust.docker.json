@@ -29,6 +29,7 @@
     "docker_storage_proof": "cd Nodes/Rust && make docker-storage-proof",
     "docker_script_corpus": "cd Nodes/Rust && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Rust && make docker-proof-local",
+    "docker_proof_10k": "cd Nodes/Rust && make docker-proof-10k",
     "docker_proof_rpc_replay": "cd Nodes/Rust && make docker-proof-rpc-replay",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Rust && make docker-smoke-once",

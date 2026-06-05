@@ -21,6 +21,24 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _target_label(target: int) -> str:
+    if target == 5000:
+        return "5k"
+    if target % 1000 == 0:
+        return f"{target // 1000}k"
+    return str(target)
+
+
+def _supporting_gate(target: int) -> str:
+    label = _target_label(target)
+    return f"supporting_{label}" if label else "local_reference"
+
+
+def _supporting_p2p_kind(target: int) -> str:
+    label = _target_label(target)
+    return f"supporting_{label}_p2p" if label else "local_reference_p2p"
+
+
 def _load_details(row: dict[str, Any]) -> dict[str, Any]:
     raw = row.get("details_json") or "{}"
     try:
@@ -169,9 +187,9 @@ def _build_artifact(
 
         return {
             "benchmark_contract_version": 1,
-            "benchmark_gate": "supporting_5k",
-            "benchmark_kind": "supporting_5k_p2p",
-            "benchmark_lane": "supporting_5k_p2p",
+            "benchmark_gate": _supporting_gate(args.target),
+            "benchmark_kind": _supporting_p2p_kind(args.target),
+            "benchmark_lane": _supporting_p2p_kind(args.target),
             "utxo_accounting_policy": "core_spendable_v1",
             "binary_gate_status": "not_attempted",
             "blocks_connected": max(0, validated_height - int(args.reference_start_height)),
@@ -221,7 +239,7 @@ def _build_artifact(
             "sync_exit_code": completed.returncode,
             "sync_status": sync_state.get("sync_status", "unknown"),
             "target_height": args.target,
-            "target_label": "5k",
+            "target_label": _target_label(args.target),
             "timing_summary": timing_summary,
             "validated_hash": validated_hash,
             "validated_height": validated_height,

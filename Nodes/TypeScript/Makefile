@@ -7,12 +7,13 @@ DOCKER_SYNC_TARGET ?= 5000
 DOCKER_SYNC_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/typescript_docker_supporting_5k_benchmark_$(shell date +%F).json
+DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/typescript_docker_supporting_10k_benchmark_$(shell date +%F).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/typescript_script_corpus_$(shell date +%F).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/typescript_script_corpus_docker_$(shell date +%F).json
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: build test native-status storage-proof script-corpus docker-config docker-build docker-warm docker-script-corpus docker-typescript-native-proof docker-typescript-sync-status docker-typescript-sync-supervisor docker-typescript-sync-stop docker-typescript-sync-resume docker-smoke-once
+.PHONY: build test native-status storage-proof script-corpus docker-config docker-build docker-warm docker-script-corpus docker-typescript-native-proof docker-typescript-native-10k-proof docker-typescript-sync-status docker-typescript-sync-supervisor docker-typescript-sync-stop docker-typescript-sync-resume docker-smoke-once
 
 build:
 	npm run build
@@ -53,8 +54,15 @@ docker-typescript-native-proof:
 	  DOCKER_SYNC_TARGET=$(DOCKER_SYNC_TARGET) DOCKER_SYNC_BLOCKS_MAX=$(DOCKER_SYNC_BLOCKS_MAX) \
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) \
 	  DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
-	  scripts/docker_5k_benchmark.sh
+		  scripts/docker_5k_benchmark.sh
 	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/tsbitnode.db
+
+docker-typescript-native-10k-proof:
+	$(MAKE) docker-typescript-native-proof \
+	  DOCKER_PROOF_VOLUME=tsbitnode_10k_proof_data \
+	  DOCKER_SYNC_TARGET=10000 \
+	  DOCKER_SYNC_BLOCKS_MAX=10000 \
+	  DOCKER_BENCHMARK_RESULT=$(DOCKER_10K_BENCHMARK_RESULT)
 
 docker-typescript-sync-status:
 	DOCKER_SYNC_VOLUME=$(DOCKER_SYNC_VOLUME) SECP256K1_BACKEND=native \

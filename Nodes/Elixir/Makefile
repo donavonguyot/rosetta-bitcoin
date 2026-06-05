@@ -9,6 +9,10 @@ DOCKER_SYNC_VOLUME ?= exbitnode_sync_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/elixir_rocksdb_codec_v2_storage.json
 RESULT_DATE ?= $(shell date +%F)
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_10k_benchmark_$(RESULT_DATE).json
+DOCKER_BENCHMARK_TARGET ?= 5000
+DOCKER_BENCHMARK_HEADER_TARGET ?= $(DOCKER_BENCHMARK_TARGET)
+DOCKER_BENCHMARK_BLOCKS_MAX ?= 5001
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/elixir_script_corpus_docker_$(RESULT_DATE).json
 DOCKER_PREFETCH_DEPTH ?= 4
 DOCKER_SCRIPT_THREADS ?= 4
@@ -28,7 +32,7 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
+.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 
 test:
 	$(MIX) test
@@ -90,7 +94,7 @@ docker-proof-local:
 	  exit_file=.docker-elixir-5k-sync-exit; \
 	  set +e; \
 	  DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) RUNTIME_SURFACE=docker PEERS=$(DOCKER_PEERS) \
-	    HEADERS_MAX=5000 HEADER_BATCHES_MAX=50 BLOCKS_MAX=5001 \
+		    HEADERS_MAX=$(DOCKER_BENCHMARK_HEADER_TARGET) HEADER_BATCHES_MAX=50 BLOCKS_MAX=$(DOCKER_BENCHMARK_BLOCKS_MAX) \
 	    BLOCK_PREFETCH_DEPTH=$(DOCKER_PREFETCH_DEPTH) SYNC_TIMING=1 \
 	    PAR_SCRIPT_VERIFY=1 PAR_SCRIPT_THREADS=$(DOCKER_SCRIPT_THREADS) PAR_SCRIPT_MIN_INPUTS=2 \
 	    $(DOCKER_COMPOSE) run --rm exbitnode-sync-proof mix sync.local > $$sync_log 2>&1; \
@@ -99,12 +103,20 @@ docker-proof-local:
 	  printf '%s\n' "$$sync_rc" > $$exit_file; \
 	  DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) RUNTIME_SURFACE=docker PEERS=$(DOCKER_PEERS) \
 	    $(DOCKER_COMPOSE) run --rm --no-deps exbitnode-sync-proof mix node.status > $$status_json || true; \
-	  DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) TARGET_HEIGHT=5000 HEADER_TARGET_HEIGHT=5000 \
-	    BLOCKS_MAX=5001 PREFETCH_DEPTH=$(DOCKER_PREFETCH_DEPTH) SCRIPT_RUNNER_MODE=parallel \
+		  DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) TARGET_HEIGHT=$(DOCKER_BENCHMARK_TARGET) HEADER_TARGET_HEIGHT=$(DOCKER_BENCHMARK_HEADER_TARGET) \
+		    BLOCKS_MAX=$(DOCKER_BENCHMARK_BLOCKS_MAX) PREFETCH_DEPTH=$(DOCKER_PREFETCH_DEPTH) SCRIPT_RUNNER_MODE=parallel \
 	    PEER=$(DOCKER_PEERS) PROOF_PATH=$(DOCKER_BENCHMARK_RESULT) \
 	    python3 ../Shared/conformance/tools/proofs/capture_elixir_docker_5k_benchmark.py $$status_json $$sync_log $$exit_file; \
 	  rm -f $$sync_log $$status_json $$exit_file
 	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
+
+docker-proof-10k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=exbitnode_10k_proof_data \
+	  DOCKER_BENCHMARK_RESULT=$(DOCKER_10K_BENCHMARK_RESULT) \
+	  DOCKER_BENCHMARK_TARGET=10000 \
+	  DOCKER_BENCHMARK_HEADER_TARGET=10000 \
+	  DOCKER_BENCHMARK_BLOCKS_MAX=10001
 
 docker-long-sync-proof:
 	@for i in $$(seq 1 60); do \

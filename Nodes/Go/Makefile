@@ -7,6 +7,7 @@ STORAGE_RESULT ?= ../Shared/conformance/results/go_storage_gate_$(RESULT_DATE).j
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/go_script_corpus_docker_$(RESULT_DATE).json
 DOCKER_STORAGE_RESULT ?= /results/go_storage_gate_docker_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= /results/go_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+DOCKER_10K_PROOF_RESULT ?= /results/go_docker_supporting_10k_benchmark_$(RESULT_DATE).json
 DOCKER_RPC_REPLAY_RESULT ?= /results/go_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_PROOF_VOLUME ?= gobitnode_proof_data
@@ -24,7 +25,7 @@ DOCKER_SYNC_TARGET ?= 5000
 DOCKER_RPC_URL ?= http://host.docker.internal:48332
 DOCKER_P2P_PEER ?= host.docker.internal:48333
 
-.PHONY: build test go-node-status go-node-storage-proof go-node-script-corpus go-node-sync-local go-node-connect-local go-node-native-crypto-test docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-rpc-replay docker-smoke-once clean
+.PHONY: build test go-node-status go-node-storage-proof go-node-script-corpus go-node-sync-local go-node-connect-local go-node-native-crypto-test docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-rpc-replay docker-smoke-once clean
 
 build:
 	$(GO) build ./cmd/...
@@ -87,8 +88,14 @@ docker-proof-local:
 	  --datadir /data \
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --byte-source p2p \
-	  --peer $(DOCKER_P2P_PEER) \
-	  --result-path $(DOCKER_LOCAL_PROOF_RESULT)
+		  --peer $(DOCKER_P2P_PEER) \
+		  --result-path $(DOCKER_LOCAL_PROOF_RESULT)
+
+docker-proof-10k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=gobitnode_10k_proof_data \
+	  DOCKER_SYNC_TARGET=10000 \
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_10K_PROOF_RESULT)
 
 docker-proof-rpc-replay:
 	@for i in $$(seq 1 60); do \

@@ -97,6 +97,16 @@ def target_label(target):
     return str(target)
 
 
+def supporting_gate(target):
+    label = target_label(target)
+    return f"supporting_{label}" if label else "local_reference"
+
+
+def supporting_p2p_kind(target):
+    label = target_label(target)
+    return f"supporting_{label}_p2p" if label else "local_reference_p2p"
+
+
 def extract_json_object(raw):
     start = raw.find("{")
     end = raw.rfind("}")
@@ -192,9 +202,9 @@ if not stage_totals:
 
 doc = {
     "benchmark_contract_version": 1,
-    "benchmark_kind": "supporting_5k_p2p",
-    "benchmark_gate": "supporting_5k",
-    "benchmark_lane": "supporting_5k_p2p",
+    "benchmark_kind": supporting_p2p_kind(target),
+    "benchmark_gate": supporting_gate(target),
+    "benchmark_lane": supporting_p2p_kind(target),
     "utxo_accounting_policy": "core_spendable_v1",
     "target_label": target_label(target),
     "target_height": target,

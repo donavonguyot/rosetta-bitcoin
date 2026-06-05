@@ -27,6 +27,7 @@
     "docker_status": "cd Nodes/Java && DOCKER_PROOF_VOLUME=jbitnode_sync_data SECP256K1_BACKEND=native docker compose -f docker/docker-compose.yml run --rm --no-deps jbitnode-sync-proof com.jbitnode.cli.DbStatus",
     "docker_script_corpus": "cd Nodes/Java && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Java && make docker-java-native-crypto-proof",
+    "docker_proof_10k": "cd Nodes/Java && make docker-java-supporting-10k-proof",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Java && make docker-java-sync-supervisor",
     "docker_supervisor_status": "cd Nodes/Java && make docker-java-sync-status",

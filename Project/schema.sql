@@ -684,8 +684,8 @@ classified AS (
   SELECT
     *,
     CASE
-      WHEN peer_mode = 'local_reference_rpc' OR byte_source = 'local_reference_rpc' OR proof_mode IN ('rpc_replay', 'pipeline') THEN 'supporting_5k_rpc_replay'
-      WHEN peer_mode = 'local_reference' OR byte_source = 'local_reference_p2p' THEN 'supporting_5k_p2p'
+      WHEN peer_mode = 'local_reference_rpc' OR byte_source = 'local_reference_rpc' OR proof_mode IN ('rpc_replay', 'pipeline') THEN replace(official_lane, '_p2p', '_rpc_replay')
+      WHEN peer_mode = 'local_reference' OR byte_source = 'local_reference_p2p' THEN official_lane
       ELSE coalesce(nullif(reported_lane, ''), 'diagnostic')
     END AS evidence_lane,
     CASE
@@ -745,7 +745,7 @@ SELECT
   END AS gate_status,
   CASE
     WHEN validated_height < target_height OR result IN ('failed', 'blocked', 'error') THEN 'failed'
-    WHEN evidence_lane = 'supporting_5k_rpc_replay' THEN 'evidence_only'
+    WHEN evidence_lane LIKE '%_rpc_replay' THEN 'evidence_only'
     WHEN comparability_notes = '' THEN 'comparable'
     WHEN rocksdb_wal_disabled <> wal_disabled_required OR runtime_surface <> preferred_runtime_surface THEN 'diagnostic'
     ELSE 'evidence_only'
@@ -1071,8 +1071,22 @@ clean_corpus AS (
     coalesce(lca.source_artifact_id, '') AS source_artifact_id
   FROM script_corpus_baseline scb
   LEFT JOIN latest_corpus_attempt lca ON lca.port = scb.port AND lca.rn = 1
-),
-open_blockers AS (
+  ),
+  stage_gate_evidence AS (
+    SELECT
+      port,
+      CASE gate_id
+        WHEN 'supporting_10k' THEN '10k'
+        ELSE ''
+      END AS stage,
+      gate_status,
+      comparability_status,
+      validated_height,
+      source_artifact_id
+    FROM benchmark_gate_matrix
+    WHERE gate_id IN ('supporting_10k')
+  ),
+  open_blockers AS (
   SELECT
     cst.stage,
     count(cbs.height) AS open_blocker_count,
@@ -1093,7 +1107,8 @@ SELECT
     WHEN coalesce(ob.open_blocker_count, 0) > 0 THEN 'open_blockers'
     WHEN cst.stage = 'corpus' THEN 'passed'
     WHEN cst.stage = '5k' AND coalesce(pb.baseline_status, '') <> 'passed' THEN 'missing_5k_baseline'
-    WHEN cst.stage IN ('10k', '50k', '100k') AND coalesce(se.max_validated_height, -1) < cst.target_height THEN 'missing_stage_proof'
+    WHEN cst.stage = '10k' AND NOT (coalesce(sge.gate_status, '') = 'passed' AND coalesce(sge.comparability_status, '') = 'comparable') THEN 'missing_stage_proof'
+    WHEN cst.stage IN ('50k', '100k') AND coalesce(se.max_validated_height, -1) < cst.target_height THEN 'missing_stage_proof'
     WHEN cst.stage = 'tip' AND NOT (se.sync_status = 'blocks_current' AND se.max_validated_height >= se.header_height AND se.header_height > 0) THEN 'missing_tip_proof'
     ELSE 'passed'
   END AS runway_status,
@@ -1104,6 +1119,8 @@ SELECT
   coalesce(cc.native_crypto_backend, '') AS script_native_crypto_backend,
   coalesce(pb.baseline_status, '') AS baseline_5k_status,
   coalesce(pb.comparability_status, '') AS baseline_5k_comparability,
+  coalesce(sge.gate_status, '') AS stage_gate_status,
+  coalesce(sge.comparability_status, '') AS stage_gate_comparability,
   coalesce(se.max_validated_height, -1) AS max_validated_height,
   coalesce(se.header_height, -1) AS header_height,
   coalesce(se.sync_status, '') AS sync_status,
@@ -1111,10 +1128,12 @@ SELECT
   coalesce(ob.open_blocker_heights, '') AS open_blocker_heights,
   coalesce(cc.source_artifact_id, '') AS script_source_artifact_id,
   coalesce(pb.source_artifact_id, '') AS baseline_source_artifact_id,
+  coalesce(sge.source_artifact_id, '') AS stage_source_artifact_id,
   coalesce(se.status_source_artifact_id, '') AS status_source_artifact_id
 FROM ports p
 CROSS JOIN consensus_stage_targets cst
 LEFT JOIN clean_corpus cc ON cc.port = p.port
 LEFT JOIN port_baseline_5k pb ON pb.port = p.port
+LEFT JOIN stage_gate_evidence sge ON sge.port = p.port AND sge.stage = cst.stage
 LEFT JOIN sync_evidence se ON se.port = p.port
 LEFT JOIN open_blockers ob ON ob.stage = cst.stage;
