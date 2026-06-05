@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import struct
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -29,6 +30,8 @@ SCHEMA_VERSION = 1
 NATIVE_MARKER = "pybitnode-native-chainstate-v1"
 STATS_KEY = "default"
 STATS_VERSION = 1
+UTXO_CODEC_VERSION = "2"
+UTXO_CODEC_MAGIC = b"pyutxo2\x00"
 STAT_FIELDS = (
     "utxo_count",
     "header_count",
@@ -63,6 +66,28 @@ def _json_loads(raw: bytes | str | None) -> Any:
     if isinstance(raw, bytes):
         raw = raw.decode()
     return json.loads(raw)
+
+
+def _compact_size(value: int) -> bytes:
+    if value < 0xFD:
+        return bytes([value])
+    if value <= 0xFFFF:
+        return b"\xfd" + struct.pack("<H", value)
+    if value <= 0xFFFF_FFFF:
+        return b"\xfe" + struct.pack("<I", value)
+    return b"\xff" + struct.pack("<Q", value)
+
+
+def _read_compact_size(raw: bytes, offset: int) -> tuple[int, int]:
+    first = raw[offset]
+    offset += 1
+    if first < 0xFD:
+        return first, offset
+    if first == 0xFD:
+        return struct.unpack_from("<H", raw, offset)[0], offset + 2
+    if first == 0xFE:
+        return struct.unpack_from("<I", raw, offset)[0], offset + 4
+    return struct.unpack_from("<Q", raw, offset)[0], offset + 8
 
 
 def _part(value: object) -> str:
@@ -122,6 +147,15 @@ class ProjectTracker:
         joined = "|".join((namespace, *(_part(part) for part in parts)))
         return joined.encode()
 
+    def _utxo_key(self, txid_hex: str, vout: int) -> bytes:
+        return self._key("utxo", txid_hex, int(vout))
+
+    def _decode_utxo_key(self, key: bytes) -> tuple[str, int]:
+        parts = key.decode().split("|")
+        if len(parts) != 3 or parts[0] != "utxo":
+            raise ValueError(f"invalid utxo key: {key!r}")
+        return parts[1], int(parts[2])
+
     def _prefix(self, namespace: str, *parts: object) -> bytes:
         return self._key(namespace, *parts) + b"|"
 
@@ -172,7 +206,10 @@ class ProjectTracker:
         for key, raw in self._db.items():
             key_b = key if isinstance(key, bytes) else str(key).encode()
             if key_b.startswith(prefix):
-                yield key_b, _json_loads(raw)
+                if namespace == "utxo":
+                    yield key_b, self._decode_utxo_row(key_b, raw, include_script_bytes=False)
+                else:
+                    yield key_b, _json_loads(raw)
 
     def _all(self, namespace: str, *parts: object) -> list[dict]:
         return [dict(value) for _, value in self._iter_prefix(namespace, *parts)]
@@ -528,6 +565,59 @@ class ProjectTracker:
         except KeyError:
             pass
 
+    def _encode_utxo_row(self, row: dict) -> bytes:
+        script = row.get("script_pubkey_bytes")
+        if script is None:
+            script = bytes.fromhex(str(row["script_pubkey"]))
+        value = int(row["value"])
+        height = int(row["height"])
+        coinbase = 1 if bool(row["coinbase"]) else 0
+        return (
+            UTXO_CODEC_MAGIC
+            + struct.pack("<qIB", value, height, coinbase)
+            + _compact_size(len(script))
+            + bytes(script)
+        )
+
+    def _decode_utxo_row(
+        self,
+        key: bytes,
+        raw: bytes | str | None,
+        *,
+        include_script_bytes: bool = True,
+        include_script_hex: bool = True,
+    ) -> dict | None:
+        if raw is None:
+            return None
+        txid_hex, vout = self._decode_utxo_key(key)
+        if isinstance(raw, str):
+            row = dict(_json_loads(raw))
+        elif raw.startswith(UTXO_CODEC_MAGIC):
+            offset = len(UTXO_CODEC_MAGIC)
+            value, height, coinbase = struct.unpack_from("<qIB", raw, offset)
+            offset += struct.calcsize("<qIB")
+            script_len, offset = _read_compact_size(raw, offset)
+            script = raw[offset:offset + script_len]
+            if len(script) != script_len:
+                raise ValueError(f"short binary UTXO script for {txid_hex}:{vout}")
+            row = {
+                "txid": txid_hex,
+                "vout": vout,
+                "height": height,
+                "value": value,
+                "coinbase": int(coinbase),
+            }
+            if include_script_hex:
+                row["script_pubkey"] = script.hex()
+            if include_script_bytes:
+                row["script_pubkey_bytes"] = script
+            return row
+        else:
+            row = dict(_json_loads(raw))
+        if include_script_bytes and "script_pubkey_bytes" not in row:
+            row["script_pubkey_bytes"] = bytes.fromhex(str(row["script_pubkey"]))
+        return row
+
     def replace_utxo_undo(self, chain: str, height: int, entries: list[dict]) -> None:
         self._put("utxo_undo", chain, height, value={"chain": chain, "height": height, "entries": entries, "created_at": _utcnow()})
 
@@ -554,20 +644,19 @@ class ProjectTracker:
     def add_utxo(self, txid: bytes, vout: int, *, height: int, value: int, script_pubkey: bytes, coinbase: bool) -> None:
         if self.get_utxo(txid, vout) is not None:
             raise KeyError(f"UTXO already exists: {txid[::-1].hex()}:{vout}")
-        self._put(
-            "utxo",
-            txid[::-1].hex(),
-            vout,
-            value={
-                "txid": txid[::-1].hex(),
-                "vout": vout,
+        key = self._utxo_key(txid[::-1].hex(), vout)
+        raw = self._encode_utxo_row(
+            {
                 "height": height,
                 "value": value,
-                "script_pubkey": script_pubkey.hex(),
+                "script_pubkey_bytes": script_pubkey,
                 "coinbase": 1 if coinbase else 0,
-                "created_at": _utcnow(),
-            },
+            }
         )
+        if self._txn_ops is not None:
+            self._txn_ops.append(("put", key, raw))
+        else:
+            self._db[key] = raw
         self._adjust_stat("utxo_count", 1)
 
     def add_utxos(self, utxos: Iterable[dict]) -> None:
@@ -580,9 +669,16 @@ class ProjectTracker:
             if key in seen:
                 raise KeyError(f"duplicate UTXO in batch: {txid}:{vout}")
             seen.add(key)
-            if self._get("utxo", txid, vout) is not None:
+            key_bytes = self._utxo_key(txid, vout)
+            if self._decode_utxo_row(key_bytes, self._db.get(key_bytes), include_script_bytes=False) is not None:
                 raise KeyError(f"UTXO already exists: {txid}:{vout}")
-            self._put("utxo", txid, vout, value={**row, "created_at": _utcnow()})
+            if "script_pubkey_bytes" not in row and "script_pubkey" in row:
+                row = {**row, "script_pubkey_bytes": bytes.fromhex(str(row["script_pubkey"]))}
+            raw = self._encode_utxo_row(row)
+            if self._txn_ops is not None:
+                self._txn_ops.append(("put", key_bytes, raw))
+            else:
+                self._db[key_bytes] = raw
             added += 1
         if added:
             self._adjust_stat("utxo_count", added)
@@ -606,22 +702,44 @@ class ProjectTracker:
             self._adjust_stat("utxo_count", -deleted)
 
     def get_utxo(self, txid: bytes, vout: int) -> dict | None:
-        row = self._get("utxo", txid[::-1].hex(), int(vout))
+        key = self._utxo_key(txid[::-1].hex(), int(vout))
+        row = self._decode_utxo_row(key, self._db.get(key), include_script_bytes=True)
         return dict(row) if row else None
 
     def get_utxos_many(self, outpoints: Iterable[tuple[bytes, int]]) -> dict[tuple[bytes, int], dict | None]:
-        out: dict[tuple[bytes, int], dict | None] = {}
+        keys: dict[tuple[bytes, int], bytes] = {}
         for txid, vout in dict.fromkeys((txid, int(vout)) for txid, vout in outpoints):
-            out[(txid, vout)] = self.get_utxo(txid, vout)
+            keys[(txid, vout)] = self._utxo_key(txid[::-1].hex(), int(vout))
+        out: dict[tuple[bytes, int], dict | None] = {key: None for key in keys}
+        if not keys:
+            return out
+        raw_by_key: dict[bytes, bytes | str | None]
+        get_many = getattr(self._db, "get_many", None) or getattr(self._db, "multi_get", None)
+        if callable(get_many):
+            values = get_many(list(keys.values()))
+            if isinstance(values, dict):
+                raw_by_key = {k if isinstance(k, bytes) else str(k).encode(): v for k, v in values.items()}
+            else:
+                raw_by_key = dict(zip(keys.values(), values, strict=False))
+        else:
+            raw_by_key = {raw_key: self._db.get(raw_key) for raw_key in keys.values()}
+        for outpoint, raw_key in keys.items():
+            out[outpoint] = self._decode_utxo_row(
+                raw_key,
+                raw_by_key.get(raw_key),
+                include_script_bytes=True,
+                include_script_hex=False,
+            )
         return out
 
     def list_utxos(self) -> list[dict]:
         return sorted(self._all("utxo"), key=lambda row: (row["txid"], int(row["vout"])))
 
     def delete_utxo_by_hex(self, txid_hex: str, vout: int) -> None:
-        if self._get("utxo", txid_hex, int(vout)) is None:
+        key = self._utxo_key(txid_hex, int(vout))
+        if self._decode_utxo_row(key, self._db.get(key), include_script_bytes=False) is None:
             return
-        self._delete("utxo", txid_hex, int(vout))
+        self._delete_key(key)
         self._adjust_stat("utxo_count", -1)
 
     def utxo_count(self) -> int:

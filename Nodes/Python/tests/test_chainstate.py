@@ -4,7 +4,7 @@ import pytest
 
 from pybitnode.chain.genesis import TESTNET4_GENESIS
 from pybitnode.chain.params import TESTNET4
-from pybitnode.chainstate.tracker import SCHEMA_VERSION, ProjectTracker
+from pybitnode.chainstate.tracker import SCHEMA_VERSION, UTXO_CODEC_MAGIC, ProjectTracker
 from pybitnode.config import Settings
 from pybitnode.messages.headers import HeadersMessage
 from pybitnode.sync.headers import ensure_genesis, genesis_locator, next_locator, persist_headers, repair_sync_state
@@ -59,6 +59,52 @@ def test_tracker_headers_ignore_duplicates(tmp_path):
     tracker.record_header(0, "abc", "def", 123)
     tracker.record_header(0, "abc", "def", 123)
     assert tracker.header_count() == 1
+    tracker.close()
+
+
+def test_tracker_writes_binary_utxos_and_returns_raw_script_bytes(tmp_path):
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
+    txid_internal = bytes.fromhex("11" * 32)
+    script = bytes.fromhex("76a914" + "22" * 20 + "88ac")
+
+    tracker.add_utxo(txid_internal, 3, height=7, value=12345, script_pubkey=script, coinbase=False)
+    raw_key = tracker._utxo_key(txid_internal[::-1].hex(), 3)
+    assert tracker._db.get(raw_key).startswith(UTXO_CODEC_MAGIC)
+
+    row = tracker.get_utxo(txid_internal, 3)
+    assert row["txid"] == txid_internal[::-1].hex()
+    assert row["vout"] == 3
+    assert row["value"] == 12345
+    assert row["height"] == 7
+    assert row["script_pubkey"] == script.hex()
+    assert row["script_pubkey_bytes"] == script
+    assert tracker.get_utxos_many([(txid_internal, 3)])[(txid_internal, 3)]["script_pubkey_bytes"] == script
+    assert "script_pubkey_bytes" not in tracker.list_utxos()[0]
+    tracker.close()
+
+
+def test_tracker_reads_legacy_json_utxos_with_raw_script_bytes(tmp_path):
+    tracker = ProjectTracker(tmp_path / "chainstate-rocksdb")
+    txid_hex = "33" * 32
+    script = bytes.fromhex("0014" + "44" * 20)
+    tracker._put(
+        "utxo",
+        txid_hex,
+        0,
+        value={
+            "txid": txid_hex,
+            "vout": 0,
+            "height": 9,
+            "value": 99,
+            "script_pubkey": script.hex(),
+            "coinbase": 1,
+        },
+    )
+
+    txid_internal = bytes.fromhex(txid_hex)[::-1]
+    row = tracker.get_utxo(txid_internal, 0)
+    assert row["script_pubkey"] == script.hex()
+    assert row["script_pubkey_bytes"] == script
     tracker.close()
 
 

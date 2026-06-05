@@ -31,6 +31,20 @@ class ConnectBlockError(ValueError):
     pass
 
 
+def _utxo_script_bytes(utxo: dict) -> bytes:
+    script = utxo.get("script_pubkey_bytes")
+    if isinstance(script, bytes):
+        return script
+    return bytes.fromhex(str(utxo["script_pubkey"]))
+
+
+def _utxo_script_hex(utxo: dict) -> str:
+    script = utxo.get("script_pubkey")
+    if script is not None:
+        return str(script)
+    return _utxo_script_bytes(utxo).hex()
+
+
 @dataclass(frozen=True)
 class _PrevoutInfo:
     value: int
@@ -84,7 +98,7 @@ def _external_spend_undo_entries(view: _BlockUtxoView) -> list[dict]:
                 "vout": int(utxo["vout"]),
                 "height": int(utxo["height"]),
                 "value": int(utxo["value"]),
-                "script_pubkey": utxo["script_pubkey"],
+                "script_pubkey": _utxo_script_hex(utxo),
                 "coinbase": int(utxo["coinbase"]),
             }
         )
@@ -147,6 +161,14 @@ class _BlockUtxoView:
         self.spent.add(key)
         return utxo
 
+    def mark_spent_checked(self, outpoint: OutPoint) -> None:
+        key = (outpoint.hash, outpoint.index)
+        if key in self.spent:
+            raise ConnectBlockError(
+                f"double spend of {outpoint.hash[::-1].hex()}:{outpoint.index}"
+            )
+        self.spent.add(key)
+
     def create(
         self,
         txid: bytes,
@@ -176,7 +198,7 @@ class _BlockUtxoView:
             "vout": vout,
             "height": self.height,
             "value": value,
-            "script_pubkey": script_pubkey.hex(),
+            "script_pubkey_bytes": script_pubkey,
             "coinbase": 1 if coinbase else 0,
         }
 
@@ -239,7 +261,7 @@ def _validate_non_coinbase_inputs(
         prevout_infos.append(
             _PrevoutInfo(
                 value=int(utxo["value"]),
-                script_pubkey=bytes.fromhex(utxo["script_pubkey"]),
+                script_pubkey=_utxo_script_bytes(utxo),
                 coinbase=bool(utxo["coinbase"]),
                 height=int(utxo["height"]),
             )
@@ -275,7 +297,7 @@ def _validate_non_coinbase_inputs(
         raise ConnectBlockError(str(exc)) from exc
 
     for tx_in in tx.inputs:
-        view.spend(tx_in.previous_output)
+        view.mark_spent_checked(tx_in.previous_output)
 
     return input_total
 
@@ -288,6 +310,8 @@ def connect_block(
     expected_prev: bytes,
     expected_hash: bytes | None = None,
     chain_name: str = "testnet4",
+    script_verify_runner: ScriptVerifyRunner | None = None,
+    update_metrics: bool = True,
 ) -> Block:
     from pybitnode.sync.validate import BlockValidationError, validate_block
 
@@ -306,8 +330,11 @@ def connect_block(
     except BlockValidationError as exc:
         raise ConnectBlockError(str(exc)) from exc
 
+    owns_script_runner = script_verify_runner is None
+    if script_verify_runner is None:
+        script_verify_runner = ScriptVerifyRunner()
     try:
-        with ScriptVerifyRunner() as script_verify_runner:
+        try:
             view = _BlockUtxoView(tracker, height, timings=timings)
             total_fees = 0
             for tx in block.transactions:
@@ -334,6 +361,10 @@ def connect_block(
                         script_pubkey=output.script_pubkey,
                         coinbase=False,
                     )
+
+        finally:
+            if owns_script_runner:
+                script_verify_runner.close()
 
         coinbase = block.transactions[0]
         _validate_coinbase(coinbase, height, total_fees=total_fees)
@@ -364,7 +395,8 @@ def connect_block(
             if timings is not None:
                 timings["utxo_apply"] = perf_counter() - apply_started
             tracker.set_validated_tip(height, block.header.block_hash_hex(), chain=chain_name)
-            incr_meta_counter(tracker, META_BLOCKS_VALIDATED_TOTAL)
+            if update_metrics:
+                incr_meta_counter(tracker, META_BLOCKS_VALIDATED_TOTAL)
         if timings is not None:
             timings["commit"] = perf_counter() - commit_started
             timings["block_connect_store_commit"] = perf_counter() - connect_started

@@ -5,7 +5,9 @@ import logging
 
 from pybitnode.chain.params import ChainParams
 from pybitnode.consensus.connect import ConnectBlockError, connect_block
+from pybitnode.consensus.script.script_verify_runner import ScriptVerifyRunner
 from pybitnode.chainstate.tracker import ProjectTracker
+from pybitnode.metrics import META_BLOCKS_VALIDATED_TOTAL, incr_meta_counter
 from pybitnode.p2p.peer import PeerConnection, broadcast_witness_block_inv
 from pybitnode.storage.blocks import BlockStore
 from pybitnode.sync.validate import BlockValidationError, validate_block
@@ -96,6 +98,7 @@ async def sync_blocks_batch(
     batch_size: int,
     max_blocks: int,
     parallel_downloads: int = 0,
+    script_verify_runner: ScriptVerifyRunner | None = None,
 ) -> int:
     if not peers:
         return 0
@@ -134,49 +137,78 @@ async def sync_blocks_batch(
                     res = await request_block_from_peers_parallel(peers, blk_hash)
                 return ht, res
 
-            rows = await asyncio.gather(*(_fetch_one(w) for w in work))
-            fetched = {ht: res for ht, res in rows}
+            pending: dict[int, asyncio.Task] = {}
+            next_to_schedule = 0
 
-            for height, block_hash_hex, block_hash_rev, expected_prev in work:
-                outcome = fetched[height]
-                if outcome is None:
-                    tracker.log_event(
-                        "sync",
-                        "Block unavailable from peers",
-                        level="warning",
-                        details={"height": height, "block_hash": block_hash_hex},
-                    )
-                    break
-                payload, _peer = outcome
-                try:
-                    connect_block(
-                        tracker,
-                        payload,
-                        height=height,
-                        expected_prev=expected_prev,
-                        expected_hash=block_hash_rev,
-                        chain_name=chain.name,
-                    )
-                    await broadcast_witness_block_inv(peers, block_hash_rev, tracker)
-                except ConnectBlockError as exc:
-                    tracker.log_event(
-                        "sync",
-                        "Rejected invalid block",
-                        level="warning",
-                        details={"height": height, "error": str(exc)},
-                    )
-                    tracker.upsert_sync_state(chain.name, sync_status="blocks_blocked")
-                    break
-                file_name, offset, size = block_store.write(payload)
-                tracker.record_block(height, block_hash_hex, file_name, offset, size)
-                downloaded += 1
-                if downloaded == 1 or downloaded % 32 == 0:
-                    logger.info(
-                        "Block sync progress: height=%s batch_downloaded=%s utxos=%s",
-                        height,
-                        downloaded,
-                        tracker.utxo_count(),
-                    )
+            def _schedule_ahead() -> None:
+                nonlocal next_to_schedule
+                while len(pending) < parallel_downloads and next_to_schedule < len(work):
+                    item = work[next_to_schedule]
+                    pending[item[0]] = asyncio.create_task(_fetch_one(item))
+                    next_to_schedule += 1
+
+            _schedule_ahead()
+            try:
+                for height, block_hash_hex, block_hash_rev, expected_prev in work:
+                    task = pending.pop(height, None)
+                    if task is None:
+                        break
+                    outcome_height, outcome = await task
+                    if outcome_height != height:
+                        tracker.log_event(
+                            "sync",
+                            "Block fetch pipeline height mismatch",
+                            level="warning",
+                            details={"height": height, "outcome_height": outcome_height},
+                        )
+                        break
+                    _schedule_ahead()
+                    if outcome is None:
+                        tracker.log_event(
+                            "sync",
+                            "Block unavailable from peers",
+                            level="warning",
+                            details={"height": height, "block_hash": block_hash_hex},
+                        )
+                        break
+                    payload, _peer = outcome
+                    try:
+                        connect_block(
+                            tracker,
+                            payload,
+                            height=height,
+                            expected_prev=expected_prev,
+                            expected_hash=block_hash_rev,
+                            chain_name=chain.name,
+                            script_verify_runner=script_verify_runner,
+                            update_metrics=False,
+                        )
+                        await broadcast_witness_block_inv(peers, block_hash_rev, tracker)
+                    except ConnectBlockError as exc:
+                        tracker.log_event(
+                            "sync",
+                            "Rejected invalid block",
+                            level="warning",
+                            details={"height": height, "error": str(exc)},
+                        )
+                        tracker.upsert_sync_state(chain.name, sync_status="blocks_blocked")
+                        break
+                    file_name, offset, size = block_store.write(payload)
+                    tracker.record_block(height, block_hash_hex, file_name, offset, size)
+                    downloaded += 1
+                    if downloaded == 1 or downloaded % 32 == 0:
+                        logger.info(
+                            "Block sync progress: height=%s batch_downloaded=%s utxos=%s",
+                            height,
+                            downloaded,
+                            tracker.utxo_count(),
+                        )
+            finally:
+                for task in pending.values():
+                    if not task.done():
+                        task.cancel()
+                if pending:
+                    await asyncio.gather(*pending.values(), return_exceptions=True)
 
     else:
         for height in missing:
@@ -207,6 +239,8 @@ async def sync_blocks_batch(
                     expected_prev=expected_prev,
                     expected_hash=block_hash,
                     chain_name=chain.name,
+                    script_verify_runner=script_verify_runner,
+                    update_metrics=False,
                 )
                 await broadcast_witness_block_inv(peers, block_hash, tracker)
             except ConnectBlockError as exc:
@@ -230,6 +264,7 @@ async def sync_blocks_batch(
                 )
 
     if downloaded:
+        incr_meta_counter(tracker, META_BLOCKS_VALIDATED_TOTAL, downloaded)
         tracker.log_event(
             "sync",
             f"Downloaded {downloaded} blocks",
@@ -253,31 +288,33 @@ async def sync_blocks_to_tip(
     parallel_downloads: int = 0,
 ) -> int:
     total = 0
-    while True:
-        validated = tracker.get_validated_height(chain.name)
-        if target_height and validated >= target_height:
-            break
-        remaining = max_blocks - total if max_blocks else batch_size
-        if max_blocks and remaining <= 0:
-            break
-        batch_limit = min(batch_size, remaining) if max_blocks else batch_size
-        if target_height:
-            heights_left = target_height - validated
-            if heights_left <= 0:
+    with ScriptVerifyRunner() as script_verify_runner:
+        while True:
+            validated = tracker.get_validated_height(chain.name)
+            if target_height and validated >= target_height:
                 break
-            batch_limit = min(batch_limit, heights_left)
-        downloaded = await sync_blocks_batch(
-            peers,
-            tracker,
-            chain,
-            block_store,
-            batch_size=batch_limit,
-            max_blocks=batch_limit if max_blocks else 0,
-            parallel_downloads=parallel_downloads,
-        )
-        if downloaded == 0:
-            break
-        total += downloaded
+            remaining = max_blocks - total if max_blocks else batch_size
+            if max_blocks and remaining <= 0:
+                break
+            batch_limit = min(batch_size, remaining) if max_blocks else batch_size
+            if target_height:
+                heights_left = target_height - validated
+                if heights_left <= 0:
+                    break
+                batch_limit = min(batch_limit, heights_left)
+            downloaded = await sync_blocks_batch(
+                peers,
+                tracker,
+                chain,
+                block_store,
+                batch_size=batch_limit,
+                max_blocks=batch_limit if max_blocks else 0,
+                parallel_downloads=parallel_downloads,
+                script_verify_runner=script_verify_runner,
+            )
+            if downloaded == 0:
+                break
+            total += downloaded
     return total
 
 

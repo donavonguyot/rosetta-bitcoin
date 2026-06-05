@@ -106,7 +106,17 @@ async def test_sync_blocks_batch_parallel_marks_capability_and_bounded_gather(tm
 
     connect_order: list[int] = []
 
-    def fake_connect_block(tracker, payload, *, height, expected_prev, expected_hash, chain_name):  # noqa: ARG001
+    def fake_connect_block(
+        tracker,
+        payload,
+        *,
+        height,
+        expected_prev,
+        expected_hash,
+        chain_name,
+        script_verify_runner=None,
+        update_metrics=True,
+    ):  # noqa: ARG001
         connect_order.append(height)
 
     monkeypatch.setattr(
