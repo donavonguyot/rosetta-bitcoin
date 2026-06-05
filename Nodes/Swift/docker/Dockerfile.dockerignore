@@ -1,0 +1,6 @@
+.git
+.build
+data-swift
+data-swift-*
+*.log
+.DS_Store

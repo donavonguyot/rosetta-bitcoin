@@ -4,11 +4,13 @@ RESULT_DATE ?= $(shell date +%F)
 SCRIPT_RESULT ?= ../Shared/conformance/results/swift_script_corpus_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /results/swift_script_corpus_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= /results/swift_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+DOCKER_10K_PROOF_RESULT ?= /results/swift_docker_supporting_10k_benchmark_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_P2P_PEER ?= host.docker.internal:48333
+DOCKER_PROOF_VOLUME ?= swiftbitnode_proof_data
 DOCKER_SYNC_TARGET ?= 5000
 
-.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local clean
+.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k clean
 
 build:
 	$(SWIFT) build
@@ -56,8 +58,8 @@ docker-proof-local:
 	  sleep 2; \
 	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
 	done
-	@docker volume rm -f swiftbitnode_proof_data swift_swiftbitnode_proof_data docker_swiftbitnode_proof_data >/dev/null 2>&1 || true
-	$(DOCKER_COMPOSE) run --rm --no-deps \
+	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
+	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps \
 	  -e TARGET_HEIGHT=$(DOCKER_SYNC_TARGET) \
 	  -e HEADER_TARGET_HEIGHT=$(DOCKER_SYNC_TARGET) \
 	  -e PREFETCH_DEPTH=4 \
@@ -70,6 +72,12 @@ docker-proof-local:
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
 	  --output $(DOCKER_LOCAL_PROOF_RESULT)
+
+docker-proof-10k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=swiftbitnode_10k_proof_data \
+	  DOCKER_SYNC_TARGET=10000 \
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_10K_PROOF_RESULT)
 
 clean:
 	rm -rf .build data-swift

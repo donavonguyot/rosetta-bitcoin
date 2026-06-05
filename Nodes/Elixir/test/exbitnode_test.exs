@@ -416,6 +416,7 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
     assert result.height == 0
     assert is_integer(result.timing.utxo_load)
     assert is_integer(result.timing.block_connect_store_commit)
+    assert result.timing.block_connect_store_commit >= result.timing.commit
     assert ChainstateTracker.get_validated_height(conn, "testnet4") == 0
     assert ChainstateTracker.utxo_count(conn, "testnet4") == 0
     assert ChainstateTracker.block_count(conn, "testnet4") == 1

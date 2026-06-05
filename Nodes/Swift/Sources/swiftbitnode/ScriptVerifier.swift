@@ -193,6 +193,9 @@ enum ScriptVerifier {
             return (false, "loader", "missing_witness", "missing taproot witness stack")
         }
         let witness = fixture.transaction.witness[fixture.inputIndex]
+        if witness.count == 1 {
+            return verifyTaprootKeyPath(fixture, signatureWithHashType: witness[0])
+        }
         guard witness.count >= 2 else {
             return (false, "stack", "taproot_witness_shape", "taproot script path requires script and control block")
         }
@@ -283,31 +286,61 @@ enum ScriptVerifier {
         return NativeSecp256k1.verifyECDSA(pubkey: pubkey, msg32: digest, derSignature: der)
     }
 
+    private static func verifyTaprootKeyPath(_ fixture: CorpusFixture, signatureWithHashType: Data) -> (Bool, String, String, String) {
+        guard NativeSecp256k1.available else {
+            return (false, "crypto", "native_secp256k1_unavailable", "native secp256k1 verifier is unavailable")
+        }
+        guard fixture.prevScriptPubKey.count == 34, fixture.prevScriptPubKey[0] == 0x51, fixture.prevScriptPubKey[1] == 0x20 else {
+            return (false, "template", "p2tr_program_shape", "invalid P2TR witness program")
+        }
+        guard fixture.prevouts.count >= fixture.transaction.inputs.count else {
+            return (false, "loader", "missing_prevouts", "taproot key path requires spent prevouts for every input")
+        }
+        guard let parsed = parseTaprootSignature(signatureWithHashType) else {
+            return (false, "stack", "taproot_keypath_signature_shape", "taproot key path witness must be 64-byte sig or 65-byte sig+hashtype")
+        }
+        do {
+            let digest = try Sighash.taprootKeyPath(
+                tx: fixture.transaction,
+                inputIndex: fixture.inputIndex,
+                prevouts: fixture.prevouts,
+                sighashType: parsed.sighashType
+            )
+            let pubkey = fixture.prevScriptPubKey.subdata(in: 2..<34)
+            let result = NativeSecp256k1.verifySchnorrResult(xonlyPubkey: pubkey, msg32: digest, signature: parsed.signature)
+            return result == "valid"
+                ? (true, "ok", "", "")
+                : (false, "crypto", "schnorr_\(result)", "P2TR key-path Schnorr verification returned \(result)")
+        } catch {
+            return (false, "sighash", "taproot_keypath_sighash_error", error.localizedDescription)
+        }
+    }
+
     private static func verifyTaprootSignature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, tapleafHash: Data) -> Bool {
         guard pubkey.count == 32 else { return false }
-        if signatureWithHashType.isEmpty { return false }
-        let sighashType: UInt8
-        let signature: Data
-        if signatureWithHashType.count == 64 {
-            sighashType = 0x00
-            signature = signatureWithHashType
-        } else if signatureWithHashType.count == 65 {
-            sighashType = signatureWithHashType.last ?? 0x00
-            guard sighashType != 0x00 else { return false }
-            signature = Data(signatureWithHashType.dropLast())
-        } else {
-            return false
-        }
+        guard let parsed = parseTaprootSignature(signatureWithHashType) else { return false }
         guard let digest = try? Sighash.taprootScriptPath(
             tx: fixture.transaction,
             inputIndex: fixture.inputIndex,
             prevouts: fixture.prevouts,
             tapleafHash: tapleafHash,
-            sighashType: sighashType
+            sighashType: parsed.sighashType
         ) else {
             return false
         }
-        return NativeSecp256k1.verifySchnorr(xonlyPubkey: pubkey, msg32: digest, signature: signature)
+        return NativeSecp256k1.verifySchnorr(xonlyPubkey: pubkey, msg32: digest, signature: parsed.signature)
+    }
+
+    private static func parseTaprootSignature(_ signatureWithHashType: Data) -> (signature: Data, sighashType: UInt8)? {
+        if signatureWithHashType.count == 64 {
+            return (signatureWithHashType, 0x00)
+        }
+        if signatureWithHashType.count == 65 {
+            let sighashType = signatureWithHashType.last ?? 0x00
+            guard sighashType != 0x00 else { return nil }
+            return (Data(signatureWithHashType.dropLast()), sighashType)
+        }
+        return nil
     }
 
     private static func currentPrevout(_ fixture: CorpusFixture) -> CorpusPrevout? {

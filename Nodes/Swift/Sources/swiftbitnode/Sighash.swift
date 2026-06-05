@@ -177,6 +177,66 @@ enum Sighash {
         return taggedHash(tag: "TapSighash", Data([0x00]) + msg)
     }
 
+    static func taprootKeyPath(
+        tx: Transaction,
+        inputIndex: Int,
+        prevouts: [CorpusPrevout],
+        sighashType: UInt8
+    ) throws -> Data {
+        guard inputIndex >= 0, inputIndex < tx.inputs.count, prevouts.count >= tx.inputs.count else {
+            throw SwiftBitnodeError.message("taproot sighash missing prevouts")
+        }
+        guard taprootAllowedHashType(sighashType) else {
+            throw SwiftBitnodeError.message("unsupported taproot sighash type")
+        }
+        let outputMode = sighashType == 0x00 ? all : UInt32(sighashType & 0x03)
+        let anyone = (sighashType & 0x80) != 0
+        var msg = Data()
+        msg.append(sighashType)
+        msg.append(UInt32(bitPattern: tx.version).littleEndianData)
+        msg.append(tx.locktime.littleEndianData)
+        if !anyone {
+            msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
+                out.append(input.previousTxidInternal)
+                out.append(input.vout.littleEndianData)
+            }))
+            msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
+                out.append(UInt64(bitPattern: prevout.amount).littleEndianData)
+            }))
+            msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
+                appendCompactSize(&out, UInt64(prevout.scriptPubKey.count))
+                out.append(prevout.scriptPubKey)
+            }))
+            msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
+                out.append(input.sequence.littleEndianData)
+            }))
+        }
+        if outputMode == all {
+            msg.append(SHA256.hash(tx.outputs.reduce(into: Data()) { out, output in
+                out.append(serializeOutput(output))
+            }))
+        } else if outputMode == single && inputIndex >= tx.outputs.count {
+            throw SwiftBitnodeError.message("taproot SIGHASH_SINGLE missing matching output")
+        }
+        msg.append(UInt8(0)) // ext_flag=0, no annex
+        if anyone {
+            let input = tx.inputs[inputIndex]
+            let prevout = prevouts[inputIndex]
+            msg.append(input.previousTxidInternal)
+            msg.append(input.vout.littleEndianData)
+            msg.append(UInt64(bitPattern: prevout.amount).littleEndianData)
+            appendCompactSize(&msg, UInt64(prevout.scriptPubKey.count))
+            msg.append(prevout.scriptPubKey)
+            msg.append(input.sequence.littleEndianData)
+        } else {
+            msg.append(UInt32(inputIndex).littleEndianData)
+        }
+        if outputMode == single {
+            msg.append(SHA256.hash(serializeOutput(tx.outputs[inputIndex])))
+        }
+        return taggedHash(tag: "TapSighash", Data([0x00]) + msg)
+    }
+
     static func tapleafHash(script: Data, leafVersion: UInt8) -> Data {
         var payload = Data([leafVersion])
         appendCompactSize(&payload, UInt64(script.count))
@@ -204,6 +264,10 @@ enum Sighash {
     private static func taggedHash(tag: String, _ payload: Data) -> Data {
         let tagHash = SHA256.hash(Data(tag.utf8))
         return SHA256.hash(tagHash + tagHash + payload)
+    }
+
+    private static func taprootAllowedHashType(_ hashType: UInt8) -> Bool {
+        hashType <= 0x03 || (hashType >= 0x81 && hashType <= 0x83)
     }
 
     private static func appendCompactSize(_ out: inout Data, _ value: UInt64) {

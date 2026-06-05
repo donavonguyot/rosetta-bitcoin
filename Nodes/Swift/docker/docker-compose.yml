@@ -32,5 +32,8 @@ services:
 
 volumes:
   swiftbitnode_data:
+    name: ${DOCKER_DATA_VOLUME:-swiftbitnode_data}
   swiftbitnode_proof_data:
+    name: ${DOCKER_PROOF_VOLUME:-swiftbitnode_proof_data}
   swiftbitnode_supervisor_data:
+    name: ${DOCKER_SUPERVISOR_VOLUME:-swiftbitnode_supervisor_data}

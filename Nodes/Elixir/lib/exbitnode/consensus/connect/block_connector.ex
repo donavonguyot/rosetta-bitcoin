@@ -31,6 +31,7 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
         expected_hash_internal,
         stored \\ nil
       ) do
+    connect_started_at = System.monotonic_time(:microsecond)
     validated = ChainstateTracker.get_validated_height(conn, chain)
 
     if height != validated + 1 do
@@ -114,6 +115,8 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
         })
       end)
 
+    connect_us = System.monotonic_time(:microsecond) - connect_started_at
+
     %{
       height: height,
       block_hash_hex: block_hash_hex,
@@ -124,7 +127,7 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
         script_runner_wait: Process.get(:exbitnode_script_runner_wait_us, 0),
         utxo_apply: Process.get(:exbitnode_utxo_apply_us, 0),
         commit: commit_us,
-        block_connect_store_commit: commit_us
+        block_connect_store_commit: connect_us
       }
     }
   end

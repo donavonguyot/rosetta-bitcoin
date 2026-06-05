@@ -75,7 +75,14 @@ defmodule Exbitnode.Sync.BlockSync do
 
           {download_wait_us, {prefetcher, request_result}} =
             timed(fn ->
-              request_block_with_prefetch(prefetcher, next_height, peer_pid, block_hash_internal, peer_ctx, reconnects)
+              request_block_with_prefetch(
+                prefetcher,
+                next_height,
+                peer_pid,
+                block_hash_internal,
+                peer_ctx,
+                reconnects
+              )
             end)
 
           bump_timing(:block_download_wait, download_wait_us)
@@ -88,14 +95,14 @@ defmodule Exbitnode.Sync.BlockSync do
               try do
                 connect_result =
                   BlockConnector.connect(
-                  conn,
-                  chain.name,
-                  next_height,
-                  payload,
-                  expected_prev_internal,
-                  block_hash_internal,
-                  stored
-                )
+                    conn,
+                    chain.name,
+                    next_height,
+                    payload,
+                    expected_prev_internal,
+                    block_hash_internal,
+                    stored
+                  )
 
                 merge_connector_timing(connect_result)
                 write_progress_snapshot(conn, chain.name, peer_ctx, "blocks_syncing")
@@ -131,12 +138,22 @@ defmodule Exbitnode.Sync.BlockSync do
                 e ->
                   BlockPrefetcher.cancel_all(prefetcher)
                   ChainstateTracker.log_event(conn, "consensus", Exception.message(e), "error")
-                  write_progress_snapshot(conn, chain.name, peer_ctx, "failed", nil, Exception.message(e))
+
+                  write_progress_snapshot(
+                    conn,
+                    chain.name,
+                    peer_ctx,
+                    "failed",
+                    nil,
+                    Exception.message(e)
+                  )
+
                   finish(conn, chain.name, downloaded, connected, blocker, "failed")
               end
 
             {:error, :notfound, peer_pid, reconnects} ->
               BlockPrefetcher.cancel_all(prefetcher)
+
               ChainstateTracker.log_event(
                 conn,
                 "sync",
@@ -157,6 +174,7 @@ defmodule Exbitnode.Sync.BlockSync do
 
             {:error, reason, peer_pid, reconnects} ->
               BlockPrefetcher.cancel_all(prefetcher)
+
               ChainstateTracker.log_event(
                 conn,
                 "sync",
@@ -179,7 +197,14 @@ defmodule Exbitnode.Sync.BlockSync do
     end
   end
 
-  defp request_block_with_prefetch(prefetcher, next_height, peer_pid, block_hash_internal, peer_ctx, reconnects) do
+  defp request_block_with_prefetch(
+         prefetcher,
+         next_height,
+         peer_pid,
+         block_hash_internal,
+         peer_ctx,
+         reconnects
+       ) do
     case BlockPrefetcher.pop(prefetcher, next_height) do
       {prefetcher, {:ok, payload}} ->
         {prefetcher, {:ok, payload, peer_pid, reconnects}}
@@ -262,6 +287,7 @@ defmodule Exbitnode.Sync.BlockSync do
          _peer_pid \\ nil,
          _reconnects \\ 0
        ) do
+    sync_status = final_sync_status(conn, chain, sync_status)
     ChainstateTracker.upsert_sync_state(conn, chain, %{sync_status: sync_status})
 
     %{
@@ -273,7 +299,28 @@ defmodule Exbitnode.Sync.BlockSync do
     |> maybe_put_timing()
   end
 
-  defp write_progress_snapshot(conn, chain, peer_ctx, sync_status, blocker \\ nil, last_error \\ nil) do
+  defp final_sync_status(conn, chain, "blocks_syncing") do
+    validated_height = ChainstateTracker.get_validated_height(conn, chain)
+    sync_state = ChainstateTracker.get_sync_state(conn, chain)
+    header_height = (sync_state && sync_state.best_height) || -1
+
+    if header_height >= 0 and validated_height >= header_height do
+      "blocks_current"
+    else
+      "blocks_syncing"
+    end
+  end
+
+  defp final_sync_status(_conn, _chain, sync_status), do: sync_status
+
+  defp write_progress_snapshot(
+         conn,
+         chain,
+         peer_ctx,
+         sync_status,
+         blocker \\ nil,
+         last_error \\ nil
+       ) do
     data_dir = peer_ctx && Map.get(peer_ctx, :data_dir)
     peer_source = peer_ctx && "#{peer_ctx.host}:#{peer_ctx.port}"
 

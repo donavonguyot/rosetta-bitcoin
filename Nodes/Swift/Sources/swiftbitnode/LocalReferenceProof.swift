@@ -60,6 +60,17 @@ enum LocalReferenceProof {
         if !reached && failures.isEmpty {
             failures.append("target not reached")
         }
+        let targetLabel: String
+        switch target {
+        case 5000:
+            targetLabel = "5k"
+        case 10000:
+            targetLabel = "10k"
+        default:
+            targetLabel = "\(target)"
+        }
+        let benchmarkGate = targetLabel == "\(target)" ? "local_reference" : "supporting_\(targetLabel)"
+        let benchmarkKind = targetLabel == "\(target)" ? "local_reference_p2p" : "supporting_\(targetLabel)_p2p"
         let stages = timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"])
         let elapsedMs = max(1, Int((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000))
         let doc: [String: Any] = [
@@ -69,12 +80,12 @@ enum LocalReferenceProof {
             "chain": Constants.chain,
             "runtime_surface": Constants.runtimeSurface,
             "benchmark_contract_version": 1,
-            "benchmark_gate": "supporting_5k",
-            "benchmark_kind": "supporting_5k_p2p",
-            "benchmark_lane": "supporting_5k_p2p",
+            "benchmark_gate": benchmarkGate,
+            "benchmark_kind": benchmarkKind,
+            "benchmark_lane": benchmarkKind,
             "target_height": target,
             "header_target_height": target,
-            "target_label": target == 5000 ? "5k" : "\(target)",
+            "target_label": targetLabel,
             "byte_source": "local_reference_p2p",
             "proof_mode": "p2p_sync",
             "peer_mode": "local_reference",

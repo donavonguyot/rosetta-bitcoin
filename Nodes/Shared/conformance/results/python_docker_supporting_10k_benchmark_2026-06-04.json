@@ -1,0 +1,447 @@
+{
+  "benchmark_contract_version": 1,
+  "benchmark_gate": "supporting_10k",
+  "benchmark_kind": "supporting_10k_p2p",
+  "benchmark_lane": "supporting_10k_p2p",
+  "binary_gate_status": "not_attempted",
+  "blocks_connected": 10000,
+  "blocks_fetched": 10000,
+  "byte_source": "local_reference_p2p",
+  "captured_at": "2026-06-05T05:46:08+00:00",
+  "category": "local_reference_sync",
+  "chain": "testnet4",
+  "chainstate_backend": "rocksdb",
+  "chainstate_status": "usable",
+  "chainstate_utxo_count": 9519,
+  "current_blocker": null,
+  "datadir": "/proof/data",
+  "docker_volume": "pybitnode_10k_proof_data",
+  "elapsed_ms": 20180,
+  "failures": [],
+  "fresh_state": true,
+  "header_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+  "header_height": 10000,
+  "header_target_height": 10000,
+  "implementation": "PythonNode",
+  "local_reference_status": "target_reached",
+  "native_crypto_available": true,
+  "native_crypto_backend": "coincurve",
+  "native_storage": true,
+  "node": "PythonNode",
+  "peer": "host.docker.internal:48333",
+  "peer_mode": "local_reference",
+  "port": "python",
+  "prefetch_depth": 4,
+  "proof_mode": "p2p_sync",
+  "proof_wrapper_elapsed_ms": 35839,
+  "reference_finish_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+  "reference_finish_height": 10000,
+  "reference_start_hash": "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
+  "reference_start_height": 0,
+  "result": "passed",
+  "resume_supported": true,
+  "rocksdb_wal_disabled": false,
+  "runtime_surface": "docker",
+  "script_runner_mode": "parallel",
+  "script_threads": "4",
+  "started_at": "2026-06-05T05:45:32+00:00",
+  "status": {
+    "block_count": 10000,
+    "chain": "testnet4",
+    "checkpoints": {
+      "cp0_framing": {
+        "capabilities_done": 5,
+        "capabilities_total": 6,
+        "checkpoint": "cp0_framing",
+        "optional_done": 0,
+        "optional_total": 1,
+        "phase": "phase0",
+        "required_done": 5,
+        "required_pass": true,
+        "required_total": 5,
+        "title": "Message framing"
+      },
+      "cp1_handshake": {
+        "capabilities_done": 6,
+        "capabilities_total": 8,
+        "checkpoint": "cp1_handshake",
+        "optional_done": 0,
+        "optional_total": 2,
+        "phase": "phase0",
+        "required_done": 6,
+        "required_pass": true,
+        "required_total": 6,
+        "title": "Connection handshake"
+      },
+      "cp2_discovery": {
+        "capabilities_done": 5,
+        "capabilities_total": 6,
+        "checkpoint": "cp2_discovery",
+        "optional_done": 0,
+        "optional_total": 1,
+        "phase": "phase0",
+        "required_done": 5,
+        "required_pass": true,
+        "required_total": 5,
+        "title": "Peer discovery"
+      },
+      "cp3_headers": {
+        "capabilities_done": 10,
+        "capabilities_total": 10,
+        "checkpoint": "cp3_headers",
+        "optional_done": 0,
+        "optional_total": 0,
+        "phase": "phase1",
+        "required_done": 10,
+        "required_pass": true,
+        "required_total": 10,
+        "title": "Header sync"
+      },
+      "cp4_blocks": {
+        "capabilities_done": 6,
+        "capabilities_total": 6,
+        "checkpoint": "cp4_blocks",
+        "optional_done": 1,
+        "optional_total": 1,
+        "phase": "phase2",
+        "required_done": 5,
+        "required_pass": true,
+        "required_total": 5,
+        "title": "Block download"
+      },
+      "cp5_tx_relay": {
+        "capabilities_done": 6,
+        "capabilities_total": 6,
+        "checkpoint": "cp5_tx_relay",
+        "optional_done": 1,
+        "optional_total": 1,
+        "phase": "phase4",
+        "required_done": 5,
+        "required_pass": true,
+        "required_total": 5,
+        "title": "Transaction relay"
+      },
+      "cp6_serving": {
+        "capabilities_done": 2,
+        "capabilities_total": 4,
+        "checkpoint": "cp6_serving",
+        "optional_done": 0,
+        "optional_total": 0,
+        "phase": "phase4",
+        "required_done": 2,
+        "required_pass": false,
+        "required_total": 4,
+        "title": "Inbound serving"
+      },
+      "cp7_keepalive": {
+        "capabilities_done": 3,
+        "capabilities_total": 3,
+        "checkpoint": "cp7_keepalive",
+        "optional_done": 0,
+        "optional_total": 0,
+        "phase": "phase0",
+        "required_done": 3,
+        "required_pass": true,
+        "required_total": 3,
+        "title": "Connection keepalive"
+      },
+      "cp8_extensions": {
+        "capabilities_done": 2,
+        "capabilities_total": 4,
+        "checkpoint": "cp8_extensions",
+        "optional_done": 2,
+        "optional_total": 4,
+        "phase": "phase5",
+        "required_done": 0,
+        "required_pass": true,
+        "required_total": 0,
+        "title": "Protocol extensions"
+      }
+    },
+    "connected_peers": 0,
+    "header_count": 10001,
+    "peer_count": 1,
+    "phases": [
+      {
+        "notes": "Message framing, version/verack, Docker scaffold",
+        "phase": "phase0",
+        "status": "in_progress",
+        "title": "Wire + handshake",
+        "updated_at": "2026-06-05T05:45:32+00:00"
+      },
+      {
+        "notes": "Block locator, header chain persistence",
+        "phase": "phase1",
+        "status": "pending",
+        "title": "Header sync",
+        "updated_at": "2026-06-05T05:45:32+00:00"
+      },
+      {
+        "notes": "10000 blocks stored, validated through height 10000",
+        "phase": "phase2",
+        "status": "in_progress",
+        "title": "Block download",
+        "updated_at": "2026-06-05T05:46:08+00:00"
+      },
+      {
+        "notes": "Validated through height 10000 (9519 UTXOs)",
+        "phase": "phase3",
+        "status": "in_progress",
+        "title": "Consensus validation",
+        "updated_at": "2026-06-05T05:46:08+00:00"
+      },
+      {
+        "notes": "Tx admission and rebroadcast",
+        "phase": "phase4",
+        "status": "pending",
+        "title": "Mempool + relay",
+        "updated_at": "2026-06-05T05:45:32+00:00"
+      },
+      {
+        "notes": "Metrics, peer banning, optional BIP324",
+        "phase": "phase5",
+        "status": "pending",
+        "title": "Hardening",
+        "updated_at": "2026-06-05T05:45:32+00:00"
+      }
+    ],
+    "recent_events": [
+      {
+        "category": "sync",
+        "created_at": "2026-06-05T05:46:08+00:00",
+        "details_json": "{\"from_height\": 9985, \"to_height\": 10000}",
+        "id": 30332,
+        "level": "info",
+        "message": "Downloaded 16 blocks"
+      },
+      {
+        "category": "p2p",
+        "created_at": "2026-06-05T05:46:08+00:00",
+        "details_json": "{\"host\": \"host.docker.internal\", \"port\": 48333}",
+        "id": 30331,
+        "level": "info",
+        "message": "Sent inv"
+      },
+      {
+        "category": "timing",
+        "created_at": "2026-06-05T05:46:08+00:00",
+        "details_json": "{\"height\": 10000, \"block_hash\": \"000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466\", \"tx_count\": 1, \"input_count\": 0, \"success\": true, \"error\": \"\", \"stages_ms\": {\"block_connect_store_commit\": 0.061, \"commit\": 0.032, \"script_verify\": 0.0, \"utxo_apply\": 0.014, \"utxo_load\": 0.007}}",
+        "id": 30330,
+        "level": "info",
+        "message": "connect_block"
+      },
+      {
+        "category": "p2p",
+        "created_at": "2026-06-05T05:46:08+00:00",
+        "details_json": "{\"host\": \"host.docker.internal\", \"port\": 48333}",
+        "id": 30329,
+        "level": "info",
+        "message": "Sent inv"
+      },
+      {
+        "category": "timing",
+        "created_at": "2026-06-05T05:46:08+00:00",
+        "details_json": "{\"height\": 9999, \"block_hash\": \"00000000003fa3e83207b8c0b2310422d5f01587b6a908f030288e9f30602d04\", \"tx_count\": 1, \"input_count\": 0, \"success\": true, \"error\": \"\", \"stages_ms\": {\"block_connect_store_commit\": 0.059, \"commit\": 0.029, \"script_verify\": 0.0, \"utxo_apply\": 0.014, \"utxo_load\": 0.007}}",
+        "id": 30328,
+        "level": "info",
+        "message": "connect_block"
+      }
+    ],
+    "storage_backend": "rocksdb",
+    "sync": {
+      "best_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+      "best_height": 10000,
+      "chain": "testnet4",
+      "header_count": 10001,
+      "sync_status": "blocks_current",
+      "updated_at": "2026-06-05T05:46:08+00:00"
+    },
+    "utxo_count": 9519,
+    "validated_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+    "validated_height": 10000,
+    "wire": {
+      "checkpoints_passed": 8,
+      "checkpoints_percent": 88.9,
+      "checkpoints_total": 9,
+      "full_node_wire_ready": false,
+      "required_done": 41,
+      "required_percent": 95.3,
+      "required_total": 43
+    }
+  },
+  "stderr_tail": "blocks: Block sync progress: height=9472 batch_downloaded=32 utxos=8991\n2026-06-05 05:46:07,131 INFO pybitnode.sync.blocks: Block sync progress: height=9473 batch_downloaded=1 utxos=8992\n2026-06-05 05:46:07,137 INFO pybitnode.sync.blocks: Block sync progress: height=9504 batch_downloaded=32 utxos=9023\n2026-06-05 05:46:07,217 INFO pybitnode.sync.blocks: Block sync progress: height=9505 batch_downloaded=1 utxos=9024\n2026-06-05 05:46:07,223 INFO pybitnode.sync.blocks: Block sync progress: height=9536 batch_downloaded=32 utxos=9055\n2026-06-05 05:46:07,302 INFO pybitnode.sync.blocks: Block sync progress: height=9537 batch_downloaded=1 utxos=9056\n2026-06-05 05:46:07,308 INFO pybitnode.sync.blocks: Block sync progress: height=9568 batch_downloaded=32 utxos=9087\n2026-06-05 05:46:07,386 INFO pybitnode.sync.blocks: Block sync progress: height=9569 batch_downloaded=1 utxos=9088\n2026-06-05 05:46:07,392 INFO pybitnode.sync.blocks: Block sync progress: height=9600 batch_downloaded=32 utxos=9119\n2026-06-05 05:46:07,467 INFO pybitnode.sync.blocks: Block sync progress: height=9601 batch_downloaded=1 utxos=9120\n2026-06-05 05:46:07,473 INFO pybitnode.sync.blocks: Block sync progress: height=9632 batch_downloaded=32 utxos=9151\n2026-06-05 05:46:07,550 INFO pybitnode.sync.blocks: Block sync progress: height=9633 batch_downloaded=1 utxos=9152\n2026-06-05 05:46:07,556 INFO pybitnode.sync.blocks: Block sync progress: height=9664 batch_downloaded=32 utxos=9183\n2026-06-05 05:46:07,634 INFO pybitnode.sync.blocks: Block sync progress: height=9665 batch_downloaded=1 utxos=9184\n2026-06-05 05:46:07,640 INFO pybitnode.sync.blocks: Block sync progress: height=9696 batch_downloaded=32 utxos=9215\n2026-06-05 05:46:07,717 INFO pybitnode.sync.blocks: Block sync progress: height=9697 batch_downloaded=1 utxos=9216\n2026-06-05 05:46:07,723 INFO pybitnode.sync.blocks: Block sync progress: height=9728 batch_downloaded=32 utxos=9247\n2026-06-05 05:46:07,800 INFO pybitnode.sync.blocks: Block sync progress: height=9729 batch_downloaded=1 utxos=9248\n2026-06-05 05:46:07,805 INFO pybitnode.sync.blocks: Block sync progress: height=9760 batch_downloaded=32 utxos=9279\n2026-06-05 05:46:07,882 INFO pybitnode.sync.blocks: Block sync progress: height=9761 batch_downloaded=1 utxos=9280\n2026-06-05 05:46:07,888 INFO pybitnode.sync.blocks: Block sync progress: height=9792 batch_downloaded=32 utxos=9311\n2026-06-05 05:46:07,965 INFO pybitnode.sync.blocks: Block sync progress: height=9793 batch_downloaded=1 utxos=9312\n2026-06-05 05:46:07,970 INFO pybitnode.sync.blocks: Block sync progress: height=9824 batch_downloaded=32 utxos=9343\n2026-06-05 05:46:08,047 INFO pybitnode.sync.blocks: Block sync progress: height=9825 batch_downloaded=1 utxos=9344\n2026-06-05 05:46:08,053 INFO pybitnode.sync.blocks: Block sync progress: height=9856 batch_downloaded=32 utxos=9375\n2026-06-05 05:46:08,130 INFO pybitnode.sync.blocks: Block sync progress: height=9857 batch_downloaded=1 utxos=9376\n2026-06-05 05:46:08,135 INFO pybitnode.sync.blocks: Block sync progress: height=9888 batch_downloaded=32 utxos=9407\n2026-06-05 05:46:08,212 INFO pybitnode.sync.blocks: Block sync progress: height=9889 batch_downloaded=1 utxos=9408\n2026-06-05 05:46:08,218 INFO pybitnode.sync.blocks: Block sync progress: height=9920 batch_downloaded=32 utxos=9439\n2026-06-05 05:46:08,295 INFO pybitnode.sync.blocks: Block sync progress: height=9921 batch_downloaded=1 utxos=9440\n2026-06-05 05:46:08,300 INFO pybitnode.sync.blocks: Block sync progress: height=9952 batch_downloaded=32 utxos=9471\n2026-06-05 05:46:08,376 INFO pybitnode.sync.blocks: Block sync progress: height=9953 batch_downloaded=1 utxos=9472\n2026-06-05 05:46:08,382 INFO pybitnode.sync.blocks: Block sync progress: height=9984 batch_downloaded=32 utxos=9503\n2026-06-05 05:46:08,456 INFO pybitnode.sync.blocks: Block sync progress: height=9985 batch_downloaded=1 utxos=9504\n2026-06-05 05:46:08,479 INFO __main__: Block sync complete: downloaded=10000 stored=10000 validated=10000 utxos=9519\n",
+  "stdout_tail": "pybitnode sync summary\n  downloaded_blocks=10000\n  connected_blocks=10000\n  sync_status=blocks_current\n  current_blocker=(none)\n  validated_height=10000\n  header_height=10000\n  utxo_count=9519\n  binary_gate_status=not_attempted\n",
+  "stored_block_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+  "stored_block_height": 10000,
+  "sync_exit_code": 0,
+  "sync_status": "blocks_current",
+  "target_height": 10000,
+  "target_label": "10k",
+  "timing_summary": {
+    "slow_blocks": [
+      {
+        "block_connect_store_commit_ms": 78,
+        "block_hash": "000000004cfba4fe6174c546086df7fb52b3d65d44788c0ee8acf436dd28de32",
+        "commit_ms": 1,
+        "height": 739,
+        "input_count": 563,
+        "rank": 1,
+        "script_verify_ms": 272,
+        "tx_count": 2,
+        "utxo_apply_ms": 0,
+        "utxo_load_ms": 1
+      },
+      {
+        "block_connect_store_commit_ms": 27,
+        "block_hash": "0000000004232bc88a11ce84dbcc57f0589cd5a921bb4a6ecfe70222c26409ac",
+        "commit_ms": 1,
+        "height": 5626,
+        "input_count": 325,
+        "rank": 2,
+        "script_verify_ms": 48,
+        "tx_count": 36,
+        "utxo_apply_ms": 1,
+        "utxo_load_ms": 2
+      },
+      {
+        "block_connect_store_commit_ms": 26,
+        "block_hash": "0000000000cc5fde17c545a309da0edb2f412342c00942515125c2d547c3e4aa",
+        "commit_ms": 1,
+        "height": 6090,
+        "input_count": 400,
+        "rank": 3,
+        "script_verify_ms": 54,
+        "tx_count": 70,
+        "utxo_apply_ms": 0,
+        "utxo_load_ms": 1
+      },
+      {
+        "block_connect_store_commit_ms": 25,
+        "block_hash": "0000000002366a5e588068832e4283c1dd602c8903ccf42d236a103f8a22955e",
+        "commit_ms": 1,
+        "height": 6096,
+        "input_count": 428,
+        "rank": 4,
+        "script_verify_ms": 49,
+        "tx_count": 57,
+        "utxo_apply_ms": 1,
+        "utxo_load_ms": 1
+      },
+      {
+        "block_connect_store_commit_ms": 25,
+        "block_hash": "0000000001225f2c4d7cc99274a7fbee74e3efb77a0cd2f4efdc28a5441e42dd",
+        "commit_ms": 1,
+        "height": 6182,
+        "input_count": 447,
+        "rank": 5,
+        "script_verify_ms": 51,
+        "tx_count": 59,
+        "utxo_apply_ms": 0,
+        "utxo_load_ms": 1
+      },
+      {
+        "block_connect_store_commit_ms": 24,
+        "block_hash": "000000000c81a582eaad6a390af99250396d55dc6fd9a704cf963625e5f17ea0",
+        "commit_ms": 1,
+        "height": 5324,
+        "input_count": 469,
+        "rank": 6,
+        "script_verify_ms": 40,
+        "tx_count": 46,
+        "utxo_apply_ms": 0,
+        "utxo_load_ms": 1
+      },
+      {
+        "block_connect_store_commit_ms": 23,
+        "block_hash": "000000000cb468a240b788659ac1c0fc8539623c66c0b28dadd0aca38fd81bc8",
+        "commit_ms": 1,
+        "height": 5595,
+        "input_count": 390,
+        "rank": 7,
+        "script_verify_ms": 46,
+        "tx_count": 38,
+        "utxo_apply_ms": 0,
+        "utxo_load_ms": 1
+      },
+      {
+        "block_connect_store_commit_ms": 23,
+        "block_hash": "000000000110e3a0f2ca7750389811cc19b5028227616d0819d43cf335138917",
+        "commit_ms": 0,
+        "height": 6072,
+        "input_count": 428,
+        "rank": 8,
+        "script_verify_ms": 41,
+        "tx_count": 56,
+        "utxo_apply_ms": 0,
+        "utxo_load_ms": 1
+      },
+      {
+        "block_connect_store_commit_ms": 23,
+        "block_hash": "00000000022db3bcc3400d1480f7ebdb6846d42acfa4efc711cda0d38428a1e5",
+        "commit_ms": 0,
+        "height": 6148,
+        "input_count": 468,
+        "rank": 9,
+        "script_verify_ms": 39,
+        "tx_count": 57,
+        "utxo_apply_ms": 0,
+        "utxo_load_ms": 1
+      },
+      {
+        "block_connect_store_commit_ms": 22,
+        "block_hash": "0000000005e4116e432accd2d09ab48b8f3e05eaa132b7e31a1286ffde3a390e",
+        "commit_ms": 1,
+        "height": 4340,
+        "input_count": 443,
+        "rank": 10,
+        "script_verify_ms": 38,
+        "tx_count": 40,
+        "utxo_apply_ms": 0,
+        "utxo_load_ms": 1
+      }
+    ],
+    "slow_stages": [
+      {
+        "count": 10000,
+        "max_ms": 272,
+        "stage": "script_verify"
+      },
+      {
+        "count": 10000,
+        "max_ms": 78,
+        "stage": "block_connect_store_commit"
+      },
+      {
+        "count": 10000,
+        "max_ms": 1,
+        "stage": "commit"
+      },
+      {
+        "count": 10000,
+        "max_ms": 4,
+        "stage": "utxo_load"
+      },
+      {
+        "count": 10000,
+        "max_ms": 1,
+        "stage": "utxo_apply"
+      }
+    ],
+    "stage_totals_ms": {
+      "block_connect_store_commit": 20180,
+      "commit": 1427,
+      "script_verify": 28498,
+      "utxo_apply": 883,
+      "utxo_load": 1141
+    },
+    "total_ms": 20180
+  },
+  "utxo_accounting_policy": "core_spendable_v1",
+  "validated_hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+  "validated_height": 10000,
+  "verification": {
+    "command": "make docker-proof-local",
+    "docker_volume": "pybitnode_10k_proof_data",
+    "live_progress_reporting": false
+  }
+}

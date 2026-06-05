@@ -6,7 +6,7 @@
     "root": "Nodes/Swift",
     "dockerfile": "Nodes/Swift/docker/Dockerfile",
     "compose": "Nodes/Swift/docker/docker-compose.yml",
-    "dockerignore": "Nodes/Swift/.dockerignore"
+    "dockerignore": "Nodes/Swift/docker/.dockerignore"
   },
   "images": {
     "base": "swift:6.0-jammy",
@@ -27,7 +27,7 @@
     "docker_status": "cd Nodes/Swift && make docker-status",
     "docker_script_corpus": "cd Nodes/Swift && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Swift && make docker-proof-local",
-    "docker_proof_10k": null,
+    "docker_proof_10k": "cd Nodes/Swift && make docker-proof-10k",
     "docker_probe_external": null,
     "docker_supervisor": null,
     "docker_supervisor_status": null,
@@ -67,7 +67,8 @@
   "proof_artifacts": {
     "script_corpus_result": "Nodes/Shared/conformance/results/swift_script_corpus_<YYYY-MM-DD>.json",
     "local_reference_result": "Nodes/Shared/conformance/results/swift_docker_supporting_5k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. The local Reference 5k proof remains the bounded baseline gate."
+    "supporting_10k_result": "Nodes/Shared/conformance/results/swift_docker_supporting_10k_benchmark_<YYYY-MM-DD>.json",
+    "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. Local Reference 5k and 10k proofs are bounded benchmark gates."
   },
   "known_caveats": ["The local Reference P2P comparator is a bounded proof harness, not live tip maintenance", "Persistent live P2P supervisor is still a follow-up surface", "Binary gate remains not_attempted"]
 }
