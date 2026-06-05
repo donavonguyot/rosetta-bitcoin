@@ -43,9 +43,17 @@ public static class Secp256k1
 
     public static bool VerifyDerSignature(ReadOnlySpan<byte> pubkey, ReadOnlySpan<byte> messageHash, ReadOnlySpan<byte> signature)
     {
-        if (UseNativeBackend())
-            return NativeVerifyEcdsa(pubkey, messageHash, signature);
-        return VerifyDerSignatureReference(pubkey, messageHash, signature);
+        var timingStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            if (UseNativeBackend())
+                return NativeVerifyEcdsa(pubkey, messageHash, signature);
+            return VerifyDerSignatureReference(pubkey, messageHash, signature);
+        }
+        finally
+        {
+            ScriptTiming.AddEcdsaVerify(System.Diagnostics.Stopwatch.GetTimestamp() - timingStarted);
+        }
     }
 
     public static bool VerifyDerSignatureReference(ReadOnlySpan<byte> pubkey, ReadOnlySpan<byte> messageHash, ReadOnlySpan<byte> signature)
@@ -73,15 +81,23 @@ public static class Secp256k1
 
     public static bool VerifySchnorrSignature(ReadOnlySpan<byte> pubkeyXOnly, ReadOnlySpan<byte> messageHash, ReadOnlySpan<byte> signature)
     {
-        if (pubkeyXOnly.Length != 32 || messageHash.Length != 32 || signature.Length != 64)
-            return false;
+        var timingStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
-            return global::Secp256k1Net.Secp256k1.VerifySchnorr(signature, messageHash, pubkeyXOnly);
+            if (pubkeyXOnly.Length != 32 || messageHash.Length != 32 || signature.Length != 64)
+                return false;
+            try
+            {
+                return global::Secp256k1Net.Secp256k1.VerifySchnorr(signature, messageHash, pubkeyXOnly);
+            }
+            catch
+            {
+                return false;
+            }
         }
-        catch
+        finally
         {
-            return false;
+            ScriptTiming.AddSchnorrVerify(System.Diagnostics.Stopwatch.GetTimestamp() - timingStarted);
         }
     }
 

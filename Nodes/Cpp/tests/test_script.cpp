@@ -953,13 +953,14 @@ void testScriptVerifyRunnerReportsLowestInputFailure() {
     messages::Transaction tx;
     consensus::script::ScriptVerifyRunner runner(4);
     const std::vector<consensus::script::VerifyInputJob> jobs = {
-        consensus::script::VerifyInputJob{&tx, 5, {consensus::script::OP_1}, 1, nullptr},
-        consensus::script::VerifyInputJob{&tx, 2, {consensus::script::OP_1}, 1, nullptr},
-        consensus::script::VerifyInputJob{&tx, 7, {consensus::script::OP_1}, 1, nullptr},
+        consensus::script::VerifyInputJob{&tx, 1, 5, {consensus::script::OP_1}, 1, nullptr},
+        consensus::script::VerifyInputJob{&tx, 0, 7, {consensus::script::OP_1}, 1, nullptr},
+        consensus::script::VerifyInputJob{&tx, 1, 2, {consensus::script::OP_1}, 1, nullptr},
     };
     const auto result = runner.verify(jobs);
     EXPECT_TRUE(result.error.has_value());
-    EXPECT_EQ(result.failedInputIndex, 2u);
+    EXPECT_EQ(result.failedTxIndex, 0u);
+    EXPECT_EQ(result.failedInputIndex, 7u);
     EXPECT_TRUE(result.workerCpuUs >= 0);
 }
 

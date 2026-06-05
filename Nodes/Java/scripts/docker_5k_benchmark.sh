@@ -98,13 +98,15 @@ def target_label(target):
 
 
 def supporting_gate(target):
-    label = target_label(target)
-    return f"supporting_{label}" if label else "local_reference"
+    if target == 100000:
+        return "primary_100k"
+    return f"supporting_{target_label(target)}"
 
 
 def supporting_p2p_kind(target):
-    label = target_label(target)
-    return f"supporting_{label}_p2p" if label else "local_reference_p2p"
+    if target == 100000:
+        return "primary_100k_p2p"
+    return f"supporting_{target_label(target)}_p2p"
 
 
 def extract_json_object(raw):
@@ -120,6 +122,18 @@ def parse_pairs(line):
     for key, value in re.findall(r"([A-Za-z0-9_]+)=([^ ]+)", line):
         pairs[key] = value
     return pairs
+
+
+def parse_json_map(value):
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(key): as_int(raw) for key, raw in parsed.items()}
 
 
 def parse_run_log(path):
@@ -147,6 +161,15 @@ def parse_run_log(path):
                     "height": as_int(pairs.get("height")),
                     "block_size": as_int(pairs.get("block_size")),
                     "input_count": as_int(pairs.get("input_count")),
+                    "tx_count": as_int(pairs.get("tx_count")),
+                    "vin_count": as_int(pairs.get("vin_count")),
+                    "vout_count": as_int(pairs.get("vout_count")),
+                    "script_input_count": as_int(pairs.get("script_input_count")),
+                    "input_shape_counts": parse_json_map(pairs.get("input_shape_counts")),
+                    "spent_prevout_script_types": parse_json_map(
+                        pairs.get("spent_prevout_script_types")
+                    ),
+                    "output_script_types": parse_json_map(pairs.get("output_script_types")),
                     "utxo_load_ms": as_int(pairs.get("utxo_load_ms")),
                     "script_verify_ms": as_int(pairs.get("script_verify_ms")),
                     "utxo_apply_ms": as_int(pairs.get("utxo_apply_ms")),

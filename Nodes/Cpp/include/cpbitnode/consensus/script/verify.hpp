@@ -51,6 +51,7 @@ void verifyTransactionInput(
 
 struct VerifyInputJob {
     const messages::Transaction* transaction = nullptr;
+    std::size_t txIndex = 0;
     std::size_t inputIndex = 0;
     std::vector<std::uint8_t> scriptPubkey;
     std::int64_t amount = 0;
@@ -60,6 +61,7 @@ struct VerifyInputJob {
 
 struct VerifyBatchResult {
     std::optional<std::string> error;
+    std::size_t failedTxIndex = 0;
     std::size_t failedInputIndex = 0;
     long long workerCpuUs = 0;
 };

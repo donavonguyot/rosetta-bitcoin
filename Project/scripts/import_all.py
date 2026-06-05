@@ -1086,7 +1086,7 @@ def timing_stages(payload: dict[str, Any]) -> dict[str, int]:
             return
         name = text(stage)
         current = stages.get(name)
-        if current is None or parsed > 0 or current <= 0:
+        if current is None or (current <= 0 and parsed > 0):
             stages[name] = parsed
 
     sync_timing = payload.get("sync_timing")

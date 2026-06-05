@@ -9,6 +9,14 @@
 
 namespace cpbitnode::db {
 
+struct StorageTimingSnapshot {
+    long long utxoDeletePrepareUs = 0;
+    long long utxoPutPrepareUs = 0;
+    long long undoPutPrepareUs = 0;
+    long long metadataPutPrepareUs = 0;
+    long long rocksdbWriteUs = 0;
+};
+
 struct StoredBlockRow {
     int height = 0;
     std::string blockHash;
@@ -146,5 +154,7 @@ public:
 };
 
 std::unique_ptr<NodeStateStore> openRocksDbNodeStateStore(const std::string& dataDir);
+void resetStorageTiming();
+StorageTimingSnapshot storageTimingSnapshot();
 
 }  // namespace cpbitnode::db

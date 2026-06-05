@@ -21,6 +21,7 @@ public final class ChainstateStoreFactory {
   static final String STATUS = META_PREFIX + "status";
   static final String TIP_HEIGHT = META_PREFIX + "tip_height";
   static final String TIP_HASH = META_PREFIX + "tip_hash";
+  static final String UTXO_COUNT = META_PREFIX + "utxo_count";
   static final String SCHEMA_VERSION = META_PREFIX + "schema_version";
   static final String CODEC_VERSION = META_PREFIX + "codec_version";
   static final String UPDATED_AT = META_PREFIX + "updated_at";
@@ -97,6 +98,7 @@ public final class ChainstateStoreFactory {
         valueOrDefault(tracker.getMeta(STATUS), "usable"),
         parseInt(tracker.getMeta(TIP_HEIGHT), tracker.getValidatedHeight(chain)),
         valueOrDefault(tracker.getMeta(TIP_HASH), tracker.getValidatedHash(chain)),
+        parseLong(tracker.getMeta(UTXO_COUNT), -1),
         valueOrDefault(tracker.getMeta(SCHEMA_VERSION), Integer.toString(CHAINSTATE_SCHEMA_VERSION)),
         valueOrDefault(tracker.getMeta(UPDATED_AT), nowIso()));
   }
@@ -113,6 +115,7 @@ public final class ChainstateStoreFactory {
             "usable",
             tip.height(),
             tip.hash(),
+            statsUtxoCount(store, existing),
             existing.schemaVersion(),
             nowIso());
     writeMetadata(tracker, updated);
@@ -131,6 +134,7 @@ public final class ChainstateStoreFactory {
     tracker.setMeta(STATUS, metadata.status());
     tracker.setMeta(TIP_HEIGHT, Integer.toString(metadata.tipHeight()));
     tracker.setMeta(TIP_HASH, valueOrDefault(metadata.tipHash(), ""));
+    tracker.setMeta(UTXO_COUNT, Long.toString(metadata.utxoCount()));
     tracker.setMeta(SCHEMA_VERSION, metadata.schemaVersion());
     tracker.setMeta(UPDATED_AT, metadata.updatedAt());
   }
@@ -164,6 +168,7 @@ public final class ChainstateStoreFactory {
             mode == ChainstateOpenMode.REBUILD ? "rebuilding" : "usable",
             currentTipHeight,
             currentTipHash,
+            existing.utxoCount(),
             Integer.toString(CHAINSTATE_SCHEMA_VERSION),
             nowIso());
     writeMetadata(tracker, metadata);
@@ -179,6 +184,7 @@ public final class ChainstateStoreFactory {
         "usable",
         tracker.getValidatedHeight(chain),
         tracker.getValidatedHash(chain),
+        parseLong(tracker.getMeta(UTXO_COUNT), -1),
         Integer.toString(CHAINSTATE_SCHEMA_VERSION),
         nowIso());
   }
@@ -198,6 +204,7 @@ public final class ChainstateStoreFactory {
     rocksDb.putMetadata(STATUS, metadata.status());
     rocksDb.putMetadata(TIP_HEIGHT, Integer.toString(metadata.tipHeight()));
     rocksDb.putMetadata(TIP_HASH, valueOrDefault(metadata.tipHash(), ""));
+    rocksDb.putMetadata(UTXO_COUNT, Long.toString(metadata.utxoCount()));
     rocksDb.putMetadata(SCHEMA_VERSION, metadata.schemaVersion());
     rocksDb.putMetadata(CODEC_VERSION, "2");
     rocksDb.putMetadata(UPDATED_AT, metadata.updatedAt());
@@ -235,6 +242,21 @@ public final class ChainstateStoreFactory {
       return defaultValue;
     }
     return Integer.parseInt(value);
+  }
+
+  private static long parseLong(String value, long defaultValue) {
+    if (value == null || value.isBlank()) {
+      return defaultValue;
+    }
+    return Long.parseLong(value);
+  }
+
+  private static long statsUtxoCount(ChainstateStore store, ChainstateMetadata existing)
+      throws SQLException {
+    if (existing.utxoCount() >= 0) {
+      return existing.utxoCount();
+    }
+    return store.stats().utxoCount();
   }
 
   private static String valueOrDefault(String value, String defaultValue) {

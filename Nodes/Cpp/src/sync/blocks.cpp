@@ -56,6 +56,11 @@ struct PipelineTiming {
     long long scriptSchnorrVerify = 0;
     long long scriptInterpreterEval = 0;
     long long scriptRunnerWait = 0;
+    long long utxoDeletePrepare = 0;
+    long long utxoPutPrepare = 0;
+    long long undoPutPrepare = 0;
+    long long metadataPutPrepare = 0;
+    long long rocksdbWrite = 0;
 };
 
 long long elapsedUs(Clock::time_point start) {
@@ -111,6 +116,11 @@ void emitPipelineTiming(const PipelineTiming& timing) {
               << " script_schnorr_verify=" << timing.scriptSchnorrVerify
               << " script_interpreter_eval=" << timing.scriptInterpreterEval
               << " script_runner_wait=" << timing.scriptRunnerWait
+              << " utxo_delete_prepare=" << timing.utxoDeletePrepare
+              << " utxo_put_prepare=" << timing.utxoPutPrepare
+              << " undo_put_prepare=" << timing.undoPutPrepare
+              << " metadata_put_prepare=" << timing.metadataPutPrepare
+              << " rocksdb_write=" << timing.rocksdbWrite
               << "\n";
 }
 
@@ -532,6 +542,7 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     pipeline.prefetchDepth = prefetchDepthFromEnv(parallelDownloads);
     pipeline.scriptThreads = scriptRunner != nullptr ? scriptRunner->threadCount() : 1;
     consensus::script::resetScriptTiming();
+    db::resetStorageTiming();
     const auto p2pReadStarted = p2p::p2pReadTelemetrySnapshot();
 
     const int limit = maxBlocks == 0 ? batchSize : std::min(batchSize, maxBlocks);
@@ -660,6 +671,12 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     pipeline.scriptSchnorrVerify = scriptTiming.schnorrVerifyUs;
     pipeline.scriptInterpreterEval = scriptTiming.interpreterEvalUs;
     pipeline.scriptRunnerWait = scriptTiming.runnerWaitUs;
+    const auto storageTiming = db::storageTimingSnapshot();
+    pipeline.utxoDeletePrepare = storageTiming.utxoDeletePrepareUs;
+    pipeline.utxoPutPrepare = storageTiming.utxoPutPrepareUs;
+    pipeline.undoPutPrepare = storageTiming.undoPutPrepareUs;
+    pipeline.metadataPutPrepare = storageTiming.metadataPutPrepareUs;
+    pipeline.rocksdbWrite = storageTiming.rocksdbWriteUs;
     emitPipelineTiming(pipeline);
     return downloaded;
 }

@@ -40,6 +40,11 @@ public interface IChainstateStore : IDisposable
     long RecordPeerConnected(string host, int port, string direction, ulong services, int version, string userAgent, int startHeight);
 }
 
+public interface IChainstateCommitTimingSource
+{
+    IReadOnlyDictionary<string, long> LastCommitTimingTicks { get; }
+}
+
 public sealed record ChainstateMetadata(
     string BackendName,
     string BackendPath,

@@ -4,6 +4,7 @@ using CsBitNode.Consensus.Script;
 using CsBitNode.Consensus.Tx;
 using CsBitNode.Db;
 using CsBitNode.Messages;
+using CsBitNode.Sync;
 using CsBitNode.Util;
 
 namespace CsBitNode.Consensus.Connect;
@@ -22,7 +23,8 @@ public static class BlockConnector
         Action<string, int, long>? timingSink = null,
         int? expectedValidatedHeight = null,
         ChainstateBlockStorageIndex? storedBlock = null,
-        bool parallelScriptRunner = false)
+        bool parallelScriptRunner = false,
+        Action<int, BlockTimingShape>? shapeSink = null)
     {
         var validated = expectedValidatedHeight ?? store.GetValidatedHeight(chain);
         if (height != validated + 1)
@@ -49,8 +51,9 @@ public static class BlockConnector
             .ToList());
         prevoutLoadStarted.Stop();
         timingSink?.Invoke("utxo_load", height, prevoutLoadStarted.ElapsedTicks);
+        timingSink?.Invoke("prevout_batch_load", height, prevoutLoadStarted.ElapsedTicks);
 
-        long scriptVerifyElapsed = 0;
+        var scriptJobs = new List<BlockScriptVerifyJob>();
         for (var transactionIndex = 0; transactionIndex < block.Transactions.Count; transactionIndex++)
         {
             var transaction = block.Transactions[transactionIndex];
@@ -58,7 +61,7 @@ public static class BlockConnector
                 continue;
             var txid = txids[transactionIndex];
             var txidHex = Hex.Encode(Hex.Reverse(txid));
-            scriptVerifyElapsed += ValidateNonCoinbaseTransaction(view, blockHashHex, height, txidHex, transaction, parallelScriptRunner);
+            PrepareNonCoinbaseTransaction(view, blockHashHex, height, txidHex, transactionIndex, transaction, scriptJobs);
             for (var vout = 0; vout < transaction.Outputs.Count; vout++)
             {
                 var output = transaction.Outputs[vout];
@@ -67,7 +70,12 @@ public static class BlockConnector
                 view.Create(txid, vout, output.Value, output.ScriptPubKey, coinbase: false);
             }
         }
-        timingSink?.Invoke("script_verify", height, scriptVerifyElapsed);
+        var beforeScriptTiming = ScriptTiming.Snapshot();
+        var scriptStarted = System.Diagnostics.Stopwatch.StartNew();
+        VerifyBlockScripts(scriptJobs, parallelScriptRunner, height, timingSink);
+        scriptStarted.Stop();
+        timingSink?.Invoke("script_verify", height, scriptStarted.ElapsedTicks);
+        RecordScriptTimingDelta(timingSink, height, ScriptTiming.Snapshot().Delta(beforeScriptTiming));
 
         var coinbase = block.Transactions[0];
         var coinbaseTxid = txids[0];
@@ -88,6 +96,14 @@ public static class BlockConnector
         store.CommitBlock(commit);
         commitStarted.Stop();
         timingSink?.Invoke("commit", height, commitStarted.ElapsedTicks);
+        if (store is IChainstateCommitTimingSource commitTiming)
+            foreach (var (stage, elapsedTicks) in commitTiming.LastCommitTimingTicks)
+            {
+                if (stage == "commit")
+                    continue;
+                timingSink?.Invoke(stage, height, elapsedTicks);
+            }
+        shapeSink?.Invoke(height, BuildBlockShape(block, scriptJobs));
         return new ConnectResult(height, blockHashHex, view.CreatedCount);
     }
 
@@ -109,13 +125,14 @@ public static class BlockConnector
         return outputs;
     }
 
-    private static long ValidateNonCoinbaseTransaction(
+    private static void PrepareNonCoinbaseTransaction(
         BlockUtxoView view,
         string blockHashHex,
         int height,
         string txidHex,
+        int transactionIndex,
         Transaction transaction,
-        bool parallelScriptRunner)
+        List<BlockScriptVerifyJob> scriptJobs)
     {
         var seen = new HashSet<ViewOutpoint>();
         var utxoInfos = new List<ViewUtxo>();
@@ -137,56 +154,20 @@ public static class BlockConnector
             .ToList();
 
         long inputTotal = 0;
-        var scriptStarted = System.Diagnostics.Stopwatch.StartNew();
-        if (parallelScriptRunner && transaction.Inputs.Count > 1)
-        {
-            var errors = new Exception?[transaction.Inputs.Count];
-            Parallel.For(0, transaction.Inputs.Count, inputIndex =>
-            {
-                var utxo = utxoInfos[inputIndex];
-                try
-                {
-                    ScriptVerify.VerifyTransactionInput(
-                        transaction,
-                        inputIndex,
-                        new ScriptVerify.VerifyInputOptions(utxo.ScriptPubKey, utxo.ValueSats, spentPrevouts));
-                }
-                catch (Exception error) when (error is UnsupportedScriptRule or ScriptVerifyError)
-                {
-                    errors[inputIndex] = error;
-                }
-            });
-            for (var inputIndex = 0; inputIndex < errors.Length; inputIndex++)
-            {
-                if (errors[inputIndex] is null)
-                    continue;
-                ThrowScriptFailure(errors[inputIndex]!, height, blockHashHex, txidHex, inputIndex, utxoInfos[inputIndex].ScriptPubKey);
-            }
-        }
-        else
-        {
-            for (var inputIndex = 0; inputIndex < transaction.Inputs.Count; inputIndex++)
-            {
-                var utxo = utxoInfos[inputIndex];
-                try
-                {
-                    ScriptVerify.VerifyTransactionInput(
-                        transaction,
-                        inputIndex,
-                        new ScriptVerify.VerifyInputOptions(utxo.ScriptPubKey, utxo.ValueSats, spentPrevouts));
-                }
-                catch (Exception error) when (error is UnsupportedScriptRule or ScriptVerifyError)
-                {
-                    ThrowScriptFailure(error, height, blockHashHex, txidHex, inputIndex, utxo.ScriptPubKey);
-                }
-            }
-        }
         for (var inputIndex = 0; inputIndex < transaction.Inputs.Count; inputIndex++)
         {
             var utxo = utxoInfos[inputIndex];
+            scriptJobs.Add(new BlockScriptVerifyJob(
+                transactionIndex,
+                inputIndex,
+                blockHashHex,
+                txidHex,
+                transaction,
+                utxo,
+                spentPrevouts,
+                new SighashCache()));
             inputTotal += utxo.ValueSats;
         }
-        scriptStarted.Stop();
 
         long outputTotal = transaction.Outputs.Sum(o => o.Value);
         if (inputTotal < outputTotal)
@@ -194,7 +175,129 @@ public static class BlockConnector
 
         foreach (var input in transaction.Inputs)
             view.Spend(input.PreviousOutput);
-        return scriptStarted.ElapsedTicks;
+    }
+
+    private static void VerifyBlockScripts(
+        IReadOnlyList<BlockScriptVerifyJob> jobs,
+        bool parallelScriptRunner,
+        int height,
+        Action<string, int, long>? timingSink)
+    {
+        if (jobs.Count == 0)
+            return;
+        var errors = new Exception?[jobs.Count];
+        var runnerStarted = System.Diagnostics.Stopwatch.StartNew();
+        if (parallelScriptRunner && jobs.Count > 1)
+        {
+            Parallel.For(0, jobs.Count, index => errors[index] = VerifyScriptJob(jobs[index]));
+        }
+        else
+        {
+            for (var index = 0; index < jobs.Count; index++)
+                errors[index] = VerifyScriptJob(jobs[index]);
+        }
+        runnerStarted.Stop();
+        if (parallelScriptRunner && jobs.Count > 1)
+            timingSink?.Invoke("script_runner_wait", height, runnerStarted.ElapsedTicks);
+
+        var firstFailure = FirstScriptFailureIndex(errors);
+        if (firstFailure is not null)
+        {
+            var job = jobs[firstFailure.Value];
+            ThrowScriptFailure(errors[firstFailure.Value]!, height, job.BlockHashHex, job.TxidHex, job.InputIndex, job.Utxo.ScriptPubKey);
+        }
+    }
+
+    internal static int? FirstScriptFailureIndex(IReadOnlyList<Exception?> errors)
+    {
+        for (var index = 0; index < errors.Count; index++)
+            if (errors[index] is not null)
+                return index;
+        return null;
+    }
+
+    private static Exception? VerifyScriptJob(BlockScriptVerifyJob job)
+    {
+        try
+        {
+            ScriptVerify.VerifyTransactionInput(
+                job.Transaction,
+                job.InputIndex,
+                new ScriptVerify.VerifyInputOptions(job.Utxo.ScriptPubKey, job.Utxo.ValueSats, job.SpentPrevouts),
+                job.SighashCache);
+            return null;
+        }
+        catch (Exception error) when (error is UnsupportedScriptRule or ScriptVerifyError)
+        {
+            return error;
+        }
+    }
+
+    private static void RecordScriptTimingDelta(Action<string, int, long>? timingSink, int height, ScriptTimingSnapshot delta)
+    {
+        timingSink?.Invoke("script_legacy_sighash", height, delta.LegacySighashTicks);
+        timingSink?.Invoke("script_bip143_sighash", height, delta.Bip143SighashTicks);
+        timingSink?.Invoke("script_taproot_sighash", height, delta.TaprootSighashTicks);
+        timingSink?.Invoke("script_ecdsa_verify", height, delta.EcdsaVerifyTicks);
+        timingSink?.Invoke("script_schnorr_verify", height, delta.SchnorrVerifyTicks);
+        timingSink?.Invoke("script_interpreter_eval", height, delta.InterpreterEvalTicks);
+    }
+
+    private static BlockTimingShape BuildBlockShape(Block.Block block, IReadOnlyList<BlockScriptVerifyJob> scriptJobs)
+    {
+        var inputShapes = new Dictionary<string, int>(StringComparer.Ordinal);
+        var spentTypes = new Dictionary<string, int>(StringComparer.Ordinal);
+        var outputTypes = new Dictionary<string, int>(StringComparer.Ordinal);
+        var vinCount = 0;
+        var voutCount = 0;
+        var scriptInputCount = 0;
+
+        for (var txIndex = 0; txIndex < block.Transactions.Count; txIndex++)
+        {
+            var transaction = block.Transactions[txIndex];
+            vinCount += transaction.Inputs.Count;
+            voutCount += transaction.Outputs.Count;
+            for (var inputIndex = 0; inputIndex < transaction.Inputs.Count; inputIndex++)
+            {
+                var kind = InputShape(transaction, txIndex, inputIndex);
+                Increment(inputShapes, kind);
+                if (kind != "coinbase")
+                    scriptInputCount++;
+            }
+            foreach (var output in transaction.Outputs)
+                Increment(outputTypes, ScriptType(output.ScriptPubKey));
+        }
+
+        foreach (var job in scriptJobs)
+            Increment(spentTypes, ScriptType(job.Utxo.ScriptPubKey));
+
+        return new BlockTimingShape(
+            block.Transactions.Count,
+            vinCount,
+            voutCount,
+            scriptInputCount,
+            inputShapes,
+            spentTypes,
+            outputTypes);
+    }
+
+    private static string InputShape(Transaction transaction, int txIndex, int inputIndex)
+    {
+        if (txIndex == 0 && transaction.IsCoinbase)
+            return "coinbase";
+        if (transaction.Inputs[inputIndex].ScriptSig.Length > 0)
+            return "legacy_scriptsig";
+        if (inputIndex < transaction.Witness.Count && transaction.Witness[inputIndex].Count > 0)
+            return "witness";
+        return "empty_spend";
+    }
+
+    private static string ScriptType(byte[] scriptPubKey) =>
+        ScriptTemplates.Describe(scriptPubKey).ToLowerInvariant();
+
+    private static void Increment(Dictionary<string, int> counts, string key)
+    {
+        counts[key] = counts.GetValueOrDefault(key) + 1;
     }
 
     private static void ThrowScriptFailure(
@@ -214,6 +317,16 @@ public static class BlockConnector
             throw new ValidationBlocker(height, blockHashHex, txidHex, inputIndex, Hex.Encode(scriptPubKey), verifyError.Message, "script_verification_failed");
         }
     }
+
+    private sealed record BlockScriptVerifyJob(
+        int TransactionIndex,
+        int InputIndex,
+        string BlockHashHex,
+        string TxidHex,
+        Transaction Transaction,
+        ViewUtxo Utxo,
+        IReadOnlyList<ScriptVerify.SpentPrevout> SpentPrevouts,
+        SighashCache SighashCache);
 }
 
 internal sealed class BlockUtxoView

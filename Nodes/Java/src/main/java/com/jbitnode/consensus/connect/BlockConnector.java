@@ -19,6 +19,7 @@ import com.jbitnode.db.ProjectTracker.StoredUtxo;
 import com.jbitnode.db.ProjectTracker.UtxoUndoEntry;
 import com.jbitnode.db.UtxoStore;
 import com.jbitnode.messages.BlockHeaderCodec;
+import com.jbitnode.scripts.ScriptTemplateClassifier;
 import com.jbitnode.sync.BlockValidationException;
 import com.jbitnode.sync.BlockValidator;
 import com.jbitnode.sync.BlockValidator.ValidateOptions;
@@ -26,21 +27,45 @@ import com.jbitnode.util.Hex;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /** Connects blocks with independent script verification and transactional UTXO updates. */
 public final class BlockConnector {
 
   private BlockConnector() {}
 
-  public record ConnectResult(int height, String blockHashHex, int utxosCreated, int inputCount) {
+  public record ConnectResult(
+      int height,
+      String blockHashHex,
+      int utxosCreated,
+      int inputCount,
+      BlockShapeSummary shapeSummary) {
     public ConnectResult(int height, String blockHashHex, int utxosCreated) {
       this(height, blockHashHex, utxosCreated, 0);
+    }
+
+    public ConnectResult(int height, String blockHashHex, int utxosCreated, int inputCount) {
+      this(height, blockHashHex, utxosCreated, inputCount, BlockShapeSummary.empty());
+    }
+  }
+
+  public record BlockShapeSummary(
+      int txCount,
+      int vinCount,
+      int voutCount,
+      int scriptInputCount,
+      Map<String, Integer> inputShapeCounts,
+      Map<String, Integer> spentPrevoutScriptTypes,
+      Map<String, Integer> outputScriptTypes) {
+    static BlockShapeSummary empty() {
+      return new BlockShapeSummary(0, 0, 0, 0, Map.of(), Map.of(), Map.of());
     }
   }
 
@@ -149,6 +174,7 @@ public final class BlockConnector {
 
     String blockHashHex = BlockHeaderCodec.blockHashHex(block.header());
     BlockShape shape = BlockShape.from(block);
+    BlockShapeSummaryBuilder shapeSummary = summarizeBlockShape(block);
     BlockUtxoView view =
         new BlockUtxoView(utxoStore, chain, height, timings, shape.spendCount(), shape.spendableOutputUpperBound());
 
@@ -199,7 +225,8 @@ public final class BlockConnector {
                 transaction,
                 timings,
                 scriptVerifyRunner,
-                blockVerifyJobs);
+                blockVerifyJobs,
+                shapeSummary);
         long outputStarted = System.nanoTime();
         for (int vout = 0; vout < transaction.outputs().size(); vout++) {
           TxOut output = transaction.outputs().get(vout);
@@ -247,11 +274,14 @@ public final class BlockConnector {
     timings.utxoApplyNanos += System.nanoTime() - applyStarted;
 
     timingSink.record("utxo_load", height, timings.utxoLoadMillis());
-    for (Map.Entry<String, Long> entry : timings.stageMillis().entrySet()) {
+    Map<String, Long> stageMillis = timings.stageMillis();
+    for (Map.Entry<String, Long> entry : stageMillis.entrySet()) {
       timingSink.record(entry.getKey(), height, entry.getValue());
     }
-    timingSink.record("utxo_apply", height, timings.utxoApplyMillis());
-    return new ConnectResult(height, blockHashHex, view.createdCount(), inputCount);
+    if (!stageMillis.containsKey("utxo_apply")) {
+      timingSink.record("utxo_apply", height, timings.utxoApplyMillis());
+    }
+    return new ConnectResult(height, blockHashHex, view.createdCount(), inputCount, shapeSummary.build());
   }
 
   private static final class ConnectTimings {
@@ -305,6 +335,78 @@ public final class BlockConnector {
     }
   }
 
+  static BlockShapeSummaryBuilder summarizeBlockShape(Block block) {
+    BlockShapeSummaryBuilder summary = new BlockShapeSummaryBuilder();
+    summary.txCount = block.transactions().size();
+    for (Transaction transaction : block.transactions()) {
+      summary.vinCount += transaction.inputs().size();
+      summary.voutCount += transaction.outputs().size();
+      if (transaction.isCoinbase()) {
+        summary.addInputShape("coinbase");
+      } else {
+        for (int inputIndex = 0; inputIndex < transaction.inputs().size(); inputIndex++) {
+          summary.addInputShape(inputShapeLabel(transaction, inputIndex));
+        }
+      }
+      for (TxOut output : transaction.outputs()) {
+        summary.addOutputScriptType(output.scriptPubKey());
+      }
+    }
+    return summary;
+  }
+
+  static String inputShapeLabel(Transaction transaction, int inputIndex) {
+    if (inputIndex < transaction.witness().size() && !transaction.witness().get(inputIndex).isEmpty()) {
+      return "witness";
+    }
+    TxIn input = transaction.inputs().get(inputIndex);
+    if (input.scriptSig().length > 0) {
+      return "legacy_scriptsig";
+    }
+    return "empty_spend";
+  }
+
+  static String scriptTypeLabel(byte[] scriptPubKey) {
+    String label = ScriptTemplateClassifier.classify(scriptPubKey);
+    return label.startsWith("other(") ? "other" : label;
+  }
+
+  static final class BlockShapeSummaryBuilder {
+    private int txCount;
+    private int vinCount;
+    private int voutCount;
+    private int scriptInputCount;
+    private final Map<String, Integer> inputShapeCounts = new TreeMap<>();
+    private final Map<String, Integer> spentPrevoutScriptTypes = new TreeMap<>();
+    private final Map<String, Integer> outputScriptTypes = new TreeMap<>();
+
+    void addInputShape(String label) {
+      inputShapeCounts.merge(label, 1, Integer::sum);
+      if (!"coinbase".equals(label)) {
+        scriptInputCount += 1;
+      }
+    }
+
+    void addSpentPrevoutScriptType(byte[] scriptPubKey) {
+      spentPrevoutScriptTypes.merge(scriptTypeLabel(scriptPubKey), 1, Integer::sum);
+    }
+
+    void addOutputScriptType(byte[] scriptPubKey) {
+      outputScriptTypes.merge(scriptTypeLabel(scriptPubKey), 1, Integer::sum);
+    }
+
+    BlockShapeSummary build() {
+      return new BlockShapeSummary(
+          txCount,
+          vinCount,
+          voutCount,
+          scriptInputCount,
+          Collections.unmodifiableMap(new TreeMap<>(inputShapeCounts)),
+          Collections.unmodifiableMap(new TreeMap<>(spentPrevoutScriptTypes)),
+          Collections.unmodifiableMap(new TreeMap<>(outputScriptTypes)));
+    }
+  }
+
   private record PrevoutInfo(long valueSats, byte[] scriptPubKey) {}
 
   private static long prepareNonCoinbaseTransaction(
@@ -316,7 +418,8 @@ public final class BlockConnector {
       Transaction transaction,
       ConnectTimings timings,
       ScriptVerifyRunner scriptVerifyRunner,
-      List<ScriptVerifyRunner.BlockInputVerifyJob> blockVerifyJobs)
+      List<ScriptVerifyRunner.BlockInputVerifyJob> blockVerifyJobs,
+      BlockShapeSummaryBuilder shapeSummary)
       throws ConnectBlockException, ValidationBlocker, SQLException {
     int inputSize = transaction.inputs().size();
     Set<UtxoKey> seenPrevouts = new HashSet<>(Math.max(16, inputSize * 2));
@@ -348,6 +451,7 @@ public final class BlockConnector {
                 + utxo.height()
                 + ")");
       }
+      shapeSummary.addSpentPrevoutScriptType(utxo.scriptPubKey());
       prevoutInfos.add(new PrevoutInfo(utxo.valueSats(), utxo.scriptPubKey()));
     }
 

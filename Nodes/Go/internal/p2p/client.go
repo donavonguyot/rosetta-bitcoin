@@ -26,11 +26,12 @@ const (
 )
 
 type FetchedBlock struct {
-	Height int
-	Hash   string
-	Raw    []byte
-	Info   refsync.BlockInfo
-	Err    error
+	Height      int
+	Hash        string
+	Raw         []byte
+	Info        refsync.BlockInfo
+	FetchMillis int64
+	Err         error
 }
 
 type FetchOptions struct {
@@ -68,11 +69,13 @@ func FetchBlocks(opts FetchOptions) <-chan FetchedBlock {
 		}
 		for start := 0; start <= opts.Target; start += prefetch {
 			end := minInt(opts.Target+1, start+prefetch)
+			fetchStarted := time.Now()
 			rawBlocks, err := client.requestBlocks(hashes[start:end])
 			if err != nil {
 				out <- FetchedBlock{Height: start, Err: err}
 				return
 			}
+			fetchMillis := time.Since(fetchStarted).Milliseconds() / int64(maxInt(1, len(rawBlocks)))
 			for index, raw := range rawBlocks {
 				height := start + index
 				expectedHash := displayHash(hashes[height])
@@ -85,7 +88,7 @@ func FetchBlocks(opts FetchOptions) <-chan FetchedBlock {
 					out <- FetchedBlock{Height: height, Err: err}
 					return
 				}
-				out <- FetchedBlock{Height: height, Hash: info.Hash, Raw: raw, Info: info}
+				out <- FetchedBlock{Height: height, Hash: info.Hash, Raw: raw, Info: info, FetchMillis: fetchMillis}
 			}
 		}
 	}()

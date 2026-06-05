@@ -61,10 +61,11 @@ public static class ScriptInterpreter
         byte[] ScriptCode,
         int CodeSeparatorOffset,
         long Amount,
-        bool Witness)
+        bool Witness,
+        SighashCache? Cache)
     {
-        public EvalContext(Transaction tx, int inputIndex, byte[] scriptCode, long amount, bool witness)
-            : this(tx, inputIndex, scriptCode, 0, amount, witness)
+        public EvalContext(Transaction tx, int inputIndex, byte[] scriptCode, long amount, bool witness, SighashCache? cache = null)
+            : this(tx, inputIndex, scriptCode, 0, amount, witness, cache)
         {
         }
 
@@ -88,15 +89,16 @@ public static class ScriptInterpreter
         Transaction tx,
         int inputIndex,
         long amount,
-        IReadOnlyList<byte[]> witness)
+        IReadOnlyList<byte[]> witness,
+        SighashCache? cache = null)
     {
         if (ScriptTemplates.IsP2pk(scriptPubKey))
-            return VerifyP2pk(scriptSig, scriptPubKey, tx, inputIndex, amount);
+            return VerifyP2pk(scriptSig, scriptPubKey, tx, inputIndex, amount, cache);
 
         if (ScriptTemplates.IsP2wpkh(scriptPubKey))
-            return VerifyP2wpkh(scriptPubKey, tx, inputIndex, amount, witness);
+            return VerifyP2wpkh(scriptPubKey, tx, inputIndex, amount, witness, cache);
 
-        return VerifyLegacy(scriptSig, scriptPubKey, tx, inputIndex, amount);
+        return VerifyLegacy(scriptSig, scriptPubKey, tx, inputIndex, amount, cache);
     }
 
     private static bool VerifyP2pk(
@@ -104,7 +106,8 @@ public static class ScriptInterpreter
         ReadOnlySpan<byte> scriptPubKey,
         Transaction tx,
         int inputIndex,
-        long amount)
+        long amount,
+        SighashCache? cache)
     {
         if (!WitnessEmpty(tx, inputIndex))
             return false;
@@ -113,8 +116,8 @@ public static class ScriptInterpreter
             return false;
 
         var stack = new ScriptStack();
-        EvaluateScript(scriptSig, stack, tx, inputIndex, scriptPubKey.ToArray(), amount, witness: false);
-        EvaluateScript(scriptPubKey, stack, tx, inputIndex, scriptPubKey.ToArray(), amount, witness: false);
+        EvaluateScript(scriptSig, stack, tx, inputIndex, scriptPubKey.ToArray(), amount, witness: false, cache);
+        EvaluateScript(scriptPubKey, stack, tx, inputIndex, scriptPubKey.ToArray(), amount, witness: false, cache);
         return TerminalSuccessStrict(stack);
     }
 
@@ -123,7 +126,8 @@ public static class ScriptInterpreter
         Transaction tx,
         int inputIndex,
         long amount,
-        IReadOnlyList<byte[]> witness)
+        IReadOnlyList<byte[]> witness,
+        SighashCache? cache)
     {
         if (inputIndex < tx.Inputs.Count && tx.Inputs[inputIndex].ScriptSig.Length > 0)
             return false;
@@ -132,7 +136,7 @@ public static class ScriptInterpreter
         var scriptCode = P2pkhScriptCode(scriptPubKey[2..]);
         var stack = new ScriptStack();
         stack.AddRange(witness.Select(w => w.ToArray()));
-        EvaluateScript(scriptCode, stack, tx, inputIndex, scriptCode, amount, witness: true);
+        EvaluateScript(scriptCode, stack, tx, inputIndex, scriptCode, amount, witness: true, cache);
         return TerminalSuccessStrict(stack);
     }
 
@@ -141,11 +145,12 @@ public static class ScriptInterpreter
         ReadOnlySpan<byte> scriptPubKey,
         Transaction tx,
         int inputIndex,
-        long amount)
+        long amount,
+        SighashCache? cache)
     {
         var stack = new ScriptStack();
-        EvaluateScript(scriptSig, stack, tx, inputIndex, scriptPubKey.ToArray(), amount, witness: false);
-        EvaluateScript(scriptPubKey, stack, tx, inputIndex, scriptPubKey.ToArray(), amount, witness: false);
+        EvaluateScript(scriptSig, stack, tx, inputIndex, scriptPubKey.ToArray(), amount, witness: false, cache);
+        EvaluateScript(scriptPubKey, stack, tx, inputIndex, scriptPubKey.ToArray(), amount, witness: false, cache);
         if (ScriptTemplates.IsP2pkh(scriptPubKey) || ScriptTemplates.IsBareLegacyScript(scriptPubKey))
             return TerminalSuccessRelaxed(stack);
         return TerminalSuccessStrict(stack);
@@ -179,9 +184,10 @@ public static class ScriptInterpreter
         int inputIndex,
         byte[] scriptCode,
         long amount,
-        bool witness)
+        bool witness,
+        SighashCache? cache = null)
     {
-        EvaluateScript(script, stack, new EvalContext(tx, inputIndex, scriptCode, amount, witness));
+        EvaluateScript(script, stack, new EvalContext(tx, inputIndex, scriptCode, amount, witness, cache));
     }
 
     internal static void EvaluateScript(
@@ -189,6 +195,9 @@ public static class ScriptInterpreter
         ScriptStack stack,
         EvalContext context)
     {
+        var timingStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
         var offset = 0;
         var evalContext = context;
         var vfExec = new List<bool>();
@@ -567,6 +576,11 @@ public static class ScriptInterpreter
 
         if (vfExec.Count != 0)
             throw new ScriptError("unbalanced conditional");
+        }
+        finally
+        {
+            ScriptTiming.AddInterpreterEval(System.Diagnostics.Stopwatch.GetTimestamp() - timingStarted);
+        }
     }
 
     internal static bool CheckEcdsaSignature(EvalContext context, ReadOnlySpan<byte> signature, ReadOnlySpan<byte> pubkey)
@@ -587,8 +601,8 @@ public static class ScriptInterpreter
         var sighashType = signature[^1];
         var sigDer = signature[..^1];
         var digest = witness
-            ? Sighash.Bip143Sighash(context.Tx, context.InputIndex, scriptCode, context.Amount, sighashType)
-            : Sighash.LegacySighash(context.Tx, context.InputIndex, scriptCode, sighashType);
+            ? Sighash.Bip143Sighash(context.Tx, context.InputIndex, scriptCode, context.Amount, sighashType, context.Cache)
+            : Sighash.LegacySighash(context.Tx, context.InputIndex, scriptCode, sighashType, context.Cache);
         return Secp256k1.VerifyDerSignature(pubkey, digest, sigDer);
     }
 

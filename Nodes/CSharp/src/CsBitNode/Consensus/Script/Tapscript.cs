@@ -53,7 +53,8 @@ internal static class Tapscript
         byte[] tapleafHash,
         IReadOnlyList<ScriptVerify.SpentPrevout> spentPrevouts,
         byte[]? annex,
-        ref int validationBudgetLeft)
+        ref int validationBudgetLeft,
+        SighashCache? cache = null)
     {
         if (PrescanOpSuccess(script))
             return;
@@ -399,7 +400,7 @@ internal static class Tapscript
             {
                 var pubkey = stack.PopItem();
                 var signature = stack.PopItem();
-                var valid = CheckSchnorrSignature(pubkey, signature, tx, inputIndex, spentPrevouts, annex, tapleafHash, codeSeparatorPos, ref validationBudgetLeft);
+                var valid = CheckSchnorrSignature(pubkey, signature, tx, inputIndex, spentPrevouts, annex, tapleafHash, codeSeparatorPos, ref validationBudgetLeft, cache);
                 if (opcode == Opcodes.OP_CHECKSIG)
                     stack.PushItem(ScriptInterpreter.EncodeOpN(valid ? 1 : 0));
                 else if (!valid)
@@ -413,7 +414,7 @@ internal static class Tapscript
                 var nItem = stack.PopItem();
                 var signature = stack.PopItem();
                 var n = ScriptNum.Decode(nItem);
-                var valid = CheckSchnorrSignature(pubkey, signature, tx, inputIndex, spentPrevouts, annex, tapleafHash, codeSeparatorPos, ref validationBudgetLeft);
+                var valid = CheckSchnorrSignature(pubkey, signature, tx, inputIndex, spentPrevouts, annex, tapleafHash, codeSeparatorPos, ref validationBudgetLeft, cache);
                 stack.PushItem(ScriptNum.Encode(valid ? n + 1 : n));
                 offset++;
                 instructionPos++;
@@ -495,7 +496,8 @@ internal static class Tapscript
         byte[]? annex,
         byte[] tapleafHash,
         long codeSeparatorPos,
-        ref int validationBudgetLeft)
+        ref int validationBudgetLeft,
+        SighashCache? cache)
     {
         if (pubkey.Length == 0)
             throw new ScriptError("empty pubkey in tapscript checksig");
@@ -525,7 +527,8 @@ internal static class Tapscript
                 tx,
                 inputIndex,
                 spentPrevouts,
-                TaprootSighash.TaprootSighashOptions.ScriptPath(hashType, annex, tapleafHash, codeSeparatorPos));
+                TaprootSighash.TaprootSighashOptions.ScriptPath(hashType, annex, tapleafHash, codeSeparatorPos),
+                cache);
         }
         catch (ArgumentException error)
         {

@@ -83,6 +83,13 @@ public final class BlockSync {
       int height,
       int blockSize,
       int inputCount,
+      int txCount,
+      int vinCount,
+      int voutCount,
+      int scriptInputCount,
+      Map<String, Integer> inputShapeCounts,
+      Map<String, Integer> spentPrevoutScriptTypes,
+      Map<String, Integer> outputScriptTypes,
       long utxoLoadMillis,
       long scriptVerifyMillis,
       long utxoApplyMillis,
@@ -257,7 +264,8 @@ public final class BlockSync {
           timingCollector.recordBlock(
               height,
               payload.length,
-              result.inputCount());
+              result.inputCount(),
+              result.shapeSummary());
           if (!downloadCapsMarked) {
             blockSource.markBlockDownloadCapabilities();
             downloadCapsMarked = true;
@@ -394,7 +402,6 @@ public final class BlockSync {
       blockStorage.storeBlock(chain, height, result.blockHashHex(), payload);
     }
     timingSink.record("block_store", height, elapsedMillis(blockStoreStarted));
-    timingSink.record("commit", height, 0);
     timingSink.record("block_connect_store_commit", height, elapsedMillis(started));
     if (logConnectedBlock) {
       tracker.logEvent(
@@ -433,8 +440,12 @@ public final class BlockSync {
       totalMillisByStage.merge(stage, elapsedMillis, Long::sum);
     }
 
-    void recordBlock(int height, int blockSize, int inputCount) {
-      blockShapes.put(height, new BlockShape(blockSize, inputCount));
+    void recordBlock(
+        int height,
+        int blockSize,
+        int inputCount,
+        BlockConnector.BlockShapeSummary shapeSummary) {
+      blockShapes.put(height, new BlockShape(blockSize, inputCount, shapeSummary));
     }
 
     TimingSummary summary() {
@@ -446,6 +457,13 @@ public final class BlockSync {
                 entry.getKey(),
                 entry.getValue().blockSize(),
                 entry.getValue().inputCount(),
+                entry.getValue().shapeSummary().txCount(),
+                entry.getValue().shapeSummary().vinCount(),
+                entry.getValue().shapeSummary().voutCount(),
+                entry.getValue().shapeSummary().scriptInputCount(),
+                entry.getValue().shapeSummary().inputShapeCounts(),
+                entry.getValue().shapeSummary().spentPrevoutScriptTypes(),
+                entry.getValue().shapeSummary().outputScriptTypes(),
                 stages.getOrDefault("utxo_load", 0L),
                 stages.getOrDefault("script_verify", 0L),
                 stages.getOrDefault("utxo_apply", 0L),
@@ -462,7 +480,8 @@ public final class BlockSync {
     }
   }
 
-  private record BlockShape(int blockSize, int inputCount) {}
+  private record BlockShape(
+      int blockSize, int inputCount, BlockConnector.BlockShapeSummary shapeSummary) {}
 
   static String blockerEventJson(ValidationBlocker blocker) {
     return "{"

@@ -151,12 +151,63 @@ func RunStore(store *storage.Store, opts Options) (Summary, error) {
 		}); err != nil {
 			return Summary{}, err
 		}
-		timing.recordBlock(height, time.Since(blockStarted))
+		timing.recordBlock(height, time.Since(blockStarted), blockShape(txs))
 		if !opts.Quiet && (height%opts.Progress == 0 || height == opts.Target) {
 			fmt.Printf("gobitnode-connect height=%d hash=%s txs=%d utxos=%d\n", height, info.Hash, info.TxCount, utxoCount)
 		}
 	}
 	return summaryFrom(meta, opts.Target, started, connected, true, runner, store, timing), nil
+}
+
+func blockShape(txs []txtypes.Transaction) SlowBlock {
+	shape := SlowBlock{
+		TxCount:           len(txs),
+		InputShapeCounts:  map[string]int{},
+		OutputScriptTypes: map[string]int{},
+	}
+	for _, tx := range txs {
+		shape.VinCount += len(tx.Inputs)
+		shape.VoutCount += len(tx.Outputs)
+		for inputIndex, input := range tx.Inputs {
+			if tx.IsCoinbase() && inputIndex == 0 {
+				shape.InputShapeCounts["coinbase"]++
+				continue
+			}
+			shape.ScriptInputCount++
+			if inputIndex < len(tx.Witness) && len(tx.Witness[inputIndex]) > 0 {
+				shape.InputShapeCounts["witness"]++
+			} else if len(input.ScriptSig) > 0 {
+				shape.InputShapeCounts["legacy_scriptsig"]++
+			} else {
+				shape.InputShapeCounts["empty"]++
+			}
+		}
+		for _, output := range tx.Outputs {
+			shape.OutputScriptTypes[scriptType(output.ScriptPubKey)]++
+		}
+	}
+	return shape
+}
+
+func scriptType(script []byte) string {
+	switch {
+	case len(script) == 0:
+		return "empty"
+	case script[0] == 0x6a:
+		return "op_return"
+	case len(script) == 25 && script[0] == 0x76 && script[1] == 0xa9 && script[2] == 0x14 && script[23] == 0x88 && script[24] == 0xac:
+		return "p2pkh"
+	case len(script) == 23 && script[0] == 0xa9 && script[1] == 0x14 && script[22] == 0x87:
+		return "p2sh"
+	case len(script) == 22 && script[0] == 0x00 && script[1] == 0x14:
+		return "p2wpkh"
+	case len(script) == 34 && script[0] == 0x00 && script[1] == 0x20:
+		return "p2wsh"
+	case len(script) == 34 && script[0] == 0x51 && script[1] == 0x20:
+		return "p2tr"
+	default:
+		return "other"
+	}
 }
 
 func connectTransactions(store *storage.Store, runner scriptRunner, timing *timingCollector, height int, blockHash string, txs []txtypes.Transaction) ([]storage.UTXO, []storage.OutPoint, []storage.UndoEntry, map[string]any, error) {

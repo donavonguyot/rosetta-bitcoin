@@ -13,7 +13,9 @@
 #include <array>
 #include <chrono>
 #include <cstdlib>
+#include <deque>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <string_view>
@@ -33,6 +35,13 @@ struct ConnectTiming {
     long long utxoApply = 0;
     long long commit = 0;
     long long blockConnectStoreCommit = 0;
+    int txCount = 0;
+    int vinCount = 0;
+    int voutCount = 0;
+    int scriptInputCount = 0;
+    std::map<std::string, int> inputShapeCounts;
+    std::map<std::string, int> spentPrevoutScriptTypes;
+    std::map<std::string, int> outputScriptTypes;
 };
 
 bool syncTimingEnabled() {
@@ -53,6 +62,49 @@ std::string displayHex(std::span<const std::uint8_t> bytes) {
         out.push_back(kHex[*it & 0xf]);
     }
     return out;
+}
+
+std::string compactCounts(const std::map<std::string, int>& counts) {
+    if (counts.empty()) {
+        return "none";
+    }
+    std::ostringstream out;
+    bool first = true;
+    for (const auto& [key, count] : counts) {
+        if (!first) {
+            out << ",";
+        }
+        first = false;
+        out << key << ":" << count;
+    }
+    return out.str();
+}
+
+std::string scriptPubkeyType(std::span<const std::uint8_t> script) {
+    if (script.empty()) return "empty";
+    if (script[0] == 0x6a) return "op_return";
+    if (script.size() == 25 && script[0] == 0x76 && script[1] == 0xa9 && script[2] == 0x14 && script[23] == 0x88 &&
+        script[24] == 0xac) {
+        return "p2pkh";
+    }
+    if (script.size() == 23 && script[0] == 0xa9 && script[1] == 0x14 && script[22] == 0x87) return "p2sh";
+    if (script.size() == 22 && script[0] == 0x00 && script[1] == 0x14) return "p2wpkh";
+    if (script.size() == 34 && script[0] == 0x00 && script[1] == 0x20) return "p2wsh";
+    if (script.size() == 34 && script[0] == 0x51 && script[1] == 0x20) return "p2tr";
+    return "other";
+}
+
+std::string inputShape(const messages::Transaction& tx, std::size_t inputIndex, bool coinbase) {
+    if (coinbase) {
+        return "coinbase";
+    }
+    if (!tx.witness.empty() && inputIndex < tx.witness.size() && !tx.witness[inputIndex].empty()) {
+        return "witness";
+    }
+    if (inputIndex < tx.inputs.size() && !tx.inputs[inputIndex].scriptSig.empty()) {
+        return "legacy_scriptsig";
+    }
+    return "empty_scriptsig";
 }
 
 struct OutpointKey {
@@ -163,13 +215,27 @@ public:
         return *utxo;
     }
 
+    bool isSpent(const messages::OutPoint& outpoint) const { return spent_.contains(outpointKey(outpoint)); }
+
+    void spendKnown(const messages::OutPoint& outpoint, const db::StoredUtxo& utxo) {
+        const auto key = outpointKey(outpoint);
+        if (spent_.contains(key)) {
+            throw ConnectBlockError("double spend of " + displayHex(outpoint.hash) + ":" +
+                                    std::to_string(outpoint.index));
+        }
+        spent_.insert(key);
+        if (!created_.contains(key)) {
+            externalUndo_.push_back(utxo);
+        }
+    }
+
     void create(const std::vector<std::uint8_t>& txid, int vout, std::int64_t value,
-                const std::vector<std::uint8_t>& scriptPubkey, bool coinbase) {
+                const std::vector<std::uint8_t>& scriptPubkey, bool coinbase, bool checkExisting = false) {
         const auto key = outpointKey(txid, vout);
         const bool knownExisting = loaded_.contains(key);
         const bool knownMissing = loadedMissing_.contains(key);
         if (created_.contains(key) || knownExisting ||
-            (!knownMissing && chainstate_.getUtxo(txid, vout).has_value())) {
+            (checkExisting && !knownMissing && chainstate_.getUtxo(txid, vout).has_value())) {
             throw ConnectBlockError("duplicate UTXO " + displayHex(txid) + ":" + std::to_string(vout));
         }
         db::StoredUtxo utxo;
@@ -245,6 +311,111 @@ bool blockHasWitness(const Block& block) {
     return false;
 }
 
+struct TxScriptContext {
+    std::size_t txIndex = 0;
+    const messages::Transaction* transaction = nullptr;
+    std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>> spentPrevouts;
+    script::SighashCache sighashCache;
+
+    TxScriptContext(std::size_t txIndex_, const messages::Transaction& tx,
+                    std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>> spentPrevouts_)
+        : txIndex(txIndex_), transaction(&tx), spentPrevouts(std::move(spentPrevouts_)),
+          sighashCache(tx, &spentPrevouts) {}
+};
+
+std::int64_t prepareNonCoinbaseInputs(BlockUtxoView& view, const messages::Transaction& tx, std::size_t txIndex,
+                                      std::deque<TxScriptContext>& contexts,
+                                      std::vector<script::VerifyInputJob>& jobs,
+                                      std::map<std::string, int>& spentPrevoutScriptTypes) {
+    if (tx.inputs.empty()) {
+        throw ConnectBlockError("non-coinbase transaction has no inputs");
+    }
+    std::unordered_set<OutpointKey, OutpointKeyHash> seenPrevouts;
+    std::vector<db::StoredUtxo> utxoInfos;
+    utxoInfos.reserve(tx.inputs.size());
+
+    for (const auto& txIn : tx.inputs) {
+        const auto key = outpointKey(txIn.previousOutput);
+        if (seenPrevouts.contains(key) || view.isSpent(txIn.previousOutput)) {
+            throw ConnectBlockError("double spend of " + displayHex(txIn.previousOutput.hash) + ":" +
+                                    std::to_string(txIn.previousOutput.index));
+        }
+        seenPrevouts.insert(key);
+
+        const auto utxo = view.get(txIn.previousOutput);
+        if (!utxo.has_value()) {
+            throw ConnectBlockError("missing UTXO " + displayHex(txIn.previousOutput.hash) + ":" +
+                                    std::to_string(txIn.previousOutput.index));
+        }
+        if (utxo->coinbase && view.height() - utxo->height < kCoinbaseMaturity) {
+            throw ConnectBlockError("coinbase output not mature at height " + std::to_string(view.height()) +
+                                    " (created at " + std::to_string(utxo->height) + ")");
+        }
+        utxoInfos.push_back(*utxo);
+    }
+
+    std::int64_t inputTotal = 0;
+    std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>> spentPrevouts;
+    spentPrevouts.reserve(utxoInfos.size());
+    for (const auto& utxo : utxoInfos) {
+        inputTotal += utxo.value;
+        spentPrevouts.emplace_back(utxo.value, utxo.scriptPubkey);
+        spentPrevoutScriptTypes[scriptPubkeyType(utxo.scriptPubkey)] += 1;
+    }
+
+    contexts.emplace_back(txIndex, tx, std::move(spentPrevouts));
+    auto& context = contexts.back();
+    for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
+        jobs.push_back(script::VerifyInputJob{&tx,
+                                              txIndex,
+                                              inputIndex,
+                                              context.spentPrevouts[inputIndex].second,
+                                              context.spentPrevouts[inputIndex].first,
+                                              &context.spentPrevouts,
+                                              &context.sighashCache});
+    }
+
+    for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
+        view.spendKnown(tx.inputs[inputIndex].previousOutput, utxoInfos[inputIndex]);
+    }
+    return inputTotal;
+}
+
+void verifyBlockScriptJobs(const std::vector<script::VerifyInputJob>& jobs, script::ScriptVerifyRunner* runner,
+                           ConnectTiming* timing) {
+    if (jobs.empty()) {
+        return;
+    }
+    if (runner != nullptr && jobs.size() > 1) {
+        const auto result = runner->verify(jobs);
+        if (timing != nullptr) {
+            timing->scriptVerifyWorkerCpu += result.workerCpuUs;
+        }
+        if (result.error.has_value()) {
+            throw ConnectBlockError(*result.error);
+        }
+        return;
+    }
+    for (const auto& job : jobs) {
+        const auto started = Clock::now();
+        try {
+            if (job.transaction == nullptr) {
+                throw script::ScriptVerifyError("missing transaction for script verify job");
+            }
+            script::verifyTransactionInput(*job.transaction, job.inputIndex, job.scriptPubkey, job.amount,
+                                           job.spentPrevouts, job.sighashCache);
+        } catch (const script::ScriptVerifyError& exc) {
+            if (timing != nullptr) {
+                timing->scriptVerifyWorkerCpu += elapsedUs(started);
+            }
+            throw ConnectBlockError(exc.what());
+        }
+        if (timing != nullptr) {
+            timing->scriptVerifyWorkerCpu += elapsedUs(started);
+        }
+    }
+}
+
 std::int64_t validateNonCoinbaseInputs(BlockUtxoView& view, const messages::Transaction& tx,
                                        script::ScriptVerifyRunner* runner, ConnectTiming* timing) {
     std::unordered_set<OutpointKey, OutpointKeyHash> seenPrevouts;
@@ -284,7 +455,7 @@ std::int64_t validateNonCoinbaseInputs(BlockUtxoView& view, const messages::Tran
         for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
             const auto& utxo = utxoInfos[inputIndex];
             jobs.push_back(
-                script::VerifyInputJob{&tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts, &sighashCache});
+                script::VerifyInputJob{&tx, 0, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts, &sighashCache});
         }
         const auto result = runner->verify(jobs);
         if (timing != nullptr) {
@@ -327,6 +498,13 @@ void emitTiming(int height, const ConnectTiming& timing) {
               << " utxo_apply=" << timing.utxoApply
               << " commit=" << timing.commit
               << " block_connect_store_commit=" << timing.blockConnectStoreCommit
+              << " tx_count=" << timing.txCount
+              << " vin_count=" << timing.vinCount
+              << " vout_count=" << timing.voutCount
+              << " script_input_count=" << timing.scriptInputCount
+              << " input_shape_counts=" << compactCounts(timing.inputShapeCounts)
+              << " spent_prevout_script_types=" << compactCounts(timing.spentPrevoutScriptTypes)
+              << " output_script_types=" << compactCounts(timing.outputScriptTypes)
               << "\n";
 }
 
@@ -376,33 +554,34 @@ Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chai
     detail::BlockUtxoView view(chainstate, options.height);
     detail::ConnectTiming timing;
     const bool timingEnabled = detail::syncTimingEnabled();
+    timing.txCount = static_cast<int>(block.transactions.size());
     std::vector<std::vector<std::uint8_t>> txids;
     txids.reserve(block.transactions.size());
     for (const auto& tx : block.transactions) {
         txids.push_back(transactionTxid(tx));
     }
     std::vector<db::Outpoint> blockPrevouts;
-    std::vector<db::Outpoint> createdOutpoints;
     for (std::size_t txIndex = 0; txIndex < block.transactions.size(); ++txIndex) {
         const auto& tx = block.transactions[txIndex];
-        if (messages::transactionIsCoinbase(tx)) {
-            for (std::size_t outputIndex = 0; outputIndex < tx.outputs.size(); ++outputIndex) {
-                if (isSpendableOutput(tx.outputs[outputIndex].scriptPubkey)) {
-                    createdOutpoints.push_back(db::Outpoint{txids[txIndex], static_cast<int>(outputIndex)});
-                }
-            }
+        timing.vinCount += static_cast<int>(tx.inputs.size());
+        timing.voutCount += static_cast<int>(tx.outputs.size());
+        const bool coinbase = messages::transactionIsCoinbase(tx);
+        for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
+            timing.inputShapeCounts[detail::inputShape(tx, inputIndex, coinbase)] += 1;
+        }
+        if (!coinbase) {
+            timing.scriptInputCount += static_cast<int>(tx.inputs.size());
+        }
+        for (const auto& output : tx.outputs) {
+            timing.outputScriptTypes[detail::scriptPubkeyType(output.scriptPubkey)] += 1;
+        }
+        if (coinbase) {
             continue;
         }
         for (const auto& txIn : tx.inputs) {
             blockPrevouts.push_back(db::Outpoint{txIn.previousOutput.hash, static_cast<int>(txIn.previousOutput.index)});
         }
-        for (std::size_t outputIndex = 0; outputIndex < tx.outputs.size(); ++outputIndex) {
-            if (isSpendableOutput(tx.outputs[outputIndex].scriptPubkey)) {
-                createdOutpoints.push_back(db::Outpoint{txids[txIndex], static_cast<int>(outputIndex)});
-            }
-        }
     }
-    blockPrevouts.insert(blockPrevouts.end(), createdOutpoints.begin(), createdOutpoints.end());
     auto timerStart = detail::Clock::now();
     view.preloadExternal(blockPrevouts);
     if (timingEnabled) {
@@ -410,15 +589,19 @@ Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chai
     }
 
     std::int64_t totalFees = 0;
+    std::deque<detail::TxScriptContext> scriptContexts;
+    std::vector<script::VerifyInputJob> scriptJobs;
+    long long scriptPhaseUs = 0;
     for (std::size_t txIndex = 0; txIndex < block.transactions.size(); ++txIndex) {
         const auto& tx = block.transactions[txIndex];
         if (messages::transactionIsCoinbase(tx)) {
             continue;
         }
         timerStart = detail::Clock::now();
-        const auto inputTotal = detail::validateNonCoinbaseInputs(view, tx, options.scriptRunner, &timing);
+        const auto inputTotal = detail::prepareNonCoinbaseInputs(view, tx, txIndex, scriptContexts, scriptJobs,
+                                                                 timing.spentPrevoutScriptTypes);
         if (timingEnabled) {
-            timing.scriptVerify += detail::elapsedUs(timerStart);
+            scriptPhaseUs += detail::elapsedUs(timerStart);
         }
         std::int64_t outputTotal = 0;
         for (const auto& output : tx.outputs) {
@@ -439,6 +622,11 @@ Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chai
         if (timingEnabled) {
             timing.utxoApply += detail::elapsedUs(timerStart);
         }
+    }
+    timerStart = detail::Clock::now();
+    detail::verifyBlockScriptJobs(scriptJobs, options.scriptRunner, &timing);
+    if (timingEnabled) {
+        timing.scriptVerify += scriptPhaseUs + detail::elapsedUs(timerStart);
     }
 
     const auto& coinbase = block.transactions.front();

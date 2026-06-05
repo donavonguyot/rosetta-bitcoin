@@ -35,6 +35,9 @@ def timing_summary(status: dict) -> dict:
         return {}
     totals = {}
     slow_blocks = []
+    slow_block_shapes = sync_timing.get("SlowBlocks")
+    if not isinstance(slow_block_shapes, list):
+        slow_block_shapes = []
     for stage, values in stages.items():
         if not isinstance(values, dict):
             continue
@@ -54,6 +57,7 @@ def timing_summary(status: dict) -> dict:
         "stage_totals_ms": totals,
         "total_ms": totals.get("block_connect_store_commit", sum(totals.values())),
         "slow_stages": sorted(slow_blocks, key=lambda row: row["max_ms"], reverse=True)[:10],
+        "slow_blocks": slow_block_shapes,
     }
 
 
@@ -63,11 +67,15 @@ def target_label(height: int) -> str:
 
 
 def supporting_gate(height: int) -> str:
+    if height == 100000:
+        return "primary_100k"
     label = target_label(height)
     return f"supporting_{label}" if label else "local_reference"
 
 
 def supporting_p2p_kind(height: int) -> str:
+    if height == 100000:
+        return "primary_100k_p2p"
     label = target_label(height)
     return f"supporting_{label}_p2p" if label else "local_reference_p2p"
 

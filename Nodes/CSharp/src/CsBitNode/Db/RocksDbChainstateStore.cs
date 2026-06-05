@@ -8,7 +8,7 @@ using RocksDbSharp;
 
 namespace CsBitNode.Db;
 
-public sealed class RocksDbChainstateStore : IChainstateStore
+public sealed class RocksDbChainstateStore : IChainstateStore, IChainstateCommitTimingSource
 {
     public const string BackendName = "rocksdb";
     public const string CodecVersion = "2";
@@ -38,6 +38,8 @@ public sealed class RocksDbChainstateStore : IChainstateStore
     }
 
     public ChainstateMetadata Metadata => _metadata;
+
+    public IReadOnlyDictionary<string, long> LastCommitTimingTicks { get; private set; } = new Dictionary<string, long>();
 
     public string? MetadataValue(string key) => GetMetadata(key);
 
@@ -157,14 +159,26 @@ public sealed class RocksDbChainstateStore : IChainstateStore
 
     public ChainstateCommitResult CommitBlock(ChainstateBlockCommit commit)
     {
+        var commitStarted = System.Diagnostics.Stopwatch.StartNew();
+        var timings = new Dictionary<string, long>(StringComparer.Ordinal);
         var updatedAt = UtcNowIso();
         var metadata = _metadata with { TipHeight = commit.Height, TipHash = commit.BlockHashHex, UpdatedAt = updatedAt };
         using var batch = new WriteBatch();
+        var stageStarted = System.Diagnostics.Stopwatch.StartNew();
         foreach (var outpoint in commit.SpentOutpoints)
             batch.Delete(ChainstateCodecV2.UtxoKey(commit.Chain, outpoint.Txid, outpoint.Vout));
+        stageStarted.Stop();
+        timings["utxo_delete_prepare"] = stageStarted.ElapsedTicks;
+        stageStarted.Restart();
         foreach (var utxo in commit.CreatedUtxos)
             batch.Put(ChainstateCodecV2.UtxoKey(commit.Chain, utxo.Txid, utxo.Vout), ChainstateCodecV2.EncodeUtxo(utxo));
+        stageStarted.Stop();
+        timings["utxo_put_prepare"] = stageStarted.ElapsedTicks;
+        stageStarted.Restart();
         batch.Put(ChainstateCodecV2.UndoKey(commit.Chain, commit.Height), ChainstateCodecV2.EncodeUndo(commit.UndoEntries));
+        stageStarted.Stop();
+        timings["undo_put_prepare"] = stageStarted.ElapsedTicks;
+        stageStarted.Restart();
         if (commit.StoredBlock is not null)
         {
             var blockKey = ChainstateCodecV2.BlockIndexKey(commit.Chain, commit.Height);
@@ -191,7 +205,15 @@ public sealed class RocksDbChainstateStore : IChainstateStore
         PutMetadata(batch, "tip_hash", commit.BlockHashHex);
         PutMetadata(batch, "updated_at", updatedAt);
         PutCounterIfPresent(batch, "utxo_count", commit.Chain, commit.CreatedUtxos.Count - commit.SpentOutpoints.Count);
+        stageStarted.Stop();
+        timings["metadata_put_prepare"] = stageStarted.ElapsedTicks;
+        stageStarted.Restart();
         _db.Write(batch, NewWriteOptions());
+        stageStarted.Stop();
+        timings["rocksdb_write"] = stageStarted.ElapsedTicks;
+        commitStarted.Stop();
+        timings["commit"] = commitStarted.ElapsedTicks;
+        LastCommitTimingTicks = timings;
         _metadata = metadata;
         return new ChainstateCommitResult(commit.Height, commit.BlockHashHex, commit.CreatedUtxos.Count, commit.SpentOutpoints.Count);
     }

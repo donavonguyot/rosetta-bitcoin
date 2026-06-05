@@ -33,82 +33,87 @@ public static class TaprootSighash
         Transaction transaction,
         int inputIndex,
         IReadOnlyList<ScriptVerify.SpentPrevout> spentPrevouts,
-        int hashType)
+        int hashType,
+        SighashCache? cache = null)
     {
-        return SignatureHash(transaction, inputIndex, spentPrevouts, TaprootSighashOptions.KeyPath(hashType));
+        return SignatureHash(transaction, inputIndex, spentPrevouts, TaprootSighashOptions.KeyPath(hashType), cache);
     }
 
     public static byte[] SignatureHash(
         Transaction transaction,
         int inputIndex,
         IReadOnlyList<ScriptVerify.SpentPrevout> spentPrevouts,
-        TaprootSighashOptions options)
+        TaprootSighashOptions options,
+        SighashCache? cache = null)
     {
-        if (spentPrevouts.Count != transaction.Inputs.Count)
-            throw new ArgumentException("spent_prevouts length mismatch");
-        var hashType = options.HashType;
-        if (!AllowedHashType(hashType))
-            throw new ArgumentException("unsupported taproot sighash type");
-        if (inputIndex >= transaction.Inputs.Count)
-            throw new ArgumentOutOfRangeException(nameof(inputIndex));
-        if (options.ExtFlag is not (0 or 1))
-            throw new ArgumentException("invalid taproot ext_flag");
-        if (options.ExtFlag == 1 && options.TapleafHash?.Length != 32)
-            throw new ArgumentException("tapscript sighash requires 32-byte tapleaf_hash");
-
-        var outputMode = hashType == SighashDefault ? SighashAll : hashType & 0x03;
-        var anyoneCanPay = (hashType & 0x80) != 0;
-        var annexPresent = options.Annex is not null;
-        using var body = new MemoryStream();
-        body.WriteByte((byte)hashType);
-        body.Write(WireSerialize.PackInt32Le(transaction.Version));
-        body.Write(WireSerialize.PackInt32Le((int)transaction.LockTime));
-
-        if (!anyoneCanPay)
+        return ScriptTiming.MeasureTaprootSighash(() =>
         {
-            body.Write(ShaPrevouts(transaction));
-            body.Write(ShaAmounts(spentPrevouts));
-            body.Write(ShaScriptPubKeys(spentPrevouts));
-            body.Write(ShaSequences(transaction));
-        }
+            if (spentPrevouts.Count != transaction.Inputs.Count)
+                throw new ArgumentException("spent_prevouts length mismatch");
+            var hashType = options.HashType;
+            if (!AllowedHashType(hashType))
+                throw new ArgumentException("unsupported taproot sighash type");
+            if (inputIndex >= transaction.Inputs.Count)
+                throw new ArgumentOutOfRangeException(nameof(inputIndex));
+            if (options.ExtFlag is not (0 or 1))
+                throw new ArgumentException("invalid taproot ext_flag");
+            if (options.ExtFlag == 1 && options.TapleafHash?.Length != 32)
+                throw new ArgumentException("tapscript sighash requires 32-byte tapleaf_hash");
 
-        if (outputMode == SighashAll)
-            body.Write(ShaOutputsAll(transaction));
-        else if (outputMode == SighashSingle && inputIndex >= transaction.Outputs.Count)
-            throw new ArgumentException("SIGHASH_SINGLE without matching output");
+            var outputMode = hashType == SighashDefault ? SighashAll : hashType & 0x03;
+            var anyoneCanPay = (hashType & 0x80) != 0;
+            var annexPresent = options.Annex is not null;
+            using var body = new MemoryStream();
+            body.WriteByte((byte)hashType);
+            body.Write(WireSerialize.PackInt32Le(transaction.Version));
+            body.Write(WireSerialize.PackInt32Le((int)transaction.LockTime));
 
-        var spendType = (options.ExtFlag << 1) + (annexPresent ? 1 : 0);
-        body.WriteByte((byte)spendType);
-        if (anyoneCanPay)
-        {
-            var txIn = transaction.Inputs[inputIndex];
-            var prevout = spentPrevouts[inputIndex];
-            body.Write(Sighash.SerializeOutPoint(txIn.PreviousOutput));
-            body.Write(Sighash.SerializeOutput(new TxOut(prevout.Amount, prevout.ScriptPubKey)));
-            body.Write(WireSerialize.PackInt32Le((int)txIn.Sequence));
-        }
-        else
-        {
-            body.Write(WireSerialize.PackInt32Le(inputIndex));
-        }
+            if (!anyoneCanPay)
+            {
+                body.Write(cache?.TaprootPrevouts(transaction) ?? ShaPrevouts(transaction));
+                body.Write(cache?.TaprootAmounts(spentPrevouts) ?? ShaAmounts(spentPrevouts));
+                body.Write(cache?.TaprootScriptPubKeys(spentPrevouts) ?? ShaScriptPubKeys(spentPrevouts));
+                body.Write(cache?.TaprootSequences(transaction) ?? ShaSequences(transaction));
+            }
 
-        if (annexPresent)
-            body.Write(AnnexDigest(options.Annex!));
+            if (outputMode == SighashAll)
+                body.Write(cache?.TaprootOutputsAll(transaction) ?? ShaOutputsAll(transaction));
+            else if (outputMode == SighashSingle && inputIndex >= transaction.Outputs.Count)
+                throw new ArgumentException("SIGHASH_SINGLE without matching output");
 
-        if (outputMode == SighashSingle)
-            body.Write(Hash160.Sha256(Sighash.SerializeOutput(transaction.Outputs[inputIndex])));
+            var spendType = (options.ExtFlag << 1) + (annexPresent ? 1 : 0);
+            body.WriteByte((byte)spendType);
+            if (anyoneCanPay)
+            {
+                var txIn = transaction.Inputs[inputIndex];
+                var prevout = spentPrevouts[inputIndex];
+                body.Write(Sighash.SerializeOutPoint(txIn.PreviousOutput));
+                body.Write(Sighash.SerializeOutput(new TxOut(prevout.Amount, prevout.ScriptPubKey)));
+                body.Write(WireSerialize.PackInt32Le((int)txIn.Sequence));
+            }
+            else
+            {
+                body.Write(WireSerialize.PackInt32Le(inputIndex));
+            }
 
-        if (options.ExtFlag == 1)
-        {
-            body.Write(options.TapleafHash!);
-            body.WriteByte(0); // key version
-            body.Write(WireSerialize.PackInt32Le((int)(options.TapscriptCodeSeparatorPos & 0xffff_ffffL)));
-        }
+            if (annexPresent)
+                body.Write(AnnexDigest(options.Annex!));
 
-        using var sigMsg = new MemoryStream();
-        sigMsg.WriteByte(0);
-        sigMsg.Write(body.ToArray());
-        return TaprootHash.TaggedHash("TapSighash", sigMsg.ToArray());
+            if (outputMode == SighashSingle)
+                body.Write(cache?.TaprootSingleOutputHash(transaction, inputIndex) ?? Hash160.Sha256(Sighash.SerializeOutput(transaction.Outputs[inputIndex])));
+
+            if (options.ExtFlag == 1)
+            {
+                body.Write(options.TapleafHash!);
+                body.WriteByte(0); // key version
+                body.Write(WireSerialize.PackInt32Le((int)(options.TapscriptCodeSeparatorPos & 0xffff_ffffL)));
+            }
+
+            using var sigMsg = new MemoryStream();
+            sigMsg.WriteByte(0);
+            sigMsg.Write(body.ToArray());
+            return TaprootHash.TaggedHash("TapSighash", sigMsg.ToArray());
+        });
     }
 
     private static bool AllowedHashType(int hashType) =>

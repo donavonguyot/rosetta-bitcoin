@@ -92,7 +92,8 @@ public static class BlockSync
                     (stage, height, elapsedTicks) => timingSink?.Record(stage, height, elapsedTicks),
                     expectedValidatedHeight: validatedHeight,
                     storedBlock: new ChainstateBlockStorageIndex(stored.FileNumber, stored.FileOffset, stored.BlockSize),
-                    parallelScriptRunner: parallelScriptRunner);
+                    parallelScriptRunner: parallelScriptRunner,
+                    shapeSink: (height, shape) => timingSink?.RecordBlockShape(height, shape));
                 blockStarted.Stop();
                 timingSink?.Record("block_connect_store_commit", nextHeight, blockStarted.ElapsedTicks);
                 connected += 1;

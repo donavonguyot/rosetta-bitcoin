@@ -7,13 +7,11 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
-#include <future>
-#include <functional>
 #include <mutex>
-#include <queue>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 
 namespace cpbitnode::consensus::script {
 namespace {
@@ -162,64 +160,21 @@ public:
             return batch;
         }
         if (!parallel() || jobs.size() == 1) {
-            for (const auto& job : jobs) {
-                const auto started = Clock::now();
-                try {
-                    if (job.transaction == nullptr) {
-                        throw ScriptVerifyError("missing transaction for script verify job");
-                    }
-                    verifyTransactionInput(*job.transaction, job.inputIndex, job.scriptPubkey, job.amount,
-                                           job.spentPrevouts, job.sighashCache);
-                } catch (const ScriptVerifyError& exc) {
-                    batch.workerCpuUs += elapsedUs(started);
-                    if (!batch.error.has_value() || job.inputIndex < batch.failedInputIndex) {
-                        batch.error = exc.what();
-                        batch.failedInputIndex = job.inputIndex;
-                    }
-                    continue;
-                }
-                batch.workerCpuUs += elapsedUs(started);
+            std::vector<JobResult> results(jobs.size());
+            for (std::size_t index = 0; index < jobs.size(); ++index) {
+                runJob(jobs[index], results[index]);
             }
+            reduceResults(results, batch);
             return batch;
         }
 
-        struct JobResult {
-            std::size_t inputIndex = 0;
-            long long workerCpuUs = 0;
-            std::optional<std::string> error;
-        };
-
-        std::vector<std::future<JobResult>> futures;
-        futures.reserve(jobs.size());
-        for (const auto& job : jobs) {
-            futures.push_back(submit([job]() {
-                JobResult result;
-                result.inputIndex = job.inputIndex;
-                const auto started = Clock::now();
-                try {
-                    if (job.transaction == nullptr) {
-                        throw ScriptVerifyError("missing transaction for script verify job");
-                    }
-                    verifyTransactionInput(*job.transaction, job.inputIndex, job.scriptPubkey, job.amount,
-                                           job.spentPrevouts, job.sighashCache);
-                } catch (const ScriptVerifyError& exc) {
-                    result.error = exc.what();
-                }
-                result.workerCpuUs = elapsedUs(started);
-                return result;
-            }));
-        }
+        std::vector<JobResult> results(jobs.size());
         const auto waitStarted = Clock::now();
-        for (auto& future : futures) {
-            const auto result = future.get();
-            batch.workerCpuUs += result.workerCpuUs;
-            if (result.error.has_value() &&
-                (!batch.error.has_value() || result.inputIndex < batch.failedInputIndex)) {
-                batch.error = result.error;
-                batch.failedInputIndex = result.inputIndex;
-            }
-        }
+        startBatch(jobs, results);
+        processJobs(jobs, results);
+        waitForBatch();
         recordScriptTiming(ScriptTimingStage::runnerWait, elapsedUs(waitStarted));
+        reduceResults(results, batch);
         return batch;
     }
 
@@ -227,32 +182,105 @@ public:
     bool parallel() const { return threadCount_ > 1 && !workers_.empty(); }
 
 private:
-    template <typename Fn>
-    auto submit(Fn&& fn) -> std::future<decltype(fn())> {
-        using Result = decltype(fn());
-        auto task = std::make_shared<std::packaged_task<Result()>>(std::forward<Fn>(fn));
-        auto future = task->get_future();
+    struct JobResult {
+        std::size_t txIndex = 0;
+        std::size_t inputIndex = 0;
+        long long workerCpuUs = 0;
+        std::optional<std::string> error;
+    };
+
+    static bool isEarlierFailure(std::size_t txIndex, std::size_t inputIndex, const VerifyBatchResult& batch) {
+        return !batch.error.has_value() ||
+               std::pair(txIndex, inputIndex) < std::pair(batch.failedTxIndex, batch.failedInputIndex);
+    }
+
+    static void runJob(const VerifyInputJob& job, JobResult& result) {
+        result.txIndex = job.txIndex;
+        result.inputIndex = job.inputIndex;
+        const auto started = Clock::now();
+        try {
+            if (job.transaction == nullptr) {
+                throw ScriptVerifyError("missing transaction for script verify job");
+            }
+            verifyTransactionInput(*job.transaction, job.inputIndex, job.scriptPubkey, job.amount, job.spentPrevouts,
+                                   job.sighashCache);
+        } catch (const ScriptVerifyError& exc) {
+            result.error = exc.what();
+        }
+        result.workerCpuUs = elapsedUs(started);
+    }
+
+    static void reduceResults(const std::vector<JobResult>& results, VerifyBatchResult& batch) {
+        for (const auto& result : results) {
+            batch.workerCpuUs += result.workerCpuUs;
+            if (result.error.has_value() && isEarlierFailure(result.txIndex, result.inputIndex, batch)) {
+                batch.error = result.error;
+                batch.failedTxIndex = result.txIndex;
+                batch.failedInputIndex = result.inputIndex;
+            }
+        }
+    }
+
+    void processJobs(const std::vector<VerifyInputJob>& jobs, std::vector<JobResult>& results) {
+        while (true) {
+            const auto index = nextJob_.fetch_add(1, std::memory_order_relaxed);
+            if (index >= jobs.size()) {
+                return;
+            }
+            runJob(jobs[index], results[index]);
+        }
+    }
+
+    void startBatch(const std::vector<VerifyInputJob>& jobs, std::vector<JobResult>& results) {
         {
             std::lock_guard lock(mutex_);
-            tasks_.push([task]() { (*task)(); });
+            activeJobs_ = &jobs;
+            activeResults_ = &results;
+            nextJob_.store(0, std::memory_order_relaxed);
+            activeWorkers_ = workers_.size();
+            batchActive_ = true;
+            ++generation_;
         }
-        cv_.notify_one();
-        return future;
+        cv_.notify_all();
+    }
+
+    void waitForBatch() {
+        std::unique_lock lock(mutex_);
+        doneCv_.wait(lock, [this]() { return !batchActive_; });
     }
 
     void workerLoop() {
+        std::size_t seenGeneration = 0;
         while (true) {
-            std::function<void()> task;
+            const std::vector<VerifyInputJob>* jobs = nullptr;
+            std::vector<JobResult>* results = nullptr;
             {
                 std::unique_lock lock(mutex_);
-                cv_.wait(lock, [this]() { return stopped_ || !tasks_.empty(); });
-                if (stopped_ && tasks_.empty()) {
+                cv_.wait(lock, [this, &seenGeneration]() {
+                    return stopped_ || (batchActive_ && generation_ != seenGeneration);
+                });
+                if (stopped_) {
                     return;
                 }
-                task = std::move(tasks_.front());
-                tasks_.pop();
+                seenGeneration = generation_;
+                jobs = activeJobs_;
+                results = activeResults_;
             }
-            task();
+            if (jobs != nullptr && results != nullptr) {
+                processJobs(*jobs, *results);
+            }
+            {
+                std::lock_guard lock(mutex_);
+                if (activeWorkers_ > 0) {
+                    --activeWorkers_;
+                }
+                if (activeWorkers_ == 0 && batchActive_) {
+                    batchActive_ = false;
+                    activeJobs_ = nullptr;
+                    activeResults_ = nullptr;
+                    doneCv_.notify_one();
+                }
+            }
         }
     }
 
@@ -274,7 +302,13 @@ private:
     std::vector<std::thread> workers_;
     std::mutex mutex_;
     std::condition_variable cv_;
-    std::queue<std::function<void()>> tasks_;
+    std::condition_variable doneCv_;
+    std::atomic<std::size_t> nextJob_{0};
+    const std::vector<VerifyInputJob>* activeJobs_ = nullptr;
+    std::vector<JobResult>* activeResults_ = nullptr;
+    std::size_t activeWorkers_ = 0;
+    std::size_t generation_ = 0;
+    bool batchActive_ = false;
     bool stopped_ = false;
 };
 

@@ -205,6 +205,59 @@ public class NativeChainstateStoreTests
     }
 
     [Fact]
+    public void SyncTimingCollectorKeepsSlowBlockShapeSummary()
+    {
+        var collector = new SyncTimingCollector();
+        collector.RecordBlockShape(
+            7,
+            new BlockTimingShape(
+                2,
+                3,
+                4,
+                2,
+                new Dictionary<string, int> { ["witness"] = 2, ["coinbase"] = 1 },
+                new Dictionary<string, int> { ["p2tr"] = 2 },
+                new Dictionary<string, int> { ["p2wpkh"] = 4 }));
+        collector.Record("block_connect_store_commit", 7, System.Diagnostics.Stopwatch.Frequency / 1000);
+
+        var slow = Assert.Single(collector.Snapshot().SlowBlocks!);
+        Assert.Equal(7, slow.Height);
+        Assert.Equal(2, slow.TxCount);
+        Assert.Equal(3, slow.VinCount);
+        Assert.Equal(4, slow.VoutCount);
+        Assert.Equal(2, slow.ScriptInputCount);
+        Assert.Equal(2, slow.InputShapeCounts["witness"]);
+        Assert.Equal(2, slow.SpentPrevoutScriptTypes["p2tr"]);
+        Assert.Equal(4, slow.OutputScriptTypes["p2wpkh"]);
+    }
+
+    [Fact]
+    public void RocksDbCommitReportsPrepareAndWriteTimingBuckets()
+    {
+        var dir = TempDir();
+        var chain = ChainRegistry.Get("testnet4");
+        using var session = ChainstateSession.OpenNative(dir, chain);
+        var store = session.Store;
+        store.EnsureGenesis(chain.Name, Genesis.Testnet4, Genesis.Testnet4Hash);
+
+        store.CommitBlock(new ChainstateBlockCommit(
+            chain.Name,
+            1,
+            "5656565656565656565656565656565656565656565656565656565656565656",
+            [],
+            [new StoredUtxo("abababababababababababababababababababababababababababababababab", 0, 1, 50, "51", true)],
+            [],
+            new ChainstateBlockStorageIndex(1, 2, 3)));
+
+        var timing = Assert.IsAssignableFrom<IChainstateCommitTimingSource>(store).LastCommitTimingTicks;
+        Assert.Contains("utxo_delete_prepare", timing.Keys);
+        Assert.Contains("utxo_put_prepare", timing.Keys);
+        Assert.Contains("undo_put_prepare", timing.Keys);
+        Assert.Contains("metadata_put_prepare", timing.Keys);
+        Assert.Contains("rocksdb_write", timing.Keys);
+    }
+
+    [Fact]
     public void StatusIncludesPersistedTimingSummary()
     {
         var dir = TempDir();

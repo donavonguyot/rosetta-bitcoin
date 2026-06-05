@@ -141,6 +141,14 @@ public final class RocksDbChainstateStore implements UtxoStore, AutoCloseable {
     }
   }
 
+  public Long readMaintainedUtxoCount() throws SQLException {
+    String raw = getMetadata(ChainstateStoreFactory.UTXO_COUNT);
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    return Long.parseLong(raw);
+  }
+
   public void putMetadata(String key, String value) throws SQLException {
     try {
       db.put(NativeChainstateCodec.metadataKeyV2(key), NativeChainstateCodec.metadataValue(value));
@@ -150,7 +158,18 @@ public final class RocksDbChainstateStore implements UtxoStore, AutoCloseable {
   }
 
   public ChainstateCommitResult commitBlockNative(
-      ChainstateBlockCommit commit, ChainstateMetadata existingMetadata) throws SQLException {
+      ChainstateBlockCommit commit,
+      ChainstateMetadata existingMetadata,
+      ProjectTracker.UndoTimingSink timingSink)
+      throws SQLException {
+    long commitStarted = System.nanoTime();
+    long existingUtxoCount =
+        existingMetadata.utxoCount() >= 0 ? existingMetadata.utxoCount() : count(commit.chain());
+    long newUtxoCount =
+        existingUtxoCount - commit.spentOutpoints().size() + commit.createdUtxos().size();
+    if (newUtxoCount < 0) {
+      throw new SQLException("chainstate UTXO count would become negative");
+    }
     ChainstateTip tip = new ChainstateTip(commit.height(), commit.blockHashHex());
     ChainstateMetadata metadata =
         new ChainstateMetadata(
@@ -160,21 +179,30 @@ public final class RocksDbChainstateStore implements UtxoStore, AutoCloseable {
             "usable",
             tip.height(),
             tip.hash(),
+            newUtxoCount,
             existingMetadata.schemaVersion(),
             Instant.now().toString());
+    long applyStarted = System.nanoTime();
     try (WriteBatch batch = new WriteBatch();
         WriteOptions writeOptions = newWriteOptions()) {
+      long deletePrepareStarted = System.nanoTime();
       for (UtxoOutpoint outpoint : commit.spentOutpoints()) {
         batch.delete(NativeChainstateCodec.utxoKeyV2(commit.chain(), outpoint.txidHex(), outpoint.vout()));
       }
+      timingSink.record("utxo_delete_prepare", System.nanoTime() - deletePrepareStarted);
+      long putPrepareStarted = System.nanoTime();
       for (StoredUtxo utxo : commit.createdUtxos()) {
         batch.put(
             NativeChainstateCodec.utxoKeyV2(commit.chain(), utxo.txid(), utxo.vout()),
             NativeChainstateCodec.encodeUtxoV2(utxo));
       }
+      timingSink.record("utxo_put_prepare", System.nanoTime() - putPrepareStarted);
+      long undoPrepareStarted = System.nanoTime();
       batch.put(
           NativeChainstateCodec.undoKeyV2(commit.chain(), commit.height()),
           NativeChainstateCodec.encodeUndoV2(commit.undoEntries()));
+      timingSink.record("undo_put_prepare", System.nanoTime() - undoPrepareStarted);
+      long metadataPrepareStarted = System.nanoTime();
       batch.put(NativeChainstateCodec.tipKeyV2(commit.chain()), NativeChainstateCodec.encodeTipV2(tip));
       putMetadata(batch, ChainstateStoreFactory.BACKEND_NAME, metadata.backendName());
       putMetadata(batch, ChainstateStoreFactory.BACKEND_PATH, metadata.backendPath().toString());
@@ -182,9 +210,15 @@ public final class RocksDbChainstateStore implements UtxoStore, AutoCloseable {
       putMetadata(batch, ChainstateStoreFactory.STATUS, metadata.status());
       putMetadata(batch, ChainstateStoreFactory.TIP_HEIGHT, Integer.toString(metadata.tipHeight()));
       putMetadata(batch, ChainstateStoreFactory.TIP_HASH, metadata.tipHash());
+      putMetadata(batch, ChainstateStoreFactory.UTXO_COUNT, Long.toString(metadata.utxoCount()));
       putMetadata(batch, ChainstateStoreFactory.SCHEMA_VERSION, metadata.schemaVersion());
       putMetadata(batch, ChainstateStoreFactory.UPDATED_AT, metadata.updatedAt());
+      timingSink.record("metadata_put_prepare", System.nanoTime() - metadataPrepareStarted);
+      timingSink.record("utxo_apply", System.nanoTime() - applyStarted);
+      long writeStarted = System.nanoTime();
       db.write(writeOptions, batch);
+      timingSink.record("rocksdb_write", System.nanoTime() - writeStarted);
+      timingSink.record("commit", System.nanoTime() - commitStarted);
       return new ChainstateCommitResult(
           tip, commit.createdUtxos().size(), commit.spentOutpoints().size(), metadata);
     } catch (IOException | RocksDBException error) {

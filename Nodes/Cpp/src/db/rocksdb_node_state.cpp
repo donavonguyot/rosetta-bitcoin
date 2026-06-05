@@ -6,7 +6,9 @@
 #include "cpbitnode/wire/capabilities.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cstring>
 #include <cstdlib>
 #include <filesystem>
 #include <iomanip>
@@ -33,6 +35,12 @@ constexpr std::size_t kRocksDbBlockCacheBytes = 512ULL * 1024ULL * 1024ULL;
 constexpr std::size_t kRocksDbWriteBufferBytes = 64ULL * 1024ULL * 1024ULL;
 constexpr int kRocksDbMaxWriteBuffers = 4;
 constexpr int kRocksDbMaxBackgroundJobs = 4;
+
+std::atomic<long long> gUtxoDeletePrepareUs{0};
+std::atomic<long long> gUtxoPutPrepareUs{0};
+std::atomic<long long> gUndoPutPrepareUs{0};
+std::atomic<long long> gMetadataPutPrepareUs{0};
+std::atomic<long long> gRocksDbWriteUs{0};
 
 std::string utcNow() {
     const auto now = std::chrono::system_clock::now();
@@ -226,6 +234,75 @@ void checkStatus(const rocksdb::Status& status, const std::string& action) {
 
 bool keyStartsWith(const rocksdb::Slice& key, const std::string& prefix) {
     return key.size() >= prefix.size() && std::string_view(key.data(), prefix.size()) == prefix;
+}
+
+long long elapsedUs(std::chrono::steady_clock::time_point start) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count();
+}
+
+bool storageTimingEnabled() {
+    const char* raw = std::getenv("CPBITNODE_SYNC_TIMING");
+    return raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0";
+}
+
+void addStorageTiming(std::atomic<long long>& counter, long long elapsed) {
+    if (elapsed > 0 && storageTimingEnabled()) {
+        counter.fetch_add(elapsed, std::memory_order_relaxed);
+    }
+}
+
+void appendU32Le(std::string& out, std::uint32_t value) {
+    out.push_back(static_cast<char>(value & 0xff));
+    out.push_back(static_cast<char>((value >> 8) & 0xff));
+    out.push_back(static_cast<char>((value >> 16) & 0xff));
+    out.push_back(static_cast<char>((value >> 24) & 0xff));
+}
+
+std::uint32_t readU32Le(const std::string& data, std::size_t& offset) {
+    if (offset + 4 > data.size()) {
+        throw std::runtime_error("created outpoint list read past end");
+    }
+    const auto b0 = static_cast<std::uint8_t>(data[offset++]);
+    const auto b1 = static_cast<std::uint8_t>(data[offset++]);
+    const auto b2 = static_cast<std::uint8_t>(data[offset++]);
+    const auto b3 = static_cast<std::uint8_t>(data[offset++]);
+    return static_cast<std::uint32_t>(b0) | (static_cast<std::uint32_t>(b1) << 8) |
+           (static_cast<std::uint32_t>(b2) << 16) | (static_cast<std::uint32_t>(b3) << 24);
+}
+
+std::string encodeCreatedOutpoints(const std::vector<Outpoint>& outpoints) {
+    std::string out;
+    out.reserve(4 + outpoints.size() * 36);
+    appendU32Le(out, static_cast<std::uint32_t>(outpoints.size()));
+    for (const auto& outpoint : outpoints) {
+        if (outpoint.txid.size() != 32) {
+            throw std::invalid_argument("created outpoint txid must be 32 bytes");
+        }
+        out.append(reinterpret_cast<const char*>(outpoint.txid.data()), outpoint.txid.size());
+        appendU32Le(out, static_cast<std::uint32_t>(outpoint.vout));
+    }
+    return out;
+}
+
+std::vector<Outpoint> decodeCreatedOutpoints(const std::string& encoded) {
+    std::size_t offset = 0;
+    const auto count = readU32Le(encoded, offset);
+    std::vector<Outpoint> out;
+    out.reserve(count);
+    for (std::uint32_t index = 0; index < count; ++index) {
+        if (offset + 32 > encoded.size()) {
+            throw std::runtime_error("created outpoint list txid read past end");
+        }
+        std::vector<std::uint8_t> txid(32);
+        std::memcpy(txid.data(), encoded.data() + offset, txid.size());
+        offset += txid.size();
+        const auto vout = readU32Le(encoded, offset);
+        out.push_back(Outpoint{std::move(txid), static_cast<int>(vout)});
+    }
+    if (offset != encoded.size()) {
+        throw std::runtime_error("created outpoint list trailing bytes");
+    }
+    return out;
 }
 
 struct DbOutpointKey {
@@ -590,9 +667,34 @@ public:
         if (outpoints.empty()) {
             return {};
         }
+        std::vector<Outpoint> unique;
+        std::vector<std::size_t> order;
+        if (outpoints.size() >= 64) {
+            unique.reserve(outpoints.size());
+            order.reserve(outpoints.size());
+            std::unordered_map<DbOutpointKey, std::size_t, DbOutpointKeyHash> uniqueIndex;
+            for (const auto& outpoint : outpoints) {
+                DbOutpointKey key{outpoint.txid, outpoint.vout};
+                const auto found = uniqueIndex.find(key);
+                if (found != uniqueIndex.end()) {
+                    order.push_back(found->second);
+                    continue;
+                }
+                const auto index = unique.size();
+                uniqueIndex.emplace(std::move(key), index);
+                unique.push_back(outpoint);
+                order.push_back(index);
+            }
+        } else {
+            unique = outpoints;
+            order.reserve(outpoints.size());
+            for (std::size_t index = 0; index < outpoints.size(); ++index) {
+                order.push_back(index);
+            }
+        }
         std::vector<std::string> keys;
-        keys.reserve(outpoints.size());
-        for (const auto& outpoint : outpoints) {
+        keys.reserve(unique.size());
+        for (const auto& outpoint : unique) {
             keys.push_back(utxoKey(outpoint.txid, outpoint.vout));
         }
         std::vector<rocksdb::Slice> slices;
@@ -602,15 +704,20 @@ public:
         }
         std::vector<std::string> values(keys.size());
         const auto statuses = db_->MultiGet(rocksdb::ReadOptions(), slices, &values);
-        std::vector<std::optional<StoredUtxo>> out;
-        out.reserve(outpoints.size());
-        for (std::size_t index = 0; index < outpoints.size(); ++index) {
+        std::vector<std::optional<StoredUtxo>> decoded;
+        decoded.reserve(unique.size());
+        for (std::size_t index = 0; index < unique.size(); ++index) {
             if (statuses[index].IsNotFound()) {
-                out.push_back(std::nullopt);
+                decoded.push_back(std::nullopt);
                 continue;
             }
             checkStatus(statuses[index], "read rocksdb utxo");
-            out.push_back(codec_v2::decodeUtxoValue(outpoints[index].txid, outpoints[index].vout, values[index]));
+            decoded.push_back(codec_v2::decodeUtxoValue(unique[index].txid, unique[index].vout, values[index]));
+        }
+        std::vector<std::optional<StoredUtxo>> out;
+        out.reserve(outpoints.size());
+        for (const auto index : order) {
+            out.push_back(decoded[index]);
         }
         return out;
     }
@@ -647,14 +754,24 @@ public:
     void deleteUtxosCreatedAtHeight(int height) override {
         rocksdb::WriteBatch batch;
         int deleted = 0;
+        const auto createdList = getString(createdOutpointsKey(height));
+        if (createdList.has_value()) {
+            for (const auto& outpoint : decodeCreatedOutpoints(*createdList)) {
+                batch.Delete(utxoKey(outpoint.txid, outpoint.vout));
+                deleted += 1;
+            }
+            batch.Delete(createdOutpointsKey(height));
+        }
         const auto prefix = createdHeightPrefix(height);
         std::unique_ptr<rocksdb::Iterator> it(db_->NewIterator(rocksdb::ReadOptions()));
         for (it->Seek(prefix); it->Valid() && keyStartsWith(it->key(), prefix); it->Next()) {
             const auto indexKey = it->key().ToString();
-            const auto key = indexKey.substr(prefix.size());
-            batch.Delete(key);
+            if (!createdList.has_value()) {
+                const auto key = indexKey.substr(prefix.size());
+                batch.Delete(key);
+                deleted += 1;
+            }
             batch.Delete(indexKey);
-            deleted += 1;
         }
         checkStatus(it->status(), "iterate utxos by height");
         const int nextUtxoCount = std::max(0, cachedUtxoCount_ - deleted);
@@ -667,6 +784,7 @@ public:
         rocksdb::WriteBatch batch;
         deletePrefix(batch, utxoPrefix(chain));
         deletePrefix(batch, "utxo_by_height/");
+        deletePrefix(batch, createdOutpointsPrefix());
         deletePrefix(batch, codec_v2::prefixUndo(chain));
         batch.Put(codec_v2::keyTip(chain), codec_v2::encodeTipValue(0, codec_v2::displayHexToInternal(genesisHash)));
         setCounter(batch, "counter/utxo_count", 0);
@@ -689,6 +807,7 @@ public:
             validateTxid(entry.txid);
             undoByOutpoint[DbOutpointKey{entry.txid, entry.vout}] = entry;
         }
+        const auto deleteStarted = std::chrono::steady_clock::now();
         for (const auto& spend : commit.spends) {
             const auto key = utxoKey(spend.txid, spend.vout);
             batch.Delete(key);
@@ -697,14 +816,23 @@ public:
                 batch.Delete(createdHeightKey(undo->second.height, key));
             }
         }
+        addStorageTiming(gUtxoDeletePrepareUs, elapsedUs(deleteStarted));
+        const auto putStarted = std::chrono::steady_clock::now();
+        std::vector<Outpoint> createdOutpoints;
+        createdOutpoints.reserve(commit.creates.size());
         for (const auto& create : commit.creates) {
             StoredUtxo utxo{create.txid, create.vout, create.height, create.value, create.scriptPubkey,
                             create.coinbase};
             const auto key = utxoKey(create.txid, create.vout);
             batch.Put(key, codec_v2::encodeUtxoValue(utxo));
-            batch.Put(createdHeightKey(create.height, key), "");
+            createdOutpoints.push_back(Outpoint{create.txid, create.vout});
         }
+        batch.Put(createdOutpointsKey(commit.height), encodeCreatedOutpoints(createdOutpoints));
+        addStorageTiming(gUtxoPutPrepareUs, elapsedUs(putStarted));
+        const auto undoStarted = std::chrono::steady_clock::now();
         batch.Put(undoKey(commit.chain, commit.height), codec_v2::encodeUndoValue(commit.undo));
+        addStorageTiming(gUndoPutPrepareUs, elapsedUs(undoStarted));
+        const auto metadataStarted = std::chrono::steady_clock::now();
         batch.Put(codec_v2::keyTip(commit.chain),
                   codec_v2::encodeTipValue(commit.height, codec_v2::displayHexToInternal(commit.blockHash)));
         if (commit.blockIndex.has_value()) {
@@ -717,7 +845,10 @@ public:
         setCodecMetadata(batch, "user.metric_blocks_validated_total", std::to_string(validatedTotal));
         setCodecMetadata(batch, "tip_height", std::to_string(commit.height));
         setCodecMetadata(batch, "tip_hash", commit.blockHash);
+        addStorageTiming(gMetadataPutPrepareUs, elapsedUs(metadataStarted));
+        const auto writeStarted = std::chrono::steady_clock::now();
         checkStatus(db_->Write(writeOptions(), &batch), "commit block");
+        addStorageTiming(gRocksDbWriteUs, elapsedUs(writeStarted));
         cachedUtxoCount_ = nextUtxoCount;
         cachedValidatedTotal_ = validatedTotal;
         if (commit.chain == activeChain_) {
@@ -1099,6 +1230,8 @@ private:
     static std::string createdHeightKey(int height, const std::string& key) {
         return createdHeightPrefix(height) + key;
     }
+    static std::string createdOutpointsPrefix() { return "utxo_created_outpoints/"; }
+    static std::string createdOutpointsKey(int height) { return createdOutpointsPrefix() + padInt(height); }
     static std::string undoKey(const std::string& chain, int height) {
         return codec_v2::keyUndo(chain, height);
     }
@@ -1153,6 +1286,24 @@ private:
 
 std::unique_ptr<NodeStateStore> openRocksDbNodeStateStore(const std::string& dataDir) {
     return std::make_unique<RocksDbNodeStateStore>(std::filesystem::path(dataDir) / "chainstate-rocksdb");
+}
+
+void resetStorageTiming() {
+    gUtxoDeletePrepareUs.store(0, std::memory_order_relaxed);
+    gUtxoPutPrepareUs.store(0, std::memory_order_relaxed);
+    gUndoPutPrepareUs.store(0, std::memory_order_relaxed);
+    gMetadataPutPrepareUs.store(0, std::memory_order_relaxed);
+    gRocksDbWriteUs.store(0, std::memory_order_relaxed);
+}
+
+StorageTimingSnapshot storageTimingSnapshot() {
+    return StorageTimingSnapshot{
+        gUtxoDeletePrepareUs.load(std::memory_order_relaxed),
+        gUtxoPutPrepareUs.load(std::memory_order_relaxed),
+        gUndoPutPrepareUs.load(std::memory_order_relaxed),
+        gMetadataPutPrepareUs.load(std::memory_order_relaxed),
+        gRocksDbWriteUs.load(std::memory_order_relaxed),
+    };
 }
 
 }  // namespace cpbitnode::db

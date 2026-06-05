@@ -110,8 +110,15 @@ public final class DbStatusService {
 
   private static long activeUtxoCount(String chain, ChainstateMetadata metadata)
       throws SQLException, IOException {
+    if (metadata.utxoCount() >= 0) {
+      return metadata.utxoCount();
+    }
     if ("rocksdb".equals(metadata.backendName())) {
       try (RocksDbChainstateStore rocksDb = new RocksDbChainstateStore(metadata.backendPath(), false)) {
+        Long maintained = rocksDb.readMaintainedUtxoCount();
+        if (maintained != null) {
+          return maintained;
+        }
         return rocksDb.count(chain);
       } catch (org.rocksdb.RocksDBException error) {
         throw new IOException("failed to open RocksDB chainstate at " + metadata.backendPath(), error);

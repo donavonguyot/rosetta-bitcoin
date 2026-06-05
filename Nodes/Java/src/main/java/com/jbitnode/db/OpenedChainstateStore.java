@@ -44,6 +44,15 @@ final class OpenedChainstateStore implements ChainstateStore {
 
   @Override
   public ChainstateStats stats() throws SQLException {
+    if (metadata.utxoCount() >= 0) {
+      return new ChainstateStats(metadata.utxoCount());
+    }
+    if (openedUtxoStore.store() instanceof RocksDbChainstateStore rocksDb) {
+      Long maintained = rocksDb.readMaintainedUtxoCount();
+      if (maintained != null) {
+        return new ChainstateStats(maintained);
+      }
+    }
     return new ChainstateStats(openedUtxoStore.store().count(chain));
   }
 
@@ -62,7 +71,7 @@ final class OpenedChainstateStore implements ChainstateStore {
       ChainstateBlockCommit commit, ProjectTracker.UndoTimingSink timingSink)
       throws SQLException {
     if (openedUtxoStore.store() instanceof RocksDbChainstateStore rocksDb) {
-      ChainstateCommitResult nativeResult = rocksDb.commitBlockNative(commit, metadata);
+      ChainstateCommitResult nativeResult = rocksDb.commitBlockNative(commit, metadata, timingSink);
       refreshMetadata(nativeResult.metadata());
       updateOperationalTip(commit, nativeResult.metadata());
       return nativeResult;

@@ -165,6 +165,15 @@ public static class ScriptVerify
         int inputIndex,
         VerifyInputOptions options)
     {
+        VerifyTransactionInput(transaction, inputIndex, options, null);
+    }
+
+    internal static void VerifyTransactionInput(
+        Tx.Transaction transaction,
+        int inputIndex,
+        VerifyInputOptions options,
+        SighashCache? cache)
+    {
         if (inputIndex >= transaction.Inputs.Count)
             throw new ScriptVerifyError("input index out of range");
 
@@ -200,7 +209,8 @@ public static class ScriptVerify
                 inputIndex,
                 options.Amount,
                 witness,
-                options.SpentPrevouts);
+                options.SpentPrevouts,
+                cache);
         }
         catch (ScriptError error)
         {
@@ -219,19 +229,20 @@ public static class ScriptVerify
         int inputIndex,
         long amount,
         IReadOnlyList<byte[]> witness,
-        IReadOnlyList<SpentPrevout>? spentPrevouts)
+        IReadOnlyList<SpentPrevout>? spentPrevouts,
+        SighashCache? cache)
     {
         if (ScriptTemplates.IsP2tr(scriptPubKey))
-            return VerifyTaproot(scriptSig, scriptPubKey, transaction, inputIndex, witness, spentPrevouts);
+            return VerifyTaproot(scriptSig, scriptPubKey, transaction, inputIndex, witness, spentPrevouts, cache);
         if (ScriptTemplates.IsP2wpkh(scriptPubKey))
-            return ScriptInterpreter.VerifyScript(scriptSig, scriptPubKey, transaction, inputIndex, amount, witness);
+            return ScriptInterpreter.VerifyScript(scriptSig, scriptPubKey, transaction, inputIndex, amount, witness, cache);
         if (ScriptTemplates.IsP2wsh(scriptPubKey))
-            return VerifyP2wsh(scriptSig, scriptPubKey, transaction, inputIndex, amount, witness);
+            return VerifyP2wsh(scriptSig, scriptPubKey, transaction, inputIndex, amount, witness, cache);
         if (ScriptTemplates.IsP2sh(scriptPubKey))
-            return VerifyP2sh(scriptSig, scriptPubKey, transaction, inputIndex, amount, witness);
+            return VerifyP2sh(scriptSig, scriptPubKey, transaction, inputIndex, amount, witness, cache);
         if (witness.Count > 0)
             return false;
-        return ScriptInterpreter.VerifyScript(scriptSig, scriptPubKey, transaction, inputIndex, amount, witness);
+        return ScriptInterpreter.VerifyScript(scriptSig, scriptPubKey, transaction, inputIndex, amount, witness, cache);
     }
 
     private static bool VerifyP2sh(
@@ -240,7 +251,8 @@ public static class ScriptVerify
         Tx.Transaction transaction,
         int inputIndex,
         long amount,
-        IReadOnlyList<byte[]> witness)
+        IReadOnlyList<byte[]> witness,
+        SighashCache? cache)
     {
         List<byte[]> pushes;
         try
@@ -257,16 +269,16 @@ public static class ScriptVerify
         if (!Hash160.Compute(redeemScript).SequenceEqual(scriptPubKey[2..22].ToArray()))
             return false;
         if (ScriptTemplates.IsP2wpkh(redeemScript))
-            return VerifyP2wpkhWitness(redeemScript, transaction, inputIndex, amount, witness);
+            return VerifyP2wpkhWitness(redeemScript, transaction, inputIndex, amount, witness, cache);
         if (ScriptTemplates.IsP2wsh(redeemScript))
-            return VerifyP2wshWitness(redeemScript[2..].ToArray(), transaction, inputIndex, amount, witness, 1);
+            return VerifyP2wshWitness(redeemScript[2..].ToArray(), transaction, inputIndex, amount, witness, 1, cache);
 
         var stack = new ScriptStack();
         for (var i = 0; i < pushes.Count - 1; i++)
             stack.PushItem(pushes[i]);
         try
         {
-            ScriptInterpreter.EvaluateScript(redeemScript, stack, transaction, inputIndex, redeemScript, amount, witness: false);
+            ScriptInterpreter.EvaluateScript(redeemScript, stack, transaction, inputIndex, redeemScript, amount, witness: false, cache);
         }
         catch (ScriptError)
         {
@@ -280,7 +292,8 @@ public static class ScriptVerify
         Tx.Transaction transaction,
         int inputIndex,
         long amount,
-        IReadOnlyList<byte[]> witness)
+        IReadOnlyList<byte[]> witness,
+        SighashCache? cache)
     {
         if (witness.Count != 2)
             return false;
@@ -289,7 +302,7 @@ public static class ScriptVerify
         stack.AddRange(witness.Select(w => w.ToArray()));
         try
         {
-            ScriptInterpreter.EvaluateScript(scriptCode, stack, transaction, inputIndex, scriptCode, amount, witness: true);
+            ScriptInterpreter.EvaluateScript(scriptCode, stack, transaction, inputIndex, scriptCode, amount, witness: true, cache);
         }
         catch (ScriptError)
         {
@@ -304,11 +317,12 @@ public static class ScriptVerify
         Tx.Transaction transaction,
         int inputIndex,
         long amount,
-        IReadOnlyList<byte[]> witness)
+        IReadOnlyList<byte[]> witness,
+        SighashCache? cache)
     {
         if (scriptSig.Length > 0)
             return false;
-        return VerifyP2wshWitness(scriptPubKey[2..].ToArray(), transaction, inputIndex, amount, witness, 1);
+        return VerifyP2wshWitness(scriptPubKey[2..].ToArray(), transaction, inputIndex, amount, witness, 1, cache);
     }
 
     private static bool VerifyP2wshWitness(
@@ -317,7 +331,8 @@ public static class ScriptVerify
         int inputIndex,
         long amount,
         IReadOnlyList<byte[]> witness,
-        int minWitnessItems)
+        int minWitnessItems,
+        SighashCache? cache)
     {
         if (witness.Count < minWitnessItems)
             return false;
@@ -331,7 +346,7 @@ public static class ScriptVerify
             stack.PushItem(witness[i].ToArray());
         try
         {
-            ScriptInterpreter.EvaluateScript(witnessScript, stack, transaction, inputIndex, witnessScript, amount, witness: true);
+            ScriptInterpreter.EvaluateScript(witnessScript, stack, transaction, inputIndex, witnessScript, amount, witness: true, cache);
         }
         catch (ScriptError)
         {
@@ -346,14 +361,15 @@ public static class ScriptVerify
         Tx.Transaction transaction,
         int inputIndex,
         IReadOnlyList<byte[]> witness,
-        IReadOnlyList<SpentPrevout>? spentPrevouts)
+        IReadOnlyList<SpentPrevout>? spentPrevouts,
+        SighashCache? cache)
     {
         if (scriptSig.Length > 0 || spentPrevouts is null)
             return false;
         if (witness.Count == 0)
             return false;
         if (witness.Count >= 2)
-            return VerifyTaprootScriptPath(scriptPubKey, transaction, inputIndex, witness, spentPrevouts);
+            return VerifyTaprootScriptPath(scriptPubKey, transaction, inputIndex, witness, spentPrevouts, cache);
 
         var sigBlob = witness[0];
         if (sigBlob.Length is not (64 or 65))
@@ -369,7 +385,7 @@ public static class ScriptVerify
         }
         try
         {
-            var message = TaprootSighash.KeyPathSignatureHash(transaction, inputIndex, spentPrevouts, hashType);
+            var message = TaprootSighash.KeyPathSignatureHash(transaction, inputIndex, spentPrevouts, hashType, cache);
             return Secp256k1.VerifySchnorrSignature(scriptPubKey[2..], message, sig64);
         }
         catch
@@ -383,7 +399,8 @@ public static class ScriptVerify
         Tx.Transaction transaction,
         int inputIndex,
         IReadOnlyList<byte[]> witness,
-        IReadOnlyList<SpentPrevout> spentPrevouts)
+        IReadOnlyList<SpentPrevout> spentPrevouts,
+        SighashCache? cache)
     {
         if (spentPrevouts.Count != transaction.Inputs.Count || witness.Count < 2)
             return false;
@@ -445,7 +462,7 @@ public static class ScriptVerify
         foreach (var item in stackItems)
             stack.PushItem(item);
         var budget = Tapscript.ValidationWeightOffset + serializedWitnessForWeight.Length;
-        Tapscript.Evaluate(scriptBytes, stack, transaction, inputIndex, leafHash, spentPrevouts, annex, ref budget);
+        Tapscript.Evaluate(scriptBytes, stack, transaction, inputIndex, leafHash, spentPrevouts, annex, ref budget, cache);
         return ScriptInterpreter.TerminalSuccessStrict(stack);
     }
 }

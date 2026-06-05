@@ -12,8 +12,14 @@ type TimingSummary struct {
 }
 
 type SlowBlock struct {
-	Height int   `json:"height"`
-	Millis int64 `json:"ms"`
+	Height            int            `json:"height"`
+	Millis            int64          `json:"ms"`
+	TxCount           int            `json:"tx_count,omitempty"`
+	VinCount          int            `json:"vin_count,omitempty"`
+	VoutCount         int            `json:"vout_count,omitempty"`
+	ScriptInputCount  int            `json:"script_input_count,omitempty"`
+	InputShapeCounts  map[string]int `json:"input_shape_counts,omitempty"`
+	OutputScriptTypes map[string]int `json:"output_script_types,omitempty"`
 }
 
 type timingCollector struct {
@@ -45,8 +51,10 @@ func (t *timingCollector) addMillis(stage string, millis int64) {
 	t.stageNanos[stage] += millis * int64(time.Millisecond)
 }
 
-func (t *timingCollector) recordBlock(height int, duration time.Duration) {
-	t.slowBlocks = append(t.slowBlocks, SlowBlock{Height: height, Millis: duration.Milliseconds()})
+func (t *timingCollector) recordBlock(height int, duration time.Duration, shape SlowBlock) {
+	shape.Height = height
+	shape.Millis = duration.Milliseconds()
+	t.slowBlocks = append(t.slowBlocks, shape)
 	sort.Slice(t.slowBlocks, func(i, j int) bool {
 		return t.slowBlocks[i].Millis > t.slowBlocks[j].Millis
 	})

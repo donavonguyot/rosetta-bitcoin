@@ -10,6 +10,7 @@ public record ChainstateMetadata(
     String status,
     int tipHeight,
     String tipHash,
+    long utxoCount,
     String schemaVersion,
     String updatedAt) {
 

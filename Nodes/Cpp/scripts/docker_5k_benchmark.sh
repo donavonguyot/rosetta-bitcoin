@@ -131,7 +131,7 @@ def parse_timing_line(line):
             + stages_us["utxo_apply"]
             + stages_us["commit"]
         )
-    return height, stages_us
+    return height, stages_us, pairs
 
 
 def parse_run_log(path):
@@ -154,7 +154,7 @@ def parse_run_log(path):
             parsed = parse_timing_line(stripped)
             if not parsed:
                 continue
-            height, stages_us = parsed
+            height, stages_us, pairs = parsed
             block_total_us = stages_us["block_connect_store_commit"]
             for stage, value in stages_us.items():
                 stage_totals_us[stage] = stage_totals_us.get(stage, 0) + value
@@ -167,6 +167,13 @@ def parse_run_log(path):
                     "script_verify_worker_cpu_ms": round(stages_us["script_verify_worker_cpu"] / 1000),
                     "utxo_apply_ms": round(stages_us["utxo_apply"] / 1000),
                     "commit_ms": round(stages_us["commit"] / 1000),
+                    "tx_count": as_int(pairs.get("tx_count")),
+                    "vin_count": as_int(pairs.get("vin_count")),
+                    "vout_count": as_int(pairs.get("vout_count")),
+                    "script_input_count": as_int(pairs.get("script_input_count")),
+                    "input_shape_counts": pairs.get("input_shape_counts", "none"),
+                    "spent_prevout_script_types": pairs.get("spent_prevout_script_types", "none"),
+                    "output_script_types": pairs.get("output_script_types", "none"),
                 }
             )
         elif stripped.startswith("cpbitnode_pipeline_timing "):
@@ -195,6 +202,11 @@ def parse_run_log(path):
                 "script_schnorr_verify",
                 "script_interpreter_eval",
                 "script_runner_wait",
+                "utxo_delete_prepare",
+                "utxo_put_prepare",
+                "undo_put_prepare",
+                "metadata_put_prepare",
+                "rocksdb_write",
             ]:
                 pipeline_totals_us[stage] = pipeline_totals_us.get(stage, 0) + as_int(pairs.get(stage))
             pipeline_blocks_fetched += as_int(pairs.get("blocks_fetched"))

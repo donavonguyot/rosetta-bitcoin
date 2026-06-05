@@ -50,6 +50,21 @@ void testRocksDbStoreMultiGetAndHeightIndex() {
     EXPECT_BYTES_EQ(loaded[2]->txid, b);
     EXPECT_BYTES_EQ(loaded[3]->txid, a);
 
+    std::vector<cpbitnode::db::Outpoint> largeRequest;
+    largeRequest.reserve(70);
+    for (int index = 0; index < 70; ++index) {
+        largeRequest.push_back(index % 3 == 0 ? cpbitnode::db::Outpoint{a, 0}
+                                               : cpbitnode::db::Outpoint{missing, index});
+    }
+    const auto largeLoaded = store->getUtxos(largeRequest);
+    EXPECT_EQ(static_cast<int>(largeLoaded.size()), 70);
+    EXPECT_TRUE(largeLoaded[0].has_value());
+    EXPECT_TRUE(!largeLoaded[1].has_value());
+    EXPECT_TRUE(!largeLoaded[2].has_value());
+    EXPECT_TRUE(largeLoaded[3].has_value());
+    EXPECT_BYTES_EQ(largeLoaded[0]->txid, a);
+    EXPECT_BYTES_EQ(largeLoaded[3]->txid, a);
+
     store->deleteUtxosCreatedAtHeight(6);
     EXPECT_EQ(store->utxoCount(), 2);
     store->deleteUtxosCreatedAtHeight(7);

@@ -20,6 +20,8 @@ import java.io.PrintStream;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Local Core header sync CLI (`make java-node-sync-local-core`). */
@@ -307,6 +309,26 @@ public final class SyncLocalCoreService {
             + summary.totalMillis("utxo_add_list_build")
             + " avg_utxo_add_list_build_ms="
             + summary.averageMillis("utxo_add_list_build")
+            + " total_utxo_delete_prepare_ms="
+            + summary.totalMillis("utxo_delete_prepare")
+            + " avg_utxo_delete_prepare_ms="
+            + summary.averageMillis("utxo_delete_prepare")
+            + " total_utxo_put_prepare_ms="
+            + summary.totalMillis("utxo_put_prepare")
+            + " avg_utxo_put_prepare_ms="
+            + summary.averageMillis("utxo_put_prepare")
+            + " total_undo_put_prepare_ms="
+            + summary.totalMillis("undo_put_prepare")
+            + " avg_undo_put_prepare_ms="
+            + summary.averageMillis("undo_put_prepare")
+            + " total_metadata_put_prepare_ms="
+            + summary.totalMillis("metadata_put_prepare")
+            + " avg_metadata_put_prepare_ms="
+            + summary.averageMillis("metadata_put_prepare")
+            + " total_rocksdb_write_ms="
+            + summary.totalMillis("rocksdb_write")
+            + " avg_rocksdb_write_ms="
+            + summary.averageMillis("rocksdb_write")
             + " total_utxo_add_batch_ms="
             + summary.totalMillis("utxo_add_batch")
             + " avg_utxo_add_batch_ms="
@@ -354,6 +376,20 @@ public final class SyncLocalCoreService {
               + block.blockSize()
               + " input_count="
               + block.inputCount()
+              + " tx_count="
+              + block.txCount()
+              + " vin_count="
+              + block.vinCount()
+              + " vout_count="
+              + block.voutCount()
+              + " script_input_count="
+              + block.scriptInputCount()
+              + " input_shape_counts="
+              + mapJson(block.inputShapeCounts())
+              + " spent_prevout_script_types="
+              + mapJson(block.spentPrevoutScriptTypes())
+              + " output_script_types="
+              + mapJson(block.outputScriptTypes())
               + " utxo_load_ms="
               + block.utxoLoadMillis()
               + " script_verify_ms="
@@ -394,6 +430,23 @@ public final class SyncLocalCoreService {
 
   private static String escapeJson(String value) {
     return value.replace("\\", "\\\\").replace("\"", "\\\"");
+  }
+
+  private static String mapJson(Map<String, Integer> values) {
+    StringBuilder json = new StringBuilder("{");
+    boolean first = true;
+    for (Map.Entry<String, Integer> entry : new TreeMap<>(values).entrySet()) {
+      if (!first) {
+        json.append(",");
+      }
+      json.append("\"")
+          .append(escapeJson(entry.getKey()))
+          .append("\":")
+          .append(entry.getValue());
+      first = false;
+    }
+    json.append("}");
+    return json.toString();
   }
 
   private static void removeShutdownHookQuietly(Thread hook) {

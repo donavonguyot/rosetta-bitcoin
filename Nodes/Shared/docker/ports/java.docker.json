@@ -18,6 +18,8 @@
   "volumes": {
     "data": "jbitnode_data",
     "proof": "jbitnode_proof_data",
+    "proof_50k": "jbitnode_50k_proof_data",
+    "proof_100k": "jbitnode_100k_proof_data",
     "supervisor": "jbitnode_sync_data"
   },
   "commands": {
@@ -28,6 +30,8 @@
     "docker_script_corpus": "cd Nodes/Java && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Java && make docker-java-native-crypto-proof",
     "docker_proof_10k": "cd Nodes/Java && make docker-java-supporting-10k-proof",
+    "docker_proof_50k": "cd Nodes/Java && make docker-java-supporting-50k-proof",
+    "docker_proof_100k": "cd Nodes/Java && make docker-java-primary-100k-proof",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Java && make docker-java-sync-supervisor",
     "docker_supervisor_status": "cd Nodes/Java && make docker-java-sync-status",

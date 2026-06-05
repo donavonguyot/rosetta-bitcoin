@@ -7,7 +7,7 @@ using CsBitNode.Util;
 
 namespace CsBitNode.Db;
 
-public sealed class NativeFileChainstateStore : IChainstateStore
+public sealed class NativeFileChainstateStore : IChainstateStore, IChainstateCommitTimingSource
 {
     public const string BackendName = "file";
     public const string SchemaVersion = "1";
@@ -44,6 +44,8 @@ public sealed class NativeFileChainstateStore : IChainstateStore
     }
 
     public ChainstateMetadata Metadata => _metadata;
+
+    public IReadOnlyDictionary<string, long> LastCommitTimingTicks { get; private set; } = new Dictionary<string, long>();
 
     public int BootstrapStartHeight(string chain) => Math.Max(GetValidatedHeight(chain), 0);
 
@@ -127,9 +129,23 @@ public sealed class NativeFileChainstateStore : IChainstateStore
 
     public ChainstateCommitResult CommitBlock(ChainstateBlockCommit commit)
     {
+        var commitStarted = System.Diagnostics.Stopwatch.StartNew();
+        var timings = new Dictionary<string, long>(StringComparer.Ordinal);
+        var stageStarted = System.Diagnostics.Stopwatch.StartNew();
         WriteJson(CommitJournalPath(), CommitJournal.FromCommit(commit));
+        stageStarted.Stop();
+        timings["metadata_put_prepare"] = stageStarted.ElapsedTicks;
+        stageStarted.Restart();
         ApplyCommit(commit);
+        stageStarted.Stop();
+        timings["rocksdb_write"] = stageStarted.ElapsedTicks;
         File.Delete(CommitJournalPath());
+        timings.TryAdd("utxo_delete_prepare", 0);
+        timings.TryAdd("utxo_put_prepare", 0);
+        timings.TryAdd("undo_put_prepare", 0);
+        commitStarted.Stop();
+        timings["commit"] = commitStarted.ElapsedTicks;
+        LastCommitTimingTicks = timings;
         return new ChainstateCommitResult(
             commit.Height,
             commit.BlockHashHex,

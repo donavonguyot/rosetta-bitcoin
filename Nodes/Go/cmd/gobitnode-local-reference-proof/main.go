@@ -66,6 +66,7 @@ func main() {
 		"benchmark_contract_version": 1,
 		"benchmark_kind":             benchmarkKind(*target, *byteSource),
 		"benchmark_lane":             benchmarkLane,
+		"telemetry_schema":           "benchmark.telemetry_tick.v1",
 		"utxo_accounting_policy":     "core_spendable_v1",
 		"byte_source":                byteSourceValue,
 		"resume_supported":           true,
@@ -113,6 +114,7 @@ func main() {
 		doc["sync_summary"] = syncSummary
 		doc["prefetch_depth"] = prefetchDepth()
 		doc["timing_summary"] = connectSummary.TimingSummary
+		doc["pipeline_timing_summary"] = connectSummary.TimingSummary
 	}
 	doc["connect_summary"] = connectSummary
 	if err != nil {
@@ -170,11 +172,12 @@ func main() {
 }
 
 type fetchedBlock struct {
-	height int
-	hash   string
-	raw    []byte
-	info   refsync.BlockInfo
-	err    error
+	height      int
+	hash        string
+	raw         []byte
+	info        refsync.BlockInfo
+	fetchMillis int64
+	err         error
 }
 
 func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string, progress int) (refsync.Summary, connect.Summary, error) {
@@ -216,6 +219,7 @@ func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string
 		}
 	}()
 	aggregate := connect.TimingSummary{StageTotalsMillis: map[string]int64{}}
+	telemetry := newTelemetryState(started)
 	var lastConnect connect.Summary
 	fetched := 0
 	for block := range blocks {
@@ -244,6 +248,21 @@ func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string
 		fetched++
 		if block.height%progress == 0 || block.height == target {
 			fmt.Printf("gobitnode-local-reference-proof pipeline height=%d hash=%s txs=%d utxos=%d\n", block.height, block.hash, block.info.TxCount, lastConnect.ChainstateUTXOs)
+			emitTelemetryTick(telemetry, telemetryTick{
+				Gate:            gateID(target),
+				BenchmarkLane:   supportingLane(target, "rpc_replay"),
+				TargetHeight:    target,
+				Height:          block.height,
+				Hash:            block.hash,
+				TxCount:         block.info.TxCount,
+				Phase:           "rpc_replay",
+				Utxos:           lastConnect.ChainstateUTXOs,
+				LastBlockMillis: lastConnect.TimingSummary.TotalMillis,
+				Connected:       fetched,
+				SyncStatus:      lastConnect.SyncStatus,
+				CurrentBlocker:  lastConnect.CurrentBlocker,
+				Timing:          aggregate,
+			})
 		}
 	}
 	aggregate.TotalMillis = time.Since(started).Milliseconds()
@@ -275,6 +294,7 @@ func runP2PPipeline(datadir string, target int, peer string, progress int) (refs
 		Prefetch: prefetchDepth(),
 	})
 	aggregate := connect.TimingSummary{StageTotalsMillis: map[string]int64{}}
+	telemetry := newTelemetryState(started)
 	var lastConnect connect.Summary
 	fetched := 0
 	for block := range blocks {
@@ -292,6 +312,7 @@ func runP2PPipeline(datadir string, target int, peer string, progress int) (refs
 		if err := store.PutMetadata(meta); err != nil {
 			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, err
 		}
+		aggregate.StageTotalsMillis["p2p_fetch"] += block.FetchMillis
 		aggregate.StageTotalsMillis["block_store"] += time.Since(storeStart).Milliseconds()
 		connectStart := time.Now()
 		lastConnect, err = connect.RunStore(store, connect.Options{Target: block.Height, Progress: progress, Quiet: true})
@@ -303,6 +324,21 @@ func runP2PPipeline(datadir string, target int, peer string, progress int) (refs
 		fetched++
 		if block.Height%progress == 0 || block.Height == target {
 			fmt.Printf("gobitnode-local-reference-proof p2p height=%d hash=%s txs=%d utxos=%d\n", block.Height, block.Hash, block.Info.TxCount, lastConnect.ChainstateUTXOs)
+			emitTelemetryTick(telemetry, telemetryTick{
+				Gate:            gateID(target),
+				BenchmarkLane:   supportingLane(target, "p2p"),
+				TargetHeight:    target,
+				Height:          block.Height,
+				Hash:            block.Hash,
+				TxCount:         block.Info.TxCount,
+				Phase:           "p2p_sync",
+				Utxos:           lastConnect.ChainstateUTXOs,
+				LastBlockMillis: lastConnect.TimingSummary.TotalMillis,
+				Connected:       fetched,
+				SyncStatus:      lastConnect.SyncStatus,
+				CurrentBlocker:  lastConnect.CurrentBlocker,
+				Timing:          aggregate,
+			})
 		}
 	}
 	aggregate.TotalMillis = time.Since(started).Milliseconds()
@@ -386,6 +422,111 @@ func mergeTiming(dst *connect.TimingSummary, src connect.TimingSummary) {
 	}
 }
 
+type telemetryState struct {
+	started     time.Time
+	lastHeight  int
+	lastElapsed time.Duration
+	hasLast     bool
+}
+
+type telemetryTick struct {
+	Gate            string
+	BenchmarkLane   string
+	TargetHeight    int
+	Height          int
+	Hash            string
+	TxCount         int
+	Phase           string
+	Utxos           int
+	LastBlockMillis int64
+	Connected       int
+	SyncStatus      string
+	CurrentBlocker  map[string]any
+	Timing          connect.TimingSummary
+}
+
+func newTelemetryState(started time.Time) *telemetryState {
+	return &telemetryState{started: started}
+}
+
+func emitTelemetryTick(state *telemetryState, tick telemetryTick) {
+	elapsed := time.Since(state.started)
+	heightDelta := tick.Height
+	elapsedDelta := elapsed
+	if state.hasLast {
+		heightDelta = tick.Height - state.lastHeight
+		elapsedDelta = elapsed - state.lastElapsed
+	}
+	state.lastHeight = tick.Height
+	state.lastElapsed = elapsed
+	state.hasLast = true
+	recentRate := float64(heightDelta) / maxDurationSeconds(elapsedDelta)
+	totalRate := float64(tick.Connected) / maxDurationSeconds(elapsed)
+	payload := map[string]any{
+		"schema":                        "benchmark.telemetry_tick.v1",
+		"port":                          "go",
+		"gate":                          tick.Gate,
+		"benchmark_lane":                tick.BenchmarkLane,
+		"target":                        targetLabel(tick.TargetHeight),
+		"target_height":                 tick.TargetHeight,
+		"height":                        tick.Height,
+		"percent":                       (float64(tick.Height) / float64(maxInt(1, tick.TargetHeight))) * 100.0,
+		"hash":                          tick.Hash,
+		"tx_count":                      tick.TxCount,
+		"elapsed_ms":                    elapsed.Milliseconds(),
+		"rate_recent_blocks_per_second": recentRate,
+		"rate_total_blocks_per_second":  totalRate,
+		"phase":                         tick.Phase,
+		"utxos":                         tick.Utxos,
+		"last_block_ms":                 tick.LastBlockMillis,
+		"slow_blocks":                   tick.Timing.SlowBlocks,
+		"current_blocker":               tick.CurrentBlocker,
+		"sync_status":                   tick.SyncStatus,
+		"timing_buckets_ms":             timingBuckets(tick.Timing),
+	}
+	raw, _ := json.Marshal(payload)
+	fmt.Printf("benchmark.telemetry_tick %s\n", raw)
+}
+
+func maxDurationSeconds(duration time.Duration) float64 {
+	seconds := duration.Seconds()
+	if seconds < 0.001 {
+		return 0.001
+	}
+	return seconds
+}
+
+func maxInt(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
+}
+
+func timingBuckets(timing connect.TimingSummary) map[string]int64 {
+	buckets := map[string]int64{}
+	for _, stage := range []string{
+		"p2p_fetch",
+		"block_parse_validate",
+		"utxo_load",
+		"prevout_batch_load",
+		"script_verify",
+		"utxo_apply",
+		"commit",
+		"block_connect_store_commit",
+		"prevout_multi_get_call",
+		"prevout_utxo_decode",
+		"prevout_legacy_fallback_get",
+		"script_verify_worker_cpu",
+	} {
+		buckets[stage] = timing.StageTotalsMillis[stage]
+	}
+	if buckets["utxo_load"] == 0 && buckets["prevout_batch_load"] > 0 {
+		buckets["utxo_load"] = buckets["prevout_batch_load"]
+	}
+	return buckets
+}
+
 func prefetchDepth() int {
 	value := 4
 	if raw := os.Getenv("GOBITNODE_BLOCK_PREFETCH_DEPTH"); raw != "" {
@@ -453,6 +594,12 @@ func benchmarkKind(target int, byteSource string) string {
 }
 
 func supportingLane(target int, lane string) string {
+	if target == 100000 {
+		if lane == "p2p" {
+			return "primary_100k_p2p"
+		}
+		return "primary_100k_rpc_replay"
+	}
 	label := targetLabel(target)
 	if label == "" {
 		if lane == "p2p" {
@@ -464,6 +611,21 @@ func supportingLane(target int, lane string) string {
 		return "supporting_" + label + "_p2p"
 	}
 	return "supporting_" + label + "_rpc_replay"
+}
+
+func gateID(target int) string {
+	switch target {
+	case 5000:
+		return "supporting_5k"
+	case 10000:
+		return "supporting_10k"
+	case 50000:
+		return "supporting_50k"
+	case 100000:
+		return "primary_100k"
+	default:
+		return "diagnostic"
+	}
 }
 
 func fail(doc map[string]any, message string) {
