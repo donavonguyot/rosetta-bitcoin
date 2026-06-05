@@ -93,6 +93,7 @@ defmodule Exbitnode.Db.ChainstateSessionTest do
   alias Exbitnode.Chain.Genesis
   alias Exbitnode.Db.ChainstateSession
   alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
+  alias Exbitnode.Messages.BlockHeaderCodec
 
   setup do
     path = Path.join(System.tmp_dir!(), "exbitnode_test_#{:rand.uniform(1_000_000)}")
@@ -141,6 +142,45 @@ defmodule Exbitnode.Db.ChainstateSessionTest do
     assert ChainstateTracker.header_count(restarted, "testnet4") == 1
     assert ChainstateTracker.get_header_hash(restarted, "testnet4", 0) == Genesis.testnet4_hash()
     assert ChainstateSession.metadata(restarted)["backend_name"] == "rocksdb"
+  end
+
+  test "batch header commit maintains count, hash index, and sync state through restart" do
+    path = Path.join(System.tmp_dir!(), "exbitnode_header_batch_#{:rand.uniform(1_000_000)}")
+    on_exit(fn -> File.rm_rf(path) end)
+
+    {:ok, conn} = ChainstateSession.open_native(path, "testnet4")
+
+    ChainstateTracker.ensure_genesis(
+      conn,
+      "testnet4",
+      Genesis.testnet4(),
+      Genesis.testnet4_hash()
+    )
+
+    header = %{Genesis.testnet4() | nonce: 1}
+    hash = BlockHeaderCodec.block_hash_hex(header)
+    serialized = header |> BlockHeaderCodec.serialize() |> Exbitnode.Util.Hex.encode()
+
+    result =
+      ChainstateTracker.commit_headers(
+        conn,
+        "testnet4",
+        [%{height: 1, block_hash: hash, serialized_hex: serialized}],
+        %{best_height: 1, best_hash: hash, sync_status: "headers_syncing"}
+      )
+
+    assert result.stored == 1
+    assert ChainstateTracker.header_count(conn, "testnet4") == 2
+    assert ChainstateTracker.get_header_hash(conn, "testnet4", 1) == hash
+    assert ChainstateTracker.get_sync_state(conn, "testnet4").best_height == 1
+
+    ChainstateSession.close(conn)
+
+    {:ok, restarted} = ChainstateSession.open_native(path, "testnet4")
+    on_exit(fn -> ChainstateSession.close(restarted) end)
+
+    assert ChainstateTracker.header_count(restarted, "testnet4") == 2
+    assert ChainstateTracker.get_header_hash(restarted, "testnet4", 1) == hash
   end
 
   test "forbidden local DB artifacts fail closed" do
@@ -726,15 +766,18 @@ defmodule Exbitnode.Consensus.ScriptVerifyRunnerTest do
     old_parallel = System.get_env("PAR_SCRIPT_VERIFY")
     old_min = System.get_env("PAR_SCRIPT_MIN_INPUTS")
     old_threads = System.get_env("PAR_SCRIPT_THREADS")
+    old_timeout = System.get_env("SCRIPT_VERIFY_TIMEOUT_MS")
 
     System.put_env("PAR_SCRIPT_VERIFY", "1")
     System.put_env("PAR_SCRIPT_MIN_INPUTS", "1")
     System.put_env("PAR_SCRIPT_THREADS", "2")
+    System.put_env("SCRIPT_VERIFY_TIMEOUT_MS", "300000")
 
     on_exit(fn ->
       restore_env("PAR_SCRIPT_VERIFY", old_parallel)
       restore_env("PAR_SCRIPT_MIN_INPUTS", old_min)
       restore_env("PAR_SCRIPT_THREADS", old_threads)
+      restore_env("SCRIPT_VERIFY_TIMEOUT_MS", old_timeout)
     end)
 
     :ok
@@ -748,6 +791,17 @@ defmodule Exbitnode.Consensus.ScriptVerifyRunnerTest do
         %{input_index: 0} -> raise "input zero failed"
         %{input_index: 1} -> raise "input one failed"
         _job -> :ok
+      end)
+    end
+  end
+
+  test "parallel verification timeout reports task exit instead of spinning forever" do
+    System.put_env("SCRIPT_VERIFY_TIMEOUT_MS", "1")
+
+    assert_raise RuntimeError, ~r/script verification task exited/, fn ->
+      ScriptVerifyRunner.run([%{input_index: 0}], fn _job ->
+        Process.sleep(50)
+        :ok
       end)
     end
   end

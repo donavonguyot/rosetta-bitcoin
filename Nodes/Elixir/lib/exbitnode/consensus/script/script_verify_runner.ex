@@ -23,11 +23,16 @@ defmodule Exbitnode.Consensus.Script.ScriptVerifyRunner do
       end,
       max_concurrency: threads(),
       ordered: false,
-      timeout: :infinity
+      timeout: timeout_ms(),
+      on_timeout: :kill_task
     )
     |> Enum.map(fn
-      {:ok, result} -> result
-      {:exit, reason} -> {:error, -1, RuntimeError.exception("script verification task exited: #{inspect(reason)}")}
+      {:ok, result} ->
+        result
+
+      {:exit, reason} ->
+        {:error, -1,
+         RuntimeError.exception("script verification task exited: #{inspect(reason)}")}
     end)
     |> Enum.filter(&match?({:error, _input_index, _error}, &1))
     |> Enum.sort_by(fn {:error, input_index, _error} -> input_index end)
@@ -54,6 +59,11 @@ defmodule Exbitnode.Consensus.Script.ScriptVerifyRunner do
   defp min_inputs do
     System.get_env("PAR_SCRIPT_MIN_INPUTS")
     |> parse_positive(2)
+  end
+
+  defp timeout_ms do
+    System.get_env("SCRIPT_VERIFY_TIMEOUT_MS")
+    |> parse_positive(300_000)
   end
 
   defp parse_positive(nil, default), do: default

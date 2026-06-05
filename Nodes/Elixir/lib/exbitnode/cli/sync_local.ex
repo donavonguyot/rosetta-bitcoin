@@ -48,6 +48,7 @@ defmodule Exbitnode.CLI.SyncLocal do
 
       try do
         ChainstateTracker.repair_sync_state_from_headers(conn, chain.name)
+
         RuntimeStatus.write_store_snapshot(conn, data_dir, chain.name, %{
           peer_source: "#{host}:#{port}",
           sync_status: "starting"
@@ -79,7 +80,14 @@ defmodule Exbitnode.CLI.SyncLocal do
                     blocker_message: nil
                   }
                 else
-                  peer_ctx = %{host: host, port: port, chain: chain, conn: conn, data_dir: data_dir}
+                  peer_ctx = %{
+                    host: host,
+                    port: port,
+                    chain: chain,
+                    conn: conn,
+                    data_dir: data_dir
+                  }
+
                   BlockSync.sync_from_peer(peer, chain, conn, block_store, max_blocks, peer_ctx)
                 end
 
@@ -103,7 +111,8 @@ defmodule Exbitnode.CLI.SyncLocal do
                 peer_source: "#{host}:#{port}",
                 sync_status: block_result.sync_status,
                 current_blocker: block_result.blocker_message,
-                last_error: nil
+                last_error: nil,
+                extra: %{sync_timing: Map.get(block_result, :timing, %{})}
               })
 
               IO.puts("  validated_height=#{validated_height}")

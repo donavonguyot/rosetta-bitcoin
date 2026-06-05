@@ -87,6 +87,12 @@ defmodule Exbitnode.CLI.NodeStatus do
       stored_block = ChainstateTracker.max_stored_block(conn, chain)
       metadata = ChainstateSession.metadata(conn)
 
+      snapshot =
+        case RuntimeStatus.read_snapshot(data_dir) do
+          {:ok, value} -> value
+          {:error, _reason} -> %{}
+        end
+
       runtime_status =
         resolve_runtime_status(
           lock_busy,
@@ -121,6 +127,12 @@ defmodule Exbitnode.CLI.NodeStatus do
         native_crypto_backend: Exbitnode.Consensus.Script.Secp256k1.selected_backend_name(),
         native_crypto_available: Exbitnode.Consensus.Script.Secp256k1.native_backend_available?(),
         taproot_tweak_backend: Exbitnode.Consensus.Script.Secp256k1.taproot_tweak_backend_name(),
+        block_prefetch_depth: env_int("BLOCK_PREFETCH_DEPTH", 0),
+        snapshot_throttle_blocks: env_int("SYNC_SNAPSHOT_BLOCKS", 0),
+        snapshot_throttle_sec: env_int("SYNC_SNAPSHOT_SEC", 5),
+        script_verify_timeout_ms: env_int("SCRIPT_VERIFY_TIMEOUT_MS", 300_000),
+        rocksdb_disable_wal: metadata["rocksdb_disable_wal"] || "false",
+        sync_timing: Map.get(snapshot, "sync_timing", %{}),
         block_gap_count:
           max(((sync_state && sync_state.best_height) || 0) - max(validated_height, 0), 0),
         lock_status: if(lock_busy, do: "held", else: "free"),
@@ -162,6 +174,19 @@ defmodule Exbitnode.CLI.NodeStatus do
       block_count: Map.get(snapshot, "block_count", 0),
       utxo_count: Map.get(snapshot, "utxo_count", 0),
       chainstate_utxo_count: Map.get(snapshot, "utxo_count", 0),
+      block_prefetch_depth:
+        Map.get(snapshot, "block_prefetch_depth", env_int("BLOCK_PREFETCH_DEPTH", 0)),
+      snapshot_throttle_blocks:
+        Map.get(snapshot, "snapshot_throttle_blocks", env_int("SYNC_SNAPSHOT_BLOCKS", 0)),
+      snapshot_throttle_sec:
+        Map.get(snapshot, "snapshot_throttle_sec", env_int("SYNC_SNAPSHOT_SEC", 5)),
+      script_verify_timeout_ms:
+        Map.get(
+          snapshot,
+          "script_verify_timeout_ms",
+          env_int("SCRIPT_VERIFY_TIMEOUT_MS", 300_000)
+        ),
+      sync_timing: Map.get(snapshot, "sync_timing", %{}),
       block_gap_count:
         max(
           Map.get(snapshot, "header_height", 0) -
@@ -218,6 +243,10 @@ defmodule Exbitnode.CLI.NodeStatus do
       native_crypto_backend: Exbitnode.Consensus.Script.Secp256k1.selected_backend_name(),
       native_crypto_available: Exbitnode.Consensus.Script.Secp256k1.native_backend_available?(),
       taproot_tweak_backend: Exbitnode.Consensus.Script.Secp256k1.taproot_tweak_backend_name(),
+      block_prefetch_depth: env_int("BLOCK_PREFETCH_DEPTH", 0),
+      snapshot_throttle_blocks: env_int("SYNC_SNAPSHOT_BLOCKS", 0),
+      snapshot_throttle_sec: env_int("SYNC_SNAPSHOT_SEC", 5),
+      script_verify_timeout_ms: env_int("SCRIPT_VERIFY_TIMEOUT_MS", 300_000),
       current_blocker: nil,
       last_error: nil,
       peer_source: peer_source,
@@ -258,5 +287,12 @@ defmodule Exbitnode.CLI.NodeStatus do
 
   defp runtime_surface do
     System.get_env("RUNTIME_SURFACE", "host")
+  end
+
+  defp env_int(name, default) do
+    case Integer.parse(System.get_env(name) || "") do
+      {value, ""} when value >= 0 -> value
+      _ -> default
+    end
   end
 end

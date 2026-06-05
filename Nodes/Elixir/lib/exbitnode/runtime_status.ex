@@ -53,8 +53,14 @@ defmodule Exbitnode.RuntimeStatus do
         stored_block_hash: (stored_block && stored_block.block_hash) || "",
         block_count: ChainstateTracker.block_count(store, chain),
         utxo_count: ChainstateTracker.utxo_count(store, chain),
-        sync_status: Map.get(fields, :sync_status, (sync_state && sync_state.sync_status) || "starting"),
-        current_blocker: Map.get(fields, :current_blocker, ChainstateTracker.latest_blocker(store, chain)),
+        block_prefetch_depth: env_int("BLOCK_PREFETCH_DEPTH", 0),
+        snapshot_throttle_blocks: env_int("SYNC_SNAPSHOT_BLOCKS", 0),
+        snapshot_throttle_sec: env_int("SYNC_SNAPSHOT_SEC", 5),
+        script_verify_timeout_ms: env_int("SCRIPT_VERIFY_TIMEOUT_MS", 300_000),
+        sync_status:
+          Map.get(fields, :sync_status, (sync_state && sync_state.sync_status) || "starting"),
+        current_blocker:
+          Map.get(fields, :current_blocker, ChainstateTracker.latest_blocker(store, chain)),
         last_error: Map.get(fields, :last_error, ChainstateTracker.latest_error(store))
       }
       |> Map.merge(Map.get(fields, :extra, %{}))
@@ -76,6 +82,10 @@ defmodule Exbitnode.RuntimeStatus do
       "stored_block_hash" => "",
       "block_count" => 0,
       "utxo_count" => 0,
+      "block_prefetch_depth" => env_int("BLOCK_PREFETCH_DEPTH", 0),
+      "snapshot_throttle_blocks" => env_int("SYNC_SNAPSHOT_BLOCKS", 0),
+      "snapshot_throttle_sec" => env_int("SYNC_SNAPSHOT_SEC", 5),
+      "script_verify_timeout_ms" => env_int("SCRIPT_VERIFY_TIMEOUT_MS", 300_000),
       "sync_status" => "running",
       "current_blocker" => nil,
       "last_error" => nil,
@@ -129,5 +139,12 @@ defmodule Exbitnode.RuntimeStatus do
 
   defp runtime_surface do
     System.get_env("RUNTIME_SURFACE", "host")
+  end
+
+  defp env_int(name, default) do
+    case Integer.parse(System.get_env(name) || "") do
+      {value, ""} when value >= 0 -> value
+      _ -> default
+    end
   end
 end

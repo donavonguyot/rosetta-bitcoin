@@ -29,10 +29,16 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
         payload,
         expected_prev_internal,
         expected_hash_internal,
-        stored \\ nil
+        stored \\ nil,
+        opts \\ []
       ) do
     connect_started_at = System.monotonic_time(:microsecond)
-    validated = ChainstateTracker.get_validated_height(conn, chain)
+
+    validated =
+      case Keyword.fetch(opts, :expected_validated_height) do
+        {:ok, height} -> height
+        :error -> ChainstateTracker.get_validated_height(conn, chain)
+      end
 
     if height != validated + 1 do
       raise ConnectBlockError,
@@ -174,22 +180,46 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
     do: byte_size(script_pubkey) > 0 and :binary.at(script_pubkey, 0) != 0x6A
 
   defp preload_external_prevouts(conn, chain, block) do
+    txids = Enum.map(block.transactions, &Merkle.transaction_txid/1)
+    same_block_outputs = same_block_outputs(block, txids)
+
     outpoints =
       block.transactions
       |> Enum.reject(&Transaction.coinbase?/1)
       |> Enum.flat_map(fn tx ->
         Enum.map(tx.inputs, &BlockUtxoView.outpoint_tuple(&1.previous_output))
       end)
+      |> Enum.reject(&MapSet.member?(same_block_outputs, &1))
       |> Enum.uniq()
 
     conn
     |> ChainstateTracker.get_utxos(chain, outpoints)
     |> Enum.zip(outpoints)
     |> Enum.flat_map(fn
-      {nil, _outpoint} -> []
-      {utxo, outpoint} -> [{BlockUtxoView.lookup_key(outpoint), utxo}]
+      {nil, _outpoint} ->
+        []
+
+      {utxo, outpoint} ->
+        [{BlockUtxoView.outpoint_key(outpoint), BlockUtxoView.normalize_utxo(utxo)}]
     end)
     |> Map.new()
+  end
+
+  defp same_block_outputs(block, txids) do
+    block.transactions
+    |> Enum.zip(txids)
+    |> Enum.flat_map(fn {tx, txid} ->
+      tx.outputs
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {output, vout} ->
+        if spendable_output?(output.script_pubkey) do
+          [{txid |> Hex.reverse() |> Hex.encode(), vout}]
+        else
+          []
+        end
+      end)
+    end)
+    |> MapSet.new()
   end
 
   defp default_stored(payload) do
@@ -223,7 +253,7 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
 
     spent_prevouts =
       Enum.map(utxo_infos, fn utxo ->
-        {utxo.value_sats, Hex.decode(utxo.script_pubkey_hex)}
+        {utxo.value_sats, BlockUtxoView.script_pubkey(utxo)}
       end)
 
     jobs =
@@ -273,7 +303,7 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
          block_hash_hex: block_hash_hex,
          txid_hex: txid_hex
        }) do
-    script_pubkey = Hex.decode(utxo.script_pubkey_hex)
+    script_pubkey = BlockUtxoView.script_pubkey(utxo)
 
     try do
       :ok =
@@ -372,8 +402,23 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
     "#{hash |> Hex.reverse() |> Hex.encode()}:#{index}"
   end
 
+  def outpoint_key({txid, vout}), do: {txid, vout}
+  def outpoint_key(%OutPoint{} = outpoint), do: outpoint |> outpoint_tuple() |> outpoint_key()
+
+  def normalize_utxo(%{script_pubkey: script_pubkey} = utxo) when is_binary(script_pubkey),
+    do: utxo
+
+  def normalize_utxo(%{script_pubkey_hex: script_pubkey_hex} = utxo) do
+    Map.put(utxo, :script_pubkey, Hex.decode(script_pubkey_hex))
+  end
+
+  def script_pubkey(%{script_pubkey: script_pubkey}) when is_binary(script_pubkey),
+    do: script_pubkey
+
+  def script_pubkey(%{script_pubkey_hex: script_pubkey_hex}), do: Hex.decode(script_pubkey_hex)
+
   def get(%__MODULE__{} = view, %OutPoint{} = outpoint) do
-    key = lookup_key(outpoint)
+    key = outpoint_key(outpoint)
 
     cond do
       MapSet.member?(view.spent, key) ->
@@ -389,7 +434,7 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
 
   def create(%__MODULE__{} = view, txid_internal, vout, value, script_pubkey, coinbase?) do
     txid_hex = txid_internal |> Hex.reverse() |> Hex.encode()
-    key = "#{txid_hex}:#{vout}"
+    key = {txid_hex, vout}
 
     utxo = %{
       txid: txid_hex,
@@ -397,6 +442,7 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
       height: view.height,
       value_sats: value,
       script_pubkey_hex: Hex.encode(script_pubkey),
+      script_pubkey: script_pubkey,
       coinbase: coinbase?
     }
 
@@ -404,11 +450,12 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
   end
 
   def spend(%__MODULE__{} = view, %OutPoint{} = outpoint) do
-    key = lookup_key(outpoint)
+    key = outpoint_key(outpoint)
+    display_key = lookup_key(outpoint)
     utxo = get(view, outpoint)
 
     if utxo == nil do
-      raise ConnectBlockError, "missing UTXO to spend #{key}"
+      raise ConnectBlockError, "missing UTXO to spend #{display_key}"
     end
 
     external_undo =
@@ -448,10 +495,7 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
 
   def external_spent_outpoints(%__MODULE__{} = view) do
     view.external_spent
-    |> Enum.map(fn key ->
-      [txid, vout] = String.split(key, ":", parts: 2)
-      {txid, String.to_integer(vout)}
-    end)
+    |> Enum.map(fn {txid, vout} -> {txid, vout} end)
     |> Enum.sort()
   end
 

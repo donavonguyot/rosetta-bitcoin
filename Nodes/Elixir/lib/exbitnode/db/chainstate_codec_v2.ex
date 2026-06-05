@@ -9,6 +9,7 @@ defmodule Exbitnode.Db.ChainstateCodecV2 do
   @metadata_prefix 0x6D
   @block_index_prefix 0x62
   @header_prefix 0x68
+  @header_hash_prefix 0x48
   @event_prefix 0x65
   @blocker_prefix 0x78
   @sync_state_prefix 0x73
@@ -29,6 +30,10 @@ defmodule Exbitnode.Db.ChainstateCodecV2 do
     do: <<@block_index_prefix>> <> chain_key(chain) <> u32(height)
 
   def header_key(chain, height), do: <<@header_prefix>> <> chain_key(chain) <> u32(height)
+
+  def header_hash_key(chain, height),
+    do: <<@header_hash_prefix>> <> chain_key(chain) <> u32(height)
+
   def event_key(id), do: <<@event_prefix, id::unsigned-big-64>>
   def blocker_key(chain), do: <<@blocker_prefix>> <> chain_key(chain)
 
@@ -36,6 +41,7 @@ defmodule Exbitnode.Db.ChainstateCodecV2 do
   def undo_prefix(chain), do: <<@undo_prefix>> <> chain_key(chain)
   def block_index_prefix(chain), do: <<@block_index_prefix>> <> chain_key(chain)
   def header_prefix(chain), do: <<@header_prefix>> <> chain_key(chain)
+  def header_hash_prefix(chain), do: <<@header_hash_prefix>> <> chain_key(chain)
   def event_prefix, do: <<@event_prefix>>
   def peer_prefix, do: <<@peer_prefix>>
 

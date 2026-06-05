@@ -18,6 +18,7 @@ defmodule Exbitnode.Sync.BlockSync do
   def sync_from_peer(peer_pid, chain, conn, block_store, max_blocks, peer_ctx \\ nil)
       when is_pid(peer_pid) do
     reset_timing()
+    cursor = initial_cursor(conn, chain.name)
 
     do_sync(
       peer_pid,
@@ -31,7 +32,9 @@ defmodule Exbitnode.Sync.BlockSync do
       "blocks_syncing",
       peer_ctx,
       0,
-      BlockPrefetcher.new(block_prefetch_depth())
+      BlockPrefetcher.new(block_prefetch_depth()),
+      cursor,
+      new_snapshot_gate(cursor.validated_height)
     )
   end
 
@@ -47,13 +50,15 @@ defmodule Exbitnode.Sync.BlockSync do
          sync_status,
          peer_ctx,
          reconnects,
-         prefetcher
+         prefetcher,
+         cursor,
+         snapshot_gate
        ) do
     if max_blocks > 0 and connected >= max_blocks do
       BlockPrefetcher.cancel_all(prefetcher)
       finish(conn, chain.name, downloaded, connected, blocker, sync_status)
     else
-      next_height = ChainstateTracker.get_validated_height(conn, chain.name) + 1
+      next_height = cursor.validated_height + 1
 
       header_hash_hex = ChainstateTracker.get_header_hash(conn, chain.name, next_height)
 
@@ -69,7 +74,7 @@ defmodule Exbitnode.Sync.BlockSync do
           finish(conn, chain.name, downloaded, connected, blocker, "failed")
 
         true ->
-          expected_prev_internal = prev_internal(conn, chain.name, next_height)
+          expected_prev_internal = prev_internal(conn, chain.name, next_height, cursor)
           block_hash_internal = Hex.reverse(Hex.decode(header_hash_hex))
           prefetcher = BlockPrefetcher.ensure(prefetcher, peer_pid, chain.name, conn, next_height)
 
@@ -101,11 +106,26 @@ defmodule Exbitnode.Sync.BlockSync do
                     payload,
                     expected_prev_internal,
                     block_hash_internal,
-                    stored
+                    stored,
+                    expected_validated_height: cursor.validated_height
                   )
 
                 merge_connector_timing(connect_result)
-                write_progress_snapshot(conn, chain.name, peer_ctx, "blocks_syncing")
+
+                cursor = %{
+                  validated_height: connect_result.height,
+                  validated_hash: connect_result.block_hash_hex
+                }
+
+                snapshot_gate =
+                  maybe_write_progress_snapshot(
+                    snapshot_gate,
+                    conn,
+                    chain.name,
+                    peer_ctx,
+                    "blocks_syncing",
+                    cursor.validated_height
+                  )
 
                 do_sync(
                   peer_pid,
@@ -119,7 +139,9 @@ defmodule Exbitnode.Sync.BlockSync do
                   "blocks_syncing",
                   peer_ctx,
                   reconnects,
-                  prefetcher
+                  prefetcher,
+                  cursor,
+                  snapshot_gate
                 )
               rescue
                 e in ValidationBlocker ->
@@ -271,10 +293,29 @@ defmodule Exbitnode.Sync.BlockSync do
   end
 
   defp block_prefetch_depth do
-    case Integer.parse(System.get_env("BLOCK_PREFETCH_DEPTH") || "4") do
+    case Integer.parse(System.get_env("BLOCK_PREFETCH_DEPTH") || "0") do
       {depth, ""} when depth >= 0 -> depth
-      _ -> 4
+      _ -> 0
     end
+  end
+
+  defp initial_cursor(conn, chain) do
+    validated_height = ChainstateTracker.get_validated_height(conn, chain)
+
+    %{
+      validated_height: validated_height,
+      validated_hash:
+        if(validated_height >= 0, do: ChainstateTracker.get_validated_hash(conn, chain), else: "")
+    }
+  end
+
+  defp new_snapshot_gate(validated_height) do
+    %{
+      last_height: validated_height,
+      last_at_ms: System.monotonic_time(:millisecond),
+      blocks: snapshot_blocks(),
+      interval_ms: snapshot_interval_ms()
+    }
   end
 
   defp finish(
@@ -329,19 +370,60 @@ defmodule Exbitnode.Sync.BlockSync do
         peer_source: peer_source,
         sync_status: sync_status,
         current_blocker: blocker,
-        last_error: last_error
+        last_error: last_error,
+        extra: %{
+          snapshot_throttle_blocks: snapshot_blocks(),
+          snapshot_throttle_sec: snapshot_interval_sec()
+        }
       })
     end
   end
 
-  defp prev_internal(conn, chain, next_height) do
+  defp maybe_write_progress_snapshot(gate, conn, chain, peer_ctx, sync_status, height) do
+    now = System.monotonic_time(:millisecond)
+    block_due? = gate.blocks > 0 and height - gate.last_height >= gate.blocks
+    time_due? = gate.interval_ms > 0 and now - gate.last_at_ms >= gate.interval_ms
+
+    if block_due? or time_due? do
+      write_progress_snapshot(conn, chain, peer_ctx, sync_status)
+      %{gate | last_height: height, last_at_ms: now}
+    else
+      gate
+    end
+  end
+
+  defp prev_internal(conn, chain, next_height, cursor) do
     if next_height == 0 do
       :binary.copy(<<0>>, 32)
     else
-      prev_hash_hex = ChainstateTracker.get_header_hash(conn, chain, next_height - 1)
+      prev_hash_hex =
+        cond do
+          cursor.validated_height == next_height - 1 and cursor.validated_hash != "" ->
+            cursor.validated_hash
+
+          true ->
+            ChainstateTracker.get_header_hash(conn, chain, next_height - 1)
+        end
+
       Hex.reverse(Hex.decode(prev_hash_hex))
     end
   end
+
+  defp snapshot_blocks do
+    case Integer.parse(System.get_env("SYNC_SNAPSHOT_BLOCKS") || "0") do
+      {value, ""} when value >= 0 -> value
+      _ -> 0
+    end
+  end
+
+  defp snapshot_interval_sec do
+    case Integer.parse(System.get_env("SYNC_SNAPSHOT_SEC") || "5") do
+      {value, ""} when value >= 0 -> value
+      _ -> 5
+    end
+  end
+
+  defp snapshot_interval_ms, do: snapshot_interval_sec() * 1000
 
   defp reset_timing do
     if timing_enabled?() do

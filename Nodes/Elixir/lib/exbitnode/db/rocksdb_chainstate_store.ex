@@ -29,6 +29,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
     "updated_at",
     "tip_height",
     "tip_hash",
+    "header_count",
     "block_count",
     "utxo_count",
     "stored_block_height",
@@ -74,11 +75,20 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
         put_meta_op("network", chain),
         put_meta_op("generation_id", generation_id),
         put_meta_op("status", "usable"),
-        put_meta_op("rocksdb_block_cache_bytes", env_value("ROCKSDB_BLOCK_CACHE_BYTES", "134217728")),
-        put_meta_op("rocksdb_write_buffer_bytes", env_value("ROCKSDB_WRITE_BUFFER_BYTES", "134217728")),
+        put_meta_op(
+          "rocksdb_block_cache_bytes",
+          env_value("ROCKSDB_BLOCK_CACHE_BYTES", "134217728")
+        ),
+        put_meta_op(
+          "rocksdb_write_buffer_bytes",
+          env_value("ROCKSDB_WRITE_BUFFER_BYTES", "134217728")
+        ),
         put_meta_op("rocksdb_max_write_buffers", env_value("ROCKSDB_MAX_WRITE_BUFFERS", "4")),
         put_meta_op("rocksdb_max_background_jobs", env_value("ROCKSDB_MAX_BACKGROUND_JOBS", "4")),
-        put_meta_op("rocksdb_disable_wal", if(env_flag?("ROCKSDB_DISABLE_WAL"), do: "true", else: "false")),
+        put_meta_op(
+          "rocksdb_disable_wal",
+          if(env_flag?("ROCKSDB_DISABLE_WAL"), do: "true", else: "false")
+        ),
         put_meta_op("created_at", created_at),
         put_meta_op("updated_at", now)
       ])
@@ -103,7 +113,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
   def get_meta(%__MODULE__{} = store, key) do
     case RocksDb.get(store.db, ChainstateCodecV2.metadata_key(key)) do
       {:ok, value} -> value
-      :nil -> nil
+      nil -> nil
       {:error, reason} -> raise "rocksdb metadata read failed: #{reason}"
     end
   end
@@ -117,7 +127,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
   def get_validated_tip(%__MODULE__{} = store, chain) do
     case RocksDb.get(store.db, ChainstateCodecV2.tip_key(chain)) do
       {:ok, value} -> ChainstateCodecV2.decode_tip(value)
-      :nil -> %{height: -1, block_hash: ""}
+      nil -> %{height: -1, block_hash: ""}
       {:error, reason} -> raise "rocksdb tip read failed: #{reason}"
     end
   end
@@ -133,7 +143,8 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
         ]
       else
         [
-          {:put, ChainstateCodecV2.tip_key(chain), ChainstateCodecV2.encode_tip(height, block_hash)},
+          {:put, ChainstateCodecV2.tip_key(chain),
+           ChainstateCodecV2.encode_tip(height, block_hash)},
           put_meta_op("tip_height", Integer.to_string(height)),
           put_meta_op("tip_hash", block_hash)
         ]
@@ -146,7 +157,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
   def get_sync_state(%__MODULE__{} = store, chain) do
     case RocksDb.get(store.db, ChainstateCodecV2.sync_state_key(chain)) do
       {:ok, value} -> decode_json_atom_map(value)
-      :nil -> nil
+      nil -> nil
       {:error, reason} -> raise "rocksdb sync_state read failed: #{reason}"
     end
   end
@@ -163,12 +174,16 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
       updated_at: utc_now_iso()
     }
 
-    write_batch(store, touch_ops([{:put, ChainstateCodecV2.sync_state_key(chain), Jason.encode!(value)}]))
+    write_batch(
+      store,
+      touch_ops([{:put, ChainstateCodecV2.sync_state_key(chain), Jason.encode!(value)}])
+    )
   end
 
   @impl true
-  def insert_header(%__MODULE__{} = store, chain, height, _block_hash, _prev_hash, serialized_hex) do
+  def insert_header(%__MODULE__{} = store, chain, height, block_hash, _prev_hash, serialized_hex) do
     key = ChainstateCodecV2.header_key(chain, height)
+    hash_key = ChainstateCodecV2.header_hash_key(chain, height)
 
     case RocksDb.get(store.db, key) do
       {:ok, _} when serialized_hex == "" ->
@@ -176,16 +191,33 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
 
       {:ok, _} ->
         serialized = Hex.decode(serialized_hex)
-        :ok = write_batch(store, touch_ops([{:put, key, ChainstateCodecV2.encode_header(serialized)}]))
+
+        :ok =
+          write_batch(
+            store,
+            touch_ops([
+              {:put, key, ChainstateCodecV2.encode_header(serialized)},
+              {:put, hash_key, block_hash}
+            ])
+          )
+
         :updated
 
-      :nil ->
+      nil ->
         serialized = Hex.decode(serialized_hex)
 
         :ok =
-          write_batch(store, touch_ops([
-            {:put, key, ChainstateCodecV2.encode_header(serialized)}
-          ]))
+          write_batch(
+            store,
+            touch_ops([
+              {:put, key, ChainstateCodecV2.encode_header(serialized)},
+              {:put, hash_key, block_hash},
+              put_meta_op(
+                "header_count",
+                Integer.to_string(max(meta_int(store, "header_count", 0), height + 1))
+              )
+            ])
+          )
 
         :inserted
 
@@ -195,10 +227,79 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
   end
 
   @impl true
+  def commit_headers(%__MODULE__{} = store, chain, headers, opts) when is_list(headers) do
+    now = utc_now_iso()
+
+    {stored, ops} =
+      Enum.reduce(headers, {0, []}, fn header, {count, acc} ->
+        height = Map.fetch!(header, :height)
+        block_hash = Map.fetch!(header, :block_hash)
+        serialized_hex = Map.fetch!(header, :serialized_hex)
+        key = ChainstateCodecV2.header_key(chain, height)
+        hash_key = ChainstateCodecV2.header_hash_key(chain, height)
+
+        case RocksDb.get(store.db, key) do
+          {:ok, _} ->
+            {count, acc}
+
+          nil ->
+            serialized = Hex.decode(serialized_hex)
+
+            {count + 1,
+             [
+               {:put, key, ChainstateCodecV2.encode_header(serialized)},
+               {:put, hash_key, block_hash}
+               | acc
+             ]}
+
+          {:error, reason} ->
+            raise "rocksdb header read failed: #{reason}"
+        end
+      end)
+
+    best_height = Map.fetch!(opts, :best_height)
+    best_hash = Map.fetch!(opts, :best_hash)
+    sync_status = Map.get(opts, :sync_status, "headers_syncing")
+    existing = get_sync_state(store, chain)
+    existing_count = (existing && existing.header_count) || meta_int(store, "header_count", 0)
+    header_count = max(existing_count + stored, best_height + 1)
+
+    sync_value = %{
+      best_height: best_height,
+      best_hash: best_hash,
+      header_count: header_count,
+      sync_status: sync_status,
+      updated_at: now
+    }
+
+    final_ops =
+      ops ++
+        [
+          {:put, ChainstateCodecV2.sync_state_key(chain), Jason.encode!(sync_value)},
+          put_meta_op("header_count", Integer.to_string(header_count))
+        ]
+
+    if final_ops != [] do
+      :ok = write_batch(store, touch_ops(Enum.reverse(final_ops)))
+    end
+
+    %{stored: stored, best_height: best_height, best_hash: best_hash, header_count: header_count}
+  end
+
+  @impl true
   def get_header_hash(%__MODULE__{} = store, chain, height) do
-    case get_header(store, chain, height) do
-      nil -> nil
-      header -> header.block_hash
+    case RocksDb.get(store.db, ChainstateCodecV2.header_hash_key(chain, height)) do
+      {:ok, value} ->
+        value
+
+      nil ->
+        case get_header(store, chain, height) do
+          nil -> nil
+          header -> header.block_hash
+        end
+
+      {:error, reason} ->
+        raise "rocksdb header hash read failed: #{reason}"
     end
   end
 
@@ -217,7 +318,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
           header_serialized_hex: Hex.encode(serialized)
         }
 
-      :nil ->
+      nil ->
         nil
 
       {:error, reason} ->
@@ -226,7 +327,17 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
   end
 
   @impl true
-  def header_count(%__MODULE__{} = store, chain), do: count_prefix(store, ChainstateCodecV2.header_prefix(chain))
+  def header_count(%__MODULE__{} = store, chain) do
+    case get_meta(store, "header_count") do
+      nil ->
+        count = count_prefix(store, ChainstateCodecV2.header_prefix(chain))
+        :ok = put_meta(store, "header_count", Integer.to_string(count))
+        count
+
+      value ->
+        parse_int(value, 0)
+    end
+  end
 
   @impl true
   def record_block(%__MODULE__{} = store, chain, height, block_hash, stored) do
@@ -241,8 +352,14 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
     ops =
       [
         {:put, ChainstateCodecV2.block_index_key(chain, height), value},
-        put_meta_op("block_count", Integer.to_string(max(meta_int(store, "block_count", 0), height + 1))),
-        put_meta_op("stored_block_height", Integer.to_string(max(meta_int(store, "stored_block_height", -1), height))),
+        put_meta_op(
+          "block_count",
+          Integer.to_string(max(meta_int(store, "block_count", 0), height + 1))
+        ),
+        put_meta_op(
+          "stored_block_height",
+          Integer.to_string(max(meta_int(store, "stored_block_height", -1), height))
+        ),
         put_meta_op("stored_block_hash", block_hash)
       ]
 
@@ -253,7 +370,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
   def get_block(%__MODULE__{} = store, chain, height) do
     case RocksDb.get(store.db, ChainstateCodecV2.block_index_key(chain, height)) do
       {:ok, value} -> ChainstateCodecV2.decode_block_index(chain, height, value)
-      :nil -> nil
+      nil -> nil
       {:error, reason} -> raise "rocksdb block index read failed: #{reason}"
     end
   end
@@ -296,7 +413,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
 
     case RocksDb.get(store.db, key) do
       {:ok, value} -> ChainstateCodecV2.decode_utxo(txid, vout, value)
-      :nil -> nil
+      nil -> nil
       {:error, reason} -> raise "rocksdb utxo read failed: #{reason}"
     end
   end
@@ -316,7 +433,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
         |> Enum.zip(values)
         |> Enum.map(fn
           {{txid, vout}, {:ok, value}} -> ChainstateCodecV2.decode_utxo(txid, vout, value)
-          {_outpoint, :nil} -> nil
+          {_outpoint, nil} -> nil
         end)
 
       {:error, reason} ->
@@ -339,7 +456,12 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
 
   @impl true
   def replace_utxo_undo(%__MODULE__{} = store, chain, height, entries) do
-    write_batch(store, touch_ops([{:put, ChainstateCodecV2.undo_key(chain, height), ChainstateCodecV2.encode_undo(entries)}]))
+    write_batch(
+      store,
+      touch_ops([
+        {:put, ChainstateCodecV2.undo_key(chain, height), ChainstateCodecV2.encode_undo(entries)}
+      ])
+    )
   end
 
   @impl true
@@ -349,7 +471,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
     entries =
       case RocksDb.get(store.db, key) do
         {:ok, value} -> ChainstateCodecV2.decode_undo(value)
-        :nil -> []
+        nil -> []
         {:error, reason} -> raise "rocksdb undo read failed: #{reason}"
       end
 
@@ -366,7 +488,8 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
       store
       |> scan(prefix)
       |> Enum.flat_map(fn {key, value} ->
-        <<_prefix::binary-size(prefix_size), txid_internal::binary-size(32), vout::unsigned-big-32>> = key
+        <<_prefix::binary-size(prefix_size), txid_internal::binary-size(32),
+          vout::unsigned-big-32>> = key
 
         txid = txid_internal |> Hex.reverse() |> Hex.encode()
         utxo = ChainstateCodecV2.decode_utxo(txid, vout, value)
@@ -395,7 +518,9 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
     store
     |> scan(prefix)
     |> Enum.map(fn {key, value} ->
-      <<_prefix::binary-size(byte_size(prefix)), txid_internal::binary-size(32), vout::unsigned-big-32>> = key
+      <<_prefix::binary-size(byte_size(prefix)), txid_internal::binary-size(32),
+        vout::unsigned-big-32>> = key
+
       txid = txid_internal |> Hex.reverse() |> Hex.encode()
       utxo = ChainstateCodecV2.decode_utxo(txid, vout, value)
       [utxo.txid, utxo.vout, utxo.height, utxo.value_sats]
@@ -413,7 +538,10 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
       created_at: utc_now_iso()
     }
 
-    write_batch(store, touch_ops([{:put, ChainstateCodecV2.event_key(unique_id()), Jason.encode!(event)}]))
+    write_batch(
+      store,
+      touch_ops([{:put, ChainstateCodecV2.event_key(unique_id()), Jason.encode!(event)}])
+    )
   end
 
   @impl true
@@ -422,7 +550,9 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
     |> scan(ChainstateCodecV2.event_prefix())
     |> Enum.map(fn {key, value} -> {key, decode_json_atom_map(value)} end)
     |> Enum.sort_by(fn {key, _event} -> key end, :desc)
-    |> Enum.find_value(fn {_key, event} -> if event.severity == "error", do: event.message, else: nil end)
+    |> Enum.find_value(fn {_key, event} ->
+      if event.severity == "error", do: event.message, else: nil
+    end)
   end
 
   @impl true
@@ -440,20 +570,32 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
       created_at: utc_now_iso()
     }
 
-    write_batch(store, touch_ops([{:put, ChainstateCodecV2.blocker_key(chain), Jason.encode!(row)}]))
+    write_batch(
+      store,
+      touch_ops([{:put, ChainstateCodecV2.blocker_key(chain), Jason.encode!(row)}])
+    )
   end
 
   @impl true
   def latest_blocker(%__MODULE__{} = store, chain) do
     case RocksDb.get(store.db, ChainstateCodecV2.blocker_key(chain)) do
       {:ok, value} -> decode_json_atom_map(value)
-      :nil -> nil
+      nil -> nil
       {:error, reason} -> raise "rocksdb blocker read failed: #{reason}"
     end
   end
 
   @impl true
-  def record_peer_connected(%__MODULE__{} = store, host, port, direction, services, peer_version, user_agent, start_height) do
+  def record_peer_connected(
+        %__MODULE__{} = store,
+        host,
+        port,
+        direction,
+        services,
+        peer_version,
+        user_agent,
+        start_height
+      ) do
     peer = %{
       host: host,
       port: port,
@@ -465,7 +607,10 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
       start_height: start_height
     }
 
-    write_batch(store, touch_ops([{:put, ChainstateCodecV2.peer_key(unique_id()), Jason.encode!(peer)}]))
+    write_batch(
+      store,
+      touch_ops([{:put, ChainstateCodecV2.peer_key(unique_id()), Jason.encode!(peer)}])
+    )
   end
 
   @impl true
@@ -490,18 +635,38 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
       [
         {:put, ChainstateCodecV2.block_index_key(chain, height), block_value},
         {:put, ChainstateCodecV2.undo_key(chain, height), ChainstateCodecV2.encode_undo(undo)},
-        {:put, ChainstateCodecV2.tip_key(chain), ChainstateCodecV2.encode_tip(height, block_hash)},
-        put_meta_op("block_count", Integer.to_string(max(meta_int(store, "block_count", 0), height + 1))),
-        put_meta_op("stored_block_height", Integer.to_string(max(meta_int(store, "stored_block_height", -1), height))),
+        {:put, ChainstateCodecV2.tip_key(chain),
+         ChainstateCodecV2.encode_tip(height, block_hash)},
+        put_meta_op(
+          "block_count",
+          Integer.to_string(max(meta_int(store, "block_count", 0), height + 1))
+        ),
+        put_meta_op(
+          "stored_block_height",
+          Integer.to_string(max(meta_int(store, "stored_block_height", -1), height))
+        ),
         put_meta_op("stored_block_hash", block_hash),
-        put_meta_op("utxo_count", Integer.to_string(max(meta_int(store, "utxo_count", 0) + length(created) - length(spent), 0))),
+        put_meta_op(
+          "utxo_count",
+          Integer.to_string(
+            max(meta_int(store, "utxo_count", 0) + length(created) - length(spent), 0)
+          )
+        ),
         put_meta_op("tip_height", Integer.to_string(height)),
         put_meta_op("tip_hash", block_hash)
       ]
 
     header_ops =
       if is_binary(header_serialized_hex) and header_serialized_hex != "" do
-        [{:put, ChainstateCodecV2.header_key(chain, height), ChainstateCodecV2.encode_header(Hex.decode(header_serialized_hex))}]
+        [
+          {:put, ChainstateCodecV2.header_key(chain, height),
+           ChainstateCodecV2.encode_header(Hex.decode(header_serialized_hex))},
+          {:put, ChainstateCodecV2.header_hash_key(chain, height), block_hash},
+          put_meta_op(
+            "header_count",
+            Integer.to_string(max(meta_int(store, "header_count", 0), height + 1))
+          )
+        ]
       else
         []
       end
@@ -510,11 +675,16 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
       base_ops ++
         header_ops ++
         Enum.map(spent, fn {txid, vout} ->
-          {:delete, ChainstateCodecV2.utxo_key(chain, txid |> Hex.decode() |> Hex.reverse(), vout)}
+          {:delete,
+           ChainstateCodecV2.utxo_key(chain, txid |> Hex.decode() |> Hex.reverse(), vout)}
         end) ++
         Enum.map(created, fn utxo ->
-          {:put, ChainstateCodecV2.utxo_key(chain, utxo.txid |> Hex.decode() |> Hex.reverse(), utxo.vout),
-           ChainstateCodecV2.encode_utxo(utxo)}
+          {:put,
+           ChainstateCodecV2.utxo_key(
+             chain,
+             utxo.txid |> Hex.decode() |> Hex.reverse(),
+             utxo.vout
+           ), ChainstateCodecV2.encode_utxo(utxo)}
         end)
 
     write_batch(store, touch_ops(ops))
@@ -532,25 +702,50 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
 
   defp put_meta_op(key, value), do: {:put, ChainstateCodecV2.metadata_key(key), to_string(value)}
   defp touch_ops(ops), do: ops ++ [put_meta_op("updated_at", utc_now_iso())]
-  defp adjust_counter_op(store, key, delta), do: put_meta_op(key, Integer.to_string(max(meta_int(store, key, 0) + delta, 0)))
+
+  defp adjust_counter_op(store, key, delta),
+    do: put_meta_op(key, Integer.to_string(max(meta_int(store, key, 0) + delta, 0)))
 
   defp backfill_operational_metadata(store, chain) do
     ops =
       []
-      |> maybe_backfill("block_count", fn -> Integer.to_string(count_prefix(store, ChainstateCodecV2.block_index_prefix(chain))) end, store)
-      |> maybe_backfill("utxo_count", fn -> Integer.to_string(count_prefix(store, ChainstateCodecV2.utxo_prefix(chain))) end, store)
-      |> maybe_backfill("stored_block_height", fn ->
-        case max_stored_block_by_scan(store, chain) do
-          nil -> "-1"
-          block -> Integer.to_string(block.height)
-        end
-      end, store)
-      |> maybe_backfill("stored_block_hash", fn ->
-        case max_stored_block_by_scan(store, chain) do
-          nil -> ""
-          block -> block.block_hash
-        end
-      end, store)
+      |> maybe_backfill(
+        "header_count",
+        fn -> Integer.to_string(count_prefix(store, ChainstateCodecV2.header_prefix(chain))) end,
+        store
+      )
+      |> maybe_backfill(
+        "block_count",
+        fn ->
+          Integer.to_string(count_prefix(store, ChainstateCodecV2.block_index_prefix(chain)))
+        end,
+        store
+      )
+      |> maybe_backfill(
+        "utxo_count",
+        fn -> Integer.to_string(count_prefix(store, ChainstateCodecV2.utxo_prefix(chain))) end,
+        store
+      )
+      |> maybe_backfill(
+        "stored_block_height",
+        fn ->
+          case max_stored_block_by_scan(store, chain) do
+            nil -> "-1"
+            block -> Integer.to_string(block.height)
+          end
+        end,
+        store
+      )
+      |> maybe_backfill(
+        "stored_block_hash",
+        fn ->
+          case max_stored_block_by_scan(store, chain) do
+            nil -> ""
+            block -> block.block_hash
+          end
+        end,
+        store
+      )
 
     if ops == [], do: :ok, else: write_batch(store, touch_ops(ops))
   end
@@ -597,6 +792,7 @@ defmodule Exbitnode.Db.RocksDbChainstateStore do
   defp meta_int(store, key, default), do: get_meta(store, key) |> parse_int(default)
 
   defp parse_int(nil, default), do: default
+
   defp parse_int(value, default) when is_binary(value) do
     case Integer.parse(value) do
       {int, ""} -> int

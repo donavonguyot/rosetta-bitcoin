@@ -75,6 +75,10 @@ defmodule Exbitnode.Chainstate.Tracker do
     store.__struct__.insert_header(store, chain, height, block_hash, prev_hash, serialized_hex)
   end
 
+  def commit_headers(store, chain, headers, opts) do
+    store.__struct__.commit_headers(store, chain, headers, opts)
+  end
+
   def next_locator(store, chain, best_height, genesis_hash_internal) do
     cond do
       best_height <= 0 ->

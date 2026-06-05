@@ -11,6 +11,7 @@ defmodule Exbitnode.Db.ChainstateStore do
   @callback upsert_sync_state(term(), String.t(), map()) :: :ok
   @callback insert_header(term(), String.t(), integer(), String.t(), String.t(), String.t()) ::
               :inserted | :exists | :updated
+  @callback commit_headers(term(), String.t(), list(map()), map()) :: map()
   @callback get_header_hash(term(), String.t(), integer()) :: String.t() | nil
   @callback get_header(term(), String.t(), integer()) :: map() | nil
   @callback header_count(term(), String.t()) :: integer()

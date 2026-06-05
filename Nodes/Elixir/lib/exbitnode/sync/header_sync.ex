@@ -94,7 +94,6 @@ defmodule Exbitnode.Sync.HeaderSync do
 
                 total_stored >= max_headers ->
                   ChainstateTracker.upsert_sync_state(conn, chain.name, %{
-                    header_count: ChainstateTracker.header_count(conn, chain.name),
                     sync_status: "headers_syncing"
                   })
 
@@ -151,62 +150,61 @@ defmodule Exbitnode.Sync.HeaderSync do
         Hex.reverse(Hex.decode(tip_hash_hex))
       end
 
-    Enum.reduce(headers, {0, tip_height, tip_internal}, fn header,
-                                                           {stored, height, prev_internal} ->
-      try do
-        :ok = HeaderValidator.validate_header(header, prev_internal)
-        height = height + 1
-        block_hash = BlockHeaderCodec.block_hash_hex(header)
-        prev_hash = Hex.encode(Hex.reverse(header.prev_block))
-        serialized = header |> BlockHeaderCodec.serialize() |> Hex.encode()
-
-        inserted? =
-          case ChainstateTracker.insert_header(
-                 conn,
-                 chain,
-                 height,
-                 block_hash,
-                 prev_hash,
-                 serialized
-               ) do
-            :inserted -> true
-            :exists -> false
-          end
-
-        if inserted? do
-          :ok =
-            ChainstateTracker.upsert_sync_state(conn, chain, %{
-              best_height: height,
-              best_hash: block_hash,
-              header_count: ChainstateTracker.header_count(conn, chain),
-              sync_status: "headers_syncing"
-            })
-
-          tip_internal = BlockHeaderCodec.block_hash(header)
-          {stored + 1, height, tip_internal}
-        else
+    {entries, height, tip_internal, tip_hash} =
+      Enum.reduce_while(headers, {[], tip_height, tip_internal, tip_hash_hex}, fn header,
+                                                                                  {entries,
+                                                                                   height,
+                                                                                   prev_internal,
+                                                                                   tip_hash} ->
+        try do
+          :ok = HeaderValidator.validate_header(header, prev_internal)
+          height = height + 1
+          block_hash = BlockHeaderCodec.block_hash_hex(header)
           existing_hash = ChainstateTracker.get_header_hash(conn, chain, height)
 
-          if existing_hash != block_hash do
+          if existing_hash != nil and existing_hash != block_hash do
             raise Exbitnode.Consensus.HeaderValidationError,
                   "header hash mismatch at height #{height}"
           end
 
+          serialized = header |> BlockHeaderCodec.serialize() |> Hex.encode()
           tip_internal = BlockHeaderCodec.block_hash(header)
-          {stored, height, tip_internal}
-        end
-      rescue
-        e in Exbitnode.Consensus.HeaderValidationError ->
-          ChainstateTracker.log_event(
-            conn,
-            "sync",
-            "Header rejected at height #{height + 1}: #{Exception.message(e)}",
-            "warning"
-          )
 
-          {stored, height, prev_internal}
-      end
-    end)
+          {:cont,
+           {
+             [
+               %{
+                 height: height,
+                 block_hash: block_hash,
+                 serialized_hex: serialized
+               }
+               | entries
+             ],
+             height,
+             tip_internal,
+             block_hash
+           }}
+        rescue
+          e in Exbitnode.Consensus.HeaderValidationError ->
+            ChainstateTracker.log_event(
+              conn,
+              "sync",
+              "Header rejected at height #{height + 1}: #{Exception.message(e)}",
+              "warning"
+            )
+
+            {:halt, {entries, height, prev_internal, tip_hash}}
+        end
+      end)
+
+    result =
+      ChainstateTracker.commit_headers(conn, chain, Enum.reverse(entries), %{
+        best_height: height,
+        best_hash: tip_hash,
+        sync_status: "headers_syncing"
+      })
+
+    {result.stored, height, tip_internal}
   end
 
   defp mark_headers_current(conn, chain) do
@@ -215,7 +213,6 @@ defmodule Exbitnode.Sync.HeaderSync do
     ChainstateTracker.upsert_sync_state(conn, chain, %{
       best_height: state && state.best_height,
       best_hash: state && state.best_hash,
-      header_count: ChainstateTracker.header_count(conn, chain),
       sync_status: "headers_current"
     })
   end
