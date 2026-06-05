@@ -128,6 +128,7 @@ def docker_health_document(settings: Settings, tracker: ProjectTracker) -> dict:
         "healthy": ok,
         "sync_status": sync_status,
         "chain": settings.chain,
+        "utxo_accounting_policy": "core_spendable_v1",
         "validated_height": validated_height,
         "header_height": tracker.max_header_height(),
         "block_count": summary.get("block_count", 0),

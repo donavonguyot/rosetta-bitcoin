@@ -3,14 +3,59 @@
 These prompts are for agents working in root-owned port directories or isolated
 root worktrees. Replace bracketed placeholders before use.
 
+## Bring a port to the 5k baseline
+
+```text
+You are working on [PORT_NAME] in /Users/donavonguyot/RB/Nodes/[PORT_DIR].
+
+Read first:
+- /Users/donavonguyot/RB/AGENTS.md
+- /Users/donavonguyot/RB/Docs/port-baseline-5k.md
+- /Users/donavonguyot/RB/Nodes/Shared/consensus/CONSENSUS_RUNWAY.md
+- /Users/donavonguyot/RB/Nodes/Shared/conformance/BENCHMARK_CONTRACT.md
+- /Users/donavonguyot/RB/Nodes/Shared/templates/port-baseline-5k/README.md
+- /Users/donavonguyot/RB/Nodes/Shared/docker/ports/[port].docker.json if it exists
+
+Goal:
+Make this port clear the strict 5k baseline.
+
+Required baseline evidence:
+- RocksDB owns runtime truth.
+- Native crypto is selected, available, and reported.
+- Shared script corpus passes 45/45.
+- Docker `docker_proof_local` syncs from fresh proof volume to height 5000
+  using local Reference P2P.
+- WAL is enabled.
+- `prefetch_depth=4` and `script_runner_mode=parallel`.
+- `utxo_accounting_policy=core_spendable_v1` and
+  `chainstate_utxo_count=4574`.
+- Compact proof JSON is written under
+  `Nodes/Shared/conformance/results/` and imported by Project.
+
+Acceptance commands:
+- python3 Project/scripts/import_all.py --db Project/project.db --rebuild
+- python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port [port] --strict
+- python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --port [port] --stage 5k --strict
+- python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
+
+Rules:
+- Do not use alternate stores or fallback crypto for baseline evidence.
+- Do not use RPC replay as `docker_proof_local`.
+- Do not reuse proof state for the baseline run.
+- Do not claim binary-gate success from the 5k baseline.
+```
+
 ## Port one blocker to a follower
 
 ```text
 You are working on [PORT_NAME] in [PORT_PATH].
 
 Read /Users/donavonguyot/RB/AGENTS.md first.
-Read /Users/donavonguyot/RB/Docs/consensus-blockers-testnet4.md for the
-blocker facts.
+Read /Users/donavonguyot/RB/Nodes/Shared/consensus/CONSENSUS_RUNWAY.md and
+/Users/donavonguyot/RB/Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json
+for the rule inventory. Read
+/Users/donavonguyot/RB/Docs/consensus-blockers-testnet4.md for historical
+blocker provenance.
 
 Goal:
 Port the consensus rule needed to clear testnet4 height [HEIGHT] without
@@ -26,16 +71,17 @@ Blocker facts:
 - rule/template: [RULE]
 
 Tasks:
-1. Inspect the follower's current blocker/status DB and confirm it has reached
-   or is expected to reach this height.
-2. Compare Python and Java implementations for the rule. Use them as references,
+1. Query Project's consensus runway and blocker catalog for the port and stage.
+2. Confirm the target rule card and fixture IDs in the Shared rule ledger.
+3. Compare Python and Java implementations for the rule. Use them as references,
    not as validity oracles.
-3. Implement the smallest consensus-correct change in the follower.
-4. Add a real fixture/regression test for the blocker.
-5. Add a negative test if the rule has a clear failure mode.
-6. Run the follower's relevant tests.
-7. Resume sync only if the live datadir is not already owned by another writer.
-8. Update the follower blocker ledger with exact facts and fixture paths.
+4. Implement the smallest consensus-correct change in the follower.
+5. Add or run the Shared fixture/regression test for the blocker.
+6. Add a negative test if the rule has a clear failure mode.
+7. Run the follower's relevant tests and script corpus.
+8. Resume sync only if the live datadir is not already owned by another writer.
+9. Update the follower blocker ledger with exact facts and fixture paths.
+10. Rebuild Project and run `preflight_consensus_runway.py` for the relevant stage.
 
 Rules:
 - Do not skip validation.
@@ -92,9 +138,11 @@ Return:
 ## Compare Python and Java for one rule
 
 ```text
-You are comparing PythonNode and JavaNode for consensus rule [RULE].
+You are comparing Python and Java for consensus rule [RULE].
 
 Read:
+- /Users/donavonguyot/RB/Nodes/Shared/consensus/CONSENSUS_RUNWAY.md
+- /Users/donavonguyot/RB/Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json
 - /Users/donavonguyot/RB/Docs/consensus-blockers-testnet4.md
 - /Users/donavonguyot/RB/Docs/script-semantics-gotchas.md
 - relevant Python and Java script/sighash/connect code
@@ -153,6 +201,7 @@ blocker matrix instead of editing matrix Markdown:
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
 ```
 
 Rules:
@@ -175,14 +224,15 @@ Tasks:
 2. Report validated_height, header_height, sync_status, current blocker, peer,
    and binary_gate_status.
 3. If a script survey tool exists, run it in read-only mode only.
-4. Compare the next few blocker heights against
-   /Users/donavonguyot/RB/Docs/consensus-blockers-testnet4.md.
+4. Compare the next few blocker heights against the Shared rule ledger and
+   /Users/donavonguyot/RB/Docs/consensus-blockers-testnet4.md provenance notes.
 5. For project-level status context, query Project reports instead of
    hand-maintained Markdown:
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
 ```
 
 Rules:
@@ -228,7 +278,7 @@ Rules:
 - Do not skip script rules.
 - Do not parallelize UTXO writes.
 - Do not reorder block transactions.
-- Do not share one SQLite connection across worker threads.
+- Do not share one mutable runtime store handle unsafely across worker threads.
 - Do not treat another port's sync outcome as proof.
 
 Return:

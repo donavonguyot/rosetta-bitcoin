@@ -16,6 +16,7 @@ export interface NativeStatusDocument {
   implementation: "TypeScriptNode";
   network: string;
   runtime_surface: "native";
+  utxo_accounting_policy: "core_spendable_v1";
   runtime_status: "running" | "not_running";
   chain: string;
   datadir: string;
@@ -84,6 +85,7 @@ export async function nativeStatusDocument(settings: Settings): Promise<NativeSt
       implementation: "TypeScriptNode",
       network: chain.name,
       runtime_surface: "native",
+      utxo_accounting_policy: "core_spendable_v1",
       runtime_status: activeWriterPid === null ? "not_running" : "running",
       chain: chain.name,
       datadir: session.dataDir,

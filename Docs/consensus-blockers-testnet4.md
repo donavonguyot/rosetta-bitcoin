@@ -1,8 +1,17 @@
 # Testnet4 consensus blocker catalog
 
-This catalog turns the Python and Java live-chain blocker trail into a shared
-handoff queue for follower ports. Treat these facts as regression targets, not as
+This catalog preserves the Python and Java live-chain blocker trail as shared
+provenance for follower ports. Treat these facts as regression targets, not as
 validation shortcuts. Every port must still independently verify the spend.
+
+The primary rule inventory is
+`Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json`. Project imports
+that ledger plus this catalog and owns the current blocker projection:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section blocker-catalog
+```
 
 Status values:
 
@@ -11,7 +20,7 @@ Status values:
 - `not_reached`: port has not validated this height yet.
 - `unknown`: no reliable status was found.
 
-Current scout and follower frontiers are Project projections. Query them with:
+Scout and follower frontiers are Project projections. Query them with:
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section port-status

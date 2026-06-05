@@ -68,6 +68,7 @@ public final class DbStatusService {
       root.put("block_gap_count", tracker.countBlockStorageGaps(chain, Math.max(tip.height(), 0)));
       root.put("validated_height", tip.height());
       root.put("validated_hash", tip.hash() == null ? "" : tip.hash());
+      root.put("utxo_accounting_policy", "core_spendable_v1");
       root.put("chainstate_backend", metadata.backendName());
       root.put("chainstate_backend_path", metadata.backendPath().toString());
       root.put("chainstate_status", metadata.status());

@@ -28,6 +28,7 @@ chainstate_backend
 chainstate_backend_path
 chainstate_generation_id
 chainstate_status
+utxo_accounting_policy
 chainstate_utxo_count
 
 native_crypto_backend
@@ -105,8 +106,14 @@ the active chainstate backend. If the node mirrors those fields into another
 store, the mirror must not be reported as canonical unless it matches the active
 backend.
 
-If the active backend is RocksDB, LevelDB, MDBX, or another key/value store,
-SQLite UTXO counts are irrelevant except as a diagnostic comparison.
+For the 5k baseline, the active backend must be RocksDB. Counts from any other
+backend are diagnostic until the port has already cleared the RocksDB baseline.
+
+`chainstate_utxo_count` uses `utxo_accounting_policy=core_spendable_v1`: count
+only active spendable chainstate UTXO entries, exclude the genesis coinbase, and
+exclude Core-unspendable outputs with an empty scriptPubKey or a first opcode of
+`OP_RETURN` / `0x6a`. Raw unspent output counts may be reported as diagnostics,
+but they must not be reported as `chainstate_utxo_count`.
 
 ## Blocker Rule
 

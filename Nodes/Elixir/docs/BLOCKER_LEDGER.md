@@ -1,7 +1,7 @@
 # ElixirNode blocker ledger
 
 Handoff notes for exbitnode. Canonical scout trail remains
-[PythonNode/docs/BLOCKER_LEDGER.md](../../PythonNode/docs/BLOCKER_LEDGER.md).
+[Nodes/Python/docs/BLOCKER_LEDGER.md](../../Python/docs/BLOCKER_LEDGER.md).
 
 ## Last recorded evidence
 

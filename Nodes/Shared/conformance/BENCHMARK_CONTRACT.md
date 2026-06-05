@@ -65,12 +65,18 @@ The first standardized gate for port-by-port work is:
 supporting_5k_p2p
 ```
 
+When combined with RocksDB runtime truth, native crypto, the Shared script
+corpus `45/45`, and Project strict preflight, this lane is the workspace's 5k
+baseline. The baseline proves readiness, comparability, and reporting discipline;
+it is not a speed ranking and it is not binary-gate evidence.
+
 Required metadata:
 
 ```text
 benchmark_contract_version = 1
 benchmark_kind = supporting_5k_p2p
 benchmark_lane = supporting_5k_p2p
+utxo_accounting_policy = core_spendable_v1
 target_height = 5000
 header_target_height = 5000
 target_label = 5k
@@ -92,6 +98,18 @@ and the final validated hash matches the port-validated block at height `5000`.
 It is the official comparable readiness gate for Docker/local-reference P2P
 wiring, native storage ownership, status/proof artifacts, and the first
 spend/script path around block 739. It is still not binary-gate evidence.
+
+The 5k baseline requires RocksDB and native crypto. Alternate storage engines,
+managed or pure crypto proof paths, WAL-off runs, reused datadirs, partial script
+corpus results, and missing timing metadata are diagnostic or research evidence,
+not baseline evidence.
+
+For this gate, `chainstate_utxo_count` must use Core-style spendable accounting:
+active spendable UTXO entries only, excluding genesis coinbase and empty or
+`OP_RETURN` / `0x6a` outputs. At height `5000`, hash
+`000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2`, the
+expected `chainstate_utxo_count` is `4574`. Raw unspent output counts are
+diagnostic only.
 
 ### Replay Evidence Lane
 
@@ -154,6 +172,15 @@ WAL-off, wrong-header-target, wrong-prefetch, single-runner, non-Docker, or
 missing-fresh-state artifact is rejected as non-comparable even when it remains
 valid evidence.
 
+Strict baseline acceptance uses the composed baseline preflight:
+
+```bash
+python3 Project/scripts/preflight_port_baseline.py \
+  --db Project/project.db \
+  --port <port> \
+  --strict
+```
+
 ## Diagnostic Runs
 
 Ports may still run disposable diagnostics while tuning, for example WAL-off
@@ -192,6 +219,7 @@ blocks_connected
 current_blocker
 binary_gate_status
 chainstate_backend
+utxo_accounting_policy
 chainstate_utxo_count
 native_crypto_backend
 peer_mode

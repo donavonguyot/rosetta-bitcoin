@@ -1,6 +1,7 @@
 {
   "chain": "testnet4",
   "datadir": "/data",
+  "utxo_accounting_policy": "core_spendable_v1",
   "native_storage": true,
   "sqlite_free": true,
   "local_sqlite_artifact_absent": true,
@@ -14,11 +15,11 @@
   "block_count": 5000,
   "stored_block_height": 5000,
   "stored_minus_validated": 0,
-  "utxo_count": 9232,
+  "utxo_count": 4574,
   "chainstate_backend": "rocksdb",
   "chainstate_backend_path": "/data/chainstate-rocksdb",
   "codec_version": "2",
-  "chainstate_generation_id": "rocksdb-dca1ed67-76c9-4243-9246-eb4c562a2d2d",
+  "chainstate_generation_id": "rocksdb-d2ae634e-1e3c-4bc5-a1d8-dc3d910d7b73",
   "chainstate_status": "usable",
   "native_crypto_backend": "libsecp256k1-secp256k1.net",
   "native_crypto_available": true,
@@ -28,45 +29,45 @@
     "Stages": {
       "block_store": {
         "Count": 5000,
-        "TotalMicros": 40555,
-        "P50Micros": 6,
-        "P95Micros": 20,
-        "MaxMicros": 242
+        "TotalMicros": 27990,
+        "P50Micros": 4,
+        "P95Micros": 14,
+        "MaxMicros": 166
       },
       "utxo_load": {
         "Count": 5000,
-        "TotalMicros": 213790,
-        "P50Micros": 4,
-        "P95Micros": 150,
-        "MaxMicros": 7570
+        "TotalMicros": 258032,
+        "P50Micros": 2,
+        "P95Micros": 198,
+        "MaxMicros": 3142
       },
       "script_verify": {
         "Count": 5000,
-        "TotalMicros": 1987854,
+        "TotalMicros": 1911718,
         "P50Micros": 0,
-        "P95Micros": 1708,
-        "MaxMicros": 77448
+        "P95Micros": 1704,
+        "MaxMicros": 34628
       },
       "utxo_apply": {
         "Count": 5000,
-        "TotalMicros": 25278,
-        "P50Micros": 2,
-        "P95Micros": 12,
-        "MaxMicros": 600
+        "TotalMicros": 18655,
+        "P50Micros": 1,
+        "P95Micros": 9,
+        "MaxMicros": 1192
       },
       "commit": {
         "Count": 5000,
-        "TotalMicros": 445901,
-        "P50Micros": 49,
-        "P95Micros": 268,
-        "MaxMicros": 4133
+        "TotalMicros": 459702,
+        "P50Micros": 36,
+        "P95Micros": 304,
+        "MaxMicros": 1745
       },
       "block_connect_store_commit": {
         "Count": 5000,
-        "TotalMicros": 3235822,
-        "P50Micros": 177,
-        "P95Micros": 2418,
-        "MaxMicros": 93705
+        "TotalMicros": 3012313,
+        "P50Micros": 73,
+        "P95Micros": 2403,
+        "MaxMicros": 42264
       }
     }
   },

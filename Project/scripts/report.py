@@ -19,6 +19,8 @@ SECTIONS = (
     "blocker-matrix",
     "benchmark-gates",
     "benchmark-comparability",
+    "port-baseline-5k",
+    "consensus-runway",
     "benchmark-summary",
     "decisions",
 )
@@ -30,6 +32,10 @@ SECTION_ALIASES = {
     "blockers": "blocker-catalog",
     "gates": "benchmark-gates",
     "comparability": "benchmark-comparability",
+    "baseline": "port-baseline-5k",
+    "5k-baseline": "port-baseline-5k",
+    "runway": "consensus-runway",
+    "consensus": "consensus-runway",
     "benchmarks": "benchmark-summary",
 }
 
@@ -254,7 +260,8 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
         select gate_id, port, gate_status, comparability_status, evidence_lane,
                validated_height, header_target_height, runtime_surface, peer_mode,
                prefetch_depth, script_runner_mode, rocksdb_wal_disabled,
-               fresh_state, comparability_notes, captured_at
+               fresh_state, utxo_accounting_policy, chainstate_utxo_count,
+               comparability_notes, captured_at
         from benchmark_gate_matrix
         order by target_height, port
         """,
@@ -275,6 +282,8 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
                 "runner",
                 "wal_off",
                 "fresh",
+                "utxo_policy",
+                "utxos",
                 "notes",
                 "captured",
             ),
@@ -292,7 +301,8 @@ def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
         select port, gate_id, gate_status, comparability_status, evidence_lane,
                validated_height, header_target_height, peer_mode, byte_source,
                proof_mode, prefetch_depth, script_runner_mode,
-               rocksdb_wal_disabled, fresh_state, comparability_notes
+               rocksdb_wal_disabled, fresh_state, utxo_accounting_policy,
+               chainstate_utxo_count, comparability_notes
         from benchmark_comparability
         order by target_height, port, captured_at
         """,
@@ -314,7 +324,110 @@ def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
                 "runner",
                 "wal_off",
                 "fresh",
+                "utxo_policy",
+                "utxos",
                 "notes",
+            ),
+            data,
+        )
+    )
+
+
+def print_port_baseline_5k(connection: sqlite3.Connection) -> None:
+    print("## Port Baseline 5k")
+    print()
+    data = rows(
+        connection,
+        """
+        select port, baseline_status, gate_status, comparability_status,
+               validated_height, chainstate_backend, native_crypto_backend,
+               script_corpus_status, script_passed, script_failed,
+               prefetch_depth, script_runner_mode, rocksdb_wal_disabled,
+               fresh_state, utxo_accounting_policy, chainstate_utxo_count,
+               required_timing_buckets, captured_at
+        from port_baseline_5k
+        order by port
+        """,
+    )
+    print(
+        table(
+            (
+                "port",
+                "baseline",
+                "gate",
+                "comparable",
+                "validated",
+                "backend",
+                "native_crypto",
+                "script",
+                "script_pass",
+                "script_fail",
+                "prefetch",
+                "runner",
+                "wal_off",
+                "fresh",
+                "utxo_policy",
+                "utxos",
+                "timing",
+                "captured",
+            ),
+            data,
+        )
+    )
+
+
+def print_consensus_runway(connection: sqlite3.Connection) -> None:
+    print("## Consensus Runway")
+    print()
+    rules = rows(
+        connection,
+        """
+        select chain, category, status, rule_count, min_height, max_height
+        from consensus_rule_summary
+        order by chain, category, status
+        """,
+    )
+    print(table(("chain", "category", "status", "rules", "min_height", "max_height"), rules))
+    print()
+    data = rows(
+        connection,
+        """
+        select port, stage, runway_status, target_height,
+               has_clean_script_corpus, script_passed, script_failed,
+               script_runtime_surface, script_native_crypto_backend,
+               baseline_5k_status, max_validated_height, header_height,
+               sync_status, open_blocker_count, open_blocker_heights
+        from consensus_runway
+        order by port,
+          case stage
+            when 'corpus' then 0
+            when '5k' then 1
+            when '10k' then 2
+            when '50k' then 3
+            when '100k' then 4
+            when 'tip' then 5
+            else 6
+          end
+        """,
+    )
+    print(
+        table(
+            (
+                "port",
+                "stage",
+                "status",
+                "target",
+                "script",
+                "script_pass",
+                "script_fail",
+                "script_surface",
+                "script_crypto",
+                "5k",
+                "validated",
+                "headers",
+                "sync",
+                "open_blockers",
+                "blocker_heights",
             ),
             data,
         )
@@ -338,6 +451,8 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "blocker-matrix": print_blocker_matrix,
     "benchmark-gates": print_benchmark_gates,
     "benchmark-comparability": print_benchmark_comparability,
+    "port-baseline-5k": print_port_baseline_5k,
+    "consensus-runway": print_consensus_runway,
     "benchmark-summary": print_benchmark_summary,
     "decisions": print_decisions,
 }

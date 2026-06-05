@@ -147,7 +147,7 @@ targets as the normal blocker-hunting loop.
 
 | Target | Purpose |
 |--------|---------|
-| `make test` | Run JUnit 5 tests (73 tests) |
+| `make test` | Run JUnit 5 tests |
 | `make coverage` | Run tests + JaCoCo 100% line gate |
 | `make docker-config` | Validate `docker-compose.yml` |
 | `make docker-warm` | Warm the Docker image/cache before a benchmark campaign |
@@ -199,7 +199,7 @@ by the recorded live blocker trail.
 | Next | Tip maintenance, serving, and continued blocker capture from current network tip |
 
 Reference scout fix: Python commit **`dd65c78`** (*Verify Taproot key-path spends*).
-See `docs/BLOCKER_LEDGER.md` for live sync status toward height 6975.
+See `docs/BLOCKER_LEDGER.md` for the live blocker trail and binary-gate evidence.
 
 ## Snapshot export
 
@@ -368,8 +368,7 @@ Environment:
 | `PAR_SCRIPT_THREADS` | CPU count | Max worker threads for parallel input verify |
 | `PAR_SCRIPT_MIN_INPUTS` | `2` | Minimum inputs per tx before using parallel verify |
 
-Extended catch-up toward testnet4 height **6975** (P2TR key-path blocker) from a
-validated tip around **500**:
+Historical catch-up example from the early P2TR key-path blocker era:
 
 ```bash
 make java-node-sync-catchup
@@ -417,7 +416,8 @@ Harvested hex/block fixtures live under `src/test/resources/fixtures/` (see
 
 ## Schema
 
-SQLite tables mirror TypeScriptNode scout tracker:
+Historical local SQLite tracker tables mirrored the TypeScript scout tracker.
+Current runtime truth is native chainstate; this schema is legacy context only:
 
 `meta`, `project_phases`, `sync_state`, `peers`, `peer_addresses`, `headers`,
 `blocks`, `utxos`, `utxo_undo`, `validated_tip`, `wire_capabilities`, `events`

@@ -130,6 +130,7 @@ def main() -> int:
                 "benchmark_contract_version": 1,
                 "benchmark_kind": "supporting_5k_p2p" if target_block_height == 5000 else "local_reference_p2p",
                 "benchmark_lane": "supporting_5k_p2p",
+                "utxo_accounting_policy": "core_spendable_v1",
                 "byte_source": "local_reference_p2p",
                 "proof_mode": "p2p_sync",
                 "peer_mode": "local_reference",

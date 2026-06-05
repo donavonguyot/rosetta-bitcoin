@@ -417,9 +417,55 @@ defmodule Exbitnode.Consensus.BlockConnectTest do
     assert is_integer(result.timing.utxo_load)
     assert is_integer(result.timing.block_connect_store_commit)
     assert ChainstateTracker.get_validated_height(conn, "testnet4") == 0
+    assert ChainstateTracker.utxo_count(conn, "testnet4") == 0
     assert ChainstateTracker.block_count(conn, "testnet4") == 1
-    assert ChainstateTracker.get_header_hash(conn, "testnet4", 0) == BlockHeaderCodec.block_hash_hex(header)
-    assert ChainstateTracker.max_stored_block(conn, "testnet4").block_hash == BlockHeaderCodec.block_hash_hex(header)
+
+    assert ChainstateTracker.get_header_hash(conn, "testnet4", 0) ==
+             BlockHeaderCodec.block_hash_hex(header)
+
+    assert ChainstateTracker.max_stored_block(conn, "testnet4").block_hash ==
+             BlockHeaderCodec.block_hash_hex(header)
+  end
+
+  test "connect skips core unspendable outputs", %{conn: conn} do
+    connect_genesis!(conn)
+
+    coinbase = %Transaction{
+      version: 1,
+      inputs: [
+        %TxIn{
+          previous_output: %OutPoint{hash: :binary.copy(<<0>>, 32), index: 0xFFFF_FFFF},
+          script_sig: <<4, 1>>,
+          sequence: 0xFFFF_FFFF
+        }
+      ],
+      outputs: [
+        %TxOut{value: 1, script_pubkey: <<>>},
+        %TxOut{value: 2, script_pubkey: <<0x6A, 0x01, 0x02>>},
+        %TxOut{value: 3, script_pubkey: <<0x51>>}
+      ],
+      lock_time: 0,
+      witness: []
+    }
+
+    prev_internal = BlockHeaderCodec.block_hash(Genesis.testnet4())
+
+    header1 = %{
+      Genesis.testnet4()
+      | prev_block: prev_internal,
+        merkle_root: Merkle.block_merkle_root([coinbase])
+    }
+
+    hash1_internal = BlockHeaderCodec.block_hash(header1)
+    tx_bytes = TransactionParser.serialize(coinbase, false)
+
+    payload1 =
+      BlockHeaderCodec.serialize(header1) <> WireSerialize.write_compact_size(1) <> tx_bytes
+
+    result = BlockConnector.connect(conn, "testnet4", 1, payload1, prev_internal, hash1_internal)
+
+    assert result.utxos_created == 1
+    assert ChainstateTracker.utxo_count(conn, "testnet4") == 1
   end
 
   test "disconnect rewinds tip and removes block utxos", %{conn: conn} do
@@ -625,7 +671,10 @@ defmodule Exbitnode.Consensus.ScriptVerifyTest do
 
   test "script corpus fixture filter uses prev_spk fallback when prevouts are absent" do
     result_path =
-      Path.join(System.tmp_dir!(), "elixir_script_corpus_fixture_#{:rand.uniform(1_000_000)}.json")
+      Path.join(
+        System.tmp_dir!(),
+        "elixir_script_corpus_fixture_#{:rand.uniform(1_000_000)}.json"
+      )
 
     on_exit(fn -> File.rm(result_path) end)
 

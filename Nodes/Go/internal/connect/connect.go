@@ -22,6 +22,7 @@ type Options struct {
 type Summary struct {
 	Implementation     string         `json:"implementation"`
 	RuntimeSurface     string         `json:"runtime_surface"`
+	UtxoAccounting     string         `json:"utxo_accounting_policy"`
 	Mode               string         `json:"mode"`
 	TargetHeight       int            `json:"target_height"`
 	HeaderHeight       int            `json:"header_height"`
@@ -256,6 +257,9 @@ func outputsFor(height int, transaction txtypes.Transaction, coinbase bool) []st
 	txid := transaction.TxID()
 	utxos := make([]storage.UTXO, 0, len(transaction.Outputs))
 	for vout, output := range transaction.Outputs {
+		if !isSpendableOutput(output.ScriptPubKey) {
+			continue
+		}
 		utxos = append(utxos, storage.UTXO{
 			TxID:              txid,
 			Vout:              uint32(vout),
@@ -266,6 +270,10 @@ func outputsFor(height int, transaction txtypes.Transaction, coinbase bool) []st
 		})
 	}
 	return utxos
+}
+
+func isSpendableOutput(scriptPubKey []byte) bool {
+	return len(scriptPubKey) > 0 && scriptPubKey[0] != 0x6a
 }
 
 type blockView struct {
@@ -420,6 +428,7 @@ func summaryFrom(meta storage.Metadata, target int, started string, connected in
 	return Summary{
 		Implementation:     "GoNode",
 		RuntimeSurface:     surface.RuntimeSurface(),
+		UtxoAccounting:     "core_spendable_v1",
 		Mode:               "stored_block_connect",
 		TargetHeight:       target,
 		HeaderHeight:       meta.HeaderHeight,

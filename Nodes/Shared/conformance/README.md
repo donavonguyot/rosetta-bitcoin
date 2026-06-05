@@ -18,7 +18,7 @@ fixtures/
 
 **Script corpus:** [`fixtures/scripts/`](fixtures/scripts/) is the offline
 45-fixture spend-verification gate. When debugging failures, start with
-[`Docs/script-semantics-gotchas.md`](../../Docs/script-semantics-gotchas.md)
+[`Docs/script-semantics-gotchas.md`](../../../Docs/script-semantics-gotchas.md)
 (§ Shared script corpus and MATRIX triage), not the fixture `missing_rule` field alone.
 
 The fixture manifest is broader than the current shared byte tree. During

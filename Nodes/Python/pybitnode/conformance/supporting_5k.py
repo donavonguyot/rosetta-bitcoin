@@ -172,6 +172,7 @@ def _build_artifact(
             "benchmark_gate": "supporting_5k",
             "benchmark_kind": "supporting_5k_p2p",
             "benchmark_lane": "supporting_5k_p2p",
+            "utxo_accounting_policy": "core_spendable_v1",
             "binary_gate_status": "not_attempted",
             "blocks_connected": max(0, validated_height - int(args.reference_start_height)),
             "blocks_fetched": max(0, validated_height - int(args.reference_start_height)),

@@ -40,7 +40,8 @@ tuning. Those properties are more valuable than preserving a pure-language Java
 LevelDB default.
 
 Native packaging risk is accepted for serious ports. Ports that cannot yet ship
-RocksDB remain reference/debug ports until they prove an equivalent path.
+RocksDB remain reference/debug ports and cannot claim 5k baseline status.
+Alternate stores may be explored only after a RocksDB baseline exists.
 
 ## Port Starting Matrix
 

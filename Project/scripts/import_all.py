@@ -113,6 +113,8 @@ BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
         "official_header_target_height": 5000,
         "official_prefetch_depth": 4,
         "official_script_runner_mode": "parallel",
+        "official_utxo_accounting_policy": "core_spendable_v1",
+        "official_chainstate_utxo_count": 4574,
         "fresh_state_required": 1,
         "local_reference_required": 1,
         "durable_required": 1,
@@ -586,11 +588,12 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
               official_lane, official_byte_source, official_peer_mode,
               official_proof_mode, official_header_target_height,
               official_prefetch_depth, official_script_runner_mode,
+              official_utxo_accounting_policy, official_chainstate_utxo_count,
               fresh_state_required,
               local_reference_required, durable_required, wal_disabled_required,
               resume_supported_required, binary_gate_status, result_name_pattern,
               notes
-            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(gate_id) DO UPDATE SET
               target_height = excluded.target_height,
               target_label = excluded.target_label,
@@ -605,6 +608,8 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
               official_header_target_height = excluded.official_header_target_height,
               official_prefetch_depth = excluded.official_prefetch_depth,
               official_script_runner_mode = excluded.official_script_runner_mode,
+              official_utxo_accounting_policy = excluded.official_utxo_accounting_policy,
+              official_chainstate_utxo_count = excluded.official_chainstate_utxo_count,
               fresh_state_required = excluded.fresh_state_required,
               local_reference_required = excluded.local_reference_required,
               durable_required = excluded.durable_required,
@@ -627,6 +632,8 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
               benchmark_gates.official_header_target_height <> excluded.official_header_target_height OR
               benchmark_gates.official_prefetch_depth <> excluded.official_prefetch_depth OR
               benchmark_gates.official_script_runner_mode <> excluded.official_script_runner_mode OR
+              benchmark_gates.official_utxo_accounting_policy <> excluded.official_utxo_accounting_policy OR
+              benchmark_gates.official_chainstate_utxo_count <> excluded.official_chainstate_utxo_count OR
               benchmark_gates.fresh_state_required <> excluded.fresh_state_required OR
               benchmark_gates.local_reference_required <> excluded.local_reference_required OR
               benchmark_gates.durable_required <> excluded.durable_required OR
@@ -651,6 +658,8 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
                 gate["official_header_target_height"],
                 gate["official_prefetch_depth"],
                 gate["official_script_runner_mode"],
+                gate["official_utxo_accounting_policy"],
+                gate["official_chainstate_utxo_count"],
                 gate["fresh_state_required"],
                 gate["local_reference_required"],
                 gate["durable_required"],
@@ -661,6 +670,120 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
                 gate["notes"],
             ),
         )
+
+
+def iter_consensus_rules(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    rules = payload.get("rules")
+    if isinstance(rules, list):
+        return [rule for rule in rules if isinstance(rule, dict)]
+    return []
+
+
+def import_consensus_rule_ledger(connection: sqlite3.Connection, root: Path, path: Path) -> int:
+    payload = read_json(path)
+    artifact = make_artifact(path, root, payload)
+    rules = iter_consensus_rules(payload)
+    existing = connection.execute(
+        """
+        SELECT artifact_id, source_sha256
+        FROM artifacts
+        WHERE path = ?
+        """,
+        (artifact.rel_path,),
+    ).fetchone()
+    if existing:
+        artifact = replace(artifact, artifact_id=text(existing[0]))
+        existing_rules = connection.execute(
+            "SELECT count(*) FROM consensus_rules WHERE source_artifact_id = ?",
+            (artifact.artifact_id,),
+        ).fetchone()[0]
+        if text(existing[1]) == artifact.source_sha256 and existing_rules >= len(rules):
+            return len(rules)
+    elif artifact_exists(connection, artifact.artifact_id):
+        existing_rules = connection.execute(
+            "SELECT count(*) FROM consensus_rules WHERE source_artifact_id = ?",
+            (artifact.artifact_id,),
+        ).fetchone()[0]
+        if existing_rules >= len(rules):
+            return len(rules)
+    upsert_artifact(connection, artifact)
+    for rule in rules:
+        rule_id = text(rule.get("rule_id"))
+        if not rule_id:
+            continue
+        first_observed = rule.get("first_observed") if isinstance(rule.get("first_observed"), dict) else {}
+        blocker = rule.get("blocker") if isinstance(rule.get("blocker"), dict) else {}
+        first_height = integer(first_observed.get("height"), -1)
+        blocker_height = integer(blocker.get("height"), first_height)
+        connection.execute(
+            """
+            INSERT INTO consensus_rules(
+              rule_id, category, title, chain, status, first_height,
+              blocker_height, missing_rule, fixture_ids_json,
+              required_rules_json, tags_json, raw_json, source_artifact_id
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(rule_id) DO UPDATE SET
+              category = excluded.category,
+              title = excluded.title,
+              chain = excluded.chain,
+              status = excluded.status,
+              first_height = excluded.first_height,
+              blocker_height = excluded.blocker_height,
+              missing_rule = excluded.missing_rule,
+              fixture_ids_json = excluded.fixture_ids_json,
+              required_rules_json = excluded.required_rules_json,
+              tags_json = excluded.tags_json,
+              raw_json = excluded.raw_json,
+              source_artifact_id = excluded.source_artifact_id
+            """,
+            (
+                rule_id,
+                text(rule.get("category")),
+                text(rule.get("title")),
+                text(rule.get("chain"), text(payload.get("chain"))),
+                text(rule.get("status")),
+                first_height,
+                blocker_height,
+                text(blocker.get("missing_rule")),
+                pretty_json(rule.get("fixture_ids", [])),
+                pretty_json(rule.get("required_rules", [])),
+                pretty_json(rule.get("tags", [])),
+                pretty_json(rule),
+                artifact.artifact_id,
+            ),
+        )
+        for index, evidence in enumerate(rule.get("evidence", [])):
+            if not isinstance(evidence, dict):
+                continue
+            connection.execute(
+                """
+                INSERT INTO consensus_rule_evidence(
+                  evidence_id, rule_id, port, artifact_path, result,
+                  corpus_result, runtime_surface, verifier_json,
+                  source_artifact_id
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(evidence_id) DO UPDATE SET
+                  port = excluded.port,
+                  artifact_path = excluded.artifact_path,
+                  result = excluded.result,
+                  corpus_result = excluded.corpus_result,
+                  runtime_surface = excluded.runtime_surface,
+                  verifier_json = excluded.verifier_json,
+                  source_artifact_id = excluded.source_artifact_id
+                """,
+                (
+                    stable_id("consensus_rule_evidence", artifact.artifact_id, rule_id, index),
+                    rule_id,
+                    text(evidence.get("port")).lower(),
+                    text(evidence.get("artifact")),
+                    text(evidence.get("result")),
+                    text(evidence.get("corpus_result")),
+                    text(evidence.get("runtime_surface")),
+                    pretty_json(evidence.get("verifier", {})),
+                    artifact.artifact_id,
+                ),
+            )
+    return len(rules)
 
 
 def result_from_payload(payload: dict[str, Any]) -> str:
@@ -678,6 +801,17 @@ def result_from_payload(payload: dict[str, Any]) -> str:
 
 
 def result_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    if text(payload.get("schema")) == "shared.script_fixtures.validation.v1":
+        return [
+            {
+                "fixture_id": "shared.script_fixtures.manifest",
+                "category": "script_corpus_manifest",
+                "result": result_from_payload(payload),
+                "validated_height": None,
+                "failure": text(payload.get("failure")),
+                "raw": payload,
+            }
+        ]
     rows = payload.get("results")
     if isinstance(rows, list):
         return [row for row in rows if isinstance(row, dict)]
@@ -766,9 +900,9 @@ def import_status_snapshot(connection: sqlite3.Connection, artifact: Artifact, p
           binary_gate_status, header_height, header_hash, stored_block_height,
           stored_block_hash, validated_height, validated_hash, chainstate_backend,
           chainstate_status, chainstate_generation_id, chainstate_utxo_count,
-          block_gap_count, current_blocker_id, last_error, raw_json,
+          utxo_accounting_policy, block_gap_count, current_blocker_id, last_error, raw_json,
           source_artifact_id
-        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(snapshot_id) DO UPDATE SET
           captured_at = excluded.captured_at,
           chain = excluded.chain,
@@ -784,6 +918,7 @@ def import_status_snapshot(connection: sqlite3.Connection, artifact: Artifact, p
           chainstate_status = excluded.chainstate_status,
           chainstate_generation_id = excluded.chainstate_generation_id,
           chainstate_utxo_count = excluded.chainstate_utxo_count,
+          utxo_accounting_policy = excluded.utxo_accounting_policy,
           block_gap_count = excluded.block_gap_count,
           current_blocker_id = excluded.current_blocker_id,
           last_error = excluded.last_error,
@@ -806,6 +941,7 @@ def import_status_snapshot(connection: sqlite3.Connection, artifact: Artifact, p
             text(payload.get("chainstate_status")),
             text(payload.get("chainstate_generation_id")),
             integer(first(payload, "chainstate_utxo_count", "utxo_count", default=None), None),
+            text(payload.get("utxo_accounting_policy")),
             integer(payload.get("block_gap_count"), None),
             blocker_id,
             text(payload.get("last_error")),
@@ -979,10 +1115,14 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                             "byte_source",
                             "proof_mode",
                             "benchmark_lane",
+                            "utxo_accounting_policy",
                             "prefetch_depth",
                             "script_threads",
                             "script_runner_mode",
                             "crypto_context_mode",
+                            "native_crypto_backend",
+                            "native_crypto_available",
+                            "taproot_tweak_backend",
                             "rocksdb_wal_disabled",
                             "resume_supported",
                             "fresh_state",
@@ -1028,6 +1168,7 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                             "stored_block_height",
                             "blocks_fetched",
                             "blocks_connected",
+                            "chainstate_utxo_count",
                             "current_blocker",
                             "failures",
                         )
@@ -1318,6 +1459,7 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
     db_path = root / args.db
     if args.rebuild and db_path.exists():
         db_path.unlink()
+    initialize_schema = not db_path.exists()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     counts = {
         "docker_manifests": 0,
@@ -1327,14 +1469,19 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         "blocker_rows": 0,
         "decisions": len(DECISIONS),
         "benchmark_gates": len(BENCHMARK_GATES),
+        "consensus_rules": 0,
         "port_commands": 0,
     }
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
-        init_db(connection, root / "Project/schema.sql")
+        if initialize_schema:
+            init_db(connection, root / "Project/schema.sql")
         connection.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('schema', 'mission-control-baseline')")
         connection.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('sqlite_utils_cli', 'required')")
         import_benchmark_gates(connection)
+        rules_path = root / "Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json"
+        if rules_path.exists():
+            counts["consensus_rules"] += import_consensus_rule_ledger(connection, root, rules_path)
 
         docker_dir = root / args.docker_dir
         for path in sorted(docker_dir.glob("*.docker.json")):

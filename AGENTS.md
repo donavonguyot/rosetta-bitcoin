@@ -22,17 +22,38 @@ Before editing a port, read:
 1. `README.md` at the workspace root.
 2. `Docs/README.md`.
 3. `Docs/git-topology.md`.
-4. `Docs/port-status.md` and Project reports for current imported status.
-5. `Nodes/Shared/STATUS_CONTRACT.md`.
-6. `Nodes/Shared/storage/STORAGE_GATE.md`.
-7. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
-8. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
-9. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
-10. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` for Project Docker query examples.
-11. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
-12. `Docs/blocker-ledger.md`.
-13. `Docs/supervisor-contract.md`.
-14. The target port's README and blocker ledger.
+4. `Docs/port-baseline-5k.md` before new-port, benchmark, or readiness work.
+5. `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md` before consensus, corpus, or long-sync readiness work.
+6. `Docs/port-status.md` and Project reports for current imported status.
+7. `Nodes/Shared/STATUS_CONTRACT.md`.
+8. `Nodes/Shared/storage/STORAGE_GATE.md`.
+9. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
+10. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
+11. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
+12. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` for Project Docker query examples.
+13. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
+14. `Docs/blocker-ledger.md`.
+15. `Docs/supervisor-contract.md`.
+16. The target port's README and blocker ledger.
+
+The first comparable readiness standard is the **5k baseline**. A port is not
+baseline-ready until Project can show: RocksDB runtime truth, native crypto,
+Shared script corpus `45/45`, Docker local Reference P2P to height `5000`, fresh
+proof state, WAL enabled, fixed benchmark knobs, `core_spendable_v1` UTXO
+accounting with `chainstate_utxo_count=4574`, and imported compact proof JSON.
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
+python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict
+```
+
+Consensus readiness uses a separate runway from corpus to tip. Start from the
+Shared rule ledger and Project runway checks, not from scattered port history:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --port <port> --stage corpus --strict
+```
 
 Progress can be measured with many gauges, but the gauges are not the goal:
 
@@ -50,11 +71,9 @@ it addresses, and what remains blocked.
 
 Core Node compliance is not a single green test. Keep consensus progress,
 native storage compliance, Docker runtime compliance, and Project imports
-separate. Native/Core mode is non-compliant if it creates, reads, or requires
-port-local SQLite for operational node truth such as headers, block index, sync
-state, validated tip, UTXO, undo, chainstate metadata, blocker state, or status
-fields. `Project/project.db` is allowed and preferred for mission-control
-imports and reports, but node runtimes must not read it for operational truth.
+separate. Project SQLite is mission control. Ports must not use port-local
+SQLite for operational runtime truth such as headers, block index, sync state,
+validated tip, UTXO, undo, chainstate metadata, blocker state, or status fields.
 Docker compliance requires a manifest and the runtime contract in
 `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`. Before changing Docker behavior,
 read the port manifest and run the report-only validator:
@@ -87,10 +106,14 @@ All `Nodes/<Port>/` directories are root-owned source directories. Nested
 
 | Path | Package | Role |
 |------|---------|------|
-| `~/RB/Nodes/Python` | **pybitnode** | Full-break native parity target; legacy SQLite scout evidence is historical |
-| `~/RB/Nodes/TypeScript` | **tsbitnode** | Native/Core migration target; RocksDB and scoped native crypto deps allowed |
+| `~/RB/Nodes/Python` | **pybitnode** | RocksDB/native-crypto scout |
+| `~/RB/Nodes/TypeScript` | **tsbitnode** | RocksDB/native-crypto follower |
 | `~/RB/Nodes/Cpp` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
+| `~/RB/Nodes/CSharp` | **csbitnode** | Managed-runtime follower |
+| `~/RB/Nodes/Go` | **gobitnode** | Fast native follower |
 | `~/RB/Nodes/Java` | **jbitnode** | Clean Java follower; live discovery above Python scout horizon |
+| `~/RB/Nodes/Rust` | **rsbitnode** | Native follower |
+| `~/RB/Nodes/Elixir` | **exbitnode** | BEAM follower |
 
 All active nodes target **Bitcoin testnet4**. They can run in parallel only with
 isolated state and deliberate peer allocation.
@@ -130,17 +153,19 @@ messages were sent.
 
 ### Historical Python / Java trail
 
-Shared coordination docs turn the historical Python SQLite-scout trail and Java
-live-chain trail into a work queue for ports:
+Shared coordination docs turn historical Python scout notes and Java live-chain
+notes into provenance for ports:
 
+- [`Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`](Nodes/Shared/consensus/CONSENSUS_RUNWAY.md) — canonical corpus-to-tip consensus path.
+- [`Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json`](Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json) — primary rule inventory.
 - [`Docs/consensus-blockers-testnet4.md`](Docs/consensus-blockers-testnet4.md) — durable blocker facts and fixture anchors.
 - [`Docs/follower-port-matrix.md`](Docs/follower-port-matrix.md) — Project query guide for the generated blocker matrix.
 - [`Docs/script-semantics-gotchas.md`](Docs/script-semantics-gotchas.md) — language-neutral consensus traps; includes **Shared script corpus triage** (stack/sighash/template vs missing opcode).
 - [`Docs/port-performance-lessons.md`](Docs/port-performance-lessons.md) — reusable block-connect performance patterns from Java/Python catch-up.
 - [`Docs/agent-prompts.md`](Docs/agent-prompts.md) — reusable prompts for porting blockers, harvesting fixtures, and updating ledgers.
 
-Ports copy blocker facts and tests from this trail, not trust outcomes. Python
-itself must also reprove blockers under its forward RocksDB/native-crypto path.
+Ports use blocker facts and tests from this trail, not trust outcomes. Project
+owns current imported consensus readiness.
 
 ---
 
@@ -316,7 +341,7 @@ binary_gate_status: failed | not_attempted | passed
 | Running sync batch in a **sandbox without network** | False “broken sync” diagnosis; peers never connect |
 | Calling `completeDeferredHandshake()` **before block sync** | Peers disconnect; “too advanced” |
 | Advertising **inflated `start_height`** | Remote peer drops connection |
-| **Two writers** on same datadir | SQLite corruption / lock errors; UTXO stall at 5579 |
+| **Two writers** on same datadir | Native chainstate corruption / lock errors; UTXO stall at 5579 |
 | **syncBatchLoop + manual tsbitnode-sync** on same datadir | Dual writer; use `.tsbitnode_sync.lock` — see [Single writer rule](#single-writer-rule-typescript) |
 | **Parallel agents** editing `peer.ts` | Merge conflicts and conflicting handshake logic |
 | Editing consensus/P2P while a sync process is live | Run may mix old state with new code; blocker diagnosis becomes muddy |
@@ -434,10 +459,19 @@ Script verification applies on **spend paths** (non-coinbase transactions consum
 Before chasing live sync script blockers, ports should pass the shared **45-fixture**
 corpus in [`Nodes/Shared/conformance/fixtures/scripts/manifest.json`](Nodes/Shared/conformance/fixtures/scripts/manifest.json)
 and record JSON under [`Nodes/Shared/conformance/results/`](Nodes/Shared/conformance/results/).
+The accepted port proof shape is `port.script_corpus_result.v1`; Shared manifest
+validation is not port proof.
 When a fixture fails, read **[`Docs/script-semantics-gotchas.md`](Docs/script-semantics-gotchas.md)
 § Shared script corpus and MATRIX triage** first: failures are often loader,
 sighash, template limits, or stack semantics — not a missing opcode. Do not treat
 manifest `missing_rule` or MATRIX labels as ground truth without `ScriptError` text.
+
+Use Project for current corpus and runway state:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --port <port> --stage corpus --strict
+```
 
 | Milestone | Height / target | Notes |
 |-----------|-----------------|-------|
@@ -499,14 +533,14 @@ Known durable lessons:
 | P2P | Deferred handshake + honest `start_height` during sync |
 | Snapshots | Export after settled checkpoints; live status/logs are fresher during active sync |
 
-Re-run tests after P2P changes: `npm test` in `TypeScriptNode`.
+Re-run tests after P2P changes: `npm test` in `Nodes/TypeScript`.
 
 ---
 
 ## Repo hygiene
 
-Python currently has git history. Other ports should get clean git boundaries
-before serious work continues.
+This workspace uses a single root Git repo. For ownership boundaries, read
+`Docs/git-topology.md`.
 
 Rules:
 

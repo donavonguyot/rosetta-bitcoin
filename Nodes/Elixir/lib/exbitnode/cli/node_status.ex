@@ -109,6 +109,7 @@ defmodule Exbitnode.CLI.NodeStatus do
         stored_block_hash: (stored_block && stored_block.block_hash) || "",
         validated_height: validated_height,
         validated_hash: validated_hash,
+        utxo_accounting_policy: "core_spendable_v1",
         header_count: header_count,
         block_count: block_count,
         utxo_count: utxo_count,

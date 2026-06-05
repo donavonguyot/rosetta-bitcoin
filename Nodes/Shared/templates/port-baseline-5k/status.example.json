@@ -1,0 +1,22 @@
+{
+  "implementation": "{{Port}}",
+  "node_id": "{{node_id}}",
+  "chain": "testnet4",
+  "sync_status": "target_reached",
+  "binary_gate_status": "not_attempted",
+  "header_height": 5000,
+  "header_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "stored_block_height": 5000,
+  "stored_block_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "validated_height": 5000,
+  "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "chainstate_backend": "rocksdb",
+  "chainstate_status": "usable",
+  "chainstate_generation_id": "{{generation_id}}",
+  "utxo_accounting_policy": "core_spendable_v1",
+  "chainstate_utxo_count": 4574,
+  "native_crypto_backend": "{{native_crypto_backend}}",
+  "native_crypto_available": true,
+  "current_blocker": null,
+  "last_error": ""
+}

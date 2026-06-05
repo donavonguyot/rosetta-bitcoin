@@ -96,8 +96,9 @@ Generation IDs prevent accidental promotion or reuse of partially rebuilt state.
 
 ## Backend Choice
 
-Shared now targets RocksDB for serious operational ports. Debug/reference
-backends may exist, but they are not the finish-line chainstate backend.
+Shared now requires RocksDB for serious operational ports and for the 5k
+baseline. Debug/reference backends may exist, but they are not comparable
+baseline evidence or the finish-line chainstate backend.
 RocksDB-backed stores must use Shared Chainstate Codec v2 byte-for-byte so
 storage optimizations apply uniformly across ports.
 
@@ -113,7 +114,9 @@ codec v2 vector conformance
 
 SQLite or file stores may be bootstrap/reference backends, but they must not
 become the authoritative serious-port chainstate by accident. They also must
-not remain as hidden side stores in native/Core proof mode.
+not remain as hidden side stores in native/Core proof mode. Other storage
+engines are research-only until the port has already cleared the RocksDB
+baseline.
 
 ## Python Full-Break Target
 

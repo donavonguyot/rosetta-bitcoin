@@ -1,6 +1,7 @@
 package com.jbitnode.consensus.connect;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.jbitnode.chain.ChainRegistry;
@@ -13,6 +14,12 @@ import java.nio.file.Path;
 import java.util.Map;
 
 class BlockConnectorNativeTest {
+  @Test
+  void spendableOutputRejectsCoreUnspendableScripts() {
+    assertFalse(BlockConnector.isSpendableOutput(new byte[] {}));
+    assertFalse(BlockConnector.isSpendableOutput(new byte[] {(byte) 0x6a, 0x01, 0x02}));
+    assertTrue(BlockConnector.isSpendableOutput(new byte[] {0x51}));
+  }
 
   @Test
   void connectsEarlyFixtureBlocksIntoNativeRocksDbChainstate(@TempDir Path tempDir)
@@ -50,7 +57,7 @@ class BlockConnectorNativeTest {
       assertEquals(2, second.height());
       assertEquals(NativeChainstateFixtures.blockHashHex(2), session.tracker().getValidatedHash(chain.name()));
       assertEquals(2, session.chainstateStore().tip().height());
-      assertEquals(4, session.chainstateStore().stats().utxoCount());
+      assertEquals(2, session.chainstateStore().stats().utxoCount());
       assertTrue(session.chainstateStore().readUndo(chain.name(), 2).isEmpty());
       assertTrue(Files.exists(ChainstateSession.nativeStorageMarker(dataDir)));
       assertTrue(Files.notExists(dataDir.resolve("jbitnode.db")));

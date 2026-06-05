@@ -1,6 +1,6 @@
-# ElixirNode (exbitnode)
+# Elixir (exbitnode)
 
-Supervised Bitcoin **testnet4** follower on the BEAM/OTP. ElixirNode is the exotic
+Supervised Bitcoin **testnet4** follower on the BEAM/OTP. Elixir is the exotic
 follower in the Nodes fleet: peer sessions, sync workers, and chainstate writes are
 designed for fault isolation and restartable long-running node behavior.
 
@@ -11,11 +11,11 @@ every stored connected block, reach/maintain tip. Header-only sync does not pass
 
 | Node | Role |
 |------|------|
-| PythonNode | Scout — discovers live-chain blockers first |
-| TypeScriptNode / CSharpNode | Fast managed followers |
-| **ElixirNode** | Supervised follower — OTP process boundaries, honest blockers |
+| Python | Scout — discovers live-chain blockers first |
+| TypeScript / CSharp | Fast managed followers |
+| **Elixir** | Supervised follower — OTP process boundaries, honest blockers |
 
-Use Python's blocker ledger as the consensus work queue. ElixirNode must not treat
+Use Python's blocker ledger as the consensus work queue. Elixir must not treat
 Python or local Core as validation oracles.
 
 ## Prerequisites

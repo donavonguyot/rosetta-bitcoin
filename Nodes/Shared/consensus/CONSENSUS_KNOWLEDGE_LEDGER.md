@@ -4,6 +4,9 @@ The consensus knowledge ledger is a language-neutral map of rules, blockers,
 fixtures, and proof evidence. It exists so ports can learn from each other
 without treating another port's runtime as an oracle.
 
+For the staged acceptance path that uses this ledger, read
+`Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`.
+
 ## Scope
 
 Ledger v1 starts with the Shared script corpus because that is the first shared

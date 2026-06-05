@@ -6,28 +6,29 @@
   "blocks_connected": 5001,
   "blocks_fetched": 5001,
   "byte_source": "local_reference_p2p",
-  "captured_at": "2026-06-04T21:00:51Z",
+  "captured_at": "2026-06-04T22:34:25Z",
   "category": "local_reference_sync",
   "chain": "testnet4",
   "chainstate_backend": "rocksdb",
   "chainstate_backend_path": "/data/chainstate-rocksdb",
   "chainstate_status": "usable",
-  "chainstate_utxo_count": 9232,
+  "chainstate_utxo_count": 4574,
   "connect_summary": {
     "implementation": "GoNode",
     "runtime_surface": "docker",
+    "utxo_accounting_policy": "core_spendable_v1",
     "mode": "local_reference_p2p_connect",
     "target_height": 5000,
     "header_height": 5000,
     "stored_block_height": 5000,
     "validated_height": 5000,
     "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
-    "chainstate_utxo_count": 9232,
+    "chainstate_utxo_count": 4574,
     "sync_status": "blocks_current",
     "current_blocker": null,
     "reached_target": true,
-    "started_at": "2026-06-04T21:00:51Z",
-    "updated_at": "2026-06-04T21:00:54Z",
+    "started_at": "2026-06-04T22:34:25Z",
+    "updated_at": "2026-06-04T22:34:28Z",
     "blocks_connected": 5001,
     "script_runner_mode": "parallel",
     "script_threads": 15,
@@ -36,59 +37,59 @@
     "rocksdb_tuning": "block_cache=512MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
     "rocksdb_wal_disabled": false,
     "timing_summary": {
-      "total_ms": 3011,
+      "total_ms": 3093,
       "stage_totals_ms": {
-        "block_connect_store_commit": 1588,
-        "block_parse_validate": 11,
-        "block_read": 5,
+        "block_connect_store_commit": 1643,
+        "block_parse_validate": 8,
+        "block_read": 2,
         "block_store": 1,
-        "commit": 4,
-        "prevout_batch_load": 6,
-        "prevout_legacy_fallback_get": 0,
-        "prevout_multi_get_call": 1,
+        "commit": 9,
+        "prevout_batch_load": 5,
+        "prevout_legacy_fallback_get": 4,
+        "prevout_multi_get_call": 0,
         "prevout_utxo_decode": 0,
-        "script_verify": 579,
-        "script_verify_worker_cpu": 3647
+        "script_verify": 576,
+        "script_verify_worker_cpu": 3808
       },
       "slow_blocks": [
         {
           "height": 739,
-          "ms": 73
-        },
-        {
-          "height": 2204,
-          "ms": 9
-        },
-        {
-          "height": 4533,
-          "ms": 8
-        },
-        {
-          "height": 2205,
-          "ms": 7
+          "ms": 56
         },
         {
           "height": 2212,
-          "ms": 7
+          "ms": 14
         },
         {
-          "height": 2222,
-          "ms": 7
+          "height": 2224,
+          "ms": 9
         },
         {
-          "height": 4340,
-          "ms": 7
-        },
-        {
-          "height": 4855,
-          "ms": 7
+          "height": 2191,
+          "ms": 8
         },
         {
           "height": 2208,
+          "ms": 7
+        },
+        {
+          "height": 4094,
+          "ms": 7
+        },
+        {
+          "height": 4124,
+          "ms": 7
+        },
+        {
+          "height": 4366,
+          "ms": 7
+        },
+        {
+          "height": 2192,
           "ms": 6
         },
         {
-          "height": 2234,
+          "height": 4266,
           "ms": 6
         }
       ]
@@ -127,6 +128,7 @@
     "node_id": "gobitnode-local-reference-sync",
     "implementation": "GoNode",
     "runtime_surface": "docker",
+    "utxo_accounting_policy": "core_spendable_v1",
     "runtime_status": "not_running",
     "chain": "testnet4",
     "network": "testnet4",
@@ -143,7 +145,7 @@
     "chainstate_backend_path": "/data/chainstate-rocksdb",
     "chainstate_generation_id": "go-reference-sync",
     "chainstate_status": "usable",
-    "chainstate_utxo_count": 9232,
+    "chainstate_utxo_count": 4574,
     "storage_codec_version": 2,
     "rocksdb_tuning": "block_cache=512MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
     "rocksdb_wal_disabled": false,
@@ -155,7 +157,7 @@
     "last_error": "",
     "active_writer_pid": null,
     "lock_status": "unlocked",
-    "updated_at": "2026-06-04T21:00:54Z"
+    "updated_at": "2026-06-04T22:34:28Z"
   },
   "storage_codec_version": 2,
   "stored_block_height": 5000,
@@ -172,72 +174,73 @@
     "sync_status": "blocks_current",
     "current_blocker": null,
     "binary_gate_status": "not_attempted",
-    "started_at": "2026-06-04T21:00:51Z",
-    "updated_at": "2026-06-04T21:00:54Z",
+    "started_at": "2026-06-04T22:34:25Z",
+    "updated_at": "2026-06-04T22:34:28Z",
     "blocks_fetched": 5001
   },
   "taproot_tweak_backend": "libsecp256k1",
   "target_height": 5000,
   "target_label": "5k",
   "timing_summary": {
-    "total_ms": 3011,
+    "total_ms": 3093,
     "stage_totals_ms": {
-      "block_connect_store_commit": 1588,
-      "block_parse_validate": 11,
-      "block_read": 5,
+      "block_connect_store_commit": 1643,
+      "block_parse_validate": 8,
+      "block_read": 2,
       "block_store": 1,
-      "commit": 4,
-      "prevout_batch_load": 6,
-      "prevout_legacy_fallback_get": 0,
-      "prevout_multi_get_call": 1,
+      "commit": 9,
+      "prevout_batch_load": 5,
+      "prevout_legacy_fallback_get": 4,
+      "prevout_multi_get_call": 0,
       "prevout_utxo_decode": 0,
-      "script_verify": 579,
-      "script_verify_worker_cpu": 3647
+      "script_verify": 576,
+      "script_verify_worker_cpu": 3808
     },
     "slow_blocks": [
       {
         "height": 739,
-        "ms": 73
-      },
-      {
-        "height": 2204,
-        "ms": 9
-      },
-      {
-        "height": 4533,
-        "ms": 8
-      },
-      {
-        "height": 2205,
-        "ms": 7
+        "ms": 56
       },
       {
         "height": 2212,
-        "ms": 7
+        "ms": 14
       },
       {
-        "height": 2222,
-        "ms": 7
+        "height": 2224,
+        "ms": 9
       },
       {
-        "height": 4340,
-        "ms": 7
-      },
-      {
-        "height": 4855,
-        "ms": 7
+        "height": 2191,
+        "ms": 8
       },
       {
         "height": 2208,
+        "ms": 7
+      },
+      {
+        "height": 4094,
+        "ms": 7
+      },
+      {
+        "height": 4124,
+        "ms": 7
+      },
+      {
+        "height": 4366,
+        "ms": 7
+      },
+      {
+        "height": 2192,
         "ms": 6
       },
       {
-        "height": 2234,
+        "height": 4266,
         "ms": 6
       }
     ]
   },
-  "updated_at": "2026-06-04T21:00:54Z",
+  "updated_at": "2026-06-04T22:34:28Z",
+  "utxo_accounting_policy": "core_spendable_v1",
   "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
   "validated_height": 5000
 }

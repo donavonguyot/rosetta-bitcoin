@@ -391,7 +391,7 @@ public final class BlockConnector {
   }
 
   static boolean isSpendableOutput(byte[] scriptPubKey) {
-    return scriptPubKey.length > 0;
+    return scriptPubKey.length > 0 && scriptPubKey[0] != 0x6a;
   }
 
   static long elapsedMillis(long startedNanos) {

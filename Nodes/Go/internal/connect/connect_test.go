@@ -47,6 +47,24 @@ func TestBlockViewExternalSpendProducesDeleteAndUndo(t *testing.T) {
 	}
 }
 
+func TestOutputsForSkipsCoreUnspendableOutputs(t *testing.T) {
+	tx := txtypes.Transaction{
+		Outputs: []txtypes.TxOut{
+			{Value: 1, ScriptPubKey: nil},
+			{Value: 2, ScriptPubKey: []byte{0x6a, 0x01, 0x02}},
+			{Value: 3, ScriptPubKey: []byte{0x51}},
+		},
+	}
+
+	utxos := outputsFor(10, tx, false)
+	if len(utxos) != 1 {
+		t.Fatalf("expected one spendable output, got %#v", utxos)
+	}
+	if utxos[0].Value != 3 || utxos[0].Vout != 2 {
+		t.Fatalf("wrong output retained: %#v", utxos[0])
+	}
+}
+
 func TestScriptRunnerDeterministicFirstFailure(t *testing.T) {
 	t.Setenv("GOBITNODE_PAR_SCRIPT_VERIFY", "1")
 	t.Setenv("GOBITNODE_PAR_SCRIPT_THREADS", "4")

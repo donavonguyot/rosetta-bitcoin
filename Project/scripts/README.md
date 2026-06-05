@@ -17,8 +17,9 @@ sqlite-utils query Project/project.db \
 
 ## Import Everything
 
-Rebuild Project from canonical Shared results, Docker manifests, selected status
-exports, blocker ledgers, and seeded decisions:
+Rebuild Project from canonical Shared results, Docker manifests, the Shared
+consensus rule ledger, selected status exports, blocker ledgers, and seeded
+decisions:
 
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
@@ -48,6 +49,8 @@ python3 Project/scripts/report.py --db Project/project.db --section blocker-matr
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-gates
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-comparability
+python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
 ```
 
 Preflight a benchmark gate before starting a port run:
@@ -71,6 +74,43 @@ durable proof volume, and required metadata stance such as
 `script_runner_mode=parallel`, and `fresh_state=true`. It does not fail merely
 because a port has no gate result yet; missing evidence means the run still
 needs to happen.
+
+Preflight the full 5k baseline after importing evidence:
+
+```bash
+python3 Project/scripts/preflight_port_baseline.py \
+  --db Project/project.db \
+  --port go \
+  --strict
+
+python3 Project/scripts/preflight_port_baseline.py \
+  --db Project/project.db \
+  --all
+```
+
+The strict baseline combines the comparable 5k gate with RocksDB, native crypto,
+script-corpus, UTXO accounting, timing buckets, and Docker command-surface
+evidence. The `--all` form is report-only unless `--strict` is also supplied.
+
+Preflight the consensus runway after importing evidence:
+
+```bash
+python3 Project/scripts/preflight_consensus_runway.py \
+  --db Project/project.db \
+  --port go \
+  --stage corpus \
+  --strict
+
+python3 Project/scripts/preflight_consensus_runway.py \
+  --db Project/project.db \
+  --port go \
+  --stage 5k \
+  --strict
+```
+
+The runway stages are `corpus`, `5k`, `10k`, `50k`, `100k`, and `tip`. The
+preflight checks Project's imported rule ledger, blocker state, port-owned
+script-corpus proof, 5k baseline posture, and staged sync evidence.
 
 Warm the port image before a benchmark campaign, then run fresh proof volumes
 without rebuilding unless a clean rebuild is intentional:
@@ -110,6 +150,12 @@ sqlite-utils query Project/project.db \
 
 sqlite-utils query Project/project.db \
   "select * from benchmark_comparability order by target_height, port"
+
+sqlite-utils query Project/project.db \
+  "select * from port_baseline_5k order by port"
+
+sqlite-utils query Project/project.db \
+  "select * from consensus_runway order by port, target_height"
 ```
 
 Generated reports are stdout-only. Do not add or commit a generated

@@ -91,7 +91,8 @@ public static class BlockConnector
         return new ConnectResult(height, blockHashHex, view.CreatedCount);
     }
 
-    public static bool IsSpendableOutput(byte[] scriptPubKey) => scriptPubKey.Length > 0;
+    public static bool IsSpendableOutput(byte[] scriptPubKey) =>
+        scriptPubKey.Length > 0 && scriptPubKey[0] != 0x6a;
 
     private static HashSet<ViewOutpoint> SameBlockOutputs(Block.Block block, IReadOnlyList<byte[]> txids)
     {

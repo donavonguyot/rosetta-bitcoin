@@ -1,30 +1,30 @@
 # Test fixtures (harvested from scout nodes)
 
-Hex and flat-file fixtures copied from PythonNode and TypeScriptNode tests for
+Hex and flat-file fixtures copied from Python and TypeScript tests for
 independent Java consensus prep (tx parsing, merkle, block storage).
 
 | Fixture | Source |
 |---------|--------|
-| `blocks/blk00000.dat` | `TypeScriptNode/tests/fixtures/blocks/blk00000.dat` (same file as `PythonNode/tests/fixtures/blocks/` when present) |
+| `blocks/blk00000.dat` | `Nodes/TypeScript/tests/fixtures/blocks/blk00000.dat` (same file as `Nodes/Python/tests/fixtures/blocks/` when present) |
 | `block1_wire.hex` … `block5_wire.hex` | Extracted wire payloads from `blk00000.dat` (258-byte testnet4 blocks 1–5) |
-| `block1_hash.txt` | `TypeScriptNode/tests/consensus.test.ts` — expected block 1 hash |
-| `tx_taproot_6975.hex` | `TypeScriptNode/tests/script.test.ts` and `PythonNode/tests/test_script.py` (`test_real_testnet4_block6975_taproot_keypath_accepted`) |
+| `block1_hash.txt` | `Nodes/TypeScript/tests/consensus.test.ts` — expected block 1 hash |
+| `tx_taproot_6975.hex` | `Nodes/TypeScript/tests/script.test.ts` and `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block6975_taproot_keypath_accepted`) |
 | `tx_taproot_6975_prev_spk.hex` | Same sources — prevout scriptPubKey for input 0 (64.3 BTC P2TR output) |
 | `block_22830.hex` | Local Core RPC `getblock` @ height 22830 (`127.0.0.1:48332`, block hash `00000000000002a4…`) |
-| `tx_p2tr_scriptpath_22830.hex` | Same RPC `getrawtransaction` for tx `630725d9…` (block index 2; wtxid `dca917fc…`); cross-checked against `PythonNode/tests/test_script.py` (`test_real_testnet4_block22830_taproot_script_path_if_accepted`) |
+| `tx_p2tr_scriptpath_22830.hex` | Same RPC `getrawtransaction` for tx `630725d9…` (block index 2; wtxid `dca917fc…`); cross-checked against `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block22830_taproot_script_path_if_accepted`) |
 | `tx_p2tr_scriptpath_22830_prev_spk.hex` | RPC prevout tx `745ba1ca…` vout 0 — P2TR `5120f6b0…` (798 sats, created in same block) |
 | `tx_p2tr_scriptpath_22830_prevouts.json` | Prevout amount + scriptPubKey for BIP341/342 sighash (`amount`: 798 sats) |
 | `tx_p2tr_scriptpath_22830_witness_0.hex` | Witness stack item 0 — 64-byte Schnorr signature for tapscript path |
 | `tx_p2tr_scriptpath_22830_tapscript.hex` | Witness stack item 1 — 0xc0 leaf with Ordinals-style `OP_IF`/`OP_ENDIF` envelope + checksig |
 | `tx_p2tr_scriptpath_22830_control_block.hex` | Witness stack item 2 — 33-byte control block (leaf version `0xc0`, internal key `7c6cea56…`) |
 | `block_25207.hex` | Local Core RPC `getblock` @ height 25207 (`0000000000000046…da0b`) |
-| `tx_op1_25207.hex` | Same RPC `getrawtransaction` for tx `23bf6f59…` (block index 1); cross-checked against `PythonNode/tests/test_script.py` (`test_real_testnet4_block25207_bare_op1_and_p2tr_spend_accepted`) |
+| `tx_op1_25207.hex` | Same RPC `getrawtransaction` for tx `23bf6f59…` (block index 1); cross-checked against `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block25207_bare_op1_and_p2tr_spend_accepted`) |
 | `tx_op1_25207_prevouts.json` | All six prevouts: input 0 P2TR 725313 sats; inputs 1–5 bare `OP_1` (`51`) at 1 sat each (created block 25200 tx `056aad3e…`) |
 | `tx_op1_25207_prev_spk_input1.hex` | Prevout for input 1 — bare `OP_1` scriptPubKey `51` |
 | `tx_op1_25207_scriptsig_input1.hex` | Input 1 scriptSig (empty — bare OP_1 spends require push-only empty scriptSig) |
 | `tx_op1_25207_witness_input0.hex` | Input 0 witness item 0 — 64-byte Schnorr signature (P2TR key-path in same tx) |
 | `block_27042.hex` | Local Core RPC `getblock` @ height 27042 (`0000000000000048…040b0`) |
-| `tx_p2wsh_27042.hex` | Same RPC `getrawtransaction` for tx `0864a600…` (block index 1); no Python scout fixture at this height (nearest P2WSH scout: block 27251 in `PythonNode/tests/test_script.py`) |
+| `tx_p2wsh_27042.hex` | Same RPC `getrawtransaction` for tx `0864a600…` (block index 1); no Python scout fixture at this height (nearest P2WSH scout: block 27251 in `Nodes/Python/tests/test_script.py`) |
 | `tx_p2wsh_27042_prevouts.json` | Prevout tx `6274e40d…` vout 0 from block 27038 — 94800 sats, native P2WSH `0020379e4b…` |
 | `tx_p2wsh_27042_prev_spk.hex` | Prevout scriptPubKey — `OP_0` + 32-byte witness-script hash |
 | `tx_p2wsh_27042_witness_0.hex` | Witness stack item 0 — empty push (CHECKMULTISIG dummy) |
@@ -32,13 +32,13 @@ independent Java consensus prep (tx parsing, merkle, block storage).
 | `tx_p2wsh_27042_witness_2.hex` | Witness stack item 2 — DER signature (key 2) |
 | `tx_p2wsh_27042_witness_script.hex` | Witness stack item 3 — redeem script `OP_2 <pk1> <pk2> OP_2 OP_CHECKMULTISIG` (2-of-2 multisig; SHA256 matches program hash) |
 | `block_27251.hex` | Local Core RPC `getblock` @ height 27251 (`00000000e32a5d69…8b9c78`) |
-| `tx_p2wsh_ifelse_27251.hex` | `PythonNode/tests/test_script.py` (`test_real_testnet4_block27251_p2wsh_if_else_multisig_accepted`); cross-checked against Core block verbose tx `a66a655d…` |
+| `tx_p2wsh_ifelse_27251.hex` | `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block27251_p2wsh_if_else_multisig_accepted`); cross-checked against Core block verbose tx `a66a655d…` |
 | `tx_p2wsh_ifelse_27251_prevouts.json` | Three prevouts (10000 / 10000 / 79761 sats), same P2WSH program `0020e51d37e1…` on all inputs |
 | `tx_p2wsh_ifelse_27251_prev_spk.hex` | Prevout scriptPubKey — native P2WSH `OP_0` + SHA256(witnessScript) |
 | `tx_p2wsh_ifelse_27251_witness_input{N}_{W}.hex` | Per-input witness stack (3 items each): DER sig, branch selector `0x01`, witnessScript |
 | `tx_p2wsh_ifelse_27251_witness_script.hex` | Witness stack item 2 (input 0) — `OP_IF <pk> OP_CHECKSIG OP_ELSE OP_2 <pk>×3 OP_3 OP_CHECKMULTISIG OP_ENDIF` |
 | `block_27807.hex` | Local Core RPC `getblock` @ height 27807 (`000000000024e0d4…87ffc`) |
-| `tx_p2sh_ifelse_sha256_27807.hex` | `PythonNode/tests/test_script.py` (`test_real_testnet4_block27807_p2sh_if_else_sha256_accepted`); cross-checked against Core block verbose tx `d1a68c8f…` (index 1) |
+| `tx_p2sh_ifelse_sha256_27807.hex` | `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block27807_p2sh_if_else_sha256_accepted`); cross-checked against Core block verbose tx `d1a68c8f…` (index 1) |
 | `tx_p2sh_ifelse_sha256_27807_prevouts.json` | Prevout tx `52ceb80c…` vout 0 — 489171 sats, P2SH `a914d569…` |
 | `tx_p2sh_ifelse_sha256_27807_prev_spk.hex` | Prevout scriptPubKey — bare P2SH `OP_HASH160` + `HASH160(redeemScript)` |
 | `tx_p2sh_ifelse_sha256_27807_scriptsig.hex` | Full input-0 scriptSig (DER sig, preimage push, `OP_0` branch selector, redeemScript push) |
@@ -51,7 +51,7 @@ independent Java consensus prep (tx parsing, merkle, block storage).
 | `tx_p2sh_ifelse_sha256_27807_sha256_digest.hex` | `SHA256(preimage)` — `6009b3c19a19f84e6b5208493a411939d0f49a90b462aa55b5b32466602c80b4` |
 | `tx_p2sh_ifelse_sha256_27807_branch.json` | Machine-readable IF/ELSE branch metadata (height, txid, branch selector, python_test name) |
 | `block_27815.hex` | Local Core RPC `getblock` @ height 27815 (`00000000f649f430…1b250`) |
-| `tx_p2sh_ifelse_numeric_27815.hex` | `PythonNode/tests/test_script.py` (`test_real_testnet4_block27815_p2sh_if_else_numeric_branch_accepted`); cross-checked against Core block verbose tx `2a691884…` (index 1) |
+| `tx_p2sh_ifelse_numeric_27815.hex` | `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block27815_p2sh_if_else_numeric_branch_accepted`); cross-checked against Core block verbose tx `2a691884…` (index 1) |
 | `tx_p2sh_ifelse_27815.hex` | Alias of `tx_p2sh_ifelse_numeric_27815.hex` (regression-test naming parity with 27807) |
 | `tx_p2sh_ifelse_numeric_27815_prevouts.json` | Prevout tx `f0c81358…` vout 0 — 740492 sats, P2SH `a9149bd8…` |
 | `tx_p2sh_ifelse_numeric_27815_prev_spk.hex` | Prevout scriptPubKey — bare P2SH `OP_HASH160` + `HASH160(redeemScript)` |
@@ -65,7 +65,7 @@ independent Java consensus prep (tx parsing, merkle, block storage).
 | `tx_p2sh_ifelse_numeric_27815_redeem_else_branch.hex` | Inactive `OP_ELSE` body — `OP_SHA256 PUSH(32) OP_EQUALVERIFY` |
 | `tx_p2sh_ifelse_numeric_27815_branch.json` | Machine-readable IF/ELSE branch metadata (height, txid, operand 2001 vs constant 2024, python_test name) |
 | `block_27840.hex` | Local Core RPC `getblock` @ height 27840 (`000000000000004b…db9bc`) |
-| `tx_bare_multisig_27840.hex` | `PythonNode/tests/test_script.py` (`test_real_testnet4_block27840_bare_multisig_accepted`); cross-checked against Core block verbose tx `f2b2a965…` (index 1) |
+| `tx_bare_multisig_27840.hex` | `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block27840_bare_multisig_accepted`); cross-checked against Core block verbose tx `f2b2a965…` (index 1) |
 | `tx_bare_multisig_27840_prevouts.json` | Prevout tx `65d9e145…` vout 0 — 477645 sats, bare 2-of-3 multisig scriptPubKey |
 | `tx_bare_multisig_27840_prev_spk.hex` | Prevout scriptPubKey — `OP_2` + three `PUSH(65)` uncompressed pubkeys + `OP_3 OP_CHECKMULTISIG` (201 bytes) |
 | `tx_bare_multisig_27840_scriptsig.hex` | Full input-0 scriptSig (147 bytes) |
@@ -74,14 +74,14 @@ independent Java consensus prep (tx parsing, merkle, block storage).
 | `tx_bare_multisig_27840_scriptsig_sig2.hex` | scriptSig item 2 — 72-byte DER+hashtype signature |
 | `tx_bare_multisig_27840_meta.json` | Machine-readable bare-multisig metadata (height, txid, prevout, python_test name) |
 | `block_31842.hex` | Local Core RPC `getblock` @ height 31842 (`0000000000000042…dd51`) |
-| `tx_p2wsh_op1_only_31842.hex` | `PythonNode/tests/test_script.py` (`test_real_testnet4_block31842_p2wsh_op1_only_witness_accepted`); cross-checked against Core block verbose tx `b6dc5519…` (index 1) |
+| `tx_p2wsh_op1_only_31842.hex` | `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block31842_p2wsh_op1_only_witness_accepted`); cross-checked against Core block verbose tx `b6dc5519…` (index 1) |
 | `tx_p2wsh_op1_only_31842_prevouts.json` | Prevout tx `4cb3e118…` vout 1 — 69179 sats, native P2WSH `00204ae815…` |
 | `tx_p2wsh_op1_only_31842_prev_spk.hex` | Prevout scriptPubKey — `OP_0` + SHA256(`OP_1`) |
 | `tx_p2wsh_op1_only_31842_witness_0.hex` | Witness stack item 0 — witnessScript only (`51`, len-1 stack) |
 | `tx_p2wsh_op1_only_31842_witness_script.hex` | Alias of witness item 0 — single-byte `OP_1` witness script |
 | `tx_p2wsh_op1_only_31842_meta.json` | Machine-readable P2WSH len-1 metadata (height, txid, python_test name) |
 | `block_32712.hex` | Local Core RPC `getblock` @ height 32712 (`0000000000000013…a6a3`) |
-| `tx_p2tr_tapscript_numequal_32712.hex` | `PythonNode/tests/test_script.py` (`test_real_testnet4_block32712_p2tr_tapscript_checksigadd_2of3_numequal_accepted`); cross-checked against Core block verbose tx `6b586a4f…` (index 1) |
+| `tx_p2tr_tapscript_numequal_32712.hex` | `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block32712_p2tr_tapscript_checksigadd_2of3_numequal_accepted`); cross-checked against Core block verbose tx `6b586a4f…` (index 1) |
 | `tx_p2tr_tapscript_numequal_32712_prevouts.json` | Prevout tx `ad635a2c…` vout 1 — 50000 sats, P2TR `51203a6c36…` |
 | `tx_p2tr_tapscript_numequal_32712_prev_spk.hex` | Prevout scriptPubKey — P2TR output key |
 | `tx_p2tr_tapscript_numequal_32712_witness_{0..4}.hex` | Script-path stack: empty, sig1, sig2, tapscript, control block |
@@ -100,7 +100,7 @@ independent Java consensus prep (tx parsing, merkle, block storage).
 | `tx_p2wsh_cltv_32868_branch.json` | Machine-readable IF/ELSE branch metadata (branch selector, locktime 1719894876, python_test references) |
 | `tx_p2wsh_cltv_32868_meta.json` | Machine-readable P2WSH CLTV metadata (height, txid, opcode sequence, missing_rule) |
 | `block_33500.hex` | Local Core RPC `getblock` @ height 33500 (`0000000000000034…56c4`) |
-| `tx_p2sh_p2wsh_op1_only_33500.hex` | `PythonNode/tests/test_script.py` (`test_real_testnet4_block33500_p2sh_p2wsh_op1_only_witness_accepted`); cross-checked against Core block verbose tx `f89a4629…` (index 3) |
+| `tx_p2sh_p2wsh_op1_only_33500.hex` | `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block33500_p2sh_p2wsh_op1_only_witness_accepted`); cross-checked against Core block verbose tx `f89a4629…` (index 3) |
 | `tx_p2sh_p2wsh_op1_only_33500_prevouts.json` | Prevout tx `c240434e…` vout 0 — 62819 sats, P2SH `a91472c4…` |
 | `tx_p2sh_p2wsh_op1_only_33500_prev_spk.hex` | Prevout scriptPubKey — bare P2SH `OP_HASH160` + `HASH160(nested P2WSH program)` |
 | `tx_p2sh_p2wsh_op1_only_33500_scriptsig.hex` | Input-0 scriptSig — push-only redeem script `OP_0` + 32-byte witness-script hash (nested P2WSH program) |
@@ -108,7 +108,7 @@ independent Java consensus prep (tx parsing, merkle, block storage).
 | `tx_p2sh_p2wsh_op1_only_33500_witness_script.hex` | Alias of witness item 0 — single-byte `OP_1` witness script |
 | `tx_p2sh_p2wsh_op1_only_33500_meta.json` | Machine-readable P2SH→P2WSH len-1 metadata (height, txid, python_test name) |
 | `block_38010.hex` | Local Core RPC `getblock` @ height 38010 (`0000000000000012…a626`) |
-| `tx_p2pkh_sighash_single_38010.hex` | `PythonNode/tests/test_script.py` (`test_real_testnet4_block38010_p2pkh_sighash_single_sequence_accepted`); cross-checked against Core block verbose tx `ba32ba8e…` (index 1) |
+| `tx_p2pkh_sighash_single_38010.hex` | `Nodes/Python/tests/test_script.py` (`test_real_testnet4_block38010_p2pkh_sighash_single_sequence_accepted`); cross-checked against Core block verbose tx `ba32ba8e…` (index 1) |
 | `tx_p2pkh_sighash_single_38010_prevouts.json` | Prevout tx `95fe33f9…` vout 0 — 85922406945143 sats, P2PKH `76a9149ec1…` |
 | `tx_p2pkh_sighash_single_38010_prev_spk.hex` | Prevout scriptPubKey — legacy P2PKH `OP_DUP OP_HASH160 … OP_EQUALVERIFY OP_CHECKSIG` |
 | `tx_p2pkh_sighash_single_38010_scriptsig.hex` | Input-0 scriptSig — 71-byte DER+SIGHASH_SINGLE (0x03) + 33-byte compressed pubkey |
@@ -151,7 +151,7 @@ independent Java consensus prep (tx parsing, merkle, block storage).
 
 ## Scout above 38191 (2026-05-25)
 
-Grep of `PythonNode/tests/test_script.py` for `test_real_testnet4_block38*` and
+Grep of `Nodes/Python/tests/test_script.py` for `test_real_testnet4_block38*` and
 `test_real_testnet4_block39*` with height **> 38191**:
 
 **No Python scout fixtures above 38010** (live-only blockers 38191–44295 harvested via Core RPC).

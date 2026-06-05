@@ -18,6 +18,23 @@ Initial fixtures are marked `raw_imported`. Follower ports should consume
 `manifest.json`, load bytes by `fixture_id`, and record their own results before
 claiming support for a rule or fixture group.
 
+The accepted port-owned proof artifact uses schema `port.script_corpus_result.v1`
+with:
+
+```text
+category=script_corpus
+fixture_count=45
+passed=45
+failed=0
+runtime_surface=<host|docker>
+verifier=<port verifier>
+native_crypto_backend=<native backend>
+results=[per-fixture rows]
+```
+
+`shared.script_fixtures.validation.v1` validates this manifest only. It is not a
+port's corpus proof and Project must not count it as one.
+
 ## Port runners
 
 | Port | Command (native secp required) | Result JSON |
@@ -32,7 +49,7 @@ Build C++ with `-DCPBITNODE_USE_NATIVE_SECP256K1=ON`. CTest target: `shared_scri
 Do **not** implement the fixture’s `missing_rule` string blindly. It records what
 blocked the harvesting port at import time, not what your interpreter lacks today.
 
-1. Read [`Docs/script-semantics-gotchas.md`](../../../../Docs/script-semantics-gotchas.md)
+1. Read [`Docs/script-semantics-gotchas.md`](../../../../../Docs/script-semantics-gotchas.md)
    (section **Shared script corpus and MATRIX triage**).
 2. Re-run **only** the failing `fixture_id` and capture the full `failure` text in
    the port’s corpus result JSON.

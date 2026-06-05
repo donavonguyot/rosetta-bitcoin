@@ -16,6 +16,7 @@ type Document struct {
 	NodeID                 string                 `json:"node_id"`
 	Implementation         string                 `json:"implementation"`
 	RuntimeSurface         string                 `json:"runtime_surface"`
+	UtxoAccounting         string                 `json:"utxo_accounting_policy"`
 	RuntimeStatus          string                 `json:"runtime_status"`
 	Chain                  string                 `json:"chain"`
 	Network                string                 `json:"network"`
@@ -78,6 +79,7 @@ func Build(datadir string) (Document, error) {
 		NodeID:                 meta.NodeID,
 		Implementation:         "GoNode",
 		RuntimeSurface:         surface.RuntimeSurface(),
+		UtxoAccounting:         "core_spendable_v1",
 		RuntimeStatus:          map[bool]string{true: "running", false: "not_running"}[pid != nil],
 		Chain:                  meta.Chain,
 		Network:                meta.Chain,

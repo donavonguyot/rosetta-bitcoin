@@ -1,0 +1,34 @@
+{
+  "port": "{{port}}",
+  "node_id": "{{node_id}}",
+  "status": "proof_partial",
+  "root_path": "Nodes/{{Port}}",
+  "dockerfile_path": "Nodes/{{Port}}/docker/Dockerfile",
+  "compose_path": "Nodes/{{Port}}/docker/docker-compose.yml",
+  "dockerignore_path": "Nodes/{{Port}}/.dockerignore",
+  "volumes": {
+    "data": "{{port}}_sync_data",
+    "proof": "{{port}}_proof_data",
+    "supervisor": "{{port}}_supervisor_data"
+  },
+  "commands": {
+    "docker_config": "cd Nodes/{{Port}} && make docker-config",
+    "docker_build": "cd Nodes/{{Port}} && make docker-build",
+    "docker_warm": "cd Nodes/{{Port}} && make docker-warm",
+    "docker_status": "cd Nodes/{{Port}} && make docker-status",
+    "docker_proof_local": "cd Nodes/{{Port}} && make docker-proof-local",
+    "docker_script_corpus": "cd Nodes/{{Port}} && make docker-script-corpus"
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": true,
+      "peer": "host.docker.internal:48333",
+      "command": "make docker-proof-local"
+    }
+  },
+  "proof_artifacts": {
+    "script_corpus": "Nodes/Shared/conformance/results/{{port}}_script_corpus_<YYYY-MM-DD>.json",
+    "supporting_5k": "Nodes/Shared/conformance/results/{{port}}_docker_supporting_5k_benchmark_<YYYY-MM-DD>.json"
+  },
+  "known_caveats": []
+}

@@ -88,6 +88,10 @@ defmodule Exbitnode.CLI.SyncLocal do
                 IO.puts("  connected_blocks=#{block_result.connected}")
                 IO.puts("  sync_status=#{block_result.sync_status}")
 
+                if Map.has_key?(block_result, :timing) do
+                  IO.puts("  sync_timing_json=#{Jason.encode!(block_result.timing)}")
+                end
+
                 if block_result.blocker_message do
                   IO.puts("  current_blocker=#{block_result.blocker_message}")
                 end

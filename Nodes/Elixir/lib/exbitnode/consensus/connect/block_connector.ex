@@ -9,13 +9,28 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
   }
 
   alias Exbitnode.Consensus.Connect.{BlockUtxoView, ConnectBlockError, ValidationBlocker}
-  alias Exbitnode.Consensus.Script.{ScriptVerify, ScriptVerifyError, ScriptVerifyRunner, UnsupportedScriptRule}
+
+  alias Exbitnode.Consensus.Script.{
+    ScriptVerify,
+    ScriptVerifyError,
+    ScriptVerifyRunner,
+    UnsupportedScriptRule
+  }
+
   alias Exbitnode.Consensus.Tx.Transaction
   alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
   alias Exbitnode.Messages.BlockHeaderCodec
   alias Exbitnode.Util.Hex
 
-  def connect(conn, chain, height, payload, expected_prev_internal, expected_hash_internal, stored \\ nil) do
+  def connect(
+        conn,
+        chain,
+        height,
+        payload,
+        expected_prev_internal,
+        expected_hash_internal,
+        stored \\ nil
+      ) do
     validated = ChainstateTracker.get_validated_height(conn, chain)
 
     if height != validated + 1 do
@@ -29,14 +44,16 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
       rescue
         e in BlockValidationError ->
           reraise ConnectBlockError, [message: e.message], __STACKTRACE__
-    end
+      end
 
     block_hash_hex = BlockHeaderCodec.block_hash_hex(block.header)
     Process.put(:exbitnode_script_verify_us, 0)
     Process.put(:exbitnode_script_runner_wait_us, 0)
     Process.put(:exbitnode_utxo_apply_us, 0)
 
-    {utxo_load_us, loaded_prevouts} = timed(fn -> preload_external_prevouts(conn, chain, block) end)
+    {utxo_load_us, loaded_prevouts} =
+      timed(fn -> preload_external_prevouts(conn, chain, block) end)
+
     view = BlockUtxoView.new(conn, chain, height, loaded_prevouts)
 
     view =
@@ -70,7 +87,7 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
 
     view =
       Enum.reduce(Enum.with_index(coinbase.outputs), view, fn {output, vout}, acc_view ->
-        if spendable_output?(output.script_pubkey) do
+        if height > 0 and spendable_output?(output.script_pubkey) do
           BlockUtxoView.create(
             acc_view,
             coinbase_txid,
@@ -151,13 +168,15 @@ defmodule Exbitnode.Consensus.Connect.BlockConnector do
   end
 
   def spendable_output?(script_pubkey) when is_binary(script_pubkey),
-    do: byte_size(script_pubkey) > 0
+    do: byte_size(script_pubkey) > 0 and :binary.at(script_pubkey, 0) != 0x6A
 
   defp preload_external_prevouts(conn, chain, block) do
     outpoints =
       block.transactions
       |> Enum.reject(&Transaction.coinbase?/1)
-      |> Enum.flat_map(fn tx -> Enum.map(tx.inputs, &BlockUtxoView.outpoint_tuple(&1.previous_output)) end)
+      |> Enum.flat_map(fn tx ->
+        Enum.map(tx.inputs, &BlockUtxoView.outpoint_tuple(&1.previous_output))
+      end)
       |> Enum.uniq()
 
     conn
@@ -433,5 +452,6 @@ defmodule Exbitnode.Consensus.Connect.BlockUtxoView do
     |> Enum.sort()
   end
 
-  def created_utxos(%__MODULE__{created: created}), do: created |> Map.values() |> Enum.sort_by(&{&1.txid, &1.vout})
+  def created_utxos(%__MODULE__{created: created}),
+    do: created |> Map.values() |> Enum.sort_by(&{&1.txid, &1.vout})
 end

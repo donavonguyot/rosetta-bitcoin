@@ -7,6 +7,10 @@ DOCKER_REBUILD ?= 0
 DOCKER_PROOF_VOLUME ?= exbitnode_proof_data
 DOCKER_SYNC_VOLUME ?= exbitnode_sync_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/elixir_rocksdb_codec_v2_storage.json
+RESULT_DATE ?= $(shell date +%F)
+DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+DOCKER_PREFETCH_DEPTH ?= 4
+DOCKER_SCRIPT_THREADS ?= 4
 DOCKER_LONG_PROOF_VOLUME ?= exbitnode_native_10k_sync_data
 DOCKER_LONG_PROOF_PATH ?= ../Shared/conformance/results/elixir_native_docker_10k_sync_20260603.json
 DOCKER_LONG_HEADERS_MAX ?= 10000
@@ -23,7 +27,7 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-proof-local docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
+.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-proof-local docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 
 test:
 	$(MIX) test
@@ -56,11 +60,41 @@ docker-warm: docker-build
 docker-status:
 	DOCKER_PROOF_VOLUME=$(DOCKER_SYNC_VOLUME) RUNTIME_SURFACE=docker $(DOCKER_COMPOSE) run --rm --no-deps exbitnode-sync-proof mix node.status
 
-docker-proof-local:
+docker-storage-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build exbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) RUNTIME_SURFACE=docker PROOF_PATH=/tmp/elixir_storage_proof.json \
 	  $(DOCKER_COMPOSE) run --rm --no-deps exbitnode-sync-proof mix storage.proof
+	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
+
+docker-proof-local:
+	@for i in $$(seq 1 60); do \
+	  nc -z 127.0.0.1 48333 && break; \
+	  sleep 2; \
+	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
+	done
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build exbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
+	@set -e; \
+	  sync_log=.docker-elixir-5k-sync.log; \
+	  status_json=.docker-elixir-5k-status.json; \
+	  exit_file=.docker-elixir-5k-sync-exit; \
+	  set +e; \
+	  DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) RUNTIME_SURFACE=docker PEERS=$(DOCKER_PEERS) \
+	    HEADERS_MAX=5000 HEADER_BATCHES_MAX=50 BLOCKS_MAX=5001 \
+	    BLOCK_PREFETCH_DEPTH=$(DOCKER_PREFETCH_DEPTH) SYNC_TIMING=1 \
+	    PAR_SCRIPT_VERIFY=1 PAR_SCRIPT_THREADS=$(DOCKER_SCRIPT_THREADS) PAR_SCRIPT_MIN_INPUTS=2 \
+	    $(DOCKER_COMPOSE) run --rm exbitnode-sync-proof mix sync.local > $$sync_log 2>&1; \
+	  sync_rc=$$?; \
+	  set -e; \
+	  printf '%s\n' "$$sync_rc" > $$exit_file; \
+	  DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) RUNTIME_SURFACE=docker PEERS=$(DOCKER_PEERS) \
+	    $(DOCKER_COMPOSE) run --rm --no-deps exbitnode-sync-proof mix node.status > $$status_json || true; \
+	  DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) TARGET_HEIGHT=5000 HEADER_TARGET_HEIGHT=5000 \
+	    BLOCKS_MAX=5001 PREFETCH_DEPTH=$(DOCKER_PREFETCH_DEPTH) SCRIPT_RUNNER_MODE=parallel \
+	    PEER=$(DOCKER_PEERS) PROOF_PATH=$(DOCKER_BENCHMARK_RESULT) \
+	    python3 ../Shared/conformance/tools/proofs/capture_elixir_docker_5k_benchmark.py $$status_json $$sync_log $$exit_file; \
+	  rm -f $$sync_log $$status_json $$exit_file
 	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
 
 docker-long-sync-proof:

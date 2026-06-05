@@ -70,6 +70,7 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
         benchmark_kind(opts.target, opts.byte_source).into(),
     );
     doc.insert("benchmark_lane".into(), benchmark_lane.into());
+    doc.insert("utxo_accounting_policy".into(), "core_spendable_v1".into());
     doc.insert("byte_source".into(), byte_source.into());
     doc.insert("resume_supported".into(), true.into());
     doc.insert("fresh_state".into(), true.into());

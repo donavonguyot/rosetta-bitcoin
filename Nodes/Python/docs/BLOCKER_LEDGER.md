@@ -6,7 +6,7 @@ native state, and reproducible sync commands -- not this file alone.
 **Status query:**
 
 ```bash
-cd PythonNode
+cd Nodes/Python
 .venv/bin/pybitnode-status --state-path ./data/chainstate-rocksdb
 tail -n 40 sync_batch_run.log
 ```

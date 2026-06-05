@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import unquote
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,7 +22,31 @@ PROJECTION_DOCS = [
     ROOT / "Docs/follower-port-matrix.md",
 ]
 
+BASELINE_DOCS = [
+    ROOT / "README.md",
+    ROOT / "AGENTS.md",
+    ROOT / "Docs/port-baseline-5k.md",
+]
+
+CONSENSUS_RUNWAY_DOCS = [
+    ROOT / "README.md",
+    ROOT / "AGENTS.md",
+    ROOT / "Docs/agent-prompts.md",
+    ROOT / "Nodes/Shared/consensus/CONSENSUS_RUNWAY.md",
+]
+
 PORT_DOC_STATUS_HEADINGS = re.compile(r"^##\s+(?:Live status|Current status|Current Status)\b")
+MARKDOWN_LINK = re.compile(r"!?\[[^\]\n]+\]\(([^)\n]+)\)")
+IGNORED_PATH_PARTS = {
+    ".git",
+    ".pytest_cache",
+    ".venv",
+    "_build",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+}
 
 FORBIDDEN_PATTERNS = [
     re.compile(r"update\s+.*Docs/(?:follower-port-matrix|port-status)\.md", re.IGNORECASE),
@@ -38,7 +63,29 @@ FORBIDDEN_PATTERNS = [
     re.compile(r"SQLite\s+is\s+forbidden", re.IGNORECASE),
     re.compile(r"avoid\s+SQLite", re.IGNORECASE),
     re.compile(r"SQLite\s+at\s+all\s+cost", re.IGNORECASE),
+    re.compile(r"approved\s+native\s+" + "store", re.IGNORECASE),
+    re.compile(r"RocksDB\s+or\s+(?:an?\s+)?" + "approved", re.IGNORECASE),
+    re.compile("baseline" + r"\b.*\b(?:" + "Level" + r"DB|M" + r"DBX)\b", re.IGNORECASE),
+    re.compile(r"baseline\b.*\b(?:managed|pure|fallback)\s+crypto\b", re.IGNORECASE),
+    re.compile(r"piece\s+.*consensus\s+status\s+.*(?:port\s+README|historical|Java/Python)", re.IGNORECASE),
+    re.compile(r"current\s+consensus\s+status\s+.*(?:port\s+README|historical\s+Java|historical\s+Python)", re.IGNORECASE),
 ]
+
+BASELINE_REQUIRED_TERMS = (
+    "RocksDB",
+    "native crypto",
+    "45/45",
+    "Docker local Reference P2P",
+    "core_spendable_v1",
+    "Project",
+)
+
+CONSENSUS_REQUIRED_TERMS = (
+    "CONSENSUS_RUNWAY",
+    "testnet4_script_rules_v1.json",
+    "consensus-runway",
+    "preflight_consensus_runway.py",
+)
 
 
 def iter_text_files(path: Path) -> list[Path]:
@@ -50,7 +97,7 @@ def iter_text_files(path: Path) -> list[Path]:
         if candidate.is_file()
         and candidate.suffix.lower() in {".md", ".py", ".sql", ".txt"}
         and candidate.name != "check_doc_drift.py"
-        and ".git" not in candidate.parts
+        and not (set(candidate.parts) & IGNORED_PATH_PARTS)
     ]
 
 
@@ -60,6 +107,37 @@ def line_has_unqualified_sqlite_forbidden(text: str) -> bool:
         return False
     qualifiers = ("port-local", "operational", "native/core", "project")
     return not any(qualifier in lower for qualifier in qualifiers)
+
+
+def markdown_link_target(raw_target: str) -> str:
+    target = raw_target.strip()
+    if target.startswith("<") and target.endswith(">"):
+        target = target[1:-1].strip()
+    if " " in target:
+        target = target.split(" ", 1)[0]
+    return unquote(target)
+
+
+def is_external_link(target: str) -> bool:
+    lower = target.lower()
+    return (
+        not target
+        or target.startswith("#")
+        or lower.startswith(("http://", "https://", "mailto:", "tel:", "data:"))
+    )
+
+
+def local_link_exists(path: Path, target: str) -> bool:
+    if is_external_link(target):
+        return True
+    target_without_anchor = target.split("#", 1)[0]
+    if not target_without_anchor:
+        return True
+    if target_without_anchor.startswith("/"):
+        candidate = Path(target_without_anchor)
+    else:
+        candidate = path.parent / target_without_anchor
+    return candidate.exists()
 
 
 def main() -> int:
@@ -72,6 +150,24 @@ def main() -> int:
         for index, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if line.startswith("|") and "---" in line:
                 errors.append(f"{path.relative_to(ROOT)}:{index}: hand-maintained table in projection doc")
+
+    for path in BASELINE_DOCS:
+        if not path.exists():
+            errors.append(f"missing baseline doc: {path.relative_to(ROOT)}")
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for term in BASELINE_REQUIRED_TERMS:
+            if term not in text:
+                errors.append(f"{path.relative_to(ROOT)}: baseline guidance missing {term!r}")
+
+    for path in CONSENSUS_RUNWAY_DOCS:
+        if not path.exists():
+            errors.append(f"missing consensus runway doc: {path.relative_to(ROOT)}")
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for term in CONSENSUS_REQUIRED_TERMS:
+            if term not in text:
+                errors.append(f"{path.relative_to(ROOT)}: consensus runway guidance missing {term!r}")
 
     for root in SCAN_ROOTS:
         for path in iter_text_files(root):
@@ -89,6 +185,11 @@ def main() -> int:
                         errors.append(f"{rel_path}:{index}: forbidden drift phrase: {line.strip()}")
                 if line_has_unqualified_sqlite_forbidden(line):
                     errors.append(f"{rel_path}:{index}: unqualified SQLite forbidden language: {line.strip()}")
+                if path.suffix.lower() == ".md":
+                    for match in MARKDOWN_LINK.finditer(line):
+                        target = markdown_link_target(match.group(1))
+                        if not local_link_exists(path, target):
+                            errors.append(f"{rel_path}:{index}: broken local Markdown link: {target}")
 
     if errors:
         print("doc_drift_check status=failed")

@@ -10,6 +10,7 @@ pub struct StatusDocument {
     pub node_id: String,
     pub implementation: &'static str,
     pub runtime_surface: String,
+    pub utxo_accounting_policy: &'static str,
     pub runtime_status: String,
     pub chain: String,
     pub network: String,
@@ -53,6 +54,7 @@ pub fn build(datadir: &Path, runtime_surface: &str) -> Result<StatusDocument> {
         node_id: meta.node_id,
         implementation: "RustNode",
         runtime_surface: runtime_surface.to_string(),
+        utxo_accounting_policy: "core_spendable_v1",
         runtime_status: if active_writer_pid.is_some() {
             "running"
         } else {

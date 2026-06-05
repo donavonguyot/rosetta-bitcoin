@@ -250,6 +250,11 @@ seconds with `validated_hash =
 `chainstate_utxo_count = 19100`, native `libsecp256k1`, and no blocker. This is
 bounded local-reference evidence, not a live P2P/tip-maintenance claim.
 
+When comparing UTXO counts, use the shared `core_spendable_v1` accounting
+policy: active spendable UTXOs only, excluding genesis coinbase and empty or
+`OP_RETURN` outputs. Raw unspent output counts are useful diagnostics, but they
+are not comparable `chainstate_utxo_count` values.
+
 ## Anti-patterns
 
 - Migrating storage engines before measuring the access pattern.
@@ -288,7 +293,7 @@ copy:
 - enforce one writer with a datadir lock;
 - keep chunks bounded and parseable;
 - write terminal summaries with `validated_height`, `sync_status`,
-  `current_blocker`, and `utxo_count`;
+  `current_blocker`, `utxo_accounting_policy`, and `utxo_count`;
 - monitor with a separate read-only sentinel loop instead of restarting sync.
 
 PythonNode mirrors this in `Nodes/Python/Makefile`,

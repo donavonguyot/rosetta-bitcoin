@@ -7,6 +7,8 @@ canonical docs below instead of adding a one-off plan file.
 
 - `port-status.md` - how to query Project for the current all-port projection.
 - `follower-port-matrix.md` - how to query Project for the blocker matrix.
+- `../Nodes/Shared/consensus/CONSENSUS_RUNWAY.md` - how to query Project for
+  corpus-to-tip consensus readiness.
 
 These pages do not own repeated status rows. Rebuild/import Project and query
 `Project/project.db` for mission-control status:
@@ -15,10 +17,12 @@ These pages do not own repeated status rows. Rebuild/import Project and query
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
 ```
 
 ## Canonical Policy
 
+- `port-baseline-5k.md` - strict first readiness baseline for comparable ports.
 - `git-topology.md` - root repository, port directory, and artifact ownership.
 - `artifact-retention.md` - proof/log/datadir retention policy.
 - `storage-contract.md` - project-level storage compliance rules.
@@ -26,7 +30,7 @@ python3 Project/scripts/report.py --db Project/project.db --section blocker-matr
 
 ## Durable Lessons
 
-- `consensus-blockers-testnet4.md` - shared blocker facts and fixture anchors.
+- `consensus-blockers-testnet4.md` - shared blocker provenance and fixture anchors.
 - `script-semantics-gotchas.md` - consensus/script traps learned from blockers.
 - `blocker-ledger.md` - blocker record shape and classification rules.
 - `port-performance-lessons.md` - reusable performance lessons.
@@ -36,6 +40,13 @@ python3 Project/scripts/report.py --db Project/project.db --section blocker-matr
 - `checkpoint-strategy.md` - checkpoint and snapshot guidance.
 - `native-crypto-contract.md` - native crypto expectations.
 - `agent-prompts.md` - reusable prompts for agents.
+
+For baseline readiness, prefer Project over hand-maintained summaries:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
+python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --all
+```
 
 ## Cleanup Rule
 

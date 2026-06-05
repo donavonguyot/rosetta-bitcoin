@@ -28,6 +28,11 @@ Nodes/Shared/
   conformance/
 ```
 
+For consensus readiness, start with
+`Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`. It defines the staged
+`script-corpus -> 5k -> 10k -> 50k -> 100k -> tip` path and points Project at
+the Shared rule ledger instead of scattered historical status notes.
+
 ## Non-Negotiable Rule
 
 Each node has exactly one authoritative operational chainstate in its own

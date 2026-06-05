@@ -1,6 +1,6 @@
 # pybitnode operations runbook
 
-Operations reference for syncing, rebuilding tracker state from disk, exporting snapshots, and running the node with inbound peers. Paths assume repo root (`PythonNode/`).
+Operations reference for syncing, rebuilding tracker state from disk, exporting snapshots, and running the node with inbound peers. Paths assume workspace root plus `Nodes/Python/`.
 
 Deep dives on how header/block sync and persistence fit together live in [`ARCHITECTURE.md`](ARCHITECTURE.md); this file focuses on procedures and knobs—including the [**lightweight block-sync handshake**](#lightweight-block-sync-handshake-no-header-refresh) when skipping header refresh, and the [**consensus stall playbook**](#consensus-stall-playbook-invalid-blocks) when validation rejects blocks during sync.
 

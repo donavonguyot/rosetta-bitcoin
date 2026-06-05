@@ -31,6 +31,7 @@ public static class NodeStatusService
         {
             ["chain"] = chain,
             ["datadir"] = dataDir,
+            ["utxo_accounting_policy"] = "core_spendable_v1",
             ["native_storage"] = true,
             ["sqlite_free"] = !hasSqliteArtifact,
             ["local_sqlite_artifact_absent"] = !hasSqliteArtifact,

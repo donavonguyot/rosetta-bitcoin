@@ -1,7 +1,7 @@
 {
   "implementation": "CSharpNode",
   "category": "docker_native_crypto_sync",
-  "captured_at": "2026-06-04T21:42:11.855178+00:00",
+  "captured_at": "2026-06-04T22:36:35.254387+00:00",
   "datadir": "/data",
   "chain": "testnet4",
   "runtime_surface": "docker",
@@ -27,78 +27,78 @@
     "Stages": {
       "block_store": {
         "Count": 5000,
-        "TotalMicros": 40555,
-        "P50Micros": 6,
-        "P95Micros": 20,
-        "MaxMicros": 242
+        "TotalMicros": 27990,
+        "P50Micros": 4,
+        "P95Micros": 14,
+        "MaxMicros": 166
       },
       "utxo_load": {
         "Count": 5000,
-        "TotalMicros": 213790,
-        "P50Micros": 4,
-        "P95Micros": 150,
-        "MaxMicros": 7570
+        "TotalMicros": 258032,
+        "P50Micros": 2,
+        "P95Micros": 198,
+        "MaxMicros": 3142
       },
       "script_verify": {
         "Count": 5000,
-        "TotalMicros": 1987854,
+        "TotalMicros": 1911718,
         "P50Micros": 0,
-        "P95Micros": 1708,
-        "MaxMicros": 77448
+        "P95Micros": 1704,
+        "MaxMicros": 34628
       },
       "utxo_apply": {
         "Count": 5000,
-        "TotalMicros": 25278,
-        "P50Micros": 2,
-        "P95Micros": 12,
-        "MaxMicros": 600
+        "TotalMicros": 18655,
+        "P50Micros": 1,
+        "P95Micros": 9,
+        "MaxMicros": 1192
       },
       "commit": {
         "Count": 5000,
-        "TotalMicros": 445901,
-        "P50Micros": 49,
-        "P95Micros": 268,
-        "MaxMicros": 4133
+        "TotalMicros": 459702,
+        "P50Micros": 36,
+        "P95Micros": 304,
+        "MaxMicros": 1745
       },
       "block_connect_store_commit": {
         "Count": 5000,
-        "TotalMicros": 3235822,
-        "P50Micros": 177,
-        "P95Micros": 2418,
-        "MaxMicros": 93705
+        "TotalMicros": 3012313,
+        "P50Micros": 73,
+        "P95Micros": 2403,
+        "MaxMicros": 42264
       }
     }
   },
   "timing_summary": {
     "stage_totals_ms": {
-      "block_store": 41,
-      "utxo_load": 214,
-      "script_verify": 1988,
-      "utxo_apply": 25,
-      "commit": 446,
-      "block_connect_store_commit": 3236
+      "block_store": 28,
+      "utxo_load": 258,
+      "script_verify": 1912,
+      "utxo_apply": 19,
+      "commit": 460,
+      "block_connect_store_commit": 3012
     },
-    "total_ms": 3236,
+    "total_ms": 3012,
     "slow_stages": [
       {
         "stage": "block_connect_store_commit",
         "count": 5000,
-        "max_ms": 94
+        "max_ms": 42
       },
       {
         "stage": "script_verify",
         "count": 5000,
-        "max_ms": 77
+        "max_ms": 35
       },
       {
         "stage": "utxo_load",
         "count": 5000,
-        "max_ms": 8
+        "max_ms": 3
       },
       {
         "stage": "commit",
         "count": 5000,
-        "max_ms": 4
+        "max_ms": 2
       },
       {
         "stage": "utxo_apply",
@@ -112,8 +112,8 @@
       }
     ]
   },
-  "elapsed_ms": 3236,
-  "proof_wrapper_elapsed_ms": 16272,
+  "elapsed_ms": 3012,
+  "proof_wrapper_elapsed_ms": 16338,
   "sync_exit_code": 0,
   "result": "passed",
   "bounded_gate_status": "passed",
@@ -127,6 +127,7 @@
   "benchmark_contract_version": 1,
   "benchmark_kind": "supporting_5k_p2p",
   "benchmark_lane": "supporting_5k_p2p",
+  "utxo_accounting_policy": "core_spendable_v1",
   "byte_source": "local_reference_p2p",
   "proof_mode": "p2p_sync",
   "peer_mode": "local_reference",
@@ -138,7 +139,7 @@
   "fresh_state": true,
   "blocks_fetched": 5000,
   "blocks_connected": 5000,
-  "chainstate_utxo_count": 9232,
+  "chainstate_utxo_count": 4574,
   "reference_start_height": 0,
   "reference_start_hash": "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
   "reference_finish_height": 5000,

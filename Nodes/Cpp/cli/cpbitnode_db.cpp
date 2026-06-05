@@ -68,6 +68,7 @@ std::string statusJson(const cpbitnode::config::Settings& settings, cpbitnode::d
     out << "\"runtime_surface\":" << cpbitnode::util::jsonString(runtimeSurface()) << ",";
     out << "\"chain\":" << cpbitnode::util::jsonString(settings.chain) << ",";
     out << "\"network\":\"testnet4\",";
+    out << "\"utxo_accounting_policy\":\"core_spendable_v1\",";
     out << "\"sync_status\":" << cpbitnode::util::jsonString(sync) << ",";
     out << "\"runtime_status\":\"not_running\",";
     out << "\"binary_gate_status\":"

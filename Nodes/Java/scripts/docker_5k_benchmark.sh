@@ -195,6 +195,7 @@ doc = {
     "benchmark_kind": "supporting_5k_p2p",
     "benchmark_gate": "supporting_5k",
     "benchmark_lane": "supporting_5k_p2p",
+    "utxo_accounting_policy": "core_spendable_v1",
     "target_label": target_label(target),
     "target_height": target,
     "header_target_height": as_int(os.environ.get("HEADERS_MAX"), target),

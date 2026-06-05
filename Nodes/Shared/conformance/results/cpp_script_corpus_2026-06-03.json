@@ -1,7 +1,7 @@
 {
-  "captured_at": "2026-06-04T22:11:07+00:00",
+  "captured_at": "2026-06-04T22:27:14+00:00",
   "category": "script_corpus",
-  "commit": "580f1e1916f761606504653d8deff2742e86e89a",
+  "commit": "583793d4633f9884c232772aa4fa61ba3db63809",
   "failed": 0,
   "fixture_count": 45,
   "implementation": "CppNode",

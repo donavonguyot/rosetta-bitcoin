@@ -31,6 +31,7 @@ pub struct SlowBlock {
 pub struct ConnectSummary {
     pub implementation: &'static str,
     pub runtime_surface: String,
+    pub utxo_accounting_policy: &'static str,
     pub mode: String,
     pub target_height: u32,
     pub header_height: i64,
@@ -517,23 +518,62 @@ fn outputs_for(
     txid_internal: [u8; 32],
     coinbase: bool,
 ) -> Result<Vec<StoredUtxo>> {
-    transaction
-        .outputs
-        .iter()
-        .enumerate()
-        .map(|(vout, output)| {
-            if output.value < 0 {
-                bail!("negative output value")
-            }
-            Ok(StoredUtxo {
-                outpoint: UtxoOutpoint::new(txid_internal, u32::try_from(vout)?),
-                height,
-                value_sats: output.value as u64,
-                coinbase,
-                script_pubkey: output.script_pubkey.clone(),
-            })
-        })
-        .collect()
+    let mut utxos = Vec::with_capacity(transaction.outputs.len());
+    for (vout, output) in transaction.outputs.iter().enumerate() {
+        if output.value < 0 {
+            bail!("negative output value")
+        }
+        if !is_spendable_output(&output.script_pubkey) {
+            continue;
+        }
+        utxos.push(StoredUtxo {
+            outpoint: UtxoOutpoint::new(txid_internal, u32::try_from(vout)?),
+            height,
+            value_sats: output.value as u64,
+            coinbase,
+            script_pubkey: output.script_pubkey.clone(),
+        });
+    }
+    Ok(utxos)
+}
+
+fn is_spendable_output(script_pubkey: &[u8]) -> bool {
+    !script_pubkey.is_empty() && script_pubkey[0] != 0x6a
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tx::TxOut;
+
+    #[test]
+    fn outputs_for_skips_core_unspendable_outputs() {
+        let transaction = Transaction {
+            version: 1,
+            inputs: vec![],
+            outputs: vec![
+                TxOut {
+                    value: 1,
+                    script_pubkey: vec![],
+                },
+                TxOut {
+                    value: 2,
+                    script_pubkey: vec![0x6a, 0x01, 0x02],
+                },
+                TxOut {
+                    value: 3,
+                    script_pubkey: vec![0x51],
+                },
+            ],
+            lock_time: 0,
+            witness: vec![],
+        };
+
+        let utxos = outputs_for(10, &transaction, [1; 32], false).expect("outputs");
+        assert_eq!(utxos.len(), 1);
+        assert_eq!(utxos[0].value_sats, 3);
+        assert_eq!(utxos[0].outpoint.vout, 2);
+    }
 }
 
 fn blocker(
@@ -568,6 +608,7 @@ fn summary_from(
     ConnectSummary {
         implementation: "RustNode",
         runtime_surface: runtime_surface.to_string(),
+        utxo_accounting_policy: "core_spendable_v1",
         mode: "stored_block_connect".to_string(),
         target_height: target,
         header_height: meta.header_height,

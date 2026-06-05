@@ -771,7 +771,7 @@ utxo_apply: 498 ms
 commit: 21 ms
 ```
 
-Implementation: [`ScriptVerifyRunner`](JavaNode/src/main/java/com/jbitnode/consensus/script/ScriptVerifyRunner.java) + [`ScriptVerifySettings`](JavaNode/src/main/java/com/jbitnode/config/ScriptVerifySettings.java); parallel only within each tx (`inputs >= PAR_SCRIPT_MIN_INPUTS`). `java-node-sync-chunk` sets `PAR_SCRIPT_VERIFY=1`.
+Implementation: [`ScriptVerifyRunner`](../src/main/java/com/jbitnode/consensus/script/ScriptVerifyRunner.java) + [`ScriptVerifySettings`](../src/main/java/com/jbitnode/config/ScriptVerifySettings.java); parallel only within each tx (`inputs >= PAR_SCRIPT_MIN_INPUTS`). `java-node-sync-chunk` sets `PAR_SCRIPT_VERIFY=1`.
 
 Inspect timing split (debug only, `SYNC_TIMING=1`):
 
@@ -1542,7 +1542,7 @@ follower_notes: Root cause = two BLOCKS_MAX=0 sync processes on ./data-java. Eve
 
 ## Scout path (anticipated blockers above 32712)
 
-Python scout fixtures in `PythonNode/tests/test_script.py` with `test_real_testnet4_block3*`
+Python scout fixtures in `Nodes/Python/tests/test_script.py` with `test_real_testnet4_block3*`
 and height **> 32868** (lowest first). Live blocker now @41700 (bare scriptPubKey `51024e73…`);
 @38191 P2SH CLTV BIP65 v1 no-op resolved in this commit. Fixtures harvested 2026-05-25 via Core RPC
 `127.0.0.1:48332` (`ReferenceNode` docker).
@@ -1556,7 +1556,7 @@ No Python `test_real_testnet4_block34*` scout fixture exists between 33500 and 3
 
 ## Scout path above 38191 (2026-05-25)
 
-Grep of `PythonNode/tests/test_script.py` for `test_real_testnet4_block38*` and
+Grep of `Nodes/Python/tests/test_script.py` for `test_real_testnet4_block38*` and
 `test_real_testnet4_block39*` with height **> 38191**:
 
 **No Python scout fixtures above 38191.**
@@ -1661,4 +1661,4 @@ follower_notes:
 3. Implement the **exact** missing rule with a regression fixture before resuming sync.
 4. Export snapshots on a quiescent DB after the fix lands.
 
-See workspace [`AGENTS.md`](../../AGENTS.md) for scout/follower rules and binary gate definition.
+See workspace [`AGENTS.md`](../../../AGENTS.md) for scout/follower rules and binary gate definition.

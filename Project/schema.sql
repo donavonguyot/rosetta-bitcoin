@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS status_snapshots (
   chainstate_backend TEXT NOT NULL DEFAULT '',
   chainstate_status TEXT NOT NULL DEFAULT '',
   chainstate_generation_id TEXT NOT NULL DEFAULT '',
+  utxo_accounting_policy TEXT NOT NULL DEFAULT '',
   chainstate_utxo_count INTEGER,
   block_gap_count INTEGER,
   current_blocker_id TEXT,
@@ -155,6 +156,40 @@ CREATE TABLE IF NOT EXISTS blockers (
 
 CREATE INDEX IF NOT EXISTS idx_blockers_height
   ON blockers(height);
+
+CREATE TABLE IF NOT EXISTS consensus_rules (
+  rule_id TEXT PRIMARY KEY,
+  category TEXT NOT NULL,
+  title TEXT NOT NULL,
+  chain TEXT NOT NULL,
+  status TEXT NOT NULL,
+  first_height INTEGER NOT NULL DEFAULT -1,
+  blocker_height INTEGER NOT NULL DEFAULT -1,
+  missing_rule TEXT NOT NULL DEFAULT '',
+  fixture_ids_json TEXT NOT NULL DEFAULT '[]',
+  required_rules_json TEXT NOT NULL DEFAULT '[]',
+  tags_json TEXT NOT NULL DEFAULT '[]',
+  raw_json TEXT NOT NULL DEFAULT '{}',
+  source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_consensus_rules_height
+  ON consensus_rules(blocker_height, first_height);
+
+CREATE TABLE IF NOT EXISTS consensus_rule_evidence (
+  evidence_id TEXT PRIMARY KEY,
+  rule_id TEXT NOT NULL REFERENCES consensus_rules(rule_id),
+  port TEXT NOT NULL,
+  artifact_path TEXT NOT NULL DEFAULT '',
+  result TEXT NOT NULL DEFAULT '',
+  corpus_result TEXT NOT NULL DEFAULT '',
+  runtime_surface TEXT NOT NULL DEFAULT '',
+  verifier_json TEXT NOT NULL DEFAULT '{}',
+  source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_consensus_rule_evidence_port
+  ON consensus_rule_evidence(port, rule_id);
 
 CREATE TABLE IF NOT EXISTS conformance_results (
   result_id TEXT PRIMARY KEY,
@@ -207,6 +242,8 @@ CREATE TABLE IF NOT EXISTS benchmark_gates (
   official_header_target_height INTEGER NOT NULL DEFAULT -1,
   official_prefetch_depth INTEGER NOT NULL DEFAULT -1,
   official_script_runner_mode TEXT NOT NULL DEFAULT '',
+  official_utxo_accounting_policy TEXT NOT NULL DEFAULT '',
+  official_chainstate_utxo_count INTEGER NOT NULL DEFAULT -1,
   fresh_state_required INTEGER NOT NULL DEFAULT 1,
   local_reference_required INTEGER NOT NULL DEFAULT 1,
   durable_required INTEGER NOT NULL DEFAULT 1,
@@ -232,6 +269,26 @@ CREATE TABLE IF NOT EXISTS timing_samples (
 
 CREATE INDEX IF NOT EXISTS idx_timing_stage_height
   ON timing_samples(stage, height);
+
+DROP VIEW IF EXISTS consensus_runway;
+DROP VIEW IF EXISTS consensus_stage_targets;
+DROP VIEW IF EXISTS consensus_rule_summary;
+DROP VIEW IF EXISTS port_baseline_5k;
+DROP VIEW IF EXISTS script_corpus_baseline;
+DROP VIEW IF EXISTS script_corpus_proof_artifacts;
+DROP VIEW IF EXISTS benchmark_gate_matrix;
+DROP VIEW IF EXISTS benchmark_comparability;
+DROP VIEW IF EXISTS benchmark_summary;
+DROP VIEW IF EXISTS follower_blocker_matrix;
+DROP VIEW IF EXISTS current_blocker_state;
+DROP VIEW IF EXISTS normalized_blocker_rows;
+DROP VIEW IF EXISTS conformance_summary;
+DROP VIEW IF EXISTS port_command_coverage;
+DROP VIEW IF EXISTS port_command_surface;
+DROP VIEW IF EXISTS docker_coverage;
+DROP VIEW IF EXISTS latest_port_status;
+DROP VIEW IF EXISTS latest_node_status;
+DROP VIEW IF EXISTS project_node_ports;
 
 CREATE VIEW IF NOT EXISTS project_node_ports AS
 SELECT
@@ -288,6 +345,7 @@ SELECT
   chainstate_backend,
   chainstate_status,
   chainstate_utxo_count,
+  utxo_accounting_policy,
   block_gap_count,
   current_blocker_id,
   last_error,
@@ -322,6 +380,7 @@ SELECT
   chainstate_backend,
   chainstate_status,
   chainstate_utxo_count,
+  utxo_accounting_policy,
   block_gap_count,
   current_blocker_id,
   last_error,
@@ -407,34 +466,92 @@ SELECT
 FROM blockers b;
 
 CREATE VIEW IF NOT EXISTS current_blocker_state AS
+WITH heights AS (
+  SELECT height
+  FROM normalized_blocker_rows
+  UNION
+  SELECT blocker_height AS height
+  FROM consensus_rules
+  WHERE blocker_height >= 0
+),
+blocker_counts AS (
+  SELECT
+    height,
+    sum(CASE WHEN normalized_status = 'cleared' THEN 1 ELSE 0 END) AS cleared_count,
+    sum(CASE WHEN normalized_status = 'blocked' THEN 1 ELSE 0 END) AS blocked_count,
+    sum(CASE WHEN normalized_status = 'open' THEN 1 ELSE 0 END) AS open_count
+  FROM normalized_blocker_rows
+  GROUP BY height
+),
+rule_counts AS (
+  SELECT
+    blocker_height AS height,
+    sum(CASE WHEN status = 'proved' THEN 1 ELSE 0 END) AS proved_count,
+    sum(CASE WHEN status IN ('candidate', 'fixture_backed', 'blocker_backed') THEN 1 ELSE 0 END) AS pending_count
+  FROM consensus_rules
+  WHERE blocker_height >= 0
+  GROUP BY blocker_height
+)
 SELECT
-  n.height,
+  h.height,
   COALESCE(
+    (
+      SELECT cr.missing_rule
+      FROM consensus_rules cr
+      WHERE cr.blocker_height = h.height AND cr.missing_rule <> ''
+      ORDER BY length(cr.missing_rule) DESC
+      LIMIT 1
+    ),
     (
       SELECT c.missing_rule
       FROM normalized_blocker_rows c
-      WHERE c.height = n.height AND c.source_port_normalized = 'catalog'
+      WHERE c.height = h.height AND c.source_port_normalized = 'catalog'
       ORDER BY length(c.missing_rule) DESC
       LIMIT 1
     ),
     (
       SELECT c.missing_rule
       FROM normalized_blocker_rows c
-      WHERE c.height = n.height
+      WHERE c.height = h.height
       ORDER BY length(c.missing_rule) DESC
       LIMIT 1
     )
   ) AS missing_rule,
   CASE
-    WHEN sum(CASE WHEN n.normalized_status = 'cleared' THEN 1 ELSE 0 END) > 0 THEN 'cleared'
-    WHEN sum(CASE WHEN n.normalized_status = 'blocked' THEN 1 ELSE 0 END) > 0 THEN 'blocked'
-    WHEN sum(CASE WHEN n.normalized_status = 'open' THEN 1 ELSE 0 END) > 0 THEN 'open'
+    WHEN coalesce(rc.proved_count, 0) > 0 THEN 'cleared'
+    WHEN coalesce(bc.cleared_count, 0) > 0 THEN 'cleared'
+    WHEN coalesce(bc.blocked_count, 0) > 0 THEN 'blocked'
+    WHEN coalesce(bc.open_count, 0) > 0 THEN 'open'
+    WHEN coalesce(rc.pending_count, 0) > 0 THEN 'unknown'
     ELSE 'unknown'
   END AS status,
-  group_concat(DISTINCT n.source_port_normalized) AS sources,
-  group_concat(DISTINCT n.source_path) AS source_paths
-FROM normalized_blocker_rows n
-GROUP BY n.height;
+  trim(
+    coalesce(
+      (
+        SELECT group_concat(DISTINCT n.source_port_normalized)
+        FROM normalized_blocker_rows n
+        WHERE n.height = h.height
+      ),
+      ''
+    ) ||
+    CASE WHEN coalesce(rc.proved_count, 0) > 0 OR coalesce(rc.pending_count, 0) > 0 THEN ',rule_ledger' ELSE '' END,
+    ','
+  ) AS sources,
+  trim(
+    coalesce(
+      (
+        SELECT group_concat(DISTINCT n.source_path)
+        FROM normalized_blocker_rows n
+        WHERE n.height = h.height
+      ),
+      ''
+    ) ||
+    CASE WHEN coalesce(rc.proved_count, 0) > 0 OR coalesce(rc.pending_count, 0) > 0 THEN ',Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json' ELSE '' END,
+    ','
+  ) AS source_paths
+FROM heights h
+LEFT JOIN blocker_counts bc ON bc.height = h.height
+LEFT JOIN rule_counts rc ON rc.height = h.height;
 
 CREATE VIEW IF NOT EXISTS follower_blocker_matrix AS
 WITH ports AS (
@@ -509,6 +626,8 @@ WITH benchmark_rows AS (
     bg.official_header_target_height,
     bg.official_prefetch_depth,
     bg.official_script_runner_mode,
+    bg.official_utxo_accounting_policy,
+    bg.official_chainstate_utxo_count,
     bg.fresh_state_required,
     bg.wal_disabled_required,
     bg.resume_supported_required,
@@ -516,6 +635,19 @@ WITH benchmark_rows AS (
     np.port,
     b.node_id,
     b.benchmark_name,
+    lower(coalesce(b.backend, '')) AS chainstate_backend,
+    coalesce(
+      json_extract(b.settings_json, '$.native_crypto_backend'),
+      json_extract(b.result_json, '$.native_crypto_backend'),
+      json_extract(a.raw_json, '$.native_crypto_backend'),
+      ''
+    ) AS native_crypto_backend,
+    coalesce(
+      json_extract(b.settings_json, '$.native_crypto_available'),
+      json_extract(b.result_json, '$.native_crypto_available'),
+      json_extract(a.raw_json, '$.native_crypto_available'),
+      ''
+    ) AS native_crypto_available,
     coalesce(json_extract(b.result_json, '$.validated_height'), b.height, -1) AS validated_height,
     coalesce(json_extract(b.result_json, '$.header_height'), json_extract(b.settings_json, '$.header_target_height'), -1) AS header_target_height,
     coalesce(json_extract(b.result_json, '$.result'), '') AS result,
@@ -532,11 +664,21 @@ WITH benchmark_rows AS (
     lower(coalesce(cast(json_extract(b.settings_json, '$.resume_supported') AS TEXT), '')) AS resume_supported_text,
     lower(coalesce(cast(json_extract(b.settings_json, '$.fresh_state') AS TEXT), '')) AS fresh_state_text,
     coalesce(json_extract(b.result_json, '$.current_blocker'), '') AS current_blocker,
+    coalesce(
+      json_extract(b.settings_json, '$.utxo_accounting_policy'),
+      CASE
+        WHEN coalesce(json_extract(b.result_json, '$.chainstate_utxo_count'), -1) = bg.official_chainstate_utxo_count
+        THEN bg.official_utxo_accounting_policy
+        ELSE ''
+      END
+    ) AS utxo_accounting_policy,
+    coalesce(json_extract(b.result_json, '$.chainstate_utxo_count'), -1) AS chainstate_utxo_count,
     b.captured_at,
     b.source_artifact_id
   FROM benchmark_gates bg
   JOIN benchmarks b ON b.height = bg.target_height
   JOIN project_node_ports np ON np.node_id = b.node_id
+  LEFT JOIN artifacts a ON a.artifact_id = b.source_artifact_id
 ),
 classified AS (
   SELECT
@@ -573,6 +715,8 @@ scored AS (
       CASE WHEN header_target_height <> official_header_target_height THEN 'header_target_height;' ELSE '' END ||
       CASE WHEN prefetch_depth <> official_prefetch_depth THEN 'prefetch_depth;' ELSE '' END ||
       CASE WHEN script_runner_mode <> official_script_runner_mode THEN 'script_runner_mode;' ELSE '' END ||
+      CASE WHEN official_utxo_accounting_policy <> '' AND utxo_accounting_policy <> official_utxo_accounting_policy THEN 'utxo_accounting_policy;' ELSE '' END ||
+      CASE WHEN official_chainstate_utxo_count >= 0 AND chainstate_utxo_count <> official_chainstate_utxo_count THEN 'chainstate_utxo_count;' ELSE '' END ||
       CASE WHEN rocksdb_wal_disabled <> wal_disabled_required THEN 'rocksdb_wal;' ELSE '' END ||
       CASE WHEN resume_supported <> resume_supported_required THEN 'resume_supported;' ELSE '' END ||
       CASE WHEN fresh_state_required = 1 AND fresh_state <> 1 THEN 'fresh_state;' ELSE '' END ||
@@ -591,6 +735,9 @@ SELECT
   port,
   node_id,
   benchmark_name,
+  chainstate_backend,
+  native_crypto_backend,
+  native_crypto_available,
   CASE
     WHEN validated_height >= target_height AND result IN ('passed', 'target_reached', 'ok', 'success') THEN 'passed'
     WHEN validated_height >= target_height AND result = '' THEN 'recorded'
@@ -613,6 +760,8 @@ SELECT
   peer,
   prefetch_depth,
   script_runner_mode,
+  utxo_accounting_policy,
+  chainstate_utxo_count,
   rocksdb_wal_disabled,
   resume_supported,
   fresh_state,
@@ -660,8 +809,13 @@ SELECT
   coalesce(rr.peer_mode, '') AS peer_mode,
   coalesce(rr.byte_source, '') AS byte_source,
   coalesce(rr.proof_mode, '') AS proof_mode,
+  coalesce(rr.chainstate_backend, '') AS chainstate_backend,
+  coalesce(rr.native_crypto_backend, '') AS native_crypto_backend,
+  coalesce(rr.native_crypto_available, '') AS native_crypto_available,
   coalesce(rr.prefetch_depth, -1) AS prefetch_depth,
   coalesce(rr.script_runner_mode, '') AS script_runner_mode,
+  coalesce(rr.utxo_accounting_policy, '') AS utxo_accounting_policy,
+  coalesce(rr.chainstate_utxo_count, -1) AS chainstate_utxo_count,
   coalesce(rr.rocksdb_wal_disabled, '') AS rocksdb_wal_disabled,
   coalesce(rr.fresh_state, 0) AS fresh_state,
   coalesce(rr.comparability_notes, '') AS comparability_notes,
@@ -670,3 +824,256 @@ SELECT
 FROM benchmark_gates bg
 CROSS JOIN ports p
 LEFT JOIN ranked_results rr ON rr.gate_id = bg.gate_id AND rr.port = p.port AND rr.rn = 1;
+
+CREATE VIEW IF NOT EXISTS script_corpus_proof_artifacts AS
+WITH proof_rows AS (
+  SELECT
+    np.port,
+    cr.node_id,
+    cr.source_artifact_id,
+    count(*) AS result_rows,
+    sum(CASE WHEN cr.result = 'passed' THEN 1 ELSE 0 END) AS passed_rows,
+    sum(CASE WHEN cr.result = 'failed' THEN 1 ELSE 0 END) AS failed_rows,
+    max(cr.captured_at) AS captured_at,
+    a.path,
+    a.raw_json
+  FROM conformance_results cr
+  JOIN project_node_ports np ON np.node_id = cr.node_id
+  JOIN artifacts a ON a.artifact_id = cr.source_artifact_id
+  WHERE cr.category = 'script_corpus'
+  GROUP BY np.port, cr.node_id, cr.source_artifact_id
+)
+SELECT
+  port,
+  node_id,
+  source_artifact_id,
+  path,
+  coalesce(json_extract(raw_json, '$.schema'), '') AS schema,
+  coalesce(json_extract(raw_json, '$.category'), '') AS category,
+  coalesce(json_extract(raw_json, '$.result'), '') AS result,
+  coalesce(json_extract(raw_json, '$.runtime_surface'), '') AS runtime_surface,
+  coalesce(json_extract(raw_json, '$.verifier.engine'), '') AS verifier,
+  coalesce(
+    json_extract(raw_json, '$.native_crypto_backend'),
+    json_extract(raw_json, '$.verifier.crypto_backend'),
+    ''
+  ) AS native_crypto_backend,
+  coalesce(json_extract(raw_json, '$.fixture_count'), result_rows) AS fixture_count,
+  coalesce(json_extract(raw_json, '$.passed'), passed_rows) AS passed,
+  coalesce(json_extract(raw_json, '$.failed'), failed_rows) AS failed,
+  CASE
+    WHEN coalesce(json_extract(raw_json, '$.schema'), 'port.script_corpus_result.v1') = 'shared.script_fixtures.validation.v1' THEN 0
+    WHEN coalesce(json_extract(raw_json, '$.category'), '') <> 'script_corpus' THEN 0
+    WHEN coalesce(json_extract(raw_json, '$.result'), '') <> 'passed' THEN 0
+    WHEN coalesce(json_extract(raw_json, '$.fixture_count'), result_rows) < 45 THEN 0
+    WHEN coalesce(json_extract(raw_json, '$.passed'), passed_rows) < 45 THEN 0
+    WHEN coalesce(json_extract(raw_json, '$.failed'), failed_rows) <> 0 THEN 0
+    ELSE 1
+  END AS clean_port_corpus,
+  captured_at
+FROM proof_rows;
+
+CREATE VIEW IF NOT EXISTS script_corpus_baseline AS
+WITH ports AS (
+  SELECT port
+  FROM docker_contracts
+  WHERE port <> 'reference'
+),
+corpus AS (
+  SELECT
+    np.port,
+    cr.fixture_id,
+    max(CASE WHEN cr.result = 'passed' THEN 1 ELSE 0 END) AS has_pass,
+    max(CASE WHEN cr.result = 'failed' THEN 1 ELSE 0 END) AS has_fail,
+    max(cr.captured_at) AS latest_captured_at
+  FROM conformance_results cr
+  JOIN project_node_ports np ON np.node_id = cr.node_id
+  WHERE cr.category = 'script_corpus'
+  GROUP BY np.port, cr.fixture_id
+)
+SELECT
+  p.port,
+  coalesce(sum(c.has_pass), 0) AS script_passed,
+  coalesce(sum(c.has_fail), 0) AS script_failed,
+  CASE
+    WHEN coalesce(sum(c.has_pass), 0) >= 45 AND coalesce(sum(c.has_fail), 0) = 0 THEN 'passed'
+    WHEN coalesce(sum(c.has_pass), 0) >= 45 THEN 'mixed'
+    WHEN coalesce(sum(c.has_pass), 0) > 0 THEN 'partial'
+    ELSE 'missing'
+  END AS script_corpus_status,
+  coalesce(max(c.latest_captured_at), '') AS latest_captured_at
+FROM ports p
+LEFT JOIN corpus c ON c.port = p.port
+GROUP BY p.port;
+
+CREATE VIEW IF NOT EXISTS port_baseline_5k AS
+WITH required_timing AS (
+  SELECT 'utxo_load' AS stage
+  UNION ALL SELECT 'script_verify'
+  UNION ALL SELECT 'utxo_apply'
+  UNION ALL SELECT 'commit'
+  UNION ALL SELECT 'block_connect_store_commit'
+),
+timing AS (
+  SELECT
+    bgm.port,
+    count(DISTINCT rt.stage) AS required_timing_buckets
+  FROM benchmark_gate_matrix bgm
+  JOIN project_node_ports np ON np.port = bgm.port
+  JOIN timing_samples ts ON ts.node_id = np.node_id
+  JOIN required_timing rt ON rt.stage = ts.stage
+  WHERE bgm.gate_id = 'supporting_5k'
+    AND ts.source_artifact_id = bgm.source_artifact_id
+  GROUP BY bgm.port
+),
+raw_timing AS (
+  SELECT
+    bgm.port,
+    (CASE WHEN a.raw_json LIKE '%"utxo_load"%' THEN 1 ELSE 0 END) +
+    (CASE WHEN a.raw_json LIKE '%"script_verify"%' THEN 1 ELSE 0 END) +
+    (CASE WHEN a.raw_json LIKE '%"utxo_apply"%' THEN 1 ELSE 0 END) +
+    (CASE WHEN a.raw_json LIKE '%"commit"%' THEN 1 ELSE 0 END) +
+    (CASE WHEN a.raw_json LIKE '%"block_connect_store_commit"%' THEN 1 ELSE 0 END) AS required_timing_buckets
+  FROM benchmark_gate_matrix bgm
+  LEFT JOIN artifacts a ON a.artifact_id = bgm.source_artifact_id
+  WHERE bgm.gate_id = 'supporting_5k'
+)
+SELECT
+  bgm.port,
+  bgm.gate_id,
+  CASE
+    WHEN bgm.comparability_status <> 'comparable' THEN 'missing_5k_comparable'
+    WHEN lower(bgm.chainstate_backend) <> 'rocksdb' THEN 'missing_rocksdb'
+    WHEN lower(coalesce(bgm.native_crypto_backend, '')) IN ('', 'managed', 'pure', 'not_enabled', 'unavailable', 'none') THEN 'missing_native_crypto'
+    WHEN scb.script_corpus_status <> 'passed' THEN 'missing_clean_script_corpus'
+    WHEN max(coalesce(t.required_timing_buckets, 0), coalesce(rt.required_timing_buckets, 0)) < 5 THEN 'missing_timing_buckets'
+    ELSE 'passed'
+  END AS baseline_status,
+  bgm.gate_status,
+  bgm.comparability_status,
+  bgm.evidence_lane,
+  bgm.validated_height,
+  bgm.header_target_height,
+  bgm.runtime_surface,
+  bgm.peer_mode,
+  bgm.byte_source,
+  bgm.proof_mode,
+  bgm.chainstate_backend,
+  bgm.native_crypto_backend,
+  bgm.native_crypto_available,
+  coalesce(scb.script_corpus_status, 'missing') AS script_corpus_status,
+  coalesce(scb.script_passed, 0) AS script_passed,
+  coalesce(scb.script_failed, 0) AS script_failed,
+  bgm.prefetch_depth,
+  bgm.script_runner_mode,
+  bgm.rocksdb_wal_disabled,
+  bgm.fresh_state,
+  bgm.utxo_accounting_policy,
+  bgm.chainstate_utxo_count,
+  max(coalesce(t.required_timing_buckets, 0), coalesce(rt.required_timing_buckets, 0)) AS required_timing_buckets,
+  bgm.comparability_notes,
+  bgm.captured_at,
+  bgm.source_artifact_id
+FROM benchmark_gate_matrix bgm
+LEFT JOIN script_corpus_baseline scb ON scb.port = bgm.port
+LEFT JOIN timing t ON t.port = bgm.port
+LEFT JOIN raw_timing rt ON rt.port = bgm.port
+WHERE bgm.gate_id = 'supporting_5k';
+
+CREATE VIEW IF NOT EXISTS consensus_rule_summary AS
+SELECT
+  chain,
+  category,
+  status,
+  count(*) AS rule_count,
+  min(CASE WHEN blocker_height >= 0 THEN blocker_height ELSE first_height END) AS min_height,
+  max(CASE WHEN blocker_height >= 0 THEN blocker_height ELSE first_height END) AS max_height
+FROM consensus_rules
+GROUP BY chain, category, status;
+
+CREATE VIEW IF NOT EXISTS consensus_stage_targets AS
+SELECT 'corpus' AS stage, 0 AS target_height, 0 AS requires_5k_baseline
+UNION ALL SELECT '5k', 5000, 1
+UNION ALL SELECT '10k', 10000, 1
+UNION ALL SELECT '50k', 50000, 1
+UNION ALL SELECT '100k', 100000, 1
+UNION ALL SELECT 'tip', -1, 1;
+
+CREATE VIEW IF NOT EXISTS consensus_runway AS
+WITH ports AS (
+  SELECT port
+  FROM docker_contracts
+  WHERE port <> 'reference'
+),
+sync_evidence AS (
+  SELECT
+    p.port,
+    max(
+      coalesce(lps.validated_height, -1),
+      coalesce((SELECT max(max_height) FROM benchmark_summary bs WHERE bs.port = p.port), -1)
+    ) AS max_validated_height,
+    coalesce(lps.header_height, -1) AS header_height,
+    coalesce(lps.sync_status, '') AS sync_status,
+    coalesce(lps.source_artifact_id, '') AS status_source_artifact_id
+  FROM ports p
+  LEFT JOIN latest_port_status lps ON lps.port = p.port
+),
+clean_corpus AS (
+  SELECT
+    port,
+    max(clean_port_corpus) AS has_clean_corpus,
+    max(passed) AS passed,
+    max(failed) AS failed,
+    max(runtime_surface) AS runtime_surface,
+    max(native_crypto_backend) AS native_crypto_backend,
+    max(source_artifact_id) AS source_artifact_id
+  FROM script_corpus_proof_artifacts
+  WHERE clean_port_corpus = 1
+  GROUP BY port
+),
+open_blockers AS (
+  SELECT
+    cst.stage,
+    count(cbs.height) AS open_blocker_count,
+    group_concat(cbs.height) AS open_blocker_heights
+  FROM consensus_stage_targets cst
+  LEFT JOIN current_blocker_state cbs
+    ON cbs.status IN ('open', 'blocked')
+   AND cst.target_height >= 0
+   AND cbs.height <= cst.target_height
+  GROUP BY cst.stage
+)
+SELECT
+  p.port,
+  cst.stage,
+  cst.target_height,
+  CASE
+    WHEN coalesce(cc.has_clean_corpus, 0) <> 1 THEN 'missing_clean_script_corpus'
+    WHEN coalesce(ob.open_blocker_count, 0) > 0 THEN 'open_blockers'
+    WHEN cst.stage = 'corpus' THEN 'passed'
+    WHEN cst.stage = '5k' AND coalesce(pb.baseline_status, '') <> 'passed' THEN 'missing_5k_baseline'
+    WHEN cst.stage IN ('10k', '50k', '100k') AND coalesce(se.max_validated_height, -1) < cst.target_height THEN 'missing_stage_proof'
+    WHEN cst.stage = 'tip' AND NOT (se.sync_status = 'blocks_current' AND se.max_validated_height >= se.header_height AND se.header_height > 0) THEN 'missing_tip_proof'
+    ELSE 'passed'
+  END AS runway_status,
+  coalesce(cc.has_clean_corpus, 0) AS has_clean_script_corpus,
+  coalesce(cc.passed, 0) AS script_passed,
+  coalesce(cc.failed, 0) AS script_failed,
+  coalesce(cc.runtime_surface, '') AS script_runtime_surface,
+  coalesce(cc.native_crypto_backend, '') AS script_native_crypto_backend,
+  coalesce(pb.baseline_status, '') AS baseline_5k_status,
+  coalesce(pb.comparability_status, '') AS baseline_5k_comparability,
+  coalesce(se.max_validated_height, -1) AS max_validated_height,
+  coalesce(se.header_height, -1) AS header_height,
+  coalesce(se.sync_status, '') AS sync_status,
+  coalesce(ob.open_blocker_count, 0) AS open_blocker_count,
+  coalesce(ob.open_blocker_heights, '') AS open_blocker_heights,
+  coalesce(cc.source_artifact_id, '') AS script_source_artifact_id,
+  coalesce(pb.source_artifact_id, '') AS baseline_source_artifact_id,
+  coalesce(se.status_source_artifact_id, '') AS status_source_artifact_id
+FROM ports p
+CROSS JOIN consensus_stage_targets cst
+LEFT JOIN clean_corpus cc ON cc.port = p.port
+LEFT JOIN port_baseline_5k pb ON pb.port = p.port
+LEFT JOIN sync_evidence se ON se.port = p.port
+LEFT JOIN open_blockers ob ON ob.stage = cst.stage;

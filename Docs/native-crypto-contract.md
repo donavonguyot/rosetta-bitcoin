@@ -13,6 +13,9 @@ taproot_tweak_backend
 
 ## Rules
 
+- The 5k baseline requires native crypto. Managed, pure-language, or fallback
+  crypto paths are diagnostic unless the port has already cleared the strict
+  baseline with native crypto.
 - Do not silently fall back to managed crypto in a native proof. If native crypto
   is requested and unavailable, fail the proof.
 - Shared vectors live in `Nodes/Shared/conformance/fixtures/`.

@@ -44,6 +44,7 @@ REQUIRED_ARTIFACT_FIELDS = (
     "binary_gate_status",
     "chainstate_backend",
     "chainstate_utxo_count",
+    "utxo_accounting_policy",
     "native_crypto_backend",
     "proof_mode",
     "peer_mode",
@@ -150,6 +151,8 @@ def required_metadata(gate: dict[str, Any]) -> dict[str, Any]:
         "proof_mode": gate["official_proof_mode"],
         "prefetch_depth": gate["official_prefetch_depth"],
         "script_runner_mode": gate["official_script_runner_mode"],
+        "utxo_accounting_policy": gate["official_utxo_accounting_policy"],
+        "chainstate_utxo_count": gate["official_chainstate_utxo_count"],
         "rocksdb_wal_disabled": False,
         "fresh_state": bool(gate["fresh_state_required"]),
         "resume_supported": bool(gate["resume_supported_required"]),
@@ -258,6 +261,18 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
             f"{imported_wal!r}; official runs require false"
         )
 
+    if gate_row and gate_row["utxo_accounting_policy"] and gate_row["utxo_accounting_policy"] != gate["official_utxo_accounting_policy"]:
+        errors.append(
+            "latest imported gate evidence has utxo_accounting_policy="
+            f"{gate_row['utxo_accounting_policy']!r}; expected {gate['official_utxo_accounting_policy']!r}"
+        )
+
+    if gate_row and int(gate_row["chainstate_utxo_count"]) >= 0 and int(gate_row["chainstate_utxo_count"]) != int(gate["official_chainstate_utxo_count"]):
+        errors.append(
+            "latest imported gate evidence has chainstate_utxo_count="
+            f"{gate_row['chainstate_utxo_count']}; expected {gate['official_chainstate_utxo_count']}"
+        )
+
     if gate_row and gate_row.get("comparability_status") not in (None, "", "missing", "comparable"):
         warnings.append(
             "latest imported gate evidence is "
@@ -287,6 +302,8 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         "evidence_lane": gate_row["evidence_lane"] if gate_row else "",
         "comparability_notes": gate_row["comparability_notes"] if gate_row else "",
         "validated_height": gate_row["validated_height"] if gate_row else -1,
+        "utxo_accounting_policy": gate_row["utxo_accounting_policy"] if gate_row else "",
+        "chainstate_utxo_count": gate_row["chainstate_utxo_count"] if gate_row else -1,
         "command_key": command_key,
         "command": command["command"] if command else "",
         "proof_volume": contract["proof_volume"],
@@ -318,6 +335,10 @@ def print_text(results: list[dict[str, Any]]) -> None:
             print(f"  docker_status={result['docker_status']}")
         if "validated_height" in result:
             print(f"  latest_gate_validated_height={result['validated_height']}")
+        if result.get("utxo_accounting_policy"):
+            print(f"  latest_utxo_accounting_policy={result['utxo_accounting_policy']}")
+        if "chainstate_utxo_count" in result:
+            print(f"  latest_chainstate_utxo_count={result['chainstate_utxo_count']}")
         if result.get("evidence_lane"):
             print(f"  latest_evidence_lane={result['evidence_lane']}")
         if result.get("comparability_notes"):

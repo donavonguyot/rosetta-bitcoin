@@ -1,6 +1,6 @@
 # csbitnode — C# .NET 8 Bitcoin testnet4 follower
 
-**csbitnode** is a managed-runtime follower in the Nodes workspace. PythonNode scouts
+**csbitnode** is a managed-runtime follower in the Nodes workspace. Python scouts
 live-chain blockers first; csbitnode implements the same rules independently and must
 reach tip with fully validated connected blocks.
 
@@ -14,8 +14,8 @@ trusted import, or skipping unknown consensus rules does **not** pass.
 
 | Source | Role |
 |--------|------|
-| [PythonNode/docs/BLOCKER_LEDGER.md](../PythonNode/docs/BLOCKER_LEDGER.md) | Scout trail — implement each cleared rule with focused C# tests |
-| JavaNode / TypeScriptNode | Proven follower shapes and fixtures — not validity authority |
+| [Nodes/Python/docs/BLOCKER_LEDGER.md](../Python/docs/BLOCKER_LEDGER.md) | Scout trail — implement each cleared rule with focused C# tests |
+| Java / TypeScript | Proven follower shapes and fixtures — not validity authority |
 | Local Core `127.0.0.1:48333` | Byte source for headers/blocks — **not** a validation oracle |
 
 ## Datadir
@@ -29,8 +29,8 @@ trusted import, or skipping unknown consensus rules does **not** pass.
 **One writer per datadir.** Sync acquires `<DATA_DIR>/.csbitnode.lock`. A second sync
 against the same datadir exits with `datadir lock busy`.
 
-Never share datadirs or chainstate files with PythonNode (`./data/chainstate-rocksdb`) or other followers.
-CSharpNode's operational state is native RocksDB; `csbitnode.db` is treated as a retired
+Never share datadirs or chainstate files with Python (`./data/chainstate-rocksdb`) or other followers.
+CSharp's operational state is native RocksDB; `csbitnode.db` is treated as a retired
 SQLite artifact and native startup fails if it appears in a C# datadir.
 
 ## Deferred handshake
@@ -44,7 +44,7 @@ It does **not** send `feefilter`, `mempool`, or `sendcmpct` until headers are cu
 Requires .NET 8 (`brew install dotnet@8` on macOS).
 
 ```bash
-cd CSharpNode
+cd Nodes/CSharp
 make build
 make test
 make csharp-node-native-crypto-test
@@ -145,7 +145,7 @@ current_blocker: block 22830 P2TR script-path / BIP342
 binary_gate_status: not_attempted
 ```
 
-CSharpNode has cleared the first Taproot key-path range and 10k bounded sync
+CSharp has cleared the first Taproot key-path range and 10k bounded sync
 surface with native RocksDB and native crypto. The next consensus rule is
 Taproot script-path validation, which should start with a first-class C#
 diagnostic/fixture for block 22830 before implementing tapscript.
@@ -171,7 +171,7 @@ Script interpreter port follows Python blocker ledger entries (see `docs/BLOCKER
 
 ## Git
 
-CSharpNode is its own git repo. Live datadirs, build output, and DB files stay ignored.
+CSharp is root-owned under the single workspace Git repo. Live datadirs, build output, and DB files stay ignored.
 
 ```bash
 git init   # if not already initialized

@@ -66,6 +66,7 @@ func main() {
 		"benchmark_contract_version": 1,
 		"benchmark_kind":             benchmarkKind(*target, *byteSource),
 		"benchmark_lane":             benchmarkLane,
+		"utxo_accounting_policy":     "core_spendable_v1",
 		"byte_source":                byteSourceValue,
 		"resume_supported":           true,
 		"fresh_state":                true,
