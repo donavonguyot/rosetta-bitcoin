@@ -56,7 +56,7 @@ docker-proof-local:
 	  sleep 2; \
 	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
 	done
-	@docker volume rm -f swiftbitnode_proof_data >/dev/null 2>&1 || true
+	@docker volume rm -f swiftbitnode_proof_data swift_swiftbitnode_proof_data docker_swiftbitnode_proof_data >/dev/null 2>&1 || true
 	$(DOCKER_COMPOSE) run --rm --no-deps \
 	  -e TARGET_HEIGHT=$(DOCKER_SYNC_TARGET) \
 	  -e HEADER_TARGET_HEIGHT=$(DOCKER_SYNC_TARGET) \

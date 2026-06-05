@@ -163,6 +163,39 @@ final class P2PClient {
         }
     }
 
+    func requestBlocks(hashes: [Data]) throws -> [Data] {
+        guard !hashes.isEmpty else { return [] }
+        let wanted = Set(hashes.map(\.hex))
+        try send(command: "getdata", payload: getdataPayload(hashes: hashes))
+        var blocksByHash: [String: Data] = [:]
+        while blocksByHash.count < hashes.count {
+            let message = try readMessage()
+            switch message.command {
+            case "block":
+                guard message.payload.count >= 80 else {
+                    throw SwiftBitnodeError.message("short block payload")
+                }
+                let got = SHA256.doubleHash(message.payload.subdata(in: 0..<80))
+                let key = got.hex
+                if wanted.contains(key) {
+                    blocksByHash[key] = message.payload
+                }
+            case "notfound":
+                throw SwiftBitnodeError.message("peer returned notfound")
+            case "ping":
+                try send(command: "pong", payload: message.payload)
+            default:
+                break
+            }
+        }
+        return try hashes.map { hash in
+            guard let block = blocksByHash[hash.hex] else {
+                throw SwiftBitnodeError.message("missing requested block")
+            }
+            return block
+        }
+    }
+
     private func readCommand(_ command: String) throws -> P2PMessage {
         while true {
             let message = try readMessage()
@@ -207,18 +240,25 @@ final class P2PClient {
 }
 
 enum P2PFetcher {
-    static func fetch(peer: String, target: Int, handle: (P2PBlock) throws -> Bool) throws -> Int {
+    static func fetch(peer: String, target: Int, startHeight: Int = 0, prefetchDepth: Int = 1, handle: (P2PBlock) throws -> Bool) throws -> Int {
         let client = try P2PClient(peer: peer)
         try client.handshake()
         let hashes = try client.headersThrough(target: target)
         var fetched = 0
-        for height in 0...target {
-            let raw = try client.requestBlock(hash: hashes[height])
-            let hash = SHA256.doubleHash(raw.subdata(in: 0..<80)).reversedHex
-            fetched += 1
-            let shouldContinue = try handle(P2PBlock(height: height, hash: hash, raw: raw))
-            if !shouldContinue {
-                break
+        let depth = max(1, prefetchDepth)
+        var height = max(0, startHeight)
+        while height <= target {
+            let end = min(target, height + depth - 1)
+            let batchHashes = Array(hashes[height...end])
+            let blocks = try client.requestBlocks(hashes: batchHashes)
+            for raw in blocks {
+                let hash = SHA256.doubleHash(raw.subdata(in: 0..<80)).reversedHex
+                fetched += 1
+                let shouldContinue = try handle(P2PBlock(height: height, hash: hash, raw: raw))
+                height += 1
+                if !shouldContinue {
+                    return fetched
+                }
             }
         }
         return fetched
@@ -255,10 +295,16 @@ private func getheadersPayload(locator: Data) -> Data {
 }
 
 private func getdataPayload(hash: Data) -> Data {
+    getdataPayload(hashes: [hash])
+}
+
+private func getdataPayload(hashes: [Data]) -> Data {
     var out = Data()
-    appendCompactSize(&out, 1)
-    out.append(UInt32((1 << 30) | 2).littleEndianData)
-    out.append(hash)
+    appendCompactSize(&out, UInt64(hashes.count))
+    for hash in hashes {
+        out.append(UInt32((1 << 30) | 2).littleEndianData)
+        out.append(hash)
+    }
     return out
 }
 

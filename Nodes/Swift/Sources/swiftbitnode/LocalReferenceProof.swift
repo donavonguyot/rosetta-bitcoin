@@ -6,8 +6,14 @@ enum LocalReferenceProof {
         let target = args.int("target", default: Int(ProcessInfo.processInfo.environment["TARGET_HEIGHT"] ?? "") ?? 5000)
         let peer = args.string("peer", default: ProcessInfo.processInfo.environment["PEER"] ?? "host.docker.internal:48333")
         let datadir = args.string("datadir", default: ProcessInfo.processInfo.environment["DATA_DIR"] ?? "/data")
+        let prefetchDepth = Int(ProcessInfo.processInfo.environment["PREFETCH_DEPTH"] ?? "") ?? 1
+        let scriptRunnerMode = ProcessInfo.processInfo.environment["SCRIPT_RUNNER_MODE"] ?? "serial"
+        let rocksdbWalDisabled = (ProcessInfo.processInfo.environment["ROCKSDB_WAL_DISABLED"] ?? "false").lowercased() == "true"
+        let freshState = (ProcessInfo.processInfo.environment["FRESH_STATE"] ?? "true").lowercased() != "false"
         let started = Date()
         let store = try ChainStore(datadir: datadir)
+        let initialState = try store.load()
+        let startHeight = max(0, initialState.validatedHeight + 1)
         var timing = TimingCollector()
         var blocksFetched = 0
         var blocksConnected = 0
@@ -15,7 +21,7 @@ enum LocalReferenceProof {
 
         do {
             let fetchStart = Date()
-            blocksFetched = try P2PFetcher.fetch(peer: peer, target: target) { block in
+            blocksFetched = try P2PFetcher.fetch(peer: peer, target: target, startHeight: startHeight, prefetchDepth: prefetchDepth) { block in
                 try store.recordBlock(height: block.height, raw: block.raw)
                 try store.markStored(height: block.height, hash: block.hash)
                 let connectStart = Date()
@@ -75,8 +81,8 @@ enum LocalReferenceProof {
             "proof_mode": "p2p_sync",
             "peer_mode": "local_reference",
             "peer": peer,
-            "reference_start_height": 0,
-            "reference_start_hash": Constants.genesisHash,
+            "reference_start_height": max(0, startHeight - 1),
+            "reference_start_hash": initialState.validatedHash.isEmpty ? Constants.genesisHash : initialState.validatedHash,
             "reference_finish_height": target,
             "reference_finish_hash": status["header_hash"] ?? "",
             "validated_height": validatedHeight,
@@ -95,11 +101,11 @@ enum LocalReferenceProof {
             "utxo_accounting_policy": "core_spendable_v1",
             "native_crypto_backend": Constants.nativeCryptoBackend,
             "native_crypto_available": (NativeReport.build()["native_crypto_available"] as? Bool) ?? false,
-            "script_runner_mode": "serial",
-            "rocksdb_wal_disabled": false,
-            "prefetch_depth": 1,
-            "resume_supported": false,
-            "fresh_state": true,
+            "script_runner_mode": scriptRunnerMode,
+            "rocksdb_wal_disabled": rocksdbWalDisabled,
+            "prefetch_depth": prefetchDepth,
+            "resume_supported": true,
+            "fresh_state": freshState,
             "result": reached ? "passed" : "failed",
             "failures": failures,
             "elapsed_ms": elapsedMs,

@@ -77,10 +77,7 @@ enum ScriptVerifier {
         if isBareMultisig(b) {
             return .bareMultisig
         }
-        if !b.isEmpty {
-            return .bareLegacy
-        }
-        return .unknown
+        return .bareLegacy
     }
 
     private static func isBareMultisig(_ b: [UInt8]) -> Bool {
@@ -105,7 +102,7 @@ enum ScriptVerifier {
         guard NativeSecp256k1.available else {
             return (false, "crypto", "native_secp256k1_unavailable", "native secp256k1 verifier is unavailable")
         }
-        guard let prevout = fixture.prevouts.first else {
+        guard let prevout = currentPrevout(fixture) else {
             return (false, "loader", "missing_prevout", "missing prevout for P2WPKH")
         }
         guard witness[0].count > 1 else {
@@ -121,7 +118,10 @@ enum ScriptVerifier {
             if result != "valid" {
                 return (false, "crypto", "ecdsa_\(result)", "P2WPKH ECDSA verification returned \(result)")
             }
-            return (false, "stack", "hash160_check_not_implemented", "P2WPKH signature verifies; pubkey HASH160 check is not implemented")
+            guard Hash.hash160(witness[1]) == program else {
+                return (false, "stack", "p2wpkh_pubkey_hash_mismatch", "P2WPKH pubkey HASH160 mismatch")
+            }
+            return (true, "ok", "", "")
         } catch {
             return (false, "sighash", "bip143_error", error.localizedDescription)
         }
@@ -179,9 +179,6 @@ enum ScriptVerifier {
             let stack = try ScriptInterpreter.parsePushes(input.scriptSig)
             let passed = try ScriptInterpreter.evaluate(script: fixture.prevScriptPubKey, stack: stack) { signatureWithHashType, pubkey, scriptCode in
                 verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode)
-            }
-            if !passed, ProcessInfo.processInfo.environment["SWIFTBITNODE_SCRIPT_DEBUG"] == "1" {
-                FileHandle.standardError.write(Data("script_debug fixture=\(fixture.fixtureID) bare_result=false\n".utf8))
             }
             return passed
                 ? (true, "ok", "", "")
@@ -253,7 +250,7 @@ enum ScriptVerifier {
 
     private static func verifySegwitV0Signature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, scriptCode: Data) -> Bool {
         guard signatureWithHashType.count > 1,
-              let prevout = fixture.prevouts.first else {
+              let prevout = currentPrevout(fixture) else {
             return false
         }
         let der = Data(signatureWithHashType.dropLast())
@@ -311,6 +308,13 @@ enum ScriptVerifier {
             return false
         }
         return NativeSecp256k1.verifySchnorr(xonlyPubkey: pubkey, msg32: digest, signature: signature)
+    }
+
+    private static func currentPrevout(_ fixture: CorpusFixture) -> CorpusPrevout? {
+        if fixture.inputIndex >= 0, fixture.inputIndex < fixture.prevouts.count {
+            return fixture.prevouts[fixture.inputIndex]
+        }
+        return fixture.prevouts.first
     }
 }
 

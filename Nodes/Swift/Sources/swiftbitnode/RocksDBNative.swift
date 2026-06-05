@@ -17,6 +17,12 @@ final class RocksDBNative {
     private typealias WriteOptionsDestroy = @convention(c) (OpaquePointer?) -> Void
     private typealias Put = @convention(c) (OpaquePointer?, OpaquePointer?, UnsafePointer<CChar>?, Int, UnsafePointer<CChar>?, Int, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Void
     private typealias Get = @convention(c) (OpaquePointer?, OpaquePointer?, UnsafePointer<CChar>?, Int, UnsafeMutablePointer<Int>?, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> UnsafeMutablePointer<CChar>?
+    private typealias Delete = @convention(c) (OpaquePointer?, OpaquePointer?, UnsafePointer<CChar>?, Int, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Void
+    private typealias WriteBatchCreate = @convention(c) () -> OpaquePointer?
+    private typealias WriteBatchDestroy = @convention(c) (OpaquePointer?) -> Void
+    private typealias WriteBatchPut = @convention(c) (OpaquePointer?, UnsafePointer<CChar>?, Int, UnsafePointer<CChar>?, Int) -> Void
+    private typealias WriteBatchDelete = @convention(c) (OpaquePointer?, UnsafePointer<CChar>?, Int) -> Void
+    private typealias Write = @convention(c) (OpaquePointer?, OpaquePointer?, OpaquePointer?, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Void
     private typealias Free = @convention(c) (UnsafeMutableRawPointer?) -> Void
 
     private struct API {
@@ -32,6 +38,12 @@ final class RocksDBNative {
         let writeOptionsDestroy: WriteOptionsDestroy
         let put: Put
         let get: Get
+        let delete: Delete
+        let writeBatchCreate: WriteBatchCreate
+        let writeBatchDestroy: WriteBatchDestroy
+        let writeBatchPut: WriteBatchPut
+        let writeBatchDelete: WriteBatchDelete
+        let write: Write
         let free: Free
 
         static func load() -> API? {
@@ -49,12 +61,18 @@ final class RocksDBNative {
                     let writeOptionsDestroy = symbol(handle, "rocksdb_writeoptions_destroy", WriteOptionsDestroy.self),
                     let put = symbol(handle, "rocksdb_put", Put.self),
                     let get = symbol(handle, "rocksdb_get", Get.self),
+                    let delete = symbol(handle, "rocksdb_delete", Delete.self),
+                    let writeBatchCreate = symbol(handle, "rocksdb_writebatch_create", WriteBatchCreate.self),
+                    let writeBatchDestroy = symbol(handle, "rocksdb_writebatch_destroy", WriteBatchDestroy.self),
+                    let writeBatchPut = symbol(handle, "rocksdb_writebatch_put", WriteBatchPut.self),
+                    let writeBatchDelete = symbol(handle, "rocksdb_writebatch_delete", WriteBatchDelete.self),
+                    let write = symbol(handle, "rocksdb_write", Write.self),
                     let free = symbol(handle, "rocksdb_free", Free.self)
                 else {
                     dlclose(handle)
                     continue
                 }
-                return API(handle: handle, optionsCreate: optionsCreate, optionsDestroy: optionsDestroy, optionsSetCreateIfMissing: optionsSetCreateIfMissing, open: open, close: close, readOptionsCreate: readOptionsCreate, readOptionsDestroy: readOptionsDestroy, writeOptionsCreate: writeOptionsCreate, writeOptionsDestroy: writeOptionsDestroy, put: put, get: get, free: free)
+                return API(handle: handle, optionsCreate: optionsCreate, optionsDestroy: optionsDestroy, optionsSetCreateIfMissing: optionsSetCreateIfMissing, open: open, close: close, readOptionsCreate: readOptionsCreate, readOptionsDestroy: readOptionsDestroy, writeOptionsCreate: writeOptionsCreate, writeOptionsDestroy: writeOptionsDestroy, put: put, get: get, delete: delete, writeBatchCreate: writeBatchCreate, writeBatchDestroy: writeBatchDestroy, writeBatchPut: writeBatchPut, writeBatchDelete: writeBatchDelete, write: write, free: free)
             }
             return nil
         }
@@ -125,5 +143,51 @@ final class RocksDBNative {
         guard let value else { return nil }
         defer { api.free(value) }
         return Data(bytes: value, count: length)
+    }
+
+    func delete(key: String) throws {
+        guard let writeOptions = api.writeOptionsCreate() else {
+            throw SwiftBitnodeError.message("rocksdb write options allocation failed")
+        }
+        defer { api.writeOptionsDestroy(writeOptions) }
+        var err: UnsafeMutablePointer<CChar>?
+        key.withCString { keyPtr in
+            api.delete(db, writeOptions, keyPtr, strlen(keyPtr), &err)
+        }
+        if let err {
+            let message = String(cString: err)
+            api.free(err)
+            throw SwiftBitnodeError.message("rocksdb delete failed: \(message)")
+        }
+    }
+
+    func writeBatch(puts: [(String, Data)], deletes: [String]) throws {
+        guard let batch = api.writeBatchCreate() else {
+            throw SwiftBitnodeError.message("rocksdb write batch allocation failed")
+        }
+        defer { api.writeBatchDestroy(batch) }
+        for (key, value) in puts {
+            key.withCString { keyPtr in
+                value.withUnsafeBytes { valueBytes in
+                    api.writeBatchPut(batch, keyPtr, strlen(keyPtr), valueBytes.bindMemory(to: CChar.self).baseAddress, value.count)
+                }
+            }
+        }
+        for key in deletes {
+            key.withCString { keyPtr in
+                api.writeBatchDelete(batch, keyPtr, strlen(keyPtr))
+            }
+        }
+        guard let writeOptions = api.writeOptionsCreate() else {
+            throw SwiftBitnodeError.message("rocksdb write options allocation failed")
+        }
+        defer { api.writeOptionsDestroy(writeOptions) }
+        var err: UnsafeMutablePointer<CChar>?
+        api.write(db, writeOptions, batch, &err)
+        if let err {
+            let message = String(cString: err)
+            api.free(err)
+            throw SwiftBitnodeError.message("rocksdb batch write failed: \(message)")
+        }
     }
 }

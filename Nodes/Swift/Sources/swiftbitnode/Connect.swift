@@ -14,7 +14,7 @@ struct TimingCollector {
 
 enum BlockConnector {
     static func connect(raw: Data, height: Int, store: ChainStore, timing: inout TimingCollector) throws -> Bool {
-        var state = try store.load()
+        let state = try store.load()
         let block = try timing.measure("block_parse_validate") {
             try Codec.parseBlock(raw, height: height)
         }
@@ -27,61 +27,72 @@ enum BlockConnector {
             return false
         }
 
-        let spent: [String] = []
+        var spent: [(String, StoredUtxo)] = []
         var created: [(String, StoredUtxo)] = []
+        var createdInBlock: [String: StoredUtxo] = [:]
         for (txIndex, tx) in block.transactions.enumerated() {
             if txIndex == 0 {
-                addOutputs(tx: tx, height: height, coinbase: true, created: &created)
+                addOutputs(tx: tx, height: height, coinbase: true, created: &created, createdInBlock: &createdInBlock)
                 continue
+            }
+            var prevouts: [CorpusPrevout] = []
+            for input in tx.inputs {
+                let key = outpointKey(txidInternal: input.previousTxidInternal, vout: input.vout)
+                guard let prev = try timing.measure("utxo_load", { try createdInBlock[key] ?? store.getUtxo(key, state: state) }) else {
+                    try store.setBlocker(height: height, failure: "missing UTXO \(key)", txid: tx.txid, inputIndex: prevouts.count)
+                    return false
+                }
+                prevouts.append(CorpusPrevout(amount: prev.value, scriptPubKey: Data(prev.scriptPubKeyHex.hexToBytes())))
             }
             for (inputIndex, input) in tx.inputs.enumerated() {
                 let key = outpointKey(txidInternal: input.previousTxidInternal, vout: input.vout)
-                guard let prev = state.utxos[key] else {
-                    try store.setBlocker(height: height, failure: "missing UTXO \(key)", txid: tx.txid, inputIndex: inputIndex)
-                    return false
-                }
+                let prev = try timing.measure("utxo_load", { try createdInBlock[key] ?? store.getUtxo(key, state: state) })!
                 if prev.coinbase && height - prev.height < 100 {
                     try store.setBlocker(height: height, failure: "coinbase spend before maturity", txid: tx.txid, inputIndex: inputIndex)
                     return false
                 }
-                try store.setBlocker(height: height, failure: "script verification not implemented", txid: tx.txid, inputIndex: inputIndex)
-                return false
+                let result = timing.measure("script_verify") {
+                    ScriptVerifier.verify(CorpusFixture(
+                        fixtureID: "live.\(height).\(tx.txid).\(inputIndex)",
+                        height: height,
+                        blockHash: block.hash,
+                        txid: tx.txid,
+                        inputIndex: inputIndex,
+                        transaction: tx,
+                        prevouts: prevouts,
+                        prevScriptPubKey: Data(prev.scriptPubKeyHex.hexToBytes()),
+                        loadedFiles: 0,
+                        fileHashes: [:]
+                    ))
+                }
+                guard result.passed else {
+                    try store.setBlocker(height: height, failure: "\(result.stage):\(result.type): \(result.message)", txid: tx.txid, inputIndex: inputIndex)
+                    return false
+                }
+                if createdInBlock.removeValue(forKey: key) != nil {
+                    created.removeAll { $0.0 == key }
+                } else {
+                    spent.append((key, prev))
+                }
             }
-            addOutputs(tx: tx, height: height, coinbase: false, created: &created)
+            addOutputs(tx: tx, height: height, coinbase: false, created: &created, createdInBlock: &createdInBlock)
         }
 
-        timing.measure("utxo_apply") {
-            for key in spent {
-                state.utxos.removeValue(forKey: key)
-            }
-            for (key, utxo) in created {
-                state.utxos[key] = utxo
-            }
-        }
         try timing.measure("commit") {
-            state.validatedHeight = height
-            state.validatedHash = block.hash
-            state.headerHeight = height
-            state.headerHash = block.hash
-            state.storedBlockHeight = max(state.storedBlockHeight, height)
-            state.storedBlockHash = block.hash
-            state.chainstateUtxoCount = state.utxos.count
-            state.syncStatus = "blocks_current"
-            state.chainstateStatus = store.backendName == "rocksdb" ? "usable" : "diagnostic_file_store"
-            state.currentBlocker = nil
-            state.lastError = ""
-            try store.save(state)
+            try store.commitConnectedBlock(state: state, raw: raw, height: height, hash: block.hash, created: created, spent: spent)
         }
         return true
     }
 
-    private static func addOutputs(tx: Transaction, height: Int, coinbase: Bool, created: inout [(String, StoredUtxo)]) {
+    private static func addOutputs(tx: Transaction, height: Int, coinbase: Bool, created: inout [(String, StoredUtxo)], createdInBlock: inout [String: StoredUtxo]) {
         if height == 0, coinbase {
             return
         }
         for (index, output) in tx.outputs.enumerated() where output.isSpendableCoreV1 {
             let key = "\(tx.txid):\(index)"
-            created.append((key, StoredUtxo(value: output.value, scriptPubKeyHex: output.scriptPubKey.hex, height: height, coinbase: coinbase)))
+            let utxo = StoredUtxo(value: output.value, scriptPubKeyHex: output.scriptPubKey.hex, height: height, coinbase: coinbase)
+            created.append((key, utxo))
+            createdInBlock[key] = utxo
         }
     }
 

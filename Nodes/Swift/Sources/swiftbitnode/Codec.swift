@@ -69,7 +69,7 @@ struct TxOutput {
     let value: Int64
     let scriptPubKey: Data
     var isSpendableCoreV1: Bool {
-        !scriptPubKey.isEmpty && scriptPubKey.first != 0x6a
+        scriptPubKey.first != 0x6a
     }
 }
 

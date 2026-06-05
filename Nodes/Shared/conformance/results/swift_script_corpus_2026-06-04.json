@@ -1,15 +1,15 @@
 {
-  "captured_at" : "2026-06-05T02:50:41Z",
+  "captured_at" : "2026-06-05T03:19:33Z",
   "category" : "script_corpus",
-  "failed" : 1,
+  "failed" : 0,
   "fixture_count" : 45,
   "implementation" : "SwiftNode",
   "native_crypto_backend" : "libsecp256k1",
   "node_id" : "swift",
-  "not_implemented" : 1,
-  "passed" : 44,
+  "not_implemented" : 0,
+  "passed" : 45,
   "port" : "swift",
-  "result" : "failed",
+  "result" : "passed",
   "results" : [
     {
       "block_hash" : "000000000000004ba29c976c33753742a34fb029eb261e146dfd31bccdadb9bc",
@@ -1264,9 +1264,9 @@
     {
       "block_hash" : "00000000000000015305f8164957079870b6287ad335fb4f3fba11b732305b45",
       "expected_result" : "valid",
-      "failure" : "bare script evaluated false",
-      "failure_stage" : "stack",
-      "failure_type" : "bare_script_false",
+      "failure" : "",
+      "failure_stage" : "ok",
+      "failure_type" : "",
       "file_sha256" : {
         "scripts.bare_legacy_118555\/block_118555.hex" : "99e52a8d2103a3a4de0354d24bf642c32a01d2f468e6eff9ac2d2b981b3aa77d",
         "scripts.bare_legacy_118555\/tx_bare_legacy_118555_meta.json" : "6d44f9fb989a4a061e3a2b6185cd0a6b7f652cfcb3eee50a7755dcb0a8bdc695",
@@ -1278,7 +1278,7 @@
       "height" : 118555,
       "input_index" : 1,
       "loaded_files" : 5,
-      "result" : "failed",
+      "result" : "passed",
       "template" : "bareLegacy",
       "txid" : "17e5b4d1bd3debce6de1f1ede70d4a663d6df6c6006464ff55ada618b6a59a98"
     },

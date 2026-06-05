@@ -27,11 +27,13 @@
     "docker_status": "cd Nodes/Swift && make docker-status",
     "docker_script_corpus": "cd Nodes/Swift && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Swift && make docker-proof-local",
+    "docker_proof_10k": null,
     "docker_probe_external": null,
     "docker_supervisor": null,
     "docker_supervisor_status": null,
     "docker_supervisor_stop": null,
-    "docker_supervisor_resume": null
+    "docker_supervisor_resume": null,
+    "docker_smoke_once": "cd Nodes/Swift && make docker-status"
   },
   "peer_modes": {
     "local_reference": {
@@ -45,7 +47,19 @@
       "command": null,
       "peer": null,
       "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
     }
+  },
+  "supervisor": {
+    "stop_marker": ".swiftbitnode_supervisor_stop",
+    "resume_marker": ".swiftbitnode_supervisor_resume",
+    "poll_sec": 120,
+    "check_sec": 5
   },
   "tick_json": {
     "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
@@ -53,7 +67,7 @@
   "proof_artifacts": {
     "script_corpus_result": "Nodes/Shared/conformance/results/swift_script_corpus_<YYYY-MM-DD>.json",
     "local_reference_result": "Nodes/Shared/conformance/results/swift_docker_supporting_5k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Swift proof_partial: corpus-first command surface is present; strict baseline remains blocked until 45/45 corpus and RocksDB runtime truth are implemented."
+    "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. The local Reference 5k proof remains the bounded baseline gate."
   },
-  "known_caveats": ["Shared script corpus is not yet 45/45", "Operational state is still diagnostic, not RocksDB-owned truth", "Binary gate remains not_attempted"]
+  "known_caveats": ["The local Reference P2P comparator is a bounded proof harness, not live tip maintenance", "Persistent live P2P supervisor is still a follow-up surface", "Binary gate remains not_attempted"]
 }
