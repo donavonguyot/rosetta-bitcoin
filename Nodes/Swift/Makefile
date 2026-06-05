@@ -5,6 +5,7 @@ SCRIPT_RESULT ?= ../Shared/conformance/results/swift_script_corpus_$(RESULT_DATE
 DOCKER_SCRIPT_RESULT ?= /results/swift_script_corpus_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= /results/swift_docker_supporting_5k_benchmark_$(RESULT_DATE).json
 DOCKER_10K_PROOF_RESULT ?= /results/swift_docker_supporting_10k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_PROOF_RESULT ?= /results/swift_docker_supporting_50k_benchmark_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_P2P_PEER ?= host.docker.internal:48333
 DOCKER_PROOF_VOLUME ?= swiftbitnode_proof_data
@@ -13,7 +14,7 @@ DOCKER_SUPERVISOR_TARGET ?= 10000
 DOCKER_SUPERVISOR_CHUNK ?= 5000
 DOCKER_SUPERVISOR_RESULT ?= /results/swift_supervisor_status_$(RESULT_DATE).json
 
-.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local swift-node-sync-supervisor docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume clean
+.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local swift-node-sync-supervisor docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume clean
 
 build:
 	$(SWIFT) build
@@ -88,6 +89,12 @@ docker-proof-10k:
 	  DOCKER_PROOF_VOLUME=swiftbitnode_10k_proof_data \
 	  DOCKER_SYNC_TARGET=10000 \
 	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_10K_PROOF_RESULT)
+
+docker-proof-50k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=swiftbitnode_50k_proof_data \
+	  DOCKER_SYNC_TARGET=50000 \
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_50K_PROOF_RESULT)
 
 docker-supervisor:
 	@for i in $$(seq 1 60); do \

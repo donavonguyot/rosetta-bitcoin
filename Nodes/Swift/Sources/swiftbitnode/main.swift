@@ -16,6 +16,8 @@ do {
         try SyncSupervisor.run(args: args)
     case "consensus-self-test":
         try Json.write(ConsensusSelfTest.run(), to: nil)
+    case "performance-self-test":
+        try Json.write(PerformanceSelfTest.run(), to: nil)
     default:
         printHelp()
     }

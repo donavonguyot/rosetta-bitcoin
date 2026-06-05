@@ -16,5 +16,5 @@ func nowIso8601() -> String {
 }
 
 func printHelp() {
-    print("swiftbitnode <status|native-crypto-vectors|script-corpus|proof-local> [options]")
+    print("swiftbitnode <status|native-crypto-vectors|script-corpus|proof-local|sync-supervisor|consensus-self-test|performance-self-test> [options]")
 }

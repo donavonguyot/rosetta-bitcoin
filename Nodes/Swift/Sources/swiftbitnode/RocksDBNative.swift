@@ -6,9 +6,27 @@ import Darwin
 #endif
 
 final class RocksDBNative {
+    static var tuningMetadata: [String: Any] {
+        [
+            "write_buffer_size": 64 * 1024 * 1024,
+            "max_write_buffer_number": 4,
+            "max_background_jobs": 4,
+            "max_open_files": -1,
+            "increase_parallelism": 4,
+            "reusable_read_options": true,
+            "reusable_write_options": true,
+            "wal_disabled": false
+        ]
+    }
+
     private typealias OptionsCreate = @convention(c) () -> OpaquePointer?
     private typealias OptionsDestroy = @convention(c) (OpaquePointer?) -> Void
     private typealias OptionsSetCreateIfMissing = @convention(c) (OpaquePointer?, UInt8) -> Void
+    private typealias OptionsSetWriteBufferSize = @convention(c) (OpaquePointer?, Int) -> Void
+    private typealias OptionsSetMaxWriteBufferNumber = @convention(c) (OpaquePointer?, Int32) -> Void
+    private typealias OptionsSetMaxBackgroundJobs = @convention(c) (OpaquePointer?, Int32) -> Void
+    private typealias OptionsSetMaxOpenFiles = @convention(c) (OpaquePointer?, Int32) -> Void
+    private typealias OptionsIncreaseParallelism = @convention(c) (OpaquePointer?, Int32) -> Void
     private typealias Open = @convention(c) (OpaquePointer?, UnsafePointer<CChar>?, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> OpaquePointer?
     private typealias Close = @convention(c) (OpaquePointer?) -> Void
     private typealias ReadOptionsCreate = @convention(c) () -> OpaquePointer?
@@ -31,6 +49,11 @@ final class RocksDBNative {
         let optionsCreate: OptionsCreate
         let optionsDestroy: OptionsDestroy
         let optionsSetCreateIfMissing: OptionsSetCreateIfMissing
+        let optionsSetWriteBufferSize: OptionsSetWriteBufferSize?
+        let optionsSetMaxWriteBufferNumber: OptionsSetMaxWriteBufferNumber?
+        let optionsSetMaxBackgroundJobs: OptionsSetMaxBackgroundJobs?
+        let optionsSetMaxOpenFiles: OptionsSetMaxOpenFiles?
+        let optionsIncreaseParallelism: OptionsIncreaseParallelism?
         let open: Open
         let close: Close
         let readOptionsCreate: ReadOptionsCreate
@@ -75,7 +98,33 @@ final class RocksDBNative {
                     continue
                 }
                 let multiGet = symbol(handle, "rocksdb_multi_get", MultiGet.self)
-                return API(handle: handle, optionsCreate: optionsCreate, optionsDestroy: optionsDestroy, optionsSetCreateIfMissing: optionsSetCreateIfMissing, open: open, close: close, readOptionsCreate: readOptionsCreate, readOptionsDestroy: readOptionsDestroy, writeOptionsCreate: writeOptionsCreate, writeOptionsDestroy: writeOptionsDestroy, put: put, get: get, multiGet: multiGet, delete: delete, writeBatchCreate: writeBatchCreate, writeBatchDestroy: writeBatchDestroy, writeBatchPut: writeBatchPut, writeBatchDelete: writeBatchDelete, write: write, free: free)
+                return API(
+                    handle: handle,
+                    optionsCreate: optionsCreate,
+                    optionsDestroy: optionsDestroy,
+                    optionsSetCreateIfMissing: optionsSetCreateIfMissing,
+                    optionsSetWriteBufferSize: symbol(handle, "rocksdb_options_set_write_buffer_size", OptionsSetWriteBufferSize.self),
+                    optionsSetMaxWriteBufferNumber: symbol(handle, "rocksdb_options_set_max_write_buffer_number", OptionsSetMaxWriteBufferNumber.self),
+                    optionsSetMaxBackgroundJobs: symbol(handle, "rocksdb_options_set_max_background_jobs", OptionsSetMaxBackgroundJobs.self),
+                    optionsSetMaxOpenFiles: symbol(handle, "rocksdb_options_set_max_open_files", OptionsSetMaxOpenFiles.self),
+                    optionsIncreaseParallelism: symbol(handle, "rocksdb_options_increase_parallelism", OptionsIncreaseParallelism.self),
+                    open: open,
+                    close: close,
+                    readOptionsCreate: readOptionsCreate,
+                    readOptionsDestroy: readOptionsDestroy,
+                    writeOptionsCreate: writeOptionsCreate,
+                    writeOptionsDestroy: writeOptionsDestroy,
+                    put: put,
+                    get: get,
+                    multiGet: multiGet,
+                    delete: delete,
+                    writeBatchCreate: writeBatchCreate,
+                    writeBatchDestroy: writeBatchDestroy,
+                    writeBatchPut: writeBatchPut,
+                    writeBatchDelete: writeBatchDelete,
+                    write: write,
+                    free: free
+                )
             }
             return nil
         }
@@ -88,6 +137,8 @@ final class RocksDBNative {
 
     private let api: API
     private let db: OpaquePointer
+    private let readOptions: OpaquePointer
+    private let writeOptions: OpaquePointer
     let path: String
 
     init?(path: String) {
@@ -95,30 +146,45 @@ final class RocksDBNative {
         guard let options = api.optionsCreate() else { return nil }
         defer { api.optionsDestroy(options) }
         api.optionsSetCreateIfMissing(options, 1)
+        api.optionsSetWriteBufferSize?(options, 64 * 1024 * 1024)
+        api.optionsSetMaxWriteBufferNumber?(options, 4)
+        api.optionsSetMaxBackgroundJobs?(options, 4)
+        api.optionsSetMaxOpenFiles?(options, -1)
+        api.optionsIncreaseParallelism?(options, 4)
         var err: UnsafeMutablePointer<CChar>?
         guard let db = api.open(options, path, &err) else {
             if let err { api.free(err) }
             return nil
         }
+        guard let readOptions = api.readOptionsCreate(),
+              let writeOptions = api.writeOptionsCreate() else {
+            api.close(db)
+            return nil
+        }
         self.api = api
         self.db = db
+        self.readOptions = readOptions
+        self.writeOptions = writeOptions
         self.path = path
     }
 
     deinit {
+        api.readOptionsDestroy(readOptions)
+        api.writeOptionsDestroy(writeOptions)
         api.close(db)
     }
 
     func put(key: String, value: Data) throws {
-        guard let writeOptions = api.writeOptionsCreate() else {
-            throw SwiftBitnodeError.message("rocksdb write options allocation failed")
-        }
-        defer { api.writeOptionsDestroy(writeOptions) }
+        try put(key: Data(key.utf8), value: value)
+    }
+
+    func put(key: Data, value: Data) throws {
         var err: UnsafeMutablePointer<CChar>?
-        try key.withCString { keyPtr in
+        try key.withUnsafeBytes { keyBytes in
             try value.withUnsafeBytes { valueBytes in
+                let keyPtr = keyBytes.bindMemory(to: CChar.self).baseAddress
                 let valuePtr = valueBytes.bindMemory(to: CChar.self).baseAddress
-                api.put(db, writeOptions, keyPtr, strlen(keyPtr), valuePtr, value.count, &err)
+                api.put(db, writeOptions, keyPtr, key.count, valuePtr, value.count, &err)
                 if let err {
                     let message = String(cString: err)
                     api.free(err)
@@ -129,14 +195,15 @@ final class RocksDBNative {
     }
 
     func get(key: String) throws -> Data? {
-        guard let readOptions = api.readOptionsCreate() else {
-            throw SwiftBitnodeError.message("rocksdb read options allocation failed")
-        }
-        defer { api.readOptionsDestroy(readOptions) }
+        try get(key: Data(key.utf8))
+    }
+
+    func get(key: Data) throws -> Data? {
         var err: UnsafeMutablePointer<CChar>?
         var length = 0
-        let value: UnsafeMutablePointer<CChar>? = key.withCString { keyPtr in
-            api.get(db, readOptions, keyPtr, strlen(keyPtr), &length, &err)
+        let value: UnsafeMutablePointer<CChar>? = key.withUnsafeBytes { keyBytes in
+            let keyPtr = keyBytes.bindMemory(to: CChar.self).baseAddress
+            return api.get(db, readOptions, keyPtr, key.count, &length, &err)
         }
         if let err {
             let message = String(cString: err)
@@ -149,9 +216,20 @@ final class RocksDBNative {
     }
 
     func get(keys: [String]) throws -> [String: Data] {
+        let raw = try get(keys: keys.map { Data($0.utf8) })
+        var out: [String: Data] = [:]
+        for key in keys {
+            if let value = raw[Data(key.utf8)] {
+                out[key] = value
+            }
+        }
+        return out
+    }
+
+    func get(keys: [Data]) throws -> [Data: Data] {
         guard !keys.isEmpty else { return [:] }
         guard let multiGet = api.multiGet else {
-            var out: [String: Data] = [:]
+            var out: [Data: Data] = [:]
             for key in keys {
                 if let value = try get(key: key) {
                     out[key] = value
@@ -159,24 +237,28 @@ final class RocksDBNative {
             }
             return out
         }
-        guard let readOptions = api.readOptionsCreate() else {
-            throw SwiftBitnodeError.message("rocksdb read options allocation failed")
+        let keyBuffers: [UnsafeMutableRawPointer] = keys.map { key in
+            let pointer = UnsafeMutableRawPointer.allocate(byteCount: max(1, key.count), alignment: 1)
+            key.withUnsafeBytes { bytes in
+                if let base = bytes.baseAddress, key.count > 0 {
+                    pointer.copyMemory(from: base, byteCount: key.count)
+                }
+            }
+            return pointer
         }
-        defer { api.readOptionsDestroy(readOptions) }
-        let cKeys = keys.map { strdup($0)! }
         defer {
-            for key in cKeys {
-                free(key)
+            for pointer in keyBuffers {
+                pointer.deallocate()
             }
         }
-        var keyPointers = cKeys.map { Optional(UnsafePointer<CChar>($0)) }
-        var keySizes = cKeys.map { strlen($0) }
+        var keyPointers = keyBuffers.map { Optional(UnsafePointer<CChar>($0.assumingMemoryBound(to: CChar.self))) }
+        var keySizes = keys.map(\.count)
         var values = Array<UnsafeMutablePointer<CChar>?>(repeating: nil, count: keys.count)
         var valueSizes = Array<Int>(repeating: 0, count: keys.count)
         var errors = Array<UnsafeMutablePointer<CChar>?>(repeating: nil, count: keys.count)
         multiGet(db, readOptions, keys.count, &keyPointers, &keySizes, &values, &valueSizes, &errors)
 
-        var out: [String: Data] = [:]
+        var out: [Data: Data] = [:]
         for index in keys.indices {
             if let err = errors[index] {
                 let message = String(cString: err)
@@ -192,13 +274,14 @@ final class RocksDBNative {
     }
 
     func delete(key: String) throws {
-        guard let writeOptions = api.writeOptionsCreate() else {
-            throw SwiftBitnodeError.message("rocksdb write options allocation failed")
-        }
-        defer { api.writeOptionsDestroy(writeOptions) }
+        try delete(key: Data(key.utf8))
+    }
+
+    func delete(key: Data) throws {
         var err: UnsafeMutablePointer<CChar>?
-        key.withCString { keyPtr in
-            api.delete(db, writeOptions, keyPtr, strlen(keyPtr), &err)
+        key.withUnsafeBytes { keyBytes in
+            let keyPtr = keyBytes.bindMemory(to: CChar.self).baseAddress
+            api.delete(db, writeOptions, keyPtr, key.count, &err)
         }
         if let err {
             let message = String(cString: err)
@@ -208,26 +291,29 @@ final class RocksDBNative {
     }
 
     func writeBatch(puts: [(String, Data)], deletes: [String]) throws {
+        try writeBatch(
+            puts: puts.map { (Data($0.0.utf8), $0.1) },
+            deletes: deletes.map { Data($0.utf8) }
+        )
+    }
+
+    func writeBatch(puts: [(Data, Data)], deletes: [Data]) throws {
         guard let batch = api.writeBatchCreate() else {
             throw SwiftBitnodeError.message("rocksdb write batch allocation failed")
         }
         defer { api.writeBatchDestroy(batch) }
         for (key, value) in puts {
-            key.withCString { keyPtr in
+            key.withUnsafeBytes { keyBytes in
                 value.withUnsafeBytes { valueBytes in
-                    api.writeBatchPut(batch, keyPtr, strlen(keyPtr), valueBytes.bindMemory(to: CChar.self).baseAddress, value.count)
+                    api.writeBatchPut(batch, keyBytes.bindMemory(to: CChar.self).baseAddress, key.count, valueBytes.bindMemory(to: CChar.self).baseAddress, value.count)
                 }
             }
         }
         for key in deletes {
-            key.withCString { keyPtr in
-                api.writeBatchDelete(batch, keyPtr, strlen(keyPtr))
+            key.withUnsafeBytes { keyBytes in
+                api.writeBatchDelete(batch, keyBytes.bindMemory(to: CChar.self).baseAddress, key.count)
             }
         }
-        guard let writeOptions = api.writeOptionsCreate() else {
-            throw SwiftBitnodeError.message("rocksdb write options allocation failed")
-        }
-        defer { api.writeOptionsDestroy(writeOptions) }
         var err: UnsafeMutablePointer<CChar>?
         api.write(db, writeOptions, batch, &err)
         if let err {

@@ -101,16 +101,16 @@ enum ConsensusSelfTest {
         scriptSig: Data = Data(),
         witness: [[Data]] = [[]]
     ) -> Transaction {
-        Transaction(
+        let txidInternal = Data(repeating: 0xaa, count: 32)
+        let wtxidInternal = Data(repeating: 0xbb, count: 32)
+        return Transaction(
             version: version,
-            rawNoWitness: Data(),
-            rawWithWitness: Data(),
             inputs: [TxInput(previousTxidInternal: Data(repeating: 1, count: 32), vout: 0, scriptSig: scriptSig, sequence: sequence)],
             outputs: [TxOutput(value: 500, scriptPubKey: Data([0x51]))],
             witness: witness,
             locktime: locktime,
-            txid: "self-test-txid",
-            wtxid: "self-test-wtxid",
+            txidInternal: txidInternal,
+            wtxidInternal: wtxidInternal,
             hasWitness: !witness.isEmpty
         )
     }

@@ -39,7 +39,9 @@ enum SyncSupervisor {
                         prefetchDepth: prefetchDepth,
                         advertiseHeight: state.validatedHeight
                     ) { block in
+                        let connectStart = DispatchTime.now().uptimeNanoseconds
                         let result = try BlockConnector.connect(raw: block.raw, height: block.height, state: state, store: store, timing: &timing)
+                        timing.addElapsed("block_connect_store_commit", since: connectStart)
                         if result.connected {
                             chunkConnected += 1
                             state = result.state
@@ -114,6 +116,11 @@ enum SyncSupervisor {
             "failures": failures,
             "chunks": chunks,
             "stage_totals_ms": timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"]),
+            "timing_summary": [
+                "stage_totals_ms": timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"]),
+                "slow_blocks": timing.slowBlocksJson(),
+                "total_ms": elapsedMs
+            ],
             "elapsed_ms": elapsedMs,
             "status": status,
             "captured_at": nowIso8601()

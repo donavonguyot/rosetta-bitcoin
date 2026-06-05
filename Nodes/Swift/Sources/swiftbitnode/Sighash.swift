@@ -5,13 +5,82 @@ enum Sighash {
     static let none: UInt32 = 0x02
     static let single: UInt32 = 0x03
     static let anyoneCanPay: UInt32 = 0x80
+    private static let zeroHash = Data(repeating: 0, count: 32)
+
+    final class Cache: @unchecked Sendable {
+        let bip143HashPrevouts: Data
+        let bip143HashSequence: Data
+        let bip143HashOutputs: Data
+        let bip143HashSingle: [Data]
+        let taprootHashPrevouts: Data
+        let taprootHashAmounts: Data
+        let taprootHashScriptPubKeys: Data
+        let taprootHashSequences: Data
+        let taprootHashOutputs: Data
+        let taprootHashSingle: [Data]
+
+        init(tx: Transaction, prevouts: [CorpusPrevout]) {
+            var prevoutBytes = Data()
+            prevoutBytes.reserveCapacity(tx.inputs.count * 36)
+            var sequenceBytes = Data()
+            sequenceBytes.reserveCapacity(tx.inputs.count * 4)
+            for input in tx.inputs {
+                prevoutBytes.append(input.previousTxidInternal)
+                prevoutBytes.append(input.vout.littleEndianData)
+                sequenceBytes.append(input.sequence.littleEndianData)
+            }
+
+            var outputBytes = Data()
+            var bip143Singles: [Data] = []
+            var taprootSingles: [Data] = []
+            bip143Singles.reserveCapacity(tx.outputs.count)
+            taprootSingles.reserveCapacity(tx.outputs.count)
+            for output in tx.outputs {
+                let serialized = Sighash.serializeOutput(output)
+                outputBytes.append(serialized)
+                bip143Singles.append(SHA256.doubleHash(serialized))
+                taprootSingles.append(SHA256.hash(serialized))
+            }
+
+            var amountBytes = Data()
+            amountBytes.reserveCapacity(prevouts.count * 8)
+            var scriptPubKeyBytes = Data()
+            for prevout in prevouts {
+                amountBytes.append(UInt64(bitPattern: prevout.amount).littleEndianData)
+                Sighash.appendCompactSize(&scriptPubKeyBytes, UInt64(prevout.scriptPubKey.count))
+                scriptPubKeyBytes.append(prevout.scriptPubKey)
+            }
+
+            self.bip143HashPrevouts = SHA256.doubleHash(prevoutBytes)
+            self.bip143HashSequence = SHA256.doubleHash(sequenceBytes)
+            self.bip143HashOutputs = SHA256.doubleHash(outputBytes)
+            self.bip143HashSingle = bip143Singles
+            self.taprootHashPrevouts = SHA256.hash(prevoutBytes)
+            self.taprootHashAmounts = SHA256.hash(amountBytes)
+            self.taprootHashScriptPubKeys = SHA256.hash(scriptPubKeyBytes)
+            self.taprootHashSequences = SHA256.hash(sequenceBytes)
+            self.taprootHashOutputs = SHA256.hash(outputBytes)
+            self.taprootHashSingle = taprootSingles
+        }
+
+        func bip143SingleOutput(_ index: Int) -> Data {
+            guard index >= 0, index < bip143HashSingle.count else { return Sighash.zeroHash }
+            return bip143HashSingle[index]
+        }
+
+        func taprootSingleOutput(_ index: Int) -> Data {
+            guard index >= 0, index < taprootHashSingle.count else { return Sighash.zeroHash }
+            return taprootHashSingle[index]
+        }
+    }
 
     static func bip143(
         tx: Transaction,
         inputIndex: Int,
         scriptCode: Data,
         amount: Int64,
-        sighashType: UInt32
+        sighashType: UInt32,
+        cache: Cache? = nil
     ) throws -> Data {
         guard inputIndex >= 0, inputIndex < tx.inputs.count else {
             throw SwiftBitnodeError.message("input index out of range")
@@ -20,7 +89,9 @@ enum Sighash {
         let anyone = (sighashType & anyoneCanPay) != 0
         let hashPrevouts: Data
         if anyone {
-            hashPrevouts = Data(repeating: 0, count: 32)
+            hashPrevouts = zeroHash
+        } else if let cache {
+            hashPrevouts = cache.bip143HashPrevouts
         } else {
             hashPrevouts = SHA256.doubleHash(tx.inputs.reduce(into: Data()) { out, input in
                 out.append(input.previousTxidInternal)
@@ -29,7 +100,9 @@ enum Sighash {
         }
         let hashSequence: Data
         if anyone || baseType == single || baseType == none {
-            hashSequence = Data(repeating: 0, count: 32)
+            hashSequence = zeroHash
+        } else if let cache {
+            hashSequence = cache.bip143HashSequence
         } else {
             hashSequence = SHA256.doubleHash(tx.inputs.reduce(into: Data()) { out, input in
                 out.append(input.sequence.littleEndianData)
@@ -37,13 +110,13 @@ enum Sighash {
         }
         let hashOutputs: Data
         if baseType == all {
-            hashOutputs = SHA256.doubleHash(tx.outputs.reduce(into: Data()) { out, output in
+            hashOutputs = cache?.bip143HashOutputs ?? SHA256.doubleHash(tx.outputs.reduce(into: Data()) { out, output in
                 out.append(serializeOutput(output))
             })
         } else if baseType == single && inputIndex < tx.outputs.count {
-            hashOutputs = SHA256.doubleHash(serializeOutput(tx.outputs[inputIndex]))
+            hashOutputs = cache?.bip143SingleOutput(inputIndex) ?? SHA256.doubleHash(serializeOutput(tx.outputs[inputIndex]))
         } else {
-            hashOutputs = Data(repeating: 0, count: 32)
+            hashOutputs = zeroHash
         }
         let input = tx.inputs[inputIndex]
         var preimage = Data()
@@ -122,7 +195,8 @@ enum Sighash {
         tapleafHash: Data,
         sighashType: UInt8,
         annex: Data? = nil,
-        codeSeparatorPos: UInt32 = UInt32.max
+        codeSeparatorPos: UInt32 = UInt32.max,
+        cache: Cache? = nil
     ) throws -> Data {
         guard inputIndex >= 0, inputIndex < tx.inputs.count, prevouts.count >= tx.inputs.count else {
             throw SwiftBitnodeError.message("taproot sighash missing prevouts")
@@ -137,23 +211,30 @@ enum Sighash {
         msg.append(UInt32(bitPattern: tx.version).littleEndianData)
         msg.append(tx.locktime.littleEndianData)
         if !anyone {
-            msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
-                out.append(input.previousTxidInternal)
-                out.append(input.vout.littleEndianData)
-            }))
-            msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
-                out.append(UInt64(bitPattern: prevout.amount).littleEndianData)
-            }))
-            msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
-                appendCompactSize(&out, UInt64(prevout.scriptPubKey.count))
-                out.append(prevout.scriptPubKey)
-            }))
-            msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
-                out.append(input.sequence.littleEndianData)
-            }))
+            if let cache {
+                msg.append(cache.taprootHashPrevouts)
+                msg.append(cache.taprootHashAmounts)
+                msg.append(cache.taprootHashScriptPubKeys)
+                msg.append(cache.taprootHashSequences)
+            } else {
+                msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
+                    out.append(input.previousTxidInternal)
+                    out.append(input.vout.littleEndianData)
+                }))
+                msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
+                    out.append(UInt64(bitPattern: prevout.amount).littleEndianData)
+                }))
+                msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
+                    appendCompactSize(&out, UInt64(prevout.scriptPubKey.count))
+                    out.append(prevout.scriptPubKey)
+                }))
+                msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
+                    out.append(input.sequence.littleEndianData)
+                }))
+            }
         }
         if baseType != none && baseType != single {
-            msg.append(SHA256.hash(tx.outputs.reduce(into: Data()) { out, output in
+            msg.append(cache?.taprootHashOutputs ?? SHA256.hash(tx.outputs.reduce(into: Data()) { out, output in
                 out.append(serializeOutput(output))
             }))
         }
@@ -180,7 +261,7 @@ enum Sighash {
             guard inputIndex < tx.outputs.count else {
                 throw SwiftBitnodeError.message("taproot SIGHASH_SINGLE missing matching output")
             }
-            msg.append(SHA256.hash(serializeOutput(tx.outputs[inputIndex])))
+            msg.append(cache?.taprootSingleOutput(inputIndex) ?? SHA256.hash(serializeOutput(tx.outputs[inputIndex])))
         }
         msg.append(tapleafHash)
         msg.append(UInt8(0x00)) // key_version
@@ -193,7 +274,8 @@ enum Sighash {
         inputIndex: Int,
         prevouts: [CorpusPrevout],
         sighashType: UInt8,
-        annex: Data? = nil
+        annex: Data? = nil,
+        cache: Cache? = nil
     ) throws -> Data {
         guard inputIndex >= 0, inputIndex < tx.inputs.count, prevouts.count >= tx.inputs.count else {
             throw SwiftBitnodeError.message("taproot sighash missing prevouts")
@@ -208,23 +290,30 @@ enum Sighash {
         msg.append(UInt32(bitPattern: tx.version).littleEndianData)
         msg.append(tx.locktime.littleEndianData)
         if !anyone {
-            msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
-                out.append(input.previousTxidInternal)
-                out.append(input.vout.littleEndianData)
-            }))
-            msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
-                out.append(UInt64(bitPattern: prevout.amount).littleEndianData)
-            }))
-            msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
-                appendCompactSize(&out, UInt64(prevout.scriptPubKey.count))
-                out.append(prevout.scriptPubKey)
-            }))
-            msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
-                out.append(input.sequence.littleEndianData)
-            }))
+            if let cache {
+                msg.append(cache.taprootHashPrevouts)
+                msg.append(cache.taprootHashAmounts)
+                msg.append(cache.taprootHashScriptPubKeys)
+                msg.append(cache.taprootHashSequences)
+            } else {
+                msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
+                    out.append(input.previousTxidInternal)
+                    out.append(input.vout.littleEndianData)
+                }))
+                msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
+                    out.append(UInt64(bitPattern: prevout.amount).littleEndianData)
+                }))
+                msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
+                    appendCompactSize(&out, UInt64(prevout.scriptPubKey.count))
+                    out.append(prevout.scriptPubKey)
+                }))
+                msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
+                    out.append(input.sequence.littleEndianData)
+                }))
+            }
         }
         if outputMode == all {
-            msg.append(SHA256.hash(tx.outputs.reduce(into: Data()) { out, output in
+            msg.append(cache?.taprootHashOutputs ?? SHA256.hash(tx.outputs.reduce(into: Data()) { out, output in
                 out.append(serializeOutput(output))
             }))
         } else if outputMode == single && inputIndex >= tx.outputs.count {
@@ -250,7 +339,7 @@ enum Sighash {
             msg.append(SHA256.hash(serializedAnnex))
         }
         if outputMode == single {
-            msg.append(SHA256.hash(serializeOutput(tx.outputs[inputIndex])))
+            msg.append(cache?.taprootSingleOutput(inputIndex) ?? SHA256.hash(serializeOutput(tx.outputs[inputIndex])))
         }
         return taggedHash(tag: "TapSighash", Data([0x00]) + msg)
     }

@@ -31,24 +31,24 @@ enum ScriptTemplate: String {
 }
 
 enum ScriptVerifier {
-    static func verify(_ fixture: CorpusFixture) -> (passed: Bool, stage: String, type: String, message: String) {
+    static func verify(_ fixture: CorpusFixture, cache: Sighash.Cache? = nil) -> (passed: Bool, stage: String, type: String, message: String) {
         guard fixture.inputIndex >= 0, fixture.inputIndex < fixture.transaction.inputs.count else {
             return (false, "loader", "input_index", "input index out of range")
         }
         let template = classify(fixture.prevScriptPubKey)
         switch template {
         case .p2wpkh:
-            return verifyP2WPKH(fixture)
+            return verifyP2WPKH(fixture, cache: cache)
         case .p2pkh:
-            return verifyP2PKH(fixture)
+            return verifyP2PKH(fixture, cache: cache)
         case .p2sh:
-            return verifyP2SH(fixture)
+            return verifyP2SH(fixture, cache: cache)
         case .p2wsh:
-            return verifyP2WSH(fixture, initialStack: nil)
+            return verifyP2WSH(fixture, initialStack: nil, cache: cache)
         case .p2tr:
-            return verifyP2TR(fixture)
+            return verifyP2TR(fixture, cache: cache)
         case .bareOpN, .bareMultisig, .bareLegacy:
-            return verifyBare(fixture)
+            return verifyBare(fixture, cache: cache)
         case .unknown:
             return (false, "template", "unknown_template", "unsupported scriptPubKey template: \(fixture.prevScriptPubKey.hex)")
         }
@@ -87,7 +87,7 @@ enum ScriptVerifier {
         return true
     }
 
-    private static func verifyP2WPKH(_ fixture: CorpusFixture, witnessProgramOverride: Data? = nil) -> (Bool, String, String, String) {
+    private static func verifyP2WPKH(_ fixture: CorpusFixture, witnessProgramOverride: Data? = nil, cache: Sighash.Cache? = nil) -> (Bool, String, String, String) {
         let tx = fixture.transaction
         if witnessProgramOverride == nil, !tx.inputs[fixture.inputIndex].scriptSig.isEmpty {
             return (false, "stack", "native_segwit_scriptsig_nonempty", "native P2WPKH scriptSig must be empty")
@@ -117,7 +117,7 @@ enum ScriptVerifier {
         do {
             let program = programScript.subdata(in: 2..<22)
             let scriptCode = Sighash.p2wpkhScriptCode(program20: program)
-            let digest = try Sighash.bip143(tx: tx, inputIndex: fixture.inputIndex, scriptCode: scriptCode, amount: prevout.amount, sighashType: sighashType)
+            let digest = try Sighash.bip143(tx: tx, inputIndex: fixture.inputIndex, scriptCode: scriptCode, amount: prevout.amount, sighashType: sighashType, cache: cache)
             let result = NativeSecp256k1.verifyECDSAResult(pubkey: witness[1], msg32: digest, derSignature: Data(signature))
             if result != "valid" {
                 return (false, "crypto", "ecdsa_\(result)", "P2WPKH ECDSA verification returned \(result)")
@@ -131,7 +131,7 @@ enum ScriptVerifier {
         }
     }
 
-    private static func verifyP2SH(_ fixture: CorpusFixture) -> (Bool, String, String, String) {
+    private static func verifyP2SH(_ fixture: CorpusFixture, cache: Sighash.Cache? = nil) -> (Bool, String, String, String) {
         let input = fixture.transaction.inputs[fixture.inputIndex]
         do {
             let pushes = try ScriptInterpreter.parsePushes(input.scriptSig)
@@ -142,13 +142,13 @@ enum ScriptVerifier {
                 return (false, "template", "p2sh_hash_mismatch", "redeem script HASH160 does not match scriptPubKey")
             }
             if ScriptVerifier.classify(redeemScript) == .p2wsh {
-                return verifyP2WSH(fixture, initialStack: nil, witnessProgramOverride: redeemScript)
+                return verifyP2WSH(fixture, initialStack: nil, witnessProgramOverride: redeemScript, cache: cache)
             }
             if ScriptVerifier.classify(redeemScript) == .p2wpkh {
                 guard pushes.count == 1 else {
                     return (false, "stack", "p2sh_nested_witness_scriptsig_shape", "nested segwit P2SH scriptSig must contain only redeem script")
                 }
-                return verifyP2WPKH(fixture, witnessProgramOverride: redeemScript)
+                return verifyP2WPKH(fixture, witnessProgramOverride: redeemScript, cache: cache)
             }
             let context = ScriptInterpreter.Context(
                 transaction: fixture.transaction,
@@ -159,7 +159,7 @@ enum ScriptVerifier {
                 codeSeparatorCallback: nil
             )
             let passed = try ScriptInterpreter.evaluate(script: redeemScript, stack: Array(pushes.dropLast()), context: context) { signatureWithHashType, pubkey, scriptCode in
-                verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode)
+                verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode, cache: cache)
             }
             return passed
                 ? (true, "ok", "", "")
@@ -169,7 +169,7 @@ enum ScriptVerifier {
         }
     }
 
-    private static func verifyP2PKH(_ fixture: CorpusFixture) -> (Bool, String, String, String) {
+    private static func verifyP2PKH(_ fixture: CorpusFixture, cache: Sighash.Cache? = nil) -> (Bool, String, String, String) {
         do {
             let input = fixture.transaction.inputs[fixture.inputIndex]
             let pushes = try ScriptInterpreter.parsePushes(input.scriptSig)
@@ -189,7 +189,7 @@ enum ScriptVerifier {
                 codeSeparatorCallback: nil
             )
             let passed = try ScriptInterpreter.evaluate(script: fixture.prevScriptPubKey, stack: pushes, context: context) { signatureWithHashType, pubkey, scriptCode in
-                verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode)
+                verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode, cache: cache)
             }
             return passed
                 ? (true, "ok", "", "")
@@ -199,7 +199,7 @@ enum ScriptVerifier {
         }
     }
 
-    private static func verifyBare(_ fixture: CorpusFixture) -> (Bool, String, String, String) {
+    private static func verifyBare(_ fixture: CorpusFixture, cache: Sighash.Cache? = nil) -> (Bool, String, String, String) {
         do {
             let input = fixture.transaction.inputs[fixture.inputIndex]
             let stack = try ScriptInterpreter.parsePushes(input.scriptSig)
@@ -212,7 +212,7 @@ enum ScriptVerifier {
                 codeSeparatorCallback: nil
             )
             let passed = try ScriptInterpreter.evaluate(script: fixture.prevScriptPubKey, stack: stack, context: context) { signatureWithHashType, pubkey, scriptCode in
-                verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode)
+                verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode, cache: cache)
             }
             return passed
                 ? (true, "ok", "", "")
@@ -222,7 +222,7 @@ enum ScriptVerifier {
         }
     }
 
-    private static func verifyP2TR(_ fixture: CorpusFixture) -> (Bool, String, String, String) {
+    private static func verifyP2TR(_ fixture: CorpusFixture, cache: Sighash.Cache? = nil) -> (Bool, String, String, String) {
         guard fixture.transaction.inputs[fixture.inputIndex].scriptSig.isEmpty else {
             return (false, "stack", "p2tr_scriptsig_nonempty", "P2TR scriptSig must be empty")
         }
@@ -237,7 +237,7 @@ enum ScriptVerifier {
             annex = nil
         }
         if witness.count == 1 {
-            return verifyTaprootKeyPath(fixture, signatureWithHashType: witness[0], annex: annex)
+            return verifyTaprootKeyPath(fixture, signatureWithHashType: witness[0], annex: annex, cache: cache)
         }
         guard witness.count >= 2 else {
             return (false, "stack", "taproot_witness_shape", "taproot script path requires script and control block")
@@ -276,7 +276,7 @@ enum ScriptVerifier {
                 codeSeparatorCallback: { codeSeparatorPos = UInt32($0) }
             )
             let passed = try ScriptInterpreter.evaluate(script: tapscript, stack: initialStack, context: context) { signatureWithHashType, pubkey, _ in
-                verifyTaprootSignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, tapleafHash: tapleafHash, annex: annex, codeSeparatorPos: codeSeparatorPos)
+                verifyTaprootSignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, tapleafHash: tapleafHash, annex: annex, codeSeparatorPos: codeSeparatorPos, cache: cache)
             }
             return passed
                 ? (true, "ok", "", "")
@@ -289,7 +289,8 @@ enum ScriptVerifier {
     private static func verifyP2WSH(
         _ fixture: CorpusFixture,
         initialStack: [Data]?,
-        witnessProgramOverride: Data? = nil
+        witnessProgramOverride: Data? = nil,
+        cache: Sighash.Cache? = nil
     ) -> (Bool, String, String, String) {
         if witnessProgramOverride == nil, !fixture.transaction.inputs[fixture.inputIndex].scriptSig.isEmpty {
             return (false, "stack", "native_segwit_scriptsig_nonempty", "native P2WSH scriptSig must be empty")
@@ -319,7 +320,7 @@ enum ScriptVerifier {
                 codeSeparatorCallback: nil
             )
             let passed = try ScriptInterpreter.evaluate(script: witnessScript, stack: stack, context: context) { signatureWithHashType, pubkey, scriptCode in
-                verifySegwitV0Signature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode)
+                verifySegwitV0Signature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode, cache: cache)
             }
             return passed
                 ? (true, "ok", "", "")
@@ -329,7 +330,7 @@ enum ScriptVerifier {
         }
     }
 
-    private static func verifySegwitV0Signature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, scriptCode: Data) -> Bool {
+    private static func verifySegwitV0Signature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, scriptCode: Data, cache: Sighash.Cache? = nil) -> Bool {
         guard signatureWithHashType.count > 1,
               let prevout = currentPrevout(fixture) else {
             return false
@@ -341,14 +342,15 @@ enum ScriptVerifier {
             inputIndex: fixture.inputIndex,
             scriptCode: scriptCode,
             amount: prevout.amount,
-            sighashType: sighashType
+            sighashType: sighashType,
+            cache: cache
         ) else {
             return false
         }
         return NativeSecp256k1.verifyECDSA(pubkey: pubkey, msg32: digest, derSignature: der)
     }
 
-    private static func verifyLegacySignature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, scriptCode: Data) -> Bool {
+    private static func verifyLegacySignature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, scriptCode: Data, cache: Sighash.Cache? = nil) -> Bool {
         guard signatureWithHashType.count > 1 else { return false }
         let der = Data(signatureWithHashType.dropLast())
         let sighashType = UInt32(signatureWithHashType.last ?? 1)
@@ -364,7 +366,7 @@ enum ScriptVerifier {
         return NativeSecp256k1.verifyECDSA(pubkey: pubkey, msg32: digest, derSignature: der)
     }
 
-    private static func verifyTaprootKeyPath(_ fixture: CorpusFixture, signatureWithHashType: Data, annex: Data?) -> (Bool, String, String, String) {
+    private static func verifyTaprootKeyPath(_ fixture: CorpusFixture, signatureWithHashType: Data, annex: Data?, cache: Sighash.Cache? = nil) -> (Bool, String, String, String) {
         guard NativeSecp256k1.available else {
             return (false, "crypto", "native_secp256k1_unavailable", "native secp256k1 verifier is unavailable")
         }
@@ -383,7 +385,8 @@ enum ScriptVerifier {
                 inputIndex: fixture.inputIndex,
                 prevouts: fixture.prevouts,
                 sighashType: parsed.sighashType,
-                annex: annex
+                annex: annex,
+                cache: cache
             )
             let pubkey = fixture.prevScriptPubKey.subdata(in: 2..<34)
             let result = NativeSecp256k1.verifySchnorrResult(xonlyPubkey: pubkey, msg32: digest, signature: parsed.signature)
@@ -395,7 +398,7 @@ enum ScriptVerifier {
         }
     }
 
-    private static func verifyTaprootSignature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, tapleafHash: Data, annex: Data?, codeSeparatorPos: UInt32) -> Bool {
+    private static func verifyTaprootSignature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, tapleafHash: Data, annex: Data?, codeSeparatorPos: UInt32, cache: Sighash.Cache? = nil) -> Bool {
         guard pubkey.count == 32 else { return false }
         guard let parsed = parseTaprootSignature(signatureWithHashType) else { return false }
         guard let digest = try? Sighash.taprootScriptPath(
@@ -405,7 +408,8 @@ enum ScriptVerifier {
             tapleafHash: tapleafHash,
             sighashType: parsed.sighashType,
             annex: annex,
-            codeSeparatorPos: codeSeparatorPos
+            codeSeparatorPos: codeSeparatorPos,
+            cache: cache
         ) else {
             return false
         }

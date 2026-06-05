@@ -20,17 +20,33 @@ struct ByteReader {
     }
 
     mutating func uint8() throws -> UInt8 {
-        try read(1)[0]
+        guard offset < data.count else {
+            throw SwiftBitnodeError.message("short read at offset \(offset), need 1")
+        }
+        let value = data[offset]
+        offset += 1
+        return value
     }
 
     mutating func uint16LE() throws -> UInt16 {
-        let bytes = [UInt8](try read(2))
-        return UInt16(bytes[0]) | UInt16(bytes[1]) << 8
+        guard offset + 2 <= data.count else {
+            throw SwiftBitnodeError.message("short read at offset \(offset), need 2")
+        }
+        let value = UInt16(data[offset]) | UInt16(data[offset + 1]) << 8
+        offset += 2
+        return value
     }
 
     mutating func uint32LE() throws -> UInt32 {
-        let bytes = [UInt8](try read(4))
-        return UInt32(bytes[0]) | UInt32(bytes[1]) << 8 | UInt32(bytes[2]) << 16 | UInt32(bytes[3]) << 24
+        guard offset + 4 <= data.count else {
+            throw SwiftBitnodeError.message("short read at offset \(offset), need 4")
+        }
+        let value = UInt32(data[offset])
+            | UInt32(data[offset + 1]) << 8
+            | UInt32(data[offset + 2]) << 16
+            | UInt32(data[offset + 3]) << 24
+        offset += 4
+        return value
     }
 
     mutating func int32LE() throws -> Int32 {
@@ -38,11 +54,14 @@ struct ByteReader {
     }
 
     mutating func uint64LE() throws -> UInt64 {
-        let bytes = [UInt8](try read(8))
+        guard offset + 8 <= data.count else {
+            throw SwiftBitnodeError.message("short read at offset \(offset), need 8")
+        }
         var value: UInt64 = 0
         for i in 0..<8 {
-            value |= UInt64(bytes[i]) << UInt64(i * 8)
+            value |= UInt64(data[offset + i]) << UInt64(i * 8)
         }
+        offset += 8
         return value
     }
 
@@ -75,15 +94,16 @@ struct TxOutput: Sendable {
 
 struct Transaction: Sendable {
     let version: Int32
-    let rawNoWitness: Data
-    let rawWithWitness: Data
     let inputs: [TxInput]
     let outputs: [TxOutput]
     let witness: [[Data]]
     let locktime: UInt32
-    let txid: String
-    let wtxid: String
+    let txidInternal: Data
+    let wtxidInternal: Data
     let hasWitness: Bool
+
+    var txid: String { txidInternal.reversedHex }
+    var wtxid: String { wtxidInternal.reversedHex }
 }
 
 struct BlockInfo: Sendable {
@@ -127,7 +147,6 @@ enum Codec {
     }
 
     static func parseTransaction(_ reader: inout ByteReader) throws -> Transaction {
-        let txStart = reader.offset
         let versionBytes = try reader.read(4)
         var versionReader = ByteReader(versionBytes)
         let version = try versionReader.int32LE()
@@ -184,23 +203,23 @@ enum Codec {
         let locktime = try locktimeReader.uint32LE()
         let txEnd = reader.offset
         let noWitness = versionBytes + reader.data.subdata(in: inputsAndOutputsStart..<noWitnessMiddleEnd) + locktimeBytes
-        let withWitness = versionBytes + markerFlag + reader.data.subdata(in: inputsAndOutputsStart..<txEnd)
+        let wtxidBytes = hasWitness ? versionBytes + markerFlag + reader.data.subdata(in: inputsAndOutputsStart..<txEnd) : Data()
+        let txidInternal = SHA256.doubleHash(noWitness)
+        let wtxidInternal = hasWitness ? SHA256.doubleHash(wtxidBytes) : txidInternal
         return Transaction(
             version: version,
-            rawNoWitness: noWitness,
-            rawWithWitness: reader.data.subdata(in: txStart..<txEnd),
             inputs: inputs,
             outputs: outputs,
             witness: witness,
             locktime: locktime,
-            txid: SHA256.doubleHash(noWitness).reversedHex,
-            wtxid: SHA256.doubleHash(withWitness).reversedHex,
+            txidInternal: txidInternal,
+            wtxidInternal: wtxidInternal,
             hasWitness: hasWitness
         )
     }
 
     private static func verifyMerkleRoot(txs: [Transaction], expectedInternal: Data) throws {
-        var layer = txs.map { Data($0.txid.hexToBytes().reversed()) }
+        var layer = txs.map(\.txidInternal)
         guard !layer.isEmpty else {
             throw SwiftBitnodeError.message("block has no transactions")
         }

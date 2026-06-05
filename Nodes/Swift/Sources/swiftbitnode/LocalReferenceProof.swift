@@ -10,6 +10,7 @@ enum LocalReferenceProof {
         let scriptRunnerMode = ProcessInfo.processInfo.environment["SCRIPT_RUNNER_MODE"] ?? "serial"
         let rocksdbWalDisabled = (ProcessInfo.processInfo.environment["ROCKSDB_WAL_DISABLED"] ?? "false").lowercased() == "true"
         let freshState = (ProcessInfo.processInfo.environment["FRESH_STATE"] ?? "true").lowercased() != "false"
+        let deleteLegacyUtxoKeys = (ProcessInfo.processInfo.environment["SWIFTBITNODE_DELETE_LEGACY_UTXO_KEYS"] ?? "false").lowercased() == "true"
         let started = DispatchTime.now().uptimeNanoseconds
         let store = try ChainStore(datadir: datadir)
         let initialState = try store.load()
@@ -66,6 +67,8 @@ enum LocalReferenceProof {
             targetLabel = "5k"
         case 10000:
             targetLabel = "10k"
+        case 50000:
+            targetLabel = "50k"
         default:
             targetLabel = "\(target)"
         }
@@ -112,6 +115,8 @@ enum LocalReferenceProof {
             "native_crypto_available": (NativeReport.build()["native_crypto_available"] as? Bool) ?? false,
             "script_runner_mode": scriptRunnerMode,
             "rocksdb_wal_disabled": rocksdbWalDisabled,
+            "rocksdb_tuning": RocksDBNative.tuningMetadata,
+            "delete_legacy_utxo_keys": deleteLegacyUtxoKeys,
             "prefetch_depth": prefetchDepth,
             "resume_supported": true,
             "fresh_state": freshState,
@@ -123,6 +128,8 @@ enum LocalReferenceProof {
             "stage_totals_ms": stages,
             "timing_summary": [
                 "stage_totals_ms": stages,
+                "slow_blocks": timing.slowBlocksJson(),
+                "script_verify_worker_cpu": timing.totalMs("script_verify_worker_cpu"),
                 "total_ms": elapsedMs
             ]
         ]

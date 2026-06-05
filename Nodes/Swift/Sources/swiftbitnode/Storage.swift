@@ -5,6 +5,26 @@ import Glibc
 import Darwin
 #endif
 
+struct OutpointKey: Hashable, Sendable, Codable {
+    let txidInternal: Data
+    let vout: UInt32
+
+    var display: String {
+        "\(txidInternal.reversedHex):\(vout)"
+    }
+
+    var rocksKey: Data {
+        var out = Data([0x55])
+        out.append(txidInternal)
+        out.append(vout.littleEndianData)
+        return out
+    }
+
+    var legacyRocksKey: String {
+        "utxo:\(display)"
+    }
+}
+
 struct StoredUtxo: Codable, Sendable {
     let value: Int64
     let scriptPubKey: Data
@@ -41,12 +61,14 @@ final class ChainStore {
     let rocks: RocksDBNative?
     private let lockURL: URL
     private let lockToken: String?
+    private let deleteLegacyUtxoKeys: Bool
 
     init(datadir: String, acquireLock: Bool = true) throws {
         self.datadir = URL(fileURLWithPath: datadir)
         self.blocksDir = self.datadir.appendingPathComponent("blocks")
         self.stateURL = self.datadir.appendingPathComponent("swift-chainstate.json")
         self.lockURL = self.datadir.appendingPathComponent(".swiftbitnode.lock")
+        self.deleteLegacyUtxoKeys = (ProcessInfo.processInfo.environment["SWIFTBITNODE_DELETE_LEGACY_UTXO_KEYS"] ?? "false").lowercased() == "true"
         try FileManager.default.createDirectory(at: self.datadir, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: self.blocksDir, withIntermediateDirectories: true)
         self.lockToken = acquireLock ? try Self.acquireLock(lockURL: lockURL) : nil
@@ -89,7 +111,6 @@ final class ChainStore {
             try rocks.writeBatch(
                 puts: [
                     ("block:raw:height:\(height)", raw),
-                    ("block:raw:hash:\(hash)", raw),
                     ("block:index:height:\(height)", Data(hash.utf8)),
                     ("block:index:hash:\(hash)", Data("\(height)".utf8))
                 ],
@@ -147,21 +168,52 @@ final class ChainStore {
         return out
     }
 
+    func getUtxos(_ keys: [OutpointKey], state: StoreState) throws -> [OutpointKey: StoredUtxo] {
+        if let rocks {
+            let raw = try rocks.get(keys: keys.map(\.rocksKey))
+            var out: [OutpointKey: StoredUtxo] = [:]
+            var missingLegacy: [OutpointKey] = []
+            for key in keys {
+                if let data = raw[key.rocksKey] {
+                    out[key] = try decodeUtxo(data)
+                } else {
+                    missingLegacy.append(key)
+                }
+            }
+            if !missingLegacy.isEmpty {
+                let legacyRaw = try rocks.get(keys: missingLegacy.map(\.legacyRocksKey))
+                for key in missingLegacy {
+                    if let data = legacyRaw[key.legacyRocksKey] {
+                        out[key] = try decodeUtxo(data)
+                    }
+                }
+            }
+            return out
+        }
+        var out: [OutpointKey: StoredUtxo] = [:]
+        for key in keys {
+            if let utxo = state.utxos[key.display] {
+                out[key] = utxo
+            }
+        }
+        return out
+    }
+
     func commitConnectedBlock(
         state: StoreState,
         raw: Data,
         height: Int,
         hash: String,
-        created: [(String, StoredUtxo)],
-        spent: [(String, StoredUtxo)]
+        created: [(OutpointKey, StoredUtxo)],
+        spent: [(OutpointKey, StoredUtxo)]
     ) throws -> StoreState {
         var copy = state
         if rocks == nil {
             for (key, _) in spent {
-                copy.utxos.removeValue(forKey: key)
+                copy.utxos.removeValue(forKey: key.display)
             }
             for (key, utxo) in created {
-                copy.utxos[key] = utxo
+                copy.utxos[key.display] = utxo
             }
         } else {
             copy.utxos.removeAll(keepingCapacity: false)
@@ -184,19 +236,22 @@ final class ChainStore {
             try stateData.write(to: stateURL)
             return copy
         }
-        let undoPayload = try JSONEncoder().encode(spent.map { StoredUndo(key: $0.0, utxo: $0.1) })
-        var puts: [(String, Data)] = [
-            ("meta:state", stateData),
-            ("block:raw:height:\(height)", raw),
-            ("block:raw:hash:\(hash)", raw),
-            ("block:index:height:\(height)", Data(hash.utf8)),
-            ("block:index:hash:\(hash)", Data("\(height)".utf8)),
-            ("undo:height:\(height)", undoPayload)
+        let undoPayload = encodeUndo(spent)
+        var puts: [(Data, Data)] = [
+            (Data("meta:state".utf8), stateData),
+            (Data("block:raw:height:\(height)".utf8), raw),
+            (Data("block:index:height:\(height)".utf8), Data(hash.utf8)),
+            (Data("block:index:hash:\(hash)".utf8), Data("\(height)".utf8)),
+            (Data("undo:height:\(height)".utf8), undoPayload)
         ]
         for (key, utxo) in created {
-            puts.append(("utxo:\(key)", encodeUtxo(utxo)))
+            puts.append((key.rocksKey, encodeUtxo(utxo)))
         }
-        try rocks.writeBatch(puts: puts, deletes: spent.map { "utxo:\($0.0)" })
+        var deletes = spent.map { $0.0.rocksKey }
+        if deleteLegacyUtxoKeys {
+            deletes.append(contentsOf: spent.map { Data($0.0.legacyRocksKey.utf8) })
+        }
+        try rocks.writeBatch(puts: puts, deletes: deletes)
         return copy
     }
 
@@ -234,6 +289,19 @@ final class ChainStore {
         out.append(utxo.coinbase ? 1 : 0)
         appendCompactSize(&out, UInt64(utxo.scriptPubKey.count))
         out.append(utxo.scriptPubKey)
+        return out
+    }
+
+    private func encodeUndo(_ spent: [(OutpointKey, StoredUtxo)]) -> Data {
+        var out = Data()
+        appendCompactSize(&out, UInt64(spent.count))
+        for (key, utxo) in spent {
+            out.append(key.txidInternal)
+            out.append(key.vout.littleEndianData)
+            let encoded = encodeUtxo(utxo)
+            appendCompactSize(&out, UInt64(encoded.count))
+            out.append(encoded)
+        }
         return out
     }
 
