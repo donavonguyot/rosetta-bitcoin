@@ -1,0 +1,4 @@
+.build
+data-swift
+*.log
+.DS_Store
