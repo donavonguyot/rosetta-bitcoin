@@ -232,12 +232,12 @@ def print_benchmark_summary(connection: sqlite3.Connection) -> None:
         connection,
         """
         select port, node_id, benchmark_name, max_height, backend,
-               sample_count, latest_captured_at
+               sample_count, best_total_ms, latest_captured_at
         from benchmark_summary
         order by port, node_id, benchmark_name
         """,
     )
-    print(table(("port", "node", "benchmark", "max_height", "backend", "samples", "latest"), data))
+    print(table(("port", "node", "benchmark", "max_height", "backend", "samples", "best_ms", "latest"), data))
 
 
 def print_benchmark_gates(connection: sqlite3.Connection) -> None:
@@ -302,7 +302,7 @@ def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
                validated_height, header_target_height, peer_mode, byte_source,
                proof_mode, prefetch_depth, script_runner_mode,
                rocksdb_wal_disabled, fresh_state, utxo_accounting_policy,
-               chainstate_utxo_count, comparability_notes
+               chainstate_utxo_count, total_ms, comparability_notes
         from benchmark_comparability
         order by target_height, port, captured_at
         """,
@@ -326,6 +326,7 @@ def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
                 "fresh",
                 "utxo_policy",
                 "utxos",
+                "total_ms",
                 "notes",
             ),
             data,

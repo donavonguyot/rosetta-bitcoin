@@ -115,8 +115,16 @@ enum NativeSecp256k1 {
     }
 
     static func taprootTweakResult(xonlyPubkey: Data, merkleRoot: Data, expectedXOnly: String, expectedParity: Int?) -> String {
-        guard xonlyPubkey.count == 32, let shared else {
+        guard let tweaked = taprootTweakXOnly(xonlyPubkey: xonlyPubkey, merkleRoot: merkleRoot) else {
             return "malformed_input"
+        }
+        let parityMatches = expectedParity.map { tweaked.parity == $0 } ?? true
+        return tweaked.outputXOnly.hex == expectedXOnly && parityMatches ? "valid" : "consensus_invalid"
+    }
+
+    static func taprootTweakXOnly(xonlyPubkey: Data, merkleRoot: Data) -> (outputXOnly: Data, parity: Int)? {
+        guard xonlyPubkey.count == 32, let shared else {
+            return nil
         }
         let api = shared.api
         let ctx = shared.context
@@ -124,22 +132,20 @@ enum NativeSecp256k1 {
         let parsed = xonlyPubkey.withUnsafeBytes { pubBytes in
             api.xonlyPubkeyParse(ctx, &internalKey, pubBytes.bindMemory(to: UInt8.self).baseAddress) == 1
         }
-        guard parsed else { return "malformed_input" }
+        guard parsed else { return nil }
         let tweak = taggedHash(tag: "TapTweak", xonlyPubkey + merkleRoot)
         var tweakedPubkey = [UInt8](repeating: 0, count: 64)
         let tweaked = tweak.withUnsafeBytes { tweakBytes in
             api.xonlyPubkeyTweakAdd(ctx, &tweakedPubkey, internalKey, tweakBytes.bindMemory(to: UInt8.self).baseAddress) == 1
         }
-        guard tweaked else { return "consensus_invalid" }
+        guard tweaked else { return nil }
         var compressed = [UInt8](repeating: 0, count: 33)
         var compressedLen = 33
         guard api.ecPubkeySerialize(ctx, &compressed, &compressedLen, tweakedPubkey, 258) == 1, compressedLen == 33 else {
-            return "consensus_invalid"
+            return nil
         }
-        let outputHex = Data(compressed[1..<33]).hex
         let parity = Int(compressed[0] - 2)
-        let parityMatches = expectedParity.map { parity == $0 } ?? true
-        return outputHex == expectedXOnly && parityMatches ? "valid" : "consensus_invalid"
+        return (Data(compressed[1..<33]), parity)
     }
 
     private static func taggedHash(tag: String, _ payload: Data) -> Data {

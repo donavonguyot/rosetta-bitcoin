@@ -12,6 +12,10 @@ do {
         try ScriptCorpus.run(args: args)
     case "proof-local":
         try LocalReferenceProof.run(args: args)
+    case "sync-supervisor":
+        try SyncSupervisor.run(args: args)
+    case "consensus-self-test":
+        try Json.write(ConsensusSelfTest.run(), to: nil)
     default:
         printHelp()
     }

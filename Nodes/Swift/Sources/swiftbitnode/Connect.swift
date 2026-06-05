@@ -104,6 +104,7 @@ enum BlockConnector {
         }
 
         var spent: [(String, StoredUtxo)] = []
+        var spentKeysInBlock = Set<String>()
         var created: [(String, StoredUtxo)] = []
         var createdInBlock: [String: StoredUtxo] = [:]
         for (txIndex, tx) in block.transactions.enumerated() {
@@ -121,14 +122,32 @@ enum BlockConnector {
                 prevouts.append(CorpusPrevout(amount: prev.value, scriptPubKey: prev.scriptPubKey))
             }
             var spendInputs: [SpendInput] = []
+            var inputValue: Int64 = 0
+            var txInputKeys = Set<String>()
             for (inputIndex, input) in tx.inputs.enumerated() {
                 let key = outpointKey(txidInternal: input.previousTxidInternal, vout: input.vout)
+                guard txInputKeys.insert(key).inserted, !spentKeysInBlock.contains(key) else {
+                    try store.setBlocker(height: height, failure: "duplicate input spend \(key)", txid: tx.txid, inputIndex: inputIndex)
+                    return (false, state)
+                }
                 let prev = (createdInBlock[key] ?? loaded[key])!
                 if prev.coinbase && height - prev.height < 100 {
                     try store.setBlocker(height: height, failure: "coinbase spend before maturity", txid: tx.txid, inputIndex: inputIndex)
                     return (false, state)
                 }
+                inputValue = try checkedAdd(inputValue, prev.value, height: height, txid: tx.txid, inputIndex: inputIndex, store: store, state: state)
                 spendInputs.append(SpendInput(inputIndex: inputIndex, key: key, prev: prev))
+            }
+            let outputValue = try tx.outputs.enumerated().reduce(Int64(0)) { total, item in
+                if item.element.value < 0 {
+                    try store.setBlocker(height: height, failure: "negative transaction output value", txid: tx.txid, inputIndex: -1)
+                    throw SwiftBitnodeError.message("negative transaction output value")
+                }
+                return try checkedAdd(total, item.element.value, height: height, txid: tx.txid, inputIndex: -1, store: store, state: state)
+            }
+            guard inputValue >= outputValue else {
+                try store.setBlocker(height: height, failure: "transaction spends more than inputs", txid: tx.txid, inputIndex: -1)
+                return (false, state)
             }
 
             let verifyResults = VerificationResults(count: tx.inputs.count)
@@ -195,6 +214,7 @@ enum BlockConnector {
                 } else {
                     spent.append((key, prev))
                 }
+                spentKeysInBlock.insert(key)
             }
             addOutputs(tx: tx, height: height, coinbase: false, created: &created, createdInBlock: &createdInBlock)
         }
@@ -219,5 +239,13 @@ enum BlockConnector {
 
     private static func outpointKey(txidInternal: Data, vout: UInt32) -> String {
         "\(txidInternal.reversedHex):\(vout)"
+    }
+
+    private static func checkedAdd(_ left: Int64, _ right: Int64, height: Int, txid: String, inputIndex: Int, store: ChainStore, state: StoreState) throws -> Int64 {
+        guard right <= Int64.max - left else {
+            try store.setBlocker(height: height, failure: "transaction value overflow", txid: txid, inputIndex: inputIndex)
+            throw SwiftBitnodeError.message("transaction value overflow")
+        }
+        return left + right
     }
 }

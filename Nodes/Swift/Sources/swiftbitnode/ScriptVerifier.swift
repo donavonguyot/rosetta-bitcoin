@@ -87,8 +87,11 @@ enum ScriptVerifier {
         return true
     }
 
-    private static func verifyP2WPKH(_ fixture: CorpusFixture) -> (Bool, String, String, String) {
+    private static func verifyP2WPKH(_ fixture: CorpusFixture, witnessProgramOverride: Data? = nil) -> (Bool, String, String, String) {
         let tx = fixture.transaction
+        if witnessProgramOverride == nil, !tx.inputs[fixture.inputIndex].scriptSig.isEmpty {
+            return (false, "stack", "native_segwit_scriptsig_nonempty", "native P2WPKH scriptSig must be empty")
+        }
         guard fixture.inputIndex < tx.witness.count else {
             return (false, "loader", "missing_witness", "missing witness stack")
         }
@@ -96,7 +99,8 @@ enum ScriptVerifier {
         guard witness.count == 2 else {
             return (false, "stack", "p2wpkh_witness_shape", "P2WPKH witness expected 2 items, got \(witness.count)")
         }
-        guard fixture.prevScriptPubKey.count == 22 else {
+        let programScript = witnessProgramOverride ?? fixture.prevScriptPubKey
+        guard programScript.count == 22 else {
             return (false, "template", "p2wpkh_program_length", "invalid P2WPKH witness program length")
         }
         guard NativeSecp256k1.available else {
@@ -111,7 +115,7 @@ enum ScriptVerifier {
         let signature = witness[0].dropLast()
         let sighashType = UInt32(witness[0].last ?? 1)
         do {
-            let program = fixture.prevScriptPubKey.subdata(in: 2..<22)
+            let program = programScript.subdata(in: 2..<22)
             let scriptCode = Sighash.p2wpkhScriptCode(program20: program)
             let digest = try Sighash.bip143(tx: tx, inputIndex: fixture.inputIndex, scriptCode: scriptCode, amount: prevout.amount, sighashType: sighashType)
             let result = NativeSecp256k1.verifyECDSAResult(pubkey: witness[1], msg32: digest, derSignature: Data(signature))
@@ -140,7 +144,21 @@ enum ScriptVerifier {
             if ScriptVerifier.classify(redeemScript) == .p2wsh {
                 return verifyP2WSH(fixture, initialStack: nil, witnessProgramOverride: redeemScript)
             }
-            let passed = try ScriptInterpreter.evaluate(script: redeemScript, stack: Array(pushes.dropLast())) { signatureWithHashType, pubkey, scriptCode in
+            if ScriptVerifier.classify(redeemScript) == .p2wpkh {
+                guard pushes.count == 1 else {
+                    return (false, "stack", "p2sh_nested_witness_scriptsig_shape", "nested segwit P2SH scriptSig must contain only redeem script")
+                }
+                return verifyP2WPKH(fixture, witnessProgramOverride: redeemScript)
+            }
+            let context = ScriptInterpreter.Context(
+                transaction: fixture.transaction,
+                inputIndex: fixture.inputIndex,
+                tapscript: false,
+                maxScriptElementSize: 520,
+                maxScriptNumSize: 4,
+                codeSeparatorCallback: nil
+            )
+            let passed = try ScriptInterpreter.evaluate(script: redeemScript, stack: Array(pushes.dropLast()), context: context) { signatureWithHashType, pubkey, scriptCode in
                 verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode)
             }
             return passed
@@ -162,7 +180,15 @@ enum ScriptVerifier {
             guard Hash.hash160(pubkey) == fixture.prevScriptPubKey.subdata(in: 3..<23) else {
                 return (false, "stack", "p2pkh_pubkey_hash_mismatch", "P2PKH pubkey hash mismatch")
             }
-            let passed = try ScriptInterpreter.evaluate(script: fixture.prevScriptPubKey, stack: pushes) { signatureWithHashType, pubkey, scriptCode in
+            let context = ScriptInterpreter.Context(
+                transaction: fixture.transaction,
+                inputIndex: fixture.inputIndex,
+                tapscript: false,
+                maxScriptElementSize: 520,
+                maxScriptNumSize: 4,
+                codeSeparatorCallback: nil
+            )
+            let passed = try ScriptInterpreter.evaluate(script: fixture.prevScriptPubKey, stack: pushes, context: context) { signatureWithHashType, pubkey, scriptCode in
                 verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode)
             }
             return passed
@@ -177,7 +203,15 @@ enum ScriptVerifier {
         do {
             let input = fixture.transaction.inputs[fixture.inputIndex]
             let stack = try ScriptInterpreter.parsePushes(input.scriptSig)
-            let passed = try ScriptInterpreter.evaluate(script: fixture.prevScriptPubKey, stack: stack) { signatureWithHashType, pubkey, scriptCode in
+            let context = ScriptInterpreter.Context(
+                transaction: fixture.transaction,
+                inputIndex: fixture.inputIndex,
+                tapscript: false,
+                maxScriptElementSize: 520,
+                maxScriptNumSize: 4,
+                codeSeparatorCallback: nil
+            )
+            let passed = try ScriptInterpreter.evaluate(script: fixture.prevScriptPubKey, stack: stack, context: context) { signatureWithHashType, pubkey, scriptCode in
                 verifyLegacySignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode)
             }
             return passed
@@ -189,27 +223,60 @@ enum ScriptVerifier {
     }
 
     private static func verifyP2TR(_ fixture: CorpusFixture) -> (Bool, String, String, String) {
+        guard fixture.transaction.inputs[fixture.inputIndex].scriptSig.isEmpty else {
+            return (false, "stack", "p2tr_scriptsig_nonempty", "P2TR scriptSig must be empty")
+        }
         guard fixture.inputIndex < fixture.transaction.witness.count else {
             return (false, "loader", "missing_witness", "missing taproot witness stack")
         }
-        let witness = fixture.transaction.witness[fixture.inputIndex]
+        var witness = fixture.transaction.witness[fixture.inputIndex]
+        let annex: Data?
+        if witness.count >= 2, let last = witness.last, last.first == 0x50 {
+            annex = witness.removeLast()
+        } else {
+            annex = nil
+        }
         if witness.count == 1 {
-            return verifyTaprootKeyPath(fixture, signatureWithHashType: witness[0])
+            return verifyTaprootKeyPath(fixture, signatureWithHashType: witness[0], annex: annex)
         }
         guard witness.count >= 2 else {
             return (false, "stack", "taproot_witness_shape", "taproot script path requires script and control block")
         }
         let tapscript = witness[witness.count - 2]
         let controlBlock = witness[witness.count - 1]
-        guard controlBlock.count >= 33, (controlBlock.count - 33) % 32 == 0 else {
+        guard controlBlock.count >= 33, controlBlock.count <= 33 + 128 * 32, (controlBlock.count - 33) % 32 == 0 else {
             return (false, "template", "taproot_control_block_shape", "invalid taproot control block length")
         }
         do {
             let initialStack = Array(witness.dropLast(2))
             let leafVersion = controlBlock[0] & 0xfe
             let tapleafHash = Sighash.tapleafHash(script: tapscript, leafVersion: leafVersion)
-            let passed = try ScriptInterpreter.evaluate(script: tapscript, stack: initialStack) { signatureWithHashType, pubkey, _ in
-                verifyTaprootSignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, tapleafHash: tapleafHash)
+            var merkleRoot = tapleafHash
+            var offset = 33
+            while offset < controlBlock.count {
+                merkleRoot = Sighash.tapbranchHash(merkleRoot, controlBlock.subdata(in: offset..<(offset + 32)))
+                offset += 32
+            }
+            let internalKey = controlBlock.subdata(in: 1..<33)
+            guard let tweaked = NativeSecp256k1.taprootTweakXOnly(xonlyPubkey: internalKey, merkleRoot: merkleRoot),
+                  fixture.prevScriptPubKey.subdata(in: 2..<34) == tweaked.outputXOnly,
+                  controlBlock[0] == (leafVersion | UInt8(tweaked.parity)) else {
+                return (false, "crypto", "taproot_control_block_tweak_mismatch", "taproot control block does not match output key")
+            }
+            if leafVersion != 0xc0 {
+                return (true, "ok", "", "")
+            }
+            var codeSeparatorPos = UInt32.max
+            let context = ScriptInterpreter.Context(
+                transaction: fixture.transaction,
+                inputIndex: fixture.inputIndex,
+                tapscript: true,
+                maxScriptElementSize: 520,
+                maxScriptNumSize: 4,
+                codeSeparatorCallback: { codeSeparatorPos = UInt32($0) }
+            )
+            let passed = try ScriptInterpreter.evaluate(script: tapscript, stack: initialStack, context: context) { signatureWithHashType, pubkey, _ in
+                verifyTaprootSignature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, tapleafHash: tapleafHash, annex: annex, codeSeparatorPos: codeSeparatorPos)
             }
             return passed
                 ? (true, "ok", "", "")
@@ -224,6 +291,9 @@ enum ScriptVerifier {
         initialStack: [Data]?,
         witnessProgramOverride: Data? = nil
     ) -> (Bool, String, String, String) {
+        if witnessProgramOverride == nil, !fixture.transaction.inputs[fixture.inputIndex].scriptSig.isEmpty {
+            return (false, "stack", "native_segwit_scriptsig_nonempty", "native P2WSH scriptSig must be empty")
+        }
         guard fixture.inputIndex < fixture.transaction.witness.count else {
             return (false, "loader", "missing_witness", "missing witness stack")
         }
@@ -240,7 +310,15 @@ enum ScriptVerifier {
         }
         do {
             let stack = initialStack ?? Array(witness.dropLast())
-            let passed = try ScriptInterpreter.evaluate(script: witnessScript, stack: stack) { signatureWithHashType, pubkey, scriptCode in
+            let context = ScriptInterpreter.Context(
+                transaction: fixture.transaction,
+                inputIndex: fixture.inputIndex,
+                tapscript: false,
+                maxScriptElementSize: 520,
+                maxScriptNumSize: 4,
+                codeSeparatorCallback: nil
+            )
+            let passed = try ScriptInterpreter.evaluate(script: witnessScript, stack: stack, context: context) { signatureWithHashType, pubkey, scriptCode in
                 verifySegwitV0Signature(fixture: fixture, signatureWithHashType: signatureWithHashType, pubkey: pubkey, scriptCode: scriptCode)
             }
             return passed
@@ -286,7 +364,7 @@ enum ScriptVerifier {
         return NativeSecp256k1.verifyECDSA(pubkey: pubkey, msg32: digest, derSignature: der)
     }
 
-    private static func verifyTaprootKeyPath(_ fixture: CorpusFixture, signatureWithHashType: Data) -> (Bool, String, String, String) {
+    private static func verifyTaprootKeyPath(_ fixture: CorpusFixture, signatureWithHashType: Data, annex: Data?) -> (Bool, String, String, String) {
         guard NativeSecp256k1.available else {
             return (false, "crypto", "native_secp256k1_unavailable", "native secp256k1 verifier is unavailable")
         }
@@ -304,7 +382,8 @@ enum ScriptVerifier {
                 tx: fixture.transaction,
                 inputIndex: fixture.inputIndex,
                 prevouts: fixture.prevouts,
-                sighashType: parsed.sighashType
+                sighashType: parsed.sighashType,
+                annex: annex
             )
             let pubkey = fixture.prevScriptPubKey.subdata(in: 2..<34)
             let result = NativeSecp256k1.verifySchnorrResult(xonlyPubkey: pubkey, msg32: digest, signature: parsed.signature)
@@ -316,7 +395,7 @@ enum ScriptVerifier {
         }
     }
 
-    private static func verifyTaprootSignature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, tapleafHash: Data) -> Bool {
+    private static func verifyTaprootSignature(fixture: CorpusFixture, signatureWithHashType: Data, pubkey: Data, tapleafHash: Data, annex: Data?, codeSeparatorPos: UInt32) -> Bool {
         guard pubkey.count == 32 else { return false }
         guard let parsed = parseTaprootSignature(signatureWithHashType) else { return false }
         guard let digest = try? Sighash.taprootScriptPath(
@@ -324,7 +403,9 @@ enum ScriptVerifier {
             inputIndex: fixture.inputIndex,
             prevouts: fixture.prevouts,
             tapleafHash: tapleafHash,
-            sighashType: parsed.sighashType
+            sighashType: parsed.sighashType,
+            annex: annex,
+            codeSeparatorPos: codeSeparatorPos
         ) else {
             return false
         }

@@ -3,7 +3,30 @@ import Foundation
 enum ScriptInterpreter {
     typealias SignatureChecker = (_ signatureWithHashType: Data, _ pubkey: Data, _ scriptCode: Data) -> Bool
 
-    static func evaluate(script: Data, stack initialStack: [Data] = [], signatureChecker: SignatureChecker? = nil) throws -> Bool {
+    struct Context: @unchecked Sendable {
+        let transaction: Transaction?
+        let inputIndex: Int
+        let tapscript: Bool
+        let maxScriptElementSize: Int
+        let maxScriptNumSize: Int
+        let codeSeparatorCallback: ((Int) -> Void)?
+
+        static let legacy = Context(
+            transaction: nil,
+            inputIndex: -1,
+            tapscript: false,
+            maxScriptElementSize: 520,
+            maxScriptNumSize: 4,
+            codeSeparatorCallback: nil
+        )
+    }
+
+    static func evaluate(
+        script: Data,
+        stack initialStack: [Data] = [],
+        context: Context = .legacy,
+        signatureChecker: SignatureChecker? = nil
+    ) throws -> Bool {
         var stack = initialStack
         var altStack: [Data] = []
         var execStack: [Bool] = []
@@ -14,16 +37,25 @@ enum ScriptInterpreter {
             let executing = !execStack.contains(false)
             if op >= 0x01 && op <= 0x4b {
                 let pushed = try reader.read(Int(op))
+                if context.tapscript && pushed.count > context.maxScriptElementSize {
+                    throw SwiftBitnodeError.message("push element exceeds tapscript size limit")
+                }
                 if executing { stack.append(pushed) }
                 continue
             }
             if op == 0x4c {
                 let pushed = try reader.read(Int(try reader.uint8()))
+                if context.tapscript && pushed.count > context.maxScriptElementSize {
+                    throw SwiftBitnodeError.message("push element exceeds tapscript size limit")
+                }
                 if executing { stack.append(pushed) }
                 continue
             }
             if op == 0x4d {
                 let pushed = try reader.read(Int(try reader.uint16LE()))
+                if context.tapscript && pushed.count > context.maxScriptElementSize {
+                    throw SwiftBitnodeError.message("push element exceeds tapscript size limit")
+                }
                 if executing { stack.append(pushed) }
                 continue
             }
@@ -98,11 +130,11 @@ enum ScriptInterpreter {
                 guard stack.count >= 2 else { throw SwiftBitnodeError.message("OP_OVER stack underflow") }
                 stack.append(stack[stack.count - 2])
             case 0x79:
-                let n = Int(decodeNumber(pop(&stack)))
+                let n = Int(try decodeNumber(pop(&stack), maxSize: context.maxScriptNumSize))
                 guard n >= 0, n < stack.count else { throw SwiftBitnodeError.message("OP_PICK invalid index") }
                 stack.append(stack[stack.count - 1 - n])
             case 0x7a:
-                let n = Int(decodeNumber(pop(&stack)))
+                let n = Int(try decodeNumber(pop(&stack), maxSize: context.maxScriptNumSize))
                 guard n >= 0, n < stack.count else { throw SwiftBitnodeError.message("OP_ROLL invalid index") }
                 let value = stack.remove(at: stack.count - 1 - n)
                 stack.append(value)
@@ -126,17 +158,17 @@ enum ScriptInterpreter {
                 let a = pop(&stack), b = pop(&stack)
                 guard a == b else { return false }
             case 0x8b:
-                stack.append(encodeNumber(decodeNumber(pop(&stack)) + 1))
+                stack.append(encodeNumber(try decodeNumber(pop(&stack), maxSize: context.maxScriptNumSize) + 1))
             case 0x8c:
-                stack.append(encodeNumber(decodeNumber(pop(&stack)) - 1))
+                stack.append(encodeNumber(try decodeNumber(pop(&stack), maxSize: context.maxScriptNumSize) - 1))
             case 0x8f:
-                stack.append(encodeNumber(-decodeNumber(pop(&stack))))
+                stack.append(encodeNumber(-(try decodeNumber(pop(&stack), maxSize: context.maxScriptNumSize))))
             case 0x90:
-                stack.append(encodeNumber(abs(decodeNumber(pop(&stack)))))
+                stack.append(encodeNumber(abs(try decodeNumber(pop(&stack), maxSize: context.maxScriptNumSize))))
             case 0x91:
-                stack.append(decodeNumber(pop(&stack)) == 0 ? encodeNumber(1) : Data())
+                stack.append(try decodeNumber(pop(&stack), maxSize: context.maxScriptNumSize) == 0 ? encodeNumber(1) : Data())
             case 0x92:
-                stack.append(decodeNumber(pop(&stack)) != 0 ? encodeNumber(1) : Data())
+                stack.append(try decodeNumber(pop(&stack), maxSize: context.maxScriptNumSize) != 0 ? encodeNumber(1) : Data())
             case 0x93:
                 binaryNumber(&stack) { $0 + $1 }
             case 0x94:
@@ -191,6 +223,7 @@ enum ScriptInterpreter {
                 stack.append(SHA256.doubleHash(pop(&stack)))
             case 0xab:
                 lastCodeSeparatorOffset = reader.offset
+                context.codeSeparatorCallback?(reader.offset - 1)
                 continue
             case 0xac, 0xad:
                 let pubkey = pop(&stack)
@@ -205,6 +238,9 @@ enum ScriptInterpreter {
                     stack.append(ok ? encodeNumber(1) : Data())
                 }
             case 0xae, 0xaf:
+                if context.tapscript {
+                    throw SwiftBitnodeError.message("CHECKMULTISIG disabled in tapscript")
+                }
                 let pubkeyCount = Int(decodeNumber(pop(&stack)))
                 guard pubkeyCount >= 0, pubkeyCount <= 20, stack.count >= pubkeyCount else {
                     throw SwiftBitnodeError.message("OP_CHECKMULTISIG invalid pubkey count")
@@ -244,8 +280,7 @@ enum ScriptInterpreter {
                     stack.append(ok ? encodeNumber(1) : Data())
                 }
             case 0xb1, 0xb2:
-                guard !stack.isEmpty else { throw SwiftBitnodeError.message("locktime opcode stack underflow") }
-                continue
+                try checkLockOpcode(op, stack: &stack, context: context)
             case 0xba:
                 let pubkey = pop(&stack)
                 let n = decodeNumber(pop(&stack))
@@ -256,6 +291,9 @@ enum ScriptInterpreter {
                 let ok = signature.isEmpty ? false : signatureChecker(signature, pubkey, script.subdata(in: lastCodeSeparatorOffset..<script.count))
                 stack.append(encodeNumber(n + (ok ? 1 : 0)))
             default:
+                if context.tapscript && isOpSuccess(op) {
+                    return true
+                }
                 throw SwiftBitnodeError.message(String(format: "opcode 0x%02x not implemented", op))
             }
         }
@@ -314,7 +352,14 @@ enum ScriptInterpreter {
     }
 
     static func decodeNumber(_ data: Data) -> Int64 {
+        (try? decodeNumber(data, maxSize: Int.max)) ?? 0
+    }
+
+    static func decodeNumber(_ data: Data, maxSize: Int) throws -> Int64 {
         if data.isEmpty { return 0 }
+        guard data.count <= maxSize else {
+            throw SwiftBitnodeError.message("script number overflow")
+        }
         var result: Int64 = 0
         let bytes = [UInt8](data)
         for i in 0..<bytes.count {
@@ -325,6 +370,62 @@ enum ScriptInterpreter {
             return -result
         }
         return result
+    }
+
+    private static func checkLockOpcode(_ op: UInt8, stack: inout [Data], context: Context) throws {
+        guard let item = stack.last else { throw SwiftBitnodeError.message("locktime opcode stack underflow") }
+        let value = try decodeNumber(item, maxSize: 5)
+        guard value >= 0 else { throw SwiftBitnodeError.message("negative locktime") }
+        guard let tx = context.transaction, context.inputIndex >= 0, context.inputIndex < tx.inputs.count else {
+            throw SwiftBitnodeError.message("locktime opcode missing transaction context")
+        }
+        let input = tx.inputs[context.inputIndex]
+        if op == 0xb1 {
+            let locktime = UInt32(value)
+            let threshold: UInt32 = 500_000_000
+            let stackIsHeight = locktime < threshold
+            let txIsHeight = tx.locktime < threshold
+            guard stackIsHeight == txIsHeight else {
+                throw SwiftBitnodeError.message("CLTV locktime type mismatch")
+            }
+            guard locktime <= tx.locktime else {
+                throw SwiftBitnodeError.message("CLTV locktime not reached")
+            }
+            guard input.sequence != UInt32.max else {
+                throw SwiftBitnodeError.message("CLTV final input sequence")
+            }
+            return
+        }
+
+        let sequence = UInt32(value)
+        let disableFlag: UInt32 = 1 << 31
+        if (sequence & disableFlag) != 0 {
+            return
+        }
+        guard tx.version >= 2 else {
+            throw SwiftBitnodeError.message("CSV requires transaction version >= 2")
+        }
+        guard input.sequence != UInt32.max else {
+            throw SwiftBitnodeError.message("CSV final input sequence")
+        }
+        let typeFlag: UInt32 = 1 << 22
+        let mask: UInt32 = typeFlag | 0xffff
+        guard (sequence & typeFlag) == (input.sequence & typeFlag) else {
+            throw SwiftBitnodeError.message("CSV sequence type mismatch")
+        }
+        guard (sequence & mask) <= (input.sequence & mask) else {
+            throw SwiftBitnodeError.message("CSV sequence not reached")
+        }
+    }
+
+    private static func isOpSuccess(_ op: UInt8) -> Bool {
+        op == 80 || op == 98 ||
+            (op >= 126 && op <= 129) ||
+            (op >= 131 && op <= 134) ||
+            (op >= 137 && op <= 138) ||
+            (op >= 141 && op <= 142) ||
+            (op >= 149 && op <= 153) ||
+            (op >= 187 && op <= 254)
     }
 
     static func encodeNumber(_ value: Int64) -> Data {

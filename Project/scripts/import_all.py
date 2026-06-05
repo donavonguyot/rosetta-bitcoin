@@ -1025,6 +1025,16 @@ def import_conformance_rows(connection: sqlite3.Connection, artifact: Artifact, 
 
 def timing_stages(payload: dict[str, Any]) -> dict[str, int]:
     stages: dict[str, int] = {}
+
+    def record(stage: str, elapsed: Any) -> None:
+        parsed = integer(elapsed, None)
+        if parsed is None:
+            return
+        name = text(stage)
+        current = stages.get(name)
+        if current is None or parsed > 0 or current <= 0:
+            stages[name] = parsed
+
     sync_timing = payload.get("sync_timing")
     if isinstance(sync_timing, dict):
         unit = text(sync_timing.get("Unit")).lower()
@@ -1032,45 +1042,34 @@ def timing_stages(payload: dict[str, Any]) -> dict[str, int]:
             if not isinstance(values, dict):
                 continue
             total = integer(values.get("TotalMicros") if "micro" in unit else values.get("TotalMillis"), None)
-            if total is None:
-                continue
-            stages[text(stage)] = max(0, round(total / 1000)) if "micro" in unit else total
+            if total is not None:
+                record(stage, max(0, round(total / 1000)) if "micro" in unit else total)
     for container_key in ("stage_totals_ms", "timings_ms"):
         values = payload.get(container_key)
         if isinstance(values, dict):
             for stage, elapsed in values.items():
-                parsed = integer(elapsed, None)
-                if parsed is not None:
-                    stages[text(stage)] = parsed
+                record(stage, elapsed)
     pipeline = payload.get("pipeline_timing_summary")
     if isinstance(pipeline, dict):
         nested_stages = pipeline.get("stage_totals_ms")
         if isinstance(nested_stages, dict):
             for stage, elapsed in nested_stages.items():
-                parsed = integer(elapsed, None)
-                if parsed is not None:
-                    stages[text(stage)] = parsed
+                record(stage, elapsed)
         for stage, elapsed in pipeline.items():
             if stage == "stage_totals_ms" or isinstance(elapsed, (dict, list)):
                 continue
-            parsed = integer(elapsed, None)
-            if parsed is not None:
-                stages[text(stage)] = parsed
+            record(stage, elapsed)
     connect = payload.get("connect_summary")
     timing_summary = connect.get("timing_summary") if isinstance(connect, dict) else None
     nested_stages = timing_summary.get("stage_totals_ms") if isinstance(timing_summary, dict) else None
     if isinstance(nested_stages, dict):
         for stage, elapsed in nested_stages.items():
-            parsed = integer(elapsed, None)
-            if parsed is not None:
-                stages[text(stage)] = parsed
+            record(stage, elapsed)
     timing_summary = payload.get("timing_summary")
     nested_stages = timing_summary.get("stage_totals_ms") if isinstance(timing_summary, dict) else None
     if isinstance(nested_stages, dict):
         for stage, elapsed in nested_stages.items():
-            parsed = integer(elapsed, None)
-            if parsed is not None:
-                stages[text(stage)] = parsed
+            record(stage, elapsed)
     if "utxo_load" not in stages and "prevout_batch_load" in stages:
         stages["utxo_load"] = stages["prevout_batch_load"]
     if "block_connect_store_commit" not in stages and "connect_total" in stages:
@@ -1078,8 +1077,74 @@ def timing_stages(payload: dict[str, Any]) -> dict[str, int]:
     return stages
 
 
+def timing_total_ms(payload: dict[str, Any], stages: dict[str, int]) -> int | None:
+    candidates: list[Any] = [
+        payload.get("elapsed_ms"),
+        payload.get("duration_ms"),
+        payload.get("total_ms"),
+        payload.get("wall_time_ms"),
+    ]
+    timing_summary = payload.get("timing_summary")
+    if isinstance(timing_summary, dict):
+        candidates.extend(
+            [
+                timing_summary.get("total_ms"),
+                timing_summary.get("total_wall"),
+                timing_summary.get("wall_time_ms"),
+            ]
+        )
+    pipeline = payload.get("pipeline_timing_summary")
+    if isinstance(pipeline, dict):
+        candidates.extend(
+            [
+                pipeline.get("total_ms"),
+                pipeline.get("total_wall"),
+                pipeline.get("wall_time_ms"),
+            ]
+        )
+    connect = payload.get("connect_summary")
+    connect_timing = connect.get("timing_summary") if isinstance(connect, dict) else None
+    if isinstance(connect_timing, dict):
+        candidates.extend(
+            [
+                connect_timing.get("total_ms"),
+                connect_timing.get("total_wall"),
+                connect_timing.get("wall_time_ms"),
+            ]
+        )
+    for candidate in candidates:
+        parsed = integer(candidate, None)
+        if parsed is not None and parsed > 0:
+            return parsed
+    if stages.get("block_connect_store_commit", 0) > 0:
+        return stages["block_connect_store_commit"]
+    if stages.get("connect_total", 0) > 0:
+        return stages["connect_total"]
+    return None
+
+
+def canonical_timing_summary(payload: dict[str, Any], stages: dict[str, int]) -> dict[str, Any]:
+    summary: dict[str, Any] = {"stage_totals_ms": dict(sorted(stages.items()))}
+    total = timing_total_ms(payload, stages)
+    if total is not None:
+        summary["total_ms"] = total
+    pipeline = payload.get("pipeline_timing_summary")
+    timing_summary = payload.get("timing_summary")
+    connect = payload.get("connect_summary")
+    connect_timing = connect.get("timing_summary") if isinstance(connect, dict) else None
+    for source in (timing_summary, pipeline, connect_timing):
+        if not isinstance(source, dict):
+            continue
+        slow_blocks = source.get("slow_blocks")
+        if isinstance(slow_blocks, list):
+            summary["slow_blocks"] = slow_blocks
+            break
+    return summary
+
+
 def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, payload: dict[str, Any]) -> None:
     stages = timing_stages(payload)
+    canonical_timing = canonical_timing_summary(payload, stages)
     benchmark_like = stages or any(
         key in payload
         for key in (
@@ -1186,16 +1251,19 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
             ),
             pretty_json(
                 {
-                    key: payload[key]
-                    for key in (
-                        "sync_timing",
-                        "stage_totals_ms",
-                        "pipeline_timing_summary",
-                        "timing_summary",
-                        "timings_ms",
-                        "connect_summary",
-                    )
-                    if key in payload
+                    **({"canonical_timing_summary": canonical_timing} if canonical_timing else {}),
+                    **{
+                        key: payload[key]
+                        for key in (
+                            "sync_timing",
+                            "stage_totals_ms",
+                            "pipeline_timing_summary",
+                            "timing_summary",
+                            "timings_ms",
+                            "connect_summary",
+                        )
+                        if key in payload
+                    },
                 }
             ),
             pretty_json(
@@ -1221,6 +1289,7 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                     **({"validated_height": validated_height} if validated_height is not None else {}),
                     **({"target_height": target_height} if target_height is not None else {}),
                     **({"target_label": target_label} if target_label else {}),
+                    **({"elapsed_ms": canonical_timing["total_ms"]} if "total_ms" in canonical_timing else {}),
                 }
             ),
             artifact.captured_at,

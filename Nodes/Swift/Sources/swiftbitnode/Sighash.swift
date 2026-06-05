@@ -120,10 +120,15 @@ enum Sighash {
         inputIndex: Int,
         prevouts: [CorpusPrevout],
         tapleafHash: Data,
-        sighashType: UInt8
+        sighashType: UInt8,
+        annex: Data? = nil,
+        codeSeparatorPos: UInt32 = UInt32.max
     ) throws -> Data {
         guard inputIndex >= 0, inputIndex < tx.inputs.count, prevouts.count >= tx.inputs.count else {
             throw SwiftBitnodeError.message("taproot sighash missing prevouts")
+        }
+        guard taprootAllowedHashType(sighashType) else {
+            throw SwiftBitnodeError.message("unsupported taproot sighash type")
         }
         let baseType = sighashType & 0x03
         let anyone = (sighashType & 0x80) != 0
@@ -152,7 +157,7 @@ enum Sighash {
                 out.append(serializeOutput(output))
             }))
         }
-        msg.append(UInt8(2)) // ext_flag=1, no annex
+        msg.append(UInt8(2 + (annex == nil ? 0 : 1))) // ext_flag=1 plus annex bit.
         if anyone {
             let input = tx.inputs[inputIndex]
             let prevout = prevouts[inputIndex]
@@ -165,6 +170,12 @@ enum Sighash {
         } else {
             msg.append(UInt32(inputIndex).littleEndianData)
         }
+        if let annex {
+            var serializedAnnex = Data()
+            appendCompactSize(&serializedAnnex, UInt64(annex.count))
+            serializedAnnex.append(annex)
+            msg.append(SHA256.hash(serializedAnnex))
+        }
         if baseType == single {
             guard inputIndex < tx.outputs.count else {
                 throw SwiftBitnodeError.message("taproot SIGHASH_SINGLE missing matching output")
@@ -173,7 +184,7 @@ enum Sighash {
         }
         msg.append(tapleafHash)
         msg.append(UInt8(0x00)) // key_version
-        msg.append(UInt32.max.littleEndianData) // code_separator_pos
+        msg.append(codeSeparatorPos.littleEndianData)
         return taggedHash(tag: "TapSighash", Data([0x00]) + msg)
     }
 
@@ -181,7 +192,8 @@ enum Sighash {
         tx: Transaction,
         inputIndex: Int,
         prevouts: [CorpusPrevout],
-        sighashType: UInt8
+        sighashType: UInt8,
+        annex: Data? = nil
     ) throws -> Data {
         guard inputIndex >= 0, inputIndex < tx.inputs.count, prevouts.count >= tx.inputs.count else {
             throw SwiftBitnodeError.message("taproot sighash missing prevouts")
@@ -218,7 +230,7 @@ enum Sighash {
         } else if outputMode == single && inputIndex >= tx.outputs.count {
             throw SwiftBitnodeError.message("taproot SIGHASH_SINGLE missing matching output")
         }
-        msg.append(UInt8(0)) // ext_flag=0, no annex
+        msg.append(UInt8(annex == nil ? 0 : 1)) // ext_flag=0 plus annex bit.
         if anyone {
             let input = tx.inputs[inputIndex]
             let prevout = prevouts[inputIndex]
@@ -231,6 +243,12 @@ enum Sighash {
         } else {
             msg.append(UInt32(inputIndex).littleEndianData)
         }
+        if let annex {
+            var serializedAnnex = Data()
+            appendCompactSize(&serializedAnnex, UInt64(annex.count))
+            serializedAnnex.append(annex)
+            msg.append(SHA256.hash(serializedAnnex))
+        }
         if outputMode == single {
             msg.append(SHA256.hash(serializeOutput(tx.outputs[inputIndex])))
         }
@@ -242,6 +260,11 @@ enum Sighash {
         appendCompactSize(&payload, UInt64(script.count))
         payload.append(script)
         return taggedHash(tag: "TapLeaf", payload)
+    }
+
+    static func tapbranchHash(_ left: Data, _ right: Data) -> Data {
+        let pair = left.lexicographicallyPrecedes(right) ? left + right : right + left
+        return taggedHash(tag: "TapBranch", pair)
     }
 
     static func serializeOutput(_ output: TxOutput) -> Data {

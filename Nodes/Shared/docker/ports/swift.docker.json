@@ -29,10 +29,10 @@
     "docker_proof_local": "cd Nodes/Swift && make docker-proof-local",
     "docker_proof_10k": "cd Nodes/Swift && make docker-proof-10k",
     "docker_probe_external": null,
-    "docker_supervisor": null,
-    "docker_supervisor_status": null,
-    "docker_supervisor_stop": null,
-    "docker_supervisor_resume": null,
+    "docker_supervisor": "cd Nodes/Swift && make docker-supervisor",
+    "docker_supervisor_status": "cd Nodes/Swift && make docker-supervisor-status",
+    "docker_supervisor_stop": "cd Nodes/Swift && make docker-supervisor-stop",
+    "docker_supervisor_resume": "cd Nodes/Swift && make docker-supervisor-resume",
     "docker_smoke_once": "cd Nodes/Swift && make docker-status"
   },
   "peer_modes": {
@@ -70,5 +70,5 @@
     "supporting_10k_result": "Nodes/Shared/conformance/results/swift_docker_supporting_10k_benchmark_<YYYY-MM-DD>.json",
     "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. Local Reference 5k and 10k proofs are bounded benchmark gates."
   },
-  "known_caveats": ["The local Reference P2P comparator is a bounded proof harness, not live tip maintenance", "Persistent live P2P supervisor is still a follow-up surface", "Binary gate remains not_attempted"]
+  "known_caveats": ["Swift supervisor is chunked local-reference catch-up, not external peer discovery", "Binary gate remains not_attempted until imported tip proof reaches current Reference tip"]
 }

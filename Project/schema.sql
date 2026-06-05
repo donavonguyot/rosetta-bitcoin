@@ -278,6 +278,7 @@ DROP VIEW IF EXISTS script_corpus_baseline;
 DROP VIEW IF EXISTS script_corpus_proof_artifacts;
 DROP VIEW IF EXISTS benchmark_gate_matrix;
 DROP VIEW IF EXISTS benchmark_comparability;
+DROP VIEW IF EXISTS benchmark_timing_summary;
 DROP VIEW IF EXISTS benchmark_summary;
 DROP VIEW IF EXISTS follower_blocker_matrix;
 DROP VIEW IF EXISTS current_blocker_state;
@@ -605,10 +606,33 @@ SELECT
   max(coalesce(b.height, -1)) AS max_height,
   max(b.captured_at) AS latest_captured_at,
   count(*) AS sample_count,
-  b.backend
+  b.backend,
+  min(CASE
+    WHEN coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.total_ms'), json_extract(b.result_json, '$.elapsed_ms'), -1) > 0
+    THEN coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.total_ms'), json_extract(b.result_json, '$.elapsed_ms'))
+    ELSE NULL
+  END) AS best_total_ms
 FROM benchmarks b
 JOIN project_node_ports np ON np.node_id = b.node_id
 GROUP BY np.port, b.node_id, b.benchmark_name, b.backend;
+
+CREATE VIEW IF NOT EXISTS benchmark_timing_summary AS
+SELECT
+  np.port,
+  b.node_id,
+  b.benchmark_name,
+  b.height,
+  b.backend,
+  coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.total_ms'), json_extract(b.result_json, '$.elapsed_ms'), -1) AS total_ms,
+  coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.stage_totals_ms.utxo_load'), -1) AS utxo_load_ms,
+  coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.stage_totals_ms.script_verify'), -1) AS script_verify_ms,
+  coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.stage_totals_ms.utxo_apply'), -1) AS utxo_apply_ms,
+  coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.stage_totals_ms.commit'), -1) AS commit_ms,
+  coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.stage_totals_ms.block_connect_store_commit'), -1) AS block_connect_store_commit_ms,
+  b.captured_at,
+  b.source_artifact_id
+FROM benchmarks b
+JOIN project_node_ports np ON np.node_id = b.node_id;
 
 CREATE VIEW IF NOT EXISTS benchmark_comparability AS
 WITH benchmark_rows AS (
@@ -664,6 +688,7 @@ WITH benchmark_rows AS (
     lower(coalesce(cast(json_extract(b.settings_json, '$.resume_supported') AS TEXT), '')) AS resume_supported_text,
     lower(coalesce(cast(json_extract(b.settings_json, '$.fresh_state') AS TEXT), '')) AS fresh_state_text,
     coalesce(json_extract(b.result_json, '$.current_blocker'), '') AS current_blocker,
+    coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.total_ms'), json_extract(b.result_json, '$.elapsed_ms'), -1) AS total_ms,
     coalesce(
       json_extract(b.settings_json, '$.utxo_accounting_policy'),
       CASE
@@ -767,6 +792,7 @@ SELECT
   fresh_state,
   binary_gate_status,
   comparability_notes,
+  total_ms,
   captured_at,
   source_artifact_id
 FROM scored;

@@ -9,8 +9,11 @@ DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_P2P_PEER ?= host.docker.internal:48333
 DOCKER_PROOF_VOLUME ?= swiftbitnode_proof_data
 DOCKER_SYNC_TARGET ?= 5000
+DOCKER_SUPERVISOR_TARGET ?= 10000
+DOCKER_SUPERVISOR_CHUNK ?= 5000
+DOCKER_SUPERVISOR_RESULT ?= /results/swift_supervisor_status_$(RESULT_DATE).json
 
-.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k clean
+.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local swift-node-sync-supervisor docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume clean
 
 build:
 	$(SWIFT) build
@@ -34,6 +37,13 @@ swift-node-proof-local:
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
 	  --output ../Shared/conformance/results/swift_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+
+swift-node-sync-supervisor:
+	$(SWIFT) run swiftbitnode sync-supervisor \
+	  --target $(DOCKER_SUPERVISOR_TARGET) \
+	  --chunk-size $(DOCKER_SUPERVISOR_CHUNK) \
+	  --peer $(DOCKER_P2P_PEER) \
+	  --datadir $(DATA_DIR)
 
 docker-config:
 	$(DOCKER_COMPOSE) config >/dev/null
@@ -78,6 +88,34 @@ docker-proof-10k:
 	  DOCKER_PROOF_VOLUME=swiftbitnode_10k_proof_data \
 	  DOCKER_SYNC_TARGET=10000 \
 	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_10K_PROOF_RESULT)
+
+docker-supervisor:
+	@for i in $$(seq 1 60); do \
+	  nc -z 127.0.0.1 48333 && break; \
+	  sleep 2; \
+	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
+	done
+	DOCKER_DATA_VOLUME=swiftbitnode_supervisor_data $(DOCKER_COMPOSE) run --rm --no-deps \
+	  -e TARGET_HEIGHT=$(DOCKER_SUPERVISOR_TARGET) \
+	  -e CHUNK_SIZE=$(DOCKER_SUPERVISOR_CHUNK) \
+	  -e PREFETCH_DEPTH=4 \
+	  -e PEER=$(DOCKER_P2P_PEER) \
+	  swiftbitnode \
+	  swiftbitnode sync-supervisor \
+	  --target $(DOCKER_SUPERVISOR_TARGET) \
+	  --chunk-size $(DOCKER_SUPERVISOR_CHUNK) \
+	  --peer $(DOCKER_P2P_PEER) \
+	  --datadir /data \
+	  --output $(DOCKER_SUPERVISOR_RESULT)
+
+docker-supervisor-status:
+	DOCKER_DATA_VOLUME=swiftbitnode_supervisor_data $(DOCKER_COMPOSE) run --rm --no-deps swiftbitnode swiftbitnode status --datadir /data
+
+docker-supervisor-stop:
+	DOCKER_DATA_VOLUME=swiftbitnode_supervisor_data $(DOCKER_COMPOSE) run --rm --no-deps swiftbitnode /bin/sh -lc 'touch /data/.swiftbitnode_supervisor_stop'
+
+docker-supervisor-resume:
+	DOCKER_DATA_VOLUME=swiftbitnode_supervisor_data $(DOCKER_COMPOSE) run --rm --no-deps swiftbitnode /bin/sh -lc 'rm -f /data/.swiftbitnode_supervisor_stop'
 
 clean:
 	rm -rf .build data-swift

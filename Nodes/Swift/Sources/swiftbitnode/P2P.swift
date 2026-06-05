@@ -144,13 +144,15 @@ struct P2PMessage {
 
 final class P2PClient: @unchecked Sendable {
     private let connection: TCPConnection
+    private let startHeight: Int
 
-    init(peer: String) throws {
+    init(peer: String, startHeight: Int = 0) throws {
         connection = try TCPConnection(peer: peer)
+        self.startHeight = startHeight
     }
 
     func handshake() throws {
-        try send(command: "version", payload: versionPayload())
+        try send(command: "version", payload: versionPayload(startHeight: startHeight))
         var seenVersion = false
         var seenVerack = false
         while !seenVersion || !seenVerack {
@@ -291,8 +293,8 @@ final class P2PClient: @unchecked Sendable {
 }
 
 enum P2PFetcher {
-    static func fetch(peer: String, target: Int, startHeight: Int = 0, prefetchDepth: Int = 1, handle: (P2PBlock) throws -> Bool) throws -> Int {
-        let client = try P2PClient(peer: peer)
+    static func fetch(peer: String, target: Int, startHeight: Int = 0, prefetchDepth: Int = 1, advertiseHeight: Int? = nil, handle: (P2PBlock) throws -> Bool) throws -> Int {
+        let client = try P2PClient(peer: peer, startHeight: max(0, advertiseHeight ?? startHeight - 1))
         try client.handshake()
         let hashes = try client.headersThrough(target: target)
         let depth = max(1, prefetchDepth)
@@ -329,7 +331,7 @@ enum P2PFetcher {
     }
 }
 
-private func versionPayload() -> Data {
+private func versionPayload(startHeight: Int) -> Data {
     var out = Data()
     out.append(Int32(70016).littleEndianData)
     out.append(UInt64(1 | 8).littleEndianData)
@@ -338,7 +340,7 @@ private func versionPayload() -> Data {
     appendNetAddr(&out)
     out.append(UInt64(Date().timeIntervalSince1970 * 1_000_000).littleEndianData)
     appendVarBytes(&out, Data("/swiftbitnode:0.1.0/".utf8))
-    out.append(Int32(0).littleEndianData)
+    out.append(Int32(max(0, startHeight)).littleEndianData)
     out.append(UInt8(0))
     return out
 }
