@@ -17,6 +17,7 @@ final class RocksDBNative {
     private typealias WriteOptionsDestroy = @convention(c) (OpaquePointer?) -> Void
     private typealias Put = @convention(c) (OpaquePointer?, OpaquePointer?, UnsafePointer<CChar>?, Int, UnsafePointer<CChar>?, Int, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Void
     private typealias Get = @convention(c) (OpaquePointer?, OpaquePointer?, UnsafePointer<CChar>?, Int, UnsafeMutablePointer<Int>?, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> UnsafeMutablePointer<CChar>?
+    private typealias MultiGet = @convention(c) (OpaquePointer?, OpaquePointer?, Int, UnsafeMutablePointer<UnsafePointer<CChar>?>?, UnsafeMutablePointer<Int>?, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?, UnsafeMutablePointer<Int>?, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Void
     private typealias Delete = @convention(c) (OpaquePointer?, OpaquePointer?, UnsafePointer<CChar>?, Int, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Void
     private typealias WriteBatchCreate = @convention(c) () -> OpaquePointer?
     private typealias WriteBatchDestroy = @convention(c) (OpaquePointer?) -> Void
@@ -38,6 +39,7 @@ final class RocksDBNative {
         let writeOptionsDestroy: WriteOptionsDestroy
         let put: Put
         let get: Get
+        let multiGet: MultiGet?
         let delete: Delete
         let writeBatchCreate: WriteBatchCreate
         let writeBatchDestroy: WriteBatchDestroy
@@ -72,7 +74,8 @@ final class RocksDBNative {
                     dlclose(handle)
                     continue
                 }
-                return API(handle: handle, optionsCreate: optionsCreate, optionsDestroy: optionsDestroy, optionsSetCreateIfMissing: optionsSetCreateIfMissing, open: open, close: close, readOptionsCreate: readOptionsCreate, readOptionsDestroy: readOptionsDestroy, writeOptionsCreate: writeOptionsCreate, writeOptionsDestroy: writeOptionsDestroy, put: put, get: get, delete: delete, writeBatchCreate: writeBatchCreate, writeBatchDestroy: writeBatchDestroy, writeBatchPut: writeBatchPut, writeBatchDelete: writeBatchDelete, write: write, free: free)
+                let multiGet = symbol(handle, "rocksdb_multi_get", MultiGet.self)
+                return API(handle: handle, optionsCreate: optionsCreate, optionsDestroy: optionsDestroy, optionsSetCreateIfMissing: optionsSetCreateIfMissing, open: open, close: close, readOptionsCreate: readOptionsCreate, readOptionsDestroy: readOptionsDestroy, writeOptionsCreate: writeOptionsCreate, writeOptionsDestroy: writeOptionsDestroy, put: put, get: get, multiGet: multiGet, delete: delete, writeBatchCreate: writeBatchCreate, writeBatchDestroy: writeBatchDestroy, writeBatchPut: writeBatchPut, writeBatchDelete: writeBatchDelete, write: write, free: free)
             }
             return nil
         }
@@ -143,6 +146,49 @@ final class RocksDBNative {
         guard let value else { return nil }
         defer { api.free(value) }
         return Data(bytes: value, count: length)
+    }
+
+    func get(keys: [String]) throws -> [String: Data] {
+        guard !keys.isEmpty else { return [:] }
+        guard let multiGet = api.multiGet else {
+            var out: [String: Data] = [:]
+            for key in keys {
+                if let value = try get(key: key) {
+                    out[key] = value
+                }
+            }
+            return out
+        }
+        guard let readOptions = api.readOptionsCreate() else {
+            throw SwiftBitnodeError.message("rocksdb read options allocation failed")
+        }
+        defer { api.readOptionsDestroy(readOptions) }
+        let cKeys = keys.map { strdup($0)! }
+        defer {
+            for key in cKeys {
+                free(key)
+            }
+        }
+        var keyPointers = cKeys.map { Optional(UnsafePointer<CChar>($0)) }
+        var keySizes = cKeys.map { strlen($0) }
+        var values = Array<UnsafeMutablePointer<CChar>?>(repeating: nil, count: keys.count)
+        var valueSizes = Array<Int>(repeating: 0, count: keys.count)
+        var errors = Array<UnsafeMutablePointer<CChar>?>(repeating: nil, count: keys.count)
+        multiGet(db, readOptions, keys.count, &keyPointers, &keySizes, &values, &valueSizes, &errors)
+
+        var out: [String: Data] = [:]
+        for index in keys.indices {
+            if let err = errors[index] {
+                let message = String(cString: err)
+                api.free(err)
+                throw SwiftBitnodeError.message("rocksdb multi_get failed: \(message)")
+            }
+            if let value = values[index] {
+                out[keys[index]] = Data(bytes: value, count: valueSizes[index])
+                api.free(value)
+            }
+        }
+        return out
     }
 
     func delete(key: String) throws {

@@ -7,13 +7,13 @@
   "blocks_connected" : 5001,
   "blocks_fetched" : 5001,
   "byte_source" : "local_reference_p2p",
-  "captured_at" : "2026-06-05T03:21:40Z",
+  "captured_at" : "2026-06-05T03:36:48Z",
   "chain" : "testnet4",
   "chainstate_backend" : "rocksdb",
   "chainstate_status" : "usable",
   "chainstate_utxo_count" : 4574,
   "current_blocker" : null,
-  "elapsed_ms" : 13087,
+  "elapsed_ms" : 8726,
   "failures" : [
 
   ],
@@ -40,20 +40,21 @@
   "runtime_surface" : "docker",
   "script_runner_mode" : "parallel",
   "stage_totals_ms" : {
-    "block_connect_store_commit" : 11842,
-    "block_parse_validate" : 5006,
-    "commit" : 5002,
-    "p2p_fetch" : 13074,
-    "script_verify" : 104068,
+    "block_connect_store_commit" : 8627,
+    "block_parse_validate" : 1123,
+    "commit" : 579,
+    "p2p_fetch" : 8711,
+    "prevout_batch_load" : 69,
+    "script_verify" : 1720,
     "utxo_apply" : 0,
-    "utxo_load" : 208136
+    "utxo_load" : 69
   },
   "status" : {
     "binary_gate_status" : "not_attempted",
     "chain" : "testnet4",
     "chainstate_backend" : "rocksdb",
     "chainstate_backend_path" : "\/data\/chainstate-rocksdb",
-    "chainstate_generation_id" : "474B3C10-2EF0-48BB-8688-7EE12268E1D2",
+    "chainstate_generation_id" : "A93A5AB0-8E09-47E8-A294-DBBE70321FFD",
     "chainstate_status" : "usable",
     "chainstate_utxo_count" : 4574,
     "current_blocker" : null,
@@ -80,7 +81,7 @@
     "stored_block_hash" : "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
     "stored_block_height" : 5000,
     "sync_status" : "blocks_current",
-    "updated_at" : "2026-06-05T03:21:40Z",
+    "updated_at" : "2026-06-05T03:36:48Z",
     "utxo_accounting_policy" : "core_spendable_v1",
     "validated_hash" : "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
     "validated_height" : 5000
@@ -91,15 +92,16 @@
   "target_label" : "5k",
   "timing_summary" : {
     "stage_totals_ms" : {
-      "block_connect_store_commit" : 11842,
-      "block_parse_validate" : 5006,
-      "commit" : 5002,
-      "p2p_fetch" : 13074,
-      "script_verify" : 104068,
+      "block_connect_store_commit" : 8627,
+      "block_parse_validate" : 1123,
+      "commit" : 579,
+      "p2p_fetch" : 8711,
+      "prevout_batch_load" : 69,
+      "script_verify" : 1720,
       "utxo_apply" : 0,
-      "utxo_load" : 208136
+      "utxo_load" : 69
     },
-    "total_ms" : 13087
+    "total_ms" : 8726
   },
   "utxo_accounting_policy" : "core_spendable_v1",
   "validated_hash" : "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",

@@ -10,9 +10,10 @@ enum LocalReferenceProof {
         let scriptRunnerMode = ProcessInfo.processInfo.environment["SCRIPT_RUNNER_MODE"] ?? "serial"
         let rocksdbWalDisabled = (ProcessInfo.processInfo.environment["ROCKSDB_WAL_DISABLED"] ?? "false").lowercased() == "true"
         let freshState = (ProcessInfo.processInfo.environment["FRESH_STATE"] ?? "true").lowercased() != "false"
-        let started = Date()
+        let started = DispatchTime.now().uptimeNanoseconds
         let store = try ChainStore(datadir: datadir)
         let initialState = try store.load()
+        var rollingState = initialState
         let startHeight = max(0, initialState.validatedHeight + 1)
         var timing = TimingCollector()
         var blocksFetched = 0
@@ -20,19 +21,19 @@ enum LocalReferenceProof {
         var failures: [String] = []
 
         do {
-            let fetchStart = Date()
+            let fetchStart = DispatchTime.now().uptimeNanoseconds
             blocksFetched = try P2PFetcher.fetch(peer: peer, target: target, startHeight: startHeight, prefetchDepth: prefetchDepth) { block in
-                try store.recordBlock(height: block.height, raw: block.raw)
-                try store.markStored(height: block.height, hash: block.hash)
-                let connectStart = Date()
-                let connected = try BlockConnector.connect(raw: block.raw, height: block.height, store: store, timing: &timing)
-                timing.stages["block_connect_store_commit", default: 0] += max(1, Int(Date().timeIntervalSince(connectStart) * 1000))
+                let connectStart = DispatchTime.now().uptimeNanoseconds
+                let result = try BlockConnector.connect(raw: block.raw, height: block.height, state: rollingState, store: store, timing: &timing)
+                let connected = result.connected
+                timing.addElapsed("block_connect_store_commit", since: connectStart)
                 if connected {
                     blocksConnected += 1
+                    rollingState = result.state
                 }
                 return connected
             }
-            timing.stages["p2p_fetch", default: 0] += max(1, Int(Date().timeIntervalSince(fetchStart) * 1000))
+            timing.addElapsed("p2p_fetch", since: fetchStart)
         } catch {
             failures.append(error.localizedDescription)
             try? store.setBlocker(height: blocksConnected, failure: error.localizedDescription)
@@ -59,11 +60,8 @@ enum LocalReferenceProof {
         if !reached && failures.isEmpty {
             failures.append("target not reached")
         }
-        var stages = timing.stages
-        for required in ["utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit"] {
-            stages[required, default: 0] += 0
-        }
-        let elapsedMs = max(1, Int(Date().timeIntervalSince(started) * 1000))
+        let stages = timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"])
+        let elapsedMs = max(1, Int((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000))
         let doc: [String: Any] = [
             "implementation": Constants.implementation,
             "node_id": Constants.nodeID,

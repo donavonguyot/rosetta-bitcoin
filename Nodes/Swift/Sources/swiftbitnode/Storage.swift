@@ -5,14 +5,14 @@ import Glibc
 import Darwin
 #endif
 
-struct StoredUtxo: Codable {
+struct StoredUtxo: Codable, Sendable {
     let value: Int64
-    let scriptPubKeyHex: String
+    let scriptPubKey: Data
     let height: Int
     let coinbase: Bool
 }
 
-struct StoredUndo: Codable {
+struct StoredUndo: Codable, Sendable {
     let key: String
     let utxo: StoredUtxo
 }
@@ -84,15 +84,14 @@ final class ChainStore {
         }
     }
 
-    func recordBlock(height: Int, raw: Data) throws {
+    func recordBlock(height: Int, hash: String, raw: Data) throws {
         if let rocks {
-            let block = try Codec.parseBlock(raw, height: height)
             try rocks.writeBatch(
                 puts: [
                     ("block:raw:height:\(height)", raw),
-                    ("block:raw:hash:\(block.hash)", raw),
-                    ("block:index:height:\(height)", Data(block.hash.utf8)),
-                    ("block:index:hash:\(block.hash)", Data("\(height)".utf8))
+                    ("block:raw:hash:\(hash)", raw),
+                    ("block:index:height:\(height)", Data(hash.utf8)),
+                    ("block:index:hash:\(hash)", Data("\(height)".utf8))
                 ],
                 deletes: []
             )
@@ -123,9 +122,29 @@ final class ChainStore {
 
     func getUtxo(_ key: String, state: StoreState) throws -> StoredUtxo? {
         if let rocks, let data = try rocks.get(key: "utxo:\(key)") {
-            return try JSONDecoder().decode(StoredUtxo.self, from: data)
+            return try decodeUtxo(data)
         }
         return state.utxos[key]
+    }
+
+    func getUtxos(_ keys: [String], state: StoreState) throws -> [String: StoredUtxo] {
+        if let rocks {
+            let raw = try rocks.get(keys: keys.map { "utxo:\($0)" })
+            var out: [String: StoredUtxo] = [:]
+            for key in keys {
+                if let data = raw["utxo:\(key)"] {
+                    out[key] = try decodeUtxo(data)
+                }
+            }
+            return out
+        }
+        var out: [String: StoredUtxo] = [:]
+        for key in keys {
+            if let utxo = state.utxos[key] {
+                out[key] = utxo
+            }
+        }
+        return out
     }
 
     func commitConnectedBlock(
@@ -135,7 +154,7 @@ final class ChainStore {
         hash: String,
         created: [(String, StoredUtxo)],
         spent: [(String, StoredUtxo)]
-    ) throws {
+    ) throws -> StoreState {
         var copy = state
         if rocks == nil {
             for (key, _) in spent {
@@ -163,7 +182,7 @@ final class ChainStore {
         let stateData = try JSONEncoder().encode(copy)
         guard let rocks else {
             try stateData.write(to: stateURL)
-            return
+            return copy
         }
         let undoPayload = try JSONEncoder().encode(spent.map { StoredUndo(key: $0.0, utxo: $0.1) })
         var puts: [(String, Data)] = [
@@ -175,9 +194,10 @@ final class ChainStore {
             ("undo:height:\(height)", undoPayload)
         ]
         for (key, utxo) in created {
-            puts.append(("utxo:\(key)", try JSONEncoder().encode(utxo)))
+            puts.append(("utxo:\(key)", encodeUtxo(utxo)))
         }
         try rocks.writeBatch(puts: puts, deletes: spent.map { "utxo:\($0.0)" })
+        return copy
     }
 
     func setBlocker(height: Int, failure: String, txid: String = "", inputIndex: Int = -1) throws {
@@ -205,6 +225,48 @@ final class ChainStore {
         let body = "pid=\(ProcessInfo.processInfo.processIdentifier)\ntoken=\(token)\ncreated_at=\(nowIso8601())\n"
         try body.write(to: lockURL, atomically: true, encoding: .utf8)
         return token
+    }
+
+    private func encodeUtxo(_ utxo: StoredUtxo) -> Data {
+        var out = Data()
+        out.append(UInt64(bitPattern: utxo.value).littleEndianData)
+        out.append(UInt32(utxo.height).littleEndianData)
+        out.append(utxo.coinbase ? 1 : 0)
+        appendCompactSize(&out, UInt64(utxo.scriptPubKey.count))
+        out.append(utxo.scriptPubKey)
+        return out
+    }
+
+    private func decodeUtxo(_ data: Data) throws -> StoredUtxo {
+        do {
+            var reader = ByteReader(data)
+            let value = Int64(bitPattern: try reader.uint64LE())
+            let height = Int(try reader.uint32LE())
+            let coinbase = try reader.uint8() != 0
+            let scriptLen = Int(try reader.compactSize())
+            let script = try reader.read(scriptLen)
+            guard reader.remaining == 0 else {
+                throw SwiftBitnodeError.message("utxo value has trailing bytes")
+            }
+            return StoredUtxo(value: value, scriptPubKey: script, height: height, coinbase: coinbase)
+        } catch {
+            return try JSONDecoder().decode(StoredUtxo.self, from: data)
+        }
+    }
+
+    private func appendCompactSize(_ out: inout Data, _ value: UInt64) {
+        if value < 0xfd {
+            out.append(UInt8(value))
+        } else if value <= 0xffff {
+            out.append(UInt8(0xfd))
+            out.append(UInt16(value).littleEndianData)
+        } else if value <= 0xffff_ffff {
+            out.append(UInt8(0xfe))
+            out.append(UInt32(value).littleEndianData)
+        } else {
+            out.append(UInt8(0xff))
+            out.append(value.littleEndianData)
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import Dispatch
 #if os(Linux)
 import Glibc
 #else
@@ -11,7 +12,57 @@ struct P2PBlock {
     let raw: Data
 }
 
-final class TCPConnection {
+final class BlockQueue: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var items: [Result<P2PBlock?, Error>] = []
+    private var cancelled = false
+
+    func push(_ block: P2PBlock) {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !cancelled else { return }
+        items.append(.success(block))
+        condition.signal()
+    }
+
+    func finish() {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !cancelled else { return }
+        items.append(.success(nil))
+        condition.signal()
+    }
+
+    func fail(_ error: Error) {
+        condition.lock()
+        defer { condition.unlock() }
+        guard !cancelled else { return }
+        items.append(.failure(error))
+        condition.signal()
+    }
+
+    func cancel() {
+        condition.lock()
+        cancelled = true
+        items.removeAll()
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    func pop() throws -> P2PBlock? {
+        condition.lock()
+        defer { condition.unlock() }
+        while items.isEmpty && !cancelled {
+            condition.wait()
+        }
+        if cancelled {
+            return nil
+        }
+        return try items.removeFirst().get()
+    }
+}
+
+final class TCPConnection: @unchecked Sendable {
     private let fd: Int32
 
     init(peer: String) throws {
@@ -91,7 +142,7 @@ struct P2PMessage {
     let payload: Data
 }
 
-final class P2PClient {
+final class P2PClient: @unchecked Sendable {
     private let connection: TCPConnection
 
     init(peer: String) throws {
@@ -244,21 +295,34 @@ enum P2PFetcher {
         let client = try P2PClient(peer: peer)
         try client.handshake()
         let hashes = try client.headersThrough(target: target)
-        var fetched = 0
         let depth = max(1, prefetchDepth)
-        var height = max(0, startHeight)
-        while height <= target {
-            let end = min(target, height + depth - 1)
-            let batchHashes = Array(hashes[height...end])
-            let blocks = try client.requestBlocks(hashes: batchHashes)
-            for raw in blocks {
-                let hash = SHA256.doubleHash(raw.subdata(in: 0..<80)).reversedHex
-                fetched += 1
-                let shouldContinue = try handle(P2PBlock(height: height, hash: hash, raw: raw))
-                height += 1
-                if !shouldContinue {
-                    return fetched
+        let start = max(0, startHeight)
+        let queue = BlockQueue()
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                var height = start
+                while height <= target {
+                    let end = min(target, height + depth - 1)
+                    let batchHashes = Array(hashes[height...end])
+                    let blocks = try client.requestBlocks(hashes: batchHashes)
+                    for raw in blocks {
+                        let hash = SHA256.doubleHash(raw.subdata(in: 0..<80)).reversedHex
+                        queue.push(P2PBlock(height: height, hash: hash, raw: raw))
+                        height += 1
+                    }
                 }
+                queue.finish()
+            } catch {
+                queue.fail(error)
+            }
+        }
+        var fetched = 0
+        while let block = try queue.pop() {
+            fetched += 1
+            let shouldContinue = try handle(block)
+            if !shouldContinue {
+                queue.cancel()
+                return fetched
             }
         }
         return fetched

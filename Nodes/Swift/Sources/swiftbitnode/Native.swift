@@ -34,7 +34,7 @@ enum NativeReport {
 
 enum NativeSecp256k1 {
     static var available: Bool {
-        NativeLibrary.available(["libsecp256k1.so", "libsecp256k1.so.1", "libsecp256k1.dylib"])
+        shared != nil
     }
 
     private typealias ContextCreate = @convention(c) (UInt32) -> OpaquePointer?
@@ -49,15 +49,18 @@ enum NativeSecp256k1 {
     private typealias XOnlyPubkeyFromPubkey = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<Int32>?, UnsafePointer<UInt8>?) -> Int32
     private typealias EcPubkeySerialize = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<Int>?, UnsafePointer<UInt8>?, UInt32) -> Int32
 
+    private static let shared = Shared.open()
+
     static func verifyECDSA(pubkey: Data, msg32: Data, derSignature: Data) -> Bool {
         verifyECDSAResult(pubkey: pubkey, msg32: msg32, derSignature: derSignature) == "valid"
     }
 
     static func verifyECDSAResult(pubkey: Data, msg32: Data, derSignature: Data) -> String {
-        guard msg32.count == 32, let api = API.open(), let ctx = api.contextCreate(257) else {
+        guard msg32.count == 32, let shared else {
             return "malformed_input"
         }
-        defer { api.contextDestroy(ctx) }
+        let api = shared.api
+        let ctx = shared.context
         var sig = [UInt8](repeating: 0, count: 64)
         var normalized = [UInt8](repeating: 0, count: 64)
         var parsedPubkey = [UInt8](repeating: 0, count: 64)
@@ -87,10 +90,11 @@ enum NativeSecp256k1 {
 
     static func verifySchnorrResult(xonlyPubkey: Data, msg32: Data, signature: Data) -> String {
         guard msg32.count == 32, signature.count == 64, xonlyPubkey.count == 32,
-              let api = API.open(), let ctx = api.contextCreate(257) else {
+              let shared else {
             return "malformed_input"
         }
-        defer { api.contextDestroy(ctx) }
+        let api = shared.api
+        let ctx = shared.context
         var parsedPubkey = [UInt8](repeating: 0, count: 64)
         let parsed = xonlyPubkey.withUnsafeBytes { pubBytes in
             api.xonlyPubkeyParse(ctx, &parsedPubkey, pubBytes.bindMemory(to: UInt8.self).baseAddress) == 1
@@ -111,10 +115,11 @@ enum NativeSecp256k1 {
     }
 
     static func taprootTweakResult(xonlyPubkey: Data, merkleRoot: Data, expectedXOnly: String, expectedParity: Int?) -> String {
-        guard xonlyPubkey.count == 32, let api = API.open(), let ctx = api.contextCreate(257) else {
+        guard xonlyPubkey.count == 32, let shared else {
             return "malformed_input"
         }
-        defer { api.contextDestroy(ctx) }
+        let api = shared.api
+        let ctx = shared.context
         var internalKey = [UInt8](repeating: 0, count: 64)
         let parsed = xonlyPubkey.withUnsafeBytes { pubBytes in
             api.xonlyPubkeyParse(ctx, &internalKey, pubBytes.bindMemory(to: UInt8.self).baseAddress) == 1
@@ -142,7 +147,24 @@ enum NativeSecp256k1 {
         return SHA256.hash(tagHash + tagHash + payload)
     }
 
-    private struct API {
+    private final class Shared: @unchecked Sendable {
+        let api: API
+        let context: OpaquePointer
+
+        init(api: API, context: OpaquePointer) {
+            self.api = api
+            self.context = context
+        }
+
+        static func open() -> Shared? {
+            guard let api = API.open(), let context = api.contextCreate(257) else {
+                return nil
+            }
+            return Shared(api: api, context: context)
+        }
+    }
+
+    private struct API: @unchecked Sendable {
         let handle: UnsafeMutableRawPointer
         let contextCreate: ContextCreate
         let contextDestroy: ContextDestroy

@@ -1,11 +1,11 @@
 import Foundation
 
-struct CorpusPrevout {
+struct CorpusPrevout: Sendable {
     let amount: Int64
     let scriptPubKey: Data
 }
 
-struct CorpusFixture {
+struct CorpusFixture: Sendable {
     let fixtureID: String
     let height: Int
     let blockHash: String

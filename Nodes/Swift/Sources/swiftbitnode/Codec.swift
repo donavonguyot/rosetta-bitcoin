@@ -55,7 +55,7 @@ struct ByteReader {
     }
 }
 
-struct TxInput {
+struct TxInput: Sendable {
     let previousTxidInternal: Data
     let vout: UInt32
     let scriptSig: Data
@@ -65,7 +65,7 @@ struct TxInput {
     }
 }
 
-struct TxOutput {
+struct TxOutput: Sendable {
     let value: Int64
     let scriptPubKey: Data
     var isSpendableCoreV1: Bool {
@@ -73,7 +73,7 @@ struct TxOutput {
     }
 }
 
-struct Transaction {
+struct Transaction: Sendable {
     let version: Int32
     let rawNoWitness: Data
     let rawWithWitness: Data
@@ -86,7 +86,7 @@ struct Transaction {
     let hasWitness: Bool
 }
 
-struct BlockInfo {
+struct BlockInfo: Sendable {
     let height: Int
     let header: Data
     let hash: String
