@@ -4,6 +4,11 @@ This catalog preserves the Python and Java live-chain blocker trail as shared
 provenance for follower ports. Treat these facts as regression targets, not as
 validation shortcuts. Every port must still independently verify the spend.
 
+This is not the new-port work queue. Known blocker heights in this catalog are
+already represented in the Shared consensus rule ledger and script corpus. A
+new port should pass the corpus first; it should not sync to height `739` (or
+any other listed height) to rediscover a rule that is already captured here.
+
 The primary rule inventory is
 `Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json`. Project imports
 that ledger plus this catalog and owns the current blocker projection:
@@ -31,7 +36,7 @@ python3 Project/scripts/report.py --db Project/project.db --section blocker-matr
 
 | Height | Template / rule | Block hash | Txid | Input | Spent scriptPubKey | Failure seen | Python status | Java status | Follower notes |
 |--------|-----------------|------------|------|-------|--------------------|--------------|---------------|-------------|----------------|
-| 739 | P2WPKH / BIP143 | `000000004cfba4fe6174c546086df7fb52b3d65d44788c0ee8acf436dd28de32` | `475ff67b2f2631c6b443635951d81127dcf21898f697d5f7c31e88df836ee756` | 0 | `0014a54e2a1ec06389203887661535ed118b7d053889` | `script verification failed` / missing base interpreter | cleared | cleared | First real spend-path fixture used by C#, Elixir, and likely all followers. |
+| 739 | P2WPKH / BIP143 | `000000004cfba4fe6174c546086df7fb52b3d65d44788c0ee8acf436dd28de32` | `475ff67b2f2631c6b443635951d81127dcf21898f697d5f7c31e88df836ee756` | 0 | `0014a54e2a1ec06389203887661535ed118b7d053889` | `script verification failed` / missing base interpreter | cleared | cleared | Corpus fixture and regression target. Do not rediscover this by live sync for new ports. |
 | 18,675 | P2SH redeem script | `0000000000003969823692a8e899365b91b6c98936feeaa195c22972d786ecd1` | `82be4b75b218e7a62e00b8ec064f159e04449c025d6b8aa5079a89a7bc80ca7c` | 0 | `a9144dae69b35b0f315f4823565a28b485d6a3609ad987` | unsupported `P2SH` | cleared | cleared | Implement P2SH redeem-script extraction before treating script failure as opcode failure. |
 | 22,830 | P2TR script path / BIP342 | `00000000000002a436f697d3411d77b66609c47a398951acc82f8307c880116d` | `630725d944cb0ddba2e249f248b725d1f136fc3d698e8dc4f6be61e9103fa33c` | 0 | `5120f6b00789c732c14a921e61f2b1918a8a8db262d5b0aa2fb6e8229ce3870acda5` | unsupported P2TR script-path rule | cleared | cleared | Requires Taproot script-path control block, leaf hash, tapscript evaluation, and BIP342 sighash. |
 | 25,207 | Bare `OP_1` | `00000000000000463dba9f98b495062219453ea8ee8e3a311ff7a8ad5e03da0b` | `23bf6f595cc12dde71239de913ea9a30fb60ef20a3a54246701a2dff16227f43` | 1 | `51` | unsupported bare template `unknown:51` | cleared | cleared | Bare script templates appear on spend path; do not assume every spend is standard. |

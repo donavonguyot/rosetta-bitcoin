@@ -1,6 +1,8 @@
 # Blocker ledger (CppNode follower)
 
-Handoff from live sync. PythonNode is the scout; reproduce rules independently in C++.
+Historical C++ blocker evidence. Current consensus runway truth comes from
+Project plus the Shared consensus rule ledger and script corpus; reproduce rules
+independently in C++.
 
 ## Cleared locally: height 739 — P2WPKH ECDSA verify (secp256k1)
 

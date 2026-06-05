@@ -1,7 +1,8 @@
 # CSharp blocker ledger
 
-Handoff notes for csbitnode. Canonical scout trail remains
-[Nodes/Python/docs/BLOCKER_LEDGER.md](../../Python/docs/BLOCKER_LEDGER.md).
+Handoff notes for csbitnode. Current consensus runway truth comes from Project
+plus the Shared consensus rule ledger and script corpus; historical Python notes
+are provenance only.
 
 ## Last recorded evidence
 

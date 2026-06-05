@@ -1656,9 +1656,13 @@ follower_notes:
 
 ## Usage
 
-1. Sync until the exact blocker (do not skip or assume success).
-2. Fill every field you can from live DB/logs (`make java-node-status`, `make java-node-export-snapshots`).
-3. Implement the **exact** missing rule with a regression fixture before resuming sync.
-4. Export snapshots on a quiescent DB after the fix lands.
+1. Check the Shared consensus rule ledger and script corpus first. If the rule is
+   already captured there, fix Java against the existing fixture instead of
+   rediscovering it by live sync.
+2. For a genuinely new live blocker, record the exact facts; do not skip or
+   assume success.
+3. Fill every field you can from live DB/logs (`make java-node-status`, `make java-node-export-snapshots`).
+4. Implement the **exact** missing rule with a regression fixture before resuming sync.
+5. Export snapshots on a quiescent DB after the fix lands.
 
-See workspace [`AGENTS.md`](../../../AGENTS.md) for scout/follower rules and binary gate definition.
+See workspace [`AGENTS.md`](../../../AGENTS.md) for the consensus runway and binary gate definition.

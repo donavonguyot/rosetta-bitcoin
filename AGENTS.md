@@ -106,12 +106,12 @@ All `Nodes/<Port>/` directories are root-owned source directories. Nested
 
 | Path | Package | Role |
 |------|---------|------|
-| `~/RB/Nodes/Python` | **pybitnode** | RocksDB/native-crypto scout |
+| `~/RB/Nodes/Python` | **pybitnode** | RocksDB/native-crypto reference implementation and provenance source |
 | `~/RB/Nodes/TypeScript` | **tsbitnode** | RocksDB/native-crypto follower |
-| `~/RB/Nodes/Cpp` | **cpbitnode** | Systems follower; keep behind the proven scout/follower path; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
+| `~/RB/Nodes/Cpp` | **cpbitnode** | Systems follower; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
 | `~/RB/Nodes/CSharp` | **csbitnode** | Managed-runtime follower |
 | `~/RB/Nodes/Go` | **gobitnode** | Fast native follower |
-| `~/RB/Nodes/Java` | **jbitnode** | Clean Java follower; live discovery above Python scout horizon |
+| `~/RB/Nodes/Java` | **jbitnode** | Clean Java follower and provenance source |
 | `~/RB/Nodes/Rust` | **rsbitnode** | Native follower |
 | `~/RB/Nodes/Elixir` | **exbitnode** | BEAM follower |
 
@@ -121,13 +121,16 @@ isolated state and deliberate peer allocation.
 ### Port independence and Python full-break rule
 
 Historical Python SQLite-scout blocker rows are handoff evidence, not forward
-validity proof. Python parity now requires a full break: RocksDB-owned
-operational truth, native crypto, full Docker proof/supervisor, and blocker
-rediscovery from an empty native datadir.
+validity proof. Python parity now requires RocksDB-owned operational truth,
+native crypto, full Docker proof/supervisor, and Project-importable evidence
+from the native path.
 
 No port may treat another port as an oracle for validity. Shared blocker ledgers,
-tests, and fixture details are a work queue; each port must independently
-validate with its own current implementation and active storage backend.
+rule cards, tests, and fixture details are the reusable consensus runway; each
+port must independently validate them with its own current implementation and
+active storage backend. A new port must not rediscover known script blockers by
+syncing until failure. It must implement the Shared script corpus first and prove
+`45/45` with `port.script_corpus_result.v1`.
 
 ### Blocker ledger contract
 
@@ -184,8 +187,8 @@ owns current imported consensus readiness.
 5. **Never advertise inflated `start_height`.** Report what we have actually validated (or a conservative height), not the header tip with zero validated blocks.
 
 Python hit the same pitfall; TypeScript must mirror the deferred-handshake pattern in `sync_runner.py` / `header_refresh.py`.
-Java/C++/C# followers should copy the same sync posture unless a later scout
-finding replaces it.
+Java/C++/C# followers should copy the same sync posture unless Shared contracts
+or Project evidence replace it.
 
 ---
 
@@ -456,7 +459,7 @@ Script verification applies on **spend paths** (non-coinbase transactions consum
 
 ### Shared script corpus gate (offline)
 
-Before chasing live sync script blockers, ports should pass the shared **45-fixture**
+Before any live-sync script diagnosis, ports must pass the shared **45-fixture**
 corpus in [`Nodes/Shared/conformance/fixtures/scripts/manifest.json`](Nodes/Shared/conformance/fixtures/scripts/manifest.json)
 and record JSON under [`Nodes/Shared/conformance/results/`](Nodes/Shared/conformance/results/).
 The accepted port proof shape is `port.script_corpus_result.v1`; Shared manifest
@@ -490,12 +493,20 @@ python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --
 ### Consensus validation rule
 
 If a spent output requires a script rule that is not implemented, stop with a
-bounded validation blocker. Do not connect the block by assuming success. The
-scout loop is:
+bounded validation blocker. Do not connect the block by assuming success.
+
+For new ports and 5k baseline work, this should happen offline against the
+Shared corpus first. Heights like `739`, `6975`, and the later Python/Java
+blocker trail are already captured as Shared fixtures and rule cards; they are
+not prompts to rediscover consensus from live sync. Live blocker discovery is
+only appropriate after the port already has clean corpus proof and reaches
+beyond the known imported runway.
+
+When a genuinely new live-chain blocker appears beyond the Shared corpus:
 
 ```text
-sync until exact blocker -> record blocker -> implement exact missing rule
-  -> add fixture/regression test -> resume sync
+record exact blocker -> add/link Shared fixture and rule card
+  -> implement exact missing rule -> prove with corpus or live artifact -> resume
 ```
 
 ### Parallel prep checklist (consensus / sync agents)

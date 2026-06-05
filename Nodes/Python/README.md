@@ -73,7 +73,7 @@ docker compose -f docker/docker-compose.yml up
 docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-rocksdb-proof
 ```
 
-Full replay and blocker rediscovery from an empty native datadir are intentionally
-out of scope for the native-break setup work; see
+Full replay from an empty native datadir is intentionally out of scope for the
+native-break setup work; see
 [`docs/NATIVE_REPLAY_HANDOFF.md`](docs/NATIVE_REPLAY_HANDOFF.md) for the next
 proof phase boundary.

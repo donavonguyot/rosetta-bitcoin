@@ -39,6 +39,8 @@ Acceptance commands:
 - python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
 
 Rules:
+- Do not discover known consensus blockers by syncing until failure. Implement
+  the Shared corpus/rule ledger first.
 - Do not use alternate stores or fallback crypto for baseline evidence.
 - Do not use RPC replay as `docker_proof_local`.
 - Do not reuse proof state for the baseline run.
@@ -46,6 +48,11 @@ Rules:
 ```
 
 ## Port one blocker to a follower
+
+Use this prompt only after the port has clean Shared script-corpus proof or when
+Project identifies a specific later-stage consensus gap. It is not the right
+prompt for birthing a new port to 5k; new ports should start with the corpus
+runway, not live blocker rediscovery.
 
 ```text
 You are working on [PORT_NAME] in [PORT_PATH].
@@ -84,6 +91,7 @@ Tasks:
 10. Rebuild Project and run `preflight_consensus_runway.py` for the relevant stage.
 
 Rules:
+- Do not use live sync to rediscover a known Shared corpus/rule-ledger blocker.
 - Do not skip validation.
 - Do not run two writers on one datadir.
 - Do not mutate another port's datadir.

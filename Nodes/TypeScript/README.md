@@ -139,5 +139,5 @@ chainstate.
 
 The end gate is unchanged: from empty local state on Bitcoin testnet4, the node
 reaches and maintains tip while independently validating every stored connected
-block. Current native TypeScript work is proof-partial until replay from an empty
-native datadir rediscovers or clears blockers.
+block. Current native TypeScript work is proof-partial until imported Project
+evidence proves the relevant corpus, stage, and tip runway checks.

@@ -69,6 +69,17 @@ FORBIDDEN_PATTERNS = [
     re.compile(r"baseline\b.*\b(?:managed|pure|fallback)\s+crypto\b", re.IGNORECASE),
     re.compile(r"piece\s+.*consensus\s+status\s+.*(?:port\s+README|historical|Java/Python)", re.IGNORECASE),
     re.compile(r"current\s+consensus\s+status\s+.*(?:port\s+README|historical\s+Java|historical\s+Python)", re.IGNORECASE),
+    re.compile(r"sync\s+until\s+(?:the\s+)?exact\s+blocker", re.IGNORECASE),
+    re.compile(r"Python(?:Node)?\s+scouts\s+live-chain\s+blockers\s+first", re.IGNORECASE),
+    re.compile(r"Python\s+is\s+the\s+scout", re.IGNORECASE),
+    re.compile(r"Scout\s+[—-]\s+discovers", re.IGNORECASE),
+    re.compile(r"next\s+spend-path\s+stop\s+expected", re.IGNORECASE),
+    re.compile(r"real\s+spend-path\s+blocker\s+expected", re.IGNORECASE),
+    re.compile(r"early\s+spend/script\s+path\s+around\s+block\s+739", re.IGNORECASE),
+    re.compile(r"First\s+real\s+spend-path\s+fixture", re.IGNORECASE),
+    re.compile(r"blocker\s+rediscovery\s+from\s+an\s+empty", re.IGNORECASE),
+    re.compile(r"rediscovers\s+or\s+clears\s+blockers", re.IGNORECASE),
+    re.compile(r"rerun\s+blocker\s+discovery", re.IGNORECASE),
 ]
 
 BASELINE_REQUIRED_TERMS = (

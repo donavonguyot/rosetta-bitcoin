@@ -10,9 +10,10 @@ production concerns that matter most: high-volume block connection, hot UTXO
 backend alignment, live tip maintenance, rebuild safety, status truth, and
 performance attribution.
 
-PythonNode remains useful as a readable historical scout and fixture source, but
-Shared is extracted from Java's working and broken operational lessons rather
-than from any single port's assumptions.
+PythonNode remains useful as readable historical provenance and a fixture source,
+but Shared is extracted from Java's working and broken operational lessons,
+Python history, and cross-port proof artifacts rather than from any single
+port's assumptions.
 
 ## Directory Map
 

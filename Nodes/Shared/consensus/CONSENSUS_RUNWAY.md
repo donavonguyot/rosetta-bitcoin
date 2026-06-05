@@ -12,6 +12,16 @@ testnet4 tip. The source of truth is:
 Java and Python history explains where the rule cards came from. It is
 provenance, not current per-port status.
 
+## Hard Rule For New Ports
+
+Do not build a new port by syncing until it rediscovers historical blockers.
+That work has already been done. A baseline port must implement the Shared rule
+ledger through the 45-fixture script corpus first, produce its own
+`port.script_corpus_result.v1` artifact, and then run the Docker local Reference
+5k lane. A live sync stop at a known height such as `739` means the port skipped
+or failed the corpus runway; it is not a request to inspect that spend from
+scratch.
+
 ## Stages
 
 | Stage | Required proof | Project check | Does not count |
@@ -97,11 +107,14 @@ must never count as a port's script-corpus proof.
 
 When a port stops on an unsupported consensus rule:
 
-1. Record exact blocker facts in the port blocker ledger.
-2. Link or add the Shared fixture.
-3. Link or add the rule card.
-4. Prove the rule in that port with a corpus or live-sync artifact.
-5. Rebuild Project and check the runway.
+1. First decide whether the rule is already in the Shared corpus or rule ledger.
+   If it is, fix the port against that existing fixture instead of treating the
+   live stop as discovery.
+2. Record exact blocker facts in the port blocker ledger.
+3. Link or add the Shared fixture.
+4. Link or add the rule card.
+5. Prove the rule in that port with a corpus or live-sync artifact.
+6. Rebuild Project and check the runway.
 
 Do not clear a blocker by assuming success, skipping script verification,
 trusting another port's result, or editing Markdown status by hand.

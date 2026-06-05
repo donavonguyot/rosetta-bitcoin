@@ -48,7 +48,7 @@ benchmark:
 
 | Target | Role |
 |--------|------|
-| `5000` | First readiness gate. Proves Docker/local-reference wiring, native storage ownership, status/proof artifacts, and the early spend/script path around block 739. |
+| `5000` | First readiness gate. Proves Docker/local-reference wiring, native storage ownership, status/proof artifacts, fixed knobs, UTXO accounting, and clean prior script-corpus proof. |
 | `10000` | Early consensus checkpoint. Extends the first gate through the first P2TR key-path region around 6975 without becoming the primary endurance benchmark. |
 | `50000` | Midrange regression gate. Catches heavier block/script behavior before the largest UTXO expansion. |
 | `100000` | Primary benchmark. This is the standard comparison target. |
@@ -96,8 +96,14 @@ binary_gate_status = not_attempted
 The gate passes only when `validated_height >= 5000`, `current_blocker = null`,
 and the final validated hash matches the port-validated block at height `5000`.
 It is the official comparable readiness gate for Docker/local-reference P2P
-wiring, native storage ownership, status/proof artifacts, and the first
-spend/script path around block 739. It is still not binary-gate evidence.
+wiring, native storage ownership, status/proof artifacts, and deterministic
+reporting. It is still not binary-gate evidence.
+
+The 5k lane is not where a new port discovers known script rules. The known
+early spend path, including height `739`, is already represented in the Shared
+script corpus and consensus rule ledger. A port that fails there should fix its
+script-corpus implementation and rerun corpus proof, not treat block `739` as a
+fresh live-discovery assignment.
 
 The 5k baseline requires RocksDB and native crypto. Alternate storage engines,
 managed or pure crypto proof paths, WAL-off runs, reused datadirs, partial script

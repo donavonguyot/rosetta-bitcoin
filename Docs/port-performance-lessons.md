@@ -280,8 +280,9 @@ Java's 52k investigation provides the clearest measured example:
 - Per-transaction input parallelism reduced wall-clock connect time to roughly
   10 seconds on the measured block.
 
-Python is porting the same pattern as scout work reaches the same block shapes.
-Follower ports should copy the pattern and benchmark locally, not copy trust.
+Ports should copy the pattern and benchmark locally, not copy trust. Known block
+shapes should come from the Shared corpus/rule ledger and Project evidence, not
+from rediscovering historical blockers.
 
 ## Cursor operating model
 

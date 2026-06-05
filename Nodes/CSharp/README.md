@@ -1,8 +1,9 @@
 # csbitnode — C# .NET 8 Bitcoin testnet4 follower
 
-**csbitnode** is a managed-runtime follower in the Nodes workspace. Python scouts
-live-chain blockers first; csbitnode implements the same rules independently and must
-reach tip with fully validated connected blocks.
+**csbitnode** is a managed-runtime follower in the Nodes workspace. Known
+consensus rules come from the Shared rule ledger and script corpus; csbitnode
+implements those rules independently and must reach tip with fully validated
+connected blocks.
 
 ## Binary gate
 
@@ -14,8 +15,9 @@ trusted import, or skipping unknown consensus rules does **not** pass.
 
 | Source | Role |
 |--------|------|
-| [Nodes/Python/docs/BLOCKER_LEDGER.md](../Python/docs/BLOCKER_LEDGER.md) | Scout trail — implement each cleared rule with focused C# tests |
-| Java / TypeScript | Proven follower shapes and fixtures — not validity authority |
+| [Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json](../Shared/consensus/rules/testnet4_script_rules_v1.json) | Primary known consensus rule inventory |
+| [Nodes/Shared/conformance/fixtures/scripts/manifest.json](../Shared/conformance/fixtures/scripts/manifest.json) | Required 45-fixture script corpus |
+| Java / Python / TypeScript | Proven implementation shapes and fixture provenance — not validity authority |
 | Local Core `127.0.0.1:48333` | Byte source for headers/blocks — **not** a validation oracle |
 
 ## Datadir

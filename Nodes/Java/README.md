@@ -1,8 +1,9 @@
 # jbitnode — Java 21 Bitcoin testnet4 full node
 
-**jbitnode** is a clean Java follower for the Nodes workspace. PythonNode scouts
-live-chain blockers first; jbitnode implements the same rules independently and
-must reach tip with fully validated connected blocks.
+**jbitnode** is a clean Java follower for the Nodes workspace. Known consensus
+rules come from the Shared rule ledger and script corpus; jbitnode implements
+those rules independently and must reach tip with fully validated connected
+blocks.
 
 ## Binary gate
 
@@ -77,7 +78,7 @@ Report: `target/site/jacoco/index.html`
 
 ## Deferred handshake (implemented)
 
-Initial sync mirrors Python/TypeScript scout posture:
+Initial sync mirrors the workspace deferred-handshake posture:
 
 1. Simple handshake: `version` → `verack` → **`sendheaders` only**.
 2. **No** `feefilter`, `mempool`, or `sendcmpct` immediately after `verack`.
@@ -198,8 +199,8 @@ by the recorded live blocker trail.
 | Regression | Fixtures under `src/test/resources/fixtures/` named by height/rule |
 | Next | Tip maintenance, serving, and continued blocker capture from current network tip |
 
-Reference scout fix: Python commit **`dd65c78`** (*Verify Taproot key-path spends*).
-See `docs/BLOCKER_LEDGER.md` for the live blocker trail and binary-gate evidence.
+Historical reference fix: Python commit **`dd65c78`** (*Verify Taproot key-path spends*).
+See `docs/BLOCKER_LEDGER.md` for blocker provenance and binary-gate evidence.
 
 ## Snapshot export
 
@@ -416,14 +417,14 @@ Harvested hex/block fixtures live under `src/test/resources/fixtures/` (see
 
 ## Schema
 
-Historical local SQLite tracker tables mirrored the TypeScript scout tracker.
+Historical local SQLite tracker tables mirrored the old TypeScript tracker.
 Current runtime truth is native chainstate; this schema is legacy context only:
 
 `meta`, `project_phases`, `sync_state`, `peers`, `peer_addresses`, `headers`,
 `blocks`, `utxos`, `utxo_undo`, `validated_tip`, `wire_capabilities`, `events`
 
 Wire capabilities seed from `src/main/resources/wire/capabilities.json` (ported
-from scout registry).
+from the historical registry).
 
 ## Requirements
 

@@ -1,7 +1,9 @@
 # Blocker Diagnostics Contract
 
-One-off scripts are allowed for discovery only. Any recurring blocker workflow
-must move into a port CLI or a shared Shared diagnostic that emits stable JSON.
+One-off scripts are allowed only for genuinely new live-chain discovery beyond
+the Shared corpus and rule ledger. They must not be used to rediscover known
+baseline blockers such as height `739`. Any recurring blocker workflow must move
+into a port CLI or a shared Shared diagnostic that emits stable JSON.
 
 ## Required Diagnostic JSON
 

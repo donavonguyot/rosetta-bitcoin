@@ -86,7 +86,7 @@ CSharpNode:
   first clean follower against Shared
 
 PythonNode:
-  historical scout, fixture generator, readable reference
+  historical provenance, fixture generator, readable reference
 
 TypeScriptNode:
   minimal-runtime portability check

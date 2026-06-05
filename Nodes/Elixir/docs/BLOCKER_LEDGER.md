@@ -1,7 +1,8 @@
 # ElixirNode blocker ledger
 
-Handoff notes for exbitnode. Canonical scout trail remains
-[Nodes/Python/docs/BLOCKER_LEDGER.md](../../Python/docs/BLOCKER_LEDGER.md).
+Handoff notes for exbitnode. Current consensus runway truth comes from
+Project plus the Shared consensus rule ledger and script corpus; historical
+Python notes are provenance only.
 
 ## Last recorded evidence
 
@@ -35,8 +36,8 @@ make status
 | sync_status | `blocks_syncing` |
 | missing_rule | none hit in first 128 blocks |
 | python_fix | P2PK/P2PKH/P2WPKH implemented per C# follower shape |
-| test_fixture | synthetic genesis coinbase in `test/exbitnode_test.exs`; real spend-path blocker expected ~739 (P2WPKH) per scout |
-| follower_notes | Coinbase-only / immature-coinbase path through height 127; next spend-path stop expected at height **739** (P2WPKH) or earlier template per Python ledger |
+| test_fixture | synthetic genesis coinbase in `test/exbitnode_test.exs`; height 739 P2WPKH is now a Shared corpus fixture |
+| follower_notes | Coinbase-only / immature-coinbase path through height 127; known spend-path rules must be proved through the Shared corpus rather than rediscovered by live sync |
 
 ## M3 — coinbase maturity through P2WPKH (2026-05-25)
 
@@ -82,7 +83,7 @@ make status
 | missing_rule | none through first M5 batch at **4411** |
 | python_fix | P2TR key-path from Python `test_real_testnet4_block6975_taproot_keypath_accepted` |
 | test_fixture | `test/fixtures/block6975_tx.hex` + `ScriptVerifyTest.real testnet4 block6975 P2TR key-path input0 accepted` |
-| follower_notes | `BlockSync` reconnects on `:closed`/transport errors (up to 5 retries per block request). BIP341 TapSchnorr sighash + BIP340 Schnorr verify for key-path only; script-path returns false (honest stop later). Next scout stops: **P2WSH/multisig ~25207+**, **nested segwit ~27903**. |
+| follower_notes | `BlockSync` reconnects on `:closed`/transport errors (up to 5 retries per block request). BIP341 TapSchnorr sighash + BIP340 Schnorr verify for key-path only; script-path returns false in this historical state. Known later templates now live in the Shared corpus/rule ledger. |
 
 ## Cleared: height 6975 — P2TR key-path (fixture)
 
@@ -97,17 +98,19 @@ make status
 | test_fixture | `test/fixtures/block6975_tx.hex` |
 | follower_notes | Live sync pending past height 4411; fixture regression passes |
 
-## Expected next blockers (M6+)
+## Historical next-blocker notes (M6+)
 
-Per C#/Python trail — likely upcoming templates before testnet4 tip:
+These are historical planning notes. Use the Shared corpus/rule ledger and
+Project runway for current work.
 
-| Height (scout trail) | Template | Notes |
+| Height (historical trail) | Template | Notes |
 |----------------------|----------|-------|
 | 6975 | P2TR key-path | First Taproot spend |
-| 25207+ | P2WSH / multisig / CLTV / CSV | Port as Python ledger entries appear |
+| 25207+ | P2WSH / multisig / CLTV / CSV | Now covered by Shared corpus/rule-ledger evidence |
 | 27903 | P2SH→P2WPKH nested | Nested segwit |
 
-Continue `make sync-local` with `HEADERS_MAX=0 BLOCKS_MAX=1000` until the next honest `ValidationBlocker` stop.
+After corpus proof is clean, continue staged sync and record any genuinely new
+`ValidationBlocker` stop beyond the imported rule runway.
 
 ## M4 — reorg disconnect + OTP peer supervision (2026-05-25)
 

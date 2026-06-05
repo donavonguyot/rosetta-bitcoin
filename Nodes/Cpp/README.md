@@ -4,7 +4,10 @@ C++20 Bitcoin full node (`cpbitnode`), sibling to the other implementations unde
 
 ## Status
 
-Follower implementation: P2P, sync, consensus validation, mempool, metrics HTTP, and offline unit tests. **Python is the scout** — Cpp follows discovered consensus blockers with focused C++ regression tests.
+Follower implementation: P2P, sync, consensus validation, mempool, metrics HTTP,
+and offline unit tests. Cpp inherits known consensus work from the Shared rule
+ledger and script corpus, then proves it with focused C++ regression tests and
+port-owned corpus artifacts.
 
 Cpp's Core compliance path is **RocksDB-only**. Native mode must use RocksDB for
 headers, block index, sync state, validated tip, UTXO, undo, metadata, blocker
@@ -14,6 +17,8 @@ Quality bar (current):
 
 - all normal unit tests pass (`ctest`);
 - RocksDB/native secp256k1 builds pass (`CPBITNODE_USE_ROCKSDB=ON`, `CPBITNODE_USE_NATIVE_SECP256K1=ON`), with native status/sync/proof targets linked through one RocksDB library;
+- known consensus rules are implemented from the Shared corpus/rule ledger before
+  live-sync blocker discovery;
 - new consensus fixes include focused regression tests;
 - no silent consensus skips — stop honestly on missing rules;
 - live sync progress is the primary forward gate.

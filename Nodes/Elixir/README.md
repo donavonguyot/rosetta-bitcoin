@@ -11,12 +11,14 @@ every stored connected block, reach/maintain tip. Header-only sync does not pass
 
 | Node | Role |
 |------|------|
-| Python | Scout — discovers live-chain blockers first |
+| Python / Java | Provenance sources for Shared rule cards and fixtures |
 | TypeScript / CSharp | Fast managed followers |
 | **Elixir** | Supervised follower — OTP process boundaries, honest blockers |
 
-Use Python's blocker ledger as the consensus work queue. Elixir must not treat
-Python or local Core as validation oracles.
+Use the Shared consensus rule ledger and script corpus as the consensus work
+queue. Elixir must not treat Python, Java, or local Core as validation oracles.
+Known blocker heights are already corpus fixtures; baseline work should prove the
+corpus before live-sync discovery.
 
 ## Prerequisites
 

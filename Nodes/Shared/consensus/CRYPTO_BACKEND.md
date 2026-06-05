@@ -91,7 +91,7 @@ Project conformance results for current imported crypto proof evidence.
 
 | Port | Historical authority | Library use | Then-next backend work |
 |------|-------------------|-------------|-------------------|
-| PythonNode | Pure Python secp256k1 | none for EC | Keep as readable scout/reference and fixture producer |
+| PythonNode | Pure Python secp256k1 | none for EC | Historical readable reference and fixture producer |
 | TypeScriptNode | Pure TypeScript secp256k1 | `node:crypto` for hashing only | Preserve no-runtime-deps posture unless explicitly changed |
 | JavaNode | Pure Java backend plus pluggable speed backend | ACINQ `libsecp256k1` JNI is available as `SECP256K1_BACKEND=native`; BouncyCastle remains a comparator | Keep pure path and differential-test BC/native accelerators |
 | CSharpNode | Pure C# ECDSA today | BouncyCastle only for RIPEMD160 hash shim | Add pure BIP340 Schnorr, then optional accelerator behind an interface |

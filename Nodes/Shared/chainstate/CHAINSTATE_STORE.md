@@ -136,9 +136,9 @@ backend metadata
 validated tip
 ```
 
-Python must also use native crypto for the native/Core proof path and rerun
-blocker discovery under that RocksDB/native-crypto runtime before old scout
-clearance can count as current Python parity evidence.
+Python must also use native crypto for the native/Core proof path and produce
+Project-importable RocksDB/native evidence before historical Python clearance can
+count as current Python parity evidence.
 
 Java now uses RocksDB as its node-local KV storage target. Optimization work
 should improve the shared RocksDB plus Codec v2 path rather than maintaining a
