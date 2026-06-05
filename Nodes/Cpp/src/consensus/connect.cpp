@@ -113,8 +113,11 @@ public:
         }
         const auto loaded = chainstate_.getUtxos(external);
         for (std::size_t index = 0; index < external.size(); ++index) {
+            const auto key = outpointKey(external[index].txid, external[index].vout);
             if (loaded[index].has_value()) {
-                loaded_.emplace(outpointKey(external[index].txid, external[index].vout), *loaded[index]);
+                loaded_.emplace(key, *loaded[index]);
+            } else {
+                loadedMissing_.insert(key);
             }
         }
     }
@@ -131,6 +134,9 @@ public:
         const auto loaded = loaded_.find(key);
         if (loaded != loaded_.end()) {
             return loaded->second;
+        }
+        if (loadedMissing_.contains(key)) {
+            return std::nullopt;
         }
         return chainstate_.getUtxo(outpoint.hash, static_cast<int>(outpoint.index));
     }
@@ -160,7 +166,10 @@ public:
     void create(const std::vector<std::uint8_t>& txid, int vout, std::int64_t value,
                 const std::vector<std::uint8_t>& scriptPubkey, bool coinbase) {
         const auto key = outpointKey(txid, vout);
-        if (created_.contains(key) || chainstate_.getUtxo(txid, vout).has_value()) {
+        const bool knownExisting = loaded_.contains(key);
+        const bool knownMissing = loadedMissing_.contains(key);
+        if (created_.contains(key) || knownExisting ||
+            (!knownMissing && chainstate_.getUtxo(txid, vout).has_value())) {
             throw ConnectBlockError("duplicate UTXO " + displayHex(txid) + ":" + std::to_string(vout));
         }
         db::StoredUtxo utxo;
@@ -198,6 +207,7 @@ private:
     int height_;
     std::unordered_map<OutpointKey, db::StoredUtxo, OutpointKeyHash> created_;
     std::unordered_map<OutpointKey, db::StoredUtxo, OutpointKeyHash> loaded_;
+    std::unordered_set<OutpointKey, OutpointKeyHash> loadedMissing_;
     std::vector<db::StoredUtxo> externalUndo_;
     std::unordered_set<OutpointKey, OutpointKeyHash> spent_;
 };
@@ -266,13 +276,15 @@ std::int64_t validateNonCoinbaseInputs(BlockUtxoView& view, const messages::Tran
     for (const auto& utxo : utxoInfos) {
         spentPrevouts.emplace_back(utxo.value, utxo.scriptPubkey);
     }
+    const script::SighashCache sighashCache(tx, &spentPrevouts);
 
     if (runner != nullptr && tx.inputs.size() > 1) {
         std::vector<script::VerifyInputJob> jobs;
         jobs.reserve(tx.inputs.size());
         for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
             const auto& utxo = utxoInfos[inputIndex];
-            jobs.push_back(script::VerifyInputJob{&tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts});
+            jobs.push_back(
+                script::VerifyInputJob{&tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts, &sighashCache});
         }
         const auto result = runner->verify(jobs);
         if (timing != nullptr) {
@@ -285,7 +297,8 @@ std::int64_t validateNonCoinbaseInputs(BlockUtxoView& view, const messages::Tran
         for (std::size_t inputIndex = 0; inputIndex < tx.inputs.size(); ++inputIndex) {
             const auto& utxo = utxoInfos[inputIndex];
             try {
-                script::verifyTransactionInput(tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts);
+                script::verifyTransactionInput(tx, inputIndex, utxo.scriptPubkey, utxo.value, &spentPrevouts,
+                                               &sighashCache);
             } catch (const script::ScriptVerifyError& exc) {
                 throw ConnectBlockError(exc.what());
             }
@@ -363,15 +376,33 @@ Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chai
     detail::BlockUtxoView view(chainstate, options.height);
     detail::ConnectTiming timing;
     const bool timingEnabled = detail::syncTimingEnabled();
-    std::vector<db::Outpoint> blockPrevouts;
+    std::vector<std::vector<std::uint8_t>> txids;
+    txids.reserve(block.transactions.size());
     for (const auto& tx : block.transactions) {
+        txids.push_back(transactionTxid(tx));
+    }
+    std::vector<db::Outpoint> blockPrevouts;
+    std::vector<db::Outpoint> createdOutpoints;
+    for (std::size_t txIndex = 0; txIndex < block.transactions.size(); ++txIndex) {
+        const auto& tx = block.transactions[txIndex];
         if (messages::transactionIsCoinbase(tx)) {
+            for (std::size_t outputIndex = 0; outputIndex < tx.outputs.size(); ++outputIndex) {
+                if (isSpendableOutput(tx.outputs[outputIndex].scriptPubkey)) {
+                    createdOutpoints.push_back(db::Outpoint{txids[txIndex], static_cast<int>(outputIndex)});
+                }
+            }
             continue;
         }
         for (const auto& txIn : tx.inputs) {
             blockPrevouts.push_back(db::Outpoint{txIn.previousOutput.hash, static_cast<int>(txIn.previousOutput.index)});
         }
+        for (std::size_t outputIndex = 0; outputIndex < tx.outputs.size(); ++outputIndex) {
+            if (isSpendableOutput(tx.outputs[outputIndex].scriptPubkey)) {
+                createdOutpoints.push_back(db::Outpoint{txids[txIndex], static_cast<int>(outputIndex)});
+            }
+        }
     }
+    blockPrevouts.insert(blockPrevouts.end(), createdOutpoints.begin(), createdOutpoints.end());
     auto timerStart = detail::Clock::now();
     view.preloadExternal(blockPrevouts);
     if (timingEnabled) {
@@ -379,7 +410,8 @@ Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chai
     }
 
     std::int64_t totalFees = 0;
-    for (const auto& tx : block.transactions) {
+    for (std::size_t txIndex = 0; txIndex < block.transactions.size(); ++txIndex) {
+        const auto& tx = block.transactions[txIndex];
         if (messages::transactionIsCoinbase(tx)) {
             continue;
         }
@@ -396,13 +428,13 @@ Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chai
             throw ConnectBlockError("transaction outputs exceed inputs");
         }
         totalFees += inputTotal - outputTotal;
-        const auto txid = transactionTxid(tx);
         timerStart = detail::Clock::now();
         for (std::size_t index = 0; index < tx.outputs.size(); ++index) {
             if (!isSpendableOutput(tx.outputs[index].scriptPubkey)) {
                 continue;
             }
-            view.create(txid, static_cast<int>(index), tx.outputs[index].value, tx.outputs[index].scriptPubkey, false);
+            view.create(txids[txIndex], static_cast<int>(index), tx.outputs[index].value, tx.outputs[index].scriptPubkey,
+                        false);
         }
         if (timingEnabled) {
             timing.utxoApply += detail::elapsedUs(timerStart);
@@ -419,13 +451,12 @@ Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chai
         }
     }
 
-    const auto coinbaseTxid = transactionTxid(coinbase);
     timerStart = detail::Clock::now();
     for (std::size_t index = 0; index < coinbase.outputs.size(); ++index) {
         if (!isSpendableOutput(coinbase.outputs[index].scriptPubkey)) {
             continue;
         }
-        view.create(coinbaseTxid, static_cast<int>(index), coinbase.outputs[index].value,
+        view.create(txids.front(), static_cast<int>(index), coinbase.outputs[index].value,
                     coinbase.outputs[index].scriptPubkey, true);
     }
     if (timingEnabled) {

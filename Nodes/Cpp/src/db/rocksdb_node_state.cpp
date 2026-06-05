@@ -717,7 +717,6 @@ public:
         setCodecMetadata(batch, "user.metric_blocks_validated_total", std::to_string(validatedTotal));
         setCodecMetadata(batch, "tip_height", std::to_string(commit.height));
         setCodecMetadata(batch, "tip_hash", commit.blockHash);
-        setCodecMetadata(batch, "updated_at", utcNow());
         checkStatus(db_->Write(writeOptions(), &batch), "commit block");
         cachedUtxoCount_ = nextUtxoCount;
         cachedValidatedTotal_ = validatedTotal;

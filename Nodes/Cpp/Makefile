@@ -95,6 +95,7 @@ docker-cpp-rocksdb-storage-proof:
 docker-script-corpus:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	$(DOCKER_COMPOSE) run --rm --no-deps \
+	  -e CPBITNODE_REPO_ROOT=/shared \
 	  -v $(abspath ../Shared/conformance):/shared/conformance \
 	  cpbitnode-sync-proof cpbitnode-script-corpus \
 	  --manifest /shared/conformance/fixtures/scripts/manifest.json \

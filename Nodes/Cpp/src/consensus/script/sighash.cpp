@@ -5,7 +5,6 @@
 #include "cpbitnode/wire/serialize.hpp"
 
 #include <algorithm>
-#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 
@@ -30,7 +29,84 @@ std::vector<std::uint8_t> taprootAnnexDigest(const std::vector<std::uint8_t>& an
     return sha256Digest(blob);
 }
 
+const std::vector<std::uint8_t>& zeroHash() {
+    static const std::vector<std::uint8_t> kZero(32, 0x00);
+    return kZero;
+}
+
 }  // namespace
+
+SighashCache::SighashCache(
+    const messages::Transaction& transaction,
+    const std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>>* spentPrevouts)
+    : bip143HashPrevouts_(zeroHash()),
+      bip143HashSequence_(zeroHash()),
+      bip143HashOutputs_(zeroHash()),
+      taprootHashPrevouts_(zeroHash()),
+      taprootHashAmounts_(zeroHash()),
+      taprootHashScriptPubkeys_(zeroHash()),
+      taprootHashSequences_(zeroHash()),
+      taprootHashOutputs_(zeroHash()) {
+    std::vector<std::uint8_t> prevouts;
+    prevouts.reserve(transaction.inputs.size() * 36);
+    std::vector<std::uint8_t> sequences;
+    sequences.reserve(transaction.inputs.size() * 4);
+    for (const auto& txIn : transaction.inputs) {
+        const auto prevSer = txIn.previousOutput.serialize();
+        prevouts.insert(prevouts.end(), prevSer.begin(), prevSer.end());
+        const auto seq = wire::packUint32Le(txIn.sequence);
+        sequences.insert(sequences.end(), seq.begin(), seq.end());
+    }
+    bip143HashPrevouts_ = doubleSha256(prevouts);
+    bip143HashSequence_ = doubleSha256(sequences);
+
+    std::vector<std::uint8_t> outputs;
+    bip143HashSingle_.reserve(transaction.outputs.size());
+    taprootHashSingle_.reserve(transaction.outputs.size());
+    for (const auto& output : transaction.outputs) {
+        const auto ser = output.serialize();
+        outputs.insert(outputs.end(), ser.begin(), ser.end());
+        bip143HashSingle_.push_back(doubleSha256(ser));
+        taprootHashSingle_.push_back(sha256Digest(ser));
+    }
+    bip143HashOutputs_ = doubleSha256(outputs);
+    taprootHashOutputs_ = sha256Digest(outputs);
+
+    if (spentPrevouts == nullptr || spentPrevouts->size() != transaction.inputs.size()) {
+        return;
+    }
+
+    taprootReady_ = true;
+    std::vector<std::uint8_t> amounts;
+    std::vector<std::uint8_t> scriptPubkeys;
+    amounts.reserve(spentPrevouts->size() * 8);
+    for (std::size_t index = 0; index < spentPrevouts->size(); ++index) {
+        const auto amt = wire::packInt64Le((*spentPrevouts)[index].first);
+        amounts.insert(amounts.end(), amt.begin(), amt.end());
+        const auto& script = (*spentPrevouts)[index].second;
+        auto scriptLen = wire::writeVarint(script.size());
+        scriptPubkeys.insert(scriptPubkeys.end(), scriptLen.begin(), scriptLen.end());
+        scriptPubkeys.insert(scriptPubkeys.end(), script.begin(), script.end());
+    }
+    taprootHashPrevouts_ = sha256Digest(prevouts);
+    taprootHashAmounts_ = sha256Digest(amounts);
+    taprootHashScriptPubkeys_ = sha256Digest(scriptPubkeys);
+    taprootHashSequences_ = sha256Digest(sequences);
+}
+
+const std::vector<std::uint8_t>& SighashCache::bip143HashSingle(std::size_t outputIndex) const {
+    if (outputIndex >= bip143HashSingle_.size()) {
+        return zeroHash();
+    }
+    return bip143HashSingle_[outputIndex];
+}
+
+const std::vector<std::uint8_t>& SighashCache::taprootHashSingle(std::size_t outputIndex) const {
+    if (outputIndex >= taprootHashSingle_.size()) {
+        return zeroHash();
+    }
+    return taprootHashSingle_[outputIndex];
+}
 
 std::vector<std::uint8_t> bitcoinTaggedHash(const std::string& tag, std::span<const std::uint8_t> msg) {
     const auto tagDigest = sha256Digest(std::span<const std::uint8_t>(
@@ -98,7 +174,7 @@ std::vector<std::uint8_t> taprootSignatureHash(
     const messages::Transaction& transaction, std::size_t inputIndex,
     const std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>>& spentPrevouts, int hashType,
     const std::vector<std::uint8_t>* annex, int extFlag, std::span<const std::uint8_t> tapleafHashBytes,
-    std::uint32_t tapscriptCodeseparatorPos) {
+    std::uint32_t tapscriptCodeseparatorPos, const SighashCache* cache) {
     if (spentPrevouts.size() != transaction.inputs.size()) {
         throw std::runtime_error("spent_prevouts length mismatch");
     }
@@ -124,7 +200,12 @@ std::vector<std::uint8_t> taprootSignatureHash(
     auto lock = wire::packUint32Le(transaction.lockTime);
     body.insert(body.end(), lock.begin(), lock.end());
 
-    if (!anyoneCanPay) {
+    if (!anyoneCanPay && cache != nullptr && cache->hasTaprootPrevouts()) {
+        body.insert(body.end(), cache->taprootHashPrevouts().begin(), cache->taprootHashPrevouts().end());
+        body.insert(body.end(), cache->taprootHashAmounts().begin(), cache->taprootHashAmounts().end());
+        body.insert(body.end(), cache->taprootHashScriptPubkeys().begin(), cache->taprootHashScriptPubkeys().end());
+        body.insert(body.end(), cache->taprootHashSequences().begin(), cache->taprootHashSequences().end());
+    } else if (!anyoneCanPay) {
         std::vector<std::uint8_t> prevBlob;
         std::vector<std::uint8_t> amountsBlob;
         std::vector<std::uint8_t> scriptBlob;
@@ -153,7 +234,9 @@ std::vector<std::uint8_t> taprootSignatureHash(
         throw std::runtime_error("input_index out of range");
     }
 
-    if (outputMode == TAPROOT_SIGHASH_ALL) {
+    if (outputMode == TAPROOT_SIGHASH_ALL && cache != nullptr) {
+        body.insert(body.end(), cache->taprootHashOutputs().begin(), cache->taprootHashOutputs().end());
+    } else if (outputMode == TAPROOT_SIGHASH_ALL) {
         std::vector<std::uint8_t> outsBlob;
         for (const auto& out : transaction.outputs) {
             const auto ser = out.serialize();
@@ -193,7 +276,7 @@ std::vector<std::uint8_t> taprootSignatureHash(
 
     if (outputMode == TAPROOT_SIGHASH_SINGLE) {
         const auto outSer = transaction.outputs[inputIndex].serialize();
-        const auto h = sha256Digest(outSer);
+        const auto h = cache != nullptr ? cache->taprootHashSingle(inputIndex) : sha256Digest(outSer);
         body.insert(body.end(), h.begin(), h.end());
     }
 
@@ -285,7 +368,7 @@ std::vector<std::uint8_t> legacySighash(const messages::Transaction& transaction
 
 std::vector<std::uint8_t> bip143Sighash(const messages::Transaction& transaction, std::size_t inputIndex,
                                           std::span<const std::uint8_t> scriptCode, std::int64_t amount,
-                                          int sighashType) {
+                                          int sighashType, const SighashCache* cache) {
     if (inputIndex >= transaction.inputs.size()) {
         throw std::runtime_error("input_index out of range");
     }
@@ -295,36 +378,49 @@ std::vector<std::uint8_t> bip143Sighash(const messages::Transaction& transaction
 
     std::vector<std::uint8_t> hashPrevouts(32, 0x00);
     if (!anyoneCanPay) {
-        std::vector<std::uint8_t> prevouts;
-        for (const auto& txIn : transaction.inputs) {
-            const auto ser = txIn.previousOutput.serialize();
-            prevouts.insert(prevouts.end(), ser.begin(), ser.end());
+        if (cache != nullptr) {
+            hashPrevouts = cache->bip143HashPrevouts();
+        } else {
+            std::vector<std::uint8_t> prevouts;
+            for (const auto& txIn : transaction.inputs) {
+                const auto ser = txIn.previousOutput.serialize();
+                prevouts.insert(prevouts.end(), ser.begin(), ser.end());
+            }
+            hashPrevouts = doubleSha256(prevouts);
         }
-        hashPrevouts = doubleSha256(prevouts);
     }
 
     std::vector<std::uint8_t> hashSequence(32, 0x00);
     if (!anyoneCanPay && baseType != 2 && baseType != 3) {
-        std::vector<std::uint8_t> sequences;
-        for (const auto& txIn : transaction.inputs) {
-            const auto seq = wire::packUint32Le(txIn.sequence);
-            sequences.insert(sequences.end(), seq.begin(), seq.end());
+        if (cache != nullptr) {
+            hashSequence = cache->bip143HashSequence();
+        } else {
+            std::vector<std::uint8_t> sequences;
+            for (const auto& txIn : transaction.inputs) {
+                const auto seq = wire::packUint32Le(txIn.sequence);
+                sequences.insert(sequences.end(), seq.begin(), seq.end());
+            }
+            hashSequence = doubleSha256(sequences);
         }
-        hashSequence = doubleSha256(sequences);
     }
 
     std::vector<std::uint8_t> hashOutputs(32, 0x00);
     if (baseType == 3) {
         if (inputIndex < transaction.outputs.size()) {
-            hashOutputs = doubleSha256(transaction.outputs[inputIndex].serialize());
+            hashOutputs = cache != nullptr ? cache->bip143HashSingle(inputIndex)
+                                           : doubleSha256(transaction.outputs[inputIndex].serialize());
         }
     } else if (baseType != 2) {
-        std::vector<std::uint8_t> outputs;
-        for (const auto& output : transaction.outputs) {
-            const auto ser = output.serialize();
-            outputs.insert(outputs.end(), ser.begin(), ser.end());
+        if (cache != nullptr) {
+            hashOutputs = cache->bip143HashOutputs();
+        } else {
+            std::vector<std::uint8_t> outputs;
+            for (const auto& output : transaction.outputs) {
+                const auto ser = output.serialize();
+                outputs.insert(outputs.end(), ser.begin(), ser.end());
+            }
+            hashOutputs = doubleSha256(outputs);
         }
-        hashOutputs = doubleSha256(outputs);
     }
 
     const auto& txIn = transaction.inputs[inputIndex];

@@ -188,6 +188,13 @@ def parse_run_log(path):
                 "commit",
                 "status_writes",
                 "idle_wait",
+                "script_legacy_sighash",
+                "script_bip143_sighash",
+                "script_taproot_sighash",
+                "script_ecdsa_verify",
+                "script_schnorr_verify",
+                "script_interpreter_eval",
+                "script_runner_wait",
             ]:
                 pipeline_totals_us[stage] = pipeline_totals_us.get(stage, 0) + as_int(pairs.get(stage))
             pipeline_blocks_fetched += as_int(pairs.get("blocks_fetched"))

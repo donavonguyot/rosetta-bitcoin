@@ -6,8 +6,10 @@
 #include "cpbitnode/consensus/sha1.hpp"
 #include "cpbitnode/consensus/sha256.hpp"
 #include "cpbitnode/consensus/script/sighash.hpp"
+#include "cpbitnode/consensus/script/verify.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 
@@ -31,6 +33,11 @@ constexpr std::uint32_t SEQUENCE_LOCKTIME_MASK = 0x0000FFFF;
 constexpr int MAX_SCRIPTNUM_SIZE_LOCKTIME = 5;
 
 using Stack = std::vector<std::vector<std::uint8_t>>;
+using Clock = std::chrono::steady_clock;
+
+long long elapsedUs(Clock::time_point start) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
+}
 
 std::vector<std::uint8_t> popItem(Stack& stack) {
     if (stack.empty()) {
@@ -210,22 +217,31 @@ std::vector<std::uint8_t> legacyFindAndDelete(std::span<const std::uint8_t> scri
 
 bool checkEcdsaSignature(const std::vector<std::uint8_t>& signature, const std::vector<std::uint8_t>& pubkey,
                          const messages::Transaction& tx, std::size_t inputIndex,
-                         std::span<const std::uint8_t> scriptCode, std::int64_t amount, bool witness) {
+                         std::span<const std::uint8_t> scriptCode, std::int64_t amount, bool witness,
+                         const SighashCache* sighashCache) {
     if (signature.empty()) return false;
     const auto sighashType = signature.back();
     const std::vector<std::uint8_t> sigDer(signature.begin(), signature.end() - 1);
     std::vector<std::uint8_t> digest;
     if (witness) {
-        digest = bip143Sighash(tx, inputIndex, scriptCode, amount, sighashType);
+        const auto started = Clock::now();
+        digest = bip143Sighash(tx, inputIndex, scriptCode, amount, sighashType, sighashCache);
+        recordScriptTiming(ScriptTimingStage::bip143Sighash, elapsedUs(started));
     } else {
         const auto trimmed = legacyFindAndDelete(scriptCode, signature);
+        const auto started = Clock::now();
         digest = legacySighash(tx, inputIndex, trimmed, sighashType);
+        recordScriptTiming(ScriptTimingStage::legacySighash, elapsedUs(started));
     }
-    return verifyDerSignature(pubkey, digest, sigDer);
+    const auto verifyStarted = Clock::now();
+    const bool ok = verifyDerSignature(pubkey, digest, sigDer);
+    recordScriptTiming(ScriptTimingStage::ecdsaVerify, elapsedUs(verifyStarted));
+    return ok;
 }
 
 void execCheckmultisig(Stack& stack, std::uint8_t opcode, const messages::Transaction& tx, std::size_t inputIndex,
-                       std::span<const std::uint8_t> scriptCode, std::int64_t amount, bool witness) {
+                       std::span<const std::uint8_t> scriptCode, std::int64_t amount, bool witness,
+                       const SighashCache* sighashCache) {
     std::size_t i = 1;
     if (stack.size() < i) {
         throw ScriptError("CHECKMULTISIG stack underflow");
@@ -268,7 +284,7 @@ void execCheckmultisig(Stack& stack, std::uint8_t opcode, const messages::Transa
     while (success && remainingSigs > 0) {
         const auto& sig = stackItem(stack, isig + static_cast<std::size_t>(sigOffset));
         const auto& pubkey = stackItem(stack, ikey + static_cast<std::size_t>(keyOffset));
-        if (checkEcdsaSignature(sig, pubkey, tx, inputIndex, activeScriptCode, amount, witness)) {
+        if (checkEcdsaSignature(sig, pubkey, tx, inputIndex, activeScriptCode, amount, witness, sighashCache)) {
             ++sigOffset;
             --remainingSigs;
         }
@@ -384,7 +400,8 @@ std::size_t tapscriptAdvanceOpcode(std::span<const std::uint8_t> script, std::si
 
 void evaluateScriptImpl(std::span<const std::uint8_t> script, Stack& stack, const messages::Transaction& tx,
                         std::size_t inputIndex, std::span<const std::uint8_t> scriptCode, std::int64_t amount,
-                        bool witness, int verifyFlags = SCRIPT_VERIFY_DEFAULT) {
+                        bool witness, int verifyFlags = SCRIPT_VERIFY_DEFAULT,
+                        const SighashCache* sighashCache = nullptr) {
     std::size_t offset = 0;
     std::size_t codeseparatorOffset = 0;
     std::vector<bool> vfExec;
@@ -454,10 +471,12 @@ void evaluateScriptImpl(std::span<const std::uint8_t> script, Stack& stack, cons
             popItem(stack);
         } else if (opcode == OP_2DUP) {
             if (stack.size() < 2) throw ScriptError("stack underflow");
-            stack.insert(stack.end(), stack.end() - 2, stack.end());
+            const std::vector<std::vector<std::uint8_t>> dup(stack.end() - 2, stack.end());
+            stack.insert(stack.end(), dup.begin(), dup.end());
         } else if (opcode == OP_3DUP) {
             if (stack.size() < 3) throw ScriptError("stack underflow");
-            stack.insert(stack.end(), stack.end() - 3, stack.end());
+            const std::vector<std::vector<std::uint8_t>> dup(stack.end() - 3, stack.end());
+            stack.insert(stack.end(), dup.begin(), dup.end());
         } else if (opcode == OP_2OVER) {
             if (stack.size() < 4) throw ScriptError("stack underflow");
             stack.insert(stack.end(), stack.end() - 4, stack.end() - 2);
@@ -588,7 +607,7 @@ void evaluateScriptImpl(std::span<const std::uint8_t> script, Stack& stack, cons
             auto signature = popItem(stack);
             const auto activeScript = scriptCode.subspan(codeseparatorOffset);
             const bool valid =
-                checkEcdsaSignature(signature, pubkey, tx, inputIndex, activeScript, amount, witness);
+                checkEcdsaSignature(signature, pubkey, tx, inputIndex, activeScript, amount, witness, sighashCache);
             if (opcode == OP_CHECKSIG) {
                 pushItem(stack, encodeOpN(valid ? 1 : 0));
             } else if (!valid) {
@@ -596,7 +615,7 @@ void evaluateScriptImpl(std::span<const std::uint8_t> script, Stack& stack, cons
             }
         } else if (opcode == OP_CHECKMULTISIG || opcode == OP_CHECKMULTISIGVERIFY) {
             const auto activeScript = scriptCode.subspan(codeseparatorOffset);
-            execCheckmultisig(stack, opcode, tx, inputIndex, activeScript, amount, witness);
+            execCheckmultisig(stack, opcode, tx, inputIndex, activeScript, amount, witness, sighashCache);
         } else if (opcode == OP_CHECKLOCKTIMEVERIFY) {
             if (verifyFlags & SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY) {
                 execChecklocktimeverify(stack, tx);
@@ -655,7 +674,8 @@ bool tapscriptPrescanOpSuccess(std::span<const std::uint8_t> script) {
 void evaluateTapscript(std::span<const std::uint8_t> script, Stack& stack, const messages::Transaction& tx,
                        std::size_t inputIndex, std::span<const std::uint8_t, 32> tapleafDigest,
                        const std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>>& spentPrevouts,
-                       const std::vector<std::uint8_t>* annex, int& validationBudgetLeft) {
+                       const std::vector<std::uint8_t>* annex, int& validationBudgetLeft,
+                       const SighashCache* sighashCache) {
     if (tapscriptPrescanOpSuccess(script)) return;
 
     std::uint32_t codeseparatorPos = 0xFFFFFFFF;
@@ -827,12 +847,16 @@ void evaluateTapscript(std::span<const std::uint8_t> script, Stack& stack, const
                     throw ScriptError("invalid Schnorr signature length");
                 }
                 try {
+                    const auto sighashStarted = Clock::now();
                     const auto digest = taprootSignatureHash(tx, inputIndex, spentPrevouts, hashType, annex, 1,
-                                                             tapleafDigest, codeseparatorPos);
+                                                             tapleafDigest, codeseparatorPos, sighashCache);
+                    recordScriptTiming(ScriptTimingStage::taprootSighash, elapsedUs(sighashStarted));
+                    const auto verifyStarted = Clock::now();
                     valid = verifySchnorrSignature(
                         std::span<const std::uint8_t, 32>(pubkey.data(), 32),
                         std::span<const std::uint8_t, 32>(digest.data(), 32),
                         std::span<const std::uint8_t, 64>(sig64.data(), 64));
+                    recordScriptTiming(ScriptTimingStage::schnorrVerify, elapsedUs(verifyStarted));
                 } catch (const std::runtime_error& exc) {
                     throw ScriptError(exc.what());
                 }
@@ -881,12 +905,14 @@ void evaluateTapscript(std::span<const std::uint8_t> script, Stack& stack, const
             ++instructionPos;
         } else if (opcode == OP_2DUP) {
             if (stack.size() < 2) throw ScriptError("stack underflow");
-            stack.insert(stack.end(), stack.end() - 2, stack.end());
+            const std::vector<std::vector<std::uint8_t>> dup(stack.end() - 2, stack.end());
+            stack.insert(stack.end(), dup.begin(), dup.end());
             ++offset;
             ++instructionPos;
         } else if (opcode == OP_3DUP) {
             if (stack.size() < 3) throw ScriptError("stack underflow");
-            stack.insert(stack.end(), stack.end() - 3, stack.end());
+            const std::vector<std::vector<std::uint8_t>> dup(stack.end() - 3, stack.end());
+            stack.insert(stack.end(), dup.begin(), dup.end());
             ++offset;
             ++instructionPos;
         } else if (opcode == OP_2OVER) {
@@ -1076,11 +1102,15 @@ void evaluateTapscript(std::span<const std::uint8_t> script, Stack& stack, const
                 } else if (signature.size() != 64) {
                     throw ScriptError("invalid Schnorr signature length");
                 }
+                const auto sighashStarted = Clock::now();
                 const auto digest = taprootSignatureHash(tx, inputIndex, spentPrevouts, hashType, annex, 1,
-                                                         tapleafDigest, codeseparatorPos);
+                                                         tapleafDigest, codeseparatorPos, sighashCache);
+                recordScriptTiming(ScriptTimingStage::taprootSighash, elapsedUs(sighashStarted));
+                const auto verifyStarted = Clock::now();
                 valid = verifySchnorrSignature(std::span<const std::uint8_t, 32>(pubkey.data(), 32),
                                                std::span<const std::uint8_t, 32>(digest.data(), 32),
                                                std::span<const std::uint8_t, 64>(sig64.data(), 64));
+                recordScriptTiming(ScriptTimingStage::schnorrVerify, elapsedUs(verifyStarted));
                 pushItem(stack, encodeScriptNum(n + (valid ? 1 : 0)));
             }
             ++offset;
@@ -1102,7 +1132,8 @@ bool verifyP2trScriptPath(std::span<const std::uint8_t> scriptPubkey,
                             const std::vector<std::uint8_t>* annex, const messages::Transaction& tx,
                             std::size_t inputIndex,
                             const std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>>& spentPrevouts,
-                            std::span<const std::uint8_t> serializedWitnessForWeight) {
+                            std::span<const std::uint8_t> serializedWitnessForWeight,
+                            const SighashCache* sighashCache) {
     if (spentPrevouts.size() != tx.inputs.size()) return false;
     if (witnessItemsWithoutAnnex.size() < 2) return false;
 
@@ -1150,7 +1181,8 @@ bool verifyP2trScriptPath(std::span<const std::uint8_t> scriptPubkey,
 
         int budget = VALIDATION_WEIGHT_OFFSET + static_cast<int>(serializedWitnessForWeight.size());
         Stack execStack = stackItems;
-        evaluateTapscript(scriptBytes, execStack, tx, inputIndex, leafDigest, spentPrevouts, annex, budget);
+        evaluateTapscript(scriptBytes, execStack, tx, inputIndex, leafDigest, spentPrevouts, annex, budget,
+                          sighashCache);
         if (!terminalSuccessStrict(execStack)) {
             throw ScriptError("tapscript failed final stack check");
         }
@@ -1166,9 +1198,11 @@ bool verifyP2trScriptPath(std::span<const std::uint8_t> scriptPubkey,
 
 void evaluateScript(std::span<const std::uint8_t> script, ScriptStack& stack, const messages::Transaction& tx,
                     std::size_t inputIndex, std::span<const std::uint8_t> scriptCode, std::int64_t amount,
-                    bool witness, int verifyFlags) {
+                    bool witness, int verifyFlags, const SighashCache* sighashCache) {
     Stack internalStack = stack;
-    evaluateScriptImpl(script, internalStack, tx, inputIndex, scriptCode, amount, witness, verifyFlags);
+    const auto started = Clock::now();
+    evaluateScriptImpl(script, internalStack, tx, inputIndex, scriptCode, amount, witness, verifyFlags, sighashCache);
+    recordScriptTiming(ScriptTimingStage::interpreterEval, elapsedUs(started));
     stack = std::move(internalStack);
 }
 
@@ -1379,7 +1413,8 @@ std::optional<int> witnessProgramVersion(std::span<const std::uint8_t> scriptPub
 bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::uint8_t> scriptPubkey,
                   const messages::Transaction& tx, std::size_t inputIndex, std::int64_t amount,
                   const std::vector<std::vector<std::uint8_t>>& witness,
-                  const std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>>* spentPrevouts) {
+                  const std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>>* spentPrevouts,
+                  const SighashCache* sighashCache) {
     if (isP2pk(scriptPubkey)) {
         if (!witness.empty()) return false;
         try {
@@ -1393,13 +1428,15 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
 
         Stack stackSig;
         try {
-            evaluateScript(scriptSig, stackSig, tx, inputIndex, scriptPubkey, amount, false);
+            evaluateScript(scriptSig, stackSig, tx, inputIndex, scriptPubkey, amount, false, SCRIPT_VERIFY_DEFAULT,
+                           sighashCache);
         } catch (const ScriptError&) {
             return false;
         }
         auto stack = stackSig;
         try {
-            evaluateScript(scriptPubkey, stack, tx, inputIndex, scriptPubkey, amount, false);
+            evaluateScript(scriptPubkey, stack, tx, inputIndex, scriptPubkey, amount, false, SCRIPT_VERIFY_DEFAULT,
+                           sighashCache);
         } catch (const ScriptError&) {
             return false;
         }
@@ -1412,7 +1449,8 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
         const auto scriptCode = p2pkhScriptCode(std::span<const std::uint8_t>(scriptPubkey.data() + 2, 20));
         Stack stack = witness;
         try {
-            evaluateScript(scriptCode, stack, tx, inputIndex, scriptCode, amount, true);
+            evaluateScript(scriptCode, stack, tx, inputIndex, scriptCode, amount, true, SCRIPT_VERIFY_DEFAULT,
+                           sighashCache);
         } catch (const ScriptError&) {
             return false;
         }
@@ -1432,7 +1470,8 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
         }
         Stack stack(witness.begin(), witness.end() - 1);
         try {
-            evaluateScript(witnessScript, stack, tx, inputIndex, witnessScript, amount, true);
+            evaluateScript(witnessScript, stack, tx, inputIndex, witnessScript, amount, true, SCRIPT_VERIFY_DEFAULT,
+                           sighashCache);
         } catch (const ScriptError&) {
             throw;
         }
@@ -1455,7 +1494,8 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
         }
         if (wit.size() >= 2) {
             if (!spentPrevouts) return false;
-            return verifyP2trScriptPath(scriptPubkey, wit, annex, tx, inputIndex, *spentPrevouts, witSerialized);
+            return verifyP2trScriptPath(scriptPubkey, wit, annex, tx, inputIndex, *spentPrevouts, witSerialized,
+                                        sighashCache);
         }
         if (!spentPrevouts) return false;
         if (wit.size() != 1) return false;
@@ -1471,10 +1511,16 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
             sig64 = sig64Storage;
         }
         try {
-            const auto msg = taprootSignatureHash(tx, inputIndex, *spentPrevouts, hashType, annex);
-            return verifySchnorrSignature(std::span<const std::uint8_t, 32>(scriptPubkey.data() + 2, 32),
-                                          std::span<const std::uint8_t, 32>(msg.data(), 32),
-                                          std::span<const std::uint8_t, 64>(sig64.data(), 64));
+            const auto sighashStarted = Clock::now();
+            const auto msg = taprootSignatureHash(tx, inputIndex, *spentPrevouts, hashType, annex,
+                                                  0, {}, 0xFFFFFFFF, sighashCache);
+            recordScriptTiming(ScriptTimingStage::taprootSighash, elapsedUs(sighashStarted));
+            const auto verifyStarted = Clock::now();
+            const bool ok = verifySchnorrSignature(std::span<const std::uint8_t, 32>(scriptPubkey.data() + 2, 32),
+                                                   std::span<const std::uint8_t, 32>(msg.data(), 32),
+                                                   std::span<const std::uint8_t, 64>(sig64.data(), 64));
+            recordScriptTiming(ScriptTimingStage::schnorrVerify, elapsedUs(verifyStarted));
+            return ok;
         } catch (const std::runtime_error&) {
             return false;
         }
@@ -1511,7 +1557,8 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
 
     Stack stackSig;
     try {
-        evaluateScript(scriptSig, stackSig, tx, inputIndex, scriptPubkey, amount, false);
+        evaluateScript(scriptSig, stackSig, tx, inputIndex, scriptPubkey, amount, false, SCRIPT_VERIFY_DEFAULT,
+                       sighashCache);
     } catch (const ScriptError&) {
         throw;
     }
@@ -1522,7 +1569,8 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
 
     auto stack = stackSig;
     try {
-        evaluateScript(scriptPubkey, stack, tx, inputIndex, scriptPubkey, amount, false);
+        evaluateScript(scriptPubkey, stack, tx, inputIndex, scriptPubkey, amount, false, SCRIPT_VERIFY_DEFAULT,
+                       sighashCache);
     } catch (const ScriptError&) {
         throw;
     }
@@ -1542,7 +1590,8 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
         const auto scriptCode = p2pkhScriptCode(std::span<const std::uint8_t>(redeemCandidate.data() + 2, 20));
         Stack inner(witness);
         try {
-            evaluateScript(scriptCode, inner, tx, inputIndex, scriptCode, amount, true);
+            evaluateScript(scriptCode, inner, tx, inputIndex, scriptCode, amount, true, SCRIPT_VERIFY_DEFAULT,
+                           sighashCache);
         } catch (const ScriptError&) {
             return false;
         }
@@ -1561,7 +1610,8 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
         }
         Stack inner(witness.begin(), witness.end() - 1);
         try {
-            evaluateScript(witnessScript, inner, tx, inputIndex, witnessScript, amount, true);
+            evaluateScript(witnessScript, inner, tx, inputIndex, witnessScript, amount, true, SCRIPT_VERIFY_DEFAULT,
+                           sighashCache);
         } catch (const ScriptError&) {
             return false;
         }
@@ -1570,7 +1620,8 @@ bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::
 
     Stack inner(stackSig.begin(), stackSig.end() - 1);
     try {
-        evaluateScript(redeemCandidate, inner, tx, inputIndex, redeemCandidate, amount, false);
+        evaluateScript(redeemCandidate, inner, tx, inputIndex, redeemCandidate, amount, false, SCRIPT_VERIFY_DEFAULT,
+                       sighashCache);
     } catch (const ScriptError&) {
         return false;
     }

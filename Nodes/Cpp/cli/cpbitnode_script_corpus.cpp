@@ -23,10 +23,13 @@ int main(int argc, char** argv) {
         const auto manifestArg = argValue(argc, argv, "--manifest", "");
         const auto manifestPath = manifestArg.empty() ? cpbitnode::conformance::defaultManifestPath()
                                                       : std::filesystem::path(manifestArg);
-        const auto defaultResult =
-            cpbitnode::conformance::repoRoot() /
-            "Nodes/Shared/conformance/results/cpp_script_corpus_2026-06-03.json";
-        const auto resultPath = argValue(argc, argv, "--result-path", defaultResult.string());
+        const auto resultArg = argValue(argc, argv, "--result-path", "");
+        const auto resultPath =
+            resultArg.empty()
+                ? (cpbitnode::conformance::repoRoot() /
+                   "Nodes/Shared/conformance/results/cpp_script_corpus_2026-06-03.json")
+                      .string()
+                : resultArg;
 
         auto run = cpbitnode::conformance::runCorpus(manifestPath);
         run.runtimeSurface = argValue(argc, argv, "--runtime-surface", "host");

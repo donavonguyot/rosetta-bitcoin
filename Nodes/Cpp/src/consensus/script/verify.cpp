@@ -3,6 +3,7 @@
 #include "cpbitnode/consensus/script/interpreter.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -18,6 +19,14 @@ namespace cpbitnode::consensus::script {
 namespace {
 
 using Clock = std::chrono::steady_clock;
+
+std::atomic<long long> gLegacySighashUs{0};
+std::atomic<long long> gBip143SighashUs{0};
+std::atomic<long long> gTaprootSighashUs{0};
+std::atomic<long long> gEcdsaVerifyUs{0};
+std::atomic<long long> gSchnorrVerifyUs{0};
+std::atomic<long long> gInterpreterEvalUs{0};
+std::atomic<long long> gRunnerWaitUs{0};
 
 long long elapsedUs(Clock::time_point start) {
     return std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count();
@@ -39,10 +48,61 @@ std::size_t boundedThreadCount(std::size_t requested) {
 
 }  // namespace
 
+bool scriptTimingEnabled() {
+    const char* raw = std::getenv("CPBITNODE_SYNC_TIMING");
+    return raw != nullptr && std::string_view(raw) != "" && std::string_view(raw) != "0";
+}
+
+void resetScriptTiming() {
+    gLegacySighashUs.store(0);
+    gBip143SighashUs.store(0);
+    gTaprootSighashUs.store(0);
+    gEcdsaVerifyUs.store(0);
+    gSchnorrVerifyUs.store(0);
+    gInterpreterEvalUs.store(0);
+    gRunnerWaitUs.store(0);
+}
+
+void recordScriptTiming(ScriptTimingStage stage, long long elapsed) {
+    if (elapsed <= 0 || !scriptTimingEnabled()) {
+        return;
+    }
+    switch (stage) {
+        case ScriptTimingStage::legacySighash:
+            gLegacySighashUs.fetch_add(elapsed);
+            break;
+        case ScriptTimingStage::bip143Sighash:
+            gBip143SighashUs.fetch_add(elapsed);
+            break;
+        case ScriptTimingStage::taprootSighash:
+            gTaprootSighashUs.fetch_add(elapsed);
+            break;
+        case ScriptTimingStage::ecdsaVerify:
+            gEcdsaVerifyUs.fetch_add(elapsed);
+            break;
+        case ScriptTimingStage::schnorrVerify:
+            gSchnorrVerifyUs.fetch_add(elapsed);
+            break;
+        case ScriptTimingStage::interpreterEval:
+            gInterpreterEvalUs.fetch_add(elapsed);
+            break;
+        case ScriptTimingStage::runnerWait:
+            gRunnerWaitUs.fetch_add(elapsed);
+            break;
+    }
+}
+
+ScriptTimingSnapshot scriptTimingSnapshot() {
+    return ScriptTimingSnapshot{gLegacySighashUs.load(),   gBip143SighashUs.load(), gTaprootSighashUs.load(),
+                                gEcdsaVerifyUs.load(),    gSchnorrVerifyUs.load(), gInterpreterEvalUs.load(),
+                                gRunnerWaitUs.load()};
+}
+
 void verifyTransactionInput(
     const messages::Transaction& transaction, std::size_t inputIndex, std::span<const std::uint8_t> scriptPubkey,
     std::int64_t amount,
-    const std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>>* spentPrevouts) {
+    const std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>>* spentPrevouts,
+    const SighashCache* sighashCache) {
     if (inputIndex >= transaction.inputs.size()) {
         throw ScriptVerifyError("input index out of range");
     }
@@ -67,7 +127,8 @@ void verifyTransactionInput(
     }
 
     try {
-        if (!verifyScript(txIn.scriptSig, scriptPubkey, transaction, inputIndex, amount, witness, spentPrevouts)) {
+        if (!verifyScript(txIn.scriptSig, scriptPubkey, transaction, inputIndex, amount, witness, spentPrevouts,
+                          sighashCache)) {
             throw ScriptVerifyError("script verification failed for input " + std::to_string(inputIndex));
         }
     } catch (const ScriptError& error) {
@@ -108,7 +169,7 @@ public:
                         throw ScriptVerifyError("missing transaction for script verify job");
                     }
                     verifyTransactionInput(*job.transaction, job.inputIndex, job.scriptPubkey, job.amount,
-                                           job.spentPrevouts);
+                                           job.spentPrevouts, job.sighashCache);
                 } catch (const ScriptVerifyError& exc) {
                     batch.workerCpuUs += elapsedUs(started);
                     if (!batch.error.has_value() || job.inputIndex < batch.failedInputIndex) {
@@ -140,7 +201,7 @@ public:
                         throw ScriptVerifyError("missing transaction for script verify job");
                     }
                     verifyTransactionInput(*job.transaction, job.inputIndex, job.scriptPubkey, job.amount,
-                                           job.spentPrevouts);
+                                           job.spentPrevouts, job.sighashCache);
                 } catch (const ScriptVerifyError& exc) {
                     result.error = exc.what();
                 }
@@ -148,6 +209,7 @@ public:
                 return result;
             }));
         }
+        const auto waitStarted = Clock::now();
         for (auto& future : futures) {
             const auto result = future.get();
             batch.workerCpuUs += result.workerCpuUs;
@@ -157,6 +219,7 @@ public:
                 batch.failedInputIndex = result.inputIndex;
             }
         }
+        recordScriptTiming(ScriptTimingStage::runnerWait, elapsedUs(waitStarted));
         return batch;
     }
 

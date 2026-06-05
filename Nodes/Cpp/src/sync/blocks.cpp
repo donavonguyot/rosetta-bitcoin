@@ -1,6 +1,7 @@
 #include "cpbitnode/sync/blocks.hpp"
 
 #include "cpbitnode/consensus/connect.hpp"
+#include "cpbitnode/consensus/script/verify.hpp"
 #include "cpbitnode/messages/inventory.hpp"
 #include "cpbitnode/sync/validate.hpp"
 #include "cpbitnode/util/json.hpp"
@@ -48,6 +49,13 @@ struct PipelineTiming {
     std::uint64_t p2pBytesRead = 0;
     std::uint64_t p2pHeaderReadUs = 0;
     std::uint64_t p2pPayloadReadUs = 0;
+    long long scriptLegacySighash = 0;
+    long long scriptBip143Sighash = 0;
+    long long scriptTaprootSighash = 0;
+    long long scriptEcdsaVerify = 0;
+    long long scriptSchnorrVerify = 0;
+    long long scriptInterpreterEval = 0;
+    long long scriptRunnerWait = 0;
 };
 
 long long elapsedUs(Clock::time_point start) {
@@ -96,6 +104,13 @@ void emitPipelineTiming(const PipelineTiming& timing) {
               << " p2p_bytes_read=" << timing.p2pBytesRead
               << " p2p_header_read_us=" << timing.p2pHeaderReadUs
               << " p2p_payload_read_us=" << timing.p2pPayloadReadUs
+              << " script_legacy_sighash=" << timing.scriptLegacySighash
+              << " script_bip143_sighash=" << timing.scriptBip143Sighash
+              << " script_taproot_sighash=" << timing.scriptTaprootSighash
+              << " script_ecdsa_verify=" << timing.scriptEcdsaVerify
+              << " script_schnorr_verify=" << timing.scriptSchnorrVerify
+              << " script_interpreter_eval=" << timing.scriptInterpreterEval
+              << " script_runner_wait=" << timing.scriptRunnerWait
               << "\n";
 }
 
@@ -516,6 +531,7 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     PipelineTiming pipeline;
     pipeline.prefetchDepth = prefetchDepthFromEnv(parallelDownloads);
     pipeline.scriptThreads = scriptRunner != nullptr ? scriptRunner->threadCount() : 1;
+    consensus::script::resetScriptTiming();
     const auto p2pReadStarted = p2p::p2pReadTelemetrySnapshot();
 
     const int limit = maxBlocks == 0 ? batchSize : std::min(batchSize, maxBlocks);
@@ -628,13 +644,22 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
         pipeline.metadataStore += elapsedUs(metaStarted);
     }
 
-    if (blocksTargetHeight <= 0 && chainstate.readTip(chain.name).height >= tracker.maxHeaderHeight()) {
+    if ((blocksTargetHeight <= 0 && chainstate.readTip(chain.name).height >= tracker.maxHeaderHeight()) ||
+        (blocksTargetHeight > 0 && chainstate.readTip(chain.name).height >= blocksTargetHeight)) {
         const auto finalStatusStarted = Clock::now();
         tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_current");
         pipeline.statusWrites += elapsedUs(finalStatusStarted);
     }
     pipeline.totalWall = elapsedUs(batchStarted);
     applyP2PReadTelemetryDelta(pipeline, p2pReadStarted);
+    const auto scriptTiming = consensus::script::scriptTimingSnapshot();
+    pipeline.scriptLegacySighash = scriptTiming.legacySighashUs;
+    pipeline.scriptBip143Sighash = scriptTiming.bip143SighashUs;
+    pipeline.scriptTaprootSighash = scriptTiming.taprootSighashUs;
+    pipeline.scriptEcdsaVerify = scriptTiming.ecdsaVerifyUs;
+    pipeline.scriptSchnorrVerify = scriptTiming.schnorrVerifyUs;
+    pipeline.scriptInterpreterEval = scriptTiming.interpreterEvalUs;
+    pipeline.scriptRunnerWait = scriptTiming.runnerWaitUs;
     emitPipelineTiming(pipeline);
     return downloaded;
 }
@@ -654,6 +679,7 @@ int syncBlocksToTip(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     while (true) {
         const int validated = chainstate.readTip(chain.name).height;
         if (settings.blocksTargetHeight > 0 && validated >= settings.blocksTargetHeight) {
+            tracker.upsertSyncState(chain.name, std::nullopt, std::nullopt, std::nullopt, "blocks_current");
             break;
         }
         const int remaining =

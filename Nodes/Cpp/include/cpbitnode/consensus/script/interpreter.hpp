@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "cpbitnode/consensus/script/opcodes.hpp"
+#include "cpbitnode/consensus/script/sighash.hpp"
 #include "cpbitnode/messages/transaction.hpp"
 
 namespace cpbitnode::consensus::script {
@@ -37,12 +38,13 @@ std::optional<int> witnessProgramVersion(std::span<const std::uint8_t> scriptPub
 
 void evaluateScript(std::span<const std::uint8_t> script, ScriptStack& stack, const messages::Transaction& tx,
                     std::size_t inputIndex, std::span<const std::uint8_t> scriptCode, std::int64_t amount,
-                    bool witness, int verifyFlags = SCRIPT_VERIFY_DEFAULT);
+                    bool witness, int verifyFlags = SCRIPT_VERIFY_DEFAULT, const SighashCache* sighashCache = nullptr);
 
 bool verifyScript(std::span<const std::uint8_t> scriptSig, std::span<const std::uint8_t> scriptPubkey,
                   const messages::Transaction& tx, std::size_t inputIndex, std::int64_t amount,
                   const std::vector<std::vector<std::uint8_t>>& witness = {},
                   const std::vector<std::pair<std::int64_t, std::vector<std::uint8_t>>>* spentPrevouts =
-                      nullptr);
+                      nullptr,
+                  const SighashCache* sighashCache = nullptr);
 
 }  // namespace cpbitnode::consensus::script

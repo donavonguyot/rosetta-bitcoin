@@ -8,6 +8,7 @@
 #include <ctime>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -534,6 +535,9 @@ std::string isoUtcNow() {
 }  // namespace
 
 std::filesystem::path repoRoot() {
+    if (const char* envRoot = std::getenv("CPBITNODE_REPO_ROOT"); envRoot != nullptr && std::string(envRoot) != "") {
+        return std::filesystem::path(envRoot);
+    }
 #ifdef CPBITNODE_REPO_ROOT
     return std::filesystem::path(CPBITNODE_REPO_ROOT);
 #else
