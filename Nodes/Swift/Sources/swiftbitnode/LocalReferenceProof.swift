@@ -20,6 +20,11 @@ enum LocalReferenceProof {
         var blocksFetched = 0
         var blocksConnected = 0
         var failures: [String] = []
+        var lastTelemetryNanos = started
+        var lastTelemetryHeight = max(0, initialState.validatedHeight)
+        let targetLabel = targetLabel(for: target)
+        let benchmarkGate = benchmarkGateFor(target: target, label: targetLabel)
+        let benchmarkKind = benchmarkKindFor(target: target, label: targetLabel)
 
         do {
             let fetchStart = DispatchTime.now().uptimeNanoseconds
@@ -31,6 +36,22 @@ enum LocalReferenceProof {
                 if connected {
                     blocksConnected += 1
                     rollingState = result.state
+                    let now = DispatchTime.now().uptimeNanoseconds
+                    if block.height - lastTelemetryHeight >= 2500 || now - lastTelemetryNanos >= 15_000_000_000 || block.height >= target {
+                        emitTelemetry(
+                            gate: benchmarkGate,
+                            target: target,
+                            height: block.height,
+                            state: rollingState,
+                            started: started,
+                            previousHeight: lastTelemetryHeight,
+                            previousNanos: lastTelemetryNanos,
+                            phase: block.height >= target ? "complete" : "syncing",
+                            timing: timing
+                        )
+                        lastTelemetryHeight = block.height
+                        lastTelemetryNanos = now
+                    }
                 }
                 return connected
             }
@@ -61,21 +82,14 @@ enum LocalReferenceProof {
         if !reached && failures.isEmpty {
             failures.append("target not reached")
         }
-        let targetLabel: String
-        switch target {
-        case 5000:
-            targetLabel = "5k"
-        case 10000:
-            targetLabel = "10k"
-        case 50000:
-            targetLabel = "50k"
-        default:
-            targetLabel = "\(target)"
-        }
-        let benchmarkGate = targetLabel == "\(target)" ? "local_reference" : "supporting_\(targetLabel)"
-        let benchmarkKind = targetLabel == "\(target)" ? "local_reference_p2p" : "supporting_\(targetLabel)_p2p"
         let stages = timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"])
         let elapsedMs = max(1, Int((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000))
+        let timingSummary: [String: Any] = [
+            "stage_totals_ms": stages,
+            "slow_blocks": timing.slowBlocksJson(),
+            "script_verify_worker_cpu": timing.totalMs("script_verify_worker_cpu"),
+            "total_ms": elapsedMs
+        ]
         let doc: [String: Any] = [
             "implementation": Constants.implementation,
             "node_id": Constants.nodeID,
@@ -83,6 +97,7 @@ enum LocalReferenceProof {
             "chain": Constants.chain,
             "runtime_surface": Constants.runtimeSurface,
             "benchmark_contract_version": 1,
+            "telemetry_schema": "benchmark.telemetry_tick.v1",
             "benchmark_gate": benchmarkGate,
             "benchmark_kind": benchmarkKind,
             "benchmark_lane": benchmarkKind,
@@ -126,13 +141,79 @@ enum LocalReferenceProof {
             "captured_at": nowIso8601(),
             "status": status,
             "stage_totals_ms": stages,
-            "timing_summary": [
-                "stage_totals_ms": stages,
-                "slow_blocks": timing.slowBlocksJson(),
-                "script_verify_worker_cpu": timing.totalMs("script_verify_worker_cpu"),
-                "total_ms": elapsedMs
-            ]
+            "timing_summary": timingSummary,
+            "pipeline_timing_summary": timingSummary
         ]
         try Json.write(doc, to: output.isEmpty ? nil : output)
+    }
+
+    private static func targetLabel(for target: Int) -> String {
+        switch target {
+        case 5000:
+            return "5k"
+        case 10000:
+            return "10k"
+        case 50000:
+            return "50k"
+        case 100000:
+            return "100k"
+        default:
+            return "\(target)"
+        }
+    }
+
+    private static func benchmarkGateFor(target: Int, label: String) -> String {
+        if target == 100000 {
+            return "primary_100k"
+        }
+        return label == "\(target)" ? "local_reference" : "supporting_\(label)"
+    }
+
+    private static func benchmarkKindFor(target: Int, label: String) -> String {
+        if target == 100000 {
+            return "primary_100k_p2p"
+        }
+        return label == "\(target)" ? "local_reference_p2p" : "supporting_\(label)_p2p"
+    }
+
+    private static func emitTelemetry(
+        gate: String,
+        target: Int,
+        height: Int,
+        state: StoreState,
+        started: UInt64,
+        previousHeight: Int,
+        previousNanos: UInt64,
+        phase: String,
+        timing: TimingCollector
+    ) {
+        let now = DispatchTime.now().uptimeNanoseconds
+        let elapsedMs = max(0, Int((now - started) / 1_000_000))
+        let deltaBlocks = max(0, height - previousHeight)
+        let deltaSeconds = max(0.001, Double(now - previousNanos) / 1_000_000_000.0)
+        let elapsedSeconds = max(0.001, Double(now - started) / 1_000_000_000.0)
+        let tick: [String: Any] = [
+            "schema": "benchmark.telemetry_tick.v1",
+            "port": "swift",
+            "gate": gate,
+            "target_height": target,
+            "height": height,
+            "header_height": state.headerHeight,
+            "stored_block_height": state.storedBlockHeight,
+            "percent": target > 0 ? (Double(height) / Double(target)) * 100.0 : 0.0,
+            "elapsed_ms": elapsedMs,
+            "rate_recent_blocks_per_second": Double(deltaBlocks) / deltaSeconds,
+            "rate_total_blocks_per_second": Double(max(0, height)) / elapsedSeconds,
+            "phase": phase,
+            "utxos": state.chainstateUtxoCount,
+            "last_block_ms": NSNull(),
+            "timing_buckets_ms": timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"]),
+            "current_blocker": state.currentBlocker ?? NSNull(),
+            "process_running": phase != "complete"
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: tick, options: [.sortedKeys]),
+           let raw = String(data: data, encoding: .utf8) {
+            FileHandle.standardOutput.write(Data("benchmark.telemetry_tick \(raw)\n".utf8))
+        }
     }
 }
