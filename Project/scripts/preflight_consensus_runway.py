@@ -98,7 +98,13 @@ def preflight_port(conn: sqlite3.Connection, port: str, stage: str) -> dict[str,
         errors.append(f"5k baseline is not passed: {row.get('baseline_5k_status') or 'missing'}")
 
     target_height = int(row.get("target_height") or -1)
-    if stage == "10k" and row.get("runway_status") != "passed":
+    if (
+        stage == "10k"
+        and not (
+            row.get("stage_gate_status") == "passed"
+            and row.get("stage_gate_comparability") == "comparable"
+        )
+    ):
         errors.append(
             "missing comparable 10k benchmark gate proof "
             f"(stage_gate_status={row.get('stage_gate_status') or 'missing'}, "

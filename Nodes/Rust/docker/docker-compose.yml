@@ -100,5 +100,6 @@ services:
 volumes:
   rsbitnode_data:
   rsbitnode_proof_data:
+  rsbitnode_10k_proof_data:
   rsbitnode_local_reference_data:
   rsbitnode_sync_data:

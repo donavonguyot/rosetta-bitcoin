@@ -183,9 +183,11 @@ binary_gate_status = not_attempted
 ```
 
 At height `10000`, the expected `core_spendable_v1`
-`chainstate_utxo_count` is `19100`. Historical long-sync or RPC replay artifacts
-that reached 10k remain useful evidence, but Project should classify them as
-evidence-only unless they match the lane above.
+`chainstate_utxo_count` is `9519`. The raw unspent-output family is larger
+(`19100` excluding genesis), but raw output counts are diagnostic only and must
+not be reported as `chainstate_utxo_count`. Historical long-sync or RPC replay
+artifacts that reached 10k remain useful evidence, but Project should classify
+them as evidence-only unless they match the lane above.
 
 ### Preflight Before Each Run
 

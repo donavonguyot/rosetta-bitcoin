@@ -140,7 +140,7 @@ BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
         "official_prefetch_depth": 4,
         "official_script_runner_mode": "parallel",
         "official_utxo_accounting_policy": "core_spendable_v1",
-        "official_chainstate_utxo_count": 19100,
+        "official_chainstate_utxo_count": 9519,
         "fresh_state_required": 1,
         "local_reference_required": 1,
         "durable_required": 1,

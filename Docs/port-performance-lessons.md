@@ -247,7 +247,7 @@ The optimized Go path keeps the same consensus checks but changes the hot shape:
 Host proof from an empty scratch datadir to height 10000 passed in about 14.6
 seconds with `validated_hash =
 000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466`,
-`chainstate_utxo_count = 19100`, native `libsecp256k1`, and no blocker. This is
+`chainstate_utxo_count = 9519`, native `libsecp256k1`, and no blocker. This is
 bounded local-reference evidence, not a live P2P/tip-maintenance claim.
 
 When comparing UTXO counts, use the shared `core_spendable_v1` accounting
