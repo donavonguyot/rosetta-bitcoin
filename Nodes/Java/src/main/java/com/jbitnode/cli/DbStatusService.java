@@ -37,7 +37,10 @@ public final class DbStatusService {
       root.put("db_path", "");
       root.put("data_dir", dataDir.toString());
       root.put("native_storage", true);
-      root.put("local_sqlite_artifact_absent", !java.nio.file.Files.exists(dataDir.resolve("jbitnode.db")));
+      boolean operationalDbArtifactAbsent = !java.nio.file.Files.exists(dataDir.resolve("jbitnode.db"));
+      root.put("operational_db_artifact_absent", operationalDbArtifactAbsent);
+      root.put("runtime_db_boundary_passed", operationalDbArtifactAbsent);
+      root.put("project_db_observational_only", true);
       root.put("native_crypto_backend", Secp256k1.selectedBackendName());
       root.put("native_crypto_available", Secp256k1.nativeBackendAvailable());
       root.put("taproot_tweak_backend", Secp256k1.taprootTweakBackendName());

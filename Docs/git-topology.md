@@ -20,7 +20,7 @@ selected conformance evidence:
 - `Nodes/Shared/` for language-neutral contracts, Docker runtime inventory, fixtures,
   and selected conformance proof artifacts.
 - `Project/` for mission-control imports and reports. `Project/project.db` is
-  tracked, queryable Project SQLite, and must not become operational chainstate.
+  tracked, queryable mission-control state, and must not become operational chainstate.
 - `Nodes/` for all node implementation directories and the local Reference
   recipe.
 

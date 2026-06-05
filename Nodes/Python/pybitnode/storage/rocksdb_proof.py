@@ -90,8 +90,10 @@ def run_proof(datadir: Path) -> dict[str, Any]:
         "native_multi_get": False,
         "prefix_iteration": prefix_seen,
         "restart_persisted": persisted,
-        "local_sqlite_artifact_absent": not sqlite_artifacts,
-        "sqlite_artifacts": sqlite_artifacts,
+        "operational_db_artifact_absent": not sqlite_artifacts,
+        "runtime_db_boundary_passed": not sqlite_artifacts,
+        "project_db_observational_only": True,
+        "unapproved_runtime_db_artifacts": sqlite_artifacts,
         "result": "passed" if passed else "failed",
     }
 

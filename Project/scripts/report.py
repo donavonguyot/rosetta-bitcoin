@@ -42,7 +42,7 @@ SECTION_ALIASES = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", default="Project/project.db", help="Project SQLite DB path")
+    parser.add_argument("--db", default="Project/project.db", help="Project mission-control DB path")
     parser.add_argument(
         "--section",
         choices=(*SECTIONS, *SECTION_ALIASES.keys(), "all"),

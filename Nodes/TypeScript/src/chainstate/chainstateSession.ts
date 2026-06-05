@@ -44,7 +44,7 @@ export class ChainstateSession {
     mkdirSync(resolved, { recursive: true });
     const legacyLocalDbPath = join(resolved, LEGACY_LOCAL_DB_NAME);
     if (existsSync(legacyLocalDbPath)) {
-      throw new Error(`native TypeScript datadir must not contain legacy local DB: ${legacyLocalDbPath}`);
+      throw new Error(`native TypeScript datadir contains an unapproved port-local operational DB artifact: ${legacyLocalDbPath}`);
     }
 
     const lockHandle =

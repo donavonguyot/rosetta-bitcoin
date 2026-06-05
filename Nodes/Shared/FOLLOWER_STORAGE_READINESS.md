@@ -36,7 +36,7 @@ in Project reports.
 ## Durable Guidance
 
 - Java remains the lead extraction source for shared storage lessons.
-- Python's legacy SQLite scout trail is historical handoff evidence only.
+- Python's historical blocker trail is handoff evidence only.
 - Ports may keep legacy/reference storage tools only when they are explicitly
   named as non-Core evidence surfaces.
 - Serious-port optimization should target the active native backend and shared

@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -34,6 +35,7 @@ public:
     virtual int utxoCount() const = 0;
     virtual std::optional<StoredUtxo> getUtxo(const std::vector<std::uint8_t>& txid, int vout) const = 0;
     virtual std::vector<std::optional<StoredUtxo>> getUtxos(const std::vector<Outpoint>& outpoints) const = 0;
+    virtual std::vector<std::optional<StoredUtxoRef>> getUtxos(std::span<const DbOutpointKey> outpoints) const;
     virtual void addUtxo(const std::vector<std::uint8_t>& txid, int vout, int height, std::int64_t value,
                          const std::vector<std::uint8_t>& scriptPubkey, bool coinbase) = 0;
     virtual void spendUtxo(const std::vector<std::uint8_t>& txid, int vout) = 0;
@@ -42,6 +44,7 @@ public:
     virtual void deleteUtxosCreatedAtHeight(int height) = 0;
     virtual void resetValidatedChain(const std::string& chain, const std::string& genesisHash) = 0;
     virtual void commitBlock(const BlockCommit& commit) = 0;
+    virtual void commitBlock(const BlockCommitNative& commit);
 };
 
 class NodeStateChainstateStore final : public ChainstateStore {
@@ -54,6 +57,7 @@ public:
     int utxoCount() const override;
     std::optional<StoredUtxo> getUtxo(const std::vector<std::uint8_t>& txid, int vout) const override;
     std::vector<std::optional<StoredUtxo>> getUtxos(const std::vector<Outpoint>& outpoints) const override;
+    std::vector<std::optional<StoredUtxoRef>> getUtxos(std::span<const DbOutpointKey> outpoints) const override;
     void addUtxo(const std::vector<std::uint8_t>& txid, int vout, int height, std::int64_t value,
                  const std::vector<std::uint8_t>& scriptPubkey, bool coinbase) override;
     void spendUtxo(const std::vector<std::uint8_t>& txid, int vout) override;
@@ -62,6 +66,7 @@ public:
     void deleteUtxosCreatedAtHeight(int height) override;
     void resetValidatedChain(const std::string& chain, const std::string& genesisHash) override;
     void commitBlock(const BlockCommit& commit) override;
+    void commitBlock(const BlockCommitNative& commit) override;
 
 private:
     NodeStateStore& state_;

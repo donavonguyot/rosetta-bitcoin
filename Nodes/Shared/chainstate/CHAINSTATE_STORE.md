@@ -54,7 +54,7 @@ If commit fails, the active chainstate must not report the block as connected.
 ## Operational State Boundary
 
 Core/native mode must not split operational truth across a native chainstate and
-a hidden SQLite tracker. The native store owns:
+any hidden operational observer store. The native store owns:
 
 ```text
 headers
@@ -69,10 +69,11 @@ blocker/current-error state
 status truth
 ```
 
-SQLite may exist as an explicit legacy/reference backend, but native entry
-points must not silently instantiate SQLite for any of those fields. A hybrid
-that stores UTXO/tip/undo in RocksDB while leaving headers, block index, sync
-state, or status truth in SQLite is not Core Node compliant.
+Compatibility/reference backends may exist only when explicitly named and
+excluded from baseline proof paths. Native entry points must not silently
+instantiate any alternate store for those fields. A hybrid that stores
+UTXO/tip/undo in RocksDB while leaving headers, block index, sync state, or
+status truth elsewhere is not Core Node compliant.
 
 ## Backend Metadata
 
@@ -121,7 +122,7 @@ baseline.
 ## Python Full-Break Target
 
 Python parity is a breaking migration, not a compatibility profile. The legacy
-SQLite scout path is historical evidence only. A forward Python native/Core run
+compatibility path is historical evidence only. A forward Python native/Core run
 must start from an empty native datadir and use RocksDB for:
 
 ```text

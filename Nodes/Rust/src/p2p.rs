@@ -17,6 +17,7 @@ const GENESIS_HASH: &str = "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be3
 pub struct FetchOptions {
     pub peer: String,
     pub target: u32,
+    pub start_height: u32,
     pub prefetch: usize,
 }
 
@@ -35,7 +36,7 @@ pub fn fetch_blocks(opts: FetchOptions) -> Receiver<Result<P2PBlock>> {
             client.handshake()?;
             let hashes = client.headers_through(opts.target)?;
             let prefetch = opts.prefetch.max(1).min(64);
-            let mut start = 0usize;
+            let mut start = opts.start_height as usize;
             while start <= opts.target as usize {
                 let end = (start + prefetch).min(opts.target as usize + 1);
                 let fetch_started = Instant::now();

@@ -709,9 +709,10 @@ classified AS (
   SELECT
     *,
     CASE
+      WHEN reported_lane <> '' THEN reported_lane
       WHEN peer_mode = 'local_reference_rpc' OR byte_source = 'local_reference_rpc' OR proof_mode IN ('rpc_replay', 'pipeline') THEN replace(official_lane, '_p2p', '_rpc_replay')
       WHEN peer_mode = 'local_reference' OR byte_source = 'local_reference_p2p' THEN official_lane
-      ELSE coalesce(nullif(reported_lane, ''), 'diagnostic')
+      ELSE 'diagnostic'
     END AS evidence_lane,
     CASE
       WHEN rocksdb_wal_disabled_text IN ('1', 'true', 'yes', 'on') THEN 1

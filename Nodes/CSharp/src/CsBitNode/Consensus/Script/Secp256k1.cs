@@ -5,6 +5,7 @@ namespace CsBitNode.Consensus.Script;
 
 public static class Secp256k1
 {
+    private static readonly object NativeLock = new();
     private static readonly BigInteger P = ParseUnsignedHex(
         "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F");
     private static readonly BigInteger N = ParseUnsignedHex(
@@ -88,7 +89,8 @@ public static class Secp256k1
                 return false;
             try
             {
-                return global::Secp256k1Net.Secp256k1.VerifySchnorr(signature, messageHash, pubkeyXOnly);
+                lock (NativeLock)
+                    return global::Secp256k1Net.Secp256k1.VerifySchnorr(signature, messageHash, pubkeyXOnly);
             }
             catch
             {
@@ -116,7 +118,9 @@ public static class Secp256k1
                 var compressedInternal = new byte[33];
                 compressedInternal[0] = 0x02;
                 internalXOnly.CopyTo(compressedInternal.AsSpan(1));
-                var tweaked = global::Secp256k1Net.Secp256k1.TweakPublicKeyAdd(compressedInternal, tweak, compressed: true);
+                byte[] tweaked;
+                lock (NativeLock)
+                    tweaked = global::Secp256k1Net.Secp256k1.TweakPublicKeyAdd(compressedInternal, tweak, compressed: true);
                 if (tweaked.Length != 33 || tweaked[0] is not (0x02 or 0x03))
                     throw new Secp256k1Exception("taproot tweak returned invalid public key");
                 return new TaprootTweakResult(tweaked[0] & 1, tweaked[1..]);
@@ -190,14 +194,19 @@ public static class Secp256k1
             return false;
         try
         {
-            var (r, s) = ParseDerSignature(derSignature);
-            var compact = new byte[64];
-            ToFixedBytes(r, 32).CopyTo(compact, 0);
-            ToFixedBytes(s, 32).CopyTo(compact, 32);
-            if (global::Secp256k1Net.Secp256k1.Verify(compact, messageHash, pubkey))
-                return true;
-            var normalized = global::Secp256k1Net.Secp256k1.NormalizeSignature(compact);
-            return global::Secp256k1Net.Secp256k1.Verify(normalized, messageHash, pubkey);
+            lock (NativeLock)
+            {
+                if (global::Secp256k1Net.Secp256k1.VerifyDer(derSignature, messageHash, pubkey))
+                    return true;
+                var (r, s) = ParseDerSignature(derSignature);
+                var compact = new byte[64];
+                ToFixedBytes(r, 32).CopyTo(compact, 0);
+                ToFixedBytes(s, 32).CopyTo(compact, 32);
+                if (global::Secp256k1Net.Secp256k1.Verify(compact, messageHash, pubkey))
+                    return true;
+                var normalized = global::Secp256k1Net.Secp256k1.NormalizeSignature(compact);
+                return global::Secp256k1Net.Secp256k1.Verify(normalized, messageHash, pubkey);
+            }
         }
         catch
         {

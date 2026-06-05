@@ -40,7 +40,9 @@ heights, status, and blocker fields from the runtime.
 
 A one-shot supervisor smoke proves loop mechanics: image builds, container
 starts, status is read from inside the runtime surface, and
-`AGENT_LOOP_TICK_chatreport` is emitted. It must not require peer reachability.
+`AGENT_LOOP_TICK_chatreport` is emitted. Long-run ports may also emit
+`benchmark.telemetry_tick` JSONL for `Project/scripts/monitor_benchmark_telemetry.py`.
+It must not require peer reachability.
 
 Network proof is separate and must document its peer strategy: host Core via
 `host.docker.internal`, a Reference compose service, or an explicit external

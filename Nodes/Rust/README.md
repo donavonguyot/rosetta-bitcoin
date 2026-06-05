@@ -39,8 +39,8 @@ Native state lives under the selected datadir:
   chainstate-rocksdb/
 ```
 
-No SQLite artifact is allowed in the Rust native datadir. Status and storage
-proof read Rust-owned RocksDB metadata directly.
+Rust native proofs enforce the port-local operational DB boundary. Status and
+storage proof read Rust-owned RocksDB metadata directly.
 
 ## Local-Reference Proof Pipeline
 

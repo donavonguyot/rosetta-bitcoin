@@ -15,7 +15,7 @@ import (
 )
 
 type scriptJob struct {
-	tx         txtypes.Transaction
+	tx         *txtypes.Transaction
 	txid       string
 	inputIndex int
 	options    script.VerifyInputOptions
@@ -87,7 +87,7 @@ func (r scriptRunner) verify(jobs []scriptJob) (*scriptFailure, time.Duration) {
 		for _, job := range jobs {
 			job.options.Verifier = r.verifier
 			start := time.Now()
-			if err := script.VerifyTransactionInput(job.tx, job.inputIndex, job.options); err != nil {
+			if err := script.VerifyTransactionInput(*job.tx, job.inputIndex, job.options); err != nil {
 				workerNanos += time.Since(start).Nanoseconds()
 				return &scriptFailure{job: job, err: err}, time.Duration(workerNanos)
 			}
@@ -112,7 +112,7 @@ func (r scriptRunner) verify(jobs []scriptJob) (*scriptFailure, time.Duration) {
 				job := jobs[index]
 				job.options.Verifier = verifier
 				start := time.Now()
-				errs[index] = script.VerifyTransactionInput(job.tx, job.inputIndex, job.options)
+				errs[index] = script.VerifyTransactionInput(*job.tx, job.inputIndex, job.options)
 				atomic.AddInt64(&workerNanos, time.Since(start).Nanoseconds())
 			}
 		}()

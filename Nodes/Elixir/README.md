@@ -51,6 +51,21 @@ SKIP_BLOCKS=1 make sync-local   # headers only
 Datadir defaults to `./data-elixir` (gitignored). One writer at a time — a datadir
 lock prevents concurrent sync processes.
 
+## Docker proofs
+
+```bash
+make docker-config
+make docker-proof-local
+make docker-proof-10k
+make docker-proof-50k 2>&1 | python3 ../../Project/scripts/monitor_benchmark_telemetry.py
+```
+
+`make docker-proof-local`, `make docker-proof-10k`, and `make docker-proof-50k`
+are local Reference P2P proofs with fresh Docker volumes, RocksDB, native
+secp256k1, WAL enabled, and parallel script verification. The 50k proof uses a
+one-shot supervisor so long runs emit both `AGENT_LOOP_TICK_chatreport` and
+`benchmark.telemetry_tick` progress lines.
+
 ## Status fields
 
 `make status` reports:

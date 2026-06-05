@@ -39,7 +39,7 @@ DOCKER_PROOF_VOLUME="$VOLUME" PEERS="$PEERS" BLOCKS_MAX="$BLOCKS_MAX" BLOCKS_TAR
     -e CPBITNODE_SCRIPT_VERIFY_THREADS="${CPBITNODE_SCRIPT_VERIFY_THREADS:-}" \
     -e CPBITNODE_BLOCK_PREFETCH_DEPTH="$PREFETCH_DEPTH" \
     -e PARALLEL_BLOCK_DOWNLOADS="$PREFETCH_DEPTH" \
-    cpbitnode-sync-proof 2>&1 | tee "$RUN_LOG_TMP"
+    cpbitnode-sync-proof 2>&1 | python3 scripts/benchmark_telemetry_filter.py --target "$TARGET" --port cpp | tee "$RUN_LOG_TMP"
 sync_exit=${PIPESTATUS[0]}
 set -o pipefail
 set -e
@@ -94,11 +94,15 @@ def target_label(target):
 
 
 def supporting_gate(target):
+    if target == 100000:
+        return "primary_100k"
     label = target_label(target)
     return f"supporting_{label}" if label else "local_reference"
 
 
 def supporting_p2p_kind(target):
+    if target == 100000:
+        return "primary_100k_p2p"
     label = target_label(target)
     return f"supporting_{label}_p2p" if label else "local_reference_p2p"
 
@@ -207,6 +211,16 @@ def parse_run_log(path):
                 "undo_put_prepare",
                 "metadata_put_prepare",
                 "rocksdb_write",
+                "commit_batch_puts",
+                "commit_batch_deletes",
+                "commit_key_bytes",
+                "commit_value_bytes",
+                "commit_utxo_puts",
+                "commit_utxo_deletes",
+                "commit_undo_bytes",
+                "commit_created_list_bytes",
+                "commit_metadata_puts",
+                "commit_block_index_bytes",
             ]:
                 pipeline_totals_us[stage] = pipeline_totals_us.get(stage, 0) + as_int(pairs.get(stage))
             pipeline_blocks_fetched += as_int(pairs.get("blocks_fetched"))
@@ -291,12 +305,15 @@ pipeline_summary.setdefault("p2p_frames_read", 0)
 pipeline_summary.setdefault("p2p_bytes_read", 0)
 pipeline_summary.setdefault("p2p_header_read_us", 0)
 pipeline_summary.setdefault("p2p_payload_read_us", 0)
+if pipeline_summary.get("p2p_fetch", 0) == 0:
+    pipeline_summary["p2p_fetch"] = pipeline_summary.get("block_fetch_wait", 0)
 
 doc = {
     "benchmark_contract_version": 1,
     "benchmark_kind": supporting_p2p_kind(target),
     "benchmark_gate": supporting_gate(target),
     "benchmark_lane": supporting_p2p_kind(target),
+    "telemetry_schema": "benchmark.telemetry_tick.v1",
     "utxo_accounting_policy": "core_spendable_v1",
     "target_label": target_label(target),
     "target_height": target,

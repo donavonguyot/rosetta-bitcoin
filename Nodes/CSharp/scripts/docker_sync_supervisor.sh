@@ -16,6 +16,10 @@ log_line() {
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >&2
 }
 
+now_ms() {
+  python3 -c 'import time; print(int(time.time() * 1000))'
+}
+
 volume_file_exists() {
   local file="$1"
   docker run --rm -v "$VOLUME":/data alpine:3.20 test -f "/data/$file" >/dev/null 2>&1
@@ -63,20 +67,31 @@ field() {
   python3 -c "import json,sys; d=json.load(sys.stdin); $1" 2>/dev/null || echo "?"
 }
 
+emit_benchmark_tick() {
+  local json="$1" last_height="$2" phase="$3" process_running="$4"
+  printf '%s\n' "$json" | \
+    TARGET_BLOCK_HEIGHT="${TARGET_BLOCK_HEIGHT:-$HEADERS_MAX}" BENCHMARK_GATE="${BENCHMARK_GATE:-supervisor}" \
+    BENCHMARK_STARTED_MS="$STARTED_MS" BENCHMARK_LAST_HEIGHT="$last_height" \
+    BENCHMARK_PHASE="$phase" BENCHMARK_PROCESS_RUNNING="$process_running" POLL_SEC="$POLL_SEC" \
+    python3 scripts/emit_benchmark_telemetry_tick.py
+}
+
 emit_tick() {
   local phase="$1" last_height="$2"
-  local json h header stored status blocker delta
+  local json h header stored status blocker delta process_running
   json="$(status_json)"
   h="$(echo "$json" | field "print(d.get('validated_height','?'))")"
   header="$(echo "$json" | field "print(d.get('header_height','?'))")"
   stored="$(echo "$json" | field "print(d.get('stored_block_height','?'))")"
   status="$(echo "$json" | field "print(d.get('sync_status','?'))")"
   blocker="$(echo "$json" | field "import json; b=d.get('current_blocker'); print(json.dumps(b) if b else 'null')")"
+  process_running="$(docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" && echo 1 || echo 0)"
   delta=0
   if [[ "$h" =~ ^[0-9]+$ ]] && [[ "$last_height" =~ ^[0-9]+$ ]]; then
     delta=$((h - last_height))
   fi
-  log_line "AGENT_LOOP_TICK_chatreport {\"phase\":\"$phase\",\"validated_height\":$h,\"header_height\":$header,\"stored_block_height\":$stored,\"sync_status\":\"$status\",\"delta_since_last\":$delta,\"process_running\":$(docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME" && echo 1 || echo 0),\"current_blocker\":$blocker}"
+  log_line "AGENT_LOOP_TICK_chatreport {\"phase\":\"$phase\",\"validated_height\":$h,\"header_height\":$header,\"stored_block_height\":$stored,\"sync_status\":\"$status\",\"delta_since_last\":$delta,\"process_running\":$process_running,\"current_blocker\":$blocker}"
+  log_line "$(emit_benchmark_tick "$json" "$last_height" "$phase" "$process_running")"
   echo "$h"
 }
 
@@ -140,6 +155,7 @@ if [[ "${DOCKER_REBUILD:-0}" == "1" ]]; then
 else
   log_line "supervisor build skipped reason=warm_image_reuse rebuild_with=DOCKER_REBUILD=1"
 fi
+STARTED_MS="$(now_ms)"
 SOURCE_SIG="$(source_signature)"
 last_height="$(emit_tick starting 0)"
 log_line "supervisor start volume=$VOLUME headers_max=$HEADERS_MAX header_batches_max=$HEADER_BATCHES_MAX blocks_max=$BLOCKS_MAX poll_sec=$POLL_SEC check_sec=$CHECK_SEC"

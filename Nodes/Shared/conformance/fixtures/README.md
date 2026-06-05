@@ -11,7 +11,7 @@ blocks.block1_connect
 blocks.block2_connect
 storage.native_fresh_start
 storage.native_restart
-storage.local_sqlite_artifact_absent
+storage.operational_db_boundary
 storage.project_export_observational
 sync.deferred_handshake
 sync.honest_start_height

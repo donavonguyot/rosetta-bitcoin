@@ -14,8 +14,8 @@ docker_supervisor: pybitnode-supervisor
 full_replay_status: pending
 ```
 
-Legacy SQLite scout heights and snapshots are historical handoff evidence only.
-They do not count as current Python native parity.
+Historical compatibility heights and snapshots are handoff evidence only. They
+do not count as current Python native parity.
 
 ## Next Replay Plan Inputs
 

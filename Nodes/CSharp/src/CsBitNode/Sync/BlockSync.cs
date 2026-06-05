@@ -198,7 +198,13 @@ public static class BlockSync
             }
             finally
             {
-                _queue.CompleteAdding();
+                try
+                {
+                    _queue.CompleteAdding();
+                }
+                catch (InvalidOperationException)
+                {
+                }
             }
         }
 

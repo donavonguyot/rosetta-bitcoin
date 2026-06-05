@@ -10,9 +10,9 @@ import (
 )
 
 func TestBlockViewSameBlockSpendLeavesNoExternalMutation(t *testing.T) {
-	view := newBlockView()
-	outpoint := storage.OutPoint{TxID: "0100000000000000000000000000000000000000000000000000000000000000", Vout: 0}
-	utxo := storage.UTXO{TxID: outpoint.TxID, Vout: outpoint.Vout, Value: 10, ScriptPubKeyBytes: []byte{0x51}, Height: 1}
+	view := newBlockView(1, 1)
+	outpoint := storage.NewOutPointFromDisplay("0100000000000000000000000000000000000000000000000000000000000000", 0)
+	utxo := storage.NewUTXO(outpoint, 10, []byte{0x51}, 1, false)
 	view.loaded[outpoint] = nil
 	view.addCreated([]storage.UTXO{utxo})
 	if _, ok := view.find(outpoint); !ok {
@@ -34,9 +34,9 @@ func TestBlockViewSameBlockSpendLeavesNoExternalMutation(t *testing.T) {
 }
 
 func TestBlockViewExternalSpendProducesDeleteAndUndo(t *testing.T) {
-	view := newBlockView()
-	outpoint := storage.OutPoint{TxID: "0200000000000000000000000000000000000000000000000000000000000000", Vout: 1}
-	utxo := storage.UTXO{TxID: outpoint.TxID, Vout: outpoint.Vout, Value: 20, ScriptPubKeyBytes: []byte{0x51}, Height: 1}
+	view := newBlockView(1, 0)
+	outpoint := storage.NewOutPointFromDisplay("0200000000000000000000000000000000000000000000000000000000000000", 1)
+	utxo := storage.NewUTXO(outpoint, 20, []byte{0x51}, 1, false)
 	view.loaded[outpoint] = &utxo
 	view.markSpent(outpoint, utxo)
 	if got := view.externalSpends(); len(got) != 1 || got[0] != outpoint {
@@ -56,7 +56,8 @@ func TestOutputsForSkipsCoreUnspendableOutputs(t *testing.T) {
 		},
 	}
 
-	utxos := outputsFor(10, tx, false)
+	txidInternal := txtypes.DoubleSHA(txtypes.Serialize(tx, false))
+	utxos := outputsFor(10, &tx, txidInternal, false)
 	if len(utxos) != 1 {
 		t.Fatalf("expected one spendable output, got %#v", utxos)
 	}
@@ -69,18 +70,20 @@ func TestScriptRunnerDeterministicFirstFailure(t *testing.T) {
 	t.Setenv("GOBITNODE_PAR_SCRIPT_VERIFY", "1")
 	t.Setenv("GOBITNODE_PAR_SCRIPT_THREADS", "4")
 	runner := newScriptRunner()
+	firstTx := txtypes.Transaction{}
+	secondTx := txtypes.Transaction{}
 	jobs := []scriptJob{
 		{
 			txid:       "first",
 			inputIndex: 0,
-			tx:         txtypes.Transaction{},
+			tx:         &firstTx,
 			utxo:       storage.UTXO{ScriptPubKeyBytes: []byte{0x51}},
 			options:    script.VerifyInputOptions{},
 		},
 		{
 			txid:       "second",
 			inputIndex: 0,
-			tx:         txtypes.Transaction{},
+			tx:         &secondTx,
 			utxo:       storage.UTXO{ScriptPubKeyBytes: []byte{0x51}},
 			options:    script.VerifyInputOptions{},
 		},

@@ -61,8 +61,8 @@ type Store struct {
 }
 
 func Open(datadir string) (*Store, error) {
-	if forbiddenSQLite(datadir) {
-		return nil, errors.New("native datadir contains forbidden SQLite artifact")
+	if UnapprovedRuntimeDBArtifactPresent(datadir) {
+		return nil, errors.New("native datadir contains an unapproved port-local operational DB artifact")
 	}
 	if err := os.MkdirAll(filepath.Join(datadir, "blocks"), 0o755); err != nil {
 		return nil, err
@@ -170,6 +170,19 @@ type UTXO struct {
 	ScriptPubKeyBytes []byte `json:"-"`
 	Height            int    `json:"height"`
 	Coinbase          bool   `json:"coinbase"`
+	txidInternal      [32]byte
+}
+
+func NewUTXO(outpoint OutPoint, value int64, scriptPubKey []byte, height int, coinbase bool) UTXO {
+	return UTXO{
+		TxID:              outpoint.TxID,
+		Vout:              outpoint.Vout,
+		Value:             value,
+		ScriptPubKeyBytes: append([]byte{}, scriptPubKey...),
+		Height:            height,
+		Coinbase:          coinbase,
+		txidInternal:      outpoint.hash,
+	}
 }
 
 func (s *Store) PutUTXO(utxo UTXO) error {
@@ -177,16 +190,17 @@ func (s *Store) PutUTXO(utxo UTXO) error {
 	if err != nil {
 		return err
 	}
-	return s.putBytes(utxoKeyBytes(utxo.TxID, utxo.Vout), payload)
+	return s.putBytes(utxo.OutPoint().KeyBytes(), payload)
 }
 
 func (s *Store) GetUTXO(txid string, vout uint32) (*UTXO, error) {
-	value, err := s.getBytes(utxoKeyBytes(txid, vout))
+	outpoint := NewOutPointFromDisplay(txid, vout)
+	value, err := s.getBytes(outpoint.KeyBytes())
 	if err != nil {
 		return nil, err
 	}
 	if value == nil {
-		value, err = s.get(legacyUTXOKey(txid, vout))
+		value, err = s.get(legacyUTXOKey(outpoint.DisplayTxID(), outpoint.Vout))
 	}
 	if err != nil {
 		return nil, err
@@ -194,7 +208,7 @@ func (s *Store) GetUTXO(txid string, vout uint32) (*UTXO, error) {
 	if value == nil {
 		return nil, nil
 	}
-	utxo, err := decodeUTXO(txid, vout, value)
+	utxo, err := decodeUTXOForOutPoint(outpoint, value)
 	if err != nil {
 		return nil, err
 	}
@@ -204,6 +218,59 @@ func (s *Store) GetUTXO(txid string, vout uint32) (*UTXO, error) {
 type OutPoint struct {
 	TxID string `json:"txid"`
 	Vout uint32 `json:"vout"`
+	hash [32]byte
+}
+
+func NewOutPointFromDisplay(txid string, vout uint32) OutPoint {
+	raw, err := internalHash(txid)
+	if err != nil {
+		return OutPoint{TxID: txid, Vout: vout}
+	}
+	var hash [32]byte
+	copy(hash[:], raw)
+	return OutPoint{Vout: vout, hash: hash}
+}
+
+func NewOutPointFromInternal(hash []byte, vout uint32) OutPoint {
+	var fixed [32]byte
+	copy(fixed[:], hash)
+	return OutPoint{Vout: vout, hash: fixed}
+}
+
+func (o OutPoint) DisplayTxID() string {
+	if o.TxID != "" {
+		return o.TxID
+	}
+	return displayHash(o.hash[:])
+}
+
+func (o OutPoint) KeyBytes() []byte {
+	if o.hash == ([32]byte{}) && o.TxID != "" {
+		return utxoKeyBytes(o.TxID, o.Vout)
+	}
+	key := make([]byte, 37)
+	key[0] = binaryUTXOPrefix[0]
+	copy(key[1:33], o.hash[:])
+	binary.LittleEndian.PutUint32(key[33:37], o.Vout)
+	return key
+}
+
+func (o OutPoint) Less(other OutPoint) bool {
+	if cmp := bytes.Compare(o.hash[:], other.hash[:]); cmp != 0 {
+		return cmp < 0
+	}
+	if o.TxID != other.TxID {
+		return o.TxID < other.TxID
+	}
+	return o.Vout < other.Vout
+}
+
+func (o OutPoint) MarshalJSON() ([]byte, error) {
+	type jsonOutPoint struct {
+		TxID string `json:"txid"`
+		Vout uint32 `json:"vout"`
+	}
+	return json.Marshal(jsonOutPoint{TxID: o.DisplayTxID(), Vout: o.Vout})
 }
 
 type UTXOReadTiming struct {
@@ -225,7 +292,7 @@ func (s *Store) GetUTXOsWithTiming(outpoints []OutPoint) (map[OutPoint]*UTXO, UT
 	}
 	keys := make([][]byte, len(outpoints))
 	for i, outpoint := range outpoints {
-		keys[i] = utxoKeyBytes(outpoint.TxID, outpoint.Vout)
+		keys[i] = outpoint.KeyBytes()
 	}
 	start := time.Now()
 	values, err := s.multiGet(keys)
@@ -237,7 +304,7 @@ func (s *Store) GetUTXOsWithTiming(outpoints []OutPoint) (map[OutPoint]*UTXO, UT
 		outpoint := outpoints[i]
 		if value == nil {
 			start = time.Now()
-			legacy, err := s.get(legacyUTXOKey(outpoint.TxID, outpoint.Vout))
+			legacy, err := s.get(legacyUTXOKey(outpoint.DisplayTxID(), outpoint.Vout))
 			timing.LegacyFallbackMillis += time.Since(start).Milliseconds()
 			if err != nil {
 				return nil, timing, err
@@ -249,7 +316,7 @@ func (s *Store) GetUTXOsWithTiming(outpoints []OutPoint) (map[OutPoint]*UTXO, UT
 			continue
 		}
 		start = time.Now()
-		utxo, err := decodeUTXO(outpoint.TxID, outpoint.Vout, value)
+		utxo, err := decodeUTXOForOutPoint(outpoint, value)
 		timing.DecodeMillis += time.Since(start).Milliseconds()
 		if err != nil {
 			return nil, timing, err
@@ -318,24 +385,52 @@ type BlockCommit struct {
 	Metadata Metadata
 }
 
+type CommitTiming struct {
+	UTXOKeyEncode      time.Duration
+	UTXODeletePrepare  time.Duration
+	UTXOPutPrepare     time.Duration
+	UndoPutPrepare     time.Duration
+	MetadataPutPrepare time.Duration
+	RocksDBWrite       time.Duration
+}
+
 func (s *Store) CommitBlock(commit BlockCommit) error {
+	_, err := s.CommitBlockWithTiming(commit)
+	return err
+}
+
+func (s *Store) CommitBlockWithTiming(commit BlockCommit) (CommitTiming, error) {
+	timing := CommitTiming{}
 	batch := C.rocksdb_writebatch_create()
 	defer C.rocksdb_writebatch_destroy(batch)
+	start := time.Now()
 	for _, outpoint := range commit.Spent {
-		writeBatchDelete(batch, utxoKeyBytes(outpoint.TxID, outpoint.Vout))
+		keyStart := time.Now()
+		key := outpoint.KeyBytes()
+		timing.UTXOKeyEncode += time.Since(keyStart)
+		writeBatchDelete(batch, key)
 	}
+	timing.UTXODeletePrepare += time.Since(start)
+	start = time.Now()
 	for _, utxo := range commit.Created {
 		payload, err := encodeUTXO(utxo)
 		if err != nil {
-			return err
+			return timing, err
 		}
-		writeBatchPut(batch, utxoKeyBytes(utxo.TxID, utxo.Vout), payload)
+		keyStart := time.Now()
+		key := utxo.OutPoint().KeyBytes()
+		timing.UTXOKeyEncode += time.Since(keyStart)
+		writeBatchPut(batch, key, payload)
 	}
+	timing.UTXOPutPrepare += time.Since(start)
+	start = time.Now()
 	undo, err := json.Marshal(commit.Undo)
 	if err != nil {
-		return err
+		return timing, err
 	}
 	writeBatchPut(batch, []byte("undo:"+padHeight(commit.Height)), undo)
+	timing.UndoPutPrepare += time.Since(start)
+	start = time.Now()
 	meta := s.normalizeMetadata(commit.Metadata)
 	meta.ValidatedHeight = commit.Height
 	meta.ValidatedHash = commit.Hash
@@ -345,20 +440,23 @@ func (s *Store) CommitBlock(commit BlockCommit) error {
 	meta.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	payload, err := json.Marshal(meta)
 	if err != nil {
-		return err
+		return timing, err
 	}
 	writeBatchPut(batch, []byte("meta"), payload)
+	timing.MetadataPutPrepare += time.Since(start)
 	if s.failCommit {
 		s.failCommit = false
-		return errors.New("injected commit failure")
+		return timing, errors.New("injected commit failure")
 	}
+	start = time.Now()
 	var cerr *C.char
 	C.rocksdb_write(s.db, s.wo, batch, &cerr)
+	timing.RocksDBWrite += time.Since(start)
 	if cerr != nil {
 		defer C.rocksdb_free(unsafe.Pointer(cerr))
-		return errors.New(C.GoString(cerr))
+		return timing, errors.New(C.GoString(cerr))
 	}
-	return nil
+	return timing, nil
 }
 
 func (s *Store) put(key string, value []byte) error {
@@ -574,6 +672,39 @@ func (u UTXO) ScriptHex() string {
 	return hex.EncodeToString(u.ScriptPubKeyBytes)
 }
 
+func (u UTXO) DisplayTxID() string {
+	if u.TxID != "" {
+		return u.TxID
+	}
+	return displayHash(u.txidInternal[:])
+}
+
+func (u UTXO) OutPoint() OutPoint {
+	if u.txidInternal != ([32]byte{}) {
+		return OutPoint{Vout: u.Vout, hash: u.txidInternal}
+	}
+	return NewOutPointFromDisplay(u.TxID, u.Vout)
+}
+
+func (u UTXO) MarshalJSON() ([]byte, error) {
+	type jsonUTXO struct {
+		TxID         string `json:"txid"`
+		Vout         uint32 `json:"vout"`
+		Value        int64  `json:"value"`
+		ScriptPubKey string `json:"script_pubkey"`
+		Height       int    `json:"height"`
+		Coinbase     bool   `json:"coinbase"`
+	}
+	return json.Marshal(jsonUTXO{
+		TxID:         u.DisplayTxID(),
+		Vout:         u.Vout,
+		Value:        u.Value,
+		ScriptPubKey: u.ScriptHex(),
+		Height:       u.Height,
+		Coinbase:     u.Coinbase,
+	})
+}
+
 func encodeUTXO(utxo UTXO) ([]byte, error) {
 	script, err := utxo.ScriptBytes()
 	if err != nil {
@@ -598,6 +729,10 @@ func encodeUTXO(utxo UTXO) ([]byte, error) {
 }
 
 func decodeUTXO(txid string, vout uint32, value []byte) (UTXO, error) {
+	return decodeUTXOForOutPoint(NewOutPointFromDisplay(txid, vout), value)
+}
+
+func decodeUTXOForOutPoint(outpoint OutPoint, value []byte) (UTXO, error) {
 	if len(value) > 0 && value[0] == byte(codecVersion) {
 		if len(value) < 14 {
 			return UTXO{}, errors.New("truncated binary UTXO")
@@ -618,7 +753,7 @@ func decodeUTXO(txid string, vout uint32, value []byte) (UTXO, error) {
 			return UTXO{}, errors.New("truncated binary UTXO script")
 		}
 		script := append([]byte{}, value[offset:offset+int(scriptLen)]...)
-		return UTXO{TxID: txid, Vout: vout, Value: amount, ScriptPubKeyBytes: script, Height: height, Coinbase: coinbase}, nil
+		return UTXO{TxID: outpoint.TxID, Vout: outpoint.Vout, Value: amount, ScriptPubKeyBytes: script, Height: height, Coinbase: coinbase, txidInternal: outpoint.hash}, nil
 	}
 	var utxo UTXO
 	if err := json.Unmarshal(value, &utxo); err != nil {
@@ -630,6 +765,11 @@ func decodeUTXO(txid string, vout uint32, value []byte) (UTXO, error) {
 			utxo.ScriptPubKeyBytes = script
 		}
 	}
+	if utxo.TxID == "" {
+		utxo.TxID = outpoint.DisplayTxID()
+	}
+	utxo.Vout = outpoint.Vout
+	utxo.txidInternal = outpoint.hash
 	return utxo, nil
 }
 
@@ -803,13 +943,18 @@ func ReadMetadata(datadir string) (Metadata, error) {
 	return store.Metadata()
 }
 
-func LocalSQLiteAbsent(datadir string) bool {
-	return !forbiddenSQLite(datadir)
+func OperationalDBArtifactAbsent(datadir string) bool {
+	return !UnapprovedRuntimeDBArtifactPresent(datadir)
 }
 
-func forbiddenSQLite(datadir string) bool {
-	matches, _ := filepath.Glob(filepath.Join(datadir, "*.db"))
-	return len(matches) > 0
+func UnapprovedRuntimeDBArtifactPresent(datadir string) bool {
+	for _, pattern := range []string{"*.db", "*.sqlite", "*.sqlite3"} {
+		matches, _ := filepath.Glob(filepath.Join(datadir, pattern))
+		if len(matches) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func rocksDBBlockCacheMB() int {

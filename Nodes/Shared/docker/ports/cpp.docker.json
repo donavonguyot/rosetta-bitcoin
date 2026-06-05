@@ -18,6 +18,8 @@
   "volumes": {
     "data": "cpbitnode_data",
     "proof": "cpbitnode_proof_data",
+    "proof_50k": "cpbitnode_50k_proof_data",
+    "proof_100k": "cpbitnode_100k_proof_data",
     "supervisor": "cpbitnode_sync_data"
   },
   "commands": {
@@ -28,6 +30,8 @@
     "docker_script_corpus": "cd Nodes/Cpp && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Cpp && make docker-cpp-supporting-5k-proof",
     "docker_proof_10k": "cd Nodes/Cpp && make docker-cpp-supporting-10k-proof",
+    "docker_proof_50k": "cd Nodes/Cpp && make docker-cpp-supporting-50k-proof",
+    "docker_proof_100k": "cd Nodes/Cpp && make docker-cpp-primary-100k-proof",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Cpp && make docker-cpp-sync-supervisor",
     "docker_supervisor_status": "cd Nodes/Cpp && make docker-cpp-sync-status",
@@ -67,7 +71,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/cpp_rocksdb_codec_v2_storage_2026-06-02.json",
-    "notes": "docker_proof_local runs the supporting 5k local-reference Docker benchmark with native secp256k1, RocksDB, WAL enabled, and a fresh proof volume."
+    "notes": "docker_proof_local/docker_proof_10k/docker_proof_50k/docker_proof_100k run local-reference Docker benchmarks with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, live telemetry, and fresh proof volumes."
   },
   "known_caveats": ["External network probe command not standardized"]
 }

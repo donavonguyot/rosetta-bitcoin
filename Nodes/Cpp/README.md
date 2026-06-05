@@ -11,7 +11,7 @@ port-owned corpus artifacts.
 
 Cpp's Core compliance path is **RocksDB-only**. Native mode must use RocksDB for
 headers, block index, sync state, validated tip, UTXO, undo, metadata, blocker
-state, and status truth. SQLite support has been removed from Cpp.
+state, and status truth.
 
 Quality bar (current):
 

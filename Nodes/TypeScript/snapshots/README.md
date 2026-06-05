@@ -1,7 +1,8 @@
-# Legacy Tracker Snapshots
+# Compatibility Tracker Snapshots
 
-These JSON exports come from the historical SQLite tracker and are committed only
-as checkpoint/handoff evidence. They are not native/Core chainstate proof.
+These JSON exports come from the historical compatibility tracker and are
+committed only as checkpoint/handoff evidence. They are not native/Core
+chainstate proof.
 
 Forward TypeScript native status comes from:
 

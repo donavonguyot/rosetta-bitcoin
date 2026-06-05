@@ -30,7 +30,7 @@ public sealed class SighashCache
         _bip143OutputsAll ??= CryptoUtil.DoubleSha256(SerializedOutputsAll(transaction));
 
     public byte[] LegacyOutputsAll(Transaction transaction) =>
-        _legacyOutputsAll ??= SerializedOutputsAll(transaction);
+        _legacyOutputsAll ??= SerializedLegacyOutputsAll(transaction);
 
     public byte[] SerializedOutput(Transaction transaction, int index)
     {
@@ -104,6 +104,15 @@ public sealed class SighashCache
     private static byte[] SerializedOutputsAll(Transaction transaction)
     {
         using var ms = new MemoryStream();
+        foreach (var output in transaction.Outputs)
+            ms.Write(Sighash.SerializeOutput(output));
+        return ms.ToArray();
+    }
+
+    private static byte[] SerializedLegacyOutputsAll(Transaction transaction)
+    {
+        using var ms = new MemoryStream();
+        ms.Write(WireSerialize.WriteCompactSize(transaction.Outputs.Count));
         foreach (var output in transaction.Outputs)
             ms.Write(Sighash.SerializeOutput(output));
         return ms.ToArray();

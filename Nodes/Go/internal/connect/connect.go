@@ -139,8 +139,10 @@ func RunStore(store *storage.Store, opts Options) (Summary, error) {
 		meta.LastError = ""
 		meta.ChainstateStatus = "usable"
 		meta.SyncStatus = syncStatus(height, meta.StoredBlockHeight)
+		var commitTiming storage.CommitTiming
 		if err := timing.measure("commit", func() error {
-			return store.CommitBlock(storage.BlockCommit{
+			var commitErr error
+			commitTiming, commitErr = store.CommitBlockWithTiming(storage.BlockCommit{
 				Height:   height,
 				Hash:     info.Hash,
 				Spent:    spent,
@@ -148,9 +150,11 @@ func RunStore(store *storage.Store, opts Options) (Summary, error) {
 				Undo:     undo,
 				Metadata: meta,
 			})
+			return commitErr
 		}); err != nil {
 			return Summary{}, err
 		}
+		recordCommitTiming(timing, commitTiming)
 		timing.recordBlock(height, time.Since(blockStarted), blockShape(txs))
 		if !opts.Quiet && (height%opts.Progress == 0 || height == opts.Target) {
 			fmt.Printf("gobitnode-connect height=%d hash=%s txs=%d utxos=%d\n", height, info.Hash, info.TxCount, utxoCount)
@@ -214,7 +218,8 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 	if len(txs) == 0 || !txs[0].IsCoinbase() {
 		return nil, nil, nil, blocker(height, blockHash, "", 0, "block_first_transaction_not_coinbase", "block does not begin with a coinbase transaction"), nil
 	}
-	view := newBlockView()
+	expectedSpends, expectedCreates := blockMutationShape(txs)
+	view := newBlockView(expectedSpends, expectedCreates)
 	prevouts := gatherPrevouts(txs)
 	var loaded map[storage.OutPoint]*storage.UTXO
 	if err := timing.measure("prevout_batch_load", func() error {
@@ -229,36 +234,38 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 		return nil, nil, nil, nil, err
 	}
 	view.loaded = loaded
-	jobs := []scriptJob{}
-	for txIndex, tx := range txs {
+	jobs := make([]scriptJob, 0, expectedSpends)
+	for txIndex := range txs {
+		tx := &txs[txIndex]
+		txidInternal := txtypes.DoubleSHA(txtypes.Serialize(*tx, false))
+		txid := txtypes.DisplayHash(txidInternal)
 		if txIndex == 0 {
 			if height == 0 {
 				continue
 			}
-			outs := outputsFor(height, tx, true)
+			outs := outputsFor(height, tx, txidInternal, true)
 			view.addCreated(outs)
 			continue
 		}
 		if len(tx.Inputs) == 0 {
-			return nil, nil, nil, blocker(height, blockHash, tx.TxID(), 0, "transaction_without_inputs", "non-coinbase transaction has no inputs"), nil
+			return nil, nil, nil, blocker(height, blockHash, txid, 0, "transaction_without_inputs", "non-coinbase transaction has no inputs"), nil
 		}
 		spentPrevouts := make([]script.SpentPrevout, len(tx.Inputs))
 		inputUtxos := make([]storage.UTXO, len(tx.Inputs))
 		inputOutpoints := make([]storage.OutPoint, len(tx.Inputs))
-		inputSeen := map[string]bool{}
+		inputSeen := make(map[storage.OutPoint]bool, len(tx.Inputs))
 		for inputIndex, input := range tx.Inputs {
 			outpoint := outpointFromInput(input)
-			key := outpointKey(outpoint)
-			if inputSeen[key] || view.isSpent(outpoint) {
-				return nil, nil, nil, blockerWithPrevout(height, blockHash, tx.TxID(), inputIndex, input, storage.UTXO{}, "duplicate_spend", "duplicate spend inside block"), nil
+			if inputSeen[outpoint] || view.isSpent(outpoint) {
+				return nil, nil, nil, blockerWithPrevout(height, blockHash, txid, inputIndex, input, storage.UTXO{}, "duplicate_spend", "duplicate spend inside block"), nil
 			}
-			inputSeen[key] = true
+			inputSeen[outpoint] = true
 			utxo, ok := view.find(outpoint)
 			if !ok {
-				return nil, nil, nil, blocker(height, blockHash, tx.TxID(), inputIndex, "missing_utxo", "Go connect replay could not find the spent prevout"), nil
+				return nil, nil, nil, blocker(height, blockHash, txid, inputIndex, "missing_utxo", "Go connect replay could not find the spent prevout"), nil
 			}
 			if utxo.Coinbase && height-utxo.Height < 100 {
-				return nil, nil, nil, blockerWithPrevout(height, blockHash, tx.TxID(), inputIndex, input, utxo, "coinbase_maturity", "coinbase spend before 100 confirmations"), nil
+				return nil, nil, nil, blockerWithPrevout(height, blockHash, txid, inputIndex, input, utxo, "coinbase_maturity", "coinbase spend before 100 confirmations"), nil
 			}
 			spk, err := utxo.ScriptBytes()
 			if err != nil {
@@ -271,7 +278,7 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 		for inputIndex, input := range tx.Inputs {
 			jobs = append(jobs, scriptJob{
 				tx:         tx,
-				txid:       tx.TxID(),
+				txid:       txid,
 				inputIndex: inputIndex,
 				input:      input,
 				utxo:       inputUtxos[inputIndex],
@@ -283,7 +290,7 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 			})
 			view.markSpent(inputOutpoints[inputIndex], inputUtxos[inputIndex])
 		}
-		outs := outputsFor(height, tx, false)
+		outs := outputsFor(height, tx, txidInternal, false)
 		view.addCreated(outs)
 	}
 	var verifyFailure *scriptFailure
@@ -313,21 +320,14 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 	return created, spent, undo, nil, nil
 }
 
-func outputsFor(height int, transaction txtypes.Transaction, coinbase bool) []storage.UTXO {
-	txid := transaction.TxID()
+func outputsFor(height int, transaction *txtypes.Transaction, txidInternal []byte, coinbase bool) []storage.UTXO {
 	utxos := make([]storage.UTXO, 0, len(transaction.Outputs))
 	for vout, output := range transaction.Outputs {
 		if !isSpendableOutput(output.ScriptPubKey) {
 			continue
 		}
-		utxos = append(utxos, storage.UTXO{
-			TxID:              txid,
-			Vout:              uint32(vout),
-			Value:             output.Value,
-			ScriptPubKeyBytes: append([]byte{}, output.ScriptPubKey...),
-			Height:            height,
-			Coinbase:          coinbase,
-		})
+		outpoint := storage.NewOutPointFromInternal(txidInternal, uint32(vout))
+		utxos = append(utxos, storage.NewUTXO(outpoint, output.Value, output.ScriptPubKey, height, coinbase))
 	}
 	return utxos
 }
@@ -337,26 +337,37 @@ func isSpendableOutput(scriptPubKey []byte) bool {
 }
 
 type blockView struct {
-	loaded  map[storage.OutPoint]*storage.UTXO
-	created map[storage.OutPoint]storage.UTXO
-	spent   map[storage.OutPoint]storage.UndoEntry
+	loaded        map[storage.OutPoint]*storage.UTXO
+	created       map[storage.OutPoint]storage.UTXO
+	spent         map[storage.OutPoint]bool
+	createdOrder  []storage.OutPoint
+	externalSpent []storage.OutPoint
+	undo          []storage.UndoEntry
 }
 
-func newBlockView() *blockView {
+func newBlockView(expectedSpends int, expectedCreates int) *blockView {
 	return &blockView{
-		loaded:  map[storage.OutPoint]*storage.UTXO{},
-		created: map[storage.OutPoint]storage.UTXO{},
-		spent:   map[storage.OutPoint]storage.UndoEntry{},
+		loaded:        make(map[storage.OutPoint]*storage.UTXO, expectedSpends),
+		created:       make(map[storage.OutPoint]storage.UTXO, expectedCreates),
+		spent:         make(map[storage.OutPoint]bool, expectedSpends),
+		createdOrder:  make([]storage.OutPoint, 0, expectedCreates),
+		externalSpent: make([]storage.OutPoint, 0, expectedSpends),
+		undo:          make([]storage.UndoEntry, 0, expectedSpends),
 	}
 }
 
 func (v *blockView) addCreated(utxos []storage.UTXO) {
 	for _, utxo := range utxos {
-		v.created[storage.OutPoint{TxID: utxo.TxID, Vout: utxo.Vout}] = utxo
+		outpoint := utxo.OutPoint()
+		v.created[outpoint] = utxo
+		v.createdOrder = append(v.createdOrder, outpoint)
 	}
 }
 
 func (v *blockView) find(outpoint storage.OutPoint) (storage.UTXO, bool) {
+	if v.spent[outpoint] {
+		return storage.UTXO{}, false
+	}
 	if utxo, ok := v.created[outpoint]; ok {
 		return utxo, true
 	}
@@ -368,60 +379,41 @@ func (v *blockView) find(outpoint storage.OutPoint) (storage.UTXO, bool) {
 }
 
 func (v *blockView) isSpent(outpoint storage.OutPoint) bool {
-	_, ok := v.spent[outpoint]
-	return ok
+	return v.spent[outpoint]
 }
 
 func (v *blockView) markSpent(outpoint storage.OutPoint, utxo storage.UTXO) {
+	v.spent[outpoint] = true
 	if _, ok := v.created[outpoint]; ok {
 		delete(v.created, outpoint)
-		v.spent[outpoint] = storage.UndoEntry{Outpoint: outpoint, UTXO: utxo}
 		return
 	}
-	v.spent[outpoint] = storage.UndoEntry{Outpoint: outpoint, UTXO: utxo}
+	v.externalSpent = append(v.externalSpent, outpoint)
+	v.undo = append(v.undo, storage.UndoEntry{Outpoint: outpoint, UTXO: utxo})
 }
 
 func (v *blockView) createdUTXOs() []storage.UTXO {
 	out := make([]storage.UTXO, 0, len(v.created))
-	for _, utxo := range v.created {
-		out = append(out, utxo)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].TxID == out[j].TxID {
-			return out[i].Vout < out[j].Vout
+	for _, outpoint := range v.createdOrder {
+		if utxo, ok := v.created[outpoint]; ok {
+			out = append(out, utxo)
 		}
-		return out[i].TxID < out[j].TxID
-	})
+	}
 	return out
 }
 
 func (v *blockView) externalSpends() []storage.OutPoint {
-	out := []storage.OutPoint{}
-	for outpoint := range v.spent {
-		if v.loaded[outpoint] != nil {
-			out = append(out, outpoint)
-		}
-	}
-	sortOutpoints(out)
-	return out
+	return append([]storage.OutPoint{}, v.externalSpent...)
 }
 
 func (v *blockView) undoEntries() []storage.UndoEntry {
-	out := make([]storage.UndoEntry, 0, len(v.spent))
-	for outpoint, undo := range v.spent {
-		if v.loaded[outpoint] != nil {
-			out = append(out, undo)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return outpointKey(out[i].Outpoint) < outpointKey(out[j].Outpoint)
-	})
-	return out
+	return append([]storage.UndoEntry{}, v.undo...)
 }
 
 func gatherPrevouts(txs []txtypes.Transaction) []storage.OutPoint {
-	seen := map[storage.OutPoint]bool{}
-	out := []storage.OutPoint{}
+	expectedSpends, _ := blockMutationShape(txs)
+	seen := make(map[storage.OutPoint]bool, expectedSpends)
+	out := make([]storage.OutPoint, 0, expectedSpends)
 	for txIndex, tx := range txs {
 		if txIndex == 0 {
 			continue
@@ -441,12 +433,37 @@ func gatherPrevouts(txs []txtypes.Transaction) []storage.OutPoint {
 
 func sortOutpoints(outpoints []storage.OutPoint) {
 	sort.Slice(outpoints, func(i, j int) bool {
-		return outpointKey(outpoints[i]) < outpointKey(outpoints[j])
+		return outpoints[i].Less(outpoints[j])
 	})
 }
 
 func outpointFromInput(input txtypes.TxIn) storage.OutPoint {
-	return storage.OutPoint{TxID: txtypes.DisplayHash(input.PreviousOutput.Hash), Vout: input.PreviousOutput.Index}
+	return storage.NewOutPointFromInternal(input.PreviousOutput.Hash, input.PreviousOutput.Index)
+}
+
+func blockMutationShape(txs []txtypes.Transaction) (int, int) {
+	spends := 0
+	creates := 0
+	for txIndex, tx := range txs {
+		if txIndex != 0 {
+			spends += len(tx.Inputs)
+		}
+		for _, output := range tx.Outputs {
+			if isSpendableOutput(output.ScriptPubKey) {
+				creates++
+			}
+		}
+	}
+	return spends, creates
+}
+
+func recordCommitTiming(timing *timingCollector, commitTiming storage.CommitTiming) {
+	timing.addStage("utxo_key_encode", commitTiming.UTXOKeyEncode)
+	timing.addStage("utxo_delete_prepare", commitTiming.UTXODeletePrepare)
+	timing.addStage("utxo_put_prepare", commitTiming.UTXOPutPrepare)
+	timing.addStage("undo_put_prepare", commitTiming.UndoPutPrepare)
+	timing.addStage("metadata_put_prepare", commitTiming.MetadataPutPrepare)
+	timing.addStage("rocksdb_write", commitTiming.RocksDBWrite)
 }
 
 func blocker(height int, blockHash string, txid string, input int, missingRule string, failure string) map[string]any {
@@ -471,10 +488,6 @@ func blockerWithPrevout(height int, blockHash string, txid string, inputIndex in
 	value["spent_height"] = utxo.Height
 	value["spent_coinbase"] = utxo.Coinbase
 	return value
-}
-
-func outpointKey(outpoint storage.OutPoint) string {
-	return fmt.Sprintf("%s:%d", outpoint.TxID, outpoint.Vout)
 }
 
 func syncStatus(validated int, stored int) string {

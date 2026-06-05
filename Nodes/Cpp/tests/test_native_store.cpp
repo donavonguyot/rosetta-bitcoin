@@ -2,6 +2,7 @@
 
 #include "cpbitnode/db/node_state.hpp"
 
+#include <cstdlib>
 #include <cstdint>
 #include <filesystem>
 #include <iomanip>
@@ -20,6 +21,10 @@ namespace {
 
 std::vector<std::uint8_t> txid(std::uint8_t value) {
     return std::vector<std::uint8_t>(32, value);
+}
+
+cpbitnode::db::DbOutpointKey nativeKey(const std::vector<std::uint8_t>& txid, int vout) {
+    return cpbitnode::db::makeDbOutpointKey(txid, vout);
 }
 
 std::filesystem::path tempStoreDir(const std::string& name) {
@@ -64,6 +69,22 @@ void testRocksDbStoreMultiGetAndHeightIndex() {
     EXPECT_TRUE(largeLoaded[3].has_value());
     EXPECT_BYTES_EQ(largeLoaded[0]->txid, a);
     EXPECT_BYTES_EQ(largeLoaded[3]->txid, a);
+
+    const std::vector<cpbitnode::db::DbOutpointKey> nativeRequest = {
+        nativeKey(a, 0),
+        nativeKey(missing, 0),
+        nativeKey(b, 2),
+        nativeKey(a, 0),
+    };
+    const auto nativeLoaded = store->getUtxos(nativeRequest);
+    EXPECT_EQ(static_cast<int>(nativeLoaded.size()), 4);
+    EXPECT_TRUE(nativeLoaded[0].has_value());
+    EXPECT_TRUE(!nativeLoaded[1].has_value());
+    EXPECT_TRUE(nativeLoaded[2].has_value());
+    EXPECT_TRUE(nativeLoaded[3].has_value());
+    EXPECT_BYTES_EQ(cpbitnode::db::txidVector(nativeLoaded[0]->outpoint), a);
+    EXPECT_BYTES_EQ(cpbitnode::db::txidVector(nativeLoaded[2]->outpoint), b);
+    EXPECT_BYTES_EQ(cpbitnode::db::txidVector(nativeLoaded[3]->outpoint), a);
 
     store->deleteUtxosCreatedAtHeight(6);
     EXPECT_EQ(store->utxoCount(), 2);
@@ -158,6 +179,69 @@ void testRocksDbStoreCommitBlockUpdatesTipIndexUndoAndCounters() {
     std::filesystem::remove_all(dir);
 }
 
+void testRocksDbStoreNativeCommitTelemetryAndEmptyRecords() {
+    const auto dir = tempStoreDir("cpbitnode_native_store_native_commit");
+    auto store = cpbitnode::db::openRocksDbNodeStateStore(dir.string());
+    const auto spent = txid(0x63);
+    const auto createdA = txid(0x64);
+    const auto createdB = txid(0x65);
+    const std::string hash(64, 'c');
+
+    store->addUtxo(spent, 1, 3, 100, {0x53}, false);
+    cpbitnode::db::BlockCommitNative commit;
+    commit.chain = "testnet4";
+    commit.height = 4;
+    commit.blockHash = hash;
+    commit.spends = {nativeKey(spent, 1)};
+    commit.creates = {
+        {nativeKey(createdA, 0), 4, 75, {0x51}, false},
+        {nativeKey(createdB, 2), 4, 25, {0x52}, true},
+    };
+    commit.undo = {{nativeKey(spent, 1), 3, 100, {0x53}, false}};
+    commit.blockIndex = cpbitnode::db::StoredBlockRow{4, hash, "blk00000.dat", 8, 80};
+
+    setenv("CPBITNODE_SYNC_TIMING", "1", 1);
+    cpbitnode::db::resetStorageTiming();
+    store->commitBlock(commit);
+    const auto timing = cpbitnode::db::storageTimingSnapshot();
+    unsetenv("CPBITNODE_SYNC_TIMING");
+
+    EXPECT_EQ(store->getValidatedHeight("testnet4"), 4);
+    EXPECT_EQ(store->getValidatedHash("testnet4"), hash);
+    EXPECT_EQ(store->utxoCount(), 2);
+    EXPECT_TRUE(!store->getUtxo(spent, 1).has_value());
+    EXPECT_TRUE(store->getUtxo(createdA, 0).has_value());
+    EXPECT_TRUE(store->getUtxo(createdB, 2).has_value());
+    EXPECT_EQ(timing.commitBatchPuts, 8LL);
+    EXPECT_EQ(timing.commitBatchDeletes, 1LL);
+    EXPECT_EQ(timing.commitUtxoPuts, 2LL);
+    EXPECT_EQ(timing.commitUtxoDeletes, 1LL);
+    EXPECT_EQ(timing.commitCreatedListBytes, 76LL);
+    EXPECT_TRUE(timing.commitUndoBytes > 0);
+    EXPECT_EQ(timing.commitMetadataPuts, 1LL);
+    EXPECT_TRUE(timing.commitBlockIndexBytes > 0);
+    EXPECT_TRUE(timing.commitKeyBytes > 0);
+    EXPECT_TRUE(timing.commitValueBytes > 0);
+
+    const auto undo = store->takeUtxoUndo("testnet4", 4);
+    EXPECT_EQ(static_cast<int>(undo.size()), 1);
+    EXPECT_BYTES_EQ(undo.front().txid, spent);
+    store->deleteUtxosCreatedAtHeight(4);
+    EXPECT_EQ(store->utxoCount(), 0);
+
+    cpbitnode::db::BlockCommitNative empty;
+    empty.chain = "testnet4";
+    empty.height = 5;
+    empty.blockHash = std::string(64, 'd');
+    store->commitBlock(empty);
+    EXPECT_EQ(store->getValidatedHeight("testnet4"), 5);
+    EXPECT_TRUE(store->takeUtxoUndo("testnet4", 5).empty());
+    store->deleteUtxosCreatedAtHeight(5);
+    EXPECT_EQ(store->utxoCount(), 0);
+
+    std::filesystem::remove_all(dir);
+}
+
 void testRocksDbStoreRejectsLegacyGeneration() {
     const auto dir = tempStoreDir("cpbitnode_native_store_legacy_reject");
     const auto dbDir = dir / "chainstate-rocksdb";
@@ -194,5 +278,6 @@ void registerNativeStoreTests() {
     RUN_TEST(testRocksDbStoreMultiGetAndHeightIndex);
     RUN_TEST(testRocksDbStoreBatchedHeaders);
     RUN_TEST(testRocksDbStoreCommitBlockUpdatesTipIndexUndoAndCounters);
+    RUN_TEST(testRocksDbStoreNativeCommitTelemetryAndEmptyRecords);
     RUN_TEST(testRocksDbStoreRejectsLegacyGeneration);
 }

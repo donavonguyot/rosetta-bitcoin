@@ -14,6 +14,21 @@ The template encodes the baseline stance:
 - UTXO accounting is `core_spendable_v1` with count `4574`.
 - Compact proof JSON lands under `Nodes/Shared/conformance/results/`.
 
+## Storage Boundary Wording
+
+New port docs, tests, and proof artifacts should describe the storage rule as a
+port-local operational DB boundary:
+
+- Preferred fixture ID: `storage.operational_db_boundary`.
+- Preferred proof fields: `operational_db_artifact_absent`,
+  `runtime_db_boundary_passed`, and `project_db_observational_only`.
+- Preferred prose: RocksDB/native storage owns runtime truth; Project DB is
+  mission control only.
+
+Do not introduce broad storage-backend scare wording in new docs or test names.
+Historical proof fields with older names are importer aliases, not template
+vocabulary.
+
 After adapting a port, validate the shape through Project:
 
 ```bash

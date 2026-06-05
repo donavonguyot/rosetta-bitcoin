@@ -34,8 +34,8 @@ Native state lives under the selected datadir:
   blocks/
 ```
 
-No SQLite artifact is allowed in the Go native datadir. Status and storage proof
-read the Go chainstate directly.
+Go native proofs enforce the port-local operational DB boundary. Status and
+storage proof read the Go chainstate directly.
 
 ## Local Reference Proofs
 

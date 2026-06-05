@@ -694,9 +694,8 @@ Defaults: `CHUNK_TOTAL=15000`, `SUBCHUNK_SIZE=500`, `MAX_RESTARTS=5`. Log ticks 
 
 **Single writer:** preflight checks `.jbitnode.lock` (pid metadata); stale locks reclaimed when holder pid is dead. Never two writers on `./data-java`.
 
-Use `make java-node-status` and Project reports for current state. The old Java
-SQLite snapshot/survey targets are retired and must not be used as native
-runtime proof.
+Use `make java-node-status` and Project reports for current state. Retired Java
+compatibility snapshot/survey targets must not be used as native runtime proof.
 
 Single-shot overnight chunk (no auto-restart): `make java-node-sync-chunk-overnight`.
 Override size: `make java-node-sync-chunk BLOCKS_MAX=25000` or
@@ -707,31 +706,31 @@ Rare unlimited run (debug only): `make java-node-sync-catchup BLOCKS_MAX=0`.
 ## Perf appendix (2026-05-26 investigation)
 
 <details>
-<summary>Legacy port-local SQLite UTXO + parallel script verify benchmarks (historical reference only)</summary>
+<summary>Compatibility DB UTXO + parallel script verify benchmarks (historical reference only)</summary>
 
-This appendix documents the pre-cutover Java port-local SQLite runtime path.
-It is historical evidence only. Java native/Core runtime now uses RocksDB, and
-Project SQLite remains observational mission-control state.
+This appendix documents a pre-cutover Java compatibility runtime path. It is
+historical evidence only. Java native/Core runtime now uses RocksDB, and
+`Project/project.db` remains observational mission-control state.
 
 Stall context: ~2 MB blocks @52348–52353 (`block_size` ~1.97–2.03 MB), ~1.45M UTXOs, ~99% CPU, ~1–2 min/block before manual stop.
 
 Phase 1 measurements (read-only DB, no benchmark — active sync held lock):
 
 ```text
-utxo_index: UNIQUE(chain, txid, vout) → EXPLAIN QUERY PLAN uses SEARCH utxos USING INDEX sqlite_autoindex_utxos_1
+utxo_index: UNIQUE(chain, txid, vout) -> query plan uses the indexed UTXO lookup
 journal_mode: wal (already set)
 cache_size: 2000 pages (~8 MiB) — below working set for 1.5M-row UTXO table
 timing_events: none (SYNC_TIMING not used on last run)
-hot_path_issue: legacy ProjectTracker.getUtxo/spendUtxo/addUtxo allocated new PreparedStatement per call
+hot_path_issue: compatibility ProjectTracker.getUtxo/spendUtxo/addUtxo allocated new PreparedStatement per call
 ```
 
-Root-cause hypothesis: **JDBC + SQLite overhead dominates** on heavy blocks — thousands of per-input UTXO lookups and per-spend/create DELETE/INSERT each compiling a new prepared statement, amplified by a small page cache on a ~1.5M-row table. Script verification is also costly on multi-tx blocks but was unmeasured until granular timing landed.
+Root-cause hypothesis: **JDBC + compatibility DB overhead dominates** on heavy blocks — thousands of per-input UTXO lookups and per-spend/create DELETE/INSERT each compiling a new prepared statement, amplified by a small page cache on a ~1.5M-row table. Script verification is also costly on multi-tx blocks but was unmeasured until granular timing landed.
 
 ### Perf batch landed (2026-05-26)
 
 ```text
 BlockUtxoView.loaded: connect-time cache; externalSpendUndoEntries reuses loaded map (eliminates double-fetch)
-legacy ProjectTracker: spendUtxosBatch + addUtxosBatch (executeBatch on reused prepared statements)
+compatibility ProjectTracker: spendUtxosBatch + addUtxosBatch (executeBatch on reused prepared statements)
 Database.open: PRAGMA synchronous=NORMAL, temp_store=MEMORY, cache_size=-131072 (~128 MiB), mmap_size=268435456 (~256 MiB)
 BlockConnector: block-level SYNC_TIMING stages utxo_load, script_verify, utxo_apply, commit
 BlockSync: per-height "Block connected" info event + commit timing
@@ -751,7 +750,7 @@ utxo_load + utxo_apply + commit: 531 ms  (gate <10s: PASS)
 sustained wall clock: ~107 s/block     (gate <30s: FAIL — script_verify bound)
 ```
 
-**Conclusion:** Legacy port-local SQLite UTXO tuning succeeded; remaining wall-clock cost is script verification on ~2 MB multi-input blocks. Next perf tranche (if needed): parallel per-tx script verify (Phase 6 fallback). Catch-up can proceed at script-bound rate.
+**Conclusion:** Compatibility DB UTXO tuning succeeded; remaining wall-clock cost is script verification on ~2 MB multi-input blocks. Next perf tranche (if needed): parallel per-tx script verify (Phase 6 fallback). Catch-up can proceed at script-bound rate.
 
 ### Parallel script verify @52386 (PAR_SCRIPT_VERIFY=1, block_size=1974160)
 

@@ -58,6 +58,10 @@ void appendBytes(std::string& out, const std::vector<std::uint8_t>& bytes) {
     out.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 }
 
+void appendBytes(std::string& out, const std::array<std::uint8_t, 32>& bytes) {
+    out.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+}
+
 std::vector<std::uint8_t> readBytes(const std::string& data, std::size_t& offset, std::size_t size) {
     if (offset + size > data.size()) {
         throw std::runtime_error("codec v2 byte read past end");
@@ -136,6 +140,13 @@ std::string keyUtxo(const std::string& chain, const std::vector<std::uint8_t>& t
     return out;
 }
 
+std::string keyUtxo(const std::string& chain, const DbOutpointKey& outpoint) {
+    auto out = chainPrefix('u', chain);
+    appendBytes(out, outpoint.txid);
+    appendU32(out, outpoint.vout);
+    return out;
+}
+
 std::string keyUndo(const std::string& chain, int height) {
     requireU32(height, "height");
     auto out = chainPrefix('d', chain);
@@ -195,12 +206,45 @@ std::string encodeUtxoValue(const StoredUtxo& utxo) {
     return out;
 }
 
+std::string encodeUtxoValue(const StoredUtxoRef& utxo) {
+    requireU32(utxo.height, "height");
+    if (utxo.value < 0) {
+        throw std::invalid_argument("utxo value must be non-negative");
+    }
+    std::string out;
+    out.reserve(4 + 8 + 1 + 4 + utxo.scriptPubkey.size());
+    appendU32(out, static_cast<std::uint32_t>(utxo.height));
+    appendU64(out, static_cast<std::uint64_t>(utxo.value));
+    out.push_back(static_cast<char>(utxo.coinbase ? 1 : 0));
+    appendU32(out, static_cast<std::uint32_t>(utxo.scriptPubkey.size()));
+    appendBytes(out, utxo.scriptPubkey);
+    return out;
+}
+
 StoredUtxo decodeUtxoValue(const std::vector<std::uint8_t>& txid, int vout, const std::string& encoded) {
     requireBytes(txid, 32, "txid");
     std::size_t offset = 0;
     StoredUtxo utxo;
     utxo.txid = txid;
     utxo.vout = vout;
+    utxo.height = static_cast<int>(readU32(encoded, offset));
+    utxo.value = static_cast<std::int64_t>(readU64(encoded, offset));
+    if (offset >= encoded.size()) {
+        throw std::runtime_error("codec v2 utxo flags read past end");
+    }
+    utxo.coinbase = (static_cast<unsigned char>(encoded[offset++]) & 1) != 0;
+    const auto scriptSize = readU32(encoded, offset);
+    utxo.scriptPubkey = readBytes(encoded, offset, scriptSize);
+    if (offset != encoded.size()) {
+        throw std::runtime_error("codec v2 utxo trailing bytes");
+    }
+    return utxo;
+}
+
+StoredUtxoRef decodeUtxoValue(const DbOutpointKey& outpoint, const std::string& encoded) {
+    std::size_t offset = 0;
+    StoredUtxoRef utxo;
+    utxo.outpoint = outpoint;
     utxo.height = static_cast<int>(readU32(encoded, offset));
     utxo.value = static_cast<std::int64_t>(readU64(encoded, offset));
     if (offset >= encoded.size()) {
@@ -223,6 +267,22 @@ std::string encodeUndoValue(const std::vector<StoredUtxo>& entries) {
         requireU32(entry.vout, "vout");
         appendBytes(out, entry.txid);
         appendU32(out, static_cast<std::uint32_t>(entry.vout));
+        out.append(encodeUtxoValue(entry));
+    }
+    return out;
+}
+
+std::string encodeUndoValue(std::span<const StoredUtxoRef> entries) {
+    std::string out;
+    std::size_t reserveSize = 4;
+    for (const auto& entry : entries) {
+        reserveSize += 32 + 4 + 4 + 8 + 1 + 4 + entry.scriptPubkey.size();
+    }
+    out.reserve(reserveSize);
+    appendU32(out, static_cast<std::uint32_t>(entries.size()));
+    for (const auto& entry : entries) {
+        appendBytes(out, entry.outpoint.txid);
+        appendU32(out, entry.outpoint.vout);
         out.append(encodeUtxoValue(entry));
     }
     return out;

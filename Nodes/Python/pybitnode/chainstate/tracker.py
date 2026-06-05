@@ -110,7 +110,7 @@ class ProjectTracker:
         path = Path(state_path)
         if path.name == "pybitnode.db" or path.suffix in {".sqlite", ".sqlite3"}:
             raise RuntimeError(
-                f"refusing legacy SQLite state path for native mode: {path}; "
+                f"refusing unapproved operational DB path for native mode: {path}; "
                 "use a chainstate-rocksdb directory"
             )
         path.mkdir(parents=True, exist_ok=True)

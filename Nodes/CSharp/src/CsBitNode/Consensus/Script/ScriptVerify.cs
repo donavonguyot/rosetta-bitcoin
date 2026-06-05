@@ -25,6 +25,9 @@ public static class ScriptTemplates
     public static bool IsP2tr(ReadOnlySpan<byte> script) =>
         script.Length == 34 && script[0] == 0x51 && script[1] == 0x20;
 
+    public static bool IsFutureWitnessProgram(ReadOnlySpan<byte> script) =>
+        WitnessProgramVersion(script) is >= 1 && !IsP2tr(script);
+
     public static bool IsBareOpN(ReadOnlySpan<byte> script) =>
         script.Length > 0
         && (script[0] is >= Opcodes.OP_1 and <= Opcodes.OP_16 or Opcodes.OP_1NEGATE)
@@ -116,6 +119,7 @@ public static class ScriptTemplates
         if (IsP2wsh(script)) return "P2WSH";
         if (IsP2sh(script)) return "P2SH";
         if (IsP2tr(script)) return "P2TR";
+        if (IsFutureWitnessProgram(script)) return "future_witness";
         if (IsBareOpN(script)) return "bare_op_n";
         if (IsBareMultisig(script)) return "bare_multisig";
         if (IsBareLegacyScript(script)) return "bare_legacy";
@@ -178,16 +182,13 @@ public static class ScriptVerify
             throw new ScriptVerifyError("input index out of range");
 
         var scriptPubKey = options.ScriptPubKey;
-        var witnessVersion = ScriptTemplates.WitnessProgramVersion(scriptPubKey);
-        if (witnessVersion is > 1)
-            throw new ScriptVerifyError($"unsupported witness program version {witnessVersion}");
-
         if (!(ScriptTemplates.IsP2pk(scriptPubKey)
               || ScriptTemplates.IsP2pkh(scriptPubKey)
               || ScriptTemplates.IsP2wpkh(scriptPubKey)
               || ScriptTemplates.IsP2wsh(scriptPubKey)
               || ScriptTemplates.IsP2sh(scriptPubKey)
               || ScriptTemplates.IsP2tr(scriptPubKey)
+              || ScriptTemplates.IsFutureWitnessProgram(scriptPubKey)
               || ScriptTemplates.IsBareOpN(scriptPubKey)
               || ScriptTemplates.IsBareMultisig(scriptPubKey)
               || ScriptTemplates.IsBareLegacyScript(scriptPubKey)))
@@ -234,6 +235,8 @@ public static class ScriptVerify
     {
         if (ScriptTemplates.IsP2tr(scriptPubKey))
             return VerifyTaproot(scriptSig, scriptPubKey, transaction, inputIndex, witness, spentPrevouts, cache);
+        if (ScriptTemplates.IsFutureWitnessProgram(scriptPubKey))
+            return scriptSig.Length == 0;
         if (ScriptTemplates.IsP2wpkh(scriptPubKey))
             return ScriptInterpreter.VerifyScript(scriptSig, scriptPubKey, transaction, inputIndex, amount, witness, cache);
         if (ScriptTemplates.IsP2wsh(scriptPubKey))

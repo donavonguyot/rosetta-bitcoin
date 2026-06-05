@@ -10,15 +10,15 @@ bindings; external Bitcoin libraries remain forbidden.
 
 Native/Core parity requires RocksDB-owned operational truth, native crypto proof,
 Docker proof/supervisor support, and fresh replay from an empty native datadir.
-The historical SQLite tracker is legacy handoff evidence only and must not be
-used for Core claims.
+Historical compatibility trackers are handoff evidence only and must not be used
+for Core claims.
 
 | Surface | Canonical command | Notes |
 |---------|-------------------|-------|
 | Native status | `npx tsbitnode-status --datadir ./data-ts` | Reads RocksDB chainstate without acquiring the writer lock. |
 | Native storage proof | `npx tsbitnode-storage-proof --datadir ./data-ts-proof` | Bounded RocksDB/native crypto proof. |
 | Sync runner | `npx tsbitnode-sync --datadir ./data-ts` | Uses the active sync lock for mutable state. |
-| Legacy SQLite status | `npx tsbitnode-legacy-db --db ./data-ts/tsbitnode.db` | Legacy evidence/repair only; not a native/Core proof. |
+| Compatibility status | `npx tsbitnode-legacy-db --db ./data-ts/tsbitnode.db` | Historical evidence/repair only; not a native/Core proof. |
 
 ## Native Chainstate
 
@@ -33,19 +33,19 @@ Native operational state lives under the selected datadir:
 
 `ChainstateSession` rejects a native datadir that already contains
 `tsbitnode.db`. This fail-closed guard prevents accidentally treating old
-SQLite state as native operational truth.
+compatibility state as native operational truth.
 
 Canonical native modules are under `src/chainstate/`:
 
 | Path | Purpose |
 |------|---------|
 | `src/chainstate/chainstate.ts` | Chainstate interfaces and record types. |
-| `src/chainstate/chainstateSession.ts` | Datadir/session boundary, lock handling, SQLite-artifact rejection. |
+| `src/chainstate/chainstateSession.ts` | Datadir/session boundary, lock handling, operational DB boundary guard. |
 | `src/chainstate/rocksDbChainstateStore.ts` | RocksDB-backed chainstate implementation. |
 | `src/storage/chainstateCodecV2.ts` | Shared codec for native chainstate keys/values. |
 
-`src/db/` remains a legacy SQLite compatibility namespace for old tracker-based
-snapshots, surveys, and repair notes. Do not add new native/Core code there.
+`src/db/` remains a compatibility namespace for old tracker-based snapshots,
+surveys, and repair notes. Do not add new native/Core code there.
 
 ## Build And Test
 
@@ -90,7 +90,7 @@ npx tsbitnode-status --datadir ./data-ts
 
 Key fields are `validated_height`, `header_height`, `stored_block_height`,
 `sync_status`, `chainstate_backend`, `codec_version`, and
-`local_sqlite_artifact_absent`.
+`operational_db_artifact_absent`.
 
 ## Single Writer Rule
 

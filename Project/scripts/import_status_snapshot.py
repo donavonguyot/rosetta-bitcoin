@@ -18,7 +18,7 @@ from import_all import import_json_artifact, init_db, read_json, repo_root  # no
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", default="Project/project.db", help="Project SQLite DB path")
+    parser.add_argument("--db", default="Project/project.db", help="Project mission-control DB path")
     parser.add_argument("--node-id", required=True, help="Node ID for the status snapshot")
     parser.add_argument("status_json", help="Status JSON emitted by a node")
     return parser.parse_args()

@@ -1,0 +1,431 @@
+{
+  "benchmark_contract_version": 1,
+  "benchmark_gate": "tuning_50k_to_100k",
+  "benchmark_kind": "tuning_50k_to_100k_p2p",
+  "benchmark_lane": "tuning_50k_to_100k_p2p",
+  "binary_gate_status": "not_attempted",
+  "blocks_connected": 50000,
+  "blocks_fetched": 50000,
+  "byte_source": "local_reference_p2p",
+  "captured_at": "2026-06-05T17:38:05.222915684+00:00",
+  "category": "local_reference_sync",
+  "chain": "testnet4",
+  "chainstate_backend": "rocksdb",
+  "chainstate_backend_path": "/data/chainstate-rocksdb",
+  "chainstate_status": "usable",
+  "chainstate_utxo_count": 13154991,
+  "connect_summary": {
+    "blocks_connected": 1,
+    "chainstate_utxo_count": 13154991,
+    "current_blocker": null,
+    "header_height": 100000,
+    "implementation": "RustNode",
+    "mode": "decoded_block_connect",
+    "reached_target": true,
+    "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+    "rocksdb_wal_disabled": false,
+    "runtime_surface": "docker",
+    "script_runner_mode": "parallel",
+    "started_at": "2026-06-05T17:44:42.742786414+00:00",
+    "storage_codec_version": 2,
+    "stored_block_height": 100000,
+    "sync_status": "blocks_current",
+    "target_height": 100000,
+    "timing_summary": {
+      "slow_blocks": [
+        {
+          "height": 100000,
+          "input_shape_counts": {
+            "coinbase": 1,
+            "witness": 11
+          },
+          "ms": 2,
+          "output_script_types": {
+            "op_return": 1,
+            "p2tr": 11,
+            "p2wpkh": 1
+          },
+          "script_input_count": 11,
+          "spent_prevout_script_types": {
+            "p2tr": 11
+          },
+          "tx_count": 12,
+          "vin_count": 12,
+          "vout_count": 13
+        }
+      ],
+      "stage_totals_ms": {
+        "block_connect_store_commit": 2,
+        "commit": 0,
+        "prevout_batch_load": 0,
+        "script_verify": 2,
+        "utxo_load": 0
+      },
+      "total_ms": 2
+    },
+    "updated_at": "2026-06-05T17:44:42.745164258+00:00",
+    "utxo_accounting_policy": "core_spendable_v1",
+    "validated_hash": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
+    "validated_height": 100000
+  },
+  "connect_summary_kind": "final_connect_snapshot",
+  "current_blocker": null,
+  "datadir": "/data",
+  "failures": [],
+  "fresh_state": false,
+  "header_height": 100000,
+  "header_target_height": 100000,
+  "implementation": "RustNode",
+  "local_reference_status": "target_reached",
+  "native_crypto_available": true,
+  "native_crypto_backend": "rust-secp256k1",
+  "native_storage": true,
+  "peer": "host.docker.internal:48333",
+  "peer_mode": "local_reference",
+  "pipeline_timing_summary": {
+    "block_connect_store_commit": 318835,
+    "block_parse_validate": 35051,
+    "block_store": 4164,
+    "blocks_connected": 50000,
+    "blocks_fetched": 50000,
+    "commit": 52736,
+    "connect_total": 337750,
+    "metadata_put_prepare": 147,
+    "metadata_store": 32,
+    "p2p_fetch": 23352,
+    "prefetch_depth": 4,
+    "prevout_batch_load": 55196,
+    "rocksdb_write": 15990,
+    "rpc_getblock": 0,
+    "rpc_getblockhash": 0,
+    "script_verify": 156061,
+    "slow_blocks": [
+      {
+        "height": 71267,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 3993
+        },
+        "ms": 787,
+        "output_script_types": {
+          "op_return": 959,
+          "p2tr": 4915,
+          "p2wpkh": 473
+        },
+        "script_input_count": 3993,
+        "spent_prevout_script_types": {
+          "p2tr": 3537,
+          "p2wpkh": 456
+        },
+        "tx_count": 1466,
+        "vin_count": 3994,
+        "vout_count": 6347
+      },
+      {
+        "height": 71266,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "legacy_scriptsig": 2,
+          "witness": 3177
+        },
+        "ms": 371,
+        "output_script_types": {
+          "op_return": 822,
+          "p2tr": 4555,
+          "p2wpkh": 945,
+          "p2wsh": 1
+        },
+        "script_input_count": 3179,
+        "spent_prevout_script_types": {
+          "p2pkh": 1,
+          "p2sh": 1,
+          "p2tr": 2704,
+          "p2wpkh": 473
+        },
+        "tx_count": 1493,
+        "vin_count": 3180,
+        "vout_count": 6323
+      },
+      {
+        "height": 87923,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 6600
+        },
+        "ms": 358,
+        "output_script_types": {
+          "op_return": 14,
+          "p2pkh": 1,
+          "p2tr": 2,
+          "p2wpkh": 13
+        },
+        "script_input_count": 6600,
+        "spent_prevout_script_types": {
+          "p2tr": 6600
+        },
+        "tx_count": 15,
+        "vin_count": 6601,
+        "vout_count": 30
+      },
+      {
+        "height": 87885,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 6500
+        },
+        "ms": 356,
+        "output_script_types": {
+          "op_return": 14,
+          "p2pkh": 1,
+          "p2wpkh": 13
+        },
+        "script_input_count": 6500,
+        "spent_prevout_script_types": {
+          "p2tr": 6500
+        },
+        "tx_count": 14,
+        "vin_count": 6501,
+        "vout_count": 28
+      },
+      {
+        "height": 87868,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 6500
+        },
+        "ms": 349,
+        "output_script_types": {
+          "op_return": 14,
+          "p2pkh": 1,
+          "p2wpkh": 13
+        },
+        "script_input_count": 6500,
+        "spent_prevout_script_types": {
+          "p2tr": 6500
+        },
+        "tx_count": 14,
+        "vin_count": 6501,
+        "vout_count": 28
+      },
+      {
+        "height": 87846,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 6505
+        },
+        "ms": 346,
+        "output_script_types": {
+          "op_return": 14,
+          "p2tr": 9,
+          "p2wpkh": 15
+        },
+        "script_input_count": 6505,
+        "spent_prevout_script_types": {
+          "p2tr": 6504,
+          "p2wpkh": 1
+        },
+        "tx_count": 19,
+        "vin_count": 6506,
+        "vout_count": 38
+      },
+      {
+        "height": 87869,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 6500
+        },
+        "ms": 345,
+        "output_script_types": {
+          "op_return": 14,
+          "p2pkh": 1,
+          "p2wpkh": 13
+        },
+        "script_input_count": 6500,
+        "spent_prevout_script_types": {
+          "p2tr": 6500
+        },
+        "tx_count": 14,
+        "vin_count": 6501,
+        "vout_count": 28
+      },
+      {
+        "height": 87949,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 6500
+        },
+        "ms": 343,
+        "output_script_types": {
+          "op_return": 14,
+          "p2pkh": 1,
+          "p2wpkh": 13
+        },
+        "script_input_count": 6500,
+        "spent_prevout_script_types": {
+          "p2tr": 6500
+        },
+        "tx_count": 14,
+        "vin_count": 6501,
+        "vout_count": 28
+      },
+      {
+        "height": 87922,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 6506
+        },
+        "ms": 342,
+        "output_script_types": {
+          "op_return": 14,
+          "p2pkh": 1,
+          "p2tr": 4,
+          "p2wpkh": 13
+        },
+        "script_input_count": 6506,
+        "spent_prevout_script_types": {
+          "p2tr": 6506
+        },
+        "tx_count": 16,
+        "vin_count": 6507,
+        "vout_count": 32
+      },
+      {
+        "height": 87866,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 6501
+        },
+        "ms": 340,
+        "output_script_types": {
+          "op_return": 14,
+          "p2pkh": 1,
+          "p2tr": 1,
+          "p2wpkh": 14
+        },
+        "script_input_count": 6501,
+        "spent_prevout_script_types": {
+          "p2tr": 6501
+        },
+        "tx_count": 15,
+        "vin_count": 6502,
+        "vout_count": 30
+      }
+    ],
+    "stage_totals_ms": {
+      "block_connect_store_commit": 318835,
+      "block_parse_validate": 35051,
+      "block_store": 4164,
+      "commit": 52736,
+      "connect_total": 337750,
+      "metadata_put_prepare": 147,
+      "metadata_store": 32,
+      "p2p_fetch": 23352,
+      "prevout_batch_load": 55196,
+      "rocksdb_write": 15990,
+      "script_verify": 156061,
+      "undo_put_prepare": 13,
+      "utxo_apply": 3127,
+      "utxo_delete_prepare": 50,
+      "utxo_load": 55196,
+      "utxo_put_prepare": 1118
+    },
+    "telemetry_schema": "benchmark.telemetry_tick.v1",
+    "total_wall": 397514,
+    "undo_put_prepare": 13,
+    "utxo_apply": 3127,
+    "utxo_delete_prepare": 50,
+    "utxo_load": 55196,
+    "utxo_put_prepare": 1118
+  },
+  "prefetch_depth": 4,
+  "proof_mode": "p2p_sync",
+  "reference_finish_hash": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
+  "reference_finish_height": 100000,
+  "reference_start_hash": "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
+  "reference_start_height": 0,
+  "restored_docker_volume": "rsbitnode_tuning_50k_to_100k_data",
+  "result": "passed",
+  "resume_supported": true,
+  "resumed_from_height": 50000,
+  "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+  "rocksdb_wal_disabled": false,
+  "runtime_surface": "docker",
+  "schnorr_backend": "rust-secp256k1",
+  "script_runner_mode": "parallel",
+  "source_artifact_path": "../Shared/conformance/results/rust_docker_supporting_50k_benchmark_2026-06-05.json",
+  "source_artifact_sha256": "e96b434bd8f9edcaffcfac7d4774d920636ad46c464c7c57cabbb9bfdd11a0d6",
+  "source_benchmark_lane": "supporting_50k_p2p",
+  "source_chainstate_utxo_count": 568855,
+  "source_docker_volume": "rsbitnode_50k_proof_data",
+  "source_gate": "supporting_50k",
+  "source_header_height": 50000,
+  "source_utxo_accounting_policy": "core_spendable_v1",
+  "source_validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+  "source_validated_height": 50000,
+  "start_height": 50001,
+  "status": {
+    "active_writer_pid": null,
+    "binary_gate_status": "not_attempted",
+    "block_gap_count": 0,
+    "chain": "testnet4",
+    "chainstate_backend": "rocksdb",
+    "chainstate_backend_path": "/data/chainstate-rocksdb",
+    "chainstate_generation_id": "rust-reference-sync",
+    "chainstate_status": "usable",
+    "chainstate_utxo_count": 13154991,
+    "current_blocker": null,
+    "datadir": "/data",
+    "header_hash": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
+    "header_height": 100000,
+    "implementation": "RustNode",
+    "last_error": "",
+    "lock_status": "unlocked",
+    "native_crypto_available": true,
+    "native_crypto_backend": "rust-secp256k1",
+    "network": "testnet4",
+    "node_id": "rsbitnode-native-storage",
+    "ok": true,
+    "runtime_status": "not_running",
+    "runtime_status_detail": "scaffold",
+    "runtime_surface": "docker",
+    "schnorr_backend": "rust-secp256k1",
+    "stored_block_hash": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
+    "stored_block_height": 100000,
+    "sync_status": "blocks_current",
+    "taproot_tweak_backend": "rust-secp256k1",
+    "updated_at": "2026-06-05T17:44:42.745055632+00:00",
+    "utxo_accounting_policy": "core_spendable_v1",
+    "validated_hash": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
+    "validated_height": 100000
+  },
+  "storage_codec_version": 2,
+  "stored_block_height": 100000,
+  "sync_status": "blocks_current",
+  "sync_summary": {
+    "binary_gate_status": "not_attempted",
+    "blocks_connected": 50000,
+    "blocks_fetched": 50000,
+    "byte_source": "local_reference_p2p",
+    "current_blocker": null,
+    "header_height": 100000,
+    "implementation": "RustNode",
+    "peer": "host.docker.internal:48333",
+    "peer_mode": "local_reference",
+    "resumed_from_height": 50000,
+    "runtime_surface": "docker",
+    "start_height": 50001,
+    "started_at": "2026-06-05T17:38:05.230442884+00:00",
+    "stored_block_height": 100000,
+    "sync_status": "blocks_current",
+    "target_height": 100000,
+    "updated_at": "2026-06-05T17:44:42.745321425+00:00",
+    "validated_height": 100000
+  },
+  "taproot_tweak_backend": "rust-secp256k1",
+  "target_height": 100000,
+  "target_label": "50k->100k",
+  "updated_at": "2026-06-05T17:44:42.826062161+00:00",
+  "utxo_accounting_policy": "core_spendable_v1",
+  "validated_hash": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
+  "validated_height": 100000
+}

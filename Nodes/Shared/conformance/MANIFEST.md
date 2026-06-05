@@ -40,7 +40,7 @@ live.peer_disconnect
 live.consensus_blocker
 storage.native_fresh_start
 storage.native_restart
-storage.local_sqlite_artifact_absent
+storage.operational_db_boundary
 storage.rocksdb_operational_state_boundary
 storage.project_export_observational
 sync.deferred_handshake
@@ -120,9 +120,9 @@ expected_validated_height: 2
 expected_validated_hash: port-local block 2 hash
 expected_status: usable native chainstate
 expected_blocker:
-notes: Second run resumes from native operational storage and advances without Project DB or legacy local SQLite.
+notes: Second run resumes from native operational storage and advances without Project DB as a runtime dependency.
 
-fixture_id: storage.local_sqlite_artifact_absent
+fixture_id: storage.operational_db_boundary
 category: storage
 chain: testnet4
 height:
@@ -131,9 +131,9 @@ input_files: native storage proof datadir
 expected_result: passed
 expected_validated_height:
 expected_validated_hash:
-expected_status: no forbidden port-local SQLite runtime artifact in native datadir
+expected_status: no port-local operational DB artifact outside the approved native backend
 expected_blocker:
-notes: Boundary check only; this does not preserve or require legacy migration behavior.
+notes: Boundary check only; this does not preserve or require compatibility-store migration behavior.
 
 fixture_id: storage.project_export_observational
 category: storage

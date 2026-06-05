@@ -1,8 +1,8 @@
 # Storage Gate
 
 The storage gate is the portable proof that a port can own its operational
-state in its intended native backend without depending on Project SQLite or
-another implementation's live datadir. Project SQLite is mission-control state:
+state in its intended native backend without depending on Project DB or another
+implementation's live datadir. `Project/project.db` is mission-control state:
 it may receive exported observations after a proof, but it must never drive
 runtime sync, validation, block lookup, or status truth.
 
@@ -16,7 +16,7 @@ Every port must prove:
 ```text
 fresh_start:
   a clean datadir initializes native operational storage
-  no forbidden port-local SQLite database is created
+  no port-local operational DB artifact is created outside the approved backend
 
 restart:
   a second run resumes from native operational storage only
@@ -39,14 +39,14 @@ single_writer:
   overlapping writers must fail instead of sharing mutable state
 ```
 
-## Native Means No Operational SQLite
+## Native Operational Storage Boundary
 
-For Core Node native mode, SQLite must not be part of operational node truth.
-This is broader than checking whether `cpbitnode.db` or another `*.db` file is
-left in the proof datadir.
+For Core Node native mode, RocksDB/native storage owns operational node truth.
+The boundary proof is broader than checking whether a stray `*.db` file is left
+in the proof datadir.
 
 Native/Core sync, status, proof, rebuild, and blocker-diagnostic commands must
-not create, read, or require SQLite for:
+create, read, and require only the approved native backend for:
 
 ```text
 headers
@@ -61,12 +61,12 @@ status snapshot fields
 writer-lock truth
 ```
 
-Port-local SQLite may exist only behind an explicitly named legacy/reference
-mode. Native entry points must fail before opening SQLite-backed operational
-state. Moving a SQLite observer outside the native datadir is not a valid
-storage-gate proof if the native runtime still depends on that observer for
-operational status or sync decisions. `Project/project.db` is the exception for
-post-proof mission-control imports, not an exception to the runtime rule.
+Any compatibility or reference store must be explicitly named and excluded from
+baseline proof paths. Native entry points must fail before opening the wrong
+operational backend. Moving an observer outside the native datadir is not a
+valid storage-gate proof if the native runtime still depends on that observer
+for operational status or sync decisions. `Project/project.db` is allowed only
+for post-proof mission-control imports, not as a runtime dependency.
 
 ## Required Fixture IDs
 
@@ -75,15 +75,19 @@ The storage gate is expressed through these conformance fixture IDs:
 ```text
 storage.native_fresh_start
 storage.native_restart
-storage.local_sqlite_artifact_absent
+storage.operational_db_boundary
 storage.project_export_observational
 ```
 
-`storage.local_sqlite_artifact_absent` is a boundary check, not a complete
+`storage.operational_db_boundary` is a boundary check, not a complete
 native-storage proof. It fails when a native storage proof leaves behind a
-forbidden port-local SQLite runtime artifact in the native datadir. The broader
-native invariant also fails if runtime code reaches SQLite-backed operational
-state, even if the SQLite file lives outside the proof datadir.
+port-local operational DB artifact outside the approved backend. The broader
+native invariant also fails if runtime code reaches any unapproved operational
+store, even if that store lives outside the proof datadir.
+
+Historical artifacts may contain older fixture names for the same boundary.
+Project imports those names as aliases for `storage.operational_db_boundary`.
+New artifacts, templates, docs, and tests must use the canonical fixture name.
 
 ## Evidence JSON
 
@@ -103,7 +107,9 @@ The reusable proof shape is defined by
   "chain": "testnet4",
   "chainstate_backend": "rocksdb",
   "native_storage": true,
-  "local_sqlite_artifact_absent": true,
+  "operational_db_artifact_absent": true,
+  "runtime_db_boundary_passed": true,
+  "project_db_observational_only": true,
   "validated_height": 2,
   "validated_hash": "",
   "header_height": 4000,
@@ -142,10 +148,12 @@ chainstate_status == usable
 chainstate_backend is the port's intended native backend
 validated_height >= 2 for the smoke restart proof
 stored_block_height >= validated_height
-local_sqlite_artifact_absent == true for native storage proofs
+operational_db_artifact_absent == true for native storage proofs
+runtime_db_boundary_passed == true
+project_db_observational_only == true
 project_export.result == passed
 Project/project.db is not read by runtime sync, status, block lookup, or validation
-no SQLite-backed operational store is opened by native sync/status/proof paths
+only the approved native backend is opened by native sync/status/proof paths
 ```
 
 Passing Java does not pass any follower. Followers may copy fixture facts and

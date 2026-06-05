@@ -27,6 +27,25 @@ field() {
   python3 -c "import json,sys; d=json.load(sys.stdin); $1" 2>/dev/null || echo "?"
 }
 
+benchmark_gate() {
+  case "${BLOCKS_MAX:-0}" in
+    5000) echo "supporting_5k" ;;
+    10000) echo "supporting_10k" ;;
+    50000) echo "supporting_50k" ;;
+    100000) echo "primary_100k" ;;
+    *) echo "local_reference" ;;
+  esac
+}
+
+emit_benchmark_tick() {
+  local json="$1" last_height="$2" phase="$3"
+  printf '%s\n' "$json" | \
+    TARGET_BLOCK_HEIGHT="${BLOCKS_MAX:-0}" BENCHMARK_GATE="$(benchmark_gate)" \
+    BENCHMARK_STARTED_MS="$started_ms" BENCHMARK_LAST_HEIGHT="$last_height" \
+    BENCHMARK_PHASE="$phase" BENCHMARK_PROCESS_RUNNING=1 POLL_SEC="$POLL_SEC" \
+    python3 scripts/emit_benchmark_telemetry_tick.py
+}
+
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 started_ms="$(now_ms)"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
@@ -44,12 +63,14 @@ while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
   header="$(echo "$json" | field "print(d.get('header_height','?'))")"
   stored="$(echo "$json" | field "print(d.get('stored_block_height','?'))")"
   status="$(echo "$json" | field "print(d.get('sync_status','?'))")"
+  previous_height="$last_height"
   delta=0
   if [[ "$h" =~ ^[0-9]+$ ]] && [[ "$last_height" =~ ^[0-9]+$ ]]; then
     delta=$((h - last_height))
     last_height="$h"
   fi
   log_line "AGENT_LOOP_TICK_chatreport {\"validated_height\":$h,\"header_height\":$header,\"stored_block_height\":$stored,\"sync_status\":\"$status\",\"delta_since_last\":$delta,\"process_running\":1}"
+  log_line "$(emit_benchmark_tick "$json" "$previous_height" "$status")"
 done
 
 exit_code="$(docker inspect "$CONTAINER_NAME" --format '{{.State.ExitCode}}' 2>/dev/null || echo 125)"

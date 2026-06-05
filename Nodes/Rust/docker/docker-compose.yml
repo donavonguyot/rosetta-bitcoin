@@ -103,6 +103,7 @@ volumes:
   rsbitnode_10k_proof_data:
   rsbitnode_50k_proof_data:
   rsbitnode_100k_proof_data:
+  rsbitnode_tuning_50k_to_100k_data:
   rsbitnode_external_5k_probe_data:
   rsbitnode_local_reference_data:
   rsbitnode_sync_data:

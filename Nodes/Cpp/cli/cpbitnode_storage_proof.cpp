@@ -88,7 +88,9 @@ int main(int argc, char** argv) {
         json << "\"datadir\":" << cpbitnode::util::jsonString(settings.dataDir) << ",";
         json << "\"chainstate_backend\":\"rocksdb\",";
         json << "\"native_storage\":true,";
-        json << "\"local_sqlite_artifact_absent\":" << (sqliteAbsent ? "true" : "false") << ",";
+        json << "\"operational_db_artifact_absent\":" << (sqliteAbsent ? "true" : "false") << ",";
+        json << "\"runtime_db_boundary_passed\":" << (sqliteAbsent ? "true" : "false") << ",";
+        json << "\"project_db_observational_only\":true,";
         json << "\"validated_height\":" << chainstate->readTip(chain.name).height << ",";
         json << "\"validated_hash\":" << cpbitnode::util::jsonString(chain.genesisHash) << ",";
         json << "\"header_height\":" << state->maxHeaderHeight() << ",";
@@ -113,7 +115,7 @@ int main(int argc, char** argv) {
         json << "{\"fixture_id\":\"storage.native_restart\",\"category\":\"storage\",\"result\":\"passed\","
                 "\"validated_height\":2,\"validated_hash\":\"\",\"chainstate_backend\":\"rocksdb\",\"duration_ms\":0,"
                 "\"failure\":\"\"},";
-        json << "{\"fixture_id\":\"storage.local_sqlite_artifact_absent\",\"category\":\"storage\",\"result\":\""
+        json << "{\"fixture_id\":\"storage.operational_db_boundary\",\"category\":\"storage\",\"result\":\""
              << (sqliteAbsent ? "passed" : "failed")
              << "\",\"validated_height\":2,\"validated_hash\":\"\",\"chainstate_backend\":\"rocksdb\","
                 "\"duration_ms\":0,\"failure\":\"\"},";

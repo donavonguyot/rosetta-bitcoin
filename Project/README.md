@@ -15,7 +15,7 @@ Project/
 
 ## Boundary
 
-Project SQLite is allowed and preferred for mission-control observations:
+Project mission-control DB is allowed and preferred for observations:
 
 - node registry
 - run history
@@ -27,7 +27,7 @@ Project SQLite is allowed and preferred for mission-control observations:
 - standardized port command surfaces
 - architecture decisions
 
-Project SQLite must not store operational truth used by node runtimes:
+Project mission-control DB must not store operational truth used by node runtimes:
 
 - active UTXO set
 - authoritative validated tip

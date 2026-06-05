@@ -10,6 +10,7 @@ DOCKER_PROOF_PATH ?= ../Shared/conformance/results/elixir_rocksdb_codec_v2_stora
 RESULT_DATE ?= $(shell date +%F)
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_5k_benchmark_$(RESULT_DATE).json
 DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_10k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_50k_benchmark_$(RESULT_DATE).json
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_HEADER_TARGET ?= $(DOCKER_BENCHMARK_TARGET)
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5001
@@ -32,7 +33,7 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
+.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 
 test:
 	$(MIX) test
@@ -118,6 +119,35 @@ docker-proof-10k:
 	  DOCKER_BENCHMARK_TARGET=10000 \
 	  DOCKER_BENCHMARK_HEADER_TARGET=10000 \
 	  DOCKER_BENCHMARK_BLOCKS_MAX=10001
+
+docker-proof-50k:
+	@for i in $$(seq 1 60); do \
+	  nc -z 127.0.0.1 48333 && break; \
+	  sleep 2; \
+	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
+	done
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build exbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	@docker volume rm -f exbitnode_50k_proof_data >/dev/null 2>&1 || true
+	DOCKER_PROOF_VOLUME=exbitnode_50k_proof_data RUNTIME_SURFACE=docker \
+	  PEERS=$(DOCKER_PEERS) \
+	  HEADERS_MAX=50000 HEADER_BATCHES_MAX=100 BLOCKS_MAX=50001 \
+	  TARGET_BLOCK_HEIGHT=50000 BENCHMARK_GATE=supporting_50k \
+	  BLOCK_PREFETCH_DEPTH=4 SYNC_TIMING=1 \
+	  SYNC_SNAPSHOT_SEC=$(or $(SYNC_SNAPSHOT_SEC),5) \
+	  SYNC_SNAPSHOT_BLOCKS=$(or $(SYNC_SNAPSHOT_BLOCKS),0) \
+	  PAR_SCRIPT_VERIFY=1 PAR_SCRIPT_THREADS=$(DOCKER_SCRIPT_THREADS) PAR_SCRIPT_MIN_INPUTS=2 \
+	  POLL_SEC=$(or $(POLL_SEC),30) CHECK_SEC=$(or $(CHECK_SEC),5) \
+	  SUPERVISOR_ONCE=1 scripts/docker_sync_supervisor.sh || true
+	@docker run --rm -v exbitnode_50k_proof_data:/data alpine:3.20 sh -c 'cat /data/.exbitnode_last_sync_exit 2>/dev/null || echo 0' > .docker-elixir-50k-sync-exit
+	DOCKER_PROOF_VOLUME=exbitnode_50k_proof_data RUNTIME_SURFACE=docker PEERS=$(DOCKER_PEERS) \
+	  BLOCK_PREFETCH_DEPTH=4 SYNC_TIMING=1 \
+	  $(DOCKER_COMPOSE) run --rm --no-deps exbitnode-sync-proof mix node.status > .docker-elixir-50k-status.json || true
+	DOCKER_PROOF_VOLUME=exbitnode_50k_proof_data TARGET_HEIGHT=50000 HEADER_TARGET_HEIGHT=50000 \
+	  BLOCKS_MAX=50001 PREFETCH_DEPTH=4 SCRIPT_RUNNER_MODE=parallel \
+	  PEER=$(DOCKER_PEERS) PROOF_PATH=$(DOCKER_50K_BENCHMARK_RESULT) \
+	  python3 ../Shared/conformance/tools/proofs/capture_elixir_docker_5k_benchmark.py .docker-elixir-50k-status.json /dev/null .docker-elixir-50k-sync-exit
+	@rm -f .docker-elixir-50k-status.json .docker-elixir-50k-sync-exit
+	@docker run --rm -v exbitnode_50k_proof_data:/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
 
 docker-long-sync-proof:
 	@for i in $$(seq 1 60); do \

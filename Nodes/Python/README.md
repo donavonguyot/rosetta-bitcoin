@@ -1,8 +1,8 @@
 # pybitnode
 
 Binary-compatible Bitcoin full node in **Python** for **testnet4**. The forward
-native/Core path uses RocksDB-backed operational state plus native crypto; legacy
-SQLite scout evidence is historical only.
+native/Core path uses RocksDB-backed operational state plus native crypto;
+historical compatibility evidence is not baseline proof.
 
 Contributor-oriented module map and data flows: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

@@ -98,6 +98,7 @@ for bounded gates and should stay separate from operational blocker hunting.
 ```bash
 make docker-config
 make docker-proof-local
+make docker-proof-50k 2>&1 | python3 ../../Project/scripts/monitor_benchmark_telemetry.py
 make docker-csharp-native-crypto-proof
 # Larger bounded proof after smoke reporting is verified:
 make docker-csharp-native-crypto-bounded-sync-proof
@@ -113,7 +114,8 @@ remain diagnostic/bounded proof surfaces.
 
 Use the persistent supervisor for iterative live-chain work. It uses
 `csbitnode_sync_data` by default and never deletes that volume during normal operation.
-The supervisor runs sync in chunks, emits `AGENT_LOOP_TICK_chatreport` every 2 minutes,
+The supervisor runs sync in chunks, emits `AGENT_LOOP_TICK_chatreport` and
+`benchmark.telemetry_tick` progress lines every 2 minutes,
 pauses on blocker/error while continuing status ticks, then rebuilds and resumes from
 the same volume after a code change or explicit resume marker. Chunk completion is
 checked every few seconds by default, so 2-minute reporting does not throttle chunk
@@ -121,6 +123,7 @@ turnover.
 
 ```bash
 make docker-csharp-sync-supervisor
+make docker-csharp-sync-supervisor 2>&1 | python3 ../../Project/scripts/monitor_benchmark_telemetry.py
 make docker-csharp-sync-status
 make docker-csharp-sync-resume   # optional explicit resume trigger after a fix
 make docker-csharp-sync-stop     # stop supervisor without deleting state

@@ -41,7 +41,7 @@ pub struct Store {
 
 impl Store {
     pub fn open(datadir: &Path) -> Result<Self> {
-        reject_forbidden_sqlite(datadir)?;
+        reject_unapproved_runtime_db_artifacts(datadir)?;
         std::fs::create_dir_all(datadir)?;
         std::fs::write(datadir.join(MARKER_NAME), b"rsbitnode native storage\n")?;
         let options = tuned_options();
@@ -369,18 +369,18 @@ pub fn lock_path(datadir: &Path) -> PathBuf {
     datadir.join(LOCK_NAME)
 }
 
-pub fn local_sqlite_absent(datadir: &Path) -> bool {
-    !has_forbidden_sqlite(datadir)
+pub fn operational_db_artifact_absent(datadir: &Path) -> bool {
+    !has_unapproved_runtime_db_artifact(datadir)
 }
 
-pub fn reject_forbidden_sqlite(datadir: &Path) -> Result<()> {
-    if has_forbidden_sqlite(datadir) {
-        bail!("native datadir contains forbidden SQLite artifact");
+pub fn reject_unapproved_runtime_db_artifacts(datadir: &Path) -> Result<()> {
+    if has_unapproved_runtime_db_artifact(datadir) {
+        bail!("native datadir contains an unapproved port-local operational DB artifact");
     }
     Ok(())
 }
 
-fn has_forbidden_sqlite(datadir: &Path) -> bool {
+fn has_unapproved_runtime_db_artifact(datadir: &Path) -> bool {
     let Ok(entries) = std::fs::read_dir(datadir) else {
         return false;
     };

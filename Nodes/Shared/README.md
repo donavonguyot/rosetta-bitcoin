@@ -56,9 +56,9 @@ Use these docs as the durable Shared contract surface:
 ## Non-Negotiable Rule
 
 Each node has exactly one authoritative operational chainstate in its own
-datadir. Project-level SQLite is mission-control state and must never be used by
-consensus code to validate blocks, read UTXOs, enforce blockers, or decide the
-validated tip.
+datadir. `Project/project.db` is mission-control state and must never be used
+by consensus code to validate blocks, read UTXOs, enforce blockers, or decide
+the validated tip.
 
 ```text
 Operational chainstate:
@@ -68,7 +68,7 @@ Operational chainstate:
   backend metadata
   generation identity
 
-Project SQLite:
+Project mission-control DB:
   run history
   reports
   blocker ledger

@@ -69,9 +69,9 @@ Preserve these Java-derived patterns:
 
 Do not preserve these Java mistakes:
 
-- status reading SQLite UTXO counts while sync writes another backend
+- status reading observer-store UTXO counts while sync writes another backend
 - backend defaults that differ silently by entry point
-- using SQLite `validated_tip` as truth when the active UTXO backend disagrees
+- using observer-store `validated_tip` as truth when the active UTXO backend disagrees
 - cross-store mutation without an invariant check
 - treating one shared native crypto library as the only consensus authority for
   every port

@@ -2,8 +2,8 @@
 
 Scripts in this directory import observations into `Project/project.db` or
 generate reports from it. `Project/project.db` is the tracked mission-control
-database; port-local operational SQLite remains forbidden for native/Core node
-truth.
+database; native/Core node truth belongs in each port's approved operational
+storage.
 
 They must not mutate node operational datadirs.
 
@@ -214,7 +214,7 @@ from the status JSON when present, and otherwise infers them from `--node-id`.
 If `current_blocker` is present, it also records a blocker row keyed by
 `node_id:height:txid:input_index`.
 
-Node runtimes should emit JSON and let Project scripts perform Project SQLite
+Node runtimes should emit JSON and let Project scripts perform Project DB
 writes. Runtime code should not write `Project/project.db` directly.
 
 ## Import Boundary

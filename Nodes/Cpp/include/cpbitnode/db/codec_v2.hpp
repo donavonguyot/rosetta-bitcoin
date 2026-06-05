@@ -3,6 +3,7 @@
 #include "cpbitnode/db/node_state.hpp"
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@ namespace cpbitnode::db::codec_v2 {
 inline constexpr int kCodecVersion = 2;
 
 std::string keyUtxo(const std::string& chain, const std::vector<std::uint8_t>& txid, int vout);
+std::string keyUtxo(const std::string& chain, const DbOutpointKey& outpoint);
 std::string keyUndo(const std::string& chain, int height);
 std::string keyTip(const std::string& chain);
 std::string keyMetadata(const std::string& name);
@@ -23,9 +25,12 @@ std::string prefixBlockIndex(const std::string& chain);
 std::string prefixHeader(const std::string& chain);
 
 std::string encodeUtxoValue(const StoredUtxo& utxo);
+std::string encodeUtxoValue(const StoredUtxoRef& utxo);
 StoredUtxo decodeUtxoValue(const std::vector<std::uint8_t>& txid, int vout, const std::string& encoded);
+StoredUtxoRef decodeUtxoValue(const DbOutpointKey& outpoint, const std::string& encoded);
 
 std::string encodeUndoValue(const std::vector<StoredUtxo>& entries);
+std::string encodeUndoValue(std::span<const StoredUtxoRef> entries);
 std::vector<StoredUtxo> decodeUndoValue(const std::string& encoded);
 
 std::string encodeTipValue(int height, const std::vector<std::uint8_t>& blockHashInternal);

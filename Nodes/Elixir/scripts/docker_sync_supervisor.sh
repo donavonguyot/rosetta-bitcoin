@@ -17,6 +17,9 @@ SYNC_TIMING=${SYNC_TIMING:-1}
 SYNC_SNAPSHOT_SEC=${SYNC_SNAPSHOT_SEC:-5}
 SYNC_SNAPSHOT_BLOCKS=${SYNC_SNAPSHOT_BLOCKS:-0}
 SCRIPT_VERIFY_TIMEOUT_MS=${SCRIPT_VERIFY_TIMEOUT_MS:-300000}
+PAR_SCRIPT_VERIFY=${PAR_SCRIPT_VERIFY:-1}
+PAR_SCRIPT_THREADS=${PAR_SCRIPT_THREADS:-4}
+PAR_SCRIPT_MIN_INPUTS=${PAR_SCRIPT_MIN_INPUTS:-2}
 RUNTIME_SURFACE=${RUNTIME_SURFACE:-docker_supervisor}
 SUPERVISOR_ONCE=${SUPERVISOR_ONCE:-0}
 STOP_FILE=${STOP_FILE:-.exbitnode_supervisor_stop}
@@ -26,6 +29,10 @@ read -r -a DOCKER_COMPOSE_CMD <<< "$DOCKER_COMPOSE"
 
 log_line() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2
+}
+
+now_ms() {
+  python3 -c 'import time; print(int(time.time() * 1000))'
 }
 
 volume_test_file() {
@@ -147,6 +154,17 @@ print(json.dumps(tick, sort_keys=True, separators=(",", ":")))
 PY
   )"
   log_line "AGENT_LOOP_TICK_chatreport ${tick}"
+  printf '%s\n' "$raw_status" | \
+    TARGET_BLOCK_HEIGHT="${TARGET_BLOCK_HEIGHT:-$HEADERS_MAX}" \
+    BENCHMARK_GATE="${BENCHMARK_GATE:-supervisor}" \
+    BENCHMARK_STARTED_MS="$STARTED_MS" \
+    BENCHMARK_LAST_HEIGHT="$last_height" \
+    BENCHMARK_PHASE="$phase" \
+    BENCHMARK_PROCESS_RUNNING="$process_running" \
+    POLL_SEC="$POLL_SEC" \
+    python3 scripts/emit_benchmark_telemetry_tick.py | while IFS= read -r line; do
+      log_line "$line"
+    done
 
   TICK_JSON="$tick" python3 - <<'PY'
 import json
@@ -173,6 +191,9 @@ start_chunk() {
   SYNC_SNAPSHOT_SEC="$SYNC_SNAPSHOT_SEC" \
   SYNC_SNAPSHOT_BLOCKS="$SYNC_SNAPSHOT_BLOCKS" \
   SCRIPT_VERIFY_TIMEOUT_MS="$SCRIPT_VERIFY_TIMEOUT_MS" \
+  PAR_SCRIPT_VERIFY="$PAR_SCRIPT_VERIFY" \
+  PAR_SCRIPT_THREADS="$PAR_SCRIPT_THREADS" \
+  PAR_SCRIPT_MIN_INPUTS="$PAR_SCRIPT_MIN_INPUTS" \
     "${DOCKER_COMPOSE_CMD[@]}" run -d --name "$CONTAINER_NAME" --no-deps exbitnode-sync-proof mix sync.local >/dev/null
 }
 
@@ -264,6 +285,7 @@ pause_until_resume_or_change() {
 }
 
 build_image
+STARTED_MS="$(now_ms)"
 source_sig="$(source_signature)"
 last_height="$(emit_tick "starting" -1)"
 

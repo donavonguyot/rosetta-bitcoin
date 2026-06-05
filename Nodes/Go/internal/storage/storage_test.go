@@ -1,6 +1,9 @@
 package storage
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestBinaryUTXORoundTripAndGetMany(t *testing.T) {
 	store, err := Open(t.TempDir())
@@ -45,6 +48,30 @@ func TestBinaryUTXORoundTripAndGetMany(t *testing.T) {
 	}
 	if values[OutPoint{TxID: "0200000000000000000000000000000000000000000000000000000000000000", Vout: 0}] != nil {
 		t.Fatal("batch get returned missing utxo")
+	}
+}
+
+func TestBinaryOutPointKeyMatchesDisplayKeyAndJSON(t *testing.T) {
+	txid := "010203040506070809101112131415161718191a1b1c1d1e1f20212223242526"
+	display := NewOutPointFromDisplay(txid, 7)
+	internal := NewOutPointFromInternal(display.hash[:], 7)
+	if string(display.KeyBytes()) != string(internal.KeyBytes()) {
+		t.Fatalf("binary and display keys differ: %x != %x", display.KeyBytes(), internal.KeyBytes())
+	}
+	data, err := json.Marshal(internal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != `{"txid":"`+txid+`","vout":7}` {
+		t.Fatalf("unexpected outpoint json: %s", data)
+	}
+	utxo := NewUTXO(internal, 99, []byte{0x51}, 11, false)
+	data, err = json.Marshal(utxo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != `{"txid":"`+txid+`","vout":7,"value":99,"script_pubkey":"51","height":11,"coinbase":false}` {
+		t.Fatalf("unexpected utxo json: %s", data)
 	}
 }
 
@@ -126,6 +153,68 @@ func TestCommitBlockAtomicFailureLeavesTipAndUTXO(t *testing.T) {
 	}
 	if after.ValidatedHeight != 0 || after.ValidatedHash != "genesis" {
 		t.Fatalf("metadata advanced despite failed commit: %#v", after)
+	}
+}
+
+func TestCommitBlockWithTimingReportsPrepareAndWriteStages(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	meta := Metadata{
+		NodeID:            "test",
+		GenerationID:      "test-generation",
+		Chain:             "testnet4",
+		SyncStatus:        "blocks_syncing",
+		ChainstateStatus:  "usable",
+		ChainstateBackend: "rocksdb",
+		ValidatedHeight:   0,
+		ValidatedHash:     "genesis",
+		StoredBlockHeight: 1,
+	}
+	if err := store.PutMetadata(meta); err != nil {
+		t.Fatal(err)
+	}
+	existing := UTXO{
+		TxID:              "0600000000000000000000000000000000000000000000000000000000000000",
+		Vout:              0,
+		Value:             1000,
+		ScriptPubKeyBytes: []byte{0x51},
+		Height:            0,
+	}
+	if err := store.PutUTXO(existing); err != nil {
+		t.Fatal(err)
+	}
+	created := UTXO{
+		TxID:              "0700000000000000000000000000000000000000000000000000000000000000",
+		Vout:              1,
+		Value:             900,
+		ScriptPubKeyBytes: []byte{0x51},
+		Height:            1,
+	}
+	timing, err := store.CommitBlockWithTiming(BlockCommit{
+		Height:  1,
+		Hash:    "block1",
+		Spent:   []OutPoint{existing.OutPoint()},
+		Created: []UTXO{created},
+		Undo:    []UndoEntry{{Outpoint: existing.OutPoint(), UTXO: existing}},
+		Metadata: Metadata{
+			NodeID:              meta.NodeID,
+			GenerationID:        meta.GenerationID,
+			Chain:               meta.Chain,
+			SyncStatus:          "blocks_current",
+			ChainstateStatus:    "usable",
+			ChainstateBackend:   "rocksdb",
+			StoredBlockHeight:   1,
+			ChainstateUTXOCount: 1,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if timing.UTXODeletePrepare <= 0 || timing.UTXOPutPrepare <= 0 || timing.UndoPutPrepare <= 0 || timing.MetadataPutPrepare <= 0 || timing.RocksDBWrite <= 0 {
+		t.Fatalf("missing commit timing: %#v", timing)
 	}
 }
 

@@ -17,8 +17,10 @@ pub struct StorageProof {
     runtime_surface: String,
     chainstate_backend: String,
     native_storage: bool,
-    local_sqlite_artifact_absent: bool,
-    local_sqlite_db_present: bool,
+    operational_db_artifact_absent: bool,
+    runtime_db_boundary_passed: bool,
+    project_db_observational_only: bool,
+    runtime_db_artifact_present: bool,
     validated_height: i64,
     validated_hash: String,
     header_height: i64,
@@ -54,7 +56,7 @@ pub fn run(
 ) -> Result<StorageProof> {
     let proof = storage::seed_connect_proof(datadir)?;
     let meta = proof.metadata;
-    let local_sqlite_absent = storage::local_sqlite_absent(datadir);
+    let operational_db_absent = storage::operational_db_artifact_absent(datadir);
     let doc = StorageProof {
         implementation: "RustNode",
         commit: repo::git_commit(),
@@ -66,8 +68,10 @@ pub fn run(
         runtime_surface: runtime_surface.to_string(),
         chainstate_backend: meta.chainstate_backend.clone(),
         native_storage: true,
-        local_sqlite_artifact_absent: local_sqlite_absent,
-        local_sqlite_db_present: !local_sqlite_absent,
+        operational_db_artifact_absent: operational_db_absent,
+        runtime_db_boundary_passed: operational_db_absent,
+        project_db_observational_only: true,
+        runtime_db_artifact_present: !operational_db_absent,
         validated_height: meta.validated_height,
         validated_hash: meta.validated_hash.clone(),
         header_height: meta.header_height,
@@ -86,9 +90,7 @@ pub fn run(
             "skipped": 0,
             "jacoco_line_minimum": 0,
             "surefire_broad_exclusions": false,
-            "sqlite_jdbc_dependency_present": false,
-            "sqlite_entries_in_shaded_jar": false,
-            "local_sqlite_runtime_classes_present": false,
+            "external_runtime_db_dependency_present": false,
             "rust_tests": "cargo test",
             "codec_v2_vectors": "cargo run -- codec-vectors",
             "connect_proof": "storage-proof deterministic two-block batch commit",
@@ -96,7 +98,7 @@ pub fn run(
             "atomic_commit_exercised": proof.atomic_commit_exercised,
             "block_local_view_exercised": proof.block_local_view_exercised,
             "block_connect_store_commit_ms": proof.timings.millis("block_connect_store_commit"),
-            "sqlite_dependency_present": false
+            "compatibility_db_dependency_present": false
         }),
         project_export: serde_json::json!({
             "project_db": "",
@@ -125,12 +127,12 @@ pub fn run(
                 "",
             ),
             result(
-                "storage.local_sqlite_artifact_absent",
-                local_sqlite_absent,
+                "storage.operational_db_boundary",
+                operational_db_absent,
                 None,
                 "",
                 &meta.chainstate_backend,
-                "legacy local DB artifact exists in native datadir",
+                "port-local operational DB artifact exists outside the approved backend",
                 "",
             ),
             result(

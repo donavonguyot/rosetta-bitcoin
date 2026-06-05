@@ -146,13 +146,19 @@ std::vector<std::uint8_t> keyTxidVector(const OutpointKey& key) {
     return std::vector<std::uint8_t>(key.txid.begin(), key.txid.end());
 }
 
+db::DbOutpointKey dbOutpointKey(const OutpointKey& key) {
+    return db::DbOutpointKey{key.txid, key.vout};
+}
+
 class BlockUtxoView {
 public:
     BlockUtxoView(db::ChainstateStore& chainstate, int height) : chainstate_(chainstate), height_(height) {}
 
     void preloadExternal(std::span<const db::Outpoint> outpoints) {
-        std::vector<db::Outpoint> external;
+        std::vector<db::DbOutpointKey> external;
         external.reserve(outpoints.size());
+        std::vector<OutpointKey> externalKeys;
+        externalKeys.reserve(outpoints.size());
         std::unordered_set<OutpointKey, OutpointKeyHash> seen;
         for (const auto& outpoint : outpoints) {
             const auto key = outpointKey(outpoint.txid, outpoint.vout);
@@ -160,16 +166,16 @@ public:
                 continue;
             }
             if (seen.insert(key).second) {
-                external.push_back(outpoint);
+                external.push_back(dbOutpointKey(key));
+                externalKeys.push_back(key);
             }
         }
-        const auto loaded = chainstate_.getUtxos(external);
+        const auto loaded = chainstate_.getUtxos(std::span<const db::DbOutpointKey>(external.data(), external.size()));
         for (std::size_t index = 0; index < external.size(); ++index) {
-            const auto key = outpointKey(external[index].txid, external[index].vout);
             if (loaded[index].has_value()) {
-                loaded_.emplace(key, *loaded[index]);
+                loaded_.emplace(externalKeys[index], db::toStoredUtxo(*loaded[index]));
             } else {
-                loadedMissing_.insert(key);
+                loadedMissing_.insert(externalKeys[index]);
             }
         }
     }
@@ -652,24 +658,28 @@ Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chai
     }
 
     timerStart = detail::Clock::now();
-    db::BlockCommit commit;
+    db::BlockCommitNative commit;
     commit.chain = options.chainName;
     commit.height = options.height;
     commit.blockHash = block.header.blockHashHex();
     commit.blockIndex = options.blockIndex;
-    commit.undo = detail::externalSpendUndoEntries(view, chainstate);
+    const auto undoEntries = detail::externalSpendUndoEntries(view, chainstate);
+    commit.undo.reserve(undoEntries.size());
+    for (const auto& entry : undoEntries) {
+        commit.undo.push_back(db::toStoredUtxoRef(entry));
+    }
     for (const auto& key : view.spent()) {
         if (view.created().contains(key)) {
             continue;
         }
-        commit.spends.push_back(db::Outpoint{detail::keyTxidVector(key), static_cast<int>(key.vout)});
+        commit.spends.push_back(detail::dbOutpointKey(key));
     }
     for (const auto& [key, utxo] : view.created()) {
         if (view.spent().contains(key)) {
             continue;
         }
-        commit.creates.push_back(
-            db::UtxoCreate{utxo.txid, utxo.vout, utxo.height, utxo.value, utxo.scriptPubkey, utxo.coinbase});
+        commit.creates.push_back(db::UtxoCreateRef{detail::dbOutpointKey(key), utxo.height, utxo.value,
+                                                   utxo.scriptPubkey, utxo.coinbase});
     }
     if (timingEnabled) {
         timing.utxoApply += detail::elapsedUs(timerStart);

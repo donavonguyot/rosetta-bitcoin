@@ -202,11 +202,11 @@ by the recorded live blocker trail.
 Historical reference fix: Python commit **`dd65c78`** (*Verify Taproot key-path spends*).
 See `docs/BLOCKER_LEDGER.md` for blocker provenance and binary-gate evidence.
 
-## Retired snapshot export
+## Retired Compatibility Snapshot Export
 
-The old SQLite snapshot exporter is retired for Java native runtime. It remains
-as a CLI stub that returns unsupported status so old scripts fail loudly instead
-of reading or creating `jbitnode.db` as runtime truth.
+The compatibility snapshot exporter is retired for Java native runtime. It
+remains as a CLI stub that returns unsupported status so old scripts fail loudly
+instead of reading or creating a port-local operational DB as runtime truth.
 
 ```bash
 make java-node-export-snapshots
@@ -215,9 +215,9 @@ make java-node-export-snapshots
 Use `make java-node-status` for current RocksDB-backed status and Project import
 surfaces for mission-control snapshots.
 
-## Retired script template survey
+## Retired Script Template Survey
 
-The old Java-local SQLite script survey is also retired. Shared consensus
+The Java-local compatibility script survey is also retired. Shared consensus
 readiness now starts from the rule ledger, the 45-fixture script corpus, and
 Project consensus runway reports.
 
@@ -410,7 +410,7 @@ Harvested hex/block fixtures live under `src/test/resources/fixtures/` (see
 
 ## Schema
 
-Historical local SQLite tracker tables mirrored the old TypeScript tracker.
+Historical compatibility tracker tables mirrored the old TypeScript tracker.
 Current runtime truth is native chainstate; this schema is legacy context only:
 
 `meta`, `project_phases`, `sync_state`, `peers`, `peer_addresses`, `headers`,

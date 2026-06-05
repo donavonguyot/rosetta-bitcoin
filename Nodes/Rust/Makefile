@@ -18,19 +18,24 @@ LOCAL_REFERENCE_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_5
 LOCAL_REFERENCE_10K_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_10k_benchmark_$(RESULT_DATE).json
 LOCAL_REFERENCE_50K_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_50k_benchmark_$(RESULT_DATE).json
 LOCAL_REFERENCE_100K_RESULT ?= ../Shared/conformance/results/rust_docker_primary_100k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_TUNING_100K_RESULT ?= ../Shared/conformance/results/rust_docker_tuning_50k_to_100k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_RESULT ?= /results/rust_docker_supporting_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_10K_RESULT ?= /results/rust_docker_supporting_10k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_50K_RESULT ?= /results/rust_docker_supporting_50k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_100K_RESULT ?= /results/rust_docker_primary_100k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_TUNING_100K_RESULT ?= /results/rust_docker_tuning_50k_to_100k_benchmark_$(RESULT_DATE).json
 RPC_REPLAY_RESULT ?= ../Shared/conformance/results/rust_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
 DOCKER_P2P_PEER ?= host.docker.internal:48333
 DOCKER_LOCAL_PROOF_VOLUME ?= rsbitnode_proof_data
+DOCKER_TUNING_SOURCE_VOLUME ?= rsbitnode_50k_proof_data
+DOCKER_TUNING_100K_VOLUME ?= rsbitnode_tuning_50k_to_100k_data
+TUNING_SOURCE_50K_ARTIFACT ?= ../Shared/conformance/results/rust_docker_supporting_50k_benchmark_$(RESULT_DATE).json
 DOCKER_EXTERNAL_P2P_PEER ?=
 DOCKER_EXTERNAL_PROBE_VOLUME ?= rsbitnode_external_5k_probe_data
 
-.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-rpc-replay docker-probe-external docker-proof-local-fast docker-smoke-once clean
+.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-tuning-100k-from-50k docker-proof-rpc-replay docker-probe-external docker-proof-local-fast docker-smoke-once clean
 
 build:
 	$(CARGO) build
@@ -109,6 +114,40 @@ docker-proof-100k:
 	  DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_100k_proof_data \
 	  SYNC_TARGET=100000 \
 	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_100K_RESULT)
+
+docker-tuning-100k-from-50k:
+	@for i in $$(seq 1 60); do \
+	  nc -z 127.0.0.1 48333 && break; \
+	  sleep 2; \
+	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
+	done
+	@test -f "$(TUNING_SOURCE_50K_ARTIFACT)" || { echo "error: missing source 50k artifact: $(TUNING_SOURCE_50K_ARTIFACT)" >&2; exit 1; }
+	@python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); e={"result":"passed","benchmark_lane":"supporting_50k_p2p","validated_height":50000,"validated_hash":"00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb","chainstate_utxo_count":568855,"utxo_accounting_policy":"core_spendable_v1"}; bad=[f"{k}={d.get(k)!r}" for k,v in e.items() if d.get(k)!=v]; sys.exit("source 50k artifact is not certified: "+", ".join(bad)) if bad else None' "$(TUNING_SOURCE_50K_ARTIFACT)"
+	@source_volume="$(DOCKER_TUNING_SOURCE_VOLUME)"; \
+	  if ! docker volume inspect "$$source_volume" >/dev/null 2>&1; then source_volume="docker_$(DOCKER_TUNING_SOURCE_VOLUME)"; fi; \
+	  docker volume inspect "$$source_volume" >/dev/null; \
+	  docker volume rm -f $(DOCKER_TUNING_100K_VOLUME) docker_$(DOCKER_TUNING_100K_VOLUME) >/dev/null 2>&1 || true; \
+	  docker volume create docker_$(DOCKER_TUNING_100K_VOLUME) >/dev/null; \
+	  docker run --rm -v "$$source_volume":/source:ro -v docker_$(DOCKER_TUNING_100K_VOLUME):/target alpine:3.20 sh -c 'cd /source && tar cf - . | tar xf - -C /target'
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_TUNING_100K_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps \
+	  -e RSBITNODE_BLOCK_PREFETCH_DEPTH=$(PREFETCH_DEPTH) \
+	  -e RSBITNODE_BENCHMARK_GATE=tuning_50k_to_100k \
+	  -e RSBITNODE_BENCHMARK_KIND=tuning_50k_to_100k_p2p \
+	  -e RSBITNODE_BENCHMARK_LANE=tuning_50k_to_100k_p2p \
+	  -e 'RSBITNODE_TARGET_LABEL=50k->100k' \
+	  -e RSBITNODE_FRESH_STATE=false \
+	  -e RSBITNODE_SOURCE_GATE=supporting_50k \
+	  -e RSBITNODE_SOURCE_BENCHMARK_LANE=supporting_50k_p2p \
+	  -e RSBITNODE_SOURCE_VALIDATED_HEIGHT=50000 \
+	  -e RSBITNODE_SOURCE_HEADER_HEIGHT=50000 \
+	  -e RSBITNODE_SOURCE_VALIDATED_HASH=00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb \
+	  -e RSBITNODE_SOURCE_CHAINSTATE_UTXO_COUNT=568855 \
+	  -e RSBITNODE_SOURCE_UTXO_ACCOUNTING_POLICY=core_spendable_v1 \
+	  -e RSBITNODE_SOURCE_ARTIFACT_PATH=$(TUNING_SOURCE_50K_ARTIFACT) \
+	  -e RSBITNODE_SOURCE_ARTIFACT_SHA256="$$(shasum -a 256 "$(TUNING_SOURCE_50K_ARTIFACT)" | awk '{print $$1}')" \
+	  -e RSBITNODE_SOURCE_DOCKER_VOLUME=$(DOCKER_TUNING_SOURCE_VOLUME) \
+	  -e RSBITNODE_RESTORED_DOCKER_VOLUME=$(DOCKER_TUNING_100K_VOLUME) \
+	  rsbitnode-local-reference-proof rsbitnode local-reference-proof --datadir /data --target 100000 --byte-source p2p --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_TUNING_100K_RESULT) --runtime-surface docker
 
 docker-proof-rpc-replay:
 	@for i in $$(seq 1 60); do \

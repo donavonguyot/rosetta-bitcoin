@@ -24,8 +24,8 @@ function listTrackedRuntimeFiles(): string[] {
     .filter((path) => path.endsWith(".ts") || path.endsWith("package.json"));
 }
 
-describe("TypeScript runtime SQLite ban", () => {
-  it("does not contain SQLite runtime dependencies or legacy tracker names", () => {
+describe("TypeScript runtime DB boundary", () => {
+  it("does not contain unapproved runtime DB dependencies or compatibility tracker names", () => {
     const offenders: string[] = [];
     for (const path of listTrackedRuntimeFiles()) {
       const absolute = join(REPO_ROOT, "..", "..", path);

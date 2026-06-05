@@ -17,7 +17,7 @@ from import_all import import_json_artifact, init_db, read_json, repo_root  # no
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", default="Project/project.db", help="Project SQLite DB path")
+    parser.add_argument("--db", default="Project/project.db", help="Project mission-control DB path")
     parser.add_argument("results_json", help="Shared conformance result JSON path")
     return parser.parse_args()
 

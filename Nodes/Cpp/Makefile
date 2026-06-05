@@ -8,6 +8,8 @@ DOCKER_PROOF_PATH ?= ../Shared/conformance/results/cpp_rocksdb_codec_v2_storage.
 DOCKER_REBUILD ?= 0
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/cpp_docker_supporting_5k_benchmark_$(shell date +%F).json
 DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/cpp_docker_supporting_10k_benchmark_$(shell date +%F).json
+DOCKER_50K_BENCHMARK_RESULT ?= ../Shared/conformance/results/cpp_docker_supporting_50k_benchmark_$(shell date +%F).json
+DOCKER_100K_BENCHMARK_RESULT ?= ../Shared/conformance/results/cpp_docker_primary_100k_benchmark_$(shell date +%F).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/cpp_script_corpus_$(shell date +%F).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/cpp_script_corpus_docker_$(shell date +%F).json
 DOCKER_BENCHMARK_TARGET ?= 5000
@@ -23,7 +25,7 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: build test docker-config docker-build docker-warm node-status sync-local cpp-node-storage-proof cpp-node-script-corpus cpp-node-native-crypto-test docker-cpp-native-crypto-proof docker-cpp-supporting-5k-proof docker-cpp-supporting-10k-proof docker-cpp-rocksdb-storage-proof docker-script-corpus docker-cpp-sync-supervisor docker-cpp-sync-status docker-cpp-sync-stop docker-cpp-sync-resume clean
+.PHONY: build test docker-config docker-build docker-warm node-status sync-local cpp-node-storage-proof cpp-node-script-corpus cpp-node-native-crypto-test docker-cpp-native-crypto-proof docker-cpp-supporting-5k-proof docker-cpp-supporting-10k-proof docker-cpp-supporting-50k-proof docker-cpp-primary-100k-proof docker-cpp-rocksdb-storage-proof docker-script-corpus docker-cpp-sync-supervisor docker-cpp-sync-status docker-cpp-sync-stop docker-cpp-sync-resume clean
 
 build:
 	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
@@ -83,6 +85,20 @@ docker-cpp-supporting-10k-proof:
 	  DOCKER_BENCHMARK_RESULT=$(DOCKER_10K_BENCHMARK_RESULT) \
 	  DOCKER_BENCHMARK_TARGET=10000 \
 	  DOCKER_BENCHMARK_BLOCKS_MAX=10000
+
+docker-cpp-supporting-50k-proof:
+	$(MAKE) docker-cpp-supporting-5k-proof \
+	  DOCKER_PROOF_VOLUME=cpbitnode_50k_proof_data \
+	  DOCKER_BENCHMARK_RESULT=$(DOCKER_50K_BENCHMARK_RESULT) \
+	  DOCKER_BENCHMARK_TARGET=50000 \
+	  DOCKER_BENCHMARK_BLOCKS_MAX=50000
+
+docker-cpp-primary-100k-proof:
+	$(MAKE) docker-cpp-supporting-5k-proof \
+	  DOCKER_PROOF_VOLUME=cpbitnode_100k_proof_data \
+	  DOCKER_BENCHMARK_RESULT=$(DOCKER_100K_BENCHMARK_RESULT) \
+	  DOCKER_BENCHMARK_TARGET=100000 \
+	  DOCKER_BENCHMARK_BLOCKS_MAX=100000
 
 docker-cpp-rocksdb-storage-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi

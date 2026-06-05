@@ -81,7 +81,7 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
     );
     doc.insert("target_height".into(), opts.target.into());
     doc.insert("header_target_height".into(), opts.target.into());
-    doc.insert("target_label".into(), target_label(opts.target).into());
+    doc.insert("target_label".into(), target_label_for_opts(&opts).into());
     doc.insert("reference_start_height".into(), 0.into());
     doc.insert(
         "reference_start_hash".into(),
@@ -90,15 +90,17 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
     doc.insert("reference_finish_height".into(), opts.target.into());
     doc.insert("benchmark_contract_version".into(), 1.into());
     doc.insert("benchmark_kind".into(), benchmark_kind(&opts).into());
+    doc.insert("benchmark_gate".into(), gate_id_for(&opts).into());
     doc.insert("benchmark_lane".into(), benchmark_lane.into());
     doc.insert("utxo_accounting_policy".into(), "core_spendable_v1".into());
     doc.insert("byte_source".into(), byte_source.into());
     doc.insert("resume_supported".into(), true.into());
-    doc.insert("fresh_state".into(), true.into());
+    doc.insert("fresh_state".into(), fresh_state_for_env().into());
     doc.insert("proof_mode".into(), proof_mode.into());
     doc.insert("prefetch_depth".into(), (prefetch_depth() as i64).into());
     doc.insert("result".into(), "failed".into());
     doc.insert("failures".into(), Value::Array(Vec::new()));
+    insert_tuning_source_metadata(&mut doc);
     if is_external_manual(&opts) {
         doc.insert("selected_peer".into(), opts.peer.into());
         doc.insert("disconnects".into(), 0.into());
@@ -146,6 +148,12 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
         bail!("proof mode must be pipeline or staged");
     };
     doc.insert("sync_summary".into(), sync_summary.clone());
+    if let Some(resumed_from_height) = sync_summary.get("resumed_from_height") {
+        doc.insert("resumed_from_height".into(), resumed_from_height.clone());
+    }
+    if let Some(start_height) = sync_summary.get("start_height") {
+        doc.insert("start_height".into(), start_height.clone());
+    }
     doc.insert("connect_summary".into(), connect_summary.clone());
     doc.insert(
         "connect_summary_kind".into(),
@@ -293,12 +301,71 @@ fn target_label(target: u32) -> &'static str {
     }
 }
 
-fn benchmark_kind(opts: &LocalReferenceOptions<'_>) -> &'static str {
+fn env_override(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn target_label_for_opts(opts: &LocalReferenceOptions<'_>) -> String {
+    env_override("RSBITNODE_TARGET_LABEL").unwrap_or_else(|| target_label(opts.target).into())
+}
+
+fn fresh_state_for_env() -> bool {
+    env_override("RSBITNODE_FRESH_STATE")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(true)
+}
+
+fn insert_tuning_source_metadata(doc: &mut Map<String, Value>) {
+    let mappings = [
+        ("RSBITNODE_SOURCE_GATE", "source_gate"),
+        ("RSBITNODE_SOURCE_BENCHMARK_LANE", "source_benchmark_lane"),
+        ("RSBITNODE_SOURCE_ARTIFACT_PATH", "source_artifact_path"),
+        ("RSBITNODE_SOURCE_ARTIFACT_SHA256", "source_artifact_sha256"),
+        ("RSBITNODE_SOURCE_DOCKER_VOLUME", "source_docker_volume"),
+        ("RSBITNODE_RESTORED_DOCKER_VOLUME", "restored_docker_volume"),
+    ];
+    for (env_name, field_name) in mappings {
+        if let Some(value) = env_override(env_name) {
+            doc.insert(field_name.into(), value.into());
+        }
+    }
+    for (env_name, field_name) in [
+        (
+            "RSBITNODE_SOURCE_VALIDATED_HEIGHT",
+            "source_validated_height",
+        ),
+        (
+            "RSBITNODE_SOURCE_CHAINSTATE_UTXO_COUNT",
+            "source_chainstate_utxo_count",
+        ),
+        ("RSBITNODE_SOURCE_HEADER_HEIGHT", "source_header_height"),
+    ] {
+        if let Some(value) = env_override(env_name) {
+            if let Ok(parsed) = value.parse::<i64>() {
+                doc.insert(field_name.into(), parsed.into());
+            }
+        }
+    }
+    if let Some(value) = env_override("RSBITNODE_SOURCE_VALIDATED_HASH") {
+        doc.insert("source_validated_hash".into(), value.into());
+    }
+    if let Some(value) = env_override("RSBITNODE_SOURCE_UTXO_ACCOUNTING_POLICY") {
+        doc.insert("source_utxo_accounting_policy".into(), value.into());
+    }
+}
+
+fn benchmark_kind(opts: &LocalReferenceOptions<'_>) -> String {
+    if let Some(value) = env_override("RSBITNODE_BENCHMARK_KIND") {
+        return value;
+    }
     if is_external_manual(opts) {
         return match opts.target {
             5000 => "diagnostic_external_5k_p2p",
             _ => "diagnostic_external_p2p",
-        };
+        }
+        .into();
     }
     if is_p2p_source(opts) {
         return match opts.target {
@@ -307,7 +374,8 @@ fn benchmark_kind(opts: &LocalReferenceOptions<'_>) -> &'static str {
             50000 => "supporting_50k_p2p",
             100000 => "primary_100k_p2p",
             _ => "local_reference_p2p",
-        };
+        }
+        .into();
     }
     match opts.target {
         5000 => "supporting_5k_durable_local_reference_replay",
@@ -316,14 +384,19 @@ fn benchmark_kind(opts: &LocalReferenceOptions<'_>) -> &'static str {
         100000 => "primary_100k_durable_local_reference_replay",
         _ => "local_reference_replay",
     }
+    .into()
 }
 
-fn benchmark_lane_for(opts: &LocalReferenceOptions<'_>) -> &'static str {
+fn benchmark_lane_for(opts: &LocalReferenceOptions<'_>) -> String {
+    if let Some(value) = env_override("RSBITNODE_BENCHMARK_LANE") {
+        return value;
+    }
     if is_external_manual(opts) {
         return match opts.target {
             5000 => "diagnostic_external_5k_p2p",
             _ => "diagnostic_external_p2p",
-        };
+        }
+        .into();
     }
     match (opts.target, is_p2p_source(opts)) {
         (5000, true) => "supporting_5k_p2p",
@@ -337,6 +410,7 @@ fn benchmark_lane_for(opts: &LocalReferenceOptions<'_>) -> &'static str {
         (_, true) => "local_reference_p2p",
         (_, false) => "local_reference_rpc",
     }
+    .into()
 }
 
 fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value)> {
@@ -364,6 +438,7 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
     let receiver = p2p::fetch_blocks(p2p::FetchOptions {
         peer: opts.peer.to_string(),
         target: opts.target,
+        start_height,
         prefetch: timing.prefetch_depth,
     });
 
@@ -959,7 +1034,7 @@ fn emit_telemetry_tick(
             "port": "rust",
             "gate": gate_id_for(opts),
             "benchmark_lane": benchmark_lane_for(opts),
-            "target": target_label(opts.target),
+            "target": target_label_for_opts(opts),
             "target_height": opts.target,
             "height": height,
             "percent": ((height as f64 / opts.target.max(1) as f64) * 100.0),
@@ -979,9 +1054,12 @@ fn emit_telemetry_tick(
     );
 }
 
-fn gate_id_for(opts: &LocalReferenceOptions<'_>) -> &'static str {
+fn gate_id_for(opts: &LocalReferenceOptions<'_>) -> String {
+    if let Some(value) = env_override("RSBITNODE_BENCHMARK_GATE") {
+        return value;
+    }
     if is_external_manual(opts) {
-        return "diagnostic_external_5k";
+        return "diagnostic_external_5k".into();
     }
     match opts.target {
         5000 => "supporting_5k",
@@ -990,6 +1068,7 @@ fn gate_id_for(opts: &LocalReferenceOptions<'_>) -> &'static str {
         100000 => "primary_100k",
         _ => "diagnostic",
     }
+    .into()
 }
 
 fn prefetch_depth() -> usize {

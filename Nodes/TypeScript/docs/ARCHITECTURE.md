@@ -1,8 +1,8 @@
 # tsbitnode architecture
 
 This document maps the native/Core TypeScript implementation. For runbooks, see
-[`README.md`](../README.md). Legacy SQLite tracker tooling is documented only as
-handoff evidence and compatibility.
+[`README.md`](../README.md). Compatibility tracker tooling is documented only as
+handoff evidence.
 
 ## Native Done Model
 
@@ -17,7 +17,7 @@ npx tsbitnode-status --datadir ./data-ts
 npx tsbitnode-storage-proof --datadir ./data-ts-proof
 ```
 
-Inspect legacy SQLite evidence only when explicitly needed:
+Inspect compatibility evidence only when explicitly needed:
 
 ```bash
 npx tsbitnode-legacy-db --db ./data-ts/tsbitnode.db --wire
@@ -113,11 +113,11 @@ RocksDB chainstate records, records proof metadata, and emits proof JSON under
 | `tsbitnode-status` | `dist/cli/nativeStatus.js` | Native RocksDB chainstate status. |
 | `tsbitnode-storage-proof` | `dist/cli/storageProof.js` | Bounded native storage proof. |
 | `tsbitnode-healthcheck` | `dist/cli/healthcheck.js` | JSON health probe for runtime checks. |
-| `tsbitnode-legacy-db` | `dist/cli/dbStatus.js` | Legacy SQLite tracker status; not a Core/native proof. |
+| `tsbitnode-legacy-db` | `dist/cli/dbStatus.js` | Compatibility tracker status; not a Core/native proof. |
 
 ## Relationship To Python
 
-TypeScript follows the same full-break rule now applied to Python: old SQLite
-state is historical evidence, and forward parity must be reproved from an empty
-native datadir. Python uses RocksDB through `rocksdict`; TypeScript uses the
-RocksDB npm binding and scoped native crypto dependencies.
+TypeScript follows the same full-break rule now applied to Python: old
+compatibility state is historical evidence, and forward parity must be reproved
+from an empty native datadir. Python uses RocksDB through `rocksdict`;
+TypeScript uses the RocksDB npm binding and scoped native crypto dependencies.

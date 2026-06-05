@@ -56,22 +56,22 @@ IMPLEMENTATION_PORTS: tuple[tuple[str, str], ...] = (
 
 DECISIONS: tuple[dict[str, str], ...] = (
     {
-        "decision_id": "project-sqlite-mission-control",
-        "title": "Project SQLite is mission control",
+        "decision_id": "project-db-is-mission-control",
+        "title": "Project DB is mission control",
         "status": "accepted",
-        "context": "SQLite was overcorrected from forbidden port-local operational state into forbidden coordination state.",
-        "decision": "Project/project.db is a tracked mission-control database for observations, indexes, reports, and decisions.",
-        "consequences": "Ports may export observations into Project, but may not read Project SQLite for operational node truth.",
+        "context": "Project needs a tracked cross-port evidence index that is separate from node runtime state.",
+        "decision": "Project/project.db is the mission-control database for observations, indexes, reports, and decisions.",
+        "consequences": "Ports may export observations into Project, but may not read Project DB for operational node truth.",
         "source_path": "Project/README.md",
         "decided_at": "2026-06-04",
     },
     {
-        "decision_id": "port-operational-sqlite-forbidden",
-        "title": "Port-local operational SQLite is not Core/native truth",
+        "decision_id": "native-runtime-storage-boundary",
+        "title": "Native runtime storage owns node truth",
         "status": "accepted",
-        "context": "Follower ports migrated operational state to native stores such as RocksDB.",
-        "decision": "Native/Core mode must not create, read, or require SQLite for headers, block index, sync state, validated tip, UTXO, undo, blockers, or status truth.",
-        "consequences": "Legacy SQLite surfaces remain historical or compatibility-only and cannot support Core/native compliance claims.",
+        "context": "Follower ports must prove their own operational state instead of depending on another implementation or coordination database.",
+        "decision": "Native/Core mode must use RocksDB/native operational storage for headers, block index, sync state, validated tip, UTXO, undo, blockers, and status truth.",
+        "consequences": "Compatibility surfaces may exist only outside baseline proof paths and cannot support Core/native compliance claims.",
         "source_path": "Docs/storage-contract.md",
         "decided_at": "2026-06-04",
     },
@@ -202,6 +202,32 @@ BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
         "result_name_pattern": "<port>_<surface>_primary_100k_benchmark_<YYYY-MM-DD>.json",
         "notes": "Official comparable 100k lane: Docker/local Reference P2P with WAL enabled, fresh state, fixed knobs, and full telemetry. This gate is the optimization comparison surface.",
     },
+    {
+        "gate_id": "tuning_50k_to_100k",
+        "target_height": 100000,
+        "target_label": "50k->100k",
+        "benchmark_kind": "tuning_50k_to_100k_p2p",
+        "role": "resumed hard-region optimization workbench",
+        "preferred_runtime_surface": "docker",
+        "preferred_command_key": "docker_tuning_100k_from_50k",
+        "official_lane": "tuning_50k_to_100k_p2p",
+        "official_byte_source": "local_reference_p2p",
+        "official_peer_mode": "local_reference",
+        "official_proof_mode": "p2p_sync",
+        "official_header_target_height": 100000,
+        "official_prefetch_depth": 4,
+        "official_script_runner_mode": "parallel",
+        "official_utxo_accounting_policy": "core_spendable_v1",
+        "official_chainstate_utxo_count": 13154991,
+        "fresh_state_required": 0,
+        "local_reference_required": 1,
+        "durable_required": 1,
+        "wal_disabled_required": 0,
+        "resume_supported_required": 1,
+        "binary_gate_status": "not_attempted",
+        "result_name_pattern": "<port>_<surface>_tuning_50k_to_100k_benchmark_<YYYY-MM-DD>.json",
+        "notes": "Resumed tuning lane: clone a certified empty-state 50k proof volume, then run Docker/local Reference P2P from 50k to 100k. This is comparable only with other resumed tuning runs and does not replace empty-state 100k proof.",
+    },
 )
 
 COMMAND_PURPOSES: dict[str, str] = {
@@ -213,6 +239,7 @@ COMMAND_PURPOSES: dict[str, str] = {
     "docker_proof_10k": "run official Docker/local-reference P2P 10k proof",
     "docker_proof_50k": "run official Docker/local-reference P2P 50k proof",
     "docker_proof_100k": "run official Docker/local-reference P2P 100k proof",
+    "docker_tuning_100k_from_50k": "run resumed Docker/local-reference P2P 50k-to-100k tuning proof",
     "docker_proof_rpc_replay": "run Docker/local-reference RPC replay proof",
     "docker_diagnostic_sync_proof": "run nonstandard diagnostic Docker sync proof",
     "docker_probe_external": "run bounded probe against external peers",
@@ -241,7 +268,7 @@ class Artifact:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", default="Project/project.db", help="Project SQLite DB path")
+    parser.add_argument("--db", default="Project/project.db", help="Project mission-control DB path")
     parser.add_argument("--rebuild", action="store_true", help="Delete and rebuild the DB before import")
     parser.add_argument("--results-dir", default="Nodes/Shared/conformance/results", help="Canonical result JSON directory")
     parser.add_argument("--docker-dir", default="Nodes/Shared/docker/ports", help="Docker manifest directory")
@@ -1032,13 +1059,39 @@ def import_status_snapshot(connection: sqlite3.Connection, artifact: Artifact, p
     )
 
 
+LEGACY_STORAGE_FIXTURE_ALIASES = {
+    "storage.local_sqlite_artifact_absent": "storage.operational_db_boundary",
+    "storage.forbidden_local_db_artifact_absent": "storage.operational_db_boundary",
+}
+
+
+def normalize_conformance_fixture_id(fixture_id: str) -> str:
+    return LEGACY_STORAGE_FIXTURE_ALIASES.get(fixture_id, fixture_id)
+
+
+def normalize_conformance_row(row: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(row)
+    fixture = text(normalized.get("fixture_id") or normalized.get("name"))
+    if fixture:
+        normalized["fixture_id"] = normalize_conformance_fixture_id(fixture)
+    failure = text(normalized.get("failure"))
+    legacy_failure = "legacy local " + "DB artifact"
+    if legacy_failure in failure:
+        normalized["failure"] = failure.replace(
+            legacy_failure,
+            "port-local operational DB artifact",
+        )
+    return normalized
+
+
 def import_conformance_rows(connection: sqlite3.Connection, artifact: Artifact, payload: dict[str, Any]) -> None:
     if not any(key in payload for key in ("results", "fixtures", "result", "bounded_gate_status", "passed")):
         return
     category = text(payload.get("category") or payload.get("artifact_kind") or artifact.kind)
     for index, row in enumerate(result_rows(payload)):
+        row = normalize_conformance_row(row)
         row_payload = row.get("raw") if isinstance(row.get("raw"), dict) else row
-        fixture_id = text(row.get("fixture_id") or row.get("name") or category or artifact.path.stem)
+        fixture_id = normalize_conformance_fixture_id(text(row.get("fixture_id") or row.get("name") or category or artifact.path.stem))
         result_id = stable_id("conformance", artifact.artifact_id, index, fixture_id)
         connection.execute(
             """

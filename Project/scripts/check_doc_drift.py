@@ -61,8 +61,13 @@ FORBIDDEN_PATTERNS = [
     re.compile(r"^##\s+Current Bootstrap Fixtures\b"),
     re.compile(r"current\s+per-port\s+Docker\s+inventory", re.IGNORECASE),
     re.compile(r"SQLite\s+is\s+forbidden", re.IGNORECASE),
+    re.compile(r"forbidden\s+SQLite", re.IGNORECASE),
     re.compile(r"avoid\s+SQLite", re.IGNORECASE),
     re.compile(r"SQLite\s+at\s+all\s+cost", re.IGNORECASE),
+    re.compile(r"SQLite\s+(?:scout|tracker|snapshot|script)", re.IGNORECASE),
+    re.compile(r"(?:scout|tracker|snapshot|script)\s+SQLite", re.IGNORECASE),
+    re.compile(r"SQLite\s+mistake", re.IGNORECASE),
+    re.compile(r"SQLite\s+artifact\s+detection", re.IGNORECASE),
     re.compile(r"approved\s+native\s+" + "store", re.IGNORECASE),
     re.compile(r"RocksDB\s+or\s+(?:an?\s+)?" + "approved", re.IGNORECASE),
     re.compile("baseline" + r"\b.*\b(?:" + "Level" + r"DB|M" + r"DBX)\b", re.IGNORECASE),
@@ -106,7 +111,7 @@ def iter_text_files(path: Path) -> list[Path]:
         candidate
         for candidate in sorted(path.rglob("*"))
         if candidate.is_file()
-        and candidate.suffix.lower() in {".md", ".py", ".sql", ".txt"}
+        and candidate.suffix.lower() in {".md", ".py", ".sql", ".txt", ".ts", ".rs", ".go", ".java", ".zig"}
         and candidate.name != "check_doc_drift.py"
         and not (set(candidate.parts) & IGNORED_PATH_PARTS)
     ]
@@ -118,6 +123,27 @@ def line_has_unqualified_sqlite_forbidden(text: str) -> bool:
         return False
     qualifiers = ("port-local", "operational", "native/core", "project")
     return not any(qualifier in lower for qualifier in qualifiers)
+
+
+def line_has_new_storage_scar_vocabulary(path: Path, text: str) -> bool:
+    rel_parts = path.relative_to(ROOT).parts
+    lower = text.lower()
+    is_forward_surface = (
+        path.suffix.lower() == ".md"
+        or "templates" in rel_parts
+        or "tests" in rel_parts
+    )
+    if not is_forward_surface:
+        return False
+    return any(
+        scar in lower
+        for scar in (
+            "forbidden_",
+            "local_sqlite_artifact_absent",
+            "forbidden_local_db_artifact_absent",
+            "storage.local_sqlite_artifact_absent",
+        )
+    )
 
 
 def markdown_link_target(raw_target: str) -> str:
@@ -196,6 +222,8 @@ def main() -> int:
                         errors.append(f"{rel_path}:{index}: forbidden drift phrase: {line.strip()}")
                 if line_has_unqualified_sqlite_forbidden(line):
                     errors.append(f"{rel_path}:{index}: unqualified SQLite forbidden language: {line.strip()}")
+                if line_has_new_storage_scar_vocabulary(path, line):
+                    errors.append(f"{rel_path}:{index}: storage scar vocabulary should use operational_db_boundary: {line.strip()}")
                 if path.suffix.lower() == ".md":
                     for match in MARKDOWN_LINK.finditer(line):
                         target = markdown_link_target(match.group(1))

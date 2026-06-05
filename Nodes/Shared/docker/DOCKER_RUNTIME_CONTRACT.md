@@ -91,7 +91,7 @@ Reference is a peer recipe rather than a port implementation, but it still uses
 
 Python is not exempt from Docker parity. A forward Python native/Core claim
 requires Docker proof and supervisor support against the RocksDB/native-crypto
-runtime; the legacy SQLite scout daemon surface is historical evidence only.
+runtime; historical compatibility daemons are not Core/native evidence.
 
 ## Standard Target Names
 

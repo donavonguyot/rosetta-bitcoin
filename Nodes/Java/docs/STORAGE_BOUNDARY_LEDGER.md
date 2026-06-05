@@ -1,7 +1,7 @@
-# Java SQLite Exit Ledger
+# Java Storage Boundary Ledger
 
-This ledger is closed for the Java runtime path. JavaNode keeps raw block bytes
-in flat files, and all node-local KV state now lives in RocksDB:
+This ledger records the Java runtime storage boundary. JavaNode keeps raw block
+bytes in flat files, and all node-local KV state lives in RocksDB:
 
 ```text
 operational-rocksdb/   metadata, headers, block index, sync state, events
@@ -12,7 +12,8 @@ blocks/                raw block files
 
 `Project/project.db` remains top-level observational state. Java status export
 may be imported there by Project scripts, but Java sync/status/live/rebuild do
-not use a local `jbitnode.db` for runtime truth.
+not use any port-local operational DB outside the approved native backend for
+runtime truth.
 
 ## Operational RocksDB Keyspace
 
@@ -31,11 +32,11 @@ c/<name>                        counters
 ## Acceptance Target
 
 ```text
-- Java sync/status/live/rebuild start without opening local jbitnode.db.
+- Java sync/status/live/rebuild start from the approved native backend.
 - Fresh datadir writes headers, blocks, sync state, events, and validated tip to
   RocksDB stores.
 - Status reports RocksDB backend paths, validated height/hash, and block index
   heights from native stores.
-- Old local SQLite files are ignored or explicitly rejected, not promoted
-  silently.
+- Unapproved port-local operational DB artifacts are ignored or explicitly
+  rejected, not promoted silently.
 ```

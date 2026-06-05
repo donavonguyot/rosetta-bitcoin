@@ -1,6 +1,6 @@
 # Java Runtime Storage Boundary
 
-JavaNode has completed the clean runtime cutover: normal sync, live, rebuild, and status commands use native operational state only. Local operational SQLite (`jbitnode.db`) is no longer a supported Java runtime path.
+JavaNode has completed the clean runtime cutover: normal sync, live, rebuild, and status commands use native operational state only. A port-local operational DB outside the approved native backend is no longer a supported Java runtime path.
 
 ## Runtime State
 
@@ -13,7 +13,7 @@ blocks/
 .jbitnode_native_storage
 ```
 
-`ChainstateSession` always opens the native `OperationalStore` and native chainstate backend. Legacy SQLite promotion and SQLite UTXO mirrors are intentionally unsupported for this cutover.
+`ChainstateSession` always opens the native `OperationalStore` and native chainstate backend. Compatibility-store promotion and mirror UTXO stores are intentionally unsupported for this cutover.
 
 ## Commands
 
@@ -27,9 +27,9 @@ make java-node-status
 
 The normal Make targets set `UTXO_BACKEND=rocksdb` and `ROCKSDB_DIR` explicitly.
 
-## Project SQLite
+## Project Mission-Control DB
 
-`Project/project.db` remains top-level observational state. Java emits status JSON; Project scripts import that JSON when a SQLite project snapshot is needed.
+`Project/project.db` remains top-level observational state. Java emits status JSON; Project scripts import that JSON when mission-control rows are needed.
 
 ```bash
 make java-node-status DATA_DIR=./data-java > /tmp/javanode-status.json

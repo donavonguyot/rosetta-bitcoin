@@ -71,9 +71,10 @@ it addresses, and what remains blocked.
 
 Core Node compliance is not a single green test. Keep consensus progress,
 native storage compliance, Docker runtime compliance, and Project imports
-separate. Project SQLite is mission control. Ports must not use port-local
-SQLite for operational runtime truth such as headers, block index, sync state,
-validated tip, UTXO, undo, chainstate metadata, blocker state, or status fields.
+separate. `Project/project.db` is mission control. Ports must use their approved
+native operational storage for runtime truth such as headers, block index, sync
+state, validated tip, UTXO, undo, chainstate metadata, blocker state, and status
+fields.
 Docker compliance requires a manifest and the runtime contract in
 `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`. Before changing Docker behavior,
 read the port manifest and run the report-only validator:
@@ -120,10 +121,9 @@ isolated state and deliberate peer allocation.
 
 ### Port independence and Python full-break rule
 
-Historical Python SQLite-scout blocker rows are handoff evidence, not forward
-validity proof. Python parity now requires RocksDB-owned operational truth,
-native crypto, full Docker proof/supervisor, and Project-importable evidence
-from the native path.
+Historical Python blocker rows are handoff evidence, not forward validity proof.
+Python parity now requires RocksDB-owned operational truth, native crypto, full
+Docker proof/supervisor, and Project-importable evidence from the native path.
 
 No port may treat another port as an oracle for validity. Shared blocker ledgers,
 rule cards, tests, and fixture details are the reusable consensus runway; each
@@ -330,7 +330,7 @@ binary_gate_status: failed | not_attempted | passed
   P2P, transaction, script, or chain logic.
 - Pure TypeScript crypto/storage paths may remain as comparators or legacy
   tools, but Core proofs must report the selected RocksDB and native crypto
-  backends and must not open SQLite for operational truth.
+  backends and must not open any unapproved operational DB for runtime truth.
 - **Docker:** generic `docker-compose`; works on OrbStack. Native/Core Docker
   proof paths must install the same RocksDB and `libsecp256k1` runtime
   dependencies used by host proof paths.
@@ -400,7 +400,7 @@ Single-shot large chunk (no auto-restart): `make java-node-sync-chunk-overnight`
 On `ValidationBlocker`: harvest → fix → `mvn verify` → update `Nodes/Java/docs/BLOCKER_LEDGER.md` → resume.
 Supervisor exits **2** on blocker; inner `SyncLocalCore` exit **4**. Abnormal JVM exit sets
 `blocks_stalled` + supervisor restart (up to `MAX_RESTARTS=5`). The old Java
-SQLite snapshot/survey targets are retired; use `make java-node-status` and
+Retired snapshot/survey targets are historical; use `make java-node-status` and
 Project reports for current mission-control state.
 
 ---
@@ -417,10 +417,10 @@ npx tsbitnode-status --datadir ./data-ts
 # Sync report
 npm run sync:progress
 
-# Legacy SQLite capability/wire snapshots only
+# Retired compatibility capability/wire snapshots only
 npm run export:snapshots -- --db ./data-ts/tsbitnode.db
 
-# Legacy SQLite script template survey (read-only; optional block scan ahead of tip)
+# Retired compatibility script template survey (read-only; optional block scan ahead of tip)
 npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20
 ```
 
@@ -515,7 +515,7 @@ record exact blocker -> add/link Shared fixture and rule card
 2. **One writer** per datadir; survey/export tools must not overlap active writers.
 3. **Peer exclusion** — TS excludes Python’s default ops peer (`89.167.10.150`) unless `PEERS=` overrides; avoids cross-node interference.
 4. **Honest handshake** — deferred `feefilter` / `mempool` / `sendcmpct`; conservative `start_height` (see [Critical: handshake](#critical-handshake--sync-state-too-advanced-disconnects)).
-5. **Legacy baseline survey** — before and after batch sync, only when inspecting the old SQLite tracker: `npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20` (requires blocks downloaded past `validated_height`).
+5. **Optional compatibility survey** — only when inspecting historical TypeScript tracker data: `npm run survey:scripts -- --db ./data-ts/tsbitnode.db --scan-blocks 20` (requires blocks downloaded past `validated_height`).
 6. **Target heights** — use testnet4 milestones above; not mainnet activation heights.
 7. **Blocker ledger** — capture exact height/tx/input/template before implementing.
 8. **Repo hygiene** — commit source/tests/docs/snapshots; do not commit live DBs or generated output.
@@ -578,7 +578,7 @@ Rules:
 | `config/peers.ts` | Peer defaults, Python peer exclusion |
 | `consensus/script/interpreter.ts` | Script templates, opcode evaluation |
 | `consensus/script/verify.ts` | Spend-path verification entry |
-| `scripts/scriptTemplateSurvey.ts` | Legacy SQLite script template survey (read-only) |
+| `scripts/scriptTemplateSurvey.ts` | Retired compatibility script template survey (read-only) |
 
 ### Python (`Nodes/Python/`)
 

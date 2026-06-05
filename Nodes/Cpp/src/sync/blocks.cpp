@@ -61,6 +61,16 @@ struct PipelineTiming {
     long long undoPutPrepare = 0;
     long long metadataPutPrepare = 0;
     long long rocksdbWrite = 0;
+    long long commitBatchPuts = 0;
+    long long commitBatchDeletes = 0;
+    long long commitKeyBytes = 0;
+    long long commitValueBytes = 0;
+    long long commitUtxoPuts = 0;
+    long long commitUtxoDeletes = 0;
+    long long commitUndoBytes = 0;
+    long long commitCreatedListBytes = 0;
+    long long commitMetadataPuts = 0;
+    long long commitBlockIndexBytes = 0;
 };
 
 long long elapsedUs(Clock::time_point start) {
@@ -121,6 +131,16 @@ void emitPipelineTiming(const PipelineTiming& timing) {
               << " undo_put_prepare=" << timing.undoPutPrepare
               << " metadata_put_prepare=" << timing.metadataPutPrepare
               << " rocksdb_write=" << timing.rocksdbWrite
+              << " commit_batch_puts=" << timing.commitBatchPuts
+              << " commit_batch_deletes=" << timing.commitBatchDeletes
+              << " commit_key_bytes=" << timing.commitKeyBytes
+              << " commit_value_bytes=" << timing.commitValueBytes
+              << " commit_utxo_puts=" << timing.commitUtxoPuts
+              << " commit_utxo_deletes=" << timing.commitUtxoDeletes
+              << " commit_undo_bytes=" << timing.commitUndoBytes
+              << " commit_created_list_bytes=" << timing.commitCreatedListBytes
+              << " commit_metadata_puts=" << timing.commitMetadataPuts
+              << " commit_block_index_bytes=" << timing.commitBlockIndexBytes
               << "\n";
 }
 
@@ -677,6 +697,16 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
     pipeline.undoPutPrepare = storageTiming.undoPutPrepareUs;
     pipeline.metadataPutPrepare = storageTiming.metadataPutPrepareUs;
     pipeline.rocksdbWrite = storageTiming.rocksdbWriteUs;
+    pipeline.commitBatchPuts = storageTiming.commitBatchPuts;
+    pipeline.commitBatchDeletes = storageTiming.commitBatchDeletes;
+    pipeline.commitKeyBytes = storageTiming.commitKeyBytes;
+    pipeline.commitValueBytes = storageTiming.commitValueBytes;
+    pipeline.commitUtxoPuts = storageTiming.commitUtxoPuts;
+    pipeline.commitUtxoDeletes = storageTiming.commitUtxoDeletes;
+    pipeline.commitUndoBytes = storageTiming.commitUndoBytes;
+    pipeline.commitCreatedListBytes = storageTiming.commitCreatedListBytes;
+    pipeline.commitMetadataPuts = storageTiming.commitMetadataPuts;
+    pipeline.commitBlockIndexBytes = storageTiming.commitBlockIndexBytes;
     emitPipelineTiming(pipeline);
     return downloaded;
 }

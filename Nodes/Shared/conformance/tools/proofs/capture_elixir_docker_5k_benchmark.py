@@ -100,6 +100,8 @@ def main() -> int:
     current_blocker = status.get("current_blocker") or log.get("current_blocker")
     last_error = status.get("last_error")
     sync_timing = log.get("sync_timing") if isinstance(log.get("sync_timing"), dict) else {}
+    if not sync_timing and isinstance(status.get("sync_timing"), dict):
+        sync_timing = status.get("sync_timing", {})
     timing = timing_summary(sync_timing)
 
     failures: list[str] = []
@@ -132,6 +134,7 @@ def main() -> int:
         "runtime_surface": "docker",
         "datadir": status.get("datadir", "/data"),
         "benchmark_contract_version": 1,
+        "telemetry_schema": "benchmark.telemetry_tick.v1",
         "benchmark_gate": benchmark_gate,
         "benchmark_kind": benchmark_kind,
         "benchmark_lane": benchmark_kind,
@@ -181,6 +184,7 @@ def main() -> int:
             "stages": sync_timing,
         },
         "timing_summary": timing,
+        "pipeline_timing_summary": timing,
         "status": status,
         "verification": {
             "command": "make docker-proof-local",

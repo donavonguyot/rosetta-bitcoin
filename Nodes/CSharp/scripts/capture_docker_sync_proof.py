@@ -129,6 +129,7 @@ def main() -> int:
         "taproot_tweak_backend": status.get("taproot_tweak_backend", ""),
         "sync_timing": status.get("sync_timing"),
         "timing_summary": summary,
+        "pipeline_timing_summary": summary,
         "elapsed_ms": int(summary.get("total_ms", run_info.get("elapsed_ms", 0)) or 0),
         "proof_wrapper_elapsed_ms": int(run_info.get("elapsed_ms", 0) or 0),
         "sync_exit_code": exit_code,
@@ -146,6 +147,7 @@ def main() -> int:
         artifact.update(
             {
                 "benchmark_contract_version": 1,
+                "telemetry_schema": "benchmark.telemetry_tick.v1",
                 "benchmark_kind": supporting_p2p_kind(target_block_height),
                 "benchmark_gate": supporting_gate(target_block_height),
                 "benchmark_lane": supporting_p2p_kind(target_block_height),
