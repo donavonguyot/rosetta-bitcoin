@@ -277,22 +277,12 @@ fn verifyP2TR(
 ) !void {
     if (script_sig.len != 0) return error.TaprootScriptSigNotEmpty;
     if (spent_prevouts.len != transaction.inputs.len) return error.SpentPrevoutsLengthMismatch;
-    var witness = witness_in;
+    const witness = witness_in;
     const serialized_witness = try serializedWitnessStack(allocator, witness_in);
     defer allocator.free(serialized_witness);
-    var annex: ?[]const u8 = null;
+    const annex: ?[]const u8 = null;
     if (witness.len >= 2 and witness[witness.len - 1].len > 0 and witness[witness.len - 1][0] == TAPROOT_ANNEX_TAG) {
         return error.InvalidTaprootAnnexPosition;
-    }
-    if (witness.len >= 3 and witness[witness.len - 3].len > 0 and witness[witness.len - 3][0] == TAPROOT_ANNEX_TAG) {
-        annex = witness[witness.len - 3];
-        var trimmed = try allocator.alloc([]const u8, witness.len - 1);
-        defer allocator.free(trimmed);
-        @memcpy(trimmed[0 .. witness.len - 3], witness[0 .. witness.len - 3]);
-        trimmed[witness.len - 3] = witness[witness.len - 2];
-        trimmed[witness.len - 2] = witness[witness.len - 1];
-        witness = trimmed;
-        return verifyTaprootAfterAnnex(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier);
     }
     return verifyTaprootAfterAnnex(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier);
 }
@@ -451,7 +441,16 @@ fn evaluate(allocator: std.mem.Allocator, script: []const u8, stack: *Stack, con
             }
             offset += 1;
         } else {
-            if (active) try evalOpcode(allocator, opcode, stack, &alt, context);
+            if (active) {
+                evalOpcode(allocator, opcode, stack, &alt, context) catch |err| {
+                    const mode = if (context) |ctx| @tagName(ctx.mode) else "push_only";
+                    std.debug.print(
+                        "zig script eval failure mode={s} opcode=0x{x:0>2} offset={} stack_depth={} err={s}\n",
+                        .{ mode, opcode, offset, stack.items.items.len, @errorName(err) },
+                    );
+                    return err;
+                };
+            }
             offset += 1;
         }
     }

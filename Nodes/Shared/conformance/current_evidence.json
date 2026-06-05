@@ -338,6 +338,14 @@
       "path": "Nodes/Shared/conformance/results/zig_docker_baseline_5k_benchmark_2026-06-05-zig-5k.json",
       "status": "current",
       "notes": "Current comparable Zig 5k baseline proof. Zig remains active development beyond 5k."
+    },
+    {
+      "port": "zig",
+      "claim": "shakedown_50k",
+      "gate_id": "shakedown_50k",
+      "path": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Zig 50k shakedown proof. Zig remains active development pending explicit lifecycle promotion."
     }
   ]
 }

@@ -8,6 +8,16 @@ const ResultPaths = struct {
     proof: []const u8 = "../Shared/conformance/results/zig_docker_baseline_5k_benchmark_latest.json",
 };
 
+const ProofProfile = struct {
+    target: u32,
+    target_label: []const u8,
+    benchmark_gate: []const u8,
+    benchmark_kind: []const u8,
+    benchmark_lane: []const u8,
+    expected_hash: []const u8,
+    expected_utxo_count: i64,
+};
+
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
     const args = try init.minimal.args.toSlice(allocator);
@@ -200,6 +210,7 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const output = valueArg(args, "--output") orelse (ResultPaths{}).proof;
     const datadir = valueArg(args, "--datadir") orelse "/data";
     const target = try std.fmt.parseInt(u32, target_text, 10);
+    const profile = proofProfile(target) orelse return error.UnsupportedProofTarget;
     const prefetch_raw = std.fmt.parseInt(usize, prefetch_text, 10) catch 4;
     const prefetch = @min(@max(prefetch_raw, 1), 16);
     const started = core.nowMs();
@@ -233,11 +244,18 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     defer allocator.free(last_hash);
     var timing = ProofTiming{};
     var slow = SlowBlocks{};
+    var last_tick_height: u32 = if (start_height == 0) 0 else start_height - 1;
+    var last_tick_ms = started;
+    var last_utxos: i64 = meta.chainstate_utxo_count;
+
+    try emitTelemetryTick(out, profile, peer, "startup", last_tick_height, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
 
     var cursor: usize = start_height;
     while (cursor <= target) {
         const end = @min(cursor + prefetch, @as(usize, target) + 1);
+        const fetch_started = core.nowMs();
         const blocks = try client.requestBlocks(headers[cursor..end], @intCast(cursor));
+        timing.p2p_fetch += elapsedMs(fetch_started);
         defer allocator.free(blocks);
         for (blocks) |fetched| {
             defer fetched.deinit(allocator);
@@ -268,7 +286,9 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             last_height = fetched.height;
             allocator.free(last_hash);
             last_hash = try allocator.dupe(u8, connect.validated_hash);
-            slow.record(fetched.height, elapsedMs(block_started));
+            const last_block_ms = elapsedMs(block_started);
+            slow.record(fetched.height, last_block_ms);
+            last_utxos = connect.chainstate_utxo_count;
             if (fetched.height % 500 == 0 or fetched.height == target) {
                 try out.print("zigbitnode-local-reference-proof progress height={} target={} hash={s} utxos={} blocks_fetched={} blocks_connected={}\n", .{
                     fetched.height,
@@ -279,6 +299,9 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
                     blocks_connected,
                 });
                 try out.flush();
+                try emitTelemetryTick(out, profile, peer, "connect", fetched.height, connect.chainstate_utxo_count, last_block_ms, started, last_tick_ms, last_tick_height, timing);
+                last_tick_ms = core.nowMs();
+                last_tick_height = fetched.height;
             }
         }
         cursor = end;
@@ -287,20 +310,21 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const final_meta = try db.readMetadata(allocator);
     defer db.deinitMetadata(allocator, final_meta);
     if (last_height != target) return error.TargetNotReached;
-    if (!std.mem.eql(u8, last_hash, "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2")) return error.UnexpectedTargetHash;
-    if (final_meta.chainstate_utxo_count != 4574) return error.UnexpectedUtxoCount;
+    if (!std.mem.eql(u8, last_hash, profile.expected_hash)) return error.UnexpectedTargetHash;
+    if (final_meta.chainstate_utxo_count != profile.expected_utxo_count) return error.UnexpectedUtxoCount;
+    try emitTelemetryTick(out, profile, peer, "success", last_height, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
 
     const slow_json = try slow.toJson(allocator);
     defer allocator.free(slow_json);
     const total_ms = elapsedMs(started);
     var json_buf = std.ArrayList(u8).empty;
     defer json_buf.deinit(allocator);
-    try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_kind\":\"baseline_5k_p2p\",\"benchmark_lane\":\"baseline_5k_p2p\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"5k\",", .{ target, target });
+    try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_gate\":\"{s}\",\"benchmark_kind\":\"{s}\",\"benchmark_lane\":\"{s}\",\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"{s}\",", .{ profile.benchmark_gate, profile.benchmark_kind, profile.benchmark_lane, target, target, profile.target_label });
     try appendFmt(allocator, &json_buf, "\"runtime_surface\":\"{s}\",\"peer_mode\":\"local_reference\",\"peer\":\"{s}\",\"byte_source\":\"local_reference_p2p\",\"proof_mode\":\"p2p_sync\",\"prefetch_depth\":{},\"script_runner_mode\":\"parallel\",\"rocksdb_wal_disabled\":false,\"fresh_state\":{},\"resume_supported\":true,", .{ surface, peer, prefetch, fresh_state });
     try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"rocksdb\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":true,\"native_crypto_backend\":\"libsecp256k1\",\"schnorr_backend\":\"libsecp256k1\",\"taproot_tweak_backend\":\"libsecp256k1\",\"storage_codec_version\":2,", .{ datadir, db_path });
     try appendFmt(allocator, &json_buf, "\"rocksdb_tuning\":\"create_if_missing=true,parallelism=4,default_compaction\",\"validated_height\":{},\"validated_hash\":\"{s}\",\"header_height\":{},\"stored_block_height\":{},\"blocks_fetched\":{},\"blocks_connected\":{},\"chainstate_utxo_count\":{},", .{ final_meta.validated_height, last_hash, final_meta.header_height, final_meta.stored_block_height, blocks_fetched, blocks_connected, final_meta.chainstate_utxo_count });
-    try appendFmt(allocator, &json_buf, "\"utxo_accounting_policy\":\"core_spendable_v1\",\"sync_status\":\"blocks_current\",\"local_reference_status\":\"target_reached\",\"status\":\"passed\",\"result\":\"passed\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\",\"failures\":[],\"reference_start_height\":0,\"reference_finish_height\":{},\"reference_finish_hash\":\"{s}\",", .{ target, last_hash });
-    try appendFmt(allocator, &json_buf, "\"pipeline_timing_summary\":{{\"total_ms\":{},\"stage_totals_ms\":{{\"block_parse_validate\":{},\"block_store\":{},\"connect_total\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"block_connect_store_commit\":{}}},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.block_parse_validate, timing.block_store, timing.connect_total, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.block_connect_store_commit, slow_json });
+    try appendFmt(allocator, &json_buf, "\"utxo_accounting_policy\":\"core_spendable_v1\",\"sync_status\":\"blocks_current\",\"local_reference_status\":\"target_reached\",\"status\":\"passed\",\"result\":\"passed\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\",\"failures\":[],\"reference_start_height\":0,\"reference_start_hash\":\"00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043\",\"reference_finish_height\":{},\"reference_finish_hash\":\"{s}\",", .{ target, last_hash });
+    try appendFmt(allocator, &json_buf, "\"pipeline_timing_summary\":{{\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"block_store\":{},\"connect_total\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"block_connect_store_commit\":{}}},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.block_store, timing.connect_total, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.block_connect_store_commit, slow_json });
     try appendFmt(allocator, &json_buf, "\"timing_summary\":{{\"total_ms\":{},\"stage_totals_ms\":{{\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"block_connect_store_commit\":{}}},\"slow_blocks\":[{s}]}}}}\n", .{ total_ms, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.block_connect_store_commit, slow_json });
     const json = json_buf.items;
     try writeFileEnsuringParent(io, output, json);
@@ -308,6 +332,7 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
 }
 
 const ProofTiming = struct {
+    p2p_fetch: i64 = 0,
     block_parse_validate: i64 = 0,
     block_store: i64 = 0,
     connect_total: i64 = 0,
@@ -318,6 +343,58 @@ const ProofTiming = struct {
     commit: i64 = 0,
     block_connect_store_commit: i64 = 0,
 };
+
+fn proofProfile(target: u32) ?ProofProfile {
+    return switch (target) {
+        5000 => .{
+            .target = 5000,
+            .target_label = "5k",
+            .benchmark_gate = "baseline_5k",
+            .benchmark_kind = "baseline_5k_p2p",
+            .benchmark_lane = "baseline_5k_p2p",
+            .expected_hash = "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+            .expected_utxo_count = 4574,
+        },
+        50000 => .{
+            .target = 50000,
+            .target_label = "50k",
+            .benchmark_gate = "shakedown_50k",
+            .benchmark_kind = "shakedown_50k_p2p",
+            .benchmark_lane = "shakedown_50k_p2p",
+            .expected_hash = "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+            .expected_utxo_count = 568855,
+        },
+        else => null,
+    };
+}
+
+fn emitTelemetryTick(
+    out: anytype,
+    profile: ProofProfile,
+    peer: []const u8,
+    phase: []const u8,
+    height: u32,
+    utxos: i64,
+    last_block_ms: i64,
+    started_ms: i64,
+    previous_tick_ms: i64,
+    previous_tick_height: u32,
+    timing: ProofTiming,
+) !void {
+    const now = core.nowMs();
+    const elapsed_ms = @max(0, now - started_ms);
+    const since_tick_ms = @max(1, now - previous_tick_ms);
+    const recent_blocks: i64 = if (height >= previous_tick_height) @intCast(height - previous_tick_height) else 0;
+    const total_blocks: i64 = @intCast(height + 1);
+    const recent_rate = @divTrunc(recent_blocks * 1000, since_tick_ms);
+    const total_rate = if (elapsed_ms > 0) @divTrunc(total_blocks * 1000, elapsed_ms) else 0;
+    const percent = @divTrunc(@as(u64, height) * 100, @as(u64, profile.target));
+    try out.print(
+        "benchmark.telemetry_tick {{\"schema\":\"benchmark.telemetry_tick.v1\",\"port\":\"zig\",\"gate\":\"{s}\",\"target_height\":{},\"height\":{},\"percent\":{},\"elapsed_ms\":{},\"rate_recent_blocks_per_second\":{},\"rate_total_blocks_per_second\":{},\"phase\":\"{s}\",\"utxos\":{},\"last_block_ms\":{},\"current_blocker\":null,\"peer\":\"{s}\",\"timing_buckets_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"block_connect_store_commit\":{}}}}}\n",
+        .{ profile.benchmark_gate, profile.target, height, percent, elapsed_ms, recent_rate, total_rate, phase, utxos, last_block_ms, peer, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.block_connect_store_commit },
+    );
+    try out.flush();
+}
 
 const SlowBlocks = struct {
     heights: [10]u32 = [_]u32{0} ** 10,

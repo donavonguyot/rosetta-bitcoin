@@ -75,7 +75,7 @@
     "local_reference_result": "Nodes/Shared/conformance/results/zig_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "diagnostic_10k_result": "Nodes/Shared/conformance/results/zig_docker_diagnostic_10k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_result": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, and local Reference P2P proof to the 5k baseline."
+    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, the 5k baseline, and the 50k local Reference P2P shakedown."
   },
   "known_caveats": [
     "Zig script corpus is 45/45 with engine=zig_native and delegated=false",

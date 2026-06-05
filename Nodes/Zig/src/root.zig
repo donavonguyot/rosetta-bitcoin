@@ -768,6 +768,9 @@ pub fn isSpendableOutput(script_pubkey: []const u8) bool {
 
 const ScriptThreadResult = struct {
     err: ?anyerror = null,
+    tx_index: usize = 0,
+    input_index: usize = 0,
+    txid: [32]u8 = [_]u8{0} ** 32,
 };
 
 fn verifyScriptJobsParallel(transactions: []const tx.Transaction, jobs: []const ScriptJob) !void {
@@ -777,21 +780,57 @@ fn verifyScriptJobsParallel(transactions: []const tx.Transaction, jobs: []const 
     defer std.heap.c_allocator.free(results);
     for (jobs, 0..) |job, i| {
         results[i] = .{};
-        threads[i] = try std.Thread.spawn(.{}, verifyScriptJobWorker, .{ transactions[job.tx_index], job.prevouts, &results[i] });
+        threads[i] = try std.Thread.spawn(.{}, verifyScriptJobWorker, .{ transactions[job.tx_index], job.tx_index, job.prevouts, &results[i] });
     }
     for (threads) |thread| thread.join();
     for (results) |result| {
-        if (result.err) |err| return err;
+        if (result.err) |err| {
+            const txid_display = crypto.displayHashAlloc(std.heap.c_allocator, result.txid[0..]) catch "display-error";
+            defer if (!std.mem.eql(u8, txid_display, "display-error")) std.heap.c_allocator.free(txid_display);
+            std.debug.print("zig script verify failure tx_index={} input_index={} txid={s} err={s}\n", .{ result.tx_index, result.input_index, txid_display, @errorName(err) });
+            return err;
+        }
     }
 }
 
-fn verifyScriptJobWorker(transaction: tx.Transaction, prevouts: []script.SpentPrevout, result: *ScriptThreadResult) void {
+fn verifyScriptJobWorker(transaction: tx.Transaction, tx_index: usize, prevouts: []script.SpentPrevout, result: *ScriptThreadResult) void {
     for (transaction.inputs, 0..) |_, input_index| {
         script.verifyInput(std.heap.c_allocator, transaction, input_index, prevouts) catch |err| {
             result.err = err;
+            result.tx_index = tx_index;
+            result.input_index = input_index;
+            result.txid = transaction.txid();
+            const input = transaction.inputs[input_index];
+            const witness = if (input_index < transaction.witness.len) transaction.witness[input_index] else &.{};
+            const script_pubkey_hex = hexAlloc(std.heap.c_allocator, prevouts[input_index].script_pubkey) catch "hex-error";
+            defer if (!std.mem.eql(u8, script_pubkey_hex, "hex-error")) std.heap.c_allocator.free(script_pubkey_hex);
+            const script_sig_hex = hexAlloc(std.heap.c_allocator, input.script_sig) catch "hex-error";
+            defer if (!std.mem.eql(u8, script_sig_hex, "hex-error")) std.heap.c_allocator.free(script_sig_hex);
+            std.debug.print(
+                "zig script verify context amount={} script_pubkey={s} script_sig={s} witness_items={}\n",
+                .{ prevouts[input_index].amount, script_pubkey_hex, script_sig_hex, witness.len },
+            );
+            for (witness, 0..) |item, witness_index| {
+                const witness_hex = hexAlloc(std.heap.c_allocator, item) catch "hex-error";
+                defer if (!std.mem.eql(u8, witness_hex, "hex-error")) std.heap.c_allocator.free(witness_hex);
+                std.debug.print(
+                    "zig script verify witness[{}] len={} hex={s}\n",
+                    .{ witness_index, item.len, witness_hex },
+                );
+            }
             return;
         };
     }
+}
+
+fn hexAlloc(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
+    const alphabet = "0123456789abcdef";
+    var out = try allocator.alloc(u8, bytes.len * 2);
+    for (bytes, 0..) |byte, i| {
+        out[i * 2] = alphabet[byte >> 4];
+        out[i * 2 + 1] = alphabet[byte & 0x0f];
+    }
+    return out;
 }
 
 fn elapsedMs(start_ms: i64) i64 {
