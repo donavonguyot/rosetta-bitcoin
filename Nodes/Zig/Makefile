@@ -1,0 +1,98 @@
+ZIG ?= zig
+DATA_DIR ?= ./data-zig
+RESULT_DATE ?= $(shell date +%F)
+SCRIPT_RESULT ?= ../Shared/conformance/results/zig_script_corpus_$(RESULT_DATE).json
+STORAGE_RESULT ?= ../Shared/conformance/results/zig_storage_gate_docker_$(RESULT_DATE).json
+DOCKER_SCRIPT_RESULT ?= /results/zig_script_corpus_$(RESULT_DATE).json
+DOCKER_STORAGE_RESULT ?= /results/zig_storage_gate_docker_$(RESULT_DATE).json
+DOCKER_LOCAL_PROOF_RESULT ?= /results/zig_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+DOCKER_10K_PROOF_RESULT ?= /results/zig_docker_supporting_10k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_PROOF_RESULT ?= /results/zig_docker_supporting_50k_benchmark_$(RESULT_DATE).json
+DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+DOCKER_P2P_PEER ?= host.docker.internal:48333
+DOCKER_PROOF_VOLUME ?= zigbitnode_proof_data
+DOCKER_SYNC_TARGET ?= 5000
+
+.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-smoke-once clean
+
+build:
+	$(ZIG) build
+
+test:
+	$(ZIG) build test
+
+zig-node-status:
+	$(ZIG) build run -- status --datadir $(DATA_DIR)
+
+zig-node-storage-proof:
+	$(ZIG) build run -- storage-proof --datadir $(DATA_DIR) --output $(STORAGE_RESULT)
+
+zig-node-codec-vectors:
+	$(ZIG) build run -- codec-vectors
+
+zig-node-native-crypto-vectors:
+	$(ZIG) build run -- native-crypto-vectors
+
+zig-node-script-corpus:
+	$(ZIG) build run -- script-corpus \
+	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --output $(SCRIPT_RESULT)
+
+docker-config:
+	$(DOCKER_COMPOSE) config >/dev/null
+
+docker-build:
+	$(DOCKER_COMPOSE) build
+
+docker-warm: docker-build
+
+docker-status:
+	$(DOCKER_COMPOSE) run --rm --no-deps zigbitnode zigbitnode status --datadir /data
+
+docker-storage-proof:
+	$(DOCKER_COMPOSE) run --rm --no-deps zigbitnode \
+	  zigbitnode storage-proof --datadir /data --output $(DOCKER_STORAGE_RESULT)
+
+docker-script-corpus:
+	$(DOCKER_COMPOSE) run --rm --no-deps zigbitnode-script-corpus \
+	  zigbitnode script-corpus \
+	  --manifest /workspace/Shared/conformance/fixtures/scripts/manifest.json \
+	  --output $(DOCKER_SCRIPT_RESULT)
+
+docker-proof-local:
+	@for i in $$(seq 1 60); do \
+	  nc -z 127.0.0.1 48333 && break; \
+	  sleep 2; \
+	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
+	done
+	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
+	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps \
+	  -e TARGET_HEIGHT=$(DOCKER_SYNC_TARGET) \
+	  -e HEADER_TARGET_HEIGHT=$(DOCKER_SYNC_TARGET) \
+	  -e PREFETCH_DEPTH=4 \
+	  -e SCRIPT_RUNNER_MODE=parallel \
+	  -e ROCKSDB_WAL_DISABLED=false \
+	  -e FRESH_STATE=true \
+	  -e PEER=$(DOCKER_P2P_PEER) \
+	  zigbitnode-local-reference-proof \
+	  zigbitnode local-reference-proof \
+	  --target $(DOCKER_SYNC_TARGET) \
+	  --peer $(DOCKER_P2P_PEER) \
+	  --output $(DOCKER_LOCAL_PROOF_RESULT)
+
+docker-proof-10k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=zigbitnode_10k_proof_data \
+	  DOCKER_SYNC_TARGET=10000 \
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_10K_PROOF_RESULT)
+
+docker-proof-50k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=zigbitnode_50k_proof_data \
+	  DOCKER_SYNC_TARGET=50000 \
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_50K_PROOF_RESULT)
+
+docker-smoke-once: docker-status docker-storage-proof docker-script-corpus
+
+clean:
+	rm -rf .zig-cache zig-cache zig-out data-zig data-zig-*

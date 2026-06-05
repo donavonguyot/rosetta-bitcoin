@@ -1,0 +1,39 @@
+services:
+  zigbitnode:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      ZIGBITNODE_RUNTIME_SURFACE: docker
+    volumes:
+      - zigbitnode_data:/data
+      - ../../Shared:/workspace/Shared:ro
+      - ../../Shared/conformance/results:/results
+
+  zigbitnode-script-corpus:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      ZIGBITNODE_RUNTIME_SURFACE: docker
+    volumes:
+      - ../../Shared:/workspace/Shared:ro
+      - ../../Shared/conformance/results:/results
+
+  zigbitnode-local-reference-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      ZIGBITNODE_RUNTIME_SURFACE: docker
+    volumes:
+      - zigbitnode_proof_data:/data
+      - ../../Shared/conformance/results:/results
+
+volumes:
+  zigbitnode_data:
+    name: ${DOCKER_DATA_VOLUME:-zigbitnode_data}
+  zigbitnode_proof_data:
+    name: ${DOCKER_PROOF_VOLUME:-zigbitnode_proof_data}
+  zigbitnode_supervisor_data:
+    name: ${DOCKER_SUPERVISOR_VOLUME:-zigbitnode_supervisor_data}

@@ -1,0 +1,36 @@
+# ZigNode Blocker Ledger
+
+ZigNode starts from the Shared consensus runway and should not rediscover known
+script blockers by syncing until failure.
+
+## Current Blockers
+
+### Shared Script Corpus Verifier
+
+```text
+height: shared 45-fixture corpus
+block_hash:
+txid:
+input_index:
+spent_script_pubkey:
+failure: Zig script corpus loader is present, but the Zig-native verifier is not implemented.
+missing_rule: script interpreter, sighash, template dispatch, Taproot/Tapscript, CLTV/CSV, multisig, and blocker opcodes
+python_fix: see Nodes/Shared/consensus runway and port references
+test_fixture: Nodes/Shared/conformance/fixtures/scripts/manifest.json
+follower_notes: Must pass 45/45 with engine=zig_native and delegated=false before 5k baseline readiness.
+```
+
+### Local Reference P2P 5k Gate
+
+```text
+height: 0
+block_hash:
+txid:
+input_index:
+spent_script_pubkey:
+failure: Local Reference P2P byte-source and ordered connect path are not implemented.
+missing_rule: honest P2P handshake, getdata/block fetch, parsing, PoW, merkle, UTXO connect, and per-block RocksDB batch commit
+python_fix:
+test_fixture: supporting_5k_p2p benchmark gate
+follower_notes: Must emit zig_docker_supporting_5k_benchmark_<date>.json with validated_height >= 5000 and chainstate_utxo_count=4574.
+```

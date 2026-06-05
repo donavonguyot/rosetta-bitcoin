@@ -1,0 +1,10 @@
+zig-cache/
+zig-out/
+.zig-cache/
+data-zig/
+data-zig-*/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+chainstate-rocksdb/
