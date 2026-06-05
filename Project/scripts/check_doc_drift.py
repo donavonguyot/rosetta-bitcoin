@@ -150,6 +150,17 @@ def line_has_new_storage_scar_vocabulary(path: Path, text: str) -> bool:
     )
 
 
+def line_presents_retired_benchmark_gate(path: Path, text: str) -> bool:
+    if path.suffix.lower() != ".md":
+        return False
+    lower = text.lower()
+    if "10k" not in lower and "supporting_10k" not in lower and "tuning_50k_to_100k" not in lower and "50k-to-100k" not in lower:
+        return False
+    if any(word in lower for word in ("historical", "retired", "diagnostic", "evidence-only", "not official", "replaces 10k")):
+        return False
+    return "official" in lower or "gate" in lower or "benchmark" in lower
+
+
 def markdown_link_target(raw_target: str) -> str:
     target = raw_target.strip()
     if target.startswith("<") and target.endswith(">"):
@@ -228,6 +239,8 @@ def main() -> int:
                     errors.append(f"{rel_path}:{index}: storage guidance should state the RocksDB rule positively: {line.strip()}")
                 if line_has_new_storage_scar_vocabulary(path, line):
                     errors.append(f"{rel_path}:{index}: storage scar vocabulary should use RocksDB runtime truth: {line.strip()}")
+                if line_presents_retired_benchmark_gate(path, line):
+                    errors.append(f"{rel_path}:{index}: retired benchmark gates must not be presented as official: {line.strip()}")
                 if path.suffix.lower() == ".md":
                     for match in MARKDOWN_LINK.finditer(line):
                         target = markdown_link_target(match.group(1))

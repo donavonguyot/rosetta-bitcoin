@@ -7,7 +7,7 @@ TARGET="${DOCKER_BENCHMARK_TARGET:-5000}"
 BLOCKS_MAX="${DOCKER_BENCHMARK_BLOCKS_MAX:-5000}"
 PEERS="${DOCKER_BENCHMARK_PEERS:-host.docker.internal:48333}"
 PREFETCH_DEPTH="${DOCKER_BENCHMARK_PREFETCH_DEPTH:-4}"
-RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/cpp_docker_supporting_5k_benchmark_$(date +%F).json}"
+RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/cpp_docker_baseline_5k_benchmark_$(date +%F).json}"
 REFERENCE_START_HEIGHT="${REFERENCE_START_HEIGHT:-0}"
 
 reference_hash() {
@@ -94,17 +94,21 @@ def target_label(target):
 
 
 def supporting_gate(target):
-    if target == 100000:
-        return "primary_100k"
-    label = target_label(target)
-    return f"supporting_{label}" if label else "local_reference"
+    return {
+        5000: "baseline_5k",
+        10000: "diagnostic_10k",
+        50000: "shakedown_50k",
+        100000: "performance_100k",
+    }.get(target, "local_reference")
 
 
 def supporting_p2p_kind(target):
-    if target == 100000:
-        return "primary_100k_p2p"
-    label = target_label(target)
-    return f"supporting_{label}_p2p" if label else "local_reference_p2p"
+    return {
+        5000: "baseline_5k_p2p",
+        10000: "diagnostic_10k_p2p",
+        50000: "shakedown_50k_p2p",
+        100000: "performance_100k_p2p",
+    }.get(target, "local_reference_p2p")
 
 
 def extract_json_object(raw):

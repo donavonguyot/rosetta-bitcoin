@@ -163,17 +163,33 @@ enum LocalReferenceProof {
     }
 
     private static func benchmarkGateFor(target: Int, label: String) -> String {
-        if target == 100000 {
-            return "primary_100k"
+        switch target {
+        case 5000:
+            return "baseline_5k"
+        case 10000:
+            return "diagnostic_10k"
+        case 50000:
+            return "shakedown_50k"
+        case 100000:
+            return "performance_100k"
+        default:
+            return label == "\(target)" ? "local_reference" : "diagnostic_\(label)"
         }
-        return label == "\(target)" ? "local_reference" : "supporting_\(label)"
     }
 
     private static func benchmarkKindFor(target: Int, label: String) -> String {
-        if target == 100000 {
-            return "primary_100k_p2p"
+        switch target {
+        case 5000:
+            return "baseline_5k_p2p"
+        case 10000:
+            return "diagnostic_10k_p2p"
+        case 50000:
+            return "shakedown_50k_p2p"
+        case 100000:
+            return "performance_100k_p2p"
+        default:
+            return label == "\(target)" ? "local_reference_p2p" : "diagnostic_\(label)_p2p"
         }
-        return label == "\(target)" ? "local_reference_p2p" : "supporting_\(label)_p2p"
     }
 
     private static func emitTelemetry(

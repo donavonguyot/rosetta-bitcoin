@@ -11,7 +11,7 @@ not live P2P tip maintenance or binary-gate completion.
 runtime_surface: docker
 peer_mode: local_reference
 peer: host.docker.internal:48333
-evidence_lane: supporting_5k_p2p
+evidence_lane: baseline_5k_p2p
 header_height: 5000
 stored_block_height: 5000
 validated_height: 5000
@@ -20,7 +20,7 @@ sync_status: blocks_current
 current_blocker: null
 chainstate_backend: rocksdb
 native_crypto_backend: libsecp256k1
-proof_result: Nodes/Shared/conformance/results/go_docker_supporting_5k_benchmark_2026-06-04.json
+proof_result: Nodes/Shared/conformance/results/go_docker_baseline_5k_benchmark_2026-06-04.json
 ```
 
 ## Cleared: height 739 — first spend-path script verification

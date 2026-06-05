@@ -36,6 +36,8 @@
     "docker_proof_10k": "cd Nodes/Rust && make docker-proof-10k",
     "docker_proof_50k": "cd Nodes/Rust && make docker-proof-50k",
     "docker_proof_100k": "cd Nodes/Rust && make docker-proof-100k",
+    "docker_proof_tip_once": null,
+    "docker_tip_maintenance": null,
     "docker_tuning_100k_from_50k": "cd Nodes/Rust && make docker-tuning-100k-from-50k",
     "docker_proof_rpc_replay": "cd Nodes/Rust && make docker-proof-rpc-replay",
     "docker_probe_external": "cd Nodes/Rust && DOCKER_EXTERNAL_P2P_PEER=<host:48333> make docker-probe-external",
@@ -86,7 +88,7 @@
     "script_corpus_result": "Nodes/Shared/conformance/results/rust_script_corpus_docker_2026-06-03.json",
     "local_reference_result": "Nodes/Shared/conformance/results/rust_local_reference_docker_sync_2026-06-03.json",
     "external_probe_result": "Nodes/Shared/conformance/results/rust_docker_external_5k_probe_<YYYY-MM-DD>.json",
-    "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, bounded local-reference RPC replay, official local Reference P2P gates, and a resumed 50k-to-100k tuning lane. The tuning lane clones a certified 50k proof volume and is not a substitute for empty-state 100k proof."
+    "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, bounded local-reference RPC replay, and official local Reference P2P gates. docker_proof_10k and the resumed 50k-to-100k lane remain diagnostic only."
   },
   "known_caveats": ["The local Reference P2P comparator is a bounded proof harness, not live tip maintenance", "External manual P2P is diagnostic network-readiness evidence and is not benchmark-ranked", "Bounded local-reference RPC proof is not live P2P sync or tip maintenance", "Binary gate remains not_attempted"]
 }

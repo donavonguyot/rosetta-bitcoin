@@ -87,7 +87,7 @@ services:
         "--peer",
         "host.docker.internal:48333",
         "--result-path",
-        "/results/go_docker_supporting_5k_benchmark.json"
+        "/results/go_docker_baseline_5k_benchmark.json"
       ]
 
   gobitnode-supervisor:

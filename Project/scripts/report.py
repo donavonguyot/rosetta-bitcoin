@@ -17,8 +17,14 @@ SECTIONS = (
     "conformance",
     "blocker-catalog",
     "blocker-matrix",
+    "benchmark-suite",
     "benchmark-gates",
     "benchmark-comparability",
+    "baseline-5k",
+    "shakedown-50k",
+    "performance-100k",
+    "tip-once",
+    "tip-maintenance",
     "port-baseline-5k",
     "consensus-runway",
     "benchmark-summary",
@@ -30,10 +36,14 @@ SECTION_ALIASES = {
     "docker": "docker-coverage",
     "commands": "command-surface",
     "blockers": "blocker-catalog",
+    "benchmark-suite": "benchmark-suite",
     "gates": "benchmark-gates",
     "comparability": "benchmark-comparability",
-    "baseline": "port-baseline-5k",
-    "5k-baseline": "port-baseline-5k",
+    "baseline": "baseline-5k",
+    "5k-baseline": "baseline-5k",
+    "port-baseline-5k": "baseline-5k",
+    "50k": "shakedown-50k",
+    "100k": "performance-100k",
     "runway": "consensus-runway",
     "consensus": "consensus-runway",
     "benchmarks": "benchmark-summary",
@@ -249,7 +259,15 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
         select gate_id, target_label, target_height, benchmark_kind, role,
                preferred_runtime_surface, preferred_command_key, official_lane
         from benchmark_gates
-        order by target_height
+        order by
+          case gate_id
+            when 'baseline_5k' then 0
+            when 'shakedown_50k' then 1
+            when 'performance_100k' then 2
+            when 'tip_once' then 3
+            when 'tip_maintenance' then 4
+            else 5
+          end
         """,
     )
     print(table(("gate", "label", "target", "kind", "role", "surface", "command", "official_lane"), gates))
@@ -263,7 +281,16 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
                fresh_state, utxo_accounting_policy, chainstate_utxo_count,
                comparability_notes, captured_at
         from benchmark_gate_matrix
-        order by target_height, port
+        order by
+          case gate_id
+            when 'baseline_5k' then 0
+            when 'shakedown_50k' then 1
+            when 'performance_100k' then 2
+            when 'tip_once' then 3
+            when 'tip_maintenance' then 4
+            else 5
+          end,
+          port
         """,
     )
     print(
@@ -292,6 +319,61 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
     )
 
 
+def print_gate_matrix(connection: sqlite3.Connection, gate_id: str, title: str) -> None:
+    print(f"## {title}")
+    print()
+    data = rows(
+        connection,
+        f"""
+        select port, gate_status, comparability_status, evidence_lane,
+               validated_height, header_target_height, runtime_surface, peer_mode,
+               prefetch_depth, script_runner_mode, rocksdb_wal_disabled,
+               fresh_state, utxo_accounting_policy, chainstate_utxo_count,
+               comparability_notes, captured_at
+        from benchmark_gate_matrix
+        where gate_id = '{gate_id}'
+        order by port
+        """,
+    )
+    print(
+        table(
+            (
+                "port",
+                "status",
+                "comparable",
+                "lane",
+                "validated",
+                "headers",
+                "surface",
+                "peer_mode",
+                "prefetch",
+                "runner",
+                "wal_off",
+                "fresh",
+                "utxo_policy",
+                "utxos",
+                "notes",
+                "captured",
+            ),
+            data,
+        )
+    )
+
+
+def print_benchmark_suite(connection: sqlite3.Connection) -> None:
+    print_benchmark_gates(connection)
+    print()
+    print_gate_matrix(connection, "baseline_5k", "Baseline 5k")
+    print()
+    print_gate_matrix(connection, "shakedown_50k", "Shakedown 50k")
+    print()
+    print_gate_matrix(connection, "performance_100k", "Performance 100k")
+    print()
+    print_gate_matrix(connection, "tip_once", "Tip Once")
+    print()
+    print_gate_matrix(connection, "tip_maintenance", "Tip Maintenance")
+
+
 def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
     print("## Benchmark Comparability")
     print()
@@ -304,7 +386,17 @@ def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
                rocksdb_wal_disabled, fresh_state, utxo_accounting_policy,
                chainstate_utxo_count, total_ms, comparability_notes
         from benchmark_comparability
-        order by target_height, port, captured_at
+        order by
+          case gate_id
+            when 'baseline_5k' then 0
+            when 'shakedown_50k' then 1
+            when 'performance_100k' then 2
+            when 'tip_once' then 3
+            when 'tip_maintenance' then 4
+            else 5
+          end,
+          port,
+          captured_at
         """,
     )
     print(
@@ -404,10 +496,10 @@ def print_consensus_runway(connection: sqlite3.Connection) -> None:
           case stage
             when 'corpus' then 0
             when '5k' then 1
-            when '10k' then 2
-            when '50k' then 3
-            when '100k' then 4
-            when 'tip' then 5
+            when '50k' then 2
+            when '100k' then 3
+            when 'tip_once' then 4
+            when 'tip_maintenance' then 5
             else 6
           end
         """,
@@ -453,9 +545,14 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "conformance": print_conformance,
     "blocker-catalog": print_blocker_catalog,
     "blocker-matrix": print_blocker_matrix,
+    "benchmark-suite": print_benchmark_suite,
     "benchmark-gates": print_benchmark_gates,
     "benchmark-comparability": print_benchmark_comparability,
-    "port-baseline-5k": print_port_baseline_5k,
+    "baseline-5k": print_port_baseline_5k,
+    "shakedown-50k": lambda connection: print_gate_matrix(connection, "shakedown_50k", "Shakedown 50k"),
+    "performance-100k": lambda connection: print_gate_matrix(connection, "performance_100k", "Performance 100k"),
+    "tip-once": lambda connection: print_gate_matrix(connection, "tip_once", "Tip Once"),
+    "tip-maintenance": lambda connection: print_gate_matrix(connection, "tip_maintenance", "Tip Maintenance"),
     "consensus-runway": print_consensus_runway,
     "benchmark-summary": print_benchmark_summary,
     "decisions": print_decisions,

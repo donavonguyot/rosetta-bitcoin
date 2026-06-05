@@ -35,7 +35,7 @@ Nodes/Shared/
 
 For consensus readiness, start with
 `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`. It defines the staged
-`script-corpus -> 5k -> 10k -> 50k -> 100k -> tip` path and points Project at
+`script-corpus -> 5k -> 50k -> 100k -> tip_once -> tip_maintenance` path and points Project at
 the Shared rule ledger instead of scattered historical status notes.
 
 ## Contract Map

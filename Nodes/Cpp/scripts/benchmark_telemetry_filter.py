@@ -29,13 +29,13 @@ def target_label(target: int) -> str:
 
 def benchmark_lane(target: int) -> str:
     if target == 100000:
-        return "primary_100k_p2p"
+        return "performance_100k_p2p"
     return f"supporting_{target_label(target)}_p2p"
 
 
 def benchmark_gate(target: int) -> str:
     if target == 100000:
-        return "primary_100k"
+        return "performance_100k"
     return f"supporting_{target_label(target)}"
 
 

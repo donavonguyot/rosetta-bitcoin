@@ -47,9 +47,12 @@ python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section command-surface
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-gates
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-comparability
-python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+python3 Project/scripts/report.py --db Project/project.db --section shakedown-50k
+python3 Project/scripts/report.py --db Project/project.db --section performance-100k
 python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
 ```
 
@@ -58,17 +61,17 @@ Preflight a benchmark gate before starting a port run:
 ```bash
 python3 Project/scripts/preflight_benchmark_gate.py \
   --db Project/project.db \
-  --gate supporting_5k \
+  --gate baseline_5k \
   --port go
 
 python3 Project/scripts/preflight_benchmark_gate.py \
   --db Project/project.db \
-  --gate supporting_10k \
+  --gate shakedown_50k \
   --port go
 
 python3 Project/scripts/preflight_benchmark_gate.py \
   --db Project/project.db \
-  --gate supporting_10k \
+  --gate performance_100k \
   --all
 ```
 
@@ -79,6 +82,10 @@ durable proof volume, and required metadata stance such as
 `prefetch_depth=4`, `script_runner_mode=parallel`, and `fresh_state=true`. It
 does not fail merely because a port has no gate result yet; missing evidence
 means the run still needs to happen.
+
+The official benchmark suite is `baseline_5k`, `shakedown_50k`,
+`performance_100k`, `tip_once`, and `tip_maintenance`. Historical 10k and
+50k-to-100k artifacts may still import, but they are not official gates.
 
 Preflight the full 5k baseline after importing evidence:
 
@@ -123,7 +130,8 @@ python3 Project/scripts/preflight_consensus_runway.py \
   --strict
 ```
 
-The runway stages are `corpus`, `5k`, `10k`, `50k`, `100k`, and `tip`. The
+The runway stages are `corpus`, `5k`, `50k`, `100k`, `tip_once`, and
+`tip_maintenance`. The
 preflight checks Project's imported rule ledger, blocker state, port-owned
 script-corpus proof, 5k baseline posture, and staged sync evidence.
 

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 
-STAGES = ("corpus", "5k", "10k", "50k", "100k", "tip")
+STAGES = ("corpus", "5k", "50k", "100k", "tip_once", "tip_maintenance")
 BAD_NATIVE_CRYPTO_VALUES = {"managed", "pure", "fallback", "not_enabled", "unavailable", "none", "false"}
 
 
@@ -98,26 +98,23 @@ def preflight_port(conn: sqlite3.Connection, port: str, stage: str) -> dict[str,
         errors.append(f"5k baseline is not passed: {row.get('baseline_5k_status') or 'missing'}")
 
     target_height = int(row.get("target_height") or -1)
-    if (
-        stage == "10k"
-        and not (
-            row.get("stage_gate_status") == "passed"
-            and row.get("stage_gate_comparability") == "comparable"
-        )
+    if stage in {"50k", "100k"} and not (
+        row.get("stage_gate_status") == "passed"
+        and row.get("stage_gate_comparability") == "comparable"
     ):
         errors.append(
-            "missing comparable 10k benchmark gate proof "
+            f"missing comparable {stage} benchmark gate proof "
             f"(stage_gate_status={row.get('stage_gate_status') or 'missing'}, "
             f"stage_gate_comparability={row.get('stage_gate_comparability') or 'missing'})"
         )
-    if stage in {"10k", "50k", "100k"} and int(row.get("max_validated_height") or -1) < target_height:
+    if stage in {"50k", "100k"} and int(row.get("max_validated_height") or -1) < target_height:
         errors.append(
             f"missing {stage} stage proof: max_validated_height={row.get('max_validated_height')} "
             f"target={target_height}"
         )
-    if stage == "tip" and row.get("runway_status") != "passed":
+    if stage in {"tip_once", "tip_maintenance"} and row.get("runway_status") != "passed":
         errors.append(
-            "missing tip proof "
+            f"missing {stage} proof "
             f"(sync_status={row.get('sync_status')}, "
             f"validated={row.get('max_validated_height')}, header={row.get('header_height')})"
         )
@@ -170,7 +167,7 @@ def print_text(results: list[dict[str, Any]]) -> None:
             f"native_crypto={result.get('script_native_crypto_backend') or ''}"
         )
         print(f"  baseline_5k={result.get('baseline_5k_status') or ''}")
-        if result.get("stage") in {"10k", "50k", "100k"}:
+        if result.get("stage") in {"50k", "100k"}:
             print(
                 "  stage_gate="
                 f"{result.get('stage_gate_status') or ''} "

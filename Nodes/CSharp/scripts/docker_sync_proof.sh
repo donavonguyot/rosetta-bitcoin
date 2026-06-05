@@ -29,10 +29,10 @@ field() {
 
 benchmark_gate() {
   case "${BLOCKS_MAX:-0}" in
-    5000) echo "supporting_5k" ;;
-    10000) echo "supporting_10k" ;;
-    50000) echo "supporting_50k" ;;
-    100000) echo "primary_100k" ;;
+    5000) echo "baseline_5k" ;;
+    10000) echo "diagnostic_10k" ;;
+    50000) echo "shakedown_50k" ;;
+    100000) echo "performance_100k" ;;
     *) echo "local_reference" ;;
   esac
 }

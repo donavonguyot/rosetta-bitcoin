@@ -79,7 +79,7 @@ services:
         "--peer",
         "${P2P_PEER:-host.docker.internal:48333}",
         "--result-path",
-        "/results/rust_docker_supporting_5k_benchmark.json",
+        "/results/rust_docker_baseline_5k_benchmark.json",
         "--runtime-surface",
         "docker"
       ]

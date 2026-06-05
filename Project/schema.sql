@@ -304,6 +304,7 @@ SELECT
     WHEN lower(node_id) LIKE '%python%' OR lower(node_id) LIKE '%pybitnode%' OR lower(implementation) LIKE 'python%' THEN 'python'
     WHEN lower(node_id) LIKE '%rust%' OR lower(node_id) LIKE '%rsbitnode%' OR lower(implementation) LIKE 'rust%' THEN 'rust'
     WHEN lower(node_id) LIKE '%typescript%' OR lower(node_id) LIKE '%tsbitnode%' OR lower(implementation) LIKE 'typescript%' THEN 'typescript'
+    WHEN lower(node_id) LIKE '%zig%' OR lower(node_id) LIKE '%zigbitnode%' OR lower(implementation) LIKE 'zig%' THEN 'zig'
     ELSE node_id
   END AS port,
   implementation,
@@ -690,6 +691,21 @@ WITH benchmark_rows AS (
     coalesce(json_extract(b.result_json, '$.current_blocker'), '') AS current_blocker,
     coalesce(json_extract(b.timings_json, '$.canonical_timing_summary.total_ms'), json_extract(b.result_json, '$.elapsed_ms'), -1) AS total_ms,
     coalesce(
+      json_extract(b.result_json, '$.telemetry_schema'),
+      json_extract(a.raw_json, '$.telemetry_schema'),
+      ''
+    ) AS telemetry_schema,
+    CASE WHEN coalesce(a.raw_json, '') LIKE '%"slow_blocks"%' THEN 1 ELSE 0 END AS has_slow_blocks,
+    (
+      CASE WHEN coalesce(a.raw_json, '') LIKE '%"p2p_fetch"%' THEN 1 ELSE 0 END +
+      CASE WHEN coalesce(a.raw_json, '') LIKE '%"block_parse_validate"%' THEN 1 ELSE 0 END +
+      CASE WHEN coalesce(a.raw_json, '') LIKE '%"utxo_load"%' THEN 1 ELSE 0 END +
+      CASE WHEN coalesce(a.raw_json, '') LIKE '%"script_verify"%' THEN 1 ELSE 0 END +
+      CASE WHEN coalesce(a.raw_json, '') LIKE '%"utxo_apply"%' THEN 1 ELSE 0 END +
+      CASE WHEN coalesce(a.raw_json, '') LIKE '%"commit"%' THEN 1 ELSE 0 END +
+      CASE WHEN coalesce(a.raw_json, '') LIKE '%"block_connect_store_commit"%' THEN 1 ELSE 0 END
+    ) AS long_run_timing_bucket_count,
+    coalesce(
       json_extract(b.settings_json, '$.utxo_accounting_policy'),
       CASE
         WHEN coalesce(json_extract(b.result_json, '$.chainstate_utxo_count'), -1) = bg.official_chainstate_utxo_count
@@ -709,6 +725,9 @@ classified AS (
   SELECT
     *,
     CASE
+      WHEN reported_lane IN ('supporting_5k_p2p', 'baseline_5k_p2p') THEN 'baseline_5k_p2p'
+      WHEN reported_lane IN ('supporting_50k_p2p', 'shakedown_50k_p2p') THEN 'shakedown_50k_p2p'
+      WHEN reported_lane IN ('primary_100k_p2p', 'performance_100k_p2p') THEN 'performance_100k_p2p'
       WHEN reported_lane <> '' THEN reported_lane
       WHEN peer_mode = 'local_reference_rpc' OR byte_source = 'local_reference_rpc' OR proof_mode IN ('rpc_replay', 'pipeline') THEN replace(official_lane, '_p2p', '_rpc_replay')
       WHEN peer_mode = 'local_reference' OR byte_source = 'local_reference_p2p' THEN official_lane
@@ -746,6 +765,9 @@ scored AS (
       CASE WHEN rocksdb_wal_disabled <> wal_disabled_required THEN 'rocksdb_wal;' ELSE '' END ||
       CASE WHEN resume_supported <> resume_supported_required THEN 'resume_supported;' ELSE '' END ||
       CASE WHEN fresh_state_required = 1 AND fresh_state <> 1 THEN 'fresh_state;' ELSE '' END ||
+      CASE WHEN target_height IN (50000, 100000) AND telemetry_schema <> 'benchmark.telemetry_tick.v1' THEN 'telemetry_schema;' ELSE '' END ||
+      CASE WHEN target_height IN (50000, 100000) AND has_slow_blocks <> 1 THEN 'slow_blocks;' ELSE '' END ||
+      CASE WHEN target_height IN (50000, 100000) AND long_run_timing_bucket_count < 7 THEN 'long_run_timing_buckets;' ELSE '' END ||
       CASE WHEN binary_gate_status <> required_binary_gate_status THEN 'binary_gate_status;' ELSE '' END
     ) AS comparability_notes
   FROM classified
@@ -813,9 +835,11 @@ ranked_results AS (
                  WHEN 'comparable' THEN 0
                  WHEN 'evidence_only' THEN 1
                  WHEN 'diagnostic' THEN 2
-                 WHEN 'failed' THEN 3
-                 ELSE 4
-               END,
+               WHEN 'failed' THEN 3
+               ELSE 4
+             END,
+              CASE WHEN bc.evidence_lane = bc.official_lane THEN 0 ELSE 1 END,
+              bc.fresh_state DESC,
                bc.validated_height DESC,
                bc.captured_at DESC,
                bc.source_artifact_id
@@ -984,7 +1008,7 @@ timing AS (
   JOIN project_node_ports np ON np.port = bgm.port
   JOIN timing_samples ts ON ts.node_id = np.node_id
   JOIN required_timing rt ON rt.stage = ts.stage
-  WHERE bgm.gate_id = 'supporting_5k'
+  WHERE bgm.gate_id = 'baseline_5k'
     AND ts.source_artifact_id = bgm.source_artifact_id
   GROUP BY bgm.port
 ),
@@ -998,7 +1022,7 @@ raw_timing AS (
     (CASE WHEN a.raw_json LIKE '%"block_connect_store_commit"%' THEN 1 ELSE 0 END) AS required_timing_buckets
   FROM benchmark_gate_matrix bgm
   LEFT JOIN artifacts a ON a.artifact_id = bgm.source_artifact_id
-  WHERE bgm.gate_id = 'supporting_5k'
+  WHERE bgm.gate_id = 'baseline_5k'
 )
 SELECT
   bgm.port,
@@ -1040,7 +1064,7 @@ FROM benchmark_gate_matrix bgm
 LEFT JOIN script_corpus_baseline scb ON scb.port = bgm.port
 LEFT JOIN timing t ON t.port = bgm.port
 LEFT JOIN raw_timing rt ON rt.port = bgm.port
-WHERE bgm.gate_id = 'supporting_5k';
+WHERE bgm.gate_id = 'baseline_5k';
 
 CREATE VIEW IF NOT EXISTS consensus_rule_summary AS
 SELECT
@@ -1056,10 +1080,10 @@ GROUP BY chain, category, status;
 CREATE VIEW IF NOT EXISTS consensus_stage_targets AS
 SELECT 'corpus' AS stage, 0 AS target_height, 0 AS requires_5k_baseline
 UNION ALL SELECT '5k', 5000, 1
-UNION ALL SELECT '10k', 10000, 1
 UNION ALL SELECT '50k', 50000, 1
 UNION ALL SELECT '100k', 100000, 1
-UNION ALL SELECT 'tip', -1, 1;
+UNION ALL SELECT 'tip_once', -1, 1
+UNION ALL SELECT 'tip_maintenance', -1, 1;
 
 CREATE VIEW IF NOT EXISTS consensus_runway AS
 WITH ports AS (
@@ -1110,7 +1134,8 @@ clean_corpus AS (
     SELECT
       port,
       CASE gate_id
-        WHEN 'supporting_10k' THEN '10k'
+        WHEN 'shakedown_50k' THEN '50k'
+        WHEN 'performance_100k' THEN '100k'
         ELSE ''
       END AS stage,
       gate_status,
@@ -1118,7 +1143,7 @@ clean_corpus AS (
       validated_height,
       source_artifact_id
     FROM benchmark_gate_matrix
-    WHERE gate_id IN ('supporting_10k')
+    WHERE gate_id IN ('shakedown_50k', 'performance_100k')
   ),
   open_blockers AS (
   SELECT
@@ -1127,8 +1152,9 @@ clean_corpus AS (
     group_concat(cbs.height) AS open_blocker_heights
   FROM consensus_stage_targets cst
   LEFT JOIN current_blocker_state cbs
-    ON cbs.status IN ('open', 'blocked')
+   ON cbs.status IN ('open', 'blocked')
    AND cst.target_height >= 0
+   AND cbs.height > 0
    AND cbs.height <= cst.target_height
   GROUP BY cst.stage
 )
@@ -1141,9 +1167,9 @@ SELECT
     WHEN coalesce(ob.open_blocker_count, 0) > 0 THEN 'open_blockers'
     WHEN cst.stage = 'corpus' THEN 'passed'
     WHEN cst.stage = '5k' AND coalesce(pb.baseline_status, '') <> 'passed' THEN 'missing_5k_baseline'
-    WHEN cst.stage = '10k' AND NOT (coalesce(sge.gate_status, '') = 'passed' AND coalesce(sge.comparability_status, '') = 'comparable') THEN 'missing_stage_proof'
-    WHEN cst.stage IN ('50k', '100k') AND coalesce(se.max_validated_height, -1) < cst.target_height THEN 'missing_stage_proof'
-    WHEN cst.stage = 'tip' AND NOT (se.sync_status = 'blocks_current' AND se.max_validated_height >= se.header_height AND se.header_height > 0) THEN 'missing_tip_proof'
+    WHEN cst.stage IN ('50k', '100k') AND NOT (coalesce(sge.gate_status, '') = 'passed' AND coalesce(sge.comparability_status, '') = 'comparable') THEN 'missing_stage_proof'
+    WHEN cst.stage = 'tip_once' AND NOT (se.sync_status = 'blocks_current' AND se.max_validated_height >= se.header_height AND se.header_height > 0) THEN 'missing_tip_once_proof'
+    WHEN cst.stage = 'tip_maintenance' AND NOT (se.sync_status = 'blocks_current' AND se.max_validated_height >= se.header_height AND se.header_height > 0) THEN 'missing_tip_maintenance_proof'
     ELSE 'passed'
   END AS runway_status,
   coalesce(cc.has_clean_corpus, 0) AS has_clean_script_corpus,

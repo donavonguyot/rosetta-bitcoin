@@ -67,17 +67,21 @@ def target_label(height: int) -> str:
 
 
 def supporting_gate(height: int) -> str:
-    if height == 100000:
-        return "primary_100k"
-    label = target_label(height)
-    return f"supporting_{label}" if label else "local_reference"
+    return {
+        5000: "baseline_5k",
+        10000: "diagnostic_10k",
+        50000: "shakedown_50k",
+        100000: "performance_100k",
+    }.get(height, "local_reference")
 
 
 def supporting_p2p_kind(height: int) -> str:
-    if height == 100000:
-        return "primary_100k_p2p"
-    label = target_label(height)
-    return f"supporting_{label}_p2p" if label else "local_reference_p2p"
+    return {
+        5000: "baseline_5k_p2p",
+        10000: "diagnostic_10k_p2p",
+        50000: "shakedown_50k_p2p",
+        100000: "performance_100k_p2p",
+    }.get(height, "local_reference_p2p")
 
 
 def main() -> int:

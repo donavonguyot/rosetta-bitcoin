@@ -36,14 +36,17 @@ Before editing a port, read:
 15. `Docs/supervisor-contract.md`.
 16. The target port's README and blocker ledger.
 
-The first comparable readiness standard is the **5k baseline**. A port is not
-baseline-ready until Project can show: RocksDB runtime truth, native crypto,
-Shared script corpus `45/45`, Docker local Reference P2P to height `5000`, fresh
-proof state, WAL enabled, fixed benchmark knobs, `core_spendable_v1` UTXO
-accounting with `chainstate_utxo_count=4574`, and imported compact proof JSON.
+The official benchmark suite is `baseline_5k`, `shakedown_50k`,
+`performance_100k`, `tip_once`, and `tip_maintenance`. The first comparable
+readiness standard is the **5k baseline**. A port is not baseline-ready until
+Project can show: RocksDB runtime truth, native crypto, Shared script corpus
+`45/45`, Docker local Reference P2P to height `5000`, fresh proof state, WAL
+enabled, fixed benchmark knobs, `core_spendable_v1` UTXO accounting with
+`chainstate_utxo_count=4574`, and imported compact proof JSON.
 
 ```bash
-python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict
 ```
 

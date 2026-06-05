@@ -61,7 +61,7 @@ The current Docker P2P 5k comparator starts from a fresh Docker volume, stores
 and validates through height 5000, and is classified by Project as comparable:
 
 ```text
-result_path: Nodes/Shared/conformance/results/go_docker_supporting_5k_benchmark_2026-06-04.json
+result_path: Nodes/Shared/conformance/results/go_docker_baseline_5k_benchmark_2026-06-04.json
 runtime_surface: docker
 peer_mode: local_reference
 validated_height: 5000

@@ -14,15 +14,15 @@ PROGRESS ?= 100
 RESULT_DATE ?= $(shell date +%F)
 STORAGE_RESULT ?= ../Shared/conformance/results/rust_storage_gate_$(RESULT_DATE).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/rust_script_corpus_$(RESULT_DATE).json
-LOCAL_REFERENCE_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_5k_benchmark_$(RESULT_DATE).json
-LOCAL_REFERENCE_10K_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_10k_benchmark_$(RESULT_DATE).json
-LOCAL_REFERENCE_50K_RESULT ?= ../Shared/conformance/results/rust_docker_supporting_50k_benchmark_$(RESULT_DATE).json
-LOCAL_REFERENCE_100K_RESULT ?= ../Shared/conformance/results/rust_docker_primary_100k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_RESULT ?= ../Shared/conformance/results/rust_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_10K_RESULT ?= ../Shared/conformance/results/rust_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_50K_RESULT ?= ../Shared/conformance/results/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_100K_RESULT ?= ../Shared/conformance/results/rust_docker_performance_100k_benchmark_$(RESULT_DATE).json
 LOCAL_REFERENCE_TUNING_100K_RESULT ?= ../Shared/conformance/results/rust_docker_tuning_50k_to_100k_benchmark_$(RESULT_DATE).json
-DOCKER_LOCAL_REFERENCE_RESULT ?= /results/rust_docker_supporting_5k_benchmark_$(RESULT_DATE).json
-DOCKER_LOCAL_REFERENCE_10K_RESULT ?= /results/rust_docker_supporting_10k_benchmark_$(RESULT_DATE).json
-DOCKER_LOCAL_REFERENCE_50K_RESULT ?= /results/rust_docker_supporting_50k_benchmark_$(RESULT_DATE).json
-DOCKER_LOCAL_REFERENCE_100K_RESULT ?= /results/rust_docker_primary_100k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_RESULT ?= /results/rust_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_10K_RESULT ?= /results/rust_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_50K_RESULT ?= /results/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_100K_RESULT ?= /results/rust_docker_performance_100k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_TUNING_100K_RESULT ?= /results/rust_docker_tuning_50k_to_100k_benchmark_$(RESULT_DATE).json
 RPC_REPLAY_RESULT ?= ../Shared/conformance/results/rust_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
@@ -31,7 +31,7 @@ DOCKER_P2P_PEER ?= host.docker.internal:48333
 DOCKER_LOCAL_PROOF_VOLUME ?= rsbitnode_proof_data
 DOCKER_TUNING_SOURCE_VOLUME ?= rsbitnode_50k_proof_data
 DOCKER_TUNING_100K_VOLUME ?= rsbitnode_tuning_50k_to_100k_data
-TUNING_SOURCE_50K_ARTIFACT ?= ../Shared/conformance/results/rust_docker_supporting_50k_benchmark_$(RESULT_DATE).json
+TUNING_SOURCE_50K_ARTIFACT ?= ../Shared/conformance/results/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_EXTERNAL_P2P_PEER ?=
 DOCKER_EXTERNAL_PROBE_VOLUME ?= rsbitnode_external_5k_probe_data
 
@@ -122,7 +122,7 @@ docker-tuning-100k-from-50k:
 	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
 	done
 	@test -f "$(TUNING_SOURCE_50K_ARTIFACT)" || { echo "error: missing source 50k artifact: $(TUNING_SOURCE_50K_ARTIFACT)" >&2; exit 1; }
-	@python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); e={"result":"passed","benchmark_lane":"supporting_50k_p2p","validated_height":50000,"validated_hash":"00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb","chainstate_utxo_count":568855,"utxo_accounting_policy":"core_spendable_v1"}; bad=[f"{k}={d.get(k)!r}" for k,v in e.items() if d.get(k)!=v]; sys.exit("source 50k artifact is not certified: "+", ".join(bad)) if bad else None' "$(TUNING_SOURCE_50K_ARTIFACT)"
+	@python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); e={"result":"passed","benchmark_lane":"shakedown_50k_p2p","validated_height":50000,"validated_hash":"00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb","chainstate_utxo_count":568855,"utxo_accounting_policy":"core_spendable_v1"}; bad=[f"{k}={d.get(k)!r}" for k,v in e.items() if d.get(k)!=v]; sys.exit("source 50k artifact is not certified: "+", ".join(bad)) if bad else None' "$(TUNING_SOURCE_50K_ARTIFACT)"
 	@source_volume="$(DOCKER_TUNING_SOURCE_VOLUME)"; \
 	  if ! docker volume inspect "$$source_volume" >/dev/null 2>&1; then source_volume="docker_$(DOCKER_TUNING_SOURCE_VOLUME)"; fi; \
 	  docker volume inspect "$$source_volume" >/dev/null; \
@@ -136,8 +136,8 @@ docker-tuning-100k-from-50k:
 	  -e RSBITNODE_BENCHMARK_LANE=tuning_50k_to_100k_p2p \
 	  -e 'RSBITNODE_TARGET_LABEL=50k->100k' \
 	  -e RSBITNODE_FRESH_STATE=false \
-	  -e RSBITNODE_SOURCE_GATE=supporting_50k \
-	  -e RSBITNODE_SOURCE_BENCHMARK_LANE=supporting_50k_p2p \
+	  -e RSBITNODE_SOURCE_GATE=shakedown_50k \
+	  -e RSBITNODE_SOURCE_BENCHMARK_LANE=shakedown_50k_p2p \
 	  -e RSBITNODE_SOURCE_VALIDATED_HEIGHT=50000 \
 	  -e RSBITNODE_SOURCE_HEADER_HEIGHT=50000 \
 	  -e RSBITNODE_SOURCE_VALIDATED_HASH=00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb \

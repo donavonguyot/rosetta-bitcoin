@@ -22,6 +22,12 @@ PASSABLE_DOCKER_STATUSES = {
     "supervisor_partial",
 }
 
+GATE_ALIASES = {
+    "supporting_5k": "baseline_5k",
+    "supporting_50k": "shakedown_50k",
+    "primary_100k": "performance_100k",
+}
+
 REQUIRED_ARTIFACT_FIELDS = (
     "implementation",
     "runtime_surface",
@@ -62,7 +68,7 @@ REQUIRED_ARTIFACT_FIELDS = (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", default="Project/project.db", help="Project DB path")
-    parser.add_argument("--gate", default="supporting_5k", help="Benchmark gate id")
+    parser.add_argument("--gate", default="baseline_5k", help="Benchmark gate id")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--port", help="Port to preflight")
     group.add_argument("--all", action="store_true", help="Preflight all non-reference ports")
@@ -283,7 +289,12 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         else:
             warnings.append(message)
 
-    if gate_row and int(gate_row["chainstate_utxo_count"]) >= 0 and int(gate_row["chainstate_utxo_count"]) != int(gate["official_chainstate_utxo_count"]):
+    if (
+        gate_row
+        and int(gate["official_chainstate_utxo_count"]) >= 0
+        and int(gate_row["chainstate_utxo_count"]) >= 0
+        and int(gate_row["chainstate_utxo_count"]) != int(gate["official_chainstate_utxo_count"])
+    ):
         message = (
             "latest imported gate evidence has chainstate_utxo_count="
             f"{gate_row['chainstate_utxo_count']}; expected {gate['official_chainstate_utxo_count']}"
@@ -389,6 +400,7 @@ def print_text(results: list[dict[str, Any]]) -> None:
 
 def main() -> int:
     args = parse_args()
+    gate_id = GATE_ALIASES.get(args.gate, args.gate)
     conn = connect(args.db)
     gate = one(
         conn,
@@ -397,7 +409,7 @@ def main() -> int:
         FROM benchmark_gates
         WHERE gate_id = ?
         """,
-        (args.gate,),
+        (gate_id,),
     )
     if gate is None:
         raise SystemExit(f"missing benchmark gate: {args.gate}")
@@ -412,6 +424,7 @@ def main() -> int:
             json.dumps(
                 {
                     "gate": args.gate,
+                    "canonical_gate": gate_id,
                     "error_count": error_count,
                     "warning_count": warning_count,
                     "results": results,
@@ -424,7 +437,7 @@ def main() -> int:
         print_text(results)
         print()
         print(
-            f"benchmark_preflight_summary gate={args.gate} "
+            f"benchmark_preflight_summary gate={gate_id} "
             f"ports={len(results)} errors={error_count} warnings={warning_count}"
         )
 

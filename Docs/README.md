@@ -56,7 +56,8 @@ python3 Project/scripts/report.py --db Project/project.db --section consensus-ru
 For baseline readiness, prefer Project over hand-maintained summaries:
 
 ```bash
-python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --all
 ```
 

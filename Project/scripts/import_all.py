@@ -99,14 +99,14 @@ DECISIONS: tuple[dict[str, str], ...] = (
 
 BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
     {
-        "gate_id": "supporting_5k",
+        "gate_id": "baseline_5k",
         "target_height": 5000,
         "target_label": "5k",
-        "benchmark_kind": "supporting_5k_p2p",
-        "role": "first readiness gate",
+        "benchmark_kind": "baseline_5k_p2p",
+        "role": "birth certificate baseline",
         "preferred_runtime_surface": "docker",
         "preferred_command_key": "docker_proof_local",
-        "official_lane": "supporting_5k_p2p",
+        "official_lane": "baseline_5k_p2p",
         "official_byte_source": "local_reference_p2p",
         "official_peer_mode": "local_reference",
         "official_proof_mode": "p2p_sync",
@@ -121,44 +121,18 @@ BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
         "wal_disabled_required": 0,
         "resume_supported_required": 1,
         "binary_gate_status": "not_attempted",
-        "result_name_pattern": "<port>_<surface>_supporting_5k_benchmark_<YYYY-MM-DD>.json",
-        "notes": "Official comparable 5k lane: Docker, local Reference P2P, fixed knobs, WAL enabled, and fresh proof volume. RPC replay evidence remains valid but is not cross-ranked here.",
+        "result_name_pattern": "<port>_<surface>_baseline_5k_benchmark_<YYYY-MM-DD>.json",
+        "notes": "Birth certificate lane: Docker, local Reference P2P, fixed knobs, WAL enabled, fresh proof volume, clean corpus proof, and required timing buckets. Existing supporting_5k artifacts remain import-compatible aliases.",
     },
     {
-        "gate_id": "supporting_10k",
-        "target_height": 10000,
-        "target_label": "10k",
-        "benchmark_kind": "supporting_10k_p2p",
-        "role": "first standardized performance gate",
-        "preferred_runtime_surface": "docker",
-        "preferred_command_key": "docker_proof_10k",
-        "official_lane": "supporting_10k_p2p",
-        "official_byte_source": "local_reference_p2p",
-        "official_peer_mode": "local_reference",
-        "official_proof_mode": "p2p_sync",
-        "official_header_target_height": 10000,
-        "official_prefetch_depth": 4,
-        "official_script_runner_mode": "parallel",
-        "official_utxo_accounting_policy": "core_spendable_v1",
-        "official_chainstate_utxo_count": 9519,
-        "fresh_state_required": 1,
-        "local_reference_required": 1,
-        "durable_required": 1,
-        "wal_disabled_required": 0,
-        "resume_supported_required": 1,
-        "binary_gate_status": "not_attempted",
-        "result_name_pattern": "<port>_<surface>_supporting_10k_benchmark_<YYYY-MM-DD>.json",
-        "notes": "Official comparable 10k lane: same Docker/local Reference P2P posture as 5k, retargeted to height 10000. Older RPC replay and long-sync artifacts remain evidence-only unless they match this lane.",
-    },
-    {
-        "gate_id": "supporting_50k",
+        "gate_id": "shakedown_50k",
         "target_height": 50000,
         "target_label": "50k",
-        "benchmark_kind": "supporting_50k_p2p",
-        "role": "long-run telemetry shakedown",
+        "benchmark_kind": "shakedown_50k_p2p",
+        "role": "serious readiness and telemetry shakedown",
         "preferred_runtime_surface": "docker",
         "preferred_command_key": "docker_proof_50k",
-        "official_lane": "supporting_50k_p2p",
+        "official_lane": "shakedown_50k_p2p",
         "official_byte_source": "local_reference_p2p",
         "official_peer_mode": "local_reference",
         "official_proof_mode": "p2p_sync",
@@ -173,18 +147,18 @@ BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
         "wal_disabled_required": 0,
         "resume_supported_required": 1,
         "binary_gate_status": "not_attempted",
-        "result_name_pattern": "<port>_<surface>_supporting_50k_benchmark_<YYYY-MM-DD>.json",
-        "notes": "Official comparable 50k lane: Docker/local Reference P2P with live telemetry. RPC replay, WAL-off, stale-state, and missing-telemetry runs remain diagnostic or evidence-only.",
+        "result_name_pattern": "<port>_<surface>_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
+        "notes": "Serious readiness lane: Docker/local Reference P2P with live telemetry, slow-block detail, complete timing buckets, and fresh state. Existing supporting_50k artifacts remain import-compatible aliases.",
     },
     {
-        "gate_id": "primary_100k",
+        "gate_id": "performance_100k",
         "target_height": 100000,
         "target_label": "100k",
-        "benchmark_kind": "primary_100k_p2p",
-        "role": "primary long-run optimization gate",
+        "benchmark_kind": "performance_100k_p2p",
+        "role": "primary performance and optimization gate",
         "preferred_runtime_surface": "docker",
         "preferred_command_key": "docker_proof_100k",
-        "official_lane": "primary_100k_p2p",
+        "official_lane": "performance_100k_p2p",
         "official_byte_source": "local_reference_p2p",
         "official_peer_mode": "local_reference",
         "official_proof_mode": "p2p_sync",
@@ -199,34 +173,60 @@ BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
         "wal_disabled_required": 0,
         "resume_supported_required": 1,
         "binary_gate_status": "not_attempted",
-        "result_name_pattern": "<port>_<surface>_primary_100k_benchmark_<YYYY-MM-DD>.json",
-        "notes": "Official comparable 100k lane: Docker/local Reference P2P with WAL enabled, fresh state, fixed knobs, and full telemetry. This gate is the optimization comparison surface.",
+        "result_name_pattern": "<port>_<surface>_performance_100k_benchmark_<YYYY-MM-DD>.json",
+        "notes": "Primary optimization lane: Docker/local Reference P2P with WAL enabled, fresh state, fixed knobs, full telemetry, and complete timing import. Existing primary_100k artifacts remain import-compatible aliases.",
     },
     {
-        "gate_id": "tuning_50k_to_100k",
-        "target_height": 100000,
-        "target_label": "50k->100k",
-        "benchmark_kind": "tuning_50k_to_100k_p2p",
-        "role": "resumed hard-region optimization workbench",
+        "gate_id": "tip_once",
+        "target_height": -1,
+        "target_label": "tip once",
+        "benchmark_kind": "tip_once_p2p",
+        "role": "one-time empty-state-to-tip credibility proof",
         "preferred_runtime_surface": "docker",
-        "preferred_command_key": "docker_tuning_100k_from_50k",
-        "official_lane": "tuning_50k_to_100k_p2p",
+        "preferred_command_key": "docker_proof_tip_once",
+        "official_lane": "tip_once_p2p",
         "official_byte_source": "local_reference_p2p",
         "official_peer_mode": "local_reference",
         "official_proof_mode": "p2p_sync",
-        "official_header_target_height": 100000,
+        "official_header_target_height": -1,
         "official_prefetch_depth": 4,
         "official_script_runner_mode": "parallel",
         "official_utxo_accounting_policy": "core_spendable_v1",
-        "official_chainstate_utxo_count": 13154991,
-        "fresh_state_required": 0,
+        "official_chainstate_utxo_count": -1,
+        "fresh_state_required": 1,
         "local_reference_required": 1,
         "durable_required": 1,
         "wal_disabled_required": 0,
         "resume_supported_required": 1,
         "binary_gate_status": "not_attempted",
-        "result_name_pattern": "<port>_<surface>_tuning_50k_to_100k_benchmark_<YYYY-MM-DD>.json",
-        "notes": "Resumed tuning lane: clone a certified empty-state 50k proof volume, then run Docker/local Reference P2P from 50k to 100k. This is comparable only with other resumed tuning runs and does not replace empty-state 100k proof.",
+        "result_name_pattern": "<port>_<surface>_tip_once_<YYYY-MM-DD>.json",
+        "notes": "One-time credibility lane: empty state to current tip with exact Reference start/finish height/hash, full telemetry summary, and no skipped consensus. Not ranked by empty-sync speed.",
+    },
+    {
+        "gate_id": "tip_maintenance",
+        "target_height": -1,
+        "target_label": "tip maintenance",
+        "benchmark_kind": "tip_maintenance_p2p",
+        "role": "ongoing operational reality near tip",
+        "preferred_runtime_surface": "docker",
+        "preferred_command_key": "docker_tip_maintenance",
+        "official_lane": "tip_maintenance_p2p",
+        "official_byte_source": "network_or_local_reference_p2p",
+        "official_peer_mode": "tip_peer",
+        "official_proof_mode": "tip_maintenance",
+        "official_header_target_height": -1,
+        "official_prefetch_depth": 4,
+        "official_script_runner_mode": "parallel",
+        "official_utxo_accounting_policy": "core_spendable_v1",
+        "official_chainstate_utxo_count": -1,
+        "fresh_state_required": 0,
+        "local_reference_required": 0,
+        "durable_required": 1,
+        "wal_disabled_required": 0,
+        "resume_supported_required": 1,
+        "binary_gate_status": "not_attempted",
+        "result_name_pattern": "<port>_<surface>_tip_maintenance_<YYYY-MM-DD>.json",
+        "notes": "Operational maintenance lane: start near or at tip, maintain blocks_current, record reconnects/stalls/restart recovery, and emit health/status telemetry. Not a speed ranking.",
     },
 )
 
@@ -235,11 +235,13 @@ COMMAND_PURPOSES: dict[str, str] = {
     "docker_build": "build the Docker runtime/proof image",
     "docker_warm": "warm Docker images before a benchmark campaign",
     "docker_status": "read status from inside the Docker runtime surface",
-    "docker_proof_local": "run official Docker/local-reference P2P proof",
-    "docker_proof_10k": "run official Docker/local-reference P2P 10k proof",
-    "docker_proof_50k": "run official Docker/local-reference P2P 50k proof",
-    "docker_proof_100k": "run official Docker/local-reference P2P 100k proof",
-    "docker_tuning_100k_from_50k": "run resumed Docker/local-reference P2P 50k-to-100k tuning proof",
+    "docker_proof_local": "run official baseline_5k Docker/local-reference P2P proof",
+    "docker_proof_10k": "run historical/diagnostic Docker/local-reference P2P 10k proof",
+    "docker_proof_50k": "run official shakedown_50k Docker/local-reference P2P proof",
+    "docker_proof_100k": "run official performance_100k Docker/local-reference P2P proof",
+    "docker_tuning_100k_from_50k": "run historical/diagnostic resumed 50k-to-100k proof",
+    "docker_proof_tip_once": "run one-time empty-state-to-tip credibility proof",
+    "docker_tip_maintenance": "run near-tip operational maintenance proof",
     "docker_proof_rpc_replay": "run Docker/local-reference RPC replay proof",
     "docker_diagnostic_sync_proof": "run nonstandard diagnostic Docker sync proof",
     "docker_probe_external": "run bounded probe against external peers",
@@ -398,13 +400,13 @@ def benchmark_kind_for_payload(payload: dict[str, Any]) -> str:
         return explicit
     target_height = integer(payload.get("target_height"), None)
     if target_height == 5000:
-        return "supporting_5k_p2p"
+        return "baseline_5k_p2p"
     if target_height == 10000:
-        return "supporting_10k_p2p"
+        return "diagnostic_10k_p2p"
     if target_height == 50000:
-        return "supporting_50k_p2p"
+        return "shakedown_50k_p2p"
     if target_height == 100000:
-        return "primary_100k_p2p"
+        return "performance_100k_p2p"
     return text(payload.get("category") or payload.get("artifact_kind"))
 
 
@@ -687,6 +689,12 @@ def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Pat
 
 
 def import_benchmark_gates(connection: sqlite3.Connection) -> None:
+    active_gate_ids = tuple(gate["gate_id"] for gate in BENCHMARK_GATES)
+    placeholders = ",".join("?" for _ in active_gate_ids)
+    connection.execute(
+        f"DELETE FROM benchmark_gates WHERE gate_id NOT IN ({placeholders})",
+        active_gate_ids,
+    )
     for gate in BENCHMARK_GATES:
         connection.execute(
             """

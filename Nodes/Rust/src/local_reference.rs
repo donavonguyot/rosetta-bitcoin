@@ -369,19 +369,19 @@ fn benchmark_kind(opts: &LocalReferenceOptions<'_>) -> String {
     }
     if is_p2p_source(opts) {
         return match opts.target {
-            5000 => "supporting_5k_p2p",
-            10000 => "supporting_10k_p2p",
-            50000 => "supporting_50k_p2p",
-            100000 => "primary_100k_p2p",
+            5000 => "baseline_5k_p2p",
+            10000 => "diagnostic_10k_p2p",
+            50000 => "shakedown_50k_p2p",
+            100000 => "performance_100k_p2p",
             _ => "local_reference_p2p",
         }
         .into();
     }
     match opts.target {
-        5000 => "supporting_5k_durable_local_reference_replay",
-        10000 => "supporting_10k_durable_local_reference_replay",
-        50000 => "supporting_50k_durable_local_reference_replay",
-        100000 => "primary_100k_durable_local_reference_replay",
+        5000 => "diagnostic_5k_durable_local_reference_replay",
+        10000 => "diagnostic_10k_durable_local_reference_replay",
+        50000 => "diagnostic_50k_durable_local_reference_replay",
+        100000 => "diagnostic_100k_durable_local_reference_replay",
         _ => "local_reference_replay",
     }
     .into()
@@ -399,14 +399,14 @@ fn benchmark_lane_for(opts: &LocalReferenceOptions<'_>) -> String {
         .into();
     }
     match (opts.target, is_p2p_source(opts)) {
-        (5000, true) => "supporting_5k_p2p",
-        (10000, true) => "supporting_10k_p2p",
-        (50000, true) => "supporting_50k_p2p",
-        (100000, true) => "primary_100k_p2p",
-        (5000, false) => "supporting_5k_rpc_replay",
-        (10000, false) => "supporting_10k_rpc_replay",
-        (50000, false) => "supporting_50k_rpc_replay",
-        (100000, false) => "primary_100k_rpc_replay",
+        (5000, true) => "baseline_5k_p2p",
+        (10000, true) => "diagnostic_10k_p2p",
+        (50000, true) => "shakedown_50k_p2p",
+        (100000, true) => "performance_100k_p2p",
+        (5000, false) => "diagnostic_5k_rpc_replay",
+        (10000, false) => "diagnostic_10k_rpc_replay",
+        (50000, false) => "diagnostic_50k_rpc_replay",
+        (100000, false) => "diagnostic_100k_rpc_replay",
         (_, true) => "local_reference_p2p",
         (_, false) => "local_reference_rpc",
     }
@@ -1062,10 +1062,10 @@ fn gate_id_for(opts: &LocalReferenceOptions<'_>) -> String {
         return "diagnostic_external_5k".into();
     }
     match opts.target {
-        5000 => "supporting_5k",
-        10000 => "supporting_10k",
-        50000 => "supporting_50k",
-        100000 => "primary_100k",
+        5000 => "baseline_5k",
+        10000 => "diagnostic_10k",
+        50000 => "shakedown_50k",
+        100000 => "performance_100k",
         _ => "diagnostic",
     }
     .into()

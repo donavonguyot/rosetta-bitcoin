@@ -121,8 +121,20 @@ def main() -> int:
     passed = not failures
     labels = {5000: "5k", 10000: "10k", 50000: "50k", 100000: "100k"}
     target_label = labels.get(target_height, "")
-    benchmark_gate = f"supporting_{target_label}" if target_label else "local_reference"
-    benchmark_kind = f"supporting_{target_label}_p2p" if target_label else "local_reference_p2p"
+    canonical_gates = {
+        5000: "baseline_5k",
+        10000: "diagnostic_10k",
+        50000: "shakedown_50k",
+        100000: "performance_100k",
+    }
+    canonical_kinds = {
+        5000: "baseline_5k_p2p",
+        10000: "diagnostic_10k_p2p",
+        50000: "shakedown_50k_p2p",
+        100000: "performance_100k_p2p",
+    }
+    benchmark_gate = canonical_gates.get(target_height, "local_reference")
+    benchmark_kind = canonical_kinds.get(target_height, "local_reference_p2p")
 
     artifact = {
         "implementation": "ElixirNode",
@@ -196,7 +208,7 @@ def main() -> int:
     proof_path = pathlib.Path(
         os.environ.get(
             "PROOF_PATH",
-            "Nodes/Shared/conformance/results/elixir_docker_supporting_5k_benchmark.json",
+            "Nodes/Shared/conformance/results/elixir_docker_baseline_5k_benchmark.json",
         )
     )
     proof_path.parent.mkdir(parents=True, exist_ok=True)

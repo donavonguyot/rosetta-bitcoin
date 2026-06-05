@@ -3,10 +3,10 @@ MVN = JAVA_HOME="$(JAVA_HOME)" PATH="$(JAVA_HOME)/bin:$$PATH" mvn
 MAVEN_OPTS ?= -Xmx4g -XX:+ExitOnOutOfMemoryError
 export MAVEN_OPTS
 DOCKER_PROOF_VOLUME ?= jbitnode_proof_data
-DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_supporting_5k_benchmark_$(shell date +%F).json
-DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_supporting_10k_benchmark_$(shell date +%F).json
-DOCKER_50K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_supporting_50k_benchmark_$(shell date +%F).json
-DOCKER_100K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_primary_100k_benchmark_$(shell date +%F).json
+DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_baseline_5k_benchmark_$(shell date +%F).json
+DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_diagnostic_10k_benchmark_$(shell date +%F).json
+DOCKER_50K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_shakedown_50k_benchmark_$(shell date +%F).json
+DOCKER_100K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_performance_100k_benchmark_$(shell date +%F).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/java_script_corpus_$(shell date +%F).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/java_script_corpus_docker_$(shell date +%F).json
 DOCKER_BENCHMARK_TARGET ?= 5000

@@ -38,11 +38,12 @@ def bool_or_none(value: Any) -> bool | None:
 
 
 def derive_gate(target_height: int) -> str:
-    if target_height == 100000:
-        return "primary_100k"
-    if target_height in {5000, 10000, 50000}:
-        return f"supporting_{target_height // 1000}k"
-    return "local_reference"
+    return {
+        5000: "baseline_5k",
+        10000: "diagnostic_10k",
+        50000: "shakedown_50k",
+        100000: "performance_100k",
+    }.get(target_height, "local_reference")
 
 
 def timing_buckets_ms(sync_timing: Any) -> dict[str, int]:

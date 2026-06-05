@@ -32,6 +32,8 @@
     "docker_proof_10k": "cd Nodes/Go && make docker-proof-10k",
     "docker_proof_50k": "cd Nodes/Go && make docker-proof-50k",
     "docker_proof_100k": "cd Nodes/Go && make docker-proof-100k",
+    "docker_proof_tip_once": null,
+    "docker_tip_maintenance": null,
     "docker_proof_rpc_replay": "cd Nodes/Go && make docker-proof-rpc-replay",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Go && make docker-smoke-once",

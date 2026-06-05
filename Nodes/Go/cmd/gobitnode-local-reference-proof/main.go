@@ -568,61 +568,61 @@ func benchmarkKind(target int, byteSource string) string {
 	if byteSource == "p2p" {
 		switch target {
 		case 5000:
-			return "supporting_5k_p2p"
+			return "baseline_5k_p2p"
 		case 10000:
-			return "supporting_10k_p2p"
+			return "diagnostic_10k_p2p"
 		case 50000:
-			return "supporting_50k_p2p"
+			return "shakedown_50k_p2p"
 		case 100000:
-			return "primary_100k_p2p"
+			return "performance_100k_p2p"
 		default:
 			return "local_reference_p2p"
 		}
 	}
 	switch target {
 	case 5000:
-		return "supporting_5k_durable_local_reference_replay"
+		return "diagnostic_5k_durable_local_reference_replay"
 	case 10000:
-		return "supporting_10k_durable_local_reference_replay"
+		return "diagnostic_10k_durable_local_reference_replay"
 	case 50000:
-		return "supporting_50k_durable_local_reference_replay"
+		return "diagnostic_50k_durable_local_reference_replay"
 	case 100000:
-		return "primary_100k_durable_local_reference_replay"
+		return "diagnostic_100k_durable_local_reference_replay"
 	default:
 		return "local_reference_replay"
 	}
 }
 
 func supportingLane(target int, lane string) string {
-	if target == 100000 {
-		if lane == "p2p" {
-			return "primary_100k_p2p"
+	if lane == "p2p" {
+		switch target {
+		case 5000:
+			return "baseline_5k_p2p"
+		case 10000:
+			return "diagnostic_10k_p2p"
+		case 50000:
+			return "shakedown_50k_p2p"
+		case 100000:
+			return "performance_100k_p2p"
 		}
-		return "primary_100k_rpc_replay"
 	}
 	label := targetLabel(target)
 	if label == "" {
-		if lane == "p2p" {
-			return "local_reference_p2p"
-		}
 		return "local_reference_rpc"
 	}
-	if lane == "p2p" {
-		return "supporting_" + label + "_p2p"
-	}
-	return "supporting_" + label + "_rpc_replay"
+	return "diagnostic_" + label + "_rpc_replay"
 }
 
 func gateID(target int) string {
 	switch target {
 	case 5000:
-		return "supporting_5k"
+		return "baseline_5k"
 	case 10000:
-		return "supporting_10k"
+		return "diagnostic_10k"
 	case 50000:
-		return "supporting_50k"
+		return "shakedown_50k"
 	case 100000:
-		return "primary_100k"
+		return "performance_100k"
 	default:
 		return "diagnostic"
 	}

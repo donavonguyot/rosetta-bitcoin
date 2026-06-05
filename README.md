@@ -8,7 +8,7 @@ root-owned monorepo. There is exactly one Git repository, at the workspace root.
 1. [`AGENTS.md`](AGENTS.md) — operating rules and current sync cautions.
 2. [`Docs/README.md`](Docs/README.md) — documentation ownership and cleanup index.
 3. [`Docs/git-topology.md`](Docs/git-topology.md) — root vs port ownership.
-4. [`Docs/port-baseline-5k.md`](Docs/port-baseline-5k.md) — strict first readiness baseline.
+4. [`Docs/port-baseline-5k.md`](Docs/port-baseline-5k.md) — strict first readiness baseline and benchmark-suite entry point.
 5. [`Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`](Nodes/Shared/consensus/CONSENSUS_RUNWAY.md) — corpus-to-tip consensus path.
 6. [`Docs/port-status.md`](Docs/port-status.md) — Project status projection guide.
 7. [`Nodes/Shared/SPEC.md`](Nodes/Shared/SPEC.md) — shared contracts and gate intent.
@@ -30,9 +30,12 @@ root-owned monorepo. There is exactly one Git repository, at the workspace root.
 
 ## Compliance Boundaries
 
-The first comparable readiness standard is the 5k baseline: RocksDB runtime
-truth, native crypto, the shared `45/45` script corpus, Docker local Reference P2P proof, fixed benchmark knobs, `core_spendable_v1` UTXO accounting, and
-Project-importable artifacts. See [`Docs/port-baseline-5k.md`](Docs/port-baseline-5k.md).
+The official benchmark suite is `baseline_5k`, `shakedown_50k`,
+`performance_100k`, `tip_once`, and `tip_maintenance`. The first comparable
+readiness standard is the 5k baseline: RocksDB runtime truth, native crypto, the
+shared `45/45` script corpus, Docker local Reference P2P proof, fixed benchmark
+knobs, `core_spendable_v1` UTXO accounting, and Project-importable artifacts.
+See [`Docs/port-baseline-5k.md`](Docs/port-baseline-5k.md).
 
 Core Node compliance requires separate evidence for consensus progress, RocksDB
 runtime truth, status import, and Docker runtime/proof behavior. Project
@@ -46,7 +49,8 @@ python3 Nodes/Shared/docker/validate_docker_contract.py
 Project reports the 5k baseline posture with:
 
 ```bash
-python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict
 ```
 

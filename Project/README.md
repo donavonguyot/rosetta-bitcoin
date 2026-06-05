@@ -57,7 +57,7 @@ python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 python3 Project/scripts/report.py --db Project/project.db --section command-surface
-python3 Project/scripts/report.py --db Project/project.db --section benchmark-gates
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
 ```
 
 Rebuild mission control from canonical evidence:

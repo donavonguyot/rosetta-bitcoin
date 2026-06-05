@@ -3,9 +3,9 @@ DATA_DIR ?= ./data-swift
 RESULT_DATE ?= $(shell date +%F)
 SCRIPT_RESULT ?= ../Shared/conformance/results/swift_script_corpus_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /results/swift_script_corpus_$(RESULT_DATE).json
-DOCKER_LOCAL_PROOF_RESULT ?= /results/swift_docker_supporting_5k_benchmark_$(RESULT_DATE).json
-DOCKER_10K_PROOF_RESULT ?= /results/swift_docker_supporting_10k_benchmark_$(RESULT_DATE).json
-DOCKER_50K_PROOF_RESULT ?= /results/swift_docker_supporting_50k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_PROOF_RESULT ?= /results/swift_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_10K_PROOF_RESULT ?= /results/swift_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_PROOF_RESULT ?= /results/swift_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_P2P_PEER ?= host.docker.internal:48333
 DOCKER_PROOF_VOLUME ?= swiftbitnode_proof_data
@@ -37,7 +37,7 @@ swift-node-proof-local:
 	$(SWIFT) run swiftbitnode proof-local \
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
-	  --output ../Shared/conformance/results/swift_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+	  --output ../Shared/conformance/results/swift_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 
 swift-node-sync-supervisor:
 	$(SWIFT) run swiftbitnode sync-supervisor \

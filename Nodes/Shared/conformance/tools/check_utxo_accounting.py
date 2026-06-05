@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
         "artifacts",
         nargs="*",
         type=Path,
-        help="Artifact JSON files to validate. Defaults to supporting 5k benchmark artifacts.",
+        help="Artifact JSON files to validate. Defaults to 5k benchmark artifacts.",
     )
     parser.add_argument(
         "--results-dir",
@@ -66,7 +66,12 @@ def as_int(value: Any, default: int = -1) -> int:
 def artifact_paths(args: argparse.Namespace) -> list[Path]:
     if args.artifacts:
         return args.artifacts
-    return sorted(args.results_dir.glob("*docker_supporting_5k_benchmark*.json"))
+    return sorted(
+        [
+            *args.results_dir.glob("*docker_baseline_5k_benchmark*.json"),
+            *args.results_dir.glob("*docker_supporting_5k_benchmark*.json"),
+        ]
+    )
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -86,7 +91,7 @@ def validate_artifact(path: Path, *, strict_metadata: bool) -> list[str]:
 
     if as_int(payload.get("target_height")) != TARGET_HEIGHT:
         return errors
-    if payload.get("benchmark_lane") != "supporting_5k_p2p":
+    if payload.get("benchmark_lane") not in {"baseline_5k_p2p", "supporting_5k_p2p"}:
         return errors
     if payload.get("result") != "passed":
         return errors

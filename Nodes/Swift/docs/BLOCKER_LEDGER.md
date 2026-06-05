@@ -13,19 +13,19 @@ passed: 45
 failed: 0
 artifact: Nodes/Shared/conformance/results/swift_script_corpus_2026-06-04.json
 
-supporting_5k:
+baseline_5k:
 result: passed
 validated_height: 5000
 chainstate_utxo_count: 4574
 chainstate_backend: rocksdb
-artifact: Nodes/Shared/conformance/results/swift_docker_supporting_5k_benchmark_2026-06-04.json
+artifact: Nodes/Shared/conformance/results/swift_docker_baseline_5k_benchmark_2026-06-04.json
 
-supporting_10k:
+diagnostic_10k:
 result: passed
 validated_height: 10000
 chainstate_utxo_count: 9519
 chainstate_backend: rocksdb
-artifact: Nodes/Shared/conformance/results/swift_docker_supporting_10k_benchmark_2026-06-04.json
+artifact: Nodes/Shared/conformance/results/swift_docker_diagnostic_10k_benchmark_2026-06-04.json
 ```
 
 ## Known Unproven Surfaces Before Tip Claim

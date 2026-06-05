@@ -7,10 +7,10 @@ implementation: RustNode
 node_id: rsbitnode-native-storage
 validated_height: 2 in bounded storage proof only
 local_reference_validated_height: 10000 in host and Docker Core RPC replay
-supporting_5k_p2p: passed in Docker local Reference P2P proof
-supporting_5k_p2p_artifact: Nodes/Shared/conformance/results/rust_docker_supporting_5k_benchmark_2026-06-04.json
-supporting_5k_p2p_validated_height: 5000
-supporting_5k_p2p_validated_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
+baseline_5k_p2p: passed in Docker local Reference P2P proof
+baseline_5k_p2p_artifact: Nodes/Shared/conformance/results/rust_docker_baseline_5k_benchmark_2026-06-04.json
+baseline_5k_p2p_validated_height: 5000
+baseline_5k_p2p_validated_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
 binary_gate_status: not_attempted
 current_blocker: none for bounded local-reference target 10000
 ```

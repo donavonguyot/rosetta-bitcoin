@@ -28,7 +28,7 @@
   },
   "proof_artifacts": {
     "script_corpus": "Nodes/Shared/conformance/results/{{port}}_script_corpus_<YYYY-MM-DD>.json",
-    "supporting_5k": "Nodes/Shared/conformance/results/{{port}}_docker_supporting_5k_benchmark_<YYYY-MM-DD>.json"
+    "baseline_5k": "Nodes/Shared/conformance/results/{{port}}_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json"
   },
   "known_caveats": []
 }

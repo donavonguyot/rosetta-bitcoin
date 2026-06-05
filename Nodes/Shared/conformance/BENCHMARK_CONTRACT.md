@@ -1,88 +1,38 @@
 # Benchmark Contract
 
-This contract defines the one standard cross-port benchmark for node
-implementation work in this workspace.
+RB benchmarks are developer-experience infrastructure. They measure how quickly
+and cleanly a port can prove correctness, expose bottlenecks, and reproduce
+evidence during development. They are not production node bragging rights, and
+they are not a permanent architecture mandate.
 
-The benchmark exists to compare realistic full-node progress across Rust, Go,
-Cpp, Java, Python, TypeScript, CSharp, and Elixir without weakening the binary
-gate. It is not a speed-to-tip contest and it is not a substitute for live P2P
-tip maintenance.
+The baseline stack is the current measuring stick: RocksDB runtime truth,
+native/baseline crypto, Docker, local Reference P2P, WAL enabled, fixed knobs,
+Core-style UTXO accounting, and Project-importable compact artifacts. Future
+storage or crypto experiments are welcome only when they declare their lane and
+meet the same proof burden.
 
-The binary gate is unchanged: from empty local state on Bitcoin testnet4, a node
-must reach and maintain tip while independently validating every stored connected
-block.
+## Official Suite
 
-## Primary Benchmark
+| Gate | Purpose | Command | Official lane |
+|------|---------|---------|---------------|
+| `baseline_5k` | Birth certificate. Cheap enough to run often. | `docker_proof_local` | `baseline_5k_p2p` |
+| `shakedown_50k` | Serious readiness and telemetry shakedown. | `docker_proof_50k` | `shakedown_50k_p2p` |
+| `performance_100k` | Primary optimization and ranking lane. | `docker_proof_100k` | `performance_100k_p2p` |
+| `tip_once` | One-time empty-state-to-tip credibility proof. | `docker_proof_tip_once` | `tip_once_p2p` |
+| `tip_maintenance` | Operational reality near/at tip. | `docker_tip_maintenance` | `tip_maintenance_p2p` |
 
-There is one official comparable benchmark family:
+Retired gates such as `supporting_10k` and `tuning_50k_to_100k` remain
+historical evidence only. They must not appear in default official Project
+reports or acceptance prompts.
 
-```text
-durable local-reference P2P sync to fixed target height
-```
+## Shared Official Stance
 
-Required conditions:
-
-- start from an empty port-owned datadir or Docker volume;
-- reuse warm Docker images/build cache during a benchmark campaign unless
-  `DOCKER_REBUILD=1` is explicitly requested;
-- keep WAL and normal durability settings enabled;
-- use local Reference Core as a P2P peer for comparable runs;
-- independently parse, validate, store, and connect every block;
-- connect blocks in height order;
-- enforce one writer per datadir;
-- preserve the datadir after the run;
-- support resume from `validated_height + 1` after interruption;
-- report status from maintained counters and stored metadata, not hot full
-  scans;
-- emit a compact JSON artifact under `Nodes/Shared/conformance/results/`;
-- keep `binary_gate_status=not_attempted`.
-
-The benchmark target is fixed at `100000` because it covers the major early
-consensus blockers, the 66k-72k UTXO expansion, and the 87k-88k slow-block
-region without chasing a moving tip.
-
-## Supporting Gates
-
-These fixed targets are useful development gates, but they are not the primary
-benchmark:
-
-| Target | Role |
-|--------|------|
-| `5000` | First readiness gate. Proves Docker/local-reference wiring, native storage ownership, status/proof artifacts, fixed knobs, UTXO accounting, and clean prior script-corpus proof. |
-| `10000` | Early consensus checkpoint. Extends the first gate through the first P2TR key-path region around 6975 without becoming the primary endurance benchmark. |
-| `50000` | Midrange regression gate. Catches heavier block/script behavior before the largest UTXO expansion. |
-| `100000` | Primary benchmark. This is the standard comparison target. |
-
-Tip runs remain useful for milestone confidence or binary-gate-adjacent work,
-but a moving tip is not the routine benchmark target. A tip artifact must record
-the exact Reference height/hash at start and finish.
-
-## 5k Supporting Gate
-
-The first standardized gate for port-by-port work is:
+All fixed-height official lanes require:
 
 ```text
-supporting_5k_p2p
-```
-
-When combined with RocksDB runtime truth, native crypto, the Shared script
-corpus `45/45`, and Project strict preflight, this lane is the workspace's 5k
-baseline. The baseline proves readiness, comparability, and reporting discipline;
-it is not a speed ranking and it is not binary-gate evidence.
-
-Required metadata:
-
-```text
-benchmark_contract_version = 1
-benchmark_kind = supporting_5k_p2p
-benchmark_lane = supporting_5k_p2p
-utxo_accounting_policy = core_spendable_v1
-target_height = 5000
-header_target_height = 5000
-target_label = 5k
 runtime_surface = docker
 peer_mode = local_reference
-peer = host.docker.internal:48333 or Reference service:48333
+peer = host.docker.internal:48333 or reference service:48333
 byte_source = local_reference_p2p
 proof_mode = p2p_sync
 prefetch_depth = 4
@@ -91,291 +41,140 @@ rocksdb_wal_disabled = false
 fresh_state = true
 resume_supported = true
 binary_gate_status = not_attempted
-```
-
-The gate passes only when `validated_height >= 5000`, `current_blocker = null`,
-and the final validated hash matches the port-validated block at height `5000`.
-It is the official comparable readiness gate for Docker/local-reference P2P
-wiring, native storage ownership, status/proof artifacts, and deterministic
-reporting. It is still not binary-gate evidence.
-
-The 5k lane is not where a new port discovers known script rules. The known
-early spend path, including height `739`, is already represented in the Shared
-script corpus and consensus rule ledger. A port that fails there should fix its
-script-corpus implementation and rerun corpus proof, not treat block `739` as a
-fresh live-discovery assignment.
-
-The 5k baseline requires RocksDB and native crypto. Alternate storage engines,
-managed or pure crypto proof paths, WAL-off runs, reused datadirs, partial script
-corpus results, and missing timing metadata are diagnostic or research evidence,
-not baseline evidence.
-
-For this gate, `chainstate_utxo_count` must use Core-style spendable accounting:
-active spendable UTXO entries only, excluding genesis coinbase and empty or
-`OP_RETURN` / `0x6a` outputs. At height `5000`, hash
-`000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2`, the
-expected `chainstate_utxo_count` is `4574`. Raw unspent output counts are
-diagnostic only.
-
-### Replay Evidence Lane
-
-Local Reference RPC replay remains valuable consensus and storage evidence, but
-it is a separate lane:
-
-```text
-benchmark_lane = supporting_5k_rpc_replay
-peer_mode = local_reference_rpc
-byte_source = local_reference_rpc
-proof_mode = rpc_replay
-```
-
-Replay artifacts may pass the target gate, and Project should retain them as
-evidence. They must not be cross-ranked against P2P sync artifacts unless a
-separate RPC replay report is requested.
-
-Preferred Docker command surface:
-
-```text
-docker_warm
-docker_proof_local
-docker_proof_10k
-docker_proof_rpc_replay
-```
-
-Run `docker_warm` before a benchmark campaign. Use `docker_proof_local` only for
-the official local Reference P2P 5k comparable lane. Use `docker_proof_10k` for
-the official local Reference P2P 10k comparable lane. Use explicit replay
-command keys such as `docker_proof_rpc_replay` for RPC byte-source proof. Ports
-may keep idiomatic target names, but Project records the command through
-`port_command_surface` and records benchmark evidence through
-`benchmark_gate_matrix` and `benchmark_comparability`.
-
-## 10k Supporting Gate
-
-The first standardized performance gate is:
-
-```text
-supporting_10k_p2p
-```
-
-This lane deliberately reuses the 5k stance so the extra 5,000 blocks measure
-port behavior rather than harness drift:
-
-```text
-benchmark_contract_version = 1
-benchmark_kind = supporting_10k_p2p
-benchmark_lane = supporting_10k_p2p
 utxo_accounting_policy = core_spendable_v1
-target_height = 10000
-header_target_height = 10000
-target_label = 10k
-runtime_surface = docker
-peer_mode = local_reference
-peer = host.docker.internal:48333 or Reference service:48333
-byte_source = local_reference_p2p
-proof_mode = p2p_sync
-prefetch_depth = 4
-script_runner_mode = parallel
-rocksdb_wal_disabled = false
-fresh_state = true
-resume_supported = true
-binary_gate_status = not_attempted
 ```
 
-At height `10000`, the expected `core_spendable_v1`
-`chainstate_utxo_count` is `9519`. The raw unspent-output family is larger
-(`19100` excluding genesis), but raw output counts are diagnostic only and must
-not be reported as `chainstate_utxo_count`. Historical long-sync or RPC replay
-artifacts that reached 10k remain useful evidence, but Project should classify
-them as evidence-only unless they match the lane above.
+RPC replay, WAL-off runs, reused state, alternate stores, managed/pure crypto,
+missing metadata, and non-Docker artifacts are diagnostic or experimental
+evidence. Project may import them, but it must not rank them as official
+comparable evidence.
 
-### Preflight Before Each Run
+## Gate Requirements
 
-Before starting any official supporting-gate or benchmark run, preflight the
-target port through Project:
+### `baseline_5k`
 
-```bash
-python3 Project/scripts/preflight_benchmark_gate.py \
-  --db Project/project.db \
-  --gate supporting_5k \
-  --port <port>
+Required:
 
-python3 Project/scripts/preflight_benchmark_gate.py \
-  --db Project/project.db \
-  --gate supporting_10k \
-  --port <port>
-```
+- Target/header height `5000`.
+- Expected hash `000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2`.
+- `chainstate_utxo_count=4574`.
+- Clean port-owned script corpus proof: `port.script_corpus_result.v1`,
+  `fixture_count=45`, `passed=45`, `failed=0`.
+- Final artifact timing buckets: `utxo_load`, `script_verify`, `utxo_apply`,
+  `commit`, and `block_connect_store_commit`.
 
-For a whole-port readiness sweep:
+Live chat telemetry is optional for 5k because the run is intentionally short.
 
-```bash
-python3 Project/scripts/preflight_benchmark_gate.py \
-  --db Project/project.db \
-  --gate supporting_10k \
-  --all
-```
+### `shakedown_50k`
 
-The preflight is read-only. It confirms that Project knows the preferred Docker
-command, Docker contract status, local-reference P2P mode, durable proof volume,
-and required artifact metadata before a run starts. It also enforces the
-official WAL stance: `rocksdb_wal_disabled=false`. A missing current result is
-not a preflight failure; it means that port still needs the run. A replay,
-WAL-off, wrong-header-target, wrong-prefetch, single-runner, non-Docker, or
-missing-fresh-state artifact is rejected as non-comparable even when it remains
-valid evidence.
+Required:
 
-Strict baseline acceptance uses the composed baseline preflight:
+- Target/header height `50000`.
+- Expected `chainstate_utxo_count=568855`.
+- Parseable `benchmark.telemetry_tick.v1` progress.
+- Slow-block summary.
+- Long-run timing buckets: `p2p_fetch`, `block_parse_validate`, `utxo_load`,
+  `script_verify`, `utxo_apply`, `commit`, and
+  `block_connect_store_commit`.
+- No blocker and no stale/reused state.
 
-```bash
-python3 Project/scripts/preflight_port_baseline.py \
-  --db Project/project.db \
-  --port <port> \
-  --strict
-```
+This is the first serious shakedown. It replaces 10k as the meaningful
+post-baseline readiness gate.
 
-## Diagnostic Runs
+### `performance_100k`
 
-Ports may still run disposable diagnostics while tuning, for example WAL-off
-proofs, reduced targets, copied datadirs, profiler runs, or single-block heavy
-block probes.
+Required:
 
-Diagnostic runs must be labeled `diagnostic`, `fast`, `wal_off`, `profile`, or
-another explicit non-benchmark category. They must not be presented as the
-official benchmark, and they must not be compared directly against the primary
-benchmark.
+- Target/header height `100000`.
+- Expected hash `0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1`.
+- `chainstate_utxo_count=13154991`.
+- Full `benchmark.telemetry_tick.v1` progress.
+- Slow-block and script-family summaries where the port can provide them.
+- Complete timing import into Project.
 
-## Required Artifact Fields
+This is the primary performance comparison lane for optimization work.
 
-Primary benchmark JSON should include these top-level fields whenever
-applicable:
+### `tip_once`
+
+Required:
+
+- Empty state to current testnet4 tip.
+- Exact Reference start and finish height/hash.
+- Final validated tip height/hash and status artifact.
+- No skipped consensus rules.
+- Telemetry summary and final Project-importable proof.
+
+This is a one-time credibility milestone, not a routine drag race.
+
+### `tip_maintenance`
+
+Required:
+
+- Start near or at tip.
+- Maintain `blocks_current` through the maintenance window.
+- Record peer reconnects, stalls, restart recovery, and reorg-handling posture.
+- Emit health/status telemetry.
+
+This lane proves node reality. It is not ranked by empty-sync speed.
+
+## Telemetry Contract
+
+Long runs (`shakedown_50k`, `performance_100k`, `tip_once`, and
+`tip_maintenance`) must emit lines consumable by
+`Project/scripts/monitor_benchmark_telemetry.py`:
 
 ```text
-implementation
-runtime_surface
-benchmark_contract_version
-benchmark_lane
-byte_source
-proof_mode
-benchmark_kind
-target_height
-header_target_height
-target_label
-reference_start_height
-reference_start_hash
-reference_finish_height
-reference_finish_hash
-validated_height
-validated_hash
-blocks_fetched
-blocks_connected
+benchmark.telemetry_tick {"schema":"benchmark.telemetry_tick.v1", ...}
+```
+
+Required tick fields:
+
+```text
+schema
+port
+gate
+target_height or tip mode
+height
+percent when bounded
+elapsed_ms
+rate_recent_blocks_per_second
+rate_total_blocks_per_second
+phase
+utxos
+last_block_ms
 current_blocker
-binary_gate_status
-chainstate_backend
-utxo_accounting_policy
-chainstate_utxo_count
-native_crypto_backend
-peer_mode
-peer
-script_runner_mode
-rocksdb_wal_disabled
-prefetch_depth
-fresh_state
-resume_supported
-result
-failures
+timing_buckets_ms
 ```
 
-Required benchmark values:
+Required timing buckets inside `timing_buckets_ms`:
 
 ```text
-benchmark_contract_version = 1
-benchmark_kind = primary_100k_p2p
-target_height = 100000
-target_label = 100k
-peer_mode = local_reference
-byte_source = local_reference_p2p
-proof_mode = p2p_sync
-rocksdb_wal_disabled = false
-resume_supported = true
-binary_gate_status = not_attempted
+p2p_fetch
+block_parse_validate
+utxo_load
+script_verify
+utxo_apply
+commit
+block_connect_store_commit
 ```
 
-The benchmark passes only when `validated_height >= 100000`,
-`current_blocker = null`, and the final validated hash matches the locally
-validated block at height `100000`.
+Validate telemetry with:
 
-## Timing Buckets
-
-Use stable names so ports can be compared:
-
-| Bucket | Meaning |
-|--------|---------|
-| `total_wall` | End-to-end wall time for the proof command. |
-| `rpc_getblockhash` | Reference RPC block-hash lookup time. |
-| `rpc_getblock` | Reference RPC raw-block fetch time. |
-| `block_parse_validate` | Local block parse, hash, PoW, linkage, merkle, and tx decode validation. |
-| `block_store` | Raw block or block-index storage time outside chainstate connect. |
-| `metadata_store` | Non-chainstate proof/progress metadata writes. |
-| `connect_total` | Total local block connect time. |
-| `prevout_batch_load` | External prevout batch lookup time. |
-| `script_verify` | Script verification time. Label CPU-summed time if it is not wall time. |
-| `utxo_apply` | UTXO/undo mutation preparation before commit. |
-| `commit` | Storage commit/write-batch time. |
-| `block_connect_store_commit` | Whole connect/store/commit wall-clock stage when a port reports one aggregate bucket. |
-
-Artifacts should also record a `slow_blocks` list with at least height and
-elapsed milliseconds.
-
-## Resource Telemetry
-
-Docker benchmark runs should record or be accompanied by:
-
-- container name or volume name;
-- CPU percent samples;
-- memory usage samples;
-- block IO samples;
-- whether the run was fresh, resumed, interrupted, or completed cleanly.
-
-The compact proof JSON is the canonical evidence. Long logs and live datadirs
-remain generated artifacts and should not be committed unless a separate
-retention rule says otherwise.
-
-## Naming
-
-Use this result name for primary benchmark artifacts:
-
-```text
-<port>_<surface>_primary_100k_benchmark_<YYYY-MM-DD>.json
+```bash
+python3 Project/scripts/validate_benchmark_telemetry.py --require-bounded-target <log>
 ```
 
-Examples:
+## Project Acceptance
 
-```text
-rust_docker_primary_100k_benchmark_2026-06-04.json
-go_docker_primary_100k_benchmark_2026-06-04.json
-cpp_docker_primary_100k_benchmark_2026-06-04.json
+Project owns current benchmark truth:
+
+```bash
+python3 Project/scripts/import_all.py --db Project/project.db --rebuild
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --gate baseline_5k --all
+python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --gate shakedown_50k --all
+python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --gate performance_100k --all
 ```
 
-Existing legacy filenames remain valid historical evidence, but new benchmark
-work should use this naming shape when practical.
-
-Use this result name for 5k supporting-gate artifacts:
-
-```text
-<port>_<surface>_supporting_5k_benchmark_<YYYY-MM-DD>.json
-```
-
-Use this result name for 10k supporting-gate artifacts:
-
-```text
-<port>_<surface>_supporting_10k_benchmark_<YYYY-MM-DD>.json
-```
-
-## Non-Goals
-
-- Do not use benchmark results to claim live P2P sync.
-- Do not use local Reference RPC as a validation oracle.
-- Do not skip unsupported consensus rules to improve throughput.
-- Do not hide WAL-off or disposable proof settings.
-- Do not treat tip-height churn as a benchmark failure when a fixed target run
-  passed.
+Historical artifacts remain in `Nodes/Shared/conformance/results/`, but the
+official suite reports only the current gates above.

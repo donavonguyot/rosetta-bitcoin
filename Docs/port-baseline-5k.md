@@ -1,12 +1,14 @@
 # 5k Port Baseline
 
-The 5k baseline is the first standard a port must clear before its performance
-numbers or readiness claims are treated as comparable. It is deliberately strict:
-the point is to prove the same runtime stance across ports, not to reward a
-clever shortcut.
+The 5k baseline is the first standard a port must clear before readiness claims
+are treated as comparable. It is the birth certificate in the official benchmark
+suite, not a permanent architecture lock-in.
 
 The consensus runway continues this baseline toward longer validation stages and
 tip. See `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`.
+The benchmark suite continues through `shakedown_50k`, `performance_100k`,
+`tip_once`, and `tip_maintenance`; see
+`Nodes/Shared/conformance/BENCHMARK_CONTRACT.md`.
 
 ## Baseline Requirements
 
@@ -94,7 +96,9 @@ baseline projection:
 
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
-python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --gate baseline_5k --port <port>
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict
 python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --port <port> --stage 5k --strict
 python3 Nodes/Shared/conformance/tools/validate_script_corpus_result.py Nodes/Shared/conformance/results/<port>_script_corpus_*.json

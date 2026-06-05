@@ -56,7 +56,7 @@ class TelemetryContractTests(unittest.TestCase):
                 "python3",
                 str(SCRIPT_DIR / "emit_benchmark_telemetry_tick.py"),
                 "--gate",
-                "supporting_5k",
+                "baseline_5k",
                 "--target-height",
                 "5000",
                 "--started-ms",
@@ -80,7 +80,7 @@ class TelemetryContractTests(unittest.TestCase):
         tick = json.loads(proc.stdout[len(prefix) :])
         self.assertEqual(tick["schema"], "benchmark.telemetry_tick.v1")
         self.assertEqual(tick["port"], "csharp")
-        self.assertEqual(tick["gate"], "supporting_5k")
+        self.assertEqual(tick["gate"], "baseline_5k")
         self.assertEqual(tick["target_height"], 5000)
         self.assertEqual(tick["height"], 5000)
         self.assertEqual(tick["utxos"], 4574)

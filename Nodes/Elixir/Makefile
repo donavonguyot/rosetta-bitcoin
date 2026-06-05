@@ -8,9 +8,9 @@ DOCKER_PROOF_VOLUME ?= exbitnode_proof_data
 DOCKER_SYNC_VOLUME ?= exbitnode_sync_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/elixir_rocksdb_codec_v2_storage.json
 RESULT_DATE ?= $(shell date +%F)
-DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_5k_benchmark_$(RESULT_DATE).json
-DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_10k_benchmark_$(RESULT_DATE).json
-DOCKER_50K_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_50k_benchmark_$(RESULT_DATE).json
+DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_HEADER_TARGET ?= $(DOCKER_BENCHMARK_TARGET)
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5001
@@ -129,7 +129,7 @@ docker-proof-50k:
 	DOCKER_PROOF_VOLUME=exbitnode_50k_proof_data RUNTIME_SURFACE=docker \
 	  PEERS=$(DOCKER_PEERS) \
 	  HEADERS_MAX=50000 HEADER_BATCHES_MAX=100 BLOCKS_MAX=50001 \
-	  TARGET_BLOCK_HEIGHT=50000 BENCHMARK_GATE=supporting_50k \
+	  TARGET_BLOCK_HEIGHT=50000 BENCHMARK_GATE=shakedown_50k \
 	  BLOCK_PREFETCH_DEPTH=4 SYNC_TIMING=1 \
 	  SYNC_SNAPSHOT_SEC=$(or $(SYNC_SNAPSHOT_SEC),5) \
 	  SYNC_SNAPSHOT_BLOCKS=$(or $(SYNC_SNAPSHOT_BLOCKS),0) \
