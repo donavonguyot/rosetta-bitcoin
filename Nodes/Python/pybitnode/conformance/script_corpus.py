@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import subprocess
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from pybitnode.consensus.secp256k1 import native_crypto_backend_metadata
 from pybitnode.consensus.script.verify import ScriptVerifyError, verify_transaction_input
 from pybitnode.messages.transaction import Transaction
 
@@ -44,11 +46,11 @@ def load_manifest(path: Path | None = None) -> dict[str, Any]:
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
-def _first_path(entry: dict[str, Any], category: str) -> Path | None:
+def _first_path(entry: dict[str, Any], category: str, manifest_dir: Path) -> Path | None:
     values = entry.get("files", {}).get(category, [])
     if not values:
         return None
-    return default_manifest_path().parent / values[0]
+    return manifest_dir / values[0]
 
 
 def _read_hex(path: Path) -> bytes:
@@ -63,8 +65,8 @@ def _prevout_tuple(prevout: dict[str, Any]) -> tuple[int, bytes]:
     return int(amount), bytes.fromhex(str(spk))
 
 
-def _spent_prevouts(entry: dict[str, Any]) -> tuple[tuple[int, bytes], ...]:
-    prevouts_path = _first_path(entry, "prevouts")
+def _spent_prevouts(entry: dict[str, Any], manifest_dir: Path) -> tuple[tuple[int, bytes], ...]:
+    prevouts_path = _first_path(entry, "prevouts", manifest_dir)
     if prevouts_path is not None:
         prevouts = json.loads(prevouts_path.read_text(encoding="utf-8"))
         if not isinstance(prevouts, list):
@@ -73,7 +75,7 @@ def _spent_prevouts(entry: dict[str, Any]) -> tuple[tuple[int, bytes], ...]:
 
     amount = entry.get("prev_amount_sats")
     spk_hex = entry.get("spent_script_pubkey")
-    prev_spk_path = _first_path(entry, "prev_spk")
+    prev_spk_path = _first_path(entry, "prev_spk", manifest_dir)
     if prev_spk_path is not None:
         spk_hex = prev_spk_path.read_text(encoding="ascii").strip()
     if amount is None or not spk_hex:
@@ -81,10 +83,10 @@ def _spent_prevouts(entry: dict[str, Any]) -> tuple[tuple[int, bytes], ...]:
     return ((int(amount), bytes.fromhex(str(spk_hex))),)
 
 
-def _target_prevout(entry: dict[str, Any], fallback: tuple[int, bytes] | None = None) -> tuple[int, bytes]:
+def _target_prevout(entry: dict[str, Any], manifest_dir: Path, fallback: tuple[int, bytes] | None = None) -> tuple[int, bytes]:
     amount = entry.get("prev_amount_sats")
     spk_hex = entry.get("spent_script_pubkey")
-    prev_spk_path = _first_path(entry, "prev_spk")
+    prev_spk_path = _first_path(entry, "prev_spk", manifest_dir)
     if prev_spk_path is not None:
         spk_hex = prev_spk_path.read_text(encoding="ascii").strip()
     if amount is not None and spk_hex:
@@ -98,12 +100,13 @@ def _align_spent_prevouts(
     entry: dict[str, Any],
     tx: Transaction,
     spent_prevouts: tuple[tuple[int, bytes], ...],
+    manifest_dir: Path,
 ) -> tuple[tuple[int, bytes], ...]:
     input_index = int(entry["input_index"])
     if len(spent_prevouts) == len(tx.inputs):
         return spent_prevouts
     fallback = spent_prevouts[0] if spent_prevouts else None
-    target = _target_prevout(entry, fallback)
+    target = _target_prevout(entry, manifest_dir, fallback)
     aligned = list(spent_prevouts)
     while len(aligned) < len(tx.inputs):
         aligned.append((0, b""))
@@ -111,8 +114,8 @@ def _align_spent_prevouts(
     return tuple(aligned)
 
 
-def load_case(entry: dict[str, Any]) -> ScriptCorpusCase:
-    tx_path = _first_path(entry, "tx")
+def load_case(entry: dict[str, Any], manifest_dir: Path) -> ScriptCorpusCase:
+    tx_path = _first_path(entry, "tx", manifest_dir)
     if tx_path is None:
         raise ValueError(f"fixture has no transaction file: {entry['fixture_id']}")
     payload = _read_hex(tx_path)
@@ -121,7 +124,7 @@ def load_case(entry: dict[str, Any]) -> ScriptCorpusCase:
         raise ValueError(f"transaction parser consumed {consumed} of {len(payload)} bytes for {entry['fixture_id']}")
 
     input_index = int(entry["input_index"])
-    spent_prevouts = _align_spent_prevouts(entry, tx, _spent_prevouts(entry))
+    spent_prevouts = _align_spent_prevouts(entry, tx, _spent_prevouts(entry, manifest_dir), manifest_dir)
     if input_index >= len(spent_prevouts):
         raise ValueError(f"fixture input_index {input_index} has no matching prevout: {entry['fixture_id']}")
     amount, script_pubkey = spent_prevouts[input_index]
@@ -142,10 +145,12 @@ def load_case(entry: dict[str, Any]) -> ScriptCorpusCase:
 
 
 def load_cases(*, manifest_path: Path | None = None) -> list[ScriptCorpusCase]:
-    manifest = load_manifest(manifest_path)
+    resolved_manifest_path = manifest_path or default_manifest_path()
+    manifest = load_manifest(resolved_manifest_path)
+    manifest_dir = resolved_manifest_path.parent
     cases: list[ScriptCorpusCase] = []
     for entry in manifest.get("fixtures", []):
-        cases.append(load_case(entry))
+        cases.append(load_case(entry, manifest_dir))
     return cases
 
 
@@ -197,22 +202,38 @@ def git_commit() -> str:
 
 
 def run_corpus(*, manifest_path: Path | None = None) -> dict[str, Any]:
+    crypto = native_crypto_backend_metadata()
+    if not crypto.get("native"):
+        raise RuntimeError("native crypto backend unavailable")
     cases = load_cases(manifest_path=manifest_path)
     results = [run_case(case) for case in cases]
     passed = sum(1 for result in results if result["result"] == "passed")
     failed = sum(1 for result in results if result["result"] == "failed")
+    resolved_manifest_path = manifest_path or default_manifest_path()
+    try:
+        manifest_label = str(resolved_manifest_path.relative_to(repo_root()))
+    except Exception:
+        manifest_label = str(resolved_manifest_path)
     return {
+        "schema": "port.script_corpus_result.v1",
         "implementation": "PythonNode",
+        "port": "python",
         "category": "script_corpus",
-        "runtime_surface": "host",
+        "runtime_surface": os.environ.get("PYBITNODE_RUNTIME_SURFACE", "host"),
+        "native_crypto_backend": crypto.get("backend"),
         "captured_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "commit": git_commit(),
         "python_version": platform.python_version(),
-        "manifest": str((manifest_path or default_manifest_path()).relative_to(repo_root())),
+        "manifest": manifest_label,
         "fixture_count": len(results),
         "passed": passed,
         "failed": failed,
         "result": "passed" if failed == 0 else "failed",
+        "verifier": {
+            "engine": "python_native",
+            "crypto_backend": crypto.get("backend"),
+            "source": "Nodes/Python/pybitnode/consensus/script",
+        },
         "results": results,
     }
 
@@ -222,13 +243,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", default="")
     parser.add_argument(
         "--result-path",
-        default=str(repo_root() / "Nodes/Shared/conformance/results/python_script_corpus_2026-06-03.json"),
+        default="",
     )
     args = parser.parse_args(argv)
 
     manifest_path = Path(args.manifest) if args.manifest else None
     result = run_corpus(manifest_path=manifest_path)
-    out = Path(args.result_path)
+    out = Path(args.result_path) if args.result_path else repo_root() / "Nodes/Shared/conformance/results/python_script_corpus_2026-06-04.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({key: result[key] for key in ("fixture_count", "passed", "failed", "result")}, indent=2))

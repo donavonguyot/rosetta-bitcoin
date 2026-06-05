@@ -7,7 +7,7 @@
   "blocks_connected": 5000,
   "blocks_fetched": 5000,
   "byte_source": "local_reference_p2p",
-  "captured_at": "2026-06-04T20:52:15Z",
+  "captured_at": "2026-06-05T01:02:18Z",
   "category": "local_reference_sync",
   "chain": "testnet4",
   "chainstate_backend": "rocksdb",
@@ -17,7 +17,7 @@
   "current_blocker": null,
   "datadir": "/data",
   "docker_volume": "tsbitnode_proof_data",
-  "elapsed_ms": 11308,
+  "elapsed_ms": 11583,
   "failures": [],
   "fresh_state": true,
   "header_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
@@ -52,14 +52,14 @@
     "chain": "testnet4",
     "chainstate_backend": "rocksdb",
     "chainstate_backend_path": "/data/chainstate-rocksdb",
-    "chainstate_generation_id": "ts-rocksdb-7d830589-0928-407a-9a21-2ef62edb9a9e",
+    "chainstate_generation_id": "ts-rocksdb-7dc2ca9c-a1c2-476d-85ee-1bf7181175e6",
     "chainstate_status": "usable",
     "chainstate_utxo_count": 4574,
     "codec_version": "2",
     "crypto_context_mode": "libsecp256k1/reused_context_per_worker",
     "current_blocker": null,
     "datadir": "/data",
-    "generation_id": "ts-rocksdb-7d830589-0928-407a-9a21-2ef62edb9a9e",
+    "generation_id": "ts-rocksdb-7dc2ca9c-a1c2-476d-85ee-1bf7181175e6",
     "header_count": 4,
     "header_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
     "header_height": 5000,
@@ -70,7 +70,7 @@
     "native_crypto_backend": "native_libsecp256k1",
     "native_storage": true,
     "network": "testnet4",
-    "node_id": "ts-rocksdb-7d830589-0928-407a-9a21-2ef62edb9a9e",
+    "node_id": "ts-rocksdb-7dc2ca9c-a1c2-476d-85ee-1bf7181175e6",
     "ok": true,
     "runtime_status": "not_running",
     "runtime_surface": "native",
@@ -79,7 +79,8 @@
     "stored_block_height": 5000,
     "sync_status": "blocks_current",
     "taproot_tweak_backend": "native_libsecp256k1",
-    "updated_at": "2026-06-04T20:52:14Z",
+    "updated_at": "2026-06-05T01:02:18Z",
+    "utxo_accounting_policy": "core_spendable_v1",
     "utxo_count": 4574,
     "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
     "validated_height": 5000
@@ -95,11 +96,16 @@
   "timing_summary": {
     "slow_blocks": [],
     "stage_totals_ms": {
-      "block_connect_store_commit": 11308
+      "block_connect_store_commit": 11583,
+      "commit": 0,
+      "script_verify": 0,
+      "utxo_apply": 0,
+      "utxo_load": 0
     },
-    "total_ms": 11308
+    "total_ms": 11583
   },
-  "updated_at": "2026-06-04T20:52:15Z",
+  "updated_at": "2026-06-05T01:02:18Z",
+  "utxo_accounting_policy": "core_spendable_v1",
   "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
   "validated_height": 5000
 }

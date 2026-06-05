@@ -7,10 +7,12 @@ DOCKER_SYNC_TARGET ?= 5000
 DOCKER_SYNC_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/typescript_docker_supporting_5k_benchmark_$(shell date +%F).json
+SCRIPT_RESULT ?= ../Shared/conformance/results/typescript_script_corpus_$(shell date +%F).json
+DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/typescript_script_corpus_docker_$(shell date +%F).json
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: build test native-status storage-proof docker-config docker-build docker-warm docker-typescript-native-proof docker-typescript-sync-status docker-typescript-sync-supervisor docker-typescript-sync-stop docker-typescript-sync-resume docker-smoke-once
+.PHONY: build test native-status storage-proof script-corpus docker-config docker-build docker-warm docker-script-corpus docker-typescript-native-proof docker-typescript-sync-status docker-typescript-sync-supervisor docker-typescript-sync-stop docker-typescript-sync-resume docker-smoke-once
 
 build:
 	npm run build
@@ -24,6 +26,9 @@ native-status:
 storage-proof:
 	DATA_DIR=$(DATA_DIR) node dist/cli/storageProof.js --datadir $(DATA_DIR)
 
+script-corpus:
+	SECP256K1_BACKEND=native TSBITNODE_RUNTIME_SURFACE=host node dist/cli/scriptCorpus.js --result-path $(SCRIPT_RESULT)
+
 docker-config:
 	$(DOCKER_COMPOSE) config
 
@@ -31,6 +36,15 @@ docker-build:
 	$(DOCKER_COMPOSE) build tsbitnode-sync-proof tsbitnode-sync-status
 
 docker-warm: docker-build
+
+docker-script-corpus:
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build tsbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	SECP256K1_BACKEND=native TSBITNODE_RUNTIME_SURFACE=docker $(DOCKER_COMPOSE) run --rm --no-deps \
+	  -v $(abspath ../Shared/conformance):/shared/conformance \
+	  tsbitnode-sync-proof node dist/cli/scriptCorpus.js \
+	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
+	  --result-path $(DOCKER_SCRIPT_RESULT) \
+	  --runtime-surface docker
 
 docker-typescript-native-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build tsbitnode-sync-proof tsbitnode-sync-status; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi

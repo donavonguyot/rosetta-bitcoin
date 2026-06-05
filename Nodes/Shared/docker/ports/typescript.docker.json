@@ -25,6 +25,7 @@
     "docker_build": "cd Nodes/TypeScript && make docker-build",
     "docker_warm": "cd Nodes/TypeScript && make docker-warm",
     "docker_status": "cd Nodes/TypeScript && make docker-typescript-sync-status",
+    "docker_script_corpus": "cd Nodes/TypeScript && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/TypeScript && make docker-typescript-native-proof",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/TypeScript && make docker-typescript-sync-supervisor",

@@ -5,6 +5,11 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { transactionDeserialize, type Transaction } from "../messages/transaction.js";
+import {
+  ensureNativeSecp256k1Available,
+  secp256k1BackendInfo,
+  selectedSecp256k1Backend,
+} from "../consensus/cryptoBackend.js";
 import { ScriptVerifyError, verifyTransactionInput } from "../consensus/script/verify.js";
 import { VERSION } from "../version.js";
 import { parseCli } from "./args.js";
@@ -285,15 +290,23 @@ function gitCommit(): string {
   }
 }
 
-export function runCorpus(manifestPath: string, fixtureId = ""): JsonObject {
+export function runCorpus(manifestPath: string, fixtureId = "", runtimeSurface = "host"): JsonObject {
+  if (selectedSecp256k1Backend() !== "native") {
+    throw new Error("script corpus requires SECP256K1_BACKEND=native");
+  }
+  ensureNativeSecp256k1Available();
+  const cryptoInfo = secp256k1BackendInfo();
   const cases = loadCases(manifestPath, fixtureId);
   const results = cases.map(runCase);
   const passed = results.filter((result) => result.result === "passed").length;
   const failed = results.filter((result) => result.result === "failed").length;
   return {
+    schema: "port.script_corpus_result.v1",
     implementation: "TypeScriptNode",
+    port: "typescript",
     category: "script_corpus",
-    runtime_surface: "host",
+    runtime_surface: runtimeSurface,
+    native_crypto_backend: String(cryptoInfo.ecdsa_backend ?? cryptoInfo.selected_backend ?? "unknown"),
     captured_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
     commit: gitCommit(),
     node_version: process.version,
@@ -303,6 +316,13 @@ export function runCorpus(manifestPath: string, fixtureId = ""): JsonObject {
     passed,
     failed,
     result: failed === 0 ? "passed" : "failed",
+    verifier: {
+      engine: "typescript_native",
+      crypto_backend: String(cryptoInfo.ecdsa_backend ?? cryptoInfo.selected_backend ?? "unknown"),
+      schnorr_backend: String(cryptoInfo.schnorr_backend ?? "unknown"),
+      taproot_tweak_backend: String(cryptoInfo.taproot_tweak_backend ?? "unknown"),
+      source: "Nodes/TypeScript/src/consensus/script",
+    },
     results,
   };
 }
@@ -314,13 +334,15 @@ async function main(): Promise<void> {
       manifest: { type: "string" },
       "result-path": { type: "string" },
       "fixture-id": { type: "string" },
+      "runtime-surface": { type: "string" },
     },
     { name: "tsbitnode-script-corpus", version: VERSION },
   );
   const manifestPath = resolve(typeof options.manifest === "string" ? options.manifest : defaultManifestPath());
   const resultPath = resolve(typeof options["result-path"] === "string" ? options["result-path"] : defaultResultPath());
   const fixtureId = typeof options["fixture-id"] === "string" ? options["fixture-id"] : "";
-  const result = runCorpus(manifestPath, fixtureId);
+  const runtimeSurface = typeof options["runtime-surface"] === "string" ? options["runtime-surface"] : (process.env.TSBITNODE_RUNTIME_SURFACE ?? "host");
+  const result = runCorpus(manifestPath, fixtureId, runtimeSurface);
   mkdirSync(dirname(resultPath), { recursive: true });
   writeFileSync(resultPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
   console.log(JSON.stringify({

@@ -250,7 +250,16 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 		}
 		return nil, nil, nil, blockerWithPrevout(height, blockHash, verifyFailure.job.txid, verifyFailure.job.inputIndex, verifyFailure.job.input, verifyFailure.job.utxo, "script_verify_failed", verifyFailure.err.Error()), nil
 	}
-	return view.createdUTXOs(), view.externalSpends(), view.undoEntries(), nil, nil
+	var created []storage.UTXO
+	var spent []storage.OutPoint
+	var undo []storage.UndoEntry
+	timing.measure("utxo_apply", func() error {
+		created = view.createdUTXOs()
+		spent = view.externalSpends()
+		undo = view.undoEntries()
+		return nil
+	})
+	return created, spent, undo, nil, nil
 }
 
 func outputsFor(height int, transaction txtypes.Transaction, coinbase bool) []storage.UTXO {

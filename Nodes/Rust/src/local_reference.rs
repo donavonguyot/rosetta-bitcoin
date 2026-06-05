@@ -684,6 +684,12 @@ impl PipelineTiming {
 
     fn as_json(&self) -> Value {
         let mut doc = Map::new();
+        let mut stage_totals = self.stage_totals.clone();
+        if !stage_totals.contains_key("block_connect_store_commit") {
+            if let Some(connect_total) = stage_totals.get("connect_total").copied() {
+                stage_totals.insert("block_connect_store_commit", connect_total);
+            }
+        }
         doc.insert(
             "total_wall".into(),
             (self.started.elapsed().as_millis() as i64).into(),
@@ -703,11 +709,11 @@ impl PipelineTiming {
             "script_verify",
             "commit",
             "utxo_apply",
+            "block_connect_store_commit",
         ] {
             doc.insert(
                 stage.into(),
-                (self
-                    .stage_totals
+                (stage_totals
                     .get(stage)
                     .copied()
                     .unwrap_or_default()
@@ -718,7 +724,7 @@ impl PipelineTiming {
         doc.insert(
             "stage_totals_ms".into(),
             Value::Object(
-                self.stage_totals
+                stage_totals
                     .iter()
                     .map(|(stage, elapsed)| {
                         ((*stage).to_string(), (elapsed.as_millis() as i64).into())

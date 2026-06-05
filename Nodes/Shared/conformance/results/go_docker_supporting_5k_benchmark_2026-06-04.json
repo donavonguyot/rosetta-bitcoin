@@ -6,7 +6,7 @@
   "blocks_connected": 5001,
   "blocks_fetched": 5001,
   "byte_source": "local_reference_p2p",
-  "captured_at": "2026-06-04T22:34:25Z",
+  "captured_at": "2026-06-05T01:01:53Z",
   "category": "local_reference_sync",
   "chain": "testnet4",
   "chainstate_backend": "rocksdb",
@@ -27,8 +27,8 @@
     "sync_status": "blocks_current",
     "current_blocker": null,
     "reached_target": true,
-    "started_at": "2026-06-04T22:34:25Z",
-    "updated_at": "2026-06-04T22:34:28Z",
+    "started_at": "2026-06-05T01:01:53Z",
+    "updated_at": "2026-06-05T01:01:56Z",
     "blocks_connected": 5001,
     "script_runner_mode": "parallel",
     "script_threads": 15,
@@ -37,59 +37,60 @@
     "rocksdb_tuning": "block_cache=512MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
     "rocksdb_wal_disabled": false,
     "timing_summary": {
-      "total_ms": 3093,
+      "total_ms": 3002,
       "stage_totals_ms": {
-        "block_connect_store_commit": 1643,
-        "block_parse_validate": 8,
-        "block_read": 2,
-        "block_store": 1,
-        "commit": 9,
+        "block_connect_store_commit": 1570,
+        "block_parse_validate": 7,
+        "block_read": 0,
+        "block_store": 6,
+        "commit": 8,
         "prevout_batch_load": 5,
-        "prevout_legacy_fallback_get": 4,
-        "prevout_multi_get_call": 0,
-        "prevout_utxo_decode": 0,
-        "script_verify": 576,
-        "script_verify_worker_cpu": 3808
+        "prevout_legacy_fallback_get": 1,
+        "prevout_multi_get_call": 2,
+        "prevout_utxo_decode": 1,
+        "script_verify": 582,
+        "script_verify_worker_cpu": 3247,
+        "utxo_apply": 22
       },
       "slow_blocks": [
         {
           "height": 739,
-          "ms": 56
+          "ms": 52
+        },
+        {
+          "height": 4409,
+          "ms": 11
+        },
+        {
+          "height": 4569,
+          "ms": 10
         },
         {
           "height": 2212,
-          "ms": 14
+          "ms": 8
         },
         {
           "height": 2224,
-          "ms": 9
+          "ms": 8
         },
         {
-          "height": 2191,
-          "ms": 8
+          "height": 2205,
+          "ms": 7
         },
         {
           "height": 2208,
           "ms": 7
         },
         {
-          "height": 4094,
+          "height": 4321,
           "ms": 7
         },
         {
-          "height": 4124,
-          "ms": 7
-        },
-        {
-          "height": 4366,
-          "ms": 7
-        },
-        {
-          "height": 2192,
+          "height": 2199,
           "ms": 6
         },
         {
-          "height": 4266,
+          "height": 2202,
           "ms": 6
         }
       ]
@@ -157,7 +158,7 @@
     "last_error": "",
     "active_writer_pid": null,
     "lock_status": "unlocked",
-    "updated_at": "2026-06-04T22:34:28Z"
+    "updated_at": "2026-06-05T01:01:56Z"
   },
   "storage_codec_version": 2,
   "stored_block_height": 5000,
@@ -174,72 +175,73 @@
     "sync_status": "blocks_current",
     "current_blocker": null,
     "binary_gate_status": "not_attempted",
-    "started_at": "2026-06-04T22:34:25Z",
-    "updated_at": "2026-06-04T22:34:28Z",
+    "started_at": "2026-06-05T01:01:53Z",
+    "updated_at": "2026-06-05T01:01:56Z",
     "blocks_fetched": 5001
   },
   "taproot_tweak_backend": "libsecp256k1",
   "target_height": 5000,
   "target_label": "5k",
   "timing_summary": {
-    "total_ms": 3093,
+    "total_ms": 3002,
     "stage_totals_ms": {
-      "block_connect_store_commit": 1643,
-      "block_parse_validate": 8,
-      "block_read": 2,
-      "block_store": 1,
-      "commit": 9,
+      "block_connect_store_commit": 1570,
+      "block_parse_validate": 7,
+      "block_read": 0,
+      "block_store": 6,
+      "commit": 8,
       "prevout_batch_load": 5,
-      "prevout_legacy_fallback_get": 4,
-      "prevout_multi_get_call": 0,
-      "prevout_utxo_decode": 0,
-      "script_verify": 576,
-      "script_verify_worker_cpu": 3808
+      "prevout_legacy_fallback_get": 1,
+      "prevout_multi_get_call": 2,
+      "prevout_utxo_decode": 1,
+      "script_verify": 582,
+      "script_verify_worker_cpu": 3247,
+      "utxo_apply": 22
     },
     "slow_blocks": [
       {
         "height": 739,
-        "ms": 56
+        "ms": 52
+      },
+      {
+        "height": 4409,
+        "ms": 11
+      },
+      {
+        "height": 4569,
+        "ms": 10
       },
       {
         "height": 2212,
-        "ms": 14
+        "ms": 8
       },
       {
         "height": 2224,
-        "ms": 9
+        "ms": 8
       },
       {
-        "height": 2191,
-        "ms": 8
+        "height": 2205,
+        "ms": 7
       },
       {
         "height": 2208,
         "ms": 7
       },
       {
-        "height": 4094,
+        "height": 4321,
         "ms": 7
       },
       {
-        "height": 4124,
-        "ms": 7
-      },
-      {
-        "height": 4366,
-        "ms": 7
-      },
-      {
-        "height": 2192,
+        "height": 2199,
         "ms": 6
       },
       {
-        "height": 4266,
+        "height": 2202,
         "ms": 6
       }
     ]
   },
-  "updated_at": "2026-06-04T22:34:28Z",
+  "updated_at": "2026-06-05T01:01:56Z",
   "utxo_accounting_policy": "core_spendable_v1",
   "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
   "validated_height": 5000

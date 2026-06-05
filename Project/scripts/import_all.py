@@ -1023,6 +1023,12 @@ def timing_stages(payload: dict[str, Any]) -> dict[str, int]:
                 parsed = integer(elapsed, None)
                 if parsed is not None:
                     stages[text(stage)] = parsed
+        for stage, elapsed in pipeline.items():
+            if stage == "stage_totals_ms" or isinstance(elapsed, (dict, list)):
+                continue
+            parsed = integer(elapsed, None)
+            if parsed is not None:
+                stages[text(stage)] = parsed
     connect = payload.get("connect_summary")
     timing_summary = connect.get("timing_summary") if isinstance(connect, dict) else None
     nested_stages = timing_summary.get("stage_totals_ms") if isinstance(timing_summary, dict) else None
@@ -1031,6 +1037,17 @@ def timing_stages(payload: dict[str, Any]) -> dict[str, int]:
             parsed = integer(elapsed, None)
             if parsed is not None:
                 stages[text(stage)] = parsed
+    timing_summary = payload.get("timing_summary")
+    nested_stages = timing_summary.get("stage_totals_ms") if isinstance(timing_summary, dict) else None
+    if isinstance(nested_stages, dict):
+        for stage, elapsed in nested_stages.items():
+            parsed = integer(elapsed, None)
+            if parsed is not None:
+                stages[text(stage)] = parsed
+    if "utxo_load" not in stages and "prevout_batch_load" in stages:
+        stages["utxo_load"] = stages["prevout_batch_load"]
+    if "block_connect_store_commit" not in stages and "connect_total" in stages:
+        stages["block_connect_store_commit"] = stages["connect_total"]
     return stages
 
 

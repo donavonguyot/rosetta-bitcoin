@@ -182,6 +182,10 @@ doc = {
         "total_ms": elapsed_ms,
         "stage_totals_ms": {
             "block_connect_store_commit": elapsed_ms,
+            "utxo_load": as_int(status.get("timing_utxo_load_ms"), 0),
+            "script_verify": as_int(status.get("timing_script_verify_ms"), 0),
+            "utxo_apply": as_int(status.get("timing_utxo_apply_ms"), 0),
+            "commit": as_int(status.get("timing_commit_ms"), 0),
         },
         "slow_blocks": [],
     },

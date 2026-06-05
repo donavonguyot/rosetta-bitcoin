@@ -730,9 +730,17 @@ std::string runCorpusJson(const ScriptCorpusRunResult& run) {
     out << "  \"fixture_count\": " << run.fixtureCount << ",\n";
     out << "  \"implementation\": " << util::jsonString(run.implementation) << ",\n";
     out << "  \"manifest\": " << util::jsonString(run.manifest) << ",\n";
+    out << "  \"native_crypto_backend\": " << util::jsonString(run.nativeCryptoBackend) << ",\n";
     out << "  \"passed\": " << run.passed << ",\n";
+    out << "  \"port\": " << util::jsonString(run.port) << ",\n";
     out << "  \"result\": " << util::jsonString(run.result) << ",\n";
     out << "  \"runtime_surface\": " << util::jsonString(run.runtimeSurface) << ",\n";
+    out << "  \"schema\": " << util::jsonString(run.schema) << ",\n";
+    out << "  \"verifier\": {\n";
+    out << "    \"crypto_backend\": " << util::jsonString(run.nativeCryptoBackend) << ",\n";
+    out << "    \"engine\": \"cpp_native\",\n";
+    out << "    \"source\": \"Nodes/Cpp/src/consensus/script\"\n";
+    out << "  },\n";
     out << "  \"results\": [\n";
     for (std::size_t i = 0; i < run.results.size(); ++i) {
         const auto& row = run.results[i];

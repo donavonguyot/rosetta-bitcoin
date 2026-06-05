@@ -37,9 +37,12 @@ struct ScriptCorpusFixtureResult {
 };
 
 struct ScriptCorpusRunResult {
+    std::string schema = "port.script_corpus_result.v1";
     std::string implementation = "CppNode";
+    std::string port = "cpp";
     std::string category = "script_corpus";
     std::string runtimeSurface = "host";
+    std::string nativeCryptoBackend = "libsecp256k1";
     std::string capturedAt;
     std::string commit;
     std::string manifest;

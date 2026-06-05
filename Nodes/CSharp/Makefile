@@ -9,6 +9,8 @@ DOCKER_PROOF_VOLUME ?= csbitnode_proof_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json
 RESULT_DATE ?= $(shell date +%F)
 SUPPORTING_5K_RESULT ?= ../Shared/conformance/results/csharp_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+SCRIPT_RESULT ?= ../Shared/conformance/results/csharp_script_corpus_$(RESULT_DATE).json
+DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/csharp_script_corpus_docker_$(RESULT_DATE).json
 DOCKER_HEADERS_MAX ?= 200
 DOCKER_HEADER_BATCHES_MAX ?= 1
 DOCKER_BLOCKS_MAX ?= 2
@@ -24,7 +26,7 @@ DOCKER_SYNC_CHECK_SEC ?= 5
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
 
-.PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-proof-local docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
+.PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
 
 build:
 	$(DOTNET) build $(PROJECT) -c Release
@@ -42,6 +44,9 @@ test:
 
 csharp-node-native-crypto-test:
 	SECP256K1_BACKEND=native $(DOTNET) test $(TEST_PROJECT) -c Release
+
+csharp-node-script-corpus:
+	SECP256K1_BACKEND=native $(DOTNET) run --project $(PROJECT) -c Release -- script-corpus --result-path $(SCRIPT_RESULT)
 
 node-status:
 	DATA_DIR=$(DATA_DIR) $(DOTNET) run --project $(PROJECT) -c Release --no-build 2>/dev/null || \
@@ -91,6 +96,15 @@ docker-csharp-native-crypto-proof:
 	  POLL_SEC=$(or $(POLL_SEC),120) \
 	  python3 scripts/capture_docker_sync_proof.py .docker-csharp-proof-status.json .docker-csharp-proof-exit
 	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/csbitnode.db
+
+docker-script-corpus:
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build csbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	SECP256K1_BACKEND=native $(DOCKER_COMPOSE) run --rm --no-deps \
+	  -v $(abspath ../Shared/conformance):/shared/conformance \
+	  csbitnode-sync-proof script-corpus \
+	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
+	  --result-path $(DOCKER_SCRIPT_RESULT) \
+	  --runtime-surface docker
 
 docker-proof-local:
 	@for i in $$(seq 1 60); do \

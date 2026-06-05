@@ -88,6 +88,8 @@ def validate_artifact(path: Path, *, strict_metadata: bool) -> list[str]:
         return errors
     if payload.get("benchmark_lane") != "supporting_5k_p2p":
         return errors
+    if payload.get("result") != "passed":
+        return errors
 
     reported_policy = payload.get("utxo_accounting_policy")
     if reported_policy != POLICY and (reported_policy is not None or strict_metadata):

@@ -70,7 +70,11 @@ A port-owned corpus proof should use this shape:
   "implementation": "ExampleNode",
   "port": "example",
   "runtime_surface": "docker",
-  "verifier": "example-native-script",
+  "verifier": {
+    "engine": "example-native-script",
+    "crypto_backend": "libsecp256k1",
+    "source": "Nodes/Example/src/consensus/script"
+  },
   "native_crypto_backend": "libsecp256k1",
   "fixture_count": 45,
   "passed": 45,

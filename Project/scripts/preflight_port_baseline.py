@@ -24,7 +24,7 @@ PASSABLE_DOCKER_STATUSES = {
     "supervisor_partial",
 }
 
-REQUIRED_COMMANDS = ("docker_warm", "docker_proof_local")
+REQUIRED_COMMANDS = ("docker_warm", "docker_proof_local", "docker_script_corpus")
 REQUIRED_TIMING_BUCKETS = (
     "utxo_load",
     "script_verify",
@@ -108,6 +108,15 @@ def timing_keys(value: Any) -> set[str]:
         for nested in value:
             found.update(timing_keys(nested))
     return found
+
+
+def normalize_timing_keys(found: set[str]) -> set[str]:
+    normalized = set(found)
+    if "prevout_batch_load" in normalized:
+        normalized.add("utxo_load")
+    if "connect_total" in normalized:
+        normalized.add("block_connect_store_commit")
+    return normalized
 
 
 def command_errors(conn: sqlite3.Connection, port: str) -> list[str]:
@@ -196,7 +205,7 @@ def preflight_port(conn: sqlite3.Connection, port: str) -> dict[str, Any]:
             errors.append(f"{key} is {actual!r}; expected {expected!r}")
 
     payload = artifact_payload(conn, baseline.get("source_artifact_id"))
-    artifact_timing = timing_keys(payload)
+    artifact_timing = normalize_timing_keys(timing_keys(payload))
     imported_timing = set(
         row["stage"]
         for row in rows(
@@ -209,7 +218,7 @@ def preflight_port(conn: sqlite3.Connection, port: str) -> dict[str, Any]:
             (baseline.get("source_artifact_id"),),
         )
     )
-    timing = artifact_timing | imported_timing
+    timing = normalize_timing_keys(artifact_timing | imported_timing)
     missing_timing = [stage for stage in REQUIRED_TIMING_BUCKETS if stage not in timing]
     if missing_timing:
         errors.append("missing required timing buckets: " + ", ".join(missing_timing))

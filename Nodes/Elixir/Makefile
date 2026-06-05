@@ -9,6 +9,7 @@ DOCKER_SYNC_VOLUME ?= exbitnode_sync_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/elixir_rocksdb_codec_v2_storage.json
 RESULT_DATE ?= $(shell date +%F)
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/elixir_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/elixir_script_corpus_docker_$(RESULT_DATE).json
 DOCKER_PREFETCH_DEPTH ?= 4
 DOCKER_SCRIPT_THREADS ?= 4
 DOCKER_LONG_PROOF_VOLUME ?= exbitnode_native_10k_sync_data
@@ -27,7 +28,7 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-proof-local docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
+.PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 
 test:
 	$(MIX) test
@@ -66,6 +67,14 @@ docker-storage-proof:
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) RUNTIME_SURFACE=docker PROOF_PATH=/tmp/elixir_storage_proof.json \
 	  $(DOCKER_COMPOSE) run --rm --no-deps exbitnode-sync-proof mix storage.proof
 	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 sh -c '! find /data -maxdepth 1 \( -name "*.db" -o -name "*.db-wal" -o -name "*.db-shm" -o -name "*.sqlite" -o -name "*.sqlite3" \) | grep -q .'
+
+docker-script-corpus:
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build exbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	RUNTIME_SURFACE=docker $(DOCKER_COMPOSE) run --rm --no-deps \
+	  -v $(abspath ../Shared/conformance):/shared/conformance \
+	  exbitnode-sync-proof mix script.corpus -- \
+	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
+	  --result-path $(DOCKER_SCRIPT_RESULT)
 
 docker-proof-local:
 	@for i in $$(seq 1 60); do \

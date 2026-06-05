@@ -31,9 +31,12 @@ struct FixtureEntry {
 
 #[derive(Serialize)]
 pub struct ScriptCorpusReport {
+    schema: &'static str,
     implementation: &'static str,
+    port: &'static str,
     category: &'static str,
     runtime_surface: String,
+    native_crypto_backend: &'static str,
     captured_at: String,
     commit: String,
     manifest: String,
@@ -120,9 +123,12 @@ pub fn run(
         .filter(|r| r.result == "not_implemented")
         .count();
     let report = ScriptCorpusReport {
+        schema: "port.script_corpus_result.v1",
         implementation: "RustNode",
+        port: "rust",
         category: "script_corpus",
         runtime_surface: runtime_surface.to_string(),
+        native_crypto_backend: "rust-secp256k1",
         captured_at: Utc::now().to_rfc3339(),
         commit: repo::git_commit(),
         manifest: repo::rel(&manifest_path),
@@ -136,7 +142,7 @@ pub fn run(
             "engine": "rust_native",
             "crypto_backend": "rust-secp256k1",
             "source": "Nodes/Rust/src/script_verify.rs",
-            "note": "Rust runs an independent native script verifier over the shared Shared corpus.",
+            "note": "Rust runs an independent native script verifier over the shared script corpus.",
             "delegated": false
         }),
         results,

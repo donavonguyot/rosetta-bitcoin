@@ -92,6 +92,16 @@ The strict baseline combines the comparable 5k gate with RocksDB, native crypto,
 script-corpus, UTXO accounting, timing buckets, and Docker command-surface
 evidence. The `--all` form is report-only unless `--strict` is also supplied.
 
+Validate a port-owned script-corpus artifact before importing it:
+
+```bash
+python3 Nodes/Shared/conformance/tools/validate_script_corpus_result.py \
+  Nodes/Shared/conformance/results/go_script_corpus_2026-06-04.json
+```
+
+Only `schema=port.script_corpus_result.v1` artifacts count as port corpus proof.
+`shared.script_fixtures.validation.v1` remains manifest validation only.
+
 Preflight the consensus runway after importing evidence:
 
 ```bash

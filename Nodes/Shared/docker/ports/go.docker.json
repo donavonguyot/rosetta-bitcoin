@@ -25,6 +25,7 @@
     "docker_build": "cd Nodes/Go && make docker-build",
     "docker_warm": "cd Nodes/Go && make docker-warm",
     "docker_status": "cd Nodes/Go && make docker-status",
+    "docker_script_corpus": "cd Nodes/Go && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Go && make docker-proof-local",
     "docker_proof_rpc_replay": "cd Nodes/Go && make docker-proof-rpc-replay",
     "docker_probe_external": null,

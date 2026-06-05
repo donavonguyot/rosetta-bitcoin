@@ -22,7 +22,7 @@ In short: RocksDB, native crypto, `45/45`, Docker local Reference P2P,
 | Script corpus | Shared script corpus passes `45/45` |
 | Runtime surface | Docker |
 | Byte source | Local Reference Core over Bitcoin P2P |
-| Command | `docker_proof_local` |
+| Commands | `docker_script_corpus` and `docker_proof_local` |
 | Target | `target_height=5000`, `header_target_height=5000` |
 | Proof state | Fresh Docker proof volume |
 | Durability | WAL enabled, `rocksdb_wal_disabled=false` |
@@ -31,7 +31,8 @@ In short: RocksDB, native crypto, `45/45`, Docker local Reference P2P,
 | Status/proof | Compact JSON imported by Project |
 
 Shared fixture-manifest validation is not port proof. The script-corpus artifact
-must be produced by the port's own verifier against the Shared corpus.
+must be produced by the port's own verifier against the Shared corpus and use
+`schema=port.script_corpus_result.v1`.
 
 The expected block at height `5000` is:
 
@@ -74,14 +75,17 @@ Every baseline candidate needs these manifest command keys:
 
 ```text
 docker_warm
+docker_script_corpus
 docker_proof_local
 docker_status
 ```
 
 `docker_warm` prepares images and dependencies before a benchmark campaign.
-`docker_proof_local` is reserved for the official Docker/local-reference P2P
-lane. If a port keeps RPC replay, storage proof, or diagnostic sync commands,
-they must use explicit non-baseline command keys.
+`docker_script_corpus` writes port-owned corpus proof JSON under
+`Nodes/Shared/conformance/results/`. `docker_proof_local` is reserved for the
+official Docker/local-reference P2P lane. If a port keeps RPC replay, storage
+proof, or diagnostic sync commands, they must use explicit non-baseline command
+keys.
 
 ## Project Acceptance
 
@@ -93,6 +97,7 @@ python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 python3 Project/scripts/report.py --db Project/project.db --section port-baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict
 python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --port <port> --stage 5k --strict
+python3 Nodes/Shared/conformance/tools/validate_script_corpus_result.py Nodes/Shared/conformance/results/<port>_script_corpus_*.json
 ```
 
 For a report-only sweep across all ports:
@@ -121,10 +126,13 @@ Build in this order:
    available.
 3. Run the Shared script corpus and export compact JSON under
    `Nodes/Shared/conformance/results/`.
-4. Add the Docker manifest and required command keys.
-5. Emit a status JSON and 5k benchmark JSON with the fixed baseline metadata.
-6. Run `docker_warm`, then `docker_proof_local` against local Reference Core.
-7. Rebuild Project and pass `preflight_port_baseline.py --strict`.
+4. Validate the corpus artifact with
+   `Nodes/Shared/conformance/tools/validate_script_corpus_result.py`.
+5. Add the Docker manifest and required command keys.
+6. Emit a status JSON and 5k benchmark JSON with the fixed baseline metadata.
+7. Run `docker_warm`, `docker_script_corpus`, then `docker_proof_local` against
+   local Reference Core.
+8. Rebuild Project and pass `preflight_port_baseline.py --strict`.
 
 The binary gate remains larger than this baseline: a serious node must still
 reach and maintain current testnet4 tip while independently validating every

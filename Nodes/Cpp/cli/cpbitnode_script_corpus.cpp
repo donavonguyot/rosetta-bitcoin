@@ -28,7 +28,8 @@ int main(int argc, char** argv) {
             "Nodes/Shared/conformance/results/cpp_script_corpus_2026-06-03.json";
         const auto resultPath = argValue(argc, argv, "--result-path", defaultResult.string());
 
-        const auto run = cpbitnode::conformance::runCorpus(manifestPath);
+        auto run = cpbitnode::conformance::runCorpus(manifestPath);
+        run.runtimeSurface = argValue(argc, argv, "--runtime-surface", "host");
         const auto json = cpbitnode::conformance::runCorpusJson(run);
 
         std::filesystem::create_directories(std::filesystem::path(resultPath).parent_path());

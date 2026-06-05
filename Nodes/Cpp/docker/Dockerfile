@@ -7,7 +7,7 @@ RUN apt-get update \
 WORKDIR /src
 COPY . .
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -DCPBITNODE_USE_NATIVE_SECP256K1=ON \
-    && cmake --build build --target cpbitnode cpbitnode-db cpbitnode-healthcheck cpbitnode-sync cpbitnode-storage-proof cpbitnode-blocker-inspect cpbitnode_tests
+    && cmake --build build --target cpbitnode cpbitnode-db cpbitnode-healthcheck cpbitnode-sync cpbitnode-storage-proof cpbitnode-blocker-inspect cpbitnode-script-corpus cpbitnode_tests
 
 FROM ubuntu:24.04
 
@@ -21,11 +21,13 @@ COPY --from=build /src/build/cpbitnode-healthcheck /usr/local/bin/cpbitnode-heal
 COPY --from=build /src/build/cpbitnode-sync /usr/local/bin/cpbitnode-sync
 COPY --from=build /src/build/cpbitnode-storage-proof /usr/local/bin/cpbitnode-storage-proof
 COPY --from=build /src/build/cpbitnode-blocker-inspect /usr/local/bin/cpbitnode-blocker-inspect
+COPY --from=build /src/build/cpbitnode-script-corpus /usr/local/bin/cpbitnode-script-corpus
 COPY --from=build /src/build/cpbitnode_tests /usr/local/bin/cpbitnode_tests
 COPY --from=build /src/build/cpbitnode /src/build/cpbitnode
 COPY --from=build /src/build/cpbitnode-db /src/build/cpbitnode-db
 COPY --from=build /src/build/cpbitnode-healthcheck /src/build/cpbitnode-healthcheck
 COPY --from=build /src/build/cpbitnode-sync /src/build/cpbitnode-sync
+COPY --from=build /src/build/cpbitnode-script-corpus /src/build/cpbitnode-script-corpus
 COPY --from=build /src/tests/fixtures /src/tests/fixtures
 
 ENV CHAIN=testnet4

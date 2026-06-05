@@ -27,6 +27,7 @@
     "docker_status": "cd Nodes/Elixir && make docker-status",
     "docker_proof_local": "cd Nodes/Elixir && make docker-proof-local",
     "docker_storage_proof": "cd Nodes/Elixir && make docker-storage-proof",
+    "docker_script_corpus": "cd Nodes/Elixir && make docker-script-corpus",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Elixir && make docker-supervisor",
     "docker_supervisor_status": "cd Nodes/Elixir && make docker-supervisor-status",

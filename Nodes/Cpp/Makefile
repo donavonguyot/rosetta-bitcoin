@@ -7,6 +7,8 @@ DOCKER_PROOF_VOLUME ?= cpbitnode_proof_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/cpp_rocksdb_codec_v2_storage.json
 DOCKER_REBUILD ?= 0
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/cpp_docker_supporting_5k_benchmark_$(shell date +%F).json
+SCRIPT_RESULT ?= ../Shared/conformance/results/cpp_script_corpus_$(shell date +%F).json
+DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/cpp_script_corpus_docker_$(shell date +%F).json
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_PEERS ?= host.docker.internal:48333
@@ -20,7 +22,7 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: build test docker-config docker-build docker-warm node-status sync-local cpp-node-storage-proof cpp-node-native-crypto-test docker-cpp-native-crypto-proof docker-cpp-supporting-5k-proof docker-cpp-rocksdb-storage-proof docker-cpp-sync-supervisor docker-cpp-sync-status docker-cpp-sync-stop docker-cpp-sync-resume clean
+.PHONY: build test docker-config docker-build docker-warm node-status sync-local cpp-node-storage-proof cpp-node-script-corpus cpp-node-native-crypto-test docker-cpp-native-crypto-proof docker-cpp-supporting-5k-proof docker-cpp-rocksdb-storage-proof docker-script-corpus docker-cpp-sync-supervisor docker-cpp-sync-status docker-cpp-sync-stop docker-cpp-sync-resume clean
 
 build:
 	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
@@ -45,6 +47,9 @@ sync-local:
 
 cpp-node-storage-proof:
 	$(BUILD_DIR)/cpbitnode-storage-proof --datadir $(DATA_DIR) --chainstate-backend rocksdb --proof-path $(or $(PROOF_PATH),../Shared/conformance/results/cpp_rocksdb_codec_v2_storage.json)
+
+cpp-node-script-corpus:
+	$(BUILD_DIR)/cpbitnode-script-corpus --result-path $(SCRIPT_RESULT)
 
 cpp-node-native-crypto-test:
 	cmake -S . -B $(BUILD_DIR)-native -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -DCPBITNODE_USE_NATIVE_SECP256K1=ON
@@ -78,6 +83,15 @@ docker-cpp-rocksdb-storage-proof:
 	  $(DOCKER_COMPOSE) run --rm --no-deps cpbitnode-sync-proof \
 	  cpbitnode-storage-proof --datadir /data --chainstate-backend rocksdb --proof-path /tmp/cpp_storage_proof.json
 	@docker run --rm -v $(DOCKER_PROOF_VOLUME):/data alpine:3.20 test ! -f /data/cpbitnode.db
+
+docker-script-corpus:
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	$(DOCKER_COMPOSE) run --rm --no-deps \
+	  -v $(abspath ../Shared/conformance):/shared/conformance \
+	  cpbitnode-sync-proof cpbitnode-script-corpus \
+	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
+	  --result-path $(DOCKER_SCRIPT_RESULT) \
+	  --runtime-surface docker
 
 docker-cpp-sync-supervisor:
 	DOCKER_PROOF_VOLUME=$(DOCKER_SYNC_VOLUME) PEERS=$(PEERS) \

@@ -16,6 +16,8 @@ DOCKER_SUPERVISOR_VOLUME ?= pybitnode_supervisor_data
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/python_rocksdb_native_storage_2026-06-02.json
 RESULT_DATE ?= $(shell date +%F)
 SUPPORTING_5K_RESULT ?= /results/python_docker_supporting_5k_benchmark_$(RESULT_DATE).json
+SCRIPT_RESULT ?= ../Shared/conformance/results/python_script_corpus_$(RESULT_DATE).json
+DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/python_script_corpus_docker_$(RESULT_DATE).json
 DOCKER_P2P_PEER ?= host.docker.internal:48333
 DOCKER_PREFETCH_DEPTH ?= 4
 DOCKER_SCRIPT_THREADS ?= 4
@@ -24,7 +26,7 @@ DOCKER_REBUILD ?= 0
 
 SYNC_ENV = MAX_OUTBOUND_PEERS=1 PARALLEL_BLOCK_DOWNLOADS=0 SKIP_GETADDR=1
 
-.PHONY: python-node-status python-node-preflight python-node-rocksdb-proof docker-build docker-warm docker-proof-local docker-python-rocksdb-proof docker-python-supervisor docker-python-supervisor-status docker-python-supervisor-stop docker-python-supervisor-resume python-node-sync-local-reference python-node-sync-chunk python-node-sync-chunk-overnight python-node-sync-supervisor python-node-export-snapshots python-node-survey-scripts test
+.PHONY: python-node-status python-node-preflight python-node-rocksdb-proof python-node-script-corpus docker-build docker-warm docker-script-corpus docker-proof-local docker-python-rocksdb-proof docker-python-supervisor docker-python-supervisor-status docker-python-supervisor-stop docker-python-supervisor-resume python-node-sync-local-reference python-node-sync-chunk python-node-sync-chunk-overnight python-node-sync-supervisor python-node-export-snapshots python-node-survey-scripts test
 
 test:
 	$(PYTHON) -m pytest -q
@@ -34,6 +36,9 @@ python-node-status:
 
 python-node-rocksdb-proof:
 	$(PYBITNODE_ROCKSDB_PROOF) --datadir $(DATA_DIR)-proof --proof-path $(DOCKER_PROOF_PATH)
+
+python-node-script-corpus:
+	PYBITNODE_RUNTIME_SURFACE=host $(PYTHON) -m pybitnode.conformance.script_corpus --result-path $(SCRIPT_RESULT)
 
 # Fail if a pybitnode-sync writer appears active; otherwise print DB status.
 python-node-preflight:
@@ -68,6 +73,14 @@ docker-build:
 	$(DOCKER_COMPOSE) build pybitnode pybitnode-rocksdb-proof pybitnode-supporting-5k-proof pybitnode-supervisor pybitnode-supervisor-status
 
 docker-warm: docker-build
+
+docker-script-corpus:
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(MAKE) docker-build; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	PYBITNODE_RUNTIME_SURFACE=docker $(DOCKER_COMPOSE) run --rm --no-deps \
+	  -v $(abspath ../Shared/conformance):/shared/conformance \
+	  pybitnode python -m pybitnode.conformance.script_corpus \
+	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
+	  --result-path $(DOCKER_SCRIPT_RESULT)
 
 docker-proof-local:
 	@for i in $$(seq 1 60); do \

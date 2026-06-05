@@ -24,15 +24,31 @@ defmodule Exbitnode.CLI.ScriptCorpus do
 
     passed = Enum.count(results, &(&1.result == "passed"))
     failed = Enum.count(results, &(&1.result == "failed"))
+    native_crypto_backend = Exbitnode.Consensus.Script.Secp256k1.selected_backend_name()
+
+    unless Exbitnode.Consensus.Script.Secp256k1.native_backend_available?() do
+      raise "native secp256k1 backend unavailable"
+    end
 
     output = %{
+      schema: "port.script_corpus_result.v1",
       implementation: "ElixirNode",
+      port: "elixir",
       runner: "mix script.corpus",
+      category: "script_corpus",
+      runtime_surface: System.get_env("RUNTIME_SURFACE", "host"),
+      native_crypto_backend: native_crypto_backend,
       manifest: manifest_path,
       captured_at: DateTime.utc_now() |> DateTime.to_iso8601(),
       fixture_count: length(results),
       passed: passed,
       failed: failed,
+      result: if(failed == 0, do: "passed", else: "failed"),
+      verifier: %{
+        engine: "elixir_native",
+        crypto_backend: native_crypto_backend,
+        source: "Nodes/Elixir/lib/exbitnode/consensus/script"
+      },
       results: results
     }
 

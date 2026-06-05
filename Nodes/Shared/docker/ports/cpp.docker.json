@@ -25,6 +25,7 @@
     "docker_build": "cd Nodes/Cpp && make docker-build",
     "docker_warm": "cd Nodes/Cpp && make docker-warm",
     "docker_status": "cd Nodes/Cpp && make docker-cpp-sync-status",
+    "docker_script_corpus": "cd Nodes/Cpp && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Cpp && make docker-cpp-supporting-5k-proof",
     "docker_probe_external": null,
     "docker_supervisor": "cd Nodes/Cpp && make docker-cpp-sync-supervisor",

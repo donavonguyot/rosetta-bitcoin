@@ -852,7 +852,7 @@ SELECT
   coalesce(json_extract(raw_json, '$.category'), '') AS category,
   coalesce(json_extract(raw_json, '$.result'), '') AS result,
   coalesce(json_extract(raw_json, '$.runtime_surface'), '') AS runtime_surface,
-  coalesce(json_extract(raw_json, '$.verifier.engine'), '') AS verifier,
+  coalesce(json_extract(raw_json, '$.verifier.engine'), json_extract(raw_json, '$.verifier'), '') AS verifier,
   coalesce(
     json_extract(raw_json, '$.native_crypto_backend'),
     json_extract(raw_json, '$.verifier.crypto_backend'),
@@ -862,9 +862,13 @@ SELECT
   coalesce(json_extract(raw_json, '$.passed'), passed_rows) AS passed,
   coalesce(json_extract(raw_json, '$.failed'), failed_rows) AS failed,
   CASE
-    WHEN coalesce(json_extract(raw_json, '$.schema'), 'port.script_corpus_result.v1') = 'shared.script_fixtures.validation.v1' THEN 0
+    WHEN coalesce(json_extract(raw_json, '$.schema'), '') <> 'port.script_corpus_result.v1' THEN 0
+    WHEN coalesce(json_extract(raw_json, '$.port'), '') <> port THEN 0
     WHEN coalesce(json_extract(raw_json, '$.category'), '') <> 'script_corpus' THEN 0
     WHEN coalesce(json_extract(raw_json, '$.result'), '') <> 'passed' THEN 0
+    WHEN coalesce(json_extract(raw_json, '$.runtime_surface'), '') = '' THEN 0
+    WHEN coalesce(json_extract(raw_json, '$.verifier.engine'), json_extract(raw_json, '$.verifier'), '') = '' THEN 0
+    WHEN lower(coalesce(json_extract(raw_json, '$.native_crypto_backend'), json_extract(raw_json, '$.verifier.crypto_backend'), '')) IN ('', 'managed', 'pure', 'pure_ts', 'pure_java', 'pure_csharp', 'not_enabled', 'unavailable', 'none') THEN 0
     WHEN coalesce(json_extract(raw_json, '$.fixture_count'), result_rows) < 45 THEN 0
     WHEN coalesce(json_extract(raw_json, '$.passed'), passed_rows) < 45 THEN 0
     WHEN coalesce(json_extract(raw_json, '$.failed'), failed_rows) <> 0 THEN 0
@@ -881,29 +885,53 @@ WITH ports AS (
 ),
 corpus AS (
   SELECT
-    np.port,
+    spa.port,
     cr.fixture_id,
     max(CASE WHEN cr.result = 'passed' THEN 1 ELSE 0 END) AS has_pass,
     max(CASE WHEN cr.result = 'failed' THEN 1 ELSE 0 END) AS has_fail,
     max(cr.captured_at) AS latest_captured_at
   FROM conformance_results cr
-  JOIN project_node_ports np ON np.node_id = cr.node_id
+  JOIN script_corpus_proof_artifacts spa ON spa.source_artifact_id = cr.source_artifact_id
   WHERE cr.category = 'script_corpus'
-  GROUP BY np.port, cr.fixture_id
+    AND spa.clean_port_corpus = 1
+  GROUP BY spa.port, cr.fixture_id
+),
+latest_attempt AS (
+  SELECT
+    port,
+    result,
+    passed,
+    failed,
+    captured_at,
+    row_number() OVER (
+      PARTITION BY port
+      ORDER BY captured_at DESC, source_artifact_id DESC
+    ) AS rn
+  FROM script_corpus_proof_artifacts
+  WHERE schema = 'port.script_corpus_result.v1'
+    AND category = 'script_corpus'
 )
 SELECT
   p.port,
-  coalesce(sum(c.has_pass), 0) AS script_passed,
-  coalesce(sum(c.has_fail), 0) AS script_failed,
+  CASE
+    WHEN coalesce(sum(c.has_pass), 0) > 0 THEN coalesce(sum(c.has_pass), 0)
+    ELSE coalesce(max(la.passed), 0)
+  END AS script_passed,
+  CASE
+    WHEN coalesce(sum(c.has_pass), 0) > 0 THEN coalesce(sum(c.has_fail), 0)
+    ELSE coalesce(max(la.failed), 0)
+  END AS script_failed,
   CASE
     WHEN coalesce(sum(c.has_pass), 0) >= 45 AND coalesce(sum(c.has_fail), 0) = 0 THEN 'passed'
     WHEN coalesce(sum(c.has_pass), 0) >= 45 THEN 'mixed'
     WHEN coalesce(sum(c.has_pass), 0) > 0 THEN 'partial'
+    WHEN coalesce(max(la.result), '') = 'failed' THEN 'failed'
     ELSE 'missing'
   END AS script_corpus_status,
-  coalesce(max(c.latest_captured_at), '') AS latest_captured_at
+  coalesce(max(c.latest_captured_at), max(la.captured_at), '') AS latest_captured_at
 FROM ports p
 LEFT JOIN corpus c ON c.port = p.port
+LEFT JOIN latest_attempt la ON la.port = p.port AND la.rn = 1
 GROUP BY p.port;
 
 CREATE VIEW IF NOT EXISTS port_baseline_5k AS
@@ -1018,18 +1046,31 @@ sync_evidence AS (
   FROM ports p
   LEFT JOIN latest_port_status lps ON lps.port = p.port
 ),
-clean_corpus AS (
+latest_corpus_attempt AS (
   SELECT
     port,
-    max(clean_port_corpus) AS has_clean_corpus,
-    max(passed) AS passed,
-    max(failed) AS failed,
-    max(runtime_surface) AS runtime_surface,
-    max(native_crypto_backend) AS native_crypto_backend,
-    max(source_artifact_id) AS source_artifact_id
+    runtime_surface,
+    native_crypto_backend,
+    source_artifact_id,
+    row_number() OVER (
+      PARTITION BY port
+      ORDER BY captured_at DESC, source_artifact_id DESC
+    ) AS rn
   FROM script_corpus_proof_artifacts
-  WHERE clean_port_corpus = 1
-  GROUP BY port
+  WHERE schema = 'port.script_corpus_result.v1'
+    AND category = 'script_corpus'
+),
+clean_corpus AS (
+  SELECT
+    scb.port,
+    CASE WHEN scb.script_corpus_status = 'passed' THEN 1 ELSE 0 END AS has_clean_corpus,
+    scb.script_passed AS passed,
+    scb.script_failed AS failed,
+    coalesce(lca.runtime_surface, '') AS runtime_surface,
+    coalesce(lca.native_crypto_backend, '') AS native_crypto_backend,
+    coalesce(lca.source_artifact_id, '') AS source_artifact_id
+  FROM script_corpus_baseline scb
+  LEFT JOIN latest_corpus_attempt lca ON lca.port = scb.port AND lca.rn = 1
 ),
 open_blockers AS (
   SELECT

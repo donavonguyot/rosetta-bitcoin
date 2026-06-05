@@ -9,7 +9,7 @@ import (
 func Root() (string, error) {
 	if cwd, err := os.Getwd(); err == nil {
 		for dir := cwd; ; dir = filepath.Dir(dir) {
-			if exists(filepath.Join(dir, "Shared")) && exists(filepath.Join(dir, "Nodes", "Go")) {
+			if exists(filepath.Join(dir, "Nodes", "Shared")) && exists(filepath.Join(dir, "Nodes", "Go")) {
 				return dir, nil
 			}
 			parent := filepath.Dir(dir)

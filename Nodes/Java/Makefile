@@ -4,6 +4,8 @@ MAVEN_OPTS ?= -Xmx4g -XX:+ExitOnOutOfMemoryError
 export MAVEN_OPTS
 DOCKER_PROOF_VOLUME ?= jbitnode_proof_data
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_supporting_5k_benchmark_$(shell date +%F).json
+SCRIPT_RESULT ?= ../Shared/conformance/results/java_script_corpus_$(shell date +%F).json
+DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/java_script_corpus_docker_$(shell date +%F).json
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_HEADERS_MAX ?= 5000
@@ -23,7 +25,7 @@ DOCKER_SYNC_CHECK_SEC ?= 5
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
 
-.PHONY: test coverage docker-config docker-build docker-warm docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
+.PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
 
 test:
 	$(MVN) test
@@ -38,6 +40,16 @@ docker-build:
 	$(DOCKER_COMPOSE) build jbitnode-sync-proof
 
 docker-warm: docker-build
+
+docker-script-corpus:
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build jbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	$(DOCKER_COMPOSE) run --rm --no-deps \
+	  -e SECP256K1_BACKEND=native \
+	  -v $(abspath ../Shared/conformance):/shared/conformance \
+	  jbitnode-sync-proof com.jbitnode.cli.ScriptCorpus \
+	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
+	  --result-path $(DOCKER_SCRIPT_RESULT) \
+	  --runtime-surface docker
 
 docker-java-sync-proof:
 	@for i in $$(seq 1 60); do \
@@ -146,6 +158,9 @@ java-node-native-status:
 	@DATA_DIR=$(or $(DATA_DIR),./data-java-rocksdb) $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.DbStatus
 	@test ! -f "$(or $(DATA_DIR),./data-java-rocksdb)/jbitnode.db" || \
 	  (echo "error: native status created jbitnode.db" >&2; exit 1)
+
+java-node-script-corpus:
+	SECP256K1_BACKEND=native $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ScriptCorpus -Dexec.args="--result-path $(SCRIPT_RESULT)"
 
 java-node-project-export:
 	@TMP=$$(mktemp); \
