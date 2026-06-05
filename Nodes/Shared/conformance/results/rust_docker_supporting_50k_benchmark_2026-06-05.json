@@ -1,0 +1,2687 @@
+{
+  "benchmark_contract_version": 1,
+  "benchmark_kind": "supporting_50k_p2p",
+  "benchmark_lane": "supporting_50k_p2p",
+  "binary_gate_status": "not_attempted",
+  "blocks_connected": 50001,
+  "blocks_fetched": 50001,
+  "byte_source": "local_reference_p2p",
+  "captured_at": "2026-06-05T07:23:37.806065737+00:00",
+  "category": "local_reference_sync",
+  "chain": "testnet4",
+  "chainstate_backend": "rocksdb",
+  "chainstate_backend_path": "/data/chainstate-rocksdb",
+  "chainstate_status": "usable",
+  "chainstate_utxo_count": 568855,
+  "connect_summary": {
+    "blocks_connected": 1,
+    "chainstate_utxo_count": 568855,
+    "current_blocker": null,
+    "header_height": 50000,
+    "implementation": "RustNode",
+    "mode": "decoded_block_connect",
+    "reached_target": true,
+    "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+    "rocksdb_wal_disabled": false,
+    "runtime_surface": "docker",
+    "script_runner_mode": "parallel",
+    "started_at": "2026-06-05T07:24:04.875610704+00:00",
+    "storage_codec_version": 2,
+    "stored_block_height": 50000,
+    "sync_status": "blocks_current",
+    "target_height": 50000,
+    "timing_summary": {
+      "slow_blocks": [
+        {
+          "height": 50000,
+          "ms": 0
+        }
+      ],
+      "stage_totals_ms": {
+        "commit": 0,
+        "prevout_batch_load": 0,
+        "script_verify": 0,
+        "utxo_load": 0
+      },
+      "total_ms": 0
+    },
+    "updated_at": "2026-06-05T07:24:04.876350510+00:00",
+    "utxo_accounting_policy": "core_spendable_v1",
+    "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "validated_height": 50000
+  },
+  "connect_summary_kind": "final_connect_snapshot",
+  "current_blocker": null,
+  "datadir": "/data",
+  "failures": [],
+  "fresh_state": true,
+  "header_height": 50000,
+  "header_target_height": 50000,
+  "implementation": "RustNode",
+  "local_reference_status": "target_reached",
+  "native_crypto_available": true,
+  "native_crypto_backend": "rust-secp256k1",
+  "native_storage": true,
+  "peer": "host.docker.internal:48333",
+  "peer_mode": "local_reference",
+  "pipeline_timing_summary": {
+    "block_connect_store_commit": 23346,
+    "block_parse_validate": 1633,
+    "block_store": 1142,
+    "blocks_connected": 50001,
+    "blocks_fetched": 50001,
+    "commit": 380,
+    "connect_total": 23346,
+    "metadata_store": 0,
+    "p2p_fetch": 510,
+    "prefetch_depth": 4,
+    "prevout_batch_load": 139,
+    "rpc_getblock": 0,
+    "rpc_getblockhash": 0,
+    "script_verify": 5489,
+    "slow_blocks": [
+      {
+        "height": 20888,
+        "ms": 1610,
+        "script_input_count": 6760,
+        "tx_count": 2,
+        "vin_count": 6761,
+        "vout_count": 3
+      },
+      {
+        "height": 21209,
+        "ms": 527,
+        "script_input_count": 3939,
+        "tx_count": 36,
+        "vin_count": 3940,
+        "vout_count": 70
+      },
+      {
+        "height": 21238,
+        "ms": 235,
+        "script_input_count": 2555,
+        "tx_count": 22,
+        "vin_count": 2556,
+        "vout_count": 42
+      },
+      {
+        "height": 26643,
+        "ms": 232,
+        "script_input_count": 4158,
+        "tx_count": 159,
+        "vin_count": 4159,
+        "vout_count": 316
+      },
+      {
+        "height": 24553,
+        "ms": 159,
+        "script_input_count": 2963,
+        "tx_count": 191,
+        "vin_count": 2964,
+        "vout_count": 381
+      },
+      {
+        "height": 28102,
+        "ms": 75,
+        "script_input_count": 2147,
+        "tx_count": 119,
+        "vin_count": 2148,
+        "vout_count": 240
+      },
+      {
+        "height": 33068,
+        "ms": 46,
+        "script_input_count": 1958,
+        "tx_count": 15,
+        "vin_count": 1959,
+        "vout_count": 40
+      },
+      {
+        "height": 48987,
+        "ms": 35,
+        "script_input_count": 1870,
+        "tx_count": 11,
+        "vin_count": 1871,
+        "vout_count": 22
+      },
+      {
+        "height": 40825,
+        "ms": 27,
+        "script_input_count": 1284,
+        "tx_count": 3,
+        "vin_count": 1285,
+        "vout_count": 6
+      },
+      {
+        "height": 39637,
+        "ms": 24,
+        "script_input_count": 2780,
+        "tx_count": 26,
+        "vin_count": 2781,
+        "vout_count": 69
+      }
+    ],
+    "stage_totals_ms": {
+      "block_connect_store_commit": 23346,
+      "block_parse_validate": 1633,
+      "block_store": 1142,
+      "commit": 380,
+      "connect_total": 23346,
+      "metadata_store": 0,
+      "p2p_fetch": 510,
+      "prevout_batch_load": 139,
+      "script_verify": 5489,
+      "utxo_load": 139
+    },
+    "telemetry_schema": "benchmark.telemetry_tick.v1",
+    "telemetry_ticks": [
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 1,
+        "blocks_fetched": 1,
+        "current_blocker": null,
+        "elapsed_ms": 100,
+        "gate": "supporting_50k",
+        "hash": "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
+        "height": 0,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 0.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 0.0,
+        "rate_total_blocks_per_second": 9.993249360192202,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 0,
+            "ms": 0,
+            "script_input_count": 0,
+            "tx_count": 1,
+            "vin_count": 1,
+            "vout_count": 1
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 0,
+          "block_parse_validate": 0,
+          "commit": 0,
+          "p2p_fetch": 99,
+          "script_verify": 0,
+          "utxo_apply": 0,
+          "utxo_load": 0
+        },
+        "txs": 1,
+        "utxos": 0
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 2501,
+        "blocks_fetched": 2501,
+        "current_blocker": null,
+        "elapsed_ms": 463,
+        "gate": "supporting_50k",
+        "hash": "0000000021a47e064c0d6a828f8e1496280de2c7e05e43f32511335df3013adb",
+        "height": 2500,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 5.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 6887.052341597796,
+        "rate_total_blocks_per_second": 5395.624128983437,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 2222,
+            "ms": 4,
+            "script_input_count": 307,
+            "tx_count": 40,
+            "vin_count": 308,
+            "vout_count": 388
+          },
+          {
+            "height": 2204,
+            "ms": 3,
+            "script_input_count": 264,
+            "tx_count": 38,
+            "vin_count": 265,
+            "vout_count": 367
+          },
+          {
+            "height": 2205,
+            "ms": 3,
+            "script_input_count": 291,
+            "tx_count": 17,
+            "vin_count": 292,
+            "vout_count": 159
+          },
+          {
+            "height": 2208,
+            "ms": 3,
+            "script_input_count": 274,
+            "tx_count": 13,
+            "vin_count": 275,
+            "vout_count": 118
+          },
+          {
+            "height": 2212,
+            "ms": 3,
+            "script_input_count": 183,
+            "tx_count": 2,
+            "vin_count": 184,
+            "vout_count": 3
+          },
+          {
+            "height": 2187,
+            "ms": 2,
+            "script_input_count": 234,
+            "tx_count": 36,
+            "vin_count": 235,
+            "vout_count": 204
+          },
+          {
+            "height": 2191,
+            "ms": 2,
+            "script_input_count": 217,
+            "tx_count": 44,
+            "vin_count": 218,
+            "vout_count": 252
+          },
+          {
+            "height": 2199,
+            "ms": 2,
+            "script_input_count": 243,
+            "tx_count": 15,
+            "vin_count": 244,
+            "vout_count": 138
+          },
+          {
+            "height": 2202,
+            "ms": 2,
+            "script_input_count": 249,
+            "tx_count": 16,
+            "vin_count": 250,
+            "vout_count": 149
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 234,
+          "block_parse_validate": 28,
+          "commit": 0,
+          "p2p_fetch": 140,
+          "script_verify": 54,
+          "utxo_apply": 0,
+          "utxo_load": 0
+        },
+        "txs": 1,
+        "utxos": 2060
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 5001,
+        "blocks_fetched": 5001,
+        "current_blocker": null,
+        "elapsed_ms": 2020,
+        "gate": "supporting_50k",
+        "hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+        "height": 5000,
+        "last_block_ms": 1,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 10.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 1605.6518946692358,
+        "rate_total_blocks_per_second": 2475.2237857323107,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 2222,
+            "ms": 4,
+            "script_input_count": 307,
+            "tx_count": 40,
+            "vin_count": 308,
+            "vout_count": 388
+          },
+          {
+            "height": 4340,
+            "ms": 4,
+            "script_input_count": 443,
+            "tx_count": 40,
+            "vin_count": 444,
+            "vout_count": 433
+          },
+          {
+            "height": 2204,
+            "ms": 3,
+            "script_input_count": 264,
+            "tx_count": 38,
+            "vin_count": 265,
+            "vout_count": 367
+          },
+          {
+            "height": 2205,
+            "ms": 3,
+            "script_input_count": 291,
+            "tx_count": 17,
+            "vin_count": 292,
+            "vout_count": 159
+          },
+          {
+            "height": 2208,
+            "ms": 3,
+            "script_input_count": 274,
+            "tx_count": 13,
+            "vin_count": 275,
+            "vout_count": 118
+          },
+          {
+            "height": 2212,
+            "ms": 3,
+            "script_input_count": 183,
+            "tx_count": 2,
+            "vin_count": 184,
+            "vout_count": 3
+          },
+          {
+            "height": 4094,
+            "ms": 3,
+            "script_input_count": 295,
+            "tx_count": 51,
+            "vin_count": 296,
+            "vout_count": 300
+          },
+          {
+            "height": 4124,
+            "ms": 3,
+            "script_input_count": 327,
+            "tx_count": 53,
+            "vin_count": 328,
+            "vout_count": 338
+          },
+          {
+            "height": 4245,
+            "ms": 3,
+            "script_input_count": 242,
+            "tx_count": 24,
+            "vin_count": 243,
+            "vout_count": 245
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 1647,
+          "block_parse_validate": 88,
+          "commit": 0,
+          "p2p_fetch": 148,
+          "script_verify": 258,
+          "utxo_apply": 0,
+          "utxo_load": 0
+        },
+        "txs": 10,
+        "utxos": 4574
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 7501,
+        "blocks_fetched": 7501,
+        "current_blocker": null,
+        "elapsed_ms": 4799,
+        "gate": "supporting_50k",
+        "hash": "0000000000a5edfb8a310e59c479fcaf3a407c7b4595ff3fdeb14f03a69885b7",
+        "height": 7500,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 15.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 899.6041741633682,
+        "rate_total_blocks_per_second": 1562.752355741621,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 2222,
+            "ms": 4,
+            "script_input_count": 307,
+            "tx_count": 40,
+            "vin_count": 308,
+            "vout_count": 388
+          },
+          {
+            "height": 4340,
+            "ms": 4,
+            "script_input_count": 443,
+            "tx_count": 40,
+            "vin_count": 444,
+            "vout_count": 433
+          },
+          {
+            "height": 5347,
+            "ms": 4,
+            "script_input_count": 255,
+            "tx_count": 26,
+            "vin_count": 256,
+            "vout_count": 245
+          },
+          {
+            "height": 6072,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 56,
+            "vin_count": 429,
+            "vout_count": 435
+          },
+          {
+            "height": 6096,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 57,
+            "vin_count": 429,
+            "vout_count": 449
+          },
+          {
+            "height": 6120,
+            "ms": 4,
+            "script_input_count": 412,
+            "tx_count": 63,
+            "vin_count": 413,
+            "vout_count": 412
+          },
+          {
+            "height": 6148,
+            "ms": 4,
+            "script_input_count": 468,
+            "tx_count": 57,
+            "vin_count": 469,
+            "vout_count": 458
+          },
+          {
+            "height": 6182,
+            "ms": 4,
+            "script_input_count": 447,
+            "tx_count": 59,
+            "vin_count": 448,
+            "vout_count": 445
+          },
+          {
+            "height": 2204,
+            "ms": 3,
+            "script_input_count": 264,
+            "tx_count": 38,
+            "vin_count": 265,
+            "vout_count": 367
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 4167,
+          "block_parse_validate": 202,
+          "commit": 0,
+          "p2p_fetch": 200,
+          "script_verify": 1183,
+          "utxo_apply": 0,
+          "utxo_load": 0
+        },
+        "txs": 1,
+        "utxos": 7019
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 10001,
+        "blocks_fetched": 10001,
+        "current_blocker": null,
+        "elapsed_ms": 4979,
+        "gate": "supporting_50k",
+        "hash": "000000000037079ff4c37eed57d00eb9ddfde8737b559ffa4101b11e76c97466",
+        "height": 10000,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 20.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 13888.888888888889,
+        "rate_total_blocks_per_second": 2008.6234896075734,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 2222,
+            "ms": 4,
+            "script_input_count": 307,
+            "tx_count": 40,
+            "vin_count": 308,
+            "vout_count": 388
+          },
+          {
+            "height": 4340,
+            "ms": 4,
+            "script_input_count": 443,
+            "tx_count": 40,
+            "vin_count": 444,
+            "vout_count": 433
+          },
+          {
+            "height": 5347,
+            "ms": 4,
+            "script_input_count": 255,
+            "tx_count": 26,
+            "vin_count": 256,
+            "vout_count": 245
+          },
+          {
+            "height": 6072,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 56,
+            "vin_count": 429,
+            "vout_count": 435
+          },
+          {
+            "height": 6096,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 57,
+            "vin_count": 429,
+            "vout_count": 449
+          },
+          {
+            "height": 6120,
+            "ms": 4,
+            "script_input_count": 412,
+            "tx_count": 63,
+            "vin_count": 413,
+            "vout_count": 412
+          },
+          {
+            "height": 6148,
+            "ms": 4,
+            "script_input_count": 468,
+            "tx_count": 57,
+            "vin_count": 469,
+            "vout_count": 458
+          },
+          {
+            "height": 6182,
+            "ms": 4,
+            "script_input_count": 447,
+            "tx_count": 59,
+            "vin_count": 448,
+            "vout_count": 445
+          },
+          {
+            "height": 2204,
+            "ms": 3,
+            "script_input_count": 264,
+            "tx_count": 38,
+            "vin_count": 265,
+            "vout_count": 367
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 4261,
+          "block_parse_validate": 224,
+          "commit": 0,
+          "p2p_fetch": 220,
+          "script_verify": 1183,
+          "utxo_apply": 0,
+          "utxo_load": 0
+        },
+        "txs": 1,
+        "utxos": 9519
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 12501,
+        "blocks_fetched": 12501,
+        "current_blocker": null,
+        "elapsed_ms": 5206,
+        "gate": "supporting_50k",
+        "hash": "0000000000029f07dfa965ce430181ae5c55521bdcae37858967015ff466477b",
+        "height": 12500,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 25.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 11013.215859030837,
+        "rate_total_blocks_per_second": 2401.0734585768014,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 2222,
+            "ms": 4,
+            "script_input_count": 307,
+            "tx_count": 40,
+            "vin_count": 308,
+            "vout_count": 388
+          },
+          {
+            "height": 4340,
+            "ms": 4,
+            "script_input_count": 443,
+            "tx_count": 40,
+            "vin_count": 444,
+            "vout_count": 433
+          },
+          {
+            "height": 5347,
+            "ms": 4,
+            "script_input_count": 255,
+            "tx_count": 26,
+            "vin_count": 256,
+            "vout_count": 245
+          },
+          {
+            "height": 6072,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 56,
+            "vin_count": 429,
+            "vout_count": 435
+          },
+          {
+            "height": 6096,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 57,
+            "vin_count": 429,
+            "vout_count": 449
+          },
+          {
+            "height": 6120,
+            "ms": 4,
+            "script_input_count": 412,
+            "tx_count": 63,
+            "vin_count": 413,
+            "vout_count": 412
+          },
+          {
+            "height": 6148,
+            "ms": 4,
+            "script_input_count": 468,
+            "tx_count": 57,
+            "vin_count": 469,
+            "vout_count": 458
+          },
+          {
+            "height": 6182,
+            "ms": 4,
+            "script_input_count": 447,
+            "tx_count": 59,
+            "vin_count": 448,
+            "vout_count": 445
+          },
+          {
+            "height": 2204,
+            "ms": 3,
+            "script_input_count": 264,
+            "tx_count": 38,
+            "vin_count": 265,
+            "vout_count": 367
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 4379,
+          "block_parse_validate": 253,
+          "commit": 0,
+          "p2p_fetch": 237,
+          "script_verify": 1183,
+          "utxo_apply": 0,
+          "utxo_load": 0
+        },
+        "txs": 1,
+        "utxos": 12019
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 15001,
+        "blocks_fetched": 15001,
+        "current_blocker": null,
+        "elapsed_ms": 5452,
+        "gate": "supporting_50k",
+        "hash": "000000000002652d365c5ae857ef32edb1ee983c5ae5192e8a662f6c24e7c76b",
+        "height": 15000,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 30.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 10162.60162601626,
+        "rate_total_blocks_per_second": 2751.0529425439977,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 2222,
+            "ms": 4,
+            "script_input_count": 307,
+            "tx_count": 40,
+            "vin_count": 308,
+            "vout_count": 388
+          },
+          {
+            "height": 4340,
+            "ms": 4,
+            "script_input_count": 443,
+            "tx_count": 40,
+            "vin_count": 444,
+            "vout_count": 433
+          },
+          {
+            "height": 5347,
+            "ms": 4,
+            "script_input_count": 255,
+            "tx_count": 26,
+            "vin_count": 256,
+            "vout_count": 245
+          },
+          {
+            "height": 6072,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 56,
+            "vin_count": 429,
+            "vout_count": 435
+          },
+          {
+            "height": 6096,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 57,
+            "vin_count": 429,
+            "vout_count": 449
+          },
+          {
+            "height": 6120,
+            "ms": 4,
+            "script_input_count": 412,
+            "tx_count": 63,
+            "vin_count": 413,
+            "vout_count": 412
+          },
+          {
+            "height": 6148,
+            "ms": 4,
+            "script_input_count": 468,
+            "tx_count": 57,
+            "vin_count": 469,
+            "vout_count": 458
+          },
+          {
+            "height": 6182,
+            "ms": 4,
+            "script_input_count": 447,
+            "tx_count": 59,
+            "vin_count": 448,
+            "vout_count": 445
+          },
+          {
+            "height": 2204,
+            "ms": 3,
+            "script_input_count": 264,
+            "tx_count": 38,
+            "vin_count": 265,
+            "vout_count": 367
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 4504,
+          "block_parse_validate": 283,
+          "commit": 0,
+          "p2p_fetch": 259,
+          "script_verify": 1183,
+          "utxo_apply": 0,
+          "utxo_load": 0
+        },
+        "txs": 1,
+        "utxos": 14519
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 17501,
+        "blocks_fetched": 17501,
+        "current_blocker": null,
+        "elapsed_ms": 5643,
+        "gate": "supporting_50k",
+        "hash": "000000000000b8e3020eb5be74b365882d9a9496f34b4540cb42a67e8018055c",
+        "height": 17500,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 35.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 13089.005235602093,
+        "rate_total_blocks_per_second": 3101.151528867358,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 2222,
+            "ms": 4,
+            "script_input_count": 307,
+            "tx_count": 40,
+            "vin_count": 308,
+            "vout_count": 388
+          },
+          {
+            "height": 4340,
+            "ms": 4,
+            "script_input_count": 443,
+            "tx_count": 40,
+            "vin_count": 444,
+            "vout_count": 433
+          },
+          {
+            "height": 5347,
+            "ms": 4,
+            "script_input_count": 255,
+            "tx_count": 26,
+            "vin_count": 256,
+            "vout_count": 245
+          },
+          {
+            "height": 6072,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 56,
+            "vin_count": 429,
+            "vout_count": 435
+          },
+          {
+            "height": 6096,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 57,
+            "vin_count": 429,
+            "vout_count": 449
+          },
+          {
+            "height": 6120,
+            "ms": 4,
+            "script_input_count": 412,
+            "tx_count": 63,
+            "vin_count": 413,
+            "vout_count": 412
+          },
+          {
+            "height": 6148,
+            "ms": 4,
+            "script_input_count": 468,
+            "tx_count": 57,
+            "vin_count": 469,
+            "vout_count": 458
+          },
+          {
+            "height": 6182,
+            "ms": 4,
+            "script_input_count": 447,
+            "tx_count": 59,
+            "vin_count": 448,
+            "vout_count": 445
+          },
+          {
+            "height": 2204,
+            "ms": 3,
+            "script_input_count": 264,
+            "tx_count": 38,
+            "vin_count": 265,
+            "vout_count": 367
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 4590,
+          "block_parse_validate": 305,
+          "commit": 0,
+          "p2p_fetch": 295,
+          "script_verify": 1183,
+          "utxo_apply": 0,
+          "utxo_load": 0
+        },
+        "txs": 1,
+        "utxos": 17035
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 20001,
+        "blocks_fetched": 20001,
+        "current_blocker": null,
+        "elapsed_ms": 5909,
+        "gate": "supporting_50k",
+        "hash": "0000000000003a28386161143be8e7cdc3d857021986c4d0ee140d852a155b59",
+        "height": 20000,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 40.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 9398.496240601504,
+        "rate_total_blocks_per_second": 3384.5844079483313,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 19295,
+            "ms": 6,
+            "script_input_count": 538,
+            "tx_count": 502,
+            "vin_count": 539,
+            "vout_count": 1003
+          },
+          {
+            "height": 19325,
+            "ms": 5,
+            "script_input_count": 300,
+            "tx_count": 2,
+            "vin_count": 301,
+            "vout_count": 3
+          },
+          {
+            "height": 2222,
+            "ms": 4,
+            "script_input_count": 307,
+            "tx_count": 40,
+            "vin_count": 308,
+            "vout_count": 388
+          },
+          {
+            "height": 4340,
+            "ms": 4,
+            "script_input_count": 443,
+            "tx_count": 40,
+            "vin_count": 444,
+            "vout_count": 433
+          },
+          {
+            "height": 5347,
+            "ms": 4,
+            "script_input_count": 255,
+            "tx_count": 26,
+            "vin_count": 256,
+            "vout_count": 245
+          },
+          {
+            "height": 6072,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 56,
+            "vin_count": 429,
+            "vout_count": 435
+          },
+          {
+            "height": 6096,
+            "ms": 4,
+            "script_input_count": 428,
+            "tx_count": 57,
+            "vin_count": 429,
+            "vout_count": 449
+          },
+          {
+            "height": 6120,
+            "ms": 4,
+            "script_input_count": 412,
+            "tx_count": 63,
+            "vin_count": 413,
+            "vout_count": 412
+          },
+          {
+            "height": 6148,
+            "ms": 4,
+            "script_input_count": 468,
+            "tx_count": 57,
+            "vin_count": 469,
+            "vout_count": 458
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 4747,
+          "block_parse_validate": 333,
+          "commit": 0,
+          "p2p_fetch": 316,
+          "script_verify": 1198,
+          "utxo_apply": 0,
+          "utxo_load": 0
+        },
+        "txs": 1,
+        "utxos": 19549
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 22501,
+        "blocks_fetched": 22501,
+        "current_blocker": null,
+        "elapsed_ms": 8749,
+        "gate": "supporting_50k",
+        "hash": "00000000000001db3ae7307feb0d75d153e0378010d5b36f2c2af5d5bf688f76",
+        "height": 22500,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 45.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 880.2816901408452,
+        "rate_total_blocks_per_second": 2571.7365350621817,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 21717,
+            "ms": 8,
+            "script_input_count": 416,
+            "tx_count": 5,
+            "vin_count": 417,
+            "vout_count": 10
+          },
+          {
+            "height": 19295,
+            "ms": 6,
+            "script_input_count": 538,
+            "tx_count": 502,
+            "vin_count": 539,
+            "vout_count": 1003
+          },
+          {
+            "height": 19325,
+            "ms": 5,
+            "script_input_count": 300,
+            "tx_count": 2,
+            "vin_count": 301,
+            "vout_count": 3
+          },
+          {
+            "height": 2222,
+            "ms": 4,
+            "script_input_count": 307,
+            "tx_count": 40,
+            "vin_count": 308,
+            "vout_count": 388
+          },
+          {
+            "height": 4340,
+            "ms": 4,
+            "script_input_count": 443,
+            "tx_count": 40,
+            "vin_count": 444,
+            "vout_count": 433
+          },
+          {
+            "height": 5347,
+            "ms": 4,
+            "script_input_count": 255,
+            "tx_count": 26,
+            "vin_count": 256,
+            "vout_count": 245
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 7482,
+          "block_parse_validate": 370,
+          "commit": 12,
+          "p2p_fetch": 334,
+          "script_verify": 3574,
+          "utxo_apply": 0,
+          "utxo_load": 12
+        },
+        "txs": 1,
+        "utxos": 8609
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 25001,
+        "blocks_fetched": 25001,
+        "current_blocker": null,
+        "elapsed_ms": 9647,
+        "gate": "supporting_50k",
+        "hash": "00000000000000c207c423ebb2d935e7b867b51710aaf72967666e83696f01e2",
+        "height": 25000,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 50.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 2783.9643652561244,
+        "rate_total_blocks_per_second": 2591.5096427255394,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 21717,
+            "ms": 8,
+            "script_input_count": 416,
+            "tx_count": 5,
+            "vin_count": 417,
+            "vout_count": 10
+          },
+          {
+            "height": 19295,
+            "ms": 6,
+            "script_input_count": 538,
+            "tx_count": 502,
+            "vin_count": 539,
+            "vout_count": 1003
+          },
+          {
+            "height": 24958,
+            "ms": 6,
+            "script_input_count": 476,
+            "tx_count": 477,
+            "vin_count": 477,
+            "vout_count": 954
+          },
+          {
+            "height": 24975,
+            "ms": 6,
+            "script_input_count": 502,
+            "tx_count": 502,
+            "vin_count": 503,
+            "vout_count": 1004
+          },
+          {
+            "height": 19325,
+            "ms": 5,
+            "script_input_count": 300,
+            "tx_count": 2,
+            "vin_count": 301,
+            "vout_count": 3
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 8239,
+          "block_parse_validate": 430,
+          "commit": 54,
+          "p2p_fetch": 356,
+          "script_verify": 3769,
+          "utxo_apply": 0,
+          "utxo_load": 14
+        },
+        "txs": 1,
+        "utxos": 38089
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 27501,
+        "blocks_fetched": 27501,
+        "current_blocker": null,
+        "elapsed_ms": 11994,
+        "gate": "supporting_50k",
+        "hash": "0000000048a70244fedea7ffb18ed9cc5b1a34931cf9bc665ee793e2001d96af",
+        "height": 27500,
+        "last_block_ms": 1,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 55.00000000000001,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 1065.1896037494673,
+        "rate_total_blocks_per_second": 2292.8028617614623,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 21717,
+            "ms": 8,
+            "script_input_count": 416,
+            "tx_count": 5,
+            "vin_count": 417,
+            "vout_count": 10
+          },
+          {
+            "height": 25436,
+            "ms": 7,
+            "script_input_count": 483,
+            "tx_count": 483,
+            "vin_count": 484,
+            "vout_count": 966
+          },
+          {
+            "height": 19295,
+            "ms": 6,
+            "script_input_count": 538,
+            "tx_count": 502,
+            "vin_count": 539,
+            "vout_count": 1003
+          },
+          {
+            "height": 24958,
+            "ms": 6,
+            "script_input_count": 476,
+            "tx_count": 477,
+            "vin_count": 477,
+            "vout_count": 954
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 10289,
+          "block_parse_validate": 610,
+          "commit": 94,
+          "p2p_fetch": 375,
+          "script_verify": 4137,
+          "utxo_apply": 0,
+          "utxo_load": 19
+        },
+        "txs": 103,
+        "utxos": 178774
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 30001,
+        "blocks_fetched": 30001,
+        "current_blocker": null,
+        "elapsed_ms": 15979,
+        "gate": "supporting_50k",
+        "hash": "000000000000000095a56b41da7618b40949a3aef84059732ff1b045cb44fbbf",
+        "height": 30000,
+        "last_block_ms": 1,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 60.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 627.3525721455458,
+        "rate_total_blocks_per_second": 1877.4743067800698,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 28102,
+            "ms": 75,
+            "script_input_count": 2147,
+            "tx_count": 119,
+            "vin_count": 2148,
+            "vout_count": 240
+          },
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          },
+          {
+            "height": 29364,
+            "ms": 11,
+            "script_input_count": 1000,
+            "tx_count": 307,
+            "vin_count": 1001,
+            "vout_count": 618
+          },
+          {
+            "height": 21717,
+            "ms": 8,
+            "script_input_count": 416,
+            "tx_count": 5,
+            "vin_count": 417,
+            "vout_count": 10
+          },
+          {
+            "height": 29030,
+            "ms": 8,
+            "script_input_count": 463,
+            "tx_count": 445,
+            "vin_count": 464,
+            "vout_count": 890
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 13774,
+          "block_parse_validate": 921,
+          "commit": 256,
+          "p2p_fetch": 390,
+          "script_verify": 4724,
+          "utxo_apply": 0,
+          "utxo_load": 30
+        },
+        "txs": 115,
+        "utxos": 381636
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 32501,
+        "blocks_fetched": 32501,
+        "current_blocker": null,
+        "elapsed_ms": 18991,
+        "gate": "supporting_50k",
+        "hash": "000000000000001543f031e025e8d34766f03df138aba8bfd54ade846304b297",
+        "height": 32500,
+        "last_block_ms": 7,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 65.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 830.0132802124834,
+        "rate_total_blocks_per_second": 1711.3055001322443,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 28102,
+            "ms": 75,
+            "script_input_count": 2147,
+            "tx_count": 119,
+            "vin_count": 2148,
+            "vout_count": 240
+          },
+          {
+            "height": 32499,
+            "ms": 20,
+            "script_input_count": 1931,
+            "tx_count": 32,
+            "vin_count": 1932,
+            "vout_count": 55
+          },
+          {
+            "height": 30689,
+            "ms": 17,
+            "script_input_count": 171,
+            "tx_count": 158,
+            "vin_count": 172,
+            "vout_count": 319
+          },
+          {
+            "height": 30733,
+            "ms": 13,
+            "script_input_count": 1352,
+            "tx_count": 546,
+            "vin_count": 1353,
+            "vout_count": 1112
+          },
+          {
+            "height": 739,
+            "ms": 12,
+            "script_input_count": 563,
+            "tx_count": 2,
+            "vin_count": 564,
+            "vout_count": 4
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 16405,
+          "block_parse_validate": 1154,
+          "commit": 323,
+          "p2p_fetch": 406,
+          "script_verify": 5090,
+          "utxo_apply": 0,
+          "utxo_load": 54
+        },
+        "txs": 14,
+        "utxos": 537162
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 35001,
+        "blocks_fetched": 35001,
+        "current_blocker": null,
+        "elapsed_ms": 20547,
+        "gate": "supporting_50k",
+        "hash": "0000000047f9360bd7e79d3959bd32366e24b4182caf138a8b10d42add3b7fd7",
+        "height": 35000,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 70.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 1606.6838046272494,
+        "rate_total_blocks_per_second": 1703.3831238876428,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 28102,
+            "ms": 75,
+            "script_input_count": 2147,
+            "tx_count": 119,
+            "vin_count": 2148,
+            "vout_count": 240
+          },
+          {
+            "height": 33068,
+            "ms": 46,
+            "script_input_count": 1958,
+            "tx_count": 15,
+            "vin_count": 1959,
+            "vout_count": 40
+          },
+          {
+            "height": 32499,
+            "ms": 20,
+            "script_input_count": 1931,
+            "tx_count": 32,
+            "vin_count": 1932,
+            "vout_count": 55
+          },
+          {
+            "height": 30689,
+            "ms": 17,
+            "script_input_count": 171,
+            "tx_count": 158,
+            "vin_count": 172,
+            "vout_count": 319
+          },
+          {
+            "height": 32686,
+            "ms": 16,
+            "script_input_count": 2042,
+            "tx_count": 44,
+            "vin_count": 2043,
+            "vout_count": 71
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 17769,
+          "block_parse_validate": 1242,
+          "commit": 340,
+          "p2p_fetch": 424,
+          "script_verify": 5261,
+          "utxo_apply": 0,
+          "utxo_load": 105
+        },
+        "txs": 10,
+        "utxos": 529361
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 37501,
+        "blocks_fetched": 37501,
+        "current_blocker": null,
+        "elapsed_ms": 21674,
+        "gate": "supporting_50k",
+        "hash": "000000000000002a1cc25a33d8285dae50c2214cdf943892b26d4d4026799e3e",
+        "height": 37500,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 75.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 2218.2786157941437,
+        "rate_total_blocks_per_second": 1730.1888520620353,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 28102,
+            "ms": 75,
+            "script_input_count": 2147,
+            "tx_count": 119,
+            "vin_count": 2148,
+            "vout_count": 240
+          },
+          {
+            "height": 33068,
+            "ms": 46,
+            "script_input_count": 1958,
+            "tx_count": 15,
+            "vin_count": 1959,
+            "vout_count": 40
+          },
+          {
+            "height": 32499,
+            "ms": 20,
+            "script_input_count": 1931,
+            "tx_count": 32,
+            "vin_count": 1932,
+            "vout_count": 55
+          },
+          {
+            "height": 30689,
+            "ms": 17,
+            "script_input_count": 171,
+            "tx_count": 158,
+            "vin_count": 172,
+            "vout_count": 319
+          },
+          {
+            "height": 32686,
+            "ms": 16,
+            "script_input_count": 2042,
+            "tx_count": 44,
+            "vin_count": 2043,
+            "vout_count": 71
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 18742,
+          "block_parse_validate": 1309,
+          "commit": 340,
+          "p2p_fetch": 437,
+          "script_verify": 5280,
+          "utxo_apply": 0,
+          "utxo_load": 105
+        },
+        "txs": 4,
+        "utxos": 544278
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 40001,
+        "blocks_fetched": 40001,
+        "current_blocker": null,
+        "elapsed_ms": 22717,
+        "gate": "supporting_50k",
+        "hash": "000000000000000c1a1fad82b0e133f4772802b6dff7a95990580ae2e15c634f",
+        "height": 40000,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 80.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 2396.9319271332697,
+        "rate_total_blocks_per_second": 1760.787138260751,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 28102,
+            "ms": 75,
+            "script_input_count": 2147,
+            "tx_count": 119,
+            "vin_count": 2148,
+            "vout_count": 240
+          },
+          {
+            "height": 33068,
+            "ms": 46,
+            "script_input_count": 1958,
+            "tx_count": 15,
+            "vin_count": 1959,
+            "vout_count": 40
+          },
+          {
+            "height": 39637,
+            "ms": 24,
+            "script_input_count": 2780,
+            "tx_count": 26,
+            "vin_count": 2781,
+            "vout_count": 69
+          },
+          {
+            "height": 32499,
+            "ms": 20,
+            "script_input_count": 1931,
+            "tx_count": 32,
+            "vin_count": 1932,
+            "vout_count": 55
+          },
+          {
+            "height": 30689,
+            "ms": 17,
+            "script_input_count": 171,
+            "tx_count": 158,
+            "vin_count": 172,
+            "vout_count": 319
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 19648,
+          "block_parse_validate": 1368,
+          "commit": 354,
+          "p2p_fetch": 445,
+          "script_verify": 5326,
+          "utxo_apply": 0,
+          "utxo_load": 110
+        },
+        "txs": 16,
+        "utxos": 548033
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 42501,
+        "blocks_fetched": 42501,
+        "current_blocker": null,
+        "elapsed_ms": 23696,
+        "gate": "supporting_50k",
+        "hash": "000000000000002522d1a0d15d4e84b3d3e5096f82c1b6a509adad157e16e73b",
+        "height": 42500,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 85.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 2553.6261491317673,
+        "rate_total_blocks_per_second": 1793.5627293632836,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 28102,
+            "ms": 75,
+            "script_input_count": 2147,
+            "tx_count": 119,
+            "vin_count": 2148,
+            "vout_count": 240
+          },
+          {
+            "height": 33068,
+            "ms": 46,
+            "script_input_count": 1958,
+            "tx_count": 15,
+            "vin_count": 1959,
+            "vout_count": 40
+          },
+          {
+            "height": 40825,
+            "ms": 27,
+            "script_input_count": 1284,
+            "tx_count": 3,
+            "vin_count": 1285,
+            "vout_count": 6
+          },
+          {
+            "height": 39637,
+            "ms": 24,
+            "script_input_count": 2780,
+            "tx_count": 26,
+            "vin_count": 2781,
+            "vout_count": 69
+          },
+          {
+            "height": 32499,
+            "ms": 20,
+            "script_input_count": 1931,
+            "tx_count": 32,
+            "vin_count": 1932,
+            "vout_count": 55
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 20492,
+          "block_parse_validate": 1423,
+          "commit": 358,
+          "p2p_fetch": 456,
+          "script_verify": 5348,
+          "utxo_apply": 0,
+          "utxo_load": 112
+        },
+        "txs": 1,
+        "utxos": 552871
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 45001,
+        "blocks_fetched": 45001,
+        "current_blocker": null,
+        "elapsed_ms": 24969,
+        "gate": "supporting_50k",
+        "hash": "0000000019ae521883b2597ed74cd21e2efa43fbf487815300cad96206d76f0e",
+        "height": 45000,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 90.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 1963.8648860958367,
+        "rate_total_blocks_per_second": 1802.2735846876071,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 28102,
+            "ms": 75,
+            "script_input_count": 2147,
+            "tx_count": 119,
+            "vin_count": 2148,
+            "vout_count": 240
+          },
+          {
+            "height": 33068,
+            "ms": 46,
+            "script_input_count": 1958,
+            "tx_count": 15,
+            "vin_count": 1959,
+            "vout_count": 40
+          },
+          {
+            "height": 40825,
+            "ms": 27,
+            "script_input_count": 1284,
+            "tx_count": 3,
+            "vin_count": 1285,
+            "vout_count": 6
+          },
+          {
+            "height": 39637,
+            "ms": 24,
+            "script_input_count": 2780,
+            "tx_count": 26,
+            "vin_count": 2781,
+            "vout_count": 69
+          },
+          {
+            "height": 32499,
+            "ms": 20,
+            "script_input_count": 1931,
+            "tx_count": 32,
+            "vin_count": 1932,
+            "vout_count": 55
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 21572,
+          "block_parse_validate": 1504,
+          "commit": 370,
+          "p2p_fetch": 480,
+          "script_verify": 5438,
+          "utxo_apply": 0,
+          "utxo_load": 129
+        },
+        "txs": 4,
+        "utxos": 558488
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 47501,
+        "blocks_fetched": 47501,
+        "current_blocker": null,
+        "elapsed_ms": 26105,
+        "gate": "supporting_50k",
+        "hash": "000000003275b7f614f99535bbe014fbc8c8f28a13e9efe3bde7fb044d08258e",
+        "height": 47500,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 95.0,
+        "phase": "p2p_fetch_connect",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 2200.704225352113,
+        "rate_total_blocks_per_second": 1819.6103321753835,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 28102,
+            "ms": 75,
+            "script_input_count": 2147,
+            "tx_count": 119,
+            "vin_count": 2148,
+            "vout_count": 240
+          },
+          {
+            "height": 33068,
+            "ms": 46,
+            "script_input_count": 1958,
+            "tx_count": 15,
+            "vin_count": 1959,
+            "vout_count": 40
+          },
+          {
+            "height": 40825,
+            "ms": 27,
+            "script_input_count": 1284,
+            "tx_count": 3,
+            "vin_count": 1285,
+            "vout_count": 6
+          },
+          {
+            "height": 39637,
+            "ms": 24,
+            "script_input_count": 2780,
+            "tx_count": 26,
+            "vin_count": 2781,
+            "vout_count": 69
+          },
+          {
+            "height": 32499,
+            "ms": 20,
+            "script_input_count": 1931,
+            "tx_count": 32,
+            "vin_count": 1932,
+            "vout_count": 55
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 22532,
+          "block_parse_validate": 1576,
+          "commit": 376,
+          "p2p_fetch": 501,
+          "script_verify": 5456,
+          "utxo_apply": 0,
+          "utxo_load": 136
+        },
+        "txs": 3,
+        "utxos": 565661
+      },
+      {
+        "benchmark_lane": "supporting_50k_p2p",
+        "blocks_connected": 50001,
+        "blocks_fetched": 50001,
+        "current_blocker": null,
+        "elapsed_ms": 27061,
+        "gate": "supporting_50k",
+        "hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+        "height": 50000,
+        "last_block_ms": 0,
+        "peer": "host.docker.internal:48333",
+        "peer_mode": "local_reference",
+        "percent": 100.0,
+        "phase": "complete",
+        "port": "rust",
+        "prefetch_depth": 4,
+        "rate_recent_blocks_per_second": 2615.0627615062763,
+        "rate_total_blocks_per_second": 1847.6551390560535,
+        "resumed_from_height": null,
+        "runtime_surface": "docker",
+        "schema": "benchmark.telemetry_tick.v1",
+        "script_runner_mode": "parallel",
+        "slow_blocks": [
+          {
+            "height": 20888,
+            "ms": 1610,
+            "script_input_count": 6760,
+            "tx_count": 2,
+            "vin_count": 6761,
+            "vout_count": 3
+          },
+          {
+            "height": 21209,
+            "ms": 527,
+            "script_input_count": 3939,
+            "tx_count": 36,
+            "vin_count": 3940,
+            "vout_count": 70
+          },
+          {
+            "height": 21238,
+            "ms": 235,
+            "script_input_count": 2555,
+            "tx_count": 22,
+            "vin_count": 2556,
+            "vout_count": 42
+          },
+          {
+            "height": 26643,
+            "ms": 232,
+            "script_input_count": 4158,
+            "tx_count": 159,
+            "vin_count": 4159,
+            "vout_count": 316
+          },
+          {
+            "height": 24553,
+            "ms": 159,
+            "script_input_count": 2963,
+            "tx_count": 191,
+            "vin_count": 2964,
+            "vout_count": 381
+          },
+          {
+            "height": 28102,
+            "ms": 75,
+            "script_input_count": 2147,
+            "tx_count": 119,
+            "vin_count": 2148,
+            "vout_count": 240
+          },
+          {
+            "height": 33068,
+            "ms": 46,
+            "script_input_count": 1958,
+            "tx_count": 15,
+            "vin_count": 1959,
+            "vout_count": 40
+          },
+          {
+            "height": 48987,
+            "ms": 35,
+            "script_input_count": 1870,
+            "tx_count": 11,
+            "vin_count": 1871,
+            "vout_count": 22
+          },
+          {
+            "height": 40825,
+            "ms": 27,
+            "script_input_count": 1284,
+            "tx_count": 3,
+            "vin_count": 1285,
+            "vout_count": 6
+          },
+          {
+            "height": 39637,
+            "ms": 24,
+            "script_input_count": 2780,
+            "tx_count": 26,
+            "vin_count": 2781,
+            "vout_count": 69
+          }
+        ],
+        "start_height": 0,
+        "sync_status": "blocks_current",
+        "target_height": 50000,
+        "timing_buckets_ms": {
+          "block_connect_store_commit": 23346,
+          "block_parse_validate": 1633,
+          "commit": 380,
+          "p2p_fetch": 510,
+          "script_verify": 5489,
+          "utxo_apply": 0,
+          "utxo_load": 139
+        },
+        "txs": 12,
+        "utxos": 568855
+      }
+    ],
+    "total_wall": 27061,
+    "utxo_apply": 0,
+    "utxo_load": 139
+  },
+  "prefetch_depth": 4,
+  "proof_mode": "p2p_sync",
+  "reference_finish_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+  "reference_finish_height": 50000,
+  "reference_start_hash": "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
+  "reference_start_height": 0,
+  "result": "passed",
+  "resume_supported": true,
+  "rocksdb_tuning": "block_cache=256MiB,bloom=10,write_buffer=64MiB,max_write_buffers=4,max_background_jobs=4",
+  "rocksdb_wal_disabled": false,
+  "runtime_surface": "docker",
+  "schnorr_backend": "rust-secp256k1",
+  "script_runner_mode": "parallel",
+  "status": {
+    "active_writer_pid": null,
+    "binary_gate_status": "not_attempted",
+    "block_gap_count": 0,
+    "chain": "testnet4",
+    "chainstate_backend": "rocksdb",
+    "chainstate_backend_path": "/data/chainstate-rocksdb",
+    "chainstate_generation_id": "rust-reference-sync",
+    "chainstate_status": "usable",
+    "chainstate_utxo_count": 568855,
+    "current_blocker": null,
+    "datadir": "/data",
+    "header_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "header_height": 50000,
+    "implementation": "RustNode",
+    "last_error": "",
+    "lock_status": "unlocked",
+    "native_crypto_available": true,
+    "native_crypto_backend": "rust-secp256k1",
+    "network": "testnet4",
+    "node_id": "rsbitnode-native-storage",
+    "ok": true,
+    "runtime_status": "not_running",
+    "runtime_status_detail": "scaffold",
+    "runtime_surface": "docker",
+    "schnorr_backend": "rust-secp256k1",
+    "stored_block_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "stored_block_height": 50000,
+    "sync_status": "blocks_current",
+    "taproot_tweak_backend": "rust-secp256k1",
+    "updated_at": "2026-06-05T07:24:04.876220366+00:00",
+    "utxo_accounting_policy": "core_spendable_v1",
+    "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "validated_height": 50000
+  },
+  "storage_codec_version": 2,
+  "stored_block_height": 50000,
+  "sync_status": "blocks_current",
+  "sync_summary": {
+    "binary_gate_status": "not_attempted",
+    "blocks_connected": 50001,
+    "blocks_fetched": 50001,
+    "current_blocker": null,
+    "header_height": 50000,
+    "implementation": "RustNode",
+    "peer": "host.docker.internal:48333",
+    "peer_mode": "local_reference",
+    "resumed_from_height": null,
+    "runtime_surface": "docker",
+    "start_height": 0,
+    "started_at": "2026-06-05T07:23:37.814489067+00:00",
+    "stored_block_height": 50000,
+    "sync_status": "blocks_current",
+    "target_height": 50000,
+    "updated_at": "2026-06-05T07:24:04.876422169+00:00",
+    "validated_height": 50000
+  },
+  "taproot_tweak_backend": "rust-secp256k1",
+  "target_height": 50000,
+  "target_label": "50k",
+  "updated_at": "2026-06-05T07:24:05.252906588+00:00",
+  "utxo_accounting_policy": "core_spendable_v1",
+  "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+  "validated_height": 50000
+}
