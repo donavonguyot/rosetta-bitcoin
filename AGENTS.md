@@ -88,8 +88,9 @@ python3 Nodes/Shared/docker/validate_docker_contract.py
 
 Artifact cleanup follows `Docs/artifact-retention.md` and
 `Nodes/Shared/conformance/ARTIFACT_INVENTORY.md`: canonical proof JSON belongs in
-`Nodes/Shared/conformance/results/`, while live datadirs, logs, DBs, build outputs,
-and Docker volumes stay ignored and port-local.
+`Nodes/Shared/conformance/results/`, current Project claims are curated in
+`Nodes/Shared/conformance/current_evidence.json`, and live datadirs, logs, DBs,
+build outputs, and Docker volumes stay ignored and port-local.
 
 For mission-control status, blocker matrices, Docker coverage, conformance
 summaries, and benchmark summaries, query `Project/project.db` instead of
@@ -116,6 +117,7 @@ All `Nodes/<Port>/` directories are root-owned source directories. Nested
 | `~/RB/Nodes/CSharp` | **csbitnode** | Managed-runtime follower |
 | `~/RB/Nodes/Go` | **gobitnode** | Fast native follower |
 | `~/RB/Nodes/Java` | **jbitnode** | Clean Java follower and provenance source |
+| `~/RB/Nodes/OCaml` | **ocbitnode** | Stock OCaml 5 native/RocksDB follower foundation |
 | `~/RB/Nodes/Rust` | **rsbitnode** | Native follower |
 | `~/RB/Nodes/Elixir` | **exbitnode** | BEAM follower |
 

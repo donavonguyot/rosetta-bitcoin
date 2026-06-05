@@ -1,0 +1,15 @@
+services:
+  ocbitnode:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: rb/ocbitnode:foundation
+    working_dir: /workspace/OCaml
+    volumes:
+      - ocbitnode_proof_data:/data
+      - ../../Shared:/workspace/Shared
+    command: ["status", "--datadir", "/data"]
+
+volumes:
+  ocbitnode_proof_data:
+

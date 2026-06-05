@@ -1,0 +1,90 @@
+{
+  "manifest_version": 1,
+  "port": "ocaml",
+  "status": "proof_partial",
+  "paths": {
+    "root": "Nodes/OCaml",
+    "dockerfile": "Nodes/OCaml/docker/Dockerfile",
+    "compose": "Nodes/OCaml/docker/docker-compose.yml",
+    "dockerignore": "Nodes/OCaml/docker/.dockerignore"
+  },
+  "images": {
+    "base": "ocaml/opam:debian-12-ocaml-5.2",
+    "runtime": "ocaml/opam:debian-12-ocaml-5.2",
+    "os_family": "Debian",
+    "package_manager": "apt plus opam",
+    "native_dependencies": ["librocksdb-dev", "libsecp256k1-dev", "opam:secp256k1=0.5.0"]
+  },
+  "volumes": {
+    "data": "ocbitnode_data",
+    "proof": "ocbitnode_proof_data",
+    "proof_50k": "ocbitnode_50k_proof_data",
+    "proof_100k": "ocbitnode_100k_proof_data",
+    "supervisor": "ocbitnode_supervisor_data"
+  },
+  "commands": {
+    "docker_config": "cd Nodes/OCaml && make docker-config",
+    "docker_build": "cd Nodes/OCaml && make docker-build",
+    "docker_warm": "cd Nodes/OCaml && make docker-warm",
+    "docker_status": "cd Nodes/OCaml && make docker-status",
+    "docker_storage_proof": "cd Nodes/OCaml && make docker-storage-proof",
+    "docker_script_corpus": "cd Nodes/OCaml && make docker-script-corpus",
+    "docker_native_crypto_vectors": "cd Nodes/OCaml && make docker-native-crypto-vectors",
+    "docker_proof_local": null,
+    "docker_proof_10k": null,
+    "docker_proof_50k": null,
+    "docker_proof_100k": null,
+    "docker_proof_tip_once": null,
+    "docker_tip_maintenance": null,
+    "docker_probe_external": null,
+    "docker_supervisor": "cd Nodes/OCaml && make docker-smoke-once",
+    "docker_supervisor_status": "cd Nodes/OCaml && make docker-status",
+    "docker_supervisor_stop": null,
+    "docker_supervisor_resume": null,
+    "docker_smoke_once": "cd Nodes/OCaml && make docker-smoke-once"
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+    }
+  },
+  "supervisor": {
+    "stop_marker": ".ocbitnode_supervisor_stop",
+    "resume_marker": ".ocbitnode_supervisor_resume",
+    "poll_sec": 120,
+    "check_sec": 5
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": "Nodes/Shared/conformance/results/ocaml_rocksdb_codec_v2_storage_docker_<YYYY-MM-DD>.json",
+    "native_crypto_vectors_result": "Nodes/Shared/conformance/results/ocaml_native_crypto_vectors_docker_<YYYY-MM-DD>.json",
+    "script_corpus_result": "Nodes/Shared/conformance/results/ocaml_script_corpus_docker_<YYYY-MM-DD>.json",
+    "local_reference_result": null,
+    "notes": "OCaml proof_partial: stock OCaml 5 Docker build, owned RocksDB binding, native secp256k1 vectors, Chainstate Codec v2 storage proof, and Shared script corpus fixture-loader proof. No P2P or 5k claim in this phase."
+  },
+  "known_caveats": [
+    "P2P sync is not implemented",
+    "docker_proof_local, docker_proof_10k, docker_proof_50k, and docker_proof_100k remain null until the sync phase lands",
+    "Script corpus proof verifies fixture manifest/source integrity and result artifact shape; full interpreter validation belongs to the next consensus phase",
+    "Binary gate remains not_attempted"
+  ]
+}
+

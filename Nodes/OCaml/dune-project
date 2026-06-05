@@ -1,0 +1,17 @@
+(lang dune 3.11)
+
+(name ocbitnode)
+
+(generate_opam_files true)
+
+(package
+ (name ocbitnode)
+ (synopsis "OCaml follower foundation for RB testnet4 node proofs")
+ (depends
+  (ocaml (>= 5.2))
+  (dune (>= 3.11))
+  yojson
+  digestif
+  secp256k1
+  alcotest))
+

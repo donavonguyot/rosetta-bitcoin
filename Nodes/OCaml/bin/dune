@@ -1,0 +1,5 @@
+(executable
+ (public_name ocbitnode)
+ (name main)
+ (libraries ocbitnode))
+

@@ -1,0 +1,343 @@
+{
+  "schema": "rb.current_evidence.v1",
+  "generated_at": "2026-06-05",
+  "notes": "Curated current Project evidence. Historical artifacts remain in results/ but are not imported into current Project status by default.",
+  "entries": [
+    {
+      "port": "cpp",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/cpp_script_corpus_docker_2026-06-05.json",
+      "status": "current",
+      "notes": "Current C++ port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "cpp",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/cpp_rocksdb_codec_v2_storage_2026-06-02.json",
+      "status": "current",
+      "notes": "Current C++ RocksDB storage proof."
+    },
+    {
+      "port": "cpp",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/cpp_docker_supporting_5k_benchmark_rust_shape_2026-06-05.json",
+      "status": "current",
+      "notes": "Current comparable C++ 5k baseline proof."
+    },
+    {
+      "port": "cpp",
+      "claim": "shakedown_50k",
+      "gate_id": "shakedown_50k",
+      "path": "Nodes/Shared/conformance/results/cpp_docker_supporting_50k_benchmark_rust_shape_2026-06-05.json",
+      "status": "current",
+      "notes": "Current C++ 50k evidence; Project classifies remaining telemetry gaps."
+    },
+    {
+      "port": "cpp",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/cpp_docker_primary_100k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current comparable C++ 100k proof."
+    },
+    {
+      "port": "csharp",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/csharp_script_corpus_2026-06-05.json",
+      "status": "current",
+      "notes": "Current C# port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "csharp",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/csharp_rocksdb_codec_v2_storage_2026-06-01.json",
+      "status": "current",
+      "notes": "Current C# RocksDB storage proof."
+    },
+    {
+      "port": "csharp",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/csharp_docker_supporting_5k_benchmark_2026-06-04.json",
+      "status": "current",
+      "notes": "Current comparable C# 5k baseline proof."
+    },
+    {
+      "port": "csharp",
+      "claim": "shakedown_50k",
+      "gate_id": "shakedown_50k",
+      "path": "Nodes/Shared/conformance/results/csharp_docker_supporting_50k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current C# 50k evidence; Project classifies remaining telemetry gaps."
+    },
+    {
+      "port": "elixir",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/elixir_script_corpus.json",
+      "status": "current",
+      "notes": "Current Elixir port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "elixir",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/elixir_rocksdb_native_storage_20260603.json",
+      "status": "current",
+      "notes": "Current Elixir RocksDB storage proof."
+    },
+    {
+      "port": "elixir",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/elixir_docker_supporting_5k_benchmark_2026-06-04.json",
+      "status": "current",
+      "notes": "Current comparable Elixir 5k baseline proof. Elixir is baseline-retired beyond 5k."
+    },
+    {
+      "port": "go",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/go_script_corpus_2026-06-04.json",
+      "status": "current",
+      "notes": "Current Go port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "go",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/go_storage_gate_docker_2026-06-03.json",
+      "status": "current",
+      "notes": "Current Go RocksDB storage proof."
+    },
+    {
+      "port": "go",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/go_docker_supporting_5k_benchmark_2026-06-04.json",
+      "status": "current",
+      "notes": "Current comparable Go 5k baseline proof."
+    },
+    {
+      "port": "go",
+      "claim": "shakedown_50k",
+      "gate_id": "shakedown_50k",
+      "path": "Nodes/Shared/conformance/results/go_docker_supporting_50k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Go 50k evidence; Project classifies remaining telemetry gaps."
+    },
+    {
+      "port": "go",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/go_docker_primary_100k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Go 100k evidence; Project classifies remaining timing gaps."
+    },
+    {
+      "port": "java",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/java_script_corpus_2026-06-04.json",
+      "status": "current",
+      "notes": "Current Java port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "java",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/java_rocksdb_codec_v2_storage_2026-06-01.json",
+      "status": "current",
+      "notes": "Current Java RocksDB storage proof."
+    },
+    {
+      "port": "java",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/java_docker_supporting_5k_benchmark_2026-06-04.json",
+      "status": "current",
+      "notes": "Current comparable Java 5k baseline proof."
+    },
+    {
+      "port": "java",
+      "claim": "shakedown_50k",
+      "gate_id": "shakedown_50k",
+      "path": "Nodes/Shared/conformance/results/java_docker_supporting_50k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Java 50k evidence; Project classifies remaining telemetry gaps."
+    },
+    {
+      "port": "java",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/java_docker_primary_100k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Java 100k evidence; Project classifies remaining telemetry gaps."
+    },
+    {
+      "port": "ocaml",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/ocaml_script_corpus_docker_2026-06-05.json",
+      "status": "current",
+      "notes": "Current OCaml port-owned native 45/45 script corpus proof."
+    },
+    {
+      "port": "ocaml",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/ocaml_rocksdb_codec_v2_storage_docker_2026-06-05.json",
+      "status": "current",
+      "notes": "Current OCaml RocksDB Codec v2 storage proof."
+    },
+    {
+      "port": "python",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/python_script_corpus_docker_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Python port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "python",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/python_rocksdb_native_storage_2026-06-02.json",
+      "status": "current",
+      "notes": "Current Python RocksDB storage proof."
+    },
+    {
+      "port": "python",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/python_docker_supporting_5k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current comparable Python 5k baseline proof. Python is baseline-retired beyond 5k."
+    },
+    {
+      "port": "rust",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/rust_script_corpus_docker_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Rust port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "rust",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/rust_storage_gate_docker_perf_2026-06-03.json",
+      "status": "current",
+      "notes": "Current Rust RocksDB storage proof."
+    },
+    {
+      "port": "rust",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/rust_docker_supporting_5k_benchmark_2026-06-04.json",
+      "status": "current",
+      "notes": "Current comparable Rust 5k baseline proof."
+    },
+    {
+      "port": "rust",
+      "claim": "shakedown_50k",
+      "gate_id": "shakedown_50k",
+      "path": "Nodes/Shared/conformance/results/rust_docker_supporting_50k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Rust 50k evidence; Project classifies remaining telemetry gap."
+    },
+    {
+      "port": "rust",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/rust_docker_primary_100k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Rust 100k evidence; Project classifies remaining telemetry gap."
+    },
+    {
+      "port": "rust",
+      "claim": "external_probe",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/rust_docker_external_5k_probe_2026-06-05.json",
+      "status": "current",
+      "notes": "Current diagnostic Rust external manual peer probe."
+    },
+    {
+      "port": "swift",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/swift_script_corpus_2026-06-05.json",
+      "status": "current",
+      "notes": "Current Swift port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "swift",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/swift_docker_supporting_5k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current comparable Swift 5k baseline proof."
+    },
+    {
+      "port": "swift",
+      "claim": "shakedown_50k",
+      "gate_id": "shakedown_50k",
+      "path": "Nodes/Shared/conformance/results/swift_docker_supporting_50k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current comparable Swift 50k proof."
+    },
+    {
+      "port": "typescript",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/typescript_script_corpus_2026-06-04.json",
+      "status": "current",
+      "notes": "Current TypeScript port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "typescript",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/typescript_storage_gate_2026-06-03.json",
+      "status": "current",
+      "notes": "Current TypeScript RocksDB storage proof."
+    },
+    {
+      "port": "typescript",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/typescript_docker_supporting_5k_benchmark_2026-06-04.json",
+      "status": "current",
+      "notes": "Current comparable TypeScript 5k baseline proof. TypeScript is baseline-retired beyond 5k."
+    },
+    {
+      "port": "zig",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_script_corpus_2026-06-05-zig-5k-docker.json",
+      "status": "current",
+      "notes": "Current Zig port-owned 45/45 script corpus proof."
+    },
+    {
+      "port": "zig",
+      "claim": "storage",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_storage_gate_docker_2026-06-05-zig-5k-docker.json",
+      "status": "current",
+      "notes": "Current Zig RocksDB storage proof."
+    },
+    {
+      "port": "zig",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/zig_docker_baseline_5k_benchmark_2026-06-05-zig-5k.json",
+      "status": "current",
+      "notes": "Current comparable Zig 5k baseline proof. Zig remains active development beyond 5k."
+    }
+  ]
+}

@@ -26,6 +26,21 @@ CREATE TABLE IF NOT EXISTS artifacts (
 CREATE INDEX IF NOT EXISTS idx_artifacts_kind
   ON artifacts(kind);
 
+CREATE TABLE IF NOT EXISTS evidence_index_entries (
+  entry_id TEXT PRIMARY KEY,
+  port TEXT NOT NULL,
+  claim TEXT NOT NULL,
+  gate_id TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'current',
+  notes TEXT NOT NULL DEFAULT '',
+  source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+  UNIQUE(port, claim, gate_id, path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_index_path
+  ON evidence_index_entries(path);
+
 CREATE TABLE IF NOT EXISTS nodes (
   node_id TEXT PRIMARY KEY,
   implementation TEXT NOT NULL,
@@ -37,6 +52,16 @@ CREATE TABLE IF NOT EXISTS nodes (
   notes TEXT NOT NULL DEFAULT '',
   source_artifact_id TEXT REFERENCES artifacts(artifact_id),
   created_at TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS port_lifecycle (
+  port TEXT PRIMARY KEY,
+  lifecycle_status TEXT NOT NULL,
+  benchmark_scope TEXT NOT NULL DEFAULT '',
+  retired_at_gate TEXT NOT NULL DEFAULT '',
+  retired_reason TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT ''
 );
 
@@ -278,6 +303,7 @@ DROP VIEW IF EXISTS script_corpus_baseline;
 DROP VIEW IF EXISTS script_corpus_proof_artifacts;
 DROP VIEW IF EXISTS benchmark_gate_matrix;
 DROP VIEW IF EXISTS benchmark_comparability;
+DROP VIEW IF EXISTS current_evidence_status;
 DROP VIEW IF EXISTS benchmark_timing_summary;
 DROP VIEW IF EXISTS benchmark_summary;
 DROP VIEW IF EXISTS follower_blocker_matrix;
@@ -292,29 +318,50 @@ DROP VIEW IF EXISTS latest_node_status;
 DROP VIEW IF EXISTS project_node_ports;
 
 CREATE VIEW IF NOT EXISTS project_node_ports AS
+WITH mapped AS (
+  SELECT
+    node_id,
+    CASE
+      WHEN lower(node_id) = 'reference' OR lower(implementation) LIKE '%reference%' THEN 'reference'
+      WHEN lower(node_id) LIKE '%csharp%' OR lower(node_id) LIKE '%csbitnode%' OR lower(implementation) LIKE 'csharp%' THEN 'csharp'
+      WHEN lower(node_id) LIKE '%cpp%' OR lower(node_id) LIKE '%cpbitnode%' OR lower(implementation) LIKE 'cpp%' THEN 'cpp'
+      WHEN lower(node_id) LIKE '%elixir%' OR lower(node_id) LIKE '%exbitnode%' OR lower(implementation) LIKE 'elixir%' THEN 'elixir'
+      WHEN lower(node_id) LIKE '%go%' OR lower(node_id) LIKE '%gobitnode%' OR lower(implementation) LIKE 'go%' THEN 'go'
+      WHEN lower(node_id) LIKE '%java%' OR lower(node_id) LIKE '%jbitnode%' OR lower(implementation) LIKE 'java%' THEN 'java'
+      WHEN lower(node_id) LIKE '%ocaml%' OR lower(node_id) LIKE '%ocbitnode%' OR lower(implementation) LIKE 'ocaml%' OR lower(implementation) LIKE 'ocbitnode%' THEN 'ocaml'
+      WHEN lower(node_id) LIKE '%python%' OR lower(node_id) LIKE '%pybitnode%' OR lower(implementation) LIKE 'python%' THEN 'python'
+      WHEN lower(node_id) LIKE '%rust%' OR lower(node_id) LIKE '%rsbitnode%' OR lower(implementation) LIKE 'rust%' THEN 'rust'
+      WHEN lower(node_id) LIKE '%swift%' OR lower(node_id) LIKE '%swbitnode%' OR lower(implementation) LIKE 'swift%' THEN 'swift'
+      WHEN lower(node_id) LIKE '%typescript%' OR lower(node_id) LIKE '%tsbitnode%' OR lower(implementation) LIKE 'typescript%' THEN 'typescript'
+      WHEN lower(node_id) LIKE '%zig%' OR lower(node_id) LIKE '%zigbitnode%' OR lower(implementation) LIKE 'zig%' THEN 'zig'
+      ELSE node_id
+    END AS port,
+    implementation,
+    language,
+    role,
+    repo_path,
+    default_datadir,
+    status AS node_status,
+    notes
+  FROM nodes
+)
 SELECT
-  node_id,
-  CASE
-    WHEN lower(node_id) = 'reference' OR lower(implementation) LIKE '%reference%' THEN 'reference'
-    WHEN lower(node_id) LIKE '%csharp%' OR lower(node_id) LIKE '%csbitnode%' OR lower(implementation) LIKE 'csharp%' THEN 'csharp'
-    WHEN lower(node_id) LIKE '%cpp%' OR lower(node_id) LIKE '%cpbitnode%' OR lower(implementation) LIKE 'cpp%' THEN 'cpp'
-    WHEN lower(node_id) LIKE '%elixir%' OR lower(node_id) LIKE '%exbitnode%' OR lower(implementation) LIKE 'elixir%' THEN 'elixir'
-    WHEN lower(node_id) LIKE '%go%' OR lower(node_id) LIKE '%gobitnode%' OR lower(implementation) LIKE 'go%' THEN 'go'
-    WHEN lower(node_id) LIKE '%java%' OR lower(node_id) LIKE '%jbitnode%' OR lower(implementation) LIKE 'java%' THEN 'java'
-    WHEN lower(node_id) LIKE '%python%' OR lower(node_id) LIKE '%pybitnode%' OR lower(implementation) LIKE 'python%' THEN 'python'
-    WHEN lower(node_id) LIKE '%rust%' OR lower(node_id) LIKE '%rsbitnode%' OR lower(implementation) LIKE 'rust%' THEN 'rust'
-    WHEN lower(node_id) LIKE '%typescript%' OR lower(node_id) LIKE '%tsbitnode%' OR lower(implementation) LIKE 'typescript%' THEN 'typescript'
-    WHEN lower(node_id) LIKE '%zig%' OR lower(node_id) LIKE '%zigbitnode%' OR lower(implementation) LIKE 'zig%' THEN 'zig'
-    ELSE node_id
-  END AS port,
-  implementation,
-  language,
-  role,
-  repo_path,
-  default_datadir,
-  status AS node_status,
-  notes
-FROM nodes;
+  mapped.node_id,
+  mapped.port,
+  mapped.implementation,
+  mapped.language,
+  mapped.role,
+  mapped.repo_path,
+  mapped.default_datadir,
+  mapped.node_status,
+  mapped.notes,
+  coalesce(pl.lifecycle_status, CASE WHEN mapped.port = 'reference' THEN 'reference' ELSE 'active_contender' END) AS lifecycle_status,
+  coalesce(pl.benchmark_scope, CASE WHEN mapped.port = 'reference' THEN 'reference_only' ELSE 'full_suite' END) AS benchmark_scope,
+  coalesce(pl.retired_at_gate, '') AS retired_at_gate,
+  coalesce(pl.retired_reason, '') AS retired_reason,
+  coalesce(pl.notes, '') AS lifecycle_notes
+FROM mapped
+LEFT JOIN port_lifecycle pl ON pl.port = mapped.port;
 
 CREATE VIEW IF NOT EXISTS latest_node_status AS
 WITH ranked AS (
@@ -323,6 +370,9 @@ WITH ranked AS (
     np.implementation,
     np.language,
     np.role,
+    np.lifecycle_status,
+    np.benchmark_scope,
+    np.retired_at_gate,
     s.*,
     row_number() OVER (
       PARTITION BY s.node_id
@@ -337,6 +387,9 @@ SELECT
   implementation,
   language,
   role,
+  lifecycle_status,
+  benchmark_scope,
+  retired_at_gate,
   captured_at,
   chain,
   sync_status,
@@ -372,6 +425,9 @@ SELECT
   implementation,
   language,
   role,
+  lifecycle_status,
+  benchmark_scope,
+  retired_at_gate,
   captured_at,
   chain,
   sync_status,
@@ -394,6 +450,9 @@ CREATE VIEW IF NOT EXISTS docker_coverage AS
 SELECT
   dc.port,
   dc.node_id,
+  coalesce(pl.lifecycle_status, CASE WHEN dc.port = 'reference' THEN 'reference' ELSE 'active_contender' END) AS lifecycle_status,
+  coalesce(pl.benchmark_scope, CASE WHEN dc.port = 'reference' THEN 'reference_only' ELSE 'full_suite' END) AS benchmark_scope,
+  coalesce(pl.retired_at_gate, '') AS retired_at_gate,
   dc.status AS docker_status,
   CASE WHEN dc.dockerfile_path <> '' THEN 1 ELSE 0 END AS has_dockerfile,
   CASE WHEN dc.compose_path <> '' THEN 1 ELSE 0 END AS has_compose,
@@ -403,7 +462,8 @@ SELECT
   dc.supervisor_volume,
   dc.root_path,
   dc.source_artifact_id
-FROM docker_contracts dc;
+FROM docker_contracts dc
+LEFT JOIN port_lifecycle pl ON pl.port = dc.port;
 
 CREATE VIEW IF NOT EXISTS port_command_surface AS
 SELECT
@@ -429,6 +489,23 @@ SELECT
   group_concat(CASE WHEN supported = 0 THEN port END) AS unsupported_ports
 FROM port_command_surface
 GROUP BY command_key, purpose;
+
+CREATE VIEW IF NOT EXISTS current_evidence_status AS
+SELECT
+  eie.port,
+  eie.claim,
+  eie.gate_id,
+  eie.status,
+  eie.path,
+  CASE WHEN a.artifact_id IS NULL THEN 0 ELSE 1 END AS imported,
+  coalesce(a.kind, '') AS artifact_kind,
+  coalesce(a.node_id, '') AS node_id,
+  coalesce(a.captured_at, '') AS captured_at,
+  eie.notes,
+  eie.source_artifact_id AS index_artifact_id,
+  a.artifact_id AS imported_artifact_id
+FROM evidence_index_entries eie
+LEFT JOIN artifacts a ON a.path = eie.path;
 
 CREATE VIEW IF NOT EXISTS conformance_summary AS
 SELECT
@@ -557,9 +634,15 @@ LEFT JOIN rule_counts rc ON rc.height = h.height;
 
 CREATE VIEW IF NOT EXISTS follower_blocker_matrix AS
 WITH ports AS (
-  SELECT port
-  FROM docker_contracts
-  WHERE port <> 'reference'
+  SELECT
+    dc.port,
+    coalesce(pl.lifecycle_status, 'active_contender') AS lifecycle_status,
+    coalesce(pl.benchmark_scope, 'full_suite') AS benchmark_scope,
+    coalesce(pl.retired_at_gate, '') AS retired_at_gate,
+    coalesce(pl.retired_reason, '') AS retired_reason
+  FROM docker_contracts dc
+  LEFT JOIN port_lifecycle pl ON pl.port = dc.port
+  WHERE dc.port <> 'reference'
 ),
 fixture_heights AS (
   SELECT
@@ -719,7 +802,11 @@ WITH benchmark_rows AS (
   FROM benchmark_gates bg
   JOIN benchmarks b ON b.height = bg.target_height
   JOIN project_node_ports np ON np.node_id = b.node_id
-  LEFT JOIN artifacts a ON a.artifact_id = b.source_artifact_id
+  JOIN artifacts a ON a.artifact_id = b.source_artifact_id
+  JOIN evidence_index_entries eie
+    ON eie.path = a.path
+   AND eie.status = 'current'
+   AND eie.gate_id = bg.gate_id
 ),
 classified AS (
   SELECT
@@ -822,9 +909,15 @@ FROM scored;
 
 CREATE VIEW IF NOT EXISTS benchmark_gate_matrix AS
 WITH ports AS (
-  SELECT port
-  FROM docker_contracts
-  WHERE port <> 'reference'
+  SELECT
+    dc.port,
+    coalesce(pl.lifecycle_status, CASE WHEN dc.port = 'reference' THEN 'reference' ELSE 'active_contender' END) AS lifecycle_status,
+    coalesce(pl.benchmark_scope, 'full_suite') AS benchmark_scope,
+    coalesce(pl.retired_at_gate, '') AS retired_at_gate,
+    coalesce(pl.retired_reason, '') AS retired_reason
+  FROM docker_contracts dc
+  LEFT JOIN port_lifecycle pl ON pl.port = dc.port
+  WHERE dc.port <> 'reference'
 ),
 ranked_results AS (
   SELECT
@@ -855,11 +948,20 @@ SELECT
   bg.preferred_runtime_surface,
   bg.preferred_command_key,
   p.port,
+  p.lifecycle_status,
+  p.benchmark_scope,
+  p.retired_at_gate,
   CASE
+    WHEN p.lifecycle_status = 'baseline_retired' AND bg.gate_id <> 'baseline_5k' THEN 'retired'
+    WHEN p.lifecycle_status = 'active_development' AND bg.gate_id <> 'baseline_5k' AND rr.node_id IS NULL THEN 'active_development'
     WHEN rr.node_id IS NULL THEN 'missing'
     ELSE rr.gate_status
   END AS gate_status,
-  coalesce(rr.comparability_status, 'missing') AS comparability_status,
+  CASE
+    WHEN p.lifecycle_status = 'baseline_retired' AND bg.gate_id <> 'baseline_5k' THEN 'retired'
+    WHEN p.lifecycle_status = 'active_development' AND bg.gate_id <> 'baseline_5k' AND rr.node_id IS NULL THEN 'active_development'
+    ELSE coalesce(rr.comparability_status, 'missing')
+  END AS comparability_status,
   coalesce(rr.evidence_lane, '') AS evidence_lane,
   coalesce(rr.validated_height, -1) AS validated_height,
   coalesce(rr.header_target_height, -1) AS header_target_height,
@@ -876,7 +978,13 @@ SELECT
   coalesce(rr.chainstate_utxo_count, -1) AS chainstate_utxo_count,
   coalesce(rr.rocksdb_wal_disabled, '') AS rocksdb_wal_disabled,
   coalesce(rr.fresh_state, 0) AS fresh_state,
-  coalesce(rr.comparability_notes, '') AS comparability_notes,
+  CASE
+    WHEN p.lifecycle_status = 'baseline_retired' AND bg.gate_id <> 'baseline_5k'
+      THEN 'baseline_retired;' || p.retired_reason
+    WHEN p.lifecycle_status = 'active_development' AND bg.gate_id <> 'baseline_5k' AND rr.node_id IS NULL
+      THEN 'active_development;' || coalesce(p.retired_reason, '')
+    ELSE coalesce(rr.comparability_notes, '')
+  END AS comparability_notes,
   coalesce(rr.captured_at, '') AS captured_at,
   rr.source_artifact_id
 FROM benchmark_gates bg
@@ -898,6 +1006,10 @@ WITH proof_rows AS (
   FROM conformance_results cr
   JOIN project_node_ports np ON np.node_id = cr.node_id
   JOIN artifacts a ON a.artifact_id = cr.source_artifact_id
+  JOIN evidence_index_entries eie
+    ON eie.path = a.path
+   AND eie.status = 'current'
+   AND eie.claim = 'script_corpus'
   WHERE cr.category = 'script_corpus'
   GROUP BY np.port, cr.node_id, cr.source_artifact_id
 )
@@ -1087,9 +1199,15 @@ UNION ALL SELECT 'tip_maintenance', -1, 1;
 
 CREATE VIEW IF NOT EXISTS consensus_runway AS
 WITH ports AS (
-  SELECT port
-  FROM docker_contracts
-  WHERE port <> 'reference'
+  SELECT
+    dc.port,
+    coalesce(pl.lifecycle_status, 'active_contender') AS lifecycle_status,
+    coalesce(pl.benchmark_scope, 'full_suite') AS benchmark_scope,
+    coalesce(pl.retired_at_gate, '') AS retired_at_gate,
+    coalesce(pl.retired_reason, '') AS retired_reason
+  FROM docker_contracts dc
+  LEFT JOIN port_lifecycle pl ON pl.port = dc.port
+  WHERE dc.port <> 'reference'
 ),
 sync_evidence AS (
   SELECT
@@ -1160,11 +1278,16 @@ clean_corpus AS (
 )
 SELECT
   p.port,
+  p.lifecycle_status,
+  p.benchmark_scope,
+  p.retired_at_gate,
   cst.stage,
   cst.target_height,
   CASE
     WHEN coalesce(cc.has_clean_corpus, 0) <> 1 THEN 'missing_clean_script_corpus'
     WHEN coalesce(ob.open_blocker_count, 0) > 0 THEN 'open_blockers'
+    WHEN p.lifecycle_status = 'baseline_retired' AND cst.stage NOT IN ('corpus', '5k') THEN 'retired_at_baseline'
+    WHEN p.lifecycle_status = 'active_development' AND cst.stage NOT IN ('corpus', '5k') THEN 'active_development'
     WHEN cst.stage = 'corpus' THEN 'passed'
     WHEN cst.stage = '5k' AND coalesce(pb.baseline_status, '') <> 'passed' THEN 'missing_5k_baseline'
     WHEN cst.stage IN ('50k', '100k') AND NOT (coalesce(sge.gate_status, '') = 'passed' AND coalesce(sge.comparability_status, '') = 'comparable') THEN 'missing_stage_proof'

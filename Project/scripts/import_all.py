@@ -14,6 +14,7 @@ import json
 import re
 import shutil
 import sqlite3
+import subprocess
 import sys
 from dataclasses import dataclass, replace
 from io import StringIO
@@ -27,6 +28,7 @@ PORTS: dict[str, tuple[str, str, str]] = {
     "elixir": ("ElixirNode", "Elixir", "follower"),
     "go": ("GoNode", "Go", "follower"),
     "java": ("JavaNode", "Java", "lead"),
+    "ocaml": ("OCamlNode", "OCaml", "follower"),
     "python": ("PythonNode", "Python", "scout"),
     "reference": ("BitcoinCoreReference", "C++", "reference"),
     "rust": ("RustNode", "Rust", "follower"),
@@ -44,6 +46,8 @@ IMPLEMENTATION_PORTS: tuple[tuple[str, str], ...] = (
     ("gobitnode", "go"),
     ("java", "java"),
     ("jbitnode", "java"),
+    ("ocaml", "ocaml"),
+    ("ocbitnode", "ocaml"),
     ("python", "python"),
     ("pybitnode", "python"),
     ("reference", "reference"),
@@ -52,6 +56,97 @@ IMPLEMENTATION_PORTS: tuple[tuple[str, str], ...] = (
     ("rsbitnode", "rust"),
     ("typescript", "typescript"),
     ("tsbitnode", "typescript"),
+)
+
+PORT_LIFECYCLE: tuple[dict[str, str], ...] = (
+    {
+        "port": "cpp",
+        "lifecycle_status": "active_contender",
+        "benchmark_scope": "full_suite",
+        "retired_at_gate": "",
+        "retired_reason": "",
+        "notes": "Serious benchmark-table port; continue through shakedown_50k, performance_100k, and future tip gates.",
+    },
+    {
+        "port": "csharp",
+        "lifecycle_status": "active_contender",
+        "benchmark_scope": "full_suite",
+        "retired_at_gate": "",
+        "retired_reason": "",
+        "notes": "Serious benchmark-table port; continue through shakedown_50k, performance_100k, and future tip gates.",
+    },
+    {
+        "port": "go",
+        "lifecycle_status": "active_contender",
+        "benchmark_scope": "full_suite",
+        "retired_at_gate": "",
+        "retired_reason": "",
+        "notes": "Lead fast-native contender; continue through the full official benchmark suite.",
+    },
+    {
+        "port": "java",
+        "lifecycle_status": "active_contender",
+        "benchmark_scope": "full_suite",
+        "retired_at_gate": "",
+        "retired_reason": "",
+        "notes": "Serious JVM contender; continue through the full official benchmark suite.",
+    },
+    {
+        "port": "rust",
+        "lifecycle_status": "active_contender",
+        "benchmark_scope": "full_suite",
+        "retired_at_gate": "",
+        "retired_reason": "",
+        "notes": "Lead native contender; continue through the full official benchmark suite.",
+    },
+    {
+        "port": "swift",
+        "lifecycle_status": "active_contender",
+        "benchmark_scope": "full_suite",
+        "retired_at_gate": "",
+        "retired_reason": "",
+        "notes": "Serious contender after baseline and long-run modernization; continue through the full official benchmark suite.",
+    },
+    {
+        "port": "zig",
+        "lifecycle_status": "active_development",
+        "benchmark_scope": "baseline_to_full_suite_when_ready",
+        "retired_at_gate": "",
+        "retired_reason": "",
+        "notes": "Active development port; do not treat missing long-run gates as benchmark-table failures until explicitly promoted.",
+    },
+    {
+        "port": "python",
+        "lifecycle_status": "baseline_retired",
+        "benchmark_scope": "baseline_5k_only",
+        "retired_at_gate": "baseline_5k",
+        "retired_reason": "Useful provenance and baseline proof are preserved, but continued long-run optimization is not worth the maintenance burden.",
+        "notes": "Keep source, tests, and 5k evidence. Do not push through 50k/100k unless explicitly reactivated.",
+    },
+    {
+        "port": "typescript",
+        "lifecycle_status": "baseline_retired",
+        "benchmark_scope": "baseline_5k_only",
+        "retired_at_gate": "baseline_5k",
+        "retired_reason": "Useful baseline and portability lessons are preserved, but continued long-run optimization is not worth the maintenance burden.",
+        "notes": "Keep source, tests, and 5k evidence. Do not push through 50k/100k unless explicitly reactivated.",
+    },
+    {
+        "port": "elixir",
+        "lifecycle_status": "baseline_retired",
+        "benchmark_scope": "baseline_5k_only",
+        "retired_at_gate": "baseline_5k",
+        "retired_reason": "Interesting BEAM implementation and 5k proof are preserved, but the next long-run wall would be a project within the project.",
+        "notes": "Keep source, tests, and 5k evidence. Do not push through 50k/100k unless explicitly reactivated.",
+    },
+    {
+        "port": "reference",
+        "lifecycle_status": "reference",
+        "benchmark_scope": "reference_only",
+        "retired_at_gate": "",
+        "retired_reason": "",
+        "notes": "Bitcoin Core Reference is the byte source and comparison anchor, not a follower benchmark contender.",
+    },
 )
 
 DECISIONS: tuple[dict[str, str], ...] = (
@@ -273,9 +368,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db", default="Project/project.db", help="Project mission-control DB path")
     parser.add_argument("--rebuild", action="store_true", help="Delete and rebuild the DB before import")
     parser.add_argument("--results-dir", default="Nodes/Shared/conformance/results", help="Canonical result JSON directory")
+    parser.add_argument("--current-evidence", default="Nodes/Shared/conformance/current_evidence.json", help="Curated current evidence index")
     parser.add_argument("--docker-dir", default="Nodes/Shared/docker/ports", help="Docker manifest directory")
     parser.add_argument("--status-json", action="append", default=[], help="Additional exported status JSON path")
     parser.add_argument("--blocker-ledger", action="append", default=[], help="Additional blocker ledger Markdown path")
+    parser.add_argument("--include-history", action="store_true", help="Import every result JSON instead of only current_evidence entries")
+    parser.add_argument("--tracked-only", action="store_true", help="Import only git-tracked default manifest/result/status/ledger files")
     parser.add_argument("--skip-sqlite-utils-check", action="store_true", help="Do not require the sqlite-utils CLI")
     return parser.parse_args()
 
@@ -315,6 +413,29 @@ def read_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"{path} must contain a JSON object")
     return payload
+
+
+def tracked_paths(root: Path, pattern: str) -> set[Path]:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--", pattern],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return set()
+    return {root / line.strip() for line in completed.stdout.splitlines() if line.strip()}
+
+
+def iter_default_json_files(root: Path, directory: Path, tracked_only: bool) -> list[Path]:
+    if not tracked_only:
+        return sorted(directory.glob("*.json"))
+    try:
+        pattern = rel(directory, root) + "/*.json"
+    except ValueError:
+        return []
+    return sorted(path for path in tracked_paths(root, pattern) if path.exists())
 
 
 def text(value: Any, default: str = "") -> str:
@@ -500,6 +621,14 @@ def upsert_artifact(connection: sqlite3.Connection, artifact: Artifact) -> None:
           captured_at = excluded.captured_at,
           summary_json = excluded.summary_json,
           raw_json = excluded.raw_json
+        WHERE
+          artifacts.path <> excluded.path OR
+          artifacts.kind <> excluded.kind OR
+          artifacts.node_id <> excluded.node_id OR
+          artifacts.source_sha256 <> excluded.source_sha256 OR
+          artifacts.captured_at <> excluded.captured_at OR
+          artifacts.summary_json <> excluded.summary_json OR
+          artifacts.raw_json <> excluded.raw_json
         """,
         (
             artifact.artifact_id,
@@ -688,6 +817,91 @@ def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Pat
     return len(commands)
 
 
+def import_current_evidence_index(
+    connection: sqlite3.Connection,
+    root: Path,
+    path: Path,
+    tracked_only: bool,
+) -> list[Path]:
+    payload = read_json(path)
+    if text(payload.get("schema")) != "rb.current_evidence.v1":
+        raise SystemExit(f"{path} must use schema rb.current_evidence.v1")
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise SystemExit(f"{path} must contain entries[]")
+
+    artifact = make_artifact(path, root, payload)
+    upsert_artifact(connection, artifact)
+
+    tracked_result_paths: set[Path] = set()
+    if tracked_only:
+        tracked_result_paths = tracked_paths(root, "Nodes/Shared/conformance/results/*.json")
+
+    result_paths: list[Path] = []
+    seen_paths: set[str] = set()
+    active_entry_ids: list[str] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise SystemExit(f"{path} entry {index} must be an object")
+        port = text(entry.get("port")).strip()
+        claim = text(entry.get("claim")).strip()
+        gate_id = text(entry.get("gate_id")).strip()
+        evidence_path = text(entry.get("path")).strip()
+        status = text(entry.get("status"), "current").strip()
+        notes = text(entry.get("notes")).strip()
+        if not port or not claim or not evidence_path:
+            raise SystemExit(f"{path} entry {index} must include port, claim, and path")
+        if status != "current":
+            raise SystemExit(f"{path} entry {index} has unsupported status {status!r}; expected 'current'")
+        if evidence_path.startswith("/") or ".." in Path(evidence_path).parts:
+            raise SystemExit(f"{path} entry {index} path must be repo-relative: {evidence_path}")
+        full_path = root / evidence_path
+        if not full_path.exists():
+            raise SystemExit(f"{path} entry {index} missing evidence file: {evidence_path}")
+        if tracked_only and full_path not in tracked_result_paths:
+            raise SystemExit(f"{path} entry {index} evidence file is not tracked: {evidence_path}")
+        read_json(full_path)
+        entry_id = stable_id("current_evidence", port, claim, gate_id, evidence_path)
+        active_entry_ids.append(entry_id)
+        connection.execute(
+            """
+            INSERT INTO evidence_index_entries(
+              entry_id, port, claim, gate_id, path, status, notes, source_artifact_id
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(port, claim, gate_id, path) DO UPDATE SET
+              status = excluded.status,
+              notes = excluded.notes,
+              source_artifact_id = excluded.source_artifact_id
+            WHERE
+              evidence_index_entries.status <> excluded.status OR
+              evidence_index_entries.notes <> excluded.notes OR
+              evidence_index_entries.source_artifact_id <> excluded.source_artifact_id
+            """,
+            (
+                entry_id,
+                port,
+                claim,
+                gate_id,
+                evidence_path,
+                status,
+                notes,
+                artifact.artifact_id,
+            ),
+        )
+        if evidence_path not in seen_paths:
+            result_paths.append(full_path)
+            seen_paths.add(evidence_path)
+    if active_entry_ids:
+        placeholders = ",".join("?" for _ in active_entry_ids)
+        connection.execute(
+            f"DELETE FROM evidence_index_entries WHERE entry_id NOT IN ({placeholders})",
+            active_entry_ids,
+        )
+    else:
+        connection.execute("DELETE FROM evidence_index_entries")
+    return result_paths
+
+
 def import_benchmark_gates(connection: sqlite3.Connection) -> None:
     active_gate_ids = tuple(gate["gate_id"] for gate in BENCHMARK_GATES)
     placeholders = ",".join("?" for _ in active_gate_ids)
@@ -784,6 +998,45 @@ def import_benchmark_gates(connection: sqlite3.Connection) -> None:
                 gate["binary_gate_status"],
                 gate["result_name_pattern"],
                 gate["notes"],
+            ),
+        )
+
+
+def import_port_lifecycle(connection: sqlite3.Connection) -> None:
+    active_ports = tuple(row["port"] for row in PORT_LIFECYCLE)
+    placeholders = ",".join("?" for _ in active_ports)
+    connection.execute(
+        f"DELETE FROM port_lifecycle WHERE port NOT IN ({placeholders})",
+        active_ports,
+    )
+    for row in PORT_LIFECYCLE:
+        connection.execute(
+            """
+            INSERT INTO port_lifecycle(
+              port, lifecycle_status, benchmark_scope, retired_at_gate,
+              retired_reason, notes, updated_at
+            ) VALUES(?, ?, ?, ?, ?, ?, '')
+            ON CONFLICT(port) DO UPDATE SET
+              lifecycle_status = excluded.lifecycle_status,
+              benchmark_scope = excluded.benchmark_scope,
+              retired_at_gate = excluded.retired_at_gate,
+              retired_reason = excluded.retired_reason,
+              notes = excluded.notes,
+              updated_at = ''
+            WHERE
+              port_lifecycle.lifecycle_status <> excluded.lifecycle_status OR
+              port_lifecycle.benchmark_scope <> excluded.benchmark_scope OR
+              port_lifecycle.retired_at_gate <> excluded.retired_at_gate OR
+              port_lifecycle.retired_reason <> excluded.retired_reason OR
+              port_lifecycle.notes <> excluded.notes
+            """,
+            (
+                row["port"],
+                row["lifecycle_status"],
+                row["benchmark_scope"],
+                row["retired_at_gate"],
+                row["retired_reason"],
+                row["notes"],
             ),
         )
 
@@ -1700,6 +1953,8 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         "blocker_rows": 0,
         "decisions": len(DECISIONS),
         "benchmark_gates": len(BENCHMARK_GATES),
+        "port_lifecycle": len(PORT_LIFECYCLE),
+        "current_evidence": 0,
         "consensus_rules": 0,
         "port_commands": 0,
     }
@@ -1710,26 +1965,47 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         connection.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('schema', 'mission-control-baseline')")
         connection.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('sqlite_utils_cli', 'required')")
         import_benchmark_gates(connection)
+        import_port_lifecycle(connection)
+        current_evidence_paths = import_current_evidence_index(
+            connection,
+            root,
+            root / args.current_evidence,
+            args.tracked_only,
+        )
+        counts["current_evidence"] = len(current_evidence_paths)
         rules_path = root / "Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json"
         if rules_path.exists():
             counts["consensus_rules"] += import_consensus_rule_ledger(connection, root, rules_path)
 
         docker_dir = root / args.docker_dir
-        for path in sorted(docker_dir.glob("*.docker.json")):
+        for path in iter_default_json_files(root, docker_dir, args.tracked_only):
             counts["port_commands"] += import_docker_manifest(connection, root, path, read_json(path))
             counts["docker_manifests"] += 1
 
         results_dir = root / args.results_dir
-        for path in sorted(results_dir.glob("*.json")):
+        result_paths = (
+            iter_default_json_files(root, results_dir, args.tracked_only)
+            if args.include_history
+            else current_evidence_paths
+        )
+        for path in result_paths:
             import_json_artifact(connection, root, path, read_json(path))
             counts["result_json"] += 1
 
-        for status_path in [*(root / path for path in args.status_json), *default_status_jsons(root)]:
+        default_status_paths = default_status_jsons(root)
+        if args.tracked_only:
+            tracked_status_paths = tracked_paths(root, "Nodes/*/docs/status.json")
+            default_status_paths = [path for path in default_status_paths if path in tracked_status_paths]
+        for status_path in [*(root / path for path in args.status_json), *default_status_paths]:
             if status_path.exists():
                 import_json_artifact(connection, root, status_path, read_json(status_path))
                 counts["status_json"] += 1
 
-        ledgers = [*(root / path for path in args.blocker_ledger), *default_blocker_ledgers(root)]
+        default_ledger_paths = default_blocker_ledgers(root)
+        if args.tracked_only:
+            tracked_ledger_paths = tracked_paths(root, "Docs/*.md") | tracked_paths(root, "Nodes/Shared/*.md") | tracked_paths(root, "Nodes/*/docs/BLOCKER_LEDGER.md")
+            default_ledger_paths = [path for path in default_ledger_paths if path in tracked_ledger_paths]
+        ledgers = [*(root / path for path in args.blocker_ledger), *default_ledger_paths]
         seen_ledgers: set[Path] = set()
         for path in ledgers:
             if not path.exists() or path.resolve() in seen_ledgers:
