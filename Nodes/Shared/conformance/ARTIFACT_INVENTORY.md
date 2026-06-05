@@ -1,7 +1,8 @@
 # Artifact Inventory Projection
 
-Current artifact inventory is imported into `Project/project.db`. This Markdown
-file defines retention rules only; it is not a live port-by-port cleanup list.
+Current artifact inventory is selected by `current_evidence.json` and imported
+into `Project/project.db`. This Markdown file defines retention rules only; it
+is not a live port-by-port cleanup list.
 
 Use Project for current evidence rows:
 
@@ -9,13 +10,15 @@ Use Project for current evidence rows:
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 
 sqlite-utils query Project/project.db \
-  "select path, kind, node_id, captured_at from artifacts order by path"
+  "select port, claim, gate_id, imported, path from current_evidence_status order by port, claim"
 
 sqlite-utils query Project/project.db \
   "select port, category, result, result_count, max_validated_height from conformance_summary order by port, category, result"
 
 python3 Project/scripts/report.py --db Project/project.db --section conformance
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-summary
+python3 Project/scripts/report.py --db Project/project.db --section current-evidence
+python3 Project/scripts/report.py --db Project/project.db --section historical-evidence-candidates
 ```
 
 ## Canonical Project Evidence
@@ -29,6 +32,10 @@ Nodes/Shared/conformance/results/
 Cross-port benchmark JSON belongs in the same directory when it follows
 `Nodes/Shared/conformance/BENCHMARK_CONTRACT.md`. Keep compact summaries, not
 live datadirs, RocksDB directories, Docker volumes, or long logs.
+
+`Nodes/Shared/conformance/current_evidence.json` is the curated working set for
+current Project truth. Files under `results/` that are not referenced there are
+historical evidence candidates, not current status inputs.
 
 ## Cross-Port Rules
 
@@ -47,8 +54,9 @@ live datadirs, RocksDB directories, Docker volumes, or long logs.
 ## Preservation Rule
 
 Before deleting bulky local evidence, preserve a compact JSON result under
-`Nodes/Shared/conformance/results/` when it supports a current project claim.
-Then rebuild Project so the artifact hash and summary are indexed.
+`Nodes/Shared/conformance/results/` when it supports a current project claim,
+add it to `current_evidence.json`, then rebuild Project so the artifact hash and
+summary are indexed.
 
 ## Cleanup Guardrails
 

@@ -9,6 +9,7 @@ unless they have been promoted to a canonical result.
 | Class | Owner | Keep where | Commit? | Notes |
 |-------|-------|------------|---------|-------|
 | Canonical project evidence | Root | `Nodes/Shared/conformance/results/` | Yes | Compact JSON proof that supports a project-level claim. |
+| Current evidence index | Root | `Nodes/Shared/conformance/current_evidence.json` | Yes | Curated list of proof JSON files that support current Project status. |
 | Shared schemas/manifests | Root | `Nodes/Shared/conformance/`, `Nodes/Shared/docker/` | Yes | Contracts, fixture IDs, Docker manifests, validators. |
 | Port durable evidence | Root | `Nodes/<Port>/docs/`, `Nodes/<Port>/tests/fixtures/`, intentional `snapshots/` | Yes | Blocker facts, fixtures, and settled checkpoint exports. |
 | Mission-control aggregate | Root | `Project/project.db` | Yes | Tracked Project index rebuilt from canonical JSON, manifests, status exports, ledgers, and decisions. |
@@ -44,6 +45,29 @@ Result JSON should be small, machine-readable, and self-describing:
 Do not centralize live DBs, block files, full logs, Docker volumes, or RocksDB
 directories. Export a compact proof JSON instead.
 
+## Evidence Index
+
+`Nodes/Shared/conformance/current_evidence.json` decides which committed proof
+JSON files support current Project status. Normal Project refreshes import this
+working set:
+
+```bash
+python3 Project/scripts/import_all.py --db Project/project.db --rebuild
+```
+
+Historical archaeology is explicit:
+
+```bash
+python3 Project/scripts/import_all.py --db Project/project.db --rebuild --include-history
+```
+
+Use Project to inspect the current set and retained historical candidates:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section current-evidence
+python3 Project/scripts/report.py --db Project/project.db --section historical-evidence-candidates
+```
+
 ## Port-Local Evidence
 
 Keep port-specific durable evidence in root-owned port directories:
@@ -61,7 +85,8 @@ fresher while a port is actively syncing.
 Delete only after classification:
 
 1. Preserve or regenerate compact proof JSON under `Nodes/Shared/conformance/results/`
-   when the artifact supports a current project claim.
+   when the artifact supports a current project claim, and add it to
+   `Nodes/Shared/conformance/current_evidence.json`.
 2. Confirm no docs, manifests, or status tables cite the local artifact path.
 3. Keep primary active datadirs unless explicitly approved for space reclamation.
 4. Remove stale logs, duplicate scratch datadirs, temporary observer DBs, stale

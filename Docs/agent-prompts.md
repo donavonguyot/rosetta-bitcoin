@@ -36,6 +36,7 @@ Acceptance commands:
 - python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 - python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port [port] --strict
 - python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --port [port] --stage 5k --strict
+- python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
 - python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
 - python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 

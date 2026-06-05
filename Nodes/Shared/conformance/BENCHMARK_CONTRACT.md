@@ -25,6 +25,25 @@ Retired gates such as `supporting_10k` and `tuning_50k_to_100k` remain
 historical evidence only. They must not appear in default official Project
 reports or acceptance prompts.
 
+## Port Lifecycle
+
+Project also classifies each port's current benchmark lifecycle:
+
+| Lifecycle | Meaning |
+|-----------|---------|
+| `active_contender` | Keep moving through the official suite. Missing future gates are real work. |
+| `active_development` | Still being built or stabilized. Baseline evidence matters, but missing long-run gates are not benchmark-table failures yet. |
+| `baseline_retired` | Preserve source, tests, and valid 5k evidence; do not push through 50k/100k/tip gates unless explicitly reactivated. |
+| `reference` | Bitcoin Core Reference byte source, not a follower contender. |
+
+Lifecycle is a Project mission-control classification, not a deletion policy.
+Retired ports remain useful provenance and baseline examples, but official
+suite reports must not turn deliberate retirement into noisy missing-work rows.
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
+```
+
 ## Shared Official Stance
 
 All fixed-height official lanes require:

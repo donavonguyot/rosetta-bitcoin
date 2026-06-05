@@ -9,6 +9,8 @@ canonical docs below instead of adding a one-off plan file.
 - `follower-port-matrix.md` - how to query Project for the blocker matrix.
 - `../Nodes/Shared/consensus/CONSENSUS_RUNWAY.md` - how to query Project for
   corpus-to-tip consensus readiness.
+- `../Nodes/Shared/conformance/BENCHMARK_CONTRACT.md` - official benchmark
+  suite, telemetry requirements, and port lifecycle classifications.
 
 These pages do not own repeated status rows. Rebuild/import Project and query
 `Project/project.db` for mission-control status:
@@ -16,6 +18,8 @@ These pages do not own repeated status rows. Rebuild/import Project and query
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
+python3 Project/scripts/report.py --db Project/project.db --section current-evidence
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
 ```
@@ -38,9 +42,9 @@ python3 Project/scripts/report.py --db Project/project.db --section consensus-ru
 - `script-semantics-gotchas.md` - consensus/script traps learned from blockers.
 - `blocker-ledger.md` - blocker record shape and classification rules.
 - `port-performance-lessons.md` - reusable performance lessons.
-- `../Nodes/Shared/conformance/BENCHMARK_CONTRACT.md` - the primary cross-port
-  `100k` durable benchmark, the 5k supporting gate, timing buckets, and artifact
-  naming.
+- `../Nodes/Shared/conformance/BENCHMARK_CONTRACT.md` - official benchmark
+  suite, lifecycle classifications, telemetry requirements, timing buckets, and
+  artifact naming.
 - `checkpoint-strategy.md` - checkpoint and snapshot guidance.
 - `native-crypto-contract.md` - native crypto expectations.
 - `../Nodes/Shared/consensus/NATIVE_CRYPTO.md` - shared native crypto API and vectors.
@@ -57,6 +61,7 @@ For baseline readiness, prefer Project over hand-maintained summaries:
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
 python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --all
 ```

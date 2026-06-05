@@ -79,6 +79,35 @@ def preflight_port(conn: sqlite3.Connection, port: str, stage: str) -> dict[str,
             "warnings": [],
         }
 
+    if row.get("lifecycle_status") in {"baseline_retired", "active_development"} and stage not in {"corpus", "5k"}:
+        return {
+            "port": port,
+            "stage": stage,
+            "lifecycle_status": row.get("lifecycle_status"),
+            "benchmark_scope": row.get("benchmark_scope"),
+            "retired_at_gate": row.get("retired_at_gate"),
+            "runway_status": row.get("runway_status"),
+            "target_height": row.get("target_height"),
+            "has_clean_script_corpus": row.get("has_clean_script_corpus"),
+            "script_passed": row.get("script_passed"),
+            "script_failed": row.get("script_failed"),
+            "script_runtime_surface": row.get("script_runtime_surface"),
+            "script_native_crypto_backend": row.get("script_native_crypto_backend"),
+            "baseline_5k_status": row.get("baseline_5k_status"),
+            "stage_gate_status": row.get("stage_gate_status"),
+            "stage_gate_comparability": row.get("stage_gate_comparability"),
+            "max_validated_height": row.get("max_validated_height"),
+            "header_height": row.get("header_height"),
+            "sync_status": row.get("sync_status"),
+            "open_blocker_count": row.get("open_blocker_count"),
+            "open_blocker_heights": row.get("open_blocker_heights"),
+            "script_source_artifact_id": row.get("script_source_artifact_id"),
+            "baseline_source_artifact_id": row.get("baseline_source_artifact_id"),
+            "status_source_artifact_id": row.get("status_source_artifact_id"),
+            "errors": [],
+            "warnings": [],
+        }
+
     has_clean_corpus = row["has_clean_script_corpus"] == 1
     if not has_clean_corpus:
         errors.append(
@@ -125,6 +154,9 @@ def preflight_port(conn: sqlite3.Connection, port: str, stage: str) -> dict[str,
     return {
         "port": port,
         "stage": stage,
+        "lifecycle_status": row.get("lifecycle_status"),
+        "benchmark_scope": row.get("benchmark_scope"),
+        "retired_at_gate": row.get("retired_at_gate"),
         "runway_status": row.get("runway_status"),
         "target_height": row.get("target_height"),
         "has_clean_script_corpus": row.get("has_clean_script_corpus"),
@@ -156,6 +188,7 @@ def print_text(results: list[dict[str, Any]]) -> None:
             "consensus_runway_preflight "
             f"port={result['port']} "
             f"stage={result['stage']} "
+            f"lifecycle={result.get('lifecycle_status') or ''} "
             f"status={result['runway_status']} "
             f"errors={len(result['errors'])} "
             f"warnings={len(result['warnings'])}"

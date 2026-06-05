@@ -211,6 +211,27 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         (gate["gate_id"], port),
     )
 
+    if (
+        gate_row is not None
+        and gate_row.get("lifecycle_status") in {"baseline_retired", "active_development"}
+        and gate["gate_id"] != "baseline_5k"
+        and gate_row.get("comparability_status") in {"retired", "active_development", "missing"}
+    ):
+        return {
+            "gate": gate["gate_id"],
+            "port": port,
+            "lifecycle_status": gate_row.get("lifecycle_status"),
+            "benchmark_scope": gate_row.get("benchmark_scope"),
+            "retired_at_gate": gate_row.get("retired_at_gate"),
+            "gate_status": gate_row.get("gate_status"),
+            "comparability_status": gate_row.get("comparability_status"),
+            "validated_height": gate_row.get("validated_height"),
+            "errors": [],
+            "warnings": [],
+            "required_metadata": required_metadata(gate),
+            "required_artifact_fields": REQUIRED_ARTIFACT_FIELDS,
+        }
+
     docker_status = contract["status"]
     if docker_status not in PASSABLE_DOCKER_STATUSES:
         errors.append(
@@ -326,6 +347,9 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
     return {
         "gate": gate["gate_id"],
         "port": port,
+        "lifecycle_status": gate_row.get("lifecycle_status") if gate_row else "",
+        "benchmark_scope": gate_row.get("benchmark_scope") if gate_row else "",
+        "retired_at_gate": gate_row.get("retired_at_gate") if gate_row else "",
         "node_id": contract["node_id"],
         "docker_status": docker_status,
         "gate_status": gate_row["gate_status"] if gate_row else "unknown",
@@ -355,6 +379,7 @@ def print_text(results: list[dict[str, Any]]) -> None:
             "benchmark_preflight "
             f"gate={result['gate']} "
             f"port={result['port']} "
+            f"lifecycle={result.get('lifecycle_status') or ''} "
             f"gate_status={result['gate_status']} "
             f"comparability={result.get('comparability_status', 'unknown')} "
             f"errors={len(result['errors'])} "

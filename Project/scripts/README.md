@@ -15,18 +15,35 @@ sqlite-utils query Project/project.db \
   "select node_id, max(validated_height) as validated_height from status_snapshots group by node_id order by node_id"
 ```
 
-## Import Everything
+## Import Current Evidence
 
-Rebuild Project from canonical Shared results, Docker manifests, the Shared
-consensus rule ledger, selected status exports, blocker ledgers, and seeded
-decisions:
+Rebuild Project from the curated current evidence index, Docker manifests, the
+Shared consensus rule ledger, selected status exports, blocker ledgers, and
+seeded decisions:
 
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 ```
 
+Current result JSON is selected by
+`Nodes/Shared/conformance/current_evidence.json`. Historical result JSON remains
+on disk but is not imported into current Project status by default.
+
 The importer is deterministic and idempotent. Running it again without
 `--rebuild` should leave row counts stable.
+
+For explicit archaeology, import the full historical result archive:
+
+```bash
+python3 Project/scripts/import_all.py --db Project/project.db --rebuild --include-history
+```
+
+In a dirty workspace with active untracked port evidence, rebuild the tracked DB
+from committed artifacts only:
+
+```bash
+python3 Project/scripts/import_all.py --db Project/project.db --rebuild --tracked-only
+```
 
 ## Script Types
 
@@ -44,9 +61,12 @@ Print an on-demand Markdown summary:
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section all
 python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section current-evidence
+python3 Project/scripts/report.py --db Project/project.db --section historical-evidence-candidates
 python3 Project/scripts/report.py --db Project/project.db --section command-surface
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
+python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-gates
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-comparability
@@ -86,6 +106,8 @@ means the run still needs to happen.
 The official benchmark suite is `baseline_5k`, `shakedown_50k`,
 `performance_100k`, `tip_once`, and `tip_maintenance`. Historical 10k and
 50k-to-100k artifacts may still import, but they are not official gates.
+Project lifecycle rows decide whether missing future gates are active work,
+active-development runway, or deliberate baseline retirement.
 
 Preflight the full 5k baseline after importing evidence:
 

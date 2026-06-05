@@ -10,6 +10,11 @@ The benchmark suite continues through `shakedown_50k`, `performance_100k`,
 `tip_once`, and `tip_maintenance`; see
 `Nodes/Shared/conformance/BENCHMARK_CONTRACT.md`.
 
+Project may mark a port `baseline_retired` after this gate. That preserves the
+port's valid baseline evidence without pretending it must keep consuming
+50k/100k/tip maintenance time. Reactivating a retired port is an explicit
+Project lifecycle decision, not an accidental consequence of old artifacts.
+
 ## Baseline Requirements
 
 A baseline port must provide all of the following evidence:
@@ -97,6 +102,7 @@ baseline projection:
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
 python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --gate baseline_5k --port <port>
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict

@@ -49,6 +49,8 @@ python3 Nodes/Shared/docker/validate_docker_contract.py
 Project reports the 5k baseline posture with:
 
 ```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
+python3 Project/scripts/report.py --db Project/project.db --section current-evidence
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
 python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict

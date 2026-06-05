@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import sqlite3
+import subprocess
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -13,6 +14,9 @@ SECTIONS = (
     "summary",
     "port-status",
     "docker-coverage",
+    "port-lifecycle",
+    "current-evidence",
+    "historical-evidence-candidates",
     "command-surface",
     "conformance",
     "blocker-catalog",
@@ -34,6 +38,10 @@ SECTIONS = (
 SECTION_ALIASES = {
     "status": "port-status",
     "docker": "docker-coverage",
+    "lifecycle": "port-lifecycle",
+    "evidence": "current-evidence",
+    "current": "current-evidence",
+    "historical": "historical-evidence-candidates",
     "commands": "command-surface",
     "blockers": "blocker-catalog",
     "benchmark-suite": "benchmark-suite",
@@ -66,6 +74,20 @@ def rows(connection: sqlite3.Connection, query: str) -> list[sqlite3.Row]:
     return list(connection.execute(query))
 
 
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def tracked_result_paths() -> list[str]:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root()), "ls-files", "--", "Nodes/Shared/conformance/results/*.json"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return sorted(line.strip() for line in completed.stdout.splitlines() if line.strip())
+
+
 def table(headers: Iterable[str], rows_: Iterable[Iterable[object]]) -> str:
     headers = list(headers)
     data = [[str(cell) if cell is not None else "" for cell in row] for row in rows_]
@@ -90,6 +112,8 @@ def print_summary(connection: sqlite3.Connection) -> None:
         """
         select 'artifacts' as table_name, count(*) as count from artifacts
         union all select 'nodes', count(*) from nodes
+        union all select 'port_lifecycle', count(*) from port_lifecycle
+        union all select 'evidence_index_entries', count(*) from evidence_index_entries
         union all select 'docker_contracts', count(*) from docker_contracts
         union all select 'port_commands', count(*) from port_commands
         union all select 'benchmark_gates', count(*) from benchmark_gates
@@ -113,6 +137,8 @@ def print_port_status(connection: sqlite3.Connection) -> None:
         select
           lps.port,
           lps.role,
+          lps.lifecycle_status,
+          lps.benchmark_scope,
           lps.sync_status,
           lps.binary_gate_status,
           lps.header_height,
@@ -127,10 +153,78 @@ def print_port_status(connection: sqlite3.Connection) -> None:
     )
     print(
         table(
-            ("port", "role", "sync", "binary", "headers", "stored", "validated", "backend", "docker"),
+            ("port", "role", "lifecycle", "scope", "sync", "binary", "headers", "stored", "validated", "backend", "docker"),
             data,
         )
     )
+
+
+def print_port_lifecycle(connection: sqlite3.Connection) -> None:
+    print("## Port Lifecycle")
+    print()
+    data = rows(
+        connection,
+        """
+        select
+          dc.port,
+          coalesce(pl.lifecycle_status, 'active_contender') as lifecycle_status,
+          coalesce(pl.benchmark_scope, 'full_suite') as benchmark_scope,
+          coalesce(pl.retired_at_gate, '') as retired_at_gate,
+          coalesce(pl.retired_reason, '') as retired_reason,
+          coalesce(pl.notes, '') as notes
+        from docker_contracts dc
+        left join port_lifecycle pl on pl.port = dc.port
+        where dc.port <> 'reference'
+        order by
+          case coalesce(pl.lifecycle_status, 'active_contender')
+            when 'active_contender' then 0
+            when 'active_development' then 1
+            when 'baseline_retired' then 2
+            else 3
+          end,
+          dc.port
+        """,
+    )
+    print(table(("port", "lifecycle", "scope", "retired_at", "reason", "notes"), data))
+
+
+def print_current_evidence(connection: sqlite3.Connection) -> None:
+    print("## Current Evidence")
+    print()
+    data = rows(
+        connection,
+        """
+        select port, claim, gate_id, status, imported, artifact_kind,
+               node_id, captured_at, path, notes
+        from current_evidence_status
+        order by port,
+          case claim
+            when 'script_corpus' then 0
+            when 'storage' then 1
+            when 'baseline_5k' then 2
+            when 'shakedown_50k' then 3
+            when 'performance_100k' then 4
+            when 'external_probe' then 5
+            when 'tip_once' then 6
+            when 'tip_maintenance' then 7
+            else 8
+          end,
+          gate_id,
+          path
+        """,
+    )
+    print(table(("port", "claim", "gate", "status", "imported", "kind", "node", "captured", "path", "notes"), data))
+
+
+def print_historical_evidence_candidates(connection: sqlite3.Connection) -> None:
+    print("## Historical Evidence Candidates")
+    print()
+    current_paths = {
+        row["path"]
+        for row in rows(connection, "select path from evidence_index_entries")
+    }
+    candidates = [(path,) for path in tracked_result_paths() if path not in current_paths]
+    print(table(("tracked_result_json_not_current",), candidates))
 
 
 def print_docker_coverage(connection: sqlite3.Connection) -> None:
@@ -139,7 +233,7 @@ def print_docker_coverage(connection: sqlite3.Connection) -> None:
     data = rows(
         connection,
         """
-        select port, docker_status, has_dockerfile, has_compose,
+        select port, lifecycle_status, docker_status, has_dockerfile, has_compose,
                has_dockerignore, data_volume, proof_volume, supervisor_volume
         from docker_coverage
         order by port
@@ -147,7 +241,7 @@ def print_docker_coverage(connection: sqlite3.Connection) -> None:
     )
     print(
         table(
-            ("port", "status", "dockerfile", "compose", "ignore", "data_volume", "proof_volume", "supervisor_volume"),
+            ("port", "lifecycle", "status", "dockerfile", "compose", "ignore", "data_volume", "proof_volume", "supervisor_volume"),
             data,
         )
     )
@@ -275,7 +369,7 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
     matrix = rows(
         connection,
         """
-        select gate_id, port, gate_status, comparability_status, evidence_lane,
+        select gate_id, port, lifecycle_status, gate_status, comparability_status, evidence_lane,
                validated_height, header_target_height, runtime_surface, peer_mode,
                prefetch_depth, script_runner_mode, rocksdb_wal_disabled,
                fresh_state, utxo_accounting_policy, chainstate_utxo_count,
@@ -298,6 +392,7 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
             (
                 "gate",
                 "port",
+                "lifecycle",
                 "status",
                 "comparable",
                 "lane",
@@ -325,7 +420,7 @@ def print_gate_matrix(connection: sqlite3.Connection, gate_id: str, title: str) 
     data = rows(
         connection,
         f"""
-        select port, gate_status, comparability_status, evidence_lane,
+        select port, lifecycle_status, gate_status, comparability_status, evidence_lane,
                validated_height, header_target_height, runtime_surface, peer_mode,
                prefetch_depth, script_runner_mode, rocksdb_wal_disabled,
                fresh_state, utxo_accounting_policy, chainstate_utxo_count,
@@ -339,6 +434,7 @@ def print_gate_matrix(connection: sqlite3.Connection, gate_id: str, title: str) 
         table(
             (
                 "port",
+                "lifecycle",
                 "status",
                 "comparable",
                 "lane",
@@ -485,7 +581,7 @@ def print_consensus_runway(connection: sqlite3.Connection) -> None:
     data = rows(
         connection,
         """
-        select port, stage, runway_status, target_height,
+        select port, lifecycle_status, stage, runway_status, target_height,
                has_clean_script_corpus, script_passed, script_failed,
                script_runtime_surface, script_native_crypto_backend,
                baseline_5k_status, stage_gate_status, stage_gate_comparability,
@@ -508,6 +604,7 @@ def print_consensus_runway(connection: sqlite3.Connection) -> None:
         table(
             (
                 "port",
+                "lifecycle",
                 "stage",
                 "status",
                 "target",
@@ -541,6 +638,9 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "summary": print_summary,
     "port-status": print_port_status,
     "docker-coverage": print_docker_coverage,
+    "port-lifecycle": print_port_lifecycle,
+    "current-evidence": print_current_evidence,
+    "historical-evidence-candidates": print_historical_evidence_candidates,
     "command-surface": print_command_surface,
     "conformance": print_conformance,
     "blocker-catalog": print_blocker_catalog,
