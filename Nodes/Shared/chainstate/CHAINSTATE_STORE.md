@@ -165,10 +165,12 @@ compaction/tuning values surfaced in proof metadata
 Useful Java source material:
 
 - `Nodes/Java/src/main/java/com/jbitnode/db/UtxoStore.java`
-- `Nodes/Java/src/main/java/com/jbitnode/db/SqliteUtxoStore.java`
-- `Nodes/Java/src/main/java/com/jbitnode/db/LevelDbUtxoStore.java`
+- `Nodes/Java/src/main/java/com/jbitnode/db/ChainstateStore.java`
+- `Nodes/Java/src/main/java/com/jbitnode/db/RocksDbChainstateStore.java`
+- `Nodes/Java/src/main/java/com/jbitnode/db/RocksDbOperationalStore.java`
+- `Nodes/Java/src/main/java/com/jbitnode/db/UtxoStoreFactory.java`
 - `Nodes/Java/src/main/java/com/jbitnode/consensus/connect/BlockConnector.java`
 
-The Java `UtxoStore` interface is a good start, but Shared needs the broader
-`ChainstateStore` concept so undo, validated tip, backend metadata, and UTXOs
-cannot drift apart.
+The Java `UtxoStore` interface remains useful local source material, but Shared
+needs the broader `ChainstateStore` concept so undo, validated tip, backend
+metadata, and UTXOs cannot drift apart.

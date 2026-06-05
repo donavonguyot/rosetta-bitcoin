@@ -35,4 +35,6 @@ sqlite-utils query Project/project.db \
 ```
 
 The durable shared API and vector contract lives in
-`Nodes/Shared/consensus/NATIVE_CRYPTO.md`.
+`Nodes/Shared/consensus/NATIVE_CRYPTO.md`. Backend selection, fallback posture,
+and per-port crypto reporting are tracked in
+`Nodes/Shared/consensus/CRYPTO_BACKEND.md`.

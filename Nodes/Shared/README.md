@@ -27,12 +27,31 @@ Nodes/Shared/
   sync/
   consensus/
   conformance/
+  diagnostics/
+  docker/
+  replay/
+  templates/
 ```
 
 For consensus readiness, start with
 `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`. It defines the staged
 `script-corpus -> 5k -> 10k -> 50k -> 100k -> tip` path and points Project at
 the Shared rule ledger instead of scattered historical status notes.
+
+## Contract Map
+
+Use these docs as the durable Shared contract surface:
+
+| Area | Start here | Also useful |
+|------|------------|-------------|
+| Status and blocker records | `STATUS_CONTRACT.md`, `BLOCKER_LEDGER.md` | `diagnostics/BLOCKER_DIAGNOSTICS.md` |
+| Storage and chainstate | `storage/STORAGE_GATE.md`, `chainstate/CHAINSTATE_STORE.md` | `storage/CHAINSTATE_CODEC_V2.md`, `storage/ROCKSDB_REPLAY_PROOF.md`, `chainstate/REBUILD_PROMOTE.md`, `FOLLOWER_STORAGE_READINESS.md` |
+| Consensus runway | `consensus/CONSENSUS_RUNWAY.md` | `consensus/CONSENSUS_KNOWLEDGE_LEDGER.md`, `consensus/VALIDATION_PIPELINE.md`, `consensus/generated/rule_matrix.md` |
+| Crypto backends | `consensus/NATIVE_CRYPTO.md` | `consensus/CRYPTO_BACKEND.md` |
+| Docker runtime | `docker/DOCKER_RUNTIME_CONTRACT.md` | `docker/PORT_DOCKER_INVENTORY.md` |
+| Benchmarks and replay | `conformance/BENCHMARK_CONTRACT.md` | `replay/REPLAY_TELEMETRY.md` |
+| Live operation | `sync/LIVE_TIP_MAINTENANCE.md` | `sync/OPERATIONAL_BLOCKERS.md` |
+| New port baseline | `templates/port-baseline-5k/README.md` | `SPEC.md` |
 
 ## Non-Negotiable Rule
 

@@ -27,8 +27,8 @@ Shared root docs now carry the reusable Java lessons:
 - `../../../Docs/storage-contract.md` for RocksDB/native chainstate boundaries.
 - `../../../Docs/native-crypto-contract.md` for backend reporting and vector rules.
 - `../../../Docs/supervisor-contract.md` for durable sync supervisor behavior.
-- `../../../Docs/taproot-tapscript-lessons.md` for Taproot key-path vs script-path
-  guidance.
+- `../../../Docs/script-semantics-gotchas.md#taproot-key-path-vs-script-path`
+  for Taproot key-path vs script-path guidance.
 
 ### P2WSH witness OP_BOOLAND live @136369 (passed)
 
@@ -43,7 +43,7 @@ missing_rule: OP_BOOLAND (0x9a) in P2WSH witness — RIPEMD160 hashlock + CHECKS
 test_fixture: src/test/resources/fixtures/tx_p2wsh_booland_136369*, block_136369.hex
 java_fix: ScriptInterpreter.evaluate OP_BOOLAND via castToBool stack conjunction
 java_test: P2wshBooland136369RegressionTest (PASSING)
-follower_notes: P2WSH witness script OP_SIZE 32 OP_EQUALVERIFY OP_RIPEMD160 … OP_EQUAL OP_SWAP pubkey OP_CHECKSIG OP_BOOLAND; witness len 3; prevout 12_838 sats; harvest scripts/harvest_block136369_fixtures.py @127.0.0.1:48332
+follower_notes: P2WSH witness script OP_SIZE 32 OP_EQUALVERIFY OP_RIPEMD160 … OP_EQUAL OP_SWAP pubkey OP_CHECKSIG OP_BOOLAND; witness len 3; prevout 12_838 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block136369_fixtures.py @127.0.0.1:48332
 witness_script_asm: OP_SIZE 32 OP_EQUALVERIFY OP_RIPEMD160 bb90f8acbd268b662c4074acb3877c711ce5dfef OP_EQUAL OP_SWAP 03f80b6154f42255428717741e6f8fef9be87511ff9120d51bfad279eedea42998 OP_CHECKSIG OP_BOOLAND
 ```
 
@@ -64,7 +64,7 @@ missing_rule: OP_CHECKSEQUENCEVERIFY (0xb2) NOP when stack operand has disable f
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_133634*, block_133634.hex
 java_fix: Tapscript.execCheckSequenceVerify — stack disable-flag NOP with long masks; ScriptNum.decodeScriptNumLong
 java_test: P2trTapscript133634RegressionTest (PASSING)
-follower_notes: tapscript PUSH(5) 0100008000 OP_CHECKSEQUENCEVERIFY OP_DROP x-only OP_CHECKSIG; witness len 3; input+stack sequence 0x80000001; prevout 5_000 sats; harvest scripts/harvest_block133634_fixtures.py @127.0.0.1:48332
+follower_notes: tapscript PUSH(5) 0100008000 OP_CHECKSEQUENCEVERIFY OP_DROP x-only OP_CHECKSIG; witness len 3; input+stack sequence 0x80000001; prevout 5_000 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block133634_fixtures.py @127.0.0.1:48332
 tapscript_asm: 0100008000 OP_CHECKSEQUENCEVERIFY OP_DROP 8fb09f84… OP_CHECKSIG
 ```
 
@@ -98,7 +98,7 @@ python_reference: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2sh_abs_132361*, block_132361.hex
 java_fix: OpCodes.OP_ABS=0x90; ScriptInterpreter.evaluate OP_ABS via ScriptNum.encodeScriptNum(Math.abs(value), 4)
 java_test: P2shAbs132361RegressionTest (PASSING)
-follower_notes: scriptSig pushes 1 -1 + redeem; redeem OP_2DUP OP_EQUAL OP_NOT OP_VERIFY OP_ABS OP_SWAP OP_ABS OP_EQUAL; empty witness; prevout 100_000 sats; harvest scripts/harvest_block132361_fixtures.py @127.0.0.1:48332
+follower_notes: scriptSig pushes 1 -1 + redeem; redeem OP_2DUP OP_EQUAL OP_NOT OP_VERIFY OP_ABS OP_SWAP OP_ABS OP_EQUAL; empty witness; prevout 100_000 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block132361_fixtures.py @127.0.0.1:48332
 ```
 
 ## Historical checkpoint (2026-05-29, superseded)
@@ -131,7 +131,7 @@ python_reference: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_126975*, block_126975.hex
 java_fix: Tapscript.evaluate OP_2OVER + OP_OVER; ScriptInterpreter.evaluate OP_OVER
 java_test: P2trTapscript126975RegressionTest, ScriptInterpreterTest#opOverCopiesSecondFromTopItem (PASSING)
-follower_notes: Two-input tx (540-item witness stack + 769KB tapscript); prevout 420 sats; altstack/IF/HASH160/OP_OVER mega-choreography; harvest scripts/harvest_block126975_fixtures.py @127.0.0.1:48332
+follower_notes: Two-input tx (540-item witness stack + 769KB tapscript); prevout 420 sats; altstack/IF/HASH160/OP_OVER mega-choreography; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block126975_fixtures.py @127.0.0.1:48332
 ```
 
 ## Historical checkpoint (2026-05-29, superseded)
@@ -164,7 +164,7 @@ python_reference: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_121035*, block_121035.hex
 java_fix: OpCodes.OP_BOOLOR=0x9b; Tapscript.evaluate OP_BOOLOR via castToBool OR
 java_test: P2trTapscript121035RegressionTest (PASSING)
-follower_notes: Two-input tx (552-item witness stack + 233KB tapscript); prevout 0 sats; IF/altstack/OP_PICK/OP_BOOLOR/OP_BOOLAND mega-choreography; harvest scripts/harvest_block121035_fixtures.py @127.0.0.1:48332
+follower_notes: Two-input tx (552-item witness stack + 233KB tapscript); prevout 0 sats; IF/altstack/OP_PICK/OP_BOOLOR/OP_BOOLAND mega-choreography; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block121035_fixtures.py @127.0.0.1:48332
 ```
 
 ## Historical checkpoint (2026-05-29, superseded)
@@ -197,7 +197,7 @@ python_reference: pybitnode fails earlier (unsupported opcode 0x74 OP_DEPTH)
 test_fixture: src/test/resources/fixtures/tx_bare_legacy_118555*, block_118555.hex
 java_fix: ScriptTemplates.isBareLegacyScript; ScriptVerify bare-legacy relaxed terminal; ScriptInterpreter stack ops + isBarePuzzlePlaceholderSignature + bare-puzzle CMS gate
 java_test: BareLegacy118555RegressionTest (PASSING)
-follower_notes: Segwit-encapsulated tx (marker 00 01), input 1 empty witness; scriptSig 50 pushes; prevout 8000 sats; SIGHASH_ALL b3a29cef574d19524a11845ae92d5a45bc5ecbcfe43fe8fba8577bdd840586cb; harvest scripts/harvest_block118555_fixtures.py @127.0.0.1:48332
+follower_notes: Segwit-encapsulated tx (marker 00 01), input 1 empty witness; scriptSig 50 pushes; prevout 8000 sats; SIGHASH_ALL b3a29cef574d19524a11845ae92d5a45bc5ecbcfe43fe8fba8577bdd840586cb; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block118555_fixtures.py @127.0.0.1:48332
 ```
 
 ## Historical checkpoint (2026-05-29, superseded)
@@ -234,7 +234,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2sh_116040*
 java_fix: ScriptInterpreter.evaluate OP_RIPEMD160 via ScriptHash.ripemd160; OpCodes.OP_RIPEMD160=0xa6
 java_test: P2sh116040RegressionTest, ScriptInterpreterTest.opRipemd160HashesTopItem (PASSING)
-follower_notes: Two-input / one-output tx; redeem OP_DROP OP_DUP OP_RIPEMD160 … OP_CHECKSIG; scriptSig pushes minimal sig + redeem; prevout 10_000 sats; harvest scripts/harvest_block116040_fixtures.py @127.0.0.1:48332
+follower_notes: Two-input / one-output tx; redeem OP_DROP OP_DUP OP_RIPEMD160 … OP_CHECKSIG; scriptSig pushes minimal sig + redeem; prevout 10_000 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block116040_fixtures.py @127.0.0.1:48332
 redeem_script_asm: df7fab4934eb1e90844d3a6f12cce6ed OP_DROP OP_DUP OP_RIPEMD160 32a8efa32f198f21b58d98919a25b0cbcb428d49 OP_EQUALVERIFY 03784b6ebe47edcb0b81092d016c054a4375f9d0b73ca68afdf6c97614c83b83df OP_CHECKSIG
 ```
 
@@ -252,7 +252,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2sh_108972*
 java_fix: ScriptInterpreter.evaluate OP_2SWAP/OP_PICK/OP_2OVER/OP_DEPTH (mirrors Tapscript stack ops); OpCodes OP_2OVER=0x70
 java_test: P2sh108972RegressionTest, ScriptInterpreterTest stack-op unit tests (PASSING)
-follower_notes: scriptSig pushes five OP_1 + redeem OP_IF OP_2SWAP OP_PICK OP_2OVER OP_DEPTH OP_3DUP OP_ELSE OP_2SWAP OP_NOP OP_2OVER OP_ENDIF OP_PICK; empty witness; prevout 10_000 sats; harvest scripts/harvest_block108972_fixtures.py @127.0.0.1:48332
+follower_notes: scriptSig pushes five OP_1 + redeem OP_IF OP_2SWAP OP_PICK OP_2OVER OP_DEPTH OP_3DUP OP_ELSE OP_2SWAP OP_NOP OP_2OVER OP_ENDIF OP_PICK; empty witness; prevout 10_000 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block108972_fixtures.py @127.0.0.1:48332
 redeem_script_asm: OP_IF OP_2SWAP OP_PICK OP_2OVER OP_DEPTH OP_3DUP OP_ELSE OP_2SWAP OP_NOP OP_2OVER OP_ENDIF OP_PICK
 ```
 
@@ -286,7 +286,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_108508*
 java_fix: Tapscript.evaluate OP_1SUB; ScriptInterpreter.evaluate OP_1SUB (legacy parity)
 java_test: P2trTapscript108508RegressionTest (PASSING)
-follower_notes: P2TR script-path; tapscript OP_DEPTH OP_1SUB OP_IF … OP_CHECKSIGVERIFY OP_ELSE 1 OP_CHECKSEQUENCEVERIFY OP_DROP OP_ENDIF … OP_CHECKSIG; witness len 4; prevout 1_500 sats; harvest scripts/harvest_block108508_fixtures.py @127.0.0.1:48332
+follower_notes: P2TR script-path; tapscript OP_DEPTH OP_1SUB OP_IF … OP_CHECKSIGVERIFY OP_ELSE 1 OP_CHECKSEQUENCEVERIFY OP_DROP OP_ENDIF … OP_CHECKSIG; witness len 4; prevout 1_500 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block108508_fixtures.py @127.0.0.1:48332
 tapscript_asm: OP_DEPTH OP_1SUB OP_IF 405f6684… OP_CHECKSIGVERIFY OP_ELSE 1 OP_CHECKSEQUENCEVERIFY OP_DROP OP_ENDIF efa9e138… OP_CHECKSIG
 ```
 
@@ -304,7 +304,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2pkh_107951*
 java_fix: ScriptVerify.verifyScript — P2PKH uses terminalSuccessRelaxed (mirrors Core without SCRIPT_VERIFY_CLEANSTACK)
 java_test: P2pkh107951RegressionTest (PASSING)
-follower_notes: tx[1] native P2PKH; scriptSig OP_1 + DER sig SIGHASH_ALL + pubkey; empty witness; prevout 100_000 sats; locktime 107838; harvest scripts/harvest_block107951_fixtures.py @127.0.0.1:48332
+follower_notes: tx[1] native P2PKH; scriptSig OP_1 + DER sig SIGHASH_ALL + pubkey; empty witness; prevout 100_000 sats; locktime 107838; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block107951_fixtures.py @127.0.0.1:48332
 scriptsig_asm: 1 30440220... [ALL] 0391ae6ad8edb647b358b222b48c994706ffd5dbfb7c2341b78eb1fc11c4e73702
 ```
 
@@ -322,7 +322,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_100372*
 java_fix: Tapscript.evaluate OP_0NOTEQUAL (mirrors ScriptInterpreter)
 java_test: P2trTapscript100372RegressionTest (PASSING)
-follower_notes: tapscript CSV/IF branches with OP_ADD tallies; witness len 11; prevout 10_000 sats; harvest scripts/harvest_block100372_fixtures.py @127.0.0.1:48332
+follower_notes: tapscript CSV/IF branches with OP_ADD tallies; witness len 11; prevout 10_000 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block100372_fixtures.py @127.0.0.1:48332
 ```
 
 ### P2WSH OP_NIP live @98631 (passed)
@@ -339,7 +339,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2wsh_nip_98631*
 java_fix: ScriptInterpreter.evaluate OP_NIP (pop top, pop second, push top)
 java_test: P2wshNip98631RegressionTest, ScriptInterpreterTest#opNipRemovesSecondFromTopItem (PASSING)
-follower_notes: P2WSH witness script `OP_2DUP OP_CHECKSIGVERIFY OP_DROP OP_SWAP OP_2DUP OP_CHECKSIGVERIFY OP_NIP OP_CHECKSIG`; witness len 5; prevout 30_000 sats; harvest scripts/harvest_block98631_fixtures.py @127.0.0.1:48332; live resume passed through 99630.
+follower_notes: P2WSH witness script `OP_2DUP OP_CHECKSIGVERIFY OP_DROP OP_SWAP OP_2DUP OP_CHECKSIGVERIFY OP_NIP OP_CHECKSIG`; witness len 5; prevout 30_000 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block98631_fixtures.py @127.0.0.1:48332; live resume passed through 99630.
 ```
 
 ### P2WSH OP_WITHIN live @98025 (passed)
@@ -356,7 +356,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2wsh_within_98025*
 java_fix: ScriptInterpreter.evaluate OP_WITHIN (pop max, min, value; push 1 if min <= value < max)
 java_test: P2wshWithin98025RegressionTest, ScriptInterpreterTest#opWithinChecksMinInclusiveMaxExclusiveRange (PASSING)
-follower_notes: P2WSH witness script `OP_SIZE 61 70 OP_WITHIN OP_VERIFY <33B pubkey> OP_CHECKSIG`; sig len 69; witness len 2; prevout 61_700 sats; harvest scripts/harvest_block98025_fixtures.py @127.0.0.1:48332
+follower_notes: P2WSH witness script `OP_SIZE 61 70 OP_WITHIN OP_VERIFY <33B pubkey> OP_CHECKSIG`; sig len 69; witness len 2; prevout 61_700 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block98025_fixtures.py @127.0.0.1:48332
 ```
 
 ## Historical checkpoint (2026-05-29, superseded)
@@ -393,7 +393,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_89632*
 java_fix: Tapscript execCheckLockTimeVerify/execCheckSequenceVerify return early when tx.version() < 2 (mirrors ScriptInterpreter @38191)
 java_test: P2trTapscript89632RegressionTest (PASSING)
-follower_notes: nested IF/IFDUP/NOTIF tapscript with CLTV/CSV branches; tx nVersion=1 nLockTime=89631; witness len 8; prevout 59_330 sats; harvest scripts/harvest_block89632_fixtures.py
+follower_notes: nested IF/IFDUP/NOTIF tapscript with CLTV/CSV branches; tx nVersion=1 nLockTime=89631; witness len 8; prevout 59_330 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block89632_fixtures.py
 ```
 
 ### P2TR tapscript OP_IFDUP live @87214 (passed)
@@ -410,7 +410,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_87214*
 java_fix: Tapscript.evaluate OP_IFDUP (mirrors ScriptInterpreter)
 java_test: P2trTapscript87214RegressionTest (PASSING)
-follower_notes: tapscript `CHECKSIG CHECKSIGADD 2 NUMEQUAL IFDUP NOTIF CHECKSIGVERIFY CSV ENDIF`; witness len 5; prevout 150_000 sats; harvest scripts/harvest_block87214_fixtures.py
+follower_notes: tapscript `CHECKSIG CHECKSIGADD 2 NUMEQUAL IFDUP NOTIF CHECKSIGVERIFY CSV ENDIF`; witness len 5; prevout 150_000 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block87214_fixtures.py
 ```
 
 ## Historical checkpoint (2026-05-29, superseded)
@@ -445,7 +445,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2sh_sha1_82921*
 java_fix: ScriptInterpreter.evaluate OP_NOT/OP_SHA1; ScriptHash.sha1; OpCodes OP_SHA1=0xa7
 java_test: P2shSha182921RegressionTest (PASSING)
-follower_notes: SHAttered-style redeem `OP_2DUP OP_EQUAL OP_NOT OP_VERIFY OP_SHA1 OP_SWAP OP_SHA1 OP_EQUAL`; empty witness; harvest scripts/harvest_block82921_fixtures.py
+follower_notes: SHAttered-style redeem `OP_2DUP OP_EQUAL OP_NOT OP_VERIFY OP_SHA1 OP_SWAP OP_SHA1 OP_EQUAL`; empty witness; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block82921_fixtures.py
 ```
 
 ## Historical checkpoint (2026-05-29, superseded)
@@ -482,7 +482,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_82856*
 java_fix: ScriptHash.sha1; Tapscript.evaluate OP_SHA1; OpCodes OP_SHA1=0xa7
 java_test: P2trTapscript82856RegressionTest (PASSING)
-follower_notes: tiny script `OP_SHA1 <20-byte digest> OP_EQUAL`; witness len 3; prevout 1_000 sats; harvest scripts/harvest_block82856_fixtures.py
+follower_notes: tiny script `OP_SHA1 <20-byte digest> OP_EQUAL`; witness len 3; prevout 1_000 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block82856_fixtures.py
 ```
 
 ## Historical checkpoint (2026-05-29, superseded)
@@ -519,7 +519,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2sh_82112*
 java_fix: ScriptInterpreter.evaluate OP_NOP; OpCodes OP_NOP=0x61 (already present)
 java_test: P2shNop82112RegressionTest (PASSING)
-follower_notes: scriptSig pushes -2184 97 + redeem OP_NOP; empty witness; harvest scripts/harvest_block82112_fixtures.py
+follower_notes: scriptSig pushes -2184 97 + redeem OP_NOP; empty witness; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block82112_fixtures.py
 ```
 
 ## Historical checkpoint (2026-05-28)
@@ -556,7 +556,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_78841*
 java_fix: Tapscript.evaluate OP_MAX; OpCodes OP_MAX=0xa4
 java_test: P2trTapscript78841RegressionTest (PASSING)
-follower_notes: 2-input tx; witness len 46; prevouts fixture lists both inputs; harvest scripts/harvest_block78841_fixtures.py
+follower_notes: 2-input tx; witness len 46; prevouts fixture lists both inputs; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block78841_fixtures.py
 ```
 
 ### P2TR tapscript stack + NUMNOTEQUAL live @71267 (passed)
@@ -573,7 +573,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_71267*
 java_fix: Tapscript.evaluate + ScriptStack.rollFromTop; OpCodes OP_NUMNOTEQUAL=0x9e, OP_NUMEQUALVERIFY=0x9d
 java_test: P2trTapscript71267RegressionTest (PASSING)
-follower_notes: ~251KB tapscript, witness len 100, prevout 42_000_000 sats; harvest scripts/harvest_block71267_fixtures.py
+follower_notes: ~251KB tapscript, witness len 100, prevout 42_000_000 sats; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block71267_fixtures.py
 ```
 
 ### P2TR tapscript OP_TUCK + opcode surface live @70924 (passed)
@@ -590,7 +590,7 @@ python_fix: (no scout row)
 test_fixture: src/test/resources/fixtures/tx_p2tr_tapscript_70924*
 java_fix: Tapscript.evaluate — correct OP_TUCK; add missing tapscript opcodes
 java_test: P2trTapscript70924RegressionTest (PASSING)
-follower_notes: ~4.6KB tapscript, witness len 139; harvest scripts/harvest_block70924_fixtures.py
+follower_notes: ~4.6KB tapscript, witness len 139; harvest Nodes/Shared/conformance/tools/harvest/java/harvest_block70924_fixtures.py
 ```
 
 ## Historical checkpoint (2026-05-27, superseded)
@@ -631,7 +631,7 @@ fixture_tx: src/test/resources/fixtures/tx_p2tr_tapscript_hash256_67562.hex
 fixture_tapscript: src/test/resources/fixtures/tx_p2tr_tapscript_hash256_67562_tapscript.hex
 tapscript_head: OP_IF OP_HASH256 PUSH(32) … OP_VERIFY … OP_CHECKSIGADD OP_2 OP_NUMEQUAL OP_ELSE … OP_CHECKSEQUENCEVERIFY … OP_ENDIF
 java_fix: OP_HASH256 = SHA256(SHA256(x)) in Tapscript.evaluate (distinct from OP_SHA256 0xa8).
-follower_notes: Witness stack len 6: two Schnorr sigs, ASCII-hex preimage, branch selector 0x01, tapscript, control block. Harvest via scripts/harvest_block67562_fixtures.py (Core RPC or mempool.space fallback). Supervisor session +740 blocks (66821→67561) before blocker.
+follower_notes: Witness stack len 6: two Schnorr sigs, ASCII-hex preimage, branch selector 0x01, tapscript, control block. Harvest via Nodes/Shared/conformance/tools/harvest/java/harvest_block67562_fixtures.py (Core RPC or mempool.space fallback). Supervisor session +740 blocks (66821→67561) before blocker.
 ```
 
 ## Historical checkpoint (2026-05-26, superseded)
@@ -662,15 +662,15 @@ log: sync_chunk_auto.log
 
 ### Manual chunks (5000 blocks)
 
-Normal ops — **not** a daemon. One process per chunk; re-run manually after status + snapshots.
+Normal ops — **not** a daemon. One process per chunk; re-run manually after
+status.
 
 ```bash
-cd ~/Nodes/JavaNode
+cd Nodes/Java
 make java-node-preflight
 make java-node-sync-chunk DATA_DIR=./data-java PEERS=127.0.0.1:48333 \
   2>&1 | tee sync_chunk.log
 make java-node-status
-make java-node-export-snapshots
 # repeat make java-node-sync-chunk until ValidationBlocker or tip
 ```
 
@@ -694,7 +694,9 @@ Defaults: `CHUNK_TOTAL=15000`, `SUBCHUNK_SIZE=500`, `MAX_RESTARTS=5`. Log ticks 
 
 **Single writer:** preflight checks `.jbitnode.lock` (pid metadata); stale locks reclaimed when holder pid is dead. Never two writers on `./data-java`.
 
-**Optional read-only parallel:** `make java-node-survey-scripts` — never a second connect writer.
+Use `make java-node-status` and Project reports for current state. The old Java
+SQLite snapshot/survey targets are retired and must not be used as native
+runtime proof.
 
 Single-shot overnight chunk (no auto-restart): `make java-node-sync-chunk-overnight`.
 Override size: `make java-node-sync-chunk BLOCKS_MAX=25000` or
@@ -773,12 +775,15 @@ commit: 21 ms
 
 Implementation: [`ScriptVerifyRunner`](../src/main/java/com/jbitnode/consensus/script/ScriptVerifyRunner.java) + [`ScriptVerifySettings`](../src/main/java/com/jbitnode/config/ScriptVerifySettings.java); parallel only within each tx (`inputs >= PAR_SCRIPT_MIN_INPUTS`). `java-node-sync-chunk` sets `PAR_SCRIPT_VERIFY=1`.
 
-Inspect timing split (debug only, `SYNC_TIMING=1`):
+Historical SQLite timing query from the old path:
 
 ```bash
 sqlite3 ./data-java/jbitnode.db \
   "SELECT details_json FROM events WHERE source='timing' ORDER BY id DESC LIMIT 20;"
 ```
+
+Do not use this as current Java native-runtime guidance. Current benchmark
+timing belongs in Project-importable proof artifacts and Project timing reports.
 
 Deferred (only if wall clock regresses on different block shapes):
 
@@ -886,7 +891,7 @@ fixture_tx: src/test/resources/fixtures/tx_p2wsh_altstack_66241.hex
 fixture_witness_script: src/test/resources/fixtures/tx_p2wsh_altstack_66241_witness_script.hex
 witness_script_asm: 3 <pubkey> <pubkey> <pubkey> 3 OP_CHECKMULTISIG OP_TOALTSTACK 2 <pubkey> <pubkey> 2 OP_CHECKMULTISIG OP_FROMALTSTACK OP_ADD OP_SWAP OP_SIZE OP_0NOTEQUAL OP_IF <pubkey> OP_CHECKSIGVERIFY 1 OP_CHECKSEQUENCEVERIFY OP_ENDIF OP_0NOTEQUAL OP_ADD 1 OP_EQUAL
 java_fix: Preserve one multisig result on an interpreter-local altstack, then restore it after the second CHECKMULTISIG before numeric aggregation.
-follower_notes: P2WSH witness stack has five empty dummy elements, three DER signatures, and the witness script. Harvest @127.0.0.1:48332 via scripts/harvest_block66241_fixtures.py (getblock verbosity 3 prevout).
+follower_notes: P2WSH witness stack has five empty dummy elements, three DER signatures, and the witness script. Harvest @127.0.0.1:48332 via Nodes/Shared/conformance/tools/harvest/java/harvest_block66241_fixtures.py (getblock verbosity 3 prevout).
 ```
 
 ### P2SH OP_2DUP live @63603 (passed)
@@ -906,7 +911,7 @@ fixture_tx: src/test/resources/fixtures/tx_p2sh_2dup_63603.hex
 fixture_redeem_script: src/test/resources/fixtures/tx_p2sh_2dup_63603_redeem_script.hex
 redeem_script_asm: OP_2DUP OP_ADD 7 OP_EQUALVERIFY OP_SUB 3 OP_EQUAL
 java_fix: OP_2DUP in ScriptInterpreter.evaluateScript (x1 x2 → x1 x2 x1 x2). Root cause: unsupported opcode 0x6e; not SIGHASH (empty witness).
-follower_notes: Legacy P2SH; scriptSig pushes 5 2 + redeem script; prevout 16000 sats. Harvest @127.0.0.1:48332 via scripts/harvest_block63603_fixtures.py (getblock verbosity 3 prevout).
+follower_notes: Legacy P2SH; scriptSig pushes 5 2 + redeem script; prevout 16000 sats. Harvest @127.0.0.1:48332 via Nodes/Shared/conformance/tools/harvest/java/harvest_block63603_fixtures.py (getblock verbosity 3 prevout).
 witness_script_asm: (n/a — empty witness)
 ```
 
@@ -927,7 +932,7 @@ fixture_tx: src/test/resources/fixtures/tx_p2sh_3dup_63305.hex
 fixture_redeem_script: src/test/resources/fixtures/tx_p2sh_3dup_63305_redeem_script.hex
 redeem_script_asm: OP_3DUP OP_ADD 9 OP_EQUALVERIFY OP_ADD 7 OP_EQUALVERIFY OP_ADD 8 OP_EQUALVERIFY 1
 java_fix: OP_3DUP in ScriptInterpreter.evaluateScript (x1 x2 x3 → x1 x2 x3 x1 x2 x3). Root cause: unsupported opcode 0x6f; not SIGHASH (empty witness).
-follower_notes: Legacy P2SH; scriptSig pushes 3 5 4 + redeem script; prevout created in block 63304. Harvest @127.0.0.1:48332 via scripts/harvest_block63305_fixtures.py.
+follower_notes: Legacy P2SH; scriptSig pushes 3 5 4 + redeem script; prevout created in block 63304. Harvest @127.0.0.1:48332 via Nodes/Shared/conformance/tools/harvest/java/harvest_block63305_fixtures.py.
 witness_script_asm: (n/a — empty witness)
 ```
 
@@ -1661,8 +1666,8 @@ follower_notes:
    rediscovering it by live sync.
 2. For a genuinely new live blocker, record the exact facts; do not skip or
    assume success.
-3. Fill every field you can from live DB/logs (`make java-node-status`, `make java-node-export-snapshots`).
+3. Fill every field you can from live status/logs (`make java-node-status`).
 4. Implement the **exact** missing rule with a regression fixture before resuming sync.
-5. Export snapshots on a quiescent DB after the fix lands.
+5. Re-run status and import Project evidence after the fix lands.
 
 See workspace [`AGENTS.md`](../../../AGENTS.md) for the consensus runway and binary gate definition.

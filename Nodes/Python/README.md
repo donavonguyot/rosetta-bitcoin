@@ -8,14 +8,24 @@ Contributor-oriented module map and data flows: [`docs/ARCHITECTURE.md`](docs/AR
 
 ## Status (testnet4)
 
-| Metric | Value |
-|--------|-------|
-| Headers synced | ~136k |
-| Blocks validated | live: `pybitnode-status --state-path ./data/chainstate-rocksdb` (snapshots may lag) |
-| Wire capabilities | 34/43 required (79%) |
-| Checkpoints passing | 7/9 |
+Current Python readiness is owned by Project imports, not by hand-maintained
+Markdown counters. Query Project for current baseline, consensus, Docker, and
+benchmark state:
 
-Phases 0–1 complete; block download and consensus validation in progress. See [`snapshots/`](snapshots/) for exported checkpoints and [`docs/BLOCKER_LEDGER.md`](docs/BLOCKER_LEDGER.md) for cleared consensus stalls.
+```bash
+python3 ../../Project/scripts/report.py --db ../../Project/project.db --section port-baseline-5k
+python3 ../../Project/scripts/report.py --db ../../Project/project.db --section consensus-runway
+python3 ../../Project/scripts/report.py --db ../../Project/project.db --section benchmark-gates
+```
+
+For live local inspection, use:
+
+```bash
+pybitnode-status --state-path ./data/chainstate-rocksdb
+```
+
+Snapshots and [`docs/BLOCKER_LEDGER.md`](docs/BLOCKER_LEDGER.md) remain
+historical evidence, not current mission-control truth.
 
 ## Setup
 

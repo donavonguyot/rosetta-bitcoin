@@ -387,7 +387,6 @@ make java-node-preflight
 # manual chunk (repeat until blocker or tip):
 make java-node-sync-chunk DATA_DIR=./data-java PEERS=127.0.0.1:48333
 make java-node-status
-make java-node-export-snapshots
 
 # unattended (recommended overnight): sub-chunks + auto-restart on crash/stall
 make java-node-sync-supervisor DATA_DIR=./data-java PEERS=127.0.0.1:48333
@@ -400,8 +399,9 @@ Single-shot large chunk (no auto-restart): `make java-node-sync-chunk-overnight`
 **Single writer:** `.jbitnode.lock` on `./data-java` (pid metadata); preflight reclaims stale locks.
 On `ValidationBlocker`: harvest → fix → `mvn verify` → update `Nodes/Java/docs/BLOCKER_LEDGER.md` → resume.
 Supervisor exits **2** on blocker; inner `SyncLocalCore` exit **4**. Abnormal JVM exit sets
-`blocks_stalled` + supervisor restart (up to `MAX_RESTARTS=5`). Optional read-only:
-`make java-node-survey-scripts`.
+`blocks_stalled` + supervisor restart (up to `MAX_RESTARTS=5`). The old Java
+SQLite snapshot/survey targets are retired; use `make java-node-status` and
+Project reports for current mission-control state.
 
 ---
 

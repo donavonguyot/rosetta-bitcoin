@@ -27,6 +27,10 @@ python3 Project/scripts/report.py --db Project/project.db --section consensus-ru
 - `artifact-retention.md` - proof/log/datadir retention policy.
 - `storage-contract.md` - project-level storage compliance rules.
 - `supervisor-contract.md` - durable supervisor behavior and tick expectations.
+- `../Nodes/Shared/README.md` - map of Shared contracts and runbooks.
+- `../Nodes/Shared/storage/STORAGE_GATE.md` - storage gate expectations.
+- `../Nodes/Shared/chainstate/CHAINSTATE_STORE.md` - native chainstate contract.
+- `../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md` - Docker runtime contract.
 
 ## Durable Lessons
 
@@ -39,6 +43,14 @@ python3 Project/scripts/report.py --db Project/project.db --section consensus-ru
   naming.
 - `checkpoint-strategy.md` - checkpoint and snapshot guidance.
 - `native-crypto-contract.md` - native crypto expectations.
+- `../Nodes/Shared/consensus/NATIVE_CRYPTO.md` - shared native crypto API and vectors.
+- `../Nodes/Shared/consensus/CRYPTO_BACKEND.md` - backend posture and per-port crypto reporting.
+- `../Nodes/Shared/consensus/VALIDATION_PIPELINE.md` - consensus validation pipeline.
+- `../Nodes/Shared/consensus/CONSENSUS_KNOWLEDGE_LEDGER.md` - rule ledger shape.
+- `../Nodes/Shared/consensus/generated/rule_matrix.md` - generated rule coverage matrix.
+- `../Nodes/Shared/sync/LIVE_TIP_MAINTENANCE.md` - live tip maintenance contract.
+- `../Nodes/Shared/sync/OPERATIONAL_BLOCKERS.md` - operational blocker taxonomy.
+- `../Nodes/Shared/replay/REPLAY_TELEMETRY.md` - replay telemetry contract.
 - `agent-prompts.md` - reusable prompts for agents.
 
 For baseline readiness, prefer Project over hand-maintained summaries:

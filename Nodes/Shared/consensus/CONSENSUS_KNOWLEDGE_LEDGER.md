@@ -23,8 +23,11 @@ which fixtures and rules have been independently proved by artifacts.
 
 ## Rule Card Fields
 
-Rule cards live in `Nodes/Shared/consensus/rules/*.json` and use schema
-`shared.consensus_rule.v1`.
+The current rule ledger lives at
+`Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json` and uses schema
+`shared.consensus_rule.v1`. Future ledgers may add more files under
+`Nodes/Shared/consensus/rules/`, but the testnet4 script ledger is the current
+source of truth today.
 
 Required fields:
 

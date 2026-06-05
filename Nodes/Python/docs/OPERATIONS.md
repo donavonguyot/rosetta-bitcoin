@@ -192,7 +192,7 @@ Header download runs on the first available peer in an **ordered** list: **`--pe
 
 **Recovery steps:**
 
-1. Confirm the [single-writer rule](#safe-parallel-work-vs-the-live-native state); fix overlapping processes if any.
+1. Confirm the [single-writer rule](#safe-parallel-work-vs-the-live-native-state); fix overlapping processes if any.
 2. Check logs for `Header sync failed via HOST:PORT`; try **stable manual peers** via `--peers` or `PEERS` (same syntax as the batch sync table above).
 3. Each sync start calls `repair_sync_state` so `sync_state` realigns with the highest row in the `headers` table—useful after a crash mid-headers.
 4. Inspect state: `DATA_DIR=./data .venv/bin/pybitnode-status --state-path ./data/chainstate-rocksdb` for `sync_status`, `best_height`, and errors.
@@ -381,13 +381,13 @@ MAX_OUTBOUND_PEERS=1 PARALLEL_BLOCK_DOWNLOADS=0 SKIP_GETADDR=1 \
   --blocks-max 200
 ```
 
-Adjust **`--blocks-target`**, **`--blocks-max`**, and **`--datadir`**; do **not** point automation at the repository **`./data`** tree unless that is your intentional working copy (see [Safe parallel work vs the live native state](#safe-parallel-work-vs-the-live-native state)).
+Adjust **`--blocks-target`**, **`--blocks-max`**, and **`--datadir`**; do **not** point automation at the repository **`./data`** tree unless that is your intentional working copy (see [Safe parallel work vs the live native state](#safe-parallel-work-vs-the-live-native-state)).
 
 **Cross-links:** [`PeerManager.bootstrap`](../pybitnode/p2p/manager.py) uses **only** manual targets when **`--peers` / `PEERS`** is set (no extra DNS/DB seed fan-out). Manual peer runs already cap effective outbounds and skip discovery in many cases; **`SKIP_GETADDR=1`** still applies when you rely on discovered peers and want to skip post-handshake **`getaddr`**.
 
 ### Single writer and the sync lock (recap)
 
-Keep **[one mutating process per datadir](#safe-parallel-work-vs-the-live-native state)**. The **`.pybitnode-sync.lock`** file only prevents overlapping **`pybitnode-sync`** invocations; coordinate separately with **`pybitnode`** and tooling.
+Keep **[one mutating process per datadir](#safe-parallel-work-vs-the-live-native-state)**. The **`.pybitnode-sync.lock`** file only prevents overlapping **`pybitnode-sync`** invocations; coordinate separately with **`pybitnode`** and tooling.
 
 ---
 
@@ -490,13 +490,13 @@ Treat snapshot export like a **read checkpoint on a quiet native state**:
 
 **Rule of thumb:** if you could safely start **another** `pybitnode-sync` without overlapping the previous PID, it is OK to export. If unsure, inspect **`ps`** / Activity Monitor deliberately (remember **`pgrep -f`** can false-positive shell wrappers)—or defer export until the next scripted batch completes; never export deliberately **during** overlapping writers.
 
-See also **[Operational recap](#operational-recap-single-writer-lock-checkpoints)** ([single-writer rule](#safe-parallel-work-vs-the-live-native state)).
+See also **[Operational recap](#operational-recap-single-writer-lock-checkpoints)** ([single-writer rule](#safe-parallel-work-vs-the-live-native-state)).
 
 ### Between batch runs
 
 When you are advancing the chain in repeated `pybitnode-sync` batches on the **same datadir**:
 
-1. **Stop** the current sync (or node) so the DB is **not mid-write**; this avoids racing the exporter and matches the [single-writer rule](#safe-parallel-work-vs-the-live-native state) and [When to export](#when-to-export-snapshots-timing) guidance.
+1. **Stop** the current sync (or node) so the DB is **not mid-write**; this avoids racing the exporter and matches the [single-writer rule](#safe-parallel-work-vs-the-live-native-state) and [When to export](#when-to-export-snapshots-timing) guidance.
 2. Run `export_snapshots.py` **only after** writes have quiesced to refresh `snapshots/` (or a dedicated `--out` directory per milestone).
 3. Review `git diff snapshots/` (or archive the output) so you have a **checkpoint** before the next batch.
 4. Start the next batch only after you are comfortable with the captured state.

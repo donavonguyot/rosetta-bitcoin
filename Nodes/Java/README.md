@@ -172,8 +172,8 @@ targets as the normal blocker-hunting loop.
 | `make java-node-sync-local-core` | Handshake + header sync + block download/connect against local Core |
 | `make java-node-chainstate-backend-replay-native-crypto` | Run the RocksDB replay proof with `SECP256K1_BACKEND=native` |
 | `make java-node-sync-catchup` | Rare unlimited catch-up (`BLOCKS_MAX=0` default; debug only) |
-| `make java-node-export-snapshots` | Export read-only JSON snapshot from `jbitnode.db` |
-| `make java-node-survey-scripts` | Offline script template survey (read-only DB; default `--scan-blocks 20`) |
+| `make java-node-export-snapshots` | Retired legacy exporter; native snapshot export is not implemented |
+| `make java-node-survey-scripts` | Retired legacy survey; native script-template survey is not implemented |
 
 ## Proof tiers
 
@@ -183,7 +183,7 @@ targets as the normal blocker-hunting loop.
 | Supporting 5k Docker benchmark | `java_docker_supporting_5k_benchmark_<date>.json`, `docker-java-native-crypto-proof` |
 | Codec v2 replay | `java_rocksdb_codec_v2_storage_2026-06-01.json`, `java_rocksdb_codec_v2_storage_shared_2026-06-01.json` |
 | Native crypto gate | `java_native_crypto_host_replay_2026-06-01.json` and local native-vector tests |
-| 10k bounded Docker sync | `java_native_crypto_docker_long_sync_2026-06-01.json` |
+| 10k supporting Docker benchmark | `java_docker_supporting_10k_benchmark_<date>.json`, `docker-java-supporting-10k-proof` |
 | 50k bounded Docker sync | `java_native_crypto_docker_50k_sync_2026-06-01.json` |
 | Binary gate attempt/status | `docs/BLOCKER_LEDGER.md` records `validated_height=136863`, `binary_gate_status=passed` against local Core |
 
@@ -202,37 +202,32 @@ by the recorded live blocker trail.
 Historical reference fix: Python commit **`dd65c78`** (*Verify Taproot key-path spends*).
 See `docs/BLOCKER_LEDGER.md` for blocker provenance and binary-gate evidence.
 
-## Snapshot export
+## Retired snapshot export
 
-Export tracker JSON from a **quiescent** DB (one writer, between batch runs):
+The old SQLite snapshot exporter is retired for Java native runtime. It remains
+as a CLI stub that returns unsupported status so old scripts fail loudly instead
+of reading or creating `jbitnode.db` as runtime truth.
 
 ```bash
 make java-node-export-snapshots
-# or with explicit paths:
-mvn -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ExportSnapshots \
-  -Dexec.args="--db ./data-java/jbitnode.db --out /tmp/jbitnode-snapshot.json"
 ```
 
-Output includes `sync_state`, `validated_tip`, `header_summary`, `wire_capabilities` summary,
-`recent_events`, and `phases`. See `docs/BLOCKER_LEDGER.md` for blocker recording templates.
+Use `make java-node-status` for current RocksDB-backed status and Project import
+surfaces for mission-control snapshots.
 
-## Script template survey (read-only)
+## Retired script template survey
 
-Offline survey of spend/output locking templates in stored blocks past `validated_height`.
-Opens `jbitnode.db` in **SQLite read-only mode** — safe while another process holds the datadir
-lock for sync (do not run against a DB mid-write; prefer quiescent checkpoints).
+The old Java-local SQLite script survey is also retired. Shared consensus
+readiness now starts from the rule ledger, the 45-fixture script corpus, and
+Project consensus runway reports.
 
 ```bash
 make java-node-survey-scripts
-# explicit paths:
-DB=./data-java/jbitnode.db SCAN_BLOCKS=20 make java-node-survey-scripts
-mvn -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ScriptTemplateSurvey \
-  -Dexec.args="--db ./data-java/jbitnode.db --scan-blocks 20 --blocks-dir ./data-java/blocks"
 ```
 
-JSON output includes `spend_templates` (P2PK/P2PKH/P2WPKH/P2TR/P2WSH/P2SH/unknown counts with
-`first_height`), `output_templates`, rejection event counts, and `likely_blockers` (e.g. P2TR
-@6975 per Python `docs/OPERATIONS.md`, witness v2+). Cross-check `docs/BLOCKER_LEDGER.md`.
+Use `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`,
+`Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json`, and Project
+preflights before chasing live blockers.
 
 ## Post-sync operations checklist
 
@@ -256,16 +251,14 @@ these behaviors are proven against live peers and temp-datadir regressions:
 - Do not run a second writer against `./data-java` while live sync is active.
 - Do not stop the live Java sync process to inspect state.
 - Use temp `DATA_DIR` values for tests and mock-peer sync checks.
-- Prefer read-only tools for live inspection:
+- Prefer status-only tools for live inspection:
 
 ```bash
 make java-node-status
-make java-node-export-snapshots
-make java-node-survey-scripts
 ```
 
-`java-node-status` and snapshot export open an existing DB read-only. If a DB path
-does not exist, test/dev invocations may still bootstrap a fresh temp DB.
+`java-node-status` reads the native RocksDB-backed operational state. The
+retired snapshot and survey targets are not native inspection tools.
 
 ### Diagnosing a blocked height
 
@@ -278,8 +271,9 @@ does not exist, test/dev invocations may still bootstrap a fresh temp DB.
    facts: height, block hash, txid, input index, spent scriptPubKey, failure, and
    missing rule.
 4. Add a fixture/regression test for the exact missing rule before resuming sync.
-5. Use the script template survey only as a read-only hint about upcoming spends;
-   do not treat Core/Python/Java as a validation oracle.
+5. Use the Shared consensus rule ledger and script corpus as the first hint
+   about known spend templates; do not treat Core/Python/Java as a validation
+   oracle.
 
 ### Optional timing diagnostics
 
@@ -305,7 +299,6 @@ make java-node-preflight
 make java-node-sync-chunk DATA_DIR=./data-java PEERS=127.0.0.1:48333 \
   2>&1 | tee sync_chunk.log
 make java-node-status
-make java-node-export-snapshots
 # repeat make java-node-sync-chunk until ValidationBlocker or tip
 ```
 
@@ -359,7 +352,7 @@ Environment:
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `PEERS` | `127.0.0.1:48333` | Comma-separated host:port list |
-| `DATA_DIR` | `./data-java` | Datadir for `jbitnode.db` and `blocks/` |
+| `DATA_DIR` | `./data-java` | Datadir for RocksDB stores and raw `blocks/` |
 | `HEADERS_MAX` | `2000` | Max headers stored per run |
 | `HEADER_BATCHES_MAX` | `50` | Max getheaders round-trips per run |
 | `BLOCKS_MAX` | `64` (`sync-local-core`) / `5000` (`sync-chunk`) / `15000` (`sync-chunk-overnight`) / `0` (`sync-catchup`) | Max blocks per run |
@@ -407,10 +400,10 @@ make java-node-status
 | `com.jbitnode.consensus.merkle` | Tx merkle root vs block header |
 | `com.jbitnode.consensus.block` | Block payload deserialize (header + txs) |
 | `com.jbitnode.consensus.script` | Opcode constants, stack machine scaffold (M9/M10 prep) |
-| `com.jbitnode.cli.ExportSnapshotsService` | Read-only DB snapshot export |
-| `com.jbitnode.cli.ScriptTemplateSurveyService` | Read-only script template survey |
+| `com.jbitnode.cli.ExportSnapshotsService` | Retired legacy snapshot-export stub |
+| `com.jbitnode.cli.ScriptTemplateSurveyService` | Retired legacy survey stub |
 | `com.jbitnode.chain` | testnet4 params and genesis fixture |
-| `com.jbitnode.db` | `ProjectTracker` for sync_state, headers, peers |
+| `com.jbitnode.db` | RocksDB operational and chainstate stores; `ProjectTracker` is the compatibility abstraction over operational storage |
 
 Harvested hex/block fixtures live under `src/test/resources/fixtures/` (see
 `fixtures/README.md` for Python/TypeScript sources).
