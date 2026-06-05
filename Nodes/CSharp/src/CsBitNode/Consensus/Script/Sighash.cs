@@ -22,7 +22,7 @@ public static class Sighash
         if (baseType == 3 && inputIndex >= transaction.Outputs.Count)
         {
             var invalid = new byte[32];
-            invalid[^1] = 0x01;
+            invalid[0] = 0x01;
             return invalid;
         }
 
@@ -50,7 +50,7 @@ public static class Sighash
                 ms.WriteByte(0x00);
             }
 
-            if (anyoneCanPay || baseType == 1)
+            if (sourceIndex == inputIndex || baseType == 1)
                 ms.Write(WireSerialize.PackInt32Le((int)transaction.Inputs[sourceIndex].Sequence));
             else
                 ms.Write(new byte[4]);
@@ -61,8 +61,12 @@ public static class Sighash
         else if (baseType == 3)
         {
             ms.Write(WireSerialize.WriteCompactSize(inputIndex + 1));
-            for (var i = 0; i <= inputIndex; i++)
-                ms.Write(SerializeOutput(transaction.Outputs[i]));
+            for (var i = 0; i < inputIndex; i++)
+            {
+                ms.Write(WireSerialize.PackInt64Le(-1));
+                ms.Write(WireSerialize.WriteCompactSize(0));
+            }
+            ms.Write(SerializeOutput(transaction.Outputs[inputIndex]));
         }
         else
         {
@@ -141,12 +145,20 @@ public static class Sighash
         return CryptoUtil.DoubleSha256(payload.ToArray());
     }
 
-    private static byte[] SerializeOutput(TxOut output)
+    internal static byte[] SerializeOutput(TxOut output)
     {
         using var ms = new MemoryStream();
         ms.Write(WireSerialize.PackInt64Le(output.Value));
         ms.Write(WireSerialize.WriteCompactSize(output.ScriptPubKey.Length));
         ms.Write(output.ScriptPubKey);
+        return ms.ToArray();
+    }
+
+    internal static byte[] SerializeOutPoint(OutPoint outPoint)
+    {
+        using var ms = new MemoryStream();
+        ms.Write(outPoint.Hash);
+        ms.Write(WireSerialize.PackInt32Le((int)outPoint.Index));
         return ms.ToArray();
     }
 }

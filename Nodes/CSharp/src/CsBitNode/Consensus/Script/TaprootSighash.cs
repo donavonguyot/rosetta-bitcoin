@@ -11,21 +11,54 @@ public static class TaprootSighash
     public const int SighashNone = 2;
     public const int SighashSingle = 3;
 
+    public sealed record TaprootSighashOptions(
+        int HashType,
+        byte[]? Annex,
+        int ExtFlag,
+        byte[]? TapleafHash,
+        long TapscriptCodeSeparatorPos)
+    {
+        public static TaprootSighashOptions KeyPath(int hashType) =>
+            new(hashType, null, 0, null, 0xffff_ffffL);
+
+        public static TaprootSighashOptions ScriptPath(
+            int hashType,
+            byte[]? annex,
+            byte[] tapleafHash,
+            long codeSeparatorPos) =>
+            new(hashType, annex, 1, tapleafHash, codeSeparatorPos);
+    }
+
     public static byte[] KeyPathSignatureHash(
         Transaction transaction,
         int inputIndex,
         IReadOnlyList<ScriptVerify.SpentPrevout> spentPrevouts,
         int hashType)
     {
+        return SignatureHash(transaction, inputIndex, spentPrevouts, TaprootSighashOptions.KeyPath(hashType));
+    }
+
+    public static byte[] SignatureHash(
+        Transaction transaction,
+        int inputIndex,
+        IReadOnlyList<ScriptVerify.SpentPrevout> spentPrevouts,
+        TaprootSighashOptions options)
+    {
         if (spentPrevouts.Count != transaction.Inputs.Count)
             throw new ArgumentException("spent_prevouts length mismatch");
+        var hashType = options.HashType;
         if (!AllowedHashType(hashType))
             throw new ArgumentException("unsupported taproot sighash type");
         if (inputIndex >= transaction.Inputs.Count)
             throw new ArgumentOutOfRangeException(nameof(inputIndex));
+        if (options.ExtFlag is not (0 or 1))
+            throw new ArgumentException("invalid taproot ext_flag");
+        if (options.ExtFlag == 1 && options.TapleafHash?.Length != 32)
+            throw new ArgumentException("tapscript sighash requires 32-byte tapleaf_hash");
 
         var outputMode = hashType == SighashDefault ? SighashAll : hashType & 0x03;
         var anyoneCanPay = (hashType & 0x80) != 0;
+        var annexPresent = options.Annex is not null;
         using var body = new MemoryStream();
         body.WriteByte((byte)hashType);
         body.Write(WireSerialize.PackInt32Le(transaction.Version));
@@ -44,13 +77,14 @@ public static class TaprootSighash
         else if (outputMode == SighashSingle && inputIndex >= transaction.Outputs.Count)
             throw new ArgumentException("SIGHASH_SINGLE without matching output");
 
-        body.WriteByte(0); // spend_type: key path, no annex.
+        var spendType = (options.ExtFlag << 1) + (annexPresent ? 1 : 0);
+        body.WriteByte((byte)spendType);
         if (anyoneCanPay)
         {
             var txIn = transaction.Inputs[inputIndex];
             var prevout = spentPrevouts[inputIndex];
-            body.Write(SerializeOutPoint(txIn.PreviousOutput));
-            body.Write(SerializeOutput(new TxOut(prevout.Amount, prevout.ScriptPubKey)));
+            body.Write(Sighash.SerializeOutPoint(txIn.PreviousOutput));
+            body.Write(Sighash.SerializeOutput(new TxOut(prevout.Amount, prevout.ScriptPubKey)));
             body.Write(WireSerialize.PackInt32Le((int)txIn.Sequence));
         }
         else
@@ -58,13 +92,23 @@ public static class TaprootSighash
             body.Write(WireSerialize.PackInt32Le(inputIndex));
         }
 
+        if (annexPresent)
+            body.Write(AnnexDigest(options.Annex!));
+
         if (outputMode == SighashSingle)
-            body.Write(Hash160.Sha256(SerializeOutput(transaction.Outputs[inputIndex])));
+            body.Write(Hash160.Sha256(Sighash.SerializeOutput(transaction.Outputs[inputIndex])));
+
+        if (options.ExtFlag == 1)
+        {
+            body.Write(options.TapleafHash!);
+            body.WriteByte(0); // key version
+            body.Write(WireSerialize.PackInt32Le((int)(options.TapscriptCodeSeparatorPos & 0xffff_ffffL)));
+        }
 
         using var sigMsg = new MemoryStream();
         sigMsg.WriteByte(0);
         sigMsg.Write(body.ToArray());
-        return TaggedHash("TapSighash", sigMsg.ToArray());
+        return TaprootHash.TaggedHash("TapSighash", sigMsg.ToArray());
     }
 
     private static bool AllowedHashType(int hashType) =>
@@ -74,7 +118,7 @@ public static class TaprootSighash
     {
         using var ms = new MemoryStream();
         foreach (var input in transaction.Inputs)
-            ms.Write(SerializeOutPoint(input.PreviousOutput));
+            ms.Write(Sighash.SerializeOutPoint(input.PreviousOutput));
         return Hash160.Sha256(ms.ToArray());
     }
 
@@ -109,34 +153,16 @@ public static class TaprootSighash
     {
         using var ms = new MemoryStream();
         foreach (var output in transaction.Outputs)
-            ms.Write(SerializeOutput(output));
+            ms.Write(Sighash.SerializeOutput(output));
         return Hash160.Sha256(ms.ToArray());
     }
 
-    private static byte[] SerializeOutPoint(OutPoint outPoint)
+    private static byte[] AnnexDigest(byte[] annex)
     {
         using var ms = new MemoryStream();
-        ms.Write(outPoint.Hash);
-        ms.Write(WireSerialize.PackInt32Le((int)outPoint.Index));
-        return ms.ToArray();
+        ms.Write(WireSerialize.WriteCompactSize(annex.Length));
+        ms.Write(annex);
+        return Hash160.Sha256(ms.ToArray());
     }
 
-    private static byte[] SerializeOutput(TxOut output)
-    {
-        using var ms = new MemoryStream();
-        ms.Write(WireSerialize.PackInt64Le(output.Value));
-        ms.Write(WireSerialize.WriteCompactSize(output.ScriptPubKey.Length));
-        ms.Write(output.ScriptPubKey);
-        return ms.ToArray();
-    }
-
-    private static byte[] TaggedHash(string tag, ReadOnlySpan<byte> payload)
-    {
-        var tagHash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(tag));
-        var buffer = new byte[tagHash.Length * 2 + payload.Length];
-        tagHash.CopyTo(buffer, 0);
-        tagHash.CopyTo(buffer, tagHash.Length);
-        payload.CopyTo(buffer.AsSpan(tagHash.Length * 2));
-        return System.Security.Cryptography.SHA256.HashData(buffer);
-    }
 }

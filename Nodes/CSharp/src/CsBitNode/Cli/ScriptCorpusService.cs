@@ -223,7 +223,7 @@ public static class ScriptCorpusService
                 return dir.FullName;
             dir = dir.Parent;
         }
-        throw new InvalidOperationException("could not locate RB workspace root");
+        return Directory.GetCurrentDirectory();
     }
 
     private static string GitCommit(string root)

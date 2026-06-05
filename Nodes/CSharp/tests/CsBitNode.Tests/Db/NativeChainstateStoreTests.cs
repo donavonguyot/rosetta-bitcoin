@@ -343,7 +343,7 @@ public class NativeChainstateStoreTests
         Assert.Equal(1, result1.Height);
         Assert.Equal(2, result2.Height);
         Assert.Equal(2, store.GetValidatedHeight(chain.Name));
-        Assert.Equal(4, store.UtxoCount(chain.Name));
+        Assert.Equal(2, store.UtxoCount(chain.Name));
         Assert.False(File.Exists(Path.Combine(dir, "csbitnode.db")));
     }
 

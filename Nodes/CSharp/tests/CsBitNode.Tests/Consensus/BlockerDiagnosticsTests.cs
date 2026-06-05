@@ -8,7 +8,7 @@ namespace CsBitNode.Tests.Consensus;
 public class BlockerDiagnosticsTests
 {
     [Fact]
-    public void Classifies22830P2trScriptPathWithoutAcceptingSpend()
+    public void ClassifiesAndAccepts22830P2trScriptPathSpend()
     {
         var tx = FixtureTransaction("tx_p2tr_scriptpath_22830.hex");
         var prevSpk = Hex.Decode(File.ReadAllText(FixturePath("tx_p2tr_scriptpath_22830_prev_spk.hex")).Trim());
@@ -24,11 +24,10 @@ public class BlockerDiagnosticsTests
         Assert.Equal("script_path", diagnostic["p2tr_spend_type"]!.GetValue<string>());
         Assert.Equal(3, diagnostic["witness_item_count"]!.GetValue<int>());
         Assert.Equal("P2TR script-path / BIP342", diagnostic["missing_rule"]!.GetValue<string>());
-        Assert.Throws<ScriptVerifyError>(() =>
-            ScriptVerify.VerifyTransactionInput(
-                tx,
-                0,
-                new ScriptVerify.VerifyInputOptions(prevSpk, 798, [new ScriptVerify.SpentPrevout(798, prevSpk)])));
+        ScriptVerify.VerifyTransactionInput(
+            tx,
+            0,
+            new ScriptVerify.VerifyInputOptions(prevSpk, 798, [new ScriptVerify.SpentPrevout(798, prevSpk)]));
     }
 
     private static Transaction FixtureTransaction(string name)
