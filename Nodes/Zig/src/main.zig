@@ -5,7 +5,7 @@ const core = @import("zigbitnode");
 const ResultPaths = struct {
     script: []const u8 = "../Shared/conformance/results/zig_script_corpus_latest.json",
     storage: []const u8 = "../Shared/conformance/results/zig_storage_gate_docker_latest.json",
-    proof: []const u8 = "../Shared/conformance/results/zig_docker_supporting_5k_benchmark_latest.json",
+    proof: []const u8 = "../Shared/conformance/results/zig_docker_baseline_5k_benchmark_latest.json",
 };
 
 pub fn main(init: std.process.Init) !void {
@@ -37,7 +37,8 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, command, "script-corpus")) {
         try cmdScriptCorpus(allocator, io, out, args[2..], surface);
     } else if (std.mem.eql(u8, command, "local-reference-proof")) {
-        try cmdLocalReferenceProof(allocator, io, out, args[2..]);
+        const prefetch_text = init.environ_map.get("PREFETCH_DEPTH") orelse "4";
+        try cmdLocalReferenceProof(allocator, io, out, args[2..], surface, prefetch_text);
     } else if (std.mem.eql(u8, command, "sync-supervisor-once")) {
         try cmdSupervisorOnce(allocator, out, args[2..]);
     } else {
@@ -193,20 +194,165 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     try out.print("{s}", .{json});
 }
 
-fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
+fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8) !void {
     const target_text = valueArg(args, "--target") orelse "5000";
     const peer = valueArg(args, "--peer") orelse "host.docker.internal:48333";
     const output = valueArg(args, "--output") orelse (ResultPaths{}).proof;
     const datadir = valueArg(args, "--datadir") orelse "/data";
-    const json = try std.fmt.allocPrint(
-        allocator,
-        "{{\"schema\":\"port.local_reference_proof.v1\",\"benchmark_contract_version\":1,\"benchmark_kind\":\"supporting_5k_p2p\",\"benchmark_lane\":\"supporting_5k_p2p\",\"port\":\"zig\",\"node\":\"ZigNode\",\"target_height\":{s},\"header_target_height\":{s},\"target_label\":\"5k\",\"runtime_surface\":\"docker\",\"peer_mode\":\"local_reference\",\"peer\":\"{s}\",\"byte_source\":\"local_reference_p2p\",\"proof_mode\":\"p2p_sync\",\"prefetch_depth\":4,\"script_runner_mode\":\"parallel\",\"rocksdb_wal_disabled\":false,\"fresh_state\":true,\"resume_supported\":true,\"datadir\":\"{s}\",\"validated_height\":0,\"header_height\":0,\"stored_block_height\":0,\"blocks_fetched\":0,\"blocks_connected\":0,\"chainstate_utxo_count\":0,\"current_blocker\":{{\"height\":0,\"missing_rule\":\"zig P2P/local-reference connect not implemented in this wave\"}},\"binary_gate_status\":\"not_attempted\",\"status\":\"not_ready\"}}\n",
-        .{ target_text, target_text, peer, datadir },
-    );
-    defer allocator.free(json);
+    const target = try std.fmt.parseInt(u32, target_text, 10);
+    const prefetch_raw = std.fmt.parseInt(usize, prefetch_text, 10) catch 4;
+    const prefetch = @min(@max(prefetch_raw, 1), 16);
+    const started = core.nowMs();
+
+    try std.Io.Dir.cwd().createDirPath(io, datadir);
+    const marker_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.marker_file });
+    defer allocator.free(marker_path);
+    try writeFileEnsuringParent(io, marker_path, "zig native storage\n");
+
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
+    defer allocator.free(db_path);
+    try std.Io.Dir.cwd().createDirPath(io, db_path);
+    var db = try core.RocksDb.open(allocator, db_path);
+    defer db.close();
+
+    const meta = try db.readMetadata(allocator);
+    defer db.deinitMetadata(allocator, meta);
+    const start_height: u32 = if (meta.validated_height < 0) 0 else @intCast(meta.validated_height + 1);
+    const fresh_state = start_height == 0;
+
+    var client = try core.p2p.Client.connect(allocator, peer);
+    defer client.close();
+    try client.handshake(if (meta.validated_height < 0) 0 else @intCast(meta.validated_height));
+    const headers = try client.headersThrough(target);
+    defer allocator.free(headers);
+
+    var blocks_fetched: u32 = 0;
+    var blocks_connected: u32 = 0;
+    var last_height: u32 = if (start_height == 0) 0 else start_height - 1;
+    var last_hash = try allocator.dupe(u8, if (meta.validated_hash.len == 0) "" else meta.validated_hash);
+    defer allocator.free(last_hash);
+    var timing = ProofTiming{};
+    var slow = SlowBlocks{};
+
+    var cursor: usize = start_height;
+    while (cursor <= target) {
+        const end = @min(cursor + prefetch, @as(usize, target) + 1);
+        const blocks = try client.requestBlocks(headers[cursor..end], @intCast(cursor));
+        defer allocator.free(blocks);
+        for (blocks) |fetched| {
+            defer fetched.deinit(allocator);
+            blocks_fetched += 1;
+            const block_started = core.nowMs();
+            const parse_started = core.nowMs();
+            const expected_prev: ?[32]u8 = if (fetched.height == 0) null else headers[fetched.height - 1];
+            const decoded = try core.block.decodeBlock(allocator, fetched.raw, fetched.hash, expected_prev);
+            defer {
+                for (decoded.transactions) |transaction| transaction.deinit(allocator);
+                allocator.free(decoded.transactions);
+            }
+            timing.block_parse_validate += elapsedMs(parse_started);
+            const store_started = core.nowMs();
+            try db.recordBlock(allocator, fetched.height, decoded.info.hash, fetched.raw);
+            timing.block_store += elapsedMs(store_started);
+            const connect_started = core.nowMs();
+            var connect = try core.connectDecodedBlock(allocator, &db, fetched.height, target, decoded.info, decoded.transactions);
+            defer connect.deinit(allocator);
+            timing.connect_total += elapsedMs(connect_started);
+            timing.prevout_batch_load += connect.timings.prevout_batch_load;
+            timing.utxo_load += connect.timings.utxo_load;
+            timing.script_verify += connect.timings.script_verify;
+            timing.utxo_apply += connect.timings.utxo_apply;
+            timing.commit += connect.timings.commit;
+            timing.block_connect_store_commit += connect.timings.block_connect_store_commit;
+            blocks_connected += connect.blocks_connected;
+            last_height = fetched.height;
+            allocator.free(last_hash);
+            last_hash = try allocator.dupe(u8, connect.validated_hash);
+            slow.record(fetched.height, elapsedMs(block_started));
+            if (fetched.height % 500 == 0 or fetched.height == target) {
+                try out.print("zigbitnode-local-reference-proof progress height={} target={} hash={s} utxos={} blocks_fetched={} blocks_connected={}\n", .{
+                    fetched.height,
+                    target,
+                    connect.validated_hash,
+                    connect.chainstate_utxo_count,
+                    blocks_fetched,
+                    blocks_connected,
+                });
+                try out.flush();
+            }
+        }
+        cursor = end;
+    }
+
+    const final_meta = try db.readMetadata(allocator);
+    defer db.deinitMetadata(allocator, final_meta);
+    if (last_height != target) return error.TargetNotReached;
+    if (!std.mem.eql(u8, last_hash, "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2")) return error.UnexpectedTargetHash;
+    if (final_meta.chainstate_utxo_count != 4574) return error.UnexpectedUtxoCount;
+
+    const slow_json = try slow.toJson(allocator);
+    defer allocator.free(slow_json);
+    const total_ms = elapsedMs(started);
+    var json_buf = std.ArrayList(u8).empty;
+    defer json_buf.deinit(allocator);
+    try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_kind\":\"baseline_5k_p2p\",\"benchmark_lane\":\"baseline_5k_p2p\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"5k\",", .{ target, target });
+    try appendFmt(allocator, &json_buf, "\"runtime_surface\":\"{s}\",\"peer_mode\":\"local_reference\",\"peer\":\"{s}\",\"byte_source\":\"local_reference_p2p\",\"proof_mode\":\"p2p_sync\",\"prefetch_depth\":{},\"script_runner_mode\":\"parallel\",\"rocksdb_wal_disabled\":false,\"fresh_state\":{},\"resume_supported\":true,", .{ surface, peer, prefetch, fresh_state });
+    try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"rocksdb\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":true,\"native_crypto_backend\":\"libsecp256k1\",\"schnorr_backend\":\"libsecp256k1\",\"taproot_tweak_backend\":\"libsecp256k1\",\"storage_codec_version\":2,", .{ datadir, db_path });
+    try appendFmt(allocator, &json_buf, "\"rocksdb_tuning\":\"create_if_missing=true,parallelism=4,default_compaction\",\"validated_height\":{},\"validated_hash\":\"{s}\",\"header_height\":{},\"stored_block_height\":{},\"blocks_fetched\":{},\"blocks_connected\":{},\"chainstate_utxo_count\":{},", .{ final_meta.validated_height, last_hash, final_meta.header_height, final_meta.stored_block_height, blocks_fetched, blocks_connected, final_meta.chainstate_utxo_count });
+    try appendFmt(allocator, &json_buf, "\"utxo_accounting_policy\":\"core_spendable_v1\",\"sync_status\":\"blocks_current\",\"local_reference_status\":\"target_reached\",\"status\":\"passed\",\"result\":\"passed\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\",\"failures\":[],\"reference_start_height\":0,\"reference_finish_height\":{},\"reference_finish_hash\":\"{s}\",", .{ target, last_hash });
+    try appendFmt(allocator, &json_buf, "\"pipeline_timing_summary\":{{\"total_ms\":{},\"stage_totals_ms\":{{\"block_parse_validate\":{},\"block_store\":{},\"connect_total\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"block_connect_store_commit\":{}}},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.block_parse_validate, timing.block_store, timing.connect_total, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.block_connect_store_commit, slow_json });
+    try appendFmt(allocator, &json_buf, "\"timing_summary\":{{\"total_ms\":{},\"stage_totals_ms\":{{\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"block_connect_store_commit\":{}}},\"slow_blocks\":[{s}]}}}}\n", .{ total_ms, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.block_connect_store_commit, slow_json });
+    const json = json_buf.items;
     try writeFileEnsuringParent(io, output, json);
     try out.print("{s}", .{json});
-    return error.LocalReferenceProofNotImplemented;
+}
+
+const ProofTiming = struct {
+    block_parse_validate: i64 = 0,
+    block_store: i64 = 0,
+    connect_total: i64 = 0,
+    utxo_load: i64 = 0,
+    prevout_batch_load: i64 = 0,
+    script_verify: i64 = 0,
+    utxo_apply: i64 = 0,
+    commit: i64 = 0,
+    block_connect_store_commit: i64 = 0,
+};
+
+const SlowBlocks = struct {
+    heights: [10]u32 = [_]u32{0} ** 10,
+    millis: [10]i64 = [_]i64{0} ** 10,
+    len: usize = 0,
+
+    fn record(self: *SlowBlocks, height: u32, ms: i64) void {
+        var pos: usize = 0;
+        while (pos < self.len and self.millis[pos] >= ms) : (pos += 1) {}
+        if (pos >= 10) return;
+        if (self.len < 10) self.len += 1;
+        var i = self.len - 1;
+        while (i > pos) : (i -= 1) {
+            self.heights[i] = self.heights[i - 1];
+            self.millis[i] = self.millis[i - 1];
+        }
+        self.heights[pos] = height;
+        self.millis[pos] = ms;
+    }
+
+    fn toJson(self: SlowBlocks, allocator: std.mem.Allocator) ![]u8 {
+        var out = std.ArrayList(u8).empty;
+        errdefer out.deinit(allocator);
+        for (0..self.len) |i| {
+            if (i != 0) try out.appendSlice(allocator, ",");
+            const item = try std.fmt.allocPrint(allocator, "{{\"height\":{},\"ms\":{}}}", .{ self.heights[i], self.millis[i] });
+            defer allocator.free(item);
+            try out.appendSlice(allocator, item);
+        }
+        return out.toOwnedSlice(allocator);
+    }
+};
+
+fn elapsedMs(start_ms: i64) i64 {
+    return @max(0, core.nowMs() - start_ms);
 }
 
 fn verifyScriptFixture(allocator: std.mem.Allocator, io: std.Io, manifest: []const u8, obj: std.json.ObjectMap) !void {
@@ -328,4 +474,10 @@ fn jsonInteger(value: ?std.json.Value) ?i64 {
 fn writeFileEnsuringParent(io: std.Io, path: []const u8, bytes: []const u8) !void {
     if (std.fs.path.dirname(path)) |parent| try std.Io.Dir.cwd().createDirPath(io, parent);
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = bytes, .flags = .{} });
+}
+
+fn appendFmt(allocator: std.mem.Allocator, out: *std.ArrayList(u8), comptime fmt: []const u8, args: anytype) !void {
+    const part = try std.fmt.allocPrint(allocator, fmt, args);
+    defer allocator.free(part);
+    try out.appendSlice(allocator, part);
 }

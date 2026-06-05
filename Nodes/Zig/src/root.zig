@@ -6,12 +6,14 @@ const c = @cImport({
     @cInclude("secp256k1.h");
     @cInclude("secp256k1_extrakeys.h");
     @cInclude("secp256k1_schnorrsig.h");
+    @cInclude("sys/time.h");
 });
 
 pub const crypto = @import("crypto.zig");
 pub const tx = @import("tx.zig");
 pub const block = @import("block.zig");
 pub const script = @import("script.zig");
+pub const p2p = @import("p2p.zig");
 
 pub const PortInfo = struct {
     pub const port_key = "zig";
@@ -34,6 +36,10 @@ pub const StoredUtxo = struct {
     value_sats: u64,
     coinbase: bool,
     script_pubkey: []const u8,
+
+    pub fn deinit(self: StoredUtxo, allocator: std.mem.Allocator) void {
+        allocator.free(self.script_pubkey);
+    }
 };
 
 pub const CreatedUtxo = struct {
@@ -54,6 +60,20 @@ pub const ChainstateBlockCommit = struct {
     undo_entries: []const UndoEntry,
 };
 
+pub const Metadata = struct {
+    validated_height: i64 = -1,
+    validated_hash: []const u8 = "",
+    header_height: i64 = -1,
+    header_hash: []const u8 = "",
+    stored_block_height: i64 = -1,
+    stored_block_hash: []const u8 = "",
+    chainstate_backend: []const u8 = "rocksdb",
+    chainstate_status: []const u8 = "missing",
+    sync_status: []const u8 = "starting",
+    chainstate_utxo_count: i64 = 0,
+    current_blocker: []const u8 = "",
+};
+
 pub const CodecVectors = struct {
     pub const utxo_key_hex = "7508746573746e657434000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f00000001";
     pub const utxo_value_hex = "00000001000000012a05f200010000001976a914000102030405060708090a0b0c0d0e0f1011121388ac";
@@ -63,6 +83,29 @@ pub const CodecVectors = struct {
     pub const header_key_hex = "6808746573746e65743400000002";
     pub const metadata_key_hex = "6d0d636f6465635f76657273696f6e";
 };
+
+pub fn nowMs() i64 {
+    var tv: c.struct_timeval = undefined;
+    if (c.gettimeofday(&tv, null) != 0) return 0;
+    return @as(i64, @intCast(tv.tv_sec)) * 1000 + @divTrunc(@as(i64, @intCast(tv.tv_usec)), 1000);
+}
+
+fn rejectUnapprovedRuntimeDbArtifacts(path: []const u8) !void {
+    const datadir = std.fs.path.dirname(path) orelse path;
+    const datadir_z = try std.heap.c_allocator.dupeZ(u8, datadir);
+    defer std.heap.c_allocator.free(datadir_z);
+    const dir = c.opendir(datadir_z.ptr) orelse return;
+    defer _ = c.closedir(dir);
+    while (c.readdir(dir)) |entry| {
+        const name = std.mem.span(@as([*:0]const u8, @ptrCast(&entry.*.d_name)));
+        if (std.ascii.endsWithIgnoreCase(name, ".db") or
+            std.ascii.endsWithIgnoreCase(name, ".sqlite") or
+            std.ascii.endsWithIgnoreCase(name, ".sqlite3"))
+        {
+            return error.ForbiddenRuntimeDbArtifact;
+        }
+    }
+}
 
 pub fn encodeUtxoKey(allocator: std.mem.Allocator, chain: []const u8, outpoint: Outpoint) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
@@ -102,6 +145,10 @@ pub fn encodeBlockIndexKey(allocator: std.mem.Allocator, chain: []const u8, heig
 
 pub fn encodeHeaderKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
     return keyWithHeight(allocator, 'h', chain, height);
+}
+
+pub fn encodeRawBlockKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
+    return keyWithHeight(allocator, 'r', chain, height);
 }
 
 pub fn encodeMetadataKey(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
@@ -192,6 +239,7 @@ pub const RocksDb = struct {
     db: *c.rocksdb_t,
 
     pub fn open(allocator: std.mem.Allocator, path: []const u8) !RocksDb {
+        try rejectUnapprovedRuntimeDbArtifacts(path);
         const path_z = try allocator.dupeZ(u8, path);
         defer allocator.free(path_z);
 
@@ -199,7 +247,6 @@ pub const RocksDb = struct {
         defer c.rocksdb_options_destroy(options);
         c.rocksdb_options_set_create_if_missing(options, 1);
         c.rocksdb_options_increase_parallelism(options, 4);
-        c.rocksdb_options_optimize_level_style_compaction(options, 0);
 
         var err: [*c]u8 = null;
         const db = c.rocksdb_open(options, path_z.ptr, &err) orelse {
@@ -285,6 +332,99 @@ pub const RocksDb = struct {
         return out;
     }
 
+    pub fn getManyUtxos(self: *RocksDb, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint) ![]?StoredUtxo {
+        var keys = try allocator.alloc([]const u8, outpoints.len);
+        defer {
+            for (keys) |key| allocator.free(key);
+            allocator.free(keys);
+        }
+        for (outpoints, 0..) |outpoint, i| {
+            keys[i] = try encodeUtxoKey(allocator, chain, outpoint);
+        }
+        const raw_values = try self.getManyRaw(allocator, keys);
+        defer {
+            for (raw_values) |value| if (value) |bytes| allocator.free(bytes);
+            allocator.free(raw_values);
+        }
+        var out = try allocator.alloc(?StoredUtxo, outpoints.len);
+        errdefer allocator.free(out);
+        for (raw_values, 0..) |value, i| {
+            out[i] = if (value) |bytes| try decodeUtxoValue(allocator, outpoints[i], bytes) else null;
+        }
+        return out;
+    }
+
+    pub fn recordBlock(self: *RocksDb, allocator: std.mem.Allocator, height: u32, hash: [32]u8, raw: []const u8) !void {
+        const write_opts = c.rocksdb_writeoptions_create() orelse return error.RocksDbOptions;
+        defer c.rocksdb_writeoptions_destroy(write_opts);
+        const batch = c.rocksdb_writebatch_create() orelse return error.RocksDbOptions;
+        defer c.rocksdb_writebatch_destroy(batch);
+
+        const raw_key = try encodeRawBlockKey(allocator, "testnet4", height);
+        defer allocator.free(raw_key);
+        c.rocksdb_writebatch_put(batch, raw_key.ptr, raw_key.len, raw.ptr, raw.len);
+
+        const header_key = try encodeHeaderKey(allocator, "testnet4", height);
+        defer allocator.free(header_key);
+        c.rocksdb_writebatch_put(batch, header_key.ptr, header_key.len, raw.ptr, @min(raw.len, 80));
+
+        const index_key = try encodeBlockIndexKey(allocator, "testnet4", height);
+        defer allocator.free(index_key);
+        const hash_display = try crypto.displayHashAlloc(allocator, hash[0..]);
+        defer allocator.free(hash_display);
+        c.rocksdb_writebatch_put(batch, index_key.ptr, index_key.len, hash_display.ptr, hash_display.len);
+
+        var err: [*c]u8 = null;
+        c.rocksdb_write(self.db, write_opts, batch, &err);
+        if (err != null) {
+            c.rocksdb_free(err);
+            return error.RocksDbWrite;
+        }
+    }
+
+    pub fn readMetadata(self: *RocksDb, allocator: std.mem.Allocator) !Metadata {
+        const validated_height = try self.metaI64(allocator, "validated_height", -1);
+        const header_height = try self.metaI64(allocator, "header_height", validated_height);
+        const stored_block_height = try self.metaI64(allocator, "stored_block_height", validated_height);
+        const chainstate_utxo_count = try self.metaI64(allocator, "chainstate_utxo_count", 0);
+        return .{
+            .validated_height = validated_height,
+            .validated_hash = try self.metaString(allocator, "validated_hash", ""),
+            .header_height = header_height,
+            .header_hash = try self.metaString(allocator, "header_hash", ""),
+            .stored_block_height = stored_block_height,
+            .stored_block_hash = try self.metaString(allocator, "stored_block_hash", ""),
+            .chainstate_backend = try self.metaString(allocator, "chainstate_backend", "rocksdb"),
+            .chainstate_status = try self.metaString(allocator, "chainstate_status", "missing"),
+            .sync_status = try self.metaString(allocator, "sync_status", "starting"),
+            .chainstate_utxo_count = chainstate_utxo_count,
+            .current_blocker = try self.metaString(allocator, "current_blocker", ""),
+        };
+    }
+
+    pub fn deinitMetadata(_: *RocksDb, allocator: std.mem.Allocator, meta: Metadata) void {
+        allocator.free(meta.validated_hash);
+        allocator.free(meta.header_hash);
+        allocator.free(meta.stored_block_hash);
+        allocator.free(meta.chainstate_backend);
+        allocator.free(meta.chainstate_status);
+        allocator.free(meta.sync_status);
+        allocator.free(meta.current_blocker);
+    }
+
+    fn metaString(self: *RocksDb, allocator: std.mem.Allocator, name: []const u8, default: []const u8) ![]u8 {
+        const key = try encodeMetadataKey(allocator, name);
+        defer allocator.free(key);
+        return (try self.getAlloc(allocator, key)) orelse try allocator.dupe(u8, default);
+    }
+
+    fn metaI64(self: *RocksDb, allocator: std.mem.Allocator, name: []const u8, default: i64) !i64 {
+        const value = try self.metaString(allocator, name, "");
+        defer allocator.free(value);
+        if (value.len == 0) return default;
+        return std.fmt.parseInt(i64, value, 10) catch default;
+    }
+
     pub fn commitBlock(self: *RocksDb, allocator: std.mem.Allocator, commit: ChainstateBlockCommit) !void {
         const write_opts = c.rocksdb_writeoptions_create() orelse return error.RocksDbOptions;
         defer c.rocksdb_writeoptions_destroy(write_opts);
@@ -321,6 +461,17 @@ pub const RocksDb = struct {
         const height_value = try std.fmt.allocPrint(allocator, "{}", .{commit.height});
         defer allocator.free(height_value);
         c.rocksdb_writebatch_put(batch, height_key.ptr, height_key.len, height_value.ptr, height_value.len);
+
+        const hash_display = try crypto.displayHashAlloc(allocator, commit.block_hash[0..]);
+        defer allocator.free(hash_display);
+        try putMetaBatch(allocator, batch, "validated_hash", hash_display);
+        try putMetaBatch(allocator, batch, "header_height", height_value);
+        try putMetaBatch(allocator, batch, "header_hash", hash_display);
+        try putMetaBatch(allocator, batch, "stored_block_height", height_value);
+        try putMetaBatch(allocator, batch, "stored_block_hash", hash_display);
+        try putMetaBatch(allocator, batch, "sync_status", "blocks_current");
+        try putMetaBatch(allocator, batch, "chainstate_status", "usable");
+        try putMetaBatch(allocator, batch, "current_blocker", "");
 
         const backend_key = try encodeMetadataKey(allocator, "chainstate_backend");
         defer allocator.free(backend_key);
@@ -408,6 +559,243 @@ pub fn encodeUndoValue(allocator: std.mem.Allocator, entries: []const UndoEntry)
         try appendVarBytes32(allocator, &bytes, entry.utxo.script_pubkey);
     }
     return bytes.toOwnedSlice(allocator);
+}
+
+fn decodeUtxoValue(allocator: std.mem.Allocator, outpoint: Outpoint, value: []const u8) !StoredUtxo {
+    if (value.len < 17) return error.UtxoValueTooShort;
+    const height = std.mem.readInt(u32, value[0..4], .big);
+    const value_sats = std.mem.readInt(u64, value[4..12], .big);
+    const coinbase = value[12] == 1;
+    const script_len = std.mem.readInt(u32, value[13..17], .big);
+    if (17 + script_len > value.len) return error.UtxoValueTruncatedScript;
+    return .{
+        .height = height,
+        .vout = outpoint.vout,
+        .value_sats = value_sats,
+        .coinbase = coinbase,
+        .script_pubkey = try allocator.dupe(u8, value[17 .. 17 + script_len]),
+    };
+}
+
+fn putMetaBatch(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, name: []const u8, value: []const u8) !void {
+    const key = try encodeMetadataKey(allocator, name);
+    defer allocator.free(key);
+    c.rocksdb_writebatch_put(batch, key.ptr, key.len, value.ptr, value.len);
+}
+
+pub const ConnectTimings = struct {
+    utxo_load: i64 = 0,
+    prevout_batch_load: i64 = 0,
+    script_verify: i64 = 0,
+    utxo_apply: i64 = 0,
+    commit: i64 = 0,
+    block_connect_store_commit: i64 = 0,
+};
+
+pub const ConnectResult = struct {
+    validated_height: u32,
+    validated_hash: []u8,
+    chainstate_utxo_count: i64,
+    blocks_connected: u32,
+    timings: ConnectTimings,
+
+    pub fn deinit(self: ConnectResult, allocator: std.mem.Allocator) void {
+        allocator.free(self.validated_hash);
+    }
+};
+
+const ScriptJob = struct {
+    tx_index: usize,
+    prevouts: []script.SpentPrevout,
+};
+
+pub fn connectDecodedBlock(
+    allocator: std.mem.Allocator,
+    db: *RocksDb,
+    height: u32,
+    target: u32,
+    info: block.BlockInfo,
+    transactions: []const tx.Transaction,
+) !ConnectResult {
+    _ = target;
+    const block_started = nowMs();
+    if (transactions.len == 0) return error.BlockWithoutTransactions;
+
+    var txids = try allocator.alloc([32]u8, transactions.len);
+    defer allocator.free(txids);
+    for (transactions, 0..) |transaction, i| txids[i] = transaction.txid();
+
+    var external_prevouts = std.AutoHashMap(Outpoint, void).init(allocator);
+    defer external_prevouts.deinit();
+    var external_order = std.ArrayList(Outpoint).empty;
+    defer external_order.deinit(allocator);
+    for (transactions[1..]) |transaction| {
+        for (transaction.inputs) |input| {
+            const outpoint = Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+            if (!external_prevouts.contains(outpoint)) {
+                try external_prevouts.put(outpoint, {});
+                try external_order.append(allocator, outpoint);
+            }
+        }
+    }
+
+    var timings = ConnectTimings{};
+    const load_started = nowMs();
+    const loaded_values = try db.getManyUtxos(allocator, "testnet4", external_order.items);
+    defer allocator.free(loaded_values);
+    timings.prevout_batch_load += elapsedMs(load_started);
+    timings.utxo_load += elapsedMs(load_started);
+
+    var loaded = std.AutoHashMap(Outpoint, StoredUtxo).init(allocator);
+    defer {
+        var it = loaded.valueIterator();
+        while (it.next()) |utxo| utxo.deinit(allocator);
+        loaded.deinit();
+    }
+    for (external_order.items, loaded_values) |outpoint, value| {
+        if (value) |utxo| try loaded.put(outpoint, utxo);
+    }
+
+    var created = std.AutoHashMap(Outpoint, StoredUtxo).init(allocator);
+    defer created.deinit();
+    var spent = std.AutoHashMap(Outpoint, void).init(allocator);
+    defer spent.deinit();
+    var undo_entries = std.ArrayList(UndoEntry).empty;
+    defer undo_entries.deinit(allocator);
+    var external_spends = std.ArrayList(Outpoint).empty;
+    defer external_spends.deinit(allocator);
+    var script_jobs = std.ArrayList(ScriptJob).empty;
+    defer {
+        for (script_jobs.items) |job| allocator.free(job.prevouts);
+        script_jobs.deinit(allocator);
+    }
+
+    for (transactions, 0..) |transaction, tx_index| {
+        if (tx_index == 0) {
+            if (!transaction.isCoinbase()) return error.FirstTransactionNotCoinbase;
+            if (height != 0) try addCreatedOutputs(allocator, &created, height, transaction, txids[tx_index], true);
+            continue;
+        }
+        if (transaction.inputs.len == 0) return error.NonCoinbaseWithoutInputs;
+        var input_seen = std.AutoHashMap(Outpoint, void).init(allocator);
+        defer input_seen.deinit();
+        var prevouts = try allocator.alloc(script.SpentPrevout, transaction.inputs.len);
+        errdefer allocator.free(prevouts);
+        for (transaction.inputs, 0..) |input, input_index| {
+            const outpoint = Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+            if (input_seen.contains(outpoint) or spent.contains(outpoint)) return error.DuplicateSpendInBlock;
+            try input_seen.put(outpoint, {});
+            const utxo = created.get(outpoint) orelse loaded.get(outpoint) orelse return error.MissingUtxo;
+            if (utxo.coinbase and height < utxo.height + 100) return error.CoinbaseMaturity;
+            prevouts[input_index] = .{ .amount = @intCast(utxo.value_sats), .script_pubkey = utxo.script_pubkey };
+        }
+        try script_jobs.append(allocator, .{ .tx_index = tx_index, .prevouts = prevouts });
+        for (transaction.inputs) |input| {
+            const outpoint = Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+            try spent.put(outpoint, {});
+            if (!created.contains(outpoint)) {
+                try external_spends.append(allocator, outpoint);
+                const utxo = loaded.get(outpoint) orelse return error.MissingUndoUtxo;
+                try undo_entries.append(allocator, .{ .outpoint = outpoint, .utxo = utxo });
+            }
+        }
+        try addCreatedOutputs(allocator, &created, height, transaction, txids[tx_index], false);
+    }
+
+    const script_started = nowMs();
+    try verifyScriptJobsParallel(transactions, script_jobs.items);
+    timings.script_verify += elapsedMs(script_started);
+
+    var created_utxos = std.ArrayList(CreatedUtxo).empty;
+    defer created_utxos.deinit(allocator);
+    var created_iter = created.iterator();
+    while (created_iter.next()) |entry| {
+        if (!spent.contains(entry.key_ptr.*)) {
+            try created_utxos.append(allocator, .{ .outpoint = entry.key_ptr.*, .utxo = entry.value_ptr.* });
+        }
+    }
+
+    const commit_started = nowMs();
+    try db.commitBlock(allocator, .{
+        .height = height,
+        .block_hash = info.hash,
+        .spent_external = external_spends.items,
+        .created_utxos = created_utxos.items,
+        .undo_entries = undo_entries.items,
+    });
+    timings.commit += elapsedMs(commit_started);
+    timings.utxo_apply += timings.commit;
+    timings.block_connect_store_commit += elapsedMs(block_started);
+
+    const meta = try db.readMetadata(allocator);
+    defer db.deinitMetadata(allocator, meta);
+    return .{
+        .validated_height = height,
+        .validated_hash = try crypto.displayHashAlloc(allocator, info.hash[0..]),
+        .chainstate_utxo_count = meta.chainstate_utxo_count,
+        .blocks_connected = 1,
+        .timings = timings,
+    };
+}
+
+fn addCreatedOutputs(
+    allocator: std.mem.Allocator,
+    created: *std.AutoHashMap(Outpoint, StoredUtxo),
+    height: u32,
+    transaction: tx.Transaction,
+    txid: [32]u8,
+    coinbase: bool,
+) !void {
+    _ = allocator;
+    for (transaction.outputs, 0..) |output, vout| {
+        if (output.value < 0) return error.NegativeOutputValue;
+        if (!isSpendableOutput(output.script_pubkey)) continue;
+        const outpoint = Outpoint{ .txid = txid, .vout = @intCast(vout) };
+        if (created.contains(outpoint)) return error.DuplicateCreatedUtxo;
+        try created.put(outpoint, .{
+            .height = height,
+            .vout = @intCast(vout),
+            .value_sats = @intCast(output.value),
+            .coinbase = coinbase,
+            .script_pubkey = output.script_pubkey,
+        });
+    }
+}
+
+pub fn isSpendableOutput(script_pubkey: []const u8) bool {
+    return script_pubkey.len != 0 and script_pubkey[0] != 0x6a;
+}
+
+const ScriptThreadResult = struct {
+    err: ?anyerror = null,
+};
+
+fn verifyScriptJobsParallel(transactions: []const tx.Transaction, jobs: []const ScriptJob) !void {
+    var threads = try std.heap.c_allocator.alloc(std.Thread, jobs.len);
+    defer std.heap.c_allocator.free(threads);
+    var results = try std.heap.c_allocator.alloc(ScriptThreadResult, jobs.len);
+    defer std.heap.c_allocator.free(results);
+    for (jobs, 0..) |job, i| {
+        results[i] = .{};
+        threads[i] = try std.Thread.spawn(.{}, verifyScriptJobWorker, .{ transactions[job.tx_index], job.prevouts, &results[i] });
+    }
+    for (threads) |thread| thread.join();
+    for (results) |result| {
+        if (result.err) |err| return err;
+    }
+}
+
+fn verifyScriptJobWorker(transaction: tx.Transaction, prevouts: []script.SpentPrevout, result: *ScriptThreadResult) void {
+    for (transaction.inputs, 0..) |_, input_index| {
+        script.verifyInput(std.heap.c_allocator, transaction, input_index, prevouts) catch |err| {
+            result.err = err;
+            return;
+        };
+    }
+}
+
+fn elapsedMs(start_ms: i64) i64 {
+    return @max(0, nowMs() - start_ms);
 }
 
 pub fn secp256k1Available() bool {

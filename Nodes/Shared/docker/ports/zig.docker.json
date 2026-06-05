@@ -29,6 +29,10 @@
     "docker_script_corpus": "cd Nodes/Zig && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Zig && make docker-proof-local",
     "docker_proof_10k": "cd Nodes/Zig && make docker-proof-10k",
+    "docker_proof_50k": "cd Nodes/Zig && make docker-proof-50k",
+    "docker_proof_100k": null,
+    "docker_proof_tip_once": null,
+    "docker_tip_maintenance": null,
     "docker_probe_external": null,
     "docker_supervisor": null,
     "docker_supervisor_status": null,
@@ -68,14 +72,14 @@
   "proof_artifacts": {
     "storage_gate_result": "Nodes/Shared/conformance/results/zig_storage_gate_docker_<YYYY-MM-DD>.json",
     "script_corpus_result": "Nodes/Shared/conformance/results/zig_script_corpus_<YYYY-MM-DD>.json",
-    "local_reference_result": "Nodes/Shared/conformance/results/zig_docker_supporting_5k_benchmark_<YYYY-MM-DD>.json",
-    "supporting_10k_result": "Nodes/Shared/conformance/results/zig_docker_supporting_10k_benchmark_<YYYY-MM-DD>.json",
-    "supporting_50k_result": "Nodes/Shared/conformance/results/zig_docker_supporting_50k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Zig proof_partial scaffold owns native RocksDB and Docker surfaces. The script corpus verifier is 45/45; local Reference P2P connect remains the explicit baseline blocker."
+    "local_reference_result": "Nodes/Shared/conformance/results/zig_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
+    "diagnostic_10k_result": "Nodes/Shared/conformance/results/zig_docker_diagnostic_10k_benchmark_<YYYY-MM-DD>.json",
+    "shakedown_50k_result": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
+    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, and local Reference P2P proof to the 5k baseline."
   },
   "known_caveats": [
     "Zig script corpus is 45/45 with engine=zig_native and delegated=false",
-    "Local Reference P2P proof command is contract-shaped but does not yet connect blocks",
+    "Live external P2P discovery and tip maintenance remain out of scope for proof_partial",
     "Binary gate remains not_attempted"
   ]
 }

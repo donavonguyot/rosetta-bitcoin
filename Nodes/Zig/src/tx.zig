@@ -47,6 +47,13 @@ pub const Transaction = struct {
     pub fn txid(self: Transaction) [32]u8 {
         return crypto.doubleSha256(self.raw_no_witness);
     }
+
+    pub fn wtxid(self: Transaction, allocator: std.mem.Allocator) ![32]u8 {
+        if (self.witness.len == 0) return self.txid();
+        const raw = try serialize(allocator, self, true);
+        defer allocator.free(raw);
+        return crypto.doubleSha256(raw);
+    }
 };
 
 pub fn readCompactSize(data: []const u8, offset_in: usize) !struct { value: u64, offset: usize } {
@@ -197,6 +204,48 @@ pub fn deserialize(allocator: std.mem.Allocator, data: []const u8, offset_in: us
 
 pub fn serializeNoWitness(allocator: std.mem.Allocator, transaction: Transaction) ![]u8 {
     return serializePartsNoWitness(allocator, transaction.version, transaction.inputs, transaction.outputs, transaction.lock_time);
+}
+
+pub fn serialize(allocator: std.mem.Allocator, transaction: Transaction, include_witness: bool) ![]u8 {
+    if (!include_witness or transaction.witness.len == 0) return serializeNoWitness(allocator, transaction);
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    var version_buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &version_buf, @bitCast(transaction.version), .little);
+    try out.appendSlice(allocator, &version_buf);
+    try out.appendSlice(allocator, &.{ 0x00, 0x01 });
+    try writeCompactSize(allocator, &out, transaction.inputs.len);
+    for (transaction.inputs) |input| {
+        try out.appendSlice(allocator, input.previous_output.hash[0..]);
+        var index_buf: [4]u8 = undefined;
+        std.mem.writeInt(u32, &index_buf, input.previous_output.index, .little);
+        try out.appendSlice(allocator, &index_buf);
+        try writeCompactSize(allocator, &out, input.script_sig.len);
+        try out.appendSlice(allocator, input.script_sig);
+        var seq_buf: [4]u8 = undefined;
+        std.mem.writeInt(u32, &seq_buf, input.sequence, .little);
+        try out.appendSlice(allocator, &seq_buf);
+    }
+    try writeCompactSize(allocator, &out, transaction.outputs.len);
+    for (transaction.outputs) |output| {
+        var value_buf: [8]u8 = undefined;
+        std.mem.writeInt(u64, &value_buf, @bitCast(output.value), .little);
+        try out.appendSlice(allocator, &value_buf);
+        try writeCompactSize(allocator, &out, output.script_pubkey.len);
+        try out.appendSlice(allocator, output.script_pubkey);
+    }
+    for (0..transaction.inputs.len) |i| {
+        const stack = if (i < transaction.witness.len) transaction.witness[i] else &.{};
+        try writeCompactSize(allocator, &out, stack.len);
+        for (stack) |item| {
+            try writeCompactSize(allocator, &out, item.len);
+            try out.appendSlice(allocator, item);
+        }
+    }
+    var lock_buf: [4]u8 = undefined;
+    std.mem.writeInt(u32, &lock_buf, transaction.lock_time, .little);
+    try out.appendSlice(allocator, &lock_buf);
+    return out.toOwnedSlice(allocator);
 }
 
 fn serializePartsNoWitness(

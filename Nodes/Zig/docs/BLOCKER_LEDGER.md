@@ -23,14 +23,14 @@ follower_notes: Current proof reports 45/45 with engine=zig_native, delegated=fa
 ### Local Reference P2P 5k Gate
 
 ```text
-height: 0
-block_hash:
+height: 5000
+block_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
 txid:
 input_index:
 spent_script_pubkey:
-failure: Local Reference P2P byte-source and ordered connect path are not implemented.
-missing_rule: honest P2P handshake, getdata/block fetch, parsing, PoW, merkle, UTXO connect, and per-block RocksDB batch commit
+failure: cleared by Zig local Reference P2P proof
+missing_rule:
 python_fix:
-test_fixture: supporting_5k_p2p benchmark gate
-follower_notes: Must emit zig_docker_supporting_5k_benchmark_<date>.json with validated_height >= 5000 and chainstate_utxo_count=4574.
+test_fixture: baseline_5k_p2p benchmark gate
+follower_notes: Current Docker proof emits zig_docker_baseline_5k_benchmark_2026-06-05-zig-5k.json with validated_height=5000, chainstate_utxo_count=4574, fresh_state=true, WAL enabled, current_blocker=null, and binary_gate_status=not_attempted. Live external P2P discovery, tip maintenance, and binary gate remain out of scope.
 ```
