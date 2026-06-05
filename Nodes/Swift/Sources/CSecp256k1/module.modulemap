@@ -1,0 +1,5 @@
+module CSecp256k1 [system] {
+  header "/usr/include/secp256k1.h"
+  link "secp256k1"
+  export *
+}

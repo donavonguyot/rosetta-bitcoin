@@ -1,0 +1,223 @@
+import Foundation
+
+enum Sighash {
+    static let all: UInt32 = 0x01
+    static let none: UInt32 = 0x02
+    static let single: UInt32 = 0x03
+    static let anyoneCanPay: UInt32 = 0x80
+
+    static func bip143(
+        tx: Transaction,
+        inputIndex: Int,
+        scriptCode: Data,
+        amount: Int64,
+        sighashType: UInt32
+    ) throws -> Data {
+        guard inputIndex >= 0, inputIndex < tx.inputs.count else {
+            throw SwiftBitnodeError.message("input index out of range")
+        }
+        let baseType = sighashType & 0x1f
+        let anyone = (sighashType & anyoneCanPay) != 0
+        let hashPrevouts: Data
+        if anyone {
+            hashPrevouts = Data(repeating: 0, count: 32)
+        } else {
+            hashPrevouts = SHA256.doubleHash(tx.inputs.reduce(into: Data()) { out, input in
+                out.append(input.previousTxidInternal)
+                out.append(input.vout.littleEndianData)
+            })
+        }
+        let hashSequence: Data
+        if anyone || baseType == single || baseType == none {
+            hashSequence = Data(repeating: 0, count: 32)
+        } else {
+            hashSequence = SHA256.doubleHash(tx.inputs.reduce(into: Data()) { out, input in
+                out.append(input.sequence.littleEndianData)
+            })
+        }
+        let hashOutputs: Data
+        if baseType == all {
+            hashOutputs = SHA256.doubleHash(tx.outputs.reduce(into: Data()) { out, output in
+                out.append(serializeOutput(output))
+            })
+        } else if baseType == single && inputIndex < tx.outputs.count {
+            hashOutputs = SHA256.doubleHash(serializeOutput(tx.outputs[inputIndex]))
+        } else {
+            hashOutputs = Data(repeating: 0, count: 32)
+        }
+        let input = tx.inputs[inputIndex]
+        var preimage = Data()
+        preimage.append(UInt32(bitPattern: tx.version).littleEndianData)
+        preimage.append(hashPrevouts)
+        preimage.append(hashSequence)
+        preimage.append(input.previousTxidInternal)
+        preimage.append(input.vout.littleEndianData)
+        appendCompactSize(&preimage, UInt64(scriptCode.count))
+        preimage.append(scriptCode)
+        preimage.append(UInt64(bitPattern: amount).littleEndianData)
+        preimage.append(input.sequence.littleEndianData)
+        preimage.append(hashOutputs)
+        preimage.append(tx.locktime.littleEndianData)
+        preimage.append(sighashType.littleEndianData)
+        return SHA256.doubleHash(preimage)
+    }
+
+    static func p2wpkhScriptCode(program20: Data) -> Data {
+        Data([0x76, 0xa9, 0x14]) + program20 + Data([0x88, 0xac])
+    }
+
+    static func legacy(tx: Transaction, inputIndex: Int, scriptCode: Data, sighashType: UInt32, signature: Data? = nil) throws -> Data {
+        guard inputIndex >= 0, inputIndex < tx.inputs.count else {
+            throw SwiftBitnodeError.message("input index out of range")
+        }
+        let baseType = sighashType & 0x1f
+        if baseType == single && inputIndex >= tx.outputs.count {
+            return Data([0x01] + Array(repeating: 0x00, count: 31))
+        }
+        let anyone = (sighashType & anyoneCanPay) != 0
+        var preimage = Data()
+        preimage.append(UInt32(bitPattern: tx.version).littleEndianData)
+
+        let inputIndices = anyone ? [inputIndex] : Array(tx.inputs.indices)
+        appendCompactSize(&preimage, UInt64(inputIndices.count))
+        let cleanedScript = signature.map { removeSignature($0, from: scriptCode) } ?? scriptCode
+        for index in inputIndices {
+            let input = tx.inputs[index]
+            preimage.append(input.previousTxidInternal)
+            preimage.append(input.vout.littleEndianData)
+            let script = index == inputIndex ? cleanedScript : Data()
+            appendCompactSize(&preimage, UInt64(script.count))
+            preimage.append(script)
+            let sequence = (index != inputIndex && (baseType == none || baseType == single)) ? UInt32(0) : input.sequence
+            preimage.append(sequence.littleEndianData)
+        }
+
+        if baseType == none {
+            appendCompactSize(&preimage, 0)
+        } else if baseType == single {
+            appendCompactSize(&preimage, UInt64(inputIndex + 1))
+            for index in 0...inputIndex {
+                if index == inputIndex {
+                    preimage.append(serializeOutput(tx.outputs[index]))
+                } else {
+                    preimage.append(UInt64.max.littleEndianData)
+                    preimage.append(UInt8(0))
+                }
+            }
+        } else {
+            appendCompactSize(&preimage, UInt64(tx.outputs.count))
+            for output in tx.outputs {
+                preimage.append(serializeOutput(output))
+            }
+        }
+        preimage.append(tx.locktime.littleEndianData)
+        preimage.append(sighashType.littleEndianData)
+        return SHA256.doubleHash(preimage)
+    }
+
+    static func taprootScriptPath(
+        tx: Transaction,
+        inputIndex: Int,
+        prevouts: [CorpusPrevout],
+        tapleafHash: Data,
+        sighashType: UInt8
+    ) throws -> Data {
+        guard inputIndex >= 0, inputIndex < tx.inputs.count, prevouts.count >= tx.inputs.count else {
+            throw SwiftBitnodeError.message("taproot sighash missing prevouts")
+        }
+        let baseType = sighashType & 0x03
+        let anyone = (sighashType & 0x80) != 0
+        var msg = Data()
+        msg.append(sighashType)
+        msg.append(UInt32(bitPattern: tx.version).littleEndianData)
+        msg.append(tx.locktime.littleEndianData)
+        if !anyone {
+            msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
+                out.append(input.previousTxidInternal)
+                out.append(input.vout.littleEndianData)
+            }))
+            msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
+                out.append(UInt64(bitPattern: prevout.amount).littleEndianData)
+            }))
+            msg.append(SHA256.hash(prevouts.reduce(into: Data()) { out, prevout in
+                appendCompactSize(&out, UInt64(prevout.scriptPubKey.count))
+                out.append(prevout.scriptPubKey)
+            }))
+            msg.append(SHA256.hash(tx.inputs.reduce(into: Data()) { out, input in
+                out.append(input.sequence.littleEndianData)
+            }))
+        }
+        if baseType != none && baseType != single {
+            msg.append(SHA256.hash(tx.outputs.reduce(into: Data()) { out, output in
+                out.append(serializeOutput(output))
+            }))
+        }
+        msg.append(UInt8(2)) // ext_flag=1, no annex
+        if anyone {
+            let input = tx.inputs[inputIndex]
+            let prevout = prevouts[inputIndex]
+            msg.append(input.previousTxidInternal)
+            msg.append(input.vout.littleEndianData)
+            msg.append(UInt64(bitPattern: prevout.amount).littleEndianData)
+            appendCompactSize(&msg, UInt64(prevout.scriptPubKey.count))
+            msg.append(prevout.scriptPubKey)
+            msg.append(input.sequence.littleEndianData)
+        } else {
+            msg.append(UInt32(inputIndex).littleEndianData)
+        }
+        if baseType == single {
+            guard inputIndex < tx.outputs.count else {
+                throw SwiftBitnodeError.message("taproot SIGHASH_SINGLE missing matching output")
+            }
+            msg.append(SHA256.hash(serializeOutput(tx.outputs[inputIndex])))
+        }
+        msg.append(tapleafHash)
+        msg.append(UInt8(0x00)) // key_version
+        msg.append(UInt32.max.littleEndianData) // code_separator_pos
+        return taggedHash(tag: "TapSighash", Data([0x00]) + msg)
+    }
+
+    static func tapleafHash(script: Data, leafVersion: UInt8) -> Data {
+        var payload = Data([leafVersion])
+        appendCompactSize(&payload, UInt64(script.count))
+        payload.append(script)
+        return taggedHash(tag: "TapLeaf", payload)
+    }
+
+    static func serializeOutput(_ output: TxOutput) -> Data {
+        var out = Data()
+        out.append(UInt64(bitPattern: output.value).littleEndianData)
+        appendCompactSize(&out, UInt64(output.scriptPubKey.count))
+        out.append(output.scriptPubKey)
+        return out
+    }
+
+    private static func removeSignature(_ signatureWithHashType: Data, from script: Data) -> Data {
+        guard !signatureWithHashType.isEmpty else { return script }
+        var out = Data(script)
+        while let range = out.range(of: signatureWithHashType) {
+            out.removeSubrange(range)
+        }
+        return out
+    }
+
+    private static func taggedHash(tag: String, _ payload: Data) -> Data {
+        let tagHash = SHA256.hash(Data(tag.utf8))
+        return SHA256.hash(tagHash + tagHash + payload)
+    }
+
+    private static func appendCompactSize(_ out: inout Data, _ value: UInt64) {
+        if value < 0xfd {
+            out.append(UInt8(value))
+        } else if value <= 0xffff {
+            out.append(UInt8(0xfd))
+            out.append(UInt16(value).littleEndianData)
+        } else if value <= 0xffff_ffff {
+            out.append(UInt8(0xfe))
+            out.append(UInt32(value).littleEndianData)
+        } else {
+            out.append(UInt8(0xff))
+            out.append(value.littleEndianData)
+        }
+    }
+}

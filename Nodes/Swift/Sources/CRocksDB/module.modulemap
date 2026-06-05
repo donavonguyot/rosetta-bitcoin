@@ -1,0 +1,5 @@
+module CRocksDB [system] {
+  header "/usr/include/rocksdb/c.h"
+  link "rocksdb"
+  export *
+}

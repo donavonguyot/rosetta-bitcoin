@@ -1,0 +1,36 @@
+services:
+  swiftbitnode:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      SWIFTBITNODE_RUNTIME_SURFACE: docker
+    volumes:
+      - swiftbitnode_data:/data
+      - ../../Shared:/workspace/Shared:ro
+      - ../../Shared/conformance/results:/results
+
+  swiftbitnode-script-corpus:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      SWIFTBITNODE_RUNTIME_SURFACE: docker
+    volumes:
+      - ../../Shared:/workspace/Shared:ro
+      - ../../Shared/conformance/results:/results
+
+  swiftbitnode-local-reference-proof:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      SWIFTBITNODE_RUNTIME_SURFACE: docker
+    volumes:
+      - swiftbitnode_proof_data:/data
+      - ../../Shared/conformance/results:/results
+
+volumes:
+  swiftbitnode_data:
+  swiftbitnode_proof_data:
+  swiftbitnode_supervisor_data:

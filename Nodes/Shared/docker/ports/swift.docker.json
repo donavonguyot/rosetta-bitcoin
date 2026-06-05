@@ -1,0 +1,59 @@
+{
+  "manifest_version": 1,
+  "port": "swift",
+  "status": "proof_partial",
+  "paths": {
+    "root": "Nodes/Swift",
+    "dockerfile": "Nodes/Swift/docker/Dockerfile",
+    "compose": "Nodes/Swift/docker/docker-compose.yml",
+    "dockerignore": "Nodes/Swift/.dockerignore"
+  },
+  "images": {
+    "base": "swift:6.0-jammy",
+    "runtime": "swift:6.0-jammy",
+    "os_family": "Ubuntu",
+    "package_manager": "apt plus SwiftPM",
+    "native_dependencies": ["librocksdb-dev", "libsecp256k1-dev"]
+  },
+  "volumes": {
+    "data": "swiftbitnode_data",
+    "proof": "swiftbitnode_proof_data",
+    "supervisor": "swiftbitnode_supervisor_data"
+  },
+  "commands": {
+    "docker_config": "cd Nodes/Swift && make docker-config",
+    "docker_build": "cd Nodes/Swift && make docker-build",
+    "docker_warm": "cd Nodes/Swift && make docker-warm",
+    "docker_status": "cd Nodes/Swift && make docker-status",
+    "docker_script_corpus": "cd Nodes/Swift && make docker-script-corpus",
+    "docker_proof_local": "cd Nodes/Swift && make docker-proof-local",
+    "docker_probe_external": null,
+    "docker_supervisor": null,
+    "docker_supervisor_status": null,
+    "docker_supervisor_stop": null,
+    "docker_supervisor_resume": null
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": true,
+      "command": "cd Nodes/Swift && make docker-proof-local",
+      "peer": "host.docker.internal:48333",
+      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+    }
+  },
+  "tick_json": {
+    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+  },
+  "proof_artifacts": {
+    "script_corpus_result": "Nodes/Shared/conformance/results/swift_script_corpus_<YYYY-MM-DD>.json",
+    "local_reference_result": "Nodes/Shared/conformance/results/swift_docker_supporting_5k_benchmark_<YYYY-MM-DD>.json",
+    "notes": "Swift proof_partial: corpus-first command surface is present; strict baseline remains blocked until 45/45 corpus and RocksDB runtime truth are implemented."
+  },
+  "known_caveats": ["Shared script corpus is not yet 45/45", "Operational state is still diagnostic, not RocksDB-owned truth", "Binary gate remains not_attempted"]
+}
