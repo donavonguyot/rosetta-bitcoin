@@ -23,14 +23,21 @@ DOCKER_50K_PROFILE_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
 
-.PHONY: build test ocbitnode-status ocbitnode-storage-proof ocbitnode-native-crypto-vectors ocbitnode-script-corpus
+.PHONY: build test docker-test ocbitnode-status ocbitnode-storage-proof ocbitnode-native-crypto-vectors ocbitnode-script-corpus
 .PHONY: docker-config docker-build docker-warm docker-status docker-storage-proof docker-native-crypto-vectors docker-script-corpus docker-proof-local docker-proof-50k docker-proof-50k-profile docker-smoke-once
 
 build:
 	opam exec -- dune build @install
 
 test:
-	opam exec -- dune runtest
+	@if command -v opam >/dev/null 2>&1; then \
+	  opam exec -- dune runtest; \
+	else \
+	  $(MAKE) docker-test; \
+	fi
+
+docker-test:
+	$(DOCKER_COMPOSE) run --rm --entrypoint /bin/bash ocbitnode -lc 'opam exec -- dune runtest'
 
 ocbitnode-status:
 	opam exec -- dune exec -- ocbitnode status --datadir $(DATA_DIR)

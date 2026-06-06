@@ -1,0 +1,14 @@
+{
+  "captured_at": "2026-06-06T20:18:04Z",
+  "category": "test",
+  "command": "cd Nodes/OCaml && make test",
+  "command_key": "test_unit",
+  "duration_ms": 817,
+  "exit_code": 0,
+  "lifecycle_status": "active_contender",
+  "node_id": "ocaml",
+  "port": "ocaml",
+  "result": "passed",
+  "schema": "port.test_result",
+  "summary": "docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml run --rm --entrypoint /bin/bash ocbitnode -lc 'opam exec -- dune runtest'\nContainer docker-ocbitnode-run-b0c480b0bda2 Creating \n Container docker-ocbitnode-run-b0c480b0bda2 Created \n[WARNING] Running as root is not recommended\nTesting `ocbitnode foundation'.\nThis run has ID `R9FX42FZ'.\n\n  [OK]          util          0   hex roundtrip.\n  [OK]          util          1   codec metadata key.\n  [OK]          util          2   tx roundtrip.\n  [OK]          util          3   script num and bool.\n  [OK]          util          4   block merkle.\n  [OK]          util          5   rocks multi_get and sync-off batch.\n  [OK]          util          6   sighash cache equivalence.\n  [OK]          util          7   legacy sighash cache equivalence.\n\nFull test results in `/workspace/OCaml/_build/default/test/_build/_tests/ocbitnode foundation'.\nTest Successful in 0.017s. 8 tests run."
+}

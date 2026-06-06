@@ -1,0 +1,14 @@
+{
+  "captured_at": "2026-06-06T20:16:48Z",
+  "category": "test",
+  "command": "cd Nodes/Zig && make test",
+  "command_key": "test_unit",
+  "duration_ms": 452,
+  "exit_code": 0,
+  "lifecycle_status": "active_development",
+  "node_id": "zig",
+  "port": "zig",
+  "result": "passed",
+  "schema": "port.test_result",
+  "summary": "zig build test"
+}

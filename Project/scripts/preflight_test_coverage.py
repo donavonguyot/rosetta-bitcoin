@@ -99,6 +99,12 @@ def preflight_port(conn: sqlite3.Connection, port: str, level: str) -> dict[str,
     elif not str(unit["command"]).strip():
         errors.append("test_unit command has no command text")
 
+    latest_unit_result = str(matrix["latest_unit_result"] or "")
+    if latest_unit_result == "failed":
+        errors.append("latest imported test_unit result failed")
+    elif level in {"baseline-par", "coverage-control"} and not latest_unit_result:
+        warnings.append("latest test_unit result is not imported yet")
+
     missing_domains = [row["domain"] for row in domains if row["domain_status"] == "missing"]
     if missing_domains:
         warnings.append("missing critical domain evidence: " + ", ".join(missing_domains))

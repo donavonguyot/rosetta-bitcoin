@@ -1,0 +1,14 @@
+{
+  "captured_at": "2026-06-06T20:16:09Z",
+  "category": "test",
+  "command": "cd Nodes/Swift && make test",
+  "command_key": "test_unit",
+  "duration_ms": 8652,
+  "exit_code": 0,
+  "lifecycle_status": "active_contender",
+  "node_id": "swift",
+  "port": "swift",
+  "result": "passed",
+  "schema": "port.test_result",
+  "summary": "[10/36] Compiling swiftbitnode ScriptJobRunner.swift\n[11/36] Compiling swiftbitnode Native.swift\n[12/36] Compiling swiftbitnode P2P.swift\n[13/36] Compiling swiftbitnode Constants.swift\n[14/36] Compiling swiftbitnode Hash.swift\n[15/36] Compiling swiftbitnode Connect.swift\n[16/36] Compiling swiftbitnode ConsensusSelfTest.swift\n[17/36] Compiling swiftbitnode ScriptCorpus.swift\n[18/36] Compiling swiftbitnode SHA256.swift\n[19/36] Compiling swiftbitnode ScriptInterpreter.swift\n[20/36] Compiling swiftbitnode ScriptVerifier.swift\n[21/36] Compiling swiftbitnode SyncSupervisor.swift\n[22/36] Compiling swiftbitnode Sighash.swift\n[23/36] Compiling swiftbitnode JSONUtil.swift\n[24/36] Compiling swiftbitnode LocalReferenceProof.swift\n[25/36] Compiling swiftbitnode Storage.swift\n[26/36] Compiling swiftbitnode PerformanceSelfTest.swift\n[27/36] Compiling swiftbitnode RocksDBNative.swift\n[28/36] Compiling swiftbitnode main.swift\n[28/36] Write Objects.LinkFileList\n[29/36] Linking swiftbitnode\n[30/36] Applying swiftbitnode\n[32/36] Compiling swiftbitnodeTests ContractSmokeTests.swift\n[33/36] Compiling swiftbitnodeTests ConsensusRegressionTests.swift\n[34/36] Emitting module swiftbitnodeTests\n[35/38] Compiling swiftbitnodePackageTests runner.swift\n[36/38] Emitting module swiftbitnodePackageTests\n[36/38] Write Objects.LinkFileList\n[37/38] Linking swiftbitnodePackageTests\nBuild complete! (7.24s)"
+}

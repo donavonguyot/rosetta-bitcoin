@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-06-06T20:15:57Z",
+  "category": "test",
+  "command": "cd Nodes/Rust && make test",
+  "command_key": "test_unit",
+  "duration_ms": 8681,
+  "exit_code": 0,
+  "failed": 0,
+  "lifecycle_status": "active_contender",
+  "node_id": "rust",
+  "passed": 13,
+  "port": "rust",
+  "result": "passed",
+  "schema": "port.test_result",
+  "skipped": 0,
+  "summary": "      \"name\": \"header.key\",\n      \"result\": \"passed\",\n      \"failure\": \"\"\n    },\n    {\n      \"name\": \"header.value\",\n      \"result\": \"passed\",\n      \"failure\": \"\"\n    },\n    {\n      \"name\": \"metadata.key\",\n      \"result\": \"passed\",\n      \"failure\": \"\"\n    },\n    {\n      \"name\": \"metadata.value\",\n      \"result\": \"passed\",\n      \"failure\": \"\"\n    }\n  ]\n}\ntest codec_vectors_pass ... ok\ntest empty_status_is_not_attempted ... ok\ntest storage_proof_seeds_height_two ... ok\ntest script_corpus_loads_45_rows ... ok\n\ntest result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.39s\nFinished `test` profile [unoptimized + debuginfo] target(s) in 0.19s\n     Running unittests src/main.rs (target/debug/deps/rsbitnode-13b5510c448c81a9)\n     Running tests/scaffold.rs (target/debug/deps/scaffold-9e92459b75242e4c)",
+  "total": 13
+}

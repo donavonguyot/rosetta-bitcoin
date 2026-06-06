@@ -18,6 +18,7 @@
 /Nodes/*/dist/
 /Nodes/*/build/
 /Nodes/*/build-*/
+/Nodes/*/.build/
 /Nodes/*/target/
 /Nodes/*/_build/
 /Nodes/*/deps/

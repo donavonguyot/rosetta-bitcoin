@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-06-06T20:16:18Z",
+  "category": "test",
+  "command": "cd Nodes/Java && make test",
+  "command_key": "test_unit",
+  "duration_ms": 5585,
+  "exit_code": 0,
+  "failed": 0,
+  "lifecycle_status": "active_contender",
+  "node_id": "java",
+  "passed": 860,
+  "port": "java",
+  "result": "passed",
+  "schema": "port.test_result",
+  "skipped": 0,
+  "summary": "[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.096 s -- in com.jbitnode.cli.NativeStorageProofTest\n[INFO] Running com.jbitnode.storage.BlockStoreTest\n[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.007 s -- in com.jbitnode.storage.BlockStoreTest\n[INFO] Running com.jbitnode.storage.BlockStorageNativeTest\n[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.040 s -- in com.jbitnode.storage.BlockStorageNativeTest\n[INFO] Running com.jbitnode.storage.DatadirLockTest\n[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in com.jbitnode.storage.DatadirLockTest\n[INFO] Running com.jbitnode.scripts.ScriptTemplateClassifierTest\n[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0 s -- in com.jbitnode.scripts.ScriptTemplateClassifierTest\n[INFO] Running com.jbitnode.db.NativeChainstateCodecV2Test\n[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.001 s -- in com.jbitnode.db.NativeChainstateCodecV2Test\n[INFO] Running com.jbitnode.db.ProjectTrackerNativeTest\n[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.238 s -- in com.jbitnode.db.ProjectTrackerNativeTest\n[INFO] Running com.jbitnode.sync.BlockSyncNativeTest\n[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.149 s -- in com.jbitnode.sync.BlockSyncNativeTest\n[INFO] Running com.jbitnode.sync.BlockValidatorTest\n[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.003 s -- in com.jbitnode.sync.BlockValidatorTest\n[INFO] Running com.jbitnode.JbitnodeTest\n[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0 s -- in com.jbitnode.JbitnodeTest\n[INFO] \n[INFO] Results:\n[INFO] \n[INFO] Tests run: 430, Failures: 0, Errors: 0, Skipped: 0\n[INFO] \n[INFO] ------------------------------------------------------------------------\n[INFO] BUILD SUCCESS\n[INFO] ------------------------------------------------------------------------\n[INFO] Total time:  4.901 s\n[INFO] Finished at: 2026-06-06T13:16:23-07:00\n[INFO] ------------------------------------------------------------------------",
+  "total": 860
+}

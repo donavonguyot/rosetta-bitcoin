@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-06-06T20:16:23Z",
+  "category": "test",
+  "command": "cd Nodes/Cpp && make test",
+  "command_key": "test_unit",
+  "duration_ms": 2937,
+  "exit_code": 0,
+  "failed": 0,
+  "lifecycle_status": "active_contender",
+  "node_id": "cpp",
+  "passed": 2,
+  "port": "cpp",
+  "result": "passed",
+  "schema": "port.test_result",
+  "skipped": 0,
+  "summary": "ctest --test-dir build-core --output-on-failure\nTest project /Users/donavonguyot/RB/Nodes/Cpp/build-core\n    Start 1: shared_script_corpus\n1/2 Test #1: shared_script_corpus .............   Passed    0.36 sec\n    Start 2: cpbitnode_tests\n2/2 Test #2: cpbitnode_tests ..................   Passed    2.55 sec\n\n100% tests passed, 0 tests failed out of 2\n\nTotal Test time (real) =   2.91 sec",
+  "total": 2
+}

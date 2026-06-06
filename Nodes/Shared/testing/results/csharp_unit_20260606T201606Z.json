@@ -1,0 +1,18 @@
+{
+  "captured_at": "2026-06-06T20:16:06Z",
+  "category": "test",
+  "command": "cd Nodes/CSharp && make test",
+  "command_key": "test_unit",
+  "duration_ms": 2991,
+  "exit_code": 0,
+  "failed": 0,
+  "lifecycle_status": "active_contender",
+  "node_id": "csharp",
+  "passed": 41,
+  "port": "csharp",
+  "result": "passed",
+  "schema": "port.test_result",
+  "skipped": 0,
+  "summary": "/opt/homebrew/opt/dotnet@8/libexec/dotnet test tests/CsBitNode.Tests/CsBitNode.Tests.csproj -c Release\n  Determining projects to restore...\n  All projects are up-to-date for restore.\n  CsBitNode -> /Users/donavonguyot/RB/Nodes/CSharp/src/CsBitNode/bin/Release/net8.0/csbitnode.dll\n  [Secp256k1.Net] _Secp256k1NativeDir = /Users/donavonguyot/.nuget/packages/secp256k1.net/2.0.0/runtimes\n  [Secp256k1.Net] Found 10 native files\n  CsBitNode.Tests -> /Users/donavonguyot/RB/Nodes/CSharp/tests/CsBitNode.Tests/bin/Release/net8.0/CsBitNode.Tests.dll\n  [Secp256k1.Net] _Secp256k1NativeDir = /Users/donavonguyot/.nuget/packages/secp256k1.net/2.0.0/runtimes\n  [Secp256k1.Net] Found 10 native files\nTest run for /Users/donavonguyot/RB/Nodes/CSharp/tests/CsBitNode.Tests/bin/Release/net8.0/CsBitNode.Tests.dll (.NETCoreApp,Version=v8.0)\nMicrosoft (R) Test Execution Command Line Tool Version 17.8.0 (arm64)\nCopyright (c) Microsoft Corporation.  All rights reserved.\n\nStarting test execution, please wait...\nA total of 1 test files matched the specified pattern.\n\nPassed!  - Failed:     0, Passed:    41, Skipped:     0, Total:    41, Duration: 658 ms - CsBitNode.Tests.dll (net8.0)",
+  "total": 41
+}

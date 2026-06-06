@@ -1,0 +1,14 @@
+{
+  "captured_at": "2026-06-06T20:15:57Z",
+  "category": "test",
+  "command": "cd Nodes/Go && make test",
+  "command_key": "test_unit",
+  "duration_ms": 238,
+  "exit_code": 0,
+  "lifecycle_status": "active_contender",
+  "node_id": "go",
+  "port": "go",
+  "result": "passed",
+  "schema": "port.test_result",
+  "summary": "go test ./...\n?   \trosettabitcoin/nodes/go/cmd/gobitnode\t[no test files]\n?   \trosettabitcoin/nodes/go/cmd/gobitnode-blocker-inspect\t[no test files]\n?   \trosettabitcoin/nodes/go/cmd/gobitnode-connect\t[no test files]\n?   \trosettabitcoin/nodes/go/cmd/gobitnode-local-reference-proof\t[no test files]\n?   \trosettabitcoin/nodes/go/cmd/gobitnode-script-corpus\t[no test files]\n?   \trosettabitcoin/nodes/go/cmd/gobitnode-status\t[no test files]\n?   \trosettabitcoin/nodes/go/cmd/gobitnode-storage-proof\t[no test files]\n?   \trosettabitcoin/nodes/go/cmd/gobitnode-sync\t[no test files]\n?   \trosettabitcoin/nodes/go/internal/blocker\t[no test files]\nok  \trosettabitcoin/nodes/go/internal/connect\t(cached)\nok  \trosettabitcoin/nodes/go/internal/crypto\t(cached)\n?   \trosettabitcoin/nodes/go/internal/p2p\t[no test files]\n?   \trosettabitcoin/nodes/go/internal/refsync\t[no test files]\n?   \trosettabitcoin/nodes/go/internal/repo\t[no test files]\nok  \trosettabitcoin/nodes/go/internal/script\t(cached)\n?   \trosettabitcoin/nodes/go/internal/scriptcorpus\t[no test files]\n?   \trosettabitcoin/nodes/go/internal/status\t[no test files]\nok  \trosettabitcoin/nodes/go/internal/storage\t(cached)\n?   \trosettabitcoin/nodes/go/internal/surface\t[no test files]\n?   \trosettabitcoin/nodes/go/internal/tx\t[no test files]"
+}

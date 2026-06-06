@@ -1487,8 +1487,13 @@ SELECT
   CASE
     WHEN p.lifecycle_status = 'baseline_retired' THEN 'baseline_retired'
     WHEN p.lifecycle_status = 'active_development' THEN
-      CASE WHEN coalesce(c.unit_supported, 0) = 1 THEN 'inventory_ready' ELSE 'inventory_gap' END
+      CASE
+        WHEN coalesce(utr.result, '') = 'failed' THEN 'unit_result_failed'
+        WHEN coalesce(c.unit_supported, 0) = 1 THEN 'inventory_ready'
+        ELSE 'inventory_gap'
+      END
     WHEN coalesce(c.unit_supported, 0) = 0 THEN 'missing_unit_test_command'
+    WHEN coalesce(utr.result, '') = 'failed' THEN 'unit_result_failed'
     ELSE 'baseline_par'
   END AS baseline_par_status,
   CASE
