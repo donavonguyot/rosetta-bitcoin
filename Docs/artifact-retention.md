@@ -17,6 +17,20 @@ unless they have been promoted to a canonical result.
 | Generated build output | Port-local | `build*/`, `target/`, `dist/`, `_build/`, `deps/`, `node_modules/`, `.venv/` | No | Regenerate from source. |
 | Legacy cruft | None | N/A | No | Stale logs, duplicate proof dirs, temp observer DBs, crash dumps, stale pid/lock files, nested `.git/` metadata. |
 
+## Legacy Workspace Harvests
+
+Retired workspaces such as `/Users/donavonguyot/RosettaBitcoin` are external
+archives. A harvest may add small Markdown summaries, checksum/manifests,
+rewritten RB-native contracts, or deliberately promoted compact proof JSON. It
+must not import live DBs, nested `.git` directories, dependency trees, generated
+build output, portal/book/audio bulk assets, old proof scratch, local blocks,
+chainstate, logs, or runtime state.
+
+Any harvested fact that supports a current project claim must be rewritten into
+the current evidence system: canonical docs, Shared fixtures/contracts, port
+durable evidence, or compact JSON under `Nodes/Shared/conformance/results/`
+with explicit inclusion in `Nodes/Shared/conformance/current_evidence.json`.
+
 ## Canonical Result Naming
 
 Canonical project evidence uses:

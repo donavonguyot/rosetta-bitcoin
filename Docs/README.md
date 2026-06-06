@@ -43,6 +43,9 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
 
 ## Durable Lessons
 
+- `rosettabitcoin-archive-harvest.md` - Stage 1 boundary for harvesting the
+  retired RosettaBitcoin workspace without importing old authority or bulk
+  artifacts.
 - `consensus-blockers-testnet4.md` - shared blocker provenance and fixture anchors.
 - `script-semantics-gotchas.md` - consensus/script traps learned from blockers.
 - `blocker-ledger.md` - blocker record shape and classification rules.
@@ -76,3 +79,8 @@ python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --all
 Completed implementation plans should not remain as living Markdown. Extract
 still-current rules into canonical docs, then delete the plan file or move the
 facts into `Nodes/Shared/` contracts.
+
+Harvest plans follow the same rule: once a legacy-workspace harvest is complete,
+keep only the durable RB-native facts in canonical docs, Project evidence,
+Shared contracts, or compact artifacts. Do not let old archive maps become a
+parallel authority system.

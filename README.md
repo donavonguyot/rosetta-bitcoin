@@ -82,6 +82,19 @@ metadata are not root-owned artifacts. Compact proof JSON that supports a
 project claim belongs under `Nodes/Shared/conformance/results/`; see
 [`Docs/artifact-retention.md`](Docs/artifact-retention.md).
 
+## Legacy Archive Boundary
+
+The retired `/Users/donavonguyot/RosettaBitcoin` workspace is retained
+archaeology, with a compressed backup already taken. `~/RB` is the current
+deliverable workspace and the source of operational truth.
+
+Old RosettaBitcoin material may inform RB only after it is re-expressed as
+RB-owned documentation, contracts, fixtures, or compact proof evidence. Static
+IL, old proof ladders, nested repositories, generated artifacts, and historical
+runtime state are provenance or archive material; they do not support current
+claims by themselves. See
+[`Docs/rosettabitcoin-archive-harvest.md`](Docs/rosettabitcoin-archive-harvest.md).
+
 ## Binary Gate
 
 The binary gate for any serious node remains:
