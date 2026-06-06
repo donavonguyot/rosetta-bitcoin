@@ -115,11 +115,11 @@ PORT_LIFECYCLE: tuple[dict[str, str], ...] = (
     },
     {
         "port": "zig",
-        "lifecycle_status": "active_development",
-        "benchmark_scope": "baseline_to_full_suite_when_ready",
+        "lifecycle_status": "active_contender",
+        "benchmark_scope": "full_suite",
         "retired_at_gate": "",
         "retired_reason": "",
-        "notes": "Active development port; do not treat missing long-run gates as benchmark-table failures until explicitly promoted.",
+        "notes": "Promoted after clean unit telemetry, script corpus, baseline_5k, and shakedown_50k evidence; continue through the full official benchmark suite.",
     },
     {
         "port": "python",

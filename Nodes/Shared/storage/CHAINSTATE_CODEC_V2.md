@@ -3,6 +3,8 @@
 Codec v2 is the shared byte-level storage model for RocksDB-backed serious
 ports. Implementations must pass the golden vectors in
 `Nodes/Shared/conformance/fixtures/chainstate_codec_v2_vectors.json`.
+This is a storage-format version for byte compatibility, not an RB release or
+project version plan.
 
 ## Principles
 

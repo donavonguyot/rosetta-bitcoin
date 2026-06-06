@@ -1,8 +1,8 @@
-# Shared Replay Telemetry v1
+# Shared Replay Telemetry
 
-Replay telemetry v1 is the shared evidence format for offline and Docker replay
-proofs across ports. It standardizes how we measure replay behavior without
-standardizing how long any port is allowed to run.
+The replay telemetry format is the shared evidence format for offline and Docker
+replay proofs across ports. It standardizes how we measure replay behavior
+without standardizing how long any port is allowed to run.
 
 ## Goals
 
@@ -44,6 +44,7 @@ Canonical replay artifacts use:
 
 The schema is intentionally additive. Ports may include extra fields, but the
 required fields must remain stable.
+Replay telemetry versioning is compatibility metadata, not a roadmap lane.
 
 ## Stage Names
 
@@ -88,7 +89,7 @@ python3 Nodes/Shared/replay/tools/compare_replay_telemetry.py \
 
 ## Runtime Boundaries
 
-Replay telemetry v1 measures proof runs. It does not change consensus rules,
+This evidence format measures proof runs. It does not change consensus rules,
 does not permit trusted imports, and does not upgrade a port's live-sync status.
 Use `Docs/port-status.md` and the Docker inventory for port status, and use this
 artifact only as standardized replay evidence.

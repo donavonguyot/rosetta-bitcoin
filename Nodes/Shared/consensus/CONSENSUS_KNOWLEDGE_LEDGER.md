@@ -1,4 +1,4 @@
-# Shared Consensus Knowledge Ledger v1
+# Shared Consensus Knowledge Ledger
 
 The consensus knowledge ledger is a language-neutral map of rules, blockers,
 fixtures, and proof evidence. It exists so ports can learn from each other
@@ -9,9 +9,9 @@ For the staged acceptance path that uses this ledger, read
 
 ## Scope
 
-Ledger v1 starts with the Shared script corpus because that is the first shared
-cross-port consensus surface with stable fixtures. Each rule card must point to
-real evidence:
+This ledger currently starts with the Shared script corpus because that is the
+first shared cross-port consensus surface with stable fixtures. Each rule card
+must point to real evidence:
 
 - one or more script fixture IDs from
   `Nodes/Shared/conformance/fixtures/scripts/manifest.json`
@@ -28,6 +28,8 @@ The current rule ledger lives at
 `shared.consensus_rule.v1`. Future ledgers may add more files under
 `Nodes/Shared/consensus/rules/`, but the testnet4 script ledger is the current
 source of truth today.
+Here, `v1` denotes a schema/ledger-format identifier, not a project release
+plan.
 
 Required fields:
 
@@ -57,7 +59,7 @@ Required fields:
 
 ## Tooling
 
-Regenerate the v1 script rule ledger from the shared manifest:
+Regenerate the script rule ledger from the shared manifest:
 
 ```bash
 python3 Nodes/Shared/consensus/tools/seed_script_rules.py \
