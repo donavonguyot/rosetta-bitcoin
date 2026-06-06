@@ -107,6 +107,7 @@ let connect peer =
     | [] -> err ("could not resolve peer: " ^ peer)
   in
   let fd = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+  Unix.setsockopt fd Unix.TCP_NODELAY true;
   Unix.connect fd addr;
   { ic = Unix.in_channel_of_descr fd; oc = Unix.out_channel_of_descr fd }
 

@@ -23,7 +23,8 @@ reference_hash() {
 }
 
 STATUS_TMP="$(mktemp)"
-trap 'rm -f "$STATUS_TMP"' EXIT
+LOG_TMP="$(mktemp)"
+trap 'rm -f "$STATUS_TMP" "$LOG_TMP"' EXIT
 
 now_ms() {
   python3 -c 'import time; print(int(time.time() * 1000))'
@@ -35,17 +36,20 @@ REFERENCE_FINISH_HASH="${REFERENCE_FINISH_HASH:-$(reference_hash "$REFERENCE_FIN
 
 start_ms="$(now_ms)"
 set +e
-DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" PEERS="$PEER" \
+DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" PEERS="$PEER" SYNC_TIMING=1 \
   PARALLEL_BLOCK_DOWNLOADS="$PREFETCH_DEPTH" PAR_SCRIPT_VERIFY=1 \
-  "${DOCKER_COMPOSE[@]}" run --rm --no-deps tsbitnode-sync-proof \
+  "${DOCKER_COMPOSE[@]}" run --rm --no-deps -e SYNC_TIMING=1 tsbitnode-sync-proof \
     node dist/cli/syncRunner.js \
       --datadir /data \
       --peers "$PEER" \
       --blocks-target "$TARGET" \
-      --blocks-max "$BLOCKS_MAX"
-sync_exit=$?
+      --blocks-max "$BLOCKS_MAX" >"$LOG_TMP" 2>&1
+sync_exit=${PIPESTATUS[0]}
 set -e
 end_ms="$(now_ms)"
+if [ "$sync_exit" -ne 0 ]; then
+  tail -n 120 "$LOG_TMP" >&2 || true
+fi
 
 set +e
 DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" PEERS="$PEER" \
@@ -60,6 +64,7 @@ RESULT_PATH="$RESULT" \
 STATUS_PATH="$STATUS_TMP" \
 SYNC_EXIT="$sync_exit" \
 STATUS_EXIT="$status_exit" \
+LOG_PATH="$LOG_TMP" \
 START_MS="$start_ms" \
 END_MS="$end_ms" \
 TARGET="$TARGET" \
@@ -112,6 +117,75 @@ def supporting_p2p_kind(target):
     }.get(target, "local_reference_p2p")
 
 
+def sync_timing_summary(log_path: Path, elapsed_ms: int) -> dict:
+    stage_totals: dict[str, float] = {
+        "p2p_fetch": 0,
+        "block_parse_validate": 0,
+        "utxo_load": 0,
+        "script_verify": 0,
+        "utxo_apply": 0,
+        "commit": 0,
+        "block_connect_store_commit": 0,
+    }
+    slow_blocks: list[dict] = []
+    timing_count = 0
+    try:
+        lines = log_path.read_text(errors="replace").splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        if "SYNC_TIMING " not in line:
+            continue
+        _, raw = line.split("SYNC_TIMING ", 1)
+        try:
+            event = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        timings = event.get("timings_ms")
+        if not isinstance(timings, dict):
+            continue
+        timing_count += 1
+        for stage, value in timings.items():
+            if isinstance(value, (int, float)):
+                stage_totals[stage] = stage_totals.get(stage, 0) + float(value)
+        block_ms = timings.get("block_connect_store_commit")
+        height = event.get("height")
+        if isinstance(block_ms, (int, float)) and isinstance(height, int):
+            slow_blocks.append(
+                {
+                    "height": height,
+                    "ms": int(round(block_ms)),
+                    "block_hash": event.get("block_hash"),
+                }
+            )
+    connect_total = stage_totals.get("block_connect_store_commit", 0)
+    if timing_count > 0:
+        stage_totals["p2p_fetch"] = max(0, elapsed_ms - int(round(connect_total)))
+    else:
+        stage_totals["block_connect_store_commit"] = elapsed_ms
+    rounded = {
+        stage: int(round(value))
+        for stage, value in stage_totals.items()
+        if int(round(value)) != 0 or stage in {
+            "p2p_fetch",
+            "block_parse_validate",
+            "utxo_load",
+            "script_verify",
+            "utxo_apply",
+            "commit",
+            "block_connect_store_commit",
+        }
+    }
+    slow_blocks = sorted(slow_blocks, key=lambda item: item["ms"], reverse=True)[:10]
+    return {
+        "telemetry_schema": "benchmark.telemetry_tick.v1",
+        "total_ms": elapsed_ms,
+        "stage_totals_ms": rounded,
+        "timing_event_count": timing_count,
+        "slow_blocks": slow_blocks,
+    }
+
+
 status_path = Path(os.environ["STATUS_PATH"])
 try:
     status = json.loads(status_path.read_text())
@@ -124,6 +198,7 @@ status_exit = as_int(os.environ.get("STATUS_EXIT"))
 start_ms = as_int(os.environ.get("START_MS"))
 end_ms = as_int(os.environ.get("END_MS"))
 elapsed_ms = max(0, end_ms - start_ms)
+timing = sync_timing_summary(Path(os.environ["LOG_PATH"]), elapsed_ms)
 target = as_int(os.environ.get("TARGET"), 5000)
 validated_height = as_int(status.get("validated_height"), -1)
 stored_block_height = as_int(status.get("stored_block_height"), -1)
@@ -172,6 +247,7 @@ doc = {
     "chain": status.get("chain", "testnet4"),
     "binary_gate_status": "not_attempted",
     "local_reference_status": "target_reached" if passed else "target_not_reached",
+    "telemetry_schema": "benchmark.telemetry_tick.v1",
     "reference_start_height": as_int(os.environ.get("REFERENCE_START_HEIGHT"), 0),
     "reference_start_hash": os.environ.get("REFERENCE_START_HASH") or None,
     "reference_finish_height": as_int(os.environ.get("REFERENCE_FINISH_HEIGHT"), target),
@@ -201,17 +277,8 @@ doc = {
     "rocksdb_wal_disabled": False,
     "fresh_state": True,
     "resume_supported": True,
-    "timing_summary": {
-        "total_ms": elapsed_ms,
-        "stage_totals_ms": {
-            "block_connect_store_commit": elapsed_ms,
-            "utxo_load": as_int(status.get("timing_utxo_load_ms"), 0),
-            "script_verify": as_int(status.get("timing_script_verify_ms"), 0),
-            "utxo_apply": as_int(status.get("timing_utxo_apply_ms"), 0),
-            "commit": as_int(status.get("timing_commit_ms"), 0),
-        },
-        "slow_blocks": [],
-    },
+    "pipeline_timing_summary": timing,
+    "timing_summary": timing,
     "elapsed_ms": elapsed_ms,
     "captured_at": captured_at,
     "updated_at": captured_at,

@@ -113,6 +113,9 @@ func dial(peer string) (*client, error) {
 	if err != nil {
 		return nil, err
 	}
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		_ = tcp.SetNoDelay(true)
+	}
 	return &client{conn: conn}, nil
 }
 

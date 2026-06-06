@@ -88,6 +88,8 @@ final class TCPConnection: @unchecked Sendable {
         while let info = cursor {
             let candidate = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
             if candidate >= 0 {
+                var noDelay: Int32 = 1
+                setsockopt(candidate, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
                 if connect(candidate, info.pointee.ai_addr, info.pointee.ai_addrlen) == 0 {
                     connected = candidate
                     break

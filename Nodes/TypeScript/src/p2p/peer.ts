@@ -275,6 +275,7 @@ export class PeerConnection {
 
   attachSocket(socket: Socket): void {
     const now = Date.now();
+    socket.setNoDelay(true);
     this.lastActivity = now;
     this.lastPing = now;
     this.socket = socket;
@@ -693,7 +694,10 @@ export class PeerConnection {
     return new Promise((resolve, reject) => {
       const socket = connect(
         { host: this.host, port: this.port, timeout: 30_000 },
-        () => resolve(socket),
+        () => {
+          socket.setNoDelay(true);
+          resolve(socket);
+        },
       );
       socket.once("error", reject);
     });

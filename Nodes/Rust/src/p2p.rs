@@ -81,6 +81,7 @@ struct Message {
 impl Client {
     fn connect(peer: &str) -> Result<Self> {
         let stream = TcpStream::connect(peer).with_context(|| format!("connect {peer}"))?;
+        stream.set_nodelay(true)?;
         stream.set_read_timeout(Some(Duration::from_secs(120)))?;
         stream.set_write_timeout(Some(Duration::from_secs(30)))?;
         Ok(Self { stream })

@@ -10,6 +10,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -226,6 +227,8 @@ InboundServerHandle startInboundServer(const chain::ChainParams& chain, db::Node
             if (clientFd < 0) {
                 continue;
             }
+            const int noDelay = 1;
+            ::setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &noDelay, sizeof(noDelay));
             char hostBuf[INET_ADDRSTRLEN] = {};
             ::inet_ntop(AF_INET, &clientAddr.sin_addr, hostBuf, sizeof(hostBuf));
             const std::string host = hostBuf;

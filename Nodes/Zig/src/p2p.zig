@@ -5,6 +5,7 @@ const tx = @import("tx.zig");
 const c = @cImport({
     @cInclude("errno.h");
     @cInclude("netdb.h");
+    @cInclude("netinet/tcp.h");
     @cInclude("sys/socket.h");
     @cInclude("sys/time.h");
     @cInclude("unistd.h");
@@ -54,7 +55,7 @@ pub const Client = struct {
         while (cursor) |info| : (cursor = info.ai_next) {
             const fd = c.socket(info.ai_family, info.ai_socktype, info.ai_protocol);
             if (fd < 0) continue;
-            setTimeouts(fd);
+            setSocketOptions(fd);
             if (c.connect(fd, info.ai_addr, info.ai_addrlen) == 0) {
                 return .{ .fd = fd, .allocator = allocator };
             }
@@ -223,7 +224,9 @@ const Message = struct {
     }
 };
 
-fn setTimeouts(fd: c_int) void {
+fn setSocketOptions(fd: c_int) void {
+    var no_delay: c_int = 1;
+    _ = c.setsockopt(fd, c.IPPROTO_TCP, c.TCP_NODELAY, &no_delay, @sizeOf(c_int));
     var read_timeout = c.struct_timeval{ .tv_sec = 120, .tv_usec = 0 };
     var write_timeout = c.struct_timeval{ .tv_sec = 30, .tv_usec = 0 };
     _ = c.setsockopt(fd, c.SOL_SOCKET, c.SO_RCVTIMEO, &read_timeout, @sizeOf(c.struct_timeval));

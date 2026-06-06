@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import socket
 
 from pybitnode.chain.params import ChainParams
 from pybitnode.config import Settings
@@ -138,6 +139,9 @@ async def serve_inbound_session(
     )
     peer.reader = reader
     peer.writer = writer
+    sock = writer.get_extra_info("socket")
+    if sock is not None:
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     try:
         await peer.accept_inbound()
     except (

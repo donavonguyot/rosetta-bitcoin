@@ -54,6 +54,7 @@ peer_mode = local_reference
 peer = REFERENCE_P2P_PEER on REFERENCE_DOCKER_NETWORK
 byte_source = local_reference_p2p
 proof_mode = p2p_sync
+outbound P2P sockets use TCP_NODELAY
 prefetch_depth = 4
 script_runner_mode = parallel
 rocksdb_wal_disabled = false
@@ -67,6 +68,11 @@ RPC replay, WAL-off runs, reused state, alternate stores, managed/pure crypto,
 missing metadata, and non-Docker artifacts are diagnostic or experimental
 evidence. Project may import them, but it must not rank them as official
 comparable evidence.
+
+`TCP_NODELAY` is baseline P2P socket hygiene, not a special benchmark
+optimization. Ports should set it explicitly on outbound Bitcoin P2P sockets or
+document a runtime default that already does so. This keeps local Reference
+Docker proofs and real external-peer probes on the same expected node posture.
 
 ## Gate Requirements
 

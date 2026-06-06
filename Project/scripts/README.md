@@ -112,6 +112,45 @@ The official benchmark suite is `baseline_5k`, `shakedown_50k`,
 Project lifecycle rows decide whether missing future gates are active work,
 active-development runway, or deliberate baseline retirement.
 
+## Serialized Benchmark Campaigns
+
+Use the campaign runner when a gate needs to move through several ports without
+losing operator control. It is strictly serial: preflight, warm, proof, artifact
+validation, Project import, then the next port. Dry-run is the default:
+
+```bash
+python3 Project/scripts/run_benchmark_campaign.py \
+  --db Project/project.db \
+  --gate shakedown_50k \
+  --all \
+  --dry-run
+```
+
+Start an actual run only when ready:
+
+```bash
+python3 Project/scripts/run_benchmark_campaign.py \
+  --db Project/project.db \
+  --gate shakedown_50k \
+  --ports rust,go,csharp \
+  --run
+```
+
+Resume a paused campaign from its ignored local state file:
+
+```bash
+python3 Project/scripts/run_benchmark_campaign.py \
+  --campaign Project/.campaigns/<campaign_id>/state.json \
+  --resume
+```
+
+Campaign scratch lives under ignored `Project/.campaigns/`. Logs and telemetry
+tails are operational state, not committed evidence. The runner updates
+`Nodes/Shared/conformance/current_evidence.json` only after the fresh artifact
+passes shape, stance, timing, telemetry, and anomaly checks. A failed command,
+missing artifact, ambiguous artifact selection, rejected artifact, or suspicious
+regression pauses the campaign instead of moving to the next port.
+
 Preflight the full 5k baseline after importing evidence:
 
 ```bash

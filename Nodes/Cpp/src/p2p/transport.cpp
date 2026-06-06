@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -90,6 +91,8 @@ int connectWithTimeout(const addrinfo& hints, const std::string& host, int port,
         if (fd < 0) {
             continue;
         }
+        const int noDelay = 1;
+        ::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &noDelay, sizeof(noDelay));
         const int flags = ::fcntl(fd, F_GETFL, 0);
         if (flags >= 0) {
             ::fcntl(fd, F_SETFL, flags | O_NONBLOCK);

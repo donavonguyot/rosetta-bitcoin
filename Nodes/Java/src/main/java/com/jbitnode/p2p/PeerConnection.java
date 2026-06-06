@@ -60,6 +60,7 @@ public final class PeerConnection implements AutoCloseable {
 
   public void connect() throws IOException, SQLException {
     socket = new Socket();
+    socket.setTcpNoDelay(true);
     socket.connect(new InetSocketAddress(host, port), 30_000);
     socket.setSoTimeout(0);
     stream = new MessageStream(socket.getInputStream(), socket.getOutputStream(), chain.magic());

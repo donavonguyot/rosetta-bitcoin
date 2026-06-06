@@ -190,6 +190,9 @@ class PeerConnection:
         self._last_activity = now
         self._last_ping = now
         self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
+        sock = self.writer.get_extra_info("socket")
+        if sock is not None:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         await self.handshake_as_initiator()
         self._connected_monotonic = time.monotonic()
         self._ban_decay_applied = False

@@ -176,6 +176,10 @@ Reference Docker network and reaches Core at `REFERENCE_P2P_PEER` from `Nodes/Sh
 External peer probes require explicit peer routing and a healthy selected
 testnet4 node.
 
+Outbound Bitcoin P2P sockets should use `TCP_NODELAY`. This is normal node
+socket posture for small handshake, inventory, header, and block-request
+messages; it is not a benchmark-only tuning exemption.
+
 ## Volume Rules
 
 Use separate volumes for separate purposes:

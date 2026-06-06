@@ -66,6 +66,7 @@ venv/
 
 # Root-owned reporting scratch.
 /Project/tmp/
+/Project/.campaigns/
 
 # C# Docker proof scratch; canonical proof JSON lives under Nodes/Shared.
 /Nodes/CSharp/.docker-csharp-proof-*

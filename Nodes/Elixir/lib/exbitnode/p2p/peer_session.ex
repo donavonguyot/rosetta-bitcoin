@@ -23,7 +23,7 @@ defmodule Exbitnode.P2p.PeerSession do
     case :gen_tcp.connect(
            String.to_charlist(host),
            port,
-           [:binary, active: false, packet: 0],
+           [:binary, active: false, packet: 0, nodelay: true],
            30_000
          ) do
       {:ok, socket} ->

@@ -36,6 +36,7 @@ public sealed class PeerConnection : IDisposable, BlockSync.IBlockSource
     public void Connect()
     {
         _client = new TcpClient();
+        _client.NoDelay = true;
         _client.Connect(_host, _port);
         _client.ReceiveTimeout = 0;
         _stream = new MessageStream(_client.GetStream(), _chain.Magic);
