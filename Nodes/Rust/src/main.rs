@@ -216,7 +216,8 @@ fn main() -> Result<()> {
             let rpc_password = rpc_password.unwrap_or_else(|| default_pass.to_string());
             let peer = peer.unwrap_or_else(|| {
                 if docker {
-                    "bitcoin-core-testnet4:48333".to_string()
+                    std::env::var("REFERENCE_P2P_PEER")
+                        .expect("REFERENCE_P2P_PEER must be set for docker local-reference-proof")
                 } else {
                     "127.0.0.1:48333".to_string()
                 }

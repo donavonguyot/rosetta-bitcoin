@@ -3,7 +3,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-DOCKER_COMPOSE=${DOCKER_COMPOSE:-"docker compose -f docker/docker-compose.yml"}
+REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
+# shellcheck source=/dev/null
+. "$REFERENCE_TOPOLOGY_ENV"
+
+DOCKER_COMPOSE=${DOCKER_COMPOSE:-"docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml"}
 DOCKER_PROOF_VOLUME=${DOCKER_PROOF_VOLUME:-exbitnode_sync_data}
 CONTAINER_NAME=${CONTAINER_NAME:-exbitnode-sync-supervisor-run}
 POLL_SEC=${POLL_SEC:-120}
@@ -11,7 +15,7 @@ CHECK_SEC=${CHECK_SEC:-5}
 HEADERS_MAX=${HEADERS_MAX:-10000}
 HEADER_BATCHES_MAX=${HEADER_BATCHES_MAX:-50}
 BLOCKS_MAX=${BLOCKS_MAX:-500}
-PEERS=${PEERS:-bitcoin-core-testnet4:48333}
+PEERS=${PEERS:-${REFERENCE_P2P_PEER:?REFERENCE_P2P_PEER missing}}
 BLOCK_PREFETCH_DEPTH=${BLOCK_PREFETCH_DEPTH:-0}
 SYNC_TIMING=${SYNC_TIMING:-1}
 SYNC_SNAPSHOT_SEC=${SYNC_SNAPSHOT_SEC:-5}

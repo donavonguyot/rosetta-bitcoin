@@ -5,7 +5,7 @@ enum SyncSupervisor {
         let target = args.int("target", default: Int(ProcessInfo.processInfo.environment["TARGET_HEIGHT"] ?? "") ?? 10000)
         let chunkSize = max(1, args.int("chunk-size", default: Int(ProcessInfo.processInfo.environment["CHUNK_SIZE"] ?? "") ?? 5000))
         let maxRetries = max(0, args.int("max-retries", default: Int(ProcessInfo.processInfo.environment["MAX_RETRIES"] ?? "") ?? 3))
-        let defaultPeer = (ProcessInfo.processInfo.environment["SWIFTBITNODE_RUNTIME_SURFACE"] ?? "") == "docker" ? "bitcoin-core-testnet4:48333" : "127.0.0.1:48333"
+        let defaultPeer = ProcessInfo.processInfo.environment["REFERENCE_P2P_PEER"] ?? "127.0.0.1:48333"
         let peer = args.string("peer", default: ProcessInfo.processInfo.environment["PEER"] ?? defaultPeer)
         let datadir = args.string("datadir", default: ProcessInfo.processInfo.environment["DATA_DIR"] ?? "/data")
         let output = args.string("output", default: args.string("status-output", default: ""))

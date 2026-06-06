@@ -78,7 +78,7 @@ services:
         "--byte-source",
         "p2p",
         "--peer",
-        "${P2P_PEER:-bitcoin-core-testnet4:48333}",
+        "${P2P_PEER:-${REFERENCE_P2P_PEER:?set REFERENCE_P2P_PEER from Nodes/Shared/docker/reference_topology.env}}",
         "--result-path",
         "/results/rust_docker_baseline_5k_benchmark.json",
         "--runtime-surface",
@@ -111,5 +111,5 @@ volumes:
 
 networks:
   reference:
-    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    name: ${REFERENCE_DOCKER_NETWORK:?set REFERENCE_DOCKER_NETWORK from Nodes/Shared/docker/reference_topology.env}
     external: true

@@ -22,7 +22,7 @@
   "peer_modes": {
     "local_reference": {
       "supported": true,
-      "peer": "bitcoin-core-testnet4:48333",
+      "peer": "${REFERENCE_P2P_PEER}",
       "command": "make docker-proof-local"
     }
   },

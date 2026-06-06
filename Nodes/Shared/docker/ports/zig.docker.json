@@ -44,7 +44,7 @@
     "local_reference": {
       "supported": true,
       "command": "cd Nodes/Zig && make docker-proof-local",
-      "peer": "bitcoin-core-testnet4:48333",
+      "peer": "${REFERENCE_P2P_PEER}",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {

@@ -193,7 +193,7 @@ make docker-cpp-sync-resume
 
 `docker-cpp-supporting-5k-proof` is the Project-facing supporting 5k Docker
 benchmark. It uses a fresh proof volume, local Reference Core at
-`bitcoin-core-testnet4:48333`, RocksDB-owned state, native secp256k1, WAL enabled,
+`REFERENCE_P2P_PEER` from `Nodes/Shared/docker/reference_topology.env`, RocksDB-owned state, native secp256k1, WAL enabled,
 and writes compact evidence under `Nodes/Shared/conformance/results/`.
 `docker-cpp-rocksdb-storage-proof` remains the smaller storage/codec proof.
 

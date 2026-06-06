@@ -23,10 +23,10 @@
     "supervisor": "jbitnode_sync_data"
   },
   "commands": {
-    "docker_config": "cd Nodes/Java && docker compose -f docker/docker-compose.yml config",
+    "docker_config": "cd Nodes/Java && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml config",
     "docker_build": "cd Nodes/Java && make docker-build",
     "docker_warm": "cd Nodes/Java && make docker-warm",
-    "docker_status": "cd Nodes/Java && DOCKER_PROOF_VOLUME=jbitnode_sync_data SECP256K1_BACKEND=native docker compose -f docker/docker-compose.yml run --rm --no-deps jbitnode-sync-proof com.jbitnode.cli.DbStatus",
+    "docker_status": "cd Nodes/Java && DOCKER_PROOF_VOLUME=jbitnode_sync_data SECP256K1_BACKEND=native docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml run --rm --no-deps jbitnode-sync-proof com.jbitnode.cli.DbStatus",
     "docker_script_corpus": "cd Nodes/Java && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Java && make docker-java-native-crypto-proof",
     "docker_proof_10k": "cd Nodes/Java && make docker-java-supporting-10k-proof",
@@ -45,7 +45,7 @@
     "local_reference": {
       "supported": true,
       "command": "cd Nodes/Java && make docker-java-native-crypto-proof",
-      "peer": "bitcoin-core-testnet4:48333",
+      "peer": "${REFERENCE_P2P_PEER}",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {

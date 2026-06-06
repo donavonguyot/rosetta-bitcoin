@@ -9,9 +9,29 @@ import os
 import socket
 import struct
 import time
+from pathlib import Path
 
 
 TESTNET4_MAGIC = 0x283F161C
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def default_peer() -> str:
+    topology = read_env_file(Path(__file__).with_name("reference_topology.env"))
+    peer = topology.get("REFERENCE_P2P_PEER", "").strip()
+    if not peer:
+        raise RuntimeError("REFERENCE_P2P_PEER is missing from reference_topology.env")
+    return peer
 
 
 def checksum(payload: bytes) -> bytes:
@@ -85,7 +105,7 @@ def check_peer(peer: str, timeout: float, start_height: int) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--peer", default="bitcoin-core-testnet4:48333")
+    parser.add_argument("--peer", default=default_peer())
     parser.add_argument("--timeout", type=float, default=5.0)
     parser.add_argument("--start-height", type=int, default=0)
     args = parser.parse_args()

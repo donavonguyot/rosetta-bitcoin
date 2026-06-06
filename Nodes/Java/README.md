@@ -94,14 +94,14 @@ Reference Core (testnet4) for development:
 | RPC | `127.0.0.1:48332` |
 | Core datadir | `~/NodeData/bitcoin-core-testnet4` |
 
-Start Core via compose (from this directory):
+Start Core via the Reference compose file:
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d bitcoin-core-testnet4
+(cd ../Reference && docker compose -f docker/docker-compose.yml up -d bitcoin-core-testnet4)
 make docker-config   # validate compose file
 ```
 
-The `jbitnode` proof service connects to local Reference Core at `bitcoin-core-testnet4:48333`
+The `jbitnode` proof service connects to local Reference Core at `REFERENCE_P2P_PEER` from `Nodes/Shared/docker/reference_topology.env`
 (OrbStack / Docker Desktop on macOS).
 
 Host JVM sync and container sync are separate verification gates. Host `mvn`

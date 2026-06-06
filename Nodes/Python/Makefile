@@ -20,17 +20,15 @@ SUPPORTING_10K_RESULT ?= /results/python_docker_supporting_10k_benchmark_$(RESUL
 DOCKER_BENCHMARK_TARGET ?= 5000
 SCRIPT_RESULT ?= ../Shared/conformance/results/python_script_corpus_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/python_script_corpus_docker_$(RESULT_DATE).json
-REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
-DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
 DOCKER_PREFETCH_DEPTH ?= 4
 DOCKER_SCRIPT_THREADS ?= 4
-DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+include ../Shared/docker/reference_topology.mk
 DOCKER_REBUILD ?= 0
-REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 SYNC_ENV = MAX_OUTBOUND_PEERS=1 PARALLEL_BLOCK_DOWNLOADS=0 SKIP_GETADDR=1
 
-.PHONY: python-node-status python-node-preflight python-node-rocksdb-proof python-node-script-corpus docker-build docker-warm docker-script-corpus docker-proof-local docker-proof-10k docker-python-rocksdb-proof docker-python-supervisor docker-python-supervisor-status docker-python-supervisor-stop docker-python-supervisor-resume python-node-sync-local-reference python-node-sync-chunk python-node-sync-chunk-overnight python-node-sync-supervisor python-node-export-snapshots python-node-survey-scripts test
+.PHONY: python-node-status python-node-preflight python-node-rocksdb-proof python-node-script-corpus docker-config docker-build docker-warm docker-script-corpus docker-proof-local docker-proof-10k docker-python-rocksdb-proof docker-python-supervisor docker-python-supervisor-status docker-python-supervisor-stop docker-python-supervisor-resume python-node-sync-local-reference python-node-sync-chunk python-node-sync-chunk-overnight python-node-sync-supervisor python-node-export-snapshots python-node-survey-scripts test
 
 test:
 	$(PYTHON) -m pytest -q
@@ -72,6 +70,9 @@ python-node-export-snapshots:
 
 python-node-survey-scripts:
 	PYTHONPATH=. $(PYTHON) scripts/script_template_survey.py --state-path $(STATE_PATH) --scan-blocks $(SCAN_BLOCKS)
+
+docker-config:
+	$(DOCKER_COMPOSE) config
 
 docker-build:
 	$(DOCKER_COMPOSE) build pybitnode pybitnode-rocksdb-proof pybitnode-supporting-5k-proof pybitnode-supervisor pybitnode-supervisor-status

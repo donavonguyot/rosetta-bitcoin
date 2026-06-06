@@ -21,7 +21,7 @@
     "supervisor": "tsbitnode_sync_data"
   },
   "commands": {
-    "docker_config": "cd Nodes/TypeScript && docker compose -f docker/docker-compose.yml config",
+    "docker_config": "cd Nodes/TypeScript && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml config",
     "docker_build": "cd Nodes/TypeScript && make docker-build",
     "docker_warm": "cd Nodes/TypeScript && make docker-warm",
     "docker_status": "cd Nodes/TypeScript && make docker-typescript-sync-status",
@@ -43,7 +43,7 @@
     "local_reference": {
       "supported": true,
       "command": "cd Nodes/TypeScript && make docker-typescript-native-proof",
-      "peer": "bitcoin-core-testnet4:48333",
+      "peer": "${REFERENCE_P2P_PEER}",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {

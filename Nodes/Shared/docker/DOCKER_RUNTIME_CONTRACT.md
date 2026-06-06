@@ -172,7 +172,7 @@ Supervisor smoke and network proof are different checks.
 honors stop/resume mechanics. It must not require a reachable peer.
 
 Network proof is separate. Official local Reference P2P proof runs on the
-Reference Docker network and reaches Core at `bitcoin-core-testnet4:48333`.
+Reference Docker network and reaches Core at `REFERENCE_P2P_PEER` from `Nodes/Shared/docker/reference_topology.env`.
 External peer probes require explicit peer routing and a healthy selected
 testnet4 node.
 
@@ -201,7 +201,7 @@ Docker peer strategy must be explicit and recorded as one of these modes:
 ```text
 local_reference:
   deterministic proof surface
-  peer = bitcoin-core-testnet4:48333 on rosetta-reference-node_default
+  peer = REFERENCE_P2P_PEER on REFERENCE_DOCKER_NETWORK
   record peer, validated_height, header_height, stored_block_height, sync_status
 
 external_manual:

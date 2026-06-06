@@ -37,7 +37,7 @@ services:
     environment:
       CHAIN: testnet4
       DATA_DIR: /data
-      PEERS: bitcoin-core-testnet4:48333
+      PEERS: ${REFERENCE_P2P_PEER:?set REFERENCE_P2P_PEER from Nodes/Shared/docker/reference_topology.env}
     volumes:
       - jbitnode_data:/data
     restart: unless-stopped
@@ -53,7 +53,7 @@ services:
       DATA_DIR: /data
       UTXO_BACKEND: rocksdb
       ROCKSDB_DIR: /data/utxo-rocksdb
-      PEERS: ${PEERS:-bitcoin-core-testnet4:48333}
+      PEERS: ${PEERS:-${REFERENCE_P2P_PEER:?set REFERENCE_P2P_PEER from Nodes/Shared/docker/reference_topology.env}}
       SECP256K1_BACKEND: ${SECP256K1_BACKEND:-pure_java}
       HEADERS_MAX: ${HEADERS_MAX:-200}
       HEADER_BATCHES_MAX: ${HEADER_BATCHES_MAX:-1}
@@ -71,5 +71,5 @@ volumes:
 
 networks:
   reference:
-    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    name: ${REFERENCE_DOCKER_NETWORK:?set REFERENCE_DOCKER_NETWORK from Nodes/Shared/docker/reference_topology.env}
     external: true

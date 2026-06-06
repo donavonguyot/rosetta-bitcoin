@@ -4,7 +4,7 @@ enum LocalReferenceProof {
     static func run(args: Args) throws {
         let output = args.string("output", default: args.string("result-path", default: ""))
         let target = args.int("target", default: Int(ProcessInfo.processInfo.environment["TARGET_HEIGHT"] ?? "") ?? 5000)
-        let defaultPeer = (ProcessInfo.processInfo.environment["SWIFTBITNODE_RUNTIME_SURFACE"] ?? "") == "docker" ? "bitcoin-core-testnet4:48333" : "127.0.0.1:48333"
+        let defaultPeer = ProcessInfo.processInfo.environment["REFERENCE_P2P_PEER"] ?? "127.0.0.1:48333"
         let peer = args.string("peer", default: ProcessInfo.processInfo.environment["PEER"] ?? defaultPeer)
         let datadir = args.string("datadir", default: ProcessInfo.processInfo.environment["DATA_DIR"] ?? "/data")
         let prefetchDepth = Int(ProcessInfo.processInfo.environment["PREFETCH_DEPTH"] ?? "") ?? 1

@@ -25,17 +25,15 @@ DOCKER_LOCAL_REFERENCE_50K_RESULT ?= /results/rust_docker_shakedown_50k_benchmar
 DOCKER_LOCAL_REFERENCE_100K_RESULT ?= /results/rust_docker_performance_100k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_TUNING_100K_RESULT ?= /results/rust_docker_tuning_50k_to_100k_benchmark_$(RESULT_DATE).json
 RPC_REPLAY_RESULT ?= ../Shared/conformance/results/rust_local_reference_docker_sync_$(RESULT_DATE).json
-DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+include ../Shared/docker/reference_topology.mk
 DOCKER_REBUILD ?= 0
-REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
-DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
 DOCKER_LOCAL_PROOF_VOLUME ?= rsbitnode_proof_data
 DOCKER_TUNING_SOURCE_VOLUME ?= rsbitnode_50k_proof_data
 DOCKER_TUNING_100K_VOLUME ?= rsbitnode_tuning_50k_to_100k_data
 TUNING_SOURCE_50K_ARTIFACT ?= ../Shared/conformance/results/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_EXTERNAL_P2P_PEER ?=
 DOCKER_EXTERNAL_PROBE_VOLUME ?= rsbitnode_external_5k_probe_data
-REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-tuning-100k-from-50k docker-proof-rpc-replay docker-probe-external docker-proof-local-fast docker-smoke-once clean
 

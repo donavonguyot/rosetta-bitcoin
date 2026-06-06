@@ -1,27 +1,31 @@
+DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+include ../Shared/docker/reference_topology.mk
+
 docker-config:
-	docker compose -f docker/docker-compose.yml config >/dev/null
+	$(DOCKER_COMPOSE) config >/dev/null
 
 docker-build:
-	docker compose -f docker/docker-compose.yml build
+	$(DOCKER_COMPOSE) build
 
 docker-warm: docker-build
 
 docker-status:
-	docker compose -f docker/docker-compose.yml run --rm {{port}} status --json
+	$(DOCKER_COMPOSE) run --rm {{port}} status --json
 
 docker-script-corpus:
-	docker compose -f docker/docker-compose.yml run --rm {{port}} script-corpus \
+	$(DOCKER_COMPOSE) run --rm {{port}} script-corpus \
 	  --manifest ../../Nodes/Shared/conformance/fixtures/scripts/manifest.json \
 	  --output ../../Nodes/Shared/conformance/results/{{port}}_script_corpus_$(shell date +%F).json
 
 docker-proof-local:
-	docker compose -f docker/docker-compose.yml run --rm \
+	$(REFERENCE_P2P_CHECK)
+	$(DOCKER_COMPOSE) run --rm \
 	  -e TARGET_HEIGHT=5000 \
 	  -e HEADER_TARGET_HEIGHT=5000 \
 	  -e PREFETCH_DEPTH=4 \
 	  -e SCRIPT_RUNNER_MODE=parallel \
 	  -e ROCKSDB_WAL_DISABLED=false \
 	  -e FRESH_STATE=true \
-	  -e PEER=bitcoin-core-testnet4:48333 \
+	  -e PEER=$(REFERENCE_P2P_PEER) \
 	  {{port}} proof-local \
 	  --output ../../Nodes/Shared/conformance/results/{{port}}_docker_baseline_5k_benchmark_$(shell date +%F).json

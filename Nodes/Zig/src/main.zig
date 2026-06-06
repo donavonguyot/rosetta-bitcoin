@@ -67,8 +67,8 @@ fn usage(out: anytype) !void {
         \\  codec-vectors
         \\  native-crypto-vectors
         \\  script-corpus [--manifest path] [--output path]
-        \\  local-reference-proof [--target 5000|50000|100000] [--peer bitcoin-core-testnet4:48333] [--output path]
-        \\  sync-supervisor-once [--target 5000] [--peer bitcoin-core-testnet4:48333] [--datadir ./data-zig]
+        \\  local-reference-proof [--target 5000|50000|100000] [--peer <host:port>] [--output path]
+        \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
         \\
     , .{});
 }
@@ -207,7 +207,7 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
 
 fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8, script_threads_text: []const u8) !void {
     const target_text = valueArg(args, "--target") orelse "5000";
-    const peer = valueArg(args, "--peer") orelse "bitcoin-core-testnet4:48333";
+    const peer = valueArg(args, "--peer") orelse (std.process.getEnvVarOwned(allocator, "REFERENCE_P2P_PEER") catch "127.0.0.1:48333");
     const output = valueArg(args, "--output") orelse (ResultPaths{}).proof;
     const datadir = valueArg(args, "--datadir") orelse "/data";
     const target = try std.fmt.parseInt(u32, target_text, 10);

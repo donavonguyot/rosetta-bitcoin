@@ -6,7 +6,7 @@ services:
     environment:
       CHAIN: testnet4
       DATA_DIR: /data
-      PEERS: ${PEERS:-bitcoin-core-testnet4:48333}
+      PEERS: ${PEERS:-${REFERENCE_P2P_PEER:?set REFERENCE_P2P_PEER from Nodes/Shared/docker/reference_topology.env}}
       HEADERS_MAX: ${HEADERS_MAX:-200}
       HEADER_BATCHES_MAX: ${HEADER_BATCHES_MAX:-1}
       BLOCKS_MAX: ${BLOCKS_MAX:-2}
@@ -27,5 +27,5 @@ volumes:
 
 networks:
   reference:
-    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    name: ${REFERENCE_DOCKER_NETWORK:?set REFERENCE_DOCKER_NETWORK from Nodes/Shared/docker/reference_topology.env}
     external: true

@@ -28,6 +28,8 @@ GATE_ALIASES = {
     "primary_100k": "performance_100k",
 }
 
+ROOT = Path(__file__).resolve().parents[2]
+
 REQUIRED_ARTIFACT_FIELDS = (
     "implementation",
     "runtime_surface",
@@ -74,6 +76,23 @@ def parse_args() -> argparse.Namespace:
     group.add_argument("--all", action="store_true", help="Preflight all non-reference ports")
     parser.add_argument("--json", action="store_true", help="Emit JSON")
     return parser.parse_args()
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def reference_topology() -> dict[str, str]:
+    return read_env_file(ROOT / "Nodes/Shared/docker/reference_topology.env")
 
 
 def connect(db_path: str) -> sqlite3.Connection:
@@ -170,6 +189,7 @@ def required_metadata(gate: dict[str, Any]) -> dict[str, Any]:
 def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
+    expected_reference_peer = reference_topology().get("REFERENCE_P2P_PEER", "")
 
     contract = one(
         conn,
@@ -273,8 +293,14 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
                 errors.append("local_reference peer mode has no peer/source description")
             elif peer == "host.docker.internal:48333":
                 errors.append(
-                    "local_reference peer must use Docker DNS bitcoin-core-testnet4:48333, "
+                    "local_reference peer must use the shared Reference Docker DNS peer, "
                     "not host.docker.internal:48333"
+                )
+            elif expected_reference_peer and peer != expected_reference_peer:
+                errors.append(
+                    "local_reference peer must match "
+                    "Nodes/Shared/docker/reference_topology.env "
+                    f"REFERENCE_P2P_PEER={expected_reference_peer!r}; got {peer!r}"
                 )
             elif "should be" in peer.lower() or "currently" in peer.lower():
                 warnings.append(f"local_reference peer/source needs cleanup: {peer}")

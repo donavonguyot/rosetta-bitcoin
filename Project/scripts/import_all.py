@@ -419,6 +419,31 @@ def pretty_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True)
 
 
+def read_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def resolve_env_tokens(value: Any, env: dict[str, str]) -> Any:
+    if isinstance(value, str):
+        for key, replacement in env.items():
+            value = value.replace("${" + key + "}", replacement)
+        return value
+    if isinstance(value, list):
+        return [resolve_env_tokens(item, env) for item in value]
+    if isinstance(value, dict):
+        return {key: resolve_env_tokens(item, env) for key, item in value.items()}
+    return value
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -952,6 +977,10 @@ def seed_test_commands(connection: sqlite3.Connection, root: Path) -> int:
 
 def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Path, payload: dict[str, Any]) -> int:
     artifact = make_artifact(path, root, payload)
+    payload = resolve_env_tokens(
+        payload,
+        read_env_file(root / "Nodes/Shared/docker/reference_topology.env"),
+    )
     port = text(payload.get("port"), path.stem.split(".")[0])
     commands = payload.get("commands") if isinstance(payload.get("commands"), dict) else {}
     existing = connection.execute(

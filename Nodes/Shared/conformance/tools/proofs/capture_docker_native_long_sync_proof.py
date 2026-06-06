@@ -38,6 +38,18 @@ def shared_root() -> pathlib.Path:
     raise SystemExit("could not locate Shared root from proof capture script")
 
 
+def reference_peer() -> str:
+    if os.environ.get("PEER"):
+        return os.environ["PEER"]
+    if os.environ.get("REFERENCE_P2P_PEER"):
+        return os.environ["REFERENCE_P2P_PEER"]
+    env_path = shared_root() / "docker" / "reference_topology.env"
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        if raw_line.startswith("REFERENCE_P2P_PEER="):
+            return raw_line.split("=", 1)[1].strip()
+    raise SystemExit("REFERENCE_P2P_PEER is missing from reference_topology.env")
+
+
 def main() -> int:
     if len(sys.argv) not in (2, 3):
         print(
@@ -81,7 +93,7 @@ def main() -> int:
         "runtime_surface": "docker_container",
         "captured_at": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
         "chain": status["chain"],
-        "peer": os.environ.get("PEER", "bitcoin-core-testnet4:48333"),
+        "peer": reference_peer(),
         "docker_volume": os.environ.get("DOCKER_PROOF_VOLUME", "jbitnode_native_long_sync_data"),
         "datadir": status["data_dir"],
         "local_reference_tip_height": local_reference_tip_height,

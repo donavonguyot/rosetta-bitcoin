@@ -34,7 +34,7 @@ services:
       CHAINSTATE_BACKEND: rocksdb
       LOG_LEVEL: info
       RUNTIME_SURFACE: docker
-      PEERS: ${PEERS:-bitcoin-core-testnet4:48333}
+      PEERS: ${PEERS:-${REFERENCE_P2P_PEER:?set REFERENCE_P2P_PEER from Nodes/Shared/docker/reference_topology.env}}
       BLOCKS_TARGET: ${BLOCKS_MAX:-2}
       BLOCKS_MAX: ${BLOCKS_MAX:-2}
     networks:
@@ -49,7 +49,7 @@ services:
       - --chainstate-backend
       - rocksdb
       - --peers
-      - ${PEERS:-bitcoin-core-testnet4:48333}
+      - ${PEERS:-${REFERENCE_P2P_PEER:?set REFERENCE_P2P_PEER from Nodes/Shared/docker/reference_topology.env}}
       - --blocks-target
       - ${BLOCKS_MAX:-2}
       - --blocks-max
@@ -65,5 +65,5 @@ volumes:
 
 networks:
   reference:
-    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    name: ${REFERENCE_DOCKER_NETWORK:?set REFERENCE_DOCKER_NETWORK from Nodes/Shared/docker/reference_topology.env}
     external: true

@@ -25,11 +25,9 @@ DOCKER_SYNC_HEADER_BATCHES_MAX ?= 50
 DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
-DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+include ../Shared/docker/reference_topology.mk
 DOCKER_REBUILD ?= 0
-REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
-DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
-REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-supporting-10k-proof docker-java-supporting-50k-proof docker-java-primary-100k-proof docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
 

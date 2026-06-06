@@ -10,8 +10,6 @@ FIXTURE_ARG := $(if $(FIXTURE_ID),--fixture-id $(FIXTURE_ID),)
 SYNC_TARGET ?= 5000
 PREFETCH_DEPTH ?= 4
 PROGRESS ?= 1000
-REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
-DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
 DOCKER_LOCAL_PROOF_VOLUME ?= ocbitnode_5k_proof_data
 DOCKER_LOCAL_REFERENCE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_baseline_5k_telemetry_$(RESULT_DATE).log
@@ -21,8 +19,8 @@ DOCKER_50K_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_s
 DOCKER_50K_PROFILE_VOLUME ?= ocbitnode_50k_profile_data
 DOCKER_50K_PROFILE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(RESULT_DATE).json
 DOCKER_50K_PROFILE_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(RESULT_DATE).log
-DOCKER_COMPOSE := docker compose -f docker/docker-compose.yml
-REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
+DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+include ../Shared/docker/reference_topology.mk
 
 .PHONY: build test ocbitnode-status ocbitnode-storage-proof ocbitnode-native-crypto-vectors ocbitnode-script-corpus
 .PHONY: docker-config docker-build docker-warm docker-status docker-storage-proof docker-native-crypto-vectors docker-script-corpus docker-proof-local docker-proof-50k docker-proof-50k-profile docker-smoke-once

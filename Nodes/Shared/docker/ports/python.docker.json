@@ -21,10 +21,10 @@
     "supervisor": "pybitnode_supervisor_data"
   },
   "commands": {
-    "docker_config": "cd Nodes/Python && docker compose -f docker/docker-compose.yml config",
+    "docker_config": "cd Nodes/Python && make docker-config",
     "docker_build": "cd Nodes/Python && make docker-build",
     "docker_warm": "cd Nodes/Python && make docker-warm",
-    "docker_status": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode python -m pybitnode.healthcheck",
+    "docker_status": "cd Nodes/Python && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml run --rm --no-deps pybitnode python -m pybitnode.healthcheck",
     "docker_proof_local": "cd Nodes/Python && make docker-proof-local",
     "docker_proof_10k": "cd Nodes/Python && make docker-proof-10k",
     "docker_proof_50k": null,
@@ -34,17 +34,17 @@
     "docker_storage_proof": "cd Nodes/Python && make docker-python-rocksdb-proof",
     "docker_script_corpus": "cd Nodes/Python && make docker-script-corpus",
     "docker_probe_external": null,
-    "docker_supervisor": "cd Nodes/Python && docker compose -f docker/docker-compose.yml up -d pybitnode-supervisor",
-    "docker_supervisor_status": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-status",
-    "docker_supervisor_stop": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-stop",
-    "docker_supervisor_resume": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-resume",
-    "docker_smoke_once": "cd Nodes/Python && docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-rocksdb-proof"
+    "docker_supervisor": "cd Nodes/Python && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml up -d pybitnode-supervisor",
+    "docker_supervisor_status": "cd Nodes/Python && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-status",
+    "docker_supervisor_stop": "cd Nodes/Python && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-stop",
+    "docker_supervisor_resume": "cd Nodes/Python && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml run --rm --no-deps pybitnode-supervisor-resume",
+    "docker_smoke_once": "cd Nodes/Python && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml run --rm --no-deps pybitnode-rocksdb-proof"
   },
   "peer_modes": {
     "local_reference": {
       "supported": true,
       "command": "cd Nodes/Python && make docker-proof-local",
-      "peer": "bitcoin-core-testnet4:48333",
+      "peer": "${REFERENCE_P2P_PEER}",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "sync_status"]
     },
     "external_manual": {

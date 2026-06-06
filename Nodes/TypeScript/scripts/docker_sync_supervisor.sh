@@ -2,13 +2,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
+# shellcheck source=/dev/null
+. "$REFERENCE_TOPOLOGY_ENV"
+
 VOLUME="${DOCKER_SYNC_VOLUME:-tsbitnode_sync_data}"
 CONTAINER_NAME="${CONTAINER_NAME:-tsbitnode-sync-supervisor-run}"
 POLL_SEC="${POLL_SEC:-120}"
 CHECK_SEC="${CHECK_SEC:-5}"
 STOP_FILE=".tsbitnode_supervisor_stop"
 RESUME_FILE=".tsbitnode_supervisor_resume"
-PEER="${PEERS:-bitcoin-core-testnet4:48333}"
+PEER="${PEERS:-${REFERENCE_P2P_PEER:?REFERENCE_P2P_PEER missing}}"
 
 log_line() {
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >&2

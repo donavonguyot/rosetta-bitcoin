@@ -76,7 +76,7 @@ services:
         "--target",
         "${PYBITNODE_BENCHMARK_TARGET:-5000}",
         "--peer",
-        "${PYBITNODE_BENCHMARK_PEER:-bitcoin-core-testnet4:48333}",
+        "${PYBITNODE_BENCHMARK_PEER:-${REFERENCE_P2P_PEER:?set REFERENCE_P2P_PEER from Nodes/Shared/docker/reference_topology.env}}",
         "--prefetch-depth",
         "${PYBITNODE_BENCHMARK_PREFETCH_DEPTH:-4}",
         "--script-threads",
@@ -149,5 +149,5 @@ volumes:
 
 networks:
   reference:
-    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    name: ${REFERENCE_DOCKER_NETWORK:?set REFERENCE_DOCKER_NETWORK from Nodes/Shared/docker/reference_topology.env}
     external: true

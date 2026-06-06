@@ -19,17 +19,15 @@ DOCKER_HEADER_BATCHES_MAX ?= 1
 DOCKER_BLOCKS_MAX ?= 2
 DOCKER_PREFETCH_DEPTH ?= 4
 DOCKER_SCRIPT_RUNNER_MODE ?= parallel
-REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
-DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
 DOCKER_SYNC_VOLUME ?= csbitnode_sync_data
 DOCKER_SYNC_HEADERS_MAX ?= 10000
 DOCKER_SYNC_HEADER_BATCHES_MAX ?= 50
 DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
-DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+include ../Shared/docker/reference_topology.mk
 DOCKER_REBUILD ?= 0
-REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
 

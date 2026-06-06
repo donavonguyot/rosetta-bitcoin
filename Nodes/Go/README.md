@@ -53,7 +53,7 @@ result JSON. The staged fetch-then-connect mode remains available with
 `--mode staged`.
 
 `docker-proof-local` is the official 5k local Reference P2P comparator. It
-speaks Bitcoin P2P to `bitcoin-core-testnet4:48333` on the Reference Docker network, fetches headers and blocks
+speaks Bitcoin P2P to `REFERENCE_P2P_PEER` from `Nodes/Shared/docker/reference_topology.env` on the Reference Docker network, fetches headers and blocks
 through `getheaders`/`getdata`, then uses the same Go storage/connect pipeline.
 `docker-proof-rpc-replay` preserves the older local Reference RPC replay lane.
 
@@ -102,7 +102,7 @@ make docker-smoke-once
 ```
 
 `docker-proof-local` uses a fresh named Docker volume, talks to host Core P2P at
-`bitcoin-core-testnet4:48333`, and writes compact official 5k evidence under
+`REFERENCE_P2P_PEER` from `Nodes/Shared/docker/reference_topology.env`, and writes compact official 5k evidence under
 `Nodes/Shared/conformance/results/`. `docker-proof-rpc-replay` keeps the old
 host Core RPC path at `host.docker.internal:48332` as explicit replay evidence.
 Docker proof and supervisor volumes are separate from host datadirs.

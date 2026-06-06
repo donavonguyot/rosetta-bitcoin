@@ -1,9 +1,10 @@
 MIX ?= mix
 DATA_DIR ?= ./data-elixir
 PEERS ?= 127.0.0.1:48333
-DOCKER_COMPOSE ?= docker compose -f docker/docker-compose.yml
-REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
-DOCKER_PEERS ?= bitcoin-core-testnet4:48333
+DOCKER_COMPOSE ?= docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+include ../Shared/docker/reference_topology.mk
+DOCKER_PEERS ?= $(REFERENCE_P2P_PEER)
+REFERENCE_P2P_CHECK_PEER = $(DOCKER_PEERS)
 DOCKER_REBUILD ?= 0
 DOCKER_PROOF_VOLUME ?= exbitnode_proof_data
 DOCKER_SYNC_VOLUME ?= exbitnode_sync_data
@@ -33,7 +34,6 @@ DOCKER_SYNC_HEADER_BATCHES_MAX ?= 50
 DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
-REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_PEERS)
 
 .PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 

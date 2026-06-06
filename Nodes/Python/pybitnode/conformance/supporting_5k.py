@@ -259,13 +259,15 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--datadir", default="/proof/data")
     parser.add_argument("--result-path", default="/results/python_docker_supporting_5k_benchmark.json")
     parser.add_argument("--target", type=int, default=5000)
-    parser.add_argument("--peer", default="bitcoin-core-testnet4:48333")
+    parser.add_argument("--peer", default=os.environ.get("REFERENCE_P2P_PEER"))
     parser.add_argument("--prefetch-depth", type=int, default=4)
     parser.add_argument("--script-threads", default=str(os.cpu_count() or 1))
     parser.add_argument("--docker-volume", default=os.environ.get("DOCKER_PROOF_VOLUME", "pybitnode_proof_data"))
     parser.add_argument("--reference-start-height", type=int, default=0)
     parser.add_argument("--log-level", default=os.environ.get("LOG_LEVEL", "info"))
     args = parser.parse_args(argv)
+    if not args.peer:
+        parser.error("--peer or REFERENCE_P2P_PEER is required")
 
     datadir = Path(args.datadir)
     if datadir.exists():

@@ -2,10 +2,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
+# shellcheck source=/dev/null
+. "$REFERENCE_TOPOLOGY_ENV"
+
 VOLUME="${DOCKER_PROOF_VOLUME:-cpbitnode_proof_data}"
 TARGET="${DOCKER_BENCHMARK_TARGET:-5000}"
 BLOCKS_MAX="${DOCKER_BENCHMARK_BLOCKS_MAX:-5000}"
-PEERS="${DOCKER_BENCHMARK_PEERS:-bitcoin-core-testnet4:48333}"
+PEERS="${DOCKER_BENCHMARK_PEERS:-${REFERENCE_P2P_PEER:?REFERENCE_P2P_PEER missing}}"
+export PEERS
 PREFETCH_DEPTH="${DOCKER_BENCHMARK_PREFETCH_DEPTH:-4}"
 RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/cpp_docker_baseline_5k_benchmark_$(date +%F).json}"
 REFERENCE_START_HEIGHT="${REFERENCE_START_HEIGHT:-0}"
@@ -332,7 +337,7 @@ doc = {
     "peer_mode": "local_reference",
     "byte_source": "local_reference_p2p",
     "proof_mode": "p2p_sync",
-    "peer": os.environ.get("PEERS", "bitcoin-core-testnet4:48333"),
+    "peer": os.environ["PEERS"],
     "docker_volume": os.environ.get("VOLUME", "cpbitnode_proof_data"),
     "datadir": "/data",
     "chain": status.get("chain", "testnet4"),

@@ -15,6 +15,25 @@ from typing import Any
 GENESIS_HASH = "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043"
 
 
+def shared_root() -> pathlib.Path:
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if parent.name == "Shared":
+            return parent
+    raise SystemExit("could not locate Shared root from proof capture script")
+
+
+def reference_peer() -> str:
+    if os.environ.get("PEER"):
+        return os.environ["PEER"]
+    if os.environ.get("REFERENCE_P2P_PEER"):
+        return os.environ["REFERENCE_P2P_PEER"]
+    env_path = shared_root() / "docker" / "reference_topology.env"
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        if raw_line.startswith("REFERENCE_P2P_PEER="):
+            return raw_line.split("=", 1)[1].strip()
+    raise SystemExit("REFERENCE_P2P_PEER is missing from reference_topology.env")
+
+
 def load_status(path: pathlib.Path) -> dict[str, Any]:
     raw = path.read_text(encoding="utf-8")
     start = raw.find("{")
@@ -91,7 +110,7 @@ def main() -> int:
     target_height = int(os.environ.get("TARGET_HEIGHT", "5000"))
     header_target_height = int(os.environ.get("HEADER_TARGET_HEIGHT", str(target_height)))
     prefetch_depth = int(os.environ.get("PREFETCH_DEPTH", "4"))
-    peer = os.environ.get("PEER", "bitcoin-core-testnet4:48333")
+    peer = reference_peer()
     docker_volume = os.environ.get("DOCKER_PROOF_VOLUME", "exbitnode_proof_data")
 
     validated_height = as_int(status.get("validated_height"))

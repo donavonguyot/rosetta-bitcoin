@@ -7,16 +7,14 @@ DOCKER_LOCAL_PROOF_RESULT ?= /results/swift_docker_baseline_5k_benchmark_$(RESUL
 DOCKER_10K_PROOF_RESULT ?= /results/swift_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
 DOCKER_50K_PROOF_RESULT ?= /results/swift_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_100K_PROOF_RESULT ?= /results/swift_docker_performance_100k_benchmark_$(RESULT_DATE).json
-DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
-REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
+DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+include ../Shared/docker/reference_topology.mk
 LOCAL_P2P_PEER ?= 127.0.0.1:48333
-DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
 DOCKER_PROOF_VOLUME ?= swiftbitnode_proof_data
 DOCKER_SYNC_TARGET ?= 5000
 DOCKER_SUPERVISOR_TARGET ?= 10000
 DOCKER_SUPERVISOR_CHUNK ?= 5000
 DOCKER_SUPERVISOR_RESULT ?= /results/swift_supervisor_status_$(RESULT_DATE).json
-REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local swift-node-sync-supervisor docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume clean
 

@@ -79,8 +79,8 @@ data/          live datadir (gitignored)
 ## Docker
 
 ```bash
-docker compose -f docker/docker-compose.yml up
-docker compose -f docker/docker-compose.yml run --rm --no-deps pybitnode-rocksdb-proof
+make docker-config
+make docker-python-rocksdb-proof
 ```
 
 Full replay from an empty native datadir is intentionally out of scope for the

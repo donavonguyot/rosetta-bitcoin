@@ -51,7 +51,7 @@ All fixed-height official lanes require:
 ```text
 runtime_surface = docker
 peer_mode = local_reference
-peer = bitcoin-core-testnet4:48333 on rosetta-reference-node_default
+peer = REFERENCE_P2P_PEER on REFERENCE_DOCKER_NETWORK
 byte_source = local_reference_p2p
 proof_mode = p2p_sync
 prefetch_depth = 4

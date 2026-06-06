@@ -11,13 +11,13 @@ DOCKER_10K_PROOF_RESULT ?= /results/go_docker_diagnostic_10k_benchmark_$(RESULT_
 DOCKER_50K_PROOF_RESULT ?= /results/go_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_100K_PROOF_RESULT ?= /results/go_docker_performance_100k_benchmark_$(RESULT_DATE).json
 DOCKER_RPC_REPLAY_RESULT ?= /results/go_local_reference_docker_sync_$(RESULT_DATE).json
-DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
+DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+include ../Shared/docker/reference_topology.mk
 DOCKER_PROOF_VOLUME ?= gobitnode_proof_data
 DOCKER_RPC_REPLAY_VOLUME ?= gobitnode_local_reference_proof_data
 DOCKER_SYNC_VOLUME ?= gobitnode_sync_data
 DOCKER_REBUILD ?= 0
 DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
-REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
 
 SYNC_TARGET ?= 10000
 CONNECT_TARGET ?= 2
@@ -26,8 +26,6 @@ RPC_USER ?= rosetta
 RPC_PASSWORD ?= rosetta-dev-only
 DOCKER_SYNC_TARGET ?= 5000
 DOCKER_RPC_URL ?= http://host.docker.internal:48332
-DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
-REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: build test go-node-status go-node-storage-proof go-node-script-corpus go-node-sync-local go-node-connect-local go-node-native-crypto-test docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-rpc-replay docker-smoke-once clean
 
