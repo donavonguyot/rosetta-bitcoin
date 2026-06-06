@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::codec;
 
@@ -128,30 +128,49 @@ impl Store {
         chain: &str,
         outpoints: &[UtxoOutpoint],
     ) -> Result<Vec<Option<StoredUtxo>>> {
+        self.get_many_utxos_with_stats(chain, outpoints)
+            .map(|(utxos, _)| utxos)
+    }
+
+    pub fn get_many_utxos_with_stats(
+        &self,
+        chain: &str,
+        outpoints: &[UtxoOutpoint],
+    ) -> Result<(Vec<Option<StoredUtxo>>, UtxoReadStats)> {
         if outpoints.len() >= 64 {
-            return self.get_many_utxos_deduped(chain, outpoints);
+            return self.get_many_utxos_deduped_with_stats(chain, outpoints);
         }
         let keys = outpoints
             .iter()
             .map(|outpoint| codec::utxo_key(chain, &outpoint.txid_internal, outpoint.vout))
             .collect::<Vec<_>>();
-        self.db
-            .multi_get(keys)
-            .into_iter()
-            .zip(outpoints.iter())
-            .map(|(value, outpoint)| {
-                value?
-                    .map(|bytes| decode_utxo(outpoint, &bytes))
-                    .transpose()
-            })
-            .collect()
+        let mut stats = UtxoReadStats {
+            lookup_count: keys.len(),
+            key_bytes: keys.iter().map(Vec::len).sum(),
+            ..UtxoReadStats::default()
+        };
+        let read_started = Instant::now();
+        let values = self.db.multi_get(keys);
+        stats.multi_get = read_started.elapsed();
+        let mut decoded = Vec::with_capacity(values.len());
+        for (value, outpoint) in values.into_iter().zip(outpoints.iter()) {
+            let Some(bytes) = value? else {
+                decoded.push(None);
+                continue;
+            };
+            stats.value_bytes += bytes.len();
+            let decode_started = Instant::now();
+            decoded.push(Some(decode_utxo(outpoint, &bytes)?));
+            stats.decode += decode_started.elapsed();
+        }
+        Ok((decoded, stats))
     }
 
-    fn get_many_utxos_deduped(
+    fn get_many_utxos_deduped_with_stats(
         &self,
         chain: &str,
         outpoints: &[UtxoOutpoint],
-    ) -> Result<Vec<Option<StoredUtxo>>> {
+    ) -> Result<(Vec<Option<StoredUtxo>>, UtxoReadStats)> {
         let mut unique = Vec::with_capacity(outpoints.len());
         let mut unique_index = HashMap::with_capacity(outpoints.len());
         let mut order = Vec::with_capacity(outpoints.len());
@@ -171,21 +190,32 @@ impl Store {
             .iter()
             .map(|outpoint| codec::utxo_key(chain, &outpoint.txid_internal, outpoint.vout))
             .collect::<Vec<_>>();
-        let decoded = self
-            .db
-            .multi_get(keys)
-            .into_iter()
-            .zip(unique.iter())
-            .map(|(value, outpoint)| {
-                value?
-                    .map(|bytes| decode_utxo(outpoint, &bytes))
-                    .transpose()
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(order
-            .into_iter()
-            .map(|index| decoded[index].clone())
-            .collect())
+        let mut stats = UtxoReadStats {
+            lookup_count: keys.len(),
+            key_bytes: keys.iter().map(Vec::len).sum(),
+            ..UtxoReadStats::default()
+        };
+        let read_started = Instant::now();
+        let values = self.db.multi_get(keys);
+        stats.multi_get = read_started.elapsed();
+        let mut decoded = Vec::with_capacity(values.len());
+        for (value, outpoint) in values.into_iter().zip(unique.iter()) {
+            let Some(bytes) = value? else {
+                decoded.push(None);
+                continue;
+            };
+            stats.value_bytes += bytes.len();
+            let decode_started = Instant::now();
+            decoded.push(Some(decode_utxo(outpoint, &bytes)?));
+            stats.decode += decode_started.elapsed();
+        }
+        Ok((
+            order
+                .into_iter()
+                .map(|index| decoded[index].clone())
+                .collect(),
+            stats,
+        ))
     }
 
     pub fn commit_block(
@@ -543,6 +573,15 @@ pub struct StoredUtxo {
     pub value_sats: u64,
     pub coinbase: bool,
     pub script_pubkey: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UtxoReadStats {
+    pub lookup_count: usize,
+    pub key_bytes: usize,
+    pub value_bytes: usize,
+    pub multi_get: Duration,
+    pub decode: Duration,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

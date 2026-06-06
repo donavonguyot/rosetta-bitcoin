@@ -1,16 +1,18 @@
 use anyhow::{bail, ensure, Context, Result};
 use chrono::Utc;
-use rayon::prelude::*;
+use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use crate::refsync;
-use crate::script_verify::{self, SpentPrevout};
+use crate::script_verify::{self, SighashCache, SpentPrevout};
 use crate::storage::{
-    ChainstateBlockCommit, ConnectTimings, Store, StoredUtxo, UtxoOutpoint, UtxoUndoEntry,
+    ChainstateBlockCommit, ConnectTimings, Store, StoredUtxo, UtxoOutpoint, UtxoReadStats,
+    UtxoUndoEntry,
 };
 use crate::tx::{self, Transaction};
 
@@ -18,6 +20,19 @@ use crate::tx::{self, Transaction};
 pub struct TimingSummary {
     pub total_ms: i64,
     pub stage_totals_ms: HashMap<String, i64>,
+    pub script_threads: usize,
+    pub script_jobs: usize,
+    pub runner_batches: usize,
+    pub script_wall_ms: i64,
+    pub script_worker_cpu_ms: i64,
+    pub utxo_lookup_count: usize,
+    pub same_block_spends: usize,
+    pub created_utxos: usize,
+    pub spent_external: usize,
+    pub utxo_key_bytes: usize,
+    pub utxo_value_bytes: usize,
+    pub prevout_multi_get_call: i64,
+    pub prevout_utxo_decode_ms: i64,
     pub slow_blocks: Vec<SlowBlock>,
 }
 
@@ -29,6 +44,9 @@ pub struct SlowBlock {
     pub vin_count: usize,
     pub vout_count: usize,
     pub script_input_count: usize,
+    pub same_block_spends: usize,
+    pub created_utxos: usize,
+    pub spent_external: usize,
     pub input_shape_counts: BTreeMap<String, usize>,
     pub spent_prevout_script_types: BTreeMap<String, usize>,
     pub output_script_types: BTreeMap<String, usize>,
@@ -40,6 +58,9 @@ pub struct BlockShapeSummary {
     pub vin_count: usize,
     pub vout_count: usize,
     pub script_input_count: usize,
+    pub same_block_spends: usize,
+    pub created_utxos: usize,
+    pub spent_external: usize,
     pub input_shape_counts: BTreeMap<String, usize>,
     pub spent_prevout_script_types: BTreeMap<String, usize>,
     pub output_script_types: BTreeMap<String, usize>,
@@ -270,6 +291,7 @@ enum ConnectOutcome {
 struct ScriptVerifyJob {
     tx_index: usize,
     spent_prevouts: Vec<SpentPrevout>,
+    sighash_cache: SighashCache,
 }
 
 struct ScriptVerifyTask {
@@ -297,11 +319,11 @@ fn connect_transactions(
     }
 
     let prevouts = gather_prevouts(txs);
-    let load_started = Instant::now();
-    let loaded = store.get_many_utxos("testnet4", &prevouts)?;
-    let load_elapsed = load_started.elapsed();
+    let (loaded, read_stats) = store.get_many_utxos_with_stats("testnet4", &prevouts)?;
+    let load_elapsed = read_stats.multi_get + read_stats.decode;
     timing.add_stage("prevout_batch_load", load_elapsed);
     timing.add_stage("utxo_load", load_elapsed);
+    timing.record_utxo_read_stats(&read_stats);
     let mut view = BlockView::new();
     for (outpoint, utxo) in prevouts.into_iter().zip(loaded) {
         if let Some(utxo) = utxo {
@@ -381,11 +403,25 @@ fn connect_transactions(
             input_utxos.push(utxo);
             input_outpoints.push(outpoint);
         }
+        view.add_spent_prevout_script_types(&spent_prevouts);
+        let sighash_cache = match SighashCache::new(transaction, &spent_prevouts) {
+            Ok(cache) => cache,
+            Err(err) => {
+                return Ok(ConnectOutcome::Blocker(blocker(
+                    height,
+                    block_hash,
+                    &txids[tx_index],
+                    0,
+                    "sighash_cache_build_failed",
+                    &err.to_string(),
+                )));
+            }
+        };
         script_jobs.push(ScriptVerifyJob {
             tx_index,
-            spent_prevouts: spent_prevouts.clone(),
+            spent_prevouts,
+            sighash_cache,
         });
-        view.add_spent_prevout_script_types(&spent_prevouts);
         for (input_index, outpoint) in input_outpoints.iter().copied().enumerate() {
             view.mark_spent(outpoint, input_utxos[input_index].clone());
         }
@@ -396,11 +432,13 @@ fn connect_transactions(
             false,
         )?);
     }
-    let failure = timing.measure("script_verify", || {
-        Ok(verify_script_jobs(txs, &script_jobs))
-    })?;
+    let script_started = Instant::now();
+    let verify_stats = verify_script_jobs(txs, &script_jobs);
+    let script_wall = script_started.elapsed();
+    timing.add_stage("script_verify", script_wall);
+    timing.record_script_verify_stats(&verify_stats, script_wall);
     timing.set_spent_prevout_script_types(view.spent_prevout_script_types.clone());
-    if let Some((tx_index, input, failure)) = failure {
+    if let Some((tx_index, input, failure)) = verify_stats.failure {
         return Ok(ConnectOutcome::Blocker(blocker(
             height,
             block_hash,
@@ -411,32 +449,68 @@ fn connect_transactions(
         )));
     }
 
+    let spent_external = view.external_spends();
+    let created_utxos = view.created_utxos();
+    let undo_entries = view.undo_entries();
+    timing.add_count("created_utxos", created_utxos.len());
+    timing.add_count("spent_external", spent_external.len());
+    timing.add_count("same_block_spends", view.same_block_spends);
+
     Ok(ConnectOutcome::Commit(ChainstateBlockCommit {
         chain: "testnet4".to_string(),
         height,
         block_hash_internal: tx::parse_display_hash(block_hash)?,
-        spent_external: view.external_spends(),
-        created_utxos: view.created_utxos(),
-        undo_entries: view.undo_entries(),
+        spent_external,
+        created_utxos,
+        undo_entries,
     }))
 }
 
-fn verify_script_jobs(
-    txs: &[Transaction],
-    jobs: &[ScriptVerifyJob],
-) -> Option<(usize, usize, String)> {
+struct ScriptTaskResult {
+    failure: Option<(usize, usize, String)>,
+    elapsed: Duration,
+}
+
+struct ScriptVerifyStats {
+    failure: Option<(usize, usize, String)>,
+    jobs: usize,
+    threads: usize,
+    batches: usize,
+    worker_cpu: Duration,
+    mode: &'static str,
+}
+
+fn verify_script_jobs(txs: &[Transaction], jobs: &[ScriptVerifyJob]) -> ScriptVerifyStats {
     let tasks = script_verify_tasks(jobs);
-    if script_parallel_enabled() && tasks.len() > 1 {
-        first_failure_by_order(
+    let runner = script_runner_config();
+    let use_parallel = script_runner_uses_parallel(runner, tasks.len());
+    let results = if use_parallel {
+        script_pool().install(|| {
             tasks
                 .par_iter()
-                .filter_map(|task| verify_script_task(txs, jobs, task))
-                .collect::<Vec<_>>(),
-        )
+                .map(|task| verify_script_task(txs, jobs, task))
+                .collect::<Vec<_>>()
+        })
     } else {
         tasks
             .iter()
-            .find_map(|task| verify_script_task(txs, jobs, task))
+            .map(|task| verify_script_task(txs, jobs, task))
+            .collect::<Vec<_>>()
+    };
+    let worker_cpu = results.iter().map(|result| result.elapsed).sum();
+    let failure =
+        first_failure_by_order(results.iter().filter_map(|result| result.failure.clone()));
+    ScriptVerifyStats {
+        failure,
+        jobs: tasks.len(),
+        threads: if use_parallel { runner.threads } else { 1 },
+        batches: usize::from(!tasks.is_empty()),
+        worker_cpu,
+        mode: if use_parallel {
+            "parallel"
+        } else {
+            "sequential"
+        },
     }
 }
 
@@ -459,18 +533,24 @@ fn verify_script_task(
     txs: &[Transaction],
     jobs: &[ScriptVerifyJob],
     task: &ScriptVerifyTask,
-) -> Option<(usize, usize, String)> {
+) -> ScriptTaskResult {
+    let started = Instant::now();
     let job = &jobs[task.job_index];
     let transaction = &txs[task.tx_index];
-    script_verify::verify_transaction_input_borrowed(
+    let failure = script_verify::verify_transaction_input_borrowed_with_cache(
         transaction,
         task.input_index,
         &job.spent_prevouts[task.input_index].script_pubkey,
         job.spent_prevouts[task.input_index].amount,
         &job.spent_prevouts,
+        Some(&job.sighash_cache),
     )
     .err()
-    .map(|err| (task.tx_index, task.input_index, err.to_string()))
+    .map(|err| (task.tx_index, task.input_index, err.to_string()));
+    ScriptTaskResult {
+        failure,
+        elapsed: started.elapsed(),
+    }
 }
 
 fn first_failure_by_order(
@@ -485,12 +565,67 @@ fn script_parallel_enabled() -> bool {
     !std::env::var("RSBITNODE_SCRIPT_VERIFY_PARALLEL").is_ok_and(|value| value == "0")
 }
 
+#[derive(Clone, Copy)]
+struct ScriptRunnerConfig {
+    parallel_enabled: bool,
+    threads: usize,
+    min_inputs: usize,
+}
+
+fn script_runner_config() -> ScriptRunnerConfig {
+    ScriptRunnerConfig {
+        parallel_enabled: script_parallel_enabled(),
+        threads: parse_script_verify_threads(
+            std::env::var("RSBITNODE_SCRIPT_VERIFY_THREADS")
+                .ok()
+                .as_deref(),
+            std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1),
+        ),
+        min_inputs: parse_script_verify_min_inputs(
+            std::env::var("RSBITNODE_SCRIPT_VERIFY_MIN_INPUTS")
+                .ok()
+                .as_deref(),
+        ),
+    }
+}
+
+fn parse_script_verify_threads(value: Option<&str>, available: usize) -> usize {
+    value
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(available)
+        .clamp(1, 64)
+}
+
+fn parse_script_verify_min_inputs(value: Option<&str>) -> usize {
+    value
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .unwrap_or(128)
+}
+
+fn script_runner_uses_parallel(runner: ScriptRunnerConfig, task_count: usize) -> bool {
+    runner.parallel_enabled && runner.threads > 1 && task_count >= runner.min_inputs
+}
+
+fn script_pool() -> &'static ThreadPool {
+    static SCRIPT_POOL: OnceLock<ThreadPool> = OnceLock::new();
+    SCRIPT_POOL.get_or_init(|| {
+        ThreadPoolBuilder::new()
+            .num_threads(script_runner_config().threads)
+            .thread_name(|index| format!("rsbitnode-script-{index}"))
+            .build()
+            .expect("build script verify thread pool")
+    })
+}
+
 #[derive(Default)]
 struct BlockView {
     loaded: HashMap<UtxoOutpoint, StoredUtxo>,
     created: HashMap<UtxoOutpoint, StoredUtxo>,
     spent: HashMap<UtxoOutpoint, UtxoUndoEntry>,
     spent_prevout_script_types: BTreeMap<String, usize>,
+    same_block_spends: usize,
 }
 
 impl BlockView {
@@ -512,6 +647,7 @@ impl BlockView {
 
     fn mark_spent(&mut self, outpoint: UtxoOutpoint, utxo: StoredUtxo) {
         if self.created.remove(&outpoint).is_some() {
+            self.same_block_spends += 1;
             self.spent.insert(outpoint, undo_from(utxo));
             return;
         }
@@ -730,6 +866,39 @@ mod tests {
     }
 
     #[test]
+    fn script_runner_threshold_and_env_parsers_are_deterministic() {
+        assert_eq!(parse_script_verify_threads(None, 12), 12);
+        assert_eq!(parse_script_verify_threads(Some("0"), 12), 1);
+        assert_eq!(parse_script_verify_threads(Some("128"), 12), 64);
+        assert_eq!(parse_script_verify_threads(Some("bad"), 6), 6);
+        assert_eq!(parse_script_verify_min_inputs(None), 128);
+        assert_eq!(parse_script_verify_min_inputs(Some("7")), 7);
+        assert_eq!(parse_script_verify_min_inputs(Some("bad")), 128);
+
+        let runner = ScriptRunnerConfig {
+            parallel_enabled: true,
+            threads: 4,
+            min_inputs: 128,
+        };
+        assert!(!script_runner_uses_parallel(runner, 127));
+        assert!(script_runner_uses_parallel(runner, 128));
+        assert!(!script_runner_uses_parallel(
+            ScriptRunnerConfig {
+                parallel_enabled: false,
+                ..runner
+            },
+            256
+        ));
+        assert!(!script_runner_uses_parallel(
+            ScriptRunnerConfig {
+                threads: 1,
+                ..runner
+            },
+            256
+        ));
+    }
+
+    #[test]
     fn block_shape_summary_counts_spend_and_output_families() {
         let txs = vec![
             Transaction {
@@ -847,6 +1016,7 @@ fn script_runner_mode() -> &'static str {
 struct TimingCollector {
     started: Instant,
     stage_totals: HashMap<String, Duration>,
+    counts: HashMap<String, usize>,
     slow_blocks: Vec<SlowBlock>,
     spent_prevout_script_types: BTreeMap<String, usize>,
 }
@@ -856,6 +1026,7 @@ impl TimingCollector {
         Self {
             started: Instant::now(),
             stage_totals: HashMap::new(),
+            counts: HashMap::new(),
             slow_blocks: Vec::new(),
             spent_prevout_script_types: BTreeMap::new(),
         }
@@ -870,6 +1041,36 @@ impl TimingCollector {
 
     fn add_stage(&mut self, stage: &str, elapsed: Duration) {
         *self.stage_totals.entry(stage.to_string()).or_default() += elapsed;
+    }
+
+    fn add_count(&mut self, name: &str, value: usize) {
+        *self.counts.entry(name.to_string()).or_default() += value;
+    }
+
+    fn record_utxo_read_stats(&mut self, stats: &UtxoReadStats) {
+        self.add_count("utxo_lookup_count", stats.lookup_count);
+        self.add_count("utxo_key_bytes", stats.key_bytes);
+        self.add_count("utxo_value_bytes", stats.value_bytes);
+        self.add_stage("prevout_multi_get_call", stats.multi_get);
+        self.add_stage("prevout_utxo_decode", stats.decode);
+    }
+
+    fn record_script_verify_stats(&mut self, stats: &ScriptVerifyStats, wall: Duration) {
+        self.add_count("script_jobs", stats.jobs);
+        self.add_count("runner_batches", stats.batches);
+        self.add_count(
+            "script_worker_cpu_ms",
+            stats.worker_cpu.as_millis() as usize,
+        );
+        self.add_count("script_wall_ms", wall.as_millis() as usize);
+        self.counts
+            .entry("script_threads".to_string())
+            .and_modify(|value| *value = (*value).max(stats.threads))
+            .or_insert(stats.threads);
+        self.counts
+            .entry(format!("script_runner_{}_batches", stats.mode))
+            .and_modify(|value| *value += stats.batches)
+            .or_insert(stats.batches);
     }
 
     fn set_spent_prevout_script_types(&mut self, counts: BTreeMap<String, usize>) {
@@ -887,6 +1088,9 @@ impl TimingCollector {
             vin_count: shape.vin_count,
             vout_count: shape.vout_count,
             script_input_count: shape.script_input_count,
+            same_block_spends: shape.same_block_spends,
+            created_utxos: shape.created_utxos,
+            spent_external: shape.spent_external,
             input_shape_counts: shape.input_shape_counts,
             spent_prevout_script_types: shape.spent_prevout_script_types,
             output_script_types: shape.output_script_types,
@@ -896,8 +1100,28 @@ impl TimingCollector {
     }
 
     fn summary(self) -> TimingSummary {
+        let count = |name: &str| self.counts.get(name).copied().unwrap_or_default();
+        let stage_millis = |name: &str| {
+            self.stage_totals
+                .get(name)
+                .map(|duration| duration.as_millis() as i64)
+                .unwrap_or_default()
+        };
         TimingSummary {
             total_ms: self.started.elapsed().as_millis() as i64,
+            script_threads: count("script_threads"),
+            script_jobs: count("script_jobs"),
+            runner_batches: count("runner_batches"),
+            script_wall_ms: count("script_wall_ms") as i64,
+            script_worker_cpu_ms: count("script_worker_cpu_ms") as i64,
+            utxo_lookup_count: count("utxo_lookup_count"),
+            same_block_spends: count("same_block_spends"),
+            created_utxos: count("created_utxos"),
+            spent_external: count("spent_external"),
+            utxo_key_bytes: count("utxo_key_bytes"),
+            utxo_value_bytes: count("utxo_value_bytes"),
+            prevout_multi_get_call: stage_millis("prevout_multi_get_call"),
+            prevout_utxo_decode_ms: stage_millis("prevout_utxo_decode"),
             stage_totals_ms: self
                 .stage_totals
                 .into_iter()

@@ -50,13 +50,19 @@ directly in strict height order. Fetch and parse work is bounded-prefetched by
 `RSBITNODE_BLOCK_PREFETCH_DEPTH` (default `4`, capped at `16`); UTXO mutation
 and RocksDB commit remain single-threaded and ordered. Script verification runs
 as deterministic parallel jobs by default; set
-`RSBITNODE_SCRIPT_VERIFY_PARALLEL=0` to force sequential verification.
+`RSBITNODE_SCRIPT_VERIFY_PARALLEL=0` to force sequential verification. Parallel
+script verification starts at `RSBITNODE_SCRIPT_VERIFY_MIN_INPUTS` inputs
+(default `128`) and uses `RSBITNODE_SCRIPT_VERIFY_THREADS` worker threads
+(default available CPU threads, clamped to `1..64`).
 
 Progress output includes JSON telemetry with height, percent, elapsed time,
 block rate, last-block time, fetched/connected counts, UTXO count, prefetch
 depth, and script runner mode. Proof JSON includes `pipeline_timing_summary`
 with wall time, byte fetch, parse/validate, store, connect, script, prevout,
-commit, and UTXO timing fields. The top-level `blocks_fetched` and
+commit, and UTXO timing fields. Connect proof telemetry also reports script job
+counts, runner batches, script worker/wall time, UTXO lookup counts, same-block
+spends, created/spent UTXOs, UTXO key/value bytes, multi-get time, and decode
+time. The top-level `blocks_fetched` and
 `blocks_connected` fields are full proof counts; `connect_summary` is the final
 block/connect snapshot.
 

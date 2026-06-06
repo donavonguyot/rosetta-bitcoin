@@ -824,6 +824,7 @@ fn fetch_prepared_block(
 struct PipelineTiming {
     started: Instant,
     stage_totals: BTreeMap<&'static str, Duration>,
+    counts: BTreeMap<&'static str, usize>,
     slow_blocks: Vec<Value>,
     blocks_fetched: u32,
     blocks_connected: u32,
@@ -835,6 +836,7 @@ impl PipelineTiming {
         Self {
             started: Instant::now(),
             stage_totals: BTreeMap::new(),
+            counts: BTreeMap::new(),
             slow_blocks: Vec::new(),
             blocks_fetched: 0,
             blocks_connected: 0,
@@ -844,6 +846,17 @@ impl PipelineTiming {
 
     fn add(&mut self, stage: &'static str, elapsed: Duration) {
         *self.stage_totals.entry(stage).or_default() += elapsed;
+    }
+
+    fn add_count(&mut self, name: &'static str, value: usize) {
+        *self.counts.entry(name).or_default() += value;
+    }
+
+    fn max_count(&mut self, name: &'static str, value: usize) {
+        self.counts
+            .entry(name)
+            .and_modify(|existing| *existing = (*existing).max(value))
+            .or_insert(value);
     }
 
     fn merge_fetch(&mut self, timings: &FetchTimings) {
@@ -869,11 +882,36 @@ impl PipelineTiming {
                     "undo_put_prepare" => "undo_put_prepare",
                     "metadata_put_prepare" => "metadata_put_prepare",
                     "rocksdb_write" => "rocksdb_write",
+                    "prevout_multi_get_call" => "prevout_multi_get_call",
+                    "prevout_utxo_decode" => "prevout_utxo_decode",
                     _ => "connect_other",
                 },
                 Duration::from_millis(*millis as u64),
             );
         }
+        self.max_count("script_threads", summary.timing_summary.script_threads);
+        self.add_count("script_jobs", summary.timing_summary.script_jobs);
+        self.add_count("runner_batches", summary.timing_summary.runner_batches);
+        self.add_count(
+            "script_wall_ms",
+            summary.timing_summary.script_wall_ms.max(0) as usize,
+        );
+        self.add_count(
+            "script_worker_cpu_ms",
+            summary.timing_summary.script_worker_cpu_ms.max(0) as usize,
+        );
+        self.add_count(
+            "utxo_lookup_count",
+            summary.timing_summary.utxo_lookup_count,
+        );
+        self.add_count(
+            "same_block_spends",
+            summary.timing_summary.same_block_spends,
+        );
+        self.add_count("created_utxos", summary.timing_summary.created_utxos);
+        self.add_count("spent_external", summary.timing_summary.spent_external);
+        self.add_count("utxo_key_bytes", summary.timing_summary.utxo_key_bytes);
+        self.add_count("utxo_value_bytes", summary.timing_summary.utxo_value_bytes);
     }
 
     fn record_block(&mut self, height: u32, elapsed: Duration, shape: connect::BlockShapeSummary) {
@@ -884,6 +922,9 @@ impl PipelineTiming {
             "vin_count": shape.vin_count,
             "vout_count": shape.vout_count,
             "script_input_count": shape.script_input_count,
+            "same_block_spends": shape.same_block_spends,
+            "created_utxos": shape.created_utxos,
+            "spent_external": shape.spent_external,
             "input_shape_counts": shape.input_shape_counts,
             "spent_prevout_script_types": shape.spent_prevout_script_types,
             "output_script_types": shape.output_script_types,
@@ -931,6 +972,8 @@ impl PipelineTiming {
             "undo_put_prepare",
             "metadata_put_prepare",
             "rocksdb_write",
+            "prevout_multi_get_call",
+            "prevout_utxo_decode",
         ] {
             doc.insert(
                 stage.into(),
@@ -952,6 +995,42 @@ impl PipelineTiming {
                     })
                     .collect(),
             ),
+        );
+        for count in [
+            "script_threads",
+            "script_jobs",
+            "runner_batches",
+            "script_wall_ms",
+            "script_worker_cpu_ms",
+            "utxo_lookup_count",
+            "same_block_spends",
+            "created_utxos",
+            "spent_external",
+            "utxo_key_bytes",
+            "utxo_value_bytes",
+        ] {
+            doc.insert(
+                count.into(),
+                ((*self.counts.get(count).unwrap_or(&0)) as i64).into(),
+            );
+        }
+        doc.insert(
+            "prevout_multi_get_call".into(),
+            (stage_totals
+                .get("prevout_multi_get_call")
+                .copied()
+                .unwrap_or_default()
+                .as_millis() as i64)
+                .into(),
+        );
+        doc.insert(
+            "prevout_utxo_decode_ms".into(),
+            (stage_totals
+                .get("prevout_utxo_decode")
+                .copied()
+                .unwrap_or_default()
+                .as_millis() as i64)
+                .into(),
         );
         doc.insert("slow_blocks".into(), Value::Array(self.slow_blocks.clone()));
         Value::Object(doc)

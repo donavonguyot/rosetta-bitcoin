@@ -108,6 +108,54 @@ pub struct VerifyInputOptions {
     pub spent_prevouts: Vec<SpentPrevout>,
 }
 
+#[derive(Clone, Debug)]
+pub struct SighashCache {
+    bip143_hash_prevouts: [u8; 32],
+    bip143_hash_sequence: [u8; 32],
+    bip143_hash_outputs: [u8; 32],
+    bip143_single_outputs: Vec<[u8; 32]>,
+    tap_hash_prevouts: [u8; 32],
+    tap_hash_amounts: [u8; 32],
+    tap_hash_script_pubkeys: [u8; 32],
+    tap_hash_sequences: [u8; 32],
+    tap_hash_outputs: [u8; 32],
+    tap_single_outputs: Vec<[u8; 32]>,
+    legacy_serialized_outputs: Vec<Vec<u8>>,
+    legacy_all_outputs: Vec<u8>,
+}
+
+impl SighashCache {
+    pub fn new(transaction: &Transaction, spent_prevouts: &[SpentPrevout]) -> Result<Self> {
+        ensure!(
+            spent_prevouts.len() == transaction.inputs.len(),
+            "spent_prevouts length mismatch"
+        );
+        let legacy_serialized_outputs = transaction
+            .outputs
+            .iter()
+            .map(tx::serialize_txout)
+            .collect::<Vec<_>>();
+        let mut legacy_all_outputs = Vec::new();
+        for output in &legacy_serialized_outputs {
+            legacy_all_outputs.extend_from_slice(output);
+        }
+        Ok(Self {
+            bip143_hash_prevouts: bip143_hash_prevouts(transaction),
+            bip143_hash_sequence: bip143_hash_sequence(transaction),
+            bip143_hash_outputs: bip143_hash_outputs(transaction),
+            bip143_single_outputs: bip143_single_outputs(transaction),
+            tap_hash_prevouts: sha_prevouts(transaction),
+            tap_hash_amounts: sha_amounts(spent_prevouts),
+            tap_hash_script_pubkeys: sha_script_pubkeys(spent_prevouts),
+            tap_hash_sequences: sha_sequences(transaction),
+            tap_hash_outputs: sha_outputs_all(transaction),
+            tap_single_outputs: tap_single_outputs(transaction),
+            legacy_serialized_outputs,
+            legacy_all_outputs,
+        })
+    }
+}
+
 pub fn verify_transaction_input(
     transaction: &Transaction,
     input_index: usize,
@@ -128,6 +176,24 @@ pub fn verify_transaction_input_borrowed(
     script_pubkey: &[u8],
     amount: i64,
     spent_prevouts: &[SpentPrevout],
+) -> Result<()> {
+    verify_transaction_input_borrowed_with_cache(
+        transaction,
+        input_index,
+        script_pubkey,
+        amount,
+        spent_prevouts,
+        None,
+    )
+}
+
+pub fn verify_transaction_input_borrowed_with_cache(
+    transaction: &Transaction,
+    input_index: usize,
+    script_pubkey: &[u8],
+    amount: i64,
+    spent_prevouts: &[SpentPrevout],
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<()> {
     ensure!(
         input_index < transaction.inputs.len(),
@@ -163,6 +229,7 @@ pub fn verify_transaction_input_borrowed(
             amount,
             &witness,
             spent_prevouts,
+            sighash_cache,
         )?,
         "script verification failed for input {input_index}"
     );
@@ -177,6 +244,7 @@ fn verify_script(
     amount: i64,
     witness: &[Vec<u8>],
     spent_prevouts: &[SpentPrevout],
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<bool> {
     if is_p2tr(script_pubkey) {
         return verify_taproot(
@@ -186,6 +254,7 @@ fn verify_script(
             transaction,
             input_index,
             spent_prevouts,
+            sighash_cache,
         );
     }
     if is_p2wpkh(script_pubkey) {
@@ -196,6 +265,7 @@ fn verify_script(
             input_index,
             amount,
             witness,
+            sighash_cache,
         );
     }
     if is_p2wsh(script_pubkey) {
@@ -206,6 +276,7 @@ fn verify_script(
             input_index,
             amount,
             witness,
+            sighash_cache,
         );
     }
     if is_p2sh(script_pubkey) {
@@ -216,6 +287,7 @@ fn verify_script(
             input_index,
             amount,
             witness,
+            sighash_cache,
         );
     }
     let context = EvalContext {
@@ -225,6 +297,7 @@ fn verify_script(
         code_separator_offset: 0,
         amount,
         witness: false,
+        sighash_cache,
     };
     if is_p2pk(script_pubkey) {
         if !witness.is_empty() {
@@ -264,6 +337,7 @@ fn verify_p2sh(
     input_index: usize,
     amount: i64,
     witness: &[Vec<u8>],
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<bool> {
     let pushes = parse_push_only(script_sig)?;
     if pushes.is_empty() || pushes[pushes.len() - 1].len() > MAX_SCRIPT_ELEMENT_SIZE {
@@ -277,6 +351,7 @@ fn verify_p2sh(
         code_separator_offset: 0,
         amount,
         witness: false,
+        sighash_cache,
     };
     let mut stack_sig = Stack::default();
     evaluate_script(script_sig, &mut stack_sig, context.clone())?;
@@ -290,10 +365,25 @@ fn verify_p2sh(
         return Ok(false);
     }
     if is_p2wpkh(&redeem) {
-        return verify_p2wpkh_witness(&redeem, transaction, input_index, amount, witness);
+        return verify_p2wpkh_witness(
+            &redeem,
+            transaction,
+            input_index,
+            amount,
+            witness,
+            sighash_cache,
+        );
     }
     if is_p2wsh(&redeem) {
-        return verify_p2wsh_witness(&redeem[2..], transaction, input_index, amount, witness, 1);
+        return verify_p2wsh_witness(
+            &redeem[2..],
+            transaction,
+            input_index,
+            amount,
+            witness,
+            1,
+            sighash_cache,
+        );
     }
     let mut inner = Stack::default();
     let snap = stack_sig.snapshot();
@@ -307,6 +397,7 @@ fn verify_p2sh(
         code_separator_offset: 0,
         amount,
         witness: false,
+        sighash_cache,
     };
     evaluate_script(&redeem, &mut inner, inner_context)?;
     Ok(terminal_relaxed(&inner))
@@ -319,11 +410,19 @@ fn verify_p2wpkh(
     input_index: usize,
     amount: i64,
     witness: &[Vec<u8>],
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<bool> {
     if !script_sig.is_empty() {
         return Ok(false);
     }
-    verify_p2wpkh_witness(script_pubkey, transaction, input_index, amount, witness)
+    verify_p2wpkh_witness(
+        script_pubkey,
+        transaction,
+        input_index,
+        amount,
+        witness,
+        sighash_cache,
+    )
 }
 
 fn verify_p2wpkh_witness(
@@ -332,6 +431,7 @@ fn verify_p2wpkh_witness(
     input_index: usize,
     amount: i64,
     witness: &[Vec<u8>],
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<bool> {
     if witness.len() != 2 {
         return Ok(false);
@@ -347,6 +447,7 @@ fn verify_p2wpkh_witness(
         code_separator_offset: 0,
         amount,
         witness: true,
+        sighash_cache,
     };
     evaluate_script(&script_code, &mut stack, context)?;
     Ok(terminal_strict(&stack))
@@ -359,6 +460,7 @@ fn verify_p2wsh(
     input_index: usize,
     amount: i64,
     witness: &[Vec<u8>],
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<bool> {
     if !script_sig.is_empty() {
         return Ok(false);
@@ -370,6 +472,7 @@ fn verify_p2wsh(
         amount,
         witness,
         1,
+        sighash_cache,
     )
 }
 
@@ -380,6 +483,7 @@ fn verify_p2wsh_witness(
     amount: i64,
     witness: &[Vec<u8>],
     min_items: usize,
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<bool> {
     if witness.len() < min_items {
         return Ok(false);
@@ -402,6 +506,7 @@ fn verify_p2wsh_witness(
         code_separator_offset: 0,
         amount,
         witness: true,
+        sighash_cache,
     };
     evaluate_script(witness_script, &mut stack, context)?;
     Ok(terminal_strict(&stack))
@@ -415,6 +520,7 @@ struct EvalContext<'a> {
     code_separator_offset: usize,
     amount: i64,
     witness: bool,
+    sighash_cache: Option<&'a SighashCache>,
 }
 
 impl EvalContext<'_> {
@@ -748,19 +854,21 @@ fn check_ecdsa_signature(context: &EvalContext<'_>, signature: &[u8], pubkey: &[
     let sighash_type = signature[signature.len() - 1];
     let sig_der = &signature[..signature.len() - 1];
     let digest = if context.witness {
-        bip143_sighash(
+        bip143_sighash_with_cache(
             context.tx,
             context.input_index,
             context.effective_script_code(),
             context.amount,
             sighash_type,
+            context.sighash_cache,
         )
     } else {
-        legacy_sighash(
+        legacy_sighash_with_cache(
             context.tx,
             context.input_index,
             context.effective_script_code(),
             sighash_type,
+            context.sighash_cache,
         )
     };
     if let Ok(digest) = digest {
@@ -778,11 +886,12 @@ fn check_ecdsa_signature(context: &EvalContext<'_>, signature: &[u8], pubkey: &[
         ];
         for start in starts {
             if start < context.script_code.len() {
-                if let Ok(digest) = legacy_sighash(
+                if let Ok(digest) = legacy_sighash_with_cache(
                     context.tx,
                     context.input_index,
                     &context.script_code[start..],
                     sighash_type,
+                    context.sighash_cache,
                 ) {
                     if verify_ecdsa(pubkey, &digest, sig_der) {
                         return true;
@@ -792,9 +901,13 @@ fn check_ecdsa_signature(context: &EvalContext<'_>, signature: &[u8], pubkey: &[
         }
         if let Some(tail) = trailing_compressed_pubkey(&context.script_code) {
             let script_code = p2pkh_script_code(&hash160(&tail));
-            if let Ok(digest) =
-                legacy_sighash(context.tx, context.input_index, &script_code, sighash_type)
-            {
+            if let Ok(digest) = legacy_sighash_with_cache(
+                context.tx,
+                context.input_index,
+                &script_code,
+                sighash_type,
+                context.sighash_cache,
+            ) {
                 return verify_ecdsa(&tail, &digest, sig_der);
             }
         }
@@ -1268,11 +1381,22 @@ fn trailing_compressed_pubkey(script_code: &[u8]) -> Option<Vec<u8>> {
     Some(pk.to_vec())
 }
 
+#[allow(dead_code)]
 pub fn legacy_sighash(
     transaction: &Transaction,
     input_index: usize,
     script_code: &[u8],
     sighash_type: u8,
+) -> Result<[u8; 32]> {
+    legacy_sighash_with_cache(transaction, input_index, script_code, sighash_type, None)
+}
+
+fn legacy_sighash_with_cache(
+    transaction: &Transaction,
+    input_index: usize,
+    script_code: &[u8],
+    sighash_type: u8,
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<[u8; 32]> {
     ensure!(
         input_index < transaction.inputs.len(),
@@ -1316,12 +1440,20 @@ pub fn legacy_sighash(
                     script_pubkey: Vec::new(),
                 }));
             }
-            payload.extend_from_slice(&tx::serialize_txout(&transaction.outputs[input_index]));
+            if let Some(cache) = sighash_cache {
+                payload.extend_from_slice(&cache.legacy_serialized_outputs[input_index]);
+            } else {
+                payload.extend_from_slice(&tx::serialize_txout(&transaction.outputs[input_index]));
+            }
         }
         _ => {
             payload.extend_from_slice(&tx::compact_size(transaction.outputs.len() as u64));
-            for output in &transaction.outputs {
-                payload.extend_from_slice(&tx::serialize_txout(output));
+            if let Some(cache) = sighash_cache {
+                payload.extend_from_slice(&cache.legacy_all_outputs);
+            } else {
+                for output in &transaction.outputs {
+                    payload.extend_from_slice(&tx::serialize_txout(output));
+                }
             }
         }
     }
@@ -1346,12 +1478,31 @@ fn legacy_input(input: &TxIn, script_code: &[u8], base_type: u8, signing: bool) 
     out
 }
 
+#[allow(dead_code)]
 pub fn bip143_sighash(
     transaction: &Transaction,
     input_index: usize,
     script_code: &[u8],
     amount: i64,
     sighash_type: u8,
+) -> Result<[u8; 32]> {
+    bip143_sighash_with_cache(
+        transaction,
+        input_index,
+        script_code,
+        amount,
+        sighash_type,
+        None,
+    )
+}
+
+fn bip143_sighash_with_cache(
+    transaction: &Transaction,
+    input_index: usize,
+    script_code: &[u8],
+    amount: i64,
+    sighash_type: u8,
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<[u8; 32]> {
     ensure!(
         input_index < transaction.inputs.len(),
@@ -1364,29 +1515,27 @@ pub fn bip143_sighash(
     let mut hash_sequence = zero;
     let mut hash_outputs = zero;
     if !anyone_can_pay {
-        let mut blob = Vec::new();
-        for input in &transaction.inputs {
-            blob.extend_from_slice(&tx::serialize_outpoint(&input.previous_output));
-        }
-        hash_prevouts = tx::double_sha(&blob);
+        hash_prevouts = sighash_cache
+            .map(|cache| cache.bip143_hash_prevouts)
+            .unwrap_or_else(|| bip143_hash_prevouts(transaction));
     }
     if !anyone_can_pay && base_type != 2 && base_type != 3 {
-        let mut blob = Vec::new();
-        for input in &transaction.inputs {
-            blob.extend_from_slice(&input.sequence.to_le_bytes());
-        }
-        hash_sequence = tx::double_sha(&blob);
+        hash_sequence = sighash_cache
+            .map(|cache| cache.bip143_hash_sequence)
+            .unwrap_or_else(|| bip143_hash_sequence(transaction));
     }
     if base_type == 3 {
         if input_index < transaction.outputs.len() {
-            hash_outputs = tx::double_sha(&tx::serialize_txout(&transaction.outputs[input_index]));
+            hash_outputs = sighash_cache
+                .map(|cache| cache.bip143_single_outputs[input_index])
+                .unwrap_or_else(|| {
+                    tx::double_sha(&tx::serialize_txout(&transaction.outputs[input_index]))
+                });
         }
     } else if base_type != 2 {
-        let mut blob = Vec::new();
-        for output in &transaction.outputs {
-            blob.extend_from_slice(&tx::serialize_txout(output));
-        }
-        hash_outputs = tx::double_sha(&blob);
+        hash_outputs = sighash_cache
+            .map(|cache| cache.bip143_hash_outputs)
+            .unwrap_or_else(|| bip143_hash_outputs(transaction));
     }
     let input = &transaction.inputs[input_index];
     let mut payload = Vec::new();
@@ -1404,6 +1553,38 @@ pub fn bip143_sighash(
     Ok(tx::double_sha(&payload))
 }
 
+fn bip143_hash_prevouts(transaction: &Transaction) -> [u8; 32] {
+    let mut blob = Vec::new();
+    for input in &transaction.inputs {
+        blob.extend_from_slice(&tx::serialize_outpoint(&input.previous_output));
+    }
+    tx::double_sha(&blob)
+}
+
+fn bip143_hash_sequence(transaction: &Transaction) -> [u8; 32] {
+    let mut blob = Vec::new();
+    for input in &transaction.inputs {
+        blob.extend_from_slice(&input.sequence.to_le_bytes());
+    }
+    tx::double_sha(&blob)
+}
+
+fn bip143_hash_outputs(transaction: &Transaction) -> [u8; 32] {
+    let mut blob = Vec::new();
+    for output in &transaction.outputs {
+        blob.extend_from_slice(&tx::serialize_txout(output));
+    }
+    tx::double_sha(&blob)
+}
+
+fn bip143_single_outputs(transaction: &Transaction) -> Vec<[u8; 32]> {
+    transaction
+        .outputs
+        .iter()
+        .map(|output| tx::double_sha(&tx::serialize_txout(output)))
+        .collect()
+}
+
 fn verify_taproot(
     script_pubkey: &[u8],
     script_sig: &[u8],
@@ -1411,6 +1592,7 @@ fn verify_taproot(
     transaction: &Transaction,
     input_index: usize,
     spent_prevouts: &[SpentPrevout],
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<bool> {
     if !script_sig.is_empty() || spent_prevouts.is_empty() || !is_p2tr(script_pubkey) {
         return Ok(false);
@@ -1431,6 +1613,7 @@ fn verify_taproot(
             input_index,
             spent_prevouts,
             &serialized_witness,
+            sighash_cache,
         );
     }
     if witness.len() != 1 {
@@ -1460,6 +1643,7 @@ fn verify_taproot(
             tapleaf_hash: None,
             code_separator_pos: u32::MAX,
         },
+        sighash_cache,
     )?;
     Ok(verify_schnorr(&script_pubkey[2..], &digest, sig64))
 }
@@ -1472,6 +1656,7 @@ fn verify_taproot_script_path(
     input_index: usize,
     spent_prevouts: &[SpentPrevout],
     serialized_witness: &[u8],
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<bool> {
     if spent_prevouts.len() != transaction.inputs.len() || witness.len() < 2 {
         return Ok(false);
@@ -1534,10 +1719,12 @@ fn verify_taproot_script_path(
         spent_prevouts,
         annex,
         &mut budget,
+        sighash_cache,
     )?;
     Ok(terminal_strict(&stack))
 }
 
+#[derive(Clone, Copy)]
 struct TaprootOptions<'a> {
     hash_type: u8,
     annex: Option<&'a [u8]>,
@@ -1551,6 +1738,7 @@ fn taproot_sighash(
     input_index: usize,
     spent_prevouts: &[SpentPrevout],
     opt: TaprootOptions<'_>,
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<[u8; 32]> {
     ensure!(
         spent_prevouts.len() == transaction.inputs.len(),
@@ -1575,13 +1763,24 @@ fn taproot_sighash(
     body.extend_from_slice(&(transaction.version as u32).to_le_bytes());
     body.extend_from_slice(&transaction.lock_time.to_le_bytes());
     if !anyone_can_pay {
-        body.extend_from_slice(&sha_prevouts(transaction));
-        body.extend_from_slice(&sha_amounts(spent_prevouts));
-        body.extend_from_slice(&sha_script_pubkeys(spent_prevouts));
-        body.extend_from_slice(&sha_sequences(transaction));
+        if let Some(cache) = sighash_cache {
+            body.extend_from_slice(&cache.tap_hash_prevouts);
+            body.extend_from_slice(&cache.tap_hash_amounts);
+            body.extend_from_slice(&cache.tap_hash_script_pubkeys);
+            body.extend_from_slice(&cache.tap_hash_sequences);
+        } else {
+            body.extend_from_slice(&sha_prevouts(transaction));
+            body.extend_from_slice(&sha_amounts(spent_prevouts));
+            body.extend_from_slice(&sha_script_pubkeys(spent_prevouts));
+            body.extend_from_slice(&sha_sequences(transaction));
+        }
     }
     if output_mode == TAPROOT_SIGHASH_ALL {
-        body.extend_from_slice(&sha_outputs_all(transaction));
+        if let Some(cache) = sighash_cache {
+            body.extend_from_slice(&cache.tap_hash_outputs);
+        } else {
+            body.extend_from_slice(&sha_outputs_all(transaction));
+        }
     } else if output_mode == TAPROOT_SIGHASH_SINGLE && input_index >= transaction.outputs.len() {
         bail!("SIGHASH_SINGLE without matching output");
     }
@@ -1608,9 +1807,13 @@ fn taproot_sighash(
         body.extend_from_slice(&sha256_bytes(&encoded));
     }
     if output_mode == TAPROOT_SIGHASH_SINGLE {
-        body.extend_from_slice(&sha256_bytes(&tx::serialize_txout(
-            &transaction.outputs[input_index],
-        )));
+        if let Some(cache) = sighash_cache {
+            body.extend_from_slice(&cache.tap_single_outputs[input_index]);
+        } else {
+            body.extend_from_slice(&sha256_bytes(&tx::serialize_txout(
+                &transaction.outputs[input_index],
+            )));
+        }
     }
     if opt.ext_flag == 1 {
         let leaf = opt
@@ -1664,6 +1867,14 @@ fn sha_outputs_all(transaction: &Transaction) -> [u8; 32] {
         data.extend_from_slice(&tx::serialize_txout(output));
     }
     sha256_bytes(&data)
+}
+
+fn tap_single_outputs(transaction: &Transaction) -> Vec<[u8; 32]> {
+    transaction
+        .outputs
+        .iter()
+        .map(|output| sha256_bytes(&tx::serialize_txout(output)))
+        .collect()
 }
 
 fn taproot_allowed_hash_type(hash_type: u8) -> bool {
@@ -1743,6 +1954,7 @@ fn evaluate_tapscript(
     spent_prevouts: &[SpentPrevout],
     annex: Option<&[u8]>,
     budget: &mut i32,
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<()> {
     let mut offset = 0usize;
     let mut vf_exec = Vec::<bool>::new();
@@ -1793,6 +2005,7 @@ fn evaluate_tapscript(
                 leaf,
                 code_sep,
                 budget,
+                sighash_cache,
             )?;
             offset += 1;
             continue;
@@ -1822,6 +2035,7 @@ fn evaluate_tapscript(
             code_separator_offset: 0,
             amount: spent_prevouts[input_index].amount,
             witness: true,
+            sighash_cache,
         };
         if op == OP_0 || (OP_1..=OP_16).contains(&op) || op == OP_1NEGATE || is_push_opcode(op) {
             if op == OP_0 {
@@ -1857,6 +2071,7 @@ fn eval_tap_sig_op(
     leaf: &[u8; 32],
     code_sep: u32,
     budget: &mut i32,
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<()> {
     if op == OP_CHECKSIG || op == OP_CHECKSIGVERIFY {
         let pubkey = stack.pop()?;
@@ -1871,6 +2086,7 @@ fn eval_tap_sig_op(
             leaf,
             code_sep,
             budget,
+            sighash_cache,
         )?;
         if op == OP_CHECKSIG {
             stack.push(&encode_op_n(valid as i64)?);
@@ -1897,6 +2113,7 @@ fn eval_tap_sig_op(
         leaf,
         code_sep,
         budget,
+        sighash_cache,
     )?;
     if valid {
         n += 1;
@@ -1916,6 +2133,7 @@ fn verify_tap_signature(
     leaf: &[u8; 32],
     code_sep: u32,
     budget: &mut i32,
+    sighash_cache: Option<&SighashCache>,
 ) -> Result<bool> {
     ensure!(!pubkey.is_empty(), "empty pubkey in tapscript");
     if !sig.is_empty() {
@@ -1948,6 +2166,7 @@ fn verify_tap_signature(
             tapleaf_hash: Some(leaf),
             code_separator_pos: code_sep,
         },
+        sighash_cache,
     )?;
     Ok(verify_schnorr(pubkey, &digest, sig64))
 }
@@ -1995,6 +2214,144 @@ fn taproot_tweak_pubkey_xonly(internal_xonly: &[u8], tweak32: &[u8; 32]) -> Opti
         Parity::Odd => 1,
     };
     Some((tweaked.serialize(), parity))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture_transaction() -> Transaction {
+        Transaction {
+            version: 2,
+            inputs: vec![
+                TxIn {
+                    previous_output: OutPoint {
+                        hash: [1; 32],
+                        index: 0,
+                    },
+                    script_sig: vec![0x51],
+                    sequence: 0xffff_fffe,
+                },
+                TxIn {
+                    previous_output: OutPoint {
+                        hash: [2; 32],
+                        index: 1,
+                    },
+                    script_sig: vec![0x51],
+                    sequence: 0xffff_fffd,
+                },
+            ],
+            outputs: vec![
+                TxOut {
+                    value: 4_900,
+                    script_pubkey: vec![OP_1],
+                },
+                TxOut {
+                    value: 5_800,
+                    script_pubkey: vec![OP_0],
+                },
+            ],
+            lock_time: 42,
+            witness: vec![vec![], vec![]],
+        }
+    }
+
+    fn fixture_prevouts() -> Vec<SpentPrevout> {
+        vec![
+            SpentPrevout {
+                amount: 5_000,
+                script_pubkey: vec![
+                    OP_1, 0x20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                ],
+            },
+            SpentPrevout {
+                amount: 6_000,
+                script_pubkey: vec![
+                    OP_0, 0x14, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                ],
+            },
+        ]
+    }
+
+    #[test]
+    fn cached_legacy_sighash_matches_uncached() {
+        let tx = fixture_transaction();
+        let prevouts = fixture_prevouts();
+        let cache = SighashCache::new(&tx, &prevouts).expect("cache");
+        for sighash_type in [1, 3, 0x81, 0x83] {
+            let uncached = legacy_sighash(&tx, 1, &[OP_DUP, OP_CHECKSIG], sighash_type)
+                .expect("uncached legacy");
+            let cached = legacy_sighash_with_cache(
+                &tx,
+                1,
+                &[OP_DUP, OP_CHECKSIG],
+                sighash_type,
+                Some(&cache),
+            )
+            .expect("cached legacy");
+            assert_eq!(cached, uncached);
+        }
+    }
+
+    #[test]
+    fn cached_bip143_sighash_matches_uncached() {
+        let tx = fixture_transaction();
+        let prevouts = fixture_prevouts();
+        let cache = SighashCache::new(&tx, &prevouts).expect("cache");
+        for sighash_type in [1, 2, 3, 0x81, 0x83] {
+            let uncached = bip143_sighash(&tx, 0, &[OP_DUP, OP_CHECKSIG], 5_000, sighash_type)
+                .expect("uncached bip143");
+            let cached = bip143_sighash_with_cache(
+                &tx,
+                0,
+                &[OP_DUP, OP_CHECKSIG],
+                5_000,
+                sighash_type,
+                Some(&cache),
+            )
+            .expect("cached bip143");
+            assert_eq!(cached, uncached);
+        }
+    }
+
+    #[test]
+    fn cached_taproot_key_path_and_tapscript_sighash_match_uncached() {
+        let tx = fixture_transaction();
+        let prevouts = fixture_prevouts();
+        let cache = SighashCache::new(&tx, &prevouts).expect("cache");
+        let leaf = tapleaf_hash(TAPROOT_LEAF_TAPSCRIPT, &[OP_1]);
+
+        for options in [
+            TaprootOptions {
+                hash_type: TAPROOT_SIGHASH_DEFAULT,
+                annex: None,
+                ext_flag: 0,
+                tapleaf_hash: None,
+                code_separator_pos: u32::MAX,
+            },
+            TaprootOptions {
+                hash_type: TAPROOT_SIGHASH_SINGLE,
+                annex: None,
+                ext_flag: 0,
+                tapleaf_hash: None,
+                code_separator_pos: u32::MAX,
+            },
+            TaprootOptions {
+                hash_type: 0x81,
+                annex: None,
+                ext_flag: 1,
+                tapleaf_hash: Some(&leaf),
+                code_separator_pos: 3,
+            },
+        ] {
+            let uncached =
+                taproot_sighash(&tx, 0, &prevouts, options, None).expect("uncached taproot");
+            let cached =
+                taproot_sighash(&tx, 0, &prevouts, options, Some(&cache)).expect("cached taproot");
+            assert_eq!(cached, uncached);
+        }
+    }
 }
 
 #[allow(dead_code)]
