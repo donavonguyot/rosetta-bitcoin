@@ -66,6 +66,7 @@ not need new coverage work unless explicitly reactivated.
 
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
+python3 Project/scripts/capture_test_coverage.py --db Project/project.db --all --dry-run
 python3 Project/scripts/report.py --db Project/project.db --section test-commands
 python3 Project/scripts/report.py --db Project/project.db --section test-coverage
 python3 Project/scripts/report.py --db Project/project.db --section critical-test-domains
@@ -89,11 +90,16 @@ details.
 
 ## Artifact Shapes
 
-Future compact testing artifacts may use:
+Compact testing artifacts use stable schema names:
 
-- `port.test_result.v1` for a command result.
-- `port.coverage_summary.v1` for coverage metrics.
-- `port.domain_coverage.v1` for explicit domain claims.
+- `port.test_result` for a command result.
+- `port.coverage_summary` for coverage metrics.
+- `port.domain_coverage` for explicit domain claims.
 
-Do not commit generated coverage artifacts by default. Curate them only when
-they support a current Project claim.
+Historical importer aliases may remain internal for old artifacts, but new
+docs, reports, and curated artifacts should use the stable names above.
+
+`Project/scripts/capture_test_coverage.py` writes curated test and coverage
+JSON under `Nodes/Shared/testing/results/` when run explicitly with `--run`.
+Dry-run is the default. The capture script does not inspect benchmark artifacts,
+validate benchmark telemetry, or enforce timing-bucket contracts.

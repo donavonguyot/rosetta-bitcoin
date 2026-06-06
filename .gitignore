@@ -12,6 +12,7 @@
 /Nodes/*/utxo-*/
 /Nodes/*/bitcoin-core-testnet4/
 /Nodes/*/.venv/
+/Nodes/*/.venv-*/
 /Nodes/*/venv/
 /Nodes/*/node_modules/
 /Nodes/*/dist/

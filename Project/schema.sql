@@ -1437,10 +1437,28 @@ commands AS (
     port,
     max(CASE WHEN command_key = 'test_unit' THEN supported ELSE 0 END) AS unit_supported,
     max(CASE WHEN command_key = 'test_unit' THEN command ELSE '' END) AS unit_command,
-    max(CASE WHEN command_key = 'test_coverage' THEN supported ELSE 0 END) AS coverage_supported,
-    max(CASE WHEN command_key = 'test_coverage' THEN command ELSE '' END) AS coverage_command
+    max(CASE WHEN command_key IN ('test_coverage', 'test_coverage_core') THEN supported ELSE 0 END) AS coverage_supported,
+    coalesce(
+      max(CASE WHEN command_key = 'test_coverage_core' AND supported = 1 THEN command END),
+      max(CASE WHEN command_key = 'test_coverage' AND supported = 1 THEN command END),
+      ''
+    ) AS coverage_command
   FROM test_commands
   GROUP BY port
+),
+coverage_runs AS (
+  SELECT port, command_key, result, captured_at
+  FROM (
+    SELECT
+      tr.*,
+      row_number() OVER (
+        PARTITION BY tr.port
+        ORDER BY tr.captured_at DESC, tr.command_key
+      ) AS rn
+    FROM latest_test_runs tr
+    WHERE tr.command_key IN ('test_coverage', 'test_coverage_core')
+  )
+  WHERE rn = 1
 ),
 domains AS (
   SELECT
@@ -1485,7 +1503,7 @@ SELECT
 FROM ports p
 LEFT JOIN commands c ON c.port = p.port
 LEFT JOIN latest_test_runs utr ON utr.port = p.port AND utr.command_key = 'test_unit'
-LEFT JOIN latest_test_runs ctr ON ctr.port = p.port AND ctr.command_key = 'test_coverage'
+LEFT JOIN coverage_runs ctr ON ctr.port = p.port
 LEFT JOIN latest_coverage_summaries lcs ON lcs.port = p.port
 LEFT JOIN domains d ON d.port = p.port;
 

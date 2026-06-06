@@ -397,6 +397,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db", default="Project/project.db", help="Project mission-control DB path")
     parser.add_argument("--rebuild", action="store_true", help="Delete and rebuild the DB before import")
     parser.add_argument("--results-dir", default="Nodes/Shared/conformance/results", help="Canonical result JSON directory")
+    parser.add_argument("--testing-results-dir", default="Nodes/Shared/testing/results", help="Curated test and coverage result JSON directory")
     parser.add_argument("--current-evidence", default="Nodes/Shared/conformance/current_evidence.json", help="Curated current evidence index")
     parser.add_argument("--docker-dir", default="Nodes/Shared/docker/ports", help="Docker manifest directory")
     parser.add_argument("--status-json", action="append", default=[], help="Additional exported status JSON path")
@@ -621,7 +622,14 @@ def target_label_for_payload(payload: dict[str, Any]) -> str:
 def artifact_kind(path: Path, payload: dict[str, Any]) -> str:
     if path.match("*.docker.json") or "peer_modes" in payload and "proof_artifacts" in payload:
         return "docker_manifest"
-    if text(payload.get("schema")) in {"port.test_result.v1", "port.coverage_summary.v1", "port.domain_coverage.v1"}:
+    if text(payload.get("schema")) in {
+        "port.test_result",
+        "port.coverage_summary",
+        "port.domain_coverage",
+        "port.test_result.v1",
+        "port.coverage_summary.v1",
+        "port.domain_coverage.v1",
+    }:
         return text(payload.get("schema"))
     if isinstance(payload.get("fixtures"), list):
         return "script_corpus_result"
@@ -1964,7 +1972,7 @@ def import_test_rows(connection: sqlite3.Connection, artifact: Artifact, payload
         ).fetchone()
         port = text(mapped[0]) if mapped else "unknown"
 
-    if schema == "port.test_result.v1":
+    if schema in {"port.test_result", "port.test_result.v1"}:
         command_key = text(payload.get("command_key") or payload.get("test_command_key") or "test_unit")
         test_run_id = stable_id("test_run", artifact.artifact_id, command_key)
         connection.execute(
@@ -2012,9 +2020,52 @@ def import_test_rows(connection: sqlite3.Connection, artifact: Artifact, payload
         )
         return
 
-    if schema == "port.coverage_summary.v1":
+    if schema in {"port.coverage_summary", "port.coverage_summary.v1"}:
         coverage_id = stable_id("coverage", artifact.artifact_id)
+        command_key = text(payload.get("command_key") or "test_coverage")
+        test_run_id = stable_id("test_run", artifact.artifact_id, command_key)
         metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else payload
+        connection.execute(
+            """
+            INSERT INTO test_runs(
+              test_run_id, port, node_id, command_key, result, exit_code,
+              captured_at, duration_ms, summary_json, source_artifact_id
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(test_run_id) DO UPDATE SET
+              port = excluded.port,
+              node_id = excluded.node_id,
+              command_key = excluded.command_key,
+              result = excluded.result,
+              exit_code = excluded.exit_code,
+              captured_at = excluded.captured_at,
+              duration_ms = excluded.duration_ms,
+              summary_json = excluded.summary_json
+            """,
+            (
+                test_run_id,
+                port,
+                node_id,
+                command_key,
+                text(payload.get("result")),
+                integer(payload.get("exit_code"), None),
+                artifact.captured_at,
+                integer(payload.get("duration_ms") or payload.get("elapsed_ms"), None),
+                pretty_json(
+                    {
+                        key: payload[key]
+                        for key in (
+                            "summary",
+                            "tool",
+                            "command",
+                            "command_key",
+                            "metrics",
+                        )
+                        if key in payload
+                    }
+                ),
+                artifact.artifact_id,
+            ),
+        )
         connection.execute(
             """
             INSERT INTO coverage_summaries(
@@ -2051,7 +2102,7 @@ def import_test_rows(connection: sqlite3.Connection, artifact: Artifact, payload
         )
         return
 
-    if schema == "port.domain_coverage.v1":
+    if schema in {"port.domain_coverage", "port.domain_coverage.v1"}:
         claims = payload.get("domains")
         if not isinstance(claims, list):
             claims = payload.get("claims")
@@ -2342,6 +2393,7 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         "consensus_rules": 0,
         "port_commands": 0,
         "test_commands": 0,
+        "testing_json": 0,
     }
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -2377,6 +2429,12 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         for path in result_paths:
             import_json_artifact(connection, root, path, read_json(path))
             counts["result_json"] += 1
+
+        testing_results_dir = root / args.testing_results_dir
+        if testing_results_dir.exists():
+            for path in iter_default_json_files(root, testing_results_dir, args.tracked_only):
+                import_json_artifact(connection, root, path, read_json(path))
+                counts["testing_json"] += 1
 
         default_status_paths = default_status_jsons(root)
         if args.tracked_only:

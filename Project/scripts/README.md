@@ -202,6 +202,11 @@ script-corpus proof, 5k baseline posture, and staged sync evidence.
 Preflight test and coverage visibility without running every port suite:
 
 ```bash
+python3 Project/scripts/capture_test_coverage.py \
+  --db Project/project.db \
+  --all \
+  --dry-run
+
 python3 Project/scripts/preflight_test_coverage.py \
   --db Project/project.db \
   --all \
@@ -216,6 +221,25 @@ python3 Project/scripts/preflight_test_coverage.py \
 `baseline-par` checks active-contender unit-test command visibility. Coverage
 metrics remain report-only until the first inventory shows comparable data worth
 ratcheting.
+
+Capture compact product-test telemetry only when you actually want to run port
+suites:
+
+```bash
+python3 Project/scripts/capture_test_coverage.py \
+  --db Project/project.db \
+  --port cpp \
+  --run
+```
+
+The capture script is dry-run by default. It records `test_unit` results for
+active contender and active-development ports, records coverage only when
+Project already has a real supported coverage command, and writes curated JSON
+under `Nodes/Shared/testing/results/`. Baseline-retired ports remain visible in
+dry-run output and can be captured explicitly with `--port`, but `--all --run`
+does not force new work onto retired ports. These artifacts use stable schemas:
+`port.test_result`, `port.coverage_summary`, and `port.domain_coverage`.
+Benchmark gate correctness stays in benchmark preflights, not port unit tests.
 
 Some ports expose optional lane commands. C++ currently reports
 `test_core_regression`, `test_wire_codec`, `test_runtime_smoke`, and
