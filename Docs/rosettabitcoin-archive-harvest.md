@@ -39,7 +39,9 @@ Project, Shared, and artifact-retention rules.
 
 ## Next Stage Queue
 
-1. Create an archive manifest/checksum snapshot for the cleaned old workspace.
+1. Archive manifest/checksum snapshot: completed in
+   `Docs/rosettabitcoin-archive-snapshot.md` and
+   `Docs/rosettabitcoin-archive-checksums.sha256`.
 2. Run an IL value audit that maps old IL-derived ideas to current RB fixtures,
    docs, blocker facts, or rejected assumptions.
 3. Design a Core/btcg comparison lane as a separate witness/reference surface,
