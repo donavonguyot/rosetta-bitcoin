@@ -46,6 +46,11 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
 - `rosettabitcoin-archive-harvest.md` - Stage 1 boundary for harvesting the
   retired RosettaBitcoin workspace without importing old authority or bulk
   artifacts.
+- `rosettabitcoin-il-value-audit.md` - Stage 3 triage of the retired IL corpus;
+  records promotion candidates without making IL a current authority surface.
+- `core-btcg-comparison-lane.md` - Stage 4 boundary for using Core and future
+  btcg evidence as comparison/witness material without treating it as port
+  proof.
 - `consensus-blockers-testnet4.md` - shared blocker provenance and fixture anchors.
 - `script-semantics-gotchas.md` - consensus/script traps learned from blockers.
 - `blocker-ledger.md` - blocker record shape and classification rules.
@@ -83,4 +88,8 @@ facts into `Nodes/Shared/` contracts.
 Harvest plans follow the same rule: once a legacy-workspace harvest is complete,
 keep only the durable RB-native facts in canonical docs, Project evidence,
 Shared contracts, or compact artifacts. Do not let old archive maps become a
-parallel authority system.
+parallel authority system. IL audit records are triage notes only; promoted
+facts must land in canonical docs, Shared contracts, fixtures, or compact
+evidence before they can influence current claims. Comparison-lane docs calibrate
+public claims, but they do not create a parallel authority system or replace
+port-owned evidence.

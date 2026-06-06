@@ -42,10 +42,13 @@ Project, Shared, and artifact-retention rules.
 1. Archive manifest/checksum snapshot: completed in
    `Docs/rosettabitcoin-archive-snapshot.md` and
    `Docs/rosettabitcoin-archive-checksums.sha256`.
-2. Run an IL value audit that maps old IL-derived ideas to current RB fixtures,
-   docs, blocker facts, or rejected assumptions.
-3. Design a Core/btcg comparison lane as a separate witness/reference surface,
-   not as an RB port and not as a validity oracle.
+2. IL value audit: completed in
+   `Docs/rosettabitcoin-il-value-audit.md`. Old IL is historical extraction
+   material; useful ideas must still be rewritten into RB-native docs,
+   fixtures, contracts, or compact proof artifacts before use.
+3. Core/btcg comparison lane: completed in
+   `Docs/core-btcg-comparison-lane.md`. Reference and witness surfaces may
+   calibrate claims, but they are not RB ports and not validity oracles.
 4. Prepare the rename/open-source pass: repository name, README posture,
    responsible-disclosure language, ignored artifacts, and public archive
    boundary.

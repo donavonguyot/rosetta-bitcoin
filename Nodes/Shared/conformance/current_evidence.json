@@ -31,9 +31,9 @@
       "port": "cpp",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/cpp_docker_supporting_50k_benchmark_rust_shape_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/cpp_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current C++ 50k evidence; Project classifies remaining telemetry gaps."
+      "notes": "Current comparable cpp shakedown_50k proof accepted by campaign shakedown_50k_20260606_135735."
     },
     {
       "port": "cpp",
@@ -71,9 +71,9 @@
       "port": "csharp",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/csharp_docker_supporting_50k_benchmark_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/csharp_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current C# 50k evidence; Project classifies remaining telemetry gaps."
+      "notes": "Current comparable csharp shakedown_50k proof accepted by campaign shakedown_50k_20260606_140824."
     },
     {
       "port": "elixir",
@@ -127,9 +127,9 @@
       "port": "go",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/go_docker_supporting_50k_benchmark_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/go_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current Go 50k evidence; Project classifies remaining telemetry gaps."
+      "notes": "Current comparable go shakedown_50k proof accepted by campaign shakedown_50k_20260606_140127."
     },
     {
       "port": "go",
@@ -167,9 +167,9 @@
       "port": "java",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/java_docker_supporting_50k_benchmark_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/java_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current Java 50k evidence; Project classifies remaining telemetry gaps."
+      "notes": "Current comparable java shakedown_50k proof accepted by campaign shakedown_50k_20260606_141141."
     },
     {
       "port": "java",
@@ -209,7 +209,7 @@
       "gate_id": "shakedown_50k",
       "path": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current OCaml strict Docker/local Reference P2P 50k shakedown proof with live telemetry."
+      "notes": "Current comparable ocaml shakedown_50k proof accepted by campaign shakedown_50k_20260606_141452."
     },
     {
       "port": "python",
@@ -263,9 +263,9 @@
       "port": "rust",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/rust_docker_supporting_50k_benchmark_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/rust_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current Rust 50k evidence; Project classifies remaining telemetry gap."
+      "notes": "Current comparable rust shakedown_50k proof accepted by campaign shakedown_50k_20260606_135342."
     },
     {
       "port": "rust",
@@ -303,9 +303,9 @@
       "port": "swift",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/swift_docker_supporting_50k_benchmark_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/swift_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable Swift 50k proof."
+      "notes": "Current comparable swift shakedown_50k proof accepted by campaign shakedown_50k_20260606_140526."
     },
     {
       "port": "typescript",
@@ -359,9 +359,9 @@
       "port": "zig",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_perf_opt_50k_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current Zig 50k shakedown proof with script scheduler/cache telemetry. Zig remains active development pending explicit lifecycle promotion."
+      "notes": "Current comparable zig shakedown_50k proof accepted by campaign shakedown_50k_20260606_135735."
     }
   ]
 }

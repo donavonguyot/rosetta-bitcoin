@@ -112,6 +112,7 @@ func main() {
 		} else {
 			syncSummary, connectSummary, err = runPipeline(*datadir, *target, *rpcURL, *rpcUser, *rpcPassword, *progress)
 		}
+		normalizeTimingSummary(&connectSummary.TimingSummary)
 		doc["sync_summary"] = syncSummary
 		doc["prefetch_depth"] = prefetchDepth()
 		doc["timing_summary"] = connectSummary.TimingSummary
@@ -518,6 +519,7 @@ func maxInt(left, right int) int {
 }
 
 func timingBuckets(timing connect.TimingSummary) map[string]int64 {
+	normalizeTimingSummary(&timing)
 	buckets := map[string]int64{}
 	for _, stage := range []string{
 		"p2p_fetch",
@@ -547,6 +549,28 @@ func timingBuckets(timing connect.TimingSummary) map[string]int64 {
 		buckets["utxo_load"] = buckets["prevout_batch_load"]
 	}
 	return buckets
+}
+
+func normalizeTimingSummary(timing *connect.TimingSummary) {
+	if timing.StageTotalsMillis == nil {
+		timing.StageTotalsMillis = map[string]int64{}
+	}
+	for _, stage := range []string{
+		"p2p_fetch",
+		"block_parse_validate",
+		"utxo_load",
+		"script_verify",
+		"utxo_apply",
+		"commit",
+		"block_connect_store_commit",
+	} {
+		if _, ok := timing.StageTotalsMillis[stage]; !ok {
+			timing.StageTotalsMillis[stage] = 0
+		}
+	}
+	if timing.StageTotalsMillis["utxo_load"] == 0 && timing.StageTotalsMillis["prevout_batch_load"] > 0 {
+		timing.StageTotalsMillis["utxo_load"] = timing.StageTotalsMillis["prevout_batch_load"]
+	}
 }
 
 func prefetchDepth() int {

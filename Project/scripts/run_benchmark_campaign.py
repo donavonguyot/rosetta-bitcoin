@@ -414,19 +414,15 @@ def run_shell(command: str, log_path: Path) -> int:
 
 
 def stage_totals(payload: dict[str, Any]) -> dict[str, float]:
-    for key in ("timing_summary", "sync_timing"):
+    merged: dict[str, float] = {}
+    for key in ("timing_summary", "sync_timing", "pipeline_timing_summary", "canonical_timing_summary"):
         candidate = payload.get(key)
         if isinstance(candidate, dict):
             totals = candidate.get("stage_totals_ms")
             if isinstance(totals, dict):
-                return {k: num(v) for k, v in totals.items()}
-    pipeline = payload.get("pipeline_timing_summary")
-    if isinstance(pipeline, dict):
-        totals = pipeline.get("stage_totals_ms")
-        if isinstance(totals, dict):
-            return {k: num(v) for k, v in totals.items()}
-        return {k: num(v) for k, v in pipeline.items() if isinstance(v, (int, float))}
-    return {}
+                merged.update({k: num(v) for k, v in totals.items()})
+            merged.update({k: num(v) for k, v in candidate.items() if isinstance(v, (int, float))})
+    return merged
 
 
 def total_ms(payload: dict[str, Any]) -> float | None:
@@ -832,6 +828,28 @@ def self_test() -> int:
         }
         artifact = tmp_path / "rust_candidate.json"
         errors, warnings = validate_artifact(artifact, payload, gate, "rust", "bitcoin-core-testnet4:48333")
+        assert not errors, errors
+        compatibility_payload = dict(payload)
+        compatibility_payload["timing_summary"] = {
+            "total_ms": 100_000,
+            "stage_totals_ms": {
+                "utxo_load": 1,
+                "script_verify": 1,
+                "utxo_apply": 1,
+                "commit": 1,
+                "block_connect_store_commit": 1,
+            },
+        }
+        compatibility_payload["pipeline_timing_summary"] = {
+            "stage_totals_ms": {bucket: 1 for bucket in REQUIRED_BUCKETS},
+        }
+        errors, _ = validate_artifact(
+            artifact,
+            compatibility_payload,
+            gate,
+            "rust",
+            "bitcoin-core-testnet4:48333",
+        )
         assert not errors, errors
         assert classify_anomaly(payload, 30_000)[0] == "hard"
         payload["timing_summary"]["total_ms"] = 42_000

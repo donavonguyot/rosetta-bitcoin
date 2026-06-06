@@ -30,8 +30,8 @@ enum LocalReferenceProof {
         let benchmarkKind = benchmarkKindFor(target: target, label: targetLabel)
 
         do {
-            let fetchStart = DispatchTime.now().uptimeNanoseconds
             blocksFetched = try P2PFetcher.fetch(peer: peer, target: target, startHeight: startHeight, prefetchDepth: prefetchDepth) { block in
+                timing.addMicros("p2p_fetch", block.fetchMicros)
                 let connectStart = DispatchTime.now().uptimeNanoseconds
                 let result = try BlockConnector.connect(raw: block.raw, height: block.height, state: rollingState, store: store, timing: &timing, scriptRunner: scriptRunner)
                 let connected = result.connected
@@ -58,7 +58,6 @@ enum LocalReferenceProof {
                 }
                 return connected
             }
-            timing.addElapsed("p2p_fetch", since: fetchStart)
         } catch {
             failures.append(error.localizedDescription)
             try? store.setBlocker(height: blocksConnected, failure: error.localizedDescription)

@@ -53,6 +53,16 @@ def timing_summary(status: dict) -> dict:
                 "max_ms": max(0, round(max_value / 1000)) if "micro" in unit else max_value,
             }
         )
+    for stage in (
+        "p2p_fetch",
+        "block_parse_validate",
+        "utxo_load",
+        "script_verify",
+        "utxo_apply",
+        "commit",
+        "block_connect_store_commit",
+    ):
+        totals.setdefault(stage, 0)
     return {
         "stage_totals_ms": totals,
         "total_ms": totals.get("block_connect_store_commit", sum(totals.values())),

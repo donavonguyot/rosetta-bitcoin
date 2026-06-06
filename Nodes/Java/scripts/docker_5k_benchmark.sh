@@ -233,12 +233,29 @@ passed = not failures
 captured_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 if not stage_totals:
     stage_totals = {"block_connect_store_commit": elapsed_ms}
+for stage in (
+    "p2p_fetch",
+    "block_parse_validate",
+    "utxo_load",
+    "script_verify",
+    "utxo_apply",
+    "commit",
+    "block_connect_store_commit",
+):
+    stage_totals.setdefault(stage, 0)
+
+timing_summary = {
+    "total_ms": elapsed_ms,
+    "stage_totals_ms": stage_totals,
+    "slow_blocks": slow_blocks,
+}
 
 doc = {
     "benchmark_contract_version": 1,
     "benchmark_kind": supporting_p2p_kind(target),
     "benchmark_gate": supporting_gate(target),
     "benchmark_lane": supporting_p2p_kind(target),
+    "telemetry_schema": "benchmark.telemetry_tick.v1",
     "utxo_accounting_policy": "core_spendable_v1",
     "target_label": target_label(target),
     "target_height": target,
@@ -288,11 +305,8 @@ doc = {
     "rocksdb_wal_disabled": False,
     "fresh_state": True,
     "resume_supported": True,
-    "timing_summary": {
-        "total_ms": elapsed_ms,
-        "stage_totals_ms": stage_totals,
-        "slow_blocks": slow_blocks,
-    },
+    "timing_summary": timing_summary,
+    "pipeline_timing_summary": timing_summary,
     "elapsed_ms": elapsed_ms,
     "captured_at": captured_at,
     "updated_at": captured_at,

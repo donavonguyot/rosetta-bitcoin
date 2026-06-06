@@ -10,6 +10,7 @@ struct P2PBlock {
     let height: Int
     let hash: String
     let raw: Data
+    let fetchMicros: Int64
 }
 
 final class BlockQueue: @unchecked Sendable {
@@ -89,7 +90,11 @@ final class TCPConnection: @unchecked Sendable {
             let candidate = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
             if candidate >= 0 {
                 var noDelay: Int32 = 1
+#if os(Linux)
+                setsockopt(candidate, Int32(IPPROTO_TCP), TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
+#else
                 setsockopt(candidate, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
+#endif
                 if connect(candidate, info.pointee.ai_addr, info.pointee.ai_addrlen) == 0 {
                     connected = candidate
                     break
@@ -308,10 +313,13 @@ enum P2PFetcher {
                 while height <= target {
                     let end = min(target, height + depth - 1)
                     let batchHashes = Array(hashes[height...end])
+                    let fetchStart = DispatchTime.now().uptimeNanoseconds
                     let blocks = try client.requestBlocks(hashes: batchHashes)
+                    let fetchMicros = Int64((DispatchTime.now().uptimeNanoseconds - fetchStart) / 1_000)
+                    let perBlockFetchMicros = blocks.isEmpty ? 0 : fetchMicros / Int64(blocks.count)
                     for raw in blocks {
                         let hash = SHA256.doubleHash(raw.subdata(in: 0..<80)).reversedHex
-                        queue.push(P2PBlock(height: height, hash: hash, raw: raw))
+                        queue.push(P2PBlock(height: height, hash: hash, raw: raw, fetchMicros: perBlockFetchMicros))
                         height += 1
                     }
                 }

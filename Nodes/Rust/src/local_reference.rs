@@ -163,6 +163,16 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
         "pipeline_timing_summary".into(),
         pipeline_timing_summary.clone(),
     );
+    if let Value::Object(pipeline) = &pipeline_timing_summary {
+        doc.insert(
+            "telemetry_schema".into(),
+            pipeline
+                .get("telemetry_schema")
+                .cloned()
+                .unwrap_or_else(|| Value::String("benchmark.telemetry_tick.v1".to_string())),
+        );
+        doc.insert("timing_summary".into(), pipeline_timing_summary.clone());
+    }
 
     let status_doc = status::build(opts.datadir, opts.runtime_surface)?;
     doc.insert("status".into(), serde_json::to_value(&status_doc)?);
@@ -941,6 +951,17 @@ impl PipelineTiming {
             if let Some(connect_total) = stage_totals.get("connect_total").copied() {
                 stage_totals.insert("block_connect_store_commit", connect_total);
             }
+        }
+        for stage in [
+            "p2p_fetch",
+            "block_parse_validate",
+            "utxo_load",
+            "script_verify",
+            "utxo_apply",
+            "commit",
+            "block_connect_store_commit",
+        ] {
+            stage_totals.entry(stage).or_default();
         }
         doc.insert(
             "total_wall".into(),
