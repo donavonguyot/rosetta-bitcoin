@@ -15,6 +15,10 @@ let expected_utxo_count target =
   | 50000 -> Some 568855
   | _ -> None
 
+let worker_crypto_context_mode () =
+  let verifier = Crypto.create_worker_verifier () in
+  Fun.protect ~finally:(fun () -> Crypto.close_verifier verifier) (fun () -> Crypto.verifier_context_mode verifier)
+
 let json_of_counts rows =
   `Assoc (List.map (fun (name, count) -> name, `Int count) rows)
 
@@ -48,6 +52,10 @@ let json_of_timing timing =
   ]
 
 let json_of_slow_block (block : P2p.block) (connect : Block_connect.result) =
+  let worker_wall_ratio =
+    if connect.timing.script_wall_ms <= 0 then 0.0
+    else float_of_int connect.timing.script_verify_worker_cpu_ms /. float_of_int connect.timing.script_wall_ms
+  in
   `Assoc [
     "height", `Int block.height;
     "hash", `String connect.block_hash;
@@ -60,6 +68,7 @@ let json_of_slow_block (block : P2p.block) (connect : Block_connect.result) =
     "output_script_types", json_of_counts connect.output_script_types;
     "block_size", `Int connect.block_size;
     "stage_timings_ms", json_of_timing connect.timing;
+    "script_worker_cpu_wall_ratio", `Float worker_wall_ratio;
     "block_connect_store_commit_ms", `Int connect.timing.block_connect_store_commit_ms;
   ]
 
@@ -327,6 +336,8 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
       "rocksdb_runtime_truth", `Bool true;
       "native_storage", `Bool true;
       "native_crypto_backend", `String "libsecp256k1";
+      "native_crypto_available", `Bool true;
+      "crypto_context_mode", `String (worker_crypto_context_mode ());
       "utxo_accounting_policy", `String "core_spendable_v1";
       "chainstate_utxo_count", `Int chainstate_utxo_count;
       "storage_codec_version", `Int 2;
@@ -362,5 +373,5 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
     ]
   in
   Util.yojson_to_file result_path json;
-  print_endline (Yojson.Safe.pretty_to_string json);
+  Printf.printf "ocbitnode-local-reference-proof result=%s target=%d height=%d elapsed_ms=%d result_path=%s\n%!" proof_result target validated_height elapsed_ms result_path;
   if proof_result = "passed" then 0 else 1

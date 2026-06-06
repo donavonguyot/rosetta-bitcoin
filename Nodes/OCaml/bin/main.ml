@@ -42,14 +42,18 @@ let () =
             ?fixture_id:(option_value "--fixture-id" rest)
             ()
       | "local-reference-proof" :: rest ->
-          Ocbitnode.Local_reference.run
-            ~datadir:(require "--datadir" rest)
-            ~target:(int_of_string (Option.value ~default:"5000" (option_value "--target" rest)))
-            ~peer:(Option.value ~default:"127.0.0.1:48333" (option_value "--peer" rest))
-            ~result_path:(require "--result-path" rest)
-            ~runtime_surface:(Option.value ~default:"host" (option_value "--runtime-surface" rest))
-            ~progress:(int_of_string (Option.value ~default:"1000" (option_value "--progress" rest)))
-            ~telemetry_log:(Option.value ~default:"" (option_value "--telemetry-log" rest))
+          let code =
+            Ocbitnode.Local_reference.run
+              ~datadir:(require "--datadir" rest)
+              ~target:(int_of_string (Option.value ~default:"5000" (option_value "--target" rest)))
+              ~peer:(Option.value ~default:"127.0.0.1:48333" (option_value "--peer" rest))
+              ~result_path:(require "--result-path" rest)
+              ~runtime_surface:(Option.value ~default:"host" (option_value "--runtime-surface" rest))
+              ~progress:(int_of_string (Option.value ~default:"1000" (option_value "--progress" rest)))
+              ~telemetry_log:(Option.value ~default:"" (option_value "--telemetry-log" rest))
+          in
+          flush_all ();
+          Unix._exit code
       | _ -> usage ()
     with exn ->
       prerr_endline ("ocbitnode: " ^ Printexc.to_string exn);

@@ -18,6 +18,14 @@ external taproot_tweak_xonly_raw : string -> string -> string * int = "ocbitnode
 external ecdsa_verify_raw : string -> string -> string -> bool = "ocbitnode_ecdsa_verify_raw"
 external schnorr_verify_raw : string -> string -> string -> bool = "ocbitnode_schnorr_verify_raw"
 
+type verifier = {
+  context_mode : string;
+}
+
+let create_worker_verifier () = { context_mode = "libsecp256k1/worker_owned_adapter" }
+let close_verifier _verifier = ()
+let verifier_context_mode verifier = verifier.context_mode
+
 let buffer_of_bytes bytes =
   let len = String.length bytes in
   let buffer = Bigarray.Array1.create Bigarray.char Bigarray.c_layout len in
@@ -56,6 +64,12 @@ let ecdsa_verify_bytes ~pubkey ~msg_hash ~signature_der =
 
 let schnorr_verify_bytes ~xonly_pubkey ~msg_hash ~signature =
   try schnorr_verify_raw xonly_pubkey msg_hash signature with _ -> false
+
+let ecdsa_verify_bytes_with_verifier ~verifier:_ ~pubkey ~msg_hash ~signature_der =
+  ecdsa_verify_bytes ~pubkey ~msg_hash ~signature_der
+
+let schnorr_verify_bytes_with_verifier ~verifier:_ ~xonly_pubkey ~msg_hash ~signature =
+  schnorr_verify_bytes ~xonly_pubkey ~msg_hash ~signature
 
 let tagged_sha256 ~tag ~msg =
   let tag_hash = Util.sha256_raw tag in

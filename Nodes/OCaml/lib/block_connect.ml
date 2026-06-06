@@ -237,17 +237,24 @@ type script_task = {
 }
 
 type script_timing_snapshot = {
-  ss_sighash_legacy_ms : int;
-  ss_sighash_witness_ms : int;
-  ss_sighash_taproot_ms : int;
-  ss_ecdsa_verify_ms : int;
-  ss_schnorr_verify_ms : int;
-  ss_interpreter_eval_ms : int;
+  mutable ss_sighash_legacy_ms : int;
+  mutable ss_sighash_witness_ms : int;
+  mutable ss_sighash_taproot_ms : int;
+  mutable ss_ecdsa_verify_ms : int;
+  mutable ss_schnorr_verify_ms : int;
+  mutable ss_interpreter_eval_ms : int;
 }
 
 type script_outcome = (int * int * string) option * script_timing_snapshot * int
 
-let empty_script_timing_snapshot =
+type script_worker_summary = {
+  sw_failure : (int * int * string) option;
+  sw_timing : script_timing_snapshot;
+  sw_worker_ms : int;
+  sw_jobs : int;
+}
+
+let fresh_script_timing_snapshot () =
   {
     ss_sighash_legacy_ms = 0;
     ss_sighash_witness_ms = 0;
@@ -256,6 +263,8 @@ let empty_script_timing_snapshot =
     ss_schnorr_verify_ms = 0;
     ss_interpreter_eval_ms = 0;
   }
+
+let empty_script_timing_snapshot = fresh_script_timing_snapshot ()
 
 let snapshot_script_timing (row : Script_verify.script_timing) =
   {
@@ -267,19 +276,36 @@ let snapshot_script_timing (row : Script_verify.script_timing) =
     ss_interpreter_eval_ms = row.script_interpreter_eval_ms;
   }
 
+let add_snapshot into row =
+  into.ss_sighash_legacy_ms <- into.ss_sighash_legacy_ms + row.ss_sighash_legacy_ms;
+  into.ss_sighash_witness_ms <- into.ss_sighash_witness_ms + row.ss_sighash_witness_ms;
+  into.ss_sighash_taproot_ms <- into.ss_sighash_taproot_ms + row.ss_sighash_taproot_ms;
+  into.ss_ecdsa_verify_ms <- into.ss_ecdsa_verify_ms + row.ss_ecdsa_verify_ms;
+  into.ss_schnorr_verify_ms <- into.ss_schnorr_verify_ms + row.ss_schnorr_verify_ms;
+  into.ss_interpreter_eval_ms <- into.ss_interpreter_eval_ms + row.ss_interpreter_eval_ms
+
+let earlier_failure current candidate =
+  match current, candidate with
+  | None, value -> value
+  | value, None -> value
+  | Some (a_tx, a_input, _), Some (b_tx, b_input, _) ->
+      if compare (b_tx, b_input) (a_tx, a_input) < 0 then candidate else current
+
+let empty_worker_summary () =
+  { sw_failure = None; sw_timing = fresh_script_timing_snapshot (); sw_worker_ms = 0; sw_jobs = 0 }
+
 type script_worker_pool = {
   mutex : Mutex.t;
-  available : Condition.t;
+  started : Condition.t;
   finished : Condition.t;
   mutable jobs : script_task array;
-  mutable outcomes : script_outcome option array;
+  mutable summaries : script_worker_summary option array;
   mutable ranges : (int * int) array;
-  mutable remaining_workers : int;
   mutable active_workers : int;
-  mutable ready_workers : int;
-  mutable running : bool;
+  mutable completed_workers : int;
+  mutable generation : int;
   mutable stopping : bool;
-  mutable verify : (script_task -> script_outcome) option;
+  mutable verify : (Crypto.verifier -> script_task -> script_outcome) option;
   mutable workers : unit Domain.t list;
 }
 
@@ -305,73 +331,85 @@ let script_parallel_min_inputs () =
   try int_of_string (Sys.getenv "OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS")
   with _ -> 64
 
-let rec script_worker_loop pool worker_index =
-  Mutex.lock pool.mutex;
-  pool.ready_workers <- pool.ready_workers + 1;
-  Condition.broadcast pool.finished;
-  while (not pool.running) && not pool.stopping do
-    Condition.wait pool.available pool.mutex
+let process_worker_range verifier jobs verify start_index end_index =
+  let summary = ref (empty_worker_summary ()) in
+  for index = start_index to end_index - 1 do
+    let failure, script_timing, worker_ms = verify verifier jobs.(index) in
+    let current = !summary in
+    let merged_timing = current.sw_timing in
+    add_snapshot merged_timing script_timing;
+    summary :=
+      {
+        sw_failure = earlier_failure current.sw_failure failure;
+        sw_timing = merged_timing;
+        sw_worker_ms = current.sw_worker_ms + worker_ms;
+        sw_jobs = current.sw_jobs + 1;
+      }
   done;
-  let should_stop = pool.stopping in
-  if should_stop then Mutex.unlock pool.mutex
-  else if worker_index >= pool.active_workers then (
-    while pool.running && not pool.stopping do
-      Condition.wait pool.finished pool.mutex
-    done;
-    pool.ready_workers <- pool.ready_workers - 1;
-    Mutex.unlock pool.mutex;
-    script_worker_loop pool worker_index)
-  else
-    let verify = pool.verify in
-    let start_index, end_index =
-      if worker_index < Array.length pool.ranges then pool.ranges.(worker_index) else (0, 0)
-    in
-    pool.ready_workers <- pool.ready_workers - 1;
-    Mutex.unlock pool.mutex;
-    (match verify with
-    | None -> ()
-    | Some verify ->
-        for index = start_index to end_index - 1 do
-          let outcome = verify pool.jobs.(index) in
-          Mutex.lock pool.mutex;
-          pool.outcomes.(index) <- Some outcome;
-          Mutex.unlock pool.mutex
-        done);
+  !summary
+
+let script_worker_loop pool worker_index =
+  let verifier = Crypto.create_worker_verifier () in
+  let rec loop seen_generation =
     Mutex.lock pool.mutex;
-    pool.remaining_workers <- pool.remaining_workers - 1;
-    if pool.remaining_workers = 0 then (
-      pool.running <- false;
-      pool.verify <- None;
-      Condition.broadcast pool.finished);
-    Mutex.unlock pool.mutex;
-    script_worker_loop pool worker_index
+    while (not pool.stopping) && pool.generation = seen_generation do
+      Condition.wait pool.started pool.mutex
+    done;
+    if pool.stopping then Mutex.unlock pool.mutex
+    else
+      let generation = pool.generation in
+      let active_workers = pool.active_workers in
+      let jobs = pool.jobs in
+      let ranges = pool.ranges in
+      let verify = pool.verify in
+      Mutex.unlock pool.mutex;
+      let summary =
+        if worker_index >= active_workers then empty_worker_summary ()
+        else
+          match verify with
+          | None -> empty_worker_summary ()
+          | Some verify ->
+              let start_index, end_index = ranges.(worker_index) in
+              process_worker_range verifier jobs verify start_index end_index
+      in
+      Mutex.lock pool.mutex;
+      if (not pool.stopping) && pool.generation = generation && worker_index < pool.active_workers then (
+        pool.summaries.(worker_index) <- Some summary;
+        pool.completed_workers <- pool.completed_workers + 1;
+        if pool.completed_workers = pool.active_workers then (
+          pool.verify <- None;
+          Condition.broadcast pool.finished));
+      Mutex.unlock pool.mutex;
+      loop generation
+  in
+  Fun.protect ~finally:(fun () -> Crypto.close_verifier verifier) (fun () -> loop 0)
 
 let create_script_worker_pool threads =
+  let worker_count = max 1 threads in
   let pool =
     {
       mutex = Mutex.create ();
-      available = Condition.create ();
+      started = Condition.create ();
       finished = Condition.create ();
       jobs = [||];
-      outcomes = [||];
+      summaries = [||];
       ranges = [||];
-      remaining_workers = 0;
       active_workers = 0;
-      ready_workers = 0;
-      running = false;
+      completed_workers = 0;
+      generation = 0;
       stopping = false;
       verify = None;
       workers = [];
     }
   in
-  ignore threads;
-  pool.workers <- [];
+  if worker_count > 1 then
+    pool.workers <- List.init worker_count (fun worker_index -> Domain.spawn (fun () -> script_worker_loop pool worker_index));
   pool
 
 let stop_script_worker_pool pool =
   Mutex.lock pool.mutex;
   pool.stopping <- true;
-  Condition.broadcast pool.available;
+  Condition.broadcast pool.started;
   Condition.broadcast pool.finished;
   Mutex.unlock pool.mutex;
   List.iter (fun worker -> try Domain.join worker with _ -> ()) pool.workers
@@ -381,28 +419,34 @@ let with_script_worker_pool threads fn =
   Fun.protect ~finally:(fun () -> stop_script_worker_pool pool) (fun () -> fn pool)
 
 let run_script_worker_pool pool tasks verify =
-  ignore pool;
   let task_array = Array.of_list tasks in
   if Array.length task_array = 0 then ([], 0)
   else (
-    let worker_count = max 1 (script_threads ()) in
+    let worker_count = max 1 (List.length pool.workers) in
     let active_workers = min worker_count (Array.length task_array) in
     let chunk_size = max 1 ((Array.length task_array + active_workers - 1) / active_workers) in
-    let outcomes : script_outcome option array = Array.make (Array.length task_array) None in
-    let outcome_mutex = Mutex.create () in
-    let worker worker_index =
-      let start_index = worker_index * chunk_size in
-      let end_index = min (Array.length task_array) (start_index + chunk_size) in
-      for index = start_index to end_index - 1 do
-        let outcome = verify task_array.(index) in
-        Mutex.lock outcome_mutex;
-        outcomes.(index) <- Some outcome;
-        Mutex.unlock outcome_mutex
-      done
-    in
-    let domains = List.init active_workers (fun worker_index -> Domain.spawn (fun () -> worker worker_index)) in
-    List.iter Domain.join domains;
-    outcomes |> Array.to_list |> List.map (function Some row -> row | None -> None, empty_script_timing_snapshot, 0), active_workers)
+    Mutex.lock pool.mutex;
+    pool.jobs <- task_array;
+    pool.summaries <- Array.make active_workers None;
+    pool.ranges <-
+      Array.init active_workers (fun worker_index ->
+          let start_index = worker_index * chunk_size in
+          let end_index = min (Array.length task_array) (start_index + chunk_size) in
+          start_index, end_index);
+    pool.completed_workers <- 0;
+    pool.active_workers <- active_workers;
+    pool.verify <- Some verify;
+    pool.generation <- pool.generation + 1;
+    Condition.broadcast pool.started;
+    while pool.completed_workers < pool.active_workers && not pool.stopping do
+      Condition.wait pool.finished pool.mutex
+    done;
+    let summaries = Array.to_list pool.summaries |> List.map (function Some row -> row | None -> empty_worker_summary ()) in
+    pool.jobs <- [||];
+    pool.ranges <- [||];
+    pool.active_workers <- 0;
+    Mutex.unlock pool.mutex;
+    summaries, active_workers)
 
 let add_script_timing timing row =
   timing.script_sighash_legacy_ms <- timing.script_sighash_legacy_ms + row.ss_sighash_legacy_ms;
@@ -415,14 +459,14 @@ let add_script_timing timing row =
 let verify_script_jobs ?script_pool txs txids height block_hash script_jobs timing input_shape_counts spent_prevout_script_types =
   let tx_array = Array.of_list txs in
   let txid_array = Array.of_list txids in
-  let verify_one (task : script_task) =
+  let verify_one verifier (task : script_task) =
     let started = now_ms () in
     try
       let tx = tx_array.(task.tx_index) in
       let options : Script_verify.verify_input_options =
         { script_pubkey = task.prevout.script_pubkey; amount = task.prevout.amount; spent_prevouts = task.spent_prevouts }
       in
-      let result, script_timing = Script_verify.verify_transaction_input_with_cache_and_timing ~cache:task.cache tx task.input_index options in
+      let result, script_timing = Script_verify.verify_transaction_input_with_cache_and_timing ~cache:task.cache ~verifier tx task.input_index options in
       let failure = match result with Ok () -> None | Error failure -> Some (task.tx_index, task.input_index, failure) in
       failure, snapshot_script_timing script_timing, elapsed started
     with exn -> Some (task.tx_index, task.input_index, Printexc.to_string exn), empty_script_timing_snapshot, elapsed started
@@ -437,41 +481,42 @@ let verify_script_jobs ?script_pool txs txids height block_hash script_jobs timi
   let failures =
     let task_count = List.length tasks in
     let dispatch_started = now_ms () in
-    let outcomes, active_workers =
-      if task_count < script_parallel_min_inputs () || script_threads () <= 1 then (List.map verify_one tasks, if task_count = 0 then 0 else 1)
+    let summaries, active_workers =
+      if task_count = 0 then ([], 0)
+      else if task_count < script_parallel_min_inputs () || script_threads () <= 1 then (
+        let verifier = Crypto.create_worker_verifier () in
+        let summary =
+          Fun.protect ~finally:(fun () -> Crypto.close_verifier verifier) (fun () ->
+              let task_array = Array.of_list tasks in
+              process_worker_range verifier task_array verify_one 0 task_count)
+        in
+        [ summary ], 1)
       else
         match script_pool with
         | Some pool -> run_script_worker_pool pool tasks verify_one
         | None ->
-        let task_array = Array.of_list tasks in
-        let outcomes : script_outcome option array = Array.make task_count None in
-        let cursor = Atomic.make 0 in
-        let outcome_mutex = Mutex.create () in
-        let worker () =
-          let rec loop () =
-            let index = Atomic.fetch_and_add cursor 1 in
-            if index < task_count then (
-              let outcome = verify_one task_array.(index) in
-              Mutex.lock outcome_mutex;
-              outcomes.(index) <- Some outcome;
-              Mutex.unlock outcome_mutex;
-              loop ())
-          in
-          loop ()
-        in
-        let domains = List.init (min (script_threads ()) task_count) (fun _ -> Domain.spawn worker) in
-        List.iter Domain.join domains;
-        outcomes |> Array.to_list |> List.map (function Some row -> row | None -> None, empty_script_timing_snapshot, 0), List.length domains
+            let task_array = Array.of_list tasks in
+            let active_workers = min (script_threads ()) task_count in
+            let chunk_size = max 1 ((task_count + active_workers - 1) / active_workers) in
+            let worker worker_index =
+              let verifier = Crypto.create_worker_verifier () in
+              Fun.protect ~finally:(fun () -> Crypto.close_verifier verifier) (fun () ->
+                  let start_index = worker_index * chunk_size in
+                  let end_index = min task_count (start_index + chunk_size) in
+                  process_worker_range verifier task_array verify_one start_index end_index)
+            in
+            let domains = List.init active_workers (fun worker_index -> Domain.spawn (fun () -> worker worker_index)) in
+            List.map Domain.join domains, active_workers
     in
     timing.script_job_dispatch_ms <- timing.script_job_dispatch_ms + elapsed dispatch_started;
+    timing.script_runner_wait_ms <- timing.script_runner_wait_ms + elapsed dispatch_started;
     timing.script_active_workers <- max timing.script_active_workers active_workers;
     List.iter
-      (fun (failure, script_timing, worker_ms) ->
-        ignore failure;
-        add_script_timing timing script_timing;
-        timing.script_verify_worker_cpu_ms <- timing.script_verify_worker_cpu_ms + worker_ms)
-      outcomes;
-    List.filter_map (fun (failure, _, _) -> failure) outcomes
+      (fun summary ->
+        add_script_timing timing summary.sw_timing;
+        timing.script_verify_worker_cpu_ms <- timing.script_verify_worker_cpu_ms + summary.sw_worker_ms)
+      summaries;
+    List.filter_map (fun summary -> summary.sw_failure) summaries
   in
   List.iter
     (fun (task : script_task) ->
@@ -558,7 +603,7 @@ let connect_block ~script_pool ~db ~height ~target ~raw ~expected_hash ~expected
   verify_script_jobs ?script_pool (Array.to_list tx_array) (Array.to_list txids) height block_hash (List.rev !script_jobs) timing input_shape_counts spent_prevout_script_types;
   timing.script_verify_ms <- elapsed script_started;
   timing.script_wall_ms <- timing.script_verify_ms;
-  timing.script_runner_wait_ms <- timing.script_verify_ms;
+  if timing.script_runner_wait_ms = 0 then timing.script_runner_wait_ms <- timing.script_verify_ms;
   let apply_started = now_ms () in
   let external_spend_count = ref 0 in
   Hashtbl.iter

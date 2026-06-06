@@ -8,6 +8,7 @@ RESULT_DATE ?= $(shell date -u +%F)
 FIXTURE_ID ?=
 FIXTURE_ARG := $(if $(FIXTURE_ID),--fixture-id $(FIXTURE_ID),)
 SYNC_TARGET ?= 5000
+DOCKER_50K_PROFILE_TARGET ?= $(if $(filter 5000,$(SYNC_TARGET)),26700,$(SYNC_TARGET))
 PREFETCH_DEPTH ?= 4
 PROGRESS ?= 1000
 DOCKER_LOCAL_PROOF_VOLUME ?= ocbitnode_5k_proof_data
@@ -17,8 +18,8 @@ DOCKER_50K_PROOF_VOLUME ?= ocbitnode_50k_proof_data
 DOCKER_50K_REFERENCE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_50K_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_telemetry_$(RESULT_DATE).log
 DOCKER_50K_PROFILE_VOLUME ?= ocbitnode_50k_profile_data
-DOCKER_50K_PROFILE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(RESULT_DATE).json
-DOCKER_50K_PROFILE_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(RESULT_DATE).log
+DOCKER_50K_PROFILE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(DOCKER_50K_PROFILE_TARGET)_$(RESULT_DATE).json
+DOCKER_50K_PROFILE_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(DOCKER_50K_PROFILE_TARGET)_$(RESULT_DATE).log
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
 
@@ -79,6 +80,6 @@ docker-proof-50k-profile:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_50K_PROFILE_VOLUME) docker_$(DOCKER_50K_PROFILE_VOLUME) >/dev/null 2>&1 || true
-	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROFILE_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target 50000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_PROFILE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_PROFILE_TELEMETRY_LOG)
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROFILE_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target $(DOCKER_50K_PROFILE_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_PROFILE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_PROFILE_TELEMETRY_LOG)
 
 docker-smoke-once: docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus

@@ -199,7 +199,7 @@
       "port": "ocaml",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_2026-06-06-refresh.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_2026-06-06.json",
       "status": "current",
       "notes": "Current OCaml strict Docker/local Reference P2P 5k baseline proof."
     },
