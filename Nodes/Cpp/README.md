@@ -66,8 +66,11 @@ ctest --test-dir build --output-on-failure
 ./build/cpbitnode_tests
 ```
 
-`make test` / full `ctest` is the normal product-node suite. Cpp also keeps
-historical local lanes for maintainers who need narrower diagnostics:
+`make test` refreshes the configured build tree, then runs the normal
+product-node suite. Product tests must keep generated scratch inside the build
+directory; only explicit proof targets write canonical JSON under
+`Nodes/Shared/conformance/results/`. Cpp also keeps historical local lanes for
+maintainers who need narrower diagnostics:
 
 ```bash
 make test-core      # consensus, script, native crypto, RocksDB, block connect

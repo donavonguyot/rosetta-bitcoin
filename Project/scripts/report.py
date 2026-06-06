@@ -342,7 +342,7 @@ def print_critical_test_domains(connection: sqlite3.Connection) -> None:
     data = rows(
         connection,
         """
-        select port, lifecycle_status, domain, domain_status, evidence, notes
+        select port, lifecycle_status, domain, domain_status, evidence_source_type, evidence, notes
         from critical_test_domain_coverage
         order by port,
           case domain
@@ -357,7 +357,7 @@ def print_critical_test_domains(connection: sqlite3.Connection) -> None:
           end
         """,
     )
-    print(table(("port", "lifecycle", "domain", "status", "evidence", "notes"), data))
+    print(table(("port", "lifecycle", "domain", "status", "source", "evidence", "notes"), data))
 
 
 def print_conformance(connection: sqlite3.Connection) -> None:

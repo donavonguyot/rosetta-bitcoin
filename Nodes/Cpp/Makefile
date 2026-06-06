@@ -33,16 +33,16 @@ build:
 	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(BUILD_DIR)
 
-test:
+test: build
 	ctest --test-dir $(BUILD_DIR) --output-on-failure
 
-test-core:
+test-core: build
 	ctest --test-dir $(BUILD_DIR) -L core-regression --output-on-failure
 
-test-wire:
+test-wire: build
 	ctest --test-dir $(BUILD_DIR) -L wire-codec --output-on-failure
 
-test-runtime:
+test-runtime: build
 	ctest --test-dir $(BUILD_DIR) -L runtime-smoke --output-on-failure
 
 docker-config:

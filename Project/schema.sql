@@ -1412,6 +1412,20 @@ SELECT
       ELSE ''
     END
   ) AS evidence,
+  coalesce(
+    CASE WHEN mc.domain IS NOT NULL THEN 'manual_claim' END,
+    CASE d.domain
+      WHEN 'script_verification' THEN 'script_corpus'
+      WHEN 'sighash_taproot_witness' THEN 'script_corpus'
+      WHEN 'utxo_apply_undo_accounting' THEN 'baseline_5k'
+      WHEN 'block_connect' THEN 'baseline_5k'
+      WHEN 'rocksdb_persistence_restart' THEN
+        CASE WHEN coalesce(st.has_storage_proof, 0) = 1 THEN 'storage_proof' ELSE 'baseline_5k' END
+      WHEN 'p2p_fetch_handshake' THEN 'baseline_5k'
+      WHEN 'node_status_reporting' THEN 'current_evidence'
+      ELSE ''
+    END
+  ) AS evidence_source_type,
   coalesce(mc.notes, '') AS notes
 FROM ports p
 CROSS JOIN domains d
