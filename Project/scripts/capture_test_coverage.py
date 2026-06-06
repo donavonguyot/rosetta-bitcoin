@@ -53,6 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--results-dir", default=DEFAULT_RESULTS_DIR, help="Curated JSON output directory")
     parser.add_argument("--run", action="store_true", help="Execute commands and write artifacts")
     parser.add_argument("--dry-run", action="store_true", help="Print the plan without executing commands")
+    parser.add_argument("--include-coverage", action="store_true", help="Also capture explicitly supported coverage commands")
     parser.add_argument("--self-test", action="store_true", help="Run parser and artifact fixture checks")
     return parser.parse_args()
 
@@ -124,7 +125,7 @@ def command_or_skip(commands: dict[str, CommandSurface], command_key: str) -> Co
 
 
 def preferred_coverage_command(commands: dict[str, CommandSurface]) -> CommandSurface | None:
-    return command_or_skip(commands, "test_coverage_core") or command_or_skip(commands, "test_coverage")
+    return command_or_skip(commands, "test_coverage")
 
 
 def build_plan(
@@ -132,6 +133,7 @@ def build_plan(
     selected_ports: list[str],
     explicit_port: bool,
     run_requested: bool,
+    include_coverage: bool,
 ) -> list[PlannedCommand]:
     plan: list[PlannedCommand] = []
     for port in selected_ports:
@@ -160,6 +162,9 @@ def build_plan(
             )
         else:
             plan.append(PlannedCommand(port, node_id, lifecycle, "test_unit", unit.command, "test", "run", ""))
+
+        if not include_coverage:
+            continue
 
         coverage = preferred_coverage_command(commands)
         if coverage is None:
@@ -500,7 +505,13 @@ def main() -> int:
         by_port = load_command_surface(conn)
     selected_ports = select_ports(by_port, args.port, args.all)
     run_requested = bool(args.run)
-    plan = build_plan(by_port, selected_ports, explicit_port=bool(args.port), run_requested=run_requested)
+    plan = build_plan(
+        by_port,
+        selected_ports,
+        explicit_port=bool(args.port),
+        run_requested=run_requested,
+        include_coverage=bool(args.include_coverage),
+    )
     print_plan(plan, run_requested)
     if not run_requested:
         return 0

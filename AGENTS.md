@@ -116,7 +116,7 @@ All `Nodes/<Port>/` directories are root-owned source directories. Nested
 |------|---------|------|
 | `~/RB/Nodes/Python` | **pybitnode** | RocksDB/native-crypto reference implementation and provenance source |
 | `~/RB/Nodes/TypeScript` | **tsbitnode** | RocksDB/native-crypto follower |
-| `~/RB/Nodes/Cpp` | **cpbitnode** | Systems follower; coverage monitored via `./scripts/coverage_report.sh` (report-only by default; ratchet thresholds when sync spine is stable) |
+| `~/RB/Nodes/Cpp` | **cpbitnode** | Systems follower |
 | `~/RB/Nodes/CSharp` | **csbitnode** | Managed-runtime follower |
 | `~/RB/Nodes/Go` | **gobitnode** | Fast native follower |
 | `~/RB/Nodes/Java` | **jbitnode** | Clean Java follower and provenance source |

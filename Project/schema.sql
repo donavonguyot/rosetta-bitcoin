@@ -1437,12 +1437,8 @@ commands AS (
     port,
     max(CASE WHEN command_key = 'test_unit' THEN supported ELSE 0 END) AS unit_supported,
     max(CASE WHEN command_key = 'test_unit' THEN command ELSE '' END) AS unit_command,
-    max(CASE WHEN command_key IN ('test_coverage', 'test_coverage_core') THEN supported ELSE 0 END) AS coverage_supported,
-    coalesce(
-      max(CASE WHEN command_key = 'test_coverage_core' AND supported = 1 THEN command END),
-      max(CASE WHEN command_key = 'test_coverage' AND supported = 1 THEN command END),
-      ''
-    ) AS coverage_command
+    max(CASE WHEN command_key = 'test_coverage' THEN supported ELSE 0 END) AS coverage_supported,
+    max(CASE WHEN command_key = 'test_coverage' THEN command ELSE '' END) AS coverage_command
   FROM test_commands
   GROUP BY port
 ),
@@ -1496,9 +1492,8 @@ SELECT
     ELSE 'baseline_par'
   END AS baseline_par_status,
   CASE
-    WHEN coalesce(c.coverage_supported, 0) = 0 THEN 'coverage_command_missing_report_only'
-    WHEN lcs.port IS NULL THEN 'coverage_metrics_missing_report_only'
-    ELSE 'coverage_metrics_available'
+    WHEN lcs.port IS NULL THEN 'optional_coverage_not_captured'
+    ELSE 'optional_coverage_metrics_available'
   END AS coverage_control_status
 FROM ports p
 LEFT JOIN commands c ON c.port = p.port

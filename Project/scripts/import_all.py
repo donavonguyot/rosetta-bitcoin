@@ -357,11 +357,7 @@ COMMAND_PURPOSES: dict[str, str] = {
 
 TEST_COMMAND_PURPOSES = {
     "test_unit": "run the port's normal unit/regression test suite",
-    "test_coverage": "run report-only coverage instrumentation",
-    "test_core_regression": "run focused core regression tests",
-    "test_wire_codec": "run wire and codec breadth tests",
-    "test_runtime_smoke": "run runtime smoke tests",
-    "test_coverage_core": "run report-only core-regression coverage instrumentation",
+    "test_coverage": "run optional local coverage telemetry",
 }
 
 ECOSYSTEM_TEST_FALLBACKS = {
@@ -857,67 +853,13 @@ def discover_test_commands(root: Path, port: str, root_path: str) -> dict[str, d
             else "No unit-test command discovered.",
         }
 
-    coverage_command = ""
-    coverage_method = "missing"
-    coverage_notes = "No real coverage command is known yet; report-only gap."
-    if port == "cpp" and (port_root / "scripts/coverage_report.sh").exists():
-        coverage_command = f"cd {root_path} && ./scripts/coverage_report.sh --suite all"
-        coverage_method = "cpp:coverage_report.sh"
-        coverage_notes = "C++ broad report-only gcovr path for local archaeology; not a baseline ratchet."
-    elif makefile_has_target(makefile, "coverage"):
-        coverage_command = f"cd {root_path} && make coverage"
-        coverage_method = "makefile:coverage"
-        coverage_notes = "Discovered from port Makefile coverage target."
     commands["test_coverage"] = {
         "category": "coverage_report",
-        "command": coverage_command,
-        "supported": 1 if coverage_command else 0,
-        "discovery_method": coverage_method,
-        "notes": coverage_notes,
+        "command": "",
+        "supported": 0,
+        "discovery_method": "not_default_posture",
+        "notes": "Coverage is optional local telemetry, not part of Project default test posture.",
     }
-    if port == "cpp":
-        lane_specs = [
-            (
-                "test_core_regression",
-                "core_regression",
-                "test-core",
-                "makefile:test-core",
-                "C++ focused readiness lane: consensus, script, native crypto, RocksDB, block connect.",
-            ),
-            (
-                "test_wire_codec",
-                "wire_codec",
-                "test-wire",
-                "makefile:test-wire",
-                "C++ protocol hardening lane; valuable breadth, not a cross-port ratchet.",
-            ),
-            (
-                "test_runtime_smoke",
-                "runtime_smoke",
-                "test-runtime",
-                "makefile:test-runtime",
-                "C++ CLI/settings/transport/sync hot-path smoke lane.",
-            ),
-        ]
-        for command_key, category, target, method, notes in lane_specs:
-            supported = makefile_has_target(makefile, target)
-            commands[command_key] = {
-                "category": category,
-                "command": f"cd {root_path} && make {target}" if supported else "",
-                "supported": 1 if supported else 0,
-                "discovery_method": method if supported else "missing",
-                "notes": notes if supported else f"C++ {target} lane target not found.",
-            }
-        core_coverage_supported = (port_root / "scripts/coverage_report.sh").exists()
-        commands["test_coverage_core"] = {
-            "category": "coverage_report",
-            "command": f"cd {root_path} && ./scripts/coverage_report.sh --suite core"
-            if core_coverage_supported
-            else "",
-            "supported": 1 if core_coverage_supported else 0,
-            "discovery_method": "cpp:coverage_report.sh:core" if core_coverage_supported else "missing",
-            "notes": "C++ report-only core-regression coverage lane.",
-        }
     return commands
 
 
@@ -930,43 +872,15 @@ def seed_test_commands(connection: sqlite3.Connection, root: Path) -> int:
         ORDER BY port
         """
     ).fetchall()
-    active_ports = [row[0] for row in contracts]
-    if active_ports:
-        placeholders = ",".join("?" for _ in active_ports)
-        connection.execute(f"DELETE FROM test_commands WHERE port NOT IN ({placeholders})", active_ports)
-    else:
-        connection.execute("DELETE FROM test_commands")
-
-    count = 0
+    desired_rows: list[tuple[Any, ...]] = []
+    desired_ids: list[str] = []
     for port, node_id, root_path, source_artifact_id in contracts:
         for command_key, info in discover_test_commands(root, text(port), text(root_path)).items():
-            connection.execute(
-                """
-                INSERT INTO test_commands(
-                  command_id, port, node_id, command_key, category, purpose,
-                  command, supported, discovery_method, notes, source_artifact_id
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(port, command_key) DO UPDATE SET
-                  node_id = excluded.node_id,
-                  category = excluded.category,
-                  purpose = excluded.purpose,
-                  command = excluded.command,
-                  supported = excluded.supported,
-                  discovery_method = excluded.discovery_method,
-                  notes = excluded.notes,
-                  source_artifact_id = excluded.source_artifact_id
-                WHERE
-                  test_commands.node_id <> excluded.node_id OR
-                  test_commands.category <> excluded.category OR
-                  test_commands.purpose <> excluded.purpose OR
-                  test_commands.command <> excluded.command OR
-                  test_commands.supported <> excluded.supported OR
-                  test_commands.discovery_method <> excluded.discovery_method OR
-                  test_commands.notes <> excluded.notes OR
-                  test_commands.source_artifact_id <> excluded.source_artifact_id
-                """,
+            command_id = stable_id("test_command", port, command_key)
+            desired_ids.append(command_id)
+            desired_rows.append(
                 (
-                    stable_id("test_command", port, command_key),
+                    command_id,
                     port,
                     node_id,
                     command_key,
@@ -977,10 +891,45 @@ def seed_test_commands(connection: sqlite3.Connection, root: Path) -> int:
                     text(info.get("discovery_method")),
                     text(info.get("notes")),
                     source_artifact_id,
-                ),
+                )
             )
-            count += 1
-    return count
+    for row in desired_rows:
+        connection.execute(
+            """
+            INSERT INTO test_commands(
+              command_id, port, node_id, command_key, category, purpose,
+              command, supported, discovery_method, notes, source_artifact_id
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(port, command_key) DO UPDATE SET
+              node_id = excluded.node_id,
+              category = excluded.category,
+              purpose = excluded.purpose,
+              command = excluded.command,
+              supported = excluded.supported,
+              discovery_method = excluded.discovery_method,
+              notes = excluded.notes,
+              source_artifact_id = excluded.source_artifact_id
+            WHERE
+              test_commands.node_id <> excluded.node_id OR
+              test_commands.category <> excluded.category OR
+              test_commands.purpose <> excluded.purpose OR
+              test_commands.command <> excluded.command OR
+              test_commands.supported <> excluded.supported OR
+              test_commands.discovery_method <> excluded.discovery_method OR
+              test_commands.notes <> excluded.notes OR
+              test_commands.source_artifact_id <> excluded.source_artifact_id
+            """,
+            row,
+        )
+    if desired_ids:
+        placeholders = ",".join("?" for _ in desired_ids)
+        connection.execute(
+            f"DELETE FROM test_commands WHERE command_id NOT IN ({placeholders})",
+            desired_ids,
+        )
+    else:
+        connection.execute("DELETE FROM test_commands")
+    return len(desired_rows)
 
 
 def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Path, payload: dict[str, Any]) -> int:

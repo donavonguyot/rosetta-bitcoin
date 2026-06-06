@@ -92,19 +92,12 @@ def preflight_port(conn: sqlite3.Connection, port: str, level: str) -> dict[str,
 
     command_map = {row["command_key"]: row for row in commands}
     unit = command_map.get("test_unit")
-    coverage = command_map.get("test_coverage")
-
     if unit is None:
         errors.append("missing test_unit command row")
     elif not int(unit["supported"] or 0):
         errors.append("test_unit command is not supported")
     elif not str(unit["command"]).strip():
         errors.append("test_unit command has no command text")
-
-    if coverage is None:
-        warnings.append("missing test_coverage command row")
-    elif not int(coverage["supported"] or 0):
-        warnings.append("test_coverage command is not supported yet")
 
     missing_domains = [row["domain"] for row in domains if row["domain_status"] == "missing"]
     if missing_domains:
@@ -116,10 +109,8 @@ def preflight_port(conn: sqlite3.Connection, port: str, level: str) -> dict[str,
             errors.append(f"baseline par status is {matrix['baseline_par_status']}")
 
     if level == "coverage-control":
-        if not int(matrix["coverage_supported"] or 0):
-            warnings.append("coverage command is report-only missing")
-        elif matrix["coverage_control_status"] != "coverage_metrics_available":
-            warnings.append(f"coverage metrics are not imported: {matrix['coverage_control_status']}")
+        if matrix["coverage_control_status"] != "optional_coverage_metrics_available":
+            warnings.append(f"coverage metrics are optional and not imported: {matrix['coverage_control_status']}")
 
     return {
         "port": port,

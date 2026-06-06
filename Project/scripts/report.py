@@ -299,9 +299,10 @@ def print_test_coverage(connection: sqlite3.Connection) -> None:
         connection,
         """
         select port, lifecycle_status, baseline_par_status,
-               coverage_control_status, unit_supported, latest_unit_result,
-               coverage_supported, latest_coverage_result, coverage_tool,
-               line_percent, branch_percent, missing_domain_count, domain_count
+               unit_supported, latest_unit_result, missing_domain_count,
+               domain_count, coverage_control_status, coverage_supported,
+               latest_coverage_result, coverage_tool, line_percent,
+               branch_percent
         from test_coverage_matrix
         order by
           case lifecycle_status
@@ -319,16 +320,16 @@ def print_test_coverage(connection: sqlite3.Connection) -> None:
                 "port",
                 "lifecycle",
                 "baseline_par",
-                "coverage",
                 "unit_cmd",
                 "unit_result",
+                "missing_domains",
+                "domains",
+                "coverage",
                 "coverage_cmd",
                 "coverage_result",
                 "tool",
                 "line",
                 "branch",
-                "missing_domains",
-                "domains",
             ),
             data,
         )

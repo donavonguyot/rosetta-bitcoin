@@ -23,9 +23,9 @@ Quality bar (current):
 - no silent consensus skips — stop honestly on missing rules;
 - live sync progress is the primary forward gate.
 
-Coverage is **monitored, not gated**. Cpp's historical broad suite is now lane
-classified so Project can see what each surface proves without turning global
-line/branch percentages into a cross-port ratchet.
+Coverage and lane tooling are local diagnostics only. Project's cross-port test
+posture starts with the normal product test suite and critical-domain evidence,
+not Cpp's historical breadth or global line/branch percentages.
 
 ## Requirements
 
@@ -66,7 +66,8 @@ ctest --test-dir build --output-on-failure
 ./build/cpbitnode_tests
 ```
 
-Cpp tests are intentionally grouped into lanes:
+`make test` / full `ctest` is the normal product-node suite. Cpp also keeps
+historical local lanes for maintainers who need narrower diagnostics:
 
 ```bash
 make test-core      # consensus, script, native crypto, RocksDB, block connect
@@ -82,31 +83,26 @@ ctest --test-dir build -L runtime-smoke --output-on-failure
 ./build/cpbitnode_tests --suite runtime
 ```
 
-`make test` / full `ctest` still runs the whole local suite. The `wire-codec`
-lane is valuable Cpp hardening because this port carried a historically broad
-systems test posture; it is not a template for every other port's readiness
-bar.
+The lane commands are not Project par and are not a template for every other
+port's readiness bar.
 
-## Coverage (report-only)
+## Optional local coverage
 
-Build with instrumentation, run a lane, and print gcovr summary for `src/`.
-The default suite is `core`, which matches the readiness-focused lane:
+Coverage remains available for Cpp maintainers who need local archaeology:
 
 ```bash
 ./scripts/coverage_report.sh --suite core
 ```
 
-Broad coverage remains available for local archaeology:
-
 ```bash
 ./scripts/coverage_report.sh --suite all
 ```
 
-Threshold environment variables still exist for private experiments, but Project
-does not use global Cpp line/branch thresholds as benchmark readiness. CLI
-binaries under `cli/` are smoke-tested only and are outside the coverage report.
-Serving, mempool, and deeper P2P manager coverage remain future runtime work,
-not prerequisites for the 5k/50k/100k benchmark suite.
+Project does not auto-promote Cpp coverage commands and does not use global
+Cpp line/branch thresholds as readiness. CLI binaries under `cli/` are
+smoke-tested only and are outside the coverage report. Serving, mempool, and
+deeper P2P manager coverage remain future runtime work, not prerequisites for
+the benchmark suite.
 
 ## Sync (local Bitcoin Core testnet4)
 

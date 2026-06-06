@@ -219,8 +219,7 @@ python3 Project/scripts/preflight_test_coverage.py \
 ```
 
 `baseline-par` checks active-contender unit-test command visibility. Coverage
-metrics remain report-only until the first inventory shows comparable data worth
-ratcheting.
+metrics are optional local telemetry and are not part of default par.
 
 Capture compact product-test telemetry only when you actually want to run port
 suites:
@@ -233,19 +232,14 @@ python3 Project/scripts/capture_test_coverage.py \
 ```
 
 The capture script is dry-run by default. It records `test_unit` results for
-active contender and active-development ports, records coverage only when
-Project already has a real supported coverage command, and writes curated JSON
-under `Nodes/Shared/testing/results/`. Baseline-retired ports remain visible in
+active contender and active-development ports and writes curated JSON under
+`Nodes/Shared/testing/results/`. Baseline-retired ports remain visible in
 dry-run output and can be captured explicitly with `--port`, but `--all --run`
 does not force new work onto retired ports. These artifacts use stable schemas:
 `port.test_result`, `port.coverage_summary`, and `port.domain_coverage`.
-Benchmark gate correctness stays in benchmark preflights, not port unit tests.
-
-Some ports expose optional lane commands. C++ currently reports
-`test_core_regression`, `test_wire_codec`, `test_runtime_smoke`, and
-`test_coverage_core` so its historically broad suite is visible by domain.
-Those lanes are informational unless a port explicitly claims them; they are not
-cross-port baseline requirements.
+Coverage capture requires `--include-coverage` and an explicitly supported
+command. Benchmark correctness stays in benchmark preflights, not port unit
+tests.
 
 Test coverage reports are for standalone product-node quality: consensus,
 storage, P2P, runtime smoke, and status/reporting behavior. Benchmark gates,

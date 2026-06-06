@@ -74,7 +74,8 @@ python3 Project/scripts/report.py --db Project/project.db --section critical-tes
 python3 Project/scripts/preflight_test_coverage.py --db Project/project.db --all --level inventory
 ```
 
-Coverage is report-only until Project has enough comparable data to ratchet it.
+Coverage is optional local telemetry. Product-test par starts with unit command
+visibility, imported unit results, and critical-domain evidence.
 
 Live datadirs, build outputs, local DBs, logs, dependency caches, and nested Git
 metadata are not root-owned artifacts. Compact proof JSON that supports a

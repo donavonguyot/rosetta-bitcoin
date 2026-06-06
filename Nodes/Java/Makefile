@@ -35,7 +35,7 @@ test:
 	$(MVN) test
 
 coverage:
-	$(MVN) verify
+	$(MVN) -Pcoverage verify
 
 docker-config:
 	$(DOCKER_COMPOSE) config

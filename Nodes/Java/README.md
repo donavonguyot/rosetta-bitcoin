@@ -54,10 +54,10 @@ make java-node-sync-catchup   # headers + blocks from genesis
 
 Or restore a known-good backup instead of full re-sync.
 
-## Coverage gate
+## Optional local coverage
 
-Every build runs JaCoCo during `mvn verify`. **Line coverage must be 100%** on
-all non-excluded production code or the build fails.
+JaCoCo reports are available for local inspection, but coverage is not a Java
+readiness gate and is not Project's cross-port testing posture.
 
 Tiny JaCoCo exclusions (documented in `pom.xml`):
 
@@ -70,7 +70,7 @@ Run locally:
 
 ```bash
 make test       # mvn test
-make coverage   # mvn verify (includes JaCoCo check)
+make coverage   # mvn -Pcoverage verify (includes JaCoCo report)
 ```
 
 Report: `target/site/jacoco/index.html`
@@ -148,7 +148,7 @@ targets as the normal blocker-hunting loop.
 | Target | Purpose |
 |--------|---------|
 | `make test` | Run JUnit 5 tests |
-| `make coverage` | Run tests + JaCoCo 100% line gate |
+| `make coverage` | Run tests + JaCoCo report |
 | `make docker-config` | Validate `docker-compose.yml` |
 | `make docker-warm` | Warm the Docker image/cache before a benchmark campaign |
 | `make docker-java-sync-proof` | Run a 2-block Docker packaging smoke against local Core from a fresh RocksDB proof volume |
