@@ -538,7 +538,7 @@ def validate_telemetry_log(
     port: str,
 ) -> tuple[str, list[str], list[str], dict[str, Any]]:
     gate_id = str(gate["gate_id"])
-    if gate_id not in LONG_RUN_GATES:
+    if gate_id not in LONG_RUN_GATES and gate_id != "baseline_5k":
         return "clean", [], [], {"telemetry_quality": "clean", "not_required": True}
     target_height = int(gate["target_height"]) if gate.get("target_height") not in (None, -1) else None
     result = _telemetry_validator.validate_log_paths(

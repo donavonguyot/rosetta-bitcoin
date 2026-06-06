@@ -25,7 +25,7 @@
       "gate_id": "baseline_5k",
       "path": "Nodes/Shared/conformance/results/cpp_docker_baseline_5k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable cpp baseline_5k proof accepted by campaign baseline_5k_20260606_161052."
+      "notes": "Current comparable cpp baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
     },
     {
       "port": "cpp",
@@ -65,7 +65,7 @@
       "gate_id": "baseline_5k",
       "path": "Nodes/Shared/conformance/results/csharp_docker_baseline_5k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable csharp baseline_5k proof accepted by campaign baseline_5k_20260606_161052."
+      "notes": "Current comparable csharp baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
     },
     {
       "port": "csharp",
@@ -121,7 +121,7 @@
       "gate_id": "baseline_5k",
       "path": "Nodes/Shared/conformance/results/go_docker_baseline_5k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable go baseline_5k proof accepted by campaign baseline_5k_20260606_161052."
+      "notes": "Current comparable go baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
     },
     {
       "port": "go",
@@ -161,7 +161,7 @@
       "gate_id": "baseline_5k",
       "path": "Nodes/Shared/conformance/results/java_docker_baseline_5k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable java baseline_5k proof accepted by campaign baseline_5k_20260606_161052."
+      "notes": "Current comparable java baseline_5k proof accepted by campaign baseline_5k_20260606_163325."
     },
     {
       "port": "java",
@@ -201,7 +201,7 @@
       "gate_id": "baseline_5k",
       "path": "Nodes/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable ocaml baseline_5k proof accepted by campaign baseline_5k_20260606_161052."
+      "notes": "Current comparable ocaml baseline_5k proof accepted by campaign baseline_5k_20260606_163325."
     },
     {
       "port": "ocaml",
@@ -257,7 +257,7 @@
       "gate_id": "baseline_5k",
       "path": "Nodes/Shared/conformance/results/rust_docker_baseline_5k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable rust baseline_5k proof accepted by campaign baseline_5k_20260606_161052."
+      "notes": "Current comparable rust baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
     },
     {
       "port": "rust",
@@ -297,7 +297,7 @@
       "gate_id": "baseline_5k",
       "path": "Nodes/Shared/conformance/results/swift_docker_baseline_5k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable swift baseline_5k proof accepted by campaign baseline_5k_20260606_161052."
+      "notes": "Current comparable swift baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
     },
     {
       "port": "swift",
@@ -353,7 +353,7 @@
       "gate_id": "baseline_5k",
       "path": "Nodes/Shared/conformance/results/zig_docker_baseline_5k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable zig baseline_5k proof accepted by campaign baseline_5k_20260606_161052."
+      "notes": "Current comparable zig baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
     },
     {
       "port": "zig",

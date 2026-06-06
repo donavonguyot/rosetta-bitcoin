@@ -18,6 +18,9 @@ PEER="${PEERS:-${REFERENCE_P2P_PEER:?REFERENCE_P2P_PEER missing}}"
 export PEER
 BACKEND="${SECP256K1_BACKEND:-native}"
 REFERENCE_START_HEIGHT="${REFERENCE_START_HEIGHT:-0}"
+POLL_SEC="${POLL_SEC:-15}"
+CHECK_SEC="${CHECK_SEC:-1}"
+CONTAINER_NAME="${CONTAINER_NAME:-jbitnode-sync-proof-run}"
 
 reference_hash() {
   docker exec rosetta-bitcoin-core-testnet4 \
@@ -37,19 +40,102 @@ REFERENCE_FINISH_HEIGHT="${REFERENCE_FINISH_HEIGHT:-$TARGET}"
 REFERENCE_FINISH_HASH="${REFERENCE_FINISH_HASH:-$(reference_hash "$REFERENCE_FINISH_HEIGHT")}"
 
 start_ms="$(now_ms)"
+run_id="java-$(case "$TARGET" in 5000) echo baseline_5k ;; 50000) echo shakedown_50k ;; 100000) echo performance_100k ;; *) echo local_reference ;; esac)-$start_ms"
+
+status_json() {
+  DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" \
+    "${DOCKER_COMPOSE[@]}" run --rm --no-deps jbitnode-sync-proof com.jbitnode.cli.DbStatus 2>/dev/null || echo '{}'
+}
+
+field() {
+  python3 -c "import json,sys; d=json.load(sys.stdin); $1" 2>/dev/null || echo "?"
+}
+
+benchmark_gate() {
+  case "$TARGET" in
+    5000) echo "baseline_5k" ;;
+    10000) echo "diagnostic_10k" ;;
+    50000) echo "shakedown_50k" ;;
+    100000) echo "performance_100k" ;;
+    *) echo "local_reference" ;;
+  esac
+}
+
+emit_benchmark_tick() {
+  local json="$1" last_height="$2" phase="$3" event="${4:-heartbeat}" process_running="${5:-1}"
+  printf '%s\n' "$json" | \
+    TARGET_BLOCK_HEIGHT="$TARGET" BENCHMARK_GATE="$(benchmark_gate)" \
+    BENCHMARK_STARTED_MS="$start_ms" BENCHMARK_LAST_HEIGHT="$last_height" \
+    BENCHMARK_PHASE="$phase" BENCHMARK_EVENT="$event" BENCHMARK_RUN_ID="$run_id" \
+    BENCHMARK_PROCESS_RUNNING="$process_running" POLL_SEC="$POLL_SEC" \
+    python3 scripts/emit_benchmark_telemetry_tick.py
+}
+
+log_tick() {
+  local line
+  line="$(emit_benchmark_tick "$@")"
+  printf '%s\n' "$line" | tee -a "$RUN_LOG_TMP"
+}
+
+: > "$RUN_LOG_TMP"
+log_tick '{}' 0 startup run_started 1
+docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 set +e
-set +o pipefail
 DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" HEADERS_MAX="$HEADERS_MAX" \
   HEADER_BATCHES_MAX="$HEADER_BATCHES_MAX" BLOCKS_MAX="$BLOCKS_MAX" \
-  "${DOCKER_COMPOSE[@]}" run --rm --no-deps \
+  "${DOCKER_COMPOSE[@]}" run -d --name "$CONTAINER_NAME" --no-deps \
     -e PAR_SCRIPT_VERIFY=1 \
     -e SYNC_TIMING=1 \
     -e BLOCK_PREFETCH_DEPTH="$PREFETCH_DEPTH" \
     -e ROCKSDB_DISABLE_WAL=0 \
-    jbitnode-sync-proof 2>&1 | tee "$RUN_LOG_TMP"
-sync_exit=${PIPESTATUS[0]}
-set -o pipefail
+    jbitnode-sync-proof >/dev/null
+start_exit=$?
 set -e
+if [[ "$start_exit" -eq 0 ]]; then
+  log_tick '{}' 0 startup container_started 1
+  log_tick '{}' 0 startup node_started 1
+  last_height=0
+  last_report="$(date +%s)"
+  first_peer_byte=0
+  first_block_connected=0
+  while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
+    sleep "$CHECK_SEC"
+    now_report="$(date +%s)"
+    json="$(status_json)"
+    h="$(echo "$json" | field "print(d.get('validated_height','?'))")"
+    header="$(echo "$json" | field "print(d.get('header_height','?'))")"
+    previous_height="$last_height"
+    if [[ "$h" =~ ^[0-9]+$ ]]; then
+      last_height="$h"
+    fi
+    if [[ "$first_peer_byte" == "0" ]] && [[ "$header" =~ ^[0-9]+$ ]] && (( header > 0 )); then
+      log_tick "$json" "$previous_height" peer_connect first_peer_byte 1
+      first_peer_byte=1
+    fi
+    if [[ "$first_block_connected" == "0" ]] && [[ "$h" =~ ^[0-9]+$ ]] && (( h > 0 )); then
+      log_tick "$json" "$previous_height" block_connect first_block_connected 1
+      first_block_connected=1
+    fi
+    if (( now_report - last_report >= POLL_SEC )); then
+      log_tick "$json" "$previous_height" heartbeat heartbeat 1
+      last_report="$now_report"
+    fi
+  done
+  sync_exit="$(docker inspect "$CONTAINER_NAME" --format '{{.State.ExitCode}}' 2>/dev/null || echo 125)"
+  status_json >"$STATUS_TMP" 2>&1
+  final_json="$(cat "$STATUS_TMP")"
+  final_height="$(echo "$final_json" | field "print(d.get('validated_height','?'))")"
+  if [[ "$final_height" =~ ^[0-9]+$ ]] && (( final_height >= TARGET )); then
+    log_tick "$final_json" "$last_height" complete target_reached 0
+  fi
+  log_tick "$final_json" "$last_height" complete run_finished 0
+  docker logs "$CONTAINER_NAME" 2>&1 | tee -a "$RUN_LOG_TMP" || true
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+else
+  sync_exit="$start_exit"
+  echo '{}' >"$STATUS_TMP"
+  log_tick '{}' 0 failed run_finished 0
+fi
 end_ms="$(now_ms)"
 
 set +e
@@ -194,6 +280,57 @@ def parse_run_log(path):
     return raw, timing, slow_blocks, exit_summary, current_blocker
 
 
+def telemetry_summary(path):
+    ticks = []
+    prefix = "benchmark.telemetry_tick "
+    for raw_line in path.read_text(errors="replace").splitlines():
+        marker = raw_line.find(prefix)
+        if marker < 0:
+            continue
+        try:
+            tick = json.loads(raw_line[marker + len(prefix) :])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(tick, dict):
+            ticks.append(tick)
+    lifecycle = {}
+    phase_counts = {}
+    stall_counts = {}
+    max_gap = 0
+    last_monotonic = None
+    for tick in sorted(ticks, key=lambda item: as_int(item.get("monotonic_ms"), 0)):
+        event = str(tick.get("event") or "")
+        monotonic = as_int(tick.get("monotonic_ms"), 0)
+        if event and event not in lifecycle:
+            lifecycle[event] = monotonic
+        phase = str(tick.get("phase") or "")
+        stall = str(tick.get("stall_class") or "")
+        phase_counts[phase] = phase_counts.get(phase, 0) + 1
+        stall_counts[stall] = stall_counts.get(stall, 0) + 1
+        if last_monotonic is not None:
+            max_gap = max(max_gap, monotonic - last_monotonic)
+        last_monotonic = monotonic
+    required = {
+        "run_started",
+        "container_started",
+        "node_started",
+        "first_peer_byte",
+        "first_block_connected",
+        "target_reached",
+        "run_finished",
+    }
+    quality = "clean" if ticks and required.issubset(lifecycle) else ("sparse" if ticks else "missing")
+    return {
+        "telemetry_quality": quality,
+        "tick_count": len(ticks),
+        "heartbeat_max_gap_ms": max_gap,
+        "lifecycle_markers": lifecycle,
+        "phase_counts": phase_counts,
+        "stall_class_counts": stall_counts,
+        "slow_blocks": [],
+    }
+
+
 status_raw = Path(os.environ["STATUS_PATH"]).read_text(errors="replace")
 try:
     status = extract_json_object(status_raw)
@@ -203,6 +340,7 @@ except json.JSONDecodeError:
 _, stage_totals, slow_blocks, exit_summary, log_blocker = parse_run_log(
     Path(os.environ["RUN_LOG_PATH"])
 )
+telemetry = telemetry_summary(Path(os.environ["RUN_LOG_PATH"]))
 
 sync_exit = as_int(os.environ.get("SYNC_EXIT"))
 status_exit = as_int(os.environ.get("STATUS_EXIT"))
@@ -307,6 +445,7 @@ doc = {
     "resume_supported": True,
     "timing_summary": timing_summary,
     "pipeline_timing_summary": timing_summary,
+    "telemetry_summary": telemetry,
     "elapsed_ms": elapsed_ms,
     "captured_at": captured_at,
     "updated_at": captured_at,

@@ -7,7 +7,7 @@
   "blocks_connected": 5001,
   "blocks_fetched": 5001,
   "byte_source": "local_reference_p2p",
-  "captured_at": "2026-06-06T23:12:02.993588569+00:00",
+  "captured_at": "2026-06-06T23:30:17.122846178+00:00",
   "category": "local_reference_sync",
   "chain": "testnet4",
   "chainstate_backend": "rocksdb",
@@ -26,7 +26,7 @@
     "rocksdb_wal_disabled": false,
     "runtime_surface": "docker",
     "script_runner_mode": "parallel",
-    "started_at": "2026-06-06T23:12:05.326230426+00:00",
+    "started_at": "2026-06-06T23:30:19.442162553+00:00",
     "storage_codec_version": 2,
     "stored_block_height": 5000,
     "sync_status": "blocks_current",
@@ -80,7 +80,7 @@
       "utxo_lookup_count": 99,
       "utxo_value_bytes": 1950
     },
-    "updated_at": "2026-06-06T23:12:05.328328622+00:00",
+    "updated_at": "2026-06-06T23:30:19.444296319+00:00",
     "utxo_accounting_policy": "core_spendable_v1",
     "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
     "validated_height": 5000
@@ -100,17 +100,17 @@
   "peer": "bitcoin-core-testnet4:48333",
   "peer_mode": "local_reference",
   "pipeline_timing_summary": {
-    "block_connect_store_commit": 908,
+    "block_connect_store_commit": 911,
     "block_parse_validate": 82,
-    "block_store": 83,
+    "block_store": 75,
     "blocks_connected": 5001,
     "blocks_fetched": 5001,
     "commit": 0,
-    "connect_total": 2063,
+    "connect_total": 2062,
     "created_utxos": 66644,
     "metadata_put_prepare": 0,
     "metadata_store": 0,
-    "p2p_fetch": 4,
+    "p2p_fetch": 12,
     "prefetch_depth": 4,
     "prevout_batch_load": 0,
     "prevout_multi_get_call": 0,
@@ -123,10 +123,32 @@
     "same_block_spends": 41998,
     "script_jobs": 104068,
     "script_threads": 15,
-    "script_verify": 504,
-    "script_wall_ms": 504,
-    "script_worker_cpu_ms": 999,
+    "script_verify": 497,
+    "script_wall_ms": 497,
+    "script_worker_cpu_ms": 997,
     "slow_blocks": [
+      {
+        "created_utxos": 0,
+        "height": 3259,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 25
+        },
+        "ms": 4,
+        "output_script_types": {
+          "op_return": 1,
+          "p2wpkh": 27
+        },
+        "same_block_spends": 0,
+        "script_input_count": 25,
+        "spent_external": 0,
+        "spent_prevout_script_types": {
+          "p2wpkh": 25
+        },
+        "tx_count": 9,
+        "vin_count": 26,
+        "vout_count": 28
+      },
       {
         "created_utxos": 0,
         "height": 739,
@@ -134,7 +156,7 @@
           "coinbase": 1,
           "witness": 563
         },
-        "ms": 5,
+        "ms": 3,
         "output_script_types": {
           "op_return": 1,
           "p2wpkh": 3
@@ -151,51 +173,29 @@
       },
       {
         "created_utxos": 0,
-        "height": 4634,
+        "height": 4340,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 102
+          "witness": 443
         },
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
-          "p2wpkh": 86
+          "p2wpkh": 432
         },
         "same_block_spends": 0,
-        "script_input_count": 102,
+        "script_input_count": 443,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 102
+          "p2wpkh": 443
         },
-        "tx_count": 9,
-        "vin_count": 103,
-        "vout_count": 87
+        "tx_count": 40,
+        "vin_count": 444,
+        "vout_count": 433
       },
       {
         "created_utxos": 0,
-        "height": 4639,
-        "input_shape_counts": {
-          "coinbase": 1,
-          "witness": 105
-        },
-        "ms": 3,
-        "output_script_types": {
-          "op_return": 1,
-          "p2wpkh": 97
-        },
-        "same_block_spends": 0,
-        "script_input_count": 105,
-        "spent_external": 0,
-        "spent_prevout_script_types": {
-          "p2wpkh": 105
-        },
-        "tx_count": 10,
-        "vin_count": 106,
-        "vout_count": 98
-      },
-      {
-        "created_utxos": 0,
-        "height": 4678,
+        "height": 4529,
         "input_shape_counts": {
           "coinbase": 1,
           "witness": 118
@@ -203,8 +203,7 @@
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
-          "p2pkh": 1,
-          "p2wpkh": 106
+          "p2wpkh": 112
         },
         "same_block_spends": 0,
         "script_input_count": 118,
@@ -212,76 +211,77 @@
         "spent_prevout_script_types": {
           "p2wpkh": 118
         },
-        "tx_count": 12,
+        "tx_count": 13,
         "vin_count": 119,
-        "vout_count": 108
+        "vout_count": 113
       },
       {
         "created_utxos": 0,
-        "height": 4778,
+        "height": 4534,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 66
+          "witness": 91
+        },
+        "ms": 3,
+        "output_script_types": {
+          "op_return": 1,
+          "p2wpkh": 102
+        },
+        "same_block_spends": 0,
+        "script_input_count": 91,
+        "spent_external": 0,
+        "spent_prevout_script_types": {
+          "p2wpkh": 91
+        },
+        "tx_count": 12,
+        "vin_count": 92,
+        "vout_count": 103
+      },
+      {
+        "created_utxos": 0,
+        "height": 4543,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 113
         },
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
           "p2pkh": 1,
-          "p2wpkh": 66
+          "p2wpkh": 113
         },
         "same_block_spends": 0,
-        "script_input_count": 66,
+        "script_input_count": 113,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 66
+          "p2wpkh": 113
         },
-        "tx_count": 8,
-        "vin_count": 67,
-        "vout_count": 68
+        "tx_count": 14,
+        "vin_count": 114,
+        "vout_count": 115
       },
       {
         "created_utxos": 0,
-        "height": 4907,
+        "height": 4824,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 71
+          "witness": 126
         },
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
-          "p2wpkh": 74
+          "p2pkh": 1,
+          "p2wpkh": 140
         },
         "same_block_spends": 0,
-        "script_input_count": 71,
+        "script_input_count": 126,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 71
+          "p2wpkh": 126
         },
-        "tx_count": 6,
-        "vin_count": 72,
-        "vout_count": 75
-      },
-      {
-        "created_utxos": 0,
-        "height": 2187,
-        "input_shape_counts": {
-          "coinbase": 1,
-          "witness": 234
-        },
-        "ms": 2,
-        "output_script_types": {
-          "op_return": 1,
-          "p2wpkh": 203
-        },
-        "same_block_spends": 0,
-        "script_input_count": 234,
-        "spent_external": 0,
-        "spent_prevout_script_types": {
-          "p2wpkh": 234
-        },
-        "tx_count": 36,
-        "vin_count": 235,
-        "vout_count": 204
+        "tx_count": 14,
+        "vin_count": 127,
+        "vout_count": 142
       },
       {
         "created_utxos": 0,
@@ -329,56 +329,56 @@
       },
       {
         "created_utxos": 0,
-        "height": 2191,
+        "height": 2193,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 217
+          "witness": 90
         },
         "ms": 2,
         "output_script_types": {
           "op_return": 1,
-          "p2wpkh": 251
+          "p2wpkh": 106
         },
         "same_block_spends": 0,
-        "script_input_count": 217,
+        "script_input_count": 90,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 217
+          "p2wpkh": 90
         },
-        "tx_count": 44,
-        "vin_count": 218,
-        "vout_count": 252
+        "tx_count": 19,
+        "vin_count": 91,
+        "vout_count": 107
       }
     ],
     "spent_external": 62070,
     "stage_totals_ms": {
-      "block_connect_store_commit": 908,
+      "block_connect_store_commit": 911,
       "block_parse_validate": 82,
-      "block_store": 83,
+      "block_store": 75,
       "commit": 0,
-      "connect_total": 2063,
+      "connect_total": 2062,
       "metadata_store": 0,
-      "p2p_fetch": 4,
+      "p2p_fetch": 12,
       "prevout_batch_load": 0,
       "prevout_multi_get_call": 0,
       "prevout_utxo_decode": 0,
-      "script_verify": 504,
+      "script_verify": 497,
       "utxo_apply": 0,
       "utxo_load": 0
     },
     "telemetry_schema": "benchmark.telemetry_tick.v1",
     "telemetry_summary": {
       "heartbeat_limit_ms": 15000,
-      "heartbeat_max_gap_ms": 135,
+      "heartbeat_max_gap_ms": 154,
       "lifecycle_markers": {
         "container_started": 0,
-        "first_block_connected": 16,
-        "first_peer_byte": 16,
-        "heartbeat": 16,
+        "first_block_connected": 10,
+        "first_peer_byte": 10,
+        "heartbeat": 10,
         "node_started": 0,
-        "run_finished": 2317,
+        "run_finished": 2303,
         "run_started": 0,
-        "target_reached": 2317
+        "target_reached": 2303
       },
       "phase_counts": {
         "block_connect": 1,
@@ -390,12 +390,34 @@
       "slow_blocks": [
         {
           "created_utxos": 0,
+          "height": 3259,
+          "input_shape_counts": {
+            "coinbase": 1,
+            "witness": 25
+          },
+          "ms": 4,
+          "output_script_types": {
+            "op_return": 1,
+            "p2wpkh": 27
+          },
+          "same_block_spends": 0,
+          "script_input_count": 25,
+          "spent_external": 0,
+          "spent_prevout_script_types": {
+            "p2wpkh": 25
+          },
+          "tx_count": 9,
+          "vin_count": 26,
+          "vout_count": 28
+        },
+        {
+          "created_utxos": 0,
           "height": 739,
           "input_shape_counts": {
             "coinbase": 1,
             "witness": 563
           },
-          "ms": 5,
+          "ms": 3,
           "output_script_types": {
             "op_return": 1,
             "p2wpkh": 3
@@ -412,51 +434,29 @@
         },
         {
           "created_utxos": 0,
-          "height": 4634,
+          "height": 4340,
           "input_shape_counts": {
             "coinbase": 1,
-            "witness": 102
+            "witness": 443
           },
           "ms": 3,
           "output_script_types": {
             "op_return": 1,
-            "p2wpkh": 86
+            "p2wpkh": 432
           },
           "same_block_spends": 0,
-          "script_input_count": 102,
+          "script_input_count": 443,
           "spent_external": 0,
           "spent_prevout_script_types": {
-            "p2wpkh": 102
+            "p2wpkh": 443
           },
-          "tx_count": 9,
-          "vin_count": 103,
-          "vout_count": 87
+          "tx_count": 40,
+          "vin_count": 444,
+          "vout_count": 433
         },
         {
           "created_utxos": 0,
-          "height": 4639,
-          "input_shape_counts": {
-            "coinbase": 1,
-            "witness": 105
-          },
-          "ms": 3,
-          "output_script_types": {
-            "op_return": 1,
-            "p2wpkh": 97
-          },
-          "same_block_spends": 0,
-          "script_input_count": 105,
-          "spent_external": 0,
-          "spent_prevout_script_types": {
-            "p2wpkh": 105
-          },
-          "tx_count": 10,
-          "vin_count": 106,
-          "vout_count": 98
-        },
-        {
-          "created_utxos": 0,
-          "height": 4678,
+          "height": 4529,
           "input_shape_counts": {
             "coinbase": 1,
             "witness": 118
@@ -464,8 +464,7 @@
           "ms": 3,
           "output_script_types": {
             "op_return": 1,
-            "p2pkh": 1,
-            "p2wpkh": 106
+            "p2wpkh": 112
           },
           "same_block_spends": 0,
           "script_input_count": 118,
@@ -473,76 +472,77 @@
           "spent_prevout_script_types": {
             "p2wpkh": 118
           },
-          "tx_count": 12,
+          "tx_count": 13,
           "vin_count": 119,
-          "vout_count": 108
+          "vout_count": 113
         },
         {
           "created_utxos": 0,
-          "height": 4778,
+          "height": 4534,
           "input_shape_counts": {
             "coinbase": 1,
-            "witness": 66
+            "witness": 91
+          },
+          "ms": 3,
+          "output_script_types": {
+            "op_return": 1,
+            "p2wpkh": 102
+          },
+          "same_block_spends": 0,
+          "script_input_count": 91,
+          "spent_external": 0,
+          "spent_prevout_script_types": {
+            "p2wpkh": 91
+          },
+          "tx_count": 12,
+          "vin_count": 92,
+          "vout_count": 103
+        },
+        {
+          "created_utxos": 0,
+          "height": 4543,
+          "input_shape_counts": {
+            "coinbase": 1,
+            "witness": 113
           },
           "ms": 3,
           "output_script_types": {
             "op_return": 1,
             "p2pkh": 1,
-            "p2wpkh": 66
+            "p2wpkh": 113
           },
           "same_block_spends": 0,
-          "script_input_count": 66,
+          "script_input_count": 113,
           "spent_external": 0,
           "spent_prevout_script_types": {
-            "p2wpkh": 66
+            "p2wpkh": 113
           },
-          "tx_count": 8,
-          "vin_count": 67,
-          "vout_count": 68
+          "tx_count": 14,
+          "vin_count": 114,
+          "vout_count": 115
         },
         {
           "created_utxos": 0,
-          "height": 4907,
+          "height": 4824,
           "input_shape_counts": {
             "coinbase": 1,
-            "witness": 71
+            "witness": 126
           },
           "ms": 3,
           "output_script_types": {
             "op_return": 1,
-            "p2wpkh": 74
+            "p2pkh": 1,
+            "p2wpkh": 140
           },
           "same_block_spends": 0,
-          "script_input_count": 71,
+          "script_input_count": 126,
           "spent_external": 0,
           "spent_prevout_script_types": {
-            "p2wpkh": 71
+            "p2wpkh": 126
           },
-          "tx_count": 6,
-          "vin_count": 72,
-          "vout_count": 75
-        },
-        {
-          "created_utxos": 0,
-          "height": 2187,
-          "input_shape_counts": {
-            "coinbase": 1,
-            "witness": 234
-          },
-          "ms": 2,
-          "output_script_types": {
-            "op_return": 1,
-            "p2wpkh": 203
-          },
-          "same_block_spends": 0,
-          "script_input_count": 234,
-          "spent_external": 0,
-          "spent_prevout_script_types": {
-            "p2wpkh": 234
-          },
-          "tx_count": 36,
-          "vin_count": 235,
-          "vout_count": 204
+          "tx_count": 14,
+          "vin_count": 127,
+          "vout_count": 142
         },
         {
           "created_utxos": 0,
@@ -590,25 +590,25 @@
         },
         {
           "created_utxos": 0,
-          "height": 2191,
+          "height": 2193,
           "input_shape_counts": {
             "coinbase": 1,
-            "witness": 217
+            "witness": 90
           },
           "ms": 2,
           "output_script_types": {
             "op_return": 1,
-            "p2wpkh": 251
+            "p2wpkh": 106
           },
           "same_block_spends": 0,
-          "script_input_count": 217,
+          "script_input_count": 90,
           "spent_external": 0,
           "spent_prevout_script_types": {
-            "p2wpkh": 217
+            "p2wpkh": 90
           },
-          "tx_count": 44,
-          "vin_count": 218,
-          "vout_count": 252
+          "tx_count": 19,
+          "vin_count": 91,
+          "vout_count": 107
         }
       ],
       "stall_class_counts": {
@@ -617,8 +617,8 @@
       "telemetry_quality": "clean",
       "tick_count": 58
     },
-    "total_ms": 2317,
-    "total_wall": 2317,
+    "total_ms": 2303,
+    "total_wall": 2303,
     "undo_put_prepare": 0,
     "utxo_apply": 0,
     "utxo_delete_prepare": 0,
@@ -673,7 +673,7 @@
     "stored_block_height": 5000,
     "sync_status": "blocks_current",
     "taproot_tweak_backend": "rust-secp256k1",
-    "updated_at": "2026-06-06T23:12:05.328261123+00:00",
+    "updated_at": "2026-06-06T23:30:19.444227485+00:00",
     "utxo_accounting_policy": "core_spendable_v1",
     "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
     "validated_height": 5000
@@ -694,11 +694,11 @@
     "resumed_from_height": null,
     "runtime_surface": "docker",
     "start_height": 0,
-    "started_at": "2026-06-06T23:12:03.010772471+00:00",
+    "started_at": "2026-06-06T23:30:17.140512388+00:00",
     "stored_block_height": 5000,
     "sync_status": "blocks_current",
     "target_height": 5000,
-    "updated_at": "2026-06-06T23:12:05.328437622+00:00",
+    "updated_at": "2026-06-06T23:30:19.444461945+00:00",
     "validated_height": 5000
   },
   "taproot_tweak_backend": "rust-secp256k1",
@@ -707,16 +707,16 @@
   "telemetry_schema": "benchmark.telemetry_tick.v1",
   "telemetry_summary": {
     "heartbeat_limit_ms": 15000,
-    "heartbeat_max_gap_ms": 135,
+    "heartbeat_max_gap_ms": 154,
     "lifecycle_markers": {
       "container_started": 0,
-      "first_block_connected": 16,
-      "first_peer_byte": 16,
-      "heartbeat": 16,
+      "first_block_connected": 10,
+      "first_peer_byte": 10,
+      "heartbeat": 10,
       "node_started": 0,
-      "run_finished": 2317,
+      "run_finished": 2303,
       "run_started": 0,
-      "target_reached": 2317
+      "target_reached": 2303
     },
     "phase_counts": {
       "block_connect": 1,
@@ -728,12 +728,34 @@
     "slow_blocks": [
       {
         "created_utxos": 0,
+        "height": 3259,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 25
+        },
+        "ms": 4,
+        "output_script_types": {
+          "op_return": 1,
+          "p2wpkh": 27
+        },
+        "same_block_spends": 0,
+        "script_input_count": 25,
+        "spent_external": 0,
+        "spent_prevout_script_types": {
+          "p2wpkh": 25
+        },
+        "tx_count": 9,
+        "vin_count": 26,
+        "vout_count": 28
+      },
+      {
+        "created_utxos": 0,
         "height": 739,
         "input_shape_counts": {
           "coinbase": 1,
           "witness": 563
         },
-        "ms": 5,
+        "ms": 3,
         "output_script_types": {
           "op_return": 1,
           "p2wpkh": 3
@@ -750,51 +772,29 @@
       },
       {
         "created_utxos": 0,
-        "height": 4634,
+        "height": 4340,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 102
+          "witness": 443
         },
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
-          "p2wpkh": 86
+          "p2wpkh": 432
         },
         "same_block_spends": 0,
-        "script_input_count": 102,
+        "script_input_count": 443,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 102
+          "p2wpkh": 443
         },
-        "tx_count": 9,
-        "vin_count": 103,
-        "vout_count": 87
+        "tx_count": 40,
+        "vin_count": 444,
+        "vout_count": 433
       },
       {
         "created_utxos": 0,
-        "height": 4639,
-        "input_shape_counts": {
-          "coinbase": 1,
-          "witness": 105
-        },
-        "ms": 3,
-        "output_script_types": {
-          "op_return": 1,
-          "p2wpkh": 97
-        },
-        "same_block_spends": 0,
-        "script_input_count": 105,
-        "spent_external": 0,
-        "spent_prevout_script_types": {
-          "p2wpkh": 105
-        },
-        "tx_count": 10,
-        "vin_count": 106,
-        "vout_count": 98
-      },
-      {
-        "created_utxos": 0,
-        "height": 4678,
+        "height": 4529,
         "input_shape_counts": {
           "coinbase": 1,
           "witness": 118
@@ -802,8 +802,7 @@
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
-          "p2pkh": 1,
-          "p2wpkh": 106
+          "p2wpkh": 112
         },
         "same_block_spends": 0,
         "script_input_count": 118,
@@ -811,76 +810,77 @@
         "spent_prevout_script_types": {
           "p2wpkh": 118
         },
-        "tx_count": 12,
+        "tx_count": 13,
         "vin_count": 119,
-        "vout_count": 108
+        "vout_count": 113
       },
       {
         "created_utxos": 0,
-        "height": 4778,
+        "height": 4534,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 66
+          "witness": 91
+        },
+        "ms": 3,
+        "output_script_types": {
+          "op_return": 1,
+          "p2wpkh": 102
+        },
+        "same_block_spends": 0,
+        "script_input_count": 91,
+        "spent_external": 0,
+        "spent_prevout_script_types": {
+          "p2wpkh": 91
+        },
+        "tx_count": 12,
+        "vin_count": 92,
+        "vout_count": 103
+      },
+      {
+        "created_utxos": 0,
+        "height": 4543,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 113
         },
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
           "p2pkh": 1,
-          "p2wpkh": 66
+          "p2wpkh": 113
         },
         "same_block_spends": 0,
-        "script_input_count": 66,
+        "script_input_count": 113,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 66
+          "p2wpkh": 113
         },
-        "tx_count": 8,
-        "vin_count": 67,
-        "vout_count": 68
+        "tx_count": 14,
+        "vin_count": 114,
+        "vout_count": 115
       },
       {
         "created_utxos": 0,
-        "height": 4907,
+        "height": 4824,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 71
+          "witness": 126
         },
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
-          "p2wpkh": 74
+          "p2pkh": 1,
+          "p2wpkh": 140
         },
         "same_block_spends": 0,
-        "script_input_count": 71,
+        "script_input_count": 126,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 71
+          "p2wpkh": 126
         },
-        "tx_count": 6,
-        "vin_count": 72,
-        "vout_count": 75
-      },
-      {
-        "created_utxos": 0,
-        "height": 2187,
-        "input_shape_counts": {
-          "coinbase": 1,
-          "witness": 234
-        },
-        "ms": 2,
-        "output_script_types": {
-          "op_return": 1,
-          "p2wpkh": 203
-        },
-        "same_block_spends": 0,
-        "script_input_count": 234,
-        "spent_external": 0,
-        "spent_prevout_script_types": {
-          "p2wpkh": 234
-        },
-        "tx_count": 36,
-        "vin_count": 235,
-        "vout_count": 204
+        "tx_count": 14,
+        "vin_count": 127,
+        "vout_count": 142
       },
       {
         "created_utxos": 0,
@@ -928,25 +928,25 @@
       },
       {
         "created_utxos": 0,
-        "height": 2191,
+        "height": 2193,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 217
+          "witness": 90
         },
         "ms": 2,
         "output_script_types": {
           "op_return": 1,
-          "p2wpkh": 251
+          "p2wpkh": 106
         },
         "same_block_spends": 0,
-        "script_input_count": 217,
+        "script_input_count": 90,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 217
+          "p2wpkh": 90
         },
-        "tx_count": 44,
-        "vin_count": 218,
-        "vout_count": 252
+        "tx_count": 19,
+        "vin_count": 91,
+        "vout_count": 107
       }
     ],
     "stall_class_counts": {
@@ -956,17 +956,17 @@
     "tick_count": 58
   },
   "timing_summary": {
-    "block_connect_store_commit": 908,
+    "block_connect_store_commit": 911,
     "block_parse_validate": 82,
-    "block_store": 83,
+    "block_store": 75,
     "blocks_connected": 5001,
     "blocks_fetched": 5001,
     "commit": 0,
-    "connect_total": 2063,
+    "connect_total": 2062,
     "created_utxos": 66644,
     "metadata_put_prepare": 0,
     "metadata_store": 0,
-    "p2p_fetch": 4,
+    "p2p_fetch": 12,
     "prefetch_depth": 4,
     "prevout_batch_load": 0,
     "prevout_multi_get_call": 0,
@@ -979,10 +979,32 @@
     "same_block_spends": 41998,
     "script_jobs": 104068,
     "script_threads": 15,
-    "script_verify": 504,
-    "script_wall_ms": 504,
-    "script_worker_cpu_ms": 999,
+    "script_verify": 497,
+    "script_wall_ms": 497,
+    "script_worker_cpu_ms": 997,
     "slow_blocks": [
+      {
+        "created_utxos": 0,
+        "height": 3259,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 25
+        },
+        "ms": 4,
+        "output_script_types": {
+          "op_return": 1,
+          "p2wpkh": 27
+        },
+        "same_block_spends": 0,
+        "script_input_count": 25,
+        "spent_external": 0,
+        "spent_prevout_script_types": {
+          "p2wpkh": 25
+        },
+        "tx_count": 9,
+        "vin_count": 26,
+        "vout_count": 28
+      },
       {
         "created_utxos": 0,
         "height": 739,
@@ -990,7 +1012,7 @@
           "coinbase": 1,
           "witness": 563
         },
-        "ms": 5,
+        "ms": 3,
         "output_script_types": {
           "op_return": 1,
           "p2wpkh": 3
@@ -1007,51 +1029,29 @@
       },
       {
         "created_utxos": 0,
-        "height": 4634,
+        "height": 4340,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 102
+          "witness": 443
         },
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
-          "p2wpkh": 86
+          "p2wpkh": 432
         },
         "same_block_spends": 0,
-        "script_input_count": 102,
+        "script_input_count": 443,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 102
+          "p2wpkh": 443
         },
-        "tx_count": 9,
-        "vin_count": 103,
-        "vout_count": 87
+        "tx_count": 40,
+        "vin_count": 444,
+        "vout_count": 433
       },
       {
         "created_utxos": 0,
-        "height": 4639,
-        "input_shape_counts": {
-          "coinbase": 1,
-          "witness": 105
-        },
-        "ms": 3,
-        "output_script_types": {
-          "op_return": 1,
-          "p2wpkh": 97
-        },
-        "same_block_spends": 0,
-        "script_input_count": 105,
-        "spent_external": 0,
-        "spent_prevout_script_types": {
-          "p2wpkh": 105
-        },
-        "tx_count": 10,
-        "vin_count": 106,
-        "vout_count": 98
-      },
-      {
-        "created_utxos": 0,
-        "height": 4678,
+        "height": 4529,
         "input_shape_counts": {
           "coinbase": 1,
           "witness": 118
@@ -1059,8 +1059,7 @@
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
-          "p2pkh": 1,
-          "p2wpkh": 106
+          "p2wpkh": 112
         },
         "same_block_spends": 0,
         "script_input_count": 118,
@@ -1068,76 +1067,77 @@
         "spent_prevout_script_types": {
           "p2wpkh": 118
         },
-        "tx_count": 12,
+        "tx_count": 13,
         "vin_count": 119,
-        "vout_count": 108
+        "vout_count": 113
       },
       {
         "created_utxos": 0,
-        "height": 4778,
+        "height": 4534,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 66
+          "witness": 91
+        },
+        "ms": 3,
+        "output_script_types": {
+          "op_return": 1,
+          "p2wpkh": 102
+        },
+        "same_block_spends": 0,
+        "script_input_count": 91,
+        "spent_external": 0,
+        "spent_prevout_script_types": {
+          "p2wpkh": 91
+        },
+        "tx_count": 12,
+        "vin_count": 92,
+        "vout_count": 103
+      },
+      {
+        "created_utxos": 0,
+        "height": 4543,
+        "input_shape_counts": {
+          "coinbase": 1,
+          "witness": 113
         },
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
           "p2pkh": 1,
-          "p2wpkh": 66
+          "p2wpkh": 113
         },
         "same_block_spends": 0,
-        "script_input_count": 66,
+        "script_input_count": 113,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 66
+          "p2wpkh": 113
         },
-        "tx_count": 8,
-        "vin_count": 67,
-        "vout_count": 68
+        "tx_count": 14,
+        "vin_count": 114,
+        "vout_count": 115
       },
       {
         "created_utxos": 0,
-        "height": 4907,
+        "height": 4824,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 71
+          "witness": 126
         },
         "ms": 3,
         "output_script_types": {
           "op_return": 1,
-          "p2wpkh": 74
+          "p2pkh": 1,
+          "p2wpkh": 140
         },
         "same_block_spends": 0,
-        "script_input_count": 71,
+        "script_input_count": 126,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 71
+          "p2wpkh": 126
         },
-        "tx_count": 6,
-        "vin_count": 72,
-        "vout_count": 75
-      },
-      {
-        "created_utxos": 0,
-        "height": 2187,
-        "input_shape_counts": {
-          "coinbase": 1,
-          "witness": 234
-        },
-        "ms": 2,
-        "output_script_types": {
-          "op_return": 1,
-          "p2wpkh": 203
-        },
-        "same_block_spends": 0,
-        "script_input_count": 234,
-        "spent_external": 0,
-        "spent_prevout_script_types": {
-          "p2wpkh": 234
-        },
-        "tx_count": 36,
-        "vin_count": 235,
-        "vout_count": 204
+        "tx_count": 14,
+        "vin_count": 127,
+        "vout_count": 142
       },
       {
         "created_utxos": 0,
@@ -1185,56 +1185,56 @@
       },
       {
         "created_utxos": 0,
-        "height": 2191,
+        "height": 2193,
         "input_shape_counts": {
           "coinbase": 1,
-          "witness": 217
+          "witness": 90
         },
         "ms": 2,
         "output_script_types": {
           "op_return": 1,
-          "p2wpkh": 251
+          "p2wpkh": 106
         },
         "same_block_spends": 0,
-        "script_input_count": 217,
+        "script_input_count": 90,
         "spent_external": 0,
         "spent_prevout_script_types": {
-          "p2wpkh": 217
+          "p2wpkh": 90
         },
-        "tx_count": 44,
-        "vin_count": 218,
-        "vout_count": 252
+        "tx_count": 19,
+        "vin_count": 91,
+        "vout_count": 107
       }
     ],
     "spent_external": 62070,
     "stage_totals_ms": {
-      "block_connect_store_commit": 908,
+      "block_connect_store_commit": 911,
       "block_parse_validate": 82,
-      "block_store": 83,
+      "block_store": 75,
       "commit": 0,
-      "connect_total": 2063,
+      "connect_total": 2062,
       "metadata_store": 0,
-      "p2p_fetch": 4,
+      "p2p_fetch": 12,
       "prevout_batch_load": 0,
       "prevout_multi_get_call": 0,
       "prevout_utxo_decode": 0,
-      "script_verify": 504,
+      "script_verify": 497,
       "utxo_apply": 0,
       "utxo_load": 0
     },
     "telemetry_schema": "benchmark.telemetry_tick.v1",
     "telemetry_summary": {
       "heartbeat_limit_ms": 15000,
-      "heartbeat_max_gap_ms": 135,
+      "heartbeat_max_gap_ms": 154,
       "lifecycle_markers": {
         "container_started": 0,
-        "first_block_connected": 16,
-        "first_peer_byte": 16,
-        "heartbeat": 16,
+        "first_block_connected": 10,
+        "first_peer_byte": 10,
+        "heartbeat": 10,
         "node_started": 0,
-        "run_finished": 2317,
+        "run_finished": 2303,
         "run_started": 0,
-        "target_reached": 2317
+        "target_reached": 2303
       },
       "phase_counts": {
         "block_connect": 1,
@@ -1246,12 +1246,34 @@
       "slow_blocks": [
         {
           "created_utxos": 0,
+          "height": 3259,
+          "input_shape_counts": {
+            "coinbase": 1,
+            "witness": 25
+          },
+          "ms": 4,
+          "output_script_types": {
+            "op_return": 1,
+            "p2wpkh": 27
+          },
+          "same_block_spends": 0,
+          "script_input_count": 25,
+          "spent_external": 0,
+          "spent_prevout_script_types": {
+            "p2wpkh": 25
+          },
+          "tx_count": 9,
+          "vin_count": 26,
+          "vout_count": 28
+        },
+        {
+          "created_utxos": 0,
           "height": 739,
           "input_shape_counts": {
             "coinbase": 1,
             "witness": 563
           },
-          "ms": 5,
+          "ms": 3,
           "output_script_types": {
             "op_return": 1,
             "p2wpkh": 3
@@ -1268,51 +1290,29 @@
         },
         {
           "created_utxos": 0,
-          "height": 4634,
+          "height": 4340,
           "input_shape_counts": {
             "coinbase": 1,
-            "witness": 102
+            "witness": 443
           },
           "ms": 3,
           "output_script_types": {
             "op_return": 1,
-            "p2wpkh": 86
+            "p2wpkh": 432
           },
           "same_block_spends": 0,
-          "script_input_count": 102,
+          "script_input_count": 443,
           "spent_external": 0,
           "spent_prevout_script_types": {
-            "p2wpkh": 102
+            "p2wpkh": 443
           },
-          "tx_count": 9,
-          "vin_count": 103,
-          "vout_count": 87
+          "tx_count": 40,
+          "vin_count": 444,
+          "vout_count": 433
         },
         {
           "created_utxos": 0,
-          "height": 4639,
-          "input_shape_counts": {
-            "coinbase": 1,
-            "witness": 105
-          },
-          "ms": 3,
-          "output_script_types": {
-            "op_return": 1,
-            "p2wpkh": 97
-          },
-          "same_block_spends": 0,
-          "script_input_count": 105,
-          "spent_external": 0,
-          "spent_prevout_script_types": {
-            "p2wpkh": 105
-          },
-          "tx_count": 10,
-          "vin_count": 106,
-          "vout_count": 98
-        },
-        {
-          "created_utxos": 0,
-          "height": 4678,
+          "height": 4529,
           "input_shape_counts": {
             "coinbase": 1,
             "witness": 118
@@ -1320,8 +1320,7 @@
           "ms": 3,
           "output_script_types": {
             "op_return": 1,
-            "p2pkh": 1,
-            "p2wpkh": 106
+            "p2wpkh": 112
           },
           "same_block_spends": 0,
           "script_input_count": 118,
@@ -1329,76 +1328,77 @@
           "spent_prevout_script_types": {
             "p2wpkh": 118
           },
-          "tx_count": 12,
+          "tx_count": 13,
           "vin_count": 119,
-          "vout_count": 108
+          "vout_count": 113
         },
         {
           "created_utxos": 0,
-          "height": 4778,
+          "height": 4534,
           "input_shape_counts": {
             "coinbase": 1,
-            "witness": 66
+            "witness": 91
+          },
+          "ms": 3,
+          "output_script_types": {
+            "op_return": 1,
+            "p2wpkh": 102
+          },
+          "same_block_spends": 0,
+          "script_input_count": 91,
+          "spent_external": 0,
+          "spent_prevout_script_types": {
+            "p2wpkh": 91
+          },
+          "tx_count": 12,
+          "vin_count": 92,
+          "vout_count": 103
+        },
+        {
+          "created_utxos": 0,
+          "height": 4543,
+          "input_shape_counts": {
+            "coinbase": 1,
+            "witness": 113
           },
           "ms": 3,
           "output_script_types": {
             "op_return": 1,
             "p2pkh": 1,
-            "p2wpkh": 66
+            "p2wpkh": 113
           },
           "same_block_spends": 0,
-          "script_input_count": 66,
+          "script_input_count": 113,
           "spent_external": 0,
           "spent_prevout_script_types": {
-            "p2wpkh": 66
+            "p2wpkh": 113
           },
-          "tx_count": 8,
-          "vin_count": 67,
-          "vout_count": 68
+          "tx_count": 14,
+          "vin_count": 114,
+          "vout_count": 115
         },
         {
           "created_utxos": 0,
-          "height": 4907,
+          "height": 4824,
           "input_shape_counts": {
             "coinbase": 1,
-            "witness": 71
+            "witness": 126
           },
           "ms": 3,
           "output_script_types": {
             "op_return": 1,
-            "p2wpkh": 74
+            "p2pkh": 1,
+            "p2wpkh": 140
           },
           "same_block_spends": 0,
-          "script_input_count": 71,
+          "script_input_count": 126,
           "spent_external": 0,
           "spent_prevout_script_types": {
-            "p2wpkh": 71
+            "p2wpkh": 126
           },
-          "tx_count": 6,
-          "vin_count": 72,
-          "vout_count": 75
-        },
-        {
-          "created_utxos": 0,
-          "height": 2187,
-          "input_shape_counts": {
-            "coinbase": 1,
-            "witness": 234
-          },
-          "ms": 2,
-          "output_script_types": {
-            "op_return": 1,
-            "p2wpkh": 203
-          },
-          "same_block_spends": 0,
-          "script_input_count": 234,
-          "spent_external": 0,
-          "spent_prevout_script_types": {
-            "p2wpkh": 234
-          },
-          "tx_count": 36,
-          "vin_count": 235,
-          "vout_count": 204
+          "tx_count": 14,
+          "vin_count": 127,
+          "vout_count": 142
         },
         {
           "created_utxos": 0,
@@ -1446,25 +1446,25 @@
         },
         {
           "created_utxos": 0,
-          "height": 2191,
+          "height": 2193,
           "input_shape_counts": {
             "coinbase": 1,
-            "witness": 217
+            "witness": 90
           },
           "ms": 2,
           "output_script_types": {
             "op_return": 1,
-            "p2wpkh": 251
+            "p2wpkh": 106
           },
           "same_block_spends": 0,
-          "script_input_count": 217,
+          "script_input_count": 90,
           "spent_external": 0,
           "spent_prevout_script_types": {
-            "p2wpkh": 217
+            "p2wpkh": 90
           },
-          "tx_count": 44,
-          "vin_count": 218,
-          "vout_count": 252
+          "tx_count": 19,
+          "vin_count": 91,
+          "vout_count": 107
         }
       ],
       "stall_class_counts": {
@@ -1473,8 +1473,8 @@
       "telemetry_quality": "clean",
       "tick_count": 58
     },
-    "total_ms": 2317,
-    "total_wall": 2317,
+    "total_ms": 2303,
+    "total_wall": 2303,
     "undo_put_prepare": 0,
     "utxo_apply": 0,
     "utxo_delete_prepare": 0,
@@ -1484,7 +1484,7 @@
     "utxo_put_prepare": 0,
     "utxo_value_bytes": 2420796
   },
-  "updated_at": "2026-06-06T23:12:05.445571041+00:00",
+  "updated_at": "2026-06-06T23:30:19.572457950+00:00",
   "utxo_accounting_policy": "core_spendable_v1",
   "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
   "validated_height": 5000

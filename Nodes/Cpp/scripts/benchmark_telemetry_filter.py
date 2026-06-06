@@ -78,6 +78,7 @@ def main() -> int:
     started = time.monotonic()
     run_id = f"{args.port}-{benchmark_gate(args.target)}-{int(time.time() * 1000)}"
     last_height = 0
+    last_utxos = 0
     last_tick_height = 0
     last_tick_time = started
     stage_totals: dict[str, int] = {
@@ -128,7 +129,7 @@ def main() -> int:
             "rate_recent_blocks_per_second": recent_height_delta / recent_elapsed,
             "rate_total_blocks_per_second": max(0, height) / total_elapsed,
             "phase": phase,
-            "utxos": 0,
+            "utxos": last_utxos,
             "last_block_ms": last_ms,
             "stall_class": stall_class,
             "current_block_elapsed_ms": last_ms,
@@ -178,6 +179,7 @@ def main() -> int:
         height = as_int(parsed.get("height"))
         if height <= 0:
             continue
+        last_utxos = as_int(parsed.get("utxo_count"), last_utxos)
 
         last_ms = ms_from_us(parsed.get("block_connect_store_commit"))
         block = {

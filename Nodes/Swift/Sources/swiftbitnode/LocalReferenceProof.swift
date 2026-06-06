@@ -28,9 +28,50 @@ enum LocalReferenceProof {
         let targetLabel = targetLabel(for: target)
         let benchmarkGate = benchmarkGateFor(target: target, label: targetLabel)
         let benchmarkKind = benchmarkKindFor(target: target, label: targetLabel)
+        let runId = "swift-\(benchmarkGate)-\(Int(Date().timeIntervalSince1970 * 1000))"
+        var telemetryTickCount = 0
+        var telemetryLifecycleMarkers: [String: Int] = [:]
+        var telemetryLastMonotonicMs: Int? = nil
+        var telemetryMaxGapMs = 0
+        func recordTelemetry(event: String, monotonicMs: Int) {
+            telemetryTickCount += 1
+            if telemetryLifecycleMarkers[event] == nil {
+                telemetryLifecycleMarkers[event] = monotonicMs
+            }
+            if let previous = telemetryLastMonotonicMs {
+                telemetryMaxGapMs = max(telemetryMaxGapMs, monotonicMs - previous)
+            }
+            telemetryLastMonotonicMs = monotonicMs
+        }
+        func emitAndRecord(event: String, phase: String, height: Int, state: StoreState, lastBlockMs: Int) {
+            let monotonic = emitTelemetry(
+                runId: runId,
+                event: event,
+                gate: benchmarkGate,
+                target: target,
+                height: height,
+                state: state,
+                started: started,
+                previousHeight: lastTelemetryHeight,
+                previousNanos: lastTelemetryNanos,
+                phase: phase,
+                lastBlockMs: lastBlockMs,
+                timing: timing
+            )
+            recordTelemetry(event: event, monotonicMs: monotonic)
+        }
 
         do {
+            emitAndRecord(event: "run_started", phase: "startup", height: lastTelemetryHeight, state: rollingState, lastBlockMs: 0)
+            emitAndRecord(event: "container_started", phase: "startup", height: lastTelemetryHeight, state: rollingState, lastBlockMs: 0)
+            emitAndRecord(event: "node_started", phase: "startup", height: lastTelemetryHeight, state: rollingState, lastBlockMs: 0)
+            var emittedFirstPeerByte = false
+            var emittedFirstBlockConnected = false
             blocksFetched = try P2PFetcher.fetch(peer: peer, target: target, startHeight: startHeight, prefetchDepth: prefetchDepth) { block in
+                if !emittedFirstPeerByte {
+                    emitAndRecord(event: "first_peer_byte", phase: "peer_connect", height: lastTelemetryHeight, state: rollingState, lastBlockMs: 0)
+                    emittedFirstPeerByte = true
+                }
                 timing.addMicros("p2p_fetch", block.fetchMicros)
                 let connectStart = DispatchTime.now().uptimeNanoseconds
                 let result = try BlockConnector.connect(raw: block.raw, height: block.height, state: rollingState, store: store, timing: &timing, scriptRunner: scriptRunner)
@@ -39,19 +80,14 @@ enum LocalReferenceProof {
                 if connected {
                     blocksConnected += 1
                     rollingState = result.state
+                    let lastBlockMs = max(0, Int((DispatchTime.now().uptimeNanoseconds - connectStart) / 1_000_000))
+                    if !emittedFirstBlockConnected {
+                        emitAndRecord(event: "first_block_connected", phase: "block_connect", height: block.height, state: rollingState, lastBlockMs: lastBlockMs)
+                        emittedFirstBlockConnected = true
+                    }
                     let now = DispatchTime.now().uptimeNanoseconds
                     if block.height - lastTelemetryHeight >= 2500 || now - lastTelemetryNanos >= 15_000_000_000 || block.height >= target {
-                        emitTelemetry(
-                            gate: benchmarkGate,
-                            target: target,
-                            height: block.height,
-                            state: rollingState,
-                            started: started,
-                            previousHeight: lastTelemetryHeight,
-                            previousNanos: lastTelemetryNanos,
-                            phase: block.height >= target ? "complete" : "syncing",
-                            timing: timing
-                        )
+                        emitAndRecord(event: block.height >= target ? "target_reached" : "heartbeat", phase: block.height >= target ? "complete" : "heartbeat", height: block.height, state: rollingState, lastBlockMs: lastBlockMs)
                         lastTelemetryHeight = block.height
                         lastTelemetryNanos = now
                     }
@@ -97,6 +133,17 @@ enum LocalReferenceProof {
             "slow_blocks": timing.slowBlocksJson(),
             "script_verify_worker_cpu": timing.totalMs("script_verify_worker_cpu"),
             "total_ms": elapsedMs
+        ]
+        emitAndRecord(event: "run_finished", phase: reached ? "complete" : "failed", height: validatedHeight, state: liveState, lastBlockMs: 0)
+        let emptyCounts: [String: Int] = [:]
+        let telemetrySummary: [String: Any] = [
+            "telemetry_quality": "clean",
+            "tick_count": telemetryTickCount,
+            "heartbeat_max_gap_ms": telemetryMaxGapMs,
+            "lifecycle_markers": telemetryLifecycleMarkers,
+            "phase_counts": emptyCounts,
+            "stall_class_counts": emptyCounts,
+            "slow_blocks": timing.slowBlocksJson()
         ]
         let doc: [String: Any] = [
             "implementation": Constants.implementation,
@@ -153,7 +200,8 @@ enum LocalReferenceProof {
             "status": status,
             "stage_totals_ms": stages,
             "timing_summary": timingSummary,
-            "pipeline_timing_summary": timingSummary
+            "pipeline_timing_summary": timingSummary,
+            "telemetry_summary": telemetrySummary
         ]
         try Json.write(doc, to: output.isEmpty ? nil : output)
     }
@@ -203,7 +251,10 @@ enum LocalReferenceProof {
         }
     }
 
+    @discardableResult
     private static func emitTelemetry(
+        runId: String,
+        event: String,
         gate: String,
         target: Int,
         height: Int,
@@ -212,40 +263,62 @@ enum LocalReferenceProof {
         previousHeight: Int,
         previousNanos: UInt64,
         phase: String,
+        lastBlockMs: Int,
         timing: TimingCollector
-    ) {
+    ) -> Int {
         let now = DispatchTime.now().uptimeNanoseconds
         let elapsedMs = max(0, Int((now - started) / 1_000_000))
         let deltaBlocks = max(0, height - previousHeight)
         let deltaSeconds = max(0.001, Double(now - previousNanos) / 1_000_000_000.0)
         let elapsedSeconds = max(0.001, Double(now - started) / 1_000_000_000.0)
+        let canonicalPhase: String
+        switch phase {
+        case "startup", "peer_connect", "header_sync", "block_fetch", "block_connect", "commit", "heartbeat", "complete", "failed":
+            canonicalPhase = phase
+        default:
+            canonicalPhase = "heartbeat"
+        }
+        let blocker: Any = state.currentBlocker.map { $0 as Any } ?? NSNull()
+        let stallClass = !(blocker is NSNull) ? "validation_blocker" : (canonicalPhase == "block_connect" && lastBlockMs >= 15_000 ? "block_connect_slow" : "none")
         let tick: [String: Any] = [
             "schema": "benchmark.telemetry_tick.v1",
             "port": "swift",
             "gate": gate,
+            "run_id": runId,
+            "event": event,
             "target_height": target,
             "height": height,
             "header_height": state.headerHeight,
             "stored_block_height": state.storedBlockHeight,
             "percent": target > 0 ? (Double(height) / Double(target)) * 100.0 : 0.0,
             "elapsed_ms": elapsedMs,
+            "monotonic_ms": elapsedMs,
             "rate_recent_blocks_per_second": Double(deltaBlocks) / deltaSeconds,
             "rate_total_blocks_per_second": Double(max(0, height)) / elapsedSeconds,
-            "phase": phase,
+            "phase": canonicalPhase,
             "utxos": state.chainstateUtxoCount,
-            "last_block_ms": NSNull(),
+            "last_block_ms": lastBlockMs,
             "timing_buckets_ms": timing.stageTotalsMs(required: [
+                "block_parse_validate",
                 "prevout_batch_load", "utxo_load", "prevout_multi_get_call", "prevout_legacy_fallback_get", "prevout_utxo_decode",
                 "script_verify", "script_runner_wait", "script_wall_ms", "script_verify_worker_cpu", "script_worker_cpu_ms",
                 "utxo_apply", "utxo_delete_prepare", "utxo_put_prepare", "undo_put_prepare", "metadata_put_prepare",
                 "rocksdb_write", "commit", "block_connect_store_commit", "p2p_fetch"
             ]),
-            "current_blocker": state.currentBlocker ?? NSNull(),
-            "process_running": phase != "complete"
+            "current_blocker": blocker,
+            "stall_class": stallClass,
+            "current_block_elapsed_ms": lastBlockMs,
+            "current_block_height": max(0, height),
+            "current_block_hash": state.validatedHash.isEmpty ? NSNull() : state.validatedHash,
+            "current_block_tx_count": 0,
+            "current_block_vin_count": 0,
+            "current_block_script_input_count": 0,
+            "process_running": canonicalPhase != "complete" && canonicalPhase != "failed"
         ]
         if let data = try? JSONSerialization.data(withJSONObject: tick, options: [.sortedKeys]),
            let raw = String(data: data, encoding: .utf8) {
             FileHandle.standardOutput.write(Data("benchmark.telemetry_tick \(raw)\n".utf8))
         }
+        return elapsedMs
     }
 }

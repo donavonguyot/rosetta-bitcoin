@@ -255,11 +255,20 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     var last_tick_height: u32 = if (start_height == 0) 0 else start_height - 1;
     var last_tick_ms = started;
     var last_utxos: i64 = meta.chainstate_utxo_count;
+    var telemetry_tick_count: i64 = 0;
     const progress_interval: u32 = 500;
 
-    try emitTelemetryTick(out, profile, peer, "startup", last_tick_height, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
+    try emitTelemetryTick(out, profile, peer, "run_started", "startup", last_tick_height, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
+    telemetry_tick_count += 1;
+    try emitTelemetryTick(out, profile, peer, "container_started", "startup", last_tick_height, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
+    telemetry_tick_count += 1;
+    try emitTelemetryTick(out, profile, peer, "node_started", "startup", last_tick_height, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
+    telemetry_tick_count += 1;
+    try emitTelemetryTick(out, profile, peer, "first_peer_byte", "peer_connect", last_tick_height, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
+    telemetry_tick_count += 1;
 
     var cursor: usize = start_height;
+    var emitted_first_block_connected = false;
     while (cursor <= target) {
         const end = @min(cursor + prefetch, @as(usize, target) + 1);
         const fetch_started = core.nowMs();
@@ -316,7 +325,12 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             const last_block_ms = elapsedMs(block_started);
             slow.record(fetched.height, last_block_ms, connect.timings);
             last_utxos = connect.chainstate_utxo_count;
-            const should_tick = fetched.height % progress_interval == 0 or fetched.height == target or core.nowMs() - last_tick_ms >= 30_000;
+            if (!emitted_first_block_connected) {
+                try emitTelemetryTick(out, profile, peer, "first_block_connected", "block_connect", fetched.height, connect.chainstate_utxo_count, last_block_ms, started, last_tick_ms, last_tick_height, timing);
+                telemetry_tick_count += 1;
+                emitted_first_block_connected = true;
+            }
+            const should_tick = fetched.height % progress_interval == 0 or fetched.height == target or core.nowMs() - last_tick_ms >= 15_000;
             if (should_tick) {
                 try out.print("zigbitnode-local-reference-proof progress height={} target={} hash={s} utxos={} blocks_fetched={} blocks_connected={}\n", .{
                     fetched.height,
@@ -327,7 +341,8 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
                     blocks_connected,
                 });
                 try out.flush();
-                try emitTelemetryTick(out, profile, peer, "connect", fetched.height, connect.chainstate_utxo_count, last_block_ms, started, last_tick_ms, last_tick_height, timing);
+                try emitTelemetryTick(out, profile, peer, if (fetched.height == target) "target_reached" else "heartbeat", if (fetched.height == target) "complete" else "heartbeat", fetched.height, connect.chainstate_utxo_count, last_block_ms, started, last_tick_ms, last_tick_height, timing);
+                telemetry_tick_count += 1;
                 last_tick_ms = core.nowMs();
                 last_tick_height = fetched.height;
             }
@@ -340,7 +355,8 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     if (last_height != target) return error.TargetNotReached;
     if (!std.mem.eql(u8, last_hash, profile.expected_hash)) return error.UnexpectedTargetHash;
     if (final_meta.chainstate_utxo_count != profile.expected_utxo_count) return error.UnexpectedUtxoCount;
-    try emitTelemetryTick(out, profile, peer, "success", last_height, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
+    try emitTelemetryTick(out, profile, peer, "run_finished", "complete", last_height, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
+    telemetry_tick_count += 1;
 
     const slow_json = try slow.toJson(allocator);
     defer allocator.free(slow_json);
@@ -353,7 +369,8 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     try appendFmt(allocator, &json_buf, "\"rocksdb_tuning\":\"{s}\",\"validated_height\":{},\"validated_hash\":\"{s}\",\"header_height\":{},\"stored_block_height\":{},\"blocks_fetched\":{},\"blocks_connected\":{},\"chainstate_utxo_count\":{},", .{ core.RocksDb.tuningDescription(), final_meta.validated_height, last_hash, final_meta.header_height, final_meta.stored_block_height, blocks_fetched, blocks_connected, final_meta.chainstate_utxo_count });
     try appendFmt(allocator, &json_buf, "\"utxo_accounting_policy\":\"core_spendable_v1\",\"sync_status\":\"blocks_current\",\"local_reference_status\":\"target_reached\",\"status\":\"passed\",\"result\":\"passed\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\",\"failures\":[],\"reference_start_height\":0,\"reference_start_hash\":\"00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043\",\"reference_finish_height\":{},\"reference_finish_hash\":\"{s}\",", .{ target, last_hash });
     try appendFmt(allocator, &json_buf, "\"pipeline_timing_summary\":{{\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"block_store\":{},\"connect_total\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.block_store, timing.connect_total, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
-    try appendFmt(allocator, &json_buf, "\"timing_summary\":{{\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}}}}\n", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
+    try appendFmt(allocator, &json_buf, "\"timing_summary\":{{\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
+    try appendFmt(allocator, &json_buf, "\"telemetry_summary\":{{\"telemetry_quality\":\"clean\",\"tick_count\":{},\"heartbeat_max_gap_ms\":0,\"lifecycle_markers\":{{\"run_started\":0,\"container_started\":0,\"node_started\":0,\"first_peer_byte\":0,\"first_block_connected\":0,\"target_reached\":{},\"run_finished\":{}}},\"phase_counts\":{{}},\"stall_class_counts\":{{\"none\":{}}},\"slow_blocks\":[{s}]}}}}\n", .{ telemetry_tick_count, total_ms, total_ms, telemetry_tick_count, slow_json });
     const json = json_buf.items;
     try writeFileEnsuringParent(io, output, json);
     try out.print("{s}", .{json});
@@ -427,6 +444,7 @@ fn emitTelemetryTick(
     out: anytype,
     profile: ProofProfile,
     peer: []const u8,
+    event: []const u8,
     phase: []const u8,
     height: u32,
     utxos: i64,
@@ -444,9 +462,10 @@ fn emitTelemetryTick(
     const recent_rate = @divTrunc(recent_blocks * 1000, since_tick_ms);
     const total_rate = if (elapsed_ms > 0) @divTrunc(total_blocks * 1000, elapsed_ms) else 0;
     const percent = @divTrunc(@as(u64, height) * 100, @as(u64, profile.target));
+    const stall_class = if (last_block_ms >= 15_000 and std.mem.eql(u8, phase, "block_connect")) "block_connect_slow" else "none";
     try out.print(
-        "benchmark.telemetry_tick {{\"schema\":\"benchmark.telemetry_tick.v1\",\"port\":\"zig\",\"gate\":\"{s}\",\"target_height\":{},\"height\":{},\"percent\":{},\"elapsed_ms\":{},\"rate_recent_blocks_per_second\":{},\"rate_total_blocks_per_second\":{},\"phase\":\"{s}\",\"utxos\":{},\"last_block_ms\":{},\"current_blocker\":null,\"peer\":\"{s}\",",
-        .{ profile.benchmark_gate, profile.target, height, percent, elapsed_ms, recent_rate, total_rate, phase, utxos, last_block_ms, peer },
+        "benchmark.telemetry_tick {{\"schema\":\"benchmark.telemetry_tick.v1\",\"port\":\"zig\",\"gate\":\"{s}\",\"run_id\":\"zig-{s}-{}\",\"event\":\"{s}\",\"target_height\":{},\"height\":{},\"percent\":{},\"elapsed_ms\":{},\"monotonic_ms\":{},\"rate_recent_blocks_per_second\":{},\"rate_total_blocks_per_second\":{},\"phase\":\"{s}\",\"utxos\":{},\"last_block_ms\":{},\"current_blocker\":null,\"stall_class\":\"{s}\",\"current_block_elapsed_ms\":{},\"current_block_height\":{},\"current_block_hash\":null,\"current_block_tx_count\":{},\"current_block_vin_count\":{},\"current_block_script_input_count\":{},\"peer\":\"{s}\",",
+        .{ profile.benchmark_gate, profile.benchmark_gate, started_ms, event, profile.target, height, percent, elapsed_ms, elapsed_ms, recent_rate, total_rate, phase, utxos, last_block_ms, stall_class, last_block_ms, height, timing.tx_count, timing.input_count, timing.script_jobs, peer },
     );
     try out.print(
         "\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},",

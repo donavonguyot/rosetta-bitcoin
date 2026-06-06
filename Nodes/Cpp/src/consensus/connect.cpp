@@ -494,10 +494,11 @@ std::int64_t validateNonCoinbaseInputs(BlockUtxoView& view, const messages::Tran
     return inputTotal;
 }
 
-void emitTiming(int height, const ConnectTiming& timing) {
+void emitTiming(int height, int utxoCount, const ConnectTiming& timing) {
     std::cerr << "cpbitnode_sync_timing"
               << " height=" << height
               << " unit=us"
+              << " utxo_count=" << utxoCount
               << " utxo_load=" << timing.utxoLoad
               << " script_verify=" << timing.scriptVerify
               << " script_verify_worker_cpu=" << timing.scriptVerifyWorkerCpu
@@ -689,7 +690,7 @@ Block connectDecodedBlock(db::NodeStateStore& tracker, db::ChainstateStore& chai
     if (timingEnabled) {
         timing.commit += detail::elapsedUs(timerStart);
         timing.blockConnectStoreCommit = detail::elapsedUs(fullStart);
-        detail::emitTiming(options.height, timing);
+        detail::emitTiming(options.height, chainstate.utxoCount(), timing);
     }
     return block;
 }
