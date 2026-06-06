@@ -29,6 +29,10 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
 
 ## Canonical Policy
 
+- `../LICENSE` - MIT License for RosettaBitcoin.
+- `../SECURITY.md` - vulnerability reporting policy for future public GitHub
+  publication.
+- `../CONTRIBUTING.md` - evidence-first contribution rules.
 - `port-baseline-5k.md` - strict first readiness baseline for comparable ports.
 - `git-topology.md` - root repository, port directory, and artifact ownership.
 - `artifact-retention.md` - proof/log/datadir retention policy.
@@ -51,6 +55,10 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
 - `core-btcg-comparison-lane.md` - Stage 4 boundary for using Core and future
   btcg evidence as comparison/witness material without treating it as port
   proof.
+- `rename-open-source-prep.md` - Stage 5 public-release boundary for the
+  eventual RosettaBitcoin rename/open-source pass.
+- `public-archive-provenance.md` - public summary of the retired archive and
+  the IL-to-evidence-framework transition.
 - `consensus-blockers-testnet4.md` - shared blocker provenance and fixture anchors.
 - `script-semantics-gotchas.md` - consensus/script traps learned from blockers.
 - `blocker-ledger.md` - blocker record shape and classification rules.
@@ -93,4 +101,5 @@ parallel authority system. IL audit records are triage notes only; promoted
 facts must land in canonical docs, Shared contracts, fixtures, or compact
 evidence before they can influence current claims. Comparison-lane docs calibrate
 public claims, but they do not create a parallel authority system or replace
-port-owned evidence.
+port-owned evidence. Rename/open-source prep records publication blockers and
+claim boundaries; it does not publish or rename the project by itself.

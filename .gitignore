@@ -2,6 +2,18 @@
 .claude/
 .pytest_cache/
 
+# Public-boundary guards: old archive copies and local env files must not drift
+# into the deliverable workspace.
+/RosettaBitcoin/
+/rosetta-bitcoin/
+/rosetta-bitcoin-portal/
+/rosetta-bitcoin-book/
+/rosetta-bitcoin-audio/
+/rosetta-java-node/
+/.env
+/.env.*
+!/.env.example
+
 # Node implementation directories are root-owned source. Ignore only generated
 # runtime/build/dependency artifacts under them.
 /Nodes/*/data/

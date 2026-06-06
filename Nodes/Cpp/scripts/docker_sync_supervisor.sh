@@ -2,18 +2,28 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
+if [[ -f "$REFERENCE_TOPOLOGY_ENV" ]]; then
+  # shellcheck source=/dev/null
+  . "$REFERENCE_TOPOLOGY_ENV"
+fi
 VOLUME="${DOCKER_PROOF_VOLUME:-cpbitnode_sync_data}"
 CONTAINER_NAME="${CONTAINER_NAME:-cpbitnode-sync-supervisor-run}"
 POLL_SEC="${POLL_SEC:-120}"
 CHECK_SEC="${CHECK_SEC:-5}"
 BLOCKS_MAX="${BLOCKS_MAX:-500}"
-PEERS="${PEERS:-127.0.0.1:48333}"
+PEERS="${PEERS:-${REFERENCE_P2P_PEER:-127.0.0.1:48333}}"
+PEER_MODE="${PEER_MODE:-local_reference}"
 SUPERVISOR_ONCE="${SUPERVISOR_ONCE:-0}"
 STOP_FILE=".cpbitnode_supervisor_stop"
 RESUME_FILE=".cpbitnode_supervisor_resume"
 
 log_line() {
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >&2
+}
+
+compose() {
+  docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml "$@"
 }
 
 volume_file_exists() {
@@ -54,11 +64,11 @@ PY
 
 build_image() {
   log_line "supervisor build image=cpbitnode-sync-proof"
-  docker compose -f docker/docker-compose.yml build cpbitnode-sync-proof
+  compose build cpbitnode-sync-proof
 }
 
 status_json() {
-  DOCKER_PROOF_VOLUME="$VOLUME" docker compose -f docker/docker-compose.yml run --rm --no-deps \
+  DOCKER_PROOF_VOLUME="$VOLUME" compose run --rm --no-deps \
     cpbitnode-sync-proof cpbitnode-db --datadir /data --chainstate-backend rocksdb 2>/dev/null || echo '{}'
 }
 
@@ -93,14 +103,14 @@ emit_tick() {
   else
     process_running=0
   fi
-  log_line "AGENT_LOOP_TICK_chatreport {\"phase\":\"$phase\",\"validated_height\":$(json_number_or_null "$h"),\"header_height\":$(json_number_or_null "$header"),\"stored_block_height\":$(json_number_or_null "$stored"),\"sync_status\":\"$status\",\"delta_since_last\":$(json_number_or_null "$delta"),\"process_running\":$process_running,\"current_blocker\":$blocker}"
+  log_line "AGENT_LOOP_TICK_chatreport {\"phase\":\"$phase\",\"runtime_surface\":\"docker\",\"peer_mode\":\"$PEER_MODE\",\"peer\":\"$PEERS\",\"validated_height\":$(json_number_or_null "$h"),\"header_height\":$(json_number_or_null "$header"),\"stored_block_height\":$(json_number_or_null "$stored"),\"sync_status\":\"$status\",\"delta_since_last\":$(json_number_or_null "$delta"),\"process_running\":$process_running,\"current_blocker\":$blocker}"
   echo "$h"
 }
 
 run_chunk() {
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   DOCKER_PROOF_VOLUME="$VOLUME" PEERS="$PEERS" BLOCKS_MAX="$BLOCKS_MAX" \
-    docker compose -f docker/docker-compose.yml run -d --name "$CONTAINER_NAME" cpbitnode-sync-proof >/dev/null
+    compose run -d --name "$CONTAINER_NAME" cpbitnode-sync-proof >/dev/null
 }
 
 wait_for_chunk() {
@@ -158,6 +168,11 @@ fi
 SOURCE_SIG="$(source_signature)"
 last_height="$(emit_tick starting 0)"
 log_line "supervisor start volume=$VOLUME blocks_max=$BLOCKS_MAX poll_sec=$POLL_SEC check_sec=$CHECK_SEC"
+
+if [[ "$SUPERVISOR_ONCE" == "1" && "$BLOCKS_MAX" == "0" ]]; then
+  log_line "supervisor decision=smoke_once reason=blocks_max_zero"
+  exit 0
+fi
 
 while true; do
   if volume_file_exists "$STOP_FILE"; then

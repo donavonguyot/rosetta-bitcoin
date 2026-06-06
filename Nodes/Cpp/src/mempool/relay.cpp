@@ -3,6 +3,8 @@
 #include "cpbitnode/consensus/merkle.hpp"
 #include "cpbitnode/messages/transaction.hpp"
 
+#include <tuple>
+
 namespace cpbitnode::mempool {
 
 bool handleInboundTxMessage(Mempool& pool, db::NodeStateStore& tracker, const config::Settings& settings,

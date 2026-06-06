@@ -89,6 +89,23 @@ metadata are not root-owned artifacts. Compact proof JSON that supports a
 project claim belongs under `Nodes/Shared/conformance/results/`; see
 [`Docs/artifact-retention.md`](Docs/artifact-retention.md).
 
+## Public Release Posture
+
+This workspace is being prepared for eventual publication as RosettaBitcoin.
+The local path `~/RB` is a working-directory name, not a separate public
+project identity.
+
+Public status claims must come from Project reports and current RB evidence,
+not hand-maintained tables or retired archive material. RosettaBitcoin uses the
+MIT License and plans to use GitHub private vulnerability reporting after the
+public repository exists. Repository host/name and final publication mechanics
+are still pre-publication decisions.
+
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
+[`Docs/rename-open-source-prep.md`](Docs/rename-open-source-prep.md), and the
+public archive summary in
+[`Docs/public-archive-provenance.md`](Docs/public-archive-provenance.md).
+
 ## Legacy Archive Boundary
 
 The retired `/Users/donavonguyot/RosettaBitcoin` workspace is retained
@@ -100,7 +117,9 @@ RB-owned documentation, contracts, fixtures, or compact proof evidence. Static
 IL, old proof ladders, nested repositories, generated artifacts, and historical
 runtime state are provenance or archive material; they do not support current
 claims by themselves. See
-[`Docs/rosettabitcoin-archive-harvest.md`](Docs/rosettabitcoin-archive-harvest.md).
+[`Docs/public-archive-provenance.md`](Docs/public-archive-provenance.md) for the
+public summary and [`Docs/rosettabitcoin-archive-harvest.md`](Docs/rosettabitcoin-archive-harvest.md)
+for the detailed local harvest boundary.
 
 ## Binary Gate
 

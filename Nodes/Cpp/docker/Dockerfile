@@ -1,4 +1,4 @@
-FROM ubuntu:24.04 AS build
+FROM debian:bookworm-slim AS build
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential cmake libssl-dev librocksdb-dev libsecp256k1-dev \
@@ -9,10 +9,10 @@ COPY . .
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -DCPBITNODE_USE_NATIVE_SECP256K1=ON \
     && cmake --build build --target cpbitnode cpbitnode-db cpbitnode-healthcheck cpbitnode-sync cpbitnode-storage-proof cpbitnode-blocker-inspect cpbitnode-script-corpus cpbitnode_tests
 
-FROM ubuntu:24.04
+FROM debian:bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends librocksdb8.9 libsecp256k1-1 \
+    && apt-get install -y --no-install-recommends librocksdb7.8 libsecp256k1-1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /src/build/cpbitnode /usr/local/bin/cpbitnode

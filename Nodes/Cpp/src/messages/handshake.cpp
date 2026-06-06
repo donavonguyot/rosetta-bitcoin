@@ -9,6 +9,7 @@
 #include <cstring>
 #include <random>
 #include <stdexcept>
+#include <tuple>
 
 namespace cpbitnode::messages {
 namespace {

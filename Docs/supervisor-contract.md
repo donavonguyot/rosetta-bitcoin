@@ -16,6 +16,14 @@ discarding validated state between code fixes.
   [`../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`](../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md),
   update the port manifest in `Nodes/Shared/docker/ports/`, and query Project
   Docker coverage instead of hand-maintaining Markdown rows.
+- Docker supervisors that run inside the official local Reference topology must
+  use `Nodes/Shared/docker/reference_topology.env` through
+  `REFERENCE_TOPOLOGY_ENV`, including direct script execution. Do not hardcode a
+  separate `docker compose -f ...` path or a different default peer.
+- If a Docker supervisor performs local Reference P2P work, default its peer to
+  `REFERENCE_P2P_PEER` on `REFERENCE_DOCKER_NETWORK`. Host-loopback peers such
+  as `127.0.0.1:48333` are host/manual diagnostics, not Docker supervisor
+  defaults.
 
 ## Cadence Rule
 
@@ -44,6 +52,8 @@ starts, status is read from inside the runtime surface, and
 `benchmark.telemetry_tick` JSONL for `Project/scripts/monitor_benchmark_telemetry.py`.
 It must not require peer reachability.
 
-Network proof is separate and must document its peer strategy: host Core via
-`host.docker.internal`, a Reference compose service, or an explicit external
-peer.
+Network proof is separate. Official local Reference P2P work uses the shared
+Reference Docker topology: `REFERENCE_TOPOLOGY_ENV`,
+`REFERENCE_DOCKER_NETWORK`, and `REFERENCE_P2P_PEER`. External network probes
+must require an explicit peer override. Host-loopback or host-forwarded peers
+are diagnostic/manual routes and must not become the Docker supervisor default.

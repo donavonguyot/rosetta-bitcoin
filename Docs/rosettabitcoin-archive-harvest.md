@@ -49,6 +49,6 @@ Project, Shared, and artifact-retention rules.
 3. Core/btcg comparison lane: completed in
    `Docs/core-btcg-comparison-lane.md`. Reference and witness surfaces may
    calibrate claims, but they are not RB ports and not validity oracles.
-4. Prepare the rename/open-source pass: repository name, README posture,
-   responsible-disclosure language, ignored artifacts, and public archive
-   boundary.
+4. Rename/open-source prep: documented in
+   `Docs/rename-open-source-prep.md`. Actual rename, publication, license, and
+   security/disclosure choices remain future operational steps.

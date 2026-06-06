@@ -9,11 +9,11 @@
     "dockerignore": "Nodes/Cpp/docker/.dockerignore"
   },
   "images": {
-    "base": "ubuntu:24.04",
-    "runtime": "ubuntu:24.04",
-    "os_family": "Ubuntu",
+    "base": "debian:bookworm-slim",
+    "runtime": "debian:bookworm-slim",
+    "os_family": "Debian",
     "package_manager": "apt",
-    "native_dependencies": ["librocksdb-dev", "libsecp256k1-dev"]
+    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "libsecp256k1-dev/libsecp256k1-1"]
   },
   "volumes": {
     "data": "cpbitnode_data",

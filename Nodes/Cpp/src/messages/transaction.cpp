@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <stdexcept>
+#include <tuple>
 
 namespace cpbitnode::messages {
 namespace {

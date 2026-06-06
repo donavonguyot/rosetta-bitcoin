@@ -3,6 +3,7 @@
 #include "cpbitnode/wire/serialize.hpp"
 
 #include <stdexcept>
+#include <tuple>
 
 namespace cpbitnode::messages {
 namespace {

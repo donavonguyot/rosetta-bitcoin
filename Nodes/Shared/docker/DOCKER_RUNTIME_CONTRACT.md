@@ -163,6 +163,14 @@ persistent_supervisor:
   fresh proof volumes
 ```
 
+Docker proof and supervisor scripts must share the same Reference topology
+inputs. Local Reference surfaces load
+`Nodes/Shared/docker/reference_topology.env` through `REFERENCE_TOPOLOGY_ENV`,
+pass that file to `docker compose --env-file`, and default local P2P work to
+`REFERENCE_P2P_PEER` on `REFERENCE_DOCKER_NETWORK`. Direct script execution
+must resolve the same defaults as the Makefile target. Host-loopback peers are
+manual diagnostics, not official Docker defaults.
+
 ## Smoke Versus Network Proof
 
 Supervisor smoke and network proof are different checks.

@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <tuple>
 
 namespace cpbitnode::consensus::script {
 namespace {

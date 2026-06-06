@@ -2,6 +2,8 @@
 
 #include "cpbitnode/wire/serialize.hpp"
 
+#include <tuple>
+
 namespace cpbitnode::messages {
 
 std::vector<std::uint8_t> GetAddrMessage::serialize() const { return {}; }

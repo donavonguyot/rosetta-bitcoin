@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <tuple>
 
 namespace cpbitnode::sync {
 namespace {
