@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
 # shellcheck source=/dev/null
 . "$REFERENCE_TOPOLOGY_ENV"
+DOCKER_COMPOSE=(docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml)
 
 VOLUME="${DOCKER_PROOF_VOLUME:-jbitnode_proof_data}"
 TARGET="${DOCKER_BENCHMARK_TARGET:-5000}"
@@ -40,7 +41,7 @@ set +e
 set +o pipefail
 DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" HEADERS_MAX="$HEADERS_MAX" \
   HEADER_BATCHES_MAX="$HEADER_BATCHES_MAX" BLOCKS_MAX="$BLOCKS_MAX" \
-  docker compose -f docker/docker-compose.yml run --rm --no-deps \
+  "${DOCKER_COMPOSE[@]}" run --rm --no-deps \
     -e PAR_SCRIPT_VERIFY=1 \
     -e SYNC_TIMING=1 \
     -e BLOCK_PREFETCH_DEPTH="$PREFETCH_DEPTH" \
@@ -53,7 +54,7 @@ end_ms="$(now_ms)"
 
 set +e
 DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" \
-  docker compose -f docker/docker-compose.yml run --rm --no-deps \
+  "${DOCKER_COMPOSE[@]}" run --rm --no-deps \
     jbitnode-sync-proof com.jbitnode.cli.DbStatus >"$STATUS_TMP" 2>&1
 status_exit=$?
 set -e

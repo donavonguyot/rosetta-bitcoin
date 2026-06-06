@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
 # shellcheck source=/dev/null
 . "$REFERENCE_TOPOLOGY_ENV"
+DOCKER_COMPOSE=(docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml)
 
 VOLUME="${DOCKER_SYNC_VOLUME:-tsbitnode_sync_data}"
 CONTAINER_NAME="${CONTAINER_NAME:-tsbitnode-sync-supervisor-run}"
@@ -28,7 +29,7 @@ remove_volume_file() {
 
 status_json() {
   DOCKER_SYNC_VOLUME="$VOLUME" SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
-    docker compose -f docker/docker-compose.yml run --rm --no-deps tsbitnode-sync-status 2>/dev/null || echo '{}'
+    "${DOCKER_COMPOSE[@]}" run --rm --no-deps tsbitnode-sync-status 2>/dev/null || echo '{}'
 }
 
 json_field() {
@@ -56,7 +57,7 @@ emit_tick() {
 run_chunk() {
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
-    docker compose -f docker/docker-compose.yml run -d --name "$CONTAINER_NAME" tsbitnode-sync-proof >/dev/null
+    "${DOCKER_COMPOSE[@]}" run -d --name "$CONTAINER_NAME" tsbitnode-sync-proof >/dev/null
 }
 
 wait_for_chunk() {
@@ -80,7 +81,7 @@ wait_for_chunk() {
 }
 
 if [[ "${DOCKER_REBUILD:-0}" == "1" ]]; then
-  docker compose -f docker/docker-compose.yml build tsbitnode-sync-proof tsbitnode-sync-status >/dev/null
+  "${DOCKER_COMPOSE[@]}" build tsbitnode-sync-proof tsbitnode-sync-status >/dev/null
 else
   log_line "supervisor build skipped reason=warm_image_reuse rebuild_with=DOCKER_REBUILD=1"
 fi

@@ -64,6 +64,7 @@ func main() {
 		"reference_start_hash":       "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
 		"reference_finish_height":    *target,
 		"benchmark_contract_version": 1,
+		"benchmark_gate":             gateID(*target),
 		"benchmark_kind":             benchmarkKind(*target, *byteSource),
 		"benchmark_lane":             benchmarkLane,
 		"telemetry_schema":           "benchmark.telemetry_tick.v1",

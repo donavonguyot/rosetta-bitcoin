@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
 # shellcheck source=/dev/null
 . "$REFERENCE_TOPOLOGY_ENV"
+DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml}"
 
 VOLUME="${DOCKER_PROOF_VOLUME:-cpbitnode_proof_data}"
 TARGET="${DOCKER_BENCHMARK_TARGET:-5000}"
@@ -38,7 +39,7 @@ start_ms="$(now_ms)"
 set +e
 set +o pipefail
 DOCKER_PROOF_VOLUME="$VOLUME" PEERS="$PEERS" BLOCKS_MAX="$BLOCKS_MAX" BLOCKS_TARGET="$TARGET" \
-  docker compose -f docker/docker-compose.yml run --rm --no-deps \
+  $DOCKER_COMPOSE run --rm --no-deps \
     -e CPBITNODE_SYNC_TIMING=1 \
     -e CPBITNODE_SCRIPT_VERIFY_PARALLEL=1 \
     -e CPBITNODE_SCRIPT_VERIFY_THREADS="${CPBITNODE_SCRIPT_VERIFY_THREADS:-}" \
@@ -52,7 +53,7 @@ end_ms="$(now_ms)"
 
 set +e
 DOCKER_PROOF_VOLUME="$VOLUME" \
-  docker compose -f docker/docker-compose.yml run --rm --no-deps \
+  $DOCKER_COMPOSE run --rm --no-deps \
     cpbitnode-sync-proof cpbitnode-db --datadir /data --chainstate-backend rocksdb >"$STATUS_TMP" 2>&1
 status_exit=$?
 set -e

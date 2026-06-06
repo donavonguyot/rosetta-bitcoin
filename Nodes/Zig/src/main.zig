@@ -49,7 +49,8 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, command, "local-reference-proof")) {
         const prefetch_text = init.environ_map.get("PREFETCH_DEPTH") orelse "4";
         const script_threads_text = init.environ_map.get("ZIGBITNODE_SCRIPT_THREADS") orelse "";
-        try cmdLocalReferenceProof(std.heap.smp_allocator, io, out, args[2..], surface, prefetch_text, script_threads_text);
+        const default_peer = init.environ_map.get("REFERENCE_P2P_PEER") orelse "127.0.0.1:48333";
+        try cmdLocalReferenceProof(std.heap.smp_allocator, io, out, args[2..], surface, prefetch_text, script_threads_text, default_peer);
     } else if (std.mem.eql(u8, command, "sync-supervisor-once")) {
         try cmdSupervisorOnce(allocator, out, args[2..]);
     } else {
@@ -205,9 +206,9 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     try out.print("{s}", .{json});
 }
 
-fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8, script_threads_text: []const u8) !void {
+fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8, script_threads_text: []const u8, default_peer: []const u8) !void {
     const target_text = valueArg(args, "--target") orelse "5000";
-    const peer = valueArg(args, "--peer") orelse (std.process.getEnvVarOwned(allocator, "REFERENCE_P2P_PEER") catch "127.0.0.1:48333");
+    const peer = valueArg(args, "--peer") orelse default_peer;
     const output = valueArg(args, "--output") orelse (ResultPaths{}).proof;
     const datadir = valueArg(args, "--datadir") orelse "/data";
     const target = try std.fmt.parseInt(u32, target_text, 10);

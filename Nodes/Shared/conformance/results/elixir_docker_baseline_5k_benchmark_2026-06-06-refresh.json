@@ -1,0 +1,209 @@
+{
+  "benchmark_contract_version": 1,
+  "benchmark_gate": "baseline_5k",
+  "benchmark_kind": "baseline_5k_p2p",
+  "benchmark_lane": "baseline_5k_p2p",
+  "binary_gate_status": "not_attempted",
+  "blocks_connected": 5001,
+  "blocks_fetched": 5001,
+  "byte_source": "local_reference_p2p",
+  "captured_at": "2026-06-06T18:44:38.555919Z",
+  "category": "local_reference_sync",
+  "chain": "testnet4",
+  "chainstate_backend": "rocksdb",
+  "chainstate_status": "usable",
+  "chainstate_utxo_count": 4574,
+  "current_blocker": null,
+  "datadir": "/data",
+  "docker_volume": "exbitnode_proof_data",
+  "elapsed_ms": 8360,
+  "failures": [],
+  "fresh_state": true,
+  "header_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "header_height": 5000,
+  "header_target_height": 5000,
+  "implementation": "ElixirNode",
+  "last_error": null,
+  "native_crypto_available": true,
+  "native_crypto_backend": "libsecp256k1",
+  "native_storage": true,
+  "node": "ElixirNode",
+  "peer": "bitcoin-core-testnet4:48333",
+  "peer_mode": "local_reference",
+  "pipeline_timing_summary": {
+    "slow_stages": [
+      {
+        "stage": "block_connect_store_commit",
+        "total_ms": 8360
+      },
+      {
+        "stage": "commit",
+        "total_ms": 5118
+      },
+      {
+        "stage": "script_runner_wait",
+        "total_ms": 2283
+      },
+      {
+        "stage": "script_verify",
+        "total_ms": 2283
+      },
+      {
+        "stage": "utxo_load",
+        "total_ms": 362
+      },
+      {
+        "stage": "utxo_apply",
+        "total_ms": 183
+      },
+      {
+        "stage": "block_download_wait",
+        "total_ms": 16
+      }
+    ],
+    "stage_totals_ms": {
+      "block_connect_store_commit": 8360,
+      "block_download_wait": 16,
+      "commit": 5118,
+      "script_runner_wait": 2283,
+      "script_verify": 2283,
+      "utxo_apply": 183,
+      "utxo_load": 362
+    },
+    "total_ms": 8360
+  },
+  "port": "elixir",
+  "prefetch_depth": 4,
+  "proof_mode": "p2p_sync",
+  "reference_finish_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "reference_finish_height": 5000,
+  "reference_start_hash": "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
+  "reference_start_height": 0,
+  "result": "passed",
+  "resume_supported": true,
+  "rocksdb_wal_disabled": false,
+  "runtime_surface": "docker",
+  "script_runner_mode": "parallel",
+  "status": {
+    "active_writer_command": null,
+    "active_writer_pid": null,
+    "binary_gate_status": "not_attempted",
+    "block_count": 5001,
+    "block_gap_count": 0,
+    "block_prefetch_depth": 0,
+    "chain": "testnet4",
+    "chainstate_backend": "rocksdb",
+    "chainstate_backend_path": "/data/chainstate-rocksdb",
+    "chainstate_generation_id": "exbitnode-rocksdb-d39045b76afcb01e",
+    "chainstate_status": "usable",
+    "chainstate_utxo_count": 4574,
+    "current_blocker": null,
+    "datadir": "/data",
+    "header_count": 5001,
+    "header_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "header_height": 5000,
+    "implementation": "ElixirNode",
+    "last_error": null,
+    "lock_status": "free",
+    "native_crypto_available": true,
+    "native_crypto_backend": "libsecp256k1",
+    "network": "testnet4",
+    "node_id": "exbitnode-native",
+    "peer_source": "bitcoin-core-testnet4:48333",
+    "recommendation": "checkpoint",
+    "rocksdb_disable_wal": "false",
+    "runtime_status": "not_running",
+    "runtime_surface": "docker",
+    "script_verify_timeout_ms": 300000,
+    "snapshot_throttle_blocks": 0,
+    "snapshot_throttle_sec": 5,
+    "stored_block_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "stored_block_height": 5000,
+    "sync_status": "blocks_current",
+    "sync_timing": {
+      "block_connect_store_commit": 8360433,
+      "block_download_wait": 15571,
+      "commit": 5117771,
+      "script_runner_wait": 2282976,
+      "script_verify": 2282976,
+      "utxo_apply": 182591,
+      "utxo_load": 361645
+    },
+    "taproot_tweak_backend": "libsecp256k1",
+    "updated_at": "2026-06-06T18:44:38.383244Z",
+    "utxo_accounting_policy": "core_spendable_v1",
+    "utxo_count": 4574,
+    "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "validated_height": 5000
+  },
+  "stored_block_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "stored_block_height": 5000,
+  "sync_exit_code": 0,
+  "sync_status": "blocks_current",
+  "sync_timing": {
+    "stages": {
+      "block_connect_store_commit": 8360433,
+      "block_download_wait": 15571,
+      "commit": 5117771,
+      "script_runner_wait": 2282976,
+      "script_verify": 2282976,
+      "utxo_apply": 182591,
+      "utxo_load": 361645
+    },
+    "unit": "microseconds"
+  },
+  "taproot_tweak_backend": "libsecp256k1",
+  "target_height": 5000,
+  "target_label": "5k",
+  "telemetry_schema": "benchmark.telemetry_tick.v1",
+  "timing_summary": {
+    "slow_stages": [
+      {
+        "stage": "block_connect_store_commit",
+        "total_ms": 8360
+      },
+      {
+        "stage": "commit",
+        "total_ms": 5118
+      },
+      {
+        "stage": "script_runner_wait",
+        "total_ms": 2283
+      },
+      {
+        "stage": "script_verify",
+        "total_ms": 2283
+      },
+      {
+        "stage": "utxo_load",
+        "total_ms": 362
+      },
+      {
+        "stage": "utxo_apply",
+        "total_ms": 183
+      },
+      {
+        "stage": "block_download_wait",
+        "total_ms": 16
+      }
+    ],
+    "stage_totals_ms": {
+      "block_connect_store_commit": 8360,
+      "block_download_wait": 16,
+      "commit": 5118,
+      "script_runner_wait": 2283,
+      "script_verify": 2283,
+      "utxo_apply": 183,
+      "utxo_load": 362
+    },
+    "total_ms": 8360
+  },
+  "utxo_accounting_policy": "core_spendable_v1",
+  "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "validated_height": 5000,
+  "verification": {
+    "command": "make docker-proof-local",
+    "docker_volume": "exbitnode_proof_data",
+    "sync_exit_code": 0
+  }
+}

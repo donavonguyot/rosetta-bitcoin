@@ -3,7 +3,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VOLUME="${DOCKER_PROOF_VOLUME:-jbitnode_sync_data}"
-DOCKER_COMPOSE=(docker compose -f docker/docker-compose.yml)
+REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
+DOCKER_COMPOSE=(docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml)
 CONTAINER_NAME="${CONTAINER_NAME:-jbitnode-sync-supervisor-run}"
 POLL_SEC="${POLL_SEC:-120}"
 CHECK_SEC="${CHECK_SEC:-5}"

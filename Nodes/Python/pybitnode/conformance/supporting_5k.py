@@ -30,13 +30,21 @@ def _target_label(target: int) -> str:
 
 
 def _supporting_gate(target: int) -> str:
-    label = _target_label(target)
-    return f"supporting_{label}" if label else "local_reference"
+    return {
+        5000: "baseline_5k",
+        10000: "diagnostic_10k",
+        50000: "shakedown_50k",
+        100000: "performance_100k",
+    }.get(target, "local_reference")
 
 
 def _supporting_p2p_kind(target: int) -> str:
-    label = _target_label(target)
-    return f"supporting_{label}_p2p" if label else "local_reference_p2p"
+    return {
+        5000: "baseline_5k_p2p",
+        10000: "diagnostic_10k_p2p",
+        50000: "shakedown_50k_p2p",
+        100000: "performance_100k_p2p",
+    }.get(target, "local_reference_p2p")
 
 
 def _load_details(row: dict[str, Any]) -> dict[str, Any]:
@@ -254,10 +262,10 @@ def _build_artifact(
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Run Python official supporting 5k local-reference Docker proof.")
+    parser = argparse.ArgumentParser(description="Run Python official baseline 5k local-reference Docker proof.")
     parser.add_argument("--chain", default="testnet4")
     parser.add_argument("--datadir", default="/proof/data")
-    parser.add_argument("--result-path", default="/results/python_docker_supporting_5k_benchmark.json")
+    parser.add_argument("--result-path", default="/results/python_docker_baseline_5k_benchmark.json")
     parser.add_argument("--target", type=int, default=5000)
     parser.add_argument("--peer", default=os.environ.get("REFERENCE_P2P_PEER"))
     parser.add_argument("--prefetch-depth", type=int, default=4)

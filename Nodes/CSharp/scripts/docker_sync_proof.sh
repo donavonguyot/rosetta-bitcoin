@@ -2,7 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DOCKER_COMPOSE=(docker compose -f docker/docker-compose.yml)
+REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
+DOCKER_COMPOSE=(docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml)
 POLL_SEC="${POLL_SEC:-120}"
 CONTAINER_NAME="${CONTAINER_NAME:-csbitnode-sync-proof-run}"
 STATUS_FILE="${STATUS_FILE:-.docker-csharp-proof-status.json}"
@@ -49,6 +50,7 @@ emit_benchmark_tick() {
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 started_ms="$(now_ms)"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+rm -f "$STATUS_FILE" "$EXIT_FILE" "$RUN_FILE"
 DOCKER_PROOF_VOLUME="${DOCKER_PROOF_VOLUME:-csbitnode_proof_data}" \
   SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
   HEADERS_MAX="${HEADERS_MAX:-200}" HEADER_BATCHES_MAX="${HEADER_BATCHES_MAX:-1}" BLOCKS_MAX="${BLOCKS_MAX:-2}" \

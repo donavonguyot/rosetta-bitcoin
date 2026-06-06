@@ -294,6 +294,7 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
       "port", `String "ocaml";
       "category", `String "benchmark";
       "benchmark_contract_version", `Int 1;
+      "benchmark_gate", `String (if target = 50000 then "shakedown_50k" else if target = 5000 then "baseline_5k" else "diagnostic");
       "result", `String proof_result;
       "bounded_gate_status", `String (if !target_reached then "passed" else "failed");
       "local_reference_status", `String (if !target_reached then "target_reached" else "blocked");

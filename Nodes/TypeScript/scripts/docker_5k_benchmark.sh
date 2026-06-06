@@ -5,12 +5,13 @@ cd "$(dirname "$0")/.."
 REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
 # shellcheck source=/dev/null
 . "$REFERENCE_TOPOLOGY_ENV"
+DOCKER_COMPOSE=(docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml)
 
 VOLUME="${DOCKER_PROOF_VOLUME:-tsbitnode_proof_data}"
 TARGET="${DOCKER_SYNC_TARGET:-5000}"
 BLOCKS_MAX="${DOCKER_SYNC_BLOCKS_MAX:-5000}"
 PREFETCH_DEPTH="${DOCKER_BENCHMARK_PREFETCH_DEPTH:-4}"
-RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/typescript_docker_supporting_5k_benchmark_$(date +%F).json}"
+RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/typescript_docker_baseline_5k_benchmark_$(date +%F).json}"
 PEER="${PEERS:-${REFERENCE_P2P_PEER:?REFERENCE_P2P_PEER missing}}"
 export PEER
 BACKEND="${SECP256K1_BACKEND:-native}"
@@ -36,7 +37,7 @@ start_ms="$(now_ms)"
 set +e
 DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" PEERS="$PEER" \
   PARALLEL_BLOCK_DOWNLOADS="$PREFETCH_DEPTH" PAR_SCRIPT_VERIFY=1 \
-  docker compose -f docker/docker-compose.yml run --rm --no-deps tsbitnode-sync-proof \
+  "${DOCKER_COMPOSE[@]}" run --rm --no-deps tsbitnode-sync-proof \
     node dist/cli/syncRunner.js \
       --datadir /data \
       --peers "$PEER" \
@@ -48,7 +49,7 @@ end_ms="$(now_ms)"
 
 set +e
 DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" PEERS="$PEER" \
-  docker compose -f docker/docker-compose.yml run --rm --no-deps tsbitnode-sync-proof \
+  "${DOCKER_COMPOSE[@]}" run --rm --no-deps tsbitnode-sync-proof \
     node dist/cli/nativeStatus.js --datadir /data >"$STATUS_TMP"
 status_exit=$?
 set -e
@@ -94,13 +95,21 @@ def target_label(target):
 
 
 def supporting_gate(target):
-    label = target_label(target)
-    return f"supporting_{label}" if label else "local_reference"
+    return {
+        5000: "baseline_5k",
+        10000: "diagnostic_10k",
+        50000: "shakedown_50k",
+        100000: "performance_100k",
+    }.get(target, "local_reference")
 
 
 def supporting_p2p_kind(target):
-    label = target_label(target)
-    return f"supporting_{label}_p2p" if label else "local_reference_p2p"
+    return {
+        5000: "baseline_5k_p2p",
+        10000: "diagnostic_10k_p2p",
+        50000: "shakedown_50k_p2p",
+        100000: "performance_100k_p2p",
+    }.get(target, "local_reference_p2p")
 
 
 status_path = Path(os.environ["STATUS_PATH"])
