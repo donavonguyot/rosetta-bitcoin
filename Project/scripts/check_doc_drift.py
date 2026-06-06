@@ -161,6 +161,40 @@ def line_presents_retired_benchmark_gate(path: Path, text: str) -> bool:
     return "official" in lower or "gate" in lower or "benchmark" in lower
 
 
+def line_exposes_internal_benchmark_view(path: Path, text: str) -> bool:
+    if path.suffix.lower() != ".md":
+        return False
+    lower = text.lower()
+    return any(
+        view in lower
+        for view in (
+            "benchmark_gate_matrix",
+            "benchmark_comparability",
+            "benchmark_timing_summary",
+        )
+    )
+
+
+def line_implies_noncanonical_current_rank(path: Path, text: str) -> bool:
+    if path.suffix.lower() != ".md":
+        return False
+    lower = text.lower()
+    if "noncanonical" not in lower or "leaderboard" not in lower:
+        return False
+    allowed = ("does not", "do not", "must not", "not rank", "excluded", "not support")
+    return not any(marker in lower for marker in allowed)
+
+
+def line_implies_alias_normalized_timing(path: Path, text: str) -> bool:
+    if path.suffix.lower() != ".md":
+        return False
+    lower = text.lower()
+    if "alias-normalized timing" not in lower and "normalized timing" not in lower:
+        return False
+    allowed = ("does not", "do not", "must not", "not support", "historical", "compatibility")
+    return not any(marker in lower for marker in allowed)
+
+
 def markdown_link_target(raw_target: str) -> str:
     target = raw_target.strip()
     if target.startswith("<") and target.endswith(">"):
@@ -241,6 +275,12 @@ def main() -> int:
                     errors.append(f"{rel_path}:{index}: storage scar vocabulary should use RocksDB runtime truth: {line.strip()}")
                 if line_presents_retired_benchmark_gate(path, line):
                     errors.append(f"{rel_path}:{index}: retired benchmark gates must not be presented as official: {line.strip()}")
+                if line_exposes_internal_benchmark_view(path, line):
+                    errors.append(f"{rel_path}:{index}: use current_benchmark_results or benchmark_leaderboard for public benchmark queries: {line.strip()}")
+                if line_implies_noncanonical_current_rank(path, line):
+                    errors.append(f"{rel_path}:{index}: noncanonical evidence must not support current leaderboards: {line.strip()}")
+                if line_implies_alias_normalized_timing(path, line):
+                    errors.append(f"{rel_path}:{index}: current benchmark docs must require canonical timing, not alias-normalized timing: {line.strip()}")
                 if path.suffix.lower() == ".md":
                     for match in MARKDOWN_LINK.finditer(line):
                         target = markdown_link_target(match.group(1))

@@ -11,8 +11,10 @@ DOCKER_50K_PROOF_RESULT ?= /results/zig_docker_shakedown_50k_benchmark_$(RESULT_
 DOCKER_100K_PROOF_RESULT ?= /results/zig_docker_performance_100k_benchmark_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
+VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_PROOF_VOLUME ?= zigbitnode_proof_data
 DOCKER_SYNC_TARGET ?= 5000
+BENCHMARK_GATE ?= baseline_5k
 
 .PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-smoke-once clean
 
@@ -76,24 +78,30 @@ docker-proof-local:
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
 	  --output $(DOCKER_LOCAL_PROOF_RESULT)
+	@if [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
+	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(patsubst /results/%,../Shared/conformance/results/%,$(DOCKER_LOCAL_PROOF_RESULT)) --port zig --strict-current; \
+	fi
 
 docker-proof-10k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_PROOF_VOLUME=zigbitnode_10k_proof_data \
 	  DOCKER_SYNC_TARGET=10000 \
-	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_10K_PROOF_RESULT)
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_10K_PROOF_RESULT) \
+	  BENCHMARK_GATE=diagnostic_10k
 
 docker-proof-50k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_PROOF_VOLUME=zigbitnode_50k_proof_data \
 	  DOCKER_SYNC_TARGET=50000 \
-	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_50K_PROOF_RESULT)
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_50K_PROOF_RESULT) \
+	  BENCHMARK_GATE=shakedown_50k
 
 docker-proof-100k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_PROOF_VOLUME=zigbitnode_100k_proof_data \
 	  DOCKER_SYNC_TARGET=100000 \
-	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_100K_PROOF_RESULT)
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_100K_PROOF_RESULT) \
+	  BENCHMARK_GATE=performance_100k
 
 docker-smoke-once: docker-status docker-storage-proof docker-script-corpus
 

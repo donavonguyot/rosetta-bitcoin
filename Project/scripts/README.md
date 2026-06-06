@@ -59,6 +59,7 @@ generate_reports
 Print an on-demand Markdown summary:
 
 ```bash
+python3 Project/scripts/report.py --db Project/project.db --list-sections
 python3 Project/scripts/report.py --db Project/project.db --section all
 python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section current-evidence
@@ -71,8 +72,10 @@ python3 Project/scripts/report.py --db Project/project.db --section blocker-matr
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section leaderboard
+python3 Project/scripts/report.py --db Project/project.db --section leaderboard --gate shakedown_50k
+python3 Project/scripts/report.py --db Project/project.db --section 50k-leaderboard
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-gates
-python3 Project/scripts/report.py --db Project/project.db --section benchmark-comparability
 python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/report.py --db Project/project.db --section shakedown-50k
 python3 Project/scripts/report.py --db Project/project.db --section performance-100k
@@ -147,9 +150,35 @@ python3 Project/scripts/run_benchmark_campaign.py \
 Campaign scratch lives under ignored `Project/.campaigns/`. Logs and telemetry
 tails are operational state, not committed evidence. The runner updates
 `Nodes/Shared/conformance/current_evidence.json` only after the fresh artifact
-passes shape, stance, timing, telemetry, and anomaly checks. A failed command,
-missing artifact, ambiguous artifact selection, rejected artifact, or suspicious
+passes the shared benchmark artifact validator, Project import, and anomaly
+checks. For `shakedown_50k`, `performance_100k`, and tip gates, the runner also
+validates the proof log with `validate_benchmark_telemetry.py` and requires
+`telemetry_quality=clean`. A failed command, missing artifact, ambiguous
+artifact selection, rejected artifact, telemetry rejection, or suspicious
 regression pauses the campaign instead of moving to the next port.
+
+Validate a benchmark artifact directly:
+
+```bash
+python3 Nodes/Shared/conformance/tools/validate_benchmark_artifact.py \
+  --gate shakedown_50k \
+  --artifact Nodes/Shared/conformance/results/<port>_*.json \
+  --strict-current
+```
+
+Validate a long-run proof log directly:
+
+```bash
+python3 Project/scripts/validate_benchmark_telemetry.py \
+  --gate shakedown_50k \
+  --target-height 50000 \
+  --require-clean \
+  Project/.campaigns/<campaign_id>/logs/<port>_proof.log
+```
+
+Historical artifacts may still import for archaeology. Current evidence used by
+campaigns and leaderboards must import with `artifact_quality=canonical`; long
+runs must also import with `telemetry_quality=clean`.
 
 Preflight the full 5k baseline after importing evidence:
 
@@ -297,10 +326,13 @@ sqlite-utils query Project/project.db \
   "select * from follower_blocker_matrix order by height, port"
 
 sqlite-utils query Project/project.db \
-  "select * from benchmark_gate_matrix order by target_height, port"
+  "select * from current_benchmark_results order by gate_id, port"
 
 sqlite-utils query Project/project.db \
-  "select * from benchmark_comparability order by target_height, port"
+  "select * from benchmark_leaderboard where gate_id='shakedown_50k' order by rank"
+
+sqlite-utils query Project/project.db \
+  "select port, gate_id, artifact_quality from current_benchmark_results order by gate_id, port"
 
 sqlite-utils query Project/project.db \
   "select * from port_baseline_5k order by port"

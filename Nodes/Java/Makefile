@@ -27,7 +27,9 @@ DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
+VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_REBUILD ?= 0
+BENCHMARK_GATE ?= baseline_5k
 
 .PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-supporting-10k-proof docker-java-supporting-50k-proof docker-java-primary-100k-proof docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
 
@@ -75,6 +77,9 @@ docker-java-supporting-5k-proof:
 	  PEERS=$(DOCKER_P2P_PEER) \
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
 		  scripts/docker_5k_benchmark.sh
+	@if [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
+	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(DOCKER_BENCHMARK_RESULT) --port java --strict-current; \
+	fi
 
 docker-java-supporting-10k-proof:
 	$(MAKE) docker-java-supporting-5k-proof \
@@ -83,7 +88,8 @@ docker-java-supporting-10k-proof:
 	  DOCKER_BENCHMARK_TARGET=10000 \
 	  DOCKER_BENCHMARK_BLOCKS_MAX=10000 \
 	  DOCKER_BENCHMARK_HEADERS_MAX=10000 \
-	  DOCKER_BENCHMARK_HEADER_BATCHES_MAX=50
+	  DOCKER_BENCHMARK_HEADER_BATCHES_MAX=50 \
+	  BENCHMARK_GATE=diagnostic_10k
 
 docker-java-supporting-50k-proof:
 	$(MAKE) docker-java-supporting-5k-proof \
@@ -92,7 +98,8 @@ docker-java-supporting-50k-proof:
 	  DOCKER_BENCHMARK_TARGET=50000 \
 	  DOCKER_BENCHMARK_BLOCKS_MAX=50000 \
 	  DOCKER_BENCHMARK_HEADERS_MAX=50000 \
-	  DOCKER_BENCHMARK_HEADER_BATCHES_MAX=50
+	  DOCKER_BENCHMARK_HEADER_BATCHES_MAX=50 \
+	  BENCHMARK_GATE=shakedown_50k
 
 docker-java-primary-100k-proof:
 	$(MAKE) docker-java-supporting-5k-proof \
@@ -101,7 +108,8 @@ docker-java-primary-100k-proof:
 	  DOCKER_BENCHMARK_TARGET=100000 \
 	  DOCKER_BENCHMARK_BLOCKS_MAX=100000 \
 	  DOCKER_BENCHMARK_HEADERS_MAX=100000 \
-	  DOCKER_BENCHMARK_HEADER_BATCHES_MAX=50
+	  DOCKER_BENCHMARK_HEADER_BATCHES_MAX=50 \
+	  BENCHMARK_GATE=performance_100k
 
 docker-java-native-crypto-long-sync-proof:
 	$(REFERENCE_P2P_CHECK)

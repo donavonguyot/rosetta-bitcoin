@@ -80,8 +80,14 @@ python3 <<'PY'
 import json
 import os
 import re
+import sys
+import importlib.util
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+ROOT = Path.cwd().parents[1]
+TELEMETRY_VALIDATOR = ROOT / "Project/scripts/validate_benchmark_telemetry.py"
 
 
 def as_int(value, default=0):
@@ -115,6 +121,31 @@ def supporting_p2p_kind(target):
         50000: "shakedown_50k_p2p",
         100000: "performance_100k_p2p",
     }.get(target, "local_reference_p2p")
+
+
+def telemetry_summary(log_path, gate, target):
+    spec = importlib.util.spec_from_file_location("rb_benchmark_telemetry_validator", TELEMETRY_VALIDATOR)
+    if spec is None or spec.loader is None:
+        return {"telemetry_quality": "invalid", "tick_count": 0, "heartbeat_max_gap_ms": -1, "lifecycle_markers": {}}
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    result = module.validate_log_paths(
+        [log_path],
+        gate=gate,
+        port="cpp",
+        target_height=target,
+        min_ticks=1,
+        heartbeat_max_ms=15_000,
+    )
+    summary = dict(result.summary)
+    summary["telemetry_quality"] = result.quality
+    if result.errors:
+        summary["errors"] = result.errors
+    if result.warnings:
+        summary["warnings"] = result.warnings
+    summary["telemetry_log_path"] = str(log_path)
+    return summary
 
 
 def extract_json_object(raw):
@@ -274,6 +305,7 @@ start_ms = as_int(os.environ.get("START_MS"))
 end_ms = as_int(os.environ.get("END_MS"))
 elapsed_ms = max(0, end_ms - start_ms)
 target = as_int(os.environ.get("TARGET"), 5000)
+gate = supporting_gate(target)
 validated_height = as_int(status.get("validated_height"), -1)
 stored_block_height = as_int(status.get("stored_block_height"), -1)
 current_blocker = status.get("current_blocker") or log_blocker
@@ -317,13 +349,24 @@ pipeline_summary.setdefault("p2p_header_read_us", 0)
 pipeline_summary.setdefault("p2p_payload_read_us", 0)
 if pipeline_summary.get("p2p_fetch", 0) == 0:
     pipeline_summary["p2p_fetch"] = pipeline_summary.get("block_fetch_wait", 0)
+for stage in (
+    "p2p_fetch",
+    "block_parse_validate",
+    "utxo_load",
+    "script_verify",
+    "utxo_apply",
+    "commit",
+    "block_connect_store_commit",
+):
+    stage_totals.setdefault(stage, pipeline_summary.get(stage, 0))
 
 doc = {
     "benchmark_contract_version": 1,
     "benchmark_kind": supporting_p2p_kind(target),
-    "benchmark_gate": supporting_gate(target),
+    "benchmark_gate": gate,
     "benchmark_lane": supporting_p2p_kind(target),
     "telemetry_schema": "benchmark.telemetry_tick.v1",
+    "telemetry_summary": telemetry_summary(Path(os.environ["RUN_LOG_PATH"]), gate, target),
     "utxo_accounting_policy": "core_spendable_v1",
     "target_label": target_label(target),
     "target_height": target,

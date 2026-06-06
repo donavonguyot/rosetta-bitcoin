@@ -7,14 +7,14 @@
   "blocks_connected" : 50001,
   "blocks_fetched" : 50001,
   "byte_source" : "local_reference_p2p",
-  "captured_at" : "2026-06-06T21:06:35Z",
+  "captured_at" : "2026-06-06T22:13:36Z",
   "chain" : "testnet4",
   "chainstate_backend" : "rocksdb",
   "chainstate_status" : "usable",
   "chainstate_utxo_count" : 568855,
   "current_blocker" : null,
   "delete_legacy_utxo_keys" : false,
-  "elapsed_ms" : 59224,
+  "elapsed_ms" : 58365,
   "failures" : [
 
   ],
@@ -30,11 +30,11 @@
   "peer" : "bitcoin-core-testnet4:48333",
   "peer_mode" : "local_reference",
   "pipeline_timing_summary" : {
-    "script_verify_worker_cpu" : 84508,
+    "script_verify_worker_cpu" : 88505,
     "slow_blocks" : [
       {
-        "block_connect_store_commit_ms" : 2125,
-        "commit_ms" : 10,
+        "block_connect_store_commit_ms" : 2123,
+        "commit_ms" : 11,
         "created_utxos" : 2,
         "height" : 20888,
         "input_shape_counts" : {
@@ -48,19 +48,19 @@
         "rank" : 1,
         "same_block_spends" : 0,
         "script_input_count" : 6760,
-        "script_verify_ms" : 2090,
-        "script_verify_worker_cpu_ms" : 16444,
+        "script_verify_ms" : 2087,
+        "script_verify_worker_cpu_ms" : 16465,
         "spent_external" : 6760,
         "spent_prevout_script_types" : {
           "p2pkh" : 6760
         },
         "tx_count" : 2,
-        "utxo_load_ms" : 9,
+        "utxo_load_ms" : 10,
         "vin_count" : 6761,
         "vout_count" : 3
       },
       {
-        "block_connect_store_commit_ms" : 787,
+        "block_connect_store_commit_ms" : 800,
         "commit_ms" : 7,
         "created_utxos" : 69,
         "height" : 21209,
@@ -77,20 +77,20 @@
         "rank" : 2,
         "same_block_spends" : 0,
         "script_input_count" : 3939,
-        "script_verify_ms" : 766,
-        "script_verify_worker_cpu_ms" : 5884,
+        "script_verify_ms" : 780,
+        "script_verify_worker_cpu_ms" : 6115,
         "spent_external" : 3939,
         "spent_prevout_script_types" : {
           "p2pkh" : 3839,
           "p2wpkh" : 100
         },
         "tx_count" : 36,
-        "utxo_load_ms" : 5,
+        "utxo_load_ms" : 6,
         "vin_count" : 3940,
         "vout_count" : 70
       },
       {
-        "block_connect_store_commit_ms" : 458,
+        "block_connect_store_commit_ms" : 445,
         "commit_ms" : 4,
         "created_utxos" : 380,
         "height" : 24553,
@@ -107,8 +107,8 @@
         "rank" : 3,
         "same_block_spends" : 0,
         "script_input_count" : 2963,
-        "script_verify_ms" : 440,
-        "script_verify_worker_cpu_ms" : 3372,
+        "script_verify_ms" : 428,
+        "script_verify_worker_cpu_ms" : 3242,
         "spent_external" : 2963,
         "spent_prevout_script_types" : {
           "p2pkh" : 2773,
@@ -120,7 +120,7 @@
         "vout_count" : 381
       },
       {
-        "block_connect_store_commit_ms" : 371,
+        "block_connect_store_commit_ms" : 391,
         "commit_ms" : 3,
         "created_utxos" : 41,
         "height" : 21238,
@@ -137,8 +137,8 @@
         "rank" : 4,
         "same_block_spends" : 0,
         "script_input_count" : 2555,
-        "script_verify_ms" : 360,
-        "script_verify_worker_cpu_ms" : 2722,
+        "script_verify_ms" : 380,
+        "script_verify_worker_cpu_ms" : 2886,
         "spent_external" : 2555,
         "spent_prevout_script_types" : {
           "p2pkh" : 2535,
@@ -150,7 +150,7 @@
         "vout_count" : 42
       },
       {
-        "block_connect_store_commit_ms" : 291,
+        "block_connect_store_commit_ms" : 280,
         "commit_ms" : 4,
         "created_utxos" : 33,
         "height" : 33068,
@@ -169,8 +169,8 @@
         "rank" : 5,
         "same_block_spends" : 6,
         "script_input_count" : 1958,
-        "script_verify_ms" : 267,
-        "script_verify_worker_cpu_ms" : 2096,
+        "script_verify_ms" : 256,
+        "script_verify_worker_cpu_ms" : 1929,
         "spent_external" : 1952,
         "spent_prevout_script_types" : {
           "p2pkh" : 1938,
@@ -184,8 +184,8 @@
         "vout_count" : 40
       },
       {
-        "block_connect_store_commit_ms" : 282,
-        "commit_ms" : 5,
+        "block_connect_store_commit_ms" : 274,
+        "commit_ms" : 4,
         "created_utxos" : 178,
         "height" : 28102,
         "input_shape_counts" : {
@@ -202,8 +202,8 @@
         "rank" : 6,
         "same_block_spends" : 37,
         "script_input_count" : 2147,
-        "script_verify_ms" : 262,
-        "script_verify_worker_cpu_ms" : 2015,
+        "script_verify_ms" : 256,
+        "script_verify_worker_cpu_ms" : 1955,
         "spent_external" : 2110,
         "spent_prevout_script_types" : {
           "p2pkh" : 2020,
@@ -211,12 +211,12 @@
           "p2wpkh" : 117
         },
         "tx_count" : 119,
-        "utxo_load_ms" : 9,
+        "utxo_load_ms" : 8,
         "vin_count" : 2148,
         "vout_count" : 240
       },
       {
-        "block_connect_store_commit_ms" : 129,
+        "block_connect_store_commit_ms" : 130,
         "commit_ms" : 2,
         "created_utxos" : 5,
         "height" : 40825,
@@ -233,8 +233,8 @@
         "rank" : 7,
         "same_block_spends" : 0,
         "script_input_count" : 1284,
-        "script_verify_ms" : 121,
-        "script_verify_worker_cpu_ms" : 870,
+        "script_verify_ms" : 123,
+        "script_verify_worker_cpu_ms" : 874,
         "spent_external" : 1284,
         "spent_prevout_script_types" : {
           "p2pkh" : 1282,
@@ -246,7 +246,7 @@
         "vout_count" : 6
       },
       {
-        "block_connect_store_commit_ms" : 84,
+        "block_connect_store_commit_ms" : 76,
         "commit_ms" : 2,
         "created_utxos" : 14,
         "height" : 42827,
@@ -265,8 +265,8 @@
         "rank" : 8,
         "same_block_spends" : 0,
         "script_input_count" : 939,
-        "script_verify_ms" : 80,
-        "script_verify_worker_cpu_ms" : 541,
+        "script_verify_ms" : 72,
+        "script_verify_worker_cpu_ms" : 491,
         "spent_external" : 939,
         "spent_prevout_script_types" : {
           "p2pkh" : 926,
@@ -280,7 +280,7 @@
         "vout_count" : 18
       },
       {
-        "block_connect_store_commit_ms" : 81,
+        "block_connect_store_commit_ms" : 71,
         "commit_ms" : 5,
         "created_utxos" : 314,
         "height" : 26643,
@@ -296,19 +296,19 @@
         "rank" : 9,
         "same_block_spends" : 1,
         "script_input_count" : 4158,
-        "script_verify_ms" : 33,
-        "script_verify_worker_cpu_ms" : 210,
+        "script_verify_ms" : 32,
+        "script_verify_worker_cpu_ms" : 191,
         "spent_external" : 4157,
         "spent_prevout_script_types" : {
           "p2wpkh" : 4158
         },
         "tx_count" : 159,
-        "utxo_load_ms" : 26,
+        "utxo_load_ms" : 21,
         "vin_count" : 4159,
         "vout_count" : 316
       },
       {
-        "block_connect_store_commit_ms" : 68,
+        "block_connect_store_commit_ms" : 62,
         "commit_ms" : 4,
         "created_utxos" : 66,
         "height" : 39637,
@@ -327,8 +327,8 @@
         "rank" : 10,
         "same_block_spends" : 0,
         "script_input_count" : 2780,
-        "script_verify_ms" : 52,
-        "script_verify_worker_cpu_ms" : 343,
+        "script_verify_ms" : 50,
+        "script_verify_worker_cpu_ms" : 319,
         "spent_external" : 2780,
         "spent_prevout_script_types" : {
           "p2pkh" : 895,
@@ -343,28 +343,28 @@
       }
     ],
     "stage_totals_ms" : {
-      "block_connect_store_commit" : 58021,
-      "block_parse_validate" : 9606,
-      "commit" : 6866,
-      "metadata_put_prepare" : 404,
-      "p2p_fetch" : 5806,
-      "prevout_batch_load" : 1921,
+      "block_connect_store_commit" : 57093,
+      "block_parse_validate" : 9352,
+      "commit" : 6478,
+      "metadata_put_prepare" : 375,
+      "p2p_fetch" : 5872,
+      "prevout_batch_load" : 1828,
       "prevout_legacy_fallback_get" : 0,
-      "prevout_multi_get_call" : 1516,
-      "prevout_utxo_decode" : 173,
-      "rocksdb_write" : 2836,
-      "script_runner_wait" : 19832,
-      "script_verify" : 20829,
-      "script_verify_worker_cpu" : 84508,
-      "script_wall_ms" : 20829,
-      "script_worker_cpu_ms" : 84508,
-      "undo_put_prepare" : 396,
-      "utxo_apply" : 6866,
-      "utxo_delete_prepare" : 148,
-      "utxo_load" : 1921,
-      "utxo_put_prepare" : 475
+      "prevout_multi_get_call" : 1448,
+      "prevout_utxo_decode" : 163,
+      "rocksdb_write" : 2602,
+      "script_runner_wait" : 20328,
+      "script_verify" : 21297,
+      "script_verify_worker_cpu" : 88505,
+      "script_wall_ms" : 21297,
+      "script_worker_cpu_ms" : 88505,
+      "undo_put_prepare" : 374,
+      "utxo_apply" : 6478,
+      "utxo_delete_prepare" : 139,
+      "utxo_load" : 1828,
+      "utxo_put_prepare" : 442
     },
-    "total_ms" : 59224
+    "total_ms" : 58365
   },
   "port" : "swift",
   "prefetch_depth" : 4,
@@ -391,33 +391,33 @@
   "script_runner_workers" : 8,
   "script_worker_local_secp_context" : true,
   "stage_totals_ms" : {
-    "block_connect_store_commit" : 58021,
-    "block_parse_validate" : 9606,
-    "commit" : 6866,
-    "metadata_put_prepare" : 404,
-    "p2p_fetch" : 5806,
-    "prevout_batch_load" : 1921,
+    "block_connect_store_commit" : 57093,
+    "block_parse_validate" : 9352,
+    "commit" : 6478,
+    "metadata_put_prepare" : 375,
+    "p2p_fetch" : 5872,
+    "prevout_batch_load" : 1828,
     "prevout_legacy_fallback_get" : 0,
-    "prevout_multi_get_call" : 1516,
-    "prevout_utxo_decode" : 173,
-    "rocksdb_write" : 2836,
-    "script_runner_wait" : 19832,
-    "script_verify" : 20829,
-    "script_verify_worker_cpu" : 84508,
-    "script_wall_ms" : 20829,
-    "script_worker_cpu_ms" : 84508,
-    "undo_put_prepare" : 396,
-    "utxo_apply" : 6866,
-    "utxo_delete_prepare" : 148,
-    "utxo_load" : 1921,
-    "utxo_put_prepare" : 475
+    "prevout_multi_get_call" : 1448,
+    "prevout_utxo_decode" : 163,
+    "rocksdb_write" : 2602,
+    "script_runner_wait" : 20328,
+    "script_verify" : 21297,
+    "script_verify_worker_cpu" : 88505,
+    "script_wall_ms" : 21297,
+    "script_worker_cpu_ms" : 88505,
+    "undo_put_prepare" : 374,
+    "utxo_apply" : 6478,
+    "utxo_delete_prepare" : 139,
+    "utxo_load" : 1828,
+    "utxo_put_prepare" : 442
   },
   "status" : {
     "binary_gate_status" : "not_attempted",
     "chain" : "testnet4",
     "chainstate_backend" : "rocksdb",
     "chainstate_backend_path" : "\/data\/chainstate-rocksdb",
-    "chainstate_generation_id" : "553BD071-8BC1-40FF-B571-81B15A1321D9",
+    "chainstate_generation_id" : "44B557C5-F960-4361-87C7-364347E23CD3",
     "chainstate_status" : "usable",
     "chainstate_utxo_count" : 568855,
     "current_blocker" : null,
@@ -445,7 +445,7 @@
     "stored_block_hash" : "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
     "stored_block_height" : 50000,
     "sync_status" : "blocks_current",
-    "updated_at" : "2026-06-06T21:06:35Z",
+    "updated_at" : "2026-06-06T22:13:36Z",
     "utxo_accounting_policy" : "core_spendable_v1",
     "validated_hash" : "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
     "validated_height" : 50000
@@ -456,11 +456,11 @@
   "target_label" : "50k",
   "telemetry_schema" : "benchmark.telemetry_tick.v1",
   "timing_summary" : {
-    "script_verify_worker_cpu" : 84508,
+    "script_verify_worker_cpu" : 88505,
     "slow_blocks" : [
       {
-        "block_connect_store_commit_ms" : 2125,
-        "commit_ms" : 10,
+        "block_connect_store_commit_ms" : 2123,
+        "commit_ms" : 11,
         "created_utxos" : 2,
         "height" : 20888,
         "input_shape_counts" : {
@@ -474,19 +474,19 @@
         "rank" : 1,
         "same_block_spends" : 0,
         "script_input_count" : 6760,
-        "script_verify_ms" : 2090,
-        "script_verify_worker_cpu_ms" : 16444,
+        "script_verify_ms" : 2087,
+        "script_verify_worker_cpu_ms" : 16465,
         "spent_external" : 6760,
         "spent_prevout_script_types" : {
           "p2pkh" : 6760
         },
         "tx_count" : 2,
-        "utxo_load_ms" : 9,
+        "utxo_load_ms" : 10,
         "vin_count" : 6761,
         "vout_count" : 3
       },
       {
-        "block_connect_store_commit_ms" : 787,
+        "block_connect_store_commit_ms" : 800,
         "commit_ms" : 7,
         "created_utxos" : 69,
         "height" : 21209,
@@ -503,20 +503,20 @@
         "rank" : 2,
         "same_block_spends" : 0,
         "script_input_count" : 3939,
-        "script_verify_ms" : 766,
-        "script_verify_worker_cpu_ms" : 5884,
+        "script_verify_ms" : 780,
+        "script_verify_worker_cpu_ms" : 6115,
         "spent_external" : 3939,
         "spent_prevout_script_types" : {
           "p2pkh" : 3839,
           "p2wpkh" : 100
         },
         "tx_count" : 36,
-        "utxo_load_ms" : 5,
+        "utxo_load_ms" : 6,
         "vin_count" : 3940,
         "vout_count" : 70
       },
       {
-        "block_connect_store_commit_ms" : 458,
+        "block_connect_store_commit_ms" : 445,
         "commit_ms" : 4,
         "created_utxos" : 380,
         "height" : 24553,
@@ -533,8 +533,8 @@
         "rank" : 3,
         "same_block_spends" : 0,
         "script_input_count" : 2963,
-        "script_verify_ms" : 440,
-        "script_verify_worker_cpu_ms" : 3372,
+        "script_verify_ms" : 428,
+        "script_verify_worker_cpu_ms" : 3242,
         "spent_external" : 2963,
         "spent_prevout_script_types" : {
           "p2pkh" : 2773,
@@ -546,7 +546,7 @@
         "vout_count" : 381
       },
       {
-        "block_connect_store_commit_ms" : 371,
+        "block_connect_store_commit_ms" : 391,
         "commit_ms" : 3,
         "created_utxos" : 41,
         "height" : 21238,
@@ -563,8 +563,8 @@
         "rank" : 4,
         "same_block_spends" : 0,
         "script_input_count" : 2555,
-        "script_verify_ms" : 360,
-        "script_verify_worker_cpu_ms" : 2722,
+        "script_verify_ms" : 380,
+        "script_verify_worker_cpu_ms" : 2886,
         "spent_external" : 2555,
         "spent_prevout_script_types" : {
           "p2pkh" : 2535,
@@ -576,7 +576,7 @@
         "vout_count" : 42
       },
       {
-        "block_connect_store_commit_ms" : 291,
+        "block_connect_store_commit_ms" : 280,
         "commit_ms" : 4,
         "created_utxos" : 33,
         "height" : 33068,
@@ -595,8 +595,8 @@
         "rank" : 5,
         "same_block_spends" : 6,
         "script_input_count" : 1958,
-        "script_verify_ms" : 267,
-        "script_verify_worker_cpu_ms" : 2096,
+        "script_verify_ms" : 256,
+        "script_verify_worker_cpu_ms" : 1929,
         "spent_external" : 1952,
         "spent_prevout_script_types" : {
           "p2pkh" : 1938,
@@ -610,8 +610,8 @@
         "vout_count" : 40
       },
       {
-        "block_connect_store_commit_ms" : 282,
-        "commit_ms" : 5,
+        "block_connect_store_commit_ms" : 274,
+        "commit_ms" : 4,
         "created_utxos" : 178,
         "height" : 28102,
         "input_shape_counts" : {
@@ -628,8 +628,8 @@
         "rank" : 6,
         "same_block_spends" : 37,
         "script_input_count" : 2147,
-        "script_verify_ms" : 262,
-        "script_verify_worker_cpu_ms" : 2015,
+        "script_verify_ms" : 256,
+        "script_verify_worker_cpu_ms" : 1955,
         "spent_external" : 2110,
         "spent_prevout_script_types" : {
           "p2pkh" : 2020,
@@ -637,12 +637,12 @@
           "p2wpkh" : 117
         },
         "tx_count" : 119,
-        "utxo_load_ms" : 9,
+        "utxo_load_ms" : 8,
         "vin_count" : 2148,
         "vout_count" : 240
       },
       {
-        "block_connect_store_commit_ms" : 129,
+        "block_connect_store_commit_ms" : 130,
         "commit_ms" : 2,
         "created_utxos" : 5,
         "height" : 40825,
@@ -659,8 +659,8 @@
         "rank" : 7,
         "same_block_spends" : 0,
         "script_input_count" : 1284,
-        "script_verify_ms" : 121,
-        "script_verify_worker_cpu_ms" : 870,
+        "script_verify_ms" : 123,
+        "script_verify_worker_cpu_ms" : 874,
         "spent_external" : 1284,
         "spent_prevout_script_types" : {
           "p2pkh" : 1282,
@@ -672,7 +672,7 @@
         "vout_count" : 6
       },
       {
-        "block_connect_store_commit_ms" : 84,
+        "block_connect_store_commit_ms" : 76,
         "commit_ms" : 2,
         "created_utxos" : 14,
         "height" : 42827,
@@ -691,8 +691,8 @@
         "rank" : 8,
         "same_block_spends" : 0,
         "script_input_count" : 939,
-        "script_verify_ms" : 80,
-        "script_verify_worker_cpu_ms" : 541,
+        "script_verify_ms" : 72,
+        "script_verify_worker_cpu_ms" : 491,
         "spent_external" : 939,
         "spent_prevout_script_types" : {
           "p2pkh" : 926,
@@ -706,7 +706,7 @@
         "vout_count" : 18
       },
       {
-        "block_connect_store_commit_ms" : 81,
+        "block_connect_store_commit_ms" : 71,
         "commit_ms" : 5,
         "created_utxos" : 314,
         "height" : 26643,
@@ -722,19 +722,19 @@
         "rank" : 9,
         "same_block_spends" : 1,
         "script_input_count" : 4158,
-        "script_verify_ms" : 33,
-        "script_verify_worker_cpu_ms" : 210,
+        "script_verify_ms" : 32,
+        "script_verify_worker_cpu_ms" : 191,
         "spent_external" : 4157,
         "spent_prevout_script_types" : {
           "p2wpkh" : 4158
         },
         "tx_count" : 159,
-        "utxo_load_ms" : 26,
+        "utxo_load_ms" : 21,
         "vin_count" : 4159,
         "vout_count" : 316
       },
       {
-        "block_connect_store_commit_ms" : 68,
+        "block_connect_store_commit_ms" : 62,
         "commit_ms" : 4,
         "created_utxos" : 66,
         "height" : 39637,
@@ -753,8 +753,8 @@
         "rank" : 10,
         "same_block_spends" : 0,
         "script_input_count" : 2780,
-        "script_verify_ms" : 52,
-        "script_verify_worker_cpu_ms" : 343,
+        "script_verify_ms" : 50,
+        "script_verify_worker_cpu_ms" : 319,
         "spent_external" : 2780,
         "spent_prevout_script_types" : {
           "p2pkh" : 895,
@@ -769,28 +769,28 @@
       }
     ],
     "stage_totals_ms" : {
-      "block_connect_store_commit" : 58021,
-      "block_parse_validate" : 9606,
-      "commit" : 6866,
-      "metadata_put_prepare" : 404,
-      "p2p_fetch" : 5806,
-      "prevout_batch_load" : 1921,
+      "block_connect_store_commit" : 57093,
+      "block_parse_validate" : 9352,
+      "commit" : 6478,
+      "metadata_put_prepare" : 375,
+      "p2p_fetch" : 5872,
+      "prevout_batch_load" : 1828,
       "prevout_legacy_fallback_get" : 0,
-      "prevout_multi_get_call" : 1516,
-      "prevout_utxo_decode" : 173,
-      "rocksdb_write" : 2836,
-      "script_runner_wait" : 19832,
-      "script_verify" : 20829,
-      "script_verify_worker_cpu" : 84508,
-      "script_wall_ms" : 20829,
-      "script_worker_cpu_ms" : 84508,
-      "undo_put_prepare" : 396,
-      "utxo_apply" : 6866,
-      "utxo_delete_prepare" : 148,
-      "utxo_load" : 1921,
-      "utxo_put_prepare" : 475
+      "prevout_multi_get_call" : 1448,
+      "prevout_utxo_decode" : 163,
+      "rocksdb_write" : 2602,
+      "script_runner_wait" : 20328,
+      "script_verify" : 21297,
+      "script_verify_worker_cpu" : 88505,
+      "script_wall_ms" : 21297,
+      "script_worker_cpu_ms" : 88505,
+      "undo_put_prepare" : 374,
+      "utxo_apply" : 6478,
+      "utxo_delete_prepare" : 139,
+      "utxo_load" : 1828,
+      "utxo_put_prepare" : 442
     },
-    "total_ms" : 59224
+    "total_ms" : 58365
   },
   "utxo_accounting_policy" : "core_spendable_v1",
   "validated_hash" : "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",

@@ -11,6 +11,7 @@ RPC_PASSWORD ?= rosetta-dev-only
 RPC_RETRIES ?= 10
 PREFETCH_DEPTH ?= 4
 PROGRESS ?= 100
+BENCHMARK_GATE ?= baseline_5k
 RESULT_DATE ?= $(shell date +%F)
 STORAGE_RESULT ?= ../Shared/conformance/results/rust_storage_gate_$(RESULT_DATE).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/rust_script_corpus_$(RESULT_DATE).json
@@ -27,6 +28,7 @@ DOCKER_LOCAL_REFERENCE_TUNING_100K_RESULT ?= /results/rust_docker_tuning_50k_to_
 RPC_REPLAY_RESULT ?= ../Shared/conformance/results/rust_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
+VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_REBUILD ?= 0
 DOCKER_LOCAL_PROOF_VOLUME ?= rsbitnode_proof_data
 DOCKER_TUNING_SOURCE_VOLUME ?= rsbitnode_50k_proof_data
@@ -92,24 +94,30 @@ docker-proof-local:
 	$(REFERENCE_P2P_CHECK)
 	@docker volume rm -f $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps -e RSBITNODE_BLOCK_PREFETCH_DEPTH=$(PREFETCH_DEPTH) rsbitnode-local-reference-proof rsbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --byte-source p2p --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker
+	@if [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
+	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(patsubst /results/%,../Shared/conformance/results/%,$(DOCKER_LOCAL_REFERENCE_RESULT)) --port rust --strict-current; \
+	fi
 
 docker-proof-10k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_10k_proof_data \
 	  SYNC_TARGET=10000 \
-	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_10K_RESULT)
+	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_10K_RESULT) \
+	  BENCHMARK_GATE=diagnostic_10k
 
 docker-proof-50k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_50k_proof_data \
 	  SYNC_TARGET=50000 \
-	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_50K_RESULT)
+	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_50K_RESULT) \
+	  BENCHMARK_GATE=shakedown_50k
 
 docker-proof-100k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_100k_proof_data \
 	  SYNC_TARGET=100000 \
-	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_100K_RESULT)
+	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_100K_RESULT) \
+	  BENCHMARK_GATE=performance_100k
 
 docker-tuning-100k-from-50k:
 	$(REFERENCE_P2P_CHECK)

@@ -4,6 +4,7 @@ BUILD_DIR ?= build-core
 
 DOCKER_COMPOSE ?= docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
+VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_BENCHMARK_PEERS ?= $(REFERENCE_P2P_PEER)
 REFERENCE_P2P_CHECK_PEER = $(DOCKER_BENCHMARK_PEERS)
 DOCKER_PROOF_VOLUME ?= cpbitnode_proof_data
@@ -18,6 +19,7 @@ DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/cpp_script_corpus_docker_$(s
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
+BENCHMARK_GATE ?= baseline_5k
 DOCKER_HEADERS_MAX ?= 200
 DOCKER_BLOCKS_MAX ?= 2
 DOCKER_SYNC_VOLUME ?= cpbitnode_sync_data
@@ -84,27 +86,33 @@ docker-cpp-supporting-5k-proof:
 	  DOCKER_BENCHMARK_BLOCKS_MAX=$(DOCKER_BENCHMARK_BLOCKS_MAX) DOCKER_BENCHMARK_PEERS=$(DOCKER_BENCHMARK_PEERS) \
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
 		  scripts/docker_5k_benchmark.sh
+	@if [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
+	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(DOCKER_BENCHMARK_RESULT) --port cpp --strict-current; \
+	fi
 
 docker-cpp-supporting-10k-proof:
 	$(MAKE) docker-cpp-supporting-5k-proof \
 	  DOCKER_PROOF_VOLUME=cpbitnode_10k_proof_data \
 	  DOCKER_BENCHMARK_RESULT=$(DOCKER_10K_BENCHMARK_RESULT) \
 	  DOCKER_BENCHMARK_TARGET=10000 \
-	  DOCKER_BENCHMARK_BLOCKS_MAX=10000
+	  DOCKER_BENCHMARK_BLOCKS_MAX=10000 \
+	  BENCHMARK_GATE=diagnostic_10k
 
 docker-cpp-supporting-50k-proof:
 	$(MAKE) docker-cpp-supporting-5k-proof \
 	  DOCKER_PROOF_VOLUME=cpbitnode_50k_proof_data \
 	  DOCKER_BENCHMARK_RESULT=$(DOCKER_50K_BENCHMARK_RESULT) \
 	  DOCKER_BENCHMARK_TARGET=50000 \
-	  DOCKER_BENCHMARK_BLOCKS_MAX=50000
+	  DOCKER_BENCHMARK_BLOCKS_MAX=50000 \
+	  BENCHMARK_GATE=shakedown_50k
 
 docker-cpp-primary-100k-proof:
 	$(MAKE) docker-cpp-supporting-5k-proof \
 	  DOCKER_PROOF_VOLUME=cpbitnode_100k_proof_data \
 	  DOCKER_BENCHMARK_RESULT=$(DOCKER_100K_BENCHMARK_RESULT) \
 	  DOCKER_BENCHMARK_TARGET=100000 \
-	  DOCKER_BENCHMARK_BLOCKS_MAX=100000
+	  DOCKER_BENCHMARK_BLOCKS_MAX=100000 \
+	  BENCHMARK_GATE=performance_100k
 
 docker-cpp-rocksdb-storage-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi

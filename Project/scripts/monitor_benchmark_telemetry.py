@@ -86,6 +86,11 @@ def fmt_tick(tick: dict[str, Any]) -> str:
     if not isinstance(buckets, dict):
         buckets = {}
     blocker = "present" if tick.get("current_blocker") else "null"
+    block_shape = (
+        f"tx={tick.get('current_block_tx_count', '?')}/"
+        f"vin={tick.get('current_block_vin_count', '?')}/"
+        f"script={tick.get('current_block_script_input_count', '?')}"
+    )
     return (
         f"[{tick.get('port', '?')} {tick.get('gate', '?')}] "
         f"{tick.get('height', '?')}/{tick.get('target_height', '?')} "
@@ -94,7 +99,12 @@ def fmt_tick(tick: dict[str, Any]) -> str:
         f"rate={num(tick.get('rate_recent_blocks_per_second')):.1f}/"
         f"{num(tick.get('rate_total_blocks_per_second')):.1f} blocks/s "
         f"phase={tick.get('phase', '?')} "
+        f"event={tick.get('event', '?')} "
+        f"stall={tick.get('stall_class', 'none')} "
         f"utxos={tick.get('utxos', '?')} "
+        f"block={tick.get('current_block_height', '?')} "
+        f"block_elapsed={tick.get('current_block_elapsed_ms', '?')}ms "
+        f"shape={block_shape} "
         f"last={tick.get('last_block_ms', '?')}ms "
         f"p2p={buckets.get('p2p_fetch', 0)}ms "
         f"script={buckets.get('script_verify', 0)}ms "
@@ -112,12 +122,26 @@ def should_emit(
 ) -> bool:
     if last is None:
         return True
+    if tick.get("event") in {
+        "run_started",
+        "container_started",
+        "node_started",
+        "first_peer_byte",
+        "first_block_connected",
+        "target_reached",
+        "run_finished",
+    }:
+        return True
+    if tick.get("stall_class") not in (None, "", "none"):
+        return True
     if tick.get("current_blocker"):
         return True
     if tick.get("phase") == "complete":
         return True
     height_delta = int(num(tick.get("height"))) - int(num(last.get("height")))
-    elapsed_delta = int(num(tick.get("elapsed_ms"))) - int(num(last.get("elapsed_ms")))
+    elapsed_delta = int(num(tick.get("monotonic_ms"), num(tick.get("elapsed_ms")))) - int(
+        num(last.get("monotonic_ms"), num(last.get("elapsed_ms")))
+    )
     return height_delta >= height_interval or elapsed_delta >= interval_ms
 
 

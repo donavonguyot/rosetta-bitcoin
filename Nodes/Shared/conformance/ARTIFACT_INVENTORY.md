@@ -17,6 +17,7 @@ sqlite-utils query Project/project.db \
 
 python3 Project/scripts/report.py --db Project/project.db --section conformance
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-summary
+python3 Project/scripts/report.py --db Project/project.db --section leaderboard --gate shakedown_50k
 python3 Project/scripts/report.py --db Project/project.db --section current-evidence
 python3 Project/scripts/report.py --db Project/project.db --section historical-evidence-candidates
 ```

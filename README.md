@@ -53,9 +53,16 @@ Project reports the 5k baseline posture with:
 python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
 python3 Project/scripts/report.py --db Project/project.db --section current-evidence
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section leaderboard --gate shakedown_50k
 python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict
 ```
+
+Current benchmark leaderboards rank only passed, comparable artifacts that pass
+the shared benchmark validator and import as `artifact_quality=canonical`.
+Long-run gates also require `telemetry_quality=clean`; `shakedown_50k` is the
+telemetry discipline gate before `performance_100k`. Historical evidence
+remains queryable, but it does not support current rank.
 
 Project reports consensus readiness from the Shared rule ledger through staged
 sync evidence with:

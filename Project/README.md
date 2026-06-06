@@ -58,7 +58,14 @@ python3 Project/scripts/report.py --db Project/project.db --section blocker-matr
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 python3 Project/scripts/report.py --db Project/project.db --section command-surface
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section leaderboard --gate shakedown_50k
+sqlite-utils query Project/project.db \
+  "select * from benchmark_leaderboard where gate_id='shakedown_50k' order by rank"
 ```
+
+Current benchmark leaderboards rank only canonical artifacts: passed,
+comparable, self-validated proof JSON imported with `artifact_quality=canonical`.
+Older proof files may still import for audit without supporting current ranks.
 
 Rebuild mission control from canonical evidence:
 

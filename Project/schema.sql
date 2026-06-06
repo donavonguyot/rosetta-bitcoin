@@ -365,6 +365,8 @@ DROP VIEW IF EXISTS consensus_rule_summary;
 DROP VIEW IF EXISTS port_baseline_5k;
 DROP VIEW IF EXISTS script_corpus_baseline;
 DROP VIEW IF EXISTS script_corpus_proof_artifacts;
+DROP VIEW IF EXISTS benchmark_leaderboard;
+DROP VIEW IF EXISTS current_benchmark_results;
 DROP VIEW IF EXISTS benchmark_gate_matrix;
 DROP VIEW IF EXISTS benchmark_comparability;
 DROP VIEW IF EXISTS current_evidence_status;
@@ -914,6 +916,16 @@ WITH benchmark_rows AS (
       json_extract(a.raw_json, '$.telemetry_schema'),
       ''
     ) AS telemetry_schema,
+    coalesce(
+      json_extract(b.result_json, '$.artifact_quality'),
+      json_extract(b.settings_json, '$.artifact_quality'),
+      'incomplete'
+    ) AS artifact_quality,
+    coalesce(
+      json_extract(b.result_json, '$.telemetry_quality'),
+      json_extract(b.settings_json, '$.telemetry_quality'),
+      CASE WHEN bg.target_height IN (50000, 100000) THEN 'missing' ELSE 'clean' END
+    ) AS telemetry_quality,
     CASE WHEN coalesce(a.raw_json, '') LIKE '%"slow_blocks"%' THEN 1 ELSE 0 END AS has_slow_blocks,
     (
       CASE WHEN coalesce(a.raw_json, '') LIKE '%"p2p_fetch"%' THEN 1 ELSE 0 END +
@@ -988,6 +1000,7 @@ scored AS (
       CASE WHEN resume_supported <> resume_supported_required THEN 'resume_supported;' ELSE '' END ||
       CASE WHEN fresh_state_required = 1 AND fresh_state <> 1 THEN 'fresh_state;' ELSE '' END ||
       CASE WHEN target_height IN (50000, 100000) AND telemetry_schema <> 'benchmark.telemetry_tick.v1' THEN 'telemetry_schema;' ELSE '' END ||
+      CASE WHEN target_height IN (50000, 100000) AND telemetry_quality <> 'clean' THEN 'telemetry_quality;' ELSE '' END ||
       CASE WHEN target_height IN (50000, 100000) AND has_slow_blocks <> 1 THEN 'slow_blocks;' ELSE '' END ||
       CASE WHEN target_height IN (50000, 100000) AND long_run_timing_bucket_count < 7 THEN 'long_run_timing_buckets;' ELSE '' END ||
       CASE WHEN binary_gate_status <> required_binary_gate_status THEN 'binary_gate_status;' ELSE '' END
@@ -1036,6 +1049,8 @@ SELECT
   resume_supported,
   fresh_state,
   binary_gate_status,
+  artifact_quality,
+  telemetry_quality,
   comparability_notes,
   total_ms,
   captured_at,
@@ -1113,6 +1128,8 @@ SELECT
   coalesce(rr.chainstate_utxo_count, -1) AS chainstate_utxo_count,
   coalesce(rr.rocksdb_wal_disabled, '') AS rocksdb_wal_disabled,
   coalesce(rr.fresh_state, 0) AS fresh_state,
+  coalesce(rr.artifact_quality, 'incomplete') AS artifact_quality,
+  coalesce(rr.telemetry_quality, CASE WHEN bg.target_height IN (50000, 100000) THEN 'missing' ELSE 'clean' END) AS telemetry_quality,
   CASE
     WHEN p.lifecycle_status = 'baseline_retired' AND bg.gate_id <> 'baseline_5k'
       THEN 'baseline_retired;' || p.retired_reason
@@ -1125,6 +1142,132 @@ SELECT
 FROM benchmark_gates bg
 CROSS JOIN ports p
 LEFT JOIN ranked_results rr ON rr.gate_id = bg.gate_id AND rr.port = p.port AND rr.rn = 1;
+
+CREATE VIEW IF NOT EXISTS current_benchmark_results AS
+SELECT
+  bgm.gate_id,
+  bgm.target_label,
+  bgm.target_height,
+  bgm.benchmark_kind,
+  bgm.role,
+  bgm.preferred_command_key,
+  bgm.port,
+  bgm.lifecycle_status,
+  bgm.benchmark_scope,
+  bgm.gate_status,
+  bgm.comparability_status,
+  bgm.evidence_lane,
+  bgm.validated_height,
+  bgm.header_target_height,
+  coalesce(json_extract(a.raw_json, '$.validated_hash'), '') AS validated_hash,
+  bgm.runtime_surface,
+  bgm.peer_mode,
+  bgm.byte_source,
+  bgm.proof_mode,
+  coalesce(bc.peer, '') AS peer,
+  bgm.chainstate_backend,
+  bgm.native_crypto_backend,
+  bgm.native_crypto_available,
+  bgm.prefetch_depth,
+  bgm.script_runner_mode,
+  bgm.rocksdb_wal_disabled,
+  coalesce(bc.resume_supported, '') AS resume_supported,
+  bgm.fresh_state,
+  coalesce(bc.binary_gate_status, '') AS binary_gate_status,
+  coalesce(bc.artifact_quality, 'incomplete') AS artifact_quality,
+  coalesce(bc.telemetry_quality, CASE WHEN bgm.target_height IN (50000, 100000) THEN 'missing' ELSE 'clean' END) AS telemetry_quality,
+  bgm.utxo_accounting_policy,
+  bgm.chainstate_utxo_count,
+  coalesce(bc.total_ms, -1) AS total_ms,
+  coalesce(
+    json_extract(a.raw_json, '$.timing_summary.stage_totals_ms.p2p_fetch'),
+    json_extract(a.raw_json, '$.pipeline_timing_summary.stage_totals_ms.p2p_fetch'),
+    json_extract(a.raw_json, '$.stage_totals_ms.p2p_fetch'),
+    -1
+  ) AS p2p_fetch_ms,
+  coalesce(
+    json_extract(a.raw_json, '$.timing_summary.stage_totals_ms.block_parse_validate'),
+    json_extract(a.raw_json, '$.pipeline_timing_summary.stage_totals_ms.block_parse_validate'),
+    json_extract(a.raw_json, '$.stage_totals_ms.block_parse_validate'),
+    -1
+  ) AS block_parse_validate_ms,
+  coalesce(
+    json_extract(a.raw_json, '$.timing_summary.stage_totals_ms.utxo_load'),
+    json_extract(a.raw_json, '$.pipeline_timing_summary.stage_totals_ms.utxo_load'),
+    json_extract(a.raw_json, '$.stage_totals_ms.utxo_load'),
+    -1
+  ) AS utxo_load_ms,
+  coalesce(
+    json_extract(a.raw_json, '$.timing_summary.stage_totals_ms.script_verify'),
+    json_extract(a.raw_json, '$.pipeline_timing_summary.stage_totals_ms.script_verify'),
+    json_extract(a.raw_json, '$.stage_totals_ms.script_verify'),
+    -1
+  ) AS script_verify_ms,
+  coalesce(
+    json_extract(a.raw_json, '$.timing_summary.stage_totals_ms.utxo_apply'),
+    json_extract(a.raw_json, '$.pipeline_timing_summary.stage_totals_ms.utxo_apply'),
+    json_extract(a.raw_json, '$.stage_totals_ms.utxo_apply'),
+    -1
+  ) AS utxo_apply_ms,
+  coalesce(
+    json_extract(a.raw_json, '$.timing_summary.stage_totals_ms.commit'),
+    json_extract(a.raw_json, '$.pipeline_timing_summary.stage_totals_ms.commit'),
+    json_extract(a.raw_json, '$.stage_totals_ms.commit'),
+    -1
+  ) AS commit_ms,
+  coalesce(
+    json_extract(a.raw_json, '$.timing_summary.stage_totals_ms.block_connect_store_commit'),
+    json_extract(a.raw_json, '$.pipeline_timing_summary.stage_totals_ms.block_connect_store_commit'),
+    json_extract(a.raw_json, '$.stage_totals_ms.block_connect_store_commit'),
+    -1
+  ) AS block_connect_store_commit_ms,
+  bgm.comparability_notes,
+  bgm.captured_at,
+  bgm.source_artifact_id,
+  coalesce(a.path, '') AS artifact_path
+FROM benchmark_gate_matrix bgm
+LEFT JOIN benchmark_comparability bc
+  ON bc.gate_id = bgm.gate_id
+ AND bc.port = bgm.port
+ AND bc.source_artifact_id = bgm.source_artifact_id
+LEFT JOIN artifacts a ON a.artifact_id = bgm.source_artifact_id;
+
+CREATE VIEW IF NOT EXISTS benchmark_leaderboard AS
+SELECT
+  gate_id,
+  rank() OVER (
+    PARTITION BY gate_id
+    ORDER BY total_ms ASC, port ASC
+  ) AS rank,
+  port,
+  total_ms,
+  target_label,
+  target_height,
+  validated_height,
+  validated_hash,
+  evidence_lane,
+  peer,
+  chainstate_backend,
+  native_crypto_backend,
+  artifact_quality,
+  telemetry_quality,
+  chainstate_utxo_count,
+  p2p_fetch_ms,
+  block_parse_validate_ms,
+  utxo_load_ms,
+  script_verify_ms,
+  utxo_apply_ms,
+  commit_ms,
+  block_connect_store_commit_ms,
+  captured_at,
+  artifact_path
+FROM current_benchmark_results
+WHERE gate_status = 'passed'
+  AND comparability_status = 'comparable'
+  AND artifact_quality = 'canonical'
+  AND telemetry_quality = 'clean'
+  AND lifecycle_status <> 'baseline_retired'
+  AND total_ms > 0;
 
 CREATE VIEW IF NOT EXISTS script_corpus_proof_artifacts AS
 WITH proof_rows AS (

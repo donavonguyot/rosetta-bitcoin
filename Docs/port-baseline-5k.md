@@ -51,6 +51,8 @@ The proof artifact must expose the shared timing buckets that make later
 comparisons useful:
 
 ```text
+p2p_fetch
+block_parse_validate
 utxo_load
 script_verify
 utxo_apply
@@ -104,11 +106,20 @@ python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section leaderboard --gate baseline_5k
 python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --gate baseline_5k --port <port>
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict
 python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --port <port> --stage 5k --strict
+python3 Nodes/Shared/conformance/tools/validate_benchmark_artifact.py --gate baseline_5k --artifact Nodes/Shared/conformance/results/<port>_*.json --strict-current
 python3 Nodes/Shared/conformance/tools/validate_script_corpus_result.py Nodes/Shared/conformance/results/<port>_script_corpus_*.json
 ```
+
+Current baseline evidence must import as `artifact_quality=canonical`.
+Compatibility import can still read older artifacts, but current leaderboards and
+campaign acceptance use only self-validated canonical proof JSON.
+For long-run gates, current evidence must also import as
+`telemetry_quality=clean`; a port should prove clean `shakedown_50k` telemetry
+before attempting current `performance_100k` evidence.
 
 For a report-only sweep across all ports:
 

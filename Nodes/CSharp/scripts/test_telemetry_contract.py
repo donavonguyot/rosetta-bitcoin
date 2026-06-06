@@ -68,6 +68,10 @@ class TelemetryContractTests(unittest.TestCase):
                 "15",
                 "--phase",
                 "running",
+                "--event",
+                "heartbeat",
+                "--run-id",
+                "csharp-test-run",
                 "--process-running",
                 "1",
             ],
@@ -82,10 +86,18 @@ class TelemetryContractTests(unittest.TestCase):
         self.assertEqual(tick["schema"], "benchmark.telemetry_tick.v1")
         self.assertEqual(tick["port"], "csharp")
         self.assertEqual(tick["gate"], "baseline_5k")
+        self.assertEqual(tick["run_id"], "csharp-test-run")
+        self.assertEqual(tick["event"], "heartbeat")
+        self.assertEqual(tick["phase"], "heartbeat")
+        self.assertEqual(tick["stall_class"], "none")
         self.assertEqual(tick["target_height"], 5000)
         self.assertEqual(tick["height"], 5000)
         self.assertEqual(tick["utxos"], 4574)
         self.assertEqual(tick["last_block_ms"], 60)
+        self.assertEqual(tick["current_block_height"], 5000)
+        self.assertEqual(tick["current_block_tx_count"], 2)
+        self.assertEqual(tick["current_block_vin_count"], 4)
+        self.assertEqual(tick["current_block_script_input_count"], 3)
         self.assertEqual(tick["timing_buckets_ms"]["script_verify"], 2500)
         self.assertEqual(tick["timing_buckets_ms"]["block_connect_store_commit"], 4100)
 
@@ -95,13 +107,65 @@ class TelemetryContractTests(unittest.TestCase):
             status_path = tmp_path / "status.json"
             exit_path = tmp_path / "exit"
             proof_path = tmp_path / "proof.json"
+            telemetry_log = tmp_path / "telemetry.log"
             status_path.write_text(json.dumps(SAMPLE_STATUS))
             exit_path.write_text("0\n")
+            tick_base = {
+                "schema": "benchmark.telemetry_tick.v1",
+                "port": "csharp",
+                "gate": "baseline_5k",
+                "run_id": "csharp-test-run",
+                "phase": "heartbeat",
+                "height": 5000,
+                "target_height": 5000,
+                "percent": 100,
+                "elapsed_ms": 0,
+                "monotonic_ms": 0,
+                "utxos": 4574,
+                "current_blocker": None,
+                "stall_class": "none",
+                "current_block_elapsed_ms": 0,
+                "current_block_height": 5000,
+                "current_block_hash": SAMPLE_STATUS["validated_hash"],
+                "current_block_tx_count": 2,
+                "current_block_vin_count": 4,
+                "current_block_script_input_count": 3,
+                "rate_recent_blocks_per_second": 0,
+                "rate_total_blocks_per_second": 0,
+                "last_block_ms": 0,
+                "timing_buckets_ms": {
+                    "p2p_fetch": 0,
+                    "block_parse_validate": 0,
+                    "utxo_load": 0,
+                    "script_verify": 0,
+                    "utxo_apply": 0,
+                    "commit": 0,
+                    "block_connect_store_commit": 0,
+                },
+            }
+            events = [
+                ("run_started", "startup", 0),
+                ("container_started", "startup", 1000),
+                ("node_started", "startup", 2000),
+                ("first_peer_byte", "peer_connect", 3000),
+                ("first_block_connected", "block_connect", 4000),
+                ("target_reached", "complete", 5000),
+                ("run_finished", "complete", 6000),
+            ]
+            telemetry_log.write_text(
+                "\n".join(
+                    "benchmark.telemetry_tick "
+                    + json.dumps({**tick_base, "event": event, "phase": phase, "elapsed_ms": ms, "monotonic_ms": ms})
+                    for event, phase, ms in events
+                )
+                + "\n"
+            )
             env = os.environ.copy()
             env.update(
                 {
                     "PROOF_PATH": str(proof_path),
                     "RUN_FILE": str(tmp_path / "missing-run.json"),
+                    "TELEMETRY_LOG_PATH": str(telemetry_log),
                     "STANDARD_BENCHMARK_ARTIFACT": "1",
                     "TARGET_HEADER_HEIGHT": "5000",
                     "TARGET_BLOCK_HEIGHT": "5000",
@@ -119,6 +183,7 @@ class TelemetryContractTests(unittest.TestCase):
             )
             artifact = json.loads(proof_path.read_text())
         self.assertEqual(artifact["telemetry_schema"], "benchmark.telemetry_tick.v1")
+        self.assertEqual(artifact["telemetry_summary"]["telemetry_quality"], "clean")
         self.assertEqual(artifact["pipeline_timing_summary"]["stage_totals_ms"]["script_verify"], 2500)
         self.assertEqual(artifact["timing_summary"]["stage_totals_ms"]["commit"], 500)
         self.assertIn("sync_timing", artifact)

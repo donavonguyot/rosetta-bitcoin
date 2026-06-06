@@ -27,7 +27,9 @@ DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
+VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_REBUILD ?= 0
+BENCHMARK_GATE ?= baseline_5k
 
 .PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
 
@@ -88,7 +90,7 @@ docker-csharp-native-crypto-proof:
 	  PEERS=$(DOCKER_P2P_PEER) \
 	  BLOCK_PREFETCH_DEPTH=$(DOCKER_PREFETCH_DEPTH) SCRIPT_RUNNER_MODE=$(DOCKER_SCRIPT_RUNNER_MODE) \
 	  CSBITNODE_SYNC_TIMING=$(or $(CSBITNODE_SYNC_TIMING),0) POLL_SEC=$(or $(POLL_SEC),120) \
-	  scripts/docker_sync_proof.sh || true
+	  bash -o pipefail -c 'scripts/docker_sync_proof.sh 2>&1 | tee .docker-csharp-proof.log' || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) PROOF_PATH=$(DOCKER_PROOF_PATH) \
 	  TARGET_HEADER_HEIGHT=$(DOCKER_HEADERS_MAX) TARGET_BLOCK_HEIGHT=$(DOCKER_BLOCKS_MAX) \
 	  BLOCK_PREFETCH_DEPTH=$(DOCKER_PREFETCH_DEPTH) SCRIPT_RUNNER_MODE=$(DOCKER_SCRIPT_RUNNER_MODE) \
@@ -96,8 +98,12 @@ docker-csharp-native-crypto-proof:
 	  CSBITNODE_ROCKSDB_DISABLE_WAL=$(or $(CSBITNODE_ROCKSDB_DISABLE_WAL),0) \
 	  PEERS=$(DOCKER_P2P_PEER) \
 	  PROOF_COMMAND="$(or $(PROOF_COMMAND),make docker-csharp-native-crypto-proof)" \
+	  TELEMETRY_LOG_PATH=.docker-csharp-proof.log \
 	  POLL_SEC=$(or $(POLL_SEC),120) \
 	  python3 scripts/capture_docker_sync_proof.py .docker-csharp-proof-status.json .docker-csharp-proof-exit
+	@if [ "$(STANDARD_BENCHMARK_ARTIFACT)" = "1" ] && [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
+	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(DOCKER_PROOF_PATH) --port csharp --strict-current; \
+	fi
 
 docker-script-corpus:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build csbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
@@ -121,7 +127,8 @@ docker-proof-local:
 	  CSBITNODE_SYNC_TIMING=1 \
 	  STANDARD_BENCHMARK_ARTIFACT=1 \
 	  PROOF_COMMAND="make docker-proof-local" \
-	  POLL_SEC=15
+	  POLL_SEC=15 \
+	  BENCHMARK_GATE=baseline_5k
 
 docker-proof-10k:
 	$(REFERENCE_P2P_CHECK)
@@ -136,7 +143,8 @@ docker-proof-10k:
 	  CSBITNODE_SYNC_TIMING=1 \
 	  STANDARD_BENCHMARK_ARTIFACT=1 \
 	  PROOF_COMMAND="make docker-proof-10k" \
-	  POLL_SEC=15
+	  POLL_SEC=15 \
+	  BENCHMARK_GATE=diagnostic_10k
 
 docker-proof-50k:
 	$(REFERENCE_P2P_CHECK)
@@ -151,7 +159,8 @@ docker-proof-50k:
 	  CSBITNODE_SYNC_TIMING=1 \
 	  STANDARD_BENCHMARK_ARTIFACT=1 \
 	  PROOF_COMMAND="make docker-proof-50k" \
-	  POLL_SEC=30
+	  POLL_SEC=15 \
+	  BENCHMARK_GATE=shakedown_50k
 
 docker-proof-100k:
 	$(REFERENCE_P2P_CHECK)
@@ -166,7 +175,8 @@ docker-proof-100k:
 	  CSBITNODE_SYNC_TIMING=1 \
 	  STANDARD_BENCHMARK_ARTIFACT=1 \
 	  PROOF_COMMAND="make docker-proof-100k" \
-	  POLL_SEC=60
+	  POLL_SEC=15 \
+	  BENCHMARK_GATE=performance_100k
 
 docker-csharp-native-crypto-bounded-sync-proof:
 	$(MAKE) docker-csharp-native-crypto-proof \

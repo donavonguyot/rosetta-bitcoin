@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib.util
 import json
 import re
 import shutil
@@ -21,6 +22,14 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Iterable
 
+
+ROOT = Path(__file__).resolve().parents[2]
+VALIDATOR_PATH = ROOT / "Nodes/Shared/conformance/tools/validate_benchmark_artifact.py"
+_validator_spec = importlib.util.spec_from_file_location("rb_benchmark_validator", VALIDATOR_PATH)
+if _validator_spec is None or _validator_spec.loader is None:
+    raise RuntimeError(f"cannot load benchmark artifact validator: {VALIDATOR_PATH}")
+_validator = importlib.util.module_from_spec(_validator_spec)
+_validator_spec.loader.exec_module(_validator)
 
 PORTS: dict[str, tuple[str, str, str]] = {
     "csharp": ("CSharpNode", "C#", "follower"),
@@ -1716,6 +1725,26 @@ def canonical_timing_summary(payload: dict[str, Any], stages: dict[str, int]) ->
     return summary
 
 
+def benchmark_artifact_quality(path: Path, payload: dict[str, Any]) -> str:
+    return _validator.artifact_quality(payload, path)
+
+
+def benchmark_telemetry_quality(payload: dict[str, Any]) -> str:
+    gate_id = _validator.gate_for_payload(payload)
+    spec = _validator.GATES.get(gate_id, {})
+    if not spec.get("long_run"):
+        return "clean"
+    summary = payload.get("telemetry_summary")
+    if isinstance(summary, dict):
+        quality = text(summary.get("telemetry_quality") or summary.get("quality")).strip()
+        if quality in {"clean", "sparse", "invalid", "missing"}:
+            return quality
+        return "invalid"
+    if payload.get("telemetry_schema") == "benchmark.telemetry_tick.v1":
+        return "sparse"
+    return "missing"
+
+
 def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, payload: dict[str, Any]) -> None:
     stages = timing_stages(payload)
     canonical_timing = canonical_timing_summary(payload, stages)
@@ -1759,6 +1788,8 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
             benchmark_lane = canonical_benchmark_label(f"supporting_{target_label}_rpc_replay")
         elif peer_mode == "local_reference":
             benchmark_lane = canonical_benchmark_label(f"supporting_{target_label}_p2p")
+    artifact_quality = benchmark_artifact_quality(artifact.path, payload)
+    telemetry_quality = benchmark_telemetry_quality(payload)
     benchmark_id = stable_id("benchmark", artifact.artifact_id)
     connection.execute(
         """
@@ -1815,6 +1846,8 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                     **({"benchmark_kind": benchmark_kind} if benchmark_kind else {}),
                     **({"benchmark_lane": benchmark_lane} if benchmark_lane else {}),
                     **({"benchmark_gate": canonical_benchmark_label(reported_benchmark_gate)} if reported_benchmark_gate else {}),
+                    "artifact_quality": artifact_quality,
+                    "telemetry_quality": telemetry_quality,
                     **({"target_height": target_height} if target_height is not None else {}),
                     **({"target_label": target_label} if target_label else {}),
                     **({"header_target_height": header_target_height} if header_target_height is not None else {}),
@@ -1864,6 +1897,8 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                     **({"target_height": target_height} if target_height is not None else {}),
                     **({"target_label": target_label} if target_label else {}),
                     **({"elapsed_ms": canonical_timing["total_ms"]} if "total_ms" in canonical_timing else {}),
+                    "artifact_quality": artifact_quality,
+                    "telemetry_quality": telemetry_quality,
                 }
             ),
             artifact.captured_at,

@@ -85,8 +85,11 @@ Required:
 - `chainstate_utxo_count=4574`.
 - Clean port-owned script corpus proof: `port.script_corpus_result.v1`,
   `fixture_count=45`, `passed=45`, `failed=0`.
-- Final artifact timing buckets: `utxo_load`, `script_verify`, `utxo_apply`,
-  `commit`, and `block_connect_store_commit`.
+- Canonical final artifact timing with `timing_summary.total_ms` and
+  `timing_summary.stage_totals_ms`.
+- Final artifact timing buckets: `p2p_fetch`, `block_parse_validate`,
+  `utxo_load`, `script_verify`, `utxo_apply`, `commit`, and
+  `block_connect_store_commit`.
 
 Live chat telemetry is optional for 5k because the run is intentionally short.
 
@@ -96,7 +99,9 @@ Required:
 
 - Target/header height `50000`.
 - Expected `chainstate_utxo_count=568855`.
-- Parseable `benchmark.telemetry_tick.v1` progress.
+- Clean `benchmark.telemetry_tick.v1` progress with lifecycle markers,
+  15-second-or-better heartbeats, active-block context, and
+  `telemetry_summary.telemetry_quality=clean` in the final artifact.
 - Slow-block summary.
 - Long-run timing buckets: `p2p_fetch`, `block_parse_validate`, `utxo_load`,
   `script_verify`, `utxo_apply`, `commit`, and
@@ -113,7 +118,9 @@ Required:
 - Target/header height `100000`.
 - Expected hash `0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1`.
 - `chainstate_utxo_count=13154991`.
-- Full `benchmark.telemetry_tick.v1` progress.
+- Full `benchmark.telemetry_tick.v1` progress. A port should not attempt this
+  lane as current evidence until its latest `shakedown_50k` proof reports
+  `telemetry_quality=clean`.
 - Slow-block and script-family summaries where the port can provide them.
 - Complete timing import into Project.
 
@@ -158,18 +165,49 @@ Required tick fields:
 schema
 port
 gate
-target_height or tip mode
+run_id
+event
+phase
 height
+target_height or tip mode
 percent when bounded
 elapsed_ms
+monotonic_ms
+utxos
+current_blocker
+stall_class
+current_block_elapsed_ms
+current_block_height
+current_block_hash
+current_block_tx_count
+current_block_vin_count
+current_block_script_input_count
 rate_recent_blocks_per_second
 rate_total_blocks_per_second
-phase
-utxos
 last_block_ms
-current_blocker
 timing_buckets_ms
 ```
+
+Required lifecycle events:
+
+```text
+run_started
+container_started
+node_started
+first_peer_byte
+first_block_connected
+target_reached
+run_finished
+```
+
+Canonical phases are `startup`, `peer_connect`, `header_sync`, `block_fetch`,
+`block_connect`, `commit`, `heartbeat`, `complete`, and `failed`.
+
+Canonical stall classes are `none`, `startup_wait`, `peer_wait`,
+`header_wait`, `block_wait`, `block_connect_slow`, `commit_slow`,
+`process_crashed`, `validation_blocker`, and `artifact_validation_failed`.
+Slow blocks are reported as `phase=block_connect` with
+`stall_class=block_connect_slow`; they are not generic failures.
 
 Required timing buckets inside `timing_buckets_ms`:
 
@@ -186,7 +224,11 @@ block_connect_store_commit
 Validate telemetry with:
 
 ```bash
-python3 Project/scripts/validate_benchmark_telemetry.py --require-bounded-target <log>
+python3 Project/scripts/validate_benchmark_telemetry.py \
+  --gate shakedown_50k \
+  --target-height 50000 \
+  --require-clean \
+  <log>
 ```
 
 ## Project Acceptance
@@ -194,12 +236,31 @@ python3 Project/scripts/validate_benchmark_telemetry.py --require-bounded-target
 Project owns current benchmark truth:
 
 ```bash
+python3 Nodes/Shared/conformance/tools/validate_benchmark_artifact.py --gate baseline_5k --artifact Nodes/Shared/conformance/results/<port>_*.json --strict-current
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section leaderboard --gate shakedown_50k
 python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --gate baseline_5k --all
 python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --gate shakedown_50k --all
 python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --gate performance_100k --all
 ```
 
 Historical artifacts remain in `Nodes/Shared/conformance/results/`, but the
-official suite reports only the current gates above.
+official suite reports only the current gates above. Historical import remains
+compatibility-friendly; current campaign acceptance is not. Fresh official
+evidence must pass `validate_benchmark_artifact.py` and import with
+`artifact_quality=canonical`. Long-run evidence must also import with
+`telemetry_quality=clean`.
+
+Leaderboards rank only current evidence with:
+
+```text
+result=passed
+comparability_status=comparable
+artifact_quality=canonical
+telemetry_quality=clean for shakedown_50k, performance_100k, and tip gates
+```
+
+Noncanonical evidence remains visible in `current_benchmark_results` and gate
+reports so operators can see what is missing, but it does not support current
+rankings.

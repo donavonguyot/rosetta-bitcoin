@@ -74,6 +74,7 @@ For baseline readiness, prefer Project over hand-maintained summaries:
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section leaderboard --gate shakedown_50k
 python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
 python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --all

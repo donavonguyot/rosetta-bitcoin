@@ -9,9 +9,11 @@ DOCKER_50K_PROOF_RESULT ?= /results/swift_docker_shakedown_50k_benchmark_$(RESUL
 DOCKER_100K_PROOF_RESULT ?= /results/swift_docker_performance_100k_benchmark_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
+VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 LOCAL_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_PROOF_VOLUME ?= swiftbitnode_proof_data
 DOCKER_SYNC_TARGET ?= 5000
+BENCHMARK_GATE ?= baseline_5k
 DOCKER_SUPERVISOR_TARGET ?= 10000
 DOCKER_SUPERVISOR_CHUNK ?= 5000
 DOCKER_SUPERVISOR_RESULT ?= /results/swift_supervisor_status_$(RESULT_DATE).json
@@ -82,24 +84,30 @@ docker-proof-local:
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
 	  --output $(DOCKER_LOCAL_PROOF_RESULT)
+	@if [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
+	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(patsubst /results/%,../Shared/conformance/results/%,$(DOCKER_LOCAL_PROOF_RESULT)) --port swift --strict-current; \
+	fi
 
 docker-proof-10k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_PROOF_VOLUME=swiftbitnode_10k_proof_data \
 	  DOCKER_SYNC_TARGET=10000 \
-	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_10K_PROOF_RESULT)
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_10K_PROOF_RESULT) \
+	  BENCHMARK_GATE=diagnostic_10k
 
 docker-proof-50k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_PROOF_VOLUME=swiftbitnode_50k_proof_data \
 	  DOCKER_SYNC_TARGET=50000 \
-	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_50K_PROOF_RESULT)
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_50K_PROOF_RESULT) \
+	  BENCHMARK_GATE=shakedown_50k
 
 docker-proof-100k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_PROOF_VOLUME=swiftbitnode_100k_proof_data \
 	  DOCKER_SYNC_TARGET=100000 \
-	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_100K_PROOF_RESULT)
+	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_100K_PROOF_RESULT) \
+	  BENCHMARK_GATE=performance_100k
 
 docker-supervisor:
 	$(REFERENCE_P2P_CHECK)

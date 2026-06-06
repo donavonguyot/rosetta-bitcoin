@@ -39,16 +39,19 @@ benchmark_gate() {
 }
 
 emit_benchmark_tick() {
-  local json="$1" last_height="$2" phase="$3"
+  local json="$1" last_height="$2" phase="$3" event="${4:-heartbeat}" process_running="${5:-1}"
   printf '%s\n' "$json" | \
     TARGET_BLOCK_HEIGHT="${BLOCKS_MAX:-0}" BENCHMARK_GATE="$(benchmark_gate)" \
     BENCHMARK_STARTED_MS="$started_ms" BENCHMARK_LAST_HEIGHT="$last_height" \
-    BENCHMARK_PHASE="$phase" BENCHMARK_PROCESS_RUNNING=1 POLL_SEC="$POLL_SEC" \
+    BENCHMARK_PHASE="$phase" BENCHMARK_EVENT="$event" BENCHMARK_RUN_ID="$run_id" \
+    BENCHMARK_PROCESS_RUNNING="$process_running" POLL_SEC="$POLL_SEC" \
     python3 scripts/emit_benchmark_telemetry_tick.py
 }
 
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 started_ms="$(now_ms)"
+run_id="csharp-$(benchmark_gate)-$started_ms"
+log_line "$(emit_benchmark_tick '{}' 0 startup run_started 0)"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 rm -f "$STATUS_FILE" "$EXIT_FILE" "$RUN_FILE"
 DOCKER_PROOF_VOLUME="${DOCKER_PROOF_VOLUME:-csbitnode_proof_data}" \
@@ -56,8 +59,12 @@ DOCKER_PROOF_VOLUME="${DOCKER_PROOF_VOLUME:-csbitnode_proof_data}" \
   HEADERS_MAX="${HEADERS_MAX:-200}" HEADER_BATCHES_MAX="${HEADER_BATCHES_MAX:-1}" BLOCKS_MAX="${BLOCKS_MAX:-2}" \
   BLOCK_PREFETCH_DEPTH="${BLOCK_PREFETCH_DEPTH:-1}" CSBITNODE_SYNC_TIMING="${CSBITNODE_SYNC_TIMING:-0}" \
   "${DOCKER_COMPOSE[@]}" run -d --name "$CONTAINER_NAME" csbitnode-sync-proof >/dev/null
+log_line "$(emit_benchmark_tick '{}' 0 startup container_started 1)"
+log_line "$(emit_benchmark_tick '{}' 0 startup node_started 1)"
 
 last_height=0
+first_peer_byte=0
+first_block_connected=0
 while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
   sleep "$POLL_SEC"
   json="$(status_json)"
@@ -72,12 +79,26 @@ while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
     last_height="$h"
   fi
   log_line "AGENT_LOOP_TICK_chatreport {\"validated_height\":$h,\"header_height\":$header,\"stored_block_height\":$stored,\"sync_status\":\"$status\",\"delta_since_last\":$delta,\"process_running\":1}"
-  log_line "$(emit_benchmark_tick "$json" "$previous_height" "$status")"
+  if [[ "$first_peer_byte" == "0" ]] && [[ "$header" =~ ^[0-9]+$ ]] && (( header > 0 )); then
+    log_line "$(emit_benchmark_tick "$json" "$previous_height" peer_connect first_peer_byte 1)"
+    first_peer_byte=1
+  fi
+  if [[ "$first_block_connected" == "0" ]] && [[ "$h" =~ ^[0-9]+$ ]] && (( h > 0 )); then
+    log_line "$(emit_benchmark_tick "$json" "$previous_height" block_connect first_block_connected 1)"
+    first_block_connected=1
+  fi
+  log_line "$(emit_benchmark_tick "$json" "$previous_height" heartbeat heartbeat 1)"
 done
 
 exit_code="$(docker inspect "$CONTAINER_NAME" --format '{{.State.ExitCode}}' 2>/dev/null || echo 125)"
 echo "$exit_code" > "$EXIT_FILE"
 status_json > "$STATUS_FILE"
+final_json="$(cat "$STATUS_FILE")"
+final_height="$(echo "$final_json" | field "print(d.get('validated_height','?'))")"
+if [[ "$final_height" =~ ^[0-9]+$ ]] && [[ "${BLOCKS_MAX:-0}" =~ ^[0-9]+$ ]] && (( final_height >= BLOCKS_MAX )); then
+  log_line "$(emit_benchmark_tick "$final_json" "$last_height" complete target_reached 0)"
+fi
+log_line "$(emit_benchmark_tick "$final_json" "$last_height" complete run_finished 0)"
 finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 finished_ms="$(now_ms)"
 python3 - "$RUN_FILE" "$started_at" "$finished_at" "$started_ms" "$finished_ms" <<'PY'

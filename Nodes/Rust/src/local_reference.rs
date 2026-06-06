@@ -171,6 +171,9 @@ pub fn run(opts: LocalReferenceOptions<'_>) -> Result<Value> {
                 .cloned()
                 .unwrap_or_else(|| Value::String("benchmark.telemetry_tick.v1".to_string())),
         );
+        if let Some(summary) = pipeline.get("telemetry_summary") {
+            doc.insert("telemetry_summary".into(), summary.clone());
+        }
         doc.insert("timing_summary".into(), pipeline_timing_summary.clone());
     }
 
@@ -445,6 +448,59 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
     let mut connected = 0u32;
     let mut last_tick_height = start_height.saturating_sub(1);
     let mut last_tick_elapsed = Duration::ZERO;
+    emit_telemetry_tick(
+        opts,
+        "run_started",
+        "startup",
+        "none",
+        start_height.saturating_sub(1),
+        "",
+        0,
+        0,
+        0,
+        "starting",
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
+    emit_telemetry_tick(
+        opts,
+        "container_started",
+        "startup",
+        "none",
+        start_height.saturating_sub(1),
+        "",
+        0,
+        0,
+        0,
+        "starting",
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
+    emit_telemetry_tick(
+        opts,
+        "node_started",
+        "startup",
+        "none",
+        start_height.saturating_sub(1),
+        "",
+        0,
+        0,
+        0,
+        "starting",
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
+    let mut first_peer_byte = false;
+    let mut first_block_connected = false;
     let receiver = p2p::fetch_blocks(p2p::FetchOptions {
         peer: opts.peer.to_string(),
         target: opts.target,
@@ -466,6 +522,26 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
                 block.height,
                 expected_height
             );
+        }
+        if !first_peer_byte {
+            emit_telemetry_tick(
+                opts,
+                "first_peer_byte",
+                "peer_connect",
+                "none",
+                block.height,
+                &block.hash,
+                0,
+                0,
+                connected,
+                "peer_connected",
+                &Option::<Value>::None,
+                Duration::ZERO,
+                &mut timing,
+                &mut last_tick_height,
+                &mut last_tick_elapsed,
+            );
+            first_peer_byte = true;
         }
         timing.add(
             "p2p_fetch",
@@ -523,6 +599,26 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
         fetched += 1;
         let elapsed_block = block_started.elapsed();
         timing.record_block(block.height, elapsed_block, block_shape);
+        if !first_block_connected && block.height > 0 {
+            emit_telemetry_tick(
+                opts,
+                "first_block_connected",
+                "block_connect",
+                "none",
+                block.height,
+                &info.hash,
+                info.tx_count,
+                connect.chainstate_utxo_count,
+                connected,
+                &connect.sync_status,
+                &connect.current_blocker,
+                elapsed_block,
+                &mut timing,
+                &mut last_tick_height,
+                &mut last_tick_elapsed,
+            );
+            first_block_connected = true;
+        }
         if block.height % opts.progress.max(1) == 0 || block.height == opts.target {
             println!(
                 "rsbitnode-local-reference-proof p2p progress {}",
@@ -548,7 +644,9 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
             );
             emit_telemetry_tick(
                 opts,
-                "p2p_sync",
+                "heartbeat",
+                "heartbeat",
+                telemetry_stall_class(&connect.current_blocker, elapsed_block),
                 block.height,
                 &info.hash,
                 info.tx_count,
@@ -557,7 +655,7 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
                 &connect.sync_status,
                 &connect.current_blocker,
                 elapsed_block,
-                &timing,
+                &mut timing,
                 &mut last_tick_height,
                 &mut last_tick_elapsed,
             );
@@ -574,6 +672,48 @@ fn run_p2p_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, V
             break;
         }
     }
+    emit_telemetry_tick(
+        opts,
+        "target_reached",
+        "complete",
+        "none",
+        opts.target,
+        last_connect["validated_hash"].as_str().unwrap_or_default(),
+        0,
+        last_connect["chainstate_utxo_count"]
+            .as_i64()
+            .unwrap_or_default(),
+        connected,
+        last_connect["sync_status"]
+            .as_str()
+            .unwrap_or("blocks_current"),
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
+    emit_telemetry_tick(
+        opts,
+        "run_finished",
+        "complete",
+        "none",
+        opts.target,
+        last_connect["validated_hash"].as_str().unwrap_or_default(),
+        0,
+        last_connect["chainstate_utxo_count"]
+            .as_i64()
+            .unwrap_or_default(),
+        connected,
+        last_connect["sync_status"]
+            .as_str()
+            .unwrap_or("blocks_current"),
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
     let sync = serde_json::json!({
         "implementation": "RustNode",
         "runtime_surface": opts.runtime_surface,
@@ -626,6 +766,59 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
     let mut connected = 0u32;
     let mut last_tick_height = start_height.saturating_sub(1);
     let mut last_tick_elapsed = Duration::ZERO;
+    emit_telemetry_tick(
+        opts,
+        "run_started",
+        "startup",
+        "none",
+        start_height.saturating_sub(1),
+        "",
+        0,
+        0,
+        0,
+        "starting",
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
+    emit_telemetry_tick(
+        opts,
+        "container_started",
+        "startup",
+        "none",
+        start_height.saturating_sub(1),
+        "",
+        0,
+        0,
+        0,
+        "starting",
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
+    emit_telemetry_tick(
+        opts,
+        "node_started",
+        "startup",
+        "none",
+        start_height.saturating_sub(1),
+        "",
+        0,
+        0,
+        0,
+        "starting",
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
+    let mut first_peer_byte = false;
+    let mut first_block_connected = false;
     let (sender, receiver) = mpsc::sync_channel(timing.prefetch_depth);
     let rpc_url = opts.rpc_url.to_string();
     let rpc_user = opts.rpc_user.to_string();
@@ -662,6 +855,26 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
                 block.height,
                 expected_height
             );
+        }
+        if !first_peer_byte {
+            emit_telemetry_tick(
+                opts,
+                "first_peer_byte",
+                "peer_connect",
+                "none",
+                block.height,
+                &block.info.hash,
+                block.info.tx_count,
+                0,
+                connected,
+                "peer_connected",
+                &Option::<Value>::None,
+                Duration::ZERO,
+                &mut timing,
+                &mut last_tick_height,
+                &mut last_tick_elapsed,
+            );
+            first_peer_byte = true;
         }
         timing.merge_fetch(&block.timings);
         let block_started = Instant::now();
@@ -707,6 +920,26 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
             .saturating_add(connect_started.elapsed());
         let elapsed_block = block_started.elapsed().max(block_ms);
         timing.record_block(block.height, elapsed_block, block_shape);
+        if !first_block_connected && block.height > 0 {
+            emit_telemetry_tick(
+                opts,
+                "first_block_connected",
+                "block_connect",
+                "none",
+                block.height,
+                &block.info.hash,
+                block.info.tx_count,
+                connect.chainstate_utxo_count,
+                connected,
+                &connect.sync_status,
+                &connect.current_blocker,
+                elapsed_block,
+                &mut timing,
+                &mut last_tick_height,
+                &mut last_tick_elapsed,
+            );
+            first_block_connected = true;
+        }
         if block.height % opts.progress.max(1) == 0 || block.height == opts.target {
             println!(
                 "rsbitnode-local-reference-proof progress {}",
@@ -732,7 +965,9 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
             );
             emit_telemetry_tick(
                 opts,
-                "rpc_replay",
+                "heartbeat",
+                "heartbeat",
+                telemetry_stall_class(&connect.current_blocker, elapsed_block),
                 block.height,
                 &block.info.hash,
                 block.info.tx_count,
@@ -741,7 +976,7 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
                 &connect.sync_status,
                 &connect.current_blocker,
                 elapsed_block,
-                &timing,
+                &mut timing,
                 &mut last_tick_height,
                 &mut last_tick_elapsed,
             );
@@ -758,6 +993,48 @@ fn run_pipeline(opts: &LocalReferenceOptions<'_>) -> Result<(Value, Value, Value
             break;
         }
     }
+    emit_telemetry_tick(
+        opts,
+        "target_reached",
+        "complete",
+        "none",
+        opts.target,
+        last_connect["validated_hash"].as_str().unwrap_or_default(),
+        0,
+        last_connect["chainstate_utxo_count"]
+            .as_i64()
+            .unwrap_or_default(),
+        connected,
+        last_connect["sync_status"]
+            .as_str()
+            .unwrap_or("blocks_current"),
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
+    emit_telemetry_tick(
+        opts,
+        "run_finished",
+        "complete",
+        "none",
+        opts.target,
+        last_connect["validated_hash"].as_str().unwrap_or_default(),
+        0,
+        last_connect["chainstate_utxo_count"]
+            .as_i64()
+            .unwrap_or_default(),
+        connected,
+        last_connect["sync_status"]
+            .as_str()
+            .unwrap_or("blocks_current"),
+        &Option::<Value>::None,
+        Duration::ZERO,
+        &mut timing,
+        &mut last_tick_height,
+        &mut last_tick_elapsed,
+    );
     let sync = serde_json::json!({
         "implementation": "RustNode",
         "runtime_surface": opts.runtime_surface,
@@ -833,8 +1110,15 @@ fn fetch_prepared_block(
 
 struct PipelineTiming {
     started: Instant,
+    run_id: String,
     stage_totals: BTreeMap<&'static str, Duration>,
     counts: BTreeMap<&'static str, usize>,
+    lifecycle_markers: BTreeMap<String, i64>,
+    phase_counts: BTreeMap<String, usize>,
+    stall_class_counts: BTreeMap<String, usize>,
+    telemetry_tick_count: usize,
+    heartbeat_max_gap: Duration,
+    last_telemetry_elapsed: Option<Duration>,
     slow_blocks: Vec<Value>,
     blocks_fetched: u32,
     blocks_connected: u32,
@@ -845,8 +1129,15 @@ impl PipelineTiming {
     fn new(prefetch_depth: usize) -> Self {
         Self {
             started: Instant::now(),
+            run_id: format!("rust-{}", Utc::now().timestamp_millis()),
             stage_totals: BTreeMap::new(),
             counts: BTreeMap::new(),
+            lifecycle_markers: BTreeMap::new(),
+            phase_counts: BTreeMap::new(),
+            stall_class_counts: BTreeMap::new(),
+            telemetry_tick_count: 0,
+            heartbeat_max_gap: Duration::ZERO,
+            last_telemetry_elapsed: None,
             slow_blocks: Vec::new(),
             blocks_fetched: 0,
             blocks_connected: 0,
@@ -944,6 +1235,54 @@ impl PipelineTiming {
         self.slow_blocks.truncate(10);
     }
 
+    fn record_telemetry(&mut self, event: &str, phase: &str, stall_class: &str, elapsed: Duration) {
+        self.telemetry_tick_count += 1;
+        self.lifecycle_markers
+            .entry(event.to_string())
+            .or_insert(elapsed.as_millis() as i64);
+        *self.phase_counts.entry(phase.to_string()).or_default() += 1;
+        *self
+            .stall_class_counts
+            .entry(stall_class.to_string())
+            .or_default() += 1;
+        if let Some(last) = self.last_telemetry_elapsed {
+            self.heartbeat_max_gap = self.heartbeat_max_gap.max(elapsed.saturating_sub(last));
+        }
+        self.last_telemetry_elapsed = Some(elapsed);
+    }
+
+    fn telemetry_summary_json(&self) -> Value {
+        let required = [
+            "run_started",
+            "container_started",
+            "node_started",
+            "first_peer_byte",
+            "first_block_connected",
+            "target_reached",
+            "run_finished",
+        ];
+        let mut quality = "clean";
+        if required
+            .iter()
+            .any(|event| !self.lifecycle_markers.contains_key(*event))
+        {
+            quality = "sparse";
+        }
+        if self.heartbeat_max_gap > Duration::from_secs(15) {
+            quality = "invalid";
+        }
+        serde_json::json!({
+            "telemetry_quality": quality,
+            "tick_count": self.telemetry_tick_count,
+            "lifecycle_markers": self.lifecycle_markers,
+            "heartbeat_max_gap_ms": self.heartbeat_max_gap.as_millis() as i64,
+            "heartbeat_limit_ms": 15000,
+            "phase_counts": self.phase_counts,
+            "stall_class_counts": self.stall_class_counts,
+            "slow_blocks": self.slow_blocks,
+        })
+    }
+
     fn as_json(&self) -> Value {
         let mut doc = Map::new();
         let mut stage_totals = self.stage_totals.clone();
@@ -963,10 +1302,9 @@ impl PipelineTiming {
         ] {
             stage_totals.entry(stage).or_default();
         }
-        doc.insert(
-            "total_wall".into(),
-            (self.started.elapsed().as_millis() as i64).into(),
-        );
+        let total_ms = self.started.elapsed().as_millis() as i64;
+        doc.insert("total_ms".into(), total_ms.into());
+        doc.insert("total_wall".into(), total_ms.into());
         doc.insert("prefetch_depth".into(), (self.prefetch_depth as i64).into());
         doc.insert("blocks_fetched".into(), self.blocks_fetched.into());
         doc.insert("blocks_connected".into(), self.blocks_connected.into());
@@ -974,6 +1312,7 @@ impl PipelineTiming {
             "telemetry_schema".into(),
             "benchmark.telemetry_tick.v1".into(),
         );
+        doc.insert("telemetry_summary".into(), self.telemetry_summary_json());
         for stage in [
             "rpc_getblockhash",
             "rpc_getblock",
@@ -1107,7 +1446,9 @@ impl PipelineTiming {
 #[allow(clippy::too_many_arguments)]
 fn emit_telemetry_tick(
     opts: &LocalReferenceOptions<'_>,
+    event: &str,
     phase: &str,
+    stall_class: &str,
     height: u32,
     hash: &str,
     tx_count: usize,
@@ -1116,7 +1457,7 @@ fn emit_telemetry_tick(
     sync_status: &str,
     current_blocker: &Option<Value>,
     last_block_elapsed: Duration,
-    timing: &PipelineTiming,
+    timing: &mut PipelineTiming,
     last_tick_height: &mut u32,
     last_tick_elapsed: &mut Duration,
 ) {
@@ -1125,6 +1466,14 @@ fn emit_telemetry_tick(
     let height_delta = height.saturating_sub(*last_tick_height);
     let recent_rate = height_delta as f64 / elapsed_delta.as_secs_f64().max(0.001);
     let total_rate = connected as f64 / elapsed.as_secs_f64().max(0.001);
+    let mut final_phase = phase;
+    if stall_class == "block_connect_slow" {
+        final_phase = "block_connect";
+    } else if stall_class == "commit_slow" {
+        final_phase = "commit";
+    }
+    timing.record_telemetry(event, final_phase, stall_class, elapsed);
+    let current_block = telemetry_block_shape(height, hash, last_block_elapsed, timing);
     *last_tick_height = height;
     *last_tick_elapsed = elapsed;
     println!(
@@ -1133,6 +1482,8 @@ fn emit_telemetry_tick(
             "schema": "benchmark.telemetry_tick.v1",
             "port": "rust",
             "gate": gate_id_for(opts),
+            "run_id": timing.run_id,
+            "event": event,
             "benchmark_lane": benchmark_lane_for(opts),
             "target": target_label_for_opts(opts),
             "target_height": opts.target,
@@ -1141,17 +1492,63 @@ fn emit_telemetry_tick(
             "hash": hash,
             "tx_count": tx_count,
             "elapsed_ms": elapsed.as_millis() as i64,
+            "monotonic_ms": elapsed.as_millis() as i64,
             "rate_recent_blocks_per_second": recent_rate,
             "rate_total_blocks_per_second": total_rate,
-            "phase": phase,
+            "phase": final_phase,
             "utxos": utxos,
             "last_block_ms": last_block_elapsed.as_millis() as i64,
+            "stall_class": stall_class,
+            "current_block_elapsed_ms": current_block["elapsed_ms"],
+            "current_block_height": current_block["height"],
+            "current_block_hash": current_block["hash"],
+            "current_block_tx_count": current_block["tx_count"],
+            "current_block_vin_count": current_block["vin_count"],
+            "current_block_script_input_count": current_block["script_input_count"],
             "slow_blocks": timing.slow_blocks,
             "current_blocker": current_blocker,
             "sync_status": sync_status,
             "timing_buckets_ms": timing.timing_buckets_json(),
         })
     );
+}
+
+fn telemetry_block_shape(
+    height: u32,
+    hash: &str,
+    elapsed: Duration,
+    timing: &PipelineTiming,
+) -> Value {
+    for block in &timing.slow_blocks {
+        if block["height"].as_u64() == Some(height as u64) {
+            return serde_json::json!({
+                "height": height,
+                "hash": if hash.is_empty() { Value::Null } else { Value::String(hash.to_string()) },
+                "elapsed_ms": block["ms"].as_i64().unwrap_or(elapsed.as_millis() as i64),
+                "tx_count": block["tx_count"].as_i64().unwrap_or_default(),
+                "vin_count": block["vin_count"].as_i64().unwrap_or_default(),
+                "script_input_count": block["script_input_count"].as_i64().unwrap_or_default(),
+            });
+        }
+    }
+    serde_json::json!({
+        "height": height,
+        "hash": if hash.is_empty() { Value::Null } else { Value::String(hash.to_string()) },
+        "elapsed_ms": elapsed.as_millis() as i64,
+        "tx_count": 0,
+        "vin_count": 0,
+        "script_input_count": 0,
+    })
+}
+
+fn telemetry_stall_class(current_blocker: &Option<Value>, elapsed: Duration) -> &'static str {
+    if current_blocker.is_some() {
+        "validation_blocker"
+    } else if elapsed >= Duration::from_secs(15) {
+        "block_connect_slow"
+    } else {
+        "none"
+    }
 }
 
 fn gate_id_for(opts: &LocalReferenceOptions<'_>) -> String {

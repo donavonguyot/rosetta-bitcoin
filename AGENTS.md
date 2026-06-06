@@ -43,10 +43,16 @@ readiness standard is the **5k baseline**. A port is not baseline-ready until
 Project can show: RocksDB runtime truth, native crypto, Shared script corpus
 `45/45`, Docker local Reference P2P to height `5000`, fresh proof state, WAL
 enabled, fixed benchmark knobs, `core_spendable_v1` UTXO accounting with
-`chainstate_utxo_count=4574`, and imported compact proof JSON.
+`chainstate_utxo_count=4574`, and compact proof JSON that imports as
+`artifact_quality=canonical`.
+Long-run gates (`shakedown_50k`, `performance_100k`, and tip lanes) also require
+`telemetry_quality=clean`; `shakedown_50k` is the telemetry acceptance gate
+before any current `performance_100k` attempt.
 
 ```bash
+python3 Project/scripts/report.py --db Project/project.db --list-sections
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section leaderboard --gate shakedown_50k
 python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict
 ```

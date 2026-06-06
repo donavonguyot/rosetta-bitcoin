@@ -25,6 +25,7 @@ SECTIONS = (
     "blocker-catalog",
     "blocker-matrix",
     "benchmark-suite",
+    "leaderboard",
     "benchmark-gates",
     "benchmark-comparability",
     "baseline-5k",
@@ -36,6 +37,14 @@ SECTIONS = (
     "consensus-runway",
     "benchmark-summary",
     "decisions",
+)
+
+GATES = (
+    "baseline_5k",
+    "shakedown_50k",
+    "performance_100k",
+    "tip_once",
+    "tip_maintenance",
 )
 
 SECTION_ALIASES = {
@@ -51,6 +60,10 @@ SECTION_ALIASES = {
     "domains": "critical-test-domains",
     "blockers": "blocker-catalog",
     "benchmark-suite": "benchmark-suite",
+    "rankings": "leaderboard",
+    "5k-leaderboard": "leaderboard",
+    "50k-leaderboard": "leaderboard",
+    "100k-leaderboard": "leaderboard",
     "gates": "benchmark-gates",
     "comparability": "benchmark-comparability",
     "baseline": "baseline-5k",
@@ -63,10 +76,18 @@ SECTION_ALIASES = {
     "benchmarks": "benchmark-summary",
 }
 
+SECTION_DEFAULT_GATES = {
+    "5k-leaderboard": "baseline_5k",
+    "50k-leaderboard": "shakedown_50k",
+    "100k-leaderboard": "performance_100k",
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", default="Project/project.db", help="Project mission-control DB path")
+    parser.add_argument("--gate", choices=GATES, help="Optional benchmark gate filter for leaderboard reports")
+    parser.add_argument("--list-sections", action="store_true", help="List available report sections and aliases")
     parser.add_argument(
         "--section",
         choices=(*SECTIONS, *SECTION_ALIASES.keys(), "all"),
@@ -458,7 +479,7 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
     matrix = rows(
         connection,
         """
-        select gate_id, port, lifecycle_status, gate_status, comparability_status, evidence_lane,
+        select gate_id, port, lifecycle_status, gate_status, comparability_status, artifact_quality, telemetry_quality, evidence_lane,
                validated_height, header_target_height, runtime_surface, peer_mode,
                prefetch_depth, script_runner_mode, rocksdb_wal_disabled,
                fresh_state, utxo_accounting_policy, chainstate_utxo_count,
@@ -484,6 +505,8 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
                 "lifecycle",
                 "status",
                 "comparable",
+                "quality",
+                "telemetry",
                 "lane",
                 "validated",
                 "headers",
@@ -509,7 +532,7 @@ def print_gate_matrix(connection: sqlite3.Connection, gate_id: str, title: str) 
     data = rows(
         connection,
         f"""
-        select port, lifecycle_status, gate_status, comparability_status, evidence_lane,
+        select port, lifecycle_status, gate_status, comparability_status, artifact_quality, telemetry_quality, evidence_lane,
                validated_height, header_target_height, runtime_surface, peer_mode,
                prefetch_depth, script_runner_mode, rocksdb_wal_disabled,
                fresh_state, utxo_accounting_policy, chainstate_utxo_count,
@@ -526,6 +549,8 @@ def print_gate_matrix(connection: sqlite3.Connection, gate_id: str, title: str) 
                 "lifecycle",
                 "status",
                 "comparable",
+                "quality",
+                "telemetry",
                 "lane",
                 "validated",
                 "headers",
@@ -559,6 +584,62 @@ def print_benchmark_suite(connection: sqlite3.Connection) -> None:
     print_gate_matrix(connection, "tip_maintenance", "Tip Maintenance")
 
 
+def print_leaderboard(connection: sqlite3.Connection, gate_id: str | None = None) -> None:
+    title = "Benchmark Leaderboard"
+    if gate_id:
+        title += f" ({gate_id})"
+    print(f"## {title}")
+    print()
+    where = f"where gate_id = '{gate_id}'" if gate_id else ""
+    data = rows(
+        connection,
+        f"""
+        select gate_id, rank, port, total_ms, validated_height, validated_hash,
+               evidence_lane, peer, chainstate_backend, native_crypto_backend,
+               artifact_quality, telemetry_quality, chainstate_utxo_count, p2p_fetch_ms, script_verify_ms,
+               block_connect_store_commit_ms, captured_at, artifact_path
+        from benchmark_leaderboard
+        {where}
+        order by
+          case gate_id
+            when 'baseline_5k' then 0
+            when 'shakedown_50k' then 1
+            when 'performance_100k' then 2
+            when 'tip_once' then 3
+            when 'tip_maintenance' then 4
+            else 5
+          end,
+          rank,
+          port
+        """,
+    )
+    print(
+        table(
+            (
+                "gate",
+                "rank",
+                "port",
+                "total_ms",
+                "validated",
+                "hash",
+                "lane",
+                "peer",
+                "backend",
+                "crypto",
+                "quality",
+                "telemetry",
+                "utxos",
+                "p2p_ms",
+                "script_ms",
+                "connect_ms",
+                "captured",
+                "artifact",
+            ),
+            data,
+        )
+    )
+
+
 def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
     print("## Benchmark Comparability")
     print()
@@ -569,7 +650,7 @@ def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
                validated_height, header_target_height, peer_mode, byte_source,
                proof_mode, prefetch_depth, script_runner_mode,
                rocksdb_wal_disabled, fresh_state, utxo_accounting_policy,
-               chainstate_utxo_count, total_ms, comparability_notes
+               chainstate_utxo_count, artifact_quality, telemetry_quality, total_ms, comparability_notes
         from benchmark_comparability
         order by
           case gate_id
@@ -603,6 +684,8 @@ def print_benchmark_comparability(connection: sqlite3.Connection) -> None:
                 "fresh",
                 "utxo_policy",
                 "utxos",
+                "quality",
+                "telemetry",
                 "total_ms",
                 "notes",
             ),
@@ -738,6 +821,7 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "blocker-catalog": print_blocker_catalog,
     "blocker-matrix": print_blocker_matrix,
     "benchmark-suite": print_benchmark_suite,
+    "leaderboard": print_leaderboard,
     "benchmark-gates": print_benchmark_gates,
     "benchmark-comparability": print_benchmark_comparability,
     "baseline-5k": print_port_baseline_5k,
@@ -753,15 +837,31 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
 
 def main() -> int:
     args = parse_args()
+    if args.list_sections:
+        print("sections:")
+        for section_name in SECTIONS:
+            print(f"  {section_name}")
+        print("aliases:")
+        for alias, section_name in sorted(SECTION_ALIASES.items()):
+            suffix = ""
+            if alias in SECTION_DEFAULT_GATES:
+                suffix = f" --gate {SECTION_DEFAULT_GATES[alias]}"
+            print(f"  {alias} -> {section_name}{suffix}")
+        return 0
     db_path = Path(args.db)
-    section = SECTION_ALIASES.get(args.section, args.section)
+    requested_section = args.section
+    section = SECTION_ALIASES.get(requested_section, requested_section)
+    gate_id = args.gate or SECTION_DEFAULT_GATES.get(requested_section)
     selected = list(SECTIONS) if section == "all" else [section]
     with sqlite3.connect(db_path) as connection:
         connection.row_factory = sqlite3.Row
         for index, name in enumerate(selected):
             if index:
                 print()
-            REPORTS[name](connection)
+            if name == "leaderboard":
+                print_leaderboard(connection, gate_id)
+            else:
+                REPORTS[name](connection)
     return 0
 
 

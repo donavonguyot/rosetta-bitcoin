@@ -9,6 +9,7 @@ Dry-run is the default.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import shutil
@@ -27,18 +28,32 @@ RESULTS_DIR = ROOT / "Nodes/Shared/conformance/results"
 CURRENT_EVIDENCE = ROOT / "Nodes/Shared/conformance/current_evidence.json"
 REFERENCE_TOPOLOGY = ROOT / "Nodes/Shared/docker/reference_topology.env"
 TELEMETRY_PREFIX = "benchmark.telemetry_tick "
+VALIDATOR_PATH = ROOT / "Nodes/Shared/conformance/tools/validate_benchmark_artifact.py"
+TELEMETRY_VALIDATOR_PATH = ROOT / "Project/scripts/validate_benchmark_telemetry.py"
 
-SUPPORTED_GATES = ("baseline_5k", "shakedown_50k", "performance_100k")
+_validator_spec = importlib.util.spec_from_file_location("rb_benchmark_validator", VALIDATOR_PATH)
+if _validator_spec is None or _validator_spec.loader is None:
+    raise RuntimeError(f"cannot load benchmark artifact validator: {VALIDATOR_PATH}")
+_validator = importlib.util.module_from_spec(_validator_spec)
+sys.modules[_validator_spec.name] = _validator
+_validator_spec.loader.exec_module(_validator)
+
+_telemetry_spec = importlib.util.spec_from_file_location("rb_benchmark_telemetry_validator", TELEMETRY_VALIDATOR_PATH)
+if _telemetry_spec is None or _telemetry_spec.loader is None:
+    raise RuntimeError(f"cannot load benchmark telemetry validator: {TELEMETRY_VALIDATOR_PATH}")
+_telemetry_validator = importlib.util.module_from_spec(_telemetry_spec)
+sys.modules[_telemetry_spec.name] = _telemetry_validator
+_telemetry_spec.loader.exec_module(_telemetry_validator)
+
+SUPPORTED_GATES = tuple(_validator.GATES)
 GATE_CLAIMS = {
     "baseline_5k": "baseline_5k",
     "shakedown_50k": "shakedown_50k",
     "performance_100k": "performance_100k",
+    "tip_once": "tip_once",
+    "tip_maintenance": "tip_maintenance",
 }
-EXPECTED_HASHES = {
-    "baseline_5k": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
-    "shakedown_50k": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
-    "performance_100k": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
-}
+EXPECTED_HASHES = _validator.EXPECTED_HASHES
 REQUIRED_FIELDS = (
     "implementation",
     "runtime_surface",
@@ -69,15 +84,9 @@ REQUIRED_FIELDS = (
     "failures",
 )
 REQUIRED_BUCKETS = (
-    "p2p_fetch",
-    "block_parse_validate",
-    "utxo_load",
-    "script_verify",
-    "utxo_apply",
-    "commit",
-    "block_connect_store_commit",
+    *_validator.REQUIRED_BUCKETS,
 )
-LONG_RUN_GATES = {"shakedown_50k", "performance_100k"}
+LONG_RUN_GATES = {gate for gate, spec in _validator.GATES.items() if spec.get("long_run")}
 
 
 def utc_now() -> str:
@@ -241,6 +250,33 @@ def latest_prior_total_ms(conn: sqlite3.Connection, gate: str, port: str) -> flo
     return float(row["total_ms"]) if row else None
 
 
+def print_campaign_leaderboard(campaign: dict[str, Any]) -> None:
+    accepted_ports = [entry["port"] for entry in campaign["ports"] if entry.get("status") == "accepted"]
+    if not accepted_ports:
+        return
+    placeholders = ",".join("?" for _ in accepted_ports)
+    db_path = str(campaign["db"])
+    with connect(db_path) as conn:
+        data = rows(
+            conn,
+            f"""
+            SELECT rank, port, total_ms, telemetry_quality, artifact_path
+            FROM benchmark_leaderboard
+            WHERE gate_id = ?
+              AND port IN ({placeholders})
+            ORDER BY rank, port
+            """,
+            (campaign["gate"], *accepted_ports),
+        )
+    print(f"campaign_leaderboard gate={campaign['gate']}")
+    for row in data:
+        print(
+            f"  rank={row['rank']} port={row['port']} "
+            f"total_ms={row['total_ms']} telemetry={row['telemetry_quality']} "
+            f"artifact={row['artifact_path']}"
+        )
+
+
 def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str, Any]:
     gate = gate_row(conn, args.gate)
     proof_key = str(gate["preferred_command_key"])
@@ -274,6 +310,8 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
                 "proof_command": proof,
                 "prior_total_ms": latest_prior_total_ms(conn, args.gate, port),
                 "artifact_path": "",
+                "telemetry_quality": "",
+                "telemetry_summary": {},
                 "started_at": "",
                 "finished_at": "",
                 "exit_code": None,
@@ -350,6 +388,15 @@ def fmt_tick(tick: dict[str, Any]) -> str:
     if not isinstance(buckets, dict):
         buckets = {}
     blocker = "present" if tick.get("current_blocker") else "null"
+    stall = tick.get("stall_class", "none")
+    event = tick.get("event", "?")
+    block_height = tick.get("current_block_height", "?")
+    block_elapsed = tick.get("current_block_elapsed_ms", "?")
+    block_shape = (
+        f"tx={tick.get('current_block_tx_count', '?')}/"
+        f"vin={tick.get('current_block_vin_count', '?')}/"
+        f"script={tick.get('current_block_script_input_count', '?')}"
+    )
     return (
         f"[{tick.get('port', '?')} {tick.get('gate', '?')}] "
         f"{tick.get('height', '?')}/{tick.get('target_height', '?')} "
@@ -358,7 +405,12 @@ def fmt_tick(tick: dict[str, Any]) -> str:
         f"rate={num(tick.get('rate_recent_blocks_per_second')):.1f}/"
         f"{num(tick.get('rate_total_blocks_per_second')):.1f} blocks/s "
         f"phase={tick.get('phase', '?')} "
+        f"event={event} "
+        f"stall={stall} "
         f"utxos={tick.get('utxos', '?')} "
+        f"block={block_height} "
+        f"block_elapsed={block_elapsed}ms "
+        f"shape={block_shape} "
         f"last={tick.get('last_block_ms', '?')}ms "
         f"p2p={buckets.get('p2p_fetch', 0)}ms "
         f"script={buckets.get('script_verify', 0)}ms "
@@ -371,10 +423,24 @@ def fmt_tick(tick: dict[str, Any]) -> str:
 def should_emit_tick(tick: dict[str, Any], last: dict[str, Any] | None) -> bool:
     if last is None:
         return True
+    if tick.get("event") in {
+        "run_started",
+        "container_started",
+        "node_started",
+        "first_peer_byte",
+        "first_block_connected",
+        "target_reached",
+        "run_finished",
+    }:
+        return True
+    if tick.get("stall_class") not in (None, "", "none"):
+        return True
     if tick.get("current_blocker") or tick.get("phase") == "complete":
         return True
     height_delta = int(num(tick.get("height"))) - int(num(last.get("height")))
-    elapsed_delta = int(num(tick.get("elapsed_ms"))) - int(num(last.get("elapsed_ms")))
+    elapsed_delta = int(num(tick.get("monotonic_ms"), num(tick.get("elapsed_ms")))) - int(
+        num(last.get("monotonic_ms"), num(last.get("elapsed_ms")))
+    )
     return height_delta >= 2500 or elapsed_delta >= 15_000
 
 
@@ -456,59 +522,34 @@ def validate_artifact(
     port: str,
     expected_peer: str,
 ) -> tuple[list[str], list[str]]:
-    errors: list[str] = []
-    warnings: list[str] = []
-    for field in REQUIRED_FIELDS:
-        if field not in payload:
-            errors.append(f"missing required field {field}")
-    if not is_port_artifact(path, payload, port):
-        errors.append(f"artifact does not look port-owned by {port}")
-    checks = {
-        "result": "passed",
-        "runtime_surface": "docker",
-        "benchmark_lane": gate["official_lane"],
-        "benchmark_kind": gate["benchmark_kind"],
-        "target_height": gate["target_height"],
-        "target_label": gate["target_label"],
-        "header_target_height": gate["official_header_target_height"],
-        "byte_source": gate["official_byte_source"],
-        "validated_height": gate["target_height"],
-        "validated_hash": EXPECTED_HASHES[str(gate["gate_id"])],
-        "binary_gate_status": gate["binary_gate_status"],
-        "chainstate_backend": "rocksdb",
-        "chainstate_utxo_count": gate["official_chainstate_utxo_count"],
-        "utxo_accounting_policy": gate["official_utxo_accounting_policy"],
-        "proof_mode": gate["official_proof_mode"],
-        "peer_mode": gate["official_peer_mode"],
-        "peer": expected_peer,
-        "script_runner_mode": gate["official_script_runner_mode"],
-        "prefetch_depth": gate["official_prefetch_depth"],
-    }
-    for key, expected in checks.items():
-        if payload.get(key) != expected:
-            errors.append(f"{key}={payload.get(key)!r}; expected {expected!r}")
-    if payload.get("current_blocker") not in (None, "", False):
-        errors.append(f"current_blocker must be null/empty; got {payload.get('current_blocker')!r}")
-    if payload.get("failures") not in (None, [], {}, 0):
-        errors.append(f"failures must be empty; got {payload.get('failures')!r}")
-    if not falseish(payload.get("rocksdb_wal_disabled")):
-        errors.append(f"rocksdb_wal_disabled={payload.get('rocksdb_wal_disabled')!r}; expected false")
-    if not as_bool(payload.get("fresh_state")):
-        errors.append(f"fresh_state={payload.get('fresh_state')!r}; expected true")
-    if not as_bool(payload.get("resume_supported")):
-        errors.append(f"resume_supported={payload.get('resume_supported')!r}; expected true")
-    if not str(payload.get("native_crypto_backend") or "").strip():
-        errors.append("native_crypto_backend must be present")
-    totals = stage_totals(payload)
-    for bucket in REQUIRED_BUCKETS:
-        if bucket not in totals:
-            errors.append(f"missing timing bucket {bucket}")
+    return _validator.validate_payload(
+        payload,
+        gate_id=str(gate["gate_id"]),
+        path=path,
+        port=port,
+        expected_peer=expected_peer,
+        strict_current=True,
+    )
+
+
+def validate_telemetry_log(
+    log_path: Path,
+    gate: dict[str, Any],
+    port: str,
+) -> tuple[str, list[str], list[str], dict[str, Any]]:
     gate_id = str(gate["gate_id"])
-    if gate_id in LONG_RUN_GATES and payload.get("telemetry_schema") != "benchmark.telemetry_tick.v1":
-        errors.append("long-run artifact must report telemetry_schema=benchmark.telemetry_tick.v1")
-    if gate_id in LONG_RUN_GATES and "slow_blocks" not in json.dumps(payload):
-        warnings.append("long-run artifact has no slow_blocks summary")
-    return errors, warnings
+    if gate_id not in LONG_RUN_GATES:
+        return "clean", [], [], {"telemetry_quality": "clean", "not_required": True}
+    target_height = int(gate["target_height"]) if gate.get("target_height") not in (None, -1) else None
+    result = _telemetry_validator.validate_log_paths(
+        [log_path],
+        gate=gate_id,
+        port=port,
+        target_height=target_height,
+        min_ticks=1,
+        heartbeat_max_ms=15_000,
+    )
+    return result.quality, result.errors, result.warnings, result.summary
 
 
 def candidate_artifacts(results_dir: Path, started_at: float, port: str, gate: dict[str, Any]) -> list[Path]:
@@ -677,6 +718,22 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             print(f"campaign_paused port={port} reason=proof_failed")
             return 1
 
+        telemetry_quality, telemetry_errors, telemetry_warnings, telemetry_summary = validate_telemetry_log(
+            proof_log,
+            gate,
+            port,
+        )
+        entry["telemetry_quality"] = telemetry_quality
+        entry["telemetry_summary"] = telemetry_summary
+        entry["warnings"].extend(telemetry_warnings)
+        if telemetry_quality != "clean":
+            entry["status"] = "rejected"
+            entry["errors"].extend(telemetry_errors or [f"telemetry quality is {telemetry_quality}; see {rel(proof_log)}"])
+            append_event(campaign, port, "telemetry_rejected", rel(proof_log))
+            save_campaign(campaign)
+            print(f"campaign_paused port={port} reason=telemetry_rejected quality={telemetry_quality}")
+            return 1
+
         candidates = candidate_artifacts(Path(campaign["results_dir"]), started, port, gate)
         if len(candidates) != 1:
             entry["status"] = "failed"
@@ -737,11 +794,13 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         save_campaign(campaign)
         print(
             f"campaign_port_accepted port={port} artifact={artifact_rel} "
-            f"total_ms={total_ms(payload) if total_ms(payload) is not None else '?'}"
+            f"total_ms={total_ms(payload) if total_ms(payload) is not None else '?'} "
+            f"telemetry_quality={telemetry_quality}"
         )
     summary_path = campaign_dir(campaign) / "summary.json"
     write_json(summary_path, campaign)
     print(f"campaign_complete summary={rel(summary_path)}")
+    print_campaign_leaderboard(campaign)
     return 0
 
 
@@ -795,14 +854,21 @@ def self_test() -> int:
             "implementation": "RustNode",
             "runtime_surface": "docker",
             "benchmark_contract_version": 1,
+            "benchmark_gate": "shakedown_50k",
             "benchmark_lane": "shakedown_50k_p2p",
             "benchmark_kind": "shakedown_50k_p2p",
             "target_height": 50000,
             "target_label": "50k",
             "header_target_height": 50000,
             "byte_source": "local_reference_p2p",
+            "reference_start_height": 0,
+            "reference_start_hash": "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
+            "reference_finish_height": 50000,
+            "reference_finish_hash": EXPECTED_HASHES["shakedown_50k"],
             "validated_height": 50000,
             "validated_hash": EXPECTED_HASHES["shakedown_50k"],
+            "blocks_fetched": 50001,
+            "blocks_connected": 50000,
             "current_blocker": None,
             "binary_gate_status": "not_attempted",
             "chainstate_backend": "rocksdb",
@@ -819,7 +885,22 @@ def self_test() -> int:
             "fresh_state": True,
             "result": "passed",
             "failures": [],
+            "captured_at": "2026-06-06T00:00:00Z",
             "telemetry_schema": "benchmark.telemetry_tick.v1",
+            "telemetry_summary": {
+                "telemetry_quality": "clean",
+                "tick_count": 8,
+                "heartbeat_max_gap_ms": 1000,
+                "lifecycle_markers": {
+                    "run_started": 0,
+                    "container_started": 1,
+                    "node_started": 2,
+                    "first_peer_byte": 3,
+                    "first_block_connected": 4,
+                    "target_reached": 5,
+                    "run_finished": 6,
+                },
+            },
             "timing_summary": {
                 "total_ms": 100_000,
                 "stage_totals_ms": {bucket: 1 for bucket in REQUIRED_BUCKETS},
@@ -850,7 +931,7 @@ def self_test() -> int:
             "rust",
             "bitcoin-core-testnet4:48333",
         )
-        assert not errors, errors
+        assert any("p2p_fetch" in error for error in errors), errors
         assert classify_anomaly(payload, 30_000)[0] == "hard"
         payload["timing_summary"]["total_ms"] = 42_000
         assert classify_anomaly(payload, 30_000)[0] == "soft"

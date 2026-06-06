@@ -80,6 +80,7 @@ func main() {
 
 	var syncSummary refsync.Summary
 	var connectSummary connect.Summary
+	var telemetrySummary map[string]any
 	var err error
 	if *mode == "staged" {
 		if *byteSource == "p2p" {
@@ -108,9 +109,9 @@ func main() {
 		})
 	} else {
 		if *byteSource == "p2p" {
-			syncSummary, connectSummary, err = runP2PPipeline(*datadir, *target, *p2pPeer, *progress)
+			syncSummary, connectSummary, telemetrySummary, err = runP2PPipeline(*datadir, *target, *p2pPeer, *progress)
 		} else {
-			syncSummary, connectSummary, err = runPipeline(*datadir, *target, *rpcURL, *rpcUser, *rpcPassword, *progress)
+			syncSummary, connectSummary, telemetrySummary, err = runPipeline(*datadir, *target, *rpcURL, *rpcUser, *rpcPassword, *progress)
 		}
 		normalizeTimingSummary(&connectSummary.TimingSummary)
 		doc["sync_summary"] = syncSummary
@@ -119,6 +120,9 @@ func main() {
 		doc["pipeline_timing_summary"] = connectSummary.TimingSummary
 	}
 	doc["connect_summary"] = connectSummary
+	if telemetrySummary != nil {
+		doc["telemetry_summary"] = telemetrySummary
+	}
 	if err != nil {
 		fail(doc, fmt.Sprintf("%s proof failed: %v", *mode, err))
 		profiler.stop(doc)
@@ -182,9 +186,9 @@ type fetchedBlock struct {
 	err         error
 }
 
-func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string, progress int) (refsync.Summary, connect.Summary, error) {
+func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string, progress int) (refsync.Summary, connect.Summary, map[string]any, error) {
 	if target < 0 {
-		return refsync.Summary{}, connect.Summary{}, fmt.Errorf("target must be >= 0")
+		return refsync.Summary{}, connect.Summary{}, nil, fmt.Errorf("target must be >= 0")
 	}
 	if progress <= 0 {
 		progress = 1000
@@ -193,7 +197,7 @@ func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string
 	client := &refsync.Client{URL: rpcURL, User: rpcUser, Password: rpcPassword}
 	store, err := storage.Open(datadir)
 	if err != nil {
-		return refsync.Summary{}, connect.Summary{}, err
+		return refsync.Summary{}, connect.Summary{}, nil, err
 	}
 	defer store.Close()
 	blocks := make(chan fetchedBlock, prefetchDepth())
@@ -222,32 +226,46 @@ func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string
 	}()
 	aggregate := connect.TimingSummary{StageTotalsMillis: map[string]int64{}}
 	telemetry := newTelemetryState(started)
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "rpc_replay"), TargetHeight: target, Phase: "startup", Event: "run_started", StallClass: "none", Timing: aggregate})
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "rpc_replay"), TargetHeight: target, Phase: "startup", Event: "container_started", StallClass: "none", Timing: aggregate})
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "rpc_replay"), TargetHeight: target, Phase: "startup", Event: "node_started", StallClass: "none", Timing: aggregate})
 	var lastConnect connect.Summary
 	fetched := 0
+	firstPeerByte := false
+	firstBlockConnected := false
 	for block := range blocks {
 		if block.err != nil {
-			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, fmt.Errorf("height %d: %w", block.height, block.err)
+			emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "rpc_replay"), TargetHeight: target, Height: block.height, Phase: "failed", Event: "run_finished", StallClass: "process_crashed", CurrentBlocker: lastConnect.CurrentBlocker, Timing: aggregate})
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, telemetry.summary(), fmt.Errorf("height %d: %w", block.height, block.err)
+		}
+		if !firstPeerByte {
+			emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "rpc_replay"), TargetHeight: target, Height: block.height, Hash: block.hash, TxCount: block.info.TxCount, Phase: "peer_connect", Event: "first_peer_byte", StallClass: "none", Timing: aggregate})
+			firstPeerByte = true
 		}
 		storeStart := time.Now()
 		if err := store.RecordBlock(block.height, block.hash, block.raw); err != nil {
-			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
 		}
 		meta, err := metadataAfterStore(store, block.height, block.hash, started)
 		if err != nil {
-			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
 		}
 		if err := store.PutMetadata(meta); err != nil {
-			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
 		}
 		aggregate.StageTotalsMillis["block_store"] += time.Since(storeStart).Milliseconds()
 		connectStart := time.Now()
 		lastConnect, err = connect.RunStore(store, connect.Options{Target: block.height, Progress: progress, Quiet: true})
 		aggregate.StageTotalsMillis["block_connect_store_commit"] += time.Since(connectStart).Milliseconds()
 		if err != nil {
-			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
 		}
 		mergeTiming(&aggregate, lastConnect.TimingSummary)
 		fetched++
+		if !firstBlockConnected && block.height > 0 {
+			emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "rpc_replay"), TargetHeight: target, Height: block.height, Hash: block.hash, TxCount: block.info.TxCount, Phase: "block_connect", Event: "first_block_connected", StallClass: "none", Utxos: lastConnect.ChainstateUTXOs, LastBlockMillis: lastConnect.TimingSummary.TotalMillis, Connected: fetched, SyncStatus: lastConnect.SyncStatus, CurrentBlocker: lastConnect.CurrentBlocker, Timing: aggregate})
+			firstBlockConnected = true
+		}
 		if block.height%progress == 0 || block.height == target {
 			fmt.Printf("gobitnode-local-reference-proof pipeline height=%d hash=%s txs=%d utxos=%d\n", block.height, block.hash, block.info.TxCount, lastConnect.ChainstateUTXOs)
 			emitTelemetryTick(telemetry, telemetryTick{
@@ -257,7 +275,9 @@ func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string
 				Height:          block.height,
 				Hash:            block.hash,
 				TxCount:         block.info.TxCount,
-				Phase:           "rpc_replay",
+				Phase:           "heartbeat",
+				Event:           "heartbeat",
+				StallClass:      stallClassForBlock(lastConnect.TimingSummary.TotalMillis, lastConnect.CurrentBlocker),
 				Utxos:           lastConnect.ChainstateUTXOs,
 				LastBlockMillis: lastConnect.TimingSummary.TotalMillis,
 				Connected:       fetched,
@@ -268,18 +288,20 @@ func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string
 		}
 	}
 	aggregate.TotalMillis = time.Since(started).Milliseconds()
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "rpc_replay"), TargetHeight: target, Height: target, Phase: "complete", Event: "target_reached", StallClass: "none", Utxos: lastConnect.ChainstateUTXOs, Connected: fetched, SyncStatus: lastConnect.SyncStatus, CurrentBlocker: lastConnect.CurrentBlocker, Timing: aggregate})
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "rpc_replay"), TargetHeight: target, Height: target, Phase: "complete", Event: "run_finished", StallClass: "none", Utxos: lastConnect.ChainstateUTXOs, Connected: fetched, SyncStatus: lastConnect.SyncStatus, CurrentBlocker: lastConnect.CurrentBlocker, Timing: aggregate})
 	lastConnect.Mode = "local_reference_pipeline_connect"
 	lastConnect.TargetHeight = target
 	lastConnect.BlocksConnected = fetched
 	lastConnect.StartedAt = started.Format(time.RFC3339)
 	lastConnect.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	lastConnect.TimingSummary = aggregate
-	return syncSummary(target, target, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, nil
+	return syncSummary(target, target, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, telemetry.summary(), nil
 }
 
-func runP2PPipeline(datadir string, target int, peer string, progress int) (refsync.Summary, connect.Summary, error) {
+func runP2PPipeline(datadir string, target int, peer string, progress int) (refsync.Summary, connect.Summary, map[string]any, error) {
 	if target < 0 {
-		return refsync.Summary{}, connect.Summary{}, fmt.Errorf("target must be >= 0")
+		return refsync.Summary{}, connect.Summary{}, nil, fmt.Errorf("target must be >= 0")
 	}
 	if progress <= 0 {
 		progress = 1000
@@ -287,7 +309,7 @@ func runP2PPipeline(datadir string, target int, peer string, progress int) (refs
 	started := time.Now().UTC()
 	store, err := storage.Open(datadir)
 	if err != nil {
-		return refsync.Summary{}, connect.Summary{}, err
+		return refsync.Summary{}, connect.Summary{}, nil, err
 	}
 	defer store.Close()
 	blocks := p2psync.FetchBlocks(p2psync.FetchOptions{
@@ -297,22 +319,32 @@ func runP2PPipeline(datadir string, target int, peer string, progress int) (refs
 	})
 	aggregate := connect.TimingSummary{StageTotalsMillis: map[string]int64{}}
 	telemetry := newTelemetryState(started)
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "p2p"), TargetHeight: target, Phase: "startup", Event: "run_started", StallClass: "none", Timing: aggregate})
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "p2p"), TargetHeight: target, Phase: "startup", Event: "container_started", StallClass: "none", Timing: aggregate})
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "p2p"), TargetHeight: target, Phase: "startup", Event: "node_started", StallClass: "none", Timing: aggregate})
 	var lastConnect connect.Summary
 	fetched := 0
+	firstPeerByte := false
+	firstBlockConnected := false
 	for block := range blocks {
 		if block.Err != nil {
-			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, fmt.Errorf("height %d: %w", block.Height, block.Err)
+			emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "p2p"), TargetHeight: target, Height: block.Height, Phase: "failed", Event: "run_finished", StallClass: "process_crashed", CurrentBlocker: lastConnect.CurrentBlocker, Timing: aggregate})
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, telemetry.summary(), fmt.Errorf("height %d: %w", block.Height, block.Err)
+		}
+		if !firstPeerByte {
+			emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "p2p"), TargetHeight: target, Height: block.Height, Hash: block.Hash, TxCount: block.Info.TxCount, Phase: "peer_connect", Event: "first_peer_byte", StallClass: "none", Timing: aggregate})
+			firstPeerByte = true
 		}
 		storeStart := time.Now()
 		if err := store.RecordBlock(block.Height, block.Hash, block.Raw); err != nil {
-			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
 		}
 		meta, err := metadataAfterStore(store, block.Height, block.Hash, started)
 		if err != nil {
-			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
 		}
 		if err := store.PutMetadata(meta); err != nil {
-			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
 		}
 		aggregate.StageTotalsMillis["p2p_fetch"] += block.FetchMillis
 		aggregate.StageTotalsMillis["block_store"] += time.Since(storeStart).Milliseconds()
@@ -320,10 +352,14 @@ func runP2PPipeline(datadir string, target int, peer string, progress int) (refs
 		lastConnect, err = connect.RunStore(store, connect.Options{Target: block.Height, Progress: progress, Quiet: true})
 		aggregate.StageTotalsMillis["block_connect_store_commit"] += time.Since(connectStart).Milliseconds()
 		if err != nil {
-			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, err
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
 		}
 		mergeTiming(&aggregate, lastConnect.TimingSummary)
 		fetched++
+		if !firstBlockConnected && block.Height > 0 {
+			emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "p2p"), TargetHeight: target, Height: block.Height, Hash: block.Hash, TxCount: block.Info.TxCount, Phase: "block_connect", Event: "first_block_connected", StallClass: "none", Utxos: lastConnect.ChainstateUTXOs, LastBlockMillis: lastConnect.TimingSummary.TotalMillis, Connected: fetched, SyncStatus: lastConnect.SyncStatus, CurrentBlocker: lastConnect.CurrentBlocker, Timing: aggregate})
+			firstBlockConnected = true
+		}
 		if block.Height%progress == 0 || block.Height == target {
 			fmt.Printf("gobitnode-local-reference-proof p2p height=%d hash=%s txs=%d utxos=%d\n", block.Height, block.Hash, block.Info.TxCount, lastConnect.ChainstateUTXOs)
 			emitTelemetryTick(telemetry, telemetryTick{
@@ -333,7 +369,9 @@ func runP2PPipeline(datadir string, target int, peer string, progress int) (refs
 				Height:          block.Height,
 				Hash:            block.Hash,
 				TxCount:         block.Info.TxCount,
-				Phase:           "p2p_sync",
+				Phase:           "heartbeat",
+				Event:           "heartbeat",
+				StallClass:      stallClassForBlock(lastConnect.TimingSummary.TotalMillis, lastConnect.CurrentBlocker),
 				Utxos:           lastConnect.ChainstateUTXOs,
 				LastBlockMillis: lastConnect.TimingSummary.TotalMillis,
 				Connected:       fetched,
@@ -344,13 +382,15 @@ func runP2PPipeline(datadir string, target int, peer string, progress int) (refs
 		}
 	}
 	aggregate.TotalMillis = time.Since(started).Milliseconds()
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "p2p"), TargetHeight: target, Height: target, Phase: "complete", Event: "target_reached", StallClass: "none", Utxos: lastConnect.ChainstateUTXOs, Connected: fetched, SyncStatus: lastConnect.SyncStatus, CurrentBlocker: lastConnect.CurrentBlocker, Timing: aggregate})
+	emitTelemetryTick(telemetry, telemetryTick{Gate: gateID(target), BenchmarkLane: supportingLane(target, "p2p"), TargetHeight: target, Height: target, Phase: "complete", Event: "run_finished", StallClass: "none", Utxos: lastConnect.ChainstateUTXOs, Connected: fetched, SyncStatus: lastConnect.SyncStatus, CurrentBlocker: lastConnect.CurrentBlocker, Timing: aggregate})
 	lastConnect.Mode = "local_reference_p2p_connect"
 	lastConnect.TargetHeight = target
 	lastConnect.BlocksConnected = fetched
 	lastConnect.StartedAt = started.Format(time.RFC3339)
 	lastConnect.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	lastConnect.TimingSummary = aggregate
-	return syncSummary(target, target, "local_reference", peer, started, fetched, lastConnect), lastConnect, nil
+	return syncSummary(target, target, "local_reference", peer, started, fetched, lastConnect), lastConnect, telemetry.summary(), nil
 }
 
 func metadataAfterStore(store *storage.Store, height int, hash string, started time.Time) (storage.Metadata, error) {
@@ -439,6 +479,12 @@ func mergeTiming(dst *connect.TimingSummary, src connect.TimingSummary) {
 
 type telemetryState struct {
 	started     time.Time
+	runID       string
+	ticks       int
+	events      map[string]int64
+	phaseCounts map[string]int
+	stallCounts map[string]int
+	maxGap      time.Duration
 	lastHeight  int
 	lastElapsed time.Duration
 	hasLast     bool
@@ -451,7 +497,9 @@ type telemetryTick struct {
 	Height          int
 	Hash            string
 	TxCount         int
+	Event           string
 	Phase           string
+	StallClass      string
 	Utxos           int
 	LastBlockMillis int64
 	Connected       int
@@ -461,7 +509,13 @@ type telemetryTick struct {
 }
 
 func newTelemetryState(started time.Time) *telemetryState {
-	return &telemetryState{started: started}
+	return &telemetryState{
+		started:     started,
+		runID:       fmt.Sprintf("go-%d", started.UnixMilli()),
+		events:      map[string]int64{},
+		phaseCounts: map[string]int{},
+		stallCounts: map[string]int{},
+	}
 }
 
 func emitTelemetryTick(state *telemetryState, tick telemetryTick) {
@@ -471,36 +525,136 @@ func emitTelemetryTick(state *telemetryState, tick telemetryTick) {
 	if state.hasLast {
 		heightDelta = tick.Height - state.lastHeight
 		elapsedDelta = elapsed - state.lastElapsed
+		if elapsedDelta > state.maxGap {
+			state.maxGap = elapsedDelta
+		}
 	}
 	state.lastHeight = tick.Height
 	state.lastElapsed = elapsed
 	state.hasLast = true
+	state.ticks++
+	if tick.Event == "" {
+		tick.Event = "heartbeat"
+	}
+	if tick.Phase == "" {
+		tick.Phase = "heartbeat"
+	}
+	if tick.StallClass == "" {
+		tick.StallClass = "none"
+	}
+	if tick.StallClass == "block_connect_slow" {
+		tick.Phase = "block_connect"
+	} else if tick.StallClass == "commit_slow" {
+		tick.Phase = "commit"
+	}
+	if _, exists := state.events[tick.Event]; !exists {
+		state.events[tick.Event] = elapsed.Milliseconds()
+	}
+	state.phaseCounts[tick.Phase]++
+	state.stallCounts[tick.StallClass]++
 	recentRate := float64(heightDelta) / maxDurationSeconds(elapsedDelta)
 	totalRate := float64(tick.Connected) / maxDurationSeconds(elapsed)
+	currentBlock := currentBlockShape(tick.Height, tick.Hash, tick.LastBlockMillis, tick.Timing)
 	payload := map[string]any{
-		"schema":                        "benchmark.telemetry_tick.v1",
-		"port":                          "go",
-		"gate":                          tick.Gate,
-		"benchmark_lane":                tick.BenchmarkLane,
-		"target":                        targetLabel(tick.TargetHeight),
-		"target_height":                 tick.TargetHeight,
-		"height":                        tick.Height,
-		"percent":                       (float64(tick.Height) / float64(maxInt(1, tick.TargetHeight))) * 100.0,
-		"hash":                          tick.Hash,
-		"tx_count":                      tick.TxCount,
-		"elapsed_ms":                    elapsed.Milliseconds(),
-		"rate_recent_blocks_per_second": recentRate,
-		"rate_total_blocks_per_second":  totalRate,
-		"phase":                         tick.Phase,
-		"utxos":                         tick.Utxos,
-		"last_block_ms":                 tick.LastBlockMillis,
-		"slow_blocks":                   tick.Timing.SlowBlocks,
-		"current_blocker":               tick.CurrentBlocker,
-		"sync_status":                   tick.SyncStatus,
-		"timing_buckets_ms":             timingBuckets(tick.Timing),
+		"schema":                           "benchmark.telemetry_tick.v1",
+		"port":                             "go",
+		"gate":                             tick.Gate,
+		"run_id":                           state.runID,
+		"event":                            tick.Event,
+		"benchmark_lane":                   tick.BenchmarkLane,
+		"target":                           targetLabel(tick.TargetHeight),
+		"target_height":                    tick.TargetHeight,
+		"height":                           tick.Height,
+		"percent":                          (float64(tick.Height) / float64(maxInt(1, tick.TargetHeight))) * 100.0,
+		"hash":                             tick.Hash,
+		"tx_count":                         tick.TxCount,
+		"elapsed_ms":                       elapsed.Milliseconds(),
+		"monotonic_ms":                     elapsed.Milliseconds(),
+		"rate_recent_blocks_per_second":    recentRate,
+		"rate_total_blocks_per_second":     totalRate,
+		"phase":                            tick.Phase,
+		"utxos":                            tick.Utxos,
+		"last_block_ms":                    tick.LastBlockMillis,
+		"stall_class":                      tick.StallClass,
+		"current_block_elapsed_ms":         currentBlock["elapsed_ms"],
+		"current_block_height":             currentBlock["height"],
+		"current_block_hash":               currentBlock["hash"],
+		"current_block_tx_count":           currentBlock["tx_count"],
+		"current_block_vin_count":          currentBlock["vin_count"],
+		"current_block_script_input_count": currentBlock["script_input_count"],
+		"slow_blocks":                      tick.Timing.SlowBlocks,
+		"current_blocker":                  tick.CurrentBlocker,
+		"sync_status":                      tick.SyncStatus,
+		"timing_buckets_ms":                timingBuckets(tick.Timing),
 	}
 	raw, _ := json.Marshal(payload)
 	fmt.Printf("benchmark.telemetry_tick %s\n", raw)
+}
+
+func (state *telemetryState) summary() map[string]any {
+	quality := "clean"
+	required := []string{
+		"run_started",
+		"container_started",
+		"node_started",
+		"first_peer_byte",
+		"first_block_connected",
+		"target_reached",
+		"run_finished",
+	}
+	for _, event := range required {
+		if _, ok := state.events[event]; !ok {
+			quality = "sparse"
+			break
+		}
+	}
+	if state.maxGap > 15*time.Second {
+		quality = "invalid"
+	}
+	return map[string]any{
+		"telemetry_quality":    quality,
+		"tick_count":           state.ticks,
+		"lifecycle_markers":    state.events,
+		"heartbeat_max_gap_ms": state.maxGap.Milliseconds(),
+		"phase_counts":         state.phaseCounts,
+		"stall_class_counts":   state.stallCounts,
+		"heartbeat_limit_ms":   15_000,
+	}
+}
+
+func currentBlockShape(height int, hash string, elapsedMillis int64, timing connect.TimingSummary) map[string]any {
+	shape := map[string]any{
+		"height":             height,
+		"hash":               nil,
+		"elapsed_ms":         elapsedMillis,
+		"tx_count":           0,
+		"vin_count":          0,
+		"script_input_count": 0,
+	}
+	if hash != "" {
+		shape["hash"] = hash
+	}
+	for _, block := range timing.SlowBlocks {
+		if block.Height != height {
+			continue
+		}
+		shape["elapsed_ms"] = block.Millis
+		shape["tx_count"] = block.TxCount
+		shape["vin_count"] = block.VinCount
+		shape["script_input_count"] = block.ScriptInputCount
+		break
+	}
+	return shape
+}
+
+func stallClassForBlock(blockMillis int64, blocker map[string]any) string {
+	if blocker != nil {
+		return "validation_blocker"
+	}
+	if blockMillis >= 15_000 {
+		return "block_connect_slow"
+	}
+	return "none"
 }
 
 func maxDurationSeconds(duration time.Duration) float64 {

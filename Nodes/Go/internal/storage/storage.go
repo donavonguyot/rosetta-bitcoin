@@ -4,6 +4,22 @@ package storage
 #cgo pkg-config: rocksdb
 #include <rocksdb/c.h>
 #include <stdlib.h>
+
+static void rb_set_char_ptr(char **items, size_t index, char *value) {
+	items[index] = value;
+}
+
+static char *rb_get_char_ptr(char **items, size_t index) {
+	return items[index];
+}
+
+static void rb_set_size_t(size_t *items, size_t index, size_t value) {
+	items[index] = value;
+}
+
+static size_t rb_get_size_t(size_t *items, size_t index) {
+	return items[index];
+}
 */
 import "C"
 
@@ -583,7 +599,10 @@ func (s *Store) multiGetOutpoints(outpoints []OutPoint) ([][]byte, int64, error)
 	keyPointerData := C.malloc(pointerBytes)
 	keySizeData := C.malloc(sizeBytes)
 	fixedKeyData := C.malloc(C.size_t(count * 37))
-	if keyPointerData == nil || keySizeData == nil || fixedKeyData == nil {
+	valuePointerData := C.malloc(pointerBytes)
+	valueSizeData := C.malloc(sizeBytes)
+	errPointerData := C.malloc(pointerBytes)
+	if keyPointerData == nil || keySizeData == nil || fixedKeyData == nil || valuePointerData == nil || valueSizeData == nil || errPointerData == nil {
 		if keyPointerData != nil {
 			C.free(keyPointerData)
 		}
@@ -593,14 +612,24 @@ func (s *Store) multiGetOutpoints(outpoints []OutPoint) ([][]byte, int64, error)
 		if fixedKeyData != nil {
 			C.free(fixedKeyData)
 		}
+		if valuePointerData != nil {
+			C.free(valuePointerData)
+		}
+		if valueSizeData != nil {
+			C.free(valueSizeData)
+		}
+		if errPointerData != nil {
+			C.free(errPointerData)
+		}
 		return nil, 0, errors.New("rocksdb multiget key allocation failed")
 	}
 	defer C.free(keyPointerData)
 	defer C.free(keySizeData)
 	defer C.free(fixedKeyData)
-	ckeys := unsafe.Slice((**C.char)(keyPointerData), count)
-	keySizes := unsafe.Slice((*C.size_t)(keySizeData), count)
-	fallbackKeys := []*C.char{}
+	defer C.free(valuePointerData)
+	defer C.free(valueSizeData)
+	defer C.free(errPointerData)
+	fallbackKeys := []uintptr{}
 	defer func() {
 		for _, key := range fallbackKeys {
 			C.free(unsafe.Pointer(key))
@@ -611,40 +640,41 @@ func (s *Store) multiGetOutpoints(outpoints []OutPoint) ([][]byte, int64, error)
 		ptr := unsafe.Add(fixedKeyData, i*37)
 		key := unsafe.Slice((*byte)(ptr), 37)
 		if outpoint.WriteKeyBytes(key) {
-			ckeys[i] = (*C.char)(ptr)
-			keySizes[i] = C.size_t(37)
+			C.rb_set_char_ptr((**C.char)(keyPointerData), C.size_t(i), (*C.char)(ptr))
+			C.rb_set_size_t((*C.size_t)(keySizeData), C.size_t(i), C.size_t(37))
 			keyBytes += 37
 			continue
 		}
 		encoded := outpoint.KeyBytes()
 		copied := (*C.char)(C.CBytes(encoded))
-		fallbackKeys = append(fallbackKeys, copied)
-		ckeys[i] = copied
-		keySizes[i] = C.size_t(len(encoded))
+		fallbackKeys = append(fallbackKeys, uintptr(unsafe.Pointer(copied)))
+		C.rb_set_char_ptr((**C.char)(keyPointerData), C.size_t(i), copied)
+		C.rb_set_size_t((*C.size_t)(keySizeData), C.size_t(i), C.size_t(len(encoded)))
 		keyBytes += int64(len(encoded))
 	}
-	values := make([]*C.char, count)
-	valueSizes := make([]C.size_t, count)
-	errs := make([]*C.char, count)
 	C.rocksdb_multi_get(
 		s.db,
 		s.ro,
 		C.size_t(count),
 		(**C.char)(keyPointerData),
 		(*C.size_t)(keySizeData),
-		(**C.char)(unsafe.Pointer(&values[0])),
-		(*C.size_t)(unsafe.Pointer(&valueSizes[0])),
-		(**C.char)(unsafe.Pointer(&errs[0])),
+		(**C.char)(valuePointerData),
+		(*C.size_t)(valueSizeData),
+		(**C.char)(errPointerData),
 	)
 	out := make([][]byte, count)
 	for i := range outpoints {
-		if errs[i] != nil {
-			defer C.rocksdb_free(unsafe.Pointer(errs[i]))
-			return nil, keyBytes, errors.New(C.GoString(errs[i]))
+		err := C.rb_get_char_ptr((**C.char)(errPointerData), C.size_t(i))
+		if err != nil {
+			msg := C.GoString(err)
+			C.rocksdb_free(unsafe.Pointer(err))
+			return nil, keyBytes, errors.New(msg)
 		}
-		if values[i] != nil {
-			out[i] = C.GoBytes(unsafe.Pointer(values[i]), C.int(valueSizes[i]))
-			C.rocksdb_free(unsafe.Pointer(values[i]))
+		value := C.rb_get_char_ptr((**C.char)(valuePointerData), C.size_t(i))
+		if value != nil {
+			size := C.rb_get_size_t((*C.size_t)(valueSizeData), C.size_t(i))
+			out[i] = C.GoBytes(unsafe.Pointer(value), C.int(size))
+			C.rocksdb_free(unsafe.Pointer(value))
 		}
 	}
 	return out, keyBytes, nil
@@ -654,40 +684,72 @@ func (s *Store) multiGet(keys [][]byte) ([][]byte, error) {
 	if len(keys) == 0 {
 		return [][]byte{}, nil
 	}
-	ckeys := make([]*C.char, len(keys))
-	keySizes := make([]C.size_t, len(keys))
+	count := len(keys)
+	pointerBytes := C.size_t(count) * C.size_t(unsafe.Sizeof(uintptr(0)))
+	sizeBytes := C.size_t(count) * C.size_t(unsafe.Sizeof(C.size_t(0)))
+	keyPointerData := C.malloc(pointerBytes)
+	keySizeData := C.malloc(sizeBytes)
+	valuePointerData := C.malloc(pointerBytes)
+	valueSizeData := C.malloc(sizeBytes)
+	errPointerData := C.malloc(pointerBytes)
+	if keyPointerData == nil || keySizeData == nil || valuePointerData == nil || valueSizeData == nil || errPointerData == nil {
+		if keyPointerData != nil {
+			C.free(keyPointerData)
+		}
+		if keySizeData != nil {
+			C.free(keySizeData)
+		}
+		if valuePointerData != nil {
+			C.free(valuePointerData)
+		}
+		if valueSizeData != nil {
+			C.free(valueSizeData)
+		}
+		if errPointerData != nil {
+			C.free(errPointerData)
+		}
+		return nil, errors.New("rocksdb multiget allocation failed")
+	}
+	defer C.free(keyPointerData)
+	defer C.free(keySizeData)
+	defer C.free(valuePointerData)
+	defer C.free(valueSizeData)
+	defer C.free(errPointerData)
+	copiedKeys := []uintptr{}
 	for i, key := range keys {
 		ptr := C.CBytes(key)
-		ckeys[i] = (*C.char)(ptr)
-		keySizes[i] = C.size_t(len(key))
+		copiedKeys = append(copiedKeys, uintptr(ptr))
+		C.rb_set_char_ptr((**C.char)(keyPointerData), C.size_t(i), (*C.char)(ptr))
+		C.rb_set_size_t((*C.size_t)(keySizeData), C.size_t(i), C.size_t(len(key)))
 	}
 	defer func() {
-		for _, key := range ckeys {
+		for _, key := range copiedKeys {
 			C.free(unsafe.Pointer(key))
 		}
 	}()
-	values := make([]*C.char, len(keys))
-	valueSizes := make([]C.size_t, len(keys))
-	errs := make([]*C.char, len(keys))
 	C.rocksdb_multi_get(
 		s.db,
 		s.ro,
-		C.size_t(len(keys)),
-		(**C.char)(unsafe.Pointer(&ckeys[0])),
-		(*C.size_t)(unsafe.Pointer(&keySizes[0])),
-		(**C.char)(unsafe.Pointer(&values[0])),
-		(*C.size_t)(unsafe.Pointer(&valueSizes[0])),
-		(**C.char)(unsafe.Pointer(&errs[0])),
+		C.size_t(count),
+		(**C.char)(keyPointerData),
+		(*C.size_t)(keySizeData),
+		(**C.char)(valuePointerData),
+		(*C.size_t)(valueSizeData),
+		(**C.char)(errPointerData),
 	)
-	out := make([][]byte, len(keys))
+	out := make([][]byte, count)
 	for i := range keys {
-		if errs[i] != nil {
-			defer C.rocksdb_free(unsafe.Pointer(errs[i]))
-			return nil, errors.New(C.GoString(errs[i]))
+		err := C.rb_get_char_ptr((**C.char)(errPointerData), C.size_t(i))
+		if err != nil {
+			msg := C.GoString(err)
+			C.rocksdb_free(unsafe.Pointer(err))
+			return nil, errors.New(msg)
 		}
-		if values[i] != nil {
-			out[i] = C.GoBytes(unsafe.Pointer(values[i]), C.int(valueSizes[i]))
-			C.rocksdb_free(unsafe.Pointer(values[i]))
+		value := C.rb_get_char_ptr((**C.char)(valuePointerData), C.size_t(i))
+		if value != nil {
+			size := C.rb_get_size_t((*C.size_t)(valueSizeData), C.size_t(i))
+			out[i] = C.GoBytes(unsafe.Pointer(value), C.int(size))
+			C.rocksdb_free(unsafe.Pointer(value))
 		}
 	}
 	return out, nil

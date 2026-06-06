@@ -3,7 +3,12 @@ import json
 import os
 import pathlib
 import sys
+import importlib.util
 from datetime import datetime, timezone
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[3]
+TELEMETRY_VALIDATOR = ROOT / "Project/scripts/validate_benchmark_telemetry.py"
 
 
 def load_json(path: pathlib.Path) -> dict:
@@ -23,6 +28,40 @@ def env_bool(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def load_telemetry_validator():
+    spec = importlib.util.spec_from_file_location("rb_benchmark_telemetry_validator", TELEMETRY_VALIDATOR)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def telemetry_summary(log_path: pathlib.Path, gate: str, target_height: int) -> dict:
+    if not log_path.exists() or not log_path.read_text(encoding="utf-8", errors="replace").strip():
+        return {"telemetry_quality": "missing", "tick_count": 0, "heartbeat_max_gap_ms": -1, "lifecycle_markers": {}}
+    validator = load_telemetry_validator()
+    if validator is None:
+        return {"telemetry_quality": "invalid", "tick_count": 0, "heartbeat_max_gap_ms": -1, "lifecycle_markers": {}}
+    result = validator.validate_log_paths(
+        [log_path],
+        gate=gate,
+        port="csharp",
+        target_height=target_height,
+        min_ticks=1,
+        heartbeat_max_ms=15_000,
+    )
+    summary = dict(result.summary)
+    summary["telemetry_quality"] = result.quality
+    if result.errors:
+        summary["errors"] = result.errors
+    if result.warnings:
+        summary["warnings"] = result.warnings
+    summary["telemetry_log_path"] = str(log_path)
+    return summary
 
 
 def timing_summary(status: dict) -> dict:
@@ -111,6 +150,9 @@ def main() -> int:
     script_runner_mode = os.environ.get("SCRIPT_RUNNER_MODE", "sequential")
     peer = status.get("peer_source") or os.environ.get("PEERS") or ""
     summary = timing_summary(status)
+    gate = supporting_gate(target_block_height)
+    telemetry_log = pathlib.Path(os.environ.get("TELEMETRY_LOG_PATH", ".docker-csharp-proof.log"))
+    telemetry = telemetry_summary(telemetry_log, gate, target_block_height)
     proof_path = pathlib.Path(
         os.environ.get(
             "PROOF_PATH",
@@ -162,8 +204,9 @@ def main() -> int:
             {
                 "benchmark_contract_version": 1,
                 "telemetry_schema": "benchmark.telemetry_tick.v1",
+                "telemetry_summary": telemetry,
                 "benchmark_kind": supporting_p2p_kind(target_block_height),
-                "benchmark_gate": supporting_gate(target_block_height),
+                "benchmark_gate": gate,
                 "benchmark_lane": supporting_p2p_kind(target_block_height),
                 "utxo_accounting_policy": "core_spendable_v1",
                 "byte_source": "local_reference_p2p",
