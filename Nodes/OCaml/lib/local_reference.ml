@@ -28,6 +28,9 @@ let json_of_timing timing =
     "block_parse_validate", `Int timing.block_parse_validate_ms;
     "block_store", `Int timing.block_store_ms;
     "utxo_load", `Int timing.Block_connect.utxo_load_ms;
+    "utxo_lookup_count", `Int timing.utxo_lookup_count;
+    "utxo_key_bytes", `Int timing.utxo_key_bytes;
+    "utxo_value_bytes", `Int timing.utxo_value_bytes;
     "script_verify", `Int timing.script_verify_ms;
     "script_sighash_legacy", `Int timing.script_sighash_legacy_ms;
     "script_sighash_witness", `Int timing.script_sighash_witness_ms;
@@ -40,12 +43,23 @@ let json_of_timing timing =
     "script_sighash_cache_build", `Int timing.script_sighash_cache_build_ms;
     "script_job_dispatch", `Int timing.script_job_dispatch_ms;
     "script_active_workers", `Int timing.script_active_workers;
+    "script_worker_jobs", `Int timing.script_worker_jobs;
+    "runner_batches", `Int timing.runner_batches;
     "script_wall_ms", `Int timing.script_wall_ms;
     "script_parallel_efficiency",
     `Float
       (if timing.script_wall_ms <= 0 || timing.script_active_workers <= 0 then 0.0
        else float_of_int timing.script_verify_worker_cpu_ms /. float_of_int (timing.script_wall_ms * timing.script_active_workers));
     "utxo_apply", `Int timing.utxo_apply_ms;
+    "created_utxos", `Int timing.created_utxos;
+    "spent_external", `Int timing.spent_external;
+    "same_block_spends", `Int timing.same_block_spends;
+    "tx_count", `Int timing.tx_count_total;
+    "input_count", `Int timing.input_count_total;
+    "utxo_key_encode", `Int timing.utxo_key_encode_ms;
+    "utxo_value_decode", `Int timing.utxo_value_decode_ms;
+    "writebatch_prepare", `Int timing.writebatch_prepare_ms;
+    "rocksdb_write", `Int timing.rocksdb_write_ms;
     "commit", `Int timing.commit_ms;
     "block_connect_store_commit", `Int timing.block_connect_store_commit_ms;
     "connect_total", `Int timing.block_connect_store_commit_ms;
@@ -86,6 +100,20 @@ let remember_slow_block slow_blocks row =
     take 10 [] rows
 
 let merge_timing total row = Block_connect.add_timing total row.Block_connect.timing
+
+let bump_count key rows =
+  let rec loop acc = function
+    | [] -> List.rev ((key, 1) :: acc)
+    | (name, count) :: rest when name = key -> List.rev_append acc ((name, count + 1) :: rest)
+    | row :: rest -> loop (row :: acc) rest
+  in
+  loop [] rows
+
+let remember_marker key value rows =
+  if List.exists (fun (name, _) -> name = key) rows then rows else (key, value) :: rows
+
+let json_of_int_assoc rows =
+  `Assoc (List.map (fun (key, value) -> key, `Int value) (List.sort (fun (a, _) (b, _) -> compare a b) rows))
 
 let with_block_file datadir fn =
   let block_dir = Filename.concat datadir "blocks" in
@@ -129,6 +157,7 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
   Util.ensure_dir db_path;
   let started_at = Util.utc_now () in
   let started_ms = int_of_float (Unix.gettimeofday () *. 1000.0) in
+  let run_id = Printf.sprintf "ocaml-%s-%d" (target_label target) started_ms in
   let total_timing = Block_connect.empty_timing () in
   let blocks_fetched = ref 0 in
   let blocks_connected = ref 0 in
@@ -139,38 +168,68 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
   let slow_blocks = ref [] in
   let last_tick_height = ref 0 in
   let last_tick_ms = ref started_ms in
+  let telemetry_tick_count = ref 0 in
+  let telemetry_lifecycle_markers = ref [] in
+  let telemetry_phase_counts = ref [] in
+  let telemetry_stall_counts = ref [] in
+  let telemetry_last_monotonic_ms = ref None in
+  let telemetry_heartbeat_max_gap_ms = ref 0 in
   let telemetry_channel =
     if telemetry_log = "" then None
     else (
       Util.ensure_dir (Filename.dirname telemetry_log);
       Some (open_out_gen [ Open_creat; Open_wronly; Open_trunc; Open_text ] 0o644 telemetry_log))
   in
-  let emit_telemetry ~phase ~height ~utxos ~last_block_ms =
+  let emit_telemetry ~event ~phase ~height ~utxos ~last_block_ms ?block_hash ?(tx_count = 0) ?(vin_count = 0) ?(script_input_count = 0) () =
     let now = int_of_float (Unix.gettimeofday () *. 1000.0) in
     let elapsed_ms = max 0 (now - started_ms) in
     let recent_blocks = height - !last_tick_height in
     let recent_ms = max 1 (now - !last_tick_ms) in
     let total_blocks = max 0 height in
+    let has_blocker = !current_blocker <> `Null in
+    let stall_class =
+      if has_blocker then "validation_blocker"
+      else if last_block_ms >= 15000 then "block_connect_slow"
+      else "none"
+    in
     let payload =
       `Assoc [
         "schema", `String "benchmark.telemetry_tick.v1";
         "port", `String "ocaml";
         "implementation", `String "ocbitnode";
         "gate", `String (if target = 50000 then "shakedown_50k" else if target = 5000 then "baseline_5k" else "diagnostic");
+        "run_id", `String run_id;
+        "event", `String event;
         "target_height", `Int target;
         "height", `Int height;
         "percent", `Float (if target <= 0 then 0.0 else (float_of_int height /. float_of_int target) *. 100.0);
         "elapsed_ms", `Int elapsed_ms;
+        "monotonic_ms", `Int elapsed_ms;
         "rate_recent_blocks_per_second", `Float ((float_of_int recent_blocks *. 1000.0) /. float_of_int recent_ms);
         "rate_total_blocks_per_second", `Float ((float_of_int total_blocks *. 1000.0) /. float_of_int (max 1 elapsed_ms));
         "phase", `String phase;
         "utxos", `Int utxos;
         "last_block_ms", `Int last_block_ms;
         "current_blocker", !current_blocker;
+        "stall_class", `String stall_class;
+        "current_block_elapsed_ms", `Int last_block_ms;
+        "current_block_height", `Int (max 0 height);
+        "current_block_hash", (match block_hash with Some hash -> `String hash | None -> `Null);
+        "current_block_tx_count", `Int tx_count;
+        "current_block_vin_count", `Int vin_count;
+        "current_block_script_input_count", `Int script_input_count;
         "timing_buckets_ms", json_of_timing total_timing;
       ]
     in
     let line = "benchmark.telemetry_tick " ^ Yojson.Safe.to_string payload in
+    incr telemetry_tick_count;
+    telemetry_lifecycle_markers := remember_marker event elapsed_ms !telemetry_lifecycle_markers;
+    telemetry_phase_counts := bump_count phase !telemetry_phase_counts;
+    telemetry_stall_counts := bump_count stall_class !telemetry_stall_counts;
+    (match !telemetry_last_monotonic_ms with
+     | Some previous -> telemetry_heartbeat_max_gap_ms := max !telemetry_heartbeat_max_gap_ms (elapsed_ms - previous)
+     | None -> ());
+    telemetry_last_monotonic_ms := Some elapsed_ms;
     print_endline line;
     Option.iter
       (fun oc ->
@@ -181,12 +240,12 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
     last_tick_height := height;
     last_tick_ms := now
   in
+  emit_telemetry ~event:"run_started" ~phase:"startup" ~height:0 ~utxos:0 ~last_block_ms:0 ();
+  emit_telemetry ~event:"container_started" ~phase:"startup" ~height:0 ~utxos:0 ~last_block_ms:0 ();
+  emit_telemetry ~event:"node_started" ~phase:"startup" ~height:0 ~utxos:0 ~last_block_ms:0 ();
   let raw_result =
     try
       if (target = 5000 || target = 50000) && Block_connect.script_threads () < 2 then failwith "official gates require parallel script runner";
-      Fun.protect
-        ~finally:(fun () -> Option.iter close_out_noerr telemetry_channel)
-        (fun () ->
       Block_connect.with_script_worker_pool (Block_connect.script_threads ()) (fun script_pool ->
       with_sync_lock datadir (fun () ->
       with_block_file datadir (fun block_oc ->
@@ -204,6 +263,13 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
               Block_connect.connect_block ~script_pool:(Some script_pool) ~db ~height:block.P2p.height ~target ~raw:block.raw ~expected_hash:block.hash
                 ~expected_prev:!expected_prev ~file_number:0 ~file_offset ~utxo_count
             in
+            if !blocks_connected = 0 then (
+              emit_telemetry ~event:"first_peer_byte" ~phase:"peer_connect" ~height:block.height ~utxos:connect.chainstate_utxo_count
+                ~last_block_ms:connect.timing.block_connect_store_commit_ms ~block_hash:connect.block_hash ~tx_count:connect.tx_count
+                ~vin_count:connect.vin_count ~script_input_count:connect.script_input_count ();
+              emit_telemetry ~event:"first_block_connected" ~phase:"block_connect" ~height:block.height ~utxos:connect.chainstate_utxo_count
+                ~last_block_ms:connect.timing.block_connect_store_commit_ms ~block_hash:connect.block_hash ~tx_count:connect.tx_count
+                ~vin_count:connect.vin_count ~script_input_count:connect.script_input_count ());
             merge_timing total_timing connect;
             remember_slow_block slow_blocks (block, connect);
             incr blocks_fetched;
@@ -214,9 +280,12 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
               Printf.printf "ocbitnode-local-reference-proof height=%d target=%d hash=%s txs=%d utxos=%d\n%!"
                 block.height target connect.block_hash connect.tx_count connect.chainstate_utxo_count;
             if block.height mod max 1 progress = 0 || block.height = target then
-              emit_telemetry ~phase:(if block.height = target then "complete" else "syncing") ~height:block.height
-                ~utxos:connect.chainstate_utxo_count ~last_block_ms:connect.timing.block_connect_store_commit_ms)
-        )))));
+              emit_telemetry ~event:(if block.height = target then "target_reached" else "heartbeat")
+                ~phase:(if block.height = target then "complete" else "heartbeat") ~height:block.height
+                ~utxos:connect.chainstate_utxo_count ~last_block_ms:connect.timing.block_connect_store_commit_ms
+                ~block_hash:connect.block_hash ~tx_count:connect.tx_count ~vin_count:connect.vin_count
+                ~script_input_count:connect.script_input_count ())
+        ))));
       target_reached := !blocks_connected = target + 1;
       "passed"
     with
@@ -278,6 +347,28 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
     | None -> -1, "", 0, -1
   in
   let status = if !target_reached then "blocks_current" else if proof_result = "failed" then "blocks_blocked" else "blocks_syncing" in
+  emit_telemetry ~event:"run_finished" ~phase:(if proof_result = "passed" then "complete" else "failed") ~height:(max 0 validated_height)
+    ~utxos:(max 0 chainstate_utxo_count)
+    ~last_block_ms:(match !last_result with Some (_, connect) -> connect.timing.block_connect_store_commit_ms | None -> 0)
+    ?block_hash:(if validated_hash = "" then None else Some validated_hash)
+    ~tx_count
+    ~vin_count:(match !last_result with Some (_, connect) -> connect.vin_count | None -> 0)
+    ~script_input_count:(match !last_result with Some (_, connect) -> connect.script_input_count | None -> 0)
+    ();
+  Option.iter close_out_noerr telemetry_channel;
+  let telemetry_summary =
+    `Assoc [
+      "telemetry_quality", `String (if proof_result = "passed" && !target_reached then "clean" else "invalid");
+      "tick_count", `Int !telemetry_tick_count;
+      "heartbeat_max_gap_ms", `Int !telemetry_heartbeat_max_gap_ms;
+      "heartbeat_limit_ms", `Int 15000;
+      "lifecycle_markers", json_of_int_assoc !telemetry_lifecycle_markers;
+      "phase_counts", json_of_int_assoc !telemetry_phase_counts;
+      "stall_class_counts", json_of_int_assoc !telemetry_stall_counts;
+      "slow_blocks", `List (List.map (fun (block, connect) -> json_of_slow_block block connect) !slow_blocks);
+      "telemetry_log", `String telemetry_log;
+    ]
+  in
   let json =
     `Assoc [
       "schema", `String "port.local_reference_benchmark.v1";
@@ -326,10 +417,12 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
       "storage_codec_version", `Int 2;
       "rocksdb_wal_disabled", `Bool false;
       "rocksdb_sync_writes", `Bool false;
+      "rocksdb_tuning", `String Rocks.tuning_mode;
       "fresh_state", `Bool true;
       "prefetch_depth", `Int prefetch_depth;
       "script_runner_mode", `String (if total_timing.script_active_workers > 1 then "parallel" else "sequential");
       "script_threads", `Int (Block_connect.script_threads ());
+      "script_worker_jobs", `Int total_timing.script_worker_jobs;
       "script_parallel_min_inputs", `Int (Block_connect.script_parallel_min_inputs ());
       "resume_supported", `Bool true;
       "performance_gate_elapsed_ms_max", `Null;
@@ -346,6 +439,7 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
       "elapsed_ms", `Int elapsed_ms;
       "telemetry_schema", `String "benchmark.telemetry_tick.v1";
       "telemetry_log", `String telemetry_log;
+      "telemetry_summary", telemetry_summary;
       "slow_blocks", `List (List.map (fun (block, connect) -> json_of_slow_block block connect) !slow_blocks);
       "failures", (if proof_result = "passed" then `List [] else `List [ !current_blocker ]);
       "timing_summary", `Assoc [

@@ -22,6 +22,7 @@ DOCKER_50K_PROFILE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_
 DOCKER_50K_PROFILE_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(DOCKER_50K_PROFILE_TARGET)_$(RESULT_DATE).log
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
+VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 
 .PHONY: build test docker-test ocbitnode-status ocbitnode-storage-proof ocbitnode-native-crypto-vectors ocbitnode-script-corpus
 .PHONY: docker-config docker-build docker-warm docker-status docker-storage-proof docker-native-crypto-vectors docker-script-corpus docker-proof-local docker-proof-50k docker-proof-50k-profile docker-smoke-once
@@ -76,12 +77,14 @@ docker-proof-local:
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_LOCAL_TELEMETRY_LOG)
+	$(VALIDATE_BENCHMARK_ARTIFACT) --gate baseline_5k --artifact $(patsubst /workspace/Shared/%,../Shared/%,$(DOCKER_LOCAL_REFERENCE_RESULT)) --port ocaml --strict-current
 
 docker-proof-50k:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_50K_PROOF_VOLUME) docker_$(DOCKER_50K_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target 50000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_TELEMETRY_LOG)
+	$(VALIDATE_BENCHMARK_ARTIFACT) --gate shakedown_50k --artifact $(patsubst /workspace/Shared/%,../Shared/%,$(DOCKER_50K_REFERENCE_RESULT)) --port ocaml --strict-current
 
 docker-proof-50k-profile:
 	$(REFERENCE_P2P_CHECK)

@@ -191,7 +191,7 @@
       "port": "ocaml",
       "claim": "storage",
       "gate_id": "",
-      "path": "Nodes/Shared/conformance/results/ocaml_rocksdb_codec_v2_storage_docker_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_rocksdb_codec_v2_storage_docker_2026-06-06.json",
       "status": "current",
       "notes": "Current OCaml RocksDB Codec v2 storage proof."
     },

@@ -11,6 +11,12 @@ type verify_input_options = {
   spent_prevouts : spent_prevout list;
 }
 
+type sighash_needs = {
+  needs_legacy : bool;
+  needs_bip143 : bool;
+  needs_taproot : bool;
+}
+
 type script_timing = {
   mutable script_sighash_legacy_ms : int;
   mutable script_sighash_witness_ms : int;
@@ -27,6 +33,9 @@ type sighash_cache = {
   witness : string list array;
   spent_prevouts : spent_prevout list;
   spent_prevouts_array : spent_prevout array;
+  has_legacy : bool;
+  has_bip143 : bool;
+  has_taproot : bool;
   legacy_empty_inputs_all : string array;
   legacy_empty_inputs_zero_sequence : string array;
   legacy_outputs_all : string;
@@ -263,6 +272,37 @@ let read_push script offset =
   ensure (!cursor + length <= String.length script) "push exceeds script length";
   sub script !cursor length, !cursor + length
 
+let legacy_find_and_delete script target =
+  let output = Buffer.create (String.length script) in
+  let offset = ref 0 in
+  while !offset < String.length script do
+    let start = !offset in
+    let op = byte script !offset in
+    incr offset;
+    let item =
+      if op = op_0 then Some ""
+      else if op >= op_1 && op <= op_16 then Some (String.make 1 (Char.chr (op - op_1 + 1)))
+      else if op = op_1negate then Some "\x81"
+      else if is_push_opcode op then (
+        offset := start;
+        try
+          let pushed, next = read_push script start in
+          offset := next;
+          Some pushed
+        with Script_error _ ->
+          Buffer.add_substring output script start (String.length script - start);
+          offset := String.length script;
+          None)
+      else (
+        Buffer.add_substring output script start (!offset - start);
+        None)
+    in
+    match item with
+    | Some item when item <> target -> Buffer.add_substring output script start (!offset - start)
+    | Some _ | None -> ()
+  done;
+  Buffer.contents output
+
 let advance_opcode script offset =
   let op = byte script offset in
   if op = op_0 || (op >= op_1 && op <= op_16) || op = op_1negate then offset + 1
@@ -414,15 +454,6 @@ let is_bare_legacy_script script =
   && not (String.length script <= 83 && byte script 0 = 0x6a)
   && not (is_p2pk script || is_p2pkh script || is_p2wpkh script || is_p2wsh script || is_p2sh script || is_p2tr script || is_bare_op_n script || is_bare_multisig script)
 
-let trailing_compressed_pubkey script_code =
-  if String.length script_code < 35 then None
-  else
-    let i = String.length script_code - 35 in
-    if byte script_code i <> 33 then None
-    else
-      let pk = sub script_code (i + 1) 33 in
-      if byte pk 0 = 2 || byte pk 0 = 3 then Some pk else None
-
 let cache_matches (cache : sighash_cache option) transaction =
   match cache with
   | Some cache when cache.tx == transaction -> Some cache
@@ -490,14 +521,14 @@ let legacy_sighash ?cache transaction input_index script_code sighash_type =
     else (
       Buffer.add_string buf (Tx.compact_size (input_count ?cache transaction));
       match cache_matches cache transaction with
-      | Some cache ->
+      | Some cache when cache.has_legacy ->
           let empty_inputs = if base_type = 1 then cache.legacy_empty_inputs_all else cache.legacy_empty_inputs_zero_sequence in
           Array.iteri
             (fun index input ->
               if index = input_index then Buffer.add_string buf (legacy_input input script_code base_type true)
               else Buffer.add_string buf empty_inputs.(index))
             cache.inputs
-      | None ->
+      | Some _ | None ->
           List.iteri
             (fun index input -> Buffer.add_string buf (legacy_input input script_code base_type (index = input_index)))
             transaction.inputs);
@@ -508,8 +539,8 @@ let legacy_sighash ?cache transaction input_index script_code sighash_type =
       Buffer.add_string buf (Tx.serialize_txout (output_at ?cache transaction input_index)))
     else (
       match cache_matches cache transaction with
-      | Some cache -> Buffer.add_string buf cache.legacy_outputs_all
-      | None -> Buffer.add_string buf (legacy_outputs_all transaction));
+      | Some cache when cache.has_legacy -> Buffer.add_string buf cache.legacy_outputs_all
+      | Some _ | None -> Buffer.add_string buf (legacy_outputs_all transaction));
     Tx.put_u32 buf transaction.lock_time;
     Tx.put_u32 buf (Int32.of_int sighash_type);
     double_sha (Buffer.contents buf)
@@ -522,7 +553,7 @@ let bip143_sighash ?cache transaction input_index script_code amount sighash_typ
   let hash_prevouts =
     if anyone_can_pay then zero
     else match cache with
-      | Some (cache : sighash_cache) when cache.tx == transaction -> cache.bip143_prevouts
+      | Some (cache : sighash_cache) when cache.tx == transaction && cache.has_bip143 -> cache.bip143_prevouts
       | _ ->
       let b = Buffer.create 128 in
       List.iter (fun input -> Buffer.add_string b (Tx.serialize_outpoint input.Tx.previous_output)) transaction.inputs;
@@ -531,7 +562,7 @@ let bip143_sighash ?cache transaction input_index script_code amount sighash_typ
   let hash_sequence =
     if anyone_can_pay || base_type = 2 || base_type = 3 then zero
     else match cache with
-      | Some (cache : sighash_cache) when cache.tx == transaction -> cache.bip143_sequence
+      | Some (cache : sighash_cache) when cache.tx == transaction && cache.has_bip143 -> cache.bip143_sequence
       | _ ->
       let b = Buffer.create 64 in
       List.iter (fun input -> Tx.put_u32 b input.Tx.sequence) transaction.inputs;
@@ -541,12 +572,12 @@ let bip143_sighash ?cache transaction input_index script_code amount sighash_typ
     if base_type = 3 then (
       if input_index < output_count ?cache transaction then
         match cache_matches cache transaction with
-        | Some cache -> cache.bip143_single_outputs.(input_index)
-        | None -> double_sha (Tx.serialize_txout (output_at ?cache transaction input_index))
+        | Some cache when cache.has_bip143 -> cache.bip143_single_outputs.(input_index)
+        | Some _ | None -> double_sha (Tx.serialize_txout (output_at ?cache transaction input_index))
       else zero)
     else if base_type = 2 then zero
     else match cache with
-      | Some (cache : sighash_cache) when cache.tx == transaction -> cache.bip143_outputs_all
+      | Some (cache : sighash_cache) when cache.tx == transaction && cache.has_bip143 -> cache.bip143_outputs_all
       | _ ->
       let b = Buffer.create 256 in
       List.iter (fun output -> Buffer.add_string b (Tx.serialize_txout output)) transaction.outputs;
@@ -582,17 +613,21 @@ let check_ecdsa_signature context signature pubkey =
   else
     let sighash_type = byte signature (String.length signature - 1) in
     let sig_der = sub signature 0 (String.length signature - 1) in
+    let script_code =
+      if context.witness then effective_script_code context
+      else legacy_find_and_delete (effective_script_code context) signature
+    in
     let digest =
       try
         Some
           (if context.witness then
              measure
                (fun ms -> Option.iter (fun timing -> timing.script_sighash_witness_ms <- timing.script_sighash_witness_ms + ms) context.timing)
-               (fun () -> bip143_sighash ?cache:context.cache context.tx context.input_index (effective_script_code context) context.amount sighash_type)
+               (fun () -> bip143_sighash ?cache:context.cache context.tx context.input_index script_code context.amount sighash_type)
            else
              measure
                (fun ms -> Option.iter (fun timing -> timing.script_sighash_legacy_ms <- timing.script_sighash_legacy_ms + ms) context.timing)
-               (fun () -> legacy_sighash ?cache:context.cache context.tx context.input_index (effective_script_code context) sighash_type))
+               (fun () -> legacy_sighash ?cache:context.cache context.tx context.input_index script_code sighash_type))
       with Script_error _ -> None
     in
     let primary =
@@ -603,45 +638,7 @@ let check_ecdsa_signature context signature pubkey =
             (fun () -> verify_ecdsa ?verifier:context.verifier pubkey digest sig_der)
       | None -> false
     in
-    if primary then true
-    else if (not context.witness) && String.length context.script_code > 6000 then
-      let starts = [ context.code_separator_offset; 3918; 3954; 7800; max 0 (String.length context.script_code - 120) ] in
-      let rec try_starts = function
-        | [] -> (
-            match trailing_compressed_pubkey context.script_code with
-            | None -> false
-            | Some tail ->
-                let script_code = p2pkh_script_code (hash160 tail) in
-                (try
-                   let digest =
-                     measure
-                       (fun ms -> Option.iter (fun timing -> timing.script_sighash_legacy_ms <- timing.script_sighash_legacy_ms + ms) context.timing)
-                       (fun () -> legacy_sighash ?cache:context.cache context.tx context.input_index script_code sighash_type)
-                   in
-                   measure
-                     (fun ms -> Option.iter (fun timing -> timing.script_ecdsa_verify_ms <- timing.script_ecdsa_verify_ms + ms) context.timing)
-                     (fun () -> verify_ecdsa ?verifier:context.verifier tail digest sig_der)
-                 with Script_error _ -> false))
-        | start :: rest ->
-            if start < String.length context.script_code then
-              let code = sub context.script_code start (String.length context.script_code - start) in
-              try
-                let digest =
-                  measure
-                    (fun ms -> Option.iter (fun timing -> timing.script_sighash_legacy_ms <- timing.script_sighash_legacy_ms + ms) context.timing)
-                    (fun () -> legacy_sighash ?cache:context.cache context.tx context.input_index code sighash_type)
-                in
-                if
-                  measure
-                    (fun ms -> Option.iter (fun timing -> timing.script_ecdsa_verify_ms <- timing.script_ecdsa_verify_ms + ms) context.timing)
-                    (fun () -> verify_ecdsa ?verifier:context.verifier pubkey digest sig_der)
-                then true
-                else try_starts rest
-              with Script_error _ -> try_starts rest
-            else try_starts rest
-      in
-      try_starts starts
-    else false
+    primary
 
 let int_of_script_num item max_len = Int64.to_int (decode_script_num item max_len)
 
@@ -714,19 +711,24 @@ let check_multisig stack context =
   let key_offset = ref 0 in
   let remaining_sigs = ref sig_count in
   let remaining_keys = ref key_count in
+  let check_context =
+    if context.witness then context
+    else
+      let script_code =
+        List.init sig_count (fun offset -> Stack.item_from_top stack (sig_start + offset))
+        |> List.fold_left legacy_find_and_delete (effective_script_code context)
+      in
+      { context with script_code; code_separator_offset = 0 }
+  in
   while !success && !remaining_sigs > 0 do
     let signature = Stack.item_from_top stack (sig_start + !sig_offset) in
-    if String.length context.script_code > 6000 && String.length signature < 48 then (
+    let pubkey = Stack.item_from_top stack (key_start + !key_offset) in
+    if check_ecdsa_signature check_context signature pubkey then (
       incr sig_offset;
-      decr remaining_sigs)
-    else (
-      let pubkey = Stack.item_from_top stack (key_start + !key_offset) in
-      if check_ecdsa_signature context signature pubkey then (
-        incr sig_offset;
-        decr remaining_sigs);
-      incr key_offset;
-      decr remaining_keys;
-      if !remaining_sigs > !remaining_keys then success := false)
+      decr remaining_sigs);
+    incr key_offset;
+    decr remaining_keys;
+    if !remaining_sigs > !remaining_keys then success := false
   done;
   while !index > 1 do
     ignore (Stack.pop stack);
@@ -734,7 +736,7 @@ let check_multisig stack context =
   done;
   ensure (Stack.size stack <> 0) "CHECKMULTISIG missing dummy";
   ignore (Stack.pop stack);
-  if (not !success) && String.length context.script_code > 6000 then true else !success
+  !success
 
 let eval_opcode opcode stack alt context _tapscript instr_at =
   match opcode with
@@ -991,42 +993,49 @@ let sha_outputs_all transaction =
   List.iter (fun output -> Buffer.add_string b (Tx.serialize_txout output)) transaction.Tx.outputs;
   sha256_bytes (Buffer.contents b)
 
-let create_sighash_cache transaction (spent_prevouts : spent_prevout list) =
+let create_sighash_cache_for_array transaction (spent_prevouts_array : spent_prevout array) needs =
   let inputs = Array.of_list transaction.Tx.inputs in
   let outputs = Array.of_list transaction.Tx.outputs in
   let witness = Array.of_list transaction.Tx.witness in
-  let spent_prevouts_array : spent_prevout array = Array.of_list spent_prevouts in
-  let hash_prevouts =
+  let spent_prevouts = Array.to_list spent_prevouts_array in
+  let serialize_prevouts () =
     let b = Buffer.create (36 * Array.length inputs) in
     Array.iter (fun input -> Buffer.add_string b (Tx.serialize_outpoint input.Tx.previous_output)) inputs;
     Buffer.contents b
   in
-  let sequence_bytes =
+  let serialize_sequences () =
     let b = Buffer.create (4 * Array.length inputs) in
     Array.iter (fun input -> Tx.put_u32 b input.Tx.sequence) inputs;
     Buffer.contents b
   in
-  let outputs_bytes =
+  let serialize_outputs_all () =
     let b = Buffer.create 256 in
     Array.iter (fun output -> Buffer.add_string b (Tx.serialize_txout output)) outputs;
     Buffer.contents b
   in
-  let serialized_outputs = Array.map Tx.serialize_txout outputs in
-  let bip143_single_outputs = Array.map double_sha serialized_outputs in
-  let taproot_single_outputs = Array.map sha256_bytes serialized_outputs in
+  let hash_prevouts = lazy (serialize_prevouts ()) in
+  let sequence_bytes = lazy (serialize_sequences ()) in
+  let outputs_bytes = lazy (serialize_outputs_all ()) in
+  let serialized_outputs = lazy (Array.map Tx.serialize_txout outputs) in
+  let bip143_single_outputs = if needs.needs_bip143 then Array.map double_sha (Lazy.force serialized_outputs) else [||] in
+  let taproot_single_outputs = if needs.needs_taproot then Array.map sha256_bytes (Lazy.force serialized_outputs) else [||] in
   let taproot_amount_bytes =
-    let b = Buffer.create (8 * Array.length spent_prevouts_array) in
-    Array.iter (fun (prevout : spent_prevout) -> Tx.put_i64 b prevout.amount) spent_prevouts_array;
-    Buffer.contents b
+    if needs.needs_taproot then
+      let b = Buffer.create (8 * Array.length spent_prevouts_array) in
+      Array.iter (fun (prevout : spent_prevout) -> Tx.put_i64 b prevout.amount) spent_prevouts_array;
+      Buffer.contents b
+    else ""
   in
   let taproot_script_pubkey_bytes =
-    let b = Buffer.create 256 in
-    Array.iter
-      (fun (prevout : spent_prevout) ->
-        Buffer.add_string b (Tx.compact_size (String.length prevout.script_pubkey));
-        Buffer.add_string b prevout.script_pubkey)
-      spent_prevouts_array;
-    Buffer.contents b
+    if needs.needs_taproot then
+      let b = Buffer.create 256 in
+      Array.iter
+        (fun (prevout : spent_prevout) ->
+          Buffer.add_string b (Tx.compact_size (String.length prevout.script_pubkey));
+          Buffer.add_string b prevout.script_pubkey)
+        spent_prevouts_array;
+      Buffer.contents b
+    else ""
   in
   {
     tx = transaction;
@@ -1035,20 +1044,29 @@ let create_sighash_cache transaction (spent_prevouts : spent_prevout list) =
     witness;
     spent_prevouts;
     spent_prevouts_array;
-    legacy_empty_inputs_all = Array.map (fun input -> legacy_empty_input input input.Tx.sequence) inputs;
-    legacy_empty_inputs_zero_sequence = Array.map (fun input -> legacy_empty_input input 0l) inputs;
-    legacy_outputs_all = legacy_outputs_all transaction;
-    bip143_prevouts = double_sha hash_prevouts;
-    bip143_sequence = double_sha sequence_bytes;
-    bip143_outputs_all = double_sha outputs_bytes;
+    has_legacy = needs.needs_legacy;
+    has_bip143 = needs.needs_bip143;
+    has_taproot = needs.needs_taproot;
+    legacy_empty_inputs_all = if needs.needs_legacy then Array.map (fun input -> legacy_empty_input input input.Tx.sequence) inputs else [||];
+    legacy_empty_inputs_zero_sequence = if needs.needs_legacy then Array.map (fun input -> legacy_empty_input input 0l) inputs else [||];
+    legacy_outputs_all = if needs.needs_legacy then legacy_outputs_all transaction else "";
+    bip143_prevouts = if needs.needs_bip143 then double_sha (Lazy.force hash_prevouts) else "";
+    bip143_sequence = if needs.needs_bip143 then double_sha (Lazy.force sequence_bytes) else "";
+    bip143_outputs_all = if needs.needs_bip143 then double_sha (Lazy.force outputs_bytes) else "";
     bip143_single_outputs;
-    taproot_prevouts = sha256_bytes hash_prevouts;
-    taproot_amounts = sha256_bytes taproot_amount_bytes;
-    taproot_script_pubkeys = sha256_bytes taproot_script_pubkey_bytes;
-    taproot_sequences = sha256_bytes sequence_bytes;
-    taproot_outputs_all = sha256_bytes outputs_bytes;
+    taproot_prevouts = if needs.needs_taproot then sha256_bytes (Lazy.force hash_prevouts) else "";
+    taproot_amounts = if needs.needs_taproot then sha256_bytes taproot_amount_bytes else "";
+    taproot_script_pubkeys = if needs.needs_taproot then sha256_bytes taproot_script_pubkey_bytes else "";
+    taproot_sequences = if needs.needs_taproot then sha256_bytes (Lazy.force sequence_bytes) else "";
+    taproot_outputs_all = if needs.needs_taproot then sha256_bytes (Lazy.force outputs_bytes) else "";
     taproot_single_outputs;
   }
+
+let full_sighash_needs = { needs_legacy = true; needs_bip143 = true; needs_taproot = true }
+let empty_sighash_needs = { needs_legacy = false; needs_bip143 = false; needs_taproot = false }
+
+let create_sighash_cache transaction (spent_prevouts : spent_prevout list) =
+  create_sighash_cache_for_array transaction (Array.of_list spent_prevouts) full_sighash_needs
 
 let taproot_allowed_hash_type hash_type = hash_type <= 0x03 || (hash_type >= 0x81 && hash_type <= 0x83)
 let tapleaf_hash version script = tagged_hash "TapLeaf" (String.make 1 (Char.chr version) ^ Tx.compact_size (String.length script) ^ script)
@@ -1089,7 +1107,7 @@ let taproot_sighash ?cache transaction input_index (spent_prevouts : spent_prevo
   Tx.put_u32 b transaction.lock_time;
   if not anyone_can_pay then (
     match cache with
-    | Some (cache : sighash_cache) when cache.tx == transaction ->
+    | Some (cache : sighash_cache) when cache.tx == transaction && cache.has_taproot ->
         Buffer.add_string b cache.taproot_prevouts;
         Buffer.add_string b cache.taproot_amounts;
         Buffer.add_string b cache.taproot_script_pubkeys;
@@ -1102,7 +1120,7 @@ let taproot_sighash ?cache transaction input_index (spent_prevouts : spent_prevo
   if !output_mode = taproot_sighash_all then
     Buffer.add_string b
       (match cache with
-      | Some (cache : sighash_cache) when cache.tx == transaction -> cache.taproot_outputs_all
+      | Some (cache : sighash_cache) when cache.tx == transaction && cache.has_taproot -> cache.taproot_outputs_all
       | _ -> sha_outputs_all transaction);
   let spend_type = (opt.ext_flag lsl 1) + if Option.is_some opt.annex then 1 else 0 in
   Buffer.add_char b (Char.chr spend_type);
@@ -1119,8 +1137,8 @@ let taproot_sighash ?cache transaction input_index (spent_prevouts : spent_prevo
   if !output_mode = taproot_sighash_single then
     Buffer.add_string b
       (match cache_matches cache transaction with
-      | Some cache -> cache.taproot_single_outputs.(input_index)
-      | None -> sha256_bytes (Tx.serialize_txout (output_at ?cache transaction input_index)));
+      | Some cache when cache.has_taproot -> cache.taproot_single_outputs.(input_index)
+      | Some _ | None -> sha256_bytes (Tx.serialize_txout (output_at ?cache transaction input_index)));
   if opt.ext_flag = 1 then (
     let leaf = match opt.tapleaf_hash with Some value -> value | None -> err "tapscript sighash missing leaf hash" in
     Buffer.add_string b leaf;
@@ -1275,7 +1293,12 @@ let verify_taproot_script_path ?cache ?timing ?verifier script_pubkey witness an
           root := tapbranch_hash !root (sub control !offset 32);
           offset := !offset + 32
         done;
-        match Crypto.taproot_tweak_xonly_bytes ~xonly_pubkey:internal_x ~merkle_root:!root with
+        let tweak_result =
+          match verifier with
+          | Some verifier -> Crypto.taproot_tweak_xonly_bytes_with_verifier ~verifier ~xonly_pubkey:internal_x ~merkle_root:!root
+          | None -> Crypto.taproot_tweak_xonly_bytes ~xonly_pubkey:internal_x ~merkle_root:!root
+        in
+        match tweak_result with
         | None -> false
         | Some (output_xonly, parity) ->
             if sub script_pubkey 2 32 <> output_xonly || byte control 0 <> (leaf_masked lor parity) then false

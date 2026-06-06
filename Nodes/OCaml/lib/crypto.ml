@@ -17,13 +17,34 @@ let result_of_bool = function
 external taproot_tweak_xonly_raw : string -> string -> string * int = "ocbitnode_taproot_tweak_xonly"
 external ecdsa_verify_raw : string -> string -> string -> bool = "ocbitnode_ecdsa_verify_raw"
 external schnorr_verify_raw : string -> string -> string -> bool = "ocbitnode_schnorr_verify_raw"
+type native_verifier
+
+external verifier_create_raw : unit -> native_verifier = "ocbitnode_verifier_create"
+external verifier_close_raw : native_verifier -> unit = "ocbitnode_verifier_close"
+external verifier_context_mode_raw : native_verifier -> string = "ocbitnode_verifier_context_mode"
+external ecdsa_verify_with_verifier_raw : native_verifier -> string -> string -> string -> bool = "ocbitnode_ecdsa_verify_with_verifier_raw"
+external schnorr_verify_with_verifier_raw : native_verifier -> string -> string -> string -> bool = "ocbitnode_schnorr_verify_with_verifier_raw"
+external taproot_tweak_xonly_with_verifier_raw : native_verifier -> string -> string -> string * int = "ocbitnode_taproot_tweak_xonly_with_verifier"
 
 type verifier = {
+  native : native_verifier option;
+  mutable closed : bool;
   context_mode : string;
 }
 
-let create_worker_verifier () = { context_mode = "libsecp256k1/worker_owned_adapter" }
-let close_verifier _verifier = ()
+let create_worker_verifier () =
+  try
+    let native = verifier_create_raw () in
+    { native = Some native; closed = false; context_mode = verifier_context_mode_raw native }
+  with _ -> { native = None; closed = true; context_mode = "libsecp256k1/unavailable" }
+
+let close_verifier verifier =
+  if not verifier.closed then (
+    verifier.closed <- true;
+    match verifier.native with
+    | Some native -> (try verifier_close_raw native with _ -> ())
+    | None -> ())
+
 let verifier_context_mode verifier = verifier.context_mode
 
 let buffer_of_bytes bytes =
@@ -65,11 +86,15 @@ let ecdsa_verify_bytes ~pubkey ~msg_hash ~signature_der =
 let schnorr_verify_bytes ~xonly_pubkey ~msg_hash ~signature =
   try schnorr_verify_raw xonly_pubkey msg_hash signature with _ -> false
 
-let ecdsa_verify_bytes_with_verifier ~verifier:_ ~pubkey ~msg_hash ~signature_der =
-  ecdsa_verify_bytes ~pubkey ~msg_hash ~signature_der
+let ecdsa_verify_bytes_with_verifier ~verifier ~pubkey ~msg_hash ~signature_der =
+  match verifier.native with
+  | Some native when not verifier.closed -> (try ecdsa_verify_with_verifier_raw native pubkey msg_hash signature_der with _ -> false)
+  | _ -> false
 
-let schnorr_verify_bytes_with_verifier ~verifier:_ ~xonly_pubkey ~msg_hash ~signature =
-  schnorr_verify_bytes ~xonly_pubkey ~msg_hash ~signature
+let schnorr_verify_bytes_with_verifier ~verifier ~xonly_pubkey ~msg_hash ~signature =
+  match verifier.native with
+  | Some native when not verifier.closed -> (try schnorr_verify_with_verifier_raw native xonly_pubkey msg_hash signature with _ -> false)
+  | _ -> false
 
 let tagged_sha256 ~tag ~msg =
   let tag_hash = Util.sha256_raw tag in
@@ -98,6 +123,15 @@ let taproot_tweak_xonly_bytes ~xonly_pubkey ~merkle_root =
     else
       let tweak = tagged_sha256 ~tag:"TapTweak" ~msg:(xonly_pubkey ^ merkle_root) in
       Some (taproot_tweak_xonly_raw xonly_pubkey tweak)
+  with _ -> None
+
+let taproot_tweak_xonly_bytes_with_verifier ~verifier ~xonly_pubkey ~merkle_root =
+  try
+    match verifier.native with
+    | Some native when (not verifier.closed) && String.length xonly_pubkey = 32 ->
+        let tweak = tagged_sha256 ~tag:"TapTweak" ~msg:(xonly_pubkey ^ merkle_root) in
+        Some (taproot_tweak_xonly_with_verifier_raw native xonly_pubkey tweak)
+    | _ -> None
   with _ -> None
 
 let taproot_tweak_check ~xonly_pubkey_hex ~merkle_root_hex ~expected_output_xonly_hex ~expected_parity =

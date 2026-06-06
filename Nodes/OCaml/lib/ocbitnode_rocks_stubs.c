@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 typedef struct {
   rocksdb_t *db;
@@ -97,12 +98,18 @@ static ocbitnode_batch *batch_val(value v) {
   return wrapper;
 }
 
+static long long now_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (long long)ts.tv_sec * 1000LL + (long long)ts.tv_nsec / 1000000LL;
+}
+
 CAMLprim value ocbitnode_rocks_open(value path_v, value create_v) {
   CAMLparam2(path_v, create_v);
   CAMLlocal1(block);
   char *err = NULL;
   rocksdb_options_t *options = rocksdb_options_create();
-  rocksdb_cache_t *block_cache = rocksdb_cache_create_lru(256 * 1024 * 1024);
+  rocksdb_cache_t *block_cache = rocksdb_cache_create_lru(512 * 1024 * 1024);
   rocksdb_filterpolicy_t *filter_policy = rocksdb_filterpolicy_create_bloom(10);
   rocksdb_block_based_table_options_t *table_options = rocksdb_block_based_options_create();
   rocksdb_block_based_options_set_block_cache(table_options, block_cache);
@@ -122,7 +129,7 @@ CAMLprim value ocbitnode_rocks_open(value path_v, value create_v) {
   rocksdb_options_set_level0_stop_writes_trigger(options, 36);
   rocksdb_options_set_target_file_size_base(options, 64 * 1024 * 1024);
   rocksdb_options_set_max_bytes_for_level_base(options, 512 * 1024 * 1024);
-  rocksdb_options_increase_parallelism(options, 2);
+  rocksdb_options_increase_parallelism(options, 4);
   rocksdb_t *db = rocksdb_open(options, String_val(path_v), &err);
   rocksdb_options_destroy(options);
   if (err != NULL) {
@@ -254,6 +261,120 @@ CAMLprim value ocbitnode_rocks_multi_get(value db_v, value keys_v) {
   CAMLreturn(result);
 }
 
+static void encode_be32(char *dst, int value) {
+  dst[0] = (char)((value >> 24) & 0xff);
+  dst[1] = (char)((value >> 16) & 0xff);
+  dst[2] = (char)((value >> 8) & 0xff);
+  dst[3] = (char)(value & 0xff);
+}
+
+CAMLprim value ocbitnode_rocks_multi_get_utxo_raw(value db_v, value chain_v, value outpoints_v) {
+  CAMLparam3(db_v, chain_v, outpoints_v);
+  CAMLlocal5(result, value_s, some, stats, pair);
+  ocbitnode_db *db = db_val(db_v);
+  mlsize_t count = Wosize_val(outpoints_v);
+  size_t chain_len = caml_string_length(chain_v);
+  if (chain_len >= 0xfd) caml_invalid_argument("codec v2 chain name too long");
+  size_t key_len = 1 + 1 + chain_len + 32 + 4;
+  result = caml_alloc(count, 0);
+  if (count == 0) {
+    stats = caml_alloc_tuple(4);
+    Store_field(stats, 0, Val_int(0));
+    Store_field(stats, 1, Val_int(0));
+    Store_field(stats, 2, Val_int(0));
+    Store_field(stats, 3, Val_int(0));
+    pair = caml_alloc_tuple(2);
+    Store_field(pair, 0, result);
+    Store_field(pair, 1, stats);
+    CAMLreturn(pair);
+  }
+
+  char *key_bytes = malloc(key_len * count);
+  const char **keys = malloc(sizeof(char *) * count);
+  size_t *key_lens = malloc(sizeof(size_t) * count);
+  char **values = calloc(count, sizeof(char *));
+  size_t *value_lens = calloc(count, sizeof(size_t));
+  char **errs = calloc(count, sizeof(char *));
+  if (key_bytes == NULL || keys == NULL || key_lens == NULL || values == NULL || value_lens == NULL || errs == NULL) {
+    free(key_bytes);
+    free(keys);
+    free(key_lens);
+    free(values);
+    free(value_lens);
+    free(errs);
+    caml_failwith("out of memory");
+  }
+
+  for (mlsize_t i = 0; i < count; i++) {
+    value outpoint_v = Field(outpoints_v, i);
+    value txid_v = Field(outpoint_v, 0);
+    int vout = Int_val(Field(outpoint_v, 1));
+    if (caml_string_length(txid_v) != 32) {
+      free(key_bytes);
+      free(keys);
+      free(key_lens);
+      free(values);
+      free(value_lens);
+      free(errs);
+      caml_invalid_argument("UTXO txid must be 32 bytes");
+    }
+    char *dst = key_bytes + (key_len * i);
+    dst[0] = 'u';
+    dst[1] = (char)chain_len;
+    memcpy(dst + 2, String_val(chain_v), chain_len);
+    memcpy(dst + 2 + chain_len, String_val(txid_v), 32);
+    encode_be32(dst + 2 + chain_len + 32, vout);
+    keys[i] = dst;
+    key_lens[i] = key_len;
+  }
+
+  long long started = now_ms();
+  rocksdb_multi_get(db->db, db->ro, count, keys, key_lens, values, value_lens, errs);
+  long long elapsed = now_ms() - started;
+  free(keys);
+  free(key_lens);
+  size_t value_bytes = 0;
+  for (mlsize_t i = 0; i < count; i++) {
+    if (errs[i] != NULL) {
+      char *message = strdup(errs[i]);
+      rocksdb_free(errs[i]);
+      for (mlsize_t j = 0; j < count; j++) {
+        if (values[j] != NULL) rocksdb_free(values[j]);
+      }
+      free(key_bytes);
+      free(values);
+      free(value_lens);
+      free(errs);
+      caml_failwith(message);
+    }
+    if (values[i] == NULL) {
+      Store_field(result, i, Val_none);
+    } else {
+      value_bytes += value_lens[i];
+      value_s = caml_alloc_string(value_lens[i]);
+      memcpy(Bytes_val(value_s), values[i], value_lens[i]);
+      rocksdb_free(values[i]);
+      some = caml_alloc(1, 0);
+      Store_field(some, 0, value_s);
+      Store_field(result, i, some);
+    }
+  }
+  free(key_bytes);
+  free(values);
+  free(value_lens);
+  free(errs);
+
+  stats = caml_alloc_tuple(4);
+  Store_field(stats, 0, Val_int(count));
+  Store_field(stats, 1, Val_int(key_len * count));
+  Store_field(stats, 2, Val_int(value_bytes));
+  Store_field(stats, 3, Val_int(elapsed < 0 ? 0 : elapsed));
+  pair = caml_alloc_tuple(2);
+  Store_field(pair, 0, result);
+  Store_field(pair, 1, stats);
+  CAMLreturn(pair);
+}
+
 CAMLprim value ocbitnode_rocks_delete(value db_v, value key_v, value disable_wal_v, value sync_v) {
   CAMLparam4(db_v, key_v, disable_wal_v, sync_v);
   char *err = NULL;
@@ -300,6 +421,22 @@ CAMLprim value ocbitnode_rocks_batch_write(value db_v, value batch_v, value disa
   if (Bool_val(disable_wal_v)) rocksdb_writeoptions_destroy(options);
   if (err != NULL) fail_rocks(err);
   CAMLreturn(Val_unit);
+}
+
+CAMLprim value ocbitnode_rocks_batch_write_timed(value db_v, value batch_v, value disable_wal_v, value sync_v) {
+  CAMLparam4(db_v, batch_v, disable_wal_v, sync_v);
+  char *err = NULL;
+  ocbitnode_db *db = db_val(db_v);
+  rocksdb_writeoptions_t *options = write_options(db, disable_wal_v, sync_v);
+  ocbitnode_batch *wrapper = batch_val(batch_v);
+  long long started = now_ms();
+  rocksdb_write(db->db, options, wrapper->batch, &err);
+  long long elapsed = now_ms() - started;
+  rocksdb_writebatch_destroy(wrapper->batch);
+  wrapper->batch = NULL;
+  if (Bool_val(disable_wal_v)) rocksdb_writeoptions_destroy(options);
+  if (err != NULL) fail_rocks(err);
+  CAMLreturn(Val_int(elapsed < 0 ? 0 : elapsed));
 }
 
 CAMLprim value ocbitnode_rocks_iter_prefix(value db_v, value prefix_v) {
