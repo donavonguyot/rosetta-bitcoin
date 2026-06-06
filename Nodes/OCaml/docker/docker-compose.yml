@@ -6,10 +6,21 @@ services:
     image: rb/ocbitnode:foundation
     working_dir: /workspace/OCaml
     volumes:
-      - ocbitnode_proof_data:/data
+      - ${DOCKER_LOCAL_PROOF_VOLUME:-ocbitnode_proof_data}:/data
       - ../../Shared:/workspace/Shared
+    networks:
+      - default
+      - reference
     command: ["status", "--datadir", "/data"]
 
 volumes:
   ocbitnode_proof_data:
+  ocbitnode_5k_proof_data:
+  ocbitnode_50k_proof_data:
+  ocbitnode_50k_profile_data:
+  ocbitnode_21250_profile_data:
 
+networks:
+  reference:
+    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    external: true

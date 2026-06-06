@@ -19,7 +19,8 @@ DOCKER_HEADER_BATCHES_MAX ?= 1
 DOCKER_BLOCKS_MAX ?= 2
 DOCKER_PREFETCH_DEPTH ?= 4
 DOCKER_SCRIPT_RUNNER_MODE ?= parallel
-DOCKER_P2P_PEER ?= host.docker.internal:48333
+REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
+DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
 DOCKER_SYNC_VOLUME ?= csbitnode_sync_data
 DOCKER_SYNC_HEADERS_MAX ?= 10000
 DOCKER_SYNC_HEADER_BATCHES_MAX ?= 50
@@ -28,6 +29,7 @@ DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
+REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
 
@@ -109,11 +111,7 @@ docker-script-corpus:
 	  --runtime-surface docker
 
 docker-proof-local:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	$(MAKE) docker-csharp-native-crypto-proof \
 	  DOCKER_PROOF_VOLUME=csbitnode_proof_data \
 	  DOCKER_PROOF_PATH=$(SUPPORTING_5K_RESULT) \
@@ -128,11 +126,7 @@ docker-proof-local:
 	  POLL_SEC=15
 
 docker-proof-10k:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	$(MAKE) docker-csharp-native-crypto-proof \
 	  DOCKER_PROOF_VOLUME=csbitnode_10k_proof_data \
 	  DOCKER_PROOF_PATH=$(SUPPORTING_10K_RESULT) \
@@ -147,11 +141,7 @@ docker-proof-10k:
 	  POLL_SEC=15
 
 docker-proof-50k:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	$(MAKE) docker-csharp-native-crypto-proof \
 	  DOCKER_PROOF_VOLUME=csbitnode_50k_proof_data \
 	  DOCKER_PROOF_PATH=$(SUPPORTING_50K_RESULT) \
@@ -166,11 +156,7 @@ docker-proof-50k:
 	  POLL_SEC=30
 
 docker-proof-100k:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	$(MAKE) docker-csharp-native-crypto-proof \
 	  DOCKER_PROOF_VOLUME=csbitnode_100k_proof_data \
 	  DOCKER_PROOF_PATH=$(PRIMARY_100K_RESULT) \

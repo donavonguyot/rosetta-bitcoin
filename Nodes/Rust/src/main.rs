@@ -216,7 +216,7 @@ fn main() -> Result<()> {
             let rpc_password = rpc_password.unwrap_or_else(|| default_pass.to_string());
             let peer = peer.unwrap_or_else(|| {
                 if docker {
-                    "host.docker.internal:48333".to_string()
+                    "bitcoin-core-testnet4:48333".to_string()
                 } else {
                     "127.0.0.1:48333".to_string()
                 }

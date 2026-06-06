@@ -259,7 +259,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--datadir", default="/proof/data")
     parser.add_argument("--result-path", default="/results/python_docker_supporting_5k_benchmark.json")
     parser.add_argument("--target", type=int, default=5000)
-    parser.add_argument("--peer", default="host.docker.internal:48333")
+    parser.add_argument("--peer", default="bitcoin-core-testnet4:48333")
     parser.add_argument("--prefetch-depth", type=int, default=4)
     parser.add_argument("--script-threads", default=str(os.cpu_count() or 1))
     parser.add_argument("--docker-volume", default=os.environ.get("DOCKER_PROOF_VOLUME", "pybitnode_proof_data"))

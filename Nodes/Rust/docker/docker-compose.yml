@@ -61,8 +61,9 @@ services:
       CHAIN: testnet4
       DATA_DIR: /data
       RSBITNODE_BLOCK_PREFETCH_DEPTH: ${RSBITNODE_BLOCK_PREFETCH_DEPTH:-4}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - reference
     volumes:
       - ${DOCKER_LOCAL_PROOF_VOLUME:-rsbitnode_local_reference_data}:/data
       - ../../Shared/conformance/results:/results
@@ -77,7 +78,7 @@ services:
         "--byte-source",
         "p2p",
         "--peer",
-        "${P2P_PEER:-host.docker.internal:48333}",
+        "${P2P_PEER:-bitcoin-core-testnet4:48333}",
         "--result-path",
         "/results/rust_docker_baseline_5k_benchmark.json",
         "--runtime-surface",
@@ -107,3 +108,8 @@ volumes:
   rsbitnode_external_5k_probe_data:
   rsbitnode_local_reference_data:
   rsbitnode_sync_data:
+
+networks:
+  reference:
+    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    external: true

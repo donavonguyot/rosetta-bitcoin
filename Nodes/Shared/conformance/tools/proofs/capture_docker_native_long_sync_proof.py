@@ -81,7 +81,7 @@ def main() -> int:
         "runtime_surface": "docker_container",
         "captured_at": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
         "chain": status["chain"],
-        "peer": "host.docker.internal:48333",
+        "peer": os.environ.get("PEER", "bitcoin-core-testnet4:48333"),
         "docker_volume": os.environ.get("DOCKER_PROOF_VOLUME", "jbitnode_native_long_sync_data"),
         "datadir": status["data_dir"],
         "local_reference_tip_height": local_reference_tip_height,

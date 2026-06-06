@@ -34,9 +34,12 @@ services:
       CHAINSTATE_BACKEND: rocksdb
       LOG_LEVEL: info
       RUNTIME_SURFACE: docker
-      PEERS: ${PEERS:-127.0.0.1:48333}
+      PEERS: ${PEERS:-bitcoin-core-testnet4:48333}
       BLOCKS_TARGET: ${BLOCKS_MAX:-2}
       BLOCKS_MAX: ${BLOCKS_MAX:-2}
+    networks:
+      - default
+      - reference
     volumes:
       - cpbitnode_proof_data:/data
     command:
@@ -46,7 +49,7 @@ services:
       - --chainstate-backend
       - rocksdb
       - --peers
-      - ${PEERS:-127.0.0.1:48333}
+      - ${PEERS:-bitcoin-core-testnet4:48333}
       - --blocks-target
       - ${BLOCKS_MAX:-2}
       - --blocks-max
@@ -59,3 +62,8 @@ volumes:
     name: ${DOCKER_PROOF_VOLUME:-cpbitnode_proof_data}
   cpbitnode_sync_data:
     name: ${DOCKER_SYNC_VOLUME:-cpbitnode_sync_data}
+
+networks:
+  reference:
+    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    external: true

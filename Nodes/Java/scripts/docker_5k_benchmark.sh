@@ -9,7 +9,7 @@ HEADERS_MAX="${DOCKER_BENCHMARK_HEADERS_MAX:-5000}"
 HEADER_BATCHES_MAX="${DOCKER_BENCHMARK_HEADER_BATCHES_MAX:-50}"
 PREFETCH_DEPTH="${DOCKER_BENCHMARK_PREFETCH_DEPTH:-4}"
 RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/java_docker_baseline_5k_benchmark_$(date +%F).json}"
-PEER="${PEERS:-host.docker.internal:48333}"
+PEER="${PEERS:-bitcoin-core-testnet4:48333}"
 BACKEND="${SECP256K1_BACKEND:-native}"
 REFERENCE_START_HEIGHT="${REFERENCE_START_HEIGHT:-0}"
 
@@ -247,7 +247,7 @@ doc = {
     "peer_mode": "local_reference",
     "byte_source": "local_reference_p2p",
     "proof_mode": "p2p_sync",
-    "peer": os.environ.get("PEER", "host.docker.internal:48333"),
+    "peer": os.environ.get("PEER", "bitcoin-core-testnet4:48333"),
     "docker_volume": os.environ.get("VOLUME", "jbitnode_proof_data"),
     "datadir": status.get("data_dir", "/data"),
     "chain": status.get("chain", "testnet4"),

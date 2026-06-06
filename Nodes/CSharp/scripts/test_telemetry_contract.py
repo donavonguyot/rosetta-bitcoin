@@ -23,7 +23,7 @@ SAMPLE_STATUS = {
     "native_crypto_backend": "libsecp256k1",
     "native_crypto_available": True,
     "taproot_tweak_backend": "libsecp256k1",
-    "peer_source": "host.docker.internal:48333",
+    "peer_source": "bitcoin-core-testnet4:48333",
     "sync_timing": {
         "Unit": "microseconds",
         "Stages": {
@@ -106,7 +106,7 @@ class TelemetryContractTests(unittest.TestCase):
                     "TARGET_BLOCK_HEIGHT": "5000",
                     "BLOCK_PREFETCH_DEPTH": "4",
                     "SCRIPT_RUNNER_MODE": "parallel",
-                    "PEERS": "host.docker.internal:48333",
+                    "PEERS": "bitcoin-core-testnet4:48333",
                 }
             )
             subprocess.run(

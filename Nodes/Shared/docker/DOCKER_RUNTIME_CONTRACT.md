@@ -171,8 +171,10 @@ Supervisor smoke and network proof are different checks.
 `AGENT_LOOP_TICK_chatreport`, reads status from inside the runtime surface, and
 honors stop/resume mechanics. It must not require a reachable peer.
 
-Network proof is separate. It may require `host.docker.internal`, a Reference
-container, explicit peer routing, and a healthy local Bitcoin Core testnet4 node.
+Network proof is separate. Official local Reference P2P proof runs on the
+Reference Docker network and reaches Core at `bitcoin-core-testnet4:48333`.
+External peer probes require explicit peer routing and a healthy selected
+testnet4 node.
 
 ## Volume Rules
 
@@ -199,7 +201,7 @@ Docker peer strategy must be explicit and recorded as one of these modes:
 ```text
 local_reference:
   deterministic proof surface
-  peer = host.docker.internal:48333 or Reference compose service
+  peer = bitcoin-core-testnet4:48333 on rosetta-reference-node_default
   record peer, validated_height, header_height, stored_block_height, sync_status
 
 external_manual:

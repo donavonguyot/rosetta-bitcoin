@@ -78,7 +78,7 @@ def main() -> int:
         "runtime_surface": "docker_container",
         "captured_at": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
         "chain": status.get("chain", "testnet4"),
-        "peer": status.get("peer_source", "host.docker.internal:48333"),
+        "peer": status.get("peer_source", "bitcoin-core-testnet4:48333"),
         "docker_volume": os.environ.get("DOCKER_PROOF_VOLUME", "exbitnode_native_10k_sync_data"),
         "datadir": status.get("datadir", "/data"),
         "target_header_height": target_header_height,

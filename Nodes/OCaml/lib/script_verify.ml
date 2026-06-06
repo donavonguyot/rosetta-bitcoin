@@ -11,6 +11,61 @@ type verify_input_options = {
   spent_prevouts : spent_prevout list;
 }
 
+type script_timing = {
+  mutable script_sighash_legacy_ms : int;
+  mutable script_sighash_witness_ms : int;
+  mutable script_sighash_taproot_ms : int;
+  mutable script_ecdsa_verify_ms : int;
+  mutable script_schnorr_verify_ms : int;
+  mutable script_interpreter_eval_ms : int;
+}
+
+type sighash_cache = {
+  tx : Tx.t;
+  inputs : Tx.tx_in array;
+  outputs : Tx.tx_out array;
+  witness : string list array;
+  spent_prevouts : spent_prevout list;
+  spent_prevouts_array : spent_prevout array;
+  legacy_empty_inputs_all : string array;
+  legacy_empty_inputs_zero_sequence : string array;
+  legacy_outputs_all : string;
+  bip143_prevouts : string;
+  bip143_sequence : string;
+  bip143_outputs_all : string;
+  taproot_prevouts : string;
+  taproot_amounts : string;
+  taproot_script_pubkeys : string;
+  taproot_sequences : string;
+  taproot_outputs_all : string;
+}
+
+let empty_timing () =
+  {
+    script_sighash_legacy_ms = 0;
+    script_sighash_witness_ms = 0;
+    script_sighash_taproot_ms = 0;
+    script_ecdsa_verify_ms = 0;
+    script_schnorr_verify_ms = 0;
+    script_interpreter_eval_ms = 0;
+  }
+
+let add_timing into row =
+  into.script_sighash_legacy_ms <- into.script_sighash_legacy_ms + row.script_sighash_legacy_ms;
+  into.script_sighash_witness_ms <- into.script_sighash_witness_ms + row.script_sighash_witness_ms;
+  into.script_sighash_taproot_ms <- into.script_sighash_taproot_ms + row.script_sighash_taproot_ms;
+  into.script_ecdsa_verify_ms <- into.script_ecdsa_verify_ms + row.script_ecdsa_verify_ms;
+  into.script_schnorr_verify_ms <- into.script_schnorr_verify_ms + row.script_schnorr_verify_ms;
+  into.script_interpreter_eval_ms <- into.script_interpreter_eval_ms + row.script_interpreter_eval_ms
+
+let now_ms () = int_of_float (Unix.gettimeofday () *. 1000.0)
+
+let measure add fn =
+  let started = now_ms () in
+  Fun.protect
+    ~finally:(fun () -> add (max 0 (now_ms () - started)))
+    fn
+
 let err msg = raise (Script_error msg)
 let ensure condition msg = if not condition then err msg
 
@@ -97,44 +152,57 @@ let taproot_sighash_all = 1
 let taproot_sighash_single = 3
 
 module Stack = struct
-  type t = { mutable items : string list }
+  type t = {
+    mutable items : string array;
+    mutable size : int;
+  }
 
-  let create () = { items = [] }
-  let push t item = t.items <- item :: t.items
+  let create () = { items = Array.make 16 ""; size = 0 }
+
+  let grow t =
+    let next = Array.make (max 1 (Array.length t.items * 2)) "" in
+    Array.blit t.items 0 next 0 t.size;
+    t.items <- next
+
+  let push t item =
+    if t.size = Array.length t.items then grow t;
+    t.items.(t.size) <- item;
+    t.size <- t.size + 1
 
   let pop t =
-    match t.items with
-    | x :: rest ->
-        t.items <- rest;
-        x
-    | [] -> err "stack underflow"
+    if t.size = 0 then err "stack underflow";
+    t.size <- t.size - 1;
+    let item = t.items.(t.size) in
+    t.items.(t.size) <- "";
+    item
 
   let peek t =
-    match t.items with
-    | x :: _ -> x
-    | [] -> err "stack underflow"
+    if t.size = 0 then err "stack underflow";
+    t.items.(t.size - 1)
 
-  let size t = List.length t.items
+  let size t = t.size
 
   let item_from_top t n =
     ensure (n > 0 && n <= size t) "stack underflow";
-    List.nth t.items (n - 1)
+    t.items.(t.size - n)
 
-  let snapshot t = List.rev t.items
+  let snapshot t =
+    let rows = ref [] in
+    for i = t.size - 1 downto 0 do
+      rows := t.items.(i) :: !rows
+    done;
+    !rows
+
   let push_all t items = List.iter (push t) items
 
   let roll_from_top t depth =
     ensure (depth < size t) "OP_ROLL out of range";
-    let rec remove i rows =
-      match rows with
-      | [] -> err "OP_ROLL out of range"
-      | x :: rest when i = 0 -> x, rest
-      | x :: rest ->
-          let item, tail = remove (i - 1) rest in
-          item, x :: tail
-    in
-    let item, rest = remove depth t.items in
-    t.items <- item :: rest
+    let source = t.size - 1 - depth in
+    let item = t.items.(source) in
+    for i = source to t.size - 2 do
+      t.items.(i) <- t.items.(i + 1)
+    done;
+    t.items.(t.size - 1) <- item
 end
 
 type eval_context = {
@@ -144,6 +212,8 @@ type eval_context = {
   code_separator_offset : int;
   amount : int64;
   witness : bool;
+  cache : sighash_cache option;
+  timing : script_timing option;
 }
 
 let effective_script_code context =
@@ -350,6 +420,36 @@ let trailing_compressed_pubkey script_code =
       let pk = sub script_code (i + 1) 33 in
       if byte pk 0 = 2 || byte pk 0 = 3 then Some pk else None
 
+let cache_matches (cache : sighash_cache option) transaction =
+  match cache with
+  | Some cache when cache.tx == transaction -> Some cache
+  | _ -> None
+
+let input_count ?cache transaction =
+  match cache_matches cache transaction with
+  | Some cache -> Array.length cache.inputs
+  | None -> List.length transaction.Tx.inputs
+
+let output_count ?cache transaction =
+  match cache_matches cache transaction with
+  | Some cache -> Array.length cache.outputs
+  | None -> List.length transaction.Tx.outputs
+
+let input_at ?cache transaction index =
+  match cache_matches cache transaction with
+  | Some cache -> cache.inputs.(index)
+  | None -> List.nth transaction.Tx.inputs index
+
+let output_at ?cache transaction index =
+  match cache_matches cache transaction with
+  | Some cache -> cache.outputs.(index)
+  | None -> List.nth transaction.Tx.outputs index
+
+let spent_prevout_at ?cache spent_prevouts transaction index =
+  match cache_matches cache transaction with
+  | Some cache -> cache.spent_prevouts_array.(index)
+  | None -> List.nth spent_prevouts index
+
 let legacy_input input script_code base_type signing =
   let buf = Buffer.create 128 in
   Buffer.add_string buf (Tx.serialize_outpoint input.Tx.previous_output);
@@ -360,63 +460,92 @@ let legacy_input input script_code base_type signing =
   if base_type = 1 || signing then Tx.put_u32 buf input.sequence else Tx.put_u32 buf 0l;
   Buffer.contents buf
 
-let legacy_sighash transaction input_index script_code sighash_type =
-  ensure (input_index < List.length transaction.Tx.inputs) "input index out of range";
+let legacy_empty_input input sequence =
+  let buf = Buffer.create 41 in
+  Buffer.add_string buf (Tx.serialize_outpoint input.Tx.previous_output);
+  Buffer.add_char buf '\000';
+  Tx.put_u32 buf sequence;
+  Buffer.contents buf
+
+let legacy_outputs_all transaction =
+  let buf = Buffer.create 256 in
+  Buffer.add_string buf (Tx.compact_size (List.length transaction.Tx.outputs));
+  List.iter (fun output -> Buffer.add_string buf (Tx.serialize_txout output)) transaction.outputs;
+  Buffer.contents buf
+
+let legacy_sighash ?cache transaction input_index script_code sighash_type =
+  ensure (input_index < input_count ?cache transaction) "input index out of range";
   let base_type = sighash_type land 0x1f in
   let anyone_can_pay = sighash_type land 0x80 <> 0 in
-  if base_type = 3 && input_index >= List.length transaction.Tx.outputs then "\001" ^ String.make 31 '\000'
+  if base_type = 3 && input_index >= output_count ?cache transaction then "\001" ^ String.make 31 '\000'
   else
     let buf = Buffer.create 512 in
     Tx.put_u32 buf transaction.version;
     if anyone_can_pay then (
       Buffer.add_string buf (Tx.compact_size 1);
-      Buffer.add_string buf (legacy_input (List.nth transaction.inputs input_index) script_code base_type true))
+      Buffer.add_string buf (legacy_input (input_at ?cache transaction input_index) script_code base_type true))
     else (
-      Buffer.add_string buf (Tx.compact_size (List.length transaction.inputs));
-      List.iteri
-        (fun index input -> Buffer.add_string buf (legacy_input input script_code base_type (index = input_index)))
-        transaction.inputs);
+      Buffer.add_string buf (Tx.compact_size (input_count ?cache transaction));
+      match cache_matches cache transaction with
+      | Some cache ->
+          let empty_inputs = if base_type = 1 then cache.legacy_empty_inputs_all else cache.legacy_empty_inputs_zero_sequence in
+          Array.iteri
+            (fun index input ->
+              if index = input_index then Buffer.add_string buf (legacy_input input script_code base_type true)
+              else Buffer.add_string buf empty_inputs.(index))
+            cache.inputs
+      | None ->
+          List.iteri
+            (fun index input -> Buffer.add_string buf (legacy_input input script_code base_type (index = input_index)))
+            transaction.inputs);
     if base_type = 2 then Buffer.add_char buf '\000'
     else if base_type = 3 then (
       Buffer.add_string buf (Tx.compact_size (input_index + 1));
       for _ = 0 to input_index - 1 do Buffer.add_string buf (Tx.serialize_txout { value = -1L; script_pubkey = "" }) done;
-      Buffer.add_string buf (Tx.serialize_txout (List.nth transaction.outputs input_index)))
+      Buffer.add_string buf (Tx.serialize_txout (output_at ?cache transaction input_index)))
     else (
-      Buffer.add_string buf (Tx.compact_size (List.length transaction.outputs));
-      List.iter (fun output -> Buffer.add_string buf (Tx.serialize_txout output)) transaction.outputs);
+      match cache_matches cache transaction with
+      | Some cache -> Buffer.add_string buf cache.legacy_outputs_all
+      | None -> Buffer.add_string buf (legacy_outputs_all transaction));
     Tx.put_u32 buf transaction.lock_time;
     Tx.put_u32 buf (Int32.of_int sighash_type);
     double_sha (Buffer.contents buf)
 
-let bip143_sighash transaction input_index script_code amount sighash_type =
-  ensure (input_index < List.length transaction.Tx.inputs) "input index out of range";
+let bip143_sighash ?cache transaction input_index script_code amount sighash_type =
+  ensure (input_index < input_count ?cache transaction) "input index out of range";
   let anyone_can_pay = sighash_type land 0x80 <> 0 in
   let base_type = sighash_type land 0x1f in
   let zero = String.make 32 '\000' in
   let hash_prevouts =
     if anyone_can_pay then zero
-    else
+    else match cache with
+      | Some (cache : sighash_cache) when cache.tx == transaction -> cache.bip143_prevouts
+      | _ ->
       let b = Buffer.create 128 in
       List.iter (fun input -> Buffer.add_string b (Tx.serialize_outpoint input.Tx.previous_output)) transaction.inputs;
       double_sha (Buffer.contents b)
   in
   let hash_sequence =
     if anyone_can_pay || base_type = 2 || base_type = 3 then zero
-    else
+    else match cache with
+      | Some (cache : sighash_cache) when cache.tx == transaction -> cache.bip143_sequence
+      | _ ->
       let b = Buffer.create 64 in
       List.iter (fun input -> Tx.put_u32 b input.Tx.sequence) transaction.inputs;
       double_sha (Buffer.contents b)
   in
   let hash_outputs =
     if base_type = 3 then (
-      if input_index < List.length transaction.outputs then double_sha (Tx.serialize_txout (List.nth transaction.outputs input_index)) else zero)
+      if input_index < output_count ?cache transaction then double_sha (Tx.serialize_txout (output_at ?cache transaction input_index)) else zero)
     else if base_type = 2 then zero
-    else
+    else match cache with
+      | Some (cache : sighash_cache) when cache.tx == transaction -> cache.bip143_outputs_all
+      | _ ->
       let b = Buffer.create 256 in
       List.iter (fun output -> Buffer.add_string b (Tx.serialize_txout output)) transaction.outputs;
       double_sha (Buffer.contents b)
   in
-  let input = List.nth transaction.inputs input_index in
+  let input = input_at ?cache transaction input_index in
   let buf = Buffer.create 512 in
   Tx.put_u32 buf transaction.version;
   Buffer.add_string buf hash_prevouts;
@@ -442,11 +571,24 @@ let check_ecdsa_signature context signature pubkey =
     let digest =
       try
         Some
-          (if context.witness then bip143_sighash context.tx context.input_index (effective_script_code context) context.amount sighash_type
-           else legacy_sighash context.tx context.input_index (effective_script_code context) sighash_type)
+          (if context.witness then
+             measure
+               (fun ms -> Option.iter (fun timing -> timing.script_sighash_witness_ms <- timing.script_sighash_witness_ms + ms) context.timing)
+               (fun () -> bip143_sighash ?cache:context.cache context.tx context.input_index (effective_script_code context) context.amount sighash_type)
+           else
+             measure
+               (fun ms -> Option.iter (fun timing -> timing.script_sighash_legacy_ms <- timing.script_sighash_legacy_ms + ms) context.timing)
+               (fun () -> legacy_sighash ?cache:context.cache context.tx context.input_index (effective_script_code context) sighash_type))
       with Script_error _ -> None
     in
-    let primary = match digest with Some digest -> verify_ecdsa pubkey digest sig_der | None -> false in
+    let primary =
+      match digest with
+      | Some digest ->
+          measure
+            (fun ms -> Option.iter (fun timing -> timing.script_ecdsa_verify_ms <- timing.script_ecdsa_verify_ms + ms) context.timing)
+            (fun () -> verify_ecdsa pubkey digest sig_der)
+      | None -> false
+    in
     if primary then true
     else if (not context.witness) && String.length context.script_code > 6000 then
       let starts = [ context.code_separator_offset; 3918; 3954; 7800; max 0 (String.length context.script_code - 120) ] in
@@ -456,12 +598,31 @@ let check_ecdsa_signature context signature pubkey =
             | None -> false
             | Some tail ->
                 let script_code = p2pkh_script_code (hash160 tail) in
-                (try verify_ecdsa tail (legacy_sighash context.tx context.input_index script_code sighash_type) sig_der with Script_error _ -> false))
+                (try
+                   let digest =
+                     measure
+                       (fun ms -> Option.iter (fun timing -> timing.script_sighash_legacy_ms <- timing.script_sighash_legacy_ms + ms) context.timing)
+                       (fun () -> legacy_sighash ?cache:context.cache context.tx context.input_index script_code sighash_type)
+                   in
+                   measure
+                     (fun ms -> Option.iter (fun timing -> timing.script_ecdsa_verify_ms <- timing.script_ecdsa_verify_ms + ms) context.timing)
+                     (fun () -> verify_ecdsa tail digest sig_der)
+                 with Script_error _ -> false))
         | start :: rest ->
             if start < String.length context.script_code then
               let code = sub context.script_code start (String.length context.script_code - start) in
               try
-                if verify_ecdsa pubkey (legacy_sighash context.tx context.input_index code sighash_type) sig_der then true else try_starts rest
+                let digest =
+                  measure
+                    (fun ms -> Option.iter (fun timing -> timing.script_sighash_legacy_ms <- timing.script_sighash_legacy_ms + ms) context.timing)
+                    (fun () -> legacy_sighash ?cache:context.cache context.tx context.input_index code sighash_type)
+                in
+                if
+                  measure
+                    (fun ms -> Option.iter (fun timing -> timing.script_ecdsa_verify_ms <- timing.script_ecdsa_verify_ms + ms) context.timing)
+                    (fun () -> verify_ecdsa pubkey digest sig_der)
+                then true
+                else try_starts rest
               with Script_error _ -> try_starts rest
             else try_starts rest
       in
@@ -645,11 +806,9 @@ let eval_opcode opcode stack alt context _tapscript instr_at =
       context
   | x when x = op_verify -> ensure (cast_to_bool (Stack.pop stack)) "VERIFY failed"; context
   | x
-    when List.mem x
-           [
-             op_add; op_sub; op_mul; op_min; op_max; op_lessthan; op_greaterthan; op_lessthanorequal; op_greaterthanorequal;
-             op_within; op_booland; op_boolor; op_numequal; op_numnotequal; op_numequalverify;
-           ] ->
+    when x = op_add || x = op_sub || x = op_mul || x = op_min || x = op_max || x = op_lessthan || x = op_greaterthan
+         || x = op_lessthanorequal || x = op_greaterthanorequal || x = op_within || x = op_booland || x = op_boolor
+         || x = op_numequal || x = op_numnotequal || x = op_numequalverify ->
       eval_numeric opcode stack;
       context
   | x when x = op_1sub ->
@@ -729,17 +888,25 @@ let evaluate_script script stack context =
       incr offset)
   done
 
-let verify_p2wpkh_witness script_pubkey transaction input_index amount witness =
+let timed_eval timing script stack context =
+  measure
+    (fun ms -> Option.iter (fun timing -> timing.script_interpreter_eval_ms <- timing.script_interpreter_eval_ms + ms) timing)
+    (fun () -> evaluate_script script stack context)
+
+let make_context ?cache ?timing ~tx ~input_index ~script_code ~code_separator_offset ~amount ~witness () =
+  { tx; input_index; script_code; code_separator_offset; amount; witness; cache; timing }
+
+let verify_p2wpkh_witness ?cache ?timing script_pubkey transaction input_index amount witness =
   if List.length witness <> 2 then false
   else
     let script_code = p2pkh_script_code (sub script_pubkey 2 20) in
     let stack = Stack.create () in
     List.iter (Stack.push stack) witness;
-    let context = { tx = transaction; input_index; script_code; code_separator_offset = 0; amount; witness = true } in
-    evaluate_script script_code stack context;
+    let context = make_context ?cache ?timing ~tx:transaction ~input_index ~script_code ~code_separator_offset:0 ~amount ~witness:true () in
+    timed_eval timing script_code stack context;
     terminal_strict stack
 
-let verify_p2wsh_witness witness_program transaction input_index amount witness min_items =
+let verify_p2wsh_witness ?cache ?timing witness_program transaction input_index amount witness min_items =
   if List.length witness < min_items then false
   else
     let witness_script = List.nth witness (List.length witness - 1) in
@@ -747,38 +914,38 @@ let verify_p2wsh_witness witness_program transaction input_index amount witness 
     else
       let stack = Stack.create () in
       List.iter (Stack.push stack) (List.rev (List.tl (List.rev witness)));
-      let context = { tx = transaction; input_index; script_code = witness_script; code_separator_offset = 0; amount; witness = true } in
-      evaluate_script witness_script stack context;
+      let context = make_context ?cache ?timing ~tx:transaction ~input_index ~script_code:witness_script ~code_separator_offset:0 ~amount ~witness:true () in
+      timed_eval timing witness_script stack context;
       terminal_strict stack
 
-let verify_p2wpkh script_sig script_pubkey transaction input_index amount witness =
-  script_sig = "" && verify_p2wpkh_witness script_pubkey transaction input_index amount witness
+let verify_p2wpkh ?cache ?timing script_sig script_pubkey transaction input_index amount witness =
+  script_sig = "" && verify_p2wpkh_witness ?cache ?timing script_pubkey transaction input_index amount witness
 
-let verify_p2wsh script_sig script_pubkey transaction input_index amount witness =
-  script_sig = "" && verify_p2wsh_witness (sub script_pubkey 2 32) transaction input_index amount witness 1
+let verify_p2wsh ?cache ?timing script_sig script_pubkey transaction input_index amount witness =
+  script_sig = "" && verify_p2wsh_witness ?cache ?timing (sub script_pubkey 2 32) transaction input_index amount witness 1
 
-let verify_p2sh script_sig script_pubkey transaction input_index amount witness =
+let verify_p2sh ?cache ?timing script_sig script_pubkey transaction input_index amount witness =
   let pushes = parse_push_only script_sig in
   if pushes = [] || String.length (List.nth pushes (List.length pushes - 1)) > max_script_element_size then false
   else
     let redeem = List.nth pushes (List.length pushes - 1) in
-    let context = { tx = transaction; input_index; script_code = script_pubkey; code_separator_offset = 0; amount; witness = false } in
+    let context = make_context ?cache ?timing ~tx:transaction ~input_index ~script_code:script_pubkey ~code_separator_offset:0 ~amount ~witness:false () in
     let stack_sig = Stack.create () in
-    evaluate_script script_sig stack_sig context;
+    timed_eval timing script_sig stack_sig context;
     if Stack.size stack_sig = 0 || Stack.peek stack_sig <> redeem then false
     else
       let outer = Stack.create () in
       Stack.push_all outer (Stack.snapshot stack_sig);
-      evaluate_script script_pubkey outer context;
+      timed_eval timing script_pubkey outer context;
       if (not (terminal_relaxed outer)) || hash160 redeem <> sub script_pubkey 2 20 then false
-      else if is_p2wpkh redeem then verify_p2wpkh_witness redeem transaction input_index amount witness
-      else if is_p2wsh redeem then verify_p2wsh_witness (sub redeem 2 32) transaction input_index amount witness 1
+      else if is_p2wpkh redeem then verify_p2wpkh_witness ?cache ?timing redeem transaction input_index amount witness
+      else if is_p2wsh redeem then verify_p2wsh_witness ?cache ?timing (sub redeem 2 32) transaction input_index amount witness 1
       else
         let inner = Stack.create () in
         let snap = Stack.snapshot stack_sig in
         snap |> List.rev |> List.tl |> List.rev |> List.iter (Stack.push inner);
-        let inner_context = { tx = transaction; input_index; script_code = redeem; code_separator_offset = 0; amount; witness = false } in
-        evaluate_script redeem inner inner_context;
+        let inner_context = make_context ?cache ?timing ~tx:transaction ~input_index ~script_code:redeem ~code_separator_offset:0 ~amount ~witness:false () in
+        timed_eval timing redeem inner inner_context;
         terminal_relaxed inner
 
 let sha_prevouts transaction =
@@ -810,6 +977,60 @@ let sha_outputs_all transaction =
   List.iter (fun output -> Buffer.add_string b (Tx.serialize_txout output)) transaction.Tx.outputs;
   sha256_bytes (Buffer.contents b)
 
+let create_sighash_cache transaction (spent_prevouts : spent_prevout list) =
+  let inputs = Array.of_list transaction.Tx.inputs in
+  let outputs = Array.of_list transaction.Tx.outputs in
+  let witness = Array.of_list transaction.Tx.witness in
+  let spent_prevouts_array : spent_prevout array = Array.of_list spent_prevouts in
+  let hash_prevouts =
+    let b = Buffer.create (36 * Array.length inputs) in
+    Array.iter (fun input -> Buffer.add_string b (Tx.serialize_outpoint input.Tx.previous_output)) inputs;
+    Buffer.contents b
+  in
+  let sequence_bytes =
+    let b = Buffer.create (4 * Array.length inputs) in
+    Array.iter (fun input -> Tx.put_u32 b input.Tx.sequence) inputs;
+    Buffer.contents b
+  in
+  let outputs_bytes =
+    let b = Buffer.create 256 in
+    Array.iter (fun output -> Buffer.add_string b (Tx.serialize_txout output)) outputs;
+    Buffer.contents b
+  in
+  let taproot_amount_bytes =
+    let b = Buffer.create (8 * Array.length spent_prevouts_array) in
+    Array.iter (fun (prevout : spent_prevout) -> Tx.put_i64 b prevout.amount) spent_prevouts_array;
+    Buffer.contents b
+  in
+  let taproot_script_pubkey_bytes =
+    let b = Buffer.create 256 in
+    Array.iter
+      (fun (prevout : spent_prevout) ->
+        Buffer.add_string b (Tx.compact_size (String.length prevout.script_pubkey));
+        Buffer.add_string b prevout.script_pubkey)
+      spent_prevouts_array;
+    Buffer.contents b
+  in
+  {
+    tx = transaction;
+    inputs;
+    outputs;
+    witness;
+    spent_prevouts;
+    spent_prevouts_array;
+    legacy_empty_inputs_all = Array.map (fun input -> legacy_empty_input input input.Tx.sequence) inputs;
+    legacy_empty_inputs_zero_sequence = Array.map (fun input -> legacy_empty_input input 0l) inputs;
+    legacy_outputs_all = legacy_outputs_all transaction;
+    bip143_prevouts = double_sha hash_prevouts;
+    bip143_sequence = double_sha sequence_bytes;
+    bip143_outputs_all = double_sha outputs_bytes;
+    taproot_prevouts = sha256_bytes hash_prevouts;
+    taproot_amounts = sha256_bytes taproot_amount_bytes;
+    taproot_script_pubkeys = sha256_bytes taproot_script_pubkey_bytes;
+    taproot_sequences = sha256_bytes sequence_bytes;
+    taproot_outputs_all = sha256_bytes outputs_bytes;
+  }
+
 let taproot_allowed_hash_type hash_type = hash_type <= 0x03 || (hash_type >= 0x81 && hash_type <= 0x83)
 let tapleaf_hash version script = tagged_hash "TapLeaf" (String.make 1 (Char.chr version) ^ Tx.compact_size (String.length script) ^ script)
 
@@ -834,7 +1055,7 @@ type taproot_options = {
   code_separator_pos : int32;
 }
 
-let taproot_sighash transaction input_index (spent_prevouts : spent_prevout list) opt =
+let taproot_sighash ?cache transaction input_index (spent_prevouts : spent_prevout list) opt =
   ensure (List.length spent_prevouts = List.length transaction.Tx.inputs) "spent_prevouts length mismatch";
   ensure (taproot_allowed_hash_type opt.hash_type) "unsupported taproot sighash type";
   ensure (input_index < List.length transaction.inputs) "input index out of range";
@@ -848,16 +1069,27 @@ let taproot_sighash transaction input_index (spent_prevouts : spent_prevout list
   Tx.put_u32 b transaction.version;
   Tx.put_u32 b transaction.lock_time;
   if not anyone_can_pay then (
-    Buffer.add_string b (sha_prevouts transaction);
-    Buffer.add_string b (sha_amounts spent_prevouts);
-    Buffer.add_string b (sha_script_pubkeys spent_prevouts);
-    Buffer.add_string b (sha_sequences transaction));
-  if !output_mode = taproot_sighash_all then Buffer.add_string b (sha_outputs_all transaction);
+    match cache with
+    | Some (cache : sighash_cache) when cache.tx == transaction ->
+        Buffer.add_string b cache.taproot_prevouts;
+        Buffer.add_string b cache.taproot_amounts;
+        Buffer.add_string b cache.taproot_script_pubkeys;
+        Buffer.add_string b cache.taproot_sequences
+    | _ ->
+        Buffer.add_string b (sha_prevouts transaction);
+        Buffer.add_string b (sha_amounts spent_prevouts);
+        Buffer.add_string b (sha_script_pubkeys spent_prevouts);
+        Buffer.add_string b (sha_sequences transaction));
+  if !output_mode = taproot_sighash_all then
+    Buffer.add_string b
+      (match cache with
+      | Some (cache : sighash_cache) when cache.tx == transaction -> cache.taproot_outputs_all
+      | _ -> sha_outputs_all transaction);
   let spend_type = (opt.ext_flag lsl 1) + if Option.is_some opt.annex then 1 else 0 in
   Buffer.add_char b (Char.chr spend_type);
   if anyone_can_pay then (
-    let input = List.nth transaction.inputs input_index in
-    let prevout = List.nth spent_prevouts input_index in
+    let input = input_at ?cache transaction input_index in
+    let prevout = spent_prevout_at ?cache spent_prevouts transaction input_index in
     Buffer.add_string b (Tx.serialize_outpoint input.previous_output);
     Buffer.add_string b (Tx.serialize_txout { value = prevout.amount; script_pubkey = prevout.script_pubkey });
     Tx.put_u32 b input.sequence)
@@ -865,7 +1097,7 @@ let taproot_sighash transaction input_index (spent_prevouts : spent_prevout list
   (match opt.annex with
   | Some annex -> Buffer.add_string b (sha256_bytes (Tx.compact_size (String.length annex) ^ annex))
   | None -> ());
-  if !output_mode = taproot_sighash_single then Buffer.add_string b (sha256_bytes (Tx.serialize_txout (List.nth transaction.outputs input_index)));
+  if !output_mode = taproot_sighash_single then Buffer.add_string b (sha256_bytes (Tx.serialize_txout (output_at ?cache transaction input_index)));
   if opt.ext_flag = 1 then (
     let leaf = match opt.tapleaf_hash with Some value -> value | None -> err "tapscript sighash missing leaf hash" in
     Buffer.add_string b leaf;
@@ -890,7 +1122,7 @@ let prescan_op_success script =
   done;
   !found
 
-let verify_tap_signature pubkey sig_blob transaction input_index spent_prevouts annex leaf code_sep budget =
+let verify_tap_signature ?cache ?timing pubkey sig_blob transaction input_index spent_prevouts annex leaf code_sep budget =
   ensure (pubkey <> "") "empty pubkey in tapscript";
   if sig_blob <> "" then (
     budget := !budget - tap_validation_per_sigop;
@@ -908,16 +1140,21 @@ let verify_tap_signature pubkey sig_blob transaction input_index spent_prevouts 
         taproot_sighash_default, sig_blob)
     in
     let digest =
-      taproot_sighash transaction input_index spent_prevouts
-        { hash_type; annex; ext_flag = 1; tapleaf_hash = Some leaf; code_separator_pos = code_sep }
+      measure
+        (fun ms -> Option.iter (fun timing -> timing.script_sighash_taproot_ms <- timing.script_sighash_taproot_ms + ms) timing)
+        (fun () ->
+          taproot_sighash ?cache transaction input_index spent_prevouts
+            { hash_type; annex; ext_flag = 1; tapleaf_hash = Some leaf; code_separator_pos = code_sep })
     in
-    verify_schnorr pubkey digest sig64
+    measure
+      (fun ms -> Option.iter (fun timing -> timing.script_schnorr_verify_ms <- timing.script_schnorr_verify_ms + ms) timing)
+      (fun () -> verify_schnorr pubkey digest sig64)
 
-let eval_tap_sig_op op stack transaction input_index spent_prevouts annex leaf code_sep budget =
+let eval_tap_sig_op ?cache ?timing op stack transaction input_index spent_prevouts annex leaf code_sep budget =
   if op = op_checksig || op = op_checksigverify then (
     let pubkey = Stack.pop stack in
     let sig_blob = Stack.pop stack in
-    let valid = verify_tap_signature pubkey sig_blob transaction input_index spent_prevouts annex leaf code_sep budget in
+    let valid = verify_tap_signature ?cache ?timing pubkey sig_blob transaction input_index spent_prevouts annex leaf code_sep budget in
     if op = op_checksig then Stack.push stack (encode_op_n (if valid then 1 else 0)) else ensure valid "CHECKSIGVERIFY failed")
   else
     let pubkey = Stack.pop stack in
@@ -926,10 +1163,10 @@ let eval_tap_sig_op op stack transaction input_index spent_prevouts annex leaf c
     let n = ref (decode_script_num n_item 4) in
     if sig_blob = "" then Stack.push stack (encode_script_num !n 4)
     else (
-      if verify_tap_signature pubkey sig_blob transaction input_index spent_prevouts annex leaf code_sep budget then n := Int64.add !n 1L;
+      if verify_tap_signature ?cache ?timing pubkey sig_blob transaction input_index spent_prevouts annex leaf code_sep budget then n := Int64.add !n 1L;
       Stack.push stack (encode_script_num !n 4))
 
-let evaluate_tapscript script stack transaction input_index leaf spent_prevouts annex budget =
+let evaluate_tapscript ?cache ?timing script stack transaction input_index leaf spent_prevouts annex budget =
   let offset = ref 0 in
   let steps = ref 0 in
   let step_limit = String.length script + 1000 in
@@ -958,7 +1195,7 @@ let evaluate_tapscript script stack transaction input_index leaf spent_prevouts 
       incr offset)
     else if not f_exec then offset := advance_opcode script !offset
     else if op = op_checksig || op = op_checksigverify || op = op_checksigadd then (
-      eval_tap_sig_op op stack transaction input_index spent_prevouts annex leaf !code_sep budget;
+      eval_tap_sig_op ?cache ?timing op stack transaction input_index spent_prevouts annex leaf !code_sep budget;
       incr offset)
     else if op = op_codeseparator then (
       code_sep := Int32.of_int instr_at;
@@ -987,13 +1224,15 @@ let evaluate_tapscript script stack transaction input_index leaf spent_prevouts 
           code_separator_offset = 0;
           amount = (List.nth spent_prevouts input_index).amount;
           witness = true;
+          cache;
+          timing;
         }
       in
       ignore (eval_opcode op stack alt context true instr_at);
       incr offset)
   done
 
-let verify_taproot_script_path script_pubkey witness annex transaction input_index spent_prevouts serialized_witness =
+let verify_taproot_script_path ?cache ?timing script_pubkey witness annex transaction input_index spent_prevouts serialized_witness =
   if List.length spent_prevouts <> List.length transaction.Tx.inputs || List.length witness < 2 then false
   else
     let script_bytes = List.nth witness (List.length witness - 2) in
@@ -1023,15 +1262,17 @@ let verify_taproot_script_path script_pubkey witness annex transaction input_ind
               let budget = ref (tap_validation_offset + String.length serialized_witness) in
               let stack = Stack.create () in
               List.iter (Stack.push stack) stack_items;
-              evaluate_tapscript script_bytes stack transaction input_index leaf spent_prevouts annex budget;
+              measure
+                (fun ms -> Option.iter (fun timing -> timing.script_interpreter_eval_ms <- timing.script_interpreter_eval_ms + ms) timing)
+                (fun () -> evaluate_tapscript ?cache ?timing script_bytes stack transaction input_index leaf spent_prevouts annex budget);
               terminal_strict stack
 
-let verify_taproot script_pubkey script_sig witness transaction input_index spent_prevouts =
+let verify_taproot ?cache ?timing script_pubkey script_sig witness transaction input_index spent_prevouts =
   if script_sig <> "" || spent_prevouts = [] || not (is_p2tr script_pubkey) then false
   else
     let serialized_witness = serialized_witness_stack witness in
     if List.length witness >= 2 && List.nth witness (List.length witness - 1) <> "" && byte (List.nth witness (List.length witness - 1)) 0 = 0x50 then false
-    else if List.length witness >= 2 then verify_taproot_script_path script_pubkey witness None transaction input_index spent_prevouts serialized_witness
+    else if List.length witness >= 2 then verify_taproot_script_path ?cache ?timing script_pubkey witness None transaction input_index spent_prevouts serialized_witness
     else if List.length witness <> 1 then false
     else
       let sig_blob = List.hd witness in
@@ -1046,18 +1287,23 @@ let verify_taproot script_pubkey script_sig witness transaction input_index spen
         hash_type >= 0
         &&
         let digest =
-          taproot_sighash transaction input_index spent_prevouts
-            { hash_type; annex = None; ext_flag = 0; tapleaf_hash = None; code_separator_pos = Int32.minus_one }
+          measure
+            (fun ms -> Option.iter (fun timing -> timing.script_sighash_taproot_ms <- timing.script_sighash_taproot_ms + ms) timing)
+            (fun () ->
+              taproot_sighash ?cache transaction input_index spent_prevouts
+                { hash_type; annex = None; ext_flag = 0; tapleaf_hash = None; code_separator_pos = Int32.minus_one })
         in
-        verify_schnorr (sub script_pubkey 2 32) digest sig64
+        measure
+          (fun ms -> Option.iter (fun timing -> timing.script_schnorr_verify_ms <- timing.script_schnorr_verify_ms + ms) timing)
+          (fun () -> verify_schnorr (sub script_pubkey 2 32) digest sig64)
 
-let verify_script script_sig script_pubkey transaction input_index amount witness spent_prevouts =
-  if is_p2tr script_pubkey then verify_taproot script_pubkey script_sig witness transaction input_index spent_prevouts
-  else if is_p2wpkh script_pubkey then verify_p2wpkh script_sig script_pubkey transaction input_index amount witness
-  else if is_p2wsh script_pubkey then verify_p2wsh script_sig script_pubkey transaction input_index amount witness
-  else if is_p2sh script_pubkey then verify_p2sh script_sig script_pubkey transaction input_index amount witness
+let verify_script ?cache ?timing script_sig script_pubkey transaction input_index amount witness spent_prevouts =
+  if is_p2tr script_pubkey then verify_taproot ?cache ?timing script_pubkey script_sig witness transaction input_index spent_prevouts
+  else if is_p2wpkh script_pubkey then verify_p2wpkh ?cache ?timing script_sig script_pubkey transaction input_index amount witness
+  else if is_p2wsh script_pubkey then verify_p2wsh ?cache ?timing script_sig script_pubkey transaction input_index amount witness
+  else if is_p2sh script_pubkey then verify_p2sh ?cache ?timing script_sig script_pubkey transaction input_index amount witness
   else
-    let context = { tx = transaction; input_index; script_code = script_pubkey; code_separator_offset = 0; amount; witness = false } in
+    let context = make_context ?cache ?timing ~tx:transaction ~input_index ~script_code:script_pubkey ~code_separator_offset:0 ~amount ~witness:false () in
     if is_p2pk script_pubkey then (
       if witness <> [] then false
       else
@@ -1065,43 +1311,77 @@ let verify_script script_sig script_pubkey transaction input_index amount witnes
         if List.length pushes <> 1 || List.hd pushes = "" then false
         else
           let stack_sig = Stack.create () in
-          evaluate_script script_sig stack_sig context;
+          timed_eval timing script_sig stack_sig context;
           let stack = Stack.create () in
           Stack.push_all stack (Stack.snapshot stack_sig);
-          evaluate_script script_pubkey stack context;
+          timed_eval timing script_pubkey stack context;
           terminal_strict stack)
     else if (is_bare_op_n script_pubkey || is_bare_multisig script_pubkey || is_bare_legacy_script script_pubkey) && witness <> [] then false
     else
       let stack_sig = Stack.create () in
-      evaluate_script script_sig stack_sig context;
+      timed_eval timing script_sig stack_sig context;
       let stack = Stack.create () in
       Stack.push_all stack (Stack.snapshot stack_sig);
-      evaluate_script script_pubkey stack context;
+      timed_eval timing script_pubkey stack context;
       if (is_bare_op_n script_pubkey && String.length script_pubkey > 1) || is_bare_legacy_script script_pubkey || is_p2pkh script_pubkey then
         terminal_relaxed stack
       else terminal_strict stack
 
-let verify_transaction_input transaction input_index options =
+let verify_transaction_input_with_cache_and_timing ?cache transaction input_index options =
+  let timing = empty_timing () in
   try
-    ensure (input_index < List.length transaction.Tx.inputs) "input index out of range";
+    ensure (input_index < input_count ?cache transaction) "input index out of range";
     (match witness_version options.script_pubkey with Some version -> ensure (version <= 1) "unsupported witness program version" | None -> ());
     ensure
       (is_p2pk options.script_pubkey || is_p2pkh options.script_pubkey || is_p2wpkh options.script_pubkey || is_p2wsh options.script_pubkey
        || is_p2sh options.script_pubkey || is_p2tr options.script_pubkey || is_bare_op_n options.script_pubkey || is_bare_multisig options.script_pubkey
-       || is_bare_legacy_script options.script_pubkey)
+      || is_bare_legacy_script options.script_pubkey)
       ("unsupported OCaml scriptPubKey template: " ^ Util.hex_of_bytes options.script_pubkey);
     let witness =
-      if input_index < List.length transaction.witness then List.nth transaction.witness input_index else []
+      match cache_matches cache transaction with
+      | Some cache -> if input_index < Array.length cache.witness then cache.witness.(input_index) else []
+      | None -> if input_index < List.length transaction.witness then List.nth transaction.witness input_index else []
     in
+    let cache =
+      match cache_matches cache transaction with
+      | Some cache -> Some cache
+      | None -> Some (create_sighash_cache transaction options.spent_prevouts)
+    in
+    let timing_opt = Some timing in
     ensure
-      (verify_script (List.nth transaction.inputs input_index).script_sig options.script_pubkey transaction input_index options.amount witness options.spent_prevouts)
+      (verify_script ?cache ?timing:timing_opt (input_at ?cache transaction input_index).script_sig options.script_pubkey transaction input_index
+         options.amount witness options.spent_prevouts)
       (Printf.sprintf "script verification failed for input %d" input_index);
-    Ok ()
-  with Script_error message -> Error message
+    Ok (), timing
+  with Script_error message -> Error message, timing
+
+let verify_transaction_input_with_timing transaction input_index options =
+  verify_transaction_input_with_cache_and_timing transaction input_index options
+
+let verify_transaction_input transaction input_index options =
+  fst (verify_transaction_input_with_timing transaction input_index options)
 
 let test_cast_to_bool = cast_to_bool
 let test_decode_script_num = decode_script_num
 let test_encode_script_num = encode_script_num
 let test_legacy_sighash = legacy_sighash
-let test_bip143_sighash = bip143_sighash
+let test_legacy_sighash_cached transaction spent_prevouts input_index script_code sighash_type =
+  let cache = create_sighash_cache transaction spent_prevouts in
+  legacy_sighash ~cache transaction input_index script_code sighash_type
+let test_bip143_sighash transaction input_index script_code amount sighash_type =
+  bip143_sighash transaction input_index script_code amount sighash_type
+
+let test_bip143_sighash_cached transaction spent_prevouts input_index script_code amount sighash_type =
+  let cache = create_sighash_cache transaction spent_prevouts in
+  bip143_sighash ~cache transaction input_index script_code amount sighash_type
+
+let test_taproot_sighash transaction input_index spent_prevouts hash_type =
+  taproot_sighash transaction input_index spent_prevouts
+    { hash_type; annex = None; ext_flag = 0; tapleaf_hash = None; code_separator_pos = Int32.minus_one }
+
+let test_taproot_sighash_cached transaction input_index spent_prevouts hash_type =
+  let cache = create_sighash_cache transaction spent_prevouts in
+  taproot_sighash ~cache transaction input_index spent_prevouts
+    { hash_type; annex = None; ext_flag = 0; tapleaf_hash = None; code_separator_pos = Int32.minus_one }
+
 let test_tapleaf_hash = tapleaf_hash

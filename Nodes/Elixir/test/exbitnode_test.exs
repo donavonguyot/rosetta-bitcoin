@@ -201,7 +201,7 @@ defmodule Exbitnode.RuntimeStatusTest do
     :ok =
       RuntimeStatus.write_snapshot(path, %{
         runtime_surface: "docker_supervisor",
-        peer_source: "host.docker.internal:48333",
+        peer_source: "bitcoin-core-testnet4:48333",
         validated_height: 7,
         validated_hash: "aa",
         header_height: 9,
@@ -217,7 +217,7 @@ defmodule Exbitnode.RuntimeStatusTest do
 
     assert {:ok, snapshot} = RuntimeStatus.read_snapshot(path)
     assert snapshot["runtime_surface"] == "docker_supervisor"
-    assert snapshot["peer_source"] == "host.docker.internal:48333"
+    assert snapshot["peer_source"] == "bitcoin-core-testnet4:48333"
     assert snapshot["validated_height"] == 7
     assert snapshot["header_height"] == 9
     assert snapshot["sync_status"] == "blocks_syncing"
@@ -228,7 +228,7 @@ defmodule Exbitnode.RuntimeStatusTest do
     :ok =
       RuntimeStatus.write_snapshot(path, %{
         runtime_surface: "docker_supervisor",
-        peer_source: "host.docker.internal:48333",
+        peer_source: "bitcoin-core-testnet4:48333",
         validated_height: 100,
         validated_hash: "valid-hash",
         header_height: 120,
@@ -252,7 +252,7 @@ defmodule Exbitnode.RuntimeStatusTest do
       assert status.validated_height == 100
       assert status.header_height == 120
       assert status.stored_block_height == 100
-      assert status.peer_source == "host.docker.internal:48333"
+      assert status.peer_source == "bitcoin-core-testnet4:48333"
       assert status.recommendation == "leave_running"
     after
       DatadirLock.release(lock)
@@ -283,7 +283,7 @@ defmodule Exbitnode.RuntimeStatusTest do
       RuntimeStatus.required_tick_fields(
         %{
           "runtime_surface" => "docker_supervisor",
-          "peer_source" => "host.docker.internal:48333",
+          "peer_source" => "bitcoin-core-testnet4:48333",
           "validated_height" => 10,
           "header_height" => 12,
           "stored_block_height" => 10,
@@ -297,7 +297,7 @@ defmodule Exbitnode.RuntimeStatusTest do
 
     assert tick.phase == "syncing"
     assert tick.runtime_surface == "docker_supervisor"
-    assert tick.peer == "host.docker.internal:48333"
+    assert tick.peer == "bitcoin-core-testnet4:48333"
     assert tick.validated_height == 10
     assert tick.header_height == 12
     assert tick.stored_block_height == 10

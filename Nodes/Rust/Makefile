@@ -27,13 +27,15 @@ DOCKER_LOCAL_REFERENCE_TUNING_100K_RESULT ?= /results/rust_docker_tuning_50k_to_
 RPC_REPLAY_RESULT ?= ../Shared/conformance/results/rust_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
-DOCKER_P2P_PEER ?= host.docker.internal:48333
+REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
+DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
 DOCKER_LOCAL_PROOF_VOLUME ?= rsbitnode_proof_data
 DOCKER_TUNING_SOURCE_VOLUME ?= rsbitnode_50k_proof_data
 DOCKER_TUNING_100K_VOLUME ?= rsbitnode_tuning_50k_to_100k_data
 TUNING_SOURCE_50K_ARTIFACT ?= ../Shared/conformance/results/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_EXTERNAL_P2P_PEER ?=
 DOCKER_EXTERNAL_PROBE_VOLUME ?= rsbitnode_external_5k_probe_data
+REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-tuning-100k-from-50k docker-proof-rpc-replay docker-probe-external docker-proof-local-fast docker-smoke-once clean
 
@@ -89,11 +91,7 @@ docker-script-corpus:
 	$(DOCKER_COMPOSE) run --rm --no-deps rsbitnode-script-corpus rsbitnode script-corpus --manifest /workspace/Shared/conformance/fixtures/scripts/manifest.json --result-path /results/rust_script_corpus_docker_$(RESULT_DATE).json --runtime-surface docker
 
 docker-proof-local:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@docker volume rm -f $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps -e RSBITNODE_BLOCK_PREFETCH_DEPTH=$(PREFETCH_DEPTH) rsbitnode-local-reference-proof rsbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --byte-source p2p --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker
 
@@ -116,11 +114,7 @@ docker-proof-100k:
 	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_100K_RESULT)
 
 docker-tuning-100k-from-50k:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@test -f "$(TUNING_SOURCE_50K_ARTIFACT)" || { echo "error: missing source 50k artifact: $(TUNING_SOURCE_50K_ARTIFACT)" >&2; exit 1; }
 	@python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); e={"result":"passed","benchmark_lane":"shakedown_50k_p2p","validated_height":50000,"validated_hash":"00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb","chainstate_utxo_count":568855,"utxo_accounting_policy":"core_spendable_v1"}; bad=[f"{k}={d.get(k)!r}" for k,v in e.items() if d.get(k)!=v]; sys.exit("source 50k artifact is not certified: "+", ".join(bad)) if bad else None' "$(TUNING_SOURCE_50K_ARTIFACT)"
 	@source_volume="$(DOCKER_TUNING_SOURCE_VOLUME)"; \

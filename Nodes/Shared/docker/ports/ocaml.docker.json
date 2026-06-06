@@ -30,9 +30,9 @@
     "docker_storage_proof": "cd Nodes/OCaml && make docker-storage-proof",
     "docker_script_corpus": "cd Nodes/OCaml && make docker-script-corpus",
     "docker_native_crypto_vectors": "cd Nodes/OCaml && make docker-native-crypto-vectors",
-    "docker_proof_local": null,
+    "docker_proof_local": "cd Nodes/OCaml && make docker-proof-local",
     "docker_proof_10k": null,
-    "docker_proof_50k": null,
+    "docker_proof_50k": "cd Nodes/OCaml && make docker-proof-50k",
     "docker_proof_100k": null,
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
@@ -45,9 +45,9 @@
   },
   "peer_modes": {
     "local_reference": {
-      "supported": false,
-      "command": null,
-      "peer": null,
+      "supported": true,
+      "command": "cd Nodes/OCaml && make docker-proof-local",
+      "peer": "bitcoin-core-testnet4:48333",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {
@@ -77,14 +77,15 @@
     "storage_result": "Nodes/Shared/conformance/results/ocaml_rocksdb_codec_v2_storage_docker_<YYYY-MM-DD>.json",
     "native_crypto_vectors_result": "Nodes/Shared/conformance/results/ocaml_native_crypto_vectors_docker_<YYYY-MM-DD>.json",
     "script_corpus_result": "Nodes/Shared/conformance/results/ocaml_script_corpus_docker_<YYYY-MM-DD>.json",
-    "local_reference_result": null,
-    "notes": "OCaml proof_partial: stock OCaml 5 Docker build, owned RocksDB binding, native secp256k1 vectors, Chainstate Codec v2 storage proof, and Shared script corpus fixture-loader proof. No P2P or 5k claim in this phase."
+    "local_reference_result": "Nodes/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
+    "shakedown_50k_result": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
+    "shakedown_50k_telemetry": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_telemetry_<YYYY-MM-DD>.log",
+    "notes": "OCaml has strict Docker/local Reference P2P baseline 5k and shakedown 50k evidence with RocksDB runtime truth, WAL enabled, native libsecp256k1, Codec v2 chainstate, live telemetry, and native Shared script corpus proof. 100k remains unattempted."
   },
   "known_caveats": [
-    "P2P sync is not implemented",
-    "docker_proof_local, docker_proof_10k, docker_proof_50k, and docker_proof_100k remain null until the sync phase lands",
-    "Script corpus proof verifies fixture manifest/source integrity and result artifact shape; full interpreter validation belongs to the next consensus phase",
+    "Local Reference P2P baseline 5k and shakedown 50k lanes are implemented",
+    "docker_proof_10k and docker_proof_100k remain null until those benchmark lanes land",
+    "No external peer sync, supervisor catch-up, tip_once, or tip_maintenance claim is made",
     "Binary gate remains not_attempted"
   ]
 }
-

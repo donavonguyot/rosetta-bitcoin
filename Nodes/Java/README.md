@@ -101,7 +101,7 @@ docker compose -f docker/docker-compose.yml up -d bitcoin-core-testnet4
 make docker-config   # validate compose file
 ```
 
-The `jbitnode` service connects to host Core at `host.docker.internal:48333`
+The `jbitnode` proof service connects to local Reference Core at `bitcoin-core-testnet4:48333`
 (OrbStack / Docker Desktop on macOS).
 
 Host JVM sync and container sync are separate verification gates. Host `mvn`

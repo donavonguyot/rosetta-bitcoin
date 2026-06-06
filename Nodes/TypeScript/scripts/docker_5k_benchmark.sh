@@ -7,7 +7,7 @@ TARGET="${DOCKER_SYNC_TARGET:-5000}"
 BLOCKS_MAX="${DOCKER_SYNC_BLOCKS_MAX:-5000}"
 PREFETCH_DEPTH="${DOCKER_BENCHMARK_PREFETCH_DEPTH:-4}"
 RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/typescript_docker_supporting_5k_benchmark_$(date +%F).json}"
-PEER="${PEERS:-host.docker.internal:48333}"
+PEER="${PEERS:-bitcoin-core-testnet4:48333}"
 BACKEND="${SECP256K1_BACKEND:-native}"
 REFERENCE_START_HEIGHT="${REFERENCE_START_HEIGHT:-0}"
 
@@ -152,7 +152,7 @@ doc = {
     "peer_mode": "local_reference",
     "byte_source": "local_reference_p2p",
     "proof_mode": "p2p_sync",
-    "peer": os.environ.get("PEER", "host.docker.internal:48333"),
+    "peer": os.environ.get("PEER", "bitcoin-core-testnet4:48333"),
     "docker_volume": os.environ.get("VOLUME", "tsbitnode_proof_data"),
     "datadir": "/data",
     "chain": status.get("chain", "testnet4"),

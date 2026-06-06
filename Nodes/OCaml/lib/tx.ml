@@ -219,6 +219,11 @@ let txid_internal tx = double_sha (serialize tx ~include_witness:false)
 
 let txid tx = display_hash (txid_internal tx)
 
+let is_coinbase tx =
+  match tx.inputs with
+  | [ input ] -> input.previous_output.index = Int32.minus_one && input.previous_output.hash = String.make 32 '\000'
+  | _ -> false
+
 let parse_block_transactions raw =
   ensure (String.length raw >= 81) "block too short";
   let count, offset = read_compact_size raw 80 in

@@ -37,7 +37,32 @@ struct StoredUndo: Codable, Sendable {
     let utxo: StoredUtxo
 }
 
-struct StoreState: Codable {
+struct UtxoBatchLoadTiming: Sendable {
+    var prevoutMultiGetCallMicros: Int64 = 0
+    var prevoutLegacyFallbackGetMicros: Int64 = 0
+    var prevoutUtxoDecodeMicros: Int64 = 0
+    var legacyFallbackReads: Int = 0
+}
+
+struct OrderedUtxoBatchLoad: Sendable {
+    let values: [StoredUtxo?]
+    let timing: UtxoBatchLoadTiming
+}
+
+struct CommitPreparationTiming: Sendable {
+    var utxoDeletePrepareMicros: Int64 = 0
+    var utxoPutPrepareMicros: Int64 = 0
+    var undoPutPrepareMicros: Int64 = 0
+    var metadataPutPrepareMicros: Int64 = 0
+    var rocksdbWriteMicros: Int64 = 0
+}
+
+struct ConnectedBlockCommit: Sendable {
+    let state: StoreState
+    let timing: CommitPreparationTiming
+}
+
+struct StoreState: Codable, Sendable {
     var generationID: String = UUID().uuidString
     var syncStatus: String = "empty"
     var chainstateStatus: String = "missing"
@@ -62,13 +87,15 @@ final class ChainStore {
     private let lockURL: URL
     private let lockToken: String?
     private let deleteLegacyUtxoKeys: Bool
+    let legacyUtxoFallback: Bool
 
-    init(datadir: String, acquireLock: Bool = true) throws {
+    init(datadir: String, acquireLock: Bool = true, legacyUtxoFallback: Bool? = nil) throws {
         self.datadir = URL(fileURLWithPath: datadir)
         self.blocksDir = self.datadir.appendingPathComponent("blocks")
         self.stateURL = self.datadir.appendingPathComponent("swift-chainstate.json")
         self.lockURL = self.datadir.appendingPathComponent(".swiftbitnode.lock")
         self.deleteLegacyUtxoKeys = (ProcessInfo.processInfo.environment["SWIFTBITNODE_DELETE_LEGACY_UTXO_KEYS"] ?? "false").lowercased() == "true"
+        self.legacyUtxoFallback = legacyUtxoFallback ?? ((ProcessInfo.processInfo.environment["SWIFTBITNODE_LEGACY_UTXO_FALLBACK"] ?? "true").lowercased() != "false")
         try FileManager.default.createDirectory(at: self.datadir, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: self.blocksDir, withIntermediateDirectories: true)
         self.lockToken = acquireLock ? try Self.acquireLock(lockURL: lockURL) : nil
@@ -169,34 +196,62 @@ final class ChainStore {
     }
 
     func getUtxos(_ keys: [OutpointKey], state: StoreState) throws -> [OutpointKey: StoredUtxo] {
-        if let rocks {
-            let raw = try rocks.get(keys: keys.map(\.rocksKey))
-            var out: [OutpointKey: StoredUtxo] = [:]
-            var missingLegacy: [OutpointKey] = []
-            for key in keys {
-                if let data = raw[key.rocksKey] {
-                    out[key] = try decodeUtxo(data)
-                } else {
-                    missingLegacy.append(key)
-                }
-            }
-            if !missingLegacy.isEmpty {
-                let legacyRaw = try rocks.get(keys: missingLegacy.map(\.legacyRocksKey))
-                for key in missingLegacy {
-                    if let data = legacyRaw[key.legacyRocksKey] {
-                        out[key] = try decodeUtxo(data)
-                    }
-                }
-            }
-            return out
-        }
+        let ordered = try getUtxosOrdered(keys, state: state)
         var out: [OutpointKey: StoredUtxo] = [:]
-        for key in keys {
-            if let utxo = state.utxos[key.display] {
-                out[key] = utxo
+        out.reserveCapacity(keys.count)
+        for index in keys.indices {
+            if let utxo = ordered.values[index] {
+                out[keys[index]] = utxo
             }
         }
         return out
+    }
+
+    func getUtxosOrdered(_ keys: [OutpointKey], state: StoreState) throws -> OrderedUtxoBatchLoad {
+        guard !keys.isEmpty else {
+            return OrderedUtxoBatchLoad(values: [], timing: UtxoBatchLoadTiming())
+        }
+        var timing = UtxoBatchLoadTiming()
+        if let rocks {
+            let binaryKeys = keys.map(\.rocksKey)
+            let getStarted = DispatchTime.now().uptimeNanoseconds
+            var raw = try rocks.getOrdered(keys: binaryKeys)
+            timing.prevoutMultiGetCallMicros = Int64((DispatchTime.now().uptimeNanoseconds - getStarted) / 1_000)
+            if legacyUtxoFallback {
+                var missingIndexes: [Int] = []
+                for index in raw.indices where raw[index] == nil {
+                    missingIndexes.append(index)
+                }
+                if !missingIndexes.isEmpty {
+                    let legacyStarted = DispatchTime.now().uptimeNanoseconds
+                    let legacyKeys = missingIndexes.map { Data(keys[$0].legacyRocksKey.utf8) }
+                    let legacyRaw = try rocks.getOrdered(keys: legacyKeys)
+                    timing.prevoutLegacyFallbackGetMicros = Int64((DispatchTime.now().uptimeNanoseconds - legacyStarted) / 1_000)
+                    timing.legacyFallbackReads = legacyKeys.count
+                    for (offset, index) in missingIndexes.enumerated() where legacyRaw[offset] != nil {
+                        raw[index] = legacyRaw[offset]
+                    }
+                }
+            }
+            var out = Array<StoredUtxo?>(repeating: nil, count: keys.count)
+            let decodeStarted = DispatchTime.now().uptimeNanoseconds
+            for index in raw.indices {
+                if let data = raw[index] {
+                    out[index] = try decodeUtxo(data)
+                }
+            }
+            timing.prevoutUtxoDecodeMicros = Int64((DispatchTime.now().uptimeNanoseconds - decodeStarted) / 1_000)
+            return OrderedUtxoBatchLoad(values: out, timing: timing)
+        }
+        var out = Array<StoredUtxo?>(repeating: nil, count: keys.count)
+        let decodeStarted = DispatchTime.now().uptimeNanoseconds
+        for index in keys.indices {
+            if let utxo = state.utxos[keys[index].display] {
+                out[index] = utxo
+            }
+        }
+        timing.prevoutUtxoDecodeMicros = Int64((DispatchTime.now().uptimeNanoseconds - decodeStarted) / 1_000)
+        return OrderedUtxoBatchLoad(values: out, timing: timing)
     }
 
     func commitConnectedBlock(
@@ -206,7 +261,7 @@ final class ChainStore {
         hash: String,
         created: [(OutpointKey, StoredUtxo)],
         spent: [(OutpointKey, StoredUtxo)]
-    ) throws -> StoreState {
+    ) throws -> ConnectedBlockCommit {
         var copy = state
         if rocks == nil {
             for (key, _) in spent {
@@ -231,12 +286,19 @@ final class ChainStore {
         copy.lastError = ""
         copy.updatedAt = nowIso8601()
 
+        var preparationTiming = CommitPreparationTiming()
+        let metadataStarted = DispatchTime.now().uptimeNanoseconds
         let stateData = try JSONEncoder().encode(copy)
+        preparationTiming.metadataPutPrepareMicros = Int64((DispatchTime.now().uptimeNanoseconds - metadataStarted) / 1_000)
         guard let rocks else {
             try stateData.write(to: stateURL)
-            return copy
+            return ConnectedBlockCommit(state: copy, timing: preparationTiming)
         }
+
+        let undoStarted = DispatchTime.now().uptimeNanoseconds
         let undoPayload = encodeUndo(spent)
+        preparationTiming.undoPutPrepareMicros = Int64((DispatchTime.now().uptimeNanoseconds - undoStarted) / 1_000)
+
         var puts: [(Data, Data)] = [
             (Data("meta:state".utf8), stateData),
             (Data("block:raw:height:\(height)".utf8), raw),
@@ -244,15 +306,24 @@ final class ChainStore {
             (Data("block:index:hash:\(hash)".utf8), Data("\(height)".utf8)),
             (Data("undo:height:\(height)".utf8), undoPayload)
         ]
+        puts.reserveCapacity(5 + created.count)
+        let putStarted = DispatchTime.now().uptimeNanoseconds
         for (key, utxo) in created {
             puts.append((key.rocksKey, encodeUtxo(utxo)))
         }
+        preparationTiming.utxoPutPrepareMicros = Int64((DispatchTime.now().uptimeNanoseconds - putStarted) / 1_000)
+
+        let deleteStarted = DispatchTime.now().uptimeNanoseconds
         var deletes = spent.map { $0.0.rocksKey }
         if deleteLegacyUtxoKeys {
             deletes.append(contentsOf: spent.map { Data($0.0.legacyRocksKey.utf8) })
         }
+        preparationTiming.utxoDeletePrepareMicros = Int64((DispatchTime.now().uptimeNanoseconds - deleteStarted) / 1_000)
+
+        let writeStarted = DispatchTime.now().uptimeNanoseconds
         try rocks.writeBatch(puts: puts, deletes: deletes)
-        return copy
+        preparationTiming.rocksdbWriteMicros = Int64((DispatchTime.now().uptimeNanoseconds - writeStarted) / 1_000)
+        return ConnectedBlockCommit(state: copy, timing: preparationTiming)
     }
 
     func setBlocker(height: Int, failure: String, txid: String = "", inputIndex: Int = -1) throws {
@@ -370,6 +441,7 @@ enum Status {
             "validated_hash": state.validatedHash,
             "chainstate_backend": store?.backendName ?? "missing",
             "chainstate_backend_path": store?.backendPath ?? "\(datadir)/chainstate-rocksdb",
+            "legacy_utxo_fallback": store?.legacyUtxoFallback ?? true,
             "chainstate_generation_id": state.generationID,
             "chainstate_status": state.chainstateStatus,
             "utxo_accounting_policy": "core_spendable_v1",

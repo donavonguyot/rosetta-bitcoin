@@ -20,11 +20,13 @@ SUPPORTING_10K_RESULT ?= /results/python_docker_supporting_10k_benchmark_$(RESUL
 DOCKER_BENCHMARK_TARGET ?= 5000
 SCRIPT_RESULT ?= ../Shared/conformance/results/python_script_corpus_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/python_script_corpus_docker_$(RESULT_DATE).json
-DOCKER_P2P_PEER ?= host.docker.internal:48333
+REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
+DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
 DOCKER_PREFETCH_DEPTH ?= 4
 DOCKER_SCRIPT_THREADS ?= 4
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
+REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 SYNC_ENV = MAX_OUTBOUND_PEERS=1 PARALLEL_BLOCK_DOWNLOADS=0 SKIP_GETADDR=1
 
@@ -85,11 +87,7 @@ docker-script-corpus:
 	  --result-path $(DOCKER_SCRIPT_RESULT)
 
 docker-proof-local:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(MAKE) docker-build; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) PYBITNODE_BENCHMARK_RESULT=$(SUPPORTING_5K_RESULT) \

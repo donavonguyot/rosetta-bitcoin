@@ -27,6 +27,9 @@ DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 DOCKER_COMPOSE = docker compose -f docker/docker-compose.yml
 DOCKER_REBUILD ?= 0
+REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
+DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
+REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-supporting-10k-proof docker-java-supporting-50k-proof docker-java-primary-100k-proof docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
 
@@ -55,11 +58,7 @@ docker-script-corpus:
 	  --runtime-surface docker
 
 docker-java-sync-proof:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build jbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),pure_java) $(DOCKER_COMPOSE) run --rm jbitnode-sync-proof
@@ -69,16 +68,13 @@ docker-java-native-crypto-proof:
 	$(MAKE) docker-java-supporting-5k-proof DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=native
 
 docker-java-supporting-5k-proof:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build jbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
-	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),native) \
+	  DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),native) \
 	  DOCKER_BENCHMARK_TARGET=$(DOCKER_BENCHMARK_TARGET) DOCKER_BENCHMARK_BLOCKS_MAX=$(DOCKER_BENCHMARK_BLOCKS_MAX) \
 	  DOCKER_BENCHMARK_HEADERS_MAX=$(DOCKER_BENCHMARK_HEADERS_MAX) DOCKER_BENCHMARK_HEADER_BATCHES_MAX=$(DOCKER_BENCHMARK_HEADER_BATCHES_MAX) \
+	  PEERS=$(DOCKER_P2P_PEER) \
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
 		  scripts/docker_5k_benchmark.sh
 
@@ -110,11 +106,7 @@ docker-java-primary-100k-proof:
 	  DOCKER_BENCHMARK_HEADER_BATCHES_MAX=50
 
 docker-java-native-crypto-long-sync-proof:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build jbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_LONG_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_LONG_PROOF_VOLUME) SECP256K1_BACKEND=native \

@@ -37,10 +37,7 @@ services:
     environment:
       CHAIN: testnet4
       DATA_DIR: /data
-      # OrbStack / Docker Desktop on macOS reach host-published Core ports here.
-      PEERS: host.docker.internal:48333
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      PEERS: bitcoin-core-testnet4:48333
     volumes:
       - jbitnode_data:/data
     restart: unless-stopped
@@ -56,13 +53,14 @@ services:
       DATA_DIR: /data
       UTXO_BACKEND: rocksdb
       ROCKSDB_DIR: /data/utxo-rocksdb
-      PEERS: host.docker.internal:48333
+      PEERS: ${PEERS:-bitcoin-core-testnet4:48333}
       SECP256K1_BACKEND: ${SECP256K1_BACKEND:-pure_java}
       HEADERS_MAX: ${HEADERS_MAX:-200}
       HEADER_BATCHES_MAX: ${HEADER_BATCHES_MAX:-1}
       BLOCKS_MAX: ${BLOCKS_MAX:-2}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - reference
     volumes:
       - jbitnode_proof_data:/data
 
@@ -70,3 +68,8 @@ volumes:
   jbitnode_data:
   jbitnode_proof_data:
     name: ${DOCKER_PROOF_VOLUME:-jbitnode_proof_data}
+
+networks:
+  reference:
+    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    external: true

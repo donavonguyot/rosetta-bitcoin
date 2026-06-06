@@ -271,6 +271,11 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
             peer = str(local_reference.get("peer") or "").strip()
             if not peer:
                 errors.append("local_reference peer mode has no peer/source description")
+            elif peer == "host.docker.internal:48333":
+                errors.append(
+                    "local_reference peer must use Docker DNS bitcoin-core-testnet4:48333, "
+                    "not host.docker.internal:48333"
+                )
             elif "should be" in peer.lower() or "currently" in peer.lower():
                 warnings.append(f"local_reference peer/source needs cleanup: {peer}")
 

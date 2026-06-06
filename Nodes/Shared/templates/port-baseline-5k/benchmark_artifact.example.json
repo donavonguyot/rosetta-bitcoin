@@ -13,7 +13,7 @@
   "byte_source": "local_reference_p2p",
   "proof_mode": "p2p_sync",
   "peer_mode": "local_reference",
-  "peer": "host.docker.internal:48333",
+  "peer": "bitcoin-core-testnet4:48333",
   "reference_start_height": 0,
   "reference_start_hash": "",
   "reference_finish_height": 5000,

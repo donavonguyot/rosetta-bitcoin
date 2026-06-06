@@ -17,6 +17,7 @@ DOCKER_RPC_REPLAY_VOLUME ?= gobitnode_local_reference_proof_data
 DOCKER_SYNC_VOLUME ?= gobitnode_sync_data
 DOCKER_REBUILD ?= 0
 DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
+REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
 
 SYNC_TARGET ?= 10000
 CONNECT_TARGET ?= 2
@@ -25,7 +26,8 @@ RPC_USER ?= rosetta
 RPC_PASSWORD ?= rosetta-dev-only
 DOCKER_SYNC_TARGET ?= 5000
 DOCKER_RPC_URL ?= http://host.docker.internal:48332
-DOCKER_P2P_PEER ?= host.docker.internal:48333
+DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
+REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: build test go-node-status go-node-storage-proof go-node-script-corpus go-node-sync-local go-node-connect-local go-node-native-crypto-test docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-rpc-replay docker-smoke-once clean
 
@@ -77,11 +79,7 @@ docker-script-corpus:
 	  --result-path $(DOCKER_SCRIPT_RESULT)
 
 docker-proof-local:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) GOBITNODE_RUNTIME_SURFACE=docker \
 	  GOBITNODE_PAR_SCRIPT_VERIFY=1 GOBITNODE_BLOCK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) GOBITNODE_ROCKSDB_BLOCK_CACHE_MB=512 \

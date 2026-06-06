@@ -183,7 +183,7 @@
       "port": "ocaml",
       "claim": "script_corpus",
       "gate_id": "",
-      "path": "Nodes/Shared/conformance/results/ocaml_script_corpus_docker_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_script_corpus_docker_2026-06-06.json",
       "status": "current",
       "notes": "Current OCaml port-owned native 45/45 script corpus proof."
     },
@@ -194,6 +194,22 @@
       "path": "Nodes/Shared/conformance/results/ocaml_rocksdb_codec_v2_storage_docker_2026-06-05.json",
       "status": "current",
       "notes": "Current OCaml RocksDB Codec v2 storage proof."
+    },
+    {
+      "port": "ocaml",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_2026-06-05.json",
+      "status": "current",
+      "notes": "Current OCaml strict Docker/local Reference P2P 5k baseline proof."
+    },
+    {
+      "port": "ocaml",
+      "claim": "shakedown_50k",
+      "gate_id": "shakedown_50k",
+      "path": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_2026-06-06.json",
+      "status": "current",
+      "notes": "Current OCaml strict Docker/local Reference P2P 50k shakedown proof with live telemetry."
     },
     {
       "port": "python",
@@ -343,9 +359,9 @@
       "port": "zig",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_perf_opt_50k_2026-06-06.json",
       "status": "current",
-      "notes": "Current Zig 50k shakedown proof. Zig remains active development pending explicit lifecycle promotion."
+      "notes": "Current Zig 50k shakedown proof with script scheduler/cache telemetry. Zig remains active development pending explicit lifecycle promotion."
     }
   ]
 }

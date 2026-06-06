@@ -92,6 +92,48 @@ pub const SpentPrevout = struct {
     script_pubkey: []const u8,
 };
 
+pub const SighashCache = struct {
+    bip143_hash_prevouts: [32]u8,
+    bip143_hash_sequence: [32]u8,
+    bip143_hash_outputs: [32]u8,
+    bip143_single_outputs: [][32]u8,
+    tap_hash_prevouts: [32]u8,
+    tap_hash_amounts: [32]u8,
+    tap_hash_script_pubkeys: [32]u8,
+    tap_hash_sequences: [32]u8,
+    tap_hash_outputs: [32]u8,
+    tap_single_outputs: [][32]u8,
+
+    pub fn init(allocator: std.mem.Allocator, transaction: tx.Transaction, spent_prevouts: []const SpentPrevout) !SighashCache {
+        if (spent_prevouts.len != transaction.inputs.len) return error.SpentPrevoutsLengthMismatch;
+        var bip143_single_outputs = try allocator.alloc([32]u8, transaction.outputs.len);
+        errdefer allocator.free(bip143_single_outputs);
+        var tap_single_outputs = try allocator.alloc([32]u8, transaction.outputs.len);
+        errdefer allocator.free(tap_single_outputs);
+        for (transaction.outputs, 0..) |output, i| {
+            bip143_single_outputs[i] = try hashSingleOutput(allocator, output);
+            tap_single_outputs[i] = try tapShaSingleOutput(allocator, output);
+        }
+        return .{
+            .bip143_hash_prevouts = try hashPrevouts(allocator, transaction),
+            .bip143_hash_sequence = try hashSequence(allocator, transaction),
+            .bip143_hash_outputs = try hashOutputs(allocator, transaction),
+            .bip143_single_outputs = bip143_single_outputs,
+            .tap_hash_prevouts = try tapShaPrevouts(allocator, transaction),
+            .tap_hash_amounts = try tapShaAmounts(allocator, spent_prevouts),
+            .tap_hash_script_pubkeys = try tapShaScriptPubKeys(allocator, spent_prevouts),
+            .tap_hash_sequences = try tapShaSequences(allocator, transaction),
+            .tap_hash_outputs = try tapShaOutputsAll(allocator, transaction),
+            .tap_single_outputs = tap_single_outputs,
+        };
+    }
+
+    pub fn deinit(self: *SighashCache, allocator: std.mem.Allocator) void {
+        allocator.free(self.bip143_single_outputs);
+        allocator.free(self.tap_single_outputs);
+    }
+};
+
 const VerifyMode = enum { legacy, witness_v0, tapscript };
 
 const EvalContext = struct {
@@ -103,6 +145,7 @@ const EvalContext = struct {
     verifier: *crypto.NativeVerifier,
     code_separator_offset: usize = 0,
     spent_prevouts: []const SpentPrevout = &.{},
+    sighash_cache: ?*const SighashCache = null,
     annex: ?[]const u8 = null,
     tapleaf_hash: ?[32]u8 = null,
     sigop_budget: ?*i32 = null,
@@ -114,35 +157,46 @@ pub fn verifyInput(
     input_index: usize,
     spent_prevouts: []const SpentPrevout,
 ) !void {
+    var verifier = try crypto.NativeVerifier.create();
+    defer verifier.destroy();
+    return verifyInputWithVerifier(allocator, transaction, input_index, spent_prevouts, &verifier, null);
+}
+
+pub fn verifyInputWithVerifier(
+    allocator: std.mem.Allocator,
+    transaction: tx.Transaction,
+    input_index: usize,
+    spent_prevouts: []const SpentPrevout,
+    verifier: *crypto.NativeVerifier,
+    sighash_cache: ?*const SighashCache,
+) !void {
     if (input_index >= transaction.inputs.len or input_index >= spent_prevouts.len) return error.InputIndexOutOfRange;
     const script_pubkey = spent_prevouts[input_index].script_pubkey;
     const witness = if (input_index < transaction.witness.len) transaction.witness[input_index] else &.{};
-    var verifier = try crypto.NativeVerifier.create();
-    defer verifier.destroy();
     if (isP2WSH(script_pubkey)) {
-        return verifyP2WSH(allocator, transaction, input_index, spent_prevouts[input_index].amount, transaction.inputs[input_index].script_sig, script_pubkey, witness, &verifier);
+        return verifyP2WSH(allocator, transaction, input_index, spent_prevouts[input_index].amount, transaction.inputs[input_index].script_sig, script_pubkey, witness, verifier, sighash_cache);
     }
     if (isP2SH(script_pubkey)) {
-        return verifyP2SH(allocator, transaction, input_index, spent_prevouts[input_index].amount, transaction.inputs[input_index].script_sig, script_pubkey, witness, &verifier);
+        return verifyP2SH(allocator, transaction, input_index, spent_prevouts[input_index].amount, transaction.inputs[input_index].script_sig, script_pubkey, witness, verifier, sighash_cache);
     }
     if (isP2PKH(script_pubkey)) {
-        return verifyP2PKH(allocator, transaction, input_index, spent_prevouts[input_index].amount, transaction.inputs[input_index].script_sig, script_pubkey, witness, &verifier);
+        return verifyP2PKH(allocator, transaction, input_index, spent_prevouts[input_index].amount, transaction.inputs[input_index].script_sig, script_pubkey, witness, verifier, sighash_cache);
     }
     if (isP2WPKH(script_pubkey)) {
-        return verifyP2WPKH(allocator, transaction, input_index, spent_prevouts[input_index].amount, transaction.inputs[input_index].script_sig, script_pubkey, witness, &verifier);
+        return verifyP2WPKH(allocator, transaction, input_index, spent_prevouts[input_index].amount, transaction.inputs[input_index].script_sig, script_pubkey, witness, verifier, sighash_cache);
     }
     if (isP2PK(script_pubkey) or isBareOpN(script_pubkey) or isBareLegacy(script_pubkey)) {
         if (witness.len != 0) return error.LegacyWitnessUnexpected;
         var stack = Stack.init(allocator);
         defer stack.deinit();
         try evaluate(allocator, transaction.inputs[input_index].script_sig, &stack, null);
-        var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = spent_prevouts[input_index].amount, .script_code = script_pubkey, .mode = .legacy, .verifier = &verifier };
+        var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = spent_prevouts[input_index].amount, .script_code = script_pubkey, .mode = .legacy, .verifier = verifier, .sighash_cache = sighash_cache };
         try evaluate(allocator, script_pubkey, &stack, &context);
         if (!terminalRelaxed(&stack)) return error.ScriptTerminalFalse;
         return;
     }
     if (isP2TR(script_pubkey)) {
-        return verifyP2TR(allocator, transaction, input_index, transaction.inputs[input_index].script_sig, script_pubkey, witness, spent_prevouts, &verifier);
+        return verifyP2TR(allocator, transaction, input_index, transaction.inputs[input_index].script_sig, script_pubkey, witness, spent_prevouts, verifier, sighash_cache);
     }
     return error.UnsupportedScriptTemplate;
 }
@@ -156,12 +210,13 @@ fn verifyP2PKH(
     script_pubkey: []const u8,
     witness: []const []const u8,
     verifier: *crypto.NativeVerifier,
+    sighash_cache: ?*const SighashCache,
 ) !void {
     if (witness.len != 0) return error.LegacyWitnessUnexpected;
     var stack = Stack.init(allocator);
     defer stack.deinit();
     try evaluate(allocator, script_sig, &stack, null);
-    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = script_pubkey, .mode = .legacy, .verifier = verifier };
+    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = script_pubkey, .mode = .legacy, .verifier = verifier, .sighash_cache = sighash_cache };
     try evaluate(allocator, script_pubkey, &stack, &context);
     if (!terminalRelaxed(&stack)) return error.ScriptTerminalFalse;
 }
@@ -175,6 +230,7 @@ fn verifyP2WPKH(
     script_pubkey: []const u8,
     witness: []const []const u8,
     verifier: *crypto.NativeVerifier,
+    sighash_cache: ?*const SighashCache,
 ) !void {
     if (script_sig.len != 0) return error.WitnessScriptSigNotEmpty;
     if (witness.len != 2) return error.InvalidP2WPKHWitness;
@@ -184,7 +240,7 @@ fn verifyP2WPKH(
     defer stack.deinit();
     try stack.push(witness[0]);
     try stack.push(witness[1]);
-    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = script_code, .mode = .witness_v0, .verifier = verifier };
+    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = script_code, .mode = .witness_v0, .verifier = verifier, .sighash_cache = sighash_cache };
     try evaluate(allocator, script_code, &stack, &context);
     if (!terminalStrict(&stack)) return error.ScriptTerminalFalse;
 }
@@ -198,6 +254,7 @@ fn verifyP2WSH(
     script_pubkey: []const u8,
     witness: []const []const u8,
     verifier: *crypto.NativeVerifier,
+    sighash_cache: ?*const SighashCache,
 ) !void {
     if (script_sig.len != 0) return error.WitnessScriptSigNotEmpty;
     if (witness.len < 1) return error.WitnessStackEmpty;
@@ -207,7 +264,7 @@ fn verifyP2WSH(
     var stack = Stack.init(allocator);
     defer stack.deinit();
     for (witness[0 .. witness.len - 1]) |item| try stack.push(item);
-    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = script, .mode = .witness_v0, .verifier = verifier };
+    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = script, .mode = .witness_v0, .verifier = verifier, .sighash_cache = sighash_cache };
     try evaluate(allocator, script, &stack, &context);
     if (!terminalStrict(&stack)) return error.ScriptTerminalFalse;
 }
@@ -221,6 +278,7 @@ fn verifyP2SH(
     script_pubkey: []const u8,
     witness: []const []const u8,
     verifier: *crypto.NativeVerifier,
+    sighash_cache: ?*const SighashCache,
 ) !void {
     const pushes = try parsePushOnly(allocator, script_sig);
     defer {
@@ -232,14 +290,14 @@ fn verifyP2SH(
     const redeem_hash = crypto.hash160(redeem);
     if (!std.mem.eql(u8, redeem_hash[0..], script_pubkey[2..22])) return error.P2SHHashMismatch;
     if (isP2WSH(redeem)) {
-        return verifyP2WSHWitnessProgram(allocator, transaction, input_index, amount, redeem[2..34], witness, verifier);
+        return verifyP2WSHWitnessProgram(allocator, transaction, input_index, amount, redeem[2..34], witness, verifier, sighash_cache);
     }
-    if (isP2WPKH(redeem)) return verifyP2WPKH(allocator, transaction, input_index, amount, &.{}, redeem, witness, verifier);
+    if (isP2WPKH(redeem)) return verifyP2WPKH(allocator, transaction, input_index, amount, &.{}, redeem, witness, verifier, sighash_cache);
     if (witness.len != 0) return error.LegacyWitnessUnexpected;
     var stack = Stack.init(allocator);
     defer stack.deinit();
     for (pushes[0 .. pushes.len - 1]) |item| try stack.push(item);
-    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = redeem, .mode = .legacy, .verifier = verifier };
+    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = redeem, .mode = .legacy, .verifier = verifier, .sighash_cache = sighash_cache };
     try evaluate(allocator, redeem, &stack, &context);
     if (!terminalRelaxed(&stack)) return error.ScriptTerminalFalse;
 }
@@ -252,6 +310,7 @@ fn verifyP2WSHWitnessProgram(
     program: []const u8,
     witness: []const []const u8,
     verifier: *crypto.NativeVerifier,
+    sighash_cache: ?*const SighashCache,
 ) !void {
     if (witness.len < 1) return error.WitnessStackEmpty;
     const script = witness[witness.len - 1];
@@ -260,7 +319,7 @@ fn verifyP2WSHWitnessProgram(
     var stack = Stack.init(allocator);
     defer stack.deinit();
     for (witness[0 .. witness.len - 1]) |item| try stack.push(item);
-    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = script, .mode = .witness_v0, .verifier = verifier };
+    var context = EvalContext{ .transaction = transaction, .input_index = input_index, .amount = amount, .script_code = script, .mode = .witness_v0, .verifier = verifier, .sighash_cache = sighash_cache };
     try evaluate(allocator, script, &stack, &context);
     if (!terminalStrict(&stack)) return error.ScriptTerminalFalse;
 }
@@ -274,6 +333,7 @@ fn verifyP2TR(
     witness_in: []const []const u8,
     spent_prevouts: []const SpentPrevout,
     verifier: *crypto.NativeVerifier,
+    sighash_cache: ?*const SighashCache,
 ) !void {
     if (script_sig.len != 0) return error.TaprootScriptSigNotEmpty;
     if (spent_prevouts.len != transaction.inputs.len) return error.SpentPrevoutsLengthMismatch;
@@ -284,7 +344,7 @@ fn verifyP2TR(
     if (witness.len >= 2 and witness[witness.len - 1].len > 0 and witness[witness.len - 1][0] == TAPROOT_ANNEX_TAG) {
         return error.InvalidTaprootAnnexPosition;
     }
-    return verifyTaprootAfterAnnex(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier);
+    return verifyTaprootAfterAnnex(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier, sighash_cache);
 }
 
 fn verifyTaprootAfterAnnex(
@@ -297,8 +357,9 @@ fn verifyTaprootAfterAnnex(
     serialized_witness: []const u8,
     spent_prevouts: []const SpentPrevout,
     verifier: *crypto.NativeVerifier,
+    sighash_cache: ?*const SighashCache,
 ) !void {
-    if (witness.len >= 2) return verifyTaprootScriptPath(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier);
+    if (witness.len >= 2) return verifyTaprootScriptPath(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier, sighash_cache);
     if (witness.len != 1) return error.InvalidTaprootKeyPathWitness;
     const sig_blob = witness[0];
     if (sig_blob.len != 64 and sig_blob.len != 65) return error.InvalidSchnorrSignatureLength;
@@ -309,7 +370,7 @@ fn verifyTaprootAfterAnnex(
         if (hash_type == TAPROOT_SIGHASH_DEFAULT) return error.InvalidTaprootHashType;
         sig64 = sig_blob[0..64];
     }
-    const digest = try taprootSighash(allocator, transaction, input_index, spent_prevouts, .{
+    const digest = try taprootSighashWithCache(allocator, transaction, input_index, spent_prevouts, sighash_cache, .{
         .hash_type = hash_type,
         .annex = annex,
         .ext_flag = 0,
@@ -328,6 +389,7 @@ fn verifyTaprootScriptPath(
     serialized_witness: []const u8,
     spent_prevouts: []const SpentPrevout,
     verifier: *crypto.NativeVerifier,
+    sighash_cache: ?*const SighashCache,
 ) !void {
     if (witness.len < 2) return error.InvalidTaprootScriptPathWitness;
     const script = witness[witness.len - 2];
@@ -365,6 +427,7 @@ fn verifyTaprootScriptPath(
         .verifier = verifier,
         .code_separator_offset = 0xffff_ffff,
         .spent_prevouts = spent_prevouts,
+        .sighash_cache = sighash_cache,
         .annex = annex,
         .tapleaf_hash = leaf,
         .sigop_budget = &budget,
@@ -833,7 +896,7 @@ fn checkSignature(allocator: std.mem.Allocator, context: *const EvalContext, sig
     const effective_script_code = if (context.code_separator_offset < context.script_code.len) context.script_code[context.code_separator_offset..] else &.{};
     const digest = switch (context.mode) {
         .legacy => try legacySighash(allocator, context.transaction, context.input_index, effective_script_code, signature, sighash_type),
-        .witness_v0 => try bip143Sighash(allocator, context.transaction, context.input_index, effective_script_code, context.amount, sighash_type),
+        .witness_v0 => try bip143SighashWithCache(allocator, context.transaction, context.input_index, effective_script_code, context.amount, sighash_type, context.sighash_cache),
         .tapscript => return error.SignatureVerifierNotImplemented,
     };
     return context.verifier.verifyEcdsaDer(pubkey, sig_der, &digest);
@@ -860,7 +923,7 @@ fn checkTapSignature(allocator: std.mem.Allocator, context: *const EvalContext, 
     }
     const leaf = context.tapleaf_hash orelse return error.MissingTapleafHash;
     const code_sep: u32 = if (context.code_separator_offset == 0xffff_ffff) 0xffff_ffff else @intCast(context.code_separator_offset);
-    const digest = try taprootSighash(allocator, context.transaction, context.input_index, context.spent_prevouts, .{
+    const digest = try taprootSighashWithCache(allocator, context.transaction, context.input_index, context.spent_prevouts, context.sighash_cache, .{
         .hash_type = hash_type,
         .annex = context.annex,
         .ext_flag = 1,
@@ -1011,15 +1074,33 @@ fn bip143Sighash(
     amount: i64,
     sighash_type: u8,
 ) ![32]u8 {
+    return bip143SighashWithCache(allocator, transaction, input_index, script_code, amount, sighash_type, null);
+}
+
+fn bip143SighashWithCache(
+    allocator: std.mem.Allocator,
+    transaction: tx.Transaction,
+    input_index: usize,
+    script_code: []const u8,
+    amount: i64,
+    sighash_type: u8,
+    cache: ?*const SighashCache,
+) ![32]u8 {
     const base_type = sighash_type & 0x1f;
     const anyone = (sighash_type & SIGHASH_ANYONECANPAY) != 0;
     const zero32 = [_]u8{0} ** 32;
-    const hash_prevouts = if (!anyone) try hashPrevouts(allocator, transaction) else zero32;
-    const hash_sequence = if (!anyone and base_type != SIGHASH_SINGLE and base_type != SIGHASH_NONE) try hashSequence(allocator, transaction) else zero32;
+    const hash_prevouts = if (!anyone)
+        if (cache) |cch| cch.bip143_hash_prevouts else try hashPrevouts(allocator, transaction)
+    else
+        zero32;
+    const hash_sequence = if (!anyone and base_type != SIGHASH_SINGLE and base_type != SIGHASH_NONE)
+        if (cache) |cch| cch.bip143_hash_sequence else try hashSequence(allocator, transaction)
+    else
+        zero32;
     const hash_outputs = if (base_type == SIGHASH_SINGLE and input_index < transaction.outputs.len)
-        try hashSingleOutput(allocator, transaction.outputs[input_index])
+        if (cache) |cch| cch.bip143_single_outputs[input_index] else try hashSingleOutput(allocator, transaction.outputs[input_index])
     else if (base_type != SIGHASH_SINGLE and base_type != SIGHASH_NONE)
-        try hashOutputs(allocator, transaction)
+        if (cache) |cch| cch.bip143_hash_outputs else try hashOutputs(allocator, transaction)
     else
         zero32;
 
@@ -1055,6 +1136,17 @@ fn taprootSighash(
     spent_prevouts: []const SpentPrevout,
     options: TaprootOptions,
 ) ![32]u8 {
+    return taprootSighashWithCache(allocator, transaction, input_index, spent_prevouts, null, options);
+}
+
+fn taprootSighashWithCache(
+    allocator: std.mem.Allocator,
+    transaction: tx.Transaction,
+    input_index: usize,
+    spent_prevouts: []const SpentPrevout,
+    cache: ?*const SighashCache,
+    options: TaprootOptions,
+) ![32]u8 {
     if (spent_prevouts.len != transaction.inputs.len) return error.SpentPrevoutsLengthMismatch;
     if (input_index >= transaction.inputs.len) return error.InputIndexOutOfRange;
     if (!taprootAllowedHashType(options.hash_type)) return error.InvalidTaprootHashType;
@@ -1064,12 +1156,24 @@ fn taprootSighash(
     output_mode &= 0x03;
     const anyone = (options.hash_type & SIGHASH_ANYONECANPAY) != 0;
     const zero32 = [_]u8{0} ** 32;
-    const hash_prevouts = if (!anyone) try tapShaPrevouts(allocator, transaction) else zero32;
-    const hash_amounts = if (!anyone) try tapShaAmounts(allocator, spent_prevouts) else zero32;
-    const hash_script_pubkeys = if (!anyone) try tapShaScriptPubKeys(allocator, spent_prevouts) else zero32;
-    const hash_sequences = if (!anyone) try tapShaSequences(allocator, transaction) else zero32;
+    const hash_prevouts = if (!anyone)
+        if (cache) |cch| cch.tap_hash_prevouts else try tapShaPrevouts(allocator, transaction)
+    else
+        zero32;
+    const hash_amounts = if (!anyone)
+        if (cache) |cch| cch.tap_hash_amounts else try tapShaAmounts(allocator, spent_prevouts)
+    else
+        zero32;
+    const hash_script_pubkeys = if (!anyone)
+        if (cache) |cch| cch.tap_hash_script_pubkeys else try tapShaScriptPubKeys(allocator, spent_prevouts)
+    else
+        zero32;
+    const hash_sequences = if (!anyone)
+        if (cache) |cch| cch.tap_hash_sequences else try tapShaSequences(allocator, transaction)
+    else
+        zero32;
     const hash_outputs = if (output_mode == SIGHASH_ALL)
-        try tapShaOutputsAll(allocator, transaction)
+        if (cache) |cch| cch.tap_hash_outputs else try tapShaOutputsAll(allocator, transaction)
     else
         zero32;
     if (output_mode == SIGHASH_SINGLE and input_index >= transaction.outputs.len) return error.SighashSingleMissingOutput;
@@ -1109,7 +1213,7 @@ fn taprootSighash(
         try body.appendSlice(allocator, annex_hash[0..]);
     }
     if (output_mode == SIGHASH_SINGLE) {
-        const single = try tapShaSingleOutput(allocator, transaction.outputs[input_index]);
+        const single = if (cache) |cch| cch.tap_single_outputs[input_index] else try tapShaSingleOutput(allocator, transaction.outputs[input_index]);
         try body.appendSlice(allocator, single[0..]);
     }
     if (options.ext_flag == 1) {
@@ -1475,6 +1579,67 @@ fn isBareOpN(script_pubkey: []const u8) bool {
 
 fn isBareLegacy(script_pubkey: []const u8) bool {
     return !isP2PKH(script_pubkey) and !isP2SH(script_pubkey) and !isP2WPKH(script_pubkey) and !isP2WSH(script_pubkey) and !isP2TR(script_pubkey);
+}
+
+test "sighash cache matches uncached legacy bip143 and taproot digests" {
+    const allocator = std.testing.allocator;
+    const prev0 = [_]u8{1} ** 32;
+    const prev1 = [_]u8{2} ** 32;
+    const input0 = tx.TxIn{ .previous_output = .{ .hash = prev0, .index = 0 }, .script_sig = &.{0x51}, .sequence = 0xffff_fffe };
+    const input1 = tx.TxIn{ .previous_output = .{ .hash = prev1, .index = 1 }, .script_sig = &.{0x52}, .sequence = 0xffff_fffd };
+    const output0 = tx.TxOut{ .value = 5, .script_pubkey = &.{OP_1} };
+    const output1 = tx.TxOut{ .value = 7, .script_pubkey = &.{OP_0} };
+    const inputs = [_]tx.TxIn{ input0, input1 };
+    const outputs = [_]tx.TxOut{ output0, output1 };
+    const witness = [_][]const []const u8{ &.{}, &.{} };
+    const raw = try tx.serializeNoWitness(allocator, .{
+        .version = 2,
+        .inputs = @constCast(inputs[0..]),
+        .outputs = @constCast(outputs[0..]),
+        .lock_time = 42,
+        .witness = witness[0..],
+        .raw_no_witness = &.{},
+    });
+    defer allocator.free(raw);
+    const transaction = tx.Transaction{
+        .version = 2,
+        .inputs = @constCast(inputs[0..]),
+        .outputs = @constCast(outputs[0..]),
+        .lock_time = 42,
+        .witness = witness[0..],
+        .raw_no_witness = raw,
+    };
+    const prevouts = [_]SpentPrevout{
+        .{ .amount = 11, .script_pubkey = &.{OP_1} },
+        .{ .amount = 13, .script_pubkey = &.{OP_0} },
+    };
+    var cache = try SighashCache.init(allocator, transaction, prevouts[0..]);
+    defer cache.deinit(allocator);
+
+    const legacy_a = try legacySighash(allocator, transaction, 0, &.{OP_1}, &.{ 0x30, 0x01 }, SIGHASH_ALL);
+    const legacy_b = try legacySighash(allocator, transaction, 0, &.{OP_1}, &.{ 0x30, 0x01 }, SIGHASH_ALL);
+    try std.testing.expectEqualSlices(u8, legacy_a[0..], legacy_b[0..]);
+
+    const hash_types = [_]u8{ SIGHASH_ALL, SIGHASH_SINGLE, SIGHASH_NONE, SIGHASH_ALL | SIGHASH_ANYONECANPAY };
+    for (hash_types) |hash_type| {
+        const uncached = try bip143Sighash(allocator, transaction, 1, &.{OP_0}, 13, hash_type);
+        const cached = try bip143SighashWithCache(allocator, transaction, 1, &.{OP_0}, 13, hash_type, &cache);
+        try std.testing.expectEqualSlices(u8, uncached[0..], cached[0..]);
+    }
+
+    const leaf = try tapleafHash(allocator, TAPROOT_LEAF_TAPSCRIPT, &.{OP_1});
+    const tap_options = [_]TaprootOptions{
+        .{ .hash_type = TAPROOT_SIGHASH_DEFAULT },
+        .{ .hash_type = SIGHASH_ALL },
+        .{ .hash_type = SIGHASH_SINGLE },
+        .{ .hash_type = SIGHASH_NONE | SIGHASH_ANYONECANPAY },
+        .{ .hash_type = SIGHASH_ALL, .ext_flag = 1, .tapleaf_hash = leaf, .code_separator_pos = 0xffff_ffff },
+    };
+    for (tap_options) |options| {
+        const uncached = try taprootSighash(allocator, transaction, 1, prevouts[0..], options);
+        const cached = try taprootSighashWithCache(allocator, transaction, 1, prevouts[0..], &cache, options);
+        try std.testing.expectEqualSlices(u8, uncached[0..], cached[0..]);
+    }
 }
 
 test "minimal P2WSH OP_TRUE verifies" {

@@ -7,10 +7,25 @@ CRYPTO_VECTORS ?= ../Shared/conformance/fixtures/native_crypto_v1_vectors.json
 RESULT_DATE ?= $(shell date -u +%F)
 FIXTURE_ID ?=
 FIXTURE_ARG := $(if $(FIXTURE_ID),--fixture-id $(FIXTURE_ID),)
+SYNC_TARGET ?= 5000
+PREFETCH_DEPTH ?= 4
+PROGRESS ?= 1000
+REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
+DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
+DOCKER_LOCAL_PROOF_VOLUME ?= ocbitnode_5k_proof_data
+DOCKER_LOCAL_REFERENCE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_baseline_5k_telemetry_$(RESULT_DATE).log
+DOCKER_50K_PROOF_VOLUME ?= ocbitnode_50k_proof_data
+DOCKER_50K_REFERENCE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_telemetry_$(RESULT_DATE).log
+DOCKER_50K_PROFILE_VOLUME ?= ocbitnode_50k_profile_data
+DOCKER_50K_PROFILE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(RESULT_DATE).json
+DOCKER_50K_PROFILE_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(RESULT_DATE).log
 DOCKER_COMPOSE := docker compose -f docker/docker-compose.yml
+REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: build test ocbitnode-status ocbitnode-storage-proof ocbitnode-native-crypto-vectors ocbitnode-script-corpus
-.PHONY: docker-config docker-build docker-warm docker-status docker-storage-proof docker-native-crypto-vectors docker-script-corpus docker-smoke-once
+.PHONY: docker-config docker-build docker-warm docker-status docker-storage-proof docker-native-crypto-vectors docker-script-corpus docker-proof-local docker-proof-50k docker-proof-50k-profile docker-smoke-once
 
 build:
 	opam exec -- dune build @install
@@ -49,5 +64,23 @@ docker-native-crypto-vectors:
 
 docker-script-corpus:
 	$(DOCKER_COMPOSE) run --rm ocbitnode script-corpus --manifest /workspace/Shared/conformance/fixtures/scripts/manifest.json --result-path /workspace/Shared/conformance/results/ocaml_script_corpus_docker_$(RESULT_DATE).json --runtime-surface docker $(FIXTURE_ARG)
+
+docker-proof-local:
+	$(REFERENCE_P2P_CHECK)
+	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
+	@docker volume rm $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_LOCAL_TELEMETRY_LOG)
+
+docker-proof-50k:
+	$(REFERENCE_P2P_CHECK)
+	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
+	@docker volume rm $(DOCKER_50K_PROOF_VOLUME) docker_$(DOCKER_50K_PROOF_VOLUME) >/dev/null 2>&1 || true
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target 50000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_TELEMETRY_LOG)
+
+docker-proof-50k-profile:
+	$(REFERENCE_P2P_CHECK)
+	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
+	@docker volume rm $(DOCKER_50K_PROFILE_VOLUME) docker_$(DOCKER_50K_PROFILE_VOLUME) >/dev/null 2>&1 || true
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROFILE_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target 50000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_PROFILE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_PROFILE_TELEMETRY_LOG)
 
 docker-smoke-once: docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus

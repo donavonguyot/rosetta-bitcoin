@@ -979,7 +979,7 @@ scored AS (
       CASE WHEN byte_source <> official_byte_source THEN 'byte_source;' ELSE '' END ||
       CASE WHEN peer_mode <> official_peer_mode THEN 'peer_mode;' ELSE '' END ||
       CASE WHEN proof_mode <> official_proof_mode THEN 'proof_mode;' ELSE '' END ||
-      CASE WHEN peer NOT IN ('host.docker.internal:48333', 'reference:48333', 'rosetta-bitcoin-core-testnet4:48333') THEN 'peer;' ELSE '' END ||
+      CASE WHEN peer NOT IN ('bitcoin-core-testnet4:48333', 'host.docker.internal:48333', 'reference:48333', 'rosetta-bitcoin-core-testnet4:48333') THEN 'peer;' ELSE '' END ||
       CASE WHEN header_target_height <> official_header_target_height THEN 'header_target_height;' ELSE '' END ||
       CASE WHEN prefetch_depth <> official_prefetch_depth THEN 'prefetch_depth;' ELSE '' END ||
       CASE WHEN script_runner_mode <> official_script_runner_mode THEN 'script_runner_mode;' ELSE '' END ||

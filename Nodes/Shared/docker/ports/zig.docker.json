@@ -30,7 +30,7 @@
     "docker_proof_local": "cd Nodes/Zig && make docker-proof-local",
     "docker_proof_10k": "cd Nodes/Zig && make docker-proof-10k",
     "docker_proof_50k": "cd Nodes/Zig && make docker-proof-50k",
-    "docker_proof_100k": null,
+    "docker_proof_100k": "cd Nodes/Zig && make docker-proof-100k",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_probe_external": null,
@@ -44,7 +44,7 @@
     "local_reference": {
       "supported": true,
       "command": "cd Nodes/Zig && make docker-proof-local",
-      "peer": "host.docker.internal:48333",
+      "peer": "bitcoin-core-testnet4:48333",
       "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
     },
     "external_manual": {
@@ -75,7 +75,8 @@
     "local_reference_result": "Nodes/Shared/conformance/results/zig_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "diagnostic_10k_result": "Nodes/Shared/conformance/results/zig_docker_diagnostic_10k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_result": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, the 5k baseline, and the 50k local Reference P2P shakedown."
+    "performance_100k_result": "Nodes/Shared/conformance/results/zig_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
+    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, the 5k baseline, and the 50k local Reference P2P shakedown. The 100k command surface is implemented for official performance_100k evidence."
   },
   "known_caveats": [
     "Zig script corpus is 45/45 with engine=zig_native and delegated=false",

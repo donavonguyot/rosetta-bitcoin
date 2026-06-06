@@ -91,7 +91,7 @@ def main() -> int:
     target_height = int(os.environ.get("TARGET_HEIGHT", "5000"))
     header_target_height = int(os.environ.get("HEADER_TARGET_HEIGHT", str(target_height)))
     prefetch_depth = int(os.environ.get("PREFETCH_DEPTH", "4"))
-    peer = os.environ.get("PEER", "host.docker.internal:48333")
+    peer = os.environ.get("PEER", "bitcoin-core-testnet4:48333")
     docker_volume = os.environ.get("DOCKER_PROOF_VOLUME", "exbitnode_proof_data")
 
     validated_height = as_int(status.get("validated_height"))

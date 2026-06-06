@@ -6,7 +6,11 @@ enum PerformanceSelfTest {
             ("bip143_cache_matches_uncached", testBIP143SighashCacheMatchesUncached),
             ("taproot_cache_matches_uncached", testTaprootSighashCacheMatchesUncached),
             ("script_runner_first_failure_order", testScriptJobRunnerReportsFirstFailureByJobOrder),
-            ("binary_outpoint_key_shape", testOutpointKeyUsesFixedBinaryRocksKey)
+            ("binary_outpoint_key_shape", testOutpointKeyUsesFixedBinaryRocksKey),
+            ("same_block_spend_compaction", testSameBlockSpendCompaction),
+            ("ordered_utxo_batch_file_store", testOrderedUtxoBatchFileStore),
+            ("legacy_utxo_fallback_toggle", testLegacyUtxoFallbackToggle),
+            ("worker_local_secp_context", testWorkerLocalSecpContext)
         ]
         var results: [[String: Any]] = []
         var passed = 0
@@ -128,6 +132,49 @@ enum PerformanceSelfTest {
             && Array(key.rocksKey.suffix(4)) == [0x04, 0x03, 0x02, 0x01]
     }
 
+    private static func testSameBlockSpendCompaction() -> Bool {
+        let first = OutpointKey(txidInternal: Data(repeating: 1, count: 32), vout: 0)
+        let second = OutpointKey(txidInternal: Data(repeating: 2, count: 32), vout: 1)
+        let utxo = StoredUtxo(value: 1, scriptPubKey: Data([0x51]), height: 1, coinbase: false)
+        let compacted = BlockConnector.compactCreatedForCommit([(first, utxo), (second, utxo)], spentCreated: Set([first]))
+        return compacted.count == 1 && compacted.first?.0 == second
+    }
+
+    private static func testOrderedUtxoBatchFileStore() throws -> Bool {
+        let dir = temporaryDirectory("swiftbitnode-ordered-utxo")
+        let store = try ChainStore(datadir: dir.path, acquireLock: false)
+        let first = OutpointKey(txidInternal: Data(repeating: 3, count: 32), vout: 0)
+        let second = OutpointKey(txidInternal: Data(repeating: 4, count: 32), vout: 1)
+        var state = StoreState()
+        state.utxos[first.display] = StoredUtxo(value: 11, scriptPubKey: Data([0x51]), height: 1, coinbase: false)
+        state.utxos[second.display] = StoredUtxo(value: 22, scriptPubKey: Data([0x52]), height: 2, coinbase: true)
+        let loaded = try store.getUtxosOrdered([second, first], state: state)
+        return loaded.values.count == 2
+            && loaded.values[0]?.value == 22
+            && loaded.values[1]?.value == 11
+    }
+
+    private static func testLegacyUtxoFallbackToggle() throws -> Bool {
+        let key = OutpointKey(txidInternal: Data(repeating: 5, count: 32), vout: 7)
+        let utxo = StoredUtxo(value: 33, scriptPubKey: Data([0x53]), height: 3, coinbase: false)
+        guard let rocksStore = try? ChainStore(datadir: temporaryDirectory("swiftbitnode-legacy-on").path, acquireLock: false, legacyUtxoFallback: true),
+              let rocks = rocksStore.rocks else {
+            return true
+        }
+        try rocks.put(key: key.legacyRocksKey, value: JSONEncoder().encode(utxo))
+        let fallbackOn = try rocksStore.getUtxosOrdered([key], state: StoreState())
+        let fallbackOff = try ChainStore(datadir: rocksStore.datadir.path, acquireLock: false, legacyUtxoFallback: false)
+            .getUtxosOrdered([key], state: StoreState())
+        let onValue = fallbackOn.values.first.flatMap { $0 }?.value
+        let offValue = fallbackOff.values.first.flatMap { $0 }
+        return onValue == 33 && offValue == nil
+    }
+
+    private static func testWorkerLocalSecpContext() -> Bool {
+        let runner = ScriptJobRunner(workerCount: 2)
+        return !NativeSecp256k1.available || runner.usesWorkerLocalSecp
+    }
+
     private static func makeTransaction(inputCount: Int, outputCount: Int) -> Transaction {
         var inputs: [TxInput] = []
         for index in 0..<inputCount {
@@ -181,5 +228,12 @@ enum PerformanceSelfTest {
             loadedFiles: 0,
             fileHashes: [:]
         )
+    }
+
+    private static func temporaryDirectory(_ prefix: String) -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
     }
 }

@@ -37,26 +37,73 @@ enum NativeSecp256k1 {
         shared != nil
     }
 
-    private typealias ContextCreate = @convention(c) (UInt32) -> OpaquePointer?
-    private typealias ContextDestroy = @convention(c) (OpaquePointer?) -> Void
-    private typealias EcdsaSignatureParseDer = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?, Int) -> Int32
-    private typealias EcdsaSignatureNormalize = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?) -> Int32
-    private typealias EcPubkeyParse = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?, Int) -> Int32
-    private typealias EcdsaVerify = @convention(c) (OpaquePointer?, UnsafePointer<UInt8>?, UnsafePointer<UInt8>?, UnsafePointer<UInt8>?) -> Int32
-    private typealias XOnlyPubkeyParse = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?) -> Int32
-    private typealias SchnorrsigVerify = @convention(c) (OpaquePointer?, UnsafePointer<UInt8>?, UnsafePointer<UInt8>?, Int, UnsafePointer<UInt8>?) -> Int32
-    private typealias XOnlyPubkeyTweakAdd = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?, UnsafePointer<UInt8>?) -> Int32
-    private typealias XOnlyPubkeyFromPubkey = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<Int32>?, UnsafePointer<UInt8>?) -> Int32
-    private typealias EcPubkeySerialize = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<Int>?, UnsafePointer<UInt8>?, UInt32) -> Int32
+    fileprivate typealias ContextCreate = @convention(c) (UInt32) -> OpaquePointer?
+    fileprivate typealias ContextDestroy = @convention(c) (OpaquePointer?) -> Void
+    fileprivate typealias EcdsaSignatureParseDer = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?, Int) -> Int32
+    fileprivate typealias EcdsaSignatureNormalize = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?) -> Int32
+    fileprivate typealias EcPubkeyParse = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?, Int) -> Int32
+    fileprivate typealias EcdsaVerify = @convention(c) (OpaquePointer?, UnsafePointer<UInt8>?, UnsafePointer<UInt8>?, UnsafePointer<UInt8>?) -> Int32
+    fileprivate typealias XOnlyPubkeyParse = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?) -> Int32
+    fileprivate typealias SchnorrsigVerify = @convention(c) (OpaquePointer?, UnsafePointer<UInt8>?, UnsafePointer<UInt8>?, Int, UnsafePointer<UInt8>?) -> Int32
+    fileprivate typealias XOnlyPubkeyTweakAdd = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafePointer<UInt8>?, UnsafePointer<UInt8>?) -> Int32
+    fileprivate typealias XOnlyPubkeyFromPubkey = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<Int32>?, UnsafePointer<UInt8>?) -> Int32
+    fileprivate typealias EcPubkeySerialize = @convention(c) (OpaquePointer?, UnsafeMutablePointer<UInt8>?, UnsafeMutablePointer<Int>?, UnsafePointer<UInt8>?, UInt32) -> Int32
 
-    private static let shared = Shared.open()
+    private static let threadContextKey = "swiftbitnode.native_secp256k1_context"
+    private static let shared = Context.open()
+
+    final class Context: @unchecked Sendable {
+        fileprivate let api: API
+        fileprivate let context: OpaquePointer
+
+        fileprivate init(api: API, context: OpaquePointer) {
+            self.api = api
+            self.context = context
+        }
+
+        deinit {
+            api.contextDestroy(context)
+        }
+
+        fileprivate static func open() -> Context? {
+            guard let api = API.open(), let context = api.contextCreate(257) else {
+                return nil
+            }
+            return Context(api: api, context: context)
+        }
+    }
+
+    static func makeContext() -> Context? {
+        Context.open()
+    }
+
+    static func withThreadLocalContext<T>(_ context: Context?, _ body: () throws -> T) rethrows -> T {
+        guard let context else {
+            return try body()
+        }
+        let dictionary = Thread.current.threadDictionary
+        let previous = dictionary[threadContextKey]
+        dictionary[threadContextKey] = context
+        defer {
+            if let previous {
+                dictionary[threadContextKey] = previous
+            } else {
+                dictionary.removeObject(forKey: threadContextKey)
+            }
+        }
+        return try body()
+    }
+
+    private static func currentContext() -> Context? {
+        (Thread.current.threadDictionary[threadContextKey] as? Context) ?? shared
+    }
 
     static func verifyECDSA(pubkey: Data, msg32: Data, derSignature: Data) -> Bool {
         verifyECDSAResult(pubkey: pubkey, msg32: msg32, derSignature: derSignature) == "valid"
     }
 
     static func verifyECDSAResult(pubkey: Data, msg32: Data, derSignature: Data) -> String {
-        guard msg32.count == 32, let shared else {
+        guard msg32.count == 32, let shared = currentContext() else {
             return "malformed_input"
         }
         let api = shared.api
@@ -90,7 +137,7 @@ enum NativeSecp256k1 {
 
     static func verifySchnorrResult(xonlyPubkey: Data, msg32: Data, signature: Data) -> String {
         guard msg32.count == 32, signature.count == 64, xonlyPubkey.count == 32,
-              let shared else {
+              let shared = currentContext() else {
             return "malformed_input"
         }
         let api = shared.api
@@ -123,7 +170,7 @@ enum NativeSecp256k1 {
     }
 
     static func taprootTweakXOnly(xonlyPubkey: Data, merkleRoot: Data) -> (outputXOnly: Data, parity: Int)? {
-        guard xonlyPubkey.count == 32, let shared else {
+        guard xonlyPubkey.count == 32, let shared = currentContext() else {
             return nil
         }
         let api = shared.api
@@ -153,24 +200,7 @@ enum NativeSecp256k1 {
         return SHA256.hash(tagHash + tagHash + payload)
     }
 
-    private final class Shared: @unchecked Sendable {
-        let api: API
-        let context: OpaquePointer
-
-        init(api: API, context: OpaquePointer) {
-            self.api = api
-            self.context = context
-        }
-
-        static func open() -> Shared? {
-            guard let api = API.open(), let context = api.contextCreate(257) else {
-                return nil
-            }
-            return Shared(api: api, context: context)
-        }
-    }
-
-    private struct API: @unchecked Sendable {
+    fileprivate struct API: @unchecked Sendable {
         let handle: UnsafeMutableRawPointer
         let contextCreate: ContextCreate
         let contextDestroy: ContextDestroy

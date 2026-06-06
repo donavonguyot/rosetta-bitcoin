@@ -227,13 +227,23 @@ final class RocksDBNative {
     }
 
     func get(keys: [Data]) throws -> [Data: Data] {
-        guard !keys.isEmpty else { return [:] }
+        let ordered = try getOrdered(keys: keys)
+        var out: [Data: Data] = [:]
+        out.reserveCapacity(ordered.compactMap { $0 }.count)
+        for index in keys.indices {
+            if let value = ordered[index] {
+                out[keys[index]] = value
+            }
+        }
+        return out
+    }
+
+    func getOrdered(keys: [Data]) throws -> [Data?] {
+        guard !keys.isEmpty else { return [] }
         guard let multiGet = api.multiGet else {
-            var out: [Data: Data] = [:]
-            for key in keys {
-                if let value = try get(key: key) {
-                    out[key] = value
-                }
+            var out = Array<Data?>(repeating: nil, count: keys.count)
+            for (index, key) in keys.enumerated() {
+                out[index] = try get(key: key)
             }
             return out
         }
@@ -258,7 +268,7 @@ final class RocksDBNative {
         var errors = Array<UnsafeMutablePointer<CChar>?>(repeating: nil, count: keys.count)
         multiGet(db, readOptions, keys.count, &keyPointers, &keySizes, &values, &valueSizes, &errors)
 
-        var out: [Data: Data] = [:]
+        var out = Array<Data?>(repeating: nil, count: keys.count)
         for index in keys.indices {
             if let err = errors[index] {
                 let message = String(cString: err)
@@ -266,7 +276,7 @@ final class RocksDBNative {
                 throw SwiftBitnodeError.message("rocksdb multi_get failed: \(message)")
             }
             if let value = values[index] {
-                out[keys[index]] = Data(bytes: value, count: valueSizes[index])
+                out[index] = Data(bytes: value, count: valueSizes[index])
                 api.free(value)
             }
         }

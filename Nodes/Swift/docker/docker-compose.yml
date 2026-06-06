@@ -9,6 +9,9 @@ services:
       - swiftbitnode_data:/data
       - ../../Shared:/workspace/Shared:ro
       - ../../Shared/conformance/results:/results
+    networks:
+      - default
+      - reference
 
   swiftbitnode-script-corpus:
     build:
@@ -29,6 +32,9 @@ services:
     volumes:
       - swiftbitnode_proof_data:/data
       - ../../Shared/conformance/results:/results
+    networks:
+      - default
+      - reference
 
 volumes:
   swiftbitnode_data:
@@ -37,3 +43,8 @@ volumes:
     name: ${DOCKER_PROOF_VOLUME:-swiftbitnode_proof_data}
   swiftbitnode_supervisor_data:
     name: ${DOCKER_SUPERVISOR_VOLUME:-swiftbitnode_supervisor_data}
+
+networks:
+  reference:
+    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    external: true

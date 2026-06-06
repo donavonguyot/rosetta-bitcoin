@@ -14,7 +14,8 @@ SCRIPT_RESULT ?= ../Shared/conformance/results/cpp_script_corpus_$(shell date +%
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/cpp_script_corpus_docker_$(shell date +%F).json
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5000
-DOCKER_BENCHMARK_PEERS ?= host.docker.internal:48333
+REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
+DOCKER_BENCHMARK_PEERS ?= bitcoin-core-testnet4:48333
 DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
 DOCKER_HEADERS_MAX ?= 200
 DOCKER_BLOCKS_MAX ?= 2
@@ -24,6 +25,7 @@ DOCKER_SYNC_HEADER_BATCHES_MAX ?= 50
 DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
+REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_BENCHMARK_PEERS)
 
 .PHONY: build test test-core test-wire test-runtime docker-config docker-build docker-warm node-status sync-local cpp-node-storage-proof cpp-node-script-corpus cpp-node-native-crypto-test docker-cpp-native-crypto-proof docker-cpp-supporting-5k-proof docker-cpp-supporting-10k-proof docker-cpp-supporting-50k-proof docker-cpp-primary-100k-proof docker-cpp-rocksdb-storage-proof docker-script-corpus docker-cpp-sync-supervisor docker-cpp-sync-status docker-cpp-sync-stop docker-cpp-sync-resume clean
 
@@ -75,11 +77,7 @@ docker-cpp-native-crypto-proof:
 	  cpbitnode-sync-proof cpbitnode_tests
 
 docker-cpp-supporting-5k-proof:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) DOCKER_BENCHMARK_TARGET=$(DOCKER_BENCHMARK_TARGET) \

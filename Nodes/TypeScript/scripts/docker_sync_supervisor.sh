@@ -8,7 +8,7 @@ POLL_SEC="${POLL_SEC:-120}"
 CHECK_SEC="${CHECK_SEC:-5}"
 STOP_FILE=".tsbitnode_supervisor_stop"
 RESUME_FILE=".tsbitnode_supervisor_resume"
-PEER="${PEERS:-host.docker.internal:48333}"
+PEER="${PEERS:-bitcoin-core-testnet4:48333}"
 
 log_line() {
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" >&2

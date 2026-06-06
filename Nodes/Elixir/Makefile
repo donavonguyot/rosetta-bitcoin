@@ -2,7 +2,8 @@ MIX ?= mix
 DATA_DIR ?= ./data-elixir
 PEERS ?= 127.0.0.1:48333
 DOCKER_COMPOSE ?= docker compose -f docker/docker-compose.yml
-DOCKER_PEERS ?= host.docker.internal:48333
+REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
+DOCKER_PEERS ?= bitcoin-core-testnet4:48333
 DOCKER_REBUILD ?= 0
 DOCKER_PROOF_VOLUME ?= exbitnode_proof_data
 DOCKER_SYNC_VOLUME ?= exbitnode_sync_data
@@ -32,6 +33,7 @@ DOCKER_SYNC_HEADER_BATCHES_MAX ?= 50
 DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
+REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_PEERS)
 
 .PHONY: test status node-status sync-local storage-proof script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-long-sync-proof docker-10k-sync-proof docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 
@@ -81,11 +83,7 @@ docker-script-corpus:
 	  --result-path $(DOCKER_SCRIPT_RESULT)
 
 docker-proof-local:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build exbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	@set -e; \
@@ -119,11 +117,7 @@ docker-proof-10k:
 	  DOCKER_BENCHMARK_BLOCKS_MAX=10001
 
 docker-proof-50k:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build exbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f exbitnode_50k_proof_data >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=exbitnode_50k_proof_data RUNTIME_SURFACE=docker \
@@ -147,11 +141,7 @@ docker-proof-50k:
 	@rm -f .docker-elixir-50k-status.json .docker-elixir-50k-sync-exit
 
 docker-long-sync-proof:
-	@for i in $$(seq 1 60); do \
-	  nc -z 127.0.0.1 48333 && break; \
-	  sleep 2; \
-	  if [ "$$i" = "60" ]; then echo "error: host-published Core P2P port 48333 not reachable" >&2; exit 1; fi; \
-	done
+	$(REFERENCE_P2P_CHECK)
 	@docker volume rm -f $(DOCKER_LONG_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_LONG_PROOF_VOLUME) RUNTIME_SURFACE=docker_supervisor \
 	  PEERS=$(DOCKER_PEERS) \

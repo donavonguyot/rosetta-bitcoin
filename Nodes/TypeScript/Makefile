@@ -6,12 +6,15 @@ DOCKER_REBUILD ?= 0
 DOCKER_SYNC_TARGET ?= 5000
 DOCKER_SYNC_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
+REFERENCE_DOCKER_NETWORK ?= rosetta-reference-node_default
+DOCKER_P2P_PEER ?= bitcoin-core-testnet4:48333
 DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/typescript_docker_supporting_5k_benchmark_$(shell date +%F).json
 DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/typescript_docker_supporting_10k_benchmark_$(shell date +%F).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/typescript_script_corpus_$(shell date +%F).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/typescript_script_corpus_docker_$(shell date +%F).json
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
+REFERENCE_P2P_CHECK = docker run --rm --network $(REFERENCE_DOCKER_NETWORK) -v $(abspath ../Shared/docker):/shared/docker:ro python:3.12-alpine python3 /shared/docker/check_reference_p2p.py --peer $(DOCKER_P2P_PEER)
 
 .PHONY: build test native-status storage-proof script-corpus docker-config docker-build docker-warm docker-script-corpus docker-typescript-native-proof docker-typescript-native-10k-proof docker-typescript-sync-status docker-typescript-sync-supervisor docker-typescript-sync-stop docker-typescript-sync-resume docker-smoke-once
 
@@ -48,9 +51,11 @@ docker-script-corpus:
 	  --runtime-surface docker
 
 docker-typescript-native-proof:
+	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build tsbitnode-sync-proof tsbitnode-sync-status; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=native \
+	  PEERS=$(DOCKER_P2P_PEER) \
 	  DOCKER_SYNC_TARGET=$(DOCKER_SYNC_TARGET) DOCKER_SYNC_BLOCKS_MAX=$(DOCKER_SYNC_BLOCKS_MAX) \
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) \
 	  DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \

@@ -26,6 +26,12 @@ struct TimingCollector {
         if out["utxo_load"] == nil, let prevout = out["prevout_batch_load"] {
             out["utxo_load"] = prevout
         }
+        if out["script_wall_ms"] == nil, let script = out["script_verify"] {
+            out["script_wall_ms"] = script
+        }
+        if out["script_worker_cpu_ms"] == nil, let worker = out["script_verify_worker_cpu"] {
+            out["script_worker_cpu_ms"] = worker
+        }
         for name in required {
             out[name, default: 0] += 0
         }
@@ -50,6 +56,13 @@ struct TimingCollector {
                 "rank": index + 1,
                 "height": block.height,
                 "block_connect_store_commit_ms": block.blockConnectStoreCommitMs,
+                "commit_ms": block.commitMs,
+                "utxo_load_ms": block.utxoLoadMs,
+                "script_verify_ms": block.scriptVerifyMs,
+                "script_verify_worker_cpu_ms": block.scriptVerifyWorkerCpuMs,
+                "same_block_spends": block.sameBlockSpends,
+                "created_utxos": block.createdUtxos,
+                "spent_external": block.spentExternal,
                 "tx_count": block.txCount,
                 "vin_count": block.vinCount,
                 "vout_count": block.voutCount,
@@ -65,6 +78,13 @@ struct TimingCollector {
 struct SlowBlockTiming: Sendable {
     let height: Int
     let blockConnectStoreCommitMs: Int
+    let commitMs: Int
+    let utxoLoadMs: Int
+    let scriptVerifyMs: Int
+    let scriptVerifyWorkerCpuMs: Int
+    let sameBlockSpends: Int
+    let createdUtxos: Int
+    let spentExternal: Int
     let txCount: Int
     let vinCount: Int
     let voutCount: Int
@@ -86,7 +106,14 @@ enum BlockConnector {
         return try connect(raw: raw, height: height, state: state, store: store, timing: &timing).connected
     }
 
-    static func connect(raw: Data, height: Int, state: StoreState, store: ChainStore, timing: inout TimingCollector) throws -> (connected: Bool, state: StoreState) {
+    static func connect(
+        raw: Data,
+        height: Int,
+        state: StoreState,
+        store: ChainStore,
+        timing: inout TimingCollector,
+        scriptRunner: ScriptJobRunner? = nil
+    ) throws -> (connected: Bool, state: StoreState) {
         let connectStarted = DispatchTime.now().uptimeNanoseconds
         let block = try timing.measure("block_parse_validate") {
             try Codec.parseBlock(raw, height: height)
@@ -101,23 +128,54 @@ enum BlockConnector {
         }
 
         let txidsInBlock = Set(block.transactions.map(\.txidInternal))
-        var externalPrevoutKeys = Set<OutpointKey>()
+        var externalPrevoutSet = Set<OutpointKey>()
+        var externalPrevoutKeys: [OutpointKey] = []
+        var expectedSpends = 0
+        var expectedCreates = 0
+        var expectedScriptJobs = 0
+        for tx in block.transactions {
+            expectedCreates += tx.outputs.filter(\.isSpendableCoreV1).count
+        }
         for tx in block.transactions.dropFirst() {
+            expectedSpends += tx.inputs.count
+            expectedScriptJobs += tx.inputs.count
             for input in tx.inputs {
                 if !txidsInBlock.contains(input.previousTxidInternal) {
-                    externalPrevoutKeys.insert(outpointKey(txidInternal: input.previousTxidInternal, vout: input.vout))
+                    let key = outpointKey(txidInternal: input.previousTxidInternal, vout: input.vout)
+                    if externalPrevoutSet.insert(key).inserted {
+                        externalPrevoutKeys.append(key)
+                    }
                 }
             }
         }
-        let loaded = try timing.measure("prevout_batch_load") {
-            try store.getUtxos(Array(externalPrevoutKeys), state: state)
+        let utxoLoadStarted = DispatchTime.now().uptimeNanoseconds
+        let orderedLoaded = try store.getUtxosOrdered(externalPrevoutKeys, state: state)
+        let utxoLoadMicros = Int64((DispatchTime.now().uptimeNanoseconds - utxoLoadStarted) / 1_000)
+        timing.addMicros("prevout_batch_load", utxoLoadMicros)
+        timing.addMicros("utxo_load", utxoLoadMicros)
+        timing.addMicros("prevout_multi_get_call", orderedLoaded.timing.prevoutMultiGetCallMicros)
+        timing.addMicros("prevout_legacy_fallback_get", orderedLoaded.timing.prevoutLegacyFallbackGetMicros)
+        timing.addMicros("prevout_utxo_decode", orderedLoaded.timing.prevoutUtxoDecodeMicros)
+        var loaded: [OutpointKey: StoredUtxo] = [:]
+        loaded.reserveCapacity(externalPrevoutKeys.count)
+        for index in externalPrevoutKeys.indices {
+            if let utxo = orderedLoaded.values[index] {
+                loaded[externalPrevoutKeys[index]] = utxo
+            }
         }
 
-        var spent: [(OutpointKey, StoredUtxo)] = []
-        var spentKeysInBlock = Set<OutpointKey>()
-        var created: [(OutpointKey, StoredUtxo)] = []
-        var createdInBlock: [OutpointKey: StoredUtxo] = [:]
+        var externalSpends: [(OutpointKey, StoredUtxo)] = []
+        externalSpends.reserveCapacity(externalPrevoutKeys.count)
+        var spentInBlock = Set<OutpointKey>()
+        spentInBlock.reserveCapacity(expectedSpends)
+        var createdList: [(OutpointKey, StoredUtxo)] = []
+        createdList.reserveCapacity(expectedCreates)
+        var createdLookup: [OutpointKey: StoredUtxo] = [:]
+        createdLookup.reserveCapacity(expectedCreates)
+        var createdSpent = Set<OutpointKey>()
+        createdSpent.reserveCapacity(expectedSpends)
         var scriptJobs: [ScriptVerifyJob] = []
+        scriptJobs.reserveCapacity(expectedScriptJobs)
         var vinCount = 0
         var voutCount = 0
         var scriptInputCount = 0
@@ -135,14 +193,14 @@ enum BlockConnector {
                 outputScriptTypes[scriptType(output.scriptPubKey), default: 0] += 1
             }
             if txIndex == 0 {
-                addOutputs(tx: tx, height: height, coinbase: true, created: &created, createdInBlock: &createdInBlock)
+                addOutputs(tx: tx, height: height, coinbase: true, created: &createdList, createdLookup: &createdLookup)
                 continue
             }
             scriptInputCount += tx.inputs.count
             var prevouts: [CorpusPrevout] = []
             for input in tx.inputs {
                 let key = outpointKey(txidInternal: input.previousTxidInternal, vout: input.vout)
-                guard let prev = createdInBlock[key] ?? loaded[key] else {
+                guard let prev = createdLookup[key] ?? loaded[key] else {
                     try store.setBlocker(height: height, failure: "missing UTXO \(key.display)", txid: tx.txid, inputIndex: prevouts.count)
                     return (false, state)
                 }
@@ -154,11 +212,11 @@ enum BlockConnector {
             var txInputKeys = Set<OutpointKey>()
             for (inputIndex, input) in tx.inputs.enumerated() {
                 let key = outpointKey(txidInternal: input.previousTxidInternal, vout: input.vout)
-                guard txInputKeys.insert(key).inserted, !spentKeysInBlock.contains(key) else {
+                guard txInputKeys.insert(key).inserted, !spentInBlock.contains(key) else {
                     try store.setBlocker(height: height, failure: "duplicate input spend \(key.display)", txid: tx.txid, inputIndex: inputIndex)
                     return (false, state)
                 }
-                let prev = (createdInBlock[key] ?? loaded[key])!
+                let prev = (createdLookup[key] ?? loaded[key])!
                 if prev.coinbase && height - prev.height < 100 {
                     try store.setBlocker(height: height, failure: "coinbase spend before maturity", txid: tx.txid, inputIndex: inputIndex)
                     return (false, state)
@@ -205,20 +263,25 @@ enum BlockConnector {
             for input in spendInputs {
                 let key = input.key
                 let prev = input.prev
-                if createdInBlock.removeValue(forKey: key) != nil {
-                    created.removeAll { $0.0 == key }
+                if createdLookup[key] != nil {
+                    createdSpent.insert(key)
                 } else {
-                    spent.append((key, prev))
+                    externalSpends.append((key, prev))
                 }
-                spentKeysInBlock.insert(key)
+                spentInBlock.insert(key)
             }
-            addOutputs(tx: tx, height: height, coinbase: false, created: &created, createdInBlock: &createdInBlock)
+            addOutputs(tx: tx, height: height, coinbase: false, created: &createdList, createdLookup: &createdLookup)
         }
 
         let verifyStart = DispatchTime.now().uptimeNanoseconds
-        let scriptResult = ScriptJobRunner.verify(scriptJobs)
-        timing.addElapsed("script_verify", since: verifyStart)
+        let runner = scriptRunner ?? ScriptJobRunner()
+        let scriptResult = runner.verify(scriptJobs)
+        let scriptVerifyMicros = Int64((DispatchTime.now().uptimeNanoseconds - verifyStart) / 1_000)
+        timing.addMicros("script_verify", scriptVerifyMicros)
+        timing.addMicros("script_wall_ms", scriptVerifyMicros)
         timing.addMicros("script_verify_worker_cpu", scriptResult.workerMicros)
+        timing.addMicros("script_worker_cpu_ms", scriptResult.workerMicros)
+        timing.addMicros("script_runner_wait", scriptResult.waitMicros)
         if let failure = scriptResult.failure {
             let result = failure.result
             try store.setBlocker(
@@ -230,12 +293,27 @@ enum BlockConnector {
             return (false, state)
         }
 
-        let newState = try timing.measure("commit") {
-            try store.commitConnectedBlock(state: state, raw: raw, height: height, hash: block.hash, created: created, spent: spent)
-        }
+        let retainedCreated = compactCreatedForCommit(createdList, spentCreated: createdSpent)
+        let commitStart = DispatchTime.now().uptimeNanoseconds
+        let commit = try store.commitConnectedBlock(state: state, raw: raw, height: height, hash: block.hash, created: retainedCreated, spent: externalSpends)
+        let commitMicros = Int64((DispatchTime.now().uptimeNanoseconds - commitStart) / 1_000)
+        timing.addMicros("commit", commitMicros)
+        timing.addMicros("utxo_apply", commitMicros)
+        timing.addMicros("utxo_delete_prepare", commit.timing.utxoDeletePrepareMicros)
+        timing.addMicros("utxo_put_prepare", commit.timing.utxoPutPrepareMicros)
+        timing.addMicros("undo_put_prepare", commit.timing.undoPutPrepareMicros)
+        timing.addMicros("metadata_put_prepare", commit.timing.metadataPutPrepareMicros)
+        timing.addMicros("rocksdb_write", commit.timing.rocksdbWriteMicros)
         timing.recordSlowBlock(SlowBlockTiming(
             height: height,
             blockConnectStoreCommitMs: Int((DispatchTime.now().uptimeNanoseconds - connectStarted) / 1_000_000),
+            commitMs: Int((commitMicros + 999) / 1_000),
+            utxoLoadMs: Int((utxoLoadMicros + 999) / 1_000),
+            scriptVerifyMs: Int((scriptVerifyMicros + 999) / 1_000),
+            scriptVerifyWorkerCpuMs: Int((scriptResult.workerMicros + 999) / 1_000),
+            sameBlockSpends: createdSpent.count,
+            createdUtxos: retainedCreated.count,
+            spentExternal: externalSpends.count,
             txCount: block.transactions.count,
             vinCount: vinCount,
             voutCount: voutCount,
@@ -244,10 +322,10 @@ enum BlockConnector {
             spentPrevoutScriptTypes: spentPrevoutScriptTypes,
             outputScriptTypes: outputScriptTypes
         ))
-        return (true, newState)
+        return (true, commit.state)
     }
 
-    private static func addOutputs(tx: Transaction, height: Int, coinbase: Bool, created: inout [(OutpointKey, StoredUtxo)], createdInBlock: inout [OutpointKey: StoredUtxo]) {
+    private static func addOutputs(tx: Transaction, height: Int, coinbase: Bool, created: inout [(OutpointKey, StoredUtxo)], createdLookup: inout [OutpointKey: StoredUtxo]) {
         if height == 0, coinbase {
             return
         }
@@ -255,8 +333,15 @@ enum BlockConnector {
             let key = OutpointKey(txidInternal: tx.txidInternal, vout: UInt32(index))
             let utxo = StoredUtxo(value: output.value, scriptPubKey: output.scriptPubKey, height: height, coinbase: coinbase)
             created.append((key, utxo))
-            createdInBlock[key] = utxo
+            createdLookup[key] = utxo
         }
+    }
+
+    static func compactCreatedForCommit(_ created: [(OutpointKey, StoredUtxo)], spentCreated: Set<OutpointKey>) -> [(OutpointKey, StoredUtxo)] {
+        guard !spentCreated.isEmpty else {
+            return created
+        }
+        return created.filter { !spentCreated.contains($0.0) }
     }
 
     private static func outpointKey(txidInternal: Data, vout: UInt32) -> OutpointKey {

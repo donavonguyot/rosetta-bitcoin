@@ -347,7 +347,7 @@ private func versionPayload(startHeight: Int) -> Data {
 
 private func appendNetAddr(_ out: inout Data) {
     out.append(UInt64(1 | 8).littleEndianData)
-    out.append(Data(repeating: 0, count: 16))
+    out.append(Data([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1]))
     out.append(UInt16(0).bigEndianData)
 }
 

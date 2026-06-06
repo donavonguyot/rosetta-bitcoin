@@ -1,10 +1,9 @@
 (library
  (name ocbitnode)
  (public_name ocbitnode)
- (libraries unix yojson digestif secp256k1)
+ (libraries unix threads yojson digestif secp256k1)
  (foreign_stubs
   (language c)
   (names ocbitnode_rocks_stubs ocbitnode_crypto_stubs))
  (c_library_flags
   (:standard -lrocksdb -lstdc++ -lsecp256k1)))
-

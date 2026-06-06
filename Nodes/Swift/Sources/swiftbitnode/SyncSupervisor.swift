@@ -5,12 +5,14 @@ enum SyncSupervisor {
         let target = args.int("target", default: Int(ProcessInfo.processInfo.environment["TARGET_HEIGHT"] ?? "") ?? 10000)
         let chunkSize = max(1, args.int("chunk-size", default: Int(ProcessInfo.processInfo.environment["CHUNK_SIZE"] ?? "") ?? 5000))
         let maxRetries = max(0, args.int("max-retries", default: Int(ProcessInfo.processInfo.environment["MAX_RETRIES"] ?? "") ?? 3))
-        let peer = args.string("peer", default: ProcessInfo.processInfo.environment["PEER"] ?? "host.docker.internal:48333")
+        let defaultPeer = (ProcessInfo.processInfo.environment["SWIFTBITNODE_RUNTIME_SURFACE"] ?? "") == "docker" ? "bitcoin-core-testnet4:48333" : "127.0.0.1:48333"
+        let peer = args.string("peer", default: ProcessInfo.processInfo.environment["PEER"] ?? defaultPeer)
         let datadir = args.string("datadir", default: ProcessInfo.processInfo.environment["DATA_DIR"] ?? "/data")
         let output = args.string("output", default: args.string("status-output", default: ""))
         let prefetchDepth = max(1, Int(ProcessInfo.processInfo.environment["PREFETCH_DEPTH"] ?? "") ?? args.int("prefetch-depth", default: 4))
         let started = DispatchTime.now().uptimeNanoseconds
         let store = try ChainStore(datadir: datadir)
+        let scriptRunner = ScriptJobRunner()
         let stopMarker = store.datadir.appendingPathComponent(".swiftbitnode_supervisor_stop")
         var state = try store.load()
         var timing = TimingCollector()
@@ -40,7 +42,7 @@ enum SyncSupervisor {
                         advertiseHeight: state.validatedHeight
                     ) { block in
                         let connectStart = DispatchTime.now().uptimeNanoseconds
-                        let result = try BlockConnector.connect(raw: block.raw, height: block.height, state: state, store: store, timing: &timing)
+                        let result = try BlockConnector.connect(raw: block.raw, height: block.height, state: state, store: store, timing: &timing, scriptRunner: scriptRunner)
                         timing.addElapsed("block_connect_store_commit", since: connectStart)
                         if result.connected {
                             chunkConnected += 1
@@ -115,9 +117,9 @@ enum SyncSupervisor {
             "current_blocker": blocker,
             "failures": failures,
             "chunks": chunks,
-            "stage_totals_ms": timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"]),
+            "stage_totals_ms": timing.stageTotalsMs(required: requiredTimingBuckets),
             "timing_summary": [
-                "stage_totals_ms": timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"]),
+                "stage_totals_ms": timing.stageTotalsMs(required: requiredTimingBuckets),
                 "slow_blocks": timing.slowBlocksJson(),
                 "total_ms": elapsedMs
             ],
@@ -130,4 +132,11 @@ enum SyncSupervisor {
     private static func elapsedMs(_ started: UInt64) -> Int {
         max(1, Int((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000))
     }
+
+    private static let requiredTimingBuckets = [
+        "prevout_batch_load", "utxo_load", "prevout_multi_get_call", "prevout_legacy_fallback_get", "prevout_utxo_decode",
+        "script_verify", "script_runner_wait", "script_wall_ms", "script_verify_worker_cpu", "script_worker_cpu_ms",
+        "utxo_apply", "utxo_delete_prepare", "utxo_put_prepare", "undo_put_prepare", "metadata_put_prepare",
+        "rocksdb_write", "commit", "block_connect_store_commit", "p2p_fetch"
+    ]
 }

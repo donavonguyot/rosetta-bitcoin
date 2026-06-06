@@ -10,7 +10,7 @@ not live P2P tip maintenance or binary-gate completion.
 ```text
 runtime_surface: docker
 peer_mode: local_reference
-peer: host.docker.internal:48333
+peer: see proof artifact; current reruns use bitcoin-core-testnet4:48333
 evidence_lane: baseline_5k_p2p
 header_height: 5000
 stored_block_height: 5000

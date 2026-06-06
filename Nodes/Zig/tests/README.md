@@ -3,7 +3,7 @@
 `zig build test` currently exercises the scaffold's reusable core module:
 
 - Chainstate Codec v2 byte key/value golden vectors.
-- Port-local operational DB boundary detection.
+- RocksDB runtime truth setup.
 - Ordered `get_many_utxos` shape.
 - Block-local double-spend guard shape.
 

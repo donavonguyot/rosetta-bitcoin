@@ -3,13 +3,11 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       CHAIN: testnet4
       DATA_DIR: /data
       CHAINSTATE_BACKEND: rocksdb
-      PEERS: ${PEERS:-host.docker.internal:48333}
+      PEERS: ${PEERS:-bitcoin-core-testnet4:48333}
       HEADERS_MAX: ${HEADERS_MAX:-200}
       HEADER_BATCHES_MAX: ${HEADER_BATCHES_MAX:-1}
       BLOCKS_MAX: ${BLOCKS_MAX:-2}
@@ -25,6 +23,9 @@ services:
       RUNTIME_SURFACE: ${RUNTIME_SURFACE:-docker}
     volumes:
       - exbitnode_proof_data:/data
+    networks:
+      - default
+      - reference
 
 volumes:
   exbitnode_data:
@@ -33,3 +34,8 @@ volumes:
     name: ${DOCKER_PROOF_VOLUME:-exbitnode_proof_data}
   exbitnode_sync_data:
     name: ${DOCKER_SYNC_VOLUME:-exbitnode_sync_data}
+
+networks:
+  reference:
+    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    external: true

@@ -4,15 +4,18 @@ enum LocalReferenceProof {
     static func run(args: Args) throws {
         let output = args.string("output", default: args.string("result-path", default: ""))
         let target = args.int("target", default: Int(ProcessInfo.processInfo.environment["TARGET_HEIGHT"] ?? "") ?? 5000)
-        let peer = args.string("peer", default: ProcessInfo.processInfo.environment["PEER"] ?? "host.docker.internal:48333")
+        let defaultPeer = (ProcessInfo.processInfo.environment["SWIFTBITNODE_RUNTIME_SURFACE"] ?? "") == "docker" ? "bitcoin-core-testnet4:48333" : "127.0.0.1:48333"
+        let peer = args.string("peer", default: ProcessInfo.processInfo.environment["PEER"] ?? defaultPeer)
         let datadir = args.string("datadir", default: ProcessInfo.processInfo.environment["DATA_DIR"] ?? "/data")
         let prefetchDepth = Int(ProcessInfo.processInfo.environment["PREFETCH_DEPTH"] ?? "") ?? 1
         let scriptRunnerMode = ProcessInfo.processInfo.environment["SCRIPT_RUNNER_MODE"] ?? "serial"
         let rocksdbWalDisabled = (ProcessInfo.processInfo.environment["ROCKSDB_WAL_DISABLED"] ?? "false").lowercased() == "true"
         let freshState = (ProcessInfo.processInfo.environment["FRESH_STATE"] ?? "true").lowercased() != "false"
         let deleteLegacyUtxoKeys = (ProcessInfo.processInfo.environment["SWIFTBITNODE_DELETE_LEGACY_UTXO_KEYS"] ?? "false").lowercased() == "true"
+        let legacyUtxoFallback = (ProcessInfo.processInfo.environment["SWIFTBITNODE_LEGACY_UTXO_FALLBACK"] ?? "true").lowercased() != "false"
         let started = DispatchTime.now().uptimeNanoseconds
         let store = try ChainStore(datadir: datadir)
+        let scriptRunner = ScriptJobRunner()
         let initialState = try store.load()
         var rollingState = initialState
         let startHeight = max(0, initialState.validatedHeight + 1)
@@ -30,7 +33,7 @@ enum LocalReferenceProof {
             let fetchStart = DispatchTime.now().uptimeNanoseconds
             blocksFetched = try P2PFetcher.fetch(peer: peer, target: target, startHeight: startHeight, prefetchDepth: prefetchDepth) { block in
                 let connectStart = DispatchTime.now().uptimeNanoseconds
-                let result = try BlockConnector.connect(raw: block.raw, height: block.height, state: rollingState, store: store, timing: &timing)
+                let result = try BlockConnector.connect(raw: block.raw, height: block.height, state: rollingState, store: store, timing: &timing, scriptRunner: scriptRunner)
                 let connected = result.connected
                 timing.addElapsed("block_connect_store_commit", since: connectStart)
                 if connected {
@@ -82,7 +85,13 @@ enum LocalReferenceProof {
         if !reached && failures.isEmpty {
             failures.append("target not reached")
         }
-        let stages = timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"])
+        let requiredTimingBuckets = [
+            "prevout_batch_load", "utxo_load", "prevout_multi_get_call", "prevout_legacy_fallback_get", "prevout_utxo_decode",
+            "script_verify", "script_runner_wait", "script_wall_ms", "script_verify_worker_cpu", "script_worker_cpu_ms",
+            "utxo_apply", "utxo_delete_prepare", "utxo_put_prepare", "undo_put_prepare", "metadata_put_prepare",
+            "rocksdb_write", "commit", "block_connect_store_commit", "p2p_fetch"
+        ]
+        let stages = timing.stageTotalsMs(required: requiredTimingBuckets)
         let elapsedMs = max(1, Int((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000))
         let timingSummary: [String: Any] = [
             "stage_totals_ms": stages,
@@ -129,9 +138,12 @@ enum LocalReferenceProof {
             "native_crypto_backend": Constants.nativeCryptoBackend,
             "native_crypto_available": (NativeReport.build()["native_crypto_available"] as? Bool) ?? false,
             "script_runner_mode": scriptRunnerMode,
+            "script_runner_workers": scriptRunner.workers,
+            "script_worker_local_secp_context": scriptRunner.usesWorkerLocalSecp,
             "rocksdb_wal_disabled": rocksdbWalDisabled,
             "rocksdb_tuning": RocksDBNative.tuningMetadata,
             "delete_legacy_utxo_keys": deleteLegacyUtxoKeys,
+            "legacy_utxo_fallback": legacyUtxoFallback,
             "prefetch_depth": prefetchDepth,
             "resume_supported": true,
             "fresh_state": freshState,
@@ -223,7 +235,12 @@ enum LocalReferenceProof {
             "phase": phase,
             "utxos": state.chainstateUtxoCount,
             "last_block_ms": NSNull(),
-            "timing_buckets_ms": timing.stageTotalsMs(required: ["prevout_batch_load", "utxo_load", "script_verify", "utxo_apply", "commit", "block_connect_store_commit", "p2p_fetch"]),
+            "timing_buckets_ms": timing.stageTotalsMs(required: [
+                "prevout_batch_load", "utxo_load", "prevout_multi_get_call", "prevout_legacy_fallback_get", "prevout_utxo_decode",
+                "script_verify", "script_runner_wait", "script_wall_ms", "script_verify_worker_cpu", "script_worker_cpu_ms",
+                "utxo_apply", "utxo_delete_prepare", "utxo_put_prepare", "undo_put_prepare", "metadata_put_prepare",
+                "rocksdb_write", "commit", "block_connect_store_commit", "p2p_fetch"
+            ]),
             "current_blocker": state.currentBlocker ?? NSNull(),
             "process_running": phase != "complete"
         ]

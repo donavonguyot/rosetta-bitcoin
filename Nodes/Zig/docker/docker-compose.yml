@@ -9,6 +9,9 @@ services:
       - zigbitnode_data:/data
       - ../../Shared:/workspace/Shared:ro
       - ../../Shared/conformance/results:/results
+    networks:
+      - default
+      - reference
 
   zigbitnode-script-corpus:
     build:
@@ -29,6 +32,9 @@ services:
     volumes:
       - zigbitnode_proof_data:/data
       - ../../Shared/conformance/results:/results
+    networks:
+      - default
+      - reference
 
 volumes:
   zigbitnode_data:
@@ -37,3 +43,8 @@ volumes:
     name: ${DOCKER_PROOF_VOLUME:-zigbitnode_proof_data}
   zigbitnode_supervisor_data:
     name: ${DOCKER_SUPERVISOR_VOLUME:-zigbitnode_supervisor_data}
+
+networks:
+  reference:
+    name: ${REFERENCE_DOCKER_NETWORK:-rosetta-reference-node_default}
+    external: true
