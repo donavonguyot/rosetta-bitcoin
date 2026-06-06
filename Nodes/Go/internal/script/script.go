@@ -111,10 +111,11 @@ type SpentPrevout struct {
 }
 
 type VerifyInputOptions struct {
-	ScriptPubKey  []byte
-	Amount        int64
-	SpentPrevouts []SpentPrevout
-	Verifier      *crypto.Verifier
+	ScriptPubKey      []byte
+	Amount            int64
+	SpentPrevouts     []SpentPrevout
+	Verifier          *crypto.Verifier
+	SighashPrecompute *SighashPrecompute
 }
 
 func VerifyTransactionInput(transaction tx.Transaction, inputIndex int, options VerifyInputOptions) error {
@@ -146,6 +147,9 @@ func VerifyTransactionInput(transaction tx.Transaction, inputIndex int, options 
 		defer verifier.Close()
 	}
 	cache := newSighashCache(transaction, options.SpentPrevouts)
+	if options.SighashPrecompute != nil {
+		cache = newSighashCacheFromPrecompute(transaction, options.SpentPrevouts, options.SighashPrecompute)
+	}
 	ok := verifyScript(transaction.Inputs[inputIndex].ScriptSig, options.ScriptPubKey, transaction, inputIndex, options.Amount, witness, options.SpentPrevouts, verifier, cache)
 	if !ok {
 		return VerifyError{fmt.Sprintf("script verification failed for input %d", inputIndex)}
@@ -1164,6 +1168,7 @@ func bip143Sighash(transaction tx.Transaction, inputIndex int, scriptCode []byte
 type sighashCache struct {
 	tx       tx.Transaction
 	prevouts []SpentPrevout
+	pre      *SighashPrecompute
 
 	bip143PrevoutsSet bool
 	bip143Prevouts    []byte
@@ -1186,8 +1191,47 @@ type sighashCache struct {
 	tapSingle           map[int][]byte
 }
 
+type SighashPrecompute struct {
+	bip143Prevouts []byte
+	bip143Sequence []byte
+	bip143Outputs  []byte
+	bip143Single   [][]byte
+
+	tapPrevouts      []byte
+	tapAmounts       []byte
+	tapScriptPubKeys []byte
+	tapSequences     []byte
+	tapOutputs       []byte
+	tapSingle        [][]byte
+}
+
+func NewSighashPrecompute(transaction tx.Transaction, prevouts []SpentPrevout) *SighashPrecompute {
+	pre := &SighashPrecompute{
+		bip143Prevouts:   bip143HashPrevoutsForTx(transaction),
+		bip143Sequence:   bip143HashSequenceForTx(transaction),
+		bip143Outputs:    bip143HashOutputsForTx(transaction),
+		bip143Single:     make([][]byte, len(transaction.Outputs)),
+		tapPrevouts:      shaPrevouts(transaction),
+		tapAmounts:       shaAmounts(prevouts),
+		tapScriptPubKeys: shaScriptPubKeys(prevouts),
+		tapSequences:     shaSequences(transaction),
+		tapOutputs:       shaOutputsAll(transaction),
+		tapSingle:        make([][]byte, len(transaction.Outputs)),
+	}
+	for i, output := range transaction.Outputs {
+		serialized := tx.SerializeTxOut(output)
+		pre.bip143Single[i] = tx.DoubleSHA(serialized)
+		pre.tapSingle[i] = sha256Bytes(serialized)
+	}
+	return pre
+}
+
 func newSighashCache(transaction tx.Transaction, prevouts []SpentPrevout) *sighashCache {
 	return &sighashCache{tx: transaction, prevouts: prevouts}
+}
+
+func newSighashCacheFromPrecompute(transaction tx.Transaction, prevouts []SpentPrevout, pre *SighashPrecompute) *sighashCache {
+	return &sighashCache{tx: transaction, prevouts: prevouts, pre: pre}
 }
 
 func bip143SighashCached(cache *sighashCache, transaction tx.Transaction, inputIndex int, scriptCode []byte, amount int64, sighashType int) []byte {
@@ -1228,42 +1272,42 @@ func bip143SighashCached(cache *sighashCache, transaction tx.Transaction, inputI
 }
 
 func (c *sighashCache) bip143HashPrevouts() []byte {
+	if c.pre != nil {
+		return c.pre.bip143Prevouts
+	}
 	if !c.bip143PrevoutsSet {
-		var blob []byte
-		for _, in := range c.tx.Inputs {
-			blob = append(blob, tx.SerializeOutPoint(in.PreviousOutput)...)
-		}
-		c.bip143Prevouts = tx.DoubleSHA(blob)
+		c.bip143Prevouts = bip143HashPrevoutsForTx(c.tx)
 		c.bip143PrevoutsSet = true
 	}
 	return c.bip143Prevouts
 }
 
 func (c *sighashCache) bip143HashSequence() []byte {
+	if c.pre != nil {
+		return c.pre.bip143Sequence
+	}
 	if !c.bip143SequenceSet {
-		var blob []byte
-		for _, in := range c.tx.Inputs {
-			blob = append(blob, tx.PackInt32(in.Sequence)...)
-		}
-		c.bip143Sequence = tx.DoubleSHA(blob)
+		c.bip143Sequence = bip143HashSequenceForTx(c.tx)
 		c.bip143SequenceSet = true
 	}
 	return c.bip143Sequence
 }
 
 func (c *sighashCache) bip143HashOutputs() []byte {
+	if c.pre != nil {
+		return c.pre.bip143Outputs
+	}
 	if !c.bip143OutputsSet {
-		var blob []byte
-		for _, out := range c.tx.Outputs {
-			blob = append(blob, tx.SerializeTxOut(out)...)
-		}
-		c.bip143Outputs = tx.DoubleSHA(blob)
+		c.bip143Outputs = bip143HashOutputsForTx(c.tx)
 		c.bip143OutputsSet = true
 	}
 	return c.bip143Outputs
 }
 
 func (c *sighashCache) bip143HashSingle(index int) []byte {
+	if c.pre != nil {
+		return c.pre.bip143Single[index]
+	}
 	if c.bip143Single == nil {
 		c.bip143Single = map[int][]byte{}
 	}
@@ -1273,6 +1317,30 @@ func (c *sighashCache) bip143HashSingle(index int) []byte {
 	value := tx.DoubleSHA(tx.SerializeTxOut(c.tx.Outputs[index]))
 	c.bip143Single[index] = value
 	return value
+}
+
+func bip143HashPrevoutsForTx(transaction tx.Transaction) []byte {
+	var blob []byte
+	for _, in := range transaction.Inputs {
+		blob = append(blob, tx.SerializeOutPoint(in.PreviousOutput)...)
+	}
+	return tx.DoubleSHA(blob)
+}
+
+func bip143HashSequenceForTx(transaction tx.Transaction) []byte {
+	var blob []byte
+	for _, in := range transaction.Inputs {
+		blob = append(blob, tx.PackInt32(in.Sequence)...)
+	}
+	return tx.DoubleSHA(blob)
+}
+
+func bip143HashOutputsForTx(transaction tx.Transaction) []byte {
+	var blob []byte
+	for _, out := range transaction.Outputs {
+		blob = append(blob, tx.SerializeTxOut(out)...)
+	}
+	return tx.DoubleSHA(blob)
 }
 
 func verifyTaproot(scriptPubKey, scriptSig []byte, witness [][]byte, transaction tx.Transaction, inputIndex int, spentPrevouts []SpentPrevout, verifier *crypto.Verifier, cache *sighashCache) bool {
@@ -1435,6 +1503,9 @@ func tapShaPrevouts(cache *sighashCache, transaction tx.Transaction) []byte {
 	if cache == nil {
 		return shaPrevouts(transaction)
 	}
+	if cache.pre != nil {
+		return cache.pre.tapPrevouts
+	}
 	if !cache.tapPrevoutsSet {
 		cache.tapPrevouts = shaPrevouts(transaction)
 		cache.tapPrevoutsSet = true
@@ -1445,6 +1516,9 @@ func tapShaPrevouts(cache *sighashCache, transaction tx.Transaction) []byte {
 func tapShaAmounts(cache *sighashCache, prevouts []SpentPrevout) []byte {
 	if cache == nil {
 		return shaAmounts(prevouts)
+	}
+	if cache.pre != nil {
+		return cache.pre.tapAmounts
 	}
 	if !cache.tapAmountsSet {
 		cache.tapAmounts = shaAmounts(prevouts)
@@ -1457,6 +1531,9 @@ func tapShaScriptPubKeys(cache *sighashCache, prevouts []SpentPrevout) []byte {
 	if cache == nil {
 		return shaScriptPubKeys(prevouts)
 	}
+	if cache.pre != nil {
+		return cache.pre.tapScriptPubKeys
+	}
 	if !cache.tapScriptPubKeysSet {
 		cache.tapScriptPubKeys = shaScriptPubKeys(prevouts)
 		cache.tapScriptPubKeysSet = true
@@ -1467,6 +1544,9 @@ func tapShaScriptPubKeys(cache *sighashCache, prevouts []SpentPrevout) []byte {
 func tapShaSequences(cache *sighashCache, transaction tx.Transaction) []byte {
 	if cache == nil {
 		return shaSequences(transaction)
+	}
+	if cache.pre != nil {
+		return cache.pre.tapSequences
 	}
 	if !cache.tapSequencesSet {
 		cache.tapSequences = shaSequences(transaction)
@@ -1479,6 +1559,9 @@ func tapShaOutputsAll(cache *sighashCache, transaction tx.Transaction) []byte {
 	if cache == nil {
 		return shaOutputsAll(transaction)
 	}
+	if cache.pre != nil {
+		return cache.pre.tapOutputs
+	}
 	if !cache.tapOutputsSet {
 		cache.tapOutputs = shaOutputsAll(transaction)
 		cache.tapOutputsSet = true
@@ -1489,6 +1572,9 @@ func tapShaOutputsAll(cache *sighashCache, transaction tx.Transaction) []byte {
 func tapShaOutputSingle(cache *sighashCache, transaction tx.Transaction, inputIndex int) []byte {
 	if cache == nil {
 		return sha256Bytes(tx.SerializeTxOut(transaction.Outputs[inputIndex]))
+	}
+	if cache.pre != nil {
+		return cache.pre.tapSingle[inputIndex]
 	}
 	if cache.tapSingle == nil {
 		cache.tapSingle = map[int][]byte{}

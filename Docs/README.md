@@ -11,6 +11,8 @@ canonical docs below instead of adding a one-off plan file.
   corpus-to-tip consensus readiness.
 - `../Nodes/Shared/conformance/BENCHMARK_CONTRACT.md` - official benchmark
   suite, telemetry requirements, and port lifecycle classifications.
+- `../Nodes/Shared/testing/TEST_COVERAGE_CONTRACT.md` - Project-indexed test
+  command, coverage, and critical-domain posture.
 
 These pages do not own repeated status rows. Rebuild/import Project and query
 `Project/project.db` for mission-control status:
@@ -22,6 +24,7 @@ python3 Project/scripts/report.py --db Project/project.db --section port-lifecyc
 python3 Project/scripts/report.py --db Project/project.db --section current-evidence
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section test-coverage
 ```
 
 ## Canonical Policy
@@ -35,6 +38,8 @@ python3 Project/scripts/report.py --db Project/project.db --section consensus-ru
 - `../Nodes/Shared/storage/STORAGE_GATE.md` - storage gate expectations.
 - `../Nodes/Shared/chainstate/CHAINSTATE_STORE.md` - native chainstate contract.
 - `../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md` - Docker runtime contract.
+- `../Nodes/Shared/testing/TEST_COVERAGE_CONTRACT.md` - testing and coverage
+  control contract.
 
 ## Durable Lessons
 

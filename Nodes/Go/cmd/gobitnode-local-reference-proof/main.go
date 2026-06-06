@@ -413,6 +413,19 @@ func mergeTiming(dst *connect.TimingSummary, src connect.TimingSummary) {
 	for stage, millis := range src.StageTotalsMillis {
 		dst.StageTotalsMillis[stage] += millis
 	}
+	dst.UTXOLookupCount += src.UTXOLookupCount
+	dst.UTXOKeyBytes += src.UTXOKeyBytes
+	dst.UTXOValueBytes += src.UTXOValueBytes
+	dst.CreatedUTXOs += src.CreatedUTXOs
+	dst.SpentExternal += src.SpentExternal
+	dst.SameBlockSpends += src.SameBlockSpends
+	dst.RunnerBatches += src.RunnerBatches
+	dst.TxCount += src.TxCount
+	dst.InputCount += src.InputCount
+	dst.ScriptJobs += src.ScriptJobs
+	if src.ScriptThreads > dst.ScriptThreads {
+		dst.ScriptThreads = src.ScriptThreads
+	}
 	dst.SlowBlocks = append(dst.SlowBlocks, src.SlowBlocks...)
 	sort.Slice(dst.SlowBlocks, func(i, j int) bool {
 		return dst.SlowBlocks[i].Millis > dst.SlowBlocks[j].Millis
@@ -518,6 +531,14 @@ func timingBuckets(timing connect.TimingSummary) map[string]int64 {
 		"prevout_utxo_decode",
 		"prevout_legacy_fallback_get",
 		"script_verify_worker_cpu",
+		"script_wall_ms",
+		"script_worker_cpu_ms",
+		"utxo_key_encode",
+		"utxo_delete_prepare",
+		"utxo_put_prepare",
+		"undo_put_prepare",
+		"metadata_put_prepare",
+		"rocksdb_write",
 	} {
 		buckets[stage] = timing.StageTotalsMillis[stage]
 	}

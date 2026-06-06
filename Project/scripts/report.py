@@ -18,6 +18,9 @@ SECTIONS = (
     "current-evidence",
     "historical-evidence-candidates",
     "command-surface",
+    "test-commands",
+    "test-coverage",
+    "critical-test-domains",
     "conformance",
     "blocker-catalog",
     "blocker-matrix",
@@ -43,6 +46,9 @@ SECTION_ALIASES = {
     "current": "current-evidence",
     "historical": "historical-evidence-candidates",
     "commands": "command-surface",
+    "tests": "test-coverage",
+    "coverage": "test-coverage",
+    "domains": "critical-test-domains",
     "blockers": "blocker-catalog",
     "benchmark-suite": "benchmark-suite",
     "gates": "benchmark-gates",
@@ -269,6 +275,88 @@ def print_command_surface(connection: sqlite3.Connection) -> None:
         """,
     )
     print(table(("port", "command", "supported", "run"), commands))
+
+
+def print_test_commands(connection: sqlite3.Connection) -> None:
+    print("## Test Commands")
+    print()
+    data = rows(
+        connection,
+        """
+        select port, lifecycle_status, command_key, category, supported,
+               discovery_method, command, notes
+        from test_command_surface
+        order by port, command_key
+        """,
+    )
+    print(table(("port", "lifecycle", "command", "category", "supported", "discovery", "run", "notes"), data))
+
+
+def print_test_coverage(connection: sqlite3.Connection) -> None:
+    print("## Test Coverage")
+    print()
+    data = rows(
+        connection,
+        """
+        select port, lifecycle_status, baseline_par_status,
+               coverage_control_status, unit_supported, latest_unit_result,
+               coverage_supported, latest_coverage_result, coverage_tool,
+               line_percent, branch_percent, missing_domain_count, domain_count
+        from test_coverage_matrix
+        order by
+          case lifecycle_status
+            when 'active_contender' then 0
+            when 'active_development' then 1
+            when 'baseline_retired' then 2
+            else 3
+          end,
+          port
+        """,
+    )
+    print(
+        table(
+            (
+                "port",
+                "lifecycle",
+                "baseline_par",
+                "coverage",
+                "unit_cmd",
+                "unit_result",
+                "coverage_cmd",
+                "coverage_result",
+                "tool",
+                "line",
+                "branch",
+                "missing_domains",
+                "domains",
+            ),
+            data,
+        )
+    )
+
+
+def print_critical_test_domains(connection: sqlite3.Connection) -> None:
+    print("## Critical Test Domains")
+    print()
+    data = rows(
+        connection,
+        """
+        select port, lifecycle_status, domain, domain_status, evidence, notes
+        from critical_test_domain_coverage
+        order by port,
+          case domain
+            when 'script_verification' then 0
+            when 'sighash_taproot_witness' then 1
+            when 'utxo_apply_undo_accounting' then 2
+            when 'block_connect' then 3
+            when 'rocksdb_persistence_restart' then 4
+            when 'p2p_fetch_handshake' then 5
+            when 'node_status_reporting' then 6
+            else 7
+          end
+        """,
+    )
+    print(table(("port", "lifecycle", "domain", "status", "evidence", "notes"), data))
 
 
 def print_conformance(connection: sqlite3.Connection) -> None:
@@ -642,6 +730,9 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "current-evidence": print_current_evidence,
     "historical-evidence-candidates": print_historical_evidence_candidates,
     "command-surface": print_command_surface,
+    "test-commands": print_test_commands,
+    "test-coverage": print_test_coverage,
+    "critical-test-domains": print_critical_test_domains,
     "conformance": print_conformance,
     "blocker-catalog": print_blocker_catalog,
     "blocker-matrix": print_blocker_matrix,

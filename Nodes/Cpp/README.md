@@ -23,7 +23,9 @@ Quality bar (current):
 - no silent consensus skips — stop honestly on missing rules;
 - live sync progress is the primary forward gate.
 
-Coverage is **monitored, not gated**: `./scripts/coverage_report.sh` prints gcovr line/branch totals for `src/` without failing CI. Thresholds can be ratcheted later via `THRESHOLD_LINE` / `THRESHOLD_BRANCH`.
+Coverage is **monitored, not gated**. Cpp's historical broad suite is now lane
+classified so Project can see what each surface proves without turning global
+line/branch percentages into a cross-port ratchet.
 
 ## Requirements
 
@@ -64,21 +66,47 @@ ctest --test-dir build --output-on-failure
 ./build/cpbitnode_tests
 ```
 
+Cpp tests are intentionally grouped into lanes:
+
+```bash
+make test-core      # consensus, script, native crypto, RocksDB, block connect
+make test-wire      # wire primitives, messages, compact block, JSON, params
+make test-runtime   # CLI/settings/transport/sync hot-path smoke
+
+ctest --test-dir build -L core-regression --output-on-failure
+ctest --test-dir build -L wire-codec --output-on-failure
+ctest --test-dir build -L runtime-smoke --output-on-failure
+
+./build/cpbitnode_tests --suite core
+./build/cpbitnode_tests --suite wire
+./build/cpbitnode_tests --suite runtime
+```
+
+`make test` / full `ctest` still runs the whole local suite. The `wire-codec`
+lane is valuable Cpp hardening because this port carried a historically broad
+systems test posture; it is not a template for every other port's readiness
+bar.
+
 ## Coverage (report-only)
 
-Build with instrumentation, run tests, and print gcovr summary for `src/`:
+Build with instrumentation, run a lane, and print gcovr summary for `src/`.
+The default suite is `core`, which matches the readiness-focused lane:
 
 ```bash
-./scripts/coverage_report.sh
+./scripts/coverage_report.sh --suite core
 ```
 
-Optional ratchet thresholds (defaults are report-only — thresholds `0`):
+Broad coverage remains available for local archaeology:
 
 ```bash
-THRESHOLD_LINE=80 THRESHOLD_BRANCH=70 ./scripts/coverage_report.sh
+./scripts/coverage_report.sh --suite all
 ```
 
-CLI binaries under `cli/` are smoke-tested only and are outside the coverage report.
+Threshold environment variables still exist for private experiments, but Project
+does not use global Cpp line/branch thresholds as benchmark readiness. CLI
+binaries under `cli/` are smoke-tested only and are outside the coverage report.
+Serving, mempool, and deeper P2P manager coverage remain future runtime work,
+not prerequisites for the 5k/50k/100k benchmark suite.
 
 ## Sync (local Bitcoin Core testnet4)
 

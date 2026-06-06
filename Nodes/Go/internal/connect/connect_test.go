@@ -38,12 +38,16 @@ func TestBlockViewExternalSpendProducesDeleteAndUndo(t *testing.T) {
 	outpoint := storage.NewOutPointFromDisplay("0200000000000000000000000000000000000000000000000000000000000000", 1)
 	utxo := storage.NewUTXO(outpoint, 20, []byte{0x51}, 1, false)
 	view.loaded[outpoint] = &utxo
+	view.addSpentScriptType([]byte{0x76, 0xa9, 0x14, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 0x88, 0xac})
 	view.markSpent(outpoint, utxo)
 	if got := view.externalSpends(); len(got) != 1 || got[0] != outpoint {
 		t.Fatalf("external spend not recorded: %#v", got)
 	}
 	if got := view.undoEntries(); len(got) != 1 || got[0].Outpoint != outpoint {
 		t.Fatalf("external undo not recorded: %#v", got)
+	}
+	if got := view.spentPrevoutScriptTypes["p2pkh"]; got != 1 {
+		t.Fatalf("spent script type telemetry missing: %#v", view.spentPrevoutScriptTypes)
 	}
 }
 
@@ -70,29 +74,34 @@ func TestScriptRunnerDeterministicFirstFailure(t *testing.T) {
 	t.Setenv("GOBITNODE_PAR_SCRIPT_VERIFY", "1")
 	t.Setenv("GOBITNODE_PAR_SCRIPT_THREADS", "4")
 	runner := newScriptRunner()
+	defer runner.close()
 	firstTx := txtypes.Transaction{}
 	secondTx := txtypes.Transaction{}
+	firstOptions := script.VerifyInputOptions{}
+	secondOptions := script.VerifyInputOptions{}
+	firstUTXO := storage.UTXO{ScriptPubKeyBytes: []byte{0x51}}
+	secondUTXO := storage.UTXO{ScriptPubKeyBytes: []byte{0x51}}
 	jobs := []scriptJob{
 		{
 			txid:       "first",
 			inputIndex: 0,
 			tx:         &firstTx,
-			utxo:       storage.UTXO{ScriptPubKeyBytes: []byte{0x51}},
-			options:    script.VerifyInputOptions{},
+			utxo:       &firstUTXO,
+			options:    &firstOptions,
 		},
 		{
 			txid:       "second",
 			inputIndex: 0,
 			tx:         &secondTx,
-			utxo:       storage.UTXO{ScriptPubKeyBytes: []byte{0x51}},
-			options:    script.VerifyInputOptions{},
+			utxo:       &secondUTXO,
+			options:    &secondOptions,
 		},
 	}
-	failure, workerTime := runner.verify(jobs)
+	failure, stats := runner.verify(jobs)
 	if failure == nil {
 		t.Fatal("expected failure")
 	}
-	if workerTime <= 0 {
+	if stats.workerTime <= 0 || stats.batches != 1 {
 		t.Fatal("expected worker verification timing")
 	}
 	if failure.job.txid != "first" {

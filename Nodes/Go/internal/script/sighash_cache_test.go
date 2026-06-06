@@ -11,12 +11,17 @@ func TestBIP143SighashCacheMatchesUncached(t *testing.T) {
 	transaction := cacheTestTransaction()
 	prevouts := cacheTestPrevouts()
 	cache := newSighashCache(transaction, prevouts)
+	precomputed := newSighashCacheFromPrecompute(transaction, prevouts, NewSighashPrecompute(transaction, prevouts))
 	scriptCode := []byte{OP_DUP, OP_HASH160, 20, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, OP_EQUALVERIFY, OP_CHECKSIG}
 	for _, hashType := range []int{1, 2, 3, 0x81, 0x82, 0x83} {
 		got := bip143SighashCached(cache, transaction, 1, scriptCode, prevouts[1].Amount, hashType)
 		want := bip143Sighash(transaction, 1, scriptCode, prevouts[1].Amount, hashType)
 		if !bytes.Equal(got, want) {
 			t.Fatalf("BIP143 hash type %#x mismatch: got %x want %x", hashType, got, want)
+		}
+		gotPrecomputed := bip143SighashCached(precomputed, transaction, 1, scriptCode, prevouts[1].Amount, hashType)
+		if !bytes.Equal(gotPrecomputed, want) {
+			t.Fatalf("precomputed BIP143 hash type %#x mismatch: got %x want %x", hashType, gotPrecomputed, want)
 		}
 	}
 }
@@ -25,6 +30,7 @@ func TestTaprootSighashCacheMatchesUncached(t *testing.T) {
 	transaction := cacheTestTransaction()
 	prevouts := cacheTestPrevouts()
 	cache := newSighashCache(transaction, prevouts)
+	precomputed := newSighashCacheFromPrecompute(transaction, prevouts, NewSighashPrecompute(transaction, prevouts))
 	for _, opt := range []taprootOptions{
 		{hashType: taprootSighashDefault, codeSeparatorPos: 0xffffffff},
 		{hashType: taprootSighashAll, codeSeparatorPos: 0xffffffff},
@@ -45,6 +51,13 @@ func TestTaprootSighashCacheMatchesUncached(t *testing.T) {
 		}
 		if !bytes.Equal(got, want) {
 			t.Fatalf("Taproot hash type %#x mismatch: got %x want %x", opt.hashType, got, want)
+		}
+		gotPrecomputed, err := taprootSighashCached(precomputed, transaction, 1, prevouts, opt)
+		if err != nil {
+			t.Fatalf("precomputed taproot hash type %#x: %v", opt.hashType, err)
+		}
+		if !bytes.Equal(gotPrecomputed, want) {
+			t.Fatalf("precomputed Taproot hash type %#x mismatch: got %x want %x", opt.hashType, gotPrecomputed, want)
 		}
 	}
 }

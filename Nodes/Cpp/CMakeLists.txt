@@ -123,8 +123,9 @@ if(CPBITNODE_USE_NATIVE_SECP256K1)
     add_test(
         NAME shared_script_corpus
         COMMAND cpbitnode-script-corpus
-            --result-path ${CMAKE_CURRENT_SOURCE_DIR}/../Shared/conformance/results/cpp_script_corpus_2026-06-03.json
+            --result-path ${CMAKE_BINARY_DIR}/cpp_script_corpus_ctest.json
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    set_tests_properties(shared_script_corpus PROPERTIES LABELS "core-regression;script-corpus")
 endif()
 foreach(_exe cpbitnode cpbitnode-db cpbitnode-healthcheck cpbitnode-sync cpbitnode-storage-proof cpbitnode-blocker-inspect)
     target_link_libraries(${_exe} PRIVATE cpbitnode_lib)
@@ -162,4 +163,9 @@ else()
     target_link_libraries(cpbitnode_tests PRIVATE cpbitnode_lib)
     target_compile_definitions(cpbitnode_tests PRIVATE CPBITNODE_BUILD_DIR="${CMAKE_BINARY_DIR}")
 endif()
-add_test(NAME cpbitnode_tests COMMAND cpbitnode_tests WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME cpp_core_regression COMMAND cpbitnode_tests --suite core WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(cpp_core_regression PROPERTIES LABELS "core-regression")
+add_test(NAME cpp_wire_codec COMMAND cpbitnode_tests --suite wire WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(cpp_wire_codec PROPERTIES LABELS "wire-codec")
+add_test(NAME cpp_runtime_smoke COMMAND cpbitnode_tests --suite runtime WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+set_tests_properties(cpp_runtime_smoke PROPERTIES LABELS "runtime-smoke")

@@ -242,14 +242,24 @@ func (o OutPoint) DisplayTxID() string {
 }
 
 func (o OutPoint) KeyBytes() []byte {
-	if o.hash == ([32]byte{}) && o.TxID != "" {
+	var key [37]byte
+	if o.WriteKeyBytes(key[:]) {
+		return append([]byte{}, key[:]...)
+	}
+	if o.TxID != "" {
 		return utxoKeyBytes(o.TxID, o.Vout)
 	}
-	key := make([]byte, 37)
-	key[0] = binaryUTXOPrefix[0]
-	copy(key[1:33], o.hash[:])
-	binary.LittleEndian.PutUint32(key[33:37], o.Vout)
-	return key
+	return append([]byte{}, key[:]...)
+}
+
+func (o OutPoint) WriteKeyBytes(dst []byte) bool {
+	if len(dst) < 37 || (o.hash == ([32]byte{}) && o.TxID != "") {
+		return false
+	}
+	dst[0] = binaryUTXOPrefix[0]
+	copy(dst[1:33], o.hash[:])
+	binary.LittleEndian.PutUint32(dst[33:37], o.Vout)
+	return true
 }
 
 func (o OutPoint) Less(other OutPoint) bool {
@@ -274,6 +284,9 @@ type UTXOReadTiming struct {
 	MultiGetMillis       int64
 	DecodeMillis         int64
 	LegacyFallbackMillis int64
+	LookupCount          int64
+	KeyBytes             int64
+	ValueBytes           int64
 }
 
 func (s *Store) GetUTXOs(outpoints []OutPoint) (map[OutPoint]*UTXO, error) {
@@ -287,13 +300,11 @@ func (s *Store) GetUTXOsWithTiming(outpoints []OutPoint) (map[OutPoint]*UTXO, UT
 	if len(outpoints) == 0 {
 		return result, timing, nil
 	}
-	keys := make([][]byte, len(outpoints))
-	for i, outpoint := range outpoints {
-		keys[i] = outpoint.KeyBytes()
-	}
 	start := time.Now()
-	values, err := s.multiGet(keys)
+	values, keyBytes, err := s.multiGetOutpoints(outpoints)
 	timing.MultiGetMillis += time.Since(start).Milliseconds()
+	timing.LookupCount += int64(len(outpoints))
+	timing.KeyBytes += keyBytes
 	if err != nil {
 		return nil, timing, err
 	}
@@ -312,6 +323,7 @@ func (s *Store) GetUTXOsWithTiming(outpoints []OutPoint) (map[OutPoint]*UTXO, UT
 			result[outpoint] = nil
 			continue
 		}
+		timing.ValueBytes += int64(len(value))
 		start = time.Now()
 		utxo, err := decodeUTXOForOutPoint(outpoint, value)
 		timing.DecodeMillis += time.Since(start).Milliseconds()
@@ -403,7 +415,11 @@ func (s *Store) CommitBlockWithTiming(commit BlockCommit) (CommitTiming, error) 
 	start := time.Now()
 	for _, outpoint := range commit.Spent {
 		keyStart := time.Now()
-		key := outpoint.KeyBytes()
+		var fixedKey [37]byte
+		key := fixedKey[:]
+		if !outpoint.WriteKeyBytes(key) {
+			key = outpoint.KeyBytes()
+		}
 		timing.UTXOKeyEncode += time.Since(keyStart)
 		writeBatchDelete(batch, key)
 	}
@@ -415,7 +431,12 @@ func (s *Store) CommitBlockWithTiming(commit BlockCommit) (CommitTiming, error) 
 			return timing, err
 		}
 		keyStart := time.Now()
-		key := utxo.OutPoint().KeyBytes()
+		outpoint := utxo.OutPoint()
+		var fixedKey [37]byte
+		key := fixedKey[:]
+		if !outpoint.WriteKeyBytes(key) {
+			key = outpoint.KeyBytes()
+		}
 		timing.UTXOKeyEncode += time.Since(keyStart)
 		writeBatchPut(batch, key, payload)
 	}
@@ -550,6 +571,83 @@ func writeBatchDelete(batch *C.rocksdb_writebatch_t, key []byte) {
 		ckey = (*C.char)(unsafe.Pointer(&key[0]))
 	}
 	C.rocksdb_writebatch_delete(batch, ckey, C.size_t(len(key)))
+}
+
+func (s *Store) multiGetOutpoints(outpoints []OutPoint) ([][]byte, int64, error) {
+	if len(outpoints) == 0 {
+		return [][]byte{}, 0, nil
+	}
+	count := len(outpoints)
+	pointerBytes := C.size_t(count) * C.size_t(unsafe.Sizeof(uintptr(0)))
+	sizeBytes := C.size_t(count) * C.size_t(unsafe.Sizeof(C.size_t(0)))
+	keyPointerData := C.malloc(pointerBytes)
+	keySizeData := C.malloc(sizeBytes)
+	fixedKeyData := C.malloc(C.size_t(count * 37))
+	if keyPointerData == nil || keySizeData == nil || fixedKeyData == nil {
+		if keyPointerData != nil {
+			C.free(keyPointerData)
+		}
+		if keySizeData != nil {
+			C.free(keySizeData)
+		}
+		if fixedKeyData != nil {
+			C.free(fixedKeyData)
+		}
+		return nil, 0, errors.New("rocksdb multiget key allocation failed")
+	}
+	defer C.free(keyPointerData)
+	defer C.free(keySizeData)
+	defer C.free(fixedKeyData)
+	ckeys := unsafe.Slice((**C.char)(keyPointerData), count)
+	keySizes := unsafe.Slice((*C.size_t)(keySizeData), count)
+	fallbackKeys := []*C.char{}
+	defer func() {
+		for _, key := range fallbackKeys {
+			C.free(unsafe.Pointer(key))
+		}
+	}()
+	var keyBytes int64
+	for i, outpoint := range outpoints {
+		ptr := unsafe.Add(fixedKeyData, i*37)
+		key := unsafe.Slice((*byte)(ptr), 37)
+		if outpoint.WriteKeyBytes(key) {
+			ckeys[i] = (*C.char)(ptr)
+			keySizes[i] = C.size_t(37)
+			keyBytes += 37
+			continue
+		}
+		encoded := outpoint.KeyBytes()
+		copied := (*C.char)(C.CBytes(encoded))
+		fallbackKeys = append(fallbackKeys, copied)
+		ckeys[i] = copied
+		keySizes[i] = C.size_t(len(encoded))
+		keyBytes += int64(len(encoded))
+	}
+	values := make([]*C.char, count)
+	valueSizes := make([]C.size_t, count)
+	errs := make([]*C.char, count)
+	C.rocksdb_multi_get(
+		s.db,
+		s.ro,
+		C.size_t(count),
+		(**C.char)(keyPointerData),
+		(*C.size_t)(keySizeData),
+		(**C.char)(unsafe.Pointer(&values[0])),
+		(*C.size_t)(unsafe.Pointer(&valueSizes[0])),
+		(**C.char)(unsafe.Pointer(&errs[0])),
+	)
+	out := make([][]byte, count)
+	for i := range outpoints {
+		if errs[i] != nil {
+			defer C.rocksdb_free(unsafe.Pointer(errs[i]))
+			return nil, keyBytes, errors.New(C.GoString(errs[i]))
+		}
+		if values[i] != nil {
+			out[i] = C.GoBytes(unsafe.Pointer(values[i]), C.int(valueSizes[i]))
+			C.rocksdb_free(unsafe.Pointer(values[i]))
+		}
+	}
+	return out, keyBytes, nil
 }
 
 func (s *Store) multiGet(keys [][]byte) ([][]byte, error) {

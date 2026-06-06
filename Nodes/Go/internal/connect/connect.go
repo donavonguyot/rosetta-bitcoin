@@ -85,6 +85,7 @@ func RunStore(store *storage.Store, opts Options) (Summary, error) {
 	timing := newTimingCollector()
 	runner := newScriptRunner()
 	defer runner.close()
+	timing.setCount("script_threads", int64(runner.threads()))
 	for height := startHeight; height <= opts.Target; height++ {
 		blockStarted := time.Now()
 		var raw []byte
@@ -113,7 +114,7 @@ func RunStore(store *storage.Store, opts Options) (Summary, error) {
 		}); err != nil {
 			return Summary{}, fmt.Errorf("height %d: decode transactions: %w", height, err)
 		}
-		staged, spent, undo, blocker, err := connectTransactions(store, runner, timing, height, info.Hash, txs)
+		staged, spent, undo, spentScriptTypes, blocker, err := connectTransactions(store, runner, timing, height, info.Hash, txs)
 		if err != nil {
 			return Summary{}, fmt.Errorf("height %d: %w", height, err)
 		}
@@ -155,7 +156,11 @@ func RunStore(store *storage.Store, opts Options) (Summary, error) {
 			return Summary{}, err
 		}
 		recordCommitTiming(timing, commitTiming)
-		timing.recordBlock(height, time.Since(blockStarted), blockShape(txs))
+		shape := blockShape(txs)
+		shape.SpentPrevoutScriptTypes = spentScriptTypes
+		timing.addCount("tx_count", int64(shape.TxCount))
+		timing.addCount("input_count", int64(shape.VinCount))
+		timing.recordBlock(height, time.Since(blockStarted), shape)
 		if !opts.Quiet && (height%opts.Progress == 0 || height == opts.Target) {
 			fmt.Printf("gobitnode-connect height=%d hash=%s txs=%d utxos=%d\n", height, info.Hash, info.TxCount, utxoCount)
 		}
@@ -214,9 +219,19 @@ func scriptType(script []byte) string {
 	}
 }
 
-func connectTransactions(store *storage.Store, runner scriptRunner, timing *timingCollector, height int, blockHash string, txs []txtypes.Transaction) ([]storage.UTXO, []storage.OutPoint, []storage.UndoEntry, map[string]any, error) {
+func shouldPrecomputeSighashes(prevouts []script.SpentPrevout) bool {
+	for _, prevout := range prevouts {
+		switch scriptType(prevout.ScriptPubKey) {
+		case "p2sh", "p2wpkh", "p2wsh", "p2tr":
+			return true
+		}
+	}
+	return false
+}
+
+func connectTransactions(store *storage.Store, runner *scriptRunner, timing *timingCollector, height int, blockHash string, txs []txtypes.Transaction) ([]storage.UTXO, []storage.OutPoint, []storage.UndoEntry, map[string]int, map[string]any, error) {
 	if len(txs) == 0 || !txs[0].IsCoinbase() {
-		return nil, nil, nil, blocker(height, blockHash, "", 0, "block_first_transaction_not_coinbase", "block does not begin with a coinbase transaction"), nil
+		return nil, nil, nil, nil, blocker(height, blockHash, "", 0, "block_first_transaction_not_coinbase", "block does not begin with a coinbase transaction"), nil
 	}
 	expectedSpends, expectedCreates := blockMutationShape(txs)
 	view := newBlockView(expectedSpends, expectedCreates)
@@ -229,9 +244,12 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 		timing.addMillis("prevout_multi_get_call", readTiming.MultiGetMillis)
 		timing.addMillis("prevout_utxo_decode", readTiming.DecodeMillis)
 		timing.addMillis("prevout_legacy_fallback_get", readTiming.LegacyFallbackMillis)
+		timing.addCount("utxo_lookup_count", readTiming.LookupCount)
+		timing.addCount("utxo_key_bytes", readTiming.KeyBytes)
+		timing.addCount("utxo_value_bytes", readTiming.ValueBytes)
 		return loadErr
 	}); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	view.loaded = loaded
 	jobs := make([]scriptJob, 0, expectedSpends)
@@ -248,7 +266,7 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 			continue
 		}
 		if len(tx.Inputs) == 0 {
-			return nil, nil, nil, blocker(height, blockHash, txid, 0, "transaction_without_inputs", "non-coinbase transaction has no inputs"), nil
+			return nil, nil, nil, nil, blocker(height, blockHash, txid, 0, "transaction_without_inputs", "non-coinbase transaction has no inputs"), nil
 		}
 		spentPrevouts := make([]script.SpentPrevout, len(tx.Inputs))
 		inputUtxos := make([]storage.UTXO, len(tx.Inputs))
@@ -257,36 +275,43 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 		for inputIndex, input := range tx.Inputs {
 			outpoint := outpointFromInput(input)
 			if inputSeen[outpoint] || view.isSpent(outpoint) {
-				return nil, nil, nil, blockerWithPrevout(height, blockHash, txid, inputIndex, input, storage.UTXO{}, "duplicate_spend", "duplicate spend inside block"), nil
+				return nil, nil, nil, nil, blockerWithPrevout(height, blockHash, txid, inputIndex, input, storage.UTXO{}, "duplicate_spend", "duplicate spend inside block"), nil
 			}
 			inputSeen[outpoint] = true
 			utxo, ok := view.find(outpoint)
 			if !ok {
-				return nil, nil, nil, blocker(height, blockHash, txid, inputIndex, "missing_utxo", "Go connect replay could not find the spent prevout"), nil
+				return nil, nil, nil, nil, blocker(height, blockHash, txid, inputIndex, "missing_utxo", "Go connect replay could not find the spent prevout"), nil
 			}
 			if utxo.Coinbase && height-utxo.Height < 100 {
-				return nil, nil, nil, blockerWithPrevout(height, blockHash, txid, inputIndex, input, utxo, "coinbase_maturity", "coinbase spend before 100 confirmations"), nil
+				return nil, nil, nil, nil, blockerWithPrevout(height, blockHash, txid, inputIndex, input, utxo, "coinbase_maturity", "coinbase spend before 100 confirmations"), nil
 			}
 			spk, err := utxo.ScriptBytes()
 			if err != nil {
-				return nil, nil, nil, nil, err
+				return nil, nil, nil, nil, nil, err
 			}
 			spentPrevouts[inputIndex] = script.SpentPrevout{Amount: utxo.Value, ScriptPubKey: spk}
 			inputUtxos[inputIndex] = utxo
 			inputOutpoints[inputIndex] = outpoint
+			view.addSpentScriptType(spk)
 		}
-		for inputIndex, input := range tx.Inputs {
+		var precompute *script.SighashPrecompute
+		if shouldPrecomputeSighashes(spentPrevouts) {
+			precompute = script.NewSighashPrecompute(*tx, spentPrevouts)
+		}
+		options := make([]script.VerifyInputOptions, len(tx.Inputs))
+		for inputIndex := range tx.Inputs {
+			options[inputIndex] = script.VerifyInputOptions{
+				ScriptPubKey:      spentPrevouts[inputIndex].ScriptPubKey,
+				Amount:            spentPrevouts[inputIndex].Amount,
+				SpentPrevouts:     spentPrevouts,
+				SighashPrecompute: precompute,
+			}
 			jobs = append(jobs, scriptJob{
 				tx:         tx,
 				txid:       txid,
 				inputIndex: inputIndex,
-				input:      input,
-				utxo:       inputUtxos[inputIndex],
-				options: script.VerifyInputOptions{
-					ScriptPubKey:  spentPrevouts[inputIndex].ScriptPubKey,
-					Amount:        spentPrevouts[inputIndex].Amount,
-					SpentPrevouts: spentPrevouts,
-				},
+				utxo:       &inputUtxos[inputIndex],
+				options:    &options[inputIndex],
 			})
 			view.markSpent(inputOutpoints[inputIndex], inputUtxos[inputIndex])
 		}
@@ -294,19 +319,19 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 		view.addCreated(outs)
 	}
 	var verifyFailure *scriptFailure
-	if err := timing.measure("script_verify", func() error {
-		var workerTime time.Duration
-		verifyFailure, workerTime = runner.verify(jobs)
-		timing.addStage("script_verify_worker_cpu", workerTime)
-		if verifyFailure != nil {
-			return verifyFailure.err
-		}
-		return nil
-	}); err != nil {
-		if verifyFailure == nil {
-			return nil, nil, nil, nil, err
-		}
-		return nil, nil, nil, blockerWithPrevout(height, blockHash, verifyFailure.job.txid, verifyFailure.job.inputIndex, verifyFailure.job.input, verifyFailure.job.utxo, "script_verify_failed", verifyFailure.err.Error()), nil
+	verifyStart := time.Now()
+	verifyFailure, verifyStats := runner.verify(jobs)
+	verifyWall := time.Since(verifyStart)
+	timing.addStage("script_verify", verifyWall)
+	timing.addStage("script_wall_ms", verifyWall)
+	timing.addStage("script_verify_worker_cpu", verifyStats.workerTime)
+	timing.addStage("script_worker_cpu_ms", verifyStats.workerTime)
+	timing.addCount("runner_batches", verifyStats.batches)
+	timing.addCount("script_jobs", int64(len(jobs)))
+	if verifyFailure != nil {
+		err := verifyFailure.err
+		input := verifyFailure.job.tx.Inputs[verifyFailure.job.inputIndex]
+		return nil, nil, nil, nil, blockerWithPrevout(height, blockHash, verifyFailure.job.txid, verifyFailure.job.inputIndex, input, *verifyFailure.job.utxo, "script_verify_failed", err.Error()), nil
 	}
 	var created []storage.UTXO
 	var spent []storage.OutPoint
@@ -315,9 +340,12 @@ func connectTransactions(store *storage.Store, runner scriptRunner, timing *timi
 		created = view.createdUTXOs()
 		spent = view.externalSpends()
 		undo = view.undoEntries()
+		timing.addCount("created_utxos", int64(len(created)))
+		timing.addCount("spent_external", int64(len(spent)))
+		timing.addCount("same_block_spends", int64(view.sameBlockSpends))
 		return nil
 	})
-	return created, spent, undo, nil, nil
+	return created, spent, undo, view.spentPrevoutScriptTypes, nil, nil
 }
 
 func outputsFor(height int, transaction *txtypes.Transaction, txidInternal []byte, coinbase bool) []storage.UTXO {
@@ -337,30 +365,43 @@ func isSpendableOutput(scriptPubKey []byte) bool {
 }
 
 type blockView struct {
-	loaded        map[storage.OutPoint]*storage.UTXO
-	created       map[storage.OutPoint]storage.UTXO
-	spent         map[storage.OutPoint]bool
-	createdOrder  []storage.OutPoint
-	externalSpent []storage.OutPoint
-	undo          []storage.UndoEntry
+	loaded                  map[storage.OutPoint]*storage.UTXO
+	created                 []createdEntry
+	createdIndex            map[storage.OutPoint]int
+	spent                   map[storage.OutPoint]bool
+	externalSpent           []storage.OutPoint
+	undo                    []storage.UndoEntry
+	sameBlockSpends         int
+	spentPrevoutScriptTypes map[string]int
+}
+
+type createdEntry struct {
+	outpoint storage.OutPoint
+	utxo     storage.UTXO
+	spent    bool
 }
 
 func newBlockView(expectedSpends int, expectedCreates int) *blockView {
 	return &blockView{
-		loaded:        make(map[storage.OutPoint]*storage.UTXO, expectedSpends),
-		created:       make(map[storage.OutPoint]storage.UTXO, expectedCreates),
-		spent:         make(map[storage.OutPoint]bool, expectedSpends),
-		createdOrder:  make([]storage.OutPoint, 0, expectedCreates),
-		externalSpent: make([]storage.OutPoint, 0, expectedSpends),
-		undo:          make([]storage.UndoEntry, 0, expectedSpends),
+		loaded:                  make(map[storage.OutPoint]*storage.UTXO, expectedSpends),
+		created:                 make([]createdEntry, 0, expectedCreates),
+		createdIndex:            make(map[storage.OutPoint]int, expectedCreates),
+		spent:                   make(map[storage.OutPoint]bool, expectedSpends),
+		externalSpent:           make([]storage.OutPoint, 0, expectedSpends),
+		undo:                    make([]storage.UndoEntry, 0, expectedSpends),
+		spentPrevoutScriptTypes: make(map[string]int),
 	}
 }
 
 func (v *blockView) addCreated(utxos []storage.UTXO) {
 	for _, utxo := range utxos {
 		outpoint := utxo.OutPoint()
-		v.created[outpoint] = utxo
-		v.createdOrder = append(v.createdOrder, outpoint)
+		if index, ok := v.createdIndex[outpoint]; ok {
+			v.created[index] = createdEntry{outpoint: outpoint, utxo: utxo}
+			continue
+		}
+		v.createdIndex[outpoint] = len(v.created)
+		v.created = append(v.created, createdEntry{outpoint: outpoint, utxo: utxo})
 	}
 }
 
@@ -368,8 +409,12 @@ func (v *blockView) find(outpoint storage.OutPoint) (storage.UTXO, bool) {
 	if v.spent[outpoint] {
 		return storage.UTXO{}, false
 	}
-	if utxo, ok := v.created[outpoint]; ok {
-		return utxo, true
+	if index, ok := v.createdIndex[outpoint]; ok {
+		entry := v.created[index]
+		if entry.spent {
+			return storage.UTXO{}, false
+		}
+		return entry.utxo, true
 	}
 	utxo := v.loaded[outpoint]
 	if utxo == nil {
@@ -384,30 +429,35 @@ func (v *blockView) isSpent(outpoint storage.OutPoint) bool {
 
 func (v *blockView) markSpent(outpoint storage.OutPoint, utxo storage.UTXO) {
 	v.spent[outpoint] = true
-	if _, ok := v.created[outpoint]; ok {
-		delete(v.created, outpoint)
+	if index, ok := v.createdIndex[outpoint]; ok {
+		v.created[index].spent = true
+		v.sameBlockSpends++
 		return
 	}
 	v.externalSpent = append(v.externalSpent, outpoint)
 	v.undo = append(v.undo, storage.UndoEntry{Outpoint: outpoint, UTXO: utxo})
 }
 
+func (v *blockView) addSpentScriptType(scriptPubKey []byte) {
+	v.spentPrevoutScriptTypes[scriptType(scriptPubKey)]++
+}
+
 func (v *blockView) createdUTXOs() []storage.UTXO {
 	out := make([]storage.UTXO, 0, len(v.created))
-	for _, outpoint := range v.createdOrder {
-		if utxo, ok := v.created[outpoint]; ok {
-			out = append(out, utxo)
+	for _, entry := range v.created {
+		if !entry.spent {
+			out = append(out, entry.utxo)
 		}
 	}
 	return out
 }
 
 func (v *blockView) externalSpends() []storage.OutPoint {
-	return append([]storage.OutPoint{}, v.externalSpent...)
+	return v.externalSpent
 }
 
 func (v *blockView) undoEntries() []storage.UndoEntry {
-	return append([]storage.UndoEntry{}, v.undo...)
+	return v.undo
 }
 
 func gatherPrevouts(txs []txtypes.Transaction) []storage.OutPoint {
@@ -497,7 +547,7 @@ func syncStatus(validated int, stored int) string {
 	return "blocks_syncing"
 }
 
-func summaryFrom(meta storage.Metadata, target int, started string, connected int, reached bool, runner scriptRunner, store *storage.Store, timing *timingCollector) Summary {
+func summaryFrom(meta storage.Metadata, target int, started string, connected int, reached bool, runner *scriptRunner, store *storage.Store, timing *timingCollector) Summary {
 	return Summary{
 		Implementation:     "GoNode",
 		RuntimeSurface:     surface.RuntimeSurface(),

@@ -64,6 +64,9 @@ python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section current-evidence
 python3 Project/scripts/report.py --db Project/project.db --section historical-evidence-candidates
 python3 Project/scripts/report.py --db Project/project.db --section command-surface
+python3 Project/scripts/report.py --db Project/project.db --section test-commands
+python3 Project/scripts/report.py --db Project/project.db --section test-coverage
+python3 Project/scripts/report.py --db Project/project.db --section critical-test-domains
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 python3 Project/scripts/report.py --db Project/project.db --section port-lifecycle
@@ -157,6 +160,46 @@ The runway stages are `corpus`, `5k`, `50k`, `100k`, `tip_once`, and
 preflight checks Project's imported rule ledger, blocker state, port-owned
 script-corpus proof, 5k baseline posture, and staged sync evidence.
 
+Preflight test and coverage visibility without running every port suite:
+
+```bash
+python3 Project/scripts/preflight_test_coverage.py \
+  --db Project/project.db \
+  --all \
+  --level inventory
+
+python3 Project/scripts/preflight_test_coverage.py \
+  --db Project/project.db \
+  --all \
+  --level baseline-par
+```
+
+`baseline-par` checks active-contender unit-test command visibility. Coverage
+metrics remain report-only until the first inventory shows comparable data worth
+ratcheting.
+
+Some ports expose optional lane commands. C++ currently reports
+`test_core_regression`, `test_wire_codec`, `test_runtime_smoke`, and
+`test_coverage_core` so its historically broad suite is visible by domain.
+Those lanes are informational unless a port explicitly claims them; they are not
+cross-port baseline requirements.
+
+Test coverage reports are for standalone product-node quality: consensus,
+storage, P2P, runtime smoke, and status/reporting behavior. Benchmark gates,
+telemetry schemas, timing buckets, and proof artifact comparability are validated
+by the benchmark and baseline preflights instead:
+
+```bash
+python3 Project/scripts/preflight_benchmark_gate.py \
+  --db Project/project.db \
+  --gate baseline_5k \
+  --all
+
+python3 Project/scripts/preflight_port_baseline.py \
+  --db Project/project.db \
+  --all
+```
+
 Warm the port image before a benchmark campaign, then run fresh proof volumes
 without rebuilding unless a clean rebuild is intentional:
 
@@ -186,6 +229,12 @@ sqlite-utils query Project/project.db \
 
 sqlite-utils query Project/project.db \
   "select port, command_key, supported, command from port_command_surface order by port, command_key"
+
+sqlite-utils query Project/project.db \
+  "select port, baseline_par_status, coverage_control_status from test_coverage_matrix order by port"
+
+sqlite-utils query Project/project.db \
+  "select port, domain, domain_status, evidence from critical_test_domain_coverage order by port, domain"
 
 sqlite-utils query Project/project.db \
   "select * from follower_blocker_matrix order by height, port"

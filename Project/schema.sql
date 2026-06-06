@@ -110,6 +110,70 @@ CREATE TABLE IF NOT EXISTS port_commands (
 CREATE INDEX IF NOT EXISTS idx_port_commands_key
   ON port_commands(command_key, port);
 
+CREATE TABLE IF NOT EXISTS test_commands (
+  command_id TEXT PRIMARY KEY,
+  port TEXT NOT NULL REFERENCES docker_contracts(port),
+  node_id TEXT NOT NULL REFERENCES nodes(node_id),
+  command_key TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT '',
+  purpose TEXT NOT NULL DEFAULT '',
+  command TEXT NOT NULL DEFAULT '',
+  supported INTEGER NOT NULL DEFAULT 0,
+  discovery_method TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id),
+  UNIQUE(port, command_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_test_commands_key
+  ON test_commands(command_key, port);
+
+CREATE TABLE IF NOT EXISTS test_runs (
+  test_run_id TEXT PRIMARY KEY,
+  port TEXT NOT NULL,
+  node_id TEXT NOT NULL REFERENCES nodes(node_id),
+  command_key TEXT NOT NULL,
+  result TEXT NOT NULL,
+  exit_code INTEGER,
+  captured_at TEXT NOT NULL DEFAULT '',
+  duration_ms INTEGER,
+  summary_json TEXT NOT NULL DEFAULT '{}',
+  source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_test_runs_port_command
+  ON test_runs(port, command_key, captured_at);
+
+CREATE TABLE IF NOT EXISTS coverage_summaries (
+  coverage_id TEXT PRIMARY KEY,
+  port TEXT NOT NULL,
+  node_id TEXT NOT NULL REFERENCES nodes(node_id),
+  tool TEXT NOT NULL DEFAULT '',
+  line_percent REAL,
+  branch_percent REAL,
+  function_percent REAL,
+  statement_percent REAL,
+  covered_lines INTEGER,
+  total_lines INTEGER,
+  captured_at TEXT NOT NULL DEFAULT '',
+  source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_coverage_summaries_port
+  ON coverage_summaries(port, captured_at);
+
+CREATE TABLE IF NOT EXISTS test_domain_claims (
+  claim_id TEXT PRIMARY KEY,
+  port TEXT NOT NULL,
+  node_id TEXT NOT NULL REFERENCES nodes(node_id),
+  domain TEXT NOT NULL,
+  status TEXT NOT NULL,
+  evidence TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  source_artifact_id TEXT REFERENCES artifacts(artifact_id),
+  UNIQUE(port, domain, source_artifact_id)
+);
+
 CREATE TABLE IF NOT EXISTS runs (
   run_id TEXT PRIMARY KEY,
   node_id TEXT NOT NULL REFERENCES nodes(node_id),
@@ -304,6 +368,11 @@ DROP VIEW IF EXISTS script_corpus_proof_artifacts;
 DROP VIEW IF EXISTS benchmark_gate_matrix;
 DROP VIEW IF EXISTS benchmark_comparability;
 DROP VIEW IF EXISTS current_evidence_status;
+DROP VIEW IF EXISTS critical_test_domain_coverage;
+DROP VIEW IF EXISTS test_coverage_matrix;
+DROP VIEW IF EXISTS latest_coverage_summaries;
+DROP VIEW IF EXISTS latest_test_runs;
+DROP VIEW IF EXISTS test_command_surface;
 DROP VIEW IF EXISTS benchmark_timing_summary;
 DROP VIEW IF EXISTS benchmark_summary;
 DROP VIEW IF EXISTS follower_blocker_matrix;
@@ -489,6 +558,73 @@ SELECT
   group_concat(CASE WHEN supported = 0 THEN port END) AS unsupported_ports
 FROM port_command_surface
 GROUP BY command_key, purpose;
+
+CREATE VIEW IF NOT EXISTS test_command_surface AS
+SELECT
+  tc.port,
+  tc.node_id,
+  coalesce(pl.lifecycle_status, CASE WHEN tc.port = 'reference' THEN 'reference' ELSE 'active_contender' END) AS lifecycle_status,
+  coalesce(pl.benchmark_scope, CASE WHEN tc.port = 'reference' THEN 'reference_only' ELSE 'full_suite' END) AS benchmark_scope,
+  tc.command_key,
+  tc.category,
+  tc.purpose,
+  tc.supported,
+  tc.command,
+  tc.discovery_method,
+  tc.notes,
+  dc.root_path,
+  tc.source_artifact_id
+FROM test_commands tc
+JOIN docker_contracts dc ON dc.port = tc.port
+LEFT JOIN port_lifecycle pl ON pl.port = tc.port;
+
+CREATE VIEW IF NOT EXISTS latest_test_runs AS
+WITH ranked AS (
+  SELECT
+    tr.*,
+    row_number() OVER (
+      PARTITION BY tr.port, tr.command_key
+      ORDER BY (tr.captured_at <> '') DESC, tr.captured_at DESC, tr.source_artifact_id
+    ) AS rn
+  FROM test_runs tr
+)
+SELECT
+  port,
+  node_id,
+  command_key,
+  result,
+  exit_code,
+  captured_at,
+  duration_ms,
+  summary_json,
+  source_artifact_id
+FROM ranked
+WHERE rn = 1;
+
+CREATE VIEW IF NOT EXISTS latest_coverage_summaries AS
+WITH ranked AS (
+  SELECT
+    cs.*,
+    row_number() OVER (
+      PARTITION BY cs.port
+      ORDER BY (cs.captured_at <> '') DESC, cs.captured_at DESC, cs.source_artifact_id
+    ) AS rn
+  FROM coverage_summaries cs
+)
+SELECT
+  port,
+  node_id,
+  tool,
+  line_percent,
+  branch_percent,
+  function_percent,
+  statement_percent,
+  covered_lines,
+  total_lines,
+  captured_at,
+  source_artifact_id
+FROM ranked
+WHERE rn = 1;
 
 CREATE VIEW IF NOT EXISTS current_evidence_status AS
 SELECT
@@ -1177,6 +1313,182 @@ LEFT JOIN script_corpus_baseline scb ON scb.port = bgm.port
 LEFT JOIN timing t ON t.port = bgm.port
 LEFT JOIN raw_timing rt ON rt.port = bgm.port
 WHERE bgm.gate_id = 'baseline_5k';
+
+CREATE VIEW IF NOT EXISTS critical_test_domain_coverage AS
+WITH ports AS (
+  SELECT
+    dc.port,
+    dc.node_id,
+    coalesce(pl.lifecycle_status, CASE WHEN dc.port = 'reference' THEN 'reference' ELSE 'active_contender' END) AS lifecycle_status,
+    coalesce(pl.benchmark_scope, CASE WHEN dc.port = 'reference' THEN 'reference_only' ELSE 'full_suite' END) AS benchmark_scope
+  FROM docker_contracts dc
+  LEFT JOIN port_lifecycle pl ON pl.port = dc.port
+  WHERE dc.port <> 'reference'
+),
+domains(domain, purpose) AS (
+  VALUES
+    ('script_verification', 'Shared script corpus and spend-path interpreter coverage'),
+    ('sighash_taproot_witness', 'Sighash, witness, and Taproot regression posture'),
+    ('utxo_apply_undo_accounting', 'UTXO apply, undo, and core_spendable_v1 accounting posture'),
+    ('block_connect', 'Validated block-connect proof posture'),
+    ('rocksdb_persistence_restart', 'RocksDB runtime truth and persistence posture'),
+    ('p2p_fetch_handshake', 'P2P fetch and handshake product posture'),
+    ('node_status_reporting', 'Node status and reporting smoke posture')
+),
+storage AS (
+  SELECT
+    np.port,
+    max(CASE WHEN cr.fixture_id = 'storage.rocksdb_runtime_truth' AND cr.result = 'passed' THEN 1 ELSE 0 END) AS has_storage_proof
+  FROM conformance_results cr
+  JOIN project_node_ports np ON np.node_id = cr.node_id
+  GROUP BY np.port
+),
+current_claims AS (
+  SELECT port, count(*) AS current_evidence_count
+  FROM evidence_index_entries
+  WHERE status = 'current'
+  GROUP BY port
+),
+manual_claims AS (
+  SELECT
+    port,
+    domain,
+    status,
+    evidence,
+    notes,
+    row_number() OVER (
+      PARTITION BY port, domain
+      ORDER BY (source_artifact_id IS NOT NULL) DESC, source_artifact_id DESC
+    ) AS rn
+  FROM test_domain_claims
+)
+SELECT
+  p.port,
+  p.node_id,
+  p.lifecycle_status,
+  p.benchmark_scope,
+  d.domain,
+  d.purpose,
+  coalesce(mc.status,
+    CASE d.domain
+      WHEN 'script_verification' THEN
+        CASE WHEN coalesce(scb.script_corpus_status, '') = 'passed' THEN 'covered' ELSE 'missing' END
+      WHEN 'sighash_taproot_witness' THEN
+        CASE WHEN coalesce(scb.script_corpus_status, '') = 'passed' THEN 'covered_by_script_corpus' ELSE 'missing' END
+      WHEN 'utxo_apply_undo_accounting' THEN
+        CASE
+          WHEN coalesce(pb.utxo_accounting_policy, '') = 'core_spendable_v1'
+           AND coalesce(pb.chainstate_utxo_count, -1) = 4574 THEN 'covered'
+          ELSE 'missing'
+        END
+      WHEN 'block_connect' THEN
+        CASE WHEN coalesce(pb.comparability_status, '') = 'comparable' THEN 'covered' ELSE 'missing' END
+      WHEN 'rocksdb_persistence_restart' THEN
+        CASE
+          WHEN coalesce(st.has_storage_proof, 0) = 1 THEN 'covered'
+          WHEN lower(coalesce(pb.chainstate_backend, '')) = 'rocksdb' THEN 'covered_by_baseline'
+          ELSE 'missing'
+        END
+      WHEN 'p2p_fetch_handshake' THEN
+        CASE
+          WHEN coalesce(pb.peer_mode, '') = 'local_reference'
+           AND coalesce(pb.proof_mode, '') = 'p2p_sync'
+           AND coalesce(pb.comparability_status, '') = 'comparable' THEN 'covered'
+          ELSE 'missing'
+        END
+      WHEN 'node_status_reporting' THEN
+        CASE WHEN coalesce(cc.current_evidence_count, 0) > 0 THEN 'covered' ELSE 'missing' END
+      ELSE 'missing'
+    END
+  ) AS domain_status,
+  coalesce(mc.evidence,
+    CASE d.domain
+      WHEN 'script_verification' THEN coalesce(scb.script_corpus_status, 'missing')
+      WHEN 'sighash_taproot_witness' THEN coalesce(scb.script_corpus_status, 'missing')
+      WHEN 'utxo_apply_undo_accounting' THEN coalesce(pb.utxo_accounting_policy, '')
+      WHEN 'block_connect' THEN coalesce(pb.evidence_lane, '')
+      WHEN 'rocksdb_persistence_restart' THEN CASE WHEN coalesce(st.has_storage_proof, 0) = 1 THEN 'storage.rocksdb_runtime_truth' ELSE coalesce(pb.chainstate_backend, '') END
+      WHEN 'p2p_fetch_handshake' THEN trim(coalesce(pb.peer_mode, '') || ':' || coalesce(pb.proof_mode, ''), ':')
+      WHEN 'node_status_reporting' THEN 'current_evidence=' || coalesce(cc.current_evidence_count, 0)
+      ELSE ''
+    END
+  ) AS evidence,
+  coalesce(mc.notes, '') AS notes
+FROM ports p
+CROSS JOIN domains d
+LEFT JOIN script_corpus_baseline scb ON scb.port = p.port
+LEFT JOIN port_baseline_5k pb ON pb.port = p.port
+LEFT JOIN storage st ON st.port = p.port
+LEFT JOIN current_claims cc ON cc.port = p.port
+LEFT JOIN manual_claims mc ON mc.port = p.port AND mc.domain = d.domain AND mc.rn = 1;
+
+CREATE VIEW IF NOT EXISTS test_coverage_matrix AS
+WITH ports AS (
+  SELECT
+    dc.port,
+    dc.node_id,
+    coalesce(pl.lifecycle_status, CASE WHEN dc.port = 'reference' THEN 'reference' ELSE 'active_contender' END) AS lifecycle_status,
+    coalesce(pl.benchmark_scope, CASE WHEN dc.port = 'reference' THEN 'reference_only' ELSE 'full_suite' END) AS benchmark_scope
+  FROM docker_contracts dc
+  LEFT JOIN port_lifecycle pl ON pl.port = dc.port
+  WHERE dc.port <> 'reference'
+),
+commands AS (
+  SELECT
+    port,
+    max(CASE WHEN command_key = 'test_unit' THEN supported ELSE 0 END) AS unit_supported,
+    max(CASE WHEN command_key = 'test_unit' THEN command ELSE '' END) AS unit_command,
+    max(CASE WHEN command_key = 'test_coverage' THEN supported ELSE 0 END) AS coverage_supported,
+    max(CASE WHEN command_key = 'test_coverage' THEN command ELSE '' END) AS coverage_command
+  FROM test_commands
+  GROUP BY port
+),
+domains AS (
+  SELECT
+    port,
+    sum(CASE WHEN domain_status = 'missing' THEN 1 ELSE 0 END) AS missing_domain_count,
+    count(*) AS domain_count
+  FROM critical_test_domain_coverage
+  GROUP BY port
+)
+SELECT
+  p.port,
+  p.node_id,
+  p.lifecycle_status,
+  p.benchmark_scope,
+  coalesce(c.unit_supported, 0) AS unit_supported,
+  coalesce(c.unit_command, '') AS unit_command,
+  coalesce(utr.result, '') AS latest_unit_result,
+  coalesce(utr.captured_at, '') AS latest_unit_captured_at,
+  coalesce(c.coverage_supported, 0) AS coverage_supported,
+  coalesce(c.coverage_command, '') AS coverage_command,
+  coalesce(ctr.result, '') AS latest_coverage_result,
+  coalesce(ctr.captured_at, '') AS latest_coverage_captured_at,
+  coalesce(lcs.tool, '') AS coverage_tool,
+  coalesce(lcs.line_percent, -1) AS line_percent,
+  coalesce(lcs.branch_percent, -1) AS branch_percent,
+  coalesce(lcs.function_percent, -1) AS function_percent,
+  coalesce(lcs.statement_percent, -1) AS statement_percent,
+  coalesce(d.domain_count, 0) AS domain_count,
+  coalesce(d.missing_domain_count, 0) AS missing_domain_count,
+  CASE
+    WHEN p.lifecycle_status = 'baseline_retired' THEN 'baseline_retired'
+    WHEN p.lifecycle_status = 'active_development' THEN
+      CASE WHEN coalesce(c.unit_supported, 0) = 1 THEN 'inventory_ready' ELSE 'inventory_gap' END
+    WHEN coalesce(c.unit_supported, 0) = 0 THEN 'missing_unit_test_command'
+    ELSE 'baseline_par'
+  END AS baseline_par_status,
+  CASE
+    WHEN coalesce(c.coverage_supported, 0) = 0 THEN 'coverage_command_missing_report_only'
+    WHEN lcs.port IS NULL THEN 'coverage_metrics_missing_report_only'
+    ELSE 'coverage_metrics_available'
+  END AS coverage_control_status
+FROM ports p
+LEFT JOIN commands c ON c.port = p.port
+LEFT JOIN latest_test_runs utr ON utr.port = p.port AND utr.command_key = 'test_unit'
+LEFT JOIN latest_test_runs ctr ON ctr.port = p.port AND ctr.command_key = 'test_coverage'
+LEFT JOIN latest_coverage_summaries lcs ON lcs.port = p.port
+LEFT JOIN domains d ON d.port = p.port;
 
 CREATE VIEW IF NOT EXISTS consensus_rule_summary AS
 SELECT

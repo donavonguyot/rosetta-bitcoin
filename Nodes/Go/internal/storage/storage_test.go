@@ -58,6 +58,13 @@ func TestBinaryOutPointKeyMatchesDisplayKeyAndJSON(t *testing.T) {
 	if string(display.KeyBytes()) != string(internal.KeyBytes()) {
 		t.Fatalf("binary and display keys differ: %x != %x", display.KeyBytes(), internal.KeyBytes())
 	}
+	var fixed [37]byte
+	if !internal.WriteKeyBytes(fixed[:]) {
+		t.Fatal("internal outpoint did not write fixed key")
+	}
+	if string(fixed[:]) != string(internal.KeyBytes()) {
+		t.Fatalf("fixed key differs: %x != %x", fixed, internal.KeyBytes())
+	}
 	data, err := json.Marshal(internal)
 	if err != nil {
 		t.Fatal(err)
@@ -72,6 +79,30 @@ func TestBinaryOutPointKeyMatchesDisplayKeyAndJSON(t *testing.T) {
 	}
 	if string(data) != `{"txid":"`+txid+`","vout":7,"value":99,"script_pubkey":"51","height":11,"coinbase":false}` {
 		t.Fatalf("unexpected utxo json: %s", data)
+	}
+}
+
+func TestBatchGetTimingCounters(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	outpoint := NewOutPointFromDisplay("0800000000000000000000000000000000000000000000000000000000000000", 3)
+	utxo := NewUTXO(outpoint, 55, []byte{0x51}, 12, false)
+	if err := store.PutUTXO(utxo); err != nil {
+		t.Fatal(err)
+	}
+	missing := NewOutPointFromDisplay("0900000000000000000000000000000000000000000000000000000000000000", 1)
+	values, timing, err := store.GetUTXOsWithTiming([]OutPoint{outpoint, missing})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if values[outpoint] == nil || values[missing] != nil {
+		t.Fatalf("unexpected batch results: %#v", values)
+	}
+	if timing.LookupCount != 2 || timing.KeyBytes != 74 || timing.ValueBytes == 0 {
+		t.Fatalf("unexpected read timing counters: %#v", timing)
 	}
 }
 

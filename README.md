@@ -11,12 +11,13 @@ root-owned monorepo. There is exactly one Git repository, at the workspace root.
 4. [`Docs/port-baseline-5k.md`](Docs/port-baseline-5k.md) — strict first readiness baseline and benchmark-suite entry point.
 5. [`Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`](Nodes/Shared/consensus/CONSENSUS_RUNWAY.md) — corpus-to-tip consensus path.
 6. [`Docs/port-status.md`](Docs/port-status.md) — Project status projection guide.
-7. [`Nodes/Shared/SPEC.md`](Nodes/Shared/SPEC.md) — shared contracts and gate intent.
-8. [`Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`](Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md) — Docker runtime/proof rules.
-9. `Nodes/Shared/docker/ports/<port>.docker.json` — executable Docker contract declaration for the target port.
-10. [`Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md`](Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md) — Project query guide for Docker coverage and command surfaces.
-11. [`Docs/artifact-retention.md`](Docs/artifact-retention.md) — proof/log/datadir retention rules.
-12. Port README for the implementation being changed.
+7. [`Nodes/Shared/testing/TEST_COVERAGE_CONTRACT.md`](Nodes/Shared/testing/TEST_COVERAGE_CONTRACT.md) — Project-indexed test and coverage posture.
+8. [`Nodes/Shared/SPEC.md`](Nodes/Shared/SPEC.md) — shared contracts and gate intent.
+9. [`Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`](Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md) — Docker runtime/proof rules.
+10. `Nodes/Shared/docker/ports/<port>.docker.json` — executable Docker contract declaration for the target port.
+11. [`Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md`](Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md) — Project query guide for Docker coverage and command surfaces.
+12. [`Docs/artifact-retention.md`](Docs/artifact-retention.md) — proof/log/datadir retention rules.
+13. Port README for the implementation being changed.
 
 ## Root-Owned Areas
 
@@ -64,6 +65,16 @@ python3 Nodes/Shared/consensus/tools/validate_consensus_ledger.py Nodes/Shared/c
 python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
 python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --port <port> --stage 5k --strict
 ```
+
+Project reports test and coverage posture separately from benchmark readiness:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section test-coverage
+python3 Project/scripts/report.py --db Project/project.db --section critical-test-domains
+python3 Project/scripts/preflight_test_coverage.py --db Project/project.db --all --level inventory
+```
+
+Coverage is report-only until Project has enough comparable data to ratchet it.
 
 Live datadirs, build outputs, local DBs, logs, dependency caches, and nested Git
 metadata are not root-owned artifacts. Compact proof JSON that supports a

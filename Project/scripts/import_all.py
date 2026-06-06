@@ -32,7 +32,9 @@ PORTS: dict[str, tuple[str, str, str]] = {
     "python": ("PythonNode", "Python", "scout"),
     "reference": ("BitcoinCoreReference", "C++", "reference"),
     "rust": ("RustNode", "Rust", "follower"),
+    "swift": ("SwiftNode", "Swift", "follower"),
     "typescript": ("TypeScriptNode", "TypeScript", "follower"),
+    "zig": ("ZigNode", "Zig", "follower"),
 }
 
 IMPLEMENTATION_PORTS: tuple[tuple[str, str], ...] = (
@@ -54,8 +56,12 @@ IMPLEMENTATION_PORTS: tuple[tuple[str, str], ...] = (
     ("bitcoin", "reference"),
     ("rust", "rust"),
     ("rsbitnode", "rust"),
+    ("swift", "swift"),
+    ("swbitnode", "swift"),
     ("typescript", "typescript"),
     ("tsbitnode", "typescript"),
+    ("zig", "zig"),
+    ("zigbitnode", "zig"),
 )
 
 PORT_LIFECYCLE: tuple[dict[str, str], ...] = (
@@ -349,6 +355,29 @@ COMMAND_PURPOSES: dict[str, str] = {
     "docker_script_corpus": "run shared script corpus alias",
 }
 
+TEST_COMMAND_PURPOSES = {
+    "test_unit": "run the port's normal unit/regression test suite",
+    "test_coverage": "run report-only coverage instrumentation",
+    "test_core_regression": "run focused core regression tests",
+    "test_wire_codec": "run wire and codec breadth tests",
+    "test_runtime_smoke": "run runtime smoke tests",
+    "test_coverage_core": "run report-only core-regression coverage instrumentation",
+}
+
+ECOSYSTEM_TEST_FALLBACKS = {
+    "csharp": "SECP256K1_BACKEND=native dotnet test",
+    "cpp": "cmake --build build && ctest --test-dir build --output-on-failure",
+    "elixir": "mix test",
+    "go": "go test ./...",
+    "java": "mvn test",
+    "ocaml": "dune runtest",
+    "python": "python3 -m pytest",
+    "rust": "cargo test",
+    "swift": "swift test",
+    "typescript": "npm test",
+    "zig": "zig build test",
+}
+
 
 @dataclass(frozen=True)
 class Artifact:
@@ -518,7 +547,7 @@ def captured_at_for_payload(payload: dict[str, Any]) -> str:
 def benchmark_kind_for_payload(payload: dict[str, Any]) -> str:
     explicit = text(payload.get("benchmark_kind")).strip()
     if explicit:
-        return explicit
+        return canonical_benchmark_label(explicit)
     target_height = integer(payload.get("target_height"), None)
     if target_height == 5000:
         return "baseline_5k_p2p"
@@ -529,6 +558,25 @@ def benchmark_kind_for_payload(payload: dict[str, Any]) -> str:
     if target_height == 100000:
         return "performance_100k_p2p"
     return text(payload.get("category") or payload.get("artifact_kind"))
+
+
+def canonical_benchmark_label(value: str) -> str:
+    aliases = {
+        "supporting_5k": "baseline_5k",
+        "supporting_5k_p2p": "baseline_5k_p2p",
+        "supporting_5k_rpc_replay": "baseline_5k_rpc_replay",
+        "supporting_50k": "shakedown_50k",
+        "supporting_50k_p2p": "shakedown_50k_p2p",
+        "supporting_50k_rpc_replay": "shakedown_50k_rpc_replay",
+        "primary_100k": "performance_100k",
+        "primary_100k_p2p": "performance_100k_p2p",
+        "primary_100k_rpc_replay": "performance_100k_rpc_replay",
+        "supporting_10k": "diagnostic_10k",
+        "supporting_10k_p2p": "diagnostic_10k_p2p",
+        "tuning_50k_to_100k": "diagnostic_50k_to_100k",
+        "tuning_50k_to_100k_p2p": "diagnostic_50k_to_100k_p2p",
+    }
+    return aliases.get(value, value)
 
 
 def target_label_for_payload(payload: dict[str, Any]) -> str:
@@ -548,6 +596,8 @@ def target_label_for_payload(payload: dict[str, Any]) -> str:
 def artifact_kind(path: Path, payload: dict[str, Any]) -> str:
     if path.match("*.docker.json") or "peer_modes" in payload and "proof_artifacts" in payload:
         return "docker_manifest"
+    if text(payload.get("schema")) in {"port.test_result.v1", "port.coverage_summary.v1", "port.domain_coverage.v1"}:
+        return text(payload.get("schema"))
     if isinstance(payload.get("fixtures"), list):
         return "script_corpus_result"
     if "artifact_kind" in payload:
@@ -580,6 +630,10 @@ def artifact_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "fixture_count",
         "complete_count",
         "incomplete_count",
+        "schema",
+        "command_key",
+        "line_percent",
+        "branch_percent",
     ]
     return {key: payload[key] for key in keys if key in payload}
 
@@ -733,6 +787,167 @@ def import_port_commands(
                 source_artifact_id,
             ),
         )
+
+
+def makefile_has_target(makefile: Path, target: str) -> bool:
+    if not makefile.exists():
+        return False
+    pattern = re.compile(rf"^{re.escape(target)}\s*:")
+    with makefile.open("r", encoding="utf-8") as handle:
+        return any(pattern.match(line) for line in handle)
+
+
+def discover_test_commands(root: Path, port: str, root_path: str) -> dict[str, dict[str, Any]]:
+    if port == "reference":
+        return {}
+    port_root = root / root_path
+    commands: dict[str, dict[str, Any]] = {}
+
+    makefile = port_root / "Makefile"
+    if makefile_has_target(makefile, "test"):
+        commands["test_unit"] = {
+            "category": "unit_tests",
+            "command": f"cd {root_path} && make test",
+            "supported": 1,
+            "discovery_method": "makefile:test",
+            "notes": "Discovered from port Makefile.",
+        }
+    else:
+        fallback = ECOSYSTEM_TEST_FALLBACKS.get(port, "")
+        commands["test_unit"] = {
+            "category": "unit_tests",
+            "command": f"cd {root_path} && {fallback}" if fallback else "",
+            "supported": 1 if fallback else 0,
+            "discovery_method": "ecosystem_fallback" if fallback else "missing",
+            "notes": "Deterministic ecosystem fallback; verify before treating as a passing claim."
+            if fallback
+            else "No unit-test command discovered.",
+        }
+
+    coverage_command = ""
+    coverage_method = "missing"
+    coverage_notes = "No real coverage command is known yet; report-only gap."
+    if port == "cpp" and (port_root / "scripts/coverage_report.sh").exists():
+        coverage_command = f"cd {root_path} && ./scripts/coverage_report.sh --suite all"
+        coverage_method = "cpp:coverage_report.sh"
+        coverage_notes = "C++ broad report-only gcovr path for local archaeology; not a baseline ratchet."
+    elif makefile_has_target(makefile, "coverage"):
+        coverage_command = f"cd {root_path} && make coverage"
+        coverage_method = "makefile:coverage"
+        coverage_notes = "Discovered from port Makefile coverage target."
+    commands["test_coverage"] = {
+        "category": "coverage_report",
+        "command": coverage_command,
+        "supported": 1 if coverage_command else 0,
+        "discovery_method": coverage_method,
+        "notes": coverage_notes,
+    }
+    if port == "cpp":
+        lane_specs = [
+            (
+                "test_core_regression",
+                "core_regression",
+                "test-core",
+                "makefile:test-core",
+                "C++ focused readiness lane: consensus, script, native crypto, RocksDB, block connect.",
+            ),
+            (
+                "test_wire_codec",
+                "wire_codec",
+                "test-wire",
+                "makefile:test-wire",
+                "C++ protocol hardening lane; valuable breadth, not a cross-port ratchet.",
+            ),
+            (
+                "test_runtime_smoke",
+                "runtime_smoke",
+                "test-runtime",
+                "makefile:test-runtime",
+                "C++ CLI/settings/transport/sync hot-path smoke lane.",
+            ),
+        ]
+        for command_key, category, target, method, notes in lane_specs:
+            supported = makefile_has_target(makefile, target)
+            commands[command_key] = {
+                "category": category,
+                "command": f"cd {root_path} && make {target}" if supported else "",
+                "supported": 1 if supported else 0,
+                "discovery_method": method if supported else "missing",
+                "notes": notes if supported else f"C++ {target} lane target not found.",
+            }
+        core_coverage_supported = (port_root / "scripts/coverage_report.sh").exists()
+        commands["test_coverage_core"] = {
+            "category": "coverage_report",
+            "command": f"cd {root_path} && ./scripts/coverage_report.sh --suite core"
+            if core_coverage_supported
+            else "",
+            "supported": 1 if core_coverage_supported else 0,
+            "discovery_method": "cpp:coverage_report.sh:core" if core_coverage_supported else "missing",
+            "notes": "C++ report-only core-regression coverage lane.",
+        }
+    return commands
+
+
+def seed_test_commands(connection: sqlite3.Connection, root: Path) -> int:
+    contracts = connection.execute(
+        """
+        SELECT port, node_id, root_path, source_artifact_id
+        FROM docker_contracts
+        WHERE port <> 'reference'
+        ORDER BY port
+        """
+    ).fetchall()
+    active_ports = [row[0] for row in contracts]
+    if active_ports:
+        placeholders = ",".join("?" for _ in active_ports)
+        connection.execute(f"DELETE FROM test_commands WHERE port NOT IN ({placeholders})", active_ports)
+    else:
+        connection.execute("DELETE FROM test_commands")
+
+    count = 0
+    for port, node_id, root_path, source_artifact_id in contracts:
+        for command_key, info in discover_test_commands(root, text(port), text(root_path)).items():
+            connection.execute(
+                """
+                INSERT INTO test_commands(
+                  command_id, port, node_id, command_key, category, purpose,
+                  command, supported, discovery_method, notes, source_artifact_id
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(port, command_key) DO UPDATE SET
+                  node_id = excluded.node_id,
+                  category = excluded.category,
+                  purpose = excluded.purpose,
+                  command = excluded.command,
+                  supported = excluded.supported,
+                  discovery_method = excluded.discovery_method,
+                  notes = excluded.notes,
+                  source_artifact_id = excluded.source_artifact_id
+                WHERE
+                  test_commands.node_id <> excluded.node_id OR
+                  test_commands.category <> excluded.category OR
+                  test_commands.purpose <> excluded.purpose OR
+                  test_commands.command <> excluded.command OR
+                  test_commands.supported <> excluded.supported OR
+                  test_commands.discovery_method <> excluded.discovery_method OR
+                  test_commands.notes <> excluded.notes OR
+                  test_commands.source_artifact_id <> excluded.source_artifact_id
+                """,
+                (
+                    stable_id("test_command", port, command_key),
+                    port,
+                    node_id,
+                    command_key,
+                    text(info.get("category")),
+                    TEST_COMMAND_PURPOSES.get(command_key, ""),
+                    text(info.get("command")),
+                    1 if info.get("supported") else 0,
+                    text(info.get("discovery_method")),
+                    text(info.get("notes")),
+                    source_artifact_id,
+                ),
+            )
+            count += 1
+    return count
 
 
 def import_docker_manifest(connection: sqlite3.Connection, root: Path, path: Path, payload: dict[str, Any]) -> int:
@@ -1251,6 +1466,7 @@ def import_json_artifact(connection: sqlite3.Connection, root: Path, path: Path,
     import_status_snapshot(connection, artifact, payload)
     import_conformance_rows(connection, artifact, payload)
     import_benchmark_rows(connection, artifact, payload)
+    import_test_rows(connection, artifact, payload)
     import_blocker_from_payload(connection, artifact, payload)
 
 
@@ -1517,22 +1733,22 @@ def canonical_timing_summary(payload: dict[str, Any], stages: dict[str, int]) ->
 def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, payload: dict[str, Any]) -> None:
     stages = timing_stages(payload)
     canonical_timing = canonical_timing_summary(payload, stages)
-    benchmark_like = stages or any(
+    benchmark_like = any(
         key in payload
         for key in (
-            "elapsed_ms",
-            "pipeline_timing_summary",
-            "sync_timing",
-            "connect_summary",
-            "slow_blocks",
-            "resource_samples",
+            "benchmark_gate",
             "benchmark_kind",
+            "benchmark_lane",
+            "benchmark_contract_version",
             "target_height",
             "target_label",
         )
     )
     if not benchmark_like:
         return
+    reported_benchmark_kind = text(payload.get("benchmark_kind")).strip()
+    reported_benchmark_lane = text(payload.get("benchmark_lane")).strip()
+    reported_benchmark_gate = text(payload.get("benchmark_gate")).strip()
     benchmark_kind = benchmark_kind_for_payload(payload)
     target_height = integer(payload.get("target_height"), None)
     target_label = target_label_for_payload(payload)
@@ -1551,12 +1767,12 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
             proof_mode = "rpc_replay"
         elif peer_mode == "local_reference":
             proof_mode = "p2p_sync"
-    benchmark_lane = text(payload.get("benchmark_lane")).strip()
+    benchmark_lane = canonical_benchmark_label(reported_benchmark_lane)
     if not benchmark_lane and target_label:
         if peer_mode == "local_reference_rpc" or byte_source == "local_reference_rpc":
-            benchmark_lane = f"supporting_{target_label}_rpc_replay"
+            benchmark_lane = canonical_benchmark_label(f"supporting_{target_label}_rpc_replay")
         elif peer_mode == "local_reference":
-            benchmark_lane = f"supporting_{target_label}_p2p"
+            benchmark_lane = canonical_benchmark_label(f"supporting_{target_label}_p2p")
     benchmark_id = stable_id("benchmark", artifact.artifact_id)
     connection.execute(
         """
@@ -1595,7 +1811,6 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                             "peer",
                             "byte_source",
                             "proof_mode",
-                            "benchmark_lane",
                             "utxo_accounting_policy",
                             "prefetch_depth",
                             "script_threads",
@@ -1612,12 +1827,13 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                         if key in payload
                     },
                     **({"benchmark_kind": benchmark_kind} if benchmark_kind else {}),
+                    **({"benchmark_lane": benchmark_lane} if benchmark_lane else {}),
+                    **({"benchmark_gate": canonical_benchmark_label(reported_benchmark_gate)} if reported_benchmark_gate else {}),
                     **({"target_height": target_height} if target_height is not None else {}),
                     **({"target_label": target_label} if target_label else {}),
                     **({"header_target_height": header_target_height} if header_target_height is not None else {}),
                     **({"byte_source": byte_source} if byte_source else {}),
                     **({"proof_mode": proof_mode} if proof_mode else {}),
-                    **({"benchmark_lane": benchmark_lane} if benchmark_lane else {}),
                     **({"binary_gate_status": text(payload.get("binary_gate_status"))} if "binary_gate_status" in payload else {}),
                 }
             ),
@@ -1705,7 +1921,146 @@ def blocker_key(source: str, blocker: dict[str, Any]) -> str:
         blocker.get("txid", ""),
         blocker.get("input_index", ""),
         blocker.get("missing_rule", ""),
-    )
+        )
+
+
+def import_test_rows(connection: sqlite3.Connection, artifact: Artifact, payload: dict[str, Any]) -> None:
+    schema = text(payload.get("schema"))
+    port = port_for_payload(artifact.path, payload)
+    node_id = artifact.node_id
+    if port == "unknown":
+        mapped = connection.execute(
+            "SELECT port FROM project_node_ports WHERE node_id = ?",
+            (node_id,),
+        ).fetchone()
+        port = text(mapped[0]) if mapped else "unknown"
+
+    if schema == "port.test_result.v1":
+        command_key = text(payload.get("command_key") or payload.get("test_command_key") or "test_unit")
+        test_run_id = stable_id("test_run", artifact.artifact_id, command_key)
+        connection.execute(
+            """
+            INSERT INTO test_runs(
+              test_run_id, port, node_id, command_key, result, exit_code,
+              captured_at, duration_ms, summary_json, source_artifact_id
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(test_run_id) DO UPDATE SET
+              port = excluded.port,
+              node_id = excluded.node_id,
+              command_key = excluded.command_key,
+              result = excluded.result,
+              exit_code = excluded.exit_code,
+              captured_at = excluded.captured_at,
+              duration_ms = excluded.duration_ms,
+              summary_json = excluded.summary_json
+            """,
+            (
+                test_run_id,
+                port,
+                node_id,
+                command_key,
+                text(payload.get("result")),
+                integer(payload.get("exit_code"), None),
+                artifact.captured_at,
+                integer(payload.get("duration_ms") or payload.get("elapsed_ms"), None),
+                pretty_json(
+                    {
+                        key: payload[key]
+                        for key in (
+                            "summary",
+                            "passed",
+                            "failed",
+                            "skipped",
+                            "total",
+                            "tool",
+                            "command",
+                        )
+                        if key in payload
+                    }
+                ),
+                artifact.artifact_id,
+            ),
+        )
+        return
+
+    if schema == "port.coverage_summary.v1":
+        coverage_id = stable_id("coverage", artifact.artifact_id)
+        metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else payload
+        connection.execute(
+            """
+            INSERT INTO coverage_summaries(
+              coverage_id, port, node_id, tool, line_percent, branch_percent,
+              function_percent, statement_percent, covered_lines, total_lines,
+              captured_at, source_artifact_id
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(coverage_id) DO UPDATE SET
+              port = excluded.port,
+              node_id = excluded.node_id,
+              tool = excluded.tool,
+              line_percent = excluded.line_percent,
+              branch_percent = excluded.branch_percent,
+              function_percent = excluded.function_percent,
+              statement_percent = excluded.statement_percent,
+              covered_lines = excluded.covered_lines,
+              total_lines = excluded.total_lines,
+              captured_at = excluded.captured_at
+            """,
+            (
+                coverage_id,
+                port,
+                node_id,
+                text(payload.get("tool")),
+                metrics.get("line_percent"),
+                metrics.get("branch_percent"),
+                metrics.get("function_percent"),
+                metrics.get("statement_percent"),
+                integer(metrics.get("covered_lines"), None),
+                integer(metrics.get("total_lines"), None),
+                artifact.captured_at,
+                artifact.artifact_id,
+            ),
+        )
+        return
+
+    if schema == "port.domain_coverage.v1":
+        claims = payload.get("domains")
+        if not isinstance(claims, list):
+            claims = payload.get("claims")
+        if not isinstance(claims, list):
+            return
+        for index, claim in enumerate(claims):
+            if not isinstance(claim, dict):
+                continue
+            domain = text(claim.get("domain")).strip()
+            if not domain:
+                continue
+            claim_id = stable_id("test_domain_claim", artifact.artifact_id, index, port, domain)
+            connection.execute(
+                """
+                INSERT INTO test_domain_claims(
+                  claim_id, port, node_id, domain, status, evidence, notes,
+                  source_artifact_id
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(claim_id) DO UPDATE SET
+                  port = excluded.port,
+                  node_id = excluded.node_id,
+                  domain = excluded.domain,
+                  status = excluded.status,
+                  evidence = excluded.evidence,
+                  notes = excluded.notes,
+                  source_artifact_id = excluded.source_artifact_id
+                """,
+                (
+                    claim_id,
+                    port,
+                    node_id,
+                    domain,
+                    text(claim.get("status"), "unknown"),
+                    text(claim.get("evidence")),
+                    text(claim.get("notes")),
+                    artifact.artifact_id,
+                ),
+            )
 
 
 def import_blocker_from_payload(connection: sqlite3.Connection, artifact: Artifact, payload: dict[str, Any]) -> None:
@@ -1957,6 +2312,7 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         "current_evidence": 0,
         "consensus_rules": 0,
         "port_commands": 0,
+        "test_commands": 0,
     }
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
@@ -1981,6 +2337,7 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         for path in iter_default_json_files(root, docker_dir, args.tracked_only):
             counts["port_commands"] += import_docker_manifest(connection, root, path, read_json(path))
             counts["docker_manifests"] += 1
+        counts["test_commands"] = seed_test_commands(connection, root)
 
         results_dir = root / args.results_dir
         result_paths = (

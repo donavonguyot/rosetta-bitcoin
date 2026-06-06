@@ -25,16 +25,17 @@ Before editing a port, read:
 4. `Docs/port-baseline-5k.md` before new-port, benchmark, or readiness work.
 5. `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md` before consensus, corpus, or long-sync readiness work.
 6. `Docs/port-status.md` and Project reports for current imported status.
-7. `Nodes/Shared/STATUS_CONTRACT.md`.
-8. `Nodes/Shared/storage/STORAGE_GATE.md`.
-9. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
-10. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
-11. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
-12. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` for Project Docker query examples.
-13. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
-14. `Docs/blocker-ledger.md`.
-15. `Docs/supervisor-contract.md`.
-16. The target port's README and blocker ledger.
+7. `Nodes/Shared/testing/TEST_COVERAGE_CONTRACT.md` before test coverage or par-level work.
+8. `Nodes/Shared/STATUS_CONTRACT.md`.
+9. `Nodes/Shared/storage/STORAGE_GATE.md`.
+10. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
+11. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
+12. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
+13. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` for Project Docker query examples.
+14. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
+15. `Docs/blocker-ledger.md`.
+16. `Docs/supervisor-contract.md`.
+17. The target port's README and blocker ledger.
 
 The official benchmark suite is `baseline_5k`, `shakedown_50k`,
 `performance_100k`, `tip_once`, and `tip_maintenance`. The first comparable
@@ -93,12 +94,14 @@ Artifact cleanup follows `Docs/artifact-retention.md` and
 build outputs, and Docker volumes stay ignored and port-local.
 
 For mission-control status, blocker matrices, Docker coverage, conformance
-summaries, and benchmark summaries, query `Project/project.db` instead of
-hand-maintained Markdown tables:
+summaries, benchmark summaries, and test coverage posture, query
+`Project/project.db` instead of hand-maintained Markdown tables:
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
+python3 Project/scripts/report.py --db Project/project.db --section test-coverage
+python3 Project/scripts/preflight_test_coverage.py --db Project/project.db --all --level inventory
 ```
 
 This workspace has exactly one Git repository: `/Users/donavonguyot/RB/.git`.
