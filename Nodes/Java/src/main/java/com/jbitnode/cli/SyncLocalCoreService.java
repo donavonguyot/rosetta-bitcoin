@@ -55,6 +55,8 @@ public final class SyncLocalCoreService {
     int maxBlocks = PeerConfig.parseIntValue(env.get("BLOCKS_MAX"), 64);
     boolean skipBlocks = PeerConfig.parseBoolean(env.get("SKIP_BLOCKS"), false);
     boolean syncTiming = PeerConfig.parseBoolean(env.get("SYNC_TIMING"), false);
+    boolean progressJson = PeerConfig.parseBoolean(env.get("PROGRESS_JSON"), false);
+    int progressInterval = Math.max(1, PeerConfig.parseIntValue(env.get("PROGRESS_INTERVAL"), 250));
 
     Path dbPath = NodePaths.dbPathFromEnv(env.get("DATA_DIR"), env.get("DB_PATH"));
     Path dataDir = dbPath.getParent();
@@ -103,7 +105,17 @@ public final class SyncLocalCoreService {
                   session.chainstateStore(),
                   maxBlocks,
                   BlockSync.TimingSink.none(),
-                  false);
+                  false,
+                  progressJson
+                      ? progress ->
+                          printProgressJson(
+                              out,
+                              chain.name(),
+                              headerResult.bestHeight(),
+                              session.chainstateStore(),
+                              progress,
+                              progressInterval)
+                      : BlockSync.ProgressSink.none());
           out.println("  downloaded_blocks=" + blockResult.downloaded());
           out.println("  connected_blocks=" + blockResult.connected());
           out.println("  sync_status=" + blockResult.syncStatus());
@@ -402,6 +414,45 @@ public final class SyncLocalCoreService {
               + block.blockConnectStoreCommitMillis());
       rank += 1;
     }
+  }
+
+  static void printProgressJson(
+      PrintStream out,
+      String chain,
+      int headerHeight,
+      com.jbitnode.db.ChainstateStore chainstateStore,
+      BlockSync.Progress progress,
+      int progressInterval)
+      throws SQLException {
+    if (progress.height() != 1 && progress.height() % progressInterval != 0) {
+      return;
+    }
+    ChainstateStatus chainstateStatus = ChainstateStatus.capture(chainstateStore, chain);
+    out.println(
+        "sync_progress_json={"
+            + "\"chain\":\""
+            + escapeJson(chain)
+            + "\",\"sync_status\":\""
+            + escapeJson(progress.syncStatus())
+            + "\",\"header_height\":"
+            + headerHeight
+            + ",\"validated_height\":"
+            + progress.height()
+            + ",\"validated_hash\":\""
+            + escapeJson(progress.hash())
+            + "\",\"stored_block_height\":"
+            + progress.height()
+            + ",\"utxo_count\":"
+            + chainstateStatus.backendUtxoCount()
+            + ",\"chainstate_utxo_count\":"
+            + chainstateStatus.backendUtxoCount()
+            + ",\"current_blocker\":null"
+            + ",\"downloaded_blocks\":"
+            + progress.downloaded()
+            + ",\"connected_blocks\":"
+            + progress.connected()
+            + "}");
+    out.flush();
   }
 
   static void markStalledNative(Path dataDir, String chain, String exitReason) {

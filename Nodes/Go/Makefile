@@ -19,6 +19,7 @@ DOCKER_RPC_REPLAY_VOLUME ?= gobitnode_local_reference_proof_data
 DOCKER_SYNC_VOLUME ?= gobitnode_sync_data
 DOCKER_REBUILD ?= 0
 DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
+DOCKER_BENCHMARK_PROGRESS ?= 250
 
 SYNC_TARGET ?= 10000
 CONNECT_TARGET ?= 2
@@ -87,6 +88,7 @@ docker-proof-local:
 	  gobitnode local-reference-proof \
 	  --datadir /data \
 	  --target $(DOCKER_SYNC_TARGET) \
+	  --progress $(DOCKER_BENCHMARK_PROGRESS) \
 	  --byte-source p2p \
 		  --peer $(DOCKER_P2P_PEER) \
 		  --result-path $(DOCKER_LOCAL_PROOF_RESULT)

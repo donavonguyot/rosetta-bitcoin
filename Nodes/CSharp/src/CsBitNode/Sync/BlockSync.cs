@@ -11,6 +11,13 @@ namespace CsBitNode.Sync;
 
 public static class BlockSync
 {
+    public sealed record ProgressSnapshot(
+        int Height,
+        string Hash,
+        int Downloaded,
+        int Connected,
+        string SyncStatus);
+
     public interface IBlockSource
     {
         byte[]? RequestBlock(byte[] blockHashInternal);
@@ -34,7 +41,8 @@ public static class BlockSync
         int maxBlocks,
         ITimingSink? timingSink = null,
         int prefetchDepth = 1,
-        bool parallelScriptRunner = false)
+        bool parallelScriptRunner = false,
+        Action<ProgressSnapshot>? progressSink = null)
     {
         var downloaded = 0;
         var connected = 0;
@@ -99,6 +107,12 @@ public static class BlockSync
                 connected += 1;
                 validatedHeight = connectResult.Height;
                 prevHashHex = connectResult.BlockHashHex;
+                progressSink?.Invoke(new ProgressSnapshot(
+                    validatedHeight,
+                    prevHashHex,
+                    downloaded,
+                    connected,
+                    "blocks_syncing"));
             }
             catch (ValidationBlocker validationBlocker)
             {

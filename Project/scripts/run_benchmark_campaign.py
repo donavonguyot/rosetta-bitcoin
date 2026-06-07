@@ -12,6 +12,7 @@ import argparse
 import importlib.util
 import json
 import os
+import signal
 import shutil
 import sqlite3
 import subprocess
@@ -104,6 +105,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run", action="store_true", help="Execute commands; dry-run is the default")
     parser.add_argument("--dry-run", action="store_true", help="Print the plan without executing commands")
     parser.add_argument("--pause-on", choices=("anomaly", "failure", "never"), default="anomaly")
+    parser.add_argument(
+        "--startup-timeout-sec",
+        type=int,
+        default=180,
+        help="For long-run gates, stop a proof if first_block_connected is not observed within this many seconds.",
+    )
     parser.add_argument(
         "--continue-on-failure",
         action="store_true",
@@ -338,6 +345,7 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
         "run_mode": "run" if args.run else "dry_run",
         "pause_on": args.pause_on,
         "continue_on_failure": bool(args.continue_on_failure or args.assisted),
+        "startup_timeout_sec": max(0, int(args.startup_timeout_sec)),
         "db": args.db,
         "current_evidence": str(args.current_evidence),
         "results_dir": str(args.results_dir),
@@ -466,9 +474,20 @@ def parse_tick(line: str) -> dict[str, Any] | None:
     return tick if isinstance(tick, dict) and tick.get("schema") == "benchmark.telemetry_tick.v1" else None
 
 
-def run_shell(command: str, log_path: Path) -> int:
+def terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except Exception:
+        process.terminate()
+
+
+def run_shell(command: str, log_path: Path, *, startup_timeout_sec: int = 0) -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     last_tick: dict[str, Any] | None = None
+    started = time.monotonic()
+    first_block_connected = False
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
             command,
@@ -478,15 +497,32 @@ def run_shell(command: str, log_path: Path) -> int:
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
+            start_new_session=True,
         )
         assert process.stdout is not None
         for line in process.stdout:
             log.write(line)
             log.flush()
             tick = parse_tick(line)
+            if tick and tick.get("event") == "first_block_connected":
+                first_block_connected = True
             if tick and should_emit_tick(tick, last_tick):
                 print(fmt_tick(tick), flush=True)
                 last_tick = tick
+            if (
+                startup_timeout_sec > 0
+                and not first_block_connected
+                and time.monotonic() - started > startup_timeout_sec
+            ):
+                message = (
+                    f"campaign_startup_timeout seconds={startup_timeout_sec} "
+                    "reason=missing_first_block_connected\n"
+                )
+                log.write(message)
+                log.flush()
+                print(message.strip(), flush=True)
+                terminate_process_tree(process)
+                return 124
         return process.wait()
 
 
@@ -776,7 +812,8 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         current_evidence_path = ROOT / campaign["current_evidence"]
         protected_artifact = current_evidence_artifact(current_evidence_path, port, campaign["gate"])
         protected_snapshot = snapshot_file(protected_artifact)
-        exit_code = run_shell(entry["proof_command"], proof_log)
+        startup_timeout = campaign.get("startup_timeout_sec", 0) if campaign["gate"] in LONG_RUN_GATES else 0
+        exit_code = run_shell(entry["proof_command"], proof_log, startup_timeout_sec=int(startup_timeout or 0))
         entry["finished_at"] = utc_now()
         entry["exit_code"] = exit_code
         if exit_code != 0:

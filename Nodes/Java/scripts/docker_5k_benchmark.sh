@@ -21,6 +21,7 @@ REFERENCE_START_HEIGHT="${REFERENCE_START_HEIGHT:-0}"
 POLL_SEC="${POLL_SEC:-10}"
 CHECK_SEC="${CHECK_SEC:-1}"
 CONTAINER_NAME="${CONTAINER_NAME:-jbitnode-sync-proof-run}"
+PROGRESS_INTERVAL="${PROGRESS_INTERVAL:-250}"
 
 reference_hash() {
   docker exec rosetta-bitcoin-core-testnet4 \
@@ -42,9 +43,31 @@ REFERENCE_FINISH_HASH="${REFERENCE_FINISH_HASH:-$(reference_hash "$REFERENCE_FIN
 start_ms="$(now_ms)"
 run_id="java-$(case "$TARGET" in 5000) echo baseline_5k ;; 50000) echo shakedown_50k ;; 100000) echo performance_100k ;; *) echo local_reference ;; esac)-$start_ms"
 
-status_json() {
+status_command_json() {
   DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" \
     "${DOCKER_COMPOSE[@]}" run --rm --no-deps jbitnode-sync-proof com.jbitnode.cli.DbStatus 2>/dev/null || echo '{}'
+}
+
+progress_json() {
+  docker logs "$CONTAINER_NAME" 2>/dev/null | python3 -c 'import json, sys
+latest = None
+for raw in sys.stdin:
+    if "sync_progress_json=" not in raw:
+        continue
+    payload = raw.split("sync_progress_json=", 1)[1].strip()
+    try:
+        latest = json.loads(payload)
+    except json.JSONDecodeError:
+        continue
+print(json.dumps(latest or {}))'
+}
+
+status_json() {
+  if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+    progress_json
+  else
+    status_command_json
+  fi
 }
 
 field() {
@@ -86,6 +109,8 @@ DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" HEADERS_MAX="$HEADERS
   "${DOCKER_COMPOSE[@]}" run -d --name "$CONTAINER_NAME" --no-deps \
     -e PAR_SCRIPT_VERIFY=1 \
     -e SYNC_TIMING=1 \
+    -e PROGRESS_JSON=1 \
+    -e PROGRESS_INTERVAL="$PROGRESS_INTERVAL" \
     -e BLOCK_PREFETCH_DEPTH="$PREFETCH_DEPTH" \
     -e ROCKSDB_DISABLE_WAL=0 \
     jbitnode-sync-proof >/dev/null
@@ -122,7 +147,7 @@ if [[ "$start_exit" -eq 0 ]]; then
     fi
   done
   sync_exit="$(docker inspect "$CONTAINER_NAME" --format '{{.State.ExitCode}}' 2>/dev/null || echo 125)"
-  status_json >"$STATUS_TMP" 2>&1
+  status_command_json >"$STATUS_TMP" 2>&1
   final_json="$(cat "$STATUS_TMP")"
   final_height="$(echo "$final_json" | field "print(d.get('validated_height','?'))")"
   if [[ "$final_height" =~ ^[0-9]+$ ]] && (( final_height >= TARGET )); then

@@ -162,6 +162,17 @@ tolerance. Small scheduling drift is reported as a warning and can still be
 `telemetry_quality=clean`; repeated large gaps or any hard gap reject the run
 because operators lost useful visibility.
 
+Long-run progress should be emitted by the sync writer or by a writer-owned log
+channel. Campaign proofs should not rely on a second sidecar process opening
+live RocksDB/chainstate state while the writer is active; sidecar status reads
+are reserved for final post-exit artifact capture.
+
+For long-run gates, the campaign runner also applies a startup visibility
+timeout. If `first_block_connected` is not observed within the configured
+window, the proof is terminated and recorded as failed before operators spend a
+full 100k run on a blind supervisor path. Override with
+`--startup-timeout-sec <seconds>` when intentionally testing slower startup.
+
 For assisted evidence collection, use `--assisted --pause-on never`. Assisted
 mode records failed or rejected ports, preserves candidates under the ignored
 campaign directory, and continues to the next port. It still updates current

@@ -478,16 +478,18 @@ func mergeTiming(dst *connect.TimingSummary, src connect.TimingSummary) {
 }
 
 type telemetryState struct {
-	started     time.Time
-	runID       string
-	ticks       int
-	events      map[string]int64
-	phaseCounts map[string]int
-	stallCounts map[string]int
-	maxGap      time.Duration
-	lastHeight  int
-	lastElapsed time.Duration
-	hasLast     bool
+	started         time.Time
+	runID           string
+	ticks           int
+	events          map[string]int64
+	phaseCounts     map[string]int
+	stallCounts     map[string]int
+	maxGap          time.Duration
+	gapsOverTarget  int
+	gapsOverFailure int
+	lastHeight      int
+	lastElapsed     time.Duration
+	hasLast         bool
 }
 
 type telemetryTick struct {
@@ -527,6 +529,12 @@ func emitTelemetryTick(state *telemetryState, tick telemetryTick) {
 		elapsedDelta = elapsed - state.lastElapsed
 		if elapsedDelta > state.maxGap {
 			state.maxGap = elapsedDelta
+		}
+		if elapsedDelta > 15*time.Second {
+			state.gapsOverTarget++
+		}
+		if elapsedDelta > 20*time.Second {
+			state.gapsOverFailure++
 		}
 	}
 	state.lastHeight = tick.Height
@@ -608,17 +616,24 @@ func (state *telemetryState) summary() map[string]any {
 			break
 		}
 	}
-	if state.maxGap > 15*time.Second {
+	if state.gapsOverFailure >= 2 || state.maxGap > 30*time.Second {
 		quality = "invalid"
 	}
 	return map[string]any{
-		"telemetry_quality":    quality,
-		"tick_count":           state.ticks,
-		"lifecycle_markers":    state.events,
-		"heartbeat_max_gap_ms": state.maxGap.Milliseconds(),
-		"phase_counts":         state.phaseCounts,
-		"stall_class_counts":   state.stallCounts,
-		"heartbeat_limit_ms":   15_000,
+		"telemetry_quality":           quality,
+		"tick_count":                  state.ticks,
+		"lifecycle_markers":           state.events,
+		"heartbeat_max_gap_ms":        state.maxGap.Milliseconds(),
+		"phase_counts":                state.phaseCounts,
+		"stall_class_counts":          state.stallCounts,
+		"heartbeat_target_ms":         15_000,
+		"heartbeat_grace_ms":          5_000,
+		"heartbeat_warning_ms":        15_000,
+		"heartbeat_failure_ms":        20_000,
+		"heartbeat_hard_failure_ms":   30_000,
+		"heartbeat_limit_ms":          20_000,
+		"heartbeat_gaps_over_target":  state.gapsOverTarget,
+		"heartbeat_gaps_over_failure": state.gapsOverFailure,
 	}
 }
 

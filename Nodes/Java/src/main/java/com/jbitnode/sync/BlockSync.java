@@ -96,6 +96,13 @@ public final class BlockSync {
       long commitMillis,
       long blockConnectStoreCommitMillis) {}
 
+  public record Progress(
+      int height,
+      String hash,
+      int downloaded,
+      int connected,
+      String syncStatus) {}
+
   @FunctionalInterface
   public interface TimingSink {
     void record(String stage, int height, long elapsedMillis) throws SQLException;
@@ -109,6 +116,15 @@ public final class BlockSync {
     byte[] requestBlock(byte[] blockHashInternal) throws IOException;
 
     void markBlockDownloadCapabilities() throws SQLException;
+  }
+
+  @FunctionalInterface
+  public interface ProgressSink {
+    void record(Progress progress) throws SQLException;
+
+    static ProgressSink none() {
+      return progress -> {};
+    }
   }
 
   public static Result syncFromPeer(
@@ -139,7 +155,41 @@ public final class BlockSync {
         chainstateStore,
         maxBlocks,
         timingSink,
-        replaceBlockMetadata);
+        replaceBlockMetadata,
+        ProgressSink.none());
+  }
+
+  public static Result syncFromPeer(
+      PeerConnection peer,
+      ChainParams chain,
+      ProjectTracker tracker,
+      BlockStorage blockStorage,
+      ChainstateStore chainstateStore,
+      int maxBlocks,
+      TimingSink timingSink,
+      boolean replaceBlockMetadata,
+      ProgressSink progressSink)
+      throws IOException, SQLException {
+    return syncFromBlockSource(
+        new BlockSource() {
+          @Override
+          public byte[] requestBlock(byte[] blockHashInternal) throws IOException {
+            return peer.requestBlock(blockHashInternal);
+          }
+
+          @Override
+          public void markBlockDownloadCapabilities() throws SQLException {
+            peer.markBlockDownloadCapabilities();
+          }
+        },
+        chain,
+        tracker,
+        blockStorage,
+        chainstateStore,
+        maxBlocks,
+        timingSink,
+        replaceBlockMetadata,
+        progressSink);
   }
 
   public static Result syncFromBlockSource(
@@ -151,6 +201,29 @@ public final class BlockSync {
       int maxBlocks,
       TimingSink timingSink,
       boolean replaceBlockMetadata)
+      throws IOException, SQLException {
+    return syncFromBlockSource(
+        blockSource,
+        chain,
+        tracker,
+        blockStorage,
+        chainstateStore,
+        maxBlocks,
+        timingSink,
+        replaceBlockMetadata,
+        ProgressSink.none());
+  }
+
+  public static Result syncFromBlockSource(
+      BlockSource blockSource,
+      ChainParams chain,
+      ProjectTracker tracker,
+      BlockStorage blockStorage,
+      ChainstateStore chainstateStore,
+      int maxBlocks,
+      TimingSink timingSink,
+      boolean replaceBlockMetadata,
+      ProgressSink progressSink)
       throws IOException, SQLException {
     tracker.upsertSyncState(chain.name(), new SyncStatePatch(null, null, null, "blocks_syncing"));
     TimingCollector timingCollector = new TimingCollector(timingSink);
@@ -280,6 +353,13 @@ public final class BlockSync {
           }
           connected += 1;
           downloaded += 1;
+          progressSink.record(
+              new Progress(
+                  tracker.getValidatedHeight(chain.name()),
+                  result.blockHashHex(),
+                  downloaded,
+                  connected,
+                  "blocks_syncing"));
         } catch (ValidationBlocker blocker) {
           tracker.logEvent(
               "sync",

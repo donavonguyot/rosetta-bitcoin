@@ -257,6 +257,13 @@ Emitters should target 15 seconds or better. The telemetry validator warns on
 small target drift, accepts bounded jitter, and rejects repeated large gaps or
 any hard gap that means operators lost useful visibility.
 
+Long-run telemetry must be writer-owned. During `shakedown_50k`,
+`performance_100k`, and tip gates, progress ticks should come from the running
+sync process or from a log/progress channel written by that process. Proof
+wrappers must not depend on opening live RocksDB/chainstate state from a second
+sidecar process while the sync writer is active; sidecar status reads are only
+appropriate after the writer exits.
+
 Leaderboards rank only current evidence with:
 
 ```text

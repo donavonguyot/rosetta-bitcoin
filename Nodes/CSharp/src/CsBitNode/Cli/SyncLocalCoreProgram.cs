@@ -25,6 +25,8 @@ public static class SyncLocalCoreService
         var skipBlocks = PeerConfig.ParseBool(env.GetValueOrDefault("SKIP_BLOCKS"), false);
         var syncTiming = PeerConfig.ParseBool(env.GetValueOrDefault("CSBITNODE_SYNC_TIMING"), false);
         var syncTimingLog = PeerConfig.ParseBool(env.GetValueOrDefault("CSBITNODE_SYNC_TIMING_LOG"), false);
+        var progressJson = PeerConfig.ParseBool(env.GetValueOrDefault("CSBITNODE_PROGRESS_JSON"), false);
+        var progressInterval = Math.Max(1, PeerConfig.ParseInt(env.GetValueOrDefault("PROGRESS_INTERVAL"), 250));
         var scriptRunnerMode = (env.GetValueOrDefault("SCRIPT_RUNNER_MODE") ?? "sequential").Trim().ToLowerInvariant();
         var parallelScriptRunner = scriptRunnerMode == "parallel";
         var fixtureBlocksDir = env.GetValueOrDefault("FIXTURE_BLOCKS_DIR");
@@ -41,7 +43,7 @@ public static class SyncLocalCoreService
 
         try
         {
-            return RunNative(output, chain, peer, maxHeaders, maxBatches, maxBlocks, blockPrefetchDepth, parallelScriptRunner, skipBlocks, dataDir, fixtureBlocksDir, syncTiming, syncTimingLog);
+            return RunNative(output, chain, peer, maxHeaders, maxBatches, maxBlocks, blockPrefetchDepth, parallelScriptRunner, skipBlocks, dataDir, fixtureBlocksDir, syncTiming, syncTimingLog, progressJson, progressInterval);
         }
         catch (DatadirLockBusyException ex)
         {
@@ -74,7 +76,9 @@ public static class SyncLocalCoreService
         string dataDir,
         string? fixtureBlocksDir,
         bool syncTiming,
-        bool syncTimingLog)
+        bool syncTimingLog,
+        bool progressJson,
+        int progressInterval)
     {
         using var session = ChainstateSession.OpenNative(dataDir, chain);
         var tracker = session.Store;
@@ -85,7 +89,18 @@ public static class SyncLocalCoreService
             SeedFixtureHeaders(tracker, chain, fixtureBlocksDir);
             if (!skipBlocks)
             {
-                var result = BlockSync.SyncFromBlockSource(new FixtureBlockSource(fixtureBlocksDir), chain, tracker, session.BlockStorage, maxBlocks, timingSink, blockPrefetchDepth, parallelScriptRunner);
+                var result = BlockSync.SyncFromBlockSource(
+                    new FixtureBlockSource(fixtureBlocksDir),
+                    chain,
+                    tracker,
+                    session.BlockStorage,
+                    maxBlocks,
+                    timingSink,
+                    blockPrefetchDepth,
+                    parallelScriptRunner,
+                    progressSink: progressJson
+                        ? snapshot => PrintProgressJson(output, chain.Name, tracker, syncStateBestHeight: null, snapshot, progressInterval)
+                        : null);
                 output.WriteLine($"  downloaded_blocks={result.Downloaded}");
                 output.WriteLine($"  connected_blocks={result.Connected}");
                 output.WriteLine($"  sync_status={result.SyncStatus}");
@@ -112,7 +127,18 @@ public static class SyncLocalCoreService
         var syncExitCode = 0;
         if (!skipBlocks)
         {
-            var blockResult = BlockSync.SyncFromBlockSource(connection, chain, tracker, session.BlockStorage, maxBlocks, timingSink, blockPrefetchDepth, parallelScriptRunner);
+            var blockResult = BlockSync.SyncFromBlockSource(
+                connection,
+                chain,
+                tracker,
+                session.BlockStorage,
+                maxBlocks,
+                timingSink,
+                blockPrefetchDepth,
+                parallelScriptRunner,
+                progressSink: progressJson
+                    ? snapshot => PrintProgressJson(output, chain.Name, tracker, headerResult.BestHeight, snapshot, progressInterval)
+                    : null);
             output.WriteLine($"  downloaded_blocks={blockResult.Downloaded}");
             output.WriteLine($"  connected_blocks={blockResult.Connected}");
             output.WriteLine($"  sync_status={blockResult.SyncStatus}");
@@ -157,6 +183,37 @@ public static class SyncLocalCoreService
         {
             // Best-effort only: preserve the original sync error as the authoritative failure.
         }
+    }
+
+    private static void PrintProgressJson(
+        TextWriter output,
+        string chain,
+        IChainstateStore tracker,
+        int? syncStateBestHeight,
+        BlockSync.ProgressSnapshot snapshot,
+        int progressInterval)
+    {
+        if (snapshot.Height != 1 && snapshot.Height % progressInterval != 0)
+            return;
+        var syncState = tracker.GetSyncState(chain);
+        var headerHeight = syncStateBestHeight ?? syncState?.BestHeight ?? snapshot.Height;
+        var utxoCount = tracker.UtxoCount(chain);
+        var progress = new Dictionary<string, object?>
+        {
+            ["chain"] = chain,
+            ["sync_status"] = snapshot.SyncStatus,
+            ["header_height"] = headerHeight,
+            ["validated_height"] = snapshot.Height,
+            ["validated_hash"] = snapshot.Hash,
+            ["stored_block_height"] = tracker.MaxStoredBlockHeight(chain),
+            ["utxo_count"] = utxoCount,
+            ["chainstate_utxo_count"] = utxoCount,
+            ["current_blocker"] = null,
+            ["downloaded_blocks"] = snapshot.Downloaded,
+            ["connected_blocks"] = snapshot.Connected,
+        };
+        output.WriteLine($"sync_progress_json={JsonSerializer.Serialize(progress)}");
+        output.Flush();
     }
 
     private static void SeedFixtureHeaders(IChainstateStore store, ChainParams chain, string fixtureBlocksDir)

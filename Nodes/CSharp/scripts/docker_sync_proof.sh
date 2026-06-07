@@ -9,6 +9,7 @@ CONTAINER_NAME="${CONTAINER_NAME:-csbitnode-sync-proof-run}"
 STATUS_FILE="${STATUS_FILE:-.docker-csharp-proof-status.json}"
 EXIT_FILE="${EXIT_FILE:-.docker-csharp-proof-exit}"
 RUN_FILE="${RUN_FILE:-.docker-csharp-proof-run.json}"
+PROGRESS_INTERVAL="${PROGRESS_INTERVAL:-250}"
 
 log_line() {
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"
@@ -18,10 +19,32 @@ now_ms() {
   python3 -c 'import time; print(int(time.time() * 1000))'
 }
 
-status_json() {
+status_command_json() {
   DOCKER_PROOF_VOLUME="${DOCKER_PROOF_VOLUME:-csbitnode_proof_data}" \
   SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
   "${DOCKER_COMPOSE[@]}" run --rm --no-deps csbitnode-sync-proof status 2>/dev/null || echo '{}'
+}
+
+progress_json() {
+  docker logs "$CONTAINER_NAME" 2>/dev/null | python3 -c 'import json, sys
+latest = None
+for raw in sys.stdin:
+    if "sync_progress_json=" not in raw:
+        continue
+    payload = raw.split("sync_progress_json=", 1)[1].strip()
+    try:
+        latest = json.loads(payload)
+    except json.JSONDecodeError:
+        continue
+print(json.dumps(latest or {}))'
+}
+
+status_json() {
+  if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+    progress_json
+  else
+    status_command_json
+  fi
 }
 
 field() {
@@ -58,6 +81,7 @@ DOCKER_PROOF_VOLUME="${DOCKER_PROOF_VOLUME:-csbitnode_proof_data}" \
   SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
   HEADERS_MAX="${HEADERS_MAX:-200}" HEADER_BATCHES_MAX="${HEADER_BATCHES_MAX:-1}" BLOCKS_MAX="${BLOCKS_MAX:-2}" \
   BLOCK_PREFETCH_DEPTH="${BLOCK_PREFETCH_DEPTH:-1}" CSBITNODE_SYNC_TIMING="${CSBITNODE_SYNC_TIMING:-0}" \
+  CSBITNODE_PROGRESS_JSON=1 PROGRESS_INTERVAL="$PROGRESS_INTERVAL" \
   "${DOCKER_COMPOSE[@]}" run -d --name "$CONTAINER_NAME" csbitnode-sync-proof >/dev/null
 log_line "$(emit_benchmark_tick '{}' 0 startup container_started 1)"
 log_line "$(emit_benchmark_tick '{}' 0 startup node_started 1)"
@@ -92,7 +116,7 @@ done
 
 exit_code="$(docker inspect "$CONTAINER_NAME" --format '{{.State.ExitCode}}' 2>/dev/null || echo 125)"
 echo "$exit_code" > "$EXIT_FILE"
-status_json > "$STATUS_FILE"
+status_command_json > "$STATUS_FILE"
 final_json="$(cat "$STATUS_FILE")"
 final_height="$(echo "$final_json" | field "print(d.get('validated_height','?'))")"
 if [[ "$final_height" =~ ^[0-9]+$ ]] && [[ "${BLOCKS_MAX:-0}" =~ ^[0-9]+$ ]] && (( final_height >= BLOCKS_MAX )); then
