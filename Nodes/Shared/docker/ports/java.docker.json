@@ -73,7 +73,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/java_rocksdb_docker_local_peer_sync_2026-06-01.json",
-    "notes": "docker_proof_local runs the supporting 5k local-reference Docker benchmark with native secp256k1, RocksDB, WAL enabled, and a fresh proof volume."
+    "notes": "docker_proof_local, docker_proof_50k, and docker_proof_100k run local-reference Docker benchmark commands with native secp256k1, RocksDB, WAL enabled, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts."
   },
   "known_caveats": ["External network probe command not standardized"]
 }

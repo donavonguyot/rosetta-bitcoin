@@ -13,7 +13,7 @@ BLOCKS_MAX="${DOCKER_BENCHMARK_BLOCKS_MAX:-5000}"
 PEERS="${DOCKER_BENCHMARK_PEERS:-${REFERENCE_P2P_PEER:?REFERENCE_P2P_PEER missing}}"
 export PEERS
 PREFETCH_DEPTH="${DOCKER_BENCHMARK_PREFETCH_DEPTH:-4}"
-RESULT="${DOCKER_BENCHMARK_RESULT:-../Shared/conformance/results/cpp_docker_baseline_5k_benchmark_$(date +%F).json}"
+RESULT="${DOCKER_BENCHMARK_RESULT:-.benchmark-results/cpp_docker_baseline_5k_benchmark_$(date +%F).json}"
 REFERENCE_START_HEIGHT="${REFERENCE_START_HEIGHT:-0}"
 
 reference_hash() {

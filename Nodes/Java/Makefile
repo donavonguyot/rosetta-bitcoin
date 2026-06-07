@@ -3,10 +3,11 @@ MVN = JAVA_HOME="$(JAVA_HOME)" PATH="$(JAVA_HOME)/bin:$$PATH" mvn
 MAVEN_OPTS ?= -Xmx4g -XX:+ExitOnOutOfMemoryError
 export MAVEN_OPTS
 DOCKER_PROOF_VOLUME ?= jbitnode_proof_data
-DOCKER_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_baseline_5k_benchmark_$(shell date +%F).json
+BENCHMARK_DEBUG_DIR ?= .benchmark-results
+DOCKER_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/java_docker_baseline_5k_benchmark_$(shell date +%F).json
 DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_diagnostic_10k_benchmark_$(shell date +%F).json
-DOCKER_50K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_shakedown_50k_benchmark_$(shell date +%F).json
-DOCKER_100K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_performance_100k_benchmark_$(shell date +%F).json
+DOCKER_50K_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/java_docker_shakedown_50k_benchmark_$(shell date +%F).json
+DOCKER_100K_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/java_docker_performance_100k_benchmark_$(shell date +%F).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/java_script_corpus_$(shell date +%F).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/java_script_corpus_docker_$(shell date +%F).json
 DOCKER_BENCHMARK_TARGET ?= 5000
@@ -79,9 +80,6 @@ docker-java-supporting-5k-proof:
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
 	  POLL_SEC=$(DOCKER_BENCHMARK_POLL_SEC) \
 		  scripts/docker_5k_benchmark.sh
-	@if [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
-	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(DOCKER_BENCHMARK_RESULT) --port java --strict-current; \
-	fi
 
 docker-java-supporting-10k-proof:
 	$(MAKE) docker-java-supporting-5k-proof \

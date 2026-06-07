@@ -155,9 +155,12 @@ Benchmark telemetry is Project/control-plane instrumentation. Ports should expos
 the product progress surface in
 [`PORT_PROGRESS_CONTRACT.md`](PORT_PROGRESS_CONTRACT.md); Project converts that
 surface into benchmark ticks, telemetry summaries, and canonical artifacts.
-Historical port-authored benchmark ticks remain import-compatible. Current
-active-port benchmark evidence for `baseline_5k`, `shakedown_50k`, and
-`performance_100k` must be control-built from `rb.port_progress`.
+Old port-authored benchmark ticks remain import-compatible as historical
+archaeology. Current active-port benchmark evidence for `baseline_5k`,
+`shakedown_50k`, and `performance_100k` must be control-built from
+`rb.port_progress`. New active benchmark runs must not commit port-authored
+benchmark JSON under `Nodes/Shared/conformance/results/`; any local port JSON is
+ignored debug output.
 
 Long runs (`shakedown_50k`, `performance_100k`, `tip_once`, and
 `tip_maintenance`) must emit lines consumable by
@@ -255,8 +258,9 @@ python3 Project/scripts/preflight_benchmark_gate.py --db Project/project.db --ga
 
 Historical artifacts remain in `Nodes/Shared/conformance/results/`, but the
 official suite reports only the current gates above. Historical import remains
-compatibility-friendly; current campaign acceptance is not. Fresh official
-evidence must pass `validate_benchmark_artifact.py` and import with
+compatibility-friendly; current campaign acceptance is not. Fresh active
+benchmark evidence in shared results must be Project/control-built, must pass
+`validate_benchmark_artifact.py`, and must import with
 `artifact_quality=canonical`. Long-run evidence must also import with
 `telemetry_quality=clean`.
 

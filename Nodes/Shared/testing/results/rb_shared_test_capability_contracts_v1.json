@@ -1,0 +1,19 @@
+{
+  "captured_at": "2026-06-07T00:00:00Z",
+  "category": "test_capability_contracts",
+  "notes": "Shared suite registry for Project test capability contracts. Denominators are meaningful only with suite id, version, hash, and provenance.",
+  "schema": "port.test_capability_contract.v1",
+  "suites": [
+    {
+      "case_total": 45,
+      "does_not_prove": "Project-local script fixture corpus; not community-complete Bitcoin script coverage, tip readiness, or every future consensus rule.",
+      "provenance": [
+        "rb_live_chain_regression",
+        "rb_synthetic_edge_case"
+      ],
+      "suite_hash": "9f338ff205087144c38679ebd67bde5bf372bea3082922bde5f28013e4727d06",
+      "suite_id": "rb.shared_script_corpus",
+      "suite_version": "2026-06-07"
+    }
+  ]
+}

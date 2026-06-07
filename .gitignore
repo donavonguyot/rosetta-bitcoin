@@ -40,6 +40,7 @@
 /Nodes/*/.mypy_cache/
 /Nodes/*/.vitest/
 /Nodes/*/coverage/
+/Nodes/*/.benchmark-results/
 /Nodes/*/*.log
 /Nodes/*/*.db
 /Nodes/*/*.sqlite

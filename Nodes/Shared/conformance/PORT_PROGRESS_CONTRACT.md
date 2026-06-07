@@ -42,6 +42,8 @@ Port-local tests should validate node behavior: consensus, storage, P2P,
 status, blockers, and restart/reconnect behavior. They should not lock in
 benchmark artifact schemas or telemetry pass/fail rules.
 
-Project may keep importing historical port-authored benchmark JSON. Active-port
-current benchmark evidence is built by the control harness from product progress
-and final status.
+Project may keep importing old port-authored benchmark JSON as historical
+archaeology. Active-port current benchmark evidence is built by the control
+harness from product progress and final status. New active benchmark runs must
+not commit port-authored benchmark JSON under
+`Nodes/Shared/conformance/results/`; any local port JSON is ignored debug output.

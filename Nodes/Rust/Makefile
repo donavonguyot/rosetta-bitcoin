@@ -15,15 +15,16 @@ BENCHMARK_GATE ?= baseline_5k
 RESULT_DATE ?= $(shell date +%F)
 STORAGE_RESULT ?= ../Shared/conformance/results/rust_storage_gate_$(RESULT_DATE).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/rust_script_corpus_$(RESULT_DATE).json
-LOCAL_REFERENCE_RESULT ?= ../Shared/conformance/results/rust_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+BENCHMARK_DEBUG_DIR ?= .benchmark-results
+LOCAL_REFERENCE_RESULT ?= $(BENCHMARK_DEBUG_DIR)/rust_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 LOCAL_REFERENCE_10K_RESULT ?= ../Shared/conformance/results/rust_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
-LOCAL_REFERENCE_50K_RESULT ?= ../Shared/conformance/results/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
-LOCAL_REFERENCE_100K_RESULT ?= ../Shared/conformance/results/rust_docker_performance_100k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_50K_RESULT ?= $(BENCHMARK_DEBUG_DIR)/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
+LOCAL_REFERENCE_100K_RESULT ?= $(BENCHMARK_DEBUG_DIR)/rust_docker_performance_100k_benchmark_$(RESULT_DATE).json
 LOCAL_REFERENCE_TUNING_100K_RESULT ?= ../Shared/conformance/results/rust_docker_tuning_50k_to_100k_benchmark_$(RESULT_DATE).json
-DOCKER_LOCAL_REFERENCE_RESULT ?= /results/rust_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_RESULT ?= /tmp/rust_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_10K_RESULT ?= /results/rust_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
-DOCKER_LOCAL_REFERENCE_50K_RESULT ?= /results/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
-DOCKER_LOCAL_REFERENCE_100K_RESULT ?= /results/rust_docker_performance_100k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_50K_RESULT ?= /tmp/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_REFERENCE_100K_RESULT ?= /tmp/rust_docker_performance_100k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_REFERENCE_TUNING_100K_RESULT ?= /results/rust_docker_tuning_50k_to_100k_benchmark_$(RESULT_DATE).json
 RPC_REPLAY_RESULT ?= ../Shared/conformance/results/rust_local_reference_docker_sync_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
@@ -94,9 +95,6 @@ docker-proof-local:
 	$(REFERENCE_P2P_CHECK)
 	@docker volume rm -f $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps -e RSBITNODE_BLOCK_PREFETCH_DEPTH=$(PREFETCH_DEPTH) rsbitnode-local-reference-proof rsbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --byte-source p2p --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker
-	@if [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
-	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(patsubst /results/%,../Shared/conformance/results/%,$(DOCKER_LOCAL_REFERENCE_RESULT)) --port rust --strict-current; \
-	fi
 
 docker-proof-10k:
 	$(MAKE) docker-proof-local \

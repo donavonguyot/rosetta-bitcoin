@@ -150,8 +150,10 @@ python3 Project/scripts/run_benchmark_campaign.py \
 Campaign scratch lives under ignored `Project/.campaigns/`. Logs and telemetry
 tails are operational state, not committed evidence. Active ports expose product
 progress with `rb.port_progress`; the Project control harness turns that into
-benchmark telemetry and canonical artifacts. Historical port-authored artifacts
-remain import-compatible, but active current benchmark evidence is control-built.
+benchmark telemetry and canonical artifacts. Old port-authored benchmark
+artifacts remain import-compatible as historical archaeology, but new active
+benchmark runs must not commit port-authored benchmark JSON under
+`Nodes/Shared/conformance/results/`.
 
 The runner updates `Nodes/Shared/conformance/current_evidence.json` only after
 the fresh control-built artifact passes the shared benchmark artifact validator,
@@ -296,6 +298,28 @@ does not force new work onto retired ports. These artifacts use stable schemas:
 Coverage capture requires `--include-coverage` and an explicitly supported
 command. Benchmark correctness stays in benchmark preflights, not port unit
 tests.
+
+Test capability contracts answer whether a port has a safety net for a specific
+optimization or experiment. They do not use maturity levels or naked case-count
+claims:
+
+```bash
+python3 Project/scripts/report.py \
+  --db Project/project.db \
+  --section test-capabilities
+
+python3 Project/scripts/report.py \
+  --db Project/project.db \
+  --section test-capability-gaps
+
+python3 Project/scripts/report.py \
+  --db Project/project.db \
+  --section experiment-readiness
+```
+
+See `Nodes/Shared/testing/TEST_CAPABILITY_CONTRACT.md` for the artifact schema,
+allowed provenance classes, and the rule that denominators require a named suite
+with a version and hash.
 
 Test coverage reports are for standalone product-node quality: consensus,
 storage, P2P, runtime smoke, and status/reporting behavior. Benchmark gates,

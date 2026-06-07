@@ -77,12 +77,10 @@
     "storage_result": "Nodes/Shared/conformance/results/ocaml_rocksdb_codec_v2_storage_docker_<YYYY-MM-DD>.json",
     "native_crypto_vectors_result": "Nodes/Shared/conformance/results/ocaml_native_crypto_vectors_docker_<YYYY-MM-DD>.json",
     "script_corpus_result": "Nodes/Shared/conformance/results/ocaml_script_corpus_docker_<YYYY-MM-DD>.json",
-    "local_reference_result": "Nodes/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
-    "shakedown_50k_result": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
-    "shakedown_50k_telemetry": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_telemetry_<YYYY-MM-DD>.log",
-    "performance_100k_result": "Nodes/Shared/conformance/results/ocaml_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
-    "performance_100k_telemetry": "Nodes/Shared/conformance/results/ocaml_docker_performance_100k_telemetry_<YYYY-MM-DD>.log",
-    "notes": "OCaml has strict Docker/local Reference P2P baseline 5k and shakedown 50k evidence with RocksDB runtime truth, WAL enabled, native libsecp256k1, Codec v2 chainstate, live telemetry, and native Shared script corpus proof. 100k command surface is available but unattempted."
+    "local_reference_debug_result": "Nodes/OCaml/.benchmark-results/ocaml_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
+    "shakedown_50k_debug_result": "Nodes/OCaml/.benchmark-results/ocaml_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
+    "performance_100k_debug_result": "Nodes/OCaml/.benchmark-results/ocaml_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
+    "notes": "OCaml has strict Docker/local Reference P2P baseline 5k and shakedown 50k evidence with RocksDB runtime truth, WAL enabled, native libsecp256k1, Codec v2 chainstate, live telemetry, and native Shared script corpus proof. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. 100k command surface is available but unattempted."
   },
   "known_caveats": [
     "Local Reference P2P baseline 5k and shakedown 50k lanes are implemented",

@@ -72,11 +72,11 @@
   "proof_artifacts": {
     "storage_gate_result": "Nodes/Shared/conformance/results/zig_storage_gate_docker_<YYYY-MM-DD>.json",
     "script_corpus_result": "Nodes/Shared/conformance/results/zig_script_corpus_<YYYY-MM-DD>.json",
-    "local_reference_result": "Nodes/Shared/conformance/results/zig_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
+    "local_reference_debug_result": "Nodes/Zig/.benchmark-results/zig_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "diagnostic_10k_result": "Nodes/Shared/conformance/results/zig_docker_diagnostic_10k_benchmark_<YYYY-MM-DD>.json",
-    "shakedown_50k_result": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
-    "performance_100k_result": "Nodes/Shared/conformance/results/zig_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, the 5k baseline, and the 50k local Reference P2P shakedown. The 100k command surface is implemented for official performance_100k evidence."
+    "shakedown_50k_debug_result": "Nodes/Zig/.benchmark-results/zig_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
+    "performance_100k_debug_result": "Nodes/Zig/.benchmark-results/zig_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
+    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, and official local Reference P2P benchmark commands. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts."
   },
   "known_caveats": [
     "Zig script corpus is 45/45 with engine=zig_native and delegated=false",

@@ -21,6 +21,9 @@ SECTIONS = (
     "test-commands",
     "test-coverage",
     "critical-test-domains",
+    "test-capabilities",
+    "test-capability-gaps",
+    "experiment-readiness",
     "conformance",
     "blocker-catalog",
     "blocker-matrix",
@@ -58,6 +61,9 @@ SECTION_ALIASES = {
     "tests": "test-coverage",
     "coverage": "test-coverage",
     "domains": "critical-test-domains",
+    "capabilities": "test-capabilities",
+    "capability-gaps": "test-capability-gaps",
+    "experiments": "experiment-readiness",
     "blockers": "blocker-catalog",
     "benchmark-suite": "benchmark-suite",
     "rankings": "leaderboard",
@@ -379,6 +385,95 @@ def print_critical_test_domains(connection: sqlite3.Connection) -> None:
         """,
     )
     print(table(("port", "lifecycle", "domain", "status", "source", "evidence", "notes"), data))
+
+
+def print_test_capabilities(connection: sqlite3.Connection) -> None:
+    print("## Test Capabilities")
+    print()
+    data = rows(
+        connection,
+        """
+        select port,
+               lifecycle_status,
+               capability,
+               status,
+               scope,
+               backend,
+               evidence_kind,
+               evidence_path,
+               case
+                 when suite_id <> '' then
+                   'suite=' || suite_id ||
+                   ' result=' || coalesce(case_passed, 0) || '/' || coalesce(case_total, 0) ||
+                   ' suite_hash=' || substr(suite_hash, 1, 12) ||
+                   ' provenance=' || provenance_json
+                 else provenance_json
+               end as suite_or_provenance,
+               does_not_prove,
+               evidence_source_type
+        from test_capability_contract_matrix
+        order by port,
+          case capability
+            when 'unit_surface' then 0
+            when 'shared_script_corpus' then 1
+            when 'sighash_and_witness_regressions' then 2
+            when 'utxo_apply_undo_accounting' then 3
+            when 'block_connect_local_reference' then 4
+            when 'rocksdb_restart_persistence' then 5
+            when 'p2p_deferred_handshake' then 6
+            when 'status_reporting' then 7
+            else 20
+          end,
+          capability
+        """,
+    )
+    print(
+        table(
+            (
+                "port",
+                "lifecycle",
+                "capability",
+                "status",
+                "scope",
+                "backend",
+                "evidence",
+                "path",
+                "suite/provenance",
+                "does_not_prove",
+                "source",
+            ),
+            data,
+        )
+    )
+
+
+def print_test_capability_gaps(connection: sqlite3.Connection) -> None:
+    print("## Test Capability Gaps")
+    print()
+    data = rows(
+        connection,
+        """
+        select port, lifecycle_status, capability, status, blocking_for_json,
+               evidence_kind, evidence_path, does_not_prove
+        from test_capability_gaps
+        order by port, capability
+        """,
+    )
+    print(table(("port", "lifecycle", "capability", "status", "blocking_for", "evidence", "path", "does_not_prove"), data))
+
+
+def print_experiment_readiness(connection: sqlite3.Connection) -> None:
+    print("## Experiment Readiness")
+    print()
+    data = rows(
+        connection,
+        """
+        select port, lifecycle_status, experiment, readiness, blocking_contracts
+        from experiment_readiness
+        order by port, experiment
+        """,
+    )
+    print(table(("port", "lifecycle", "experiment", "readiness", "blocking_contracts"), data))
 
 
 def print_conformance(connection: sqlite3.Connection) -> None:
@@ -818,6 +913,9 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "test-commands": print_test_commands,
     "test-coverage": print_test_coverage,
     "critical-test-domains": print_critical_test_domains,
+    "test-capabilities": print_test_capabilities,
+    "test-capability-gaps": print_test_capability_gaps,
+    "experiment-readiness": print_experiment_readiness,
     "conformance": print_conformance,
     "blocker-catalog": print_blocker_catalog,
     "blocker-matrix": print_blocker_matrix,

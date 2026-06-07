@@ -1,5 +1,5 @@
 let default_result_path () =
-  Printf.sprintf "../Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_%s.json" (Util.today_utc ())
+  Printf.sprintf ".benchmark-results/ocaml_docker_baseline_5k_benchmark_%s.json" (Util.today_utc ())
 
 let target_label target = if target = 5000 then "5k" else if target = 50000 then "50k" else string_of_int target
 

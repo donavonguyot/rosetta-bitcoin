@@ -369,6 +369,18 @@ TEST_COMMAND_PURPOSES = {
     "test_coverage": "run optional local coverage telemetry",
 }
 
+TEST_CAPABILITY_STATUSES = {"pass", "fail", "missing", "not_applicable"}
+
+TEST_CAPABILITY_PROVENANCE = {
+    "bip_standard_vector",
+    "bitcoin_core_upstream_vector",
+    "libsecp256k1_upstream_vector",
+    "rb_live_chain_regression",
+    "rb_synthetic_edge_case",
+    "port_regression",
+    "proof_derived",
+}
+
 ECOSYSTEM_TEST_FALLBACKS = {
     "csharp": "SECP256K1_BACKEND=native dotnet test",
     "cpp": "cmake --build build && ctest --test-dir build --output-on-failure",
@@ -410,6 +422,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--include-history", action="store_true", help="Import every result JSON instead of only current_evidence entries")
     parser.add_argument("--tracked-only", action="store_true", help="Import only git-tracked default manifest/result/status/ledger files")
     parser.add_argument("--skip-sqlite-utils-check", action="store_true", help="Do not require the sqlite-utils CLI")
+    parser.add_argument("--self-test", action="store_true", help="Run importer validation self-tests without importing")
     return parser.parse_args()
 
 
@@ -631,6 +644,7 @@ def artifact_kind(path: Path, payload: dict[str, Any]) -> str:
         "port.test_result",
         "port.coverage_summary",
         "port.domain_coverage",
+        "port.test_capability_contract.v1",
         "port.test_result.v1",
         "port.coverage_summary.v1",
         "port.domain_coverage.v1",
@@ -672,6 +686,8 @@ def artifact_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "command_key",
         "line_percent",
         "branch_percent",
+        "suite_id",
+        "suite_hash",
     ]
     return {key: payload[key] for key in keys if key in payload}
 
@@ -1945,6 +1961,175 @@ def blocker_key(source: str, blocker: dict[str, Any]) -> str:
         )
 
 
+def string_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [text(item).strip() for item in value if text(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def validate_provenance(values: list[str], context: str) -> None:
+    if not values:
+        raise SystemExit(f"{context}: provenance must name at least one source class")
+    unknown = sorted(set(values) - TEST_CAPABILITY_PROVENANCE)
+    if unknown:
+        raise SystemExit(f"{context}: unknown provenance values: {', '.join(unknown)}")
+
+
+def validate_capability_suite(suite: dict[str, Any], context: str) -> None:
+    suite_id = text(suite.get("suite_id")).strip()
+    suite_hash = text(suite.get("suite_hash")).strip()
+    provenance = string_list(suite.get("provenance"))
+    if not suite_id:
+        raise SystemExit(f"{context}: suite_id is required")
+    if not suite_hash:
+        raise SystemExit(f"{context}: suite_hash is required")
+    validate_provenance(provenance, context)
+    if not text(suite.get("does_not_prove")).strip():
+        raise SystemExit(f"{context}: does_not_prove is required")
+
+
+def validate_capability_contract(claim: dict[str, Any], context: str) -> None:
+    contract_id = text(claim.get("contract_id")).strip()
+    capability = text(claim.get("capability")).strip()
+    status = text(claim.get("status")).strip()
+    provenance = string_list(claim.get("provenance"))
+    suite_id = text(claim.get("suite_id")).strip()
+    suite_hash = text(claim.get("suite_hash")).strip()
+    suite_version = text(claim.get("suite_version")).strip()
+    has_denominator = claim.get("case_passed") is not None or claim.get("case_total") is not None
+
+    if not contract_id:
+        raise SystemExit(f"{context}: contract_id is required")
+    if not capability:
+        raise SystemExit(f"{context}: capability is required")
+    if status not in TEST_CAPABILITY_STATUSES:
+        raise SystemExit(f"{context}: status must be one of {sorted(TEST_CAPABILITY_STATUSES)}")
+    validate_provenance(provenance, context)
+    if has_denominator and (not suite_id or not suite_version or not suite_hash):
+        raise SystemExit(f"{context}: case counts require suite_id, suite_version, and suite_hash")
+    if has_denominator and integer(claim.get("case_total"), -1) < 0:
+        raise SystemExit(f"{context}: case_total must be nonnegative when present")
+
+
+def node_id_for_contract_port(connection: sqlite3.Connection, port: str, fallback: str) -> str:
+    row = connection.execute("SELECT node_id FROM docker_contracts WHERE port = ?", (port,)).fetchone()
+    if row:
+        return text(row[0])
+    return fallback
+
+
+def import_test_capability_contracts(connection: sqlite3.Connection, artifact: Artifact, payload: dict[str, Any]) -> None:
+    suites = payload.get("suites")
+    if isinstance(suites, list):
+        for index, suite in enumerate(suites):
+            if not isinstance(suite, dict):
+                continue
+            context = f"{artifact.rel_path}:suites[{index}]"
+            validate_capability_suite(suite, context)
+            provenance = string_list(suite.get("provenance"))
+            connection.execute(
+                """
+                INSERT INTO test_capability_suites(
+                  suite_id, suite_version, suite_hash, case_total, provenance_json,
+                  does_not_prove, source_artifact_id
+                ) VALUES(?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(suite_id, suite_version, suite_hash) DO UPDATE SET
+                  case_total = excluded.case_total,
+                  provenance_json = excluded.provenance_json,
+                  does_not_prove = excluded.does_not_prove,
+                  source_artifact_id = excluded.source_artifact_id
+                """,
+                (
+                    text(suite.get("suite_id")).strip(),
+                    text(suite.get("suite_version")).strip(),
+                    text(suite.get("suite_hash")).strip(),
+                    integer(suite.get("case_total"), None),
+                    stable_json(provenance),
+                    text(suite.get("does_not_prove")).strip(),
+                    artifact.artifact_id,
+                ),
+            )
+
+    claims = payload.get("contracts")
+    if not isinstance(claims, list):
+        claims = payload.get("claims")
+    if not isinstance(claims, list):
+        return
+
+    default_port = port_for_payload(artifact.path, payload)
+    for index, claim in enumerate(claims):
+        if not isinstance(claim, dict):
+            continue
+        context = f"{artifact.rel_path}:contracts[{index}]"
+        validate_capability_contract(claim, context)
+        port = text(claim.get("port") or default_port).strip().lower()
+        if port not in PORTS or port == "reference":
+            raise SystemExit(f"{context}: valid non-reference port is required")
+        node_id = text(claim.get("node_id")).strip() or node_id_for_contract_port(connection, port, artifact.node_id)
+        provenance = string_list(claim.get("provenance"))
+        blocking_for = string_list(claim.get("blocking_for"))
+        contract_id = text(claim.get("contract_id")).strip()
+        capability = text(claim.get("capability")).strip()
+        row_id = stable_id("test_capability_contract", artifact.artifact_id, index, port, contract_id, capability)
+        connection.execute(
+            """
+            INSERT INTO test_capability_contracts(
+              contract_row_id, port, node_id, contract_id, capability, status,
+              scope, backend, evidence_kind, evidence_path, command_key,
+              suite_id, suite_version, suite_hash, case_passed, case_total,
+              provenance_json, does_not_prove, blocking_for_json, notes,
+              source_artifact_id
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(contract_row_id) DO UPDATE SET
+              port = excluded.port,
+              node_id = excluded.node_id,
+              contract_id = excluded.contract_id,
+              capability = excluded.capability,
+              status = excluded.status,
+              scope = excluded.scope,
+              backend = excluded.backend,
+              evidence_kind = excluded.evidence_kind,
+              evidence_path = excluded.evidence_path,
+              command_key = excluded.command_key,
+              suite_id = excluded.suite_id,
+              suite_version = excluded.suite_version,
+              suite_hash = excluded.suite_hash,
+              case_passed = excluded.case_passed,
+              case_total = excluded.case_total,
+              provenance_json = excluded.provenance_json,
+              does_not_prove = excluded.does_not_prove,
+              blocking_for_json = excluded.blocking_for_json,
+              notes = excluded.notes,
+              source_artifact_id = excluded.source_artifact_id
+            """,
+            (
+                row_id,
+                port,
+                node_id,
+                contract_id,
+                capability,
+                text(claim.get("status")).strip(),
+                text(claim.get("scope")).strip(),
+                text(claim.get("backend")).strip(),
+                text(claim.get("evidence_kind")).strip(),
+                text(claim.get("evidence_path")).strip(),
+                text(claim.get("command_key")).strip(),
+                text(claim.get("suite_id")).strip(),
+                text(claim.get("suite_version")).strip(),
+                text(claim.get("suite_hash")).strip(),
+                integer(claim.get("case_passed"), None),
+                integer(claim.get("case_total"), None),
+                stable_json(provenance),
+                text(claim.get("does_not_prove")).strip(),
+                stable_json(blocking_for),
+                text(claim.get("notes")).strip(),
+                artifact.artifact_id,
+            ),
+        )
+
+
 def import_test_rows(connection: sqlite3.Connection, artifact: Artifact, payload: dict[str, Any]) -> None:
     schema = text(payload.get("schema"))
     port = port_for_payload(artifact.path, payload)
@@ -2084,6 +2269,10 @@ def import_test_rows(connection: sqlite3.Connection, artifact: Artifact, payload
                 artifact.artifact_id,
             ),
         )
+        return
+
+    if schema == "port.test_capability_contract.v1":
+        import_test_capability_contracts(connection, artifact, payload)
         return
 
     if schema in {"port.domain_coverage", "port.domain_coverage.v1"}:
@@ -2355,6 +2544,112 @@ def default_blocker_ledgers(root: Path) -> list[Path]:
     return [path for path in paths if path.exists()]
 
 
+def expect_validation_failure(fn: Any, needle: str) -> None:
+    try:
+        fn()
+    except SystemExit as exc:
+        message = str(exc)
+        if needle not in message:
+            raise AssertionError(f"expected {needle!r} in {message!r}") from exc
+        return
+    raise AssertionError(f"expected validation failure containing {needle!r}")
+
+
+def self_test() -> int:
+    valid_suite = {
+        "suite_id": "rb.shared_script_corpus",
+        "suite_version": "2026-06-07",
+        "suite_hash": "9f338ff205087144c38679ebd67bde5bf372bea3082922bde5f28013e4727d06",
+        "case_total": 45,
+        "provenance": ["rb_live_chain_regression", "rb_synthetic_edge_case"],
+        "does_not_prove": "Project-local script fixture corpus; not community-complete Bitcoin script coverage.",
+    }
+    validate_capability_suite(valid_suite, "self-test:suite")
+
+    valid_contract = {
+        "port": "go",
+        "contract_id": "shared_script_corpus",
+        "capability": "shared_script_corpus",
+        "status": "pass",
+        "suite_id": "rb.shared_script_corpus",
+        "suite_version": "2026-06-07",
+        "suite_hash": "9f338ff205087144c38679ebd67bde5bf372bea3082922bde5f28013e4727d06",
+        "case_passed": 45,
+        "case_total": 45,
+        "provenance": ["rb_live_chain_regression"],
+        "does_not_prove": "Project-local script fixture corpus; not community-complete Bitcoin script coverage.",
+    }
+    validate_capability_contract(valid_contract, "self-test:contract")
+
+    naked_denominator = dict(valid_contract)
+    naked_denominator.pop("suite_id")
+    expect_validation_failure(
+        lambda: validate_capability_contract(naked_denominator, "self-test:naked"),
+        "case counts require suite_id",
+    )
+
+    unknown_provenance = dict(valid_contract)
+    unknown_provenance["provenance"] = ["project_vibes"]
+    expect_validation_failure(
+        lambda: validate_capability_contract(unknown_provenance, "self-test:unknown-provenance"),
+        "unknown provenance",
+    )
+
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        init_db(connection, ROOT / "Project/schema.sql")
+        artifact = Artifact(
+            artifact_id="self-test-artifact",
+            path=Path("Nodes/Shared/testing/results/self_test.json"),
+            rel_path="Nodes/Shared/testing/results/self_test.json",
+            kind="port.test_capability_contract.v1",
+            node_id="go",
+            source_sha256="",
+            captured_at="2026-06-07T00:00:00Z",
+            summary={},
+            raw_json="{}",
+        )
+        connection.execute(
+            """
+            INSERT INTO artifacts(artifact_id, path, kind, node_id, source_sha256, captured_at, summary_json, raw_json)
+            VALUES(?, ?, ?, ?, '', '', '{}', '{}')
+            """,
+            (artifact.artifact_id, artifact.rel_path, artifact.kind, artifact.node_id),
+        )
+        connection.execute(
+            "INSERT INTO nodes(node_id, implementation, language, role, repo_path, default_datadir) VALUES('go', 'GoNode', 'Go', 'follower', 'Nodes/Go', './data-go')"
+        )
+        connection.execute(
+            "INSERT INTO docker_contracts(port, node_id, status, source_artifact_id) VALUES('go', 'go', 'present', ?)",
+            (artifact.artifact_id,),
+        )
+        import_test_rows(
+            connection,
+            artifact,
+            {
+                "schema": "port.test_capability_contract.v1",
+                "suites": [valid_suite],
+                "contracts": [valid_contract],
+            },
+        )
+        assert connection.execute("SELECT count(*) FROM test_capability_suites").fetchone()[0] == 1
+        assert connection.execute("SELECT count(*) FROM test_capability_contracts").fetchone()[0] == 1
+
+        import_test_rows(
+            connection,
+            artifact,
+            {
+                "schema": "port.domain_coverage",
+                "port": "go",
+                "claims": [{"domain": "script_verification", "status": "covered", "evidence": "legacy"}],
+            },
+        )
+        assert connection.execute("SELECT count(*) FROM test_domain_claims").fetchone()[0] == 1
+
+    print("project_import self-test passed")
+    return 0
+
+
 def import_all(args: argparse.Namespace) -> dict[str, int]:
     if not args.skip_sqlite_utils_check and shutil.which("sqlite-utils") is None:
         raise SystemExit("sqlite-utils CLI is required; install it or pass --skip-sqlite-utils-check")
@@ -2448,6 +2743,8 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
 
 def main() -> int:
     args = parse_args()
+    if args.self_test:
+        return self_test()
     counts = import_all(args)
     print("project_import " + " ".join(f"{key}={value}" for key, value in sorted(counts.items())))
     return 0

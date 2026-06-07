@@ -5,10 +5,10 @@ SCRIPT_RESULT ?= ../Shared/conformance/results/zig_script_corpus_$(RESULT_DATE).
 STORAGE_RESULT ?= ../Shared/conformance/results/zig_storage_gate_docker_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /results/zig_script_corpus_$(RESULT_DATE).json
 DOCKER_STORAGE_RESULT ?= /results/zig_storage_gate_docker_$(RESULT_DATE).json
-DOCKER_LOCAL_PROOF_RESULT ?= /results/zig_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_PROOF_RESULT ?= /tmp/zig_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_10K_PROOF_RESULT ?= /results/zig_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
-DOCKER_50K_PROOF_RESULT ?= /results/zig_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
-DOCKER_100K_PROOF_RESULT ?= /results/zig_docker_performance_100k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_PROOF_RESULT ?= /tmp/zig_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
+DOCKER_100K_PROOF_RESULT ?= /tmp/zig_docker_performance_100k_benchmark_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
@@ -78,9 +78,6 @@ docker-proof-local:
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
 	  --output $(DOCKER_LOCAL_PROOF_RESULT)
-	@if [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
-	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(patsubst /results/%,../Shared/conformance/results/%,$(DOCKER_LOCAL_PROOF_RESULT)) --port zig --strict-current; \
-	fi
 
 docker-proof-10k:
 	$(MAKE) docker-proof-local \

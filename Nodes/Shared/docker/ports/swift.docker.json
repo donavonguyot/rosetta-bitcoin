@@ -70,11 +70,11 @@
   },
   "proof_artifacts": {
     "script_corpus_result": "Nodes/Shared/conformance/results/swift_script_corpus_<YYYY-MM-DD>.json",
-    "local_reference_result": "Nodes/Shared/conformance/results/swift_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
+    "local_reference_debug_result": "Nodes/Swift/.benchmark-results/swift_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "diagnostic_10k_result": "Nodes/Shared/conformance/results/swift_docker_diagnostic_10k_benchmark_<YYYY-MM-DD>.json",
-    "shakedown_50k_result": "Nodes/Shared/conformance/results/swift_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
-    "performance_100k_result": "Nodes/Shared/conformance/results/swift_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. Local Reference 5k and 50k are official bounded gates; docker_proof_10k remains diagnostic only. docker_proof_100k is wired for the performance_100k surface and must be run only after the current 5k/50k refresh gates pass."
+    "shakedown_50k_debug_result": "Nodes/Swift/.benchmark-results/swift_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
+    "performance_100k_debug_result": "Nodes/Swift/.benchmark-results/swift_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
+    "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only."
   },
   "known_caveats": ["Swift supervisor is chunked local-reference catch-up, not external peer discovery", "Binary gate remains not_attempted until imported tip proof reaches current Reference tip"]
 }

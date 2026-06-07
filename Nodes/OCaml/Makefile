@@ -12,14 +12,14 @@ DOCKER_50K_PROFILE_TARGET ?= $(if $(filter 5000,$(SYNC_TARGET)),26700,$(SYNC_TAR
 PREFETCH_DEPTH ?= 4
 PROGRESS ?= 1000
 DOCKER_LOCAL_PROOF_VOLUME ?= ocbitnode_5k_proof_data
-DOCKER_LOCAL_REFERENCE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_$(RESULT_DATE).json
-DOCKER_LOCAL_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_baseline_5k_telemetry_$(RESULT_DATE).log
+DOCKER_LOCAL_REFERENCE_RESULT ?= /tmp/ocaml_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_TELEMETRY_LOG ?= /tmp/ocaml_docker_baseline_5k_telemetry_$(RESULT_DATE).log
 DOCKER_50K_PROOF_VOLUME ?= ocbitnode_50k_proof_data
-DOCKER_50K_REFERENCE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
-DOCKER_50K_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_telemetry_$(RESULT_DATE).log
+DOCKER_50K_REFERENCE_RESULT ?= /tmp/ocaml_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_TELEMETRY_LOG ?= /tmp/ocaml_docker_shakedown_50k_telemetry_$(RESULT_DATE).log
 DOCKER_100K_PROOF_VOLUME ?= ocbitnode_100k_proof_data
-DOCKER_100K_REFERENCE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_performance_100k_benchmark_$(RESULT_DATE).json
-DOCKER_100K_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_performance_100k_telemetry_$(RESULT_DATE).log
+DOCKER_100K_REFERENCE_RESULT ?= /tmp/ocaml_docker_performance_100k_benchmark_$(RESULT_DATE).json
+DOCKER_100K_TELEMETRY_LOG ?= /tmp/ocaml_docker_performance_100k_telemetry_$(RESULT_DATE).log
 DOCKER_50K_PROFILE_VOLUME ?= ocbitnode_50k_profile_data
 DOCKER_50K_PROFILE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(DOCKER_50K_PROFILE_TARGET)_$(RESULT_DATE).json
 DOCKER_50K_PROFILE_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(DOCKER_50K_PROFILE_TARGET)_$(RESULT_DATE).log
@@ -80,21 +80,18 @@ docker-proof-local:
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_LOCAL_TELEMETRY_LOG)
-	$(VALIDATE_BENCHMARK_ARTIFACT) --gate baseline_5k --artifact $(patsubst /workspace/Shared/%,../Shared/%,$(DOCKER_LOCAL_REFERENCE_RESULT)) --port ocaml --strict-current
 
 docker-proof-50k:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_50K_PROOF_VOLUME) docker_$(DOCKER_50K_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target 50000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_TELEMETRY_LOG)
-	$(VALIDATE_BENCHMARK_ARTIFACT) --gate shakedown_50k --artifact $(patsubst /workspace/Shared/%,../Shared/%,$(DOCKER_50K_REFERENCE_RESULT)) --port ocaml --strict-current
 
 docker-proof-100k:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_100K_PROOF_VOLUME) docker_$(DOCKER_100K_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_100K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target 100000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_100K_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_100K_TELEMETRY_LOG)
-	$(VALIDATE_BENCHMARK_ARTIFACT) --gate performance_100k --artifact $(patsubst /workspace/Shared/%,../Shared/%,$(DOCKER_100K_REFERENCE_RESULT)) --port ocaml --strict-current
 
 docker-proof-50k-profile:
 	$(REFERENCE_P2P_CHECK)

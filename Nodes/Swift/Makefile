@@ -3,10 +3,10 @@ DATA_DIR ?= ./data-swift
 RESULT_DATE ?= $(shell date +%F)
 SCRIPT_RESULT ?= ../Shared/conformance/results/swift_script_corpus_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /results/swift_script_corpus_$(RESULT_DATE).json
-DOCKER_LOCAL_PROOF_RESULT ?= /results/swift_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_PROOF_RESULT ?= /tmp/swift_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_10K_PROOF_RESULT ?= /results/swift_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
-DOCKER_50K_PROOF_RESULT ?= /results/swift_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
-DOCKER_100K_PROOF_RESULT ?= /results/swift_docker_performance_100k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_PROOF_RESULT ?= /tmp/swift_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
+DOCKER_100K_PROOF_RESULT ?= /tmp/swift_docker_performance_100k_benchmark_$(RESULT_DATE).json
 DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
@@ -41,7 +41,7 @@ swift-node-proof-local:
 	$(SWIFT) run swiftbitnode proof-local \
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(LOCAL_P2P_PEER) \
-	  --output ../Shared/conformance/results/swift_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+	  --output .benchmark-results/swift_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 
 swift-node-sync-supervisor:
 	$(SWIFT) run swiftbitnode sync-supervisor \
@@ -84,9 +84,6 @@ docker-proof-local:
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
 	  --output $(DOCKER_LOCAL_PROOF_RESULT)
-	@if [ "$(BENCHMARK_GATE)" != "diagnostic_10k" ]; then \
-	  $(VALIDATE_BENCHMARK_ARTIFACT) --gate $(BENCHMARK_GATE) --artifact $(patsubst /results/%,../Shared/conformance/results/%,$(DOCKER_LOCAL_PROOF_RESULT)) --port swift --strict-current; \
-	fi
 
 docker-proof-10k:
 	$(MAKE) docker-proof-local \

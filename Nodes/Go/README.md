@@ -57,11 +57,12 @@ speaks Bitcoin P2P to `REFERENCE_P2P_PEER` from `Nodes/Shared/docker/reference_t
 through `getheaders`/`getdata`, then uses the same Go storage/connect pipeline.
 `docker-proof-rpc-replay` preserves the older local Reference RPC replay lane.
 
-The current Docker P2P 5k comparator starts from a fresh Docker volume, stores
-and validates through height 5000, and is classified by Project as comparable:
+The current Docker P2P 5k comparator starts from a fresh Docker volume, streams
+`rb.port_progress`, stores and validates through height 5000, and is classified
+by Project as comparable after the control harness builds the current artifact:
 
 ```text
-result_path: Nodes/Shared/conformance/results/go_docker_baseline_5k_benchmark_2026-06-04.json
+artifact_source: project_control_harness
 runtime_surface: docker
 peer_mode: local_reference
 validated_height: 5000

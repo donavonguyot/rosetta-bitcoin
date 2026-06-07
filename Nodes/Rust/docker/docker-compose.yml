@@ -80,7 +80,7 @@ services:
         "--peer",
         "${P2P_PEER:-${REFERENCE_P2P_PEER:?set REFERENCE_P2P_PEER from Nodes/Shared/docker/reference_topology.env}}",
         "--result-path",
-        "/results/rust_docker_baseline_5k_benchmark.json",
+        "/tmp/rust_docker_baseline_5k_benchmark.json",
         "--runtime-surface",
         "docker"
       ]

@@ -52,6 +52,11 @@ Project's `baseline-par` level requires unit-test command visibility. It does
 not require any port to copy Cpp's historical lane breadth, Java's coverage
 discipline, or any global percentage posture.
 
+Capability contracts are the richer safety-net vocabulary for optimization and
+experiments. See `TEST_CAPABILITY_CONTRACT.md`. They replace maturity-level
+language with named pass/fail/missing risk surfaces, provenance, and suite
+hashes. Coverage percentages remain optional diagnostics beneath that layer.
+
 Active-development ports are inventory-first. Missing long-run or coverage
 evidence should not be treated as a failure unless the port claims that gate.
 
@@ -66,6 +71,8 @@ python3 Project/scripts/capture_test_coverage.py --db Project/project.db --all -
 python3 Project/scripts/report.py --db Project/project.db --section test-commands
 python3 Project/scripts/report.py --db Project/project.db --section test-coverage
 python3 Project/scripts/report.py --db Project/project.db --section critical-test-domains
+python3 Project/scripts/report.py --db Project/project.db --section test-capabilities
+python3 Project/scripts/report.py --db Project/project.db --section experiment-readiness
 python3 Project/scripts/preflight_test_coverage.py --db Project/project.db --all --level inventory
 ```
 

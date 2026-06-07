@@ -28,4 +28,4 @@ docker-proof-local:
 	  -e FRESH_STATE=true \
 	  -e PEER=$(REFERENCE_P2P_PEER) \
 	  {{port}} proof-local \
-	  --output ../../Nodes/Shared/conformance/results/{{port}}_docker_baseline_5k_benchmark_$(shell date +%F).json
+	  --output .benchmark-results/{{port}}_docker_baseline_5k_benchmark_$(shell date +%F).json

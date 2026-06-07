@@ -174,6 +174,44 @@ CREATE TABLE IF NOT EXISTS test_domain_claims (
   UNIQUE(port, domain, source_artifact_id)
 );
 
+CREATE TABLE IF NOT EXISTS test_capability_suites (
+  suite_id TEXT NOT NULL,
+  suite_version TEXT NOT NULL DEFAULT '',
+  suite_hash TEXT NOT NULL DEFAULT '',
+  case_total INTEGER,
+  provenance_json TEXT NOT NULL DEFAULT '[]',
+  does_not_prove TEXT NOT NULL DEFAULT '',
+  source_artifact_id TEXT REFERENCES artifacts(artifact_id),
+  PRIMARY KEY(suite_id, suite_version, suite_hash)
+);
+
+CREATE TABLE IF NOT EXISTS test_capability_contracts (
+  contract_row_id TEXT PRIMARY KEY,
+  port TEXT NOT NULL,
+  node_id TEXT NOT NULL REFERENCES nodes(node_id),
+  contract_id TEXT NOT NULL,
+  capability TEXT NOT NULL,
+  status TEXT NOT NULL,
+  scope TEXT NOT NULL DEFAULT '',
+  backend TEXT NOT NULL DEFAULT '',
+  evidence_kind TEXT NOT NULL DEFAULT '',
+  evidence_path TEXT NOT NULL DEFAULT '',
+  command_key TEXT NOT NULL DEFAULT '',
+  suite_id TEXT NOT NULL DEFAULT '',
+  suite_version TEXT NOT NULL DEFAULT '',
+  suite_hash TEXT NOT NULL DEFAULT '',
+  case_passed INTEGER,
+  case_total INTEGER,
+  provenance_json TEXT NOT NULL DEFAULT '[]',
+  does_not_prove TEXT NOT NULL DEFAULT '',
+  blocking_for_json TEXT NOT NULL DEFAULT '[]',
+  notes TEXT NOT NULL DEFAULT '',
+  source_artifact_id TEXT NOT NULL REFERENCES artifacts(artifact_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_test_capability_contracts_port
+  ON test_capability_contracts(port, capability, status);
+
 CREATE TABLE IF NOT EXISTS runs (
   run_id TEXT PRIMARY KEY,
   node_id TEXT NOT NULL REFERENCES nodes(node_id),
@@ -372,6 +410,10 @@ DROP VIEW IF EXISTS benchmark_comparability;
 DROP VIEW IF EXISTS current_evidence_status;
 DROP VIEW IF EXISTS critical_test_domain_coverage;
 DROP VIEW IF EXISTS test_coverage_matrix;
+DROP VIEW IF EXISTS experiment_readiness;
+DROP VIEW IF EXISTS test_capability_gaps;
+DROP VIEW IF EXISTS test_capability_contract_matrix;
+DROP VIEW IF EXISTS test_capability_suite_registry;
 DROP VIEW IF EXISTS latest_coverage_summaries;
 DROP VIEW IF EXISTS latest_test_runs;
 DROP VIEW IF EXISTS test_command_surface;
@@ -1665,6 +1707,316 @@ LEFT JOIN latest_test_runs utr ON utr.port = p.port AND utr.command_key = 'test_
 LEFT JOIN coverage_runs ctr ON ctr.port = p.port
 LEFT JOIN latest_coverage_summaries lcs ON lcs.port = p.port
 LEFT JOIN domains d ON d.port = p.port;
+
+CREATE VIEW IF NOT EXISTS test_capability_suite_registry AS
+SELECT
+  suite_id,
+  suite_version,
+  suite_hash,
+  case_total,
+  provenance_json,
+  does_not_prove,
+  coalesce(source_artifact_id, '') AS source_artifact_id
+FROM test_capability_suites
+UNION ALL
+SELECT
+  'rb.shared_script_corpus' AS suite_id,
+  '2026-06-07' AS suite_version,
+  '9f338ff205087144c38679ebd67bde5bf372bea3082922bde5f28013e4727d06' AS suite_hash,
+  45 AS case_total,
+  '["rb_live_chain_regression","rb_synthetic_edge_case"]' AS provenance_json,
+  'Project-local script fixture corpus; not community-complete Bitcoin script coverage.' AS does_not_prove,
+  '' AS source_artifact_id
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM test_capability_suites
+  WHERE suite_id = 'rb.shared_script_corpus'
+    AND suite_version = '2026-06-07'
+    AND suite_hash = '9f338ff205087144c38679ebd67bde5bf372bea3082922bde5f28013e4727d06'
+);
+
+CREATE VIEW IF NOT EXISTS test_capability_contract_matrix AS
+WITH ports AS (
+  SELECT
+    dc.port,
+    dc.node_id,
+    coalesce(pl.lifecycle_status, CASE WHEN dc.port = 'reference' THEN 'reference' ELSE 'active_contender' END) AS lifecycle_status,
+    coalesce(pl.benchmark_scope, CASE WHEN dc.port = 'reference' THEN 'reference_only' ELSE 'full_suite' END) AS benchmark_scope
+  FROM docker_contracts dc
+  LEFT JOIN port_lifecycle pl ON pl.port = dc.port
+  WHERE dc.port <> 'reference'
+),
+current_claims AS (
+  SELECT port, count(*) AS current_evidence_count
+  FROM evidence_index_entries
+  WHERE status = 'current'
+  GROUP BY port
+),
+storage AS (
+  SELECT
+    np.port,
+    max(CASE WHEN cr.fixture_id = 'storage.rocksdb_runtime_truth' AND cr.result = 'passed' THEN 1 ELSE 0 END) AS has_runtime_truth,
+    max(CASE WHEN cr.fixture_id = 'storage.native_restart' AND cr.result = 'passed' THEN 1 ELSE 0 END) AS has_restart,
+    max(CASE WHEN cr.fixture_id IN ('storage.batch_prevout_load_order', 'storage.atomic_writebatch_commit') AND cr.result = 'passed' THEN 1 ELSE 0 END) AS has_codec_vector,
+    max(a.path) AS evidence_path
+  FROM conformance_results cr
+  JOIN project_node_ports np ON np.node_id = cr.node_id
+  JOIN artifacts a ON a.artifact_id = cr.source_artifact_id
+  WHERE cr.category = 'storage'
+  GROUP BY np.port
+),
+commands AS (
+  SELECT
+    p.port,
+    max(CASE WHEN tcs.command_key = 'test_unit' THEN tcs.supported ELSE 0 END) AS unit_supported,
+    max(CASE WHEN tcs.command_key = 'test_unit' THEN tcs.command ELSE '' END) AS unit_command,
+    max(CASE WHEN ltr.command_key = 'test_unit' THEN ltr.result ELSE '' END) AS unit_result,
+    max(CASE WHEN ltr.command_key = 'test_unit' THEN ltr.source_artifact_id ELSE '' END) AS unit_source_artifact_id
+  FROM ports p
+  LEFT JOIN test_command_surface tcs ON tcs.port = p.port
+  LEFT JOIN latest_test_runs ltr ON ltr.port = p.port AND ltr.command_key = tcs.command_key
+  GROUP BY p.port
+),
+capability_names(capability, blocking_for_json) AS (
+  VALUES
+    ('unit_surface', '["all_experiments"]'),
+    ('shared_script_corpus', '["block_connect_optimization","pure_crypto_experiment"]'),
+    ('sighash_and_witness_regressions', '["block_connect_optimization","pure_crypto_experiment"]'),
+    ('utxo_apply_undo_accounting', '["block_connect_optimization","storage_codec_change"]'),
+    ('block_connect_local_reference', '["block_connect_optimization","p2p_handshake_change"]'),
+    ('rocksdb_restart_persistence', '["storage_codec_change"]'),
+    ('p2p_deferred_handshake', '["p2p_handshake_change"]'),
+    ('status_reporting', '["block_connect_optimization","storage_codec_change","p2p_handshake_change"]'),
+    ('crypto_bip340_vectors', '["pure_crypto_experiment"]'),
+    ('crypto_libsecp256k1_equivalence', '["pure_crypto_experiment"]'),
+    ('crypto_backend_reporting', '["pure_crypto_experiment"]'),
+    ('script_corpus_with_backend', '["pure_crypto_experiment"]'),
+    ('block_connect_with_backend', '["pure_crypto_experiment"]'),
+    ('storage_codec_vectors', '["storage_codec_change"]'),
+    ('storage_restart_after_codec_change', '["storage_codec_change"]')
+),
+derived AS (
+  SELECT
+    p.port,
+    p.node_id,
+    p.lifecycle_status,
+    p.benchmark_scope,
+    cn.capability AS contract_id,
+    cn.capability,
+    CASE cn.capability
+      WHEN 'unit_surface' THEN
+        CASE
+          WHEN coalesce(c.unit_result, '') = 'failed' THEN 'fail'
+          WHEN coalesce(c.unit_result, '') = 'passed' THEN 'pass'
+          WHEN coalesce(c.unit_supported, 0) = 1 THEN 'missing'
+          ELSE 'missing'
+        END
+      WHEN 'shared_script_corpus' THEN CASE WHEN coalesce(scb.script_corpus_status, '') = 'passed' THEN 'pass' ELSE 'missing' END
+      WHEN 'sighash_and_witness_regressions' THEN CASE WHEN coalesce(scb.script_corpus_status, '') = 'passed' THEN 'pass' ELSE 'missing' END
+      WHEN 'utxo_apply_undo_accounting' THEN
+        CASE WHEN coalesce(pb.utxo_accounting_policy, '') = 'core_spendable_v1' AND coalesce(pb.chainstate_utxo_count, -1) = 4574 THEN 'pass' ELSE 'missing' END
+      WHEN 'block_connect_local_reference' THEN CASE WHEN coalesce(pb.comparability_status, '') = 'comparable' THEN 'pass' ELSE 'missing' END
+      WHEN 'rocksdb_restart_persistence' THEN CASE WHEN coalesce(st.has_runtime_truth, 0) = 1 AND coalesce(st.has_restart, 0) = 1 THEN 'pass' ELSE 'missing' END
+      WHEN 'p2p_deferred_handshake' THEN
+        CASE WHEN coalesce(pb.peer_mode, '') = 'local_reference' AND coalesce(pb.proof_mode, '') = 'p2p_sync' AND coalesce(pb.comparability_status, '') = 'comparable' THEN 'pass' ELSE 'missing' END
+      WHEN 'status_reporting' THEN CASE WHEN coalesce(cc.current_evidence_count, 0) > 0 THEN 'pass' ELSE 'missing' END
+      WHEN 'crypto_backend_reporting' THEN CASE WHEN coalesce(pb.native_crypto_backend, '') <> '' THEN 'pass' ELSE 'missing' END
+      WHEN 'script_corpus_with_backend' THEN CASE WHEN coalesce(scb.script_corpus_status, '') = 'passed' AND coalesce(pb.native_crypto_backend, '') <> '' THEN 'pass' ELSE 'missing' END
+      WHEN 'storage_codec_vectors' THEN CASE WHEN coalesce(st.has_codec_vector, 0) = 1 THEN 'pass' ELSE 'missing' END
+      WHEN 'storage_restart_after_codec_change' THEN CASE WHEN coalesce(st.has_restart, 0) = 1 THEN 'pass' ELSE 'missing' END
+      ELSE 'missing'
+    END AS status,
+    CASE cn.capability
+      WHEN 'block_connect_local_reference' THEN coalesce(pb.runtime_surface, '')
+      WHEN 'p2p_deferred_handshake' THEN coalesce(pb.runtime_surface, '')
+      WHEN 'shared_script_corpus' THEN 'host_or_docker'
+      WHEN 'sighash_and_witness_regressions' THEN 'host_or_docker'
+      ELSE ''
+    END AS scope,
+    CASE cn.capability
+      WHEN 'crypto_backend_reporting' THEN coalesce(pb.native_crypto_backend, '')
+      WHEN 'script_corpus_with_backend' THEN coalesce(pb.native_crypto_backend, '')
+      WHEN 'block_connect_with_backend' THEN coalesce(pb.native_crypto_backend, '')
+      ELSE ''
+    END AS backend,
+    CASE cn.capability
+      WHEN 'unit_surface' THEN 'test_result'
+      WHEN 'shared_script_corpus' THEN 'suite'
+      WHEN 'sighash_and_witness_regressions' THEN 'suite'
+      WHEN 'utxo_apply_undo_accounting' THEN 'baseline_5k'
+      WHEN 'block_connect_local_reference' THEN 'baseline_5k'
+      WHEN 'rocksdb_restart_persistence' THEN 'storage_proof'
+      WHEN 'p2p_deferred_handshake' THEN 'baseline_5k'
+      WHEN 'status_reporting' THEN 'current_evidence'
+      WHEN 'crypto_backend_reporting' THEN 'baseline_5k'
+      WHEN 'script_corpus_with_backend' THEN 'suite'
+      WHEN 'storage_codec_vectors' THEN 'storage_proof'
+      WHEN 'storage_restart_after_codec_change' THEN 'storage_proof'
+      ELSE 'missing'
+    END AS evidence_kind,
+    CASE cn.capability
+      WHEN 'unit_surface' THEN coalesce((SELECT a.path FROM artifacts a WHERE a.artifact_id = c.unit_source_artifact_id), '')
+      WHEN 'shared_script_corpus' THEN 'Nodes/Shared/conformance/fixtures/scripts/manifest.json'
+      WHEN 'sighash_and_witness_regressions' THEN 'Nodes/Shared/conformance/fixtures/scripts/manifest.json'
+      WHEN 'script_corpus_with_backend' THEN 'Nodes/Shared/conformance/fixtures/scripts/manifest.json'
+      WHEN 'rocksdb_restart_persistence' THEN coalesce(st.evidence_path, '')
+      WHEN 'storage_codec_vectors' THEN coalesce(st.evidence_path, '')
+      WHEN 'storage_restart_after_codec_change' THEN coalesce(st.evidence_path, '')
+      ELSE coalesce((SELECT a.path FROM artifacts a WHERE a.artifact_id = pb.source_artifact_id), '')
+    END AS evidence_path,
+    CASE cn.capability WHEN 'unit_surface' THEN 'test_unit' ELSE '' END AS command_key,
+    CASE WHEN cn.capability IN ('shared_script_corpus', 'sighash_and_witness_regressions', 'script_corpus_with_backend') THEN 'rb.shared_script_corpus' ELSE '' END AS suite_id,
+    CASE WHEN cn.capability IN ('shared_script_corpus', 'sighash_and_witness_regressions', 'script_corpus_with_backend') THEN '2026-06-07' ELSE '' END AS suite_version,
+    CASE WHEN cn.capability IN ('shared_script_corpus', 'sighash_and_witness_regressions', 'script_corpus_with_backend') THEN '9f338ff205087144c38679ebd67bde5bf372bea3082922bde5f28013e4727d06' ELSE '' END AS suite_hash,
+    CASE WHEN cn.capability IN ('shared_script_corpus', 'sighash_and_witness_regressions', 'script_corpus_with_backend') THEN coalesce(scb.script_passed, 0) ELSE NULL END AS case_passed,
+    CASE WHEN cn.capability IN ('shared_script_corpus', 'sighash_and_witness_regressions', 'script_corpus_with_backend') THEN 45 ELSE NULL END AS case_total,
+    CASE
+      WHEN cn.capability IN ('shared_script_corpus', 'sighash_and_witness_regressions', 'script_corpus_with_backend') THEN '["rb_live_chain_regression","rb_synthetic_edge_case"]'
+      WHEN cn.capability = 'unit_surface' THEN '["port_regression"]'
+      WHEN cn.capability IN ('utxo_apply_undo_accounting','block_connect_local_reference','rocksdb_restart_persistence','p2p_deferred_handshake','status_reporting','crypto_backend_reporting','storage_codec_vectors','storage_restart_after_codec_change') THEN '["proof_derived"]'
+      ELSE '[]'
+    END AS provenance_json,
+    CASE
+      WHEN cn.capability IN ('shared_script_corpus', 'sighash_and_witness_regressions', 'script_corpus_with_backend') THEN 'Project-local script fixture corpus; not community-complete Bitcoin script coverage.'
+      WHEN cn.capability = 'p2p_deferred_handshake' THEN 'Local Reference P2P proof does not prove every live-peer serving or mempool path.'
+      WHEN cn.capability = 'block_connect_local_reference' THEN '5k local-reference block connect does not prove tip maintenance or every future consensus rule.'
+      WHEN cn.capability IN ('crypto_bip340_vectors','crypto_libsecp256k1_equivalence') THEN 'Missing means no community-anchored crypto vector evidence is currently imported.'
+      ELSE ''
+    END AS does_not_prove,
+    cn.blocking_for_json,
+    'derived_from_current_project_evidence' AS evidence_source_type,
+    coalesce(pb.source_artifact_id, '') AS source_artifact_id,
+    '' AS notes
+  FROM ports p
+  CROSS JOIN capability_names cn
+  LEFT JOIN commands c ON c.port = p.port
+  LEFT JOIN script_corpus_baseline scb ON scb.port = p.port
+  LEFT JOIN port_baseline_5k pb ON pb.port = p.port
+  LEFT JOIN storage st ON st.port = p.port
+  LEFT JOIN current_claims cc ON cc.port = p.port
+),
+explicit AS (
+  SELECT
+    tcc.port,
+    tcc.node_id,
+    coalesce(pl.lifecycle_status, CASE WHEN tcc.port = 'reference' THEN 'reference' ELSE 'active_contender' END) AS lifecycle_status,
+    coalesce(pl.benchmark_scope, CASE WHEN tcc.port = 'reference' THEN 'reference_only' ELSE 'full_suite' END) AS benchmark_scope,
+    tcc.contract_id,
+    tcc.capability,
+    tcc.status,
+    tcc.scope,
+    tcc.backend,
+    tcc.evidence_kind,
+    tcc.evidence_path,
+    tcc.command_key,
+    tcc.suite_id,
+    tcc.suite_version,
+    tcc.suite_hash,
+    tcc.case_passed,
+    tcc.case_total,
+    tcc.provenance_json,
+    tcc.does_not_prove,
+    tcc.blocking_for_json,
+    'explicit_contract' AS evidence_source_type,
+    tcc.source_artifact_id,
+    tcc.notes
+  FROM test_capability_contracts tcc
+  LEFT JOIN port_lifecycle pl ON pl.port = tcc.port
+),
+combined AS (
+  SELECT * FROM explicit
+  UNION ALL
+  SELECT * FROM derived
+),
+ranked AS (
+  SELECT
+    *,
+    row_number() OVER (
+      PARTITION BY port, capability, coalesce(nullif(scope, ''), '*'), coalesce(nullif(backend, ''), '*')
+      ORDER BY CASE WHEN evidence_source_type = 'explicit_contract' THEN 0 ELSE 1 END
+    ) AS rn
+  FROM combined
+)
+SELECT
+  port,
+  node_id,
+  lifecycle_status,
+  benchmark_scope,
+  contract_id,
+  capability,
+  status,
+  scope,
+  backend,
+  evidence_kind,
+  evidence_path,
+  command_key,
+  suite_id,
+  suite_version,
+  suite_hash,
+  case_passed,
+  case_total,
+  provenance_json,
+  does_not_prove,
+  blocking_for_json,
+  evidence_source_type,
+  source_artifact_id,
+  notes
+FROM ranked
+WHERE rn = 1;
+
+CREATE VIEW IF NOT EXISTS test_capability_gaps AS
+SELECT *
+FROM test_capability_contract_matrix
+WHERE status IN ('fail', 'missing')
+  AND lifecycle_status <> 'baseline_retired';
+
+CREATE VIEW IF NOT EXISTS experiment_readiness AS
+WITH experiment_requirements(experiment, capability) AS (
+  VALUES
+    ('pure_crypto_experiment', 'crypto_bip340_vectors'),
+    ('pure_crypto_experiment', 'crypto_libsecp256k1_equivalence'),
+    ('pure_crypto_experiment', 'crypto_backend_reporting'),
+    ('pure_crypto_experiment', 'script_corpus_with_backend'),
+    ('pure_crypto_experiment', 'block_connect_with_backend'),
+    ('block_connect_optimization', 'shared_script_corpus'),
+    ('block_connect_optimization', 'sighash_and_witness_regressions'),
+    ('block_connect_optimization', 'utxo_apply_undo_accounting'),
+    ('block_connect_optimization', 'block_connect_local_reference'),
+    ('block_connect_optimization', 'status_reporting'),
+    ('storage_codec_change', 'storage_codec_vectors'),
+    ('storage_codec_change', 'storage_restart_after_codec_change'),
+    ('storage_codec_change', 'rocksdb_restart_persistence'),
+    ('storage_codec_change', 'status_reporting'),
+    ('p2p_handshake_change', 'p2p_deferred_handshake'),
+    ('p2p_handshake_change', 'status_reporting'),
+    ('p2p_handshake_change', 'block_connect_local_reference')
+),
+ports AS (
+  SELECT port, node_id, lifecycle_status
+  FROM test_coverage_matrix
+  WHERE lifecycle_status <> 'baseline_retired'
+),
+checks AS (
+  SELECT
+    p.port,
+    p.node_id,
+    p.lifecycle_status,
+    er.experiment,
+    er.capability,
+    coalesce(tcc.status, 'missing') AS status
+  FROM ports p
+  CROSS JOIN experiment_requirements er
+  LEFT JOIN test_capability_contract_matrix tcc ON tcc.port = p.port AND tcc.capability = er.capability
+)
+SELECT
+  port,
+  node_id,
+  lifecycle_status,
+  experiment,
+  CASE WHEN sum(CASE WHEN status NOT IN ('pass', 'not_applicable') THEN 1 ELSE 0 END) = 0 THEN 'ready' ELSE 'blocked' END AS readiness,
+  coalesce(group_concat(CASE WHEN status NOT IN ('pass', 'not_applicable') THEN capability || '=' || status END), '') AS blocking_contracts
+FROM checks
+GROUP BY port, node_id, lifecycle_status, experiment;
 
 CREATE VIEW IF NOT EXISTS consensus_rule_summary AS
 SELECT

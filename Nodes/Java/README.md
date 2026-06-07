@@ -182,11 +182,11 @@ targets as the normal blocker-hunting loop.
 | Tier | Artifact / target |
 |------|-------------------|
 | 2-block smoke | `docker-java-sync-proof` |
-| Supporting 5k Docker benchmark | `java_docker_baseline_5k_benchmark_<date>.json`, `docker-java-native-crypto-proof` |
+| Supporting 5k Docker benchmark | `docker-java-native-crypto-proof` streams `rb.port_progress`; Project builds current benchmark evidence |
 | Codec v2 replay | `java_rocksdb_codec_v2_storage_2026-06-01.json`, `java_rocksdb_codec_v2_storage_shared_2026-06-01.json` |
 | Native crypto gate | `java_native_crypto_host_replay_2026-06-01.json` and local native-vector tests |
-| 10k supporting Docker benchmark | `java_docker_diagnostic_10k_benchmark_<date>.json`, `docker-java-supporting-10k-proof` |
-| 50k bounded Docker sync | `java_native_crypto_docker_50k_sync_2026-06-01.json` |
+| 10k diagnostic Docker benchmark | `docker-java-supporting-10k-proof` remains diagnostic |
+| 50k bounded Docker sync | `docker-java-supporting-50k-proof` streams `rb.port_progress`; Project builds current benchmark evidence |
 | Binary gate attempt/status | `docs/BLOCKER_LEDGER.md` records `validated_height=136863`, `binary_gate_status=passed` against local Core |
 
 ## Script interpreter

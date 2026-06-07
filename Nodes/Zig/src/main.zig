@@ -5,7 +5,7 @@ const core = @import("zigbitnode");
 const ResultPaths = struct {
     script: []const u8 = "../Shared/conformance/results/zig_script_corpus_latest.json",
     storage: []const u8 = "../Shared/conformance/results/zig_storage_gate_docker_latest.json",
-    proof: []const u8 = "../Shared/conformance/results/zig_docker_baseline_5k_benchmark_latest.json",
+    proof: []const u8 = ".benchmark-results/zig_docker_baseline_5k_benchmark_latest.json",
 };
 
 const ProofProfile = struct {
