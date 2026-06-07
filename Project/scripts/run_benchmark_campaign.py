@@ -619,6 +619,52 @@ def update_current_evidence(path: Path, port: str, gate_id: str, artifact_path: 
     write_json(path, payload)
 
 
+def current_evidence_artifact(path: Path, port: str, gate_id: str) -> Path | None:
+    if not path.exists():
+        return None
+    payload = read_json(path)
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        return None
+    claim = GATE_CLAIMS[gate_id]
+    for entry in entries:
+        if entry.get("port") == port and entry.get("claim") == claim and entry.get("gate_id") == gate_id:
+            artifact_path = entry.get("path")
+            if isinstance(artifact_path, str) and artifact_path.strip():
+                candidate = Path(artifact_path)
+                return candidate if candidate.is_absolute() else ROOT / candidate
+    return None
+
+
+def snapshot_file(path: Path | None) -> tuple[Path, bytes | None, bool] | None:
+    if path is None:
+        return None
+    if path.exists():
+        return path, path.read_bytes(), True
+    return path, None, False
+
+
+def preserve_rejected_candidate(campaign: dict[str, Any], port: str, path: Path | None) -> str:
+    if path is None or not path.exists():
+        return ""
+    target = campaign_dir(campaign) / "candidates" / f"{port}_{path.name}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(path, target)
+    return rel(target)
+
+
+def restore_snapshot(snapshot: tuple[Path, bytes | None, bool] | None) -> None:
+    if snapshot is None:
+        return
+    path, content, existed = snapshot
+    if existed:
+        assert content is not None
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    elif path.exists():
+        path.unlink()
+
+
 def rebuild_project(db: str) -> int:
     return subprocess.run(
         [sys.executable, "Project/scripts/import_all.py", "--db", db, "--rebuild"],
@@ -707,12 +753,19 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         entry["status"] = "running"
         save_campaign(campaign)
         proof_log = campaign_dir(campaign) / "logs" / f"{port}_proof.log"
+        current_evidence_path = ROOT / campaign["current_evidence"]
+        protected_artifact = current_evidence_artifact(current_evidence_path, port, campaign["gate"])
+        protected_snapshot = snapshot_file(protected_artifact)
         exit_code = run_shell(entry["proof_command"], proof_log)
         entry["finished_at"] = utc_now()
         entry["exit_code"] = exit_code
         if exit_code != 0:
+            preserved = preserve_rejected_candidate(campaign, port, protected_artifact)
+            restore_snapshot(protected_snapshot)
             entry["status"] = "failed"
             entry["errors"].append(f"proof failed; see {rel(proof_log)}")
+            if preserved:
+                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             append_event(campaign, port, "proof_failed", rel(proof_log))
             save_campaign(campaign)
             print(f"campaign_paused port={port} reason=proof_failed")
@@ -727,8 +780,12 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         entry["telemetry_summary"] = telemetry_summary
         entry["warnings"].extend(telemetry_warnings)
         if telemetry_quality != "clean":
+            preserved = preserve_rejected_candidate(campaign, port, protected_artifact)
+            restore_snapshot(protected_snapshot)
             entry["status"] = "rejected"
             entry["errors"].extend(telemetry_errors or [f"telemetry quality is {telemetry_quality}; see {rel(proof_log)}"])
+            if preserved:
+                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             append_event(campaign, port, "telemetry_rejected", rel(proof_log))
             save_campaign(campaign)
             print(f"campaign_paused port={port} reason=telemetry_rejected quality={telemetry_quality}")
@@ -736,11 +793,15 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
 
         candidates = candidate_artifacts(Path(campaign["results_dir"]), started, port, gate)
         if len(candidates) != 1:
+            preserved = preserve_rejected_candidate(campaign, port, protected_artifact)
+            restore_snapshot(protected_snapshot)
             entry["status"] = "failed"
             entry["errors"].append(
                 f"artifact selection expected 1 candidate, found {len(candidates)}: "
                 + ", ".join(rel(path) for path in candidates)
             )
+            if preserved:
+                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             append_event(campaign, port, "artifact_selection_failed", entry["errors"][-1])
             save_campaign(campaign)
             print(f"campaign_paused port={port} reason=artifact_selection_failed")
@@ -749,8 +810,12 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         artifact_path = candidates[0]
         payload = read_json(artifact_path)
         if not isinstance(payload, dict):
+            preserved = preserve_rejected_candidate(campaign, port, artifact_path)
+            restore_snapshot(protected_snapshot)
             entry["status"] = "failed"
             entry["errors"].append(f"artifact must be a JSON object: {rel(artifact_path)}")
+            if preserved:
+                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             save_campaign(campaign)
             return 1
         errors, warnings = validate_artifact(artifact_path, payload, gate, port, expected_peer)
@@ -758,33 +823,48 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         warnings.extend(anomaly_messages)
         entry["warnings"].extend(warnings)
         if errors:
+            preserved = preserve_rejected_candidate(campaign, port, artifact_path)
+            restore_snapshot(protected_snapshot)
             entry["status"] = "rejected"
             entry["errors"].extend(errors)
+            if preserved:
+                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             save_campaign(campaign)
             print(f"campaign_paused port={port} reason=artifact_rejected")
             return 1
         if anomaly == "hard" and campaign["pause_on"] in {"anomaly", "failure"}:
+            preserved = preserve_rejected_candidate(campaign, port, artifact_path)
+            restore_snapshot(protected_snapshot)
             entry["status"] = "rejected"
             entry["errors"].extend(anomaly_messages)
+            if preserved:
+                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             save_campaign(campaign)
             print(f"campaign_paused port={port} reason=hard_anomaly")
             return 1
         if anomaly == "soft" and campaign["pause_on"] == "anomaly":
+            preserved = preserve_rejected_candidate(campaign, port, artifact_path)
+            restore_snapshot(protected_snapshot)
             entry["status"] = "paused"
+            if preserved:
+                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             save_campaign(campaign)
             print(f"campaign_paused port={port} reason=soft_anomaly")
             return 1
 
         artifact_rel = rel(artifact_path)
         note = f"Current comparable {port} {campaign['gate']} proof accepted by campaign {campaign['campaign_id']}."
-        current_evidence_path = ROOT / campaign["current_evidence"]
         original_current_evidence = current_evidence_path.read_text(encoding="utf-8")
         update_current_evidence(current_evidence_path, port, campaign["gate"], artifact_rel, note)
         if rebuild_project(campaign["db"]) != 0 or verify_project_gate(campaign["db"], campaign["gate"], port) != 0:
             current_evidence_path.write_text(original_current_evidence, encoding="utf-8")
+            preserved = preserve_rejected_candidate(campaign, port, artifact_path)
+            restore_snapshot(protected_snapshot)
             rebuild_project(campaign["db"])
             entry["status"] = "failed"
             entry["errors"].append("Project import/preflight failed after evidence update")
+            if preserved:
+                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             save_campaign(campaign)
             print(f"campaign_paused port={port} reason=project_verification_failed")
             return 1
@@ -834,6 +914,24 @@ def self_test() -> int:
         )
         updated = read_json(evidence)
         assert updated["entries"][0]["path"] == "Nodes/Shared/conformance/results/new.json"
+        current_artifact = tmp_path / "current.json"
+        current_artifact.write_text('{"result":"accepted"}\n', encoding="utf-8")
+        snap = snapshot_file(current_artifact)
+        current_artifact.write_text('{"result":"failed-candidate"}\n', encoding="utf-8")
+        rejected = preserve_rejected_candidate(
+            {"campaign_id": "selftest"},
+            "rust",
+            current_artifact,
+        )
+        assert rejected.endswith("rust_current.json"), rejected
+        shutil.rmtree(campaign_dir({"campaign_id": "selftest"}), ignore_errors=True)
+        restore_snapshot(snap)
+        assert read_json(current_artifact)["result"] == "accepted"
+        new_artifact = tmp_path / "new-current.json"
+        snap = snapshot_file(new_artifact)
+        new_artifact.write_text('{"result":"failed-candidate"}\n', encoding="utf-8")
+        restore_snapshot(snap)
+        assert not new_artifact.exists()
         gate = {
             "gate_id": "shakedown_50k",
             "benchmark_kind": "shakedown_50k_p2p",

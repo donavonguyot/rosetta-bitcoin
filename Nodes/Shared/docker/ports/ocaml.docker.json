@@ -33,7 +33,7 @@
     "docker_proof_local": "cd Nodes/OCaml && make docker-proof-local",
     "docker_proof_10k": null,
     "docker_proof_50k": "cd Nodes/OCaml && make docker-proof-50k",
-    "docker_proof_100k": null,
+    "docker_proof_100k": "cd Nodes/OCaml && make docker-proof-100k",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_probe_external": null,
@@ -80,11 +80,14 @@
     "local_reference_result": "Nodes/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_result": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_telemetry": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_telemetry_<YYYY-MM-DD>.log",
-    "notes": "OCaml has strict Docker/local Reference P2P baseline 5k and shakedown 50k evidence with RocksDB runtime truth, WAL enabled, native libsecp256k1, Codec v2 chainstate, live telemetry, and native Shared script corpus proof. 100k remains unattempted."
+    "performance_100k_result": "Nodes/Shared/conformance/results/ocaml_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
+    "performance_100k_telemetry": "Nodes/Shared/conformance/results/ocaml_docker_performance_100k_telemetry_<YYYY-MM-DD>.log",
+    "notes": "OCaml has strict Docker/local Reference P2P baseline 5k and shakedown 50k evidence with RocksDB runtime truth, WAL enabled, native libsecp256k1, Codec v2 chainstate, live telemetry, and native Shared script corpus proof. 100k command surface is available but unattempted."
   },
   "known_caveats": [
     "Local Reference P2P baseline 5k and shakedown 50k lanes are implemented",
-    "docker_proof_10k and docker_proof_100k remain null until those benchmark lanes land",
+    "docker_proof_10k remains null because 10k is no longer an official benchmark lane",
+    "docker_proof_100k is available but unattempted",
     "No external peer sync, supervisor catch-up, tip_once, or tip_maintenance claim is made",
     "Binary gate remains not_attempted"
   ]
