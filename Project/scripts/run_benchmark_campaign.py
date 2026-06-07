@@ -104,6 +104,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run", action="store_true", help="Execute commands; dry-run is the default")
     parser.add_argument("--dry-run", action="store_true", help="Print the plan without executing commands")
     parser.add_argument("--pause-on", choices=("anomaly", "failure", "never"), default="anomaly")
+    parser.add_argument(
+        "--continue-on-failure",
+        action="store_true",
+        help="Assisted collection mode: record failed/rejected ports and continue the campaign.",
+    )
+    parser.add_argument(
+        "--assisted",
+        action="store_true",
+        help="Alias for --continue-on-failure with operator-friendly wording.",
+    )
     parser.add_argument("--current-evidence", default=str(CURRENT_EVIDENCE))
     parser.add_argument("--results-dir", default=str(RESULTS_DIR))
     parser.add_argument("--self-test", action="store_true", help="Run campaign runner self-tests")
@@ -327,6 +337,7 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
         "gate": args.gate,
         "run_mode": "run" if args.run else "dry_run",
         "pause_on": args.pause_on,
+        "continue_on_failure": bool(args.continue_on_failure or args.assisted),
         "db": args.db,
         "current_evidence": str(args.current_evidence),
         "results_dir": str(args.results_dir),
@@ -708,6 +719,15 @@ def print_dry_run(campaign: dict[str, Any]) -> None:
             print(f"  prior_total_ms: {entry['prior_total_ms']}")
 
 
+def campaign_should_pause(campaign: dict[str, Any], port: str, reason: str) -> bool:
+    save_campaign(campaign)
+    print(f"campaign_paused port={port} reason={reason}")
+    if campaign.get("continue_on_failure"):
+        print(f"campaign_continued_after_failure port={port} reason={reason}")
+        return False
+    return True
+
+
 def execute_campaign(campaign: dict[str, Any]) -> int:
     conn = connect(campaign["db"])
     gate = gate_row(conn, campaign["gate"])
@@ -730,9 +750,9 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             entry["status"] = "failed"
             entry["errors"].append(f"preflight failed; see {rel(preflight_log)}")
             append_event(campaign, port, "preflight_failed", rel(preflight_log))
-            save_campaign(campaign)
-            print(f"campaign_paused port={port} reason=preflight_failed")
-            return 1
+            if campaign_should_pause(campaign, port, "preflight_failed"):
+                return 1
+            continue
         entry["status"] = "preflighted"
         save_campaign(campaign)
 
@@ -744,9 +764,9 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             entry["exit_code"] = warm_code
             entry["errors"].append(f"warm failed; see {rel(warm_log)}")
             append_event(campaign, port, "warm_failed", rel(warm_log))
-            save_campaign(campaign)
-            print(f"campaign_paused port={port} reason=warm_failed")
-            return 1
+            if campaign_should_pause(campaign, port, "warm_failed"):
+                return 1
+            continue
 
         started = time.time()
         entry["started_at"] = utc_now()
@@ -767,9 +787,9 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             if preserved:
                 entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             append_event(campaign, port, "proof_failed", rel(proof_log))
-            save_campaign(campaign)
-            print(f"campaign_paused port={port} reason=proof_failed")
-            return 1
+            if campaign_should_pause(campaign, port, "proof_failed"):
+                return 1
+            continue
 
         telemetry_quality, telemetry_errors, telemetry_warnings, telemetry_summary = validate_telemetry_log(
             proof_log,
@@ -787,9 +807,9 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             if preserved:
                 entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             append_event(campaign, port, "telemetry_rejected", rel(proof_log))
-            save_campaign(campaign)
-            print(f"campaign_paused port={port} reason=telemetry_rejected quality={telemetry_quality}")
-            return 1
+            if campaign_should_pause(campaign, port, f"telemetry_rejected quality={telemetry_quality}"):
+                return 1
+            continue
 
         candidates = candidate_artifacts(Path(campaign["results_dir"]), started, port, gate)
         if len(candidates) != 1:
@@ -803,9 +823,9 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             if preserved:
                 entry["warnings"].append(f"rejected candidate preserved at {preserved}")
             append_event(campaign, port, "artifact_selection_failed", entry["errors"][-1])
-            save_campaign(campaign)
-            print(f"campaign_paused port={port} reason=artifact_selection_failed")
-            return 1
+            if campaign_should_pause(campaign, port, "artifact_selection_failed"):
+                return 1
+            continue
 
         artifact_path = candidates[0]
         payload = read_json(artifact_path)
@@ -816,8 +836,10 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             entry["errors"].append(f"artifact must be a JSON object: {rel(artifact_path)}")
             if preserved:
                 entry["warnings"].append(f"rejected candidate preserved at {preserved}")
-            save_campaign(campaign)
-            return 1
+            append_event(campaign, port, "artifact_rejected", entry["errors"][-1])
+            if campaign_should_pause(campaign, port, "artifact_rejected"):
+                return 1
+            continue
         errors, warnings = validate_artifact(artifact_path, payload, gate, port, expected_peer)
         anomaly, anomaly_messages = classify_anomaly(payload, entry.get("prior_total_ms"))
         warnings.extend(anomaly_messages)
@@ -829,9 +851,10 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             entry["errors"].extend(errors)
             if preserved:
                 entry["warnings"].append(f"rejected candidate preserved at {preserved}")
-            save_campaign(campaign)
-            print(f"campaign_paused port={port} reason=artifact_rejected")
-            return 1
+            append_event(campaign, port, "artifact_rejected", rel(artifact_path))
+            if campaign_should_pause(campaign, port, "artifact_rejected"):
+                return 1
+            continue
         if anomaly == "hard" and campaign["pause_on"] in {"anomaly", "failure"}:
             preserved = preserve_rejected_candidate(campaign, port, artifact_path)
             restore_snapshot(protected_snapshot)
@@ -839,18 +862,20 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             entry["errors"].extend(anomaly_messages)
             if preserved:
                 entry["warnings"].append(f"rejected candidate preserved at {preserved}")
-            save_campaign(campaign)
-            print(f"campaign_paused port={port} reason=hard_anomaly")
-            return 1
+            append_event(campaign, port, "hard_anomaly", "; ".join(anomaly_messages))
+            if campaign_should_pause(campaign, port, "hard_anomaly"):
+                return 1
+            continue
         if anomaly == "soft" and campaign["pause_on"] == "anomaly":
             preserved = preserve_rejected_candidate(campaign, port, artifact_path)
             restore_snapshot(protected_snapshot)
             entry["status"] = "paused"
             if preserved:
                 entry["warnings"].append(f"rejected candidate preserved at {preserved}")
-            save_campaign(campaign)
-            print(f"campaign_paused port={port} reason=soft_anomaly")
-            return 1
+            append_event(campaign, port, "soft_anomaly", "; ".join(anomaly_messages))
+            if campaign_should_pause(campaign, port, "soft_anomaly"):
+                return 1
+            continue
 
         artifact_rel = rel(artifact_path)
         note = f"Current comparable {port} {campaign['gate']} proof accepted by campaign {campaign['campaign_id']}."
@@ -865,9 +890,10 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             entry["errors"].append("Project import/preflight failed after evidence update")
             if preserved:
                 entry["warnings"].append(f"rejected candidate preserved at {preserved}")
-            save_campaign(campaign)
-            print(f"campaign_paused port={port} reason=project_verification_failed")
-            return 1
+            append_event(campaign, port, "project_verification_failed", rel(artifact_path))
+            if campaign_should_pause(campaign, port, "project_verification_failed"):
+                return 1
+            continue
         entry["status"] = "accepted"
         entry["artifact_path"] = artifact_rel
         append_event(campaign, port, "accepted", artifact_rel)
@@ -1063,6 +1089,8 @@ def main() -> int:
         campaign = load_campaign(args.campaign)
         if args.run:
             campaign["run_mode"] = "run"
+        if args.continue_on_failure or args.assisted:
+            campaign["continue_on_failure"] = True
     else:
         conn = connect(args.db)
         campaign = initial_campaign(conn, args)

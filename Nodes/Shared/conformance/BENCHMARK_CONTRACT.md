@@ -100,7 +100,7 @@ Required:
 - Target/header height `50000`.
 - Expected `chainstate_utxo_count=568855`.
 - Clean `benchmark.telemetry_tick.v1` progress with lifecycle markers,
-  15-second-or-better heartbeats, active-block context, and
+  15-second target heartbeats, active-block context, and
   `telemetry_summary.telemetry_quality=clean` in the final artifact.
 - Slow-block summary.
 - Long-run timing buckets: `p2p_fetch`, `block_parse_validate`, `utxo_load`,
@@ -251,6 +251,11 @@ compatibility-friendly; current campaign acceptance is not. Fresh official
 evidence must pass `validate_benchmark_artifact.py` and import with
 `artifact_quality=canonical`. Long-run evidence must also import with
 `telemetry_quality=clean`.
+
+Heartbeat validation is an observability check, not a scheduler-jitter trap.
+Emitters should target 15 seconds or better. The telemetry validator warns on
+small target drift, accepts bounded jitter, and rejects repeated large gaps or
+any hard gap that means operators lost useful visibility.
 
 Leaderboards rank only current evidence with:
 

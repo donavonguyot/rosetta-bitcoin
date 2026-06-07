@@ -39,9 +39,9 @@
       "port": "cpp",
       "claim": "performance_100k",
       "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/cpp_docker_primary_100k_benchmark_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/cpp_docker_performance_100k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable C++ 100k proof."
+      "notes": "Current comparable cpp performance_100k proof accepted by campaign performance_100k_20260606_175104."
     },
     {
       "port": "csharp",
@@ -273,7 +273,7 @@
       "gate_id": "performance_100k",
       "path": "Nodes/Shared/conformance/results/rust_docker_performance_100k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable rust performance_100k proof accepted by campaign performance_100k_20260606_172338."
+      "notes": "Current comparable rust performance_100k proof accepted by campaign performance_100k_20260606_175104."
     },
     {
       "port": "rust",
@@ -362,6 +362,22 @@
       "path": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
       "notes": "Current comparable zig shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
+    },
+    {
+      "port": "zig",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/zig_docker_performance_100k_benchmark_2026-06-06.json",
+      "status": "current",
+      "notes": "Current comparable zig performance_100k proof accepted by campaign performance_100k_20260606_175104."
+    },
+    {
+      "port": "swift",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/swift_docker_performance_100k_benchmark_2026-06-06.json",
+      "status": "current",
+      "notes": "Current comparable swift performance_100k proof accepted by campaign performance_100k_20260606_175104."
     }
   ]
 }

@@ -157,6 +157,16 @@ validates the proof log with `validate_benchmark_telemetry.py` and requires
 artifact selection, rejected artifact, telemetry rejection, or suspicious
 regression pauses the campaign instead of moving to the next port.
 
+Long-run heartbeat validation uses a 15-second target with bounded jitter
+tolerance. Small scheduling drift is reported as a warning and can still be
+`telemetry_quality=clean`; repeated large gaps or any hard gap reject the run
+because operators lost useful visibility.
+
+For assisted evidence collection, use `--assisted --pause-on never`. Assisted
+mode records failed or rejected ports, preserves candidates under the ignored
+campaign directory, and continues to the next port. It still updates current
+evidence only for artifacts that pass validation and Project preflight.
+
 Validate a benchmark artifact directly:
 
 ```bash

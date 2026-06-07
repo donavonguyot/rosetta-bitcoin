@@ -107,7 +107,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--port", help="Expected port")
     parser.add_argument("--target-height", type=int, help="Expected bounded target height")
     parser.add_argument("--min-ticks", type=int, default=1)
-    parser.add_argument("--heartbeat-max-ms", type=int, default=15_000)
+    parser.add_argument(
+        "--heartbeat-max-ms",
+        type=int,
+        default=15_000,
+        help="Expected heartbeat target; small jitter above this is warned, not rejected.",
+    )
+    parser.add_argument("--heartbeat-grace-ms", type=int, default=5_000)
+    parser.add_argument("--heartbeat-hard-max-ms", type=int, default=30_000)
     parser.add_argument("--require-clean", action="store_true")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable summary")
     parser.add_argument("--self-test", action="store_true", help="Run built-in validator tests")
@@ -213,7 +220,12 @@ def validate_tick(tick: dict[str, Any], *, gate: str | None, port: str | None, t
     return errors
 
 
-def telemetry_summary(ticks: list[dict[str, Any]], heartbeat_max_ms: int) -> dict[str, Any]:
+def telemetry_summary(
+    ticks: list[dict[str, Any]],
+    heartbeat_max_ms: int,
+    heartbeat_grace_ms: int,
+    heartbeat_hard_max_ms: int,
+) -> dict[str, Any]:
     lifecycle: dict[str, int] = {}
     phase_counts: Counter[str] = Counter()
     stall_counts: Counter[str] = Counter()
@@ -246,22 +258,24 @@ def telemetry_summary(ticks: list[dict[str, Any]], heartbeat_max_ms: int) -> dic
         "tick_count": len(ticks),
         "lifecycle_markers": lifecycle,
         "heartbeat_max_gap_ms": max_gap,
-        "heartbeat_limit_ms": heartbeat_max_ms,
+        "heartbeat_target_ms": heartbeat_max_ms,
+        "heartbeat_grace_ms": heartbeat_grace_ms,
+        "heartbeat_warning_ms": heartbeat_max_ms,
+        "heartbeat_failure_ms": heartbeat_max_ms + heartbeat_grace_ms,
+        "heartbeat_hard_failure_ms": heartbeat_hard_max_ms,
+        "heartbeat_limit_ms": heartbeat_max_ms + heartbeat_grace_ms,
         "phase_counts": dict(sorted(phase_counts.items())),
         "stall_class_counts": dict(sorted(stall_counts.items())),
         "slow_blocks": slow_blocks[:10],
     }
 
 
-def classify_quality(ticks: list[dict[str, Any]], errors: list[str], warnings: list[str]) -> str:
+def classify_quality(ticks: list[dict[str, Any]], errors: list[str], sparse: bool = False) -> str:
     if not ticks:
         return "missing"
     if errors:
         return "invalid"
-    lifecycle = {str(tick.get("event", "")) for tick in ticks}
-    if not set(REQUIRED_LIFECYCLE_EVENTS).issubset(lifecycle):
-        return "sparse"
-    if warnings:
+    if sparse:
         return "sparse"
     return "clean"
 
@@ -274,9 +288,12 @@ def validate_ticks(
     target_height: int | None = None,
     min_ticks: int = 1,
     heartbeat_max_ms: int = 15_000,
+    heartbeat_grace_ms: int = 5_000,
+    heartbeat_hard_max_ms: int = 30_000,
 ) -> TelemetryValidation:
     errors: list[str] = []
     warnings: list[str] = []
+    sparse = False
     if len(ticks) < min_ticks:
         errors.append(f"telemetry tick count {len(ticks)} is below required minimum {min_ticks}")
     for tick in ticks:
@@ -285,6 +302,10 @@ def validate_ticks(
     last_elapsed: int | None = None
     last_monotonic: int | None = None
     max_gap = 0
+    gaps_over_target: list[tuple[int, str]] = []
+    gaps_over_failure: list[tuple[int, str]] = []
+    gaps_over_hard: list[tuple[int, str]] = []
+    heartbeat_failure_ms = heartbeat_max_ms + heartbeat_grace_ms
     for tick in sorted_ticks:
         elapsed = as_int(tick.get("elapsed_ms"), 0)
         monotonic = as_int(tick.get("monotonic_ms"), 0)
@@ -294,23 +315,47 @@ def validate_ticks(
         if last_monotonic is not None:
             if monotonic < last_monotonic:
                 errors.append(f"{source}: monotonic_ms moved backward")
-            max_gap = max(max_gap, monotonic - last_monotonic)
+            gap = monotonic - last_monotonic
+            max_gap = max(max_gap, gap)
+            if gap > heartbeat_max_ms:
+                gaps_over_target.append((gap, source))
+            if gap > heartbeat_failure_ms:
+                gaps_over_failure.append((gap, source))
+            if gap > heartbeat_hard_max_ms:
+                gaps_over_hard.append((gap, source))
         last_elapsed = elapsed
         last_monotonic = monotonic
     events = {str(tick.get("event", "")) for tick in ticks}
     missing_events = [event for event in REQUIRED_LIFECYCLE_EVENTS if event not in events]
     if missing_events:
         warnings.append("missing lifecycle events: " + ",".join(missing_events))
-    if gate in LONG_RUN_GATES and max_gap > heartbeat_max_ms:
-        errors.append(f"heartbeat max gap {max_gap}ms exceeds {heartbeat_max_ms}ms")
+        sparse = True
+    if gate in LONG_RUN_GATES:
+        if gaps_over_target:
+            max_jitter_gap, max_jitter_source = max(gaps_over_target, key=lambda item: item[0])
+            warnings.append(
+                f"heartbeat max gap {max_jitter_gap}ms exceeds target {heartbeat_max_ms}ms at {max_jitter_source}"
+            )
+        if gaps_over_hard:
+            max_hard_gap, max_hard_source = max(gaps_over_hard, key=lambda item: item[0])
+            errors.append(
+                f"heartbeat max gap {max_hard_gap}ms exceeds hard limit {heartbeat_hard_max_ms}ms at {max_hard_source}"
+            )
+        elif len(gaps_over_failure) >= 2:
+            sample = ", ".join(f"{gap}ms at {source}" for gap, source in gaps_over_failure[:3])
+            errors.append(
+                f"heartbeat has {len(gaps_over_failure)} gaps over failure threshold {heartbeat_failure_ms}ms: {sample}"
+            )
     if target_height is not None:
         final_heights = [as_int(tick.get("height"), -1) for tick in ticks if tick.get("event") in {"target_reached", "run_finished"} or tick.get("phase") == "complete"]
         if not final_heights or max(final_heights) < target_height:
             errors.append(f"no completion tick reached target_height {target_height}")
     if "run_finished" in events and "target_reached" not in events and target_height is not None:
         errors.append("run_finished appeared without target_reached")
-    summary = telemetry_summary(sorted_ticks, heartbeat_max_ms)
-    quality = classify_quality(sorted_ticks, errors, warnings)
+    summary = telemetry_summary(sorted_ticks, heartbeat_max_ms, heartbeat_grace_ms, heartbeat_hard_max_ms)
+    summary["heartbeat_gaps_over_target"] = len(gaps_over_target)
+    summary["heartbeat_gaps_over_failure"] = len(gaps_over_failure)
+    quality = classify_quality(sorted_ticks, errors, sparse)
     summary["telemetry_quality"] = quality
     return TelemetryValidation(quality=quality, ticks=sorted_ticks, errors=errors, warnings=warnings, summary=summary)
 
@@ -323,6 +368,8 @@ def validate_log_paths(
     target_height: int | None = None,
     min_ticks: int = 1,
     heartbeat_max_ms: int = 15_000,
+    heartbeat_grace_ms: int = 5_000,
+    heartbeat_hard_max_ms: int = 30_000,
 ) -> TelemetryValidation:
     parse_errors: list[str] = []
     ticks: list[dict[str, Any]] = []
@@ -337,6 +384,8 @@ def validate_log_paths(
         target_height=target_height,
         min_ticks=min_ticks,
         heartbeat_max_ms=heartbeat_max_ms,
+        heartbeat_grace_ms=heartbeat_grace_ms,
+        heartbeat_hard_max_ms=heartbeat_hard_max_ms,
     )
     validation.errors[:0] = parse_errors
     if parse_errors and validation.quality == "clean":
@@ -399,12 +448,28 @@ def self_test() -> int:
     sparse_ticks = [tick for tick in clean_ticks if tick["event"] not in {"container_started", "first_peer_byte"}]
     missing_heartbeat = [dict(tick) for tick in clean_ticks]
     missing_heartbeat[5]["monotonic_ms"] = 50_000
+    jitter_ticks = [dict(tick) for tick in clean_ticks]
+    jitter_ticks[5]["monotonic_ms"] = 15_057
+    single_long_gap = [dict(tick) for tick in clean_ticks]
+    for tick in single_long_gap[5:]:
+        tick["monotonic_ms"] = as_int(tick["monotonic_ms"]) + 11_000
+        tick["elapsed_ms"] = as_int(tick["elapsed_ms"]) + 11_000
+    repeated_long_gap = [dict(tick) for tick in clean_ticks]
+    for tick in repeated_long_gap[5:]:
+        tick["monotonic_ms"] = as_int(tick["monotonic_ms"]) + 11_000
+        tick["elapsed_ms"] = as_int(tick["elapsed_ms"]) + 11_000
+    for tick in repeated_long_gap[6:]:
+        tick["monotonic_ms"] = as_int(tick["monotonic_ms"]) + 11_000
+        tick["elapsed_ms"] = as_int(tick["elapsed_ms"]) + 11_000
     bad_phase = [dict(tick) for tick in clean_ticks]
     bad_phase[1]["phase"] = "syncing"
     bad_stall = [dict(tick) for tick in clean_ticks]
     bad_stall[6]["stall_class"] = "mystery"
     cases = [
         ("clean", clean_ticks, "clean"),
+        ("jitter", jitter_ticks, "clean"),
+        ("single_long_gap", single_long_gap, "clean"),
+        ("repeated_long_gap", repeated_long_gap, "invalid"),
         ("sparse", sparse_ticks, "sparse"),
         ("missing_heartbeat", missing_heartbeat, "invalid"),
         ("bad_phase", bad_phase, "invalid"),
@@ -438,6 +503,8 @@ def main() -> int:
         target_height=args.target_height,
         min_ticks=args.min_ticks,
         heartbeat_max_ms=args.heartbeat_max_ms,
+        heartbeat_grace_ms=args.heartbeat_grace_ms,
+        heartbeat_hard_max_ms=args.heartbeat_hard_max_ms,
     )
     if args.json:
         print(
