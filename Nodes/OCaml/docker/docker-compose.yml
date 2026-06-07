@@ -17,6 +17,7 @@ volumes:
   ocbitnode_proof_data:
   ocbitnode_5k_proof_data:
   ocbitnode_50k_proof_data:
+  ocbitnode_100k_proof_data:
   ocbitnode_50k_profile_data:
   ocbitnode_21250_profile_data:
 
