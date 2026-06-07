@@ -45,6 +45,8 @@ let close_verifier verifier =
     | Some native -> (try verifier_close_raw native with _ -> ())
     | None -> ())
 
+let default_verifier = lazy (create_worker_verifier ())
+
 let verifier_context_mode verifier = verifier.context_mode
 
 let buffer_of_bytes bytes =
@@ -84,7 +86,10 @@ let ecdsa_verify_bytes ~pubkey ~msg_hash ~signature_der =
   try ecdsa_verify_raw pubkey msg_hash signature_der with _ -> false
 
 let schnorr_verify_bytes ~xonly_pubkey ~msg_hash ~signature =
-  try schnorr_verify_raw xonly_pubkey msg_hash signature with _ -> false
+  let verifier = Lazy.force default_verifier in
+  match verifier.native with
+  | Some native when not verifier.closed -> (try schnorr_verify_with_verifier_raw native xonly_pubkey msg_hash signature with _ -> false)
+  | _ -> false
 
 let ecdsa_verify_bytes_with_verifier ~verifier ~pubkey ~msg_hash ~signature_der =
   match verifier.native with
@@ -122,7 +127,10 @@ let taproot_tweak_xonly_bytes ~xonly_pubkey ~merkle_root =
     if String.length xonly_pubkey <> 32 then None
     else
       let tweak = tagged_sha256 ~tag:"TapTweak" ~msg:(xonly_pubkey ^ merkle_root) in
-      Some (taproot_tweak_xonly_raw xonly_pubkey tweak)
+      let verifier = Lazy.force default_verifier in
+      match verifier.native with
+      | Some native when not verifier.closed -> Some (taproot_tweak_xonly_with_verifier_raw native xonly_pubkey tweak)
+      | _ -> Some (taproot_tweak_xonly_raw xonly_pubkey tweak)
   with _ -> None
 
 let taproot_tweak_xonly_bytes_with_verifier ~verifier ~xonly_pubkey ~merkle_root =

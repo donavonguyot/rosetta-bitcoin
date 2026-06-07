@@ -1,6 +1,23 @@
 let compact_size value =
-  if value < 0xfd then String.make 1 (Char.chr value)
-  else invalid_arg "codec v2 foundation supports compact-size values below 0xfd"
+  if value < 0 then invalid_arg "compact-size cannot encode negative values"
+  else if value < 0xfd then String.make 1 (Char.chr value)
+  else if value <= 0xffff then
+    String.init 3 (function
+      | 0 -> Char.chr 0xfd
+      | 1 -> Char.chr (value land 0xff)
+      | _ -> Char.chr ((value lsr 8) land 0xff))
+  else if value <= 0xffffffff then
+    String.init 5 (function
+      | 0 -> Char.chr 0xfe
+      | i -> Char.chr ((value lsr (8 * (i - 1))) land 0xff))
+  else
+    let v = Int64.of_int value in
+    String.init 9 (function
+      | 0 -> Char.chr 0xff
+      | i ->
+          Char.chr
+            (Int64.to_int
+               (Int64.logand (Int64.shift_right_logical v (8 * (i - 1))) 0xffL)))
 
 let be32 value =
   String.init 4 (fun i -> Char.chr ((value lsr ((3 - i) * 8)) land 0xff))
@@ -36,4 +53,3 @@ let undo_value entries =
     be64 value_sats ^ compact_size (String.length script_pubkey) ^ script_pubkey
   in
   be32 (List.length entries) ^ String.concat "" (List.map encode_entry entries)
-

@@ -170,6 +170,15 @@ def zero_timing() -> dict[str, int]:
     return {bucket: 0 for bucket in _artifact_validator.REQUIRED_BUCKETS}
 
 
+def canonical_timing(raw: Any) -> dict[str, int]:
+    timing = zero_timing()
+    if not isinstance(raw, dict):
+        return timing
+    for bucket in timing:
+        timing[bucket] = max(0, as_int(raw.get(bucket), 0))
+    return timing
+
+
 def timing_from_progress(entries: list[dict[str, Any]], elapsed_ms: int) -> dict[str, Any]:
     stages = zero_timing()
     for entry in entries:
@@ -228,7 +237,7 @@ def progress_tick(
     height = as_int(entry.get("validated_height"), started_height)
     target = target_height or max(height, 0)
     percent = round((height / target * 100.0), 3) if target > 0 else None
-    timing = entry.get("timing_buckets_ms") if isinstance(entry.get("timing_buckets_ms"), dict) else zero_timing()
+    timing = canonical_timing(entry.get("timing_buckets_ms"))
     return {
         "schema": "benchmark.telemetry_tick.v1",
         "port": port,

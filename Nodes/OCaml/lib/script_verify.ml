@@ -320,7 +320,7 @@ let cast_to_bool item =
   let result = ref false in
   for i = 0 to String.length item - 1 do
     let b = byte item i in
-    if b <> 0 then result := not (i = String.length item - 1 && b = 0x80)
+    if b <> 0 && not (i = String.length item - 1 && b = 0x80) then result := true
   done;
   !result
 
@@ -607,6 +607,35 @@ let verify_schnorr ?verifier pubkey_xonly digest sig64 =
   match verifier with
   | Some verifier -> Crypto.schnorr_verify_bytes_with_verifier ~verifier ~xonly_pubkey:pubkey_xonly ~msg_hash:digest ~signature:sig64
   | None -> Crypto.schnorr_verify_bytes ~xonly_pubkey:pubkey_xonly ~msg_hash:digest ~signature:sig64
+
+let debug_tapscript_signature_failure input_index hash_type pubkey digest sig64 leaf =
+  match Sys.getenv_opt "OCBITNODE_DEBUG_TAPSCRIPT_SIG" with
+  | Some "1" | Some "true" ->
+      prerr_endline
+        (Yojson.Safe.to_string
+           (`Assoc [
+             "event", `String "ocbitnode.tapscript_signature_failed";
+             "input_index", `Int input_index;
+             "hash_type", `Int hash_type;
+             "pubkey", `String (Util.hex_of_bytes pubkey);
+             "digest", `String (Util.hex_of_bytes digest);
+             "signature", `String (Util.hex_of_bytes sig64);
+             "tapleaf_hash", `String (Util.hex_of_bytes leaf);
+           ]))
+  | _ -> ()
+
+let debug_tapscript_final_stack input_index stack =
+  match Sys.getenv_opt "OCBITNODE_DEBUG_TAPSCRIPT_SIG" with
+  | Some "1" | Some "true" ->
+      prerr_endline
+        (Yojson.Safe.to_string
+           (`Assoc [
+             "event", `String "ocbitnode.tapscript_final_stack";
+             "input_index", `Int input_index;
+             "stack_size", `Int (Stack.size stack);
+             "stack", `List (List.map (fun item -> `String (Util.hex_of_bytes item)) (Stack.snapshot stack));
+           ]))
+  | _ -> ()
 
 let check_ecdsa_signature context signature pubkey =
   if signature = "" then false
@@ -1187,9 +1216,13 @@ let verify_tap_signature ?cache ?timing ?verifier pubkey sig_blob transaction in
           taproot_sighash ?cache transaction input_index spent_prevouts
             { hash_type; annex; ext_flag = 1; tapleaf_hash = Some leaf; code_separator_pos = code_sep })
     in
-    measure
+    let valid =
+      measure
       (fun ms -> Option.iter (fun timing -> timing.script_schnorr_verify_ms <- timing.script_schnorr_verify_ms + ms) timing)
       (fun () -> verify_schnorr ?verifier pubkey digest sig64)
+    in
+    if not valid then debug_tapscript_signature_failure input_index hash_type pubkey digest sig64 leaf;
+    valid
 
 let eval_tap_sig_op ?cache ?timing ?verifier op stack transaction input_index spent_prevouts annex leaf code_sep budget =
   if op = op_checksig || op = op_checksigverify then (
@@ -1312,7 +1345,15 @@ let verify_taproot_script_path ?cache ?timing ?verifier script_pubkey witness an
               measure
                 (fun ms -> Option.iter (fun timing -> timing.script_interpreter_eval_ms <- timing.script_interpreter_eval_ms + ms) timing)
                 (fun () -> evaluate_tapscript ?cache ?timing ?verifier script_bytes stack transaction input_index leaf spent_prevouts annex budget);
-              terminal_strict stack
+              if not (terminal_strict stack) then debug_tapscript_final_stack input_index stack;
+              ensure (terminal_strict stack)
+                ("tapscript failed final stack check: "
+                ^ Yojson.Safe.to_string
+                    (`Assoc [
+                      "stack_size", `Int (Stack.size stack);
+                      "stack", `List (List.map (fun item -> `String (Util.hex_of_bytes item)) (Stack.snapshot stack));
+                    ]));
+              true
 
 let verify_taproot ?cache ?timing ?verifier script_pubkey script_sig witness transaction input_index spent_prevouts =
   if script_sig <> "" || spent_prevouts = [] || not (is_p2tr script_pubkey) then false
@@ -1430,5 +1471,30 @@ let test_taproot_sighash_cached transaction input_index spent_prevouts hash_type
   let cache = create_sighash_cache transaction spent_prevouts in
   taproot_sighash ~cache transaction input_index spent_prevouts
     { hash_type; annex = None; ext_flag = 0; tapleaf_hash = None; code_separator_pos = Int32.minus_one }
+
+let test_tapscript_sighash transaction input_index spent_prevouts hash_type tapleaf_hash =
+  taproot_sighash transaction input_index spent_prevouts
+    { hash_type; annex = None; ext_flag = 1; tapleaf_hash = Some tapleaf_hash; code_separator_pos = Int32.minus_one }
+
+let test_tapscript_sighash_cached transaction input_index spent_prevouts hash_type tapleaf_hash =
+  let cache = create_sighash_cache transaction spent_prevouts in
+  taproot_sighash ~cache transaction input_index spent_prevouts
+    { hash_type; annex = None; ext_flag = 1; tapleaf_hash = Some tapleaf_hash; code_separator_pos = Int32.minus_one }
+
+let test_tapscript_signature transaction input_index spent_prevouts pubkey signature tapleaf_hash =
+  verify_tap_signature pubkey signature transaction input_index spent_prevouts None tapleaf_hash Int32.minus_one (ref (tap_validation_offset + 1024))
+
+let test_tapscript_signature_cached transaction input_index spent_prevouts pubkey signature tapleaf_hash =
+  let cache = create_sighash_cache transaction spent_prevouts in
+  verify_tap_signature ~cache pubkey signature transaction input_index spent_prevouts None tapleaf_hash Int32.minus_one (ref (tap_validation_offset + 1024))
+
+let test_evaluate_tapscript_stack transaction input_index spent_prevouts script stack_items tapleaf_hash =
+  let stack = Stack.create () in
+  List.iter (Stack.push stack) stack_items;
+  evaluate_tapscript script stack transaction input_index tapleaf_hash spent_prevouts None (ref (tap_validation_offset + 1024));
+  Stack.snapshot stack
+
+let test_taproot_script_path script_pubkey witness transaction input_index spent_prevouts =
+  verify_taproot_script_path script_pubkey witness None transaction input_index spent_prevouts (serialized_witness_stack witness)
 
 let test_tapleaf_hash = tapleaf_hash

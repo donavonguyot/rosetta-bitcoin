@@ -8,6 +8,7 @@ using CsBitNode.P2p;
 using CsBitNode.Storage;
 using CsBitNode.Sync;
 using CsBitNode.Util;
+using System.Net.Sockets;
 
 namespace CsBitNode.Cli;
 
@@ -21,7 +22,9 @@ public static class SyncLocalCoreService
         var maxHeaders = PeerConfig.ParseInt(env.GetValueOrDefault("HEADERS_MAX"), HeaderSync.DefaultMaxHeaders);
         var maxBatches = PeerConfig.ParseInt(env.GetValueOrDefault("HEADER_BATCHES_MAX"), HeaderSync.DefaultHeaderBatchesMax);
         var maxBlocks = PeerConfig.ParseInt(env.GetValueOrDefault("BLOCKS_MAX"), 128);
+        var targetBlockHeight = PeerConfig.ParseInt(env.GetValueOrDefault("TARGET_BLOCK_HEIGHT"), maxBlocks);
         var blockPrefetchDepth = PeerConfig.ParseInt(env.GetValueOrDefault("BLOCK_PREFETCH_DEPTH"), 1);
+        var maxReconnects = Math.Max(0, PeerConfig.ParseInt(env.GetValueOrDefault("CSBITNODE_MAX_RECONNECTS"), 5));
         var skipBlocks = PeerConfig.ParseBool(env.GetValueOrDefault("SKIP_BLOCKS"), false);
         var syncTiming = PeerConfig.ParseBool(env.GetValueOrDefault("CSBITNODE_SYNC_TIMING"), false);
         var syncTimingLog = PeerConfig.ParseBool(env.GetValueOrDefault("CSBITNODE_SYNC_TIMING_LOG"), false);
@@ -39,11 +42,11 @@ public static class SyncLocalCoreService
         output.WriteLine("  storage=native-rocksdb");
         output.WriteLine($"  peer={peer.Host}:{peer.Port}");
         output.WriteLine($"  headers_max={maxHeaders} batches_max={maxBatches}");
-        output.WriteLine($"  blocks_max={maxBlocks} block_prefetch_depth={blockPrefetchDepth} script_runner_mode={scriptRunnerMode} skip_blocks={skipBlocks}");
+        output.WriteLine($"  blocks_max={maxBlocks} target_block_height={targetBlockHeight} block_prefetch_depth={blockPrefetchDepth} script_runner_mode={scriptRunnerMode} skip_blocks={skipBlocks}");
 
         try
         {
-            return RunNative(output, chain, peer, maxHeaders, maxBatches, maxBlocks, blockPrefetchDepth, parallelScriptRunner, skipBlocks, dataDir, fixtureBlocksDir, syncTiming, syncTimingLog, progressJson, progressInterval);
+            return RunNative(output, chain, peer, maxHeaders, maxBatches, maxBlocks, targetBlockHeight, blockPrefetchDepth, maxReconnects, parallelScriptRunner, skipBlocks, dataDir, fixtureBlocksDir, syncTiming, syncTimingLog, progressJson, progressInterval);
         }
         catch (DatadirLockBusyException ex)
         {
@@ -70,7 +73,9 @@ public static class SyncLocalCoreService
         int maxHeaders,
         int maxBatches,
         int maxBlocks,
+        int targetBlockHeight,
         int blockPrefetchDepth,
+        int maxReconnects,
         bool parallelScriptRunner,
         bool skipBlocks,
         string dataDir,
@@ -115,37 +120,69 @@ public static class SyncLocalCoreService
             return fixtureExitCode;
         }
 
-        var startHeight = tracker.BootstrapStartHeight(chain.Name);
-        using var connection = new PeerConnection(peer.Host, peer.Port, chain, tracker, startHeight);
-        connection.Connect();
-
-        var headerResult = HeaderSync.SyncFromPeer(connection, chain, tracker, maxHeaders, maxBatches);
-        output.WriteLine($"  stored_headers={headerResult.StoredTotal}");
-        output.WriteLine($"  header_height={headerResult.BestHeight}");
-        output.WriteLine($"  sync_status={headerResult.SyncStatus}");
-
         var syncExitCode = 0;
-        if (!skipBlocks)
+        var downloadedTotal = 0;
+        var connectedTotal = 0;
+        var reconnects = 0;
+        while (true)
         {
-            var blockResult = BlockSync.SyncFromBlockSource(
-                connection,
-                chain,
-                tracker,
-                session.BlockStorage,
-                maxBlocks,
-                timingSink,
-                blockPrefetchDepth,
-                parallelScriptRunner,
-                progressSink: progressJson
+            var startHeight = tracker.BootstrapStartHeight(chain.Name);
+            using var connection = new PeerConnection(peer.Host, peer.Port, chain, tracker, startHeight);
+            connection.Connect();
+
+            var headerResult = HeaderSync.SyncFromPeer(connection, chain, tracker, maxHeaders, maxBatches);
+            output.WriteLine($"  stored_headers={headerResult.StoredTotal}");
+            output.WriteLine($"  header_height={headerResult.BestHeight}");
+            output.WriteLine($"  sync_status={headerResult.SyncStatus}");
+
+            if (skipBlocks)
+                break;
+
+            try
+            {
+                var currentHeight = tracker.GetValidatedHeight(chain.Name);
+                var targetRemaining = targetBlockHeight > 0 ? Math.Max(0, targetBlockHeight - currentHeight) : maxBlocks;
+                var commandRemaining = maxBlocks <= 0 ? targetRemaining : Math.Max(0, maxBlocks - connectedTotal);
+                var remainingBlocks =
+                    targetBlockHeight > 0 && commandRemaining > 0
+                        ? Math.Min(commandRemaining, targetRemaining)
+                        : commandRemaining;
+                if (remainingBlocks == 0)
+                    break;
+                Action<BlockSync.ProgressSnapshot>? progressSink = progressJson
                     ? snapshot => PrintProgressJson(output, chain.Name, tracker, headerResult.BestHeight, snapshot, progressInterval)
-                    : null);
-            output.WriteLine($"  downloaded_blocks={blockResult.Downloaded}");
-            output.WriteLine($"  connected_blocks={blockResult.Connected}");
-            output.WriteLine($"  sync_status={blockResult.SyncStatus}");
-            PersistTimingSummary(tracker, chain.Name, timingSink, output);
-            if (blockResult.BlockerMessage is not null)
-                output.WriteLine($"  current_blocker={blockResult.BlockerMessage}");
-            syncExitCode = blockResult.SyncStatus is "blocked" or "failed" ? 3 : 0;
+                    : null;
+                var blockResult = BlockSync.SyncFromBlockSource(
+                    connection,
+                    chain,
+                    tracker,
+                    session.BlockStorage,
+                    remainingBlocks,
+                    timingSink,
+                    blockPrefetchDepth,
+                    parallelScriptRunner,
+                    progressSink: progressSink);
+                downloadedTotal += blockResult.Downloaded;
+                connectedTotal += blockResult.Connected;
+                output.WriteLine($"  downloaded_blocks={downloadedTotal}");
+                output.WriteLine($"  connected_blocks={connectedTotal}");
+                output.WriteLine($"  peer_reconnects={reconnects}");
+                output.WriteLine($"  sync_status={blockResult.SyncStatus}");
+                PersistTimingSummary(tracker, chain.Name, timingSink, output);
+                if (blockResult.BlockerMessage is not null)
+                    output.WriteLine($"  current_blocker={blockResult.BlockerMessage}");
+                syncExitCode = blockResult.SyncStatus is "blocked" or "failed" ? 3 : 0;
+                if (syncExitCode != 0 || (targetBlockHeight > 0 && tracker.GetValidatedHeight(chain.Name) >= targetBlockHeight) || maxBlocks <= 0 || connectedTotal >= maxBlocks || blockResult.Connected == 0)
+                    break;
+            }
+            catch (Exception ex) when (IsTransientPeerDisconnect(ex) && reconnects < maxReconnects)
+            {
+                reconnects += 1;
+                output.WriteLine($"  peer_reconnects={reconnects}");
+                output.WriteLine($"  reconnect_reason={ex.Message}");
+                tracker.UpsertSyncState(chain.Name, new SyncStatePatch(null, null, null, "peer_reconnecting"));
+                continue;
+            }
         }
 
         output.WriteLine($"  validated_height={tracker.GetValidatedHeight(chain.Name)}");
@@ -153,6 +190,16 @@ public static class SyncLocalCoreService
         output.WriteLine($"chainstate_check backend={tracker.Metadata.BackendName} validated_height={tracker.GetValidatedHeight(chain.Name)} validated_hash={tracker.GetValidatedHash(chain.Name) ?? ""} chainstate_status={tracker.Metadata.Status} generation_id={tracker.Metadata.GenerationId} backend_utxo_count={tracker.UtxoCount(chain.Name)}");
         output.WriteLine("  binary_gate_status=not_attempted");
         return syncExitCode;
+    }
+
+    private static bool IsTransientPeerDisconnect(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is EndOfStreamException || current is IOException || current is SocketException)
+                return true;
+        }
+        return false;
     }
 
     private static void PersistTimingSummary(IChainstateStore tracker, string chain, ConsoleTimingSink? timingSink, TextWriter output)

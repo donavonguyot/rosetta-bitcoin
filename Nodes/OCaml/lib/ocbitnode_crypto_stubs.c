@@ -72,16 +72,13 @@ static int schnorr_verify_with_context(secp256k1_context *ctx, value xonly_v, va
   return ok;
 }
 
-static value taproot_tweak_with_context(secp256k1_context *ctx, value xonly_v, value tweak_v) {
-  CAMLparam2(xonly_v, tweak_v);
-  CAMLlocal2(out_string, tuple);
+static void taproot_tweak_compute(secp256k1_context *ctx, value xonly_v, value tweak_v, unsigned char output[32], int *parity_out) {
   if (caml_string_length(xonly_v) != 32 || caml_string_length(tweak_v) != 32) {
     caml_failwith("taproot tweak requires 32-byte xonly key and 32-byte tweak");
   }
   secp256k1_xonly_pubkey internal;
   secp256k1_pubkey output_pubkey;
   secp256k1_xonly_pubkey output_xonly;
-  unsigned char output[32];
   int parity = 0;
   if (!secp256k1_xonly_pubkey_parse(ctx, &internal, (const unsigned char *)String_val(xonly_v))) {
     caml_failwith("invalid xonly pubkey");
@@ -95,6 +92,12 @@ static value taproot_tweak_with_context(secp256k1_context *ctx, value xonly_v, v
   if (!secp256k1_xonly_pubkey_serialize(ctx, output, &output_xonly)) {
     caml_failwith("could not serialize tweaked xonly pubkey");
   }
+  *parity_out = parity;
+}
+
+static value taproot_tweak_result(unsigned char output[32], int parity) {
+  CAMLparam0();
+  CAMLlocal2(out_string, tuple);
   out_string = caml_alloc_string(32);
   memcpy(Bytes_val(out_string), output, 32);
   tuple = caml_alloc_tuple(2);
@@ -149,7 +152,10 @@ CAMLprim value ocbitnode_schnorr_verify_with_verifier_raw(value verifier_v, valu
 CAMLprim value ocbitnode_taproot_tweak_xonly_with_verifier(value verifier_v, value xonly_v, value tweak_v) {
   CAMLparam3(verifier_v, xonly_v, tweak_v);
   CAMLlocal1(result);
-  result = taproot_tweak_with_context(verifier_val(verifier_v)->ctx, xonly_v, tweak_v);
+  unsigned char output[32];
+  int parity = 0;
+  taproot_tweak_compute(verifier_val(verifier_v)->ctx, xonly_v, tweak_v, output, &parity);
+  result = taproot_tweak_result(output, parity);
   CAMLreturn(result);
 }
 
@@ -174,7 +180,10 @@ CAMLprim value ocbitnode_taproot_tweak_xonly(value xonly_v, value tweak_v) {
   CAMLlocal1(result);
   secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
   if (ctx == NULL) caml_failwith("could not create secp256k1 context");
-  result = taproot_tweak_with_context(ctx, xonly_v, tweak_v);
+  unsigned char output[32];
+  int parity = 0;
+  taproot_tweak_compute(ctx, xonly_v, tweak_v, output, &parity);
+  result = taproot_tweak_result(output, parity);
   secp256k1_context_destroy(ctx);
   CAMLreturn(result);
 }

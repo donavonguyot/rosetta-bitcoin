@@ -1,0 +1,116 @@
+{
+  "implementation": "swift product node",
+  "port": "swift",
+  "runtime_surface": "docker",
+  "benchmark_contract_version": 1,
+  "benchmark_gate": "shakedown_50k",
+  "benchmark_lane": "shakedown_50k_p2p",
+  "benchmark_kind": "shakedown_50k_p2p",
+  "target_height": 50000,
+  "target_label": "50k",
+  "header_target_height": 50000,
+  "byte_source": "local_reference_p2p",
+  "reference_start_height": 0,
+  "reference_start_hash": "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043",
+  "reference_finish_height": 50000,
+  "reference_finish_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+  "validated_height": 50000,
+  "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+  "blocks_fetched": 50000,
+  "blocks_connected": 50000,
+  "current_blocker": null,
+  "binary_gate_status": "not_attempted",
+  "chainstate_backend": "rocksdb",
+  "chainstate_utxo_count": 568855,
+  "utxo_accounting_policy": "core_spendable_v1",
+  "native_crypto_backend": "libsecp256k1",
+  "proof_mode": "p2p_sync",
+  "peer_mode": "local_reference",
+  "peer": "bitcoin-core-testnet4:48333",
+  "script_runner_mode": "parallel",
+  "rocksdb_wal_disabled": false,
+  "prefetch_depth": 4,
+  "resume_supported": true,
+  "fresh_state": true,
+  "result": "passed",
+  "failures": [],
+  "captured_at": "2026-06-07T19:34:39Z",
+  "telemetry_schema": "benchmark.telemetry_tick.v1",
+  "telemetry_summary": {
+    "tick_count": 33,
+    "lifecycle_markers": {
+      "run_started": 0,
+      "container_started": 1,
+      "node_started": 2,
+      "first_peer_byte": 3,
+      "first_block_connected": 4,
+      "heartbeat": 2252,
+      "target_reached": 60679,
+      "run_finished": 60680
+    },
+    "heartbeat_max_gap_ms": 2248,
+    "heartbeat_target_ms": 15000,
+    "heartbeat_grace_ms": 5000,
+    "heartbeat_warning_ms": 15000,
+    "heartbeat_failure_ms": 20000,
+    "heartbeat_hard_failure_ms": 30000,
+    "heartbeat_limit_ms": 20000,
+    "phase_counts": {
+      "block_connect": 1,
+      "complete": 2,
+      "heartbeat": 26,
+      "peer_connect": 1,
+      "startup": 3
+    },
+    "stall_class_counts": {
+      "none": 33
+    },
+    "slow_blocks": [],
+    "heartbeat_gaps_over_target": 0,
+    "heartbeat_gaps_over_failure": 0,
+    "telemetry_quality": "clean"
+  },
+  "timing_summary": {
+    "total_ms": 60680,
+    "stage_totals_ms": {
+      "p2p_fetch": 5520,
+      "block_parse_validate": 9480,
+      "utxo_load": 2285,
+      "script_verify": 19493,
+      "utxo_apply": 8685,
+      "commit": 8685,
+      "block_connect_store_commit": 58500
+    },
+    "slow_blocks": []
+  },
+  "pipeline_timing_summary": {
+    "total_ms": 60680,
+    "stage_totals_ms": {
+      "p2p_fetch": 5520,
+      "block_parse_validate": 9480,
+      "utxo_load": 2285,
+      "script_verify": 19493,
+      "utxo_apply": 8685,
+      "commit": 8685,
+      "block_connect_store_commit": 58500
+    },
+    "slow_blocks": []
+  },
+  "status": {
+    "chain": "testnet4",
+    "sync_status": "blocks_current",
+    "header_height": 50000,
+    "validated_height": 50000,
+    "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "stored_block_height": 50000,
+    "chainstate_utxo_count": 568855,
+    "current_blocker": null
+  },
+  "control_harness": {
+    "artifact_source": "project_control_harness",
+    "product_progress_prefix": "rb.port_progress",
+    "product_progress_count": 26,
+    "proof_log": "/Users/donavonguyot/RB/Project/.campaigns/shakedown_50k_20260607_123016/logs/swift_proof.log",
+    "telemetry_log": "/Users/donavonguyot/RB/Project/.campaigns/shakedown_50k_20260607_123016/logs/swift_control_telemetry.log"
+  }
+}

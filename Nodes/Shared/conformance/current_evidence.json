@@ -23,17 +23,17 @@
       "port": "cpp",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/cpp_control_baseline_5k_benchmark_20260607T180746Z.json",
+      "path": "Nodes/Shared/conformance/results/cpp_control_baseline_5k_benchmark_20260607T193002Z.json",
       "status": "current",
-      "notes": "Current comparable cpp baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
+      "notes": "Current comparable cpp baseline_5k proof accepted by campaign baseline_5k_20260607_122906."
     },
     {
       "port": "cpp",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/cpp_control_shakedown_50k_benchmark_20260607T181032Z.json",
+      "path": "Nodes/Shared/conformance/results/cpp_control_shakedown_50k_benchmark_20260607T193256Z.json",
       "status": "current",
-      "notes": "Current comparable cpp shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
+      "notes": "Current comparable cpp shakedown_50k proof accepted by campaign shakedown_50k_20260607_123016."
     },
     {
       "port": "csharp",
@@ -55,17 +55,17 @@
       "port": "csharp",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/csharp_control_baseline_5k_benchmark_20260607T180817Z.json",
+      "path": "Nodes/Shared/conformance/results/csharp_control_baseline_5k_benchmark_20260607T192759Z.json",
       "status": "current",
-      "notes": "Current comparable csharp baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
+      "notes": "Current comparable csharp baseline_5k proof accepted by campaign baseline_5k_20260607_122549."
     },
     {
       "port": "csharp",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/csharp_control_shakedown_50k_benchmark_20260607T181319Z.json",
+      "path": "Nodes/Shared/conformance/results/csharp_control_shakedown_50k_benchmark_20260607T193543Z.json",
       "status": "current",
-      "notes": "Current comparable csharp shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
+      "notes": "Current comparable csharp shakedown_50k proof accepted by campaign shakedown_50k_20260607_123016."
     },
     {
       "port": "elixir",
@@ -111,17 +111,17 @@
       "port": "go",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/go_control_baseline_5k_benchmark_20260607T180751Z.json",
+      "path": "Nodes/Shared/conformance/results/go_control_baseline_5k_benchmark_20260607T192741Z.json",
       "status": "current",
-      "notes": "Current comparable go baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
+      "notes": "Current comparable go baseline_5k proof accepted by campaign baseline_5k_20260607_122549."
     },
     {
       "port": "go",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/go_control_shakedown_50k_benchmark_20260607T181112Z.json",
+      "path": "Nodes/Shared/conformance/results/go_control_shakedown_50k_benchmark_20260607T193337Z.json",
       "status": "current",
-      "notes": "Current comparable go shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
+      "notes": "Current comparable go shakedown_50k proof accepted by campaign shakedown_50k_20260607_123016."
     },
     {
       "port": "java",
@@ -143,17 +143,17 @@
       "port": "java",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/java_control_baseline_5k_benchmark_20260607T180826Z.json",
+      "path": "Nodes/Shared/conformance/results/java_control_baseline_5k_benchmark_20260607T192808Z.json",
       "status": "current",
-      "notes": "Current comparable java baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
+      "notes": "Current comparable java baseline_5k proof accepted by campaign baseline_5k_20260607_122549."
     },
     {
       "port": "java",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/java_control_shakedown_50k_benchmark_20260607T181414Z.json",
+      "path": "Nodes/Shared/conformance/results/java_control_shakedown_50k_benchmark_20260607T193638Z.json",
       "status": "current",
-      "notes": "Current comparable java shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
+      "notes": "Current comparable java shakedown_50k proof accepted by campaign shakedown_50k_20260607_123016."
     },
     {
       "port": "ocaml",
@@ -175,17 +175,17 @@
       "port": "ocaml",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/ocaml_control_baseline_5k_benchmark_20260607T180833Z.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_control_baseline_5k_benchmark_20260607T192815Z.json",
       "status": "current",
-      "notes": "Current comparable ocaml baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
+      "notes": "Current comparable ocaml baseline_5k proof accepted by campaign baseline_5k_20260607_122549."
     },
     {
       "port": "ocaml",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/ocaml_control_shakedown_50k_benchmark_20260607T181544Z.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_control_shakedown_50k_benchmark_20260607T193811Z.json",
       "status": "current",
-      "notes": "Current comparable ocaml shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
+      "notes": "Current comparable ocaml shakedown_50k proof accepted by campaign shakedown_50k_20260607_123016."
     },
     {
       "port": "python",
@@ -231,25 +231,25 @@
       "port": "rust",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/rust_control_baseline_5k_benchmark_20260607T180641Z.json",
+      "path": "Nodes/Shared/conformance/results/rust_control_baseline_5k_benchmark_20260607T192554Z.json",
       "status": "current",
-      "notes": "Current comparable rust baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
+      "notes": "Current comparable rust baseline_5k proof accepted by campaign baseline_5k_20260607_122549."
     },
     {
       "port": "rust",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/rust_control_shakedown_50k_benchmark_20260607T180920Z.json",
+      "path": "Nodes/Shared/conformance/results/rust_control_shakedown_50k_benchmark_20260607T193051Z.json",
       "status": "current",
-      "notes": "Current comparable rust shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
+      "notes": "Current comparable rust shakedown_50k proof accepted by campaign shakedown_50k_20260607_123016."
     },
     {
       "port": "rust",
       "claim": "performance_100k",
       "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/rust_control_performance_100k_benchmark_20260607T182310Z.json",
+      "path": "Nodes/Shared/conformance/results/rust_control_performance_100k_benchmark_20260607T194544Z.json",
       "status": "current",
-      "notes": "Current comparable rust performance_100k proof accepted by campaign performance_100k_20260607_111552."
+      "notes": "Current comparable rust performance_100k proof accepted by campaign performance_100k_20260607_123823."
     },
     {
       "port": "rust",
@@ -271,17 +271,17 @@
       "port": "swift",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/swift_control_baseline_5k_benchmark_20260607T180804Z.json",
+      "path": "Nodes/Shared/conformance/results/swift_control_baseline_5k_benchmark_20260607T192746Z.json",
       "status": "current",
-      "notes": "Current comparable swift baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
+      "notes": "Current comparable swift baseline_5k proof accepted by campaign baseline_5k_20260607_122549."
     },
     {
       "port": "swift",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/swift_control_shakedown_50k_benchmark_20260607T181214Z.json",
+      "path": "Nodes/Shared/conformance/results/swift_control_shakedown_50k_benchmark_20260607T193439Z.json",
       "status": "current",
-      "notes": "Current comparable swift shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
+      "notes": "Current comparable swift shakedown_50k proof accepted by campaign shakedown_50k_20260607_123016."
     },
     {
       "port": "typescript",
@@ -327,25 +327,73 @@
       "port": "zig",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/zig_control_baseline_5k_benchmark_20260607T180644Z.json",
+      "path": "Nodes/Shared/conformance/results/zig_control_baseline_5k_benchmark_20260607T192633Z.json",
       "status": "current",
-      "notes": "Current comparable zig baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
+      "notes": "Current comparable zig baseline_5k proof accepted by campaign baseline_5k_20260607_122549."
     },
     {
       "port": "zig",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/zig_control_shakedown_50k_benchmark_20260607T180951Z.json",
+      "path": "Nodes/Shared/conformance/results/zig_control_shakedown_50k_benchmark_20260607T193123Z.json",
       "status": "current",
-      "notes": "Current comparable zig shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
+      "notes": "Current comparable zig shakedown_50k proof accepted by campaign shakedown_50k_20260607_123016."
     },
     {
       "port": "zig",
       "claim": "performance_100k",
       "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/zig_control_performance_100k_benchmark_20260607T183049Z.json",
+      "path": "Nodes/Shared/conformance/results/zig_control_performance_100k_benchmark_20260607T195319Z.json",
       "status": "current",
-      "notes": "Current comparable zig performance_100k proof accepted by campaign performance_100k_20260607_111552."
+      "notes": "Current comparable zig performance_100k proof accepted by campaign performance_100k_20260607_123823."
+    },
+    {
+      "port": "cpp",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/cpp_control_performance_100k_benchmark_20260607T200509Z.json",
+      "status": "current",
+      "notes": "Current comparable cpp performance_100k proof accepted by campaign performance_100k_20260607_123823."
+    },
+    {
+      "port": "go",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/go_control_performance_100k_benchmark_20260607T201225Z.json",
+      "status": "current",
+      "notes": "Current comparable go performance_100k proof accepted by campaign performance_100k_20260607_123823."
+    },
+    {
+      "port": "swift",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/swift_control_performance_100k_benchmark_20260607T202752Z.json",
+      "status": "current",
+      "notes": "Current comparable swift performance_100k proof accepted by campaign performance_100k_20260607_123823."
+    },
+    {
+      "port": "java",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/java_control_performance_100k_benchmark_20260607T210009Z.json",
+      "status": "current",
+      "notes": "Current comparable java performance_100k proof accepted by campaign performance_100k_20260607_123823."
+    },
+    {
+      "port": "csharp",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/csharp_control_performance_100k_benchmark_20260607T223542Z.json",
+      "status": "current",
+      "notes": "Current comparable csharp performance_100k proof accepted by campaign performance_100k_20260607_151120."
+    },
+    {
+      "port": "ocaml",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/ocaml_control_performance_100k_benchmark_20260607T230208Z.json",
+      "status": "current",
+      "notes": "Current comparable ocaml performance_100k proof accepted by campaign performance_100k_20260607_154349."
     }
   ]
 }
