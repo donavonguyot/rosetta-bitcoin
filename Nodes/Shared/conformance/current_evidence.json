@@ -271,9 +271,9 @@
       "port": "rust",
       "claim": "performance_100k",
       "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/rust_docker_primary_100k_benchmark_2026-06-05.json",
+      "path": "Nodes/Shared/conformance/results/rust_docker_performance_100k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current Rust 100k evidence; Project classifies remaining telemetry gap."
+      "notes": "Current comparable rust performance_100k proof accepted by campaign performance_100k_20260606_172338."
     },
     {
       "port": "rust",
