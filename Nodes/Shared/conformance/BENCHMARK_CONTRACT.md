@@ -155,9 +155,9 @@ Benchmark telemetry is Project/control-plane instrumentation. Ports should expos
 the product progress surface in
 [`PORT_PROGRESS_CONTRACT.md`](PORT_PROGRESS_CONTRACT.md); Project converts that
 surface into benchmark ticks, telemetry summaries, and canonical artifacts.
-Historical port-authored benchmark ticks remain import-compatible, but new
-current evidence should be control-built wherever the port exposes product
-progress.
+Historical port-authored benchmark ticks remain import-compatible. Current
+active-port benchmark evidence for `baseline_5k`, `shakedown_50k`, and
+`performance_100k` must be control-built from `rb.port_progress`.
 
 Long runs (`shakedown_50k`, `performance_100k`, `tip_once`, and
 `tip_maintenance`) must emit lines consumable by

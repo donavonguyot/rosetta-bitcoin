@@ -96,6 +96,8 @@ REQUIRED_BUCKETS = (
     *_validator.REQUIRED_BUCKETS,
 )
 LONG_RUN_GATES = {gate for gate, spec in _validator.GATES.items() if spec.get("long_run")}
+ACTIVE_CONTROL_PORTS = {"rust", "zig", "cpp", "go", "swift", "csharp", "java", "ocaml"}
+CONTROL_REQUIRED_GATES = {"baseline_5k", "shakedown_50k", "performance_100k"}
 
 
 def utc_now() -> str:
@@ -128,6 +130,11 @@ def parse_args() -> argparse.Namespace:
         "--assisted",
         action="store_true",
         help="Alias for --continue-on-failure with operator-friendly wording.",
+    )
+    parser.add_argument(
+        "--compatibility-artifacts",
+        action="store_true",
+        help="Allow historical port-authored artifact fallback when product progress is missing.",
     )
     parser.add_argument("--current-evidence", default=str(CURRENT_EVIDENCE))
     parser.add_argument("--results-dir", default=str(RESULTS_DIR))
@@ -353,6 +360,7 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
         "run_mode": "run" if args.run else "dry_run",
         "pause_on": args.pause_on,
         "continue_on_failure": bool(args.continue_on_failure or args.assisted),
+        "compatibility_artifacts": bool(args.compatibility_artifacts),
         "startup_timeout_sec": max(0, int(args.startup_timeout_sec)),
         "db": args.db,
         "current_evidence": str(args.current_evidence),
@@ -875,6 +883,23 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             entry["control_artifact_path"] = rel(control_result.artifact_path)
             entry["control_telemetry_log"] = rel(control_result.telemetry_log_path)
             append_event(campaign, port, "control_artifact_built", rel(control_result.artifact_path))
+        elif (
+            port in ACTIVE_CONTROL_PORTS
+            and campaign["gate"] in CONTROL_REQUIRED_GATES
+            and not campaign.get("compatibility_artifacts")
+        ):
+            preserved = preserve_rejected_candidate(campaign, port, protected_artifact)
+            restore_snapshot(protected_snapshot)
+            entry["status"] = "failed"
+            entry["errors"].append(
+                "product progress missing; active current benchmark evidence requires rb.port_progress and a control-built artifact"
+            )
+            if preserved:
+                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
+            append_event(campaign, port, "product_progress_missing", rel(proof_log))
+            if campaign_should_pause(campaign, port, "product_progress_missing"):
+                return 1
+            continue
 
         telemetry_quality, telemetry_errors, telemetry_warnings, telemetry_summary = validate_telemetry_log(
             telemetry_log,
@@ -1178,6 +1203,8 @@ def main() -> int:
             campaign["run_mode"] = "run"
         if args.continue_on_failure or args.assisted:
             campaign["continue_on_failure"] = True
+        if args.compatibility_artifacts:
+            campaign["compatibility_artifacts"] = True
     else:
         conn = connect(args.db)
         campaign = initial_campaign(conn, args)

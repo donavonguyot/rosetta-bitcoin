@@ -596,7 +596,7 @@ def print_leaderboard(connection: sqlite3.Connection, gate_id: str | None = None
         f"""
         select gate_id, rank, port, total_ms, validated_height, validated_hash,
                evidence_lane, peer, chainstate_backend, native_crypto_backend,
-               artifact_quality, telemetry_quality, chainstate_utxo_count, p2p_fetch_ms, script_verify_ms,
+               artifact_quality, telemetry_quality, artifact_source, chainstate_utxo_count, p2p_fetch_ms, script_verify_ms,
                block_connect_store_commit_ms, captured_at, artifact_path
         from benchmark_leaderboard
         {where}
@@ -628,6 +628,7 @@ def print_leaderboard(connection: sqlite3.Connection, gate_id: str | None = None
                 "crypto",
                 "quality",
                 "telemetry",
+                "source",
                 "utxos",
                 "p2p_ms",
                 "script_ms",

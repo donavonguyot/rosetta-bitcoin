@@ -1511,6 +1511,30 @@ fn emit_telemetry_tick(
             "timing_buckets_ms": timing.timing_buckets_json(),
         })
     );
+    println!(
+        "rb.port_progress {}",
+        serde_json::json!({
+            "chain": "testnet4",
+            "sync_status": sync_status,
+            "header_height": height,
+            "validated_height": height,
+            "validated_hash": hash,
+            "stored_block_height": height,
+            "chainstate_utxo_count": utxos,
+            "current_blocker": current_blocker,
+            "peer": opts.peer,
+            "downloaded_blocks": connected,
+            "connected_blocks": connected,
+            "current_block_height": current_block["height"],
+            "current_block_hash": current_block["hash"],
+            "current_block_tx_count": current_block["tx_count"],
+            "current_block_vin_count": current_block["vin_count"],
+            "current_block_script_input_count": current_block["script_input_count"],
+            "last_block_ms": last_block_elapsed.as_millis() as i64,
+            "native_crypto_backend": "rust-secp256k1",
+            "timing_buckets_ms": timing.timing_buckets_json(),
+        })
+    );
 }
 
 fn telemetry_block_shape(

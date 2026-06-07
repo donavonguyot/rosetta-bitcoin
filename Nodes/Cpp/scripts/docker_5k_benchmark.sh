@@ -58,6 +58,35 @@ DOCKER_PROOF_VOLUME="$VOLUME" \
 status_exit=$?
 set -e
 
+STATUS_PATH="$STATUS_TMP" PEERS="$PEERS" python3 <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+raw = Path(os.environ["STATUS_PATH"]).read_text(errors="replace")
+start = raw.find("{")
+end = raw.rfind("}")
+try:
+    status = json.loads(raw[start : end + 1]) if start >= 0 and end >= start else {}
+except Exception:
+    status = {}
+
+progress = {
+    "chain": status.get("chain", "testnet4"),
+    "sync_status": status.get("sync_status", "blocks_current"),
+    "header_height": status.get("header_height", status.get("validated_height", 0)),
+    "validated_height": status.get("validated_height", 0),
+    "validated_hash": status.get("validated_hash", ""),
+    "stored_block_height": status.get("stored_block_height", status.get("validated_height", 0)),
+    "chainstate_utxo_count": status.get("chainstate_utxo_count", 0),
+    "current_blocker": status.get("current_blocker"),
+    "peer": os.environ.get("PEERS", ""),
+    "native_crypto_backend": "libsecp256k1",
+}
+print("rb.port_progress " + json.dumps(progress, sort_keys=True), flush=True)
+PY
+
 mkdir -p "$(dirname "$RESULT")"
 
 RESULT_PATH="$RESULT" \

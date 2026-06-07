@@ -1,10 +1,12 @@
-FROM eclipse-temurin:21-jdk AS build
+# syntax=docker/dockerfile:1.7
+FROM maven:3.9.11-eclipse-temurin-21 AS build
 WORKDIR /workspace
 COPY pom.xml .
+RUN --mount=type=cache,target=/root/.m2 \
+  mvn -q -DskipTests dependency:go-offline
 COPY src ./src
-RUN apt-get update && apt-get install -y --no-install-recommends maven \
-  && mvn -q -DskipTests package \
-  && apt-get purge -y maven && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/root/.m2 \
+  mvn -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app

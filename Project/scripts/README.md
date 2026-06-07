@@ -148,15 +148,15 @@ python3 Project/scripts/run_benchmark_campaign.py \
 ```
 
 Campaign scratch lives under ignored `Project/.campaigns/`. Logs and telemetry
-tails are operational state, not committed evidence. Ports should expose product
+tails are operational state, not committed evidence. Active ports expose product
 progress with `rb.port_progress`; the Project control harness turns that into
 benchmark telemetry and canonical artifacts. Historical port-authored artifacts
-remain import-compatible, but migrated ports should not own benchmark artifact
-assembly.
+remain import-compatible, but active current benchmark evidence is control-built.
 
 The runner updates `Nodes/Shared/conformance/current_evidence.json` only after
-the fresh control-built or compatibility artifact passes the shared benchmark
-artifact validator, Project import, and anomaly checks. For `shakedown_50k`,
+the fresh control-built artifact passes the shared benchmark artifact validator,
+Project import, and anomaly checks. Compatibility artifact fallback is explicit
+and historical-only by default. For `shakedown_50k`,
 `performance_100k`, and tip gates, the runner also validates control-owned
 telemetry with `validate_benchmark_telemetry.py` and requires
 `telemetry_quality=clean`. A failed command, missing product progress or

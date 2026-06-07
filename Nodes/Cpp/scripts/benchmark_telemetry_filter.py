@@ -144,6 +144,26 @@ def main() -> int:
             "timing_buckets_ms": dict(sorted(stage_totals.items())),
         }
         print(f"benchmark.telemetry_tick {json.dumps(tick, sort_keys=True)}", flush=True)
+        progress = {
+            "chain": "testnet4",
+            "sync_status": tick["sync_status"],
+            "header_height": height,
+            "validated_height": height,
+            "validated_hash": "",
+            "stored_block_height": height,
+            "chainstate_utxo_count": last_utxos,
+            "current_blocker": None,
+            "peer": "",
+            "current_block_height": max(0, height),
+            "current_block_hash": None,
+            "current_block_tx_count": block.get("tx_count", 0),
+            "current_block_vin_count": block.get("vin_count", 0),
+            "current_block_script_input_count": block.get("script_input_count", 0),
+            "last_block_ms": last_ms,
+            "native_crypto_backend": "libsecp256k1",
+            "timing_buckets_ms": dict(sorted(stage_totals.items())),
+        }
+        print(f"rb.port_progress {json.dumps(progress, sort_keys=True)}", flush=True)
         last_tick_height = height
         last_tick_time = now
 

@@ -319,6 +319,35 @@ enum LocalReferenceProof {
            let raw = String(data: data, encoding: .utf8) {
             FileHandle.standardOutput.write(Data("benchmark.telemetry_tick \(raw)\n".utf8))
         }
+        let progress: [String: Any] = [
+            "chain": Constants.chain,
+            "sync_status": state.syncStatus,
+            "header_height": state.headerHeight,
+            "validated_height": height,
+            "validated_hash": state.validatedHash,
+            "stored_block_height": state.storedBlockHeight,
+            "chainstate_utxo_count": state.chainstateUtxoCount,
+            "current_blocker": blocker,
+            "peer": ProcessInfo.processInfo.environment["PEER"] ?? ProcessInfo.processInfo.environment["REFERENCE_P2P_PEER"] ?? "",
+            "current_block_height": max(0, height),
+            "current_block_hash": state.validatedHash.isEmpty ? NSNull() : state.validatedHash,
+            "current_block_tx_count": 0,
+            "current_block_vin_count": 0,
+            "current_block_script_input_count": 0,
+            "last_block_ms": lastBlockMs,
+            "native_crypto_backend": Constants.nativeCryptoBackend,
+            "timing_buckets_ms": timing.stageTotalsMs(required: [
+                "block_parse_validate",
+                "prevout_batch_load", "utxo_load", "prevout_multi_get_call", "prevout_legacy_fallback_get", "prevout_utxo_decode",
+                "script_verify", "script_runner_wait", "script_wall_ms", "script_verify_worker_cpu", "script_worker_cpu_ms",
+                "utxo_apply", "utxo_delete_prepare", "utxo_put_prepare", "undo_put_prepare", "metadata_put_prepare",
+                "rocksdb_write", "commit", "block_connect_store_commit", "p2p_fetch"
+            ])
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: progress, options: [.sortedKeys]),
+           let raw = String(data: data, encoding: .utf8) {
+            FileHandle.standardOutput.write(Data("rb.port_progress \(raw)\n".utf8))
+        }
         return elapsedMs
     }
 }

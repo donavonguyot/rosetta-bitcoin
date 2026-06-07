@@ -222,6 +222,28 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
       ]
     in
     let line = "benchmark.telemetry_tick " ^ Yojson.Safe.to_string payload in
+    let product_progress =
+      `Assoc [
+        "chain", `String "testnet4";
+        "sync_status", `String (if height >= target then "blocks_current" else "blocks_syncing");
+        "header_height", `Int height;
+        "validated_height", `Int height;
+        "validated_hash", (match block_hash with Some hash -> `String hash | None -> `String "");
+        "stored_block_height", `Int height;
+        "chainstate_utxo_count", `Int utxos;
+        "current_blocker", !current_blocker;
+        "peer", `String peer;
+        "current_block_height", `Int (max 0 height);
+        "current_block_hash", (match block_hash with Some hash -> `String hash | None -> `Null);
+        "current_block_tx_count", `Int tx_count;
+        "current_block_vin_count", `Int vin_count;
+        "current_block_script_input_count", `Int script_input_count;
+        "last_block_ms", `Int last_block_ms;
+        "native_crypto_backend", `String "libsecp256k1";
+        "timing_buckets_ms", json_of_timing total_timing;
+      ]
+    in
+    let progress_line = "rb.port_progress " ^ Yojson.Safe.to_string product_progress in
     incr telemetry_tick_count;
     telemetry_lifecycle_markers := remember_marker event elapsed_ms !telemetry_lifecycle_markers;
     telemetry_phase_counts := bump_count phase !telemetry_phase_counts;
@@ -231,9 +253,12 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
      | None -> ());
     telemetry_last_monotonic_ms := Some elapsed_ms;
     print_endline line;
+    print_endline progress_line;
     Option.iter
       (fun oc ->
         output_string oc line;
+        output_char oc '\n';
+        output_string oc progress_line;
         output_char oc '\n';
         flush oc)
       telemetry_channel;

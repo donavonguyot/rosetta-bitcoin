@@ -9,10 +9,10 @@
     "dockerignore": "Nodes/Java/docker/.dockerignore"
   },
   "images": {
-    "base": "eclipse-temurin:21-jdk",
+    "base": "maven:3.9.11-eclipse-temurin-21",
     "runtime": "eclipse-temurin:21-jre",
     "os_family": "Debian-family Temurin image",
-    "package_manager": "apt",
+    "package_manager": "Maven/BuildKit cache plus apt in base image",
     "native_dependencies": ["rocksdbjni via Maven", "secp256k1 native backend when enabled"]
   },
   "volumes": {

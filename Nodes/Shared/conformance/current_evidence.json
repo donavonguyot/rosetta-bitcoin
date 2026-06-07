@@ -23,25 +23,17 @@
       "port": "cpp",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/cpp_docker_baseline_5k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/cpp_control_baseline_5k_benchmark_20260607T180746Z.json",
       "status": "current",
-      "notes": "Current comparable cpp baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
+      "notes": "Current comparable cpp baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
     },
     {
       "port": "cpp",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/cpp_docker_shakedown_50k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/cpp_control_shakedown_50k_benchmark_20260607T181032Z.json",
       "status": "current",
-      "notes": "Current comparable cpp shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
-    },
-    {
-      "port": "cpp",
-      "claim": "performance_100k",
-      "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/cpp_docker_performance_100k_benchmark_2026-06-06.json",
-      "status": "current",
-      "notes": "Current comparable cpp performance_100k proof accepted by campaign performance_100k_20260606_175104."
+      "notes": "Current comparable cpp shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
     },
     {
       "port": "csharp",
@@ -63,17 +55,17 @@
       "port": "csharp",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/csharp_control_baseline_5k_benchmark_20260607T173131Z.json",
+      "path": "Nodes/Shared/conformance/results/csharp_control_baseline_5k_benchmark_20260607T180817Z.json",
       "status": "current",
-      "notes": "Current comparable csharp baseline_5k proof accepted by campaign baseline_5k_20260607_103118."
+      "notes": "Current comparable csharp baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
     },
     {
       "port": "csharp",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/csharp_docker_shakedown_50k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/csharp_control_shakedown_50k_benchmark_20260607T181319Z.json",
       "status": "current",
-      "notes": "Current comparable csharp shakedown_50k proof accepted by campaign shakedown_50k_20260606_165851."
+      "notes": "Current comparable csharp shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
     },
     {
       "port": "elixir",
@@ -119,25 +111,17 @@
       "port": "go",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/go_control_baseline_5k_benchmark_20260607T173005Z.json",
+      "path": "Nodes/Shared/conformance/results/go_control_baseline_5k_benchmark_20260607T180751Z.json",
       "status": "current",
-      "notes": "Current comparable go baseline_5k proof accepted by campaign baseline_5k_20260607_103000."
+      "notes": "Current comparable go baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
     },
     {
       "port": "go",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/go_docker_shakedown_50k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/go_control_shakedown_50k_benchmark_20260607T181112Z.json",
       "status": "current",
-      "notes": "Current comparable go shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
-    },
-    {
-      "port": "go",
-      "claim": "performance_100k",
-      "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/go_docker_primary_100k_benchmark_2026-06-05.json",
-      "status": "current",
-      "notes": "Current Go 100k evidence; Project classifies remaining timing gaps."
+      "notes": "Current comparable go shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
     },
     {
       "port": "java",
@@ -159,25 +143,17 @@
       "port": "java",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/java_docker_baseline_5k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/java_control_baseline_5k_benchmark_20260607T180826Z.json",
       "status": "current",
-      "notes": "Current comparable java baseline_5k proof accepted by campaign baseline_5k_20260606_163325."
+      "notes": "Current comparable java baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
     },
     {
       "port": "java",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/java_docker_shakedown_50k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/java_control_shakedown_50k_benchmark_20260607T181414Z.json",
       "status": "current",
-      "notes": "Current comparable java shakedown_50k proof accepted by campaign shakedown_50k_20260606_170234."
-    },
-    {
-      "port": "java",
-      "claim": "performance_100k",
-      "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/java_docker_primary_100k_benchmark_2026-06-05.json",
-      "status": "current",
-      "notes": "Current Java 100k evidence; Project classifies remaining telemetry gaps."
+      "notes": "Current comparable java shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
     },
     {
       "port": "ocaml",
@@ -199,17 +175,17 @@
       "port": "ocaml",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/ocaml_docker_baseline_5k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_control_baseline_5k_benchmark_20260607T180833Z.json",
       "status": "current",
-      "notes": "Current comparable ocaml baseline_5k proof accepted by campaign baseline_5k_20260606_163325."
+      "notes": "Current comparable ocaml baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
     },
     {
       "port": "ocaml",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_2026-06-07.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_control_shakedown_50k_benchmark_20260607T181544Z.json",
       "status": "current",
-      "notes": "Current comparable ocaml shakedown_50k proof accepted by campaign shakedown_50k_20260606_170339."
+      "notes": "Current comparable ocaml shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
     },
     {
       "port": "python",
@@ -255,25 +231,25 @@
       "port": "rust",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/rust_docker_baseline_5k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/rust_control_baseline_5k_benchmark_20260607T180641Z.json",
       "status": "current",
-      "notes": "Current comparable rust baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
+      "notes": "Current comparable rust baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
     },
     {
       "port": "rust",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/rust_docker_shakedown_50k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/rust_control_shakedown_50k_benchmark_20260607T180920Z.json",
       "status": "current",
-      "notes": "Current comparable rust shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
+      "notes": "Current comparable rust shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
     },
     {
       "port": "rust",
       "claim": "performance_100k",
       "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/rust_docker_performance_100k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/rust_control_performance_100k_benchmark_20260607T182310Z.json",
       "status": "current",
-      "notes": "Current comparable rust performance_100k proof accepted by campaign performance_100k_20260606_175104."
+      "notes": "Current comparable rust performance_100k proof accepted by campaign performance_100k_20260607_111552."
     },
     {
       "port": "rust",
@@ -295,17 +271,17 @@
       "port": "swift",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/swift_docker_baseline_5k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/swift_control_baseline_5k_benchmark_20260607T180804Z.json",
       "status": "current",
-      "notes": "Current comparable swift baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
+      "notes": "Current comparable swift baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
     },
     {
       "port": "swift",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/swift_docker_shakedown_50k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/swift_control_shakedown_50k_benchmark_20260607T181214Z.json",
       "status": "current",
-      "notes": "Current comparable swift shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
+      "notes": "Current comparable swift shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
     },
     {
       "port": "typescript",
@@ -351,33 +327,25 @@
       "port": "zig",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/zig_docker_baseline_5k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/zig_control_baseline_5k_benchmark_20260607T180644Z.json",
       "status": "current",
-      "notes": "Current comparable zig baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
+      "notes": "Current comparable zig baseline_5k proof accepted by campaign baseline_5k_20260607_110636."
     },
     {
       "port": "zig",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/zig_control_shakedown_50k_benchmark_20260607T180951Z.json",
       "status": "current",
-      "notes": "Current comparable zig shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
+      "notes": "Current comparable zig shakedown_50k proof accepted by campaign shakedown_50k_20260607_110846."
     },
     {
       "port": "zig",
       "claim": "performance_100k",
       "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/zig_docker_performance_100k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/zig_control_performance_100k_benchmark_20260607T183049Z.json",
       "status": "current",
-      "notes": "Current comparable zig performance_100k proof accepted by campaign performance_100k_20260606_175104."
-    },
-    {
-      "port": "swift",
-      "claim": "performance_100k",
-      "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/swift_docker_performance_100k_benchmark_2026-06-06.json",
-      "status": "current",
-      "notes": "Current comparable swift performance_100k proof accepted by campaign performance_100k_20260606_175104."
+      "notes": "Current comparable zig performance_100k proof accepted by campaign performance_100k_20260607_111552."
     }
   ]
 }
