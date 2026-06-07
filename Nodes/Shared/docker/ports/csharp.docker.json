@@ -38,7 +38,7 @@
     "docker_supervisor_status": "cd Nodes/CSharp && make docker-csharp-sync-status",
     "docker_supervisor_stop": "cd Nodes/CSharp && make docker-csharp-sync-stop",
     "docker_supervisor_resume": "cd Nodes/CSharp && make docker-csharp-sync-resume",
-    "docker_smoke_once": null
+    "docker_smoke_once": "cd Nodes/CSharp && make docker-smoke-once"
   },
   "peer_modes": {
     "local_reference": {
@@ -74,5 +74,5 @@
     "storage_result": "Nodes/Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json",
     "notes": "Persistent Docker supervisor exists; docker_proof_local, docker_proof_50k, and docker_proof_100k run official local-reference Docker benchmark gates with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, and fresh proof volumes. docker_proof_10k remains diagnostic only."
   },
-  "known_caveats": ["External network probe command not standardized", "One-shot supervisor smoke target missing", "No daemon data volume in current compose"]
+  "known_caveats": ["External network probe command not standardized", "No daemon data volume in current compose"]
 }

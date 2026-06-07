@@ -31,7 +31,7 @@ VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benc
 DOCKER_REBUILD ?= 0
 BENCHMARK_GATE ?= baseline_5k
 
-.PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume export-snapshots clean
+.PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume docker-smoke-once export-snapshots clean
 
 build:
 	$(DOTNET) build $(PROJECT) -c Release
@@ -202,6 +202,12 @@ docker-csharp-sync-stop:
 
 docker-csharp-sync-resume:
 	docker run --rm -v $(DOCKER_SYNC_VOLUME):/data alpine:3.20 sh -c 'touch /data/.csbitnode_supervisor_resume'
+
+docker-smoke-once:
+	DOCKER_PROOF_VOLUME=$(DOCKER_SYNC_VOLUME) SECP256K1_BACKEND=native \
+	  DOCKER_REBUILD=$(DOCKER_REBUILD) SUPERVISOR_ONCE=1 BLOCKS_MAX=0 \
+	  POLL_SEC=1 CHECK_SEC=1 \
+	  scripts/docker_sync_supervisor.sh
 
 export-snapshots:
 	@echo "export-snapshots not implemented yet; use node-status for live DB fields"

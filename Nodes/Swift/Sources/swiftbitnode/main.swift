@@ -14,6 +14,8 @@ do {
         try LocalReferenceProof.run(args: args)
     case "sync-supervisor":
         try SyncSupervisor.run(args: args)
+    case "supervisor-smoke-once":
+        try SupervisorSmoke.run(args: args)
     case "consensus-self-test":
         try Json.write(ConsensusSelfTest.run(), to: nil)
     case "performance-self-test":

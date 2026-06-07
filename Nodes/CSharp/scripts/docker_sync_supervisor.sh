@@ -2,6 +2,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
+if [[ -f "$REFERENCE_TOPOLOGY_ENV" ]]; then
+  # shellcheck source=/dev/null
+  . "$REFERENCE_TOPOLOGY_ENV"
+fi
 VOLUME="${DOCKER_PROOF_VOLUME:-csbitnode_sync_data}"
 CONTAINER_NAME="${CONTAINER_NAME:-csbitnode-sync-supervisor-run}"
 POLL_SEC="${POLL_SEC:-120}"
@@ -9,6 +14,9 @@ CHECK_SEC="${CHECK_SEC:-5}"
 HEADERS_MAX="${HEADERS_MAX:-10000}"
 HEADER_BATCHES_MAX="${HEADER_BATCHES_MAX:-50}"
 BLOCKS_MAX="${BLOCKS_MAX:-500}"
+PEERS="${PEERS:-${REFERENCE_P2P_PEER:-127.0.0.1:48333}}"
+PEER_MODE="${PEER_MODE:-local_reference}"
+SUPERVISOR_ONCE="${SUPERVISOR_ONCE:-0}"
 STOP_FILE=".csbitnode_supervisor_stop"
 RESUME_FILE=".csbitnode_supervisor_resume"
 
@@ -18,6 +26,10 @@ log_line() {
 
 now_ms() {
   python3 -c 'import time; print(int(time.time() * 1000))'
+}
+
+compose() {
+  docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml "$@"
 }
 
 volume_file_exists() {
@@ -55,16 +67,25 @@ PY
 
 build_image() {
   log_line "supervisor build image=csbitnode-sync-proof"
-  docker compose build csbitnode-sync-proof
+  compose build csbitnode-sync-proof
 }
 
 status_json() {
-  DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
-    docker compose run --rm --no-deps csbitnode-sync-proof status 2>/dev/null || echo '{}'
+  DOCKER_PROOF_VOLUME="$VOLUME" PEERS="$PEERS" SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
+    compose run --rm --no-deps csbitnode-sync-proof status 2>/dev/null || echo '{}'
 }
 
 field() {
   python3 -c "import json,sys; d=json.load(sys.stdin); $1" 2>/dev/null || echo "?"
+}
+
+json_number_or_null() {
+  local value="$1"
+  if [[ "$value" =~ ^-?[0-9]+$ ]]; then
+    echo "$value"
+  else
+    echo "null"
+  fi
 }
 
 emit_benchmark_tick() {
@@ -79,6 +100,7 @@ emit_benchmark_tick() {
 emit_tick() {
   local phase="$1" last_height="$2"
   local json h header stored status blocker delta process_running
+  local h_json header_json stored_json delta_json
   json="$(status_json)"
   h="$(echo "$json" | field "print(d.get('validated_height','?'))")"
   header="$(echo "$json" | field "print(d.get('header_height','?'))")"
@@ -90,16 +112,20 @@ emit_tick() {
   if [[ "$h" =~ ^[0-9]+$ ]] && [[ "$last_height" =~ ^[0-9]+$ ]]; then
     delta=$((h - last_height))
   fi
-  log_line "AGENT_LOOP_TICK_chatreport {\"phase\":\"$phase\",\"validated_height\":$h,\"header_height\":$header,\"stored_block_height\":$stored,\"sync_status\":\"$status\",\"delta_since_last\":$delta,\"process_running\":$process_running,\"current_blocker\":$blocker}"
+  h_json="$(json_number_or_null "$h")"
+  header_json="$(json_number_or_null "$header")"
+  stored_json="$(json_number_or_null "$stored")"
+  delta_json="$(json_number_or_null "$delta")"
+  log_line "AGENT_LOOP_TICK_chatreport {\"phase\":\"$phase\",\"runtime_surface\":\"docker\",\"peer_mode\":\"$PEER_MODE\",\"peer\":\"$PEERS\",\"validated_height\":$h_json,\"header_height\":$header_json,\"stored_block_height\":$stored_json,\"sync_status\":\"$status\",\"delta_since_last\":$delta_json,\"process_running\":$process_running,\"current_blocker\":$blocker}"
   log_line "$(emit_benchmark_tick "$json" "$last_height" "$phase" "$process_running")"
   echo "$h"
 }
 
 run_chunk() {
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-  DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
+  DOCKER_PROOF_VOLUME="$VOLUME" PEERS="$PEERS" SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
     HEADERS_MAX="$HEADERS_MAX" HEADER_BATCHES_MAX="$HEADER_BATCHES_MAX" BLOCKS_MAX="$BLOCKS_MAX" \
-    docker compose run -d --name "$CONTAINER_NAME" csbitnode-sync-proof >/dev/null
+    compose run -d --name "$CONTAINER_NAME" csbitnode-sync-proof >/dev/null
 }
 
 wait_for_chunk() {
@@ -160,6 +186,11 @@ SOURCE_SIG="$(source_signature)"
 last_height="$(emit_tick starting 0)"
 log_line "supervisor start volume=$VOLUME headers_max=$HEADERS_MAX header_batches_max=$HEADER_BATCHES_MAX blocks_max=$BLOCKS_MAX poll_sec=$POLL_SEC check_sec=$CHECK_SEC"
 
+if [[ "$SUPERVISOR_ONCE" == "1" && "$BLOCKS_MAX" == "0" ]]; then
+  log_line "supervisor decision=smoke_once reason=blocks_max_zero"
+  exit 0
+fi
+
 while true; do
   if volume_file_exists "$STOP_FILE"; then
     log_line "supervisor decision=stop reason=stop_file"
@@ -177,6 +208,9 @@ while true; do
 
   if [[ "$exit_code" != "0" ]]; then
     pause_until_fix "$SOURCE_SIG" "$new_height"
+  fi
+  if [[ "$SUPERVISOR_ONCE" == "1" ]]; then
+    exit 0
   fi
   last_height="$new_height"
 done

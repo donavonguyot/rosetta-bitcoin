@@ -39,7 +39,7 @@
     "docker_supervisor_status": "cd Nodes/Java && make docker-java-sync-status",
     "docker_supervisor_stop": "cd Nodes/Java && make docker-java-sync-stop",
     "docker_supervisor_resume": "cd Nodes/Java && make docker-java-sync-resume",
-    "docker_smoke_once": null
+    "docker_smoke_once": "cd Nodes/Java && make docker-smoke-once"
   },
   "peer_modes": {
     "local_reference": {
@@ -75,5 +75,5 @@
     "storage_result": "Nodes/Shared/conformance/results/java_rocksdb_docker_local_peer_sync_2026-06-01.json",
     "notes": "docker_proof_local runs the supporting 5k local-reference Docker benchmark with native secp256k1, RocksDB, WAL enabled, and a fresh proof volume."
   },
-  "known_caveats": ["External network probe command not standardized", "One-shot supervisor smoke target missing"]
+  "known_caveats": ["External network probe command not standardized"]
 }

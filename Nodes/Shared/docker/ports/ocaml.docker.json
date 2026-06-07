@@ -37,8 +37,8 @@
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_probe_external": null,
-    "docker_supervisor": "cd Nodes/OCaml && make docker-smoke-once",
-    "docker_supervisor_status": "cd Nodes/OCaml && make docker-status",
+    "docker_supervisor": null,
+    "docker_supervisor_status": null,
     "docker_supervisor_stop": null,
     "docker_supervisor_resume": null,
     "docker_smoke_once": "cd Nodes/OCaml && make docker-smoke-once"
@@ -88,6 +88,7 @@
     "Local Reference P2P baseline 5k and shakedown 50k lanes are implemented",
     "docker_proof_10k remains null because 10k is no longer an official benchmark lane",
     "docker_proof_100k is available but unattempted",
+    "docker_smoke_once is a one-shot supervisor tick smoke, not persistent supervisor support",
     "No external peer sync, supervisor catch-up, tip_once, or tip_maintenance claim is made",
     "Binary gate remains not_attempted"
   ]

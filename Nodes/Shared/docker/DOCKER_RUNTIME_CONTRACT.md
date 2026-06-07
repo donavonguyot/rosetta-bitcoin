@@ -259,6 +259,13 @@ The inventory must record OS family and package manager because build behavior
 differs across Debian slim, Ubuntu, language runtime images, and vendor SDK
 images.
 
+Active Docker ports should use Debian Bookworm-family glibc/apt images unless a
+port has a documented runtime reason not to. Raw `debian:bookworm-slim` is the
+preferred target for self-managed native runtimes. Official Debian-family
+language images are preferred for managed or toolchain-heavy ports, such as
+JDK, .NET, Swift, OCaml, Go, and Rust images, when they preserve the language
+toolchain contract more safely than rebuilding that toolchain on raw Debian.
+
 When a port needs native libraries, the runtime image must install the matching
 runtime packages. The build must not rely on host Homebrew, host SDKs, or local
 build artifacts.

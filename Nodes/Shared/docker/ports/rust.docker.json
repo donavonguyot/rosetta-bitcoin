@@ -41,8 +41,8 @@
     "docker_tuning_100k_from_50k": "cd Nodes/Rust && make docker-tuning-100k-from-50k",
     "docker_proof_rpc_replay": "cd Nodes/Rust && make docker-proof-rpc-replay",
     "docker_probe_external": "cd Nodes/Rust && DOCKER_EXTERNAL_P2P_PEER=<host:48333> make docker-probe-external",
-    "docker_supervisor": "cd Nodes/Rust && make docker-smoke-once",
-    "docker_supervisor_status": "cd Nodes/Rust && make docker-status",
+    "docker_supervisor": null,
+    "docker_supervisor_status": null,
     "docker_supervisor_stop": null,
     "docker_supervisor_resume": null,
     "docker_smoke_once": "cd Nodes/Rust && make docker-smoke-once"
@@ -90,5 +90,5 @@
     "external_probe_result": "Nodes/Shared/conformance/results/rust_docker_external_5k_probe_<YYYY-MM-DD>.json",
     "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, bounded local-reference RPC replay, and official local Reference P2P gates. docker_proof_10k and the resumed 50k-to-100k lane remain diagnostic only."
   },
-  "known_caveats": ["The local Reference P2P comparator is a bounded proof harness, not live tip maintenance", "External manual P2P is diagnostic network-readiness evidence and is not benchmark-ranked", "Bounded local-reference RPC proof is not live P2P sync or tip maintenance", "Binary gate remains not_attempted"]
+  "known_caveats": ["The local Reference P2P comparator is a bounded proof harness, not live tip maintenance", "External manual P2P is diagnostic network-readiness evidence and is not benchmark-ranked", "Bounded local-reference RPC proof is not live P2P sync or tip maintenance", "docker_smoke_once is a one-shot supervisor tick smoke, not persistent supervisor support", "Binary gate remains not_attempted"]
 }

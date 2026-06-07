@@ -18,7 +18,7 @@ DOCKER_SUPERVISOR_TARGET ?= 10000
 DOCKER_SUPERVISOR_CHUNK ?= 5000
 DOCKER_SUPERVISOR_RESULT ?= /results/swift_supervisor_status_$(RESULT_DATE).json
 
-.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local swift-node-sync-supervisor docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume clean
+.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local swift-node-sync-supervisor docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 
 build:
 	$(SWIFT) build
@@ -132,6 +132,12 @@ docker-supervisor-stop:
 
 docker-supervisor-resume:
 	DOCKER_DATA_VOLUME=swiftbitnode_supervisor_data $(DOCKER_COMPOSE) run --rm --no-deps swiftbitnode /bin/sh -lc 'rm -f /data/.swiftbitnode_supervisor_stop'
+
+docker-smoke-once:
+	DOCKER_DATA_VOLUME=swiftbitnode_supervisor_data $(DOCKER_COMPOSE) run --rm --no-deps \
+	  -e PEER=$(DOCKER_P2P_PEER) \
+	  -e PEER_MODE=local_reference \
+	  swiftbitnode swiftbitnode supervisor-smoke-once --datadir /data
 
 clean:
 	rm -rf .build data-swift

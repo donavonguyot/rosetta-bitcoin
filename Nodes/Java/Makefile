@@ -32,7 +32,7 @@ VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benc
 DOCKER_REBUILD ?= 0
 BENCHMARK_GATE ?= baseline_5k
 
-.PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-supporting-10k-proof docker-java-supporting-50k-proof docker-java-primary-100k-proof docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
+.PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-supporting-10k-proof docker-java-supporting-50k-proof docker-java-primary-100k-proof docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume docker-smoke-once java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
 
 test:
 	$(MVN) test
@@ -172,6 +172,12 @@ docker-java-sync-stop:
 
 docker-java-sync-resume:
 	docker run --rm -v $(DOCKER_SYNC_VOLUME):/data alpine:3.20 sh -c 'touch /data/.jbitnode_supervisor_resume'
+
+docker-smoke-once:
+	DOCKER_PROOF_VOLUME=$(DOCKER_SYNC_VOLUME) SECP256K1_BACKEND=native \
+	  DOCKER_REBUILD=$(DOCKER_REBUILD) SUPERVISOR_ONCE=1 BLOCKS_MAX=0 \
+	  POLL_SEC=1 CHECK_SEC=1 \
+	  scripts/docker_sync_supervisor.sh
 
 java-node-db-status:
 	@DATA_DIR=$(or $(DATA_DIR),./data-java) $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.DbStatus
