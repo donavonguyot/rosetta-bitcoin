@@ -127,7 +127,7 @@ docker-proof-local:
 	  CSBITNODE_SYNC_TIMING=1 \
 	  STANDARD_BENCHMARK_ARTIFACT=1 \
 	  PROOF_COMMAND="make docker-proof-local" \
-	  POLL_SEC=15 \
+	  POLL_SEC=10 \
 	  BENCHMARK_GATE=baseline_5k
 
 docker-proof-10k:
@@ -143,7 +143,7 @@ docker-proof-10k:
 	  CSBITNODE_SYNC_TIMING=1 \
 	  STANDARD_BENCHMARK_ARTIFACT=1 \
 	  PROOF_COMMAND="make docker-proof-10k" \
-	  POLL_SEC=15 \
+	  POLL_SEC=10 \
 	  BENCHMARK_GATE=diagnostic_10k
 
 docker-proof-50k:
@@ -159,7 +159,7 @@ docker-proof-50k:
 	  CSBITNODE_SYNC_TIMING=1 \
 	  STANDARD_BENCHMARK_ARTIFACT=1 \
 	  PROOF_COMMAND="make docker-proof-50k" \
-	  POLL_SEC=15 \
+	  POLL_SEC=10 \
 	  BENCHMARK_GATE=shakedown_50k
 
 docker-proof-100k:
@@ -175,7 +175,7 @@ docker-proof-100k:
 	  CSBITNODE_SYNC_TIMING=1 \
 	  STANDARD_BENCHMARK_ARTIFACT=1 \
 	  PROOF_COMMAND="make docker-proof-100k" \
-	  POLL_SEC=15 \
+	  POLL_SEC=10 \
 	  BENCHMARK_GATE=performance_100k
 
 docker-csharp-native-crypto-bounded-sync-proof:

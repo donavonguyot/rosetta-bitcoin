@@ -106,8 +106,11 @@ make docker-csharp-native-crypto-bounded-sync-proof
 `make docker-proof-local` is the Project-comparable 5k lane: Docker runtime,
 fresh proof volume, local Reference Core over P2P, block prefetch depth 4,
 parallel script verification, WAL enabled, and compact evidence under
-`../Shared/conformance/results/`. The `docker-csharp-native-crypto-*` targets
-remain diagnostic/bounded proof surfaces.
+`../Shared/conformance/results/`. Official bounded benchmark proof targets emit
+`benchmark.telemetry_tick` at a 10-second cadence so the shared 15-second
+heartbeat validator has scheduling headroom. The
+`docker-csharp-native-crypto-*` targets remain diagnostic/bounded proof
+surfaces.
 
 ## Docker blocker hunting
 
@@ -166,7 +169,7 @@ Implemented surface:
 - Honest stop on unsupported script/consensus rules
 - RocksDB chainstate + `make node-status`
 - Native crypto proof fields and shared Shared vector execution
-- Docker proof targets with 2-minute in-container progress reporting
+- Docker proof targets with 10-second benchmark telemetry headroom
 - Persistent Docker supervisor with separate `POLL_SEC` report cadence and
   `CHECK_SEC` fast chunk-completion checks
 - Serializable `ValidationBlockerRecord` DTO for blocker persistence

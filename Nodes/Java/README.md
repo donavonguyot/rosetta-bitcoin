@@ -118,6 +118,9 @@ evidence. `docker-java-native-crypto-tip-sync-proof` queries the local Core tip
 before it starts, syncs from a fresh Docker volume with a height buffer, and
 writes a full local-reference proof artifact with the recorded Core tip height
 and hash.
+Official bounded benchmark proof targets emit `benchmark.telemetry_tick` at a
+10-second cadence so the shared 15-second heartbeat validator has scheduling
+headroom.
 
 Use the persistent Docker supervisor for iterative blocker hunting. It reuses
 `jbitnode_sync_data` by default, emits `AGENT_LOOP_TICK_chatreport` from inside

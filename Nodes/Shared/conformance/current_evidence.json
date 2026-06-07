@@ -33,7 +33,7 @@
       "gate_id": "shakedown_50k",
       "path": "Nodes/Shared/conformance/results/cpp_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable cpp shakedown_50k proof accepted by campaign shakedown_50k_20260606_150508."
+      "notes": "Current comparable cpp shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
     },
     {
       "port": "cpp",
@@ -73,7 +73,7 @@
       "gate_id": "shakedown_50k",
       "path": "Nodes/Shared/conformance/results/csharp_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable csharp shakedown_50k proof accepted by campaign shakedown_50k_20260606_151154."
+      "notes": "Current comparable csharp shakedown_50k proof accepted by campaign shakedown_50k_20260606_165851."
     },
     {
       "port": "elixir",
@@ -129,7 +129,7 @@
       "gate_id": "shakedown_50k",
       "path": "Nodes/Shared/conformance/results/go_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable go shakedown_50k proof accepted by campaign shakedown_50k_20260606_151154."
+      "notes": "Current comparable go shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
     },
     {
       "port": "go",
@@ -169,7 +169,7 @@
       "gate_id": "shakedown_50k",
       "path": "Nodes/Shared/conformance/results/java_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable java shakedown_50k proof accepted by campaign shakedown_50k_20260606_151154."
+      "notes": "Current comparable java shakedown_50k proof accepted by campaign shakedown_50k_20260606_170234."
     },
     {
       "port": "java",
@@ -207,9 +207,9 @@
       "port": "ocaml",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_docker_shakedown_50k_benchmark_2026-06-07.json",
       "status": "current",
-      "notes": "Current comparable ocaml shakedown_50k proof accepted by campaign shakedown_50k_20260606_151154."
+      "notes": "Current comparable ocaml shakedown_50k proof accepted by campaign shakedown_50k_20260606_170339."
     },
     {
       "port": "python",
@@ -265,7 +265,7 @@
       "gate_id": "shakedown_50k",
       "path": "Nodes/Shared/conformance/results/rust_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable rust shakedown_50k proof accepted by campaign shakedown_50k_20260606_150508."
+      "notes": "Current comparable rust shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
     },
     {
       "port": "rust",
@@ -305,7 +305,7 @@
       "gate_id": "shakedown_50k",
       "path": "Nodes/Shared/conformance/results/swift_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable swift shakedown_50k proof accepted by campaign shakedown_50k_20260606_151154."
+      "notes": "Current comparable swift shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
     },
     {
       "port": "typescript",
@@ -361,7 +361,7 @@
       "gate_id": "shakedown_50k",
       "path": "Nodes/Shared/conformance/results/zig_docker_shakedown_50k_benchmark_2026-06-06.json",
       "status": "current",
-      "notes": "Current comparable zig shakedown_50k proof accepted by campaign shakedown_50k_20260606_150508."
+      "notes": "Current comparable zig shakedown_50k proof accepted by campaign shakedown_50k_20260606_165106."
     }
   ]
 }

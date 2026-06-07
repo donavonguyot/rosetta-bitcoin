@@ -1,7 +1,7 @@
 {
   "implementation": "CSharpNode",
   "category": "docker_native_crypto_sync",
-  "captured_at": "2026-06-06T22:14:40.797673+00:00",
+  "captured_at": "2026-06-06T23:59:57.713392+00:00",
   "datadir": "/data",
   "chain": "testnet4",
   "runtime_surface": "docker",
@@ -27,142 +27,142 @@
     "Stages": {
       "block_store": {
         "Count": 50000,
-        "TotalMicros": 273890,
-        "P50Micros": 4,
+        "TotalMicros": 265207,
+        "P50Micros": 3,
         "P95Micros": 18,
-        "MaxMicros": 5512
+        "MaxMicros": 5559
       },
       "utxo_load": {
         "Count": 50000,
-        "TotalMicros": 3495538,
-        "P50Micros": 17,
-        "P95Micros": 304,
-        "MaxMicros": 29148
+        "TotalMicros": 3164422,
+        "P50Micros": 15,
+        "P95Micros": 269,
+        "MaxMicros": 29674
       },
       "prevout_batch_load": {
         "Count": 50000,
-        "TotalMicros": 3495538,
-        "P50Micros": 17,
-        "P95Micros": 304,
-        "MaxMicros": 29148
+        "TotalMicros": 3164422,
+        "P50Micros": 15,
+        "P95Micros": 269,
+        "MaxMicros": 29674
       },
       "script_verify": {
         "Count": 50000,
-        "TotalMicros": 41563058,
-        "P50Micros": 159,
-        "P95Micros": 3932,
-        "MaxMicros": 1927249
+        "TotalMicros": 40596390,
+        "P50Micros": 156,
+        "P95Micros": 3878,
+        "MaxMicros": 1733168
       },
       "script_legacy_sighash": {
         "Count": 50000,
-        "TotalMicros": 59987450,
+        "TotalMicros": 59504229,
         "P50Micros": 0,
-        "P95Micros": 11,
-        "MaxMicros": 32084159
+        "P95Micros": 10,
+        "MaxMicros": 40461268
       },
       "script_bip143_sighash": {
         "Count": 50000,
-        "TotalMicros": 30936969,
-        "P50Micros": 14,
-        "P95Micros": 591,
-        "MaxMicros": 24540388
+        "TotalMicros": 32190838,
+        "P50Micros": 13,
+        "P95Micros": 539,
+        "MaxMicros": 26286814
       },
       "script_taproot_sighash": {
         "Count": 50000,
-        "TotalMicros": 1347380,
+        "TotalMicros": 1216848,
         "P50Micros": 0,
-        "P95Micros": 31,
-        "MaxMicros": 665091
+        "P95Micros": 28,
+        "MaxMicros": 595855
       },
       "script_ecdsa_verify": {
         "Count": 50000,
-        "TotalMicros": 292751084,
-        "P50Micros": 213,
-        "P95Micros": 34383,
-        "MaxMicros": 3217367
+        "TotalMicros": 291355001,
+        "P50Micros": 218,
+        "P95Micros": 32003,
+        "MaxMicros": 6153376
       },
       "script_schnorr_verify": {
         "Count": 50000,
-        "TotalMicros": 18627199,
+        "TotalMicros": 18013613,
         "P50Micros": 0,
-        "P95Micros": 1057,
-        "MaxMicros": 1616012
+        "P95Micros": 1037,
+        "MaxMicros": 1365179
       },
       "script_interpreter_eval": {
         "Count": 50000,
-        "TotalMicros": 385765459,
-        "P50Micros": 245,
-        "P95Micros": 35150,
-        "MaxMicros": 33823243
+        "TotalMicros": 385187112,
+        "P50Micros": 249,
+        "P95Micros": 32871,
+        "MaxMicros": 46715029
       },
       "utxo_apply": {
         "Count": 50000,
-        "TotalMicros": 276159,
+        "TotalMicros": 292460,
         "P50Micros": 1,
         "P95Micros": 22,
-        "MaxMicros": 3984
+        "MaxMicros": 5148
       },
       "commit": {
         "Count": 50000,
-        "TotalMicros": 6649413,
-        "P50Micros": 45,
-        "P95Micros": 597,
-        "MaxMicros": 42364
+        "TotalMicros": 6587700,
+        "P50Micros": 44,
+        "P95Micros": 593,
+        "MaxMicros": 16071
       },
       "utxo_delete_prepare": {
         "Count": 50000,
-        "TotalMicros": 766292,
+        "TotalMicros": 688308,
         "P50Micros": 3,
         "P95Micros": 62,
-        "MaxMicros": 41707
+        "MaxMicros": 10530
       },
       "utxo_put_prepare": {
         "Count": 50000,
-        "TotalMicros": 1505793,
+        "TotalMicros": 1513849,
         "P50Micros": 7,
-        "P95Micros": 144,
-        "MaxMicros": 5011
+        "P95Micros": 143,
+        "MaxMicros": 4826
       },
       "undo_put_prepare": {
         "Count": 50000,
-        "TotalMicros": 892655,
+        "TotalMicros": 878063,
         "P50Micros": 4,
-        "P95Micros": 80,
-        "MaxMicros": 5575
+        "P95Micros": 78,
+        "MaxMicros": 4899
       },
       "metadata_put_prepare": {
         "Count": 50000,
-        "TotalMicros": 407567,
+        "TotalMicros": 393136,
         "P50Micros": 6,
-        "P95Micros": 16,
-        "MaxMicros": 4876
+        "P95Micros": 13,
+        "MaxMicros": 4824
       },
       "rocksdb_write": {
         "Count": 50000,
-        "TotalMicros": 3005232,
+        "TotalMicros": 3046749,
         "P50Micros": 21,
-        "P95Micros": 269,
-        "MaxMicros": 6146
+        "P95Micros": 267,
+        "MaxMicros": 8855
       },
       "block_connect_store_commit": {
         "Count": 50000,
-        "TotalMicros": 56102857,
-        "P50Micros": 256,
-        "P95Micros": 5144,
-        "MaxMicros": 1990309
+        "TotalMicros": 54492683,
+        "P50Micros": 245,
+        "P95Micros": 5033,
+        "MaxMicros": 1788209
       },
       "script_runner_wait": {
         "Count": 28012,
-        "TotalMicros": 41523348,
-        "P50Micros": 552,
-        "P95Micros": 5103,
-        "MaxMicros": 1927225
+        "TotalMicros": 40557573,
+        "P50Micros": 544,
+        "P95Micros": 5023,
+        "MaxMicros": 1733141
       }
     },
     "SlowBlocks": [
       {
         "Height": 20888,
-        "Micros": 1990309,
+        "Micros": 1788209,
         "TxCount": 2,
         "VinCount": 6761,
         "VoutCount": 3,
@@ -181,7 +181,7 @@
       },
       {
         "Height": 26643,
-        "Micros": 1136048,
+        "Micros": 1078385,
         "TxCount": 159,
         "VinCount": 4159,
         "VoutCount": 316,
@@ -201,7 +201,7 @@
       },
       {
         "Height": 21209,
-        "Micros": 801807,
+        "Micros": 615452,
         "TxCount": 36,
         "VinCount": 3940,
         "VoutCount": 70,
@@ -222,30 +222,8 @@
         }
       },
       {
-        "Height": 21238,
-        "Micros": 249897,
-        "TxCount": 22,
-        "VinCount": 2556,
-        "VoutCount": 42,
-        "ScriptInputCount": 2555,
-        "InputShapeCounts": {
-          "coinbase": 1,
-          "witness": 20,
-          "legacy_scriptsig": 2535
-        },
-        "SpentPrevoutScriptTypes": {
-          "p2wpkh": 20,
-          "p2pkh": 2535
-        },
-        "OutputScriptTypes": {
-          "p2pkh": 2,
-          "unknown": 1,
-          "p2wpkh": 39
-        }
-      },
-      {
         "Height": 24553,
-        "Micros": 238451,
+        "Micros": 282962,
         "TxCount": 191,
         "VinCount": 2964,
         "VoutCount": 381,
@@ -266,8 +244,30 @@
         }
       },
       {
+        "Height": 21238,
+        "Micros": 231956,
+        "TxCount": 22,
+        "VinCount": 2556,
+        "VoutCount": 42,
+        "ScriptInputCount": 2555,
+        "InputShapeCounts": {
+          "coinbase": 1,
+          "witness": 20,
+          "legacy_scriptsig": 2535
+        },
+        "SpentPrevoutScriptTypes": {
+          "p2wpkh": 20,
+          "p2pkh": 2535
+        },
+        "OutputScriptTypes": {
+          "p2pkh": 2,
+          "unknown": 1,
+          "p2wpkh": 39
+        }
+      },
+      {
         "Height": 33068,
-        "Micros": 204932,
+        "Micros": 191198,
         "TxCount": 15,
         "VinCount": 1959,
         "VoutCount": 40,
@@ -292,8 +292,32 @@
         }
       },
       {
+        "Height": 28102,
+        "Micros": 163231,
+        "TxCount": 119,
+        "VinCount": 2148,
+        "VoutCount": 240,
+        "ScriptInputCount": 2147,
+        "InputShapeCounts": {
+          "coinbase": 1,
+          "witness": 127,
+          "legacy_scriptsig": 2020
+        },
+        "SpentPrevoutScriptTypes": {
+          "p2wpkh": 117,
+          "p2pkh": 2020,
+          "p2tr": 10
+        },
+        "OutputScriptTypes": {
+          "p2pkh": 1,
+          "unknown": 25,
+          "p2wpkh": 193,
+          "p2tr": 21
+        }
+      },
+      {
         "Height": 47265,
-        "Micros": 172501,
+        "Micros": 158538,
         "TxCount": 24,
         "VinCount": 2051,
         "VoutCount": 52,
@@ -318,52 +342,8 @@
         }
       },
       {
-        "Height": 28102,
-        "Micros": 135891,
-        "TxCount": 119,
-        "VinCount": 2148,
-        "VoutCount": 240,
-        "ScriptInputCount": 2147,
-        "InputShapeCounts": {
-          "coinbase": 1,
-          "witness": 127,
-          "legacy_scriptsig": 2020
-        },
-        "SpentPrevoutScriptTypes": {
-          "p2wpkh": 117,
-          "p2pkh": 2020,
-          "p2tr": 10
-        },
-        "OutputScriptTypes": {
-          "p2pkh": 1,
-          "unknown": 25,
-          "p2wpkh": 193,
-          "p2tr": 21
-        }
-      },
-      {
-        "Height": 48987,
-        "Micros": 126080,
-        "TxCount": 11,
-        "VinCount": 1871,
-        "VoutCount": 22,
-        "ScriptInputCount": 1870,
-        "InputShapeCounts": {
-          "coinbase": 1,
-          "witness": 1870
-        },
-        "SpentPrevoutScriptTypes": {
-          "p2wpkh": 1870
-        },
-        "OutputScriptTypes": {
-          "p2wpkh": 16,
-          "unknown": 1,
-          "future_witness": 5
-        }
-      },
-      {
         "Height": 39637,
-        "Micros": 116574,
+        "Micros": 113243,
         "TxCount": 26,
         "VinCount": 2781,
         "VoutCount": 69,
@@ -385,91 +365,111 @@
           "p2pkh": 9,
           "p2tr": 4,
           "p2wpkh": 45
+        }
+      },
+      {
+        "Height": 48987,
+        "Micros": 107830,
+        "TxCount": 11,
+        "VinCount": 1871,
+        "VoutCount": 22,
+        "ScriptInputCount": 1870,
+        "InputShapeCounts": {
+          "coinbase": 1,
+          "witness": 1870
+        },
+        "SpentPrevoutScriptTypes": {
+          "p2wpkh": 1870
+        },
+        "OutputScriptTypes": {
+          "p2wpkh": 16,
+          "unknown": 1,
+          "future_witness": 5
         }
       }
     ]
   },
   "timing_summary": {
     "stage_totals_ms": {
-      "block_store": 274,
-      "utxo_load": 3496,
-      "prevout_batch_load": 3496,
-      "script_verify": 41563,
-      "script_legacy_sighash": 59987,
-      "script_bip143_sighash": 30937,
-      "script_taproot_sighash": 1347,
-      "script_ecdsa_verify": 292751,
-      "script_schnorr_verify": 18627,
-      "script_interpreter_eval": 385765,
-      "utxo_apply": 276,
-      "commit": 6649,
-      "utxo_delete_prepare": 766,
-      "utxo_put_prepare": 1506,
-      "undo_put_prepare": 893,
-      "metadata_put_prepare": 408,
-      "rocksdb_write": 3005,
-      "block_connect_store_commit": 56103,
-      "script_runner_wait": 41523,
+      "block_store": 265,
+      "utxo_load": 3164,
+      "prevout_batch_load": 3164,
+      "script_verify": 40596,
+      "script_legacy_sighash": 59504,
+      "script_bip143_sighash": 32191,
+      "script_taproot_sighash": 1217,
+      "script_ecdsa_verify": 291355,
+      "script_schnorr_verify": 18014,
+      "script_interpreter_eval": 385187,
+      "utxo_apply": 292,
+      "commit": 6588,
+      "utxo_delete_prepare": 688,
+      "utxo_put_prepare": 1514,
+      "undo_put_prepare": 878,
+      "metadata_put_prepare": 393,
+      "rocksdb_write": 3047,
+      "block_connect_store_commit": 54493,
+      "script_runner_wait": 40558,
       "p2p_fetch": 0,
       "block_parse_validate": 0
     },
-    "total_ms": 56103,
+    "total_ms": 54493,
     "slow_stages": [
       {
         "stage": "script_interpreter_eval",
         "count": 50000,
-        "max_ms": 33823
+        "max_ms": 46715
       },
       {
         "stage": "script_legacy_sighash",
         "count": 50000,
-        "max_ms": 32084
+        "max_ms": 40461
       },
       {
         "stage": "script_bip143_sighash",
         "count": 50000,
-        "max_ms": 24540
+        "max_ms": 26287
       },
       {
         "stage": "script_ecdsa_verify",
         "count": 50000,
-        "max_ms": 3217
+        "max_ms": 6153
       },
       {
         "stage": "block_connect_store_commit",
         "count": 50000,
-        "max_ms": 1990
+        "max_ms": 1788
       },
       {
         "stage": "script_verify",
         "count": 50000,
-        "max_ms": 1927
+        "max_ms": 1733
       },
       {
         "stage": "script_runner_wait",
         "count": 28012,
-        "max_ms": 1927
+        "max_ms": 1733
       },
       {
         "stage": "script_schnorr_verify",
         "count": 50000,
-        "max_ms": 1616
+        "max_ms": 1365
       },
       {
         "stage": "script_taproot_sighash",
         "count": 50000,
-        "max_ms": 665
+        "max_ms": 596
       },
       {
-        "stage": "commit",
+        "stage": "utxo_load",
         "count": 50000,
-        "max_ms": 42
+        "max_ms": 30
       }
     ],
     "slow_blocks": [
       {
         "Height": 20888,
-        "Micros": 1990309,
+        "Micros": 1788209,
         "TxCount": 2,
         "VinCount": 6761,
         "VoutCount": 3,
@@ -488,7 +488,7 @@
       },
       {
         "Height": 26643,
-        "Micros": 1136048,
+        "Micros": 1078385,
         "TxCount": 159,
         "VinCount": 4159,
         "VoutCount": 316,
@@ -508,7 +508,7 @@
       },
       {
         "Height": 21209,
-        "Micros": 801807,
+        "Micros": 615452,
         "TxCount": 36,
         "VinCount": 3940,
         "VoutCount": 70,
@@ -529,30 +529,8 @@
         }
       },
       {
-        "Height": 21238,
-        "Micros": 249897,
-        "TxCount": 22,
-        "VinCount": 2556,
-        "VoutCount": 42,
-        "ScriptInputCount": 2555,
-        "InputShapeCounts": {
-          "coinbase": 1,
-          "witness": 20,
-          "legacy_scriptsig": 2535
-        },
-        "SpentPrevoutScriptTypes": {
-          "p2wpkh": 20,
-          "p2pkh": 2535
-        },
-        "OutputScriptTypes": {
-          "p2pkh": 2,
-          "unknown": 1,
-          "p2wpkh": 39
-        }
-      },
-      {
         "Height": 24553,
-        "Micros": 238451,
+        "Micros": 282962,
         "TxCount": 191,
         "VinCount": 2964,
         "VoutCount": 381,
@@ -573,8 +551,30 @@
         }
       },
       {
+        "Height": 21238,
+        "Micros": 231956,
+        "TxCount": 22,
+        "VinCount": 2556,
+        "VoutCount": 42,
+        "ScriptInputCount": 2555,
+        "InputShapeCounts": {
+          "coinbase": 1,
+          "witness": 20,
+          "legacy_scriptsig": 2535
+        },
+        "SpentPrevoutScriptTypes": {
+          "p2wpkh": 20,
+          "p2pkh": 2535
+        },
+        "OutputScriptTypes": {
+          "p2pkh": 2,
+          "unknown": 1,
+          "p2wpkh": 39
+        }
+      },
+      {
         "Height": 33068,
-        "Micros": 204932,
+        "Micros": 191198,
         "TxCount": 15,
         "VinCount": 1959,
         "VoutCount": 40,
@@ -599,8 +599,32 @@
         }
       },
       {
+        "Height": 28102,
+        "Micros": 163231,
+        "TxCount": 119,
+        "VinCount": 2148,
+        "VoutCount": 240,
+        "ScriptInputCount": 2147,
+        "InputShapeCounts": {
+          "coinbase": 1,
+          "witness": 127,
+          "legacy_scriptsig": 2020
+        },
+        "SpentPrevoutScriptTypes": {
+          "p2wpkh": 117,
+          "p2pkh": 2020,
+          "p2tr": 10
+        },
+        "OutputScriptTypes": {
+          "p2pkh": 1,
+          "unknown": 25,
+          "p2wpkh": 193,
+          "p2tr": 21
+        }
+      },
+      {
         "Height": 47265,
-        "Micros": 172501,
+        "Micros": 158538,
         "TxCount": 24,
         "VinCount": 2051,
         "VoutCount": 52,
@@ -625,52 +649,8 @@
         }
       },
       {
-        "Height": 28102,
-        "Micros": 135891,
-        "TxCount": 119,
-        "VinCount": 2148,
-        "VoutCount": 240,
-        "ScriptInputCount": 2147,
-        "InputShapeCounts": {
-          "coinbase": 1,
-          "witness": 127,
-          "legacy_scriptsig": 2020
-        },
-        "SpentPrevoutScriptTypes": {
-          "p2wpkh": 117,
-          "p2pkh": 2020,
-          "p2tr": 10
-        },
-        "OutputScriptTypes": {
-          "p2pkh": 1,
-          "unknown": 25,
-          "p2wpkh": 193,
-          "p2tr": 21
-        }
-      },
-      {
-        "Height": 48987,
-        "Micros": 126080,
-        "TxCount": 11,
-        "VinCount": 1871,
-        "VoutCount": 22,
-        "ScriptInputCount": 1870,
-        "InputShapeCounts": {
-          "coinbase": 1,
-          "witness": 1870
-        },
-        "SpentPrevoutScriptTypes": {
-          "p2wpkh": 1870
-        },
-        "OutputScriptTypes": {
-          "p2wpkh": 16,
-          "unknown": 1,
-          "future_witness": 5
-        }
-      },
-      {
         "Height": 39637,
-        "Micros": 116574,
+        "Micros": 113243,
         "TxCount": 26,
         "VinCount": 2781,
         "VoutCount": 69,
@@ -692,91 +672,111 @@
           "p2pkh": 9,
           "p2tr": 4,
           "p2wpkh": 45
+        }
+      },
+      {
+        "Height": 48987,
+        "Micros": 107830,
+        "TxCount": 11,
+        "VinCount": 1871,
+        "VoutCount": 22,
+        "ScriptInputCount": 1870,
+        "InputShapeCounts": {
+          "coinbase": 1,
+          "witness": 1870
+        },
+        "SpentPrevoutScriptTypes": {
+          "p2wpkh": 1870
+        },
+        "OutputScriptTypes": {
+          "p2wpkh": 16,
+          "unknown": 1,
+          "future_witness": 5
         }
       }
     ]
   },
   "pipeline_timing_summary": {
     "stage_totals_ms": {
-      "block_store": 274,
-      "utxo_load": 3496,
-      "prevout_batch_load": 3496,
-      "script_verify": 41563,
-      "script_legacy_sighash": 59987,
-      "script_bip143_sighash": 30937,
-      "script_taproot_sighash": 1347,
-      "script_ecdsa_verify": 292751,
-      "script_schnorr_verify": 18627,
-      "script_interpreter_eval": 385765,
-      "utxo_apply": 276,
-      "commit": 6649,
-      "utxo_delete_prepare": 766,
-      "utxo_put_prepare": 1506,
-      "undo_put_prepare": 893,
-      "metadata_put_prepare": 408,
-      "rocksdb_write": 3005,
-      "block_connect_store_commit": 56103,
-      "script_runner_wait": 41523,
+      "block_store": 265,
+      "utxo_load": 3164,
+      "prevout_batch_load": 3164,
+      "script_verify": 40596,
+      "script_legacy_sighash": 59504,
+      "script_bip143_sighash": 32191,
+      "script_taproot_sighash": 1217,
+      "script_ecdsa_verify": 291355,
+      "script_schnorr_verify": 18014,
+      "script_interpreter_eval": 385187,
+      "utxo_apply": 292,
+      "commit": 6588,
+      "utxo_delete_prepare": 688,
+      "utxo_put_prepare": 1514,
+      "undo_put_prepare": 878,
+      "metadata_put_prepare": 393,
+      "rocksdb_write": 3047,
+      "block_connect_store_commit": 54493,
+      "script_runner_wait": 40558,
       "p2p_fetch": 0,
       "block_parse_validate": 0
     },
-    "total_ms": 56103,
+    "total_ms": 54493,
     "slow_stages": [
       {
         "stage": "script_interpreter_eval",
         "count": 50000,
-        "max_ms": 33823
+        "max_ms": 46715
       },
       {
         "stage": "script_legacy_sighash",
         "count": 50000,
-        "max_ms": 32084
+        "max_ms": 40461
       },
       {
         "stage": "script_bip143_sighash",
         "count": 50000,
-        "max_ms": 24540
+        "max_ms": 26287
       },
       {
         "stage": "script_ecdsa_verify",
         "count": 50000,
-        "max_ms": 3217
+        "max_ms": 6153
       },
       {
         "stage": "block_connect_store_commit",
         "count": 50000,
-        "max_ms": 1990
+        "max_ms": 1788
       },
       {
         "stage": "script_verify",
         "count": 50000,
-        "max_ms": 1927
+        "max_ms": 1733
       },
       {
         "stage": "script_runner_wait",
         "count": 28012,
-        "max_ms": 1927
+        "max_ms": 1733
       },
       {
         "stage": "script_schnorr_verify",
         "count": 50000,
-        "max_ms": 1616
+        "max_ms": 1365
       },
       {
         "stage": "script_taproot_sighash",
         "count": 50000,
-        "max_ms": 665
+        "max_ms": 596
       },
       {
-        "stage": "commit",
+        "stage": "utxo_load",
         "count": 50000,
-        "max_ms": 42
+        "max_ms": 30
       }
     ],
     "slow_blocks": [
       {
         "Height": 20888,
-        "Micros": 1990309,
+        "Micros": 1788209,
         "TxCount": 2,
         "VinCount": 6761,
         "VoutCount": 3,
@@ -795,7 +795,7 @@
       },
       {
         "Height": 26643,
-        "Micros": 1136048,
+        "Micros": 1078385,
         "TxCount": 159,
         "VinCount": 4159,
         "VoutCount": 316,
@@ -815,7 +815,7 @@
       },
       {
         "Height": 21209,
-        "Micros": 801807,
+        "Micros": 615452,
         "TxCount": 36,
         "VinCount": 3940,
         "VoutCount": 70,
@@ -836,30 +836,8 @@
         }
       },
       {
-        "Height": 21238,
-        "Micros": 249897,
-        "TxCount": 22,
-        "VinCount": 2556,
-        "VoutCount": 42,
-        "ScriptInputCount": 2555,
-        "InputShapeCounts": {
-          "coinbase": 1,
-          "witness": 20,
-          "legacy_scriptsig": 2535
-        },
-        "SpentPrevoutScriptTypes": {
-          "p2wpkh": 20,
-          "p2pkh": 2535
-        },
-        "OutputScriptTypes": {
-          "p2pkh": 2,
-          "unknown": 1,
-          "p2wpkh": 39
-        }
-      },
-      {
         "Height": 24553,
-        "Micros": 238451,
+        "Micros": 282962,
         "TxCount": 191,
         "VinCount": 2964,
         "VoutCount": 381,
@@ -880,8 +858,30 @@
         }
       },
       {
+        "Height": 21238,
+        "Micros": 231956,
+        "TxCount": 22,
+        "VinCount": 2556,
+        "VoutCount": 42,
+        "ScriptInputCount": 2555,
+        "InputShapeCounts": {
+          "coinbase": 1,
+          "witness": 20,
+          "legacy_scriptsig": 2535
+        },
+        "SpentPrevoutScriptTypes": {
+          "p2wpkh": 20,
+          "p2pkh": 2535
+        },
+        "OutputScriptTypes": {
+          "p2pkh": 2,
+          "unknown": 1,
+          "p2wpkh": 39
+        }
+      },
+      {
         "Height": 33068,
-        "Micros": 204932,
+        "Micros": 191198,
         "TxCount": 15,
         "VinCount": 1959,
         "VoutCount": 40,
@@ -906,8 +906,32 @@
         }
       },
       {
+        "Height": 28102,
+        "Micros": 163231,
+        "TxCount": 119,
+        "VinCount": 2148,
+        "VoutCount": 240,
+        "ScriptInputCount": 2147,
+        "InputShapeCounts": {
+          "coinbase": 1,
+          "witness": 127,
+          "legacy_scriptsig": 2020
+        },
+        "SpentPrevoutScriptTypes": {
+          "p2wpkh": 117,
+          "p2pkh": 2020,
+          "p2tr": 10
+        },
+        "OutputScriptTypes": {
+          "p2pkh": 1,
+          "unknown": 25,
+          "p2wpkh": 193,
+          "p2tr": 21
+        }
+      },
+      {
         "Height": 47265,
-        "Micros": 172501,
+        "Micros": 158538,
         "TxCount": 24,
         "VinCount": 2051,
         "VoutCount": 52,
@@ -932,52 +956,8 @@
         }
       },
       {
-        "Height": 28102,
-        "Micros": 135891,
-        "TxCount": 119,
-        "VinCount": 2148,
-        "VoutCount": 240,
-        "ScriptInputCount": 2147,
-        "InputShapeCounts": {
-          "coinbase": 1,
-          "witness": 127,
-          "legacy_scriptsig": 2020
-        },
-        "SpentPrevoutScriptTypes": {
-          "p2wpkh": 117,
-          "p2pkh": 2020,
-          "p2tr": 10
-        },
-        "OutputScriptTypes": {
-          "p2pkh": 1,
-          "unknown": 25,
-          "p2wpkh": 193,
-          "p2tr": 21
-        }
-      },
-      {
-        "Height": 48987,
-        "Micros": 126080,
-        "TxCount": 11,
-        "VinCount": 1871,
-        "VoutCount": 22,
-        "ScriptInputCount": 1870,
-        "InputShapeCounts": {
-          "coinbase": 1,
-          "witness": 1870
-        },
-        "SpentPrevoutScriptTypes": {
-          "p2wpkh": 1870
-        },
-        "OutputScriptTypes": {
-          "p2wpkh": 16,
-          "unknown": 1,
-          "future_witness": 5
-        }
-      },
-      {
         "Height": 39637,
-        "Micros": 116574,
+        "Micros": 113243,
         "TxCount": 26,
         "VinCount": 2781,
         "VoutCount": 69,
@@ -1000,11 +980,31 @@
           "p2tr": 4,
           "p2wpkh": 45
         }
+      },
+      {
+        "Height": 48987,
+        "Micros": 107830,
+        "TxCount": 11,
+        "VinCount": 1871,
+        "VoutCount": 22,
+        "ScriptInputCount": 1870,
+        "InputShapeCounts": {
+          "coinbase": 1,
+          "witness": 1870
+        },
+        "SpentPrevoutScriptTypes": {
+          "p2wpkh": 1870
+        },
+        "OutputScriptTypes": {
+          "p2wpkh": 16,
+          "unknown": 1,
+          "future_witness": 5
+        }
       }
     ]
   },
-  "elapsed_ms": 56103,
-  "proof_wrapper_elapsed_ms": 62405,
+  "elapsed_ms": 54493,
+  "proof_wrapper_elapsed_ms": 64918,
   "sync_exit_code": 0,
   "result": "passed",
   "bounded_gate_status": "passed",
@@ -1013,10 +1013,38 @@
     "command": "make docker-proof-50k",
     "docker_volume": "csbitnode_50k_proof_data",
     "live_progress_reporting": true,
-    "progress_interval_seconds": 30
+    "progress_interval_seconds": 10
   },
   "benchmark_contract_version": 1,
   "telemetry_schema": "benchmark.telemetry_tick.v1",
+  "telemetry_summary": {
+    "tick_count": 13,
+    "lifecycle_markers": {
+      "run_started": 36,
+      "container_started": 319,
+      "node_started": 361,
+      "heartbeat": 10999,
+      "first_peer_byte": 64253,
+      "first_block_connected": 64290,
+      "target_reached": 64860,
+      "run_finished": 64895
+    },
+    "heartbeat_max_gap_ms": 10755,
+    "heartbeat_limit_ms": 15000,
+    "phase_counts": {
+      "block_connect": 1,
+      "complete": 2,
+      "heartbeat": 6,
+      "peer_connect": 1,
+      "startup": 3
+    },
+    "stall_class_counts": {
+      "none": 13
+    },
+    "slow_blocks": [],
+    "telemetry_quality": "clean",
+    "telemetry_log_path": ".docker-csharp-proof.log"
+  },
   "benchmark_kind": "shakedown_50k_p2p",
   "benchmark_gate": "shakedown_50k",
   "benchmark_lane": "shakedown_50k_p2p",
