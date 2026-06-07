@@ -148,24 +148,30 @@ python3 Project/scripts/run_benchmark_campaign.py \
 ```
 
 Campaign scratch lives under ignored `Project/.campaigns/`. Logs and telemetry
-tails are operational state, not committed evidence. The runner updates
-`Nodes/Shared/conformance/current_evidence.json` only after the fresh artifact
-passes the shared benchmark artifact validator, Project import, and anomaly
-checks. For `shakedown_50k`, `performance_100k`, and tip gates, the runner also
-validates the proof log with `validate_benchmark_telemetry.py` and requires
-`telemetry_quality=clean`. A failed command, missing artifact, ambiguous
-artifact selection, rejected artifact, telemetry rejection, or suspicious
-regression pauses the campaign instead of moving to the next port.
+tails are operational state, not committed evidence. Ports should expose product
+progress with `rb.port_progress`; the Project control harness turns that into
+benchmark telemetry and canonical artifacts. Historical port-authored artifacts
+remain import-compatible, but migrated ports should not own benchmark artifact
+assembly.
+
+The runner updates `Nodes/Shared/conformance/current_evidence.json` only after
+the fresh control-built or compatibility artifact passes the shared benchmark
+artifact validator, Project import, and anomaly checks. For `shakedown_50k`,
+`performance_100k`, and tip gates, the runner also validates control-owned
+telemetry with `validate_benchmark_telemetry.py` and requires
+`telemetry_quality=clean`. A failed command, missing product progress or
+artifact, rejected artifact, telemetry rejection, or suspicious regression
+pauses the campaign instead of moving to the next port.
 
 Long-run heartbeat validation uses a 15-second target with bounded jitter
 tolerance. Small scheduling drift is reported as a warning and can still be
 `telemetry_quality=clean`; repeated large gaps or any hard gap reject the run
 because operators lost useful visibility.
 
-Long-run progress should be emitted by the sync writer or by a writer-owned log
-channel. Campaign proofs should not rely on a second sidecar process opening
-live RocksDB/chainstate state while the writer is active; sidecar status reads
-are reserved for final post-exit artifact capture.
+Long-run product progress should be emitted by the sync writer or by a
+writer-owned log channel. Campaign proofs should not rely on a second sidecar
+process opening live RocksDB/chainstate state while the writer is active;
+sidecar status reads are reserved for final post-exit status capture.
 
 For long-run gates, the campaign runner also applies a startup visibility
 timeout. If `first_block_connected` is not observed within the configured

@@ -428,8 +428,8 @@ public final class SyncLocalCoreService {
       return;
     }
     ChainstateStatus chainstateStatus = ChainstateStatus.capture(chainstateStore, chain);
-    out.println(
-        "sync_progress_json={"
+    String progressJson =
+        "{"
             + "\"chain\":\""
             + escapeJson(chain)
             + "\",\"sync_status\":\""
@@ -451,7 +451,9 @@ public final class SyncLocalCoreService {
             + progress.downloaded()
             + ",\"connected_blocks\":"
             + progress.connected()
-            + "}");
+            + "}";
+    out.println("sync_progress_json=" + progressJson);
+    out.println("rb.port_progress " + progressJson);
     out.flush();
   }
 

@@ -25,17 +25,18 @@ Before editing a port, read:
 4. `Docs/port-baseline-5k.md` before new-port, benchmark, or readiness work.
 5. `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md` before consensus, corpus, or long-sync readiness work.
 6. `Docs/port-status.md` and Project reports for current imported status.
-7. `Nodes/Shared/testing/TEST_COVERAGE_CONTRACT.md` before test coverage or par-level work.
-8. `Nodes/Shared/STATUS_CONTRACT.md`.
-9. `Nodes/Shared/storage/STORAGE_GATE.md`.
-10. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
-11. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
-12. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
-13. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` for Project Docker query examples.
-14. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
-15. `Docs/blocker-ledger.md`.
-16. `Docs/supervisor-contract.md`.
-17. The target port's README and blocker ledger.
+7. `Nodes/Shared/conformance/PORT_PROGRESS_CONTRACT.md` before benchmark telemetry or proof instrumentation work.
+8. `Nodes/Shared/testing/TEST_COVERAGE_CONTRACT.md` before test coverage or par-level work.
+9. `Nodes/Shared/STATUS_CONTRACT.md`.
+10. `Nodes/Shared/storage/STORAGE_GATE.md`.
+11. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
+12. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
+13. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
+14. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` for Project Docker query examples.
+15. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
+16. `Docs/blocker-ledger.md`.
+17. `Docs/supervisor-contract.md`.
+18. The target port's README and blocker ledger.
 
 The official benchmark suite is `baseline_5k`, `shakedown_50k`,
 `performance_100k`, `tip_once`, and `tip_maintenance`. The first comparable

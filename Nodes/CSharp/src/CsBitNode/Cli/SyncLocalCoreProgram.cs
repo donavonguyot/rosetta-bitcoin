@@ -212,7 +212,9 @@ public static class SyncLocalCoreService
             ["downloaded_blocks"] = snapshot.Downloaded,
             ["connected_blocks"] = snapshot.Connected,
         };
-        output.WriteLine($"sync_progress_json={JsonSerializer.Serialize(progress)}");
+        var raw = JsonSerializer.Serialize(progress);
+        output.WriteLine($"sync_progress_json={raw}");
+        output.WriteLine($"rb.port_progress {raw}");
         output.Flush();
     }
 

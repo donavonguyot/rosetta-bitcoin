@@ -597,6 +597,27 @@ func emitTelemetryTick(state *telemetryState, tick telemetryTick) {
 	}
 	raw, _ := json.Marshal(payload)
 	fmt.Printf("benchmark.telemetry_tick %s\n", raw)
+	if tick.Height > 0 || tick.Event == "target_reached" || tick.Event == "run_finished" {
+		progress := map[string]any{
+			"chain":                  "testnet4",
+			"sync_status":            tick.SyncStatus,
+			"header_height":          tick.TargetHeight,
+			"validated_height":       tick.Height,
+			"validated_hash":         tick.Hash,
+			"stored_block_height":    tick.Height,
+			"chainstate_utxo_count":  tick.Utxos,
+			"utxo_count":             tick.Utxos,
+			"current_blocker":        tick.CurrentBlocker,
+			"current_block_height":   currentBlock["height"],
+			"current_block_hash":     currentBlock["hash"],
+			"current_block_tx_count": currentBlock["tx_count"],
+			"downloaded_blocks":      tick.Connected,
+			"connected_blocks":       tick.Connected,
+			"timing_buckets_ms":      timingBuckets(tick.Timing),
+		}
+		progressRaw, _ := json.Marshal(progress)
+		fmt.Printf("rb.port_progress %s\n", progressRaw)
+	}
 }
 
 func (state *telemetryState) summary() map[string]any {

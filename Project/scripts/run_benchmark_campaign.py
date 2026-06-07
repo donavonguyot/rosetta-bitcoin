@@ -31,6 +31,7 @@ REFERENCE_TOPOLOGY = ROOT / "Nodes/Shared/docker/reference_topology.env"
 TELEMETRY_PREFIX = "benchmark.telemetry_tick "
 VALIDATOR_PATH = ROOT / "Nodes/Shared/conformance/tools/validate_benchmark_artifact.py"
 TELEMETRY_VALIDATOR_PATH = ROOT / "Project/scripts/validate_benchmark_telemetry.py"
+CONTROL_HARNESS_PATH = ROOT / "Project/scripts/control_benchmark_harness.py"
 
 _validator_spec = importlib.util.spec_from_file_location("rb_benchmark_validator", VALIDATOR_PATH)
 if _validator_spec is None or _validator_spec.loader is None:
@@ -45,6 +46,13 @@ if _telemetry_spec is None or _telemetry_spec.loader is None:
 _telemetry_validator = importlib.util.module_from_spec(_telemetry_spec)
 sys.modules[_telemetry_spec.name] = _telemetry_validator
 _telemetry_spec.loader.exec_module(_telemetry_validator)
+
+_control_spec = importlib.util.spec_from_file_location("rb_control_benchmark_harness", CONTROL_HARNESS_PATH)
+if _control_spec is None or _control_spec.loader is None:
+    raise RuntimeError(f"cannot load control benchmark harness: {CONTROL_HARNESS_PATH}")
+_control_harness = importlib.util.module_from_spec(_control_spec)
+sys.modules[_control_spec.name] = _control_harness
+_control_spec.loader.exec_module(_control_harness)
 
 SUPPORTED_GATES = tuple(_validator.GATES)
 GATE_CLAIMS = {
@@ -599,6 +607,31 @@ def validate_telemetry_log(
     return result.quality, result.errors, result.warnings, result.summary
 
 
+def build_control_artifact(
+    *,
+    campaign: dict[str, Any],
+    port: str,
+    gate: dict[str, Any],
+    proof_log: Path,
+    elapsed_ms: int,
+    expected_peer: str,
+) -> Any | None:
+    if not _control_harness.has_product_progress(proof_log):
+        return None
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    artifact_path = Path(campaign["results_dir"]) / f"{port}_control_{campaign['gate']}_benchmark_{stamp}.json"
+    telemetry_log_path = campaign_dir(campaign) / "logs" / f"{port}_control_telemetry.log"
+    return _control_harness.build_artifact(
+        port=port,
+        gate_id=str(gate["gate_id"]),
+        proof_log=proof_log,
+        artifact_path=artifact_path,
+        telemetry_log_path=telemetry_log_path,
+        elapsed_ms=elapsed_ms,
+        expected_peer=expected_peer,
+    )
+
+
 def candidate_artifacts(results_dir: Path, started_at: float, port: str, gate: dict[str, Any]) -> list[Path]:
     candidates: list[Path] = []
     for path in sorted(results_dir.glob("*.json")):
@@ -814,6 +847,7 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         protected_snapshot = snapshot_file(protected_artifact)
         startup_timeout = campaign.get("startup_timeout_sec", 0) if campaign["gate"] in LONG_RUN_GATES else 0
         exit_code = run_shell(entry["proof_command"], proof_log, startup_timeout_sec=int(startup_timeout or 0))
+        finished = time.time()
         entry["finished_at"] = utc_now()
         entry["exit_code"] = exit_code
         if exit_code != 0:
@@ -828,8 +862,22 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
                 return 1
             continue
 
+        control_result = build_control_artifact(
+            campaign=campaign,
+            port=port,
+            gate=gate,
+            proof_log=proof_log,
+            elapsed_ms=int(max(0, finished - started) * 1000),
+            expected_peer=expected_peer,
+        )
+        telemetry_log = control_result.telemetry_log_path if control_result is not None else proof_log
+        if control_result is not None:
+            entry["control_artifact_path"] = rel(control_result.artifact_path)
+            entry["control_telemetry_log"] = rel(control_result.telemetry_log_path)
+            append_event(campaign, port, "control_artifact_built", rel(control_result.artifact_path))
+
         telemetry_quality, telemetry_errors, telemetry_warnings, telemetry_summary = validate_telemetry_log(
-            proof_log,
+            telemetry_log,
             gate,
             port,
         )
@@ -848,23 +896,25 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
                 return 1
             continue
 
-        candidates = candidate_artifacts(Path(campaign["results_dir"]), started, port, gate)
-        if len(candidates) != 1:
-            preserved = preserve_rejected_candidate(campaign, port, protected_artifact)
-            restore_snapshot(protected_snapshot)
-            entry["status"] = "failed"
-            entry["errors"].append(
-                f"artifact selection expected 1 candidate, found {len(candidates)}: "
-                + ", ".join(rel(path) for path in candidates)
-            )
-            if preserved:
-                entry["warnings"].append(f"rejected candidate preserved at {preserved}")
-            append_event(campaign, port, "artifact_selection_failed", entry["errors"][-1])
-            if campaign_should_pause(campaign, port, "artifact_selection_failed"):
-                return 1
-            continue
-
-        artifact_path = candidates[0]
+        if control_result is not None:
+            artifact_path = control_result.artifact_path
+        else:
+            candidates = candidate_artifacts(Path(campaign["results_dir"]), started, port, gate)
+            if len(candidates) != 1:
+                preserved = preserve_rejected_candidate(campaign, port, protected_artifact)
+                restore_snapshot(protected_snapshot)
+                entry["status"] = "failed"
+                entry["errors"].append(
+                    f"artifact selection expected 1 candidate, found {len(candidates)}: "
+                    + ", ".join(rel(path) for path in candidates)
+                )
+                if preserved:
+                    entry["warnings"].append(f"rejected candidate preserved at {preserved}")
+                append_event(campaign, port, "artifact_selection_failed", entry["errors"][-1])
+                if campaign_should_pause(campaign, port, "artifact_selection_failed"):
+                    return 1
+                continue
+            artifact_path = candidates[0]
         payload = read_json(artifact_path)
         if not isinstance(payload, dict):
             preserved = preserve_rejected_candidate(campaign, port, artifact_path)

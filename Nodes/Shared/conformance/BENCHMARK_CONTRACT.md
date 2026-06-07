@@ -151,6 +151,14 @@ This lane proves node reality. It is not ranked by empty-sync speed.
 
 ## Telemetry Contract
 
+Benchmark telemetry is Project/control-plane instrumentation. Ports should expose
+the product progress surface in
+[`PORT_PROGRESS_CONTRACT.md`](PORT_PROGRESS_CONTRACT.md); Project converts that
+surface into benchmark ticks, telemetry summaries, and canonical artifacts.
+Historical port-authored benchmark ticks remain import-compatible, but new
+current evidence should be control-built wherever the port exposes product
+progress.
+
 Long runs (`shakedown_50k`, `performance_100k`, `tip_once`, and
 `tip_maintenance`) must emit lines consumable by
 `Project/scripts/monitor_benchmark_telemetry.py`:
@@ -257,11 +265,11 @@ Emitters should target 15 seconds or better. The telemetry validator warns on
 small target drift, accepts bounded jitter, and rejects repeated large gaps or
 any hard gap that means operators lost useful visibility.
 
-Long-run telemetry must be writer-owned. During `shakedown_50k`,
-`performance_100k`, and tip gates, progress ticks should come from the running
-sync process or from a log/progress channel written by that process. Proof
-wrappers must not depend on opening live RocksDB/chainstate state from a second
-sidecar process while the sync writer is active; sidecar status reads are only
+Long-run product progress must be writer-owned. During `shakedown_50k`,
+`performance_100k`, and tip gates, progress should come from the running sync
+process or from a log/progress channel written by that process. Proof wrappers
+must not depend on opening live RocksDB/chainstate state from a second sidecar
+process while the sync writer is active; sidecar status reads are only
 appropriate after the writer exits.
 
 Leaderboards rank only current evidence with:

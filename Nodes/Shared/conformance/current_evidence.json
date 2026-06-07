@@ -63,9 +63,9 @@
       "port": "csharp",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/csharp_docker_baseline_5k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/csharp_control_baseline_5k_benchmark_20260607T173131Z.json",
       "status": "current",
-      "notes": "Current comparable csharp baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
+      "notes": "Current comparable csharp baseline_5k proof accepted by campaign baseline_5k_20260607_103118."
     },
     {
       "port": "csharp",
@@ -119,9 +119,9 @@
       "port": "go",
       "claim": "baseline_5k",
       "gate_id": "baseline_5k",
-      "path": "Nodes/Shared/conformance/results/go_docker_baseline_5k_benchmark_2026-06-06.json",
+      "path": "Nodes/Shared/conformance/results/go_control_baseline_5k_benchmark_20260607T173005Z.json",
       "status": "current",
-      "notes": "Current comparable go baseline_5k proof accepted by campaign baseline_5k_20260606_163014."
+      "notes": "Current comparable go baseline_5k proof accepted by campaign baseline_5k_20260607_103000."
     },
     {
       "port": "go",
