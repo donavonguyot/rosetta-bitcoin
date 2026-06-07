@@ -1,4 +1,4 @@
-FROM swift:6.0-jammy AS build
+FROM swift:6.0-bookworm AS build
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends librocksdb-dev libsecp256k1-dev ca-certificates netcat-openbsd \
@@ -10,7 +10,7 @@ COPY Sources ./Sources
 COPY Tests ./Tests
 RUN swift build -c release
 
-FROM swift:6.0-jammy
+FROM swift:6.0-bookworm
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends librocksdb-dev libsecp256k1-dev ca-certificates netcat-openbsd \

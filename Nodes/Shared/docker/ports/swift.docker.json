@@ -9,11 +9,11 @@
     "dockerignore": "Nodes/Swift/docker/.dockerignore"
   },
   "images": {
-    "base": "swift:6.0-jammy",
-    "runtime": "swift:6.0-jammy",
-    "os_family": "Ubuntu",
+    "base": "swift:6.0-bookworm",
+    "runtime": "swift:6.0-bookworm",
+    "os_family": "Debian-family Swift image",
     "package_manager": "apt plus SwiftPM",
-    "native_dependencies": ["librocksdb-dev", "libsecp256k1-dev"]
+    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "libsecp256k1-dev/libsecp256k1-1"]
   },
   "volumes": {
     "data": "swiftbitnode_data",
