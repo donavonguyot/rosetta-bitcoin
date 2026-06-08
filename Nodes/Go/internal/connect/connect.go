@@ -364,6 +364,7 @@ func isSpendableOutput(scriptPubKey []byte) bool {
 	return len(scriptPubKey) > 0 && scriptPubKey[0] != 0x6a
 }
 
+// blockView is the block-local UTXO view for same-block churn before atomic chainstate commit.
 type blockView struct {
 	loaded                  map[storage.OutPoint]*storage.UTXO
 	created                 []createdEntry

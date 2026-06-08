@@ -206,6 +206,7 @@ pub fn run_store(
     ))
 }
 
+/// Native block connect boundary: block-local UTXO view, script verification, atomic commit.
 pub fn connect_decoded_block(
     store: &Store,
     height: u32,

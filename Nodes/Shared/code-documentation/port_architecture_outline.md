@@ -28,3 +28,6 @@ not in the architecture doc.
 - [Python ARCHITECTURE.md](../../Python/docs/ARCHITECTURE.md) — operational depth and data flows.
 - [Java ARCHITECTURE.md](../../Java/docs/ARCHITECTURE.md) — reference native/Core map with canonical vocabulary.
 - [TypeScript ARCHITECTURE.md](../../TypeScript/docs/ARCHITECTURE.md) — native/Core TypeScript expression of the same pipeline.
+- [Go ARCHITECTURE.md](../../Go/docs/ARCHITECTURE.md) — comparator-first fetch/connect architecture.
+- [Rust ARCHITECTURE.md](../../Rust/docs/ARCHITECTURE.md) — pipeline proof and Rayon script pool.
+- [Cpp ARCHITECTURE.md](../../Cpp/docs/ARCHITECTURE.md) — full live node, sync, and mempool surfaces.

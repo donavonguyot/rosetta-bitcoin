@@ -655,6 +655,7 @@ impl ConnectTimings {
     }
 }
 
+/// Block-local UTXO view: same-block creates and spends before atomic chainstate commit.
 pub struct BlockUtxoView<'a> {
     store: &'a Store,
     chain: String,

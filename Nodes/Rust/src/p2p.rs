@@ -1,3 +1,6 @@
+//! Minimal testnet4 P2P client for local Reference comparator and proof lanes.
+//! Uses deferred advanced negotiation: simple version/verack/sendheaders only.
+
 use anyhow::{bail, ensure, Context, Result};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -88,6 +91,8 @@ impl Client {
     }
 
     fn handshake(&mut self) -> Result<()> {
+        // Honest start_height: version payload advertises 0 for genesis-relative comparator
+        // fetches from fresh proof volumes.
         self.send("version", &version_payload())?;
         let mut seen_version = false;
         let mut seen_verack = false;

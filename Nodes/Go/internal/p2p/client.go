@@ -139,6 +139,9 @@ func (c *client) close() {
 }
 
 func (c *client) handshake() error {
+	// Deferred advanced negotiation: comparator handshake stays on version/verack/sendheaders
+	// only. Relay-oriented messages such as feefilter and mempool are intentionally omitted
+	// on this path. See Nodes/Shared/CODE_DOCUMENTATION.md.
 	if err := c.send("version", versionPayload()); err != nil {
 		return err
 	}
@@ -294,6 +297,8 @@ func (c *client) send(command string, payload []byte) error {
 }
 
 func versionPayload() []byte {
+	// Honest start_height: comparator proofs from genesis/fresh volumes advertise 0 until
+	// connect establishes validated runtime truth worth claiming to peers.
 	var out []byte
 	out = appendInt32(out, protocolVersion)
 	out = appendUint64(out, services)

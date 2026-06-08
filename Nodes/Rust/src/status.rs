@@ -41,6 +41,7 @@ pub struct StatusDocument {
     pub updated_at: String,
 }
 
+/// Builds status JSON from RocksDB runtime truth in the datadir.
 pub fn build(datadir: &Path, runtime_surface: &str) -> Result<StatusDocument> {
     let meta = storage::read_metadata(datadir).unwrap_or_else(|_| storage::missing_metadata());
     let (lock_status, active_writer_pid) = storage::lock_status(datadir);
