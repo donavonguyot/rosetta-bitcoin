@@ -1773,7 +1773,7 @@ UNION ALL
 SELECT
   'rb.block_connect_backend_probe_v1' AS suite_id,
   '2026-06-07' AS suite_version,
-  'b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f' AS suite_hash,
+  '7b1704a56dfdeeb72a7508db0fa85a4b63f44dbeb437f81a8bd5e364d304cb3d' AS suite_hash,
   2 AS case_total,
   '["rb_live_chain_regression","proof_derived"]' AS provenance_json,
   'Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template.' AS does_not_prove,
@@ -1783,7 +1783,39 @@ WHERE NOT EXISTS (
   FROM test_capability_suites
   WHERE suite_id = 'rb.block_connect_backend_probe_v1'
     AND suite_version = '2026-06-07'
-    AND suite_hash = 'b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f'
+    AND suite_hash = '7b1704a56dfdeeb72a7508db0fa85a4b63f44dbeb437f81a8bd5e364d304cb3d'
+)
+UNION ALL
+SELECT
+  'rb.storage_codec_vectors_v1' AS suite_id,
+  '2026-06-07' AS suite_version,
+  '2e1a634d3ceb0bf8a723a35cc0619689e472686fef1a251cbbc8eff0f97da08c' AS suite_hash,
+  7 AS case_total,
+  '["proof_derived"]' AS provenance_json,
+  'Storage codec vectors do not prove live sync safety, every future key family, or performance under long-run load.' AS does_not_prove,
+  '' AS source_artifact_id
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM test_capability_suites
+  WHERE suite_id = 'rb.storage_codec_vectors_v1'
+    AND suite_version = '2026-06-07'
+    AND suite_hash = '2e1a634d3ceb0bf8a723a35cc0619689e472686fef1a251cbbc8eff0f97da08c'
+)
+UNION ALL
+SELECT
+  'rb.storage_restart_probe_v1' AS suite_id,
+  '2026-06-07' AS suite_version,
+  'd6e36c11a39c0b7189d39ad268c46ba1af942456fdc8189ece416b5c914296a2' AS suite_hash,
+  2 AS case_total,
+  '["proof_derived"]' AS provenance_json,
+  'Bounded restart storage probes do not prove crash safety for every possible interruption point or long-run tip maintenance.' AS does_not_prove,
+  '' AS source_artifact_id
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM test_capability_suites
+  WHERE suite_id = 'rb.storage_restart_probe_v1'
+    AND suite_version = '2026-06-07'
+    AND suite_hash = 'd6e36c11a39c0b7189d39ad268c46ba1af942456fdc8189ece416b5c914296a2'
 );
 
 CREATE VIEW IF NOT EXISTS test_capability_contract_matrix AS

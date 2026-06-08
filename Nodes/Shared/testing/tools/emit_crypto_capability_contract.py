@@ -22,6 +22,8 @@ BIP340_VECTORS = ROOT / "Nodes/Shared/testing/fixtures/bip340/test-vectors.csv"
 NATIVE_CRYPTO_VECTORS = ROOT / "Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json"
 EQUIVALENCE_MANIFEST = ROOT / "Nodes/Shared/testing/fixtures/crypto_backend_equivalence_v1.json"
 BLOCK_CONNECT_MANIFEST = ROOT / "Nodes/Shared/testing/fixtures/block_connect_backend_probe_v1.json"
+STORAGE_CODEC_VECTORS = ROOT / "Nodes/Shared/conformance/fixtures/chainstate_codec_v2_vectors.json"
+STORAGE_GATE_CONTRACT = ROOT / "Nodes/Shared/storage/STORAGE_GATE.md"
 SUITE_VERSION = "2026-06-07"
 
 BACKENDS = {
@@ -73,6 +75,18 @@ SUITES: dict[str, dict[str, Any]] = {
         "provenance": ["rb_live_chain_regression", "proof_derived"],
         "does_not_prove": "Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template.",
     },
+    "rb.storage_codec_vectors_v1": {
+        "path": STORAGE_CODEC_VECTORS,
+        "case_total": lambda: 7,
+        "provenance": ["proof_derived"],
+        "does_not_prove": "Storage codec vectors do not prove live sync safety, every future key family, or performance under long-run load.",
+    },
+    "rb.storage_restart_probe_v1": {
+        "path": STORAGE_GATE_CONTRACT,
+        "case_total": lambda: 2,
+        "provenance": ["proof_derived"],
+        "does_not_prove": "Bounded restart storage probes do not prove crash safety for every possible interruption point or long-run tip maintenance.",
+    },
 }
 
 CAPABILITY_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -81,18 +95,42 @@ CAPABILITY_DEFAULTS: dict[str, dict[str, Any]] = {
         "command_key": "test_crypto_vectors",
         "suite_id": "bitcoin.bip340_schnorr_vectors",
         "evidence_kind": "suite",
+        "blocking_for": ["pure_crypto_experiment"],
     },
     "crypto_libsecp256k1_equivalence": {
         "contract_suffix": "crypto_libsecp256k1_equivalence",
         "command_key": "test_crypto_vectors",
         "suite_id": "rb.crypto_backend_equivalence_v1",
         "evidence_kind": "suite",
+        "blocking_for": ["pure_crypto_experiment"],
     },
     "block_connect_with_backend": {
         "contract_suffix": "block_connect_with_backend",
         "command_key": "test_block_connect_backend",
         "suite_id": "rb.block_connect_backend_probe_v1",
         "evidence_kind": "suite",
+        "blocking_for": ["pure_crypto_experiment"],
+    },
+    "storage_codec_vectors": {
+        "contract_suffix": "storage_codec_vectors",
+        "command_key": "test_storage_capability",
+        "suite_id": "rb.storage_codec_vectors_v1",
+        "evidence_kind": "storage_proof",
+        "blocking_for": ["storage_codec_change"],
+    },
+    "storage_restart_after_codec_change": {
+        "contract_suffix": "storage_restart_after_codec_change",
+        "command_key": "test_storage_capability",
+        "suite_id": "rb.storage_restart_probe_v1",
+        "evidence_kind": "storage_proof",
+        "blocking_for": ["storage_codec_change"],
+    },
+    "rocksdb_restart_persistence": {
+        "contract_suffix": "rocksdb_restart_persistence",
+        "command_key": "test_storage_capability",
+        "suite_id": "rb.storage_restart_probe_v1",
+        "evidence_kind": "storage_proof",
+        "blocking_for": ["storage_codec_change"],
     },
 }
 
@@ -146,6 +184,7 @@ def contract(
     suite_hash: str = "",
     case_passed: int | None = None,
     case_total: int | None = None,
+    blocking_for: list[str] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "port": port,
@@ -162,7 +201,7 @@ def contract(
         "suite_hash": suite_hash,
         "provenance": provenance,
         "does_not_prove": does_not_prove,
-        "blocking_for": ["pure_crypto_experiment"],
+        "blocking_for": blocking_for or ["pure_crypto_experiment"],
     }
     if case_passed is not None:
         payload["case_passed"] = case_passed
@@ -256,19 +295,24 @@ def outcome_payload(path: Path) -> dict[str, Any]:
         if capability not in CAPABILITY_DEFAULTS:
             raise SystemExit(f"{path}: outcomes[{index}] unknown capability {capability!r}")
         status = str(row.get("status") or "").strip()
-        if status not in {"pass", "fail"}:
-            raise SystemExit(f"{path}: outcomes[{index}] status must be pass or fail")
+        if status not in {"pass", "fail", "missing"}:
+            raise SystemExit(f"{path}: outcomes[{index}] status must be pass, fail, or missing")
         case_passed = row.get("case_passed")
         case_total = row.get("case_total")
-        if not isinstance(case_passed, int) or not isinstance(case_total, int):
-            raise SystemExit(f"{path}: outcomes[{index}] case_passed and case_total are required integers")
-        if case_passed < 0 or case_total < 0 or case_passed > case_total:
-            raise SystemExit(f"{path}: outcomes[{index}] invalid case counts")
+        has_counts = case_passed is not None or case_total is not None
+        if status in {"pass", "fail"} and not has_counts:
+            raise SystemExit(f"{path}: outcomes[{index}] pass/fail rows require case_passed and case_total")
+        if has_counts:
+            if not isinstance(case_passed, int) or not isinstance(case_total, int):
+                raise SystemExit(f"{path}: outcomes[{index}] case_passed and case_total must be integers when present")
+            if case_passed < 0 or case_total < 0 or case_passed > case_total:
+                raise SystemExit(f"{path}: outcomes[{index}] invalid case counts")
 
         defaults = CAPABILITY_DEFAULTS[capability]
         suite_id = str(row.get("suite_id") or defaults["suite_id"])
         suite_doc = suite_for_id(suite_id)
-        suite_ids.append(suite_id)
+        if status != "missing":
+            suite_ids.append(suite_id)
         notes = str(row.get("notes") or "").strip()
         contracts.append(
             contract(
@@ -281,11 +325,12 @@ def outcome_payload(path: Path) -> dict[str, Any]:
                 command_key=str(defaults["command_key"]),
                 provenance=list(suite_doc["provenance"]),
                 does_not_prove=str(suite_doc["does_not_prove"]),
-                suite_id=suite_id,
-                suite_version=str(suite_doc["suite_version"]),
-                suite_hash=str(suite_doc["suite_hash"]),
-                case_passed=case_passed,
-                case_total=case_total,
+                suite_id=suite_id if status != "missing" else "",
+                suite_version=str(suite_doc["suite_version"]) if status != "missing" else "",
+                suite_hash=str(suite_doc["suite_hash"]) if status != "missing" else "",
+                case_passed=case_passed if has_counts else None,
+                case_total=case_total if has_counts else None,
+                blocking_for=list(defaults["blocking_for"]),
             )
         )
         if notes:
@@ -294,8 +339,8 @@ def outcome_payload(path: Path) -> dict[str, Any]:
             {
                 "suite_id": suite_id,
                 "result": status,
-                "case_passed": case_passed,
-                "case_total": case_total,
+                "case_passed": case_passed if has_counts else None,
+                "case_total": case_total if has_counts else None,
                 "notes": notes,
             }
         )
@@ -375,6 +420,11 @@ def self_test() -> int:
                             "case_total": 27,
                             "notes": "intentional self-test failure row",
                         },
+                        {
+                            "capability": "storage_codec_vectors",
+                            "status": "missing",
+                            "notes": "intentional self-test missing storage row",
+                        },
                     ],
                 }
             ),
@@ -384,6 +434,9 @@ def self_test() -> int:
         assert payload["contracts"][0]["suite_id"] == "bitcoin.bip340_schnorr_vectors"
         assert payload["contracts"][1]["status"] == "fail"
         assert payload["contracts"][1]["case_total"] == 27
+        assert payload["contracts"][2]["capability"] == "storage_codec_vectors"
+        assert payload["contracts"][2]["status"] == "missing"
+        assert "case_total" not in payload["contracts"][2]
     finally:
         tmp.unlink(missing_ok=True)
     print("emit_crypto_capability_contract self-test passed")

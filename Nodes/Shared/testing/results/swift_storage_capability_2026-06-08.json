@@ -1,0 +1,98 @@
+{
+  "captured_at": "2026-06-08T08:00:47Z",
+  "category": "test_capability_contracts",
+  "contracts": [
+    {
+      "backend": "rocksdb",
+      "blocking_for": [
+        "storage_codec_change"
+      ],
+      "capability": "storage_codec_vectors",
+      "command_key": "test_storage_capability",
+      "contract_id": "swift.storage_codec_vectors",
+      "does_not_prove": "Storage codec vectors do not prove live sync safety, every future key family, or performance under long-run load.",
+      "evidence_kind": "storage_proof",
+      "evidence_path": "Nodes/Shared/conformance/fixtures/chainstate_codec_v2_vectors.json",
+      "notes": "no executed storage codec vector evidence was found",
+      "port": "swift",
+      "provenance": [
+        "proof_derived"
+      ],
+      "scope": "host",
+      "status": "missing",
+      "suite_hash": "",
+      "suite_id": "",
+      "suite_version": ""
+    },
+    {
+      "backend": "rocksdb",
+      "blocking_for": [
+        "storage_codec_change"
+      ],
+      "capability": "rocksdb_restart_persistence",
+      "command_key": "test_storage_capability",
+      "contract_id": "swift.rocksdb_restart_persistence",
+      "does_not_prove": "Bounded restart storage probes do not prove crash safety for every possible interruption point or long-run tip maintenance.",
+      "evidence_kind": "storage_proof",
+      "evidence_path": "Nodes/Shared/storage/STORAGE_GATE.md",
+      "notes": "no restart persistence evidence was found",
+      "port": "swift",
+      "provenance": [
+        "proof_derived"
+      ],
+      "scope": "host",
+      "status": "missing",
+      "suite_hash": "",
+      "suite_id": "",
+      "suite_version": ""
+    },
+    {
+      "backend": "rocksdb",
+      "blocking_for": [
+        "storage_codec_change"
+      ],
+      "capability": "storage_restart_after_codec_change",
+      "command_key": "test_storage_capability",
+      "contract_id": "swift.storage_restart_after_codec_change",
+      "does_not_prove": "Bounded restart storage probes do not prove crash safety for every possible interruption point or long-run tip maintenance.",
+      "evidence_kind": "storage_proof",
+      "evidence_path": "Nodes/Shared/storage/STORAGE_GATE.md",
+      "notes": "no restart-after-codec evidence was found",
+      "port": "swift",
+      "provenance": [
+        "proof_derived"
+      ],
+      "scope": "host",
+      "status": "missing",
+      "suite_hash": "",
+      "suite_id": "",
+      "suite_version": ""
+    }
+  ],
+  "port": "swift",
+  "results": [
+    {
+      "case_passed": null,
+      "case_total": null,
+      "notes": "no executed storage codec vector evidence was found",
+      "result": "missing",
+      "suite_id": "rb.storage_codec_vectors_v1"
+    },
+    {
+      "case_passed": null,
+      "case_total": null,
+      "notes": "no restart persistence evidence was found",
+      "result": "missing",
+      "suite_id": "rb.storage_restart_probe_v1"
+    },
+    {
+      "case_passed": null,
+      "case_total": null,
+      "notes": "no restart-after-codec evidence was found",
+      "result": "missing",
+      "suite_id": "rb.storage_restart_probe_v1"
+    }
+  ],
+  "schema": "port.test_capability_contract.v1",
+  "suites": []
+}

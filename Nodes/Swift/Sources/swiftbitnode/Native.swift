@@ -6,6 +6,21 @@ import Darwin
 #endif
 
 enum NativeLibrary {
+    static let secp256k1Names = [
+        "libsecp256k1.so",
+        "libsecp256k1.so.1",
+        "libsecp256k1.dylib",
+        "/opt/homebrew/lib/libsecp256k1.dylib",
+        "/usr/local/lib/libsecp256k1.dylib"
+    ]
+    static let rocksdbNames = [
+        "librocksdb.so",
+        "librocksdb.so.7",
+        "librocksdb.dylib",
+        "/opt/homebrew/lib/librocksdb.dylib",
+        "/usr/local/lib/librocksdb.dylib"
+    ]
+
     static func available(_ names: [String]) -> Bool {
         for name in names {
             if let handle = dlopen(name, RTLD_NOW) {
@@ -19,8 +34,8 @@ enum NativeLibrary {
 
 enum NativeReport {
     static func build() -> [String: Any] {
-        let rocks = NativeLibrary.available(["librocksdb.so", "librocksdb.so.7", "librocksdb.dylib"])
-        let secp = NativeLibrary.available(["libsecp256k1.so", "libsecp256k1.so.1", "libsecp256k1.dylib"])
+        let rocks = NativeLibrary.available(NativeLibrary.rocksdbNames)
+        let secp = NativeLibrary.available(NativeLibrary.secp256k1Names)
         return [
             "rocksdb_backend": "rocksdb-c-api",
             "rocksdb_available": rocks,
@@ -231,7 +246,7 @@ enum NativeSecp256k1 {
         let ecPubkeySerialize: EcPubkeySerialize
 
         static func open() -> API? {
-            for name in ["libsecp256k1.so", "libsecp256k1.so.1", "libsecp256k1.dylib"] {
+            for name in NativeLibrary.secp256k1Names {
                 guard let handle = dlopen(name, RTLD_NOW) else { continue }
                 guard
                     let contextCreate = symbol(handle, "secp256k1_context_create", ContextCreate.self),

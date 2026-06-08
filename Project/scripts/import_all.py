@@ -398,6 +398,7 @@ TEST_COMMAND_PURPOSES = {
     "test_coverage": "run optional local coverage telemetry",
     "test_crypto_vectors": "run shared crypto vector capability contracts",
     "test_block_connect_backend": "run bounded block-connect backend capability probe",
+    "test_storage_capability": "run bounded storage codec and restart capability contracts",
 }
 
 TEST_CAPABILITY_STATUSES = {"pass", "fail", "missing", "not_applicable"}

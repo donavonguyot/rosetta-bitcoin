@@ -46,8 +46,7 @@ zig-node-native-crypto-vectors:
 test-crypto-vectors:
 	@tmp=$$(mktemp); \
 	trap 'rm -f "$$tmp"' EXIT; \
-	if $(ZIG) build run -- native-crypto-vectors >/dev/null; then notes="native crypto smoke executed; BIP340 CSV and full backend-equivalence suite runner is not implemented yet"; else notes="native crypto smoke failed before BIP340 CSV and backend-equivalence suite execution"; fi; \
-	printf '{"port":"zig","backend":"libsecp256k1","outcomes":[{"capability":"crypto_bip340_vectors","status":"fail","case_passed":0,"case_total":19,"notes":"%s"},{"capability":"crypto_libsecp256k1_equivalence","status":"fail","case_passed":0,"case_total":27,"notes":"%s"}]}\n' "$$notes" "$$notes" > "$$tmp"; \
+	$(ZIG) build run -- test-capability --kind crypto-vectors --outcome-path "$$tmp"; \
 	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT)
 
 test-block-connect-backend:

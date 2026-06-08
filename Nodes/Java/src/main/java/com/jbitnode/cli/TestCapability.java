@@ -73,7 +73,6 @@ public final class TestCapability {
     int passed = 0;
     int total = 0;
     List<String> failures = new ArrayList<>();
-    fr.acinq.secp256k1.Secp256k1 api = fr.acinq.secp256k1.Secp256k1.get();
     List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
     for (int i = 1; i < lines.size(); i++) {
       String[] fields = lines.get(i).split(",", -1);
@@ -85,10 +84,10 @@ public final class TestCapability {
       boolean actual;
       try {
         actual =
-            api.verifySchnorr(
-                Hex.decode(fields[5]),
+            Secp256k1.verifyBip340SchnorrMessage(
+                Hex.decode(fields[2]),
                 Hex.decode(fields[4]),
-                Hex.decode(fields[2]));
+                Hex.decode(fields[5]));
       } catch (RuntimeException error) {
         actual = false;
       }

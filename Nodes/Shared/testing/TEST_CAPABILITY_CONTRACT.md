@@ -116,6 +116,24 @@ levels such as "level 1" or "gold" when adding them.
 - Provenance: `rb_live_chain_regression`, `proof_derived`
 - Does not prove: long-sync safety, tip maintenance, or every future script template.
 
+`rb.storage_codec_vectors_v1`
+
+- Manifest: `Nodes/Shared/conformance/fixtures/chainstate_codec_v2_vectors.json`
+- Suite version: `2026-06-07`
+- Suite hash: `2e1a634d3ceb0bf8a723a35cc0619689e472686fef1a251cbbc8eff0f97da08c`
+- Case total: `7`
+- Provenance: `proof_derived`
+- Does not prove: live sync safety, every future key family, or performance under long-run load.
+
+`rb.storage_restart_probe_v1`
+
+- Manifest: `Nodes/Shared/storage/STORAGE_GATE.md`
+- Suite version: `2026-06-07`
+- Suite hash: `d6e36c11a39c0b7189d39ad268c46ba1af942456fdc8189ece416b5c914296a2`
+- Case total: `2`
+- Provenance: `proof_derived`
+- Does not prove: crash safety for every possible interruption point or long-run tip maintenance.
+
 ## Project Reports
 
 ```bash

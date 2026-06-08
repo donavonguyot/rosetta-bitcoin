@@ -355,44 +355,17 @@ public final class Secp256k1 {
 
   public static boolean verifySchnorrSignatureReference(
       byte[] pubkeyXonly, byte[] messageHash, byte[] signature) {
-    if (pubkeyXonly.length != 32 || messageHash.length != 32 || signature.length != 64) {
-      return false;
-    }
-    try {
-      BigInteger xPub = new BigInteger(1, pubkeyXonly);
-      Point pubkeyPoint = liftXOnlyPubkey(xPub);
-      if (pubkeyPoint == null) {
-        return false;
-      }
-      BigInteger rx = new BigInteger(1, Arrays.copyOfRange(signature, 0, 32));
-      BigInteger s = new BigInteger(1, Arrays.copyOfRange(signature, 32, 64));
-      if (rx.compareTo(P) >= 0 || s.compareTo(N) >= 0) {
-        return false;
-      }
-      byte[] challengeInput = new byte[96];
-      System.arraycopy(signature, 0, challengeInput, 0, 32);
-      System.arraycopy(pubkeyXonly, 0, challengeInput, 32, 32);
-      System.arraycopy(messageHash, 0, challengeInput, 64, 32);
-      BigInteger e =
-          mod(
-              new BigInteger(1, ScriptHash.bitcoinTaggedHash("BIP0340/challenge", challengeInput)),
-              N);
-      Point gPoint = new Point(GX, GY);
-      Point lhs = scalarMult(s, gPoint);
-      Point rhsAdj = scalarMult(mod(N.subtract(e), N), pubkeyPoint);
-      Point rPoint = pointAdd(lhs, rhsAdj);
-      if (rPoint == null) {
-        return false;
-      }
-      return hasEvenY(rPoint) && mod(rPoint.x(), P).equals(mod(rx, P));
-    } catch (Secp256k1Error | ArithmeticException error) {
-      return false;
-    }
+    return verifyBip340SchnorrMessage(pubkeyXonly, messageHash, signature);
+  }
+
+  public static boolean verifyBip340SchnorrMessage(
+      byte[] pubkeyXonly, byte[] message, byte[] signature) {
+    return verifySchnorrSignatureOptimized(pubkeyXonly, message, signature, null);
   }
 
   private static boolean verifySchnorrSignatureOptimized(
-      byte[] pubkeyXonly, byte[] messageHash, byte[] signature, VerificationCache cache) {
-    if (pubkeyXonly.length != 32 || messageHash.length != 32 || signature.length != 64) {
+      byte[] pubkeyXonly, byte[] message, byte[] signature, VerificationCache cache) {
+    if (pubkeyXonly.length != 32 || signature.length != 64) {
       return false;
     }
     try {
@@ -406,10 +379,7 @@ public final class Secp256k1 {
       if (rx.compareTo(P) >= 0 || s.compareTo(N) >= 0) {
         return false;
       }
-      byte[] challengeInput = new byte[96];
-      System.arraycopy(signature, 0, challengeInput, 0, 32);
-      System.arraycopy(pubkeyXonly, 0, challengeInput, 32, 32);
-      System.arraycopy(messageHash, 0, challengeInput, 64, 32);
+      byte[] challengeInput = concat(Arrays.copyOfRange(signature, 0, 32), pubkeyXonly, message);
       BigInteger e =
           mod(
               new BigInteger(1, ScriptHash.bitcoinTaggedHash("BIP0340/challenge", challengeInput)),

@@ -43,6 +43,8 @@ pub fn main(init: std.process.Init) !void {
         try out.print("{{\"schema\":\"port.codec_vectors.v1\",\"port\":\"zig\",\"codec_version\":2,\"passed\":true}}\n", .{});
     } else if (std.mem.eql(u8, command, "native-crypto-vectors")) {
         try cmdNativeCrypto(out);
+    } else if (std.mem.eql(u8, command, "test-capability")) {
+        try cmdTestCapability(allocator, io, out, args[2..]);
     } else if (std.mem.eql(u8, command, "storage-proof")) {
         try cmdStorageProof(allocator, io, out, args[2..], surface);
     } else if (std.mem.eql(u8, command, "script-corpus")) {
@@ -68,6 +70,7 @@ fn usage(out: anytype) !void {
         \\  storage-proof [--datadir ./data-zig] [--output path]
         \\  codec-vectors
         \\  native-crypto-vectors
+        \\  test-capability --kind crypto-vectors --outcome-path path
         \\  script-corpus [--manifest path] [--output path]
         \\  local-reference-proof [--target <height>] [--peer <host:port>] [--output path]
         \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
@@ -117,6 +120,150 @@ fn cmdNativeCrypto(out: anytype) !void {
         "{{\"schema\":\"port.native_crypto_vectors.v1\",\"port\":\"zig\",\"passed\":{},\"delegated\":false,\"ecdsa_backend\":\"libsecp256k1\",\"schnorr_backend\":\"libsecp256k1\",\"taproot_tweak_backend\":\"libsecp256k1\",\"notes\":\"backend availability smoke vector only; full shared crypto vectors are next\"}}\n",
         .{available},
     );
+}
+
+fn cmdTestCapability(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
+    const kind = valueArg(args, "--kind") orelse return error.MissingKind;
+    const output = valueArg(args, "--outcome-path") orelse return error.MissingOutputPath;
+    if (!std.mem.eql(u8, kind, "crypto-vectors")) return error.UnsupportedCapabilityKind;
+    const json = try cryptoCapabilityOutcomes(allocator, io);
+    defer allocator.free(json);
+    try writeFileEnsuringParent(io, output, json);
+    try out.print("{s}\n", .{output});
+}
+
+fn cryptoCapabilityOutcomes(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
+    var verifier = try core.crypto.NativeVerifier.create();
+    defer verifier.destroy();
+    const bip = try runBip340Vectors(allocator, io, &verifier);
+    const native = try runNativeCryptoVectors(allocator, io, &verifier);
+    const eq_passed = bip.passed + native.passed;
+    const eq_total = bip.total + native.total;
+    return std.fmt.allocPrint(
+        allocator,
+        "{{\"port\":\"zig\",\"backend\":\"libsecp256k1\",\"outcomes\":[{{\"capability\":\"crypto_bip340_vectors\",\"status\":\"{s}\",\"case_passed\":{},\"case_total\":{},\"notes\":\"{s}\"}},{{\"capability\":\"crypto_libsecp256k1_equivalence\",\"status\":\"{s}\",\"case_passed\":{},\"case_total\":{},\"notes\":\"BIP340 {}/{} plus native crypto vectors {}/{}\"}}]}}\n",
+        .{
+            if (bip.passed == bip.total) "pass" else "fail",
+            bip.passed,
+            bip.total,
+            if (bip.passed == bip.total) "all BIP340 vectors matched expected verification result" else "one or more BIP340 vectors mismatched expected verification result",
+            if (eq_passed == eq_total) "pass" else "fail",
+            eq_passed,
+            eq_total,
+            bip.passed,
+            bip.total,
+            native.passed,
+            native.total,
+        },
+    );
+}
+
+const Count = struct {
+    passed: usize,
+    total: usize,
+};
+
+fn runBip340Vectors(allocator: std.mem.Allocator, io: std.Io, verifier: *core.crypto.NativeVerifier) !Count {
+    const path = "../Shared/testing/fixtures/bip340/test-vectors.csv";
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(2 * 1024 * 1024));
+    defer allocator.free(bytes);
+    var lines = std.mem.splitScalar(u8, bytes, '\n');
+    _ = lines.next();
+    var passed: usize = 0;
+    var total: usize = 0;
+    while (lines.next()) |raw_line| {
+        const line = std.mem.trim(u8, raw_line, " \t\r\n");
+        if (line.len == 0) continue;
+        const pub_hex = csvField(line, 2) orelse return error.MalformedBip340Csv;
+        const msg_hex = csvField(line, 4) orelse return error.MalformedBip340Csv;
+        const sig_hex = csvField(line, 5) orelse return error.MalformedBip340Csv;
+        const expected_text = csvField(line, 6) orelse return error.MalformedBip340Csv;
+        const pubkey = try core.crypto.fromHexAlloc(allocator, pub_hex);
+        defer allocator.free(pubkey);
+        const msg = try core.crypto.fromHexAlloc(allocator, msg_hex);
+        defer allocator.free(msg);
+        const sig = try core.crypto.fromHexAlloc(allocator, sig_hex);
+        defer allocator.free(sig);
+        const expected = std.mem.eql(u8, expected_text, "TRUE");
+        const actual = verifier.verifySchnorr(pubkey, sig, msg);
+        if (actual == expected) passed += 1;
+        total += 1;
+    }
+    return .{ .passed = passed, .total = total };
+}
+
+fn runNativeCryptoVectors(allocator: std.mem.Allocator, io: std.Io, verifier: *core.crypto.NativeVerifier) !Count {
+    const path = "../Shared/conformance/fixtures/native_crypto_v1_vectors.json";
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(2 * 1024 * 1024));
+    defer allocator.free(bytes);
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});
+    defer parsed.deinit();
+    const vectors = parsed.value.object.get("vectors") orelse return error.NativeVectorsMissing;
+    if (vectors != .array) return error.NativeVectorsMissing;
+    var passed: usize = 0;
+    for (vectors.array.items) |item| {
+        if (item != .object) return error.NativeVectorsMissing;
+        if (try nativeVectorMatches(allocator, verifier, item.object)) passed += 1;
+    }
+    return .{ .passed = passed, .total = vectors.array.items.len };
+}
+
+fn nativeVectorMatches(allocator: std.mem.Allocator, verifier: *core.crypto.NativeVerifier, obj: std.json.ObjectMap) !bool {
+    const expected = jsonString(obj.get("expected")) orelse return false;
+    const want_valid = std.mem.eql(u8, expected, "valid");
+    const operation = jsonString(obj.get("operation")) orelse return false;
+    if (std.mem.eql(u8, operation, "verify_ecdsa")) {
+        const pubkey = try core.crypto.fromHexAlloc(allocator, jsonString(obj.get("pubkey_hex")) orelse "");
+        defer allocator.free(pubkey);
+        const sig = try core.crypto.fromHexAlloc(allocator, jsonString(obj.get("signature_hex")) orelse "");
+        defer allocator.free(sig);
+        const msg = try core.crypto.fromHexAlloc(allocator, jsonString(obj.get("msg_hash_hex")) orelse "");
+        defer allocator.free(msg);
+        if (msg.len != 32) return !want_valid;
+        var msg32: [32]u8 = undefined;
+        @memcpy(&msg32, msg[0..32]);
+        return verifier.verifyEcdsaDer(pubkey, sig, &msg32) == want_valid;
+    }
+    if (std.mem.eql(u8, operation, "verify_schnorr")) {
+        const pubkey = try core.crypto.fromHexAlloc(allocator, jsonString(obj.get("xonly_pubkey_hex")) orelse "");
+        defer allocator.free(pubkey);
+        const sig = try core.crypto.fromHexAlloc(allocator, jsonString(obj.get("signature_hex")) orelse "");
+        defer allocator.free(sig);
+        const msg = try core.crypto.fromHexAlloc(allocator, jsonString(obj.get("msg_hash_hex")) orelse "");
+        defer allocator.free(msg);
+        return verifier.verifySchnorr(pubkey, sig, msg) == want_valid;
+    }
+    if (std.mem.eql(u8, operation, "taproot_tweak_xonly")) {
+        const internal = try core.crypto.fromHexAlloc(allocator, jsonString(obj.get("xonly_pubkey_hex")) orelse "");
+        defer allocator.free(internal);
+        const merkle = try core.crypto.fromHexAlloc(allocator, jsonString(obj.get("merkle_root_hex")) orelse "");
+        defer allocator.free(merkle);
+        var tweak_input = std.ArrayList(u8).empty;
+        defer tweak_input.deinit(allocator);
+        try tweak_input.appendSlice(allocator, internal);
+        try tweak_input.appendSlice(allocator, merkle);
+        const tweak = core.crypto.taggedHash("TapTweak", tweak_input.items);
+        const result = verifier.taprootTweakPubkeyXOnly(internal, &tweak);
+        const expected_xonly = jsonString(obj.get("expected_output_xonly_hex")) orelse "";
+        const expected_parity = jsonInteger(obj.get("expected_parity")) orelse -1;
+        if (result) |tweaked| {
+            const actual_xonly = try core.crypto.toHexAlloc(allocator, tweaked.output_xonly[0..]);
+            defer allocator.free(actual_xonly);
+            const got_valid = std.mem.eql(u8, actual_xonly, expected_xonly) and tweaked.parity == @as(u8, @intCast(expected_parity));
+            return got_valid == want_valid;
+        }
+        return !want_valid;
+    }
+    return false;
+}
+
+fn csvField(line: []const u8, target: usize) ?[]const u8 {
+    var iter = std.mem.splitScalar(u8, line, ',');
+    var index: usize = 0;
+    while (iter.next()) |field| : (index += 1) {
+        if (index == target) return field;
+    }
+    return null;
 }
 
 fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8) !void {
