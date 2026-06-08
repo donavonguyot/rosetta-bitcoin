@@ -328,6 +328,7 @@ def build_artifact(
     expected_peer: str | None = None,
     reference_finish_height: int | None = None,
     reference_finish_hash: str | None = None,
+    source_state: dict[str, Any] | None = None,
 ) -> ControlBuildResult | None:
     entries = progress_entries(proof_log)
     if not entries:
@@ -336,9 +337,23 @@ def build_artifact(
     final = best_final_progress(entries)
     expected_peer = expected_peer or read_env().get("REFERENCE_P2P_PEER", "bitcoin-core-testnet4:48333")
     first = entries[0]
-    source_state_height = as_int(first.get("validated_height"), 0)
-    source_state_hash = first.get("validated_hash")
-    source_state_utxos = as_int(first.get("chainstate_utxo_count", first.get("utxo_count")), 0)
+    source_state = source_state if isinstance(source_state, dict) else {}
+    source_state_height = as_int(
+        source_state.get("height", source_state.get("validated_height", first.get("validated_height"))),
+        0,
+    )
+    source_state_hash = (
+        source_state.get("hash")
+        or source_state.get("validated_hash")
+        or first.get("validated_hash")
+    )
+    source_state_utxos = as_int(
+        source_state.get(
+            "utxo_count",
+            source_state.get("chainstate_utxo_count", first.get("chainstate_utxo_count", first.get("utxo_count"))),
+        ),
+        0,
+    )
     started_height = source_state_height if spec.get("resume_from_state") else 0
     if spec.get("resume_from_state"):
         target_height = reference_finish_height or as_int(final.get("validated_height"), started_height)
@@ -488,7 +503,66 @@ def self_test() -> int:
         if result.telemetry_quality != "clean":
             failures += 1
             print("self_test telemetry quality:", result.telemetry_quality)
-    print(f"control_benchmark_harness_self_test cases=1 failures={failures}")
+        post_log = tmp_path / "post-proof.log"
+        post_progress = [
+            {
+                "chain": "testnet4",
+                "sync_status": "blocks_syncing",
+                "header_height": 100000,
+                "validated_height": 100000,
+                "stored_block_height": 100000,
+                "current_blocker": None,
+            },
+            {
+                "chain": "testnet4",
+                "sync_status": "blocks_current",
+                "header_height": 123456,
+                "validated_height": 123456,
+                "validated_hash": "0000000000000000000000000000000000000000000000000000000000000002",
+                "stored_block_height": 123456,
+                "chainstate_utxo_count": 999,
+                "current_blocker": None,
+                "downloaded_blocks": 23456,
+                "connected_blocks": 23456,
+            },
+        ]
+        post_log.write_text("\n".join(PRODUCT_PREFIX + json.dumps(item) for item in post_progress), encoding="utf-8")
+        post_result = build_artifact(
+            port="go",
+            gate_id="post_100k_to_tip",
+            proof_log=post_log,
+            artifact_path=tmp_path / "go_control_post_100k_to_tip.json",
+            telemetry_log_path=tmp_path / "go_control_post_telemetry.log",
+            elapsed_ms=2000,
+            expected_peer="bitcoin-core-testnet4:48333",
+            reference_finish_height=123456,
+            reference_finish_hash="0000000000000000000000000000000000000000000000000000000000000002",
+            source_state={
+                "height": 100000,
+                "hash": _artifact_validator.EXPECTED_HASHES["performance_100k"],
+                "utxo_count": 13154991,
+            },
+        )
+        if post_result is None:
+            failures += 1
+            print("self_test: failed to build post_100k_to_tip artifact")
+        else:
+            post_payload = json.loads(post_result.artifact_path.read_text(encoding="utf-8"))
+            post_errors, _ = _artifact_validator.validate_payload(
+                post_payload,
+                gate_id="post_100k_to_tip",
+                path=post_result.artifact_path,
+                port="go",
+                expected_peer="bitcoin-core-testnet4:48333",
+                strict_current=True,
+            )
+            if post_errors:
+                failures += 1
+                print("self_test post_100k_to_tip artifact errors:", post_errors)
+            if post_payload.get("source_state_hash") != _artifact_validator.EXPECTED_HASHES["performance_100k"]:
+                failures += 1
+                print("self_test post_100k_to_tip source hash was not preserved")
+    print(f"control_benchmark_harness_self_test cases=2 failures={failures}")
     return 1 if failures else 0
 
 

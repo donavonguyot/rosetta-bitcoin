@@ -418,6 +418,22 @@
       "path": "Nodes/Shared/conformance/results/swift_control_post_100k_to_tip_benchmark_20260608T074111Z.json",
       "status": "current",
       "notes": "Current comparable swift post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_003131."
+    },
+    {
+      "port": "rust",
+      "claim": "post_100k_to_tip",
+      "gate_id": "post_100k_to_tip",
+      "path": "Nodes/Shared/conformance/results/rust_control_post_100k_to_tip_benchmark_20260608T075531Z.json",
+      "status": "current",
+      "notes": "Current comparable rust post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_005528."
+    },
+    {
+      "port": "go",
+      "claim": "post_100k_to_tip",
+      "gate_id": "post_100k_to_tip",
+      "path": "Nodes/Shared/conformance/results/go_control_post_100k_to_tip_benchmark_20260608T075534Z.json",
+      "status": "current",
+      "notes": "Current comparable go post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_005528."
     }
   ]
 }

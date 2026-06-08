@@ -672,6 +672,7 @@ def build_control_artifact(
     expected_peer: str,
     reference_finish_height: int | None = None,
     reference_finish_hash: str | None = None,
+    source_state: dict[str, Any] | None = None,
 ) -> Any | None:
     if not _control_harness.has_product_progress(proof_log):
         return None
@@ -688,6 +689,7 @@ def build_control_artifact(
         expected_peer=expected_peer,
         reference_finish_height=reference_finish_height,
         reference_finish_hash=reference_finish_hash,
+        source_state=source_state,
     )
 
 
@@ -988,6 +990,7 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             expected_peer=expected_peer,
             reference_finish_height=int(reference_finish["height"]) if reference_finish else None,
             reference_finish_hash=str(reference_finish["hash"]) if reference_finish else None,
+            source_state=entry.get("source_state_status") if campaign["gate"] == "post_100k_to_tip" else None,
         )
         telemetry_log = control_result.telemetry_log_path if control_result is not None else proof_log
         if control_result is not None:
