@@ -8,10 +8,17 @@ surfaces, raw block/transaction parsing, and a Rust script-corpus harness for
 the shared 45-fixture Shared corpus. Rust also exposes a narrow local Reference
 P2P comparator for the 5k supporting gate.
 
-This milestone does not claim live P2P sync, testnet4 tip maintenance, or
-binary-gate progress. Host and Docker local-reference replay currently reach
-height 10000 with `binary_gate_status=not_attempted`; the official comparable
-5k lane uses local Reference P2P block acquisition.
+For code structure and design rationale, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For imported Rust posture, use Project reports from the repository root:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
+
+Query Project for current imported runway posture instead of treating README
+proof notes as live status.
 
 ## Commands
 

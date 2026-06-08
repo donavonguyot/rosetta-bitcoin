@@ -2,12 +2,24 @@
 
 C++20 Bitcoin full node (`cpbitnode`), sibling to the other implementations under `../`.
 
+For code structure and design rationale, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For imported C++ posture, use Project reports from the repository root:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
+
 ## Status
 
 Follower implementation: P2P, sync, consensus validation, mempool, metrics HTTP,
 and offline unit tests. Cpp inherits known consensus work from the Shared rule
 ledger and script corpus, then proves it with focused C++ regression tests and
 port-owned corpus artifacts.
+
+This README does not restate latest proof or benchmark posture. See
+[docs/STATUS.md](docs/STATUS.md) for Project query pointers.
 
 Cpp's Core compliance path is **RocksDB-only**. Native mode must use RocksDB for
 headers, block index, sync state, validated tip, UTXO, undo, metadata, blocker
