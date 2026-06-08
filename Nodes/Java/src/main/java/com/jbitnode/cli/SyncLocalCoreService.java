@@ -53,6 +53,7 @@ public final class SyncLocalCoreService {
     int maxBatches =
         PeerConfig.parseIntValue(env.get("HEADER_BATCHES_MAX"), HeaderSync.DEFAULT_HEADER_BATCHES_MAX);
     int maxBlocks = PeerConfig.parseIntValue(env.get("BLOCKS_MAX"), 64);
+    int targetBlockHeight = PeerConfig.parseIntValue(env.get("TARGET_BLOCK_HEIGHT"), 0);
     boolean skipBlocks = PeerConfig.parseBoolean(env.get("SKIP_BLOCKS"), false);
     boolean syncTiming = PeerConfig.parseBoolean(env.get("SYNC_TIMING"), false);
     boolean progressJson = PeerConfig.parseBoolean(env.get("PROGRESS_JSON"), false);
@@ -67,7 +68,13 @@ public final class SyncLocalCoreService {
     out.println("  db=(native-rocksdb)");
     out.println("  peer=" + peer.host() + ":" + peer.port());
     out.println("  headers_max=" + maxHeaders + " batches_max=" + maxBatches);
-    out.println("  blocks_max=" + maxBlocks + " skip_blocks=" + skipBlocks);
+    out.println(
+        "  blocks_max="
+            + maxBlocks
+            + " target_block_height="
+            + targetBlockHeight
+            + " skip_blocks="
+            + skipBlocks);
 
     AtomicBoolean completedNormally = new AtomicBoolean(false);
     Thread shutdownHook =
@@ -96,34 +103,52 @@ public final class SyncLocalCoreService {
 
         BlockSync.Result blockResult = null;
         if (!skipBlocks) {
-          blockResult =
-              BlockSync.syncFromPeer(
-                  connection,
-                  chain,
-                  tracker,
-                  session.blockStorage(),
-                  session.chainstateStore(),
-                  maxBlocks,
-                  BlockSync.TimingSink.none(),
-                  false,
-                  progressJson
-                      ? progress ->
-                          printProgressJson(
-                              out,
-                              chain.name(),
-                              headerResult.bestHeight(),
-                              session.chainstateStore(),
-                              progress,
-                              progressInterval)
-                      : BlockSync.ProgressSink.none());
-          out.println("  downloaded_blocks=" + blockResult.downloaded());
-          out.println("  connected_blocks=" + blockResult.connected());
-          out.println("  sync_status=" + blockResult.syncStatus());
-          if (syncTiming) {
-            printTimingSummary(out, blockResult.timingSummary());
+          int effectiveMaxBlocks = maxBlocks;
+          if (targetBlockHeight > 0) {
+            int validatedBeforeBlocks = tracker.getValidatedHeight(chain.name());
+            int remainingToTarget = Math.max(0, targetBlockHeight - validatedBeforeBlocks);
+            if (remainingToTarget == 0) {
+              effectiveMaxBlocks = 0;
+            } else if (effectiveMaxBlocks <= 0) {
+              effectiveMaxBlocks = remainingToTarget;
+            } else {
+              effectiveMaxBlocks = Math.min(effectiveMaxBlocks, remainingToTarget);
+            }
           }
-          if (blockResult.blockerMessage() != null) {
-            out.println("  current_blocker=" + blockResult.blockerMessage());
+          if (effectiveMaxBlocks == 0) {
+            out.println("  downloaded_blocks=0");
+            out.println("  connected_blocks=0");
+            out.println("  sync_status=blocks_current");
+          } else {
+            blockResult =
+                BlockSync.syncFromPeer(
+                    connection,
+                    chain,
+                    tracker,
+                    session.blockStorage(),
+                    session.chainstateStore(),
+                    effectiveMaxBlocks,
+                    BlockSync.TimingSink.none(),
+                    false,
+                    progressJson
+                        ? progress ->
+                            printProgressJson(
+                                out,
+                                chain.name(),
+                                headerResult.bestHeight(),
+                                session.chainstateStore(),
+                                progress,
+                                progressInterval)
+                        : BlockSync.ProgressSink.none());
+            out.println("  downloaded_blocks=" + blockResult.downloaded());
+            out.println("  connected_blocks=" + blockResult.connected());
+            out.println("  sync_status=" + blockResult.syncStatus());
+            if (syncTiming) {
+              printTimingSummary(out, blockResult.timingSummary());
+            }
+            if (blockResult.blockerMessage() != null) {
+              out.println("  current_blocker=" + blockResult.blockerMessage());
+            }
           }
         }
 

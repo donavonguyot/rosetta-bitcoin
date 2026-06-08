@@ -157,6 +157,23 @@ def load_json_object(raw: str, label: str, errors: list[str]) -> dict[str, Any]:
     return parsed
 
 
+def manifest_volumes(port: str, errors: list[str]) -> dict[str, Any]:
+    path = ROOT / "Nodes/Shared/docker/ports" / f"{port}.docker.json"
+    if not path.exists():
+        errors.append(f"missing Docker manifest: {path.relative_to(ROOT)}")
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        errors.append(f"{path.relative_to(ROOT)} is not valid JSON: {exc}")
+        return {}
+    volumes = payload.get("volumes")
+    if isinstance(volumes, dict):
+        return volumes
+    errors.append(f"{path.relative_to(ROOT)} volumes must be a JSON object")
+    return {}
+
+
 def benchmark_ports(conn: sqlite3.Connection) -> list[str]:
     rows = all_rows(
         conn,
@@ -313,6 +330,7 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         )
 
     peer_modes = load_json_object(contract["peer_modes_json"], "peer_modes_json", errors)
+    volumes = manifest_volumes(port, errors)
     local_reference = peer_modes.get("local_reference")
     if gate["local_reference_required"]:
         if not isinstance(local_reference, dict):
@@ -339,8 +357,15 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
             elif "should be" in peer.lower() or "currently" in peer.lower():
                 warnings.append(f"local_reference peer/source needs cleanup: {peer}")
 
+    source_state_volume = ""
+    if gate["gate_id"] == "post_100k_to_tip":
+        source_state_volume = str(volumes.get("proof_100k") or "").strip()
+        if not source_state_volume:
+            errors.append("post_100k_to_tip requires volumes.proof_100k as the source durable state")
+
     if gate["durable_required"]:
-        if not str(contract["proof_volume"]).strip():
+        durable_volume = source_state_volume if gate["gate_id"] == "post_100k_to_tip" else str(contract["proof_volume"]).strip()
+        if not durable_volume:
             errors.append("durable benchmark requires a proof_volume")
 
     if gate["wal_disabled_required"] != 0:
@@ -427,6 +452,7 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         "command_key": command_key,
         "command": command["command"] if command else "",
         "proof_volume": contract["proof_volume"],
+        "source_state_volume": source_state_volume,
         "supervisor_volume": contract["supervisor_volume"],
         "local_reference": local_reference if isinstance(local_reference, dict) else {},
         "required_metadata": required_metadata(gate),
@@ -470,6 +496,8 @@ def print_text(results: list[dict[str, Any]]) -> None:
             print(f"  command={result['command']}")
         if result.get("proof_volume"):
             print(f"  proof_volume={result['proof_volume']}")
+        if result.get("source_state_volume"):
+            print(f"  source_state_volume={result['source_state_volume']}")
         if result.get("supervisor_volume"):
             print(f"  supervisor_volume={result['supervisor_volume']}")
         local_reference = result.get("local_reference") or {}

@@ -1,12 +1,14 @@
+# syntax=docker/dockerfile:1.7
 FROM debian:bookworm-slim AS build
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential cmake libssl-dev librocksdb-dev libsecp256k1-dev \
+    && apt-get install -y --no-install-recommends build-essential ccache cmake libssl-dev librocksdb-dev libsecp256k1-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 COPY . .
-RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -DCPBITNODE_USE_NATIVE_SECP256K1=ON \
+RUN --mount=type=cache,target=/root/.cache/ccache \
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -DCPBITNODE_USE_NATIVE_SECP256K1=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
     && cmake --build build --target cpbitnode cpbitnode-db cpbitnode-healthcheck cpbitnode-sync cpbitnode-storage-proof cpbitnode-blocker-inspect cpbitnode-script-corpus cpbitnode_tests
 
 FROM debian:bookworm-slim

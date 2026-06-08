@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 ARG ZIG_VERSION=0.16.0
 
 FROM debian:bookworm-slim AS build
@@ -15,12 +16,16 @@ WORKDIR /src
 COPY build.zig ./
 COPY src ./src
 COPY tests ./tests
-RUN zig build -Doptimize=ReleaseFast
+RUN --mount=type=cache,target=/root/.cache/zig \
+  --mount=type=cache,target=/src/.zig-cache \
+  zig build -Doptimize=ReleaseFast \
+  && mkdir -p /out \
+  && cp /src/zig-out/bin/zigbitnode /out/zigbitnode
 
 FROM debian:bookworm-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends librocksdb-dev libsecp256k1-dev ca-certificates netcat-openbsd \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build /src/zig-out/bin/zigbitnode /usr/local/bin/zigbitnode
+COPY --from=build /out/zigbitnode /usr/local/bin/zigbitnode
 CMD ["zigbitnode"]

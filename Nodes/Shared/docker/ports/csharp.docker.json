@@ -22,7 +22,7 @@
     "data": null,
     "proof": "csbitnode_proof_data",
     "supervisor": "csbitnode_sync_data",
-    "post_100k_to_tip": "csbitnode_post_100k_to_tip_data"
+    "proof_100k": "csbitnode_100k_proof_data"
   },
   "commands": {
     "docker_config": "cd Nodes/CSharp && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml config",
@@ -105,7 +105,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json",
-    "notes": "Persistent Docker supervisor exists; docker_proof_local, docker_proof_50k, and docker_proof_100k run official local-reference Docker benchmark gates with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
+    "notes": "Persistent Docker supervisor exists; docker_proof_local, docker_proof_50k, and docker_proof_100k run official local-reference Docker benchmark gates with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only. post_100k_to_tip resumes the port-owned durable 100k-or-later state; Project builds current tip-readiness artifacts."
   },
   "known_caveats": [
     "External network probe command not standardized",

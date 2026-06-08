@@ -55,6 +55,8 @@
       "properties": {
         "data": { "type": ["string", "null"] },
         "proof": { "type": ["string", "null"] },
+        "proof_50k": { "type": ["string", "null"] },
+        "proof_100k": { "type": ["string", "null"] },
         "supervisor": { "type": ["string", "null"] }
       }
     },

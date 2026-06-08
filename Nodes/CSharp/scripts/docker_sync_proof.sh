@@ -71,6 +71,20 @@ emit_benchmark_tick() {
     python3 scripts/emit_benchmark_telemetry_tick.py
 }
 
+emit_product_progress() {
+  local json="$1"
+  printf '%s\n' "$json" | python3 -c 'import json, sys
+raw = sys.stdin.read().strip()
+if not raw:
+    raise SystemExit
+try:
+    payload = json.loads(raw)
+except json.JSONDecodeError:
+    raise SystemExit
+if payload:
+    print("rb.port_progress " + json.dumps(payload, sort_keys=True))'
+}
+
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 started_ms="$(now_ms)"
 run_id="csharp-$(benchmark_gate)-$started_ms"
@@ -104,6 +118,10 @@ while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
     last_height="$h"
   fi
   log_line "AGENT_LOOP_TICK_chatreport {\"validated_height\":$h,\"header_height\":$header,\"stored_block_height\":$stored,\"sync_status\":\"$status\",\"delta_since_last\":$delta,\"process_running\":1}"
+  progress_line="$(emit_product_progress "$json" || true)"
+  if [[ -n "$progress_line" ]]; then
+    log_line "$progress_line"
+  fi
   if [[ "$first_peer_byte" == "0" ]] && [[ "$header" =~ ^[0-9]+$ ]] && (( header > 0 )); then
     log_line "$(emit_benchmark_tick "$json" "$previous_height" peer_connect first_peer_byte 1)"
     first_peer_byte=1

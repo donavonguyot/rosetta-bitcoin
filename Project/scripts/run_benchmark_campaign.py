@@ -100,6 +100,24 @@ LONG_RUN_GATES = {gate for gate, spec in _validator.GATES.items() if spec.get("l
 ACTIVE_CONTROL_PORTS = {"rust", "zig", "cpp", "go", "swift", "csharp", "java", "ocaml"}
 CONTROL_REQUIRED_GATES = {"baseline_5k", "shakedown_50k", "performance_100k", "post_100k_to_tip"}
 REFERENCE_TIP_HELPER = ROOT / "Project/scripts/reference_tip.py"
+POST_100K_SOURCE_STATUS_COMMANDS = {
+    "rust": "cd Nodes/Rust && DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_100k_proof_data make docker-status",
+    "zig": "cd Nodes/Zig && DOCKER_PROOF_VOLUME=zigbitnode_100k_proof_data make docker-status",
+    "cpp": "cd Nodes/Cpp && DOCKER_PROOF_VOLUME=cpbitnode_100k_proof_data make docker-cpp-sync-status",
+    "go": "cd Nodes/Go && DOCKER_PROOF_VOLUME=gobitnode_100k_proof_data make docker-status",
+    "swift": "cd Nodes/Swift && DOCKER_PROOF_VOLUME=swiftbitnode_100k_proof_data make docker-status",
+    "csharp": (
+        "cd Nodes/CSharp && DOCKER_PROOF_VOLUME=csbitnode_100k_proof_data SECP256K1_BACKEND=native "
+        "docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml "
+        "run --rm --no-deps csbitnode-sync-proof status"
+    ),
+    "java": (
+        "cd Nodes/Java && DOCKER_PROOF_VOLUME=jbitnode_100k_proof_data SECP256K1_BACKEND=native "
+        "docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml "
+        "run --rm --no-deps jbitnode-sync-proof com.jbitnode.cli.DbStatus"
+    ),
+    "ocaml": "cd Nodes/OCaml && DOCKER_LOCAL_PROOF_VOLUME=ocbitnode_100k_proof_data make docker-status",
+}
 
 
 def utc_now() -> str:
@@ -169,6 +187,18 @@ def rows(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -> li
 def one(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
     row = conn.execute(sql, params).fetchone()
     return dict(row) if row else None
+
+
+def extract_json_object(text: str) -> dict[str, Any] | None:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        payload = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def rel(path: Path) -> str:
@@ -419,6 +449,37 @@ def reference_tip() -> dict[str, Any]:
     if not payload.get("ok"):
         raise RuntimeError(str(payload.get("error") or "reference tip check failed"))
     return payload
+
+
+def check_post_100k_source_state(port: str, log_path: Path) -> tuple[bool, str, dict[str, Any]]:
+    command = POST_100K_SOURCE_STATUS_COMMANDS.get(port)
+    if not command:
+        return False, "missing post_100k source status command", {}
+    completed = subprocess.run(command, cwd=ROOT, shell=True, capture_output=True, text=True)
+    output = completed.stdout + completed.stderr
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(output, encoding="utf-8")
+    if completed.returncode != 0:
+        return False, f"source status command failed; see {rel(log_path)}", {}
+    status = extract_json_object(output)
+    if status is None:
+        return False, f"source status output was not parseable JSON; see {rel(log_path)}", {}
+    height = int(num(status.get("validated_height"), -1))
+    state_hash = str(status.get("validated_hash") or "")
+    utxos = int(num(status.get("chainstate_utxo_count"), -1))
+    if height < 100000:
+        return False, f"source durable state height={height}; expected >=100000", status
+    if not state_hash:
+        return False, "source durable state hash is blank", status
+    if utxos <= 0:
+        return False, f"source durable state UTXO count={utxos}; expected positive", status
+    if height == 100000:
+        expected_hash = EXPECTED_HASHES["performance_100k"]
+        if state_hash != expected_hash:
+            return False, f"source durable state hash mismatch at 100000: {state_hash}", status
+        if utxos != 13154991:
+            return False, f"source durable state UTXO count={utxos}; expected 13154991 at 100000", status
+    return True, f"source durable state height={height} hash={state_hash} utxos={utxos}", status
 
 
 def ms_duration(ms: float | None) -> str:
@@ -866,6 +927,19 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
 
         reference_finish: dict[str, Any] = {}
         if campaign["gate"] == "post_100k_to_tip":
+            source_log = campaign_dir(campaign) / "logs" / f"{port}_source_state.log"
+            ok, reason, source_status = check_post_100k_source_state(port, source_log)
+            entry["source_state_status"] = source_status
+            if not ok:
+                entry["status"] = "not_ready"
+                entry["reason"] = reason
+                entry["errors"].append(f"{reason}; see {rel(source_log)}")
+                append_event(campaign, port, "source_state_not_ready", reason)
+                if campaign_should_pause(campaign, port, "source_state_not_ready"):
+                    return 1
+                continue
+            entry["source_state_status"] = source_status
+            append_event(campaign, port, "source_state_ready", reason)
             try:
                 reference_finish = reference_tip()
                 entry["reference_finish"] = reference_finish

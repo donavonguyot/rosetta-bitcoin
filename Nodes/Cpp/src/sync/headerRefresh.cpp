@@ -27,11 +27,13 @@ HeaderRefreshAction decideHeaderRefreshAction(const config::Settings& settings, 
     }
 
     const int localTip = localHeaderTipHeight(tracker, chain);
-    if (advertisedPeerHeight >= 0 && shouldSkipHeaderDownload(tracker, chain, advertisedPeerHeight)) {
+    const bool localsCoverFollowup = localHeadersCoverBlockFollowup(tracker, chain, blocksTarget);
+    if (advertisedPeerHeight >= 0 && localsCoverFollowup &&
+        shouldSkipHeaderDownload(tracker, chain, advertisedPeerHeight)) {
         return HeaderRefreshAction::SkipNearPeerTip;
     }
 
-    if (dbHeadersAlignedWithSyncState(syncBestHeight, localTip) &&
+    if (localsCoverFollowup && dbHeadersAlignedWithSyncState(syncBestHeight, localTip) &&
         advertisedPeerHeight > localTip + kHeaderSyncNearPeerTip) {
         return HeaderRefreshAction::SkipAlignedDbAheadOfPeer;
     }

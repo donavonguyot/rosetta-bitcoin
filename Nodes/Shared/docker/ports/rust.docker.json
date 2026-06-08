@@ -26,8 +26,7 @@
     "tuning_50k_to_100k": "rsbitnode_tuning_50k_to_100k_data",
     "external_probe": "rsbitnode_external_5k_probe_data",
     "supervisor": "rsbitnode_sync_data",
-    "local_reference": "rsbitnode_local_reference_data",
-    "post_100k_to_tip": "rsbitnode_post_100k_to_tip_data"
+    "local_reference": "rsbitnode_local_reference_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Rust && make docker-config",
@@ -127,7 +126,7 @@
     "script_corpus_result": "Nodes/Shared/conformance/results/rust_script_corpus_docker_2026-06-03.json",
     "local_reference_debug_result": "Nodes/Rust/.benchmark-results/rust_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "external_probe_result": "Nodes/Shared/conformance/results/rust_docker_external_5k_probe_<YYYY-MM-DD>.json",
-    "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, bounded local-reference RPC replay, and official local Reference P2P gates. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. docker_proof_10k and the resumed 50k-to-100k lane remain diagnostic only post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
+    "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, bounded local-reference RPC replay, and official local Reference P2P gates. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. docker_proof_10k and the resumed 50k-to-100k lane remain diagnostic only. post_100k_to_tip resumes the port-owned durable 100k-or-later state; Project builds current tip-readiness artifacts."
   },
   "known_caveats": [
     "The local Reference P2P comparator is a bounded proof harness, not live tip maintenance",

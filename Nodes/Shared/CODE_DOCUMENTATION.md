@@ -22,8 +22,7 @@ thing:
 | Project reports | Mission-control observations and current status projections | Runtime truth used by node code |
 
 For a reusable section outline when authoring port architecture docs, see
-`code-documentation/port_architecture_outline.md`. For the multi-port execution
-plan, see `code-documentation/DOCUMENTATION_ROLLOUT_PLAN.md`.
+`code-documentation/port_architecture_outline.md`.
 
 Inline docs earn their keep at boundaries: P2P negotiation, sync orchestration,
 block connection, UTXO mutation, script verification, datadir locking, status

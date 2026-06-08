@@ -12,7 +12,7 @@
     "base": "debian:bookworm-slim plus pinned Zig toolchain",
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
-    "package_manager": "apt plus Zig tarball",
+    "package_manager": "apt plus Zig tarball/BuildKit cache",
     "native_dependencies": [
       "librocksdb-dev",
       "libsecp256k1-dev"
@@ -21,6 +21,8 @@
   "volumes": {
     "data": "zigbitnode_data",
     "proof": "zigbitnode_proof_data",
+    "proof_50k": "zigbitnode_50k_proof_data",
+    "proof_100k": "zigbitnode_100k_proof_data",
     "supervisor": "zigbitnode_supervisor_data"
   },
   "commands": {

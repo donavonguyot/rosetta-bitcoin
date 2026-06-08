@@ -12,7 +12,7 @@
     "base": "debian:bookworm-slim",
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
-    "package_manager": "apt",
+    "package_manager": "apt plus ccache/BuildKit compile cache",
     "native_dependencies": [
       "librocksdb-dev/librocksdb7.8",
       "libsecp256k1-dev/libsecp256k1-1"

@@ -152,6 +152,14 @@ let with_sync_lock datadir fn =
       ignore (Unix.write_substring fd metadata 0 (String.length metadata));
       fn ())
 
+let metadata_int db name default =
+  match Rocks.get db (Codec_v2.metadata_key name) with
+  | Some value -> (try int_of_string value with _ -> default)
+  | None -> default
+
+let metadata_string db name default =
+  Option.value ~default (Rocks.get db (Codec_v2.metadata_key name))
+
 let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetry_log =
   let result_path = if result_path = "" then default_result_path () else result_path in
   let db_path = Filename.concat datadir "chainstate-rocksdb" in
@@ -165,6 +173,9 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
   let last_result = ref None in
   let current_blocker = ref `Null in
   let target_reached = ref false in
+  let resume_height = ref 0 in
+  let resume_hash = ref "" in
+  let resume_utxos = ref 0 in
   let prefetch_depth = 4 in
   let slow_blocks = ref [] in
   let last_tick_height = ref 0 in
@@ -266,9 +277,6 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
     last_tick_height := height;
     last_tick_ms := now
   in
-  emit_telemetry ~event:"run_started" ~phase:"startup" ~height:0 ~utxos:0 ~last_block_ms:0 ();
-  emit_telemetry ~event:"container_started" ~phase:"startup" ~height:0 ~utxos:0 ~last_block_ms:0 ();
-  emit_telemetry ~event:"node_started" ~phase:"startup" ~height:0 ~utxos:0 ~last_block_ms:0 ();
   let raw_result =
     try
       if (target = 5000 || target = 50000) && Block_connect.script_threads () < 2 then failwith "official gates require parallel script runner";
@@ -276,43 +284,65 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
       with_sync_lock datadir (fun () ->
       with_block_file datadir (fun block_oc ->
         Rocks.with_db db_path (fun db ->
-        let utxo_count = ref 0 in
-        let expected_prev = ref None in
-        P2p.iter_blocks ~peer ~target ~start_height:0 ~prefetch:prefetch_depth ~on_block:
-          (fun block ->
-            total_timing.p2p_fetch_ms <- total_timing.p2p_fetch_ms + block.P2p.fetch_ms;
-            let block_store_started = int_of_float (Unix.gettimeofday () *. 1000.0) in
-            let file_offset = pos_out block_oc in
-            output_string block_oc block.raw;
-            total_timing.block_store_ms <- total_timing.block_store_ms + max 0 (int_of_float (Unix.gettimeofday () *. 1000.0) - block_store_started);
-            let connect =
-              Block_connect.connect_block ~script_pool:(Some script_pool) ~db ~height:block.P2p.height ~target ~raw:block.raw ~expected_hash:block.hash
-                ~expected_prev:!expected_prev ~file_number:0 ~file_offset ~utxo_count
-            in
-            if !blocks_connected = 0 then (
-              emit_telemetry ~event:"first_peer_byte" ~phase:"peer_connect" ~height:block.height ~utxos:connect.chainstate_utxo_count
-                ~last_block_ms:connect.timing.block_connect_store_commit_ms ~block_hash:connect.block_hash ~tx_count:connect.tx_count
-                ~vin_count:connect.vin_count ~script_input_count:connect.script_input_count ();
-              emit_telemetry ~event:"first_block_connected" ~phase:"block_connect" ~height:block.height ~utxos:connect.chainstate_utxo_count
-                ~last_block_ms:connect.timing.block_connect_store_commit_ms ~block_hash:connect.block_hash ~tx_count:connect.tx_count
-                ~vin_count:connect.vin_count ~script_input_count:connect.script_input_count ());
-            merge_timing total_timing connect;
-            remember_slow_block slow_blocks (block, connect);
-            incr blocks_fetched;
-            incr blocks_connected;
-            last_result := Some (block, connect);
-            expected_prev := Some connect.block_hash;
-            if block.height mod max 1 progress = 0 || block.height = target then
-              Printf.printf "ocbitnode-local-reference-proof height=%d target=%d hash=%s txs=%d utxos=%d\n%!"
-                block.height target connect.block_hash connect.tx_count connect.chainstate_utxo_count;
-            if block.height mod max 1 progress = 0 || block.height = target then
-              emit_telemetry ~event:(if block.height = target then "target_reached" else "heartbeat")
-                ~phase:(if block.height = target then "complete" else "heartbeat") ~height:block.height
-                ~utxos:connect.chainstate_utxo_count ~last_block_ms:connect.timing.block_connect_store_commit_ms
-                ~block_hash:connect.block_hash ~tx_count:connect.tx_count ~vin_count:connect.vin_count
-                ~script_input_count:connect.script_input_count ())
-        ))));
-      target_reached := !blocks_connected = target + 1;
+        let stored_height = max 0 (metadata_int db "validated_height" 0) in
+        let stored_hash = metadata_string db "validated_hash" "" in
+        let stored_utxos = max 0 (metadata_int db "chainstate_utxo_count" 0) in
+        resume_height := stored_height;
+        resume_hash := stored_hash;
+        resume_utxos := stored_utxos;
+        last_tick_height := stored_height;
+        emit_telemetry ~event:"run_started" ~phase:"startup" ~height:stored_height ~utxos:stored_utxos
+          ~last_block_ms:0 ?block_hash:(if stored_hash = "" then None else Some stored_hash) ();
+        emit_telemetry ~event:"container_started" ~phase:"startup" ~height:stored_height ~utxos:stored_utxos
+          ~last_block_ms:0 ?block_hash:(if stored_hash = "" then None else Some stored_hash) ();
+        emit_telemetry ~event:"node_started" ~phase:"startup" ~height:stored_height ~utxos:stored_utxos
+          ~last_block_ms:0 ?block_hash:(if stored_hash = "" then None else Some stored_hash) ();
+        if stored_height >= target then (
+          target_reached := true;
+          emit_telemetry ~event:"target_reached" ~phase:"complete" ~height:stored_height ~utxos:stored_utxos
+            ~last_block_ms:0 ?block_hash:(if stored_hash = "" then None else Some stored_hash) ())
+        else (
+          let utxo_count = ref stored_utxos in
+          let expected_prev = ref (if stored_hash = "" then None else Some stored_hash) in
+          let start_height = stored_height + 1 in
+          P2p.iter_blocks ~peer ~target ~start_height ~prefetch:prefetch_depth ~on_block:
+            (fun block ->
+              total_timing.p2p_fetch_ms <- total_timing.p2p_fetch_ms + block.P2p.fetch_ms;
+              let block_store_started = int_of_float (Unix.gettimeofday () *. 1000.0) in
+              let file_offset = pos_out block_oc in
+              output_string block_oc block.raw;
+              total_timing.block_store_ms <-
+                total_timing.block_store_ms + max 0 (int_of_float (Unix.gettimeofday () *. 1000.0) - block_store_started);
+              let connect =
+                Block_connect.connect_block ~script_pool:(Some script_pool) ~db ~height:block.P2p.height ~target ~raw:block.raw
+                  ~expected_hash:block.hash ~expected_prev:!expected_prev ~file_number:0 ~file_offset ~utxo_count
+              in
+              if !blocks_connected = 0 then (
+                emit_telemetry ~event:"first_peer_byte" ~phase:"peer_connect" ~height:block.height ~utxos:connect.chainstate_utxo_count
+                  ~last_block_ms:connect.timing.block_connect_store_commit_ms ~block_hash:connect.block_hash ~tx_count:connect.tx_count
+                  ~vin_count:connect.vin_count ~script_input_count:connect.script_input_count ();
+                emit_telemetry ~event:"first_block_connected" ~phase:"block_connect" ~height:block.height ~utxos:connect.chainstate_utxo_count
+                  ~last_block_ms:connect.timing.block_connect_store_commit_ms ~block_hash:connect.block_hash ~tx_count:connect.tx_count
+                  ~vin_count:connect.vin_count ~script_input_count:connect.script_input_count ());
+              merge_timing total_timing connect;
+              remember_slow_block slow_blocks (block, connect);
+              incr blocks_fetched;
+              incr blocks_connected;
+              last_result := Some (block, connect);
+              resume_height := block.P2p.height;
+              resume_hash := connect.block_hash;
+              resume_utxos := connect.chainstate_utxo_count;
+              expected_prev := Some connect.block_hash;
+              if block.height mod max 1 progress = 0 || block.height = target then
+                Printf.printf "ocbitnode-local-reference-proof height=%d target=%d hash=%s txs=%d utxos=%d\n%!"
+                  block.height target connect.block_hash connect.tx_count connect.chainstate_utxo_count;
+              if block.height mod max 1 progress = 0 || block.height = target then
+                emit_telemetry ~event:(if block.height = target then "target_reached" else "heartbeat")
+                  ~phase:(if block.height = target then "complete" else "heartbeat") ~height:block.height
+                  ~utxos:connect.chainstate_utxo_count ~last_block_ms:connect.timing.block_connect_store_commit_ms
+                  ~block_hash:connect.block_hash ~tx_count:connect.tx_count ~vin_count:connect.vin_count
+                  ~script_input_count:connect.script_input_count ()));
+        target_reached := !resume_height >= target))));
       "passed"
     with
     | Block_connect.Connect_error blocker ->
@@ -370,7 +400,7 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
   let validated_height, validated_hash, tx_count, chainstate_utxo_count =
     match !last_result with
     | Some (block, connect) -> block.P2p.height, connect.Block_connect.block_hash, connect.tx_count, connect.chainstate_utxo_count
-    | None -> -1, "", 0, -1
+    | None -> !resume_height, !resume_hash, 0, !resume_utxos
   in
   let status = if !target_reached then "blocks_current" else if proof_result = "failed" then "blocks_blocked" else "blocks_syncing" in
   emit_telemetry ~event:"run_finished" ~phase:(if proof_result = "passed" then "complete" else "failed") ~height:(max 0 validated_height)

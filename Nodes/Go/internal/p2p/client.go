@@ -35,9 +35,10 @@ type FetchedBlock struct {
 }
 
 type FetchOptions struct {
-	Peer     string
-	Target   int
-	Prefetch int
+	Peer        string
+	Target      int
+	StartHeight int
+	Prefetch    int
 }
 
 func FetchBlocks(opts FetchOptions) <-chan FetchedBlock {
@@ -67,7 +68,14 @@ func FetchBlocks(opts FetchOptions) <-chan FetchedBlock {
 			out <- FetchedBlock{Err: err}
 			return
 		}
-		for start := 0; start <= opts.Target; start += prefetch {
+		startHeight := opts.StartHeight
+		if startHeight < 0 {
+			startHeight = 0
+		}
+		if startHeight > opts.Target {
+			return
+		}
+		for start := startHeight; start <= opts.Target; start += prefetch {
 			end := minInt(opts.Target+1, start+prefetch)
 			fetchStarted := time.Now()
 			rawBlocks, err := client.requestBlocks(hashes[start:end])

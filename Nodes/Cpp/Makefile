@@ -37,7 +37,7 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: build test test-core test-wire test-runtime docker-config docker-build docker-warm node-status sync-local cpp-node-storage-proof cpp-node-script-corpus cpp-node-native-crypto-test docker-cpp-native-crypto-proof docker-cpp-supporting-5k-proof docker-cpp-supporting-10k-proof docker-cpp-supporting-50k-proof docker-cpp-primary-100k-proof docker-cpp-post-100k-to-tip-proof docker-cpp-rocksdb-storage-proof docker-script-corpus docker-cpp-sync-supervisor docker-cpp-sync-status docker-cpp-sync-stop docker-cpp-sync-resume clean
+.PHONY: build test test-core test-wire test-runtime docker-config docker-build docker-warm node-status sync-local cpp-node-storage-proof cpp-node-script-corpus cpp-node-native-crypto-test docker-cpp-native-crypto-proof docker-cpp-supporting-5k-proof docker-cpp-supporting-10k-proof docker-cpp-supporting-50k-proof docker-cpp-primary-100k-proof docker-cpp-post-100k-to-tip-proof docker-proof-post-100k-to-tip docker-cpp-rocksdb-storage-proof docker-script-corpus docker-cpp-sync-supervisor docker-cpp-sync-status docker-cpp-sync-stop docker-cpp-sync-resume clean
 
 build:
 	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
@@ -133,6 +133,8 @@ docker-cpp-post-100k-to-tip-proof:
 	  DOCKER_BENCHMARK_BLOCKS_MAX=$(POST_100K_TIP_TARGET) \
 	  BENCHMARK_GATE=post_100k_to_tip \
 	  PRESERVE_PROOF_VOLUME=1
+
+docker-proof-post-100k-to-tip: docker-cpp-post-100k-to-tip-proof
 
 docker-cpp-rocksdb-storage-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi

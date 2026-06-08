@@ -58,6 +58,7 @@ services:
       HEADERS_MAX: ${HEADERS_MAX:-200}
       HEADER_BATCHES_MAX: ${HEADER_BATCHES_MAX:-1}
       BLOCKS_MAX: ${BLOCKS_MAX:-2}
+      TARGET_BLOCK_HEIGHT: ${TARGET_BLOCK_HEIGHT:-0}
     networks:
       - default
       - reference

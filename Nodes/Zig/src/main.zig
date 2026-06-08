@@ -14,6 +14,7 @@ const ProofProfile = struct {
     benchmark_gate: []const u8,
     benchmark_kind: []const u8,
     benchmark_lane: []const u8,
+    strict_expected: bool = true,
     expected_hash: []const u8,
     expected_utxo_count: i64,
 };
@@ -68,7 +69,7 @@ fn usage(out: anytype) !void {
         \\  codec-vectors
         \\  native-crypto-vectors
         \\  script-corpus [--manifest path] [--output path]
-        \\  local-reference-proof [--target 5000|50000|100000] [--peer <host:port>] [--output path]
+        \\  local-reference-proof [--target <height>] [--peer <host:port>] [--output path]
         \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
         \\
     , .{});
@@ -353,8 +354,10 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const final_meta = try db.readMetadata(allocator);
     defer db.deinitMetadata(allocator, final_meta);
     if (last_height != target) return error.TargetNotReached;
-    if (!std.mem.eql(u8, last_hash, profile.expected_hash)) return error.UnexpectedTargetHash;
-    if (final_meta.chainstate_utxo_count != profile.expected_utxo_count) return error.UnexpectedUtxoCount;
+    if (profile.strict_expected) {
+        if (!std.mem.eql(u8, last_hash, profile.expected_hash)) return error.UnexpectedTargetHash;
+        if (final_meta.chainstate_utxo_count != profile.expected_utxo_count) return error.UnexpectedUtxoCount;
+    }
     try emitTelemetryTick(out, profile, peer, "run_finished", "complete", last_height, last_hash, last_utxos, 0, started, last_tick_ms, last_tick_height, timing);
     telemetry_tick_count += 1;
 
@@ -436,7 +439,16 @@ fn proofProfile(target: u32) ?ProofProfile {
             .expected_hash = "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
             .expected_utxo_count = 13154991,
         },
-        else => null,
+        else => if (target > 100000) .{
+            .target = target,
+            .target_label = "post-100k",
+            .benchmark_gate = "post_100k_to_tip",
+            .benchmark_kind = "post_100k_to_tip_p2p",
+            .benchmark_lane = "post_100k_to_tip_p2p",
+            .strict_expected = false,
+            .expected_hash = "",
+            .expected_utxo_count = -1,
+        } else null,
     };
 }
 

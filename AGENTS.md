@@ -37,8 +37,7 @@ Before editing a port, read:
 16. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
 17. `Docs/blocker-ledger.md`.
 18. `Docs/supervisor-contract.md`.
-19. `Nodes/Shared/code-documentation/DOCUMENTATION_ROLLOUT_PLAN.md` when planning multi-port documentation work.
-20. The target port's README, port architecture doc (`Nodes/<Port>/docs/ARCHITECTURE.md` when present), and blocker ledger.
+19. The target port's README, port architecture doc (`Nodes/<Port>/docs/ARCHITECTURE.md` when present), and blocker ledger.
 
 ## Code documentation
 
@@ -46,7 +45,6 @@ Before adding or improving inline comments, docblocks, or port architecture
 prose, read:
 
 - `Nodes/Shared/CODE_DOCUMENTATION.md`
-- `Nodes/Shared/code-documentation/DOCUMENTATION_ROLLOUT_PLAN.md` for multi-port sequencing
 - `Nodes/Shared/code-documentation/agent_brief_template.md`
 - `Nodes/Shared/code-documentation/review_questions.md`
 

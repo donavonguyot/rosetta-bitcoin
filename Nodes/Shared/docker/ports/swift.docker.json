@@ -12,7 +12,7 @@
     "base": "swift:6.0-bookworm",
     "runtime": "swift:6.0-bookworm",
     "os_family": "Debian-family Swift image",
-    "package_manager": "apt plus SwiftPM",
+    "package_manager": "apt plus SwiftPM/BuildKit build cache",
     "native_dependencies": [
       "librocksdb-dev/librocksdb7.8",
       "libsecp256k1-dev/libsecp256k1-1"
@@ -21,6 +21,8 @@
   "volumes": {
     "data": "swiftbitnode_data",
     "proof": "swiftbitnode_proof_data",
+    "proof_50k": "swiftbitnode_50k_proof_data",
+    "proof_100k": "swiftbitnode_100k_proof_data",
     "supervisor": "swiftbitnode_supervisor_data"
   },
   "commands": {

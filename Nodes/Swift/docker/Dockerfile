@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM swift:6.0-bookworm AS build
 
 RUN apt-get update \
@@ -8,7 +9,11 @@ WORKDIR /src
 COPY Package.swift ./
 COPY Sources ./Sources
 COPY Tests ./Tests
-RUN swift build -c release
+RUN --mount=type=cache,target=/src/.build \
+  --mount=type=cache,target=/root/.cache/org.swift.swiftpm \
+  swift build -c release \
+  && mkdir -p /out \
+  && cp /src/.build/release/swiftbitnode /out/swiftbitnode
 
 FROM swift:6.0-bookworm
 
@@ -17,5 +22,5 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=build /src/.build/release/swiftbitnode /usr/local/bin/swiftbitnode
+COPY --from=build /out/swiftbitnode /usr/local/bin/swiftbitnode
 CMD ["swiftbitnode"]

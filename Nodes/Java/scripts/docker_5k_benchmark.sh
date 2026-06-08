@@ -105,12 +105,27 @@ log_tick() {
   printf '%s\n' "$line" | tee -a "$RUN_LOG_TMP"
 }
 
+log_product_progress() {
+  local json="$1"
+  printf '%s\n' "$json" | python3 -c 'import json, sys
+raw = sys.stdin.read().strip()
+if not raw:
+    raise SystemExit
+try:
+    payload = json.loads(raw)
+except json.JSONDecodeError:
+    raise SystemExit
+if payload:
+    print("rb.port_progress " + json.dumps(payload, sort_keys=True))' | tee -a "$RUN_LOG_TMP"
+}
+
 : > "$RUN_LOG_TMP"
 log_tick '{}' 0 startup run_started 1
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 set +e
 DOCKER_PROOF_VOLUME="$VOLUME" SECP256K1_BACKEND="$BACKEND" HEADERS_MAX="$HEADERS_MAX" \
   HEADER_BATCHES_MAX="$HEADER_BATCHES_MAX" BLOCKS_MAX="$BLOCKS_MAX" \
+  TARGET_BLOCK_HEIGHT="$TARGET" \
   "${DOCKER_COMPOSE[@]}" run -d --name "$CONTAINER_NAME" --no-deps \
     -e PAR_SCRIPT_VERIFY=1 \
     -e SYNC_TIMING=1 \
@@ -138,6 +153,7 @@ if [[ "$start_exit" -eq 0 ]]; then
     if [[ "$h" =~ ^[0-9]+$ ]]; then
       last_height="$h"
     fi
+    log_product_progress "$json" || true
     if [[ "$first_peer_byte" == "0" ]] && [[ "$header" =~ ^[0-9]+$ ]] && (( header > 0 )); then
       log_tick "$json" "$previous_height" peer_connect first_peer_byte 1
       first_peer_byte=1
