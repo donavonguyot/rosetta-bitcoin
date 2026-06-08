@@ -536,11 +536,20 @@ def terminate_process_tree(process: subprocess.Popen[str]) -> None:
         process.terminate()
 
 
-def run_shell(command: str, log_path: Path, *, startup_timeout_sec: int = 0) -> int:
+def run_shell(
+    command: str,
+    log_path: Path,
+    *,
+    startup_timeout_sec: int = 0,
+    extra_env: dict[str, str] | None = None,
+) -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     last_tick: dict[str, Any] | None = None
     started = time.monotonic()
     first_block_connected = False
+    env = os.environ.copy()
+    if extra_env:
+        env.update({key: str(value) for key, value in extra_env.items()})
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
             command,
@@ -551,6 +560,7 @@ def run_shell(command: str, log_path: Path, *, startup_timeout_sec: int = 0) -> 
             text=True,
             bufsize=1,
             start_new_session=True,
+            env=env,
         )
         assert process.stdout is not None
         for line in process.stdout:
@@ -660,6 +670,8 @@ def build_control_artifact(
     proof_log: Path,
     elapsed_ms: int,
     expected_peer: str,
+    reference_finish_height: int | None = None,
+    reference_finish_hash: str | None = None,
 ) -> Any | None:
     if not _control_harness.has_product_progress(proof_log):
         return None
@@ -674,6 +686,8 @@ def build_control_artifact(
         telemetry_log_path=telemetry_log_path,
         elapsed_ms=elapsed_ms,
         expected_peer=expected_peer,
+        reference_finish_height=reference_finish_height,
+        reference_finish_hash=reference_finish_hash,
     )
 
 
@@ -937,14 +951,19 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         protected_snapshot = snapshot_file(protected_artifact)
         startup_timeout = campaign.get("startup_timeout_sec", 0) if campaign["gate"] in LONG_RUN_GATES else 0
         proof_command = entry["proof_command"]
+        proof_env: dict[str, str] = {}
         if campaign["gate"] == "post_100k_to_tip":
-            proof_command = (
-                f"REFERENCE_FINISH_HEIGHT={int(reference_finish['height'])} "
-                f"REFERENCE_FINISH_HASH={reference_finish['hash']} "
-                f"POST_100K_TIP_TARGET={int(reference_finish['height'])} "
-                f"{proof_command}"
-            )
-        exit_code = run_shell(proof_command, proof_log, startup_timeout_sec=int(startup_timeout or 0))
+            proof_env = {
+                "REFERENCE_FINISH_HEIGHT": str(int(reference_finish["height"])),
+                "REFERENCE_FINISH_HASH": str(reference_finish["hash"]),
+                "POST_100K_TIP_TARGET": str(int(reference_finish["height"])),
+            }
+        exit_code = run_shell(
+            proof_command,
+            proof_log,
+            startup_timeout_sec=int(startup_timeout or 0),
+            extra_env=proof_env,
+        )
         finished = time.time()
         entry["finished_at"] = utc_now()
         entry["exit_code"] = exit_code
@@ -1277,6 +1296,14 @@ def self_test() -> int:
         state_path = tmp_path / "state.json"
         write_json(state_path, state)
         assert load_campaign(state_path)["campaign_id"] == "selftest"
+        env_log = tmp_path / "env.log"
+        env_code = run_shell(
+            "sh -c 'printf \"%s\" \"$POST_100K_TIP_TARGET\"'",
+            env_log,
+            extra_env={"POST_100K_TIP_TARGET": "123456"},
+        )
+        assert env_code == 0
+        assert env_log.read_text(encoding="utf-8") == "123456"
     print("benchmark_campaign_self_test passed")
     return 0
 
