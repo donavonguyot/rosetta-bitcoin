@@ -1,8 +1,22 @@
+use std::path::PathBuf;
 use std::process::Command;
+
+fn rsbitnode_bin() -> PathBuf {
+    let cargo_path = PathBuf::from(env!("CARGO_BIN_EXE_rsbitnode"));
+    if cargo_path.is_file() {
+        return cargo_path;
+    }
+    std::env::current_exe()
+        .expect("current test exe")
+        .parent()
+        .and_then(|path| path.parent())
+        .expect("target debug dir")
+        .join("rsbitnode")
+}
 
 #[test]
 fn codec_vectors_pass() {
-    let status = Command::new(env!("CARGO_BIN_EXE_rsbitnode"))
+    let status = Command::new(rsbitnode_bin())
         .arg("codec-vectors")
         .status()
         .expect("run codec vectors");
@@ -12,7 +26,7 @@ fn codec_vectors_pass() {
 #[test]
 fn empty_status_is_not_attempted() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let output = Command::new(env!("CARGO_BIN_EXE_rsbitnode"))
+    let output = Command::new(rsbitnode_bin())
         .arg("status")
         .arg("--datadir")
         .arg(dir.path())
@@ -30,7 +44,7 @@ fn empty_status_is_not_attempted() {
 fn storage_proof_seeds_height_two() {
     let dir = tempfile::tempdir().expect("tempdir");
     let result = dir.path().join("proof.json");
-    let output = Command::new(env!("CARGO_BIN_EXE_rsbitnode"))
+    let output = Command::new(rsbitnode_bin())
         .arg("storage-proof")
         .arg("--datadir")
         .arg(dir.path().join("data"))
@@ -54,7 +68,7 @@ fn storage_proof_seeds_height_two() {
 fn script_corpus_loads_45_rows() {
     let dir = tempfile::tempdir().expect("tempdir");
     let result = dir.path().join("script.json");
-    let output = Command::new(env!("CARGO_BIN_EXE_rsbitnode"))
+    let output = Command::new(rsbitnode_bin())
         .arg("script-corpus")
         .arg("--result-path")
         .arg(&result)

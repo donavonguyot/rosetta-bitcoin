@@ -111,7 +111,7 @@ levels such as "level 1" or "gold" when adding them.
 
 - Manifest: `Nodes/Shared/testing/fixtures/block_connect_backend_probe_v1.json`
 - Suite version: `2026-06-07`
-- Suite hash: `b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f`
+- Suite hash: `7b1704a56dfdeeb72a7508db0fa85a4b63f44dbeb437f81a8bd5e364d304cb3d`
 - Case total: `2`
 - Provenance: `rb_live_chain_regression`, `proof_derived`
 - Does not prove: long-sync safety, tip maintenance, or every future script template.

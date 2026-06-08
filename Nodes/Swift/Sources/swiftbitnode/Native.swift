@@ -140,6 +140,17 @@ enum NativeSecp256k1 {
               let shared = currentContext() else {
             return "malformed_input"
         }
+        return verifySchnorrMessageResult(xonlyPubkey: xonlyPubkey, message: msg32, signature: signature, context: shared)
+    }
+
+    static func verifySchnorrMessageResult(xonlyPubkey: Data, message: Data, signature: Data) -> String {
+        guard signature.count == 64, xonlyPubkey.count == 32, let shared = currentContext() else {
+            return "malformed_input"
+        }
+        return verifySchnorrMessageResult(xonlyPubkey: xonlyPubkey, message: message, signature: signature, context: shared)
+    }
+
+    private static func verifySchnorrMessageResult(xonlyPubkey: Data, message: Data, signature: Data, context shared: Context) -> String {
         let api = shared.api
         let ctx = shared.context
         var parsedPubkey = [UInt8](repeating: 0, count: 64)
@@ -147,13 +158,18 @@ enum NativeSecp256k1 {
             api.xonlyPubkeyParse(ctx, &parsedPubkey, pubBytes.bindMemory(to: UInt8.self).baseAddress) == 1
         }
         guard parsed else { return "malformed_input" }
+        var messageBytes = Array(message)
+        let messageCount = messageBytes.count
+        if messageBytes.isEmpty {
+            messageBytes = [0]
+        }
         let valid = signature.withUnsafeBytes { sigBytes in
-            msg32.withUnsafeBytes { msgBytes in
+            messageBytes.withUnsafeBufferPointer { msgBytes in
                 api.schnorrsigVerify(
                     ctx,
                     sigBytes.bindMemory(to: UInt8.self).baseAddress,
-                    msgBytes.bindMemory(to: UInt8.self).baseAddress,
-                    msg32.count,
+                    msgBytes.baseAddress,
+                    messageCount,
                     parsedPubkey
                 ) == 1
             }

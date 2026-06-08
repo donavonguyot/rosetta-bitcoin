@@ -48,6 +48,23 @@ pub struct CryptoReport {
     results: Vec<CryptoVectorResult>,
 }
 
+impl CryptoReport {
+    pub fn result(&self) -> &'static str {
+        self.result
+    }
+
+    pub fn vector_count(&self) -> usize {
+        self.vector_count
+    }
+
+    pub fn passed_count(&self) -> usize {
+        self.results
+            .iter()
+            .filter(|result| result.result == result.expected)
+            .count()
+    }
+}
+
 #[derive(Serialize)]
 struct CryptoVectorResult {
     id: String,

@@ -3,6 +3,7 @@ let usage () =
   prerr_endline "  ocbitnode status --datadir <path>";
   prerr_endline "  ocbitnode storage-proof --datadir <path> --result-path <json>";
   prerr_endline "  ocbitnode native-crypto-vectors --result-path <json> [--vectors <json>]";
+  prerr_endline "  ocbitnode test-capability --kind <crypto-vectors|block-connect-backend> --outcome-path <json>";
   prerr_endline "  ocbitnode script-corpus --manifest <path> --result-path <json> --runtime-surface <host|docker> [--fixture-id <id>]";
   prerr_endline "  ocbitnode local-reference-proof --datadir <path> --target <height> --peer <host:port> --result-path <json> --runtime-surface <host|docker> [--progress <n>] [--telemetry-log <path>]";
   2
@@ -34,6 +35,10 @@ let () =
           Ocbitnode.Native_crypto_vectors.run
             ~vector_path:(Option.value ~default:default_vectors (option_value "--vectors" rest))
             ~result_path:(require "--result-path" rest)
+      | "test-capability" :: rest ->
+          Ocbitnode.Test_capability.run
+            ~kind:(require "--kind" rest)
+            ~outcome_path:(require "--outcome-path" rest)
       | "script-corpus" :: rest ->
           Ocbitnode.Script_corpus.run
             ~manifest_path:(require "--manifest" rest)

@@ -1,0 +1,55 @@
+{
+  "captured_at": "2026-06-08T07:13:34Z",
+  "category": "test_capability_contracts",
+  "contracts": [
+    {
+      "backend": "libsecp256k1-secp256k1.net",
+      "blocking_for": [
+        "pure_crypto_experiment"
+      ],
+      "capability": "block_connect_with_backend",
+      "case_passed": 2,
+      "case_total": 2,
+      "command_key": "test_block_connect_backend",
+      "contract_id": "csharp.block_connect_with_backend",
+      "does_not_prove": "Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template.",
+      "evidence_kind": "suite",
+      "evidence_path": "Nodes/Shared/testing/fixtures/block_connect_backend_probe_v1.json",
+      "notes": "scripts.p2pkh_sighash_single_38010 result=passed; scripts.p2tr_scriptpath_44295 result=passed",
+      "port": "csharp",
+      "provenance": [
+        "rb_live_chain_regression",
+        "proof_derived"
+      ],
+      "scope": "host",
+      "status": "pass",
+      "suite_hash": "7b1704a56dfdeeb72a7508db0fa85a4b63f44dbeb437f81a8bd5e364d304cb3d",
+      "suite_id": "rb.block_connect_backend_probe_v1",
+      "suite_version": "2026-06-07"
+    }
+  ],
+  "port": "csharp",
+  "results": [
+    {
+      "case_passed": 2,
+      "case_total": 2,
+      "notes": "scripts.p2pkh_sighash_single_38010 result=passed; scripts.p2tr_scriptpath_44295 result=passed",
+      "result": "pass",
+      "suite_id": "rb.block_connect_backend_probe_v1"
+    }
+  ],
+  "schema": "port.test_capability_contract.v1",
+  "suites": [
+    {
+      "case_total": 2,
+      "does_not_prove": "Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template.",
+      "provenance": [
+        "rb_live_chain_regression",
+        "proof_derived"
+      ],
+      "suite_hash": "7b1704a56dfdeeb72a7508db0fa85a4b63f44dbeb437f81a8bd5e364d304cb3d",
+      "suite_id": "rb.block_connect_backend_probe_v1",
+      "suite_version": "2026-06-07"
+    }
+  ]
+}

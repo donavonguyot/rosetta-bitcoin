@@ -10,6 +10,8 @@ do {
         try Json.write(NativeVectors.run(), to: nil)
     case "script-corpus":
         try ScriptCorpus.run(args: args)
+    case "test-capability":
+        try TestCapability.run(args: args)
     case "proof-local":
         try LocalReferenceProof.run(args: args)
     case "sync-supervisor":

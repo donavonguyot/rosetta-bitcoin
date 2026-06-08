@@ -50,6 +50,30 @@ pub struct ScriptCorpusReport {
     results: Vec<ScriptFixtureResult>,
 }
 
+impl ScriptCorpusReport {
+    pub fn result(&self) -> &'static str {
+        self.result
+    }
+
+    pub fn fixture_count(&self) -> usize {
+        self.fixture_count
+    }
+
+    pub fn passed(&self) -> usize {
+        self.passed
+    }
+
+    pub fn native_crypto_backend(&self) -> &'static str {
+        self.native_crypto_backend
+    }
+
+    pub fn verifier_crypto_backend(&self) -> Option<&str> {
+        self.verifier
+            .get("crypto_backend")
+            .and_then(serde_json::Value::as_str)
+    }
+}
+
 #[derive(Serialize)]
 struct ScriptFixtureResult {
     fixture_id: String,

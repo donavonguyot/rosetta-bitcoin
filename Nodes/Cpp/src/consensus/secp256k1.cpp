@@ -501,7 +501,7 @@ bool verifySchnorrSignature(std::span<const std::uint8_t, 32> pubkeyXonly,
                             std::span<const std::uint8_t, 64> signature) {
 #ifdef CPBITNODE_USE_NATIVE_SECP256K1
     secp256k1_xonly_pubkey pubkey;
-    if (message.size() != 32 || signature.empty()) {
+    if (signature.empty()) {
         return false;
     }
     if (secp256k1_xonly_pubkey_parse(nativeContext(), &pubkey, pubkeyXonly.data()) != 1) {

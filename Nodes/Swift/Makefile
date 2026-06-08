@@ -39,10 +39,16 @@ swift-node-native-crypto-vectors:
 	$(SWIFT) run swiftbitnode native-crypto-vectors
 
 test-crypto-vectors:
-	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port swift --backend libsecp256k1 --result-path $(CRYPTO_CAPABILITY_RESULT)
+	@tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	$(SWIFT) run swiftbitnode test-capability --kind crypto-vectors --outcome-path "$$tmp"; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT)
 
 test-block-connect-backend:
-	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port swift --backend libsecp256k1 --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
+	@tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	$(SWIFT) run swiftbitnode test-capability --kind block-connect-backend --outcome-path "$$tmp"; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 swift-node-script-corpus:
 	$(SWIFT) run swiftbitnode script-corpus \

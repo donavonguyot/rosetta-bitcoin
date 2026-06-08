@@ -65,10 +65,10 @@ rust-node-native-crypto-vectors:
 	$(CARGO) run -- native-crypto-vectors
 
 test-crypto-vectors:
-	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port rust --backend rust-secp256k1 --result-path $(CRYPTO_CAPABILITY_RESULT)
+	$(CARGO) run -- test-crypto-capability --result-path $(CRYPTO_CAPABILITY_RESULT)
 
 test-block-connect-backend:
-	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port rust --backend rust-secp256k1 --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
+	$(CARGO) run -- test-block-connect-backend --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 rust-node-script-corpus:
 	$(CARGO) run -- script-corpus --result-path $(SCRIPT_RESULT)

@@ -7,6 +7,8 @@
 
 #include <array>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -46,6 +48,19 @@ std::string hexString(const std::array<std::uint8_t, 32>& bytes) {
         out.push_back(kHex[byte & 0xf]);
     }
     return out;
+}
+
+std::vector<std::string> splitCsv(const std::string& line) {
+    std::vector<std::string> fields;
+    std::stringstream stream(line);
+    std::string field;
+    while (std::getline(stream, field, ',')) {
+        fields.push_back(field);
+    }
+    if (!line.empty() && line.back() == ',') {
+        fields.emplace_back();
+    }
+    return fields;
 }
 
 }  // namespace
@@ -90,7 +105,43 @@ void testNativeCryptoTaprootTweakXonly() {
     EXPECT_EQ(hexString(output), std::string("4b3e30f94e0ae82945cbb40d83088b8f3bea370c24c575b7788889ad5e64da8b"));
 }
 
+void testBip340CsvVectors() {
+#ifdef CPBITNODE_REPO_ROOT
+    const std::string path = std::string(CPBITNODE_REPO_ROOT) + "/Nodes/Shared/testing/fixtures/bip340/test-vectors.csv";
+#else
+    const std::string path = "../Shared/testing/fixtures/bip340/test-vectors.csv";
+#endif
+    std::ifstream in(path);
+    EXPECT_TRUE(in.good());
+    if (!in.good()) return;
+    std::string line;
+    std::getline(in, line);
+    int total = 0;
+    int passed = 0;
+    while (std::getline(in, line)) {
+        if (line.empty()) continue;
+        const auto fields = splitCsv(line);
+        EXPECT_TRUE(fields.size() >= 7);
+        if (fields.size() < 7) continue;
+        const auto pubkey = hex32(fields[2]);
+        const auto message = hexBytes(fields[4]);
+        const auto signature = hex64(fields[5]);
+        const bool expected = fields[6] == "TRUE";
+        const bool actual = cpbitnode::consensus::verifySchnorrSignature(pubkey, message, signature);
+        if (actual == expected) {
+            ++passed;
+        } else {
+            std::cerr << "FAIL BIP340 vector " << fields[0] << " got " << actual << " expected " << expected << "\n";
+            ++g_failures;
+        }
+        ++total;
+    }
+    EXPECT_EQ(total, 19);
+    EXPECT_EQ(passed, total);
+}
+
 void testBlock739P2wpkhInput142AcceptedWithNativeCrypto() {
+#ifdef CPBITNODE_USE_NATIVE_SECP256K1
     const auto payload = cpbitnode::testfixtures::readFixtureHex("block739.hex");
     const auto block = cpbitnode::consensus::Block::deserialize(payload);
     EXPECT_TRUE(block.transactions.size() > 1);
@@ -106,6 +157,9 @@ void testBlock739P2wpkhInput142AcceptedWithNativeCrypto() {
         std::cerr << "FAIL: " << __FILE__ << ":" << __LINE__ << " block 739 input 142 threw " << exc.what() << "\n";
         ++g_failures;
     }
+#else
+    std::cerr << "SKIP block 739 native crypto path (CPBITNODE_USE_NATIVE_SECP256K1=OFF)\n";
+#endif
 }
 
 void registerNativeCryptoTests() {
@@ -114,5 +168,6 @@ void registerNativeCryptoTests() {
     RUN_TEST(testNativeCryptoSchnorrValid);
     RUN_TEST(testNativeCryptoSchnorrInvalidMutatedSignature);
     RUN_TEST(testNativeCryptoTaprootTweakXonly);
+    RUN_TEST(testBip340CsvVectors);
     RUN_TEST(testBlock739P2wpkhInput142AcceptedWithNativeCrypto);
 }

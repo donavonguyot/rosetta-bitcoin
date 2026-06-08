@@ -211,10 +211,16 @@ java-node-script-corpus:
 	SECP256K1_BACKEND=native $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ScriptCorpus -Dexec.args="--result-path $(SCRIPT_RESULT)"
 
 test-crypto-vectors:
-	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port java --backend libsecp256k1-acinq --result-path $(CRYPTO_CAPABILITY_RESULT)
+	@tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	SECP256K1_BACKEND=native $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.TestCapability -Dexec.args="--kind crypto-vectors --outcome-path $$tmp"; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT)
 
 test-block-connect-backend:
-	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port java --backend libsecp256k1-acinq --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
+	@tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	SECP256K1_BACKEND=native $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.TestCapability -Dexec.args="--kind block-connect-backend --outcome-path $$tmp"; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 java-node-project-export:
 	@TMP=$$(mktemp); \

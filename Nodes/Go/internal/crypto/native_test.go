@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"rosettabitcoin/nodes/go/internal/repo"
 )
 
 func TestNativeCryptoAvailable(t *testing.T) {
@@ -34,7 +36,11 @@ func TestReusableVerifierVectors(t *testing.T) {
 			Expected     string `json:"expected"`
 		} `json:"vectors"`
 	}{}
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "Shared", "conformance", "fixtures", "native_crypto_v1_vectors.json"))
+	root, err := repo.Root()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "Nodes", "Shared", "conformance", "fixtures", "native_crypto_v1_vectors.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

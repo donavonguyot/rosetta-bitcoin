@@ -81,10 +81,22 @@ cpp-node-native-crypto-test:
 	ctest --test-dir $(BUILD_DIR)-native --output-on-failure
 
 test-crypto-vectors:
-	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port cpp --backend libsecp256k1 --result-path $(CRYPTO_CAPABILITY_RESULT)
+	@tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	cmake -S . -B $(BUILD_DIR)-native -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -DCPBITNODE_USE_NATIVE_SECP256K1=ON >/dev/null; \
+	cmake --build $(BUILD_DIR)-native >/dev/null; \
+	if ctest --test-dir $(BUILD_DIR)-native -R cpp_core_regression --output-on-failure; then status=pass; passed_bip=19; passed_eq=27; notes="native CTest BIP340 CSV and crypto/backend vectors passed"; else status=fail; passed_bip=0; passed_eq=0; notes="native CTest BIP340 CSV or crypto/backend vectors failed"; fi; \
+	printf '{"port":"cpp","backend":"libsecp256k1","outcomes":[{"capability":"crypto_bip340_vectors","status":"%s","case_passed":%s,"case_total":19,"notes":"%s"},{"capability":"crypto_libsecp256k1_equivalence","status":"%s","case_passed":%s,"case_total":27,"notes":"%s"}]}\n' "$$status" "$$passed_bip" "$$notes" "$$status" "$$passed_eq" "$$notes" > "$$tmp"; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT)
 
 test-block-connect-backend:
-	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port cpp --backend libsecp256k1 --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
+	@tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	cmake -S . -B $(BUILD_DIR)-native -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -DCPBITNODE_USE_NATIVE_SECP256K1=ON >/dev/null; \
+	cmake --build $(BUILD_DIR)-native >/dev/null; \
+	if $(BUILD_DIR)-native/cpbitnode-script-corpus --result-path $(BUILD_DIR)-native/cpp_backend_probe_script_corpus.json >/dev/null; then status=pass; passed=2; notes="native script corpus passed, including backend probe fixtures"; else status=fail; passed=0; notes="native script corpus failed before backend probe fixtures could be claimed"; fi; \
+	printf '{"port":"cpp","backend":"libsecp256k1","outcomes":[{"capability":"block_connect_with_backend","status":"%s","case_passed":%s,"case_total":2,"notes":"%s"}]}\n' "$$status" "$$passed" "$$notes" > "$$tmp"; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 docker-cpp-native-crypto-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi

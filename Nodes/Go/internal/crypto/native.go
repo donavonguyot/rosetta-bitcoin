@@ -116,11 +116,22 @@ func (v *Verifier) VerifySchnorr(pubkeyXOnly, msg32, sig64 []byte) bool {
 	if v == nil || v.ctx == nil || len(pubkeyXOnly) != 32 || len(msg32) != 32 || len(sig64) != 64 {
 		return false
 	}
+	return v.VerifySchnorrMessage(pubkeyXOnly, msg32, sig64)
+}
+
+func (v *Verifier) VerifySchnorrMessage(pubkeyXOnly, message, sig64 []byte) bool {
+	if v == nil || v.ctx == nil || len(pubkeyXOnly) != 32 || len(sig64) != 64 {
+		return false
+	}
 	var pk C.secp256k1_xonly_pubkey
 	if C.secp256k1_xonly_pubkey_parse(v.ctx, &pk, (*C.uchar)(unsafe.Pointer(&pubkeyXOnly[0]))) != 1 {
 		return false
 	}
-	return C.secp256k1_schnorrsig_verify(v.ctx, (*C.uchar)(unsafe.Pointer(&sig64[0])), (*C.uchar)(unsafe.Pointer(&msg32[0])), C.size_t(len(msg32)), &pk) == 1
+	var msgPtr *C.uchar
+	if len(message) > 0 {
+		msgPtr = (*C.uchar)(unsafe.Pointer(&message[0]))
+	}
+	return C.secp256k1_schnorrsig_verify(v.ctx, (*C.uchar)(unsafe.Pointer(&sig64[0])), msgPtr, C.size_t(len(message)), &pk) == 1
 }
 
 type TaprootTweakResult struct {

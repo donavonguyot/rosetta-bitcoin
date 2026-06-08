@@ -17,6 +17,7 @@ let result_of_bool = function
 external taproot_tweak_xonly_raw : string -> string -> string * int = "ocbitnode_taproot_tweak_xonly"
 external ecdsa_verify_raw : string -> string -> string -> bool = "ocbitnode_ecdsa_verify_raw"
 external schnorr_verify_raw : string -> string -> string -> bool = "ocbitnode_schnorr_verify_raw"
+external schnorr_verify_message_raw : string -> string -> string -> bool = "ocbitnode_schnorr_verify_message_raw"
 type native_verifier
 
 external verifier_create_raw : unit -> native_verifier = "ocbitnode_verifier_create"
@@ -90,6 +91,9 @@ let schnorr_verify_bytes ~xonly_pubkey ~msg_hash ~signature =
   match verifier.native with
   | Some native when not verifier.closed -> (try schnorr_verify_with_verifier_raw native xonly_pubkey msg_hash signature with _ -> false)
   | _ -> false
+
+let schnorr_verify_message_bytes ~xonly_pubkey ~message ~signature =
+  try schnorr_verify_message_raw xonly_pubkey message signature with _ -> false
 
 let ecdsa_verify_bytes_with_verifier ~verifier ~pubkey ~msg_hash ~signature_der =
   match verifier.native with

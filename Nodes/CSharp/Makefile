@@ -58,10 +58,16 @@ csharp-node-native-crypto-test:
 	SECP256K1_BACKEND=native $(DOTNET) test $(TEST_PROJECT) -c Release
 
 test-crypto-vectors:
-	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port csharp --backend libsecp256k1-secp256k1.net --result-path $(CRYPTO_CAPABILITY_RESULT)
+	@tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	SECP256K1_BACKEND=native $(DOTNET) run --project $(PROJECT) -c Release -- test-capability --kind crypto-vectors --outcome-path "$$tmp"; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT)
 
 test-block-connect-backend:
-	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port csharp --backend libsecp256k1-secp256k1.net --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
+	@tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	SECP256K1_BACKEND=native $(DOTNET) run --project $(PROJECT) -c Release -- test-capability --kind block-connect-backend --outcome-path "$$tmp"; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 csharp-node-script-corpus:
 	SECP256K1_BACKEND=native $(DOTNET) run --project $(PROJECT) -c Release -- script-corpus --result-path $(SCRIPT_RESULT)

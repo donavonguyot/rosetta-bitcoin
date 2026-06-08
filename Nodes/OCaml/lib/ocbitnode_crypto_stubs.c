@@ -72,6 +72,21 @@ static int schnorr_verify_with_context(secp256k1_context *ctx, value xonly_v, va
   return ok;
 }
 
+static int schnorr_verify_message_with_context(secp256k1_context *ctx, value xonly_v, value msg_v, value sig_v) {
+  int ok = 0;
+  if (caml_string_length(xonly_v) == 32 && caml_string_length(sig_v) == 64) {
+    secp256k1_xonly_pubkey pubkey;
+    const unsigned char empty_msg = 0;
+    const unsigned char *msg_ptr = caml_string_length(msg_v) == 0
+      ? &empty_msg
+      : (const unsigned char *)String_val(msg_v);
+    if (secp256k1_xonly_pubkey_parse(ctx, &pubkey, (const unsigned char *)String_val(xonly_v))) {
+      ok = secp256k1_schnorrsig_verify(ctx, (const unsigned char *)String_val(sig_v), msg_ptr, caml_string_length(msg_v), &pubkey);
+    }
+  }
+  return ok;
+}
+
 static void taproot_tweak_compute(secp256k1_context *ctx, value xonly_v, value tweak_v, unsigned char output[32], int *parity_out) {
   if (caml_string_length(xonly_v) != 32 || caml_string_length(tweak_v) != 32) {
     caml_failwith("taproot tweak requires 32-byte xonly key and 32-byte tweak");
@@ -171,6 +186,14 @@ CAMLprim value ocbitnode_schnorr_verify_raw(value xonly_v, value msg_v, value si
   CAMLparam3(xonly_v, msg_v, sig_v);
   secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
   int ok = ctx != NULL ? schnorr_verify_with_context(ctx, xonly_v, msg_v, sig_v) : 0;
+  if (ctx != NULL) secp256k1_context_destroy(ctx);
+  CAMLreturn(Val_bool(ok));
+}
+
+CAMLprim value ocbitnode_schnorr_verify_message_raw(value xonly_v, value msg_v, value sig_v) {
+  CAMLparam3(xonly_v, msg_v, sig_v);
+  secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  int ok = ctx != NULL ? schnorr_verify_message_with_context(ctx, xonly_v, msg_v, sig_v) : 0;
   if (ctx != NULL) secp256k1_context_destroy(ctx);
   CAMLreturn(Val_bool(ok));
 }

@@ -45,7 +45,7 @@
         "rb_live_chain_regression",
         "proof_derived"
       ],
-      "suite_hash": "b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f",
+      "suite_hash": "7b1704a56dfdeeb72a7508db0fa85a4b63f44dbeb437f81a8bd5e364d304cb3d",
       "suite_id": "rb.block_connect_backend_probe_v1",
       "suite_version": "2026-06-07"
     }

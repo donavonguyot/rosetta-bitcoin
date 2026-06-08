@@ -14,6 +14,7 @@ mod script_verify;
 mod status;
 mod storage;
 mod storage_proof;
+mod test_capability;
 mod tx;
 
 #[derive(Parser)]
@@ -47,6 +48,14 @@ enum Command {
     NativeCryptoVectors {
         #[arg(long)]
         fixture_path: Option<PathBuf>,
+    },
+    TestCryptoCapability {
+        #[arg(long)]
+        result_path: Option<PathBuf>,
+    },
+    TestBlockConnectBackend {
+        #[arg(long)]
+        result_path: Option<PathBuf>,
     },
     ScriptCorpus {
         #[arg(long)]
@@ -150,6 +159,12 @@ fn main() -> Result<()> {
         Command::NativeCryptoVectors { fixture_path } => {
             print_json(&crypto_vectors::run(fixture_path.as_deref())?)
         }
+        Command::TestCryptoCapability { result_path } => {
+            print_json(&test_capability::run_crypto_vectors(result_path.as_deref())?)
+        }
+        Command::TestBlockConnectBackend { result_path } => print_json(
+            &test_capability::run_block_connect_backend(result_path.as_deref())?,
+        ),
         Command::ScriptCorpus {
             manifest,
             result_path,

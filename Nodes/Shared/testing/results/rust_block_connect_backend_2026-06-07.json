@@ -1,40 +1,54 @@
 {
-  "captured_at": "2026-06-07T23:42:22Z",
-  "category": "test_capability_contracts",
-  "contracts": [
-    {
-      "backend": "rust-secp256k1",
-      "blocking_for": [
-        "pure_crypto_experiment"
-      ],
-      "capability": "block_connect_with_backend",
-      "command_key": "test_block_connect_backend",
-      "contract_id": "rust.block_connect_with_backend",
-      "does_not_prove": "Missing means this port has not emitted bounded block-connect evidence that observes the selected backend on ECDSA and Taproot/Schnorr fixture paths.",
-      "evidence_kind": "suite",
-      "evidence_path": "Nodes/Shared/testing/fixtures/block_connect_backend_probe_v1.json",
-      "port": "rust",
-      "provenance": [
-        "rb_live_chain_regression",
-        "proof_derived"
-      ],
-      "scope": "host",
-      "status": "missing"
-    }
-  ],
-  "port": "rust",
   "schema": "port.test_capability_contract.v1",
+  "category": "test_capability_contracts",
+  "port": "rust",
+  "captured_at": "2026-06-08T06:59:22.975851+00:00",
   "suites": [
     {
+      "suite_id": "rb.block_connect_backend_probe_v1",
+      "suite_version": "2026-06-07",
+      "suite_hash": "7b1704a56dfdeeb72a7508db0fa85a4b63f44dbeb437f81a8bd5e364d304cb3d",
       "case_total": 2,
-      "does_not_prove": "Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template.",
       "provenance": [
         "rb_live_chain_regression",
         "proof_derived"
       ],
-      "suite_hash": "b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f",
+      "does_not_prove": "Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template."
+    }
+  ],
+  "contracts": [
+    {
+      "port": "rust",
+      "contract_id": "rust.block_connect_with_backend",
+      "capability": "block_connect_with_backend",
+      "status": "pass",
+      "scope": "host",
+      "backend": "rust-secp256k1",
+      "evidence_kind": "suite",
+      "evidence_path": "Nodes/Shared/testing/fixtures/block_connect_backend_probe_v1.json",
+      "command_key": "test_block_connect_backend",
       "suite_id": "rb.block_connect_backend_probe_v1",
-      "suite_version": "2026-06-07"
+      "suite_version": "2026-06-07",
+      "suite_hash": "7b1704a56dfdeeb72a7508db0fa85a4b63f44dbeb437f81a8bd5e364d304cb3d",
+      "case_passed": 2,
+      "case_total": 2,
+      "provenance": [
+        "rb_live_chain_regression",
+        "proof_derived"
+      ],
+      "does_not_prove": "Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template.",
+      "blocking_for": [
+        "pure_crypto_experiment"
+      ]
+    }
+  ],
+  "results": [
+    {
+      "suite_id": "rb.block_connect_backend_probe_v1",
+      "result": "pass",
+      "case_passed": 2,
+      "case_total": 2,
+      "notes": "ecdsa:scripts.p2pkh_sighash_single_38010 result=passed backend_observed=true requirement=block connect observes selected backend while verifying an ECDSA spend; schnorr_taproot:scripts.p2tr_scriptpath_44295 result=passed backend_observed=true requirement=block connect observes selected backend while verifying a Taproot/Schnorr spend"
     }
   ]
 }

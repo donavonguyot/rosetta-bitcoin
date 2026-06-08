@@ -1984,7 +1984,13 @@ ranked AS (
     *,
     row_number() OVER (
       PARTITION BY port, capability
-      ORDER BY CASE WHEN evidence_source_type = 'explicit_contract' THEN 0 ELSE 1 END
+      ORDER BY
+        CASE
+          WHEN evidence_source_type = 'explicit_contract' AND case_total IS NOT NULL THEN 0
+          WHEN evidence_source_type = 'explicit_contract' THEN 1
+          ELSE 2
+        END,
+        CASE status WHEN 'pass' THEN 0 WHEN 'fail' THEN 1 WHEN 'not_applicable' THEN 2 ELSE 3 END
     ) AS rn
   FROM combined
 )

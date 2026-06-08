@@ -4,7 +4,7 @@
   "fixtures": [
     {
       "backend_path": "ecdsa",
-      "fixture_id": "scripts.p2wpkh_739",
+      "fixture_id": "scripts.p2pkh_sighash_single_38010",
       "required_observation": "block connect observes selected backend while verifying an ECDSA spend"
     },
     {

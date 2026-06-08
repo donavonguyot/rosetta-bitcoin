@@ -59,10 +59,28 @@ ocbitnode-native-crypto-vectors:
 	opam exec -- dune exec -- ocbitnode native-crypto-vectors --vectors $(CRYPTO_VECTORS) --result-path $(RESULTS_DIR)/ocaml_native_crypto_vectors_$(RESULT_DATE).json
 
 test-crypto-vectors:
-	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port ocaml --backend libsecp256k1 --result-path $(CRYPTO_CAPABILITY_RESULT)
+	@tmp=$$(mktemp); \
+	host_tmp="$(TESTING_RESULTS_DIR)/.ocaml_crypto_vectors_outcome_$(RESULT_DATE).json"; \
+	trap 'rm -f "$$tmp" "$$host_tmp"' EXIT; \
+	if command -v opam >/dev/null 2>&1; then \
+	  opam exec -- dune exec -- ocbitnode test-capability --kind crypto-vectors --outcome-path "$$tmp"; \
+	else \
+	  $(DOCKER_COMPOSE) run --rm ocbitnode test-capability --kind crypto-vectors --outcome-path /workspace/Shared/testing/results/.ocaml_crypto_vectors_outcome_$(RESULT_DATE).json; \
+	  cp "$$host_tmp" "$$tmp"; \
+	fi; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT)
 
 test-block-connect-backend:
-	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port ocaml --backend libsecp256k1 --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
+	@tmp=$$(mktemp); \
+	host_tmp="$(TESTING_RESULTS_DIR)/.ocaml_block_connect_backend_outcome_$(RESULT_DATE).json"; \
+	trap 'rm -f "$$tmp" "$$host_tmp"' EXIT; \
+	if command -v opam >/dev/null 2>&1; then \
+	  opam exec -- dune exec -- ocbitnode test-capability --kind block-connect-backend --outcome-path "$$tmp"; \
+	else \
+	  $(DOCKER_COMPOSE) run --rm ocbitnode test-capability --kind block-connect-backend --outcome-path /workspace/Shared/testing/results/.ocaml_block_connect_backend_outcome_$(RESULT_DATE).json; \
+	  cp "$$host_tmp" "$$tmp"; \
+	fi; \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 ocbitnode-script-corpus:
 	opam exec -- dune exec -- ocbitnode script-corpus --manifest $(SCRIPT_MANIFEST) --result-path $(RESULTS_DIR)/ocaml_script_corpus_$(RESULT_DATE).json --runtime-surface host $(FIXTURE_ARG)
