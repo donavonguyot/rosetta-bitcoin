@@ -13,6 +13,7 @@ public static class BlockConnector
 {
     public sealed record ConnectResult(int Height, string BlockHashHex, int UtxosCreated);
 
+    // Block-local UTXO view, script verification, then atomic chainstate commit. Missing rules -> validation blocker.
     public static ConnectResult Connect(
         IChainstateStore store,
         string chain,

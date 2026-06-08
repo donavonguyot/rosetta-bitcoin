@@ -8,6 +8,7 @@ using CsBitNode.Wire;
 
 namespace CsBitNode.P2p;
 
+// Outbound P2P for sync: deferred advanced negotiation and honest start_height during catch-up.
 public sealed class PeerConnection : IDisposable, BlockSync.IBlockSource
 {
     private readonly string _host;

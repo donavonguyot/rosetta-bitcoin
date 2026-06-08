@@ -5,6 +5,18 @@ consensus rules come from the Shared rule ledger and script corpus; csbitnode
 implements those rules independently and must reach tip with fully validated
 connected blocks.
 
+For code structure and design rationale, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For imported C# posture, use Project reports from the repository root:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
+
+Query Project for current imported runway posture instead of treating README
+proof notes as live status.
+
 ## Binary gate
 
 From empty local state on Bitcoin testnet4, the node reaches and maintains tip while

@@ -2,6 +2,18 @@
 
 ZigNode is the Zig follower port for the RB node workspace.
 
+For code structure and scaffold scope, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For imported Zig posture, use Project reports from the repository root:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
+
+Query Project for current imported runway posture instead of treating README
+scaffold notes as live status.
+
 Public names:
 
 - Port key: `zig`

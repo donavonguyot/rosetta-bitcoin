@@ -23,6 +23,7 @@ public sealed class ChainstateSession : IDisposable
 
     public static bool IsNativeDatadir(string dataDir) => File.Exists(NativeMarkerPath(dataDir));
 
+    // Opens RocksDB runtime truth under the datadir lock unless acquireLock is false (read-only paths).
     public static ChainstateSession OpenNative(string dataDir, ChainParams chain, bool acquireLock = true)
     {
         dataDir = Path.GetFullPath(dataDir);

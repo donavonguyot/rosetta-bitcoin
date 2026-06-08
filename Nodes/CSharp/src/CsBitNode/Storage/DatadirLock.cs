@@ -5,6 +5,7 @@ public sealed class DatadirLockBusyException : Exception
     public DatadirLockBusyException(string message) : base(message) { }
 }
 
+// Single-writer datadir lock: one sync/connect/rebuild process owns runtime truth per datadir.
 public sealed class DatadirLock : IDisposable
 {
     private readonly FileStream? _stream;
