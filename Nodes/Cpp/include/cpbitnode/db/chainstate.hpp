@@ -25,6 +25,7 @@ struct ChainstateMetadata {
     std::string schemaVersion = "1";
 };
 
+// Active UTXO, undo, and validated tip runtime truth. Project projections observe this later.
 class ChainstateStore {
 public:
     virtual ~ChainstateStore() = default;

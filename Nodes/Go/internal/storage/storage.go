@@ -76,6 +76,8 @@ type Store struct {
 	failCommit   bool
 }
 
+// Open establishes RocksDB runtime truth for the datadir: marker, chainstate DB, and blocks/.
+// Sync and connect must treat this store as authoritative; Project is a projection only.
 func Open(datadir string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(datadir, "blocks"), 0o755); err != nil {
 		return nil, err

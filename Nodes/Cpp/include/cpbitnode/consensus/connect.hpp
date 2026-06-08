@@ -30,6 +30,8 @@ struct ConnectBlockOptions {
     script::ScriptVerifyRunner* scriptRunner = nullptr;
 };
 
+// Validation boundary: block-local UTXO view, script verification, then atomic chainstate commit.
+// Missing rules must stop as validation blockers, not implicit success.
 Block connectBlock(db::NodeStateStore& tracker, std::span<const std::uint8_t> payload,
                    const ConnectBlockOptions& options);
 Block connectBlock(db::NodeStateStore& tracker, db::ChainstateStore& chainstate,
