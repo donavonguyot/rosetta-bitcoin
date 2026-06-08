@@ -58,6 +58,9 @@ void broadcastWitnessBlockInv(const std::vector<PeerConnection*>& peers, const s
 
 class PeerConnection {
 public:
+    // Owns one Bitcoin P2P connection. Initial outbound sync uses deferred advanced negotiation:
+    // advertise an honest start_height, complete version/verack/sendheaders, and delay relay
+    // messages until the caller has a runtime mode that can safely serve them.
     struct Options {
         std::string host;
         int port = 0;
@@ -108,6 +111,8 @@ public:
     void consumeMessages(const MessageHandler& handler, double readTimeoutSeconds = 30.0);
     void dispatchMessage(const std::string& command, std::span<const std::uint8_t> payload);
     void run();
+    // Complete deferred advanced negotiation after headers are current and the caller is in a
+    // relay-capable mode. Batch sync should leave this deferred.
     void completeDeferredHandshake();
 
     const std::string& host() const { return options_.host; }

@@ -768,6 +768,9 @@ void broadcastWitnessBlockInv(const std::vector<PeerConnection*>& peers, const s
 }
 
 bool PeerConnection::deferAdvancedNegotiation() const {
+    // Deferred advanced negotiation keeps feefilter and mempool out of initial sync. Until headers
+    // are current, those relay messages can make a node appear more capable than its validated
+    // chainstate.
     if (options_.settings.lightweightOutboundHandshake()) {
         return true;
     }
@@ -812,6 +815,8 @@ void PeerConnection::postVerackNegotiation(bool outbound) {
 void PeerConnection::handshakeAsInitiator() {
     const auto recvAddr = blankAddress();
     const auto fromAddr = blankAddress();
+    // Honest start_height: options_.startHeight must come from validated runtime truth, not the
+    // header tip, so peers do not treat us as too advanced for what we can validate or serve.
     const auto version = messages::VersionMessage::build(options_.protocolVersion,
                                                          messages::NODE_NETWORK | messages::NODE_WITNESS, recvAddr,
                                                          fromAddr, options_.userAgent, options_.startHeight);
@@ -820,6 +825,8 @@ void PeerConnection::handshakeAsInitiator() {
     send(messages::VerAckMessage::kCommand, messages::VerAckMessage{}.serialize());
     readUntilCommand(messages::VerAckMessage::kCommand, 30.0);
     send(messages::SendHeadersMessage::kCommand, messages::SendHeadersMessage{}.serialize());
+    // Post-verack stays simple during sync; completeDeferredHandshake is the explicit promotion
+    // point for later relay behavior.
     postVerackNegotiation(true);
 }
 

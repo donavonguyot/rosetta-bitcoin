@@ -36,7 +36,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-/** Connects blocks with independent script verification and transactional UTXO updates. */
+/**
+ * Connects blocks with independent script verification and transactional UTXO updates.
+ *
+ * <p>This is Java's validation boundary: a block-local UTXO view handles same-block churn, and
+ * the durable store moves only through an atomic chainstate commit after every spend succeeds.
+ */
 public final class BlockConnector {
 
   private BlockConnector() {}
@@ -102,9 +107,11 @@ public final class BlockConnector {
   }
 
   /**
-   * Connects a block reusing a caller-owned {@link ScriptVerifyRunner}. The sync loop creates one
-   * runner (and its worker thread pool + warm secp256k1 verification cache) for the whole run and
-   * passes it here so we do not spin up and tear down a thread pool on every block.
+   * Connects a block reusing a caller-owned {@link ScriptVerifyRunner}.
+   *
+   * <p>The sync loop creates one runner for the whole batch so worker threads and native
+   * secp256k1 state stay warm. Validation blockers still stop the connect path with bounded
+   * consensus detail instead of turning unknown script rules into success.
    */
   public static ConnectResult connectInCurrentTransaction(
       ProjectTracker tracker,

@@ -204,6 +204,9 @@ export async function runNode(settings: Settings, options: RunNodeOptions = {}):
     );
 
     if (settings.listen) {
+      // Live service mode completes deferred advanced negotiation only after the
+      // node has entered the running state; sync-only paths do not advertise
+      // relay behavior beyond their validated chainstate.
       await manager.completeDeferredHandshake();
       inboundServer = await serveInbound({
         chain,

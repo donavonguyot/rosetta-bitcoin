@@ -23,7 +23,13 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 
-/** TCP P2P connection with version/verack handshake and header requests. */
+/**
+ * TCP P2P connection with the workspace simple-handshake posture.
+ *
+ * <p>Initial sync sends version/verack/sendheaders only: deferred advanced negotiation keeps
+ * relay-oriented messages out of the bootstrap path until the node can honestly represent its
+ * validated chainstate. See Nodes/Shared/CODE_DOCUMENTATION.md.
+ */
 public final class PeerConnection implements AutoCloseable {
 
   private final String host;
@@ -157,6 +163,8 @@ public final class PeerConnection implements AutoCloseable {
     NetworkAddress addr =
         new NetworkAddress(
             HandshakeMessages.NODE_NETWORK | HandshakeMessages.NODE_WITNESS, "0.0.0.0", 0);
+    // Honest start_height: this value comes from validated runtime truth, not the header tip.
+    // Peers may disconnect nodes that claim chain progress they cannot validate or serve.
     VersionMessage version =
         HandshakeMessages.buildVersionMessage(
             chain.protocolVersion(),
@@ -172,6 +180,8 @@ public final class PeerConnection implements AutoCloseable {
     remoteVersion = HandshakeMessages.deserializeVersion(remote.payload());
     stream.send(HandshakeMessages.VERACK_COMMAND, HandshakeMessages.serializeVerAck());
     stream.readUntilCommand(HandshakeMessages.VERACK_COMMAND, 30_000);
+    // Deferred advanced negotiation: Java intentionally stops post-verack at sendheaders here.
+    // Feefilter, mempool, and compact-block negotiation belong to a later relay-capable mode.
     stream.send(HandshakeMessages.SENDHEADERS_COMMAND, HandshakeMessages.serializeSendHeaders());
   }
 

@@ -8,7 +8,12 @@ import com.jbitnode.wire.WireSerialize;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-/** BIP143 witness transaction sighash for P2WPKH/P2WSH spend verification. */
+/**
+ * BIP143 witness transaction sighash for P2WPKH/P2WSH spend verification.
+ *
+ * <p>The amount and scriptCode are consensus inputs, so callers must pass the spent prevout truth
+ * used by block connection rather than reconstructing a wallet-style transaction view.
+ */
 public final class WitnessSighash {
 
   private static final byte[] ZERO_HASH = new byte[32];

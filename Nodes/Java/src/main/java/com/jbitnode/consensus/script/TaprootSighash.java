@@ -9,7 +9,12 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
-/** BIP341 TapSchnorr sighash (key-path and tapscript ext_flag support). */
+/**
+ * BIP341 TapSchnorr sighash for key-path and tapscript spends.
+ *
+ * <p>Spent-prevout ordering, annex handling, and tapscript ext_flag bytes are consensus data. Keep
+ * this close to Shared fixtures when changing Taproot validation.
+ */
 public final class TaprootSighash {
 
   public static final int TAPROOT_SIGHASH_DEFAULT = 0;

@@ -11,7 +11,12 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.Map;
 
-/** Owns the one active chainstate opening path for sync, live, rebuild, and status. */
+/**
+ * Owns the one active chainstate opening path for sync, live, rebuild, and status.
+ *
+ * <p>The session acquires the single-writer datadir lock before opening runtime truth surfaces.
+ * Project may import their observations later, but sync and validation read the stores opened here.
+ */
 public final class ChainstateSession implements AutoCloseable {
 
   public static final String NATIVE_STORAGE_MARKER = ".jbitnode_native_storage";

@@ -185,6 +185,9 @@ async function syncBlocks(settings: Settings): Promise<number> {
 
     const syncAfterHeaders = tracker.getSyncState(chain.name);
     if (syncAfterHeaders?.syncStatus === "headers_current" && settings.listen) {
+      // LISTEN mode may complete deferred advanced negotiation after
+      // headers_current. Batch sync intentionally keeps relay negotiation
+      // deferred while it focuses on validated block catch-up.
       await manager.completeDeferredHandshake();
     }
 

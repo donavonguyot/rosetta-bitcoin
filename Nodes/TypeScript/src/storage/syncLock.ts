@@ -41,7 +41,11 @@ export interface SyncLockHandle {
 
 export interface AcquireSyncLockOptions {
   holder?: string;
-  /** Batch-loop child: skip acquisition when the lock is held by this parent PID. */
+  /**
+   * Single-writer datadir lock inheritance: a batch-loop child may reuse the
+   * parent-held lock, but a separate writer must fail before it can corrupt
+   * UTXO, undo, or validated-tip runtime truth.
+   */
   parentPid?: number;
 }
 

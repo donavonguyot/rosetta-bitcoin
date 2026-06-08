@@ -9,7 +9,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 
-/** Legacy (pre-segwit) transaction sighash for P2PK/P2PKH script verification. */
+/**
+ * Legacy (pre-segwit) transaction sighash for P2PK/P2PKH script verification.
+ *
+ * <p>This is consensus byte-shape code; Core edge cases such as SIGHASH_SINGLE are fixtures, not
+ * wallet serialization conveniences.
+ */
 public final class LegacySighash {
 
   /** Core {@code CTxOut()} placeholder for SIGHASH_SINGLE indices {@code < nIn}. */

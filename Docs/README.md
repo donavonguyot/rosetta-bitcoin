@@ -39,6 +39,8 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
 - `storage-contract.md` - project-level storage compliance rules.
 - `supervisor-contract.md` - durable supervisor behavior and tick expectations.
 - `../Nodes/Shared/README.md` - map of Shared contracts and runbooks.
+- `../Nodes/Shared/CODE_DOCUMENTATION.md` - code documentation philosophy,
+  shared vocabulary, and agent/human review guidance.
 - `../Nodes/Shared/storage/STORAGE_GATE.md` - storage gate expectations.
 - `../Nodes/Shared/chainstate/CHAINSTATE_STORE.md` - native chainstate contract.
 - `../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md` - Docker runtime contract.
@@ -77,6 +79,10 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
 - `../Nodes/Shared/sync/OPERATIONAL_BLOCKERS.md` - operational blocker taxonomy.
 - `../Nodes/Shared/replay/REPLAY_TELEMETRY.md` - replay telemetry contract.
 - `agent-prompts.md` - reusable prompts for agents.
+- `../Nodes/Shared/code-documentation/golden_examples.md` - examples of
+  high-signal inline documentation.
+- `../Nodes/Shared/code-documentation/agent_brief_template.md` - reusable
+  template for scoped documentation passes.
 
 For baseline readiness, prefer Project over hand-maintained summaries:
 

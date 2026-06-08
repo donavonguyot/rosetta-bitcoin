@@ -21,7 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** Downloads raw blocks and connects heights with script verification. */
+/**
+ * Downloads raw blocks and connects them in validated-height order.
+ *
+ * <p>Prefetch may overlap network I/O, but block connection remains sequential so the runtime
+ * truth advances by one atomic chainstate commit at a time.
+ */
 public final class BlockSync {
 
   public static final int DEFAULT_BATCH_SIZE = 32;
@@ -463,6 +468,9 @@ public final class BlockSync {
       boolean logConnectedBlock)
       throws SQLException, ConnectBlockException, ValidationBlocker {
     long started = System.nanoTime();
+    // The block-local UTXO view and atomic chainstate commit happen before block bytes are
+    // accepted into the local block store. That keeps UTXO, undo, block index, and validated tip
+    // as one runtime truth; a Project projection only observes this later.
     BlockConnector.ConnectResult result =
         BlockConnector.connectInCurrentTransaction(
             tracker,

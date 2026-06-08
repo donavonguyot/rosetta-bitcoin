@@ -15,7 +15,12 @@ import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
-/** RocksDB implementation of the native chainstate keyspace. */
+/**
+ * RocksDB implementation of the native chainstate keyspace.
+ *
+ * <p>This store owns active UTXOs, undo rows, maintained UTXO count, chainstate metadata, and the
+ * validated tip. Those fields are one runtime truth and move together during block commit.
+ */
 public final class RocksDbChainstateStore implements UtxoStore, AutoCloseable {
 
   static {
@@ -162,6 +167,8 @@ public final class RocksDbChainstateStore implements UtxoStore, AutoCloseable {
       ChainstateMetadata existingMetadata,
       ProjectTracker.UndoTimingSink timingSink)
       throws SQLException {
+    // Atomic chainstate commit: spends, creates, undo, metadata, maintained count, and validated
+    // tip are staged in one RocksDB batch so readers never observe a half-connected block.
     long commitStarted = System.nanoTime();
     long existingUtxoCount =
         existingMetadata.utxoCount() >= 0 ? existingMetadata.utxoCount() : count(commit.chain());

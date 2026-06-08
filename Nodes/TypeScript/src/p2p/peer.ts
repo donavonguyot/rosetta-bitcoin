@@ -708,6 +708,10 @@ export class PeerConnection {
   }
 
   private deferAdvancedNegotiation(): boolean {
+    // Deferred advanced negotiation: initial sync stays on the simple
+    // version/verack/sendheaders path until headers are current. Relay-oriented
+    // messages such as feefilter and mempool can make a lagging node look more
+    // capable than its validated chainstate. See Nodes/Shared/CODE_DOCUMENTATION.md.
     if (this.settings.simpleHandshake) {
       return true;
     }
@@ -760,6 +764,9 @@ export class PeerConnection {
   }
 
   async completeDeferredHandshake(): Promise<void> {
+    // Called only after the caller has established that deferred advanced
+    // negotiation is safe for this runtime mode. Batch sync paths keep it
+    // deferred; live LISTEN mode may complete it after headers_current.
     if (this.advancedNegotiationComplete || !this.isConnected) {
       return;
     }

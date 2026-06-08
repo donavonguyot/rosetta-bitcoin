@@ -152,6 +152,9 @@ async function connectDownloadedBlock(
   },
 ): Promise<void> {
   if (tracker.session !== null) {
+    // Runtime truth lives in the native chainstate session. connectBlockNative
+    // owns the block-local UTXO view and atomic chainstate commit; a Project
+    // projection may index the result later but never participates in validation.
     await connectBlockNative(tracker.session, payload, {
       height: options.height,
       expectedPrev: options.expectedPrev,
@@ -228,6 +231,9 @@ export async function syncBlocksBatch(
     if (work.length > 0) {
       maybeMarkParallelSync(tracker, parallelDownloads);
 
+      // Download may be batched, but connect remains ordered. Each payload is
+      // validated against its expected hash/prevout context before the next
+      // atomic chainstate commit advances the validated tip.
       const chunks: Array<typeof work> = [];
       for (let index = 0; index < work.length; index += parallelDownloads) {
         chunks.push(work.slice(index, index + parallelDownloads));

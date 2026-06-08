@@ -15,7 +15,12 @@ import java.util.OptionalLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Exclusive datadir lock — one writer per `DATA_DIR` (mirrors TS `.sync_batch_loop.lock`). */
+/**
+ * Single-writer datadir lock for sync/connect/rebuild.
+ *
+ * <p>This is a chainstate integrity guard, not an operator hint: overlapping writers can lose UTXO
+ * or undo mutations and create false validation blockers.
+ */
 public final class DatadirLock implements AutoCloseable {
 
   public static final String LOCK_FILE_NAME = ".jbitnode.lock";

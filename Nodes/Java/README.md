@@ -5,6 +5,15 @@ rules come from the Shared rule ledger and script corpus; jbitnode implements
 those rules independently and must reach tip with fully validated connected
 blocks.
 
+For code structure and design rationale, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For imported Java posture, use Project reports from the repository root:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
+
 ## Binary gate
 
 From empty local state on Bitcoin testnet4, the node reaches and maintains tip
@@ -12,11 +21,9 @@ while independently validating every stored connected block. Partial sync,
 headers-only sync, trusted import, or skipping unknown consensus rules does
 **not** pass.
 
-Current Java evidence includes RocksDB/native chainstate proofs, native
-secp256k1 proofs, 10k and 50k Docker native-crypto bounded sync proofs, and a
-Core-aligned local run recorded at `validated_height=136863` with
-`binary_gate_status=passed`. Tip maintenance and serving behavior remain
-separate operational work.
+This README does not restate Java's latest proof or benchmark posture. Project
+imports own those status claims, and the Java docs stay focused on commands,
+safety boundaries, and where code lives.
 
 ## Datadir and database
 
@@ -104,23 +111,13 @@ make docker-config   # validate compose file
 The `jbitnode` proof service connects to local Reference Core at `REFERENCE_P2P_PEER` from `Nodes/Shared/docker/reference_topology.env`
 (OrbStack / Docker Desktop on macOS).
 
-Host JVM sync and container sync are separate verification gates. Host `mvn`
-or Make runs prove the Java code path on the workstation. `docker-java-sync-proof`
-is a fast 2-block packaging smoke from a fresh Docker volume.
-`docker-java-native-crypto-proof` is the Project-facing supporting 5k Docker
-benchmark with native secp256k1, WAL enabled, and a fresh proof volume.
-`docker-java-native-crypto-long-sync-proof` targets 10,000 headers and 10,000
-connected blocks by default, and records either target reach or the exact next
-blocker in a Shared proof artifact. `docker-java-native-crypto-50k-sync-proof`
-is the next larger bounded gate, using a separate Docker volume and proof
-artifact to test validation through height 50,000 without overwriting the 10k
-evidence. `docker-java-native-crypto-tip-sync-proof` queries the local Core tip
-before it starts, syncs from a fresh Docker volume with a height buffer, and
-writes a full local-reference proof artifact with the recorded Core tip height
-and hash.
-Official bounded benchmark proof targets emit `benchmark.telemetry_tick` at a
-10-second cadence so the shared 15-second heartbeat validator has scheduling
-headroom.
+Host JVM sync and container sync are separate verification surfaces. Host `mvn`
+or Make runs prove the Java code path on the workstation. Docker proof targets
+prove packaging and local Reference Core behavior from controlled volumes:
+short smokes, bounded native-crypto sync, larger diagnostic runs, and local-tip
+attempts each write Shared proof artifacts for Project import. Bounded
+benchmark targets emit `benchmark.telemetry_tick` at a 10-second cadence so the
+Shared heartbeat validator has scheduling headroom.
 
 Use the persistent Docker supervisor for iterative blocker hunting. It reuses
 `jbitnode_sync_data` by default, emits `AGENT_LOOP_TICK_chatreport` from inside
@@ -177,32 +174,35 @@ targets as the normal blocker-hunting loop.
 | `make java-node-export-snapshots` | Retired legacy exporter; native snapshot export is not implemented |
 | `make java-node-survey-scripts` | Retired legacy survey; native script-template survey is not implemented |
 
-## Proof tiers
+## Proof and report surfaces
 
-| Tier | Artifact / target |
-|------|-------------------|
-| 2-block smoke | `docker-java-sync-proof` |
-| Supporting 5k Docker benchmark | `docker-java-native-crypto-proof` streams `rb.port_progress`; Project builds current benchmark evidence |
-| Codec v2 replay | `java_rocksdb_codec_v2_storage_2026-06-01.json`, `java_rocksdb_codec_v2_storage_shared_2026-06-01.json` |
-| Native crypto gate | `java_native_crypto_host_replay_2026-06-01.json` and local native-vector tests |
-| 10k diagnostic Docker benchmark | `docker-java-supporting-10k-proof` remains diagnostic |
-| 50k bounded Docker sync | `docker-java-supporting-50k-proof` streams `rb.port_progress`; Project builds current benchmark evidence |
-| Binary gate attempt/status | `docs/BLOCKER_LEDGER.md` records `validated_height=136863`, `binary_gate_status=passed` against local Core |
+| Surface | Use |
+|---------|-----|
+| `docker-java-sync-proof` | Fast Docker packaging smoke from a fresh proof volume |
+| `docker-java-native-crypto-proof` | Bounded Docker native-crypto benchmark surface for Project import |
+| `docker-java-native-crypto-long-sync-proof` | Larger bounded diagnostic sync surface |
+| `docker-java-native-crypto-50k-sync-proof` | Larger bounded local Reference sync proof surface |
+| `docker-java-native-crypto-tip-sync-proof` | Fresh local-tip attempt against Reference Core |
+| `java-node-chainstate-backend-replay-native-crypto` | Native chainstate/crypto replay proof surface |
+| `ScriptCorpus` / `make java-node-native-crypto-test` | Offline script and crypto regression surfaces |
+| Project reports | Imported mission-control posture, benchmark summaries, and runway checks |
 
 ## Script interpreter
 
 Package `com.jbitnode.consensus.script` provides opcode constants, a stack machine,
 legacy, SegWit v0, Taproot key-path, and Taproot script-path validation needed
-by the recorded live blocker trail.
+by the Shared consensus runway and Java regression fixtures.
 
-| Status | Detail |
-|--------|--------|
-| Implemented | P2PK/P2PKH/P2WPKH, P2SH, P2WSH, P2TR key-path, P2TR script-path, CLTV/CSV, and live blocker opcode trail through 136369 |
-| Regression | Fixtures under `src/test/resources/fixtures/` named by height/rule |
-| Next | Tip maintenance, serving, and continued blocker capture from current network tip |
+| Surface | Role |
+|---------|------|
+| `ScriptVerify` | Spend-path dispatcher for supported script templates |
+| `ScriptInterpreter` | Stack semantics and opcode evaluation |
+| `LegacySighash`, `WitnessSighash`, `TaprootSighash` | Consensus sighash byte construction |
+| `src/test/resources/fixtures/` | Java regression fixtures named by height/rule |
+| `docs/BLOCKER_LEDGER.md` | Java blocker provenance and handoff notes |
+| `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md` | Cross-port corpus-to-tip consensus path |
 
-Historical reference fix: Python commit **`dd65c78`** (*Verify Taproot key-path spends*).
-See `docs/BLOCKER_LEDGER.md` for blocker provenance and binary-gate evidence.
+For the architectural map, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#script-verification-and-sighash).
 
 ## Retired Compatibility Snapshot Export
 
@@ -231,22 +231,22 @@ Use `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`,
 `Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json`, and Project
 preflights before chasing live blockers.
 
-## Post-sync operations checklist
+## Operational proof checklist
 
-After initial catch-up reaches or passes tip, JavaNode is not full-node ready until
-these behaviors are proven against live peers and temp-datadir regressions:
+After initial catch-up reaches or passes tip, JavaNode still needs evidence for
+the live behaviors below. Use Project reports for imported posture.
 
-| Area | Current status | Remaining work |
-|------|----------------|----------------|
-| Persist validated tip | `validated_tip` is advanced transactionally with UTXO updates and block metadata during block sync | Live proof after reaching current network tip |
-| Restart at tip | Startup advertises `validated_tip` via honest `start_height`; tests cover restart state from a temp DB | Long-running restart-at-tip soak with no replay |
-| Tip maintenance | Batch sync can mark `headers_current` / `blocks_current` | Continuous new-block loop and inv-driven catch-up |
-| Invalid data safety | Invalid headers/blocks stop without advancing tip; blockers are logged in `events` | Peer scoring / ban policy for repeat invalid data |
-| Undo data | `utxo_undo` rows are persisted for external spends | Disconnect/reconnect implementation that consumes undo rows |
-| Reorgs | No reorg disconnect path yet | Fork storage, chainwork fork choice, disconnect/reconnect tests |
-| Serving | Outbound `getheaders`/`getdata` client exists | Inbound `getheaders`/`getdata` serving to peers |
-| Peer lifecycle | Connect/disconnect rows are recorded | Reconnect/backoff manager and peer rotation |
-| Health output | `java-node-status` reports header/validated/stored heights, gaps, blocker, and binary gate status | Stable operator-facing health contract after live tip |
+| Area | Evidence question | Primary surface |
+|------|-------------------|-----------------|
+| Persist validated tip | Do UTXO, undo, block metadata, and validated tip advance together? | `BlockConnector`, `RocksDbChainstateStore`, Project imports |
+| Restart at tip | Does startup advertise the validated tip through honest `start_height` and avoid replay surprises? | `java-node-preflight`, `java-node-status`, restart tests |
+| Tip maintenance | Does the node keep up with new blocks after catch-up? | Live node/supervisor proof artifacts |
+| Invalid data safety | Do invalid headers or blocks stop without advancing runtime truth? | `HeaderValidator`, `BlockConnector`, blocker events |
+| Undo data | Can external spends be represented for future disconnect/reconnect work? | `utxo_undo` rows and chainstate replay tests |
+| Reorg handling | Does fork choice, disconnect, and reconnect preserve consensus state? | Dedicated reorg tests and proof artifacts |
+| Serving | Can Java answer inbound peer requests without overstating readiness? | Live P2P serving proof |
+| Peer lifecycle | Are connect, disconnect, retry, and peer rotation observable? | Operational store and status output |
+| Health output | Does operator JSON separate header height, validated height, stored blocks, and blockers? | `make java-node-status`, Project reports |
 
 ### Live datadir safety
 

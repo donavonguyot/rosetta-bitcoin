@@ -6,6 +6,12 @@ import com.jbitnode.util.Hex;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Spend-path script verifier for supported Bitcoin output templates.
+ *
+ * <p>Unsupported templates or missing consensus rules must fail as validation blockers upstream;
+ * this class must never convert an unknown spend shape into implicit success.
+ */
 public final class ScriptVerify {
   private ScriptVerify() {}
 

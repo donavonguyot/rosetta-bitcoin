@@ -46,6 +46,8 @@ int syncBlocksBatch(const std::vector<p2p::PeerConnection*>& peers, db::NodeStat
                     int batchSize, int maxBlocks, int parallelDownloads, int blocksTargetHeight,
                     consensus::script::ScriptVerifyRunner* scriptRunner);
 
+// Download may be parallel, but connection remains ordered. The block-local UTXO view and atomic
+// chainstate commit must advance before the block is accepted as stored/validated runtime truth.
 int syncBlocksToTip(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,
                     const chain::ChainParams& chain, storage::BlockStore& blockStore, const config::Settings& settings);
 int syncBlocksToTip(const std::vector<p2p::PeerConnection*>& peers, db::NodeStateStore& tracker,

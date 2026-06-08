@@ -194,6 +194,8 @@ public final class LiveNodeService {
       PrintStream out)
       throws IOException, SQLException {
     int startHeight = tracker.bootstrapStartHeight(chain.name());
+    // Honest start_height: bootstrap from validated runtime truth so the peer handshake does not
+    // advertise headers that this datadir has not connected.
     int before = tracker.getValidatedHeight(chain.name());
     try (PeerConnection connection =
         new PeerConnection(peer.host(), peer.port(), chain, tracker, startHeight)) {

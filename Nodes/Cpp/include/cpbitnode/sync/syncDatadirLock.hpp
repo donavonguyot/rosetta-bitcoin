@@ -4,7 +4,12 @@
 
 namespace cpbitnode::sync {
 
-/** Non-blocking POSIX flock on `<datadir>/.cpbitnode-sync.lock`. */
+/**
+ * Single-writer datadir lock for sync/connect/rebuild.
+ *
+ * This protects runtime truth, not just operator ergonomics: overlapping writers can create lost
+ * UTXO or undo mutations that later look like consensus validation blockers.
+ */
 class ExclusiveDataDirSyncLock {
 public:
     explicit ExclusiveDataDirSyncLock(std::filesystem::path datadir);
