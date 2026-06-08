@@ -1,6 +1,22 @@
-# pybitnode architecture
+# pybitnode Architecture
 
-This document is for contributors who want a map of the codebase: how packages relate, how major operations flow through the system, and how wire “checkpoints” line up with roadmap phases. For runbooks (sync, rebuild, snapshots, **stuck recovery**, [**consensus stall playbook**](OPERATIONS.md#consensus-stall-playbook-invalid-blocks) (**`Rejected invalid block`** / **`events.details_json`**), **parallel vs live DB** safety and [**single writer / lock recap**](OPERATIONS.md#operational-recap-single-writer-lock-checkpoints), **iterative 200-block batches toward ~10k with `--no-header-refresh`** and [`sync_batch_run.log` operators’ log markers](OPERATIONS.md#sync-batch-run-log-markers), **after ~10k: same pattern toward `sync_state.best_height` / header tip** ([batches](OPERATIONS.md#after-10k-validated-continue-toward-the-header-tip-batches)), **snapshot export between batches—not mid-write** ([timing](OPERATIONS.md#when-to-export-snapshots-timing)), **`--no-header-refresh`** [block-sync playbook](OPERATIONS.md#lightweight-block-sync-handshake-no-header-refresh), env var matrix), see [OPERATIONS.md](OPERATIONS.md).
+This document maps the Python native/Core implementation: package roles, major
+data flows, and the invariants that keep P2P, validation, chainstate, and proof
+surfaces in one shape. For commands, use [README.md](../README.md). For live
+mission-control posture, query Project reports instead of reading this file as
+status.
+
+Shared contracts own the cross-port rules:
+
+- [Code documentation philosophy](../../Shared/CODE_DOCUMENTATION.md)
+- [Validation pipeline](../../Shared/consensus/VALIDATION_PIPELINE.md)
+- [Chainstate store](../../Shared/chainstate/CHAINSTATE_STORE.md)
+- [Status contract](../../Shared/STATUS_CONTRACT.md)
+- [Docker runtime contract](../../Shared/docker/DOCKER_RUNTIME_CONTRACT.md)
+- [Consensus runway](../../Shared/consensus/CONSENSUS_RUNWAY.md)
+
+Detailed sync runbooks (stuck recovery, batch loops, snapshot timing, single-writer
+lock recap) remain in [OPERATIONS.md](OPERATIONS.md).
 
 ## Package layers
 
@@ -156,5 +172,13 @@ Defined in **`pyproject.toml`** `[project.scripts]`:
 | **`pybitnode`** | `pybitnode.node:main` | Long-running node: peer bootstrap, header sync, optional block sync/connect, mempool handling, optional inbound listener. |
 | **`pybitnode-sync`** | `pybitnode.sync_runner:main` | Batch-oriented workflow: connect P2P, sync headers/blocks and/or **`--connect-only`** replay from **`storage`**, **`--rebuild`** full UTXO replay. |
 | **`pybitnode-status`** | `chainstate_status:main` | JSON summary of RocksDB native chainstate: sync state, phases, optional **`--wire`**, **`--checkpoint`**, events. |
+
+## Mission-Control Queries
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
 
 Operational flags, **[environment variable matrix](OPERATIONS.md#environment-variable-matrix)**, and recovery steps are documented in [OPERATIONS.md](OPERATIONS.md).

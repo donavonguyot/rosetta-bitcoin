@@ -313,6 +313,7 @@ def connect_block(
     script_verify_runner: ScriptVerifyRunner | None = None,
     update_metrics: bool = True,
 ) -> Block:
+    """Block-local UTXO view, script verification, then atomic chainstate commit. Missing rules -> validation blocker."""
     from pybitnode.sync.validate import BlockValidationError, validate_block
 
     timing_enabled = _sync_timing_enabled()

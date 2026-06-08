@@ -148,6 +148,8 @@ async def broadcast_witness_block_inv(
 
 @dataclass
 class PeerConnection:
+    """Outbound P2P session: deferred advanced negotiation and honest start_height during sync."""
+
     host: str
     port: int
     chain: ChainParams
@@ -413,6 +415,7 @@ class PeerConnection:
         raise TimeoutError("Timed out waiting for block or notfound")
 
     async def handshake_as_initiator(self) -> None:
+        """Simple path: version/verack/(sendheaders); feefilter/mempool deferred until headers_current."""
         recv_addr = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
         from_addr = NetworkAddress(services=NODE_NETWORK | NODE_WITNESS, ip="0.0.0.0", port=0)
         version = VersionMessage.build(

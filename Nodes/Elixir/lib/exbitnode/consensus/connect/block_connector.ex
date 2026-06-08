@@ -1,5 +1,8 @@
 defmodule Exbitnode.Consensus.Connect.BlockConnector do
-  @moduledoc false
+  @moduledoc """
+  Block-local UTXO view, script verification, then atomic chainstate commit.
+  Missing rules become validation blockers.
+  """
 
   alias Exbitnode.Consensus.{
     BlockValidationError,

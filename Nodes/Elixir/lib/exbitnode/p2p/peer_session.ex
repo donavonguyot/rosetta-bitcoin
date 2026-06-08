@@ -1,5 +1,7 @@
 defmodule Exbitnode.P2p.PeerSession do
-  @moduledoc false
+  @moduledoc """
+  Outbound P2P for sync: deferred advanced negotiation and honest `start_height`.
+  """
 
   alias Exbitnode.Chainstate.Tracker, as: ChainstateTracker
 

@@ -1,5 +1,7 @@
 defmodule Exbitnode.Storage.DatadirLock do
-  @moduledoc false
+  @moduledoc """
+  Single-writer datadir lock for sync/connect paths (`.exbitnode.lock`).
+  """
 
   alias Exbitnode.Config.NodePaths
 

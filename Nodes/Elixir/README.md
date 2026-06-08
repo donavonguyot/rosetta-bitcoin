@@ -4,6 +4,18 @@ Supervised Bitcoin **testnet4** follower on the BEAM/OTP. Elixir is the exotic
 follower in the Nodes fleet: peer sessions, sync workers, and chainstate writes are
 designed for fault isolation and restartable long-running node behavior.
 
+For code structure and honest scope, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For imported Elixir posture, use Project reports from the repository root:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
+
+Query Project for current imported runway posture instead of treating README
+milestone notes as live status.
+
 **Binary gate:** from empty local state, connect to testnet4, independently validate
 every stored connected block, reach/maintain tip. Header-only sync does not pass.
 
@@ -126,6 +138,7 @@ HEADERS_MAX=0 BLOCKS_MAX=1000 make sync-local
 
 ## Docs
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — module map, OTP boundaries, canonical vocabulary
 - [docs/BLOCKER_LEDGER.md](docs/BLOCKER_LEDGER.md) — sync and consensus blockers
 
 ## Environment

@@ -226,6 +226,7 @@ export async function broadcastWitnessBlockInv(
   }
 }
 
+/** Outbound P2P: deferred advanced negotiation and honest start_height during sync. */
 export class PeerConnection {
   readonly host: string;
   readonly port: number;
@@ -774,6 +775,7 @@ export class PeerConnection {
   }
 
   async handshakeAsInitiator(): Promise<void> {
+    // Simple path: version/verack/(sendheaders); relay messages deferred until headers_current.
     const recvAddr: NetworkAddress = {
       services: BigInt(NODE_NETWORK | NODE_WITNESS),
       ip: "0.0.0.0",

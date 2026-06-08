@@ -1,4 +1,4 @@
-"""Prevent concurrent pybitnode-sync writers against one datadir (SQLite single-writer rule)."""
+"""Single-writer datadir lock for pybitnode-sync (`.pybitnode-sync.lock`)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class ExclusiveDataDirSyncLock:
-    """Non-blocking POSIX flock on `<datadir>/.pybitnode-sync.lock`."""
+    """Non-blocking POSIX flock implementing the single-writer datadir lock."""
 
     def __init__(self, datadir: Path) -> None:
         self.datadir = datadir

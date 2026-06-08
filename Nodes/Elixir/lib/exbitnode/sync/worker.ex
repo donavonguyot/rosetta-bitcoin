@@ -1,5 +1,7 @@
 defmodule Exbitnode.Sync.Worker do
-  @moduledoc false
+  @moduledoc """
+  Serializes `sync-local` through one GenServer to avoid overlapping datadir writers.
+  """
 
   use GenServer
 

@@ -262,6 +262,7 @@ def main(argv: list[str] | None = None) -> None:
         return await sync_blocks(settings)
 
     try:
+        # Acquire single-writer datadir lock for the full sync/connect/rebuild run.
         with ExclusiveDataDirSyncLock(resolved_data):
             rc = asyncio.run(async_main())
         raise SystemExit(rc)
