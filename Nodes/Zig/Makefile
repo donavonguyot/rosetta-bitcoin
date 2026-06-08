@@ -17,7 +17,7 @@ DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.e
 include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_PROOF_VOLUME ?= zigbitnode_proof_data
-POST_100K_TIP_VOLUME ?= zigbitnode_post_100k_to_tip_data
+POST_100K_TIP_VOLUME ?= zigbitnode_100k_proof_data
 POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_SYNC_TARGET ?= 5000
 BENCHMARK_GATE ?= baseline_5k

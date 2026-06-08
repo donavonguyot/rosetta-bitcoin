@@ -6,7 +6,7 @@ DATA_DIR ?= ./data-csharp
 PEERS ?= 127.0.0.1:48333
 
 DOCKER_PROOF_VOLUME ?= csbitnode_proof_data
-POST_100K_TIP_VOLUME ?= csbitnode_post_100k_to_tip_data
+POST_100K_TIP_VOLUME ?= csbitnode_100k_proof_data
 POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json
 RESULT_DATE ?= $(shell date +%F)

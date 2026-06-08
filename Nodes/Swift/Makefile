@@ -16,7 +16,7 @@ include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 LOCAL_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_PROOF_VOLUME ?= swiftbitnode_proof_data
-POST_100K_TIP_VOLUME ?= swiftbitnode_post_100k_to_tip_data
+POST_100K_TIP_VOLUME ?= swiftbitnode_100k_proof_data
 POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_SYNC_TARGET ?= 5000
 BENCHMARK_GATE ?= baseline_5k

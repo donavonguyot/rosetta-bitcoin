@@ -116,23 +116,12 @@ official gates.
 Project lifecycle rows decide whether missing future gates are active work,
 active-development runway, or deliberate baseline retirement.
 
-`post_100k_to_tip` starts from a captured local checkpoint of the same port's
-canonical `performance_100k` Docker volume. Checkpoints live under ignored
-`Project/.checkpoints/` and are operational state, not evidence:
-
-```bash
-python3 Project/scripts/manage_benchmark_checkpoint.py \
-  --db Project/project.db \
-  --gate performance_100k \
-  --ports rust,zig,cpp,go,swift,csharp,java,ocaml \
-  --dry-run
-```
-
-Capture available checkpoint volumes explicitly with `--capture`; the campaign
-will only restore already captured checkpoints.
-
-If a checkpoint is missing, the campaign reports the port as `not_ready`; it
-does not rerun 0-100k behind the tip command.
+`post_100k_to_tip` resumes the port's own durable Docker state at or beyond
+the current `performance_100k` truth. Project does not archive, restore, or
+preserve golden volumes for this lane. If a port has no usable durable state,
+the product run must report that truthfully or rebuild state through its normal
+sync path; Project only observes the product progress and validates the final
+control-built artifact.
 
 ## Serialized Benchmark Campaigns
 

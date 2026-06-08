@@ -321,7 +321,6 @@ def build_artifact(
     expected_peer: str | None = None,
     reference_finish_height: int | None = None,
     reference_finish_hash: str | None = None,
-    checkpoint_metadata: dict[str, Any] | None = None,
 ) -> ControlBuildResult | None:
     entries = progress_entries(proof_log)
     if not entries:
@@ -329,9 +328,12 @@ def build_artifact(
     spec = gate_spec(gate_id)
     final = best_final_progress(entries)
     expected_peer = expected_peer or read_env().get("REFERENCE_P2P_PEER", "bitcoin-core-testnet4:48333")
-    checkpoint_start = getattr(_artifact_validator, "PERFORMANCE_100K_START", {"height": 100000, "hash": _artifact_validator.EXPECTED_HASHES["performance_100k"], "utxo_count": 13154991})
-    started_height = int(checkpoint_start["height"]) if spec.get("from_checkpoint") else 0
-    if spec.get("from_checkpoint"):
+    first = entries[0]
+    source_state_height = as_int(first.get("validated_height"), 0)
+    source_state_hash = first.get("validated_hash")
+    source_state_utxos = as_int(first.get("chainstate_utxo_count", first.get("utxo_count")), 0)
+    started_height = source_state_height if spec.get("resume_from_state") else 0
+    if spec.get("resume_from_state"):
         target_height = reference_finish_height or as_int(final.get("validated_height"), started_height)
     else:
         target_height = None if spec.get("tip") else int(spec["target_height"])
@@ -357,9 +359,9 @@ def build_artifact(
         timing["stage_totals_ms"] = observed_stages
     target = int(spec["target_height"]) if not spec.get("tip") else as_int(reference_finish_height, as_int(final.get("validated_height"), 0))
     expected_hash = _artifact_validator.EXPECTED_HASHES.get(gate_id, reference_finish_hash or final.get("validated_hash", ""))
-    reference_start_height = started_height if spec.get("from_checkpoint") else 0
-    reference_start_hash = str(checkpoint_start["hash"]) if spec.get("from_checkpoint") else TESTNET4_GENESIS_HASH
-    fresh_state = False if spec.get("from_checkpoint") else True
+    reference_start_height = started_height if spec.get("resume_from_state") else 0
+    reference_start_hash = str(source_state_hash or "") if spec.get("resume_from_state") else TESTNET4_GENESIS_HASH
+    fresh_state = False if spec.get("resume_from_state") else True
     payload = {
         "implementation": f"{port} product node",
         "port": port,
@@ -369,7 +371,7 @@ def build_artifact(
         "benchmark_lane": spec["benchmark_lane"],
         "benchmark_kind": spec["benchmark_kind"],
         "target_height": target,
-        "target_label": spec["target_label"] if (not spec.get("tip") or spec.get("from_checkpoint")) else "tip",
+        "target_label": spec["target_label"] if (not spec.get("tip") or spec.get("resume_from_state")) else "tip",
         "header_target_height": target,
         "byte_source": "local_reference_p2p",
         "reference_start_height": reference_start_height,
@@ -419,19 +421,18 @@ def build_artifact(
             "telemetry_log": str(telemetry_log_path),
         },
     }
-    if spec.get("from_checkpoint"):
+    if spec.get("resume_from_state"):
         payload.update(
             {
-                "checkpoint_source_gate": spec.get("checkpoint_source_gate", "performance_100k"),
-                "checkpoint_source_height": int(checkpoint_start["height"]),
-                "checkpoint_source_hash": str(checkpoint_start["hash"]),
-                "checkpoint_source_utxo_count": int(checkpoint_start["utxo_count"]),
-                "checkpoint_metadata": checkpoint_metadata or {},
+                "source_state_gate": spec.get("source_state_gate", "performance_100k"),
+                "source_state_origin": "port_durable_state",
+                "source_state_height": source_state_height,
+                "source_state_hash": source_state_hash,
+                "source_state_utxo_count": source_state_utxos,
                 "skipped_consensus_rules": [],
             }
         )
-        payload["control_harness"]["checkpoint_source_gate"] = "performance_100k"
-        payload["control_harness"]["checkpoint_metadata"] = checkpoint_metadata or {}
+        payload["control_harness"]["resume_source"] = "port_durable_state"
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     artifact_path.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
     return ControlBuildResult(

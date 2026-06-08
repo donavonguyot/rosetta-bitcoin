@@ -36,7 +36,7 @@ include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_REBUILD ?= 0
 DOCKER_LOCAL_PROOF_VOLUME ?= rsbitnode_proof_data
-POST_100K_TIP_VOLUME ?= rsbitnode_post_100k_to_tip_data
+POST_100K_TIP_VOLUME ?= rsbitnode_100k_proof_data
 POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_TUNING_SOURCE_VOLUME ?= rsbitnode_50k_proof_data
 DOCKER_TUNING_100K_VOLUME ?= rsbitnode_tuning_50k_to_100k_data

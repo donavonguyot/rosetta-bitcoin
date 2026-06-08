@@ -99,7 +99,6 @@ REQUIRED_BUCKETS = (
 LONG_RUN_GATES = {gate for gate, spec in _validator.GATES.items() if spec.get("long_run")}
 ACTIVE_CONTROL_PORTS = {"rust", "zig", "cpp", "go", "swift", "csharp", "java", "ocaml"}
 CONTROL_REQUIRED_GATES = {"baseline_5k", "shakedown_50k", "performance_100k", "post_100k_to_tip"}
-CHECKPOINT_HELPER = ROOT / "Project/scripts/manage_benchmark_checkpoint.py"
 REFERENCE_TIP_HELPER = ROOT / "Project/scripts/reference_tip.py"
 
 
@@ -328,18 +327,12 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
         ) or {}
         status = "pending"
         reason = ""
-        checkpoint: dict[str, Any] = {}
         if not warm:
             status = "not_ready"
             reason = "missing supported docker_warm command"
         elif not proof:
             status = "not_ready"
             reason = f"missing supported {proof_key} command"
-        elif args.gate == "post_100k_to_tip":
-            checkpoint = checkpoint_status(port)
-            if checkpoint.get("status") != "ready":
-                status = "not_ready"
-                reason = checkpoint.get("reason") or "missing performance_100k checkpoint"
         entries.append(
             {
                 "port": port,
@@ -349,7 +342,7 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
                 "reason": reason,
                 "warm_command": warm,
                 "proof_command": proof,
-                "checkpoint": checkpoint,
+                "resume_source": "port_durable_state" if args.gate == "post_100k_to_tip" else "",
                 "prior_total_ms": latest_prior_total_ms(conn, args.gate, port),
                 "artifact_path": "",
                 "telemetry_quality": "",
@@ -426,44 +419,6 @@ def reference_tip() -> dict[str, Any]:
     if not payload.get("ok"):
         raise RuntimeError(str(payload.get("error") or "reference tip check failed"))
     return payload
-
-
-def checkpoint_status(port: str) -> dict[str, Any]:
-    completed = subprocess.run(
-        [sys.executable, str(CHECKPOINT_HELPER), "--ports", port, "--check", "--json"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    try:
-        payload = json.loads(completed.stdout)
-        results = payload.get("results")
-        result = results[0] if isinstance(results, list) and results else {}
-    except json.JSONDecodeError:
-        result = {}
-    if not result:
-        result = {"port": port, "status": "error", "reason": (completed.stdout + completed.stderr).strip()}
-    if completed.returncode not in (0, 2) and result.get("status") != "ready":
-        result.setdefault("reason", completed.stderr.strip() or "checkpoint check failed")
-    return result
-
-
-def restore_checkpoint(port: str) -> dict[str, Any]:
-    completed = subprocess.run(
-        [sys.executable, str(CHECKPOINT_HELPER), "--ports", port, "--restore", "--json"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    payload = json.loads(completed.stdout)
-    results = payload.get("results")
-    if not isinstance(results, list) or not results:
-        raise RuntimeError("checkpoint helper returned no restore result")
-    result = results[0]
-    if result.get("status") != "ready":
-        raise RuntimeError(str(result.get("reason") or "checkpoint restore failed"))
-    return result
 
 
 def ms_duration(ms: float | None) -> str:
@@ -854,8 +809,8 @@ def print_dry_run(campaign: dict[str, Any]) -> None:
             print(f"  warm: {entry['warm_command']}")
         if entry["proof_command"]:
             print(f"  proof: {entry['proof_command']}")
-        if entry.get("checkpoint"):
-            print(f"  checkpoint: {entry['checkpoint']}")
+        if entry.get("resume_source"):
+            print(f"  resume_source: {entry['resume_source']}")
         if entry["prior_total_ms"] is not None:
             print(f"  prior_total_ms: {entry['prior_total_ms']}")
 
@@ -909,25 +864,22 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
                 return 1
             continue
 
-        checkpoint_metadata: dict[str, Any] = {}
         reference_finish: dict[str, Any] = {}
         if campaign["gate"] == "post_100k_to_tip":
             try:
-                checkpoint_metadata = restore_checkpoint(port)
-                entry["checkpoint"] = checkpoint_metadata
                 reference_finish = reference_tip()
                 entry["reference_finish"] = reference_finish
                 append_event(
                     campaign,
                     port,
-                    "checkpoint_restored",
-                    f"{checkpoint_metadata.get('target_volume', '')} -> {reference_finish.get('height', '')}",
+                    "reference_finish_selected",
+                    f"{reference_finish.get('height', '')} {reference_finish.get('hash', '')}",
                 )
             except Exception as exc:
                 entry["status"] = "failed"
-                entry["errors"].append(f"checkpoint/reference setup failed: {exc}")
-                append_event(campaign, port, "checkpoint_setup_failed", str(exc))
-                if campaign_should_pause(campaign, port, "checkpoint_setup_failed"):
+                entry["errors"].append(f"reference tip setup failed: {exc}")
+                append_event(campaign, port, "reference_tip_setup_failed", str(exc))
+                if campaign_should_pause(campaign, port, "reference_tip_setup_failed"):
                     return 1
                 continue
 
@@ -973,7 +925,6 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             expected_peer=expected_peer,
             reference_finish_height=int(reference_finish["height"]) if reference_finish else None,
             reference_finish_hash=str(reference_finish["hash"]) if reference_finish else None,
-            checkpoint_metadata=checkpoint_metadata,
         )
         telemetry_log = control_result.telemetry_log_path if control_result is not None else proof_log
         if control_result is not None:

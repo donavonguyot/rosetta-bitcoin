@@ -23,8 +23,7 @@
     "proof": "cpbitnode_proof_data",
     "proof_50k": "cpbitnode_50k_proof_data",
     "proof_100k": "cpbitnode_100k_proof_data",
-    "supervisor": "cpbitnode_sync_data",
-    "post_100k_to_tip": "cpbitnode_post_100k_to_tip_data"
+    "supervisor": "cpbitnode_sync_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Cpp && make docker-config",
@@ -106,7 +105,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/cpp_rocksdb_codec_v2_storage_2026-06-02.json",
-    "notes": "docker_proof_local, docker_proof_50k, and docker_proof_100k run official local-reference Docker benchmark gates with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
+    "notes": "docker_proof_local, docker_proof_50k, and docker_proof_100k run official local-reference Docker benchmark gates with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only. post_100k_to_tip resumes the port-owned 100k proof volume as durable product state; Project builds current tip-readiness artifacts."
   },
   "known_caveats": [
     "External network probe command not standardized"

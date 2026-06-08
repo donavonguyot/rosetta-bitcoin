@@ -69,8 +69,8 @@ GATES: dict[str, dict[str, Any]] = {
         "utxo_count": -1,
         "long_run": True,
         "tip": True,
-        "from_checkpoint": True,
-        "checkpoint_source_gate": "performance_100k",
+        "resume_from_state": True,
+        "source_state_gate": "performance_100k",
     },
     "tip_once": {
         "target_height": -1,
@@ -186,10 +186,11 @@ REQUIRED_TIP_FIELDS = (
 )
 
 REQUIRED_POST_100K_TO_TIP_FIELDS = (
-    "checkpoint_source_gate",
-    "checkpoint_source_height",
-    "checkpoint_source_hash",
-    "checkpoint_source_utxo_count",
+    "source_state_gate",
+    "source_state_origin",
+    "source_state_height",
+    "source_state_hash",
+    "source_state_utxo_count",
     "fresh_state",
 )
 
@@ -352,7 +353,7 @@ def validate_payload(
         if field not in payload:
             errors.append(f"missing required field {field}")
 
-    if spec.get("from_checkpoint"):
+    if spec.get("resume_from_state"):
         for field in REQUIRED_POST_100K_TO_TIP_FIELDS:
             if field not in payload:
                 errors.append(f"missing post-100k-to-tip field {field}")
@@ -416,19 +417,28 @@ def validate_payload(
             errors.append("reference_finish_hash must match validated_hash")
         if payload.get("reference_finish_height") != payload.get("validated_height"):
             errors.append("reference_finish_height must match validated_height")
-        if spec.get("from_checkpoint"):
-            if payload.get("checkpoint_source_gate") != "performance_100k":
-                errors.append("checkpoint_source_gate must be performance_100k")
-            if payload.get("checkpoint_source_height") != PERFORMANCE_100K_START["height"]:
-                errors.append(f"checkpoint_source_height={payload.get('checkpoint_source_height')!r}; expected {PERFORMANCE_100K_START['height']!r}")
-            if payload.get("checkpoint_source_hash") != PERFORMANCE_100K_START["hash"]:
-                errors.append("checkpoint_source_hash must match performance_100k hash")
-            if payload.get("checkpoint_source_utxo_count") != PERFORMANCE_100K_START["utxo_count"]:
-                errors.append(f"checkpoint_source_utxo_count={payload.get('checkpoint_source_utxo_count')!r}; expected {PERFORMANCE_100K_START['utxo_count']!r}")
-            if payload.get("reference_start_height") != PERFORMANCE_100K_START["height"]:
-                errors.append(f"reference_start_height={payload.get('reference_start_height')!r}; expected {PERFORMANCE_100K_START['height']!r}")
-            if payload.get("reference_start_hash") != PERFORMANCE_100K_START["hash"]:
-                errors.append("reference_start_hash must match performance_100k hash")
+        if spec.get("resume_from_state"):
+            source_height = as_int(payload.get("source_state_height"), -1)
+            source_utxos = as_int(payload.get("source_state_utxo_count"), -1)
+            if payload.get("source_state_gate") != "performance_100k":
+                errors.append("source_state_gate must be performance_100k")
+            if payload.get("source_state_origin") != "port_durable_state":
+                errors.append("source_state_origin must be port_durable_state")
+            if source_height is None or source_height < PERFORMANCE_100K_START["height"]:
+                errors.append(f"source_state_height={payload.get('source_state_height')!r}; expected >= {PERFORMANCE_100K_START['height']!r}")
+            if not str(payload.get("source_state_hash") or "").strip():
+                errors.append("source_state_hash must be nonblank")
+            if source_utxos is None or source_utxos <= 0:
+                errors.append("source_state_utxo_count must be positive")
+            if source_height == PERFORMANCE_100K_START["height"]:
+                if payload.get("source_state_hash") != PERFORMANCE_100K_START["hash"]:
+                    errors.append("source_state_hash must match performance_100k hash when source_state_height=100000")
+                if source_utxos != PERFORMANCE_100K_START["utxo_count"]:
+                    errors.append(f"source_state_utxo_count={payload.get('source_state_utxo_count')!r}; expected {PERFORMANCE_100K_START['utxo_count']!r} when source_state_height=100000")
+            if payload.get("reference_start_height") != payload.get("source_state_height"):
+                errors.append("reference_start_height must match source_state_height")
+            if payload.get("reference_start_hash") != payload.get("source_state_hash"):
+                errors.append("reference_start_hash must match source_state_hash")
             if as_bool(payload.get("fresh_state")):
                 errors.append("post_100k_to_tip must report fresh_state=false")
         if payload.get("skipped_consensus_rules") not in (None, [], {}, 0):
@@ -444,7 +454,7 @@ def validate_payload(
         errors.append(f"rocksdb_wal_disabled={payload.get('rocksdb_wal_disabled')!r}; expected false")
     if not as_bool(payload.get("resume_supported")):
         errors.append(f"resume_supported={payload.get('resume_supported')!r}; expected true")
-    if not spec.get("maintenance") and not spec.get("from_checkpoint") and not as_bool(payload.get("fresh_state")):
+    if not spec.get("maintenance") and not spec.get("resume_from_state") and not as_bool(payload.get("fresh_state")):
         errors.append(f"fresh_state={payload.get('fresh_state')!r}; expected true")
     if not str(payload.get("native_crypto_backend") or "").strip():
         errors.append("native_crypto_backend must be present")
@@ -672,10 +682,11 @@ def self_test() -> int:
                 "validated_hash": "0000000000000000000000000000000000000000000000000000000000000002",
                 "chainstate_utxo_count": 999,
                 "fresh_state": False,
-                "checkpoint_source_gate": "performance_100k",
-                "checkpoint_source_height": 100000,
-                "checkpoint_source_hash": EXPECTED_HASHES["performance_100k"],
-                "checkpoint_source_utxo_count": 13154991,
+                "source_state_gate": "performance_100k",
+                "source_state_origin": "port_durable_state",
+                "source_state_height": 100000,
+                "source_state_hash": EXPECTED_HASHES["performance_100k"],
+                "source_state_utxo_count": 13154991,
                 "telemetry_schema": "benchmark.telemetry_tick.v1",
                 "telemetry_summary": {
                     "telemetry_quality": "clean",

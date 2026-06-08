@@ -131,12 +131,13 @@ This is the primary performance comparison lane for optimization work.
 
 Required:
 
-- Start from the same port's current canonical `performance_100k` checkpoint:
-  height `100000`, expected 100k hash, `chainstate_utxo_count=13154991`, and
-  `core_spendable_v1`.
-- Restore state from ignored Project checkpoint storage; do not silently rerun
-  0-100k when a checkpoint is missing.
-- `fresh_state=false`, `checkpoint_source_gate=performance_100k`, and
+- Resume from the port's own durable product state at or beyond current
+  `performance_100k` truth. If the observed source state is exactly height
+  `100000`, it must match the expected 100k hash and
+  `chainstate_utxo_count=13154991`.
+- Project does not archive or restore state for this lane. Ports run like
+  products: inspect durable state, reconnect, continue, or report failure.
+- `fresh_state=false`, `source_state_origin=port_durable_state`, and
   `proof_mode=p2p_sync`.
 - Finish height/hash selected from local Reference Core before the run.
 - Final validated height/hash match the selected Reference finish height/hash.

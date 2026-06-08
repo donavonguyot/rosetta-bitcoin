@@ -21,8 +21,7 @@
   "volumes": {
     "data": "swiftbitnode_data",
     "proof": "swiftbitnode_proof_data",
-    "supervisor": "swiftbitnode_supervisor_data",
-    "post_100k_to_tip": "swiftbitnode_post_100k_to_tip_data"
+    "supervisor": "swiftbitnode_supervisor_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Swift && make docker-config",
@@ -107,7 +106,7 @@
     "diagnostic_10k_result": "Nodes/Shared/conformance/results/swift_docker_diagnostic_10k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_debug_result": "Nodes/Swift/.benchmark-results/swift_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
     "performance_100k_debug_result": "Nodes/Swift/.benchmark-results/swift_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
+    "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only. post_100k_to_tip resumes the port-owned 100k proof volume as durable product state; Project builds current tip-readiness artifacts."
   },
   "known_caveats": [
     "Swift supervisor is chunked local-reference catch-up, not external peer discovery",

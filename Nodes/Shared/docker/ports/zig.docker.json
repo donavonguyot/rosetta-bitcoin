@@ -21,8 +21,7 @@
   "volumes": {
     "data": "zigbitnode_data",
     "proof": "zigbitnode_proof_data",
-    "supervisor": "zigbitnode_supervisor_data",
-    "post_100k_to_tip": "zigbitnode_post_100k_to_tip_data"
+    "supervisor": "zigbitnode_supervisor_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Zig && make docker-config",
@@ -109,7 +108,7 @@
     "diagnostic_10k_result": "Nodes/Shared/conformance/results/zig_docker_diagnostic_10k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_debug_result": "Nodes/Zig/.benchmark-results/zig_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
     "performance_100k_debug_result": "Nodes/Zig/.benchmark-results/zig_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, and official local Reference P2P benchmark commands. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
+    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, and official local Reference P2P benchmark commands. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. post_100k_to_tip resumes the port-owned 100k proof volume as durable product state; Project builds current tip-readiness artifacts."
   },
   "known_caveats": [
     "Zig script corpus is 45/45 with engine=zig_native and delegated=false",

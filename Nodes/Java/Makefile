@@ -4,7 +4,7 @@ MAVEN_OPTS ?= -Xmx4g -XX:+ExitOnOutOfMemoryError
 export MAVEN_OPTS
 RESULT_DATE ?= $(shell date +%F)
 DOCKER_PROOF_VOLUME ?= jbitnode_proof_data
-POST_100K_TIP_VOLUME ?= jbitnode_post_100k_to_tip_data
+POST_100K_TIP_VOLUME ?= jbitnode_100k_proof_data
 POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 BENCHMARK_DEBUG_DIR ?= .benchmark-results
 DOCKER_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/java_docker_baseline_5k_benchmark_$(shell date +%F).json

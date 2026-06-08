@@ -66,6 +66,14 @@ REQUIRED_ARTIFACT_FIELDS = (
     "failures",
 )
 
+POST_100K_TO_TIP_ARTIFACT_FIELDS = (
+    "source_state_gate",
+    "source_state_origin",
+    "source_state_height",
+    "source_state_hash",
+    "source_state_utxo_count",
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -186,6 +194,13 @@ def required_metadata(gate: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def required_artifact_fields(gate: dict[str, Any]) -> list[str]:
+    fields = list(REQUIRED_ARTIFACT_FIELDS)
+    if gate["gate_id"] == "post_100k_to_tip":
+        fields.extend(POST_100K_TO_TIP_ARTIFACT_FIELDS)
+    return fields
+
+
 def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -268,7 +283,7 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
             "errors": [],
             "warnings": [],
             "required_metadata": required_metadata(gate),
-            "required_artifact_fields": REQUIRED_ARTIFACT_FIELDS,
+            "required_artifact_fields": required_artifact_fields(gate),
         }
 
     docker_status = contract["status"]
@@ -415,7 +430,7 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         "supervisor_volume": contract["supervisor_volume"],
         "local_reference": local_reference if isinstance(local_reference, dict) else {},
         "required_metadata": required_metadata(gate),
-        "required_artifact_fields": list(REQUIRED_ARTIFACT_FIELDS),
+        "required_artifact_fields": required_artifact_fields(gate),
         "errors": errors,
         "warnings": warnings,
     }
