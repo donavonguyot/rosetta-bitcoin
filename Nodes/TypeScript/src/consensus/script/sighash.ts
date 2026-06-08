@@ -27,6 +27,7 @@ export function bitcoinTaggedHash(tag: string, msg: Buffer): Buffer {
   return createHash("sha256").update(Buffer.concat([tagDigest, tagDigest, msg])).digest();
 }
 
+/** Legacy pre-segwit sighash; consensus byte-shape must match Shared script fixtures. */
 export function legacySighash(
   transaction: Transaction,
   inputIndex: number,

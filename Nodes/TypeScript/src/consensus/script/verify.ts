@@ -27,6 +27,7 @@ export class ScriptVerifyError extends Error {
   }
 }
 
+/** Spend-path verifier for Shared-supported templates. Unsupported shapes must throw (validation blocker). */
 export function verifyTransactionInput(
   transaction: Transaction,
   inputIndex: number,

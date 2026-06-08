@@ -66,9 +66,11 @@ std::vector<std::uint8_t> taprootSignatureHash(
     std::span<const std::uint8_t> tapleafHashBytes = {}, std::uint32_t tapscriptCodeseparatorPos = 0xFFFFFFFF,
     const SighashCache* cache = nullptr);
 
+// Legacy pre-segwit sighash; consensus byte-shape must match Shared script fixtures.
 std::vector<std::uint8_t> legacySighash(const messages::Transaction& transaction, std::size_t inputIndex,
                                           std::span<const std::uint8_t> scriptCode, int sighashType = 1);
 
+// BIP143 witness sighash; amount and scriptCode come from spent prevout runtime truth.
 std::vector<std::uint8_t> bip143Sighash(const messages::Transaction& transaction, std::size_t inputIndex,
                                           std::span<const std::uint8_t> scriptCode, std::int64_t amount,
                                           int sighashType = 1, const SighashCache* cache = nullptr);

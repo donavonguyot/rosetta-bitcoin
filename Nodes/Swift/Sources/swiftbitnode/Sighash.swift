@@ -1,5 +1,6 @@
 import Foundation
 
+/// Legacy, BIP143, and Taproot sighash builders; consensus byte-shape must match Shared script fixtures.
 enum Sighash {
     static let all: UInt32 = 0x01
     static let none: UInt32 = 0x02

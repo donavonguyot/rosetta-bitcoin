@@ -507,6 +507,7 @@ let legacy_outputs_all transaction =
   List.iter (fun output -> Buffer.add_string buf (Tx.serialize_txout output)) transaction.outputs;
   Buffer.contents buf
 
+(* Legacy pre-segwit sighash; consensus byte-shape must match Shared script fixtures. *)
 let legacy_sighash ?cache transaction input_index script_code sighash_type =
   ensure (input_index < input_count ?cache transaction) "input index out of range";
   let base_type = sighash_type land 0x1f in
@@ -545,6 +546,7 @@ let legacy_sighash ?cache transaction input_index script_code sighash_type =
     Tx.put_u32 buf (Int32.of_int sighash_type);
     double_sha (Buffer.contents buf)
 
+(* BIP143 witness sighash; amount and script_code come from spent prevout runtime truth. *)
 let bip143_sighash ?cache transaction input_index script_code amount sighash_type =
   ensure (input_index < input_count ?cache transaction) "input index out of range";
   let anyone_can_pay = sighash_type land 0x80 <> 0 in
@@ -1415,6 +1417,7 @@ let verify_script ?cache ?timing ?verifier script_sig script_pubkey transaction 
         terminal_relaxed stack
       else terminal_strict stack
 
+(* Spend-path verifier for Shared-supported templates. Unsupported shapes -> validation blocker. *)
 let verify_transaction_input_with_cache_and_timing ?cache ?verifier transaction input_index options =
   let timing = empty_timing () in
   try

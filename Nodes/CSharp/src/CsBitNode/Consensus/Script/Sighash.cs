@@ -5,6 +5,7 @@ using CsBitNode.Wire;
 
 namespace CsBitNode.Consensus.Script;
 
+// Legacy pre-segwit sighash; consensus byte-shape must match Shared script fixtures.
 public static class Sighash
 {
     public static byte[] LegacySighash(

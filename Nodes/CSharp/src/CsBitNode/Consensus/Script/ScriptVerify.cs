@@ -156,6 +156,7 @@ public sealed class UnsupportedScriptRule : Exception
     public string Rule { get; }
 }
 
+// Spend-path verifier for Shared-supported templates. Unsupported rules must throw (validation blocker).
 public static class ScriptVerify
 {
     private const int MaxP2shRedeemPush = 520;

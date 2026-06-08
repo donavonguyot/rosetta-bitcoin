@@ -43,6 +43,7 @@ void resetScriptTiming();
 void recordScriptTiming(ScriptTimingStage stage, long long elapsedUs);
 ScriptTimingSnapshot scriptTimingSnapshot();
 
+// Spend-path verifier for Shared-supported templates. Unsupported shapes must throw (validation blocker).
 void verifyTransactionInput(
     const messages::Transaction& transaction, std::size_t inputIndex, std::span<const std::uint8_t> scriptPubkey,
     std::int64_t amount,

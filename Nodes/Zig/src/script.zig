@@ -151,6 +151,7 @@ const EvalContext = struct {
     sigop_budget: ?*i32 = null,
 };
 
+/// Spend-path verifier for Shared-supported templates. Unsupported shapes return error (validation blocker).
 pub fn verifyInput(
     allocator: std.mem.Allocator,
     transaction: tx.Transaction,
@@ -1014,6 +1015,7 @@ fn checkMultiSig(allocator: std.mem.Allocator, context: *const EvalContext, stac
     return true;
 }
 
+/// Legacy pre-segwit sighash; consensus byte-shape must match Shared script fixtures.
 fn legacySighash(
     allocator: std.mem.Allocator,
     transaction: tx.Transaction,

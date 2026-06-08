@@ -156,6 +156,7 @@ impl SighashCache {
     }
 }
 
+/// Spend-path verifier for Shared-supported templates. Unsupported rules must error (validation blocker upstream).
 pub fn verify_transaction_input(
     transaction: &Transaction,
     input_index: usize,
@@ -1382,6 +1383,7 @@ fn trailing_compressed_pubkey(script_code: &[u8]) -> Option<Vec<u8>> {
 }
 
 #[allow(dead_code)]
+/// Legacy pre-segwit sighash; consensus byte-shape must match Shared script fixtures.
 pub fn legacy_sighash(
     transaction: &Transaction,
     input_index: usize,
@@ -1479,6 +1481,7 @@ fn legacy_input(input: &TxIn, script_code: &[u8], base_type: u8, signing: bool) 
 }
 
 #[allow(dead_code)]
+/// BIP143 witness sighash; amount and scriptCode come from spent prevout runtime truth.
 pub fn bip143_sighash(
     transaction: &Transaction,
     input_index: usize,

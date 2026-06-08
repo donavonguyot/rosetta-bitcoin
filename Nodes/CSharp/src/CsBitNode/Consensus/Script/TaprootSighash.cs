@@ -4,6 +4,7 @@ using CsBitNode.Wire;
 
 namespace CsBitNode.Consensus.Script;
 
+// BIP341 Taproot sighash; spent-prevout ordering and ext_flag bytes are consensus data.
 public static class TaprootSighash
 {
     public const int SighashDefault = 0;

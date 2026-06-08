@@ -118,6 +118,8 @@ type VerifyInputOptions struct {
 	SighashPrecompute *SighashPrecompute
 }
 
+// Spend-path verifier for Shared-supported templates. Unsupported shapes must error (validation blocker).
+// Fixture triage: Docs/script-semantics-gotchas.md.
 func VerifyTransactionInput(transaction tx.Transaction, inputIndex int, options VerifyInputOptions) error {
 	if inputIndex >= len(transaction.Inputs) {
 		return VerifyError{"input index out of range"}
@@ -1064,6 +1066,7 @@ func trailingCompressedPubkey(scriptCode []byte) []byte {
 	return clone(pk)
 }
 
+// Legacy pre-segwit sighash; consensus byte-shape must match Shared script fixtures.
 func legacySighash(transaction tx.Transaction, inputIndex int, scriptCode []byte, sighashType int) []byte {
 	baseType := sighashType & 0x1f
 	anyoneCanPay := sighashType&0x80 != 0
@@ -1119,6 +1122,7 @@ func legacyInput(in tx.TxIn, scriptCode []byte, baseType int, signing bool) []by
 	return out
 }
 
+// BIP143 witness sighash; amount and scriptCode come from spent prevout runtime truth.
 func bip143Sighash(transaction tx.Transaction, inputIndex int, scriptCode []byte, amount int64, sighashType int) []byte {
 	anyoneCanPay := sighashType&0x80 != 0
 	baseType := sighashType & 0x1f

@@ -30,6 +30,7 @@ enum ScriptTemplate: String {
     case unknown
 }
 
+/// Spend-path verifier for Shared-supported templates. Unsupported templates fail as validation blockers.
 enum ScriptVerifier {
     static func verify(_ fixture: CorpusFixture, cache: Sighash.Cache? = nil) -> (passed: Bool, stage: String, type: String, message: String) {
         guard fixture.inputIndex >= 0, fixture.inputIndex < fixture.transaction.inputs.count else {
