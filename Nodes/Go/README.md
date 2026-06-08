@@ -6,10 +6,19 @@ native crypto reporting, Docker smoke surfaces, native Shared script corpus,
 local-reference stored-block replay, and a bounded local Reference P2P
 comparator for the 5k supporting gate.
 
+For code structure and design rationale, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For imported Go posture, use Project reports from the repository root:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
+
 The binary gate remains unchanged: from empty local state on Bitcoin testnet4,
 the node must reach and maintain tip while independently validating every stored
-connected block. This Go milestone does not claim live P2P sync, tip
-tip maintenance, or binary-gate completion.
+connected block. Query Project for current imported runway posture instead of
+treating README proof notes as live status.
 
 ## Commands
 
