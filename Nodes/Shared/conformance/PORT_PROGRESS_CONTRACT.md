@@ -45,13 +45,13 @@ Project reports active ports with these posture labels:
 |---------|---------|
 | `writer_owned` | The sync/proof writer emits `rb.port_progress` directly. This is the preferred steady-state model. |
 | `wrapper_translated` | A wrapper builds product progress from another status surface. This is acceptable only as a temporary compatibility bridge. |
-| `mixed` | The writer emits progress, but a wrapper also owns some pass-through or final-status glue. |
 | `missing` | Project cannot find a current product-progress source. |
 
 Go, Rust, Zig, Swift, OCaml, and C++ should stay writer-owned unless a concrete
-defect proves otherwise. C# and Java may keep wrapper glue around their Docker
-proof surfaces, but writer-emitted `rb.port_progress` is the primary product
-truth and wrappers should pass it through rather than re-author it.
+defect proves otherwise. C# and Java are also writer-owned when their sync
+writers emit complete `rb.port_progress`. Any wrapper around their Docker proof
+surfaces is control plumbing only; it may pass writer progress through and
+collect final status, but it must not re-author product progress.
 
 ## Boundary
 

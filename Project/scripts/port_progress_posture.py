@@ -89,17 +89,17 @@ SOURCE_POSTURES = {
     ),
     "csharp": SourcePosture(
         "csharp",
-        "mixed",
+        "writer_owned",
         ("Nodes/CSharp/src/CsBitNode/Cli/SyncLocalCoreProgram.cs",),
         ("Nodes/CSharp/scripts/docker_sync_proof.sh",),
-        notes="writer emits progress; wrapper should pass it through",
+        notes="writer emits progress; wrapper is control pass-through",
     ),
     "java": SourcePosture(
         "java",
-        "mixed",
+        "writer_owned",
         ("Nodes/Java/src/main/java/com/jbitnode/cli/SyncLocalCoreService.java",),
         ("Nodes/Java/scripts/docker_5k_benchmark.sh",),
-        notes="writer emits progress; wrapper should pass it through",
+        notes="writer emits progress; wrapper is control pass-through",
     ),
 }
 
@@ -145,6 +145,7 @@ def source_audit(port: str) -> dict[str, Any]:
         "port": port,
         "posture": posture.posture,
         "source_progress": bool(source_hits),
+        "wrapper_control": bool(posture.wrapper_paths),
         "wrapper_progress": bool(wrapper_hits),
         "line_atomicity": line_atomicity,
         "source_paths": list(posture.source_paths),

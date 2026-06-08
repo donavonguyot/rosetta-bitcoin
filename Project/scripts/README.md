@@ -219,10 +219,11 @@ Use the progress posture report before changing emitters:
 python3 Project/scripts/report.py --db Project/project.db --section port-progress-posture
 ```
 
-`writer_owned` is the preferred model. Low-maintenance direct emitters should
-stay direct; `mixed` wrapper paths such as C# and Java should pass through
-writer-emitted `rb.port_progress` and keep wrapper work limited to benchmark
-control and final status collection.
+`writer_owned` is the required steady-state product posture. Low-maintenance
+direct emitters should stay direct. C# and Java may still have wrapper control
+plumbing, but that wrapper work is limited to launch, benchmark control, progress
+pass-through, and final status collection; it is not a separate product-progress
+posture.
 
 For long-run gates, the campaign runner also applies a startup visibility
 timeout. If `first_block_connected` is not observed within the configured
