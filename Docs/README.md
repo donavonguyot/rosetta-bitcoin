@@ -83,6 +83,12 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
   high-signal inline documentation.
 - `../Nodes/Shared/code-documentation/agent_brief_template.md` - reusable
   template for scoped documentation passes.
+- `../Nodes/Shared/code-documentation/port_architecture_outline.md` - reusable
+  section outline for port architecture docs.
+- `../Nodes/Shared/code-documentation/review_questions.md` - judgment prompts
+  for reviewing documentation batches.
+- `../Nodes/Shared/code-documentation/language_idioms.md` - per-language inline
+  documentation placement guidance.
 
 For baseline readiness, prefer Project over hand-maintained summaries:
 

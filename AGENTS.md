@@ -28,15 +28,30 @@ Before editing a port, read:
 7. `Nodes/Shared/conformance/PORT_PROGRESS_CONTRACT.md` before benchmark telemetry or proof instrumentation work.
 8. `Nodes/Shared/testing/TEST_COVERAGE_CONTRACT.md` before test coverage or par-level work.
 9. `Nodes/Shared/STATUS_CONTRACT.md`.
-10. `Nodes/Shared/storage/STORAGE_GATE.md`.
-11. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
-12. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
-13. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
-14. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` for Project Docker query examples.
-15. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
-16. `Docs/blocker-ledger.md`.
-17. `Docs/supervisor-contract.md`.
-18. The target port's README and blocker ledger.
+10. `Nodes/Shared/CODE_DOCUMENTATION.md` before inline doc or architecture work on any port.
+11. `Nodes/Shared/storage/STORAGE_GATE.md`.
+12. `Nodes/Shared/chainstate/CHAINSTATE_STORE.md`.
+13. `Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md`.
+14. The target port manifest in `Nodes/Shared/docker/ports/<port>.docker.json` before Docker work.
+15. `Nodes/Shared/docker/PORT_DOCKER_INVENTORY.md` for Project Docker query examples.
+16. `Docs/artifact-retention.md` before deleting, moving, or preserving proof/log/datadir artifacts.
+17. `Docs/blocker-ledger.md`.
+18. `Docs/supervisor-contract.md`.
+19. The target port's README, port architecture doc (`Nodes/<Port>/docs/ARCHITECTURE.md` when present), and blocker ledger.
+
+## Code documentation
+
+Before adding or improving inline comments, docblocks, or port architecture
+prose, read:
+
+- `Nodes/Shared/CODE_DOCUMENTATION.md`
+- `Nodes/Shared/code-documentation/agent_brief_template.md`
+- `Nodes/Shared/code-documentation/review_questions.md`
+
+Use ephemeral scoped passes: improve high-signal boundaries only, make no
+executable logic changes, and do not embed current status, benchmark rank, or
+binary-gate posture in source comments. Port architecture maps live under
+`Nodes/<Port>/docs/ARCHITECTURE.md` when present (Python, Java, TypeScript).
 
 The official benchmark suite is `baseline_5k`, `shakedown_50k`,
 `performance_100k`, `post_100k_to_tip`, `tip_once`, and `tip_maintenance`.

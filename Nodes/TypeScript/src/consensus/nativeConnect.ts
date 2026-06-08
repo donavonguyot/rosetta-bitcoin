@@ -29,6 +29,7 @@ interface NativeViewUtxo {
   coinbase: boolean;
 }
 
+/** Block-local UTXO view: same-block spends and creates before atomic chainstate commit. */
 class NativeBlockUtxoView {
   readonly created = new Map<string, NativeViewUtxo>();
   readonly spent = new Set<string>();
@@ -351,6 +352,12 @@ export interface NativeConnectBlockOptions {
   scriptVerifyRunner?: ScriptVerifyRunner | undefined | undefined;
 }
 
+/**
+ * Native block connect boundary: validates the block, uses a block-local UTXO
+ * view for same-block churn, then performs an atomic chainstate commit. Missing
+ * consensus rules must surface as a validation blocker, not implicit success.
+ * See Nodes/Shared/consensus/VALIDATION_PIPELINE.md.
+ */
 export async function connectBlockNative(
   session: ChainstateSession,
   payload: Buffer,

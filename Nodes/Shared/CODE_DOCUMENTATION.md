@@ -18,6 +18,9 @@ thing:
 |----------|------|--------------|
 | Inline code docs | Local invariants, footguns, when-not-to-call notes, surprising Bitcoin semantics at the edit site | Broad tutorials, repeated contracts, status claims |
 | Port architecture docs | Package map, major data flows, design tradeoffs, how this language expresses the shared Bitcoin pipeline | Live status, benchmark rankings, generated tables |
+
+For a reusable section outline when authoring port architecture docs, see
+`code-documentation/port_architecture_outline.md`.
 | Shared docs | Cross-port contracts, vocabulary, proof shapes, validation order, operational boundaries | Port-specific implementation prose unless it is an example |
 | Project reports | Mission-control observations and current status projections | Runtime truth used by node code |
 

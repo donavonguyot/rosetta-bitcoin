@@ -62,6 +62,11 @@ function binaryGateStatus(syncStatus: string, currentBlocker: Record<string, unk
   return syncStatus === "blocks_current" ? "passed" : "not_attempted";
 }
 
+/**
+ * Builds native status JSON from RocksDB runtime truth. Uses
+ * {@link ChainstateSession.openNative} with `acquireLock: false` so read-only
+ * status does not compete with an active sync writer.
+ */
 export async function nativeStatusDocument(settings: Settings): Promise<NativeStatusDocument> {
   const chain = getChain(settings.chain);
   const lockMetadata = readSyncLockMetadata(syncLockPath(settings.dataDir));

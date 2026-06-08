@@ -14,6 +14,7 @@ Read:
 - `Docs/port-baseline-5k.md`
 - `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`
 - `Nodes/Shared/conformance/BENCHMARK_CONTRACT.md`
+- `Nodes/Shared/CODE_DOCUMENTATION.md`
 - `Docs/artifact-retention.md`
 
 Use Project reports for current status. Do not rely on static README tables or
@@ -52,4 +53,6 @@ card, or compact proof artifact before using it to support a claim.
 
 Keep changes narrowly scoped. Include the relevant Project report, preflight,
 test, corpus, benchmark, or artifact validation command in the PR description.
-If a change is docs-only, say so explicitly.
+If a change is docs-only, say so explicitly. Documentation passes must follow
+`Nodes/Shared/CODE_DOCUMENTATION.md`; run
+`python3 Project/scripts/check_doc_drift.py` after Markdown edits.

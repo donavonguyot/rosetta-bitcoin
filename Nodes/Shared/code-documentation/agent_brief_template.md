@@ -73,3 +73,36 @@ Vocabulary to preserve:
   - atomic chainstate commit
   - single-writer datadir lock
 ```
+
+## Example Ephemeral Brief — TypeScript P2P/chainstate
+
+```text
+Task:
+  Add high-signal documentation for TypeScript P2P/chainstate.
+
+Surface:
+  P2P handshake, batch sync ordering, chainstate session, and datadir lock.
+
+Files to inspect first:
+  - Nodes/TypeScript/src/p2p/peer.ts
+  - Nodes/TypeScript/src/p2p/manager.ts
+  - Nodes/TypeScript/src/cli/syncRunner.ts
+  - Nodes/TypeScript/src/node.ts
+  - Nodes/TypeScript/src/storage/syncLock.ts
+  - Nodes/TypeScript/src/chainstate/chainstateSession.ts
+  - Nodes/TypeScript/docs/ARCHITECTURE.md
+
+Shared docs to use:
+  - Nodes/Shared/CODE_DOCUMENTATION.md
+  - Nodes/Shared/STATUS_CONTRACT.md
+  - Nodes/Shared/consensus/VALIDATION_PIPELINE.md
+  - Nodes/Shared/chainstate/CHAINSTATE_STORE.md
+
+Vocabulary to preserve:
+  - deferred advanced negotiation
+  - honest start_height
+  - block-local UTXO view
+  - atomic chainstate commit
+  - single-writer datadir lock
+  - runtime truth
+```

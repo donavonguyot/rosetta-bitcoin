@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+/** Datadir lock file used for the single-writer datadir lock during sync/connect/rebuild. */
 export const SYNC_LOCK_FILENAME = ".tsbitnode_sync.lock";
 export const LEGACY_SYNC_LOCK_FILENAME = ".sync_batch_loop.lock";
 export const SYNC_LOCK_HELD_MESSAGE = "another sync process holds lock";
@@ -162,6 +163,12 @@ const PARENT_HELD_HANDLE: SyncLockHandle = {
   },
 };
 
+/**
+ * Acquires the single-writer datadir lock for sync/connect/rebuild. This is a
+ * chainstate integrity guard, not an operator hint: overlapping writers can
+ * corrupt UTXO state and create false validation blockers. See
+ * Nodes/Shared/CODE_DOCUMENTATION.md.
+ */
 export function acquireSyncLock(datadir: string, options: AcquireSyncLockOptions = {}): SyncLockHandle {
   const resolved = resolve(datadir);
   mkdirSync(resolved, { recursive: true });

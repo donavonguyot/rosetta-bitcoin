@@ -300,3 +300,64 @@ Return:
 - next blocker, if any
 - whether this improves throughput or moves the binary gate
 ```
+
+## Scoped code documentation pass
+
+Use this prompt for comment, docblock, or port-architecture work. Copy the brief
+shape from
+`/Users/donavonguyot/RB/Nodes/Shared/code-documentation/agent_brief_template.md`
+and keep the batch ephemeral.
+
+```text
+You are working on [PORT_NAME] in /Users/donavonguyot/RB/Nodes/[PORT_DIR].
+
+Read first:
+- /Users/donavonguyot/RB/AGENTS.md
+- /Users/donavonguyot/RB/Nodes/Shared/CODE_DOCUMENTATION.md
+- /Users/donavonguyot/RB/Nodes/Shared/code-documentation/review_questions.md
+- /Users/donavonguyot/RB/Nodes/Shared/code-documentation/agent_brief_template.md
+- [Shared contract paths named in the brief]
+
+Goal:
+Add high-signal documentation for [PORT_NAME] [SURFACE].
+
+Surface:
+[P2P handshake / sync orchestration / block connect / script verification /
+chainstate status / proof entrypoint]
+
+Files to inspect first:
+- [path]
+- [path]
+
+Vocabulary to preserve:
+- deferred advanced negotiation
+- honest start_height
+- block-local UTXO view
+- atomic chainstate commit
+- single-writer datadir lock
+- runtime truth
+- validation blocker
+
+Allowed edits:
+- Add or improve comments/docblocks.
+- Add or improve port architecture prose for the scoped surface.
+- Fix nearby documentation links if they are wrong.
+
+Forbidden edits:
+- No executable logic changes.
+- No test expectation changes.
+- No manifest, proof artifact, Project DB, or generated output changes.
+- No current status claims.
+- No comment-density cleanup outside the scoped surface.
+
+Acceptance:
+- The scoped files are easier for an agent to skim.
+- A human language expert learns the relevant Bitcoin invariant.
+- Comments point to Shared docs instead of duplicating them.
+- python3 Project/scripts/check_doc_drift.py passes after Markdown edits.
+- Canonical vocabulary appears on the scoped surface where the concepts exist.
+```
+
+Example briefs live in
+`Nodes/Shared/code-documentation/agent_brief_template.md` (Java P2P/sync and
+TypeScript P2P/chainstate).

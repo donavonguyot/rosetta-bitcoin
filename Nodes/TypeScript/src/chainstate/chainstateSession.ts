@@ -18,6 +18,11 @@ export interface ChainstateSessionOptions {
   lock?: AcquireSyncLockOptions;
 }
 
+/**
+ * Native chainstate session: opens RocksDB runtime truth for sync, proof, and
+ * status. By default acquires the single-writer datadir lock; read-only status
+ * may pass {@link acquireLock} `false`.
+ */
 export class ChainstateSession {
   private constructor(
     private readonly lockHandle: SyncLockHandle | null,
@@ -34,6 +39,11 @@ export class ChainstateSession {
     return existsSync(ChainstateSession.nativeMarkerPath(dataDir));
   }
 
+  /**
+   * Opens native RocksDB chainstate and block storage under {@link dataDir}.
+   * Runtime truth comes from this session; Project projections observe it later
+   * and must not be read by sync or consensus code.
+   */
   static async openNative(
     dataDir: string,
     chain: ChainParams,

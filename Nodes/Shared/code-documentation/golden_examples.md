@@ -108,3 +108,22 @@ Why this works:
 
 - It explains why the lock exists.
 - It ties an operational mechanism to consensus diagnostics.
+
+## Docker And Proof CLI Boundary
+
+Good inline shape:
+
+```ts
+/**
+ * Bounded storage proof: writes compact proof JSON from a fresh datadir run.
+ * This is evidence export, not runtime truth and not a Project import decision.
+ * See Nodes/Shared/conformance/BENCHMARK_CONTRACT.md.
+ */
+async function runStorageProof(...)
+```
+
+Why this works:
+
+- Marks the proof entrypoint as artifact emission, not validation authority.
+- Points to the benchmark contract instead of restating gate rules inline.
+- Avoids embedding current pass/fail posture in source comments.

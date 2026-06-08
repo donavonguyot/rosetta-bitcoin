@@ -52,7 +52,7 @@ Use these docs as the durable Shared contract surface:
 | Docker runtime | `docker/DOCKER_RUNTIME_CONTRACT.md` | `docker/PORT_DOCKER_INVENTORY.md` |
 | Benchmarks and replay | `conformance/BENCHMARK_CONTRACT.md` | `replay/REPLAY_TELEMETRY.md` |
 | Live operation | `sync/LIVE_TIP_MAINTENANCE.md` | `sync/OPERATIONAL_BLOCKERS.md` |
-| Code documentation | `CODE_DOCUMENTATION.md` | `code-documentation/golden_examples.md`, `code-documentation/language_idioms.md`, `code-documentation/agent_brief_template.md`, `code-documentation/review_questions.md` |
+| Code documentation | `CODE_DOCUMENTATION.md` | `code-documentation/golden_examples.md`, `code-documentation/language_idioms.md`, `code-documentation/agent_brief_template.md`, `code-documentation/review_questions.md`, `code-documentation/port_architecture_outline.md` |
 | New port baseline | `templates/port-baseline-5k/README.md` | `SPEC.md` |
 
 ## Non-Negotiable Rule

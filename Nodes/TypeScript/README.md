@@ -6,10 +6,20 @@ TypeScript is now a **Native/Core migration target**. Core/native mode may use
 runtime npm dependencies only for RocksDB and `libsecp256k1` infrastructure
 bindings; external Bitcoin libraries remain forbidden.
 
-## Current Status
+For code structure and design rationale, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For imported TypeScript posture, use Project reports from the repository root:
 
-Native/Core parity requires RocksDB runtime truth, native crypto proof,
-Docker proof/supervisor support, and fresh replay from an empty native datadir.
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
+
+## Operator Surfaces
+
+Native/Core work uses RocksDB runtime truth, native crypto, and the sync lock
+for mutable datadir state. This README does not restate latest proof or
+benchmark posture; Project imports own those status claims.
 
 | Surface | Canonical command | Notes |
 |---------|-------------------|-------|
@@ -123,5 +133,5 @@ chainstate.
 
 The end gate is unchanged: from empty local state on Bitcoin testnet4, the node
 reaches and maintains tip while independently validating every stored connected
-block. Current native TypeScript work is proof-partial until imported Project
-evidence proves the relevant corpus, stage, and tip runway checks.
+block. Query Project for current imported runway and lifecycle posture instead
+of reading static readiness claims here.
