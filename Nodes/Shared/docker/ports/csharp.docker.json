@@ -13,12 +13,16 @@
     "runtime": "mcr.microsoft.com/dotnet/runtime:8.0",
     "os_family": "Debian-family Microsoft .NET image",
     "package_manager": "apt",
-    "native_dependencies": ["RocksDB native package or bundled library", "libsecp256k1 native backend"]
+    "native_dependencies": [
+      "RocksDB native package or bundled library",
+      "libsecp256k1 native backend"
+    ]
   },
   "volumes": {
     "data": null,
     "proof": "csbitnode_proof_data",
-    "supervisor": "csbitnode_sync_data"
+    "supervisor": "csbitnode_sync_data",
+    "post_100k_to_tip": "csbitnode_post_100k_to_tip_data"
   },
   "commands": {
     "docker_config": "cd Nodes/CSharp && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml config",
@@ -30,6 +34,7 @@
     "docker_proof_10k": "cd Nodes/CSharp && make docker-proof-10k",
     "docker_proof_50k": "cd Nodes/CSharp && make docker-proof-50k",
     "docker_proof_100k": "cd Nodes/CSharp && make docker-proof-100k",
+    "docker_proof_post_100k_to_tip": "cd Nodes/CSharp && make docker-proof-post-100k-to-tip",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_diagnostic_sync_proof": "cd Nodes/CSharp && make docker-csharp-native-crypto-proof",
@@ -45,19 +50,35 @@
       "supported": true,
       "command": "cd Nodes/CSharp && make docker-proof-local",
       "peer": "${REFERENCE_P2P_PEER}",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "external_manual": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+      "required_recorded_facts": [
+        "peer",
+        "disconnects",
+        "advertised_start_height",
+        "validated_height"
+      ]
     },
     "external_seed": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+      "required_recorded_facts": [
+        "selected_peer",
+        "seed_source",
+        "disconnects",
+        "validated_height"
+      ]
     }
   },
   "supervisor": {
@@ -67,12 +88,27 @@
     "check_sec": 5
   },
   "tick_json": {
-    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+    "required_fields": [
+      "phase",
+      "runtime_surface",
+      "peer_mode",
+      "peer",
+      "validated_height",
+      "header_height",
+      "stored_block_height",
+      "sync_status",
+      "delta_since_last",
+      "process_running",
+      "current_blocker"
+    ]
   },
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json",
-    "notes": "Persistent Docker supervisor exists; docker_proof_local, docker_proof_50k, and docker_proof_100k run official local-reference Docker benchmark gates with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only."
+    "notes": "Persistent Docker supervisor exists; docker_proof_local, docker_proof_50k, and docker_proof_100k run official local-reference Docker benchmark gates with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
   },
-  "known_caveats": ["External network probe command not standardized", "No daemon data volume in current compose"]
+  "known_caveats": [
+    "External network probe command not standardized",
+    "No daemon data volume in current compose"
+  ]
 }

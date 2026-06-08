@@ -3,6 +3,10 @@ DATA_DIR ?= ./data-swift
 RESULT_DATE ?= $(shell date +%F)
 SCRIPT_RESULT ?= ../Shared/conformance/results/swift_script_corpus_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /results/swift_script_corpus_$(RESULT_DATE).json
+TESTING_RESULTS_DIR ?= ../Shared/testing/results
+TESTING_CAPABILITY_EMITTER ?= python3 ../Shared/testing/tools/emit_crypto_capability_contract.py
+CRYPTO_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/swift_crypto_vectors_$(RESULT_DATE).json
+BLOCK_CONNECT_BACKEND_RESULT ?= $(TESTING_RESULTS_DIR)/swift_block_connect_backend_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= /tmp/swift_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_10K_PROOF_RESULT ?= /results/swift_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
 DOCKER_50K_PROOF_RESULT ?= /tmp/swift_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
@@ -12,13 +16,15 @@ include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 LOCAL_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_PROOF_VOLUME ?= swiftbitnode_proof_data
+POST_100K_TIP_VOLUME ?= swiftbitnode_post_100k_to_tip_data
+POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_SYNC_TARGET ?= 5000
 BENCHMARK_GATE ?= baseline_5k
 DOCKER_SUPERVISOR_TARGET ?= 10000
 DOCKER_SUPERVISOR_CHUNK ?= 5000
 DOCKER_SUPERVISOR_RESULT ?= /results/swift_supervisor_status_$(RESULT_DATE).json
 
-.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local swift-node-sync-supervisor docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
+.PHONY: build test swift-node-status swift-node-native-crypto-vectors swift-node-script-corpus swift-node-proof-local swift-node-sync-supervisor docker-config docker-build docker-warm docker-status docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-supervisor docker-supervisor-status docker-supervisor-stop docker-supervisor-resume docker-smoke-once clean
 
 build:
 	$(SWIFT) build
@@ -31,6 +37,12 @@ swift-node-status:
 
 swift-node-native-crypto-vectors:
 	$(SWIFT) run swiftbitnode native-crypto-vectors
+
+test-crypto-vectors:
+	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port swift --backend libsecp256k1 --result-path $(CRYPTO_CAPABILITY_RESULT)
+
+test-block-connect-backend:
+	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port swift --backend libsecp256k1 --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 swift-node-script-corpus:
 	$(SWIFT) run swiftbitnode script-corpus \
@@ -69,7 +81,7 @@ docker-script-corpus:
 
 docker-proof-local:
 	$(REFERENCE_P2P_CHECK)
-	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true; fi
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps \
 	  -e TARGET_HEIGHT=$(DOCKER_SYNC_TARGET) \
 	  -e HEADER_TARGET_HEIGHT=$(DOCKER_SYNC_TARGET) \
@@ -105,6 +117,14 @@ docker-proof-100k:
 	  DOCKER_SYNC_TARGET=100000 \
 	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_100K_PROOF_RESULT) \
 	  BENCHMARK_GATE=performance_100k
+
+docker-proof-post-100k-to-tip:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=$(POST_100K_TIP_VOLUME) \
+	  DOCKER_SYNC_TARGET=$(POST_100K_TIP_TARGET) \
+	  DOCKER_LOCAL_PROOF_RESULT=/tmp/swift_docker_post_100k_to_tip_debug_$(RESULT_DATE).json \
+	  BENCHMARK_GATE=post_100k_to_tip \
+	  PRESERVE_PROOF_VOLUME=1
 
 docker-supervisor:
 	$(REFERENCE_P2P_CHECK)

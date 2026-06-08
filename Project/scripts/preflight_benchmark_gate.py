@@ -221,6 +221,25 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         """,
         (port, command_key),
     )
+    maintenance_dependency_missing = False
+    if gate["gate_id"] == "tip_maintenance":
+        dependency = one(
+            conn,
+            """
+            SELECT gate_status, comparability_status, artifact_quality, telemetry_quality
+            FROM current_benchmark_results
+            WHERE gate_id = 'post_100k_to_tip' AND port = ?
+            """,
+            (port,),
+        )
+        if not dependency or dependency.get("gate_status") != "passed":
+            maintenance_dependency_missing = True
+            warnings.append("tip_maintenance is not ready: current post_100k_to_tip evidence is required first")
+        elif dependency.get("artifact_quality") != "canonical" or dependency.get("telemetry_quality") != "clean":
+            errors.append(
+                "tip_maintenance requires canonical clean post_100k_to_tip evidence first "
+                f"(artifact={dependency.get('artifact_quality')}, telemetry={dependency.get('telemetry_quality')})"
+            )
     gate_row = one(
         conn,
         """
@@ -260,12 +279,12 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         )
 
     if command is None:
-        errors.append(f"missing preferred command {command_key!r}")
+        (warnings if maintenance_dependency_missing else errors).append(f"missing preferred command {command_key!r}")
     else:
         if not as_bool(command["supported"]):
-            errors.append(f"preferred command {command_key!r} is not supported")
+            (warnings if maintenance_dependency_missing else errors).append(f"preferred command {command_key!r} is not supported")
         if not str(command["command"]).strip():
-            errors.append(f"preferred command {command_key!r} has no command text")
+            (warnings if maintenance_dependency_missing else errors).append(f"preferred command {command_key!r} has no command text")
         command_text = str(command["command"]).strip().lower()
         if any(marker in command_text for marker in ("rpc-replay", "replay-local", "storage-proof")):
             errors.append(

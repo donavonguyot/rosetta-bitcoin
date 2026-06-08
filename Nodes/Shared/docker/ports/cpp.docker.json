@@ -13,14 +13,18 @@
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
     "package_manager": "apt",
-    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "libsecp256k1-dev/libsecp256k1-1"]
+    "native_dependencies": [
+      "librocksdb-dev/librocksdb7.8",
+      "libsecp256k1-dev/libsecp256k1-1"
+    ]
   },
   "volumes": {
     "data": "cpbitnode_data",
     "proof": "cpbitnode_proof_data",
     "proof_50k": "cpbitnode_50k_proof_data",
     "proof_100k": "cpbitnode_100k_proof_data",
-    "supervisor": "cpbitnode_sync_data"
+    "supervisor": "cpbitnode_sync_data",
+    "post_100k_to_tip": "cpbitnode_post_100k_to_tip_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Cpp && make docker-config",
@@ -32,6 +36,7 @@
     "docker_proof_10k": "cd Nodes/Cpp && make docker-cpp-supporting-10k-proof",
     "docker_proof_50k": "cd Nodes/Cpp && make docker-cpp-supporting-50k-proof",
     "docker_proof_100k": "cd Nodes/Cpp && make docker-cpp-primary-100k-proof",
+    "docker_proof_post_100k_to_tip": "cd Nodes/Cpp && make docker-cpp-post-100k-to-tip-proof",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_probe_external": null,
@@ -46,19 +51,35 @@
       "supported": true,
       "command": "cd Nodes/Cpp && make docker-cpp-supporting-5k-proof",
       "peer": "${REFERENCE_P2P_PEER}",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "external_manual": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+      "required_recorded_facts": [
+        "peer",
+        "disconnects",
+        "advertised_start_height",
+        "validated_height"
+      ]
     },
     "external_seed": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+      "required_recorded_facts": [
+        "selected_peer",
+        "seed_source",
+        "disconnects",
+        "validated_height"
+      ]
     }
   },
   "supervisor": {
@@ -68,12 +89,26 @@
     "check_sec": 5
   },
   "tick_json": {
-    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+    "required_fields": [
+      "phase",
+      "runtime_surface",
+      "peer_mode",
+      "peer",
+      "validated_height",
+      "header_height",
+      "stored_block_height",
+      "sync_status",
+      "delta_since_last",
+      "process_running",
+      "current_blocker"
+    ]
   },
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/cpp_rocksdb_codec_v2_storage_2026-06-02.json",
-    "notes": "docker_proof_local, docker_proof_50k, and docker_proof_100k run official local-reference Docker benchmark gates with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only."
+    "notes": "docker_proof_local, docker_proof_50k, and docker_proof_100k run official local-reference Docker benchmark gates with native secp256k1, RocksDB, WAL enabled, prefetch depth 4, parallel script verification, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
   },
-  "known_caveats": ["External network probe command not standardized"]
+  "known_caveats": [
+    "External network probe command not standardized"
+  ]
 }

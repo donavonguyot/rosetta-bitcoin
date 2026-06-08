@@ -13,7 +13,10 @@
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
     "package_manager": "apt plus cargo",
-    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "rust-secp256k1"]
+    "native_dependencies": [
+      "librocksdb-dev/librocksdb7.8",
+      "rust-secp256k1"
+    ]
   },
   "volumes": {
     "data": "rsbitnode_data",
@@ -23,7 +26,8 @@
     "tuning_50k_to_100k": "rsbitnode_tuning_50k_to_100k_data",
     "external_probe": "rsbitnode_external_5k_probe_data",
     "supervisor": "rsbitnode_sync_data",
-    "local_reference": "rsbitnode_local_reference_data"
+    "local_reference": "rsbitnode_local_reference_data",
+    "post_100k_to_tip": "rsbitnode_post_100k_to_tip_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Rust && make docker-config",
@@ -36,6 +40,7 @@
     "docker_proof_10k": "cd Nodes/Rust && make docker-proof-10k",
     "docker_proof_50k": "cd Nodes/Rust && make docker-proof-50k",
     "docker_proof_100k": "cd Nodes/Rust && make docker-proof-100k",
+    "docker_proof_post_100k_to_tip": "cd Nodes/Rust && make docker-proof-post-100k-to-tip",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_tuning_100k_from_50k": "cd Nodes/Rust && make docker-tuning-100k-from-50k",
@@ -52,25 +57,47 @@
       "supported": true,
       "command": "cd Nodes/Rust && make docker-proof-local",
       "peer": "${REFERENCE_P2P_PEER}",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "local_reference_rpc": {
       "supported": true,
       "command": "cd Nodes/Rust && make docker-proof-rpc-replay",
       "peer": "http://host.docker.internal:48332",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "external_manual": {
       "supported": true,
       "command": "cd Nodes/Rust && DOCKER_EXTERNAL_P2P_PEER=<host:48333> make docker-probe-external",
       "peer": "explicit testnet4 host:48333 via DOCKER_EXTERNAL_P2P_PEER",
-      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+      "required_recorded_facts": [
+        "peer",
+        "disconnects",
+        "advertised_start_height",
+        "validated_height"
+      ]
     },
     "external_seed": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+      "required_recorded_facts": [
+        "selected_peer",
+        "seed_source",
+        "disconnects",
+        "validated_height"
+      ]
     }
   },
   "supervisor": {
@@ -80,7 +107,19 @@
     "check_sec": 5
   },
   "tick_json": {
-    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+    "required_fields": [
+      "phase",
+      "runtime_surface",
+      "peer_mode",
+      "peer",
+      "validated_height",
+      "header_height",
+      "stored_block_height",
+      "sync_status",
+      "delta_since_last",
+      "process_running",
+      "current_blocker"
+    ]
   },
   "proof_artifacts": {
     "docker_contract_result": null,
@@ -88,7 +127,13 @@
     "script_corpus_result": "Nodes/Shared/conformance/results/rust_script_corpus_docker_2026-06-03.json",
     "local_reference_debug_result": "Nodes/Rust/.benchmark-results/rust_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "external_probe_result": "Nodes/Shared/conformance/results/rust_docker_external_5k_probe_<YYYY-MM-DD>.json",
-    "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, bounded local-reference RPC replay, and official local Reference P2P gates. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. docker_proof_10k and the resumed 50k-to-100k lane remain diagnostic only."
+    "notes": "Rust proof_partial: storage/status/Docker smoke, native crypto vectors, native 45/45 script corpus, bounded local-reference RPC replay, and official local Reference P2P gates. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. docker_proof_10k and the resumed 50k-to-100k lane remain diagnostic only post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
   },
-  "known_caveats": ["The local Reference P2P comparator is a bounded proof harness, not live tip maintenance", "External manual P2P is diagnostic network-readiness evidence and is not benchmark-ranked", "Bounded local-reference RPC proof is not live P2P sync or tip maintenance", "docker_smoke_once is a one-shot supervisor tick smoke, not persistent supervisor support", "Binary gate remains not_attempted"]
+  "known_caveats": [
+    "The local Reference P2P comparator is a bounded proof harness, not live tip maintenance",
+    "External manual P2P is diagnostic network-readiness evidence and is not benchmark-ranked",
+    "Bounded local-reference RPC proof is not live P2P sync or tip maintenance",
+    "docker_smoke_once is a one-shot supervisor tick smoke, not persistent supervisor support",
+    "Binary gate remains not_attempted"
+  ]
 }

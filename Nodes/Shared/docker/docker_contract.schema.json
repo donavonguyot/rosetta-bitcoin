@@ -81,6 +81,7 @@
         "docker_proof_10k": { "type": ["string", "null"] },
         "docker_proof_50k": { "type": ["string", "null"] },
         "docker_proof_100k": { "type": ["string", "null"] },
+        "docker_proof_post_100k_to_tip": { "type": ["string", "null"] },
         "docker_proof_tip_once": { "type": ["string", "null"] },
         "docker_tip_maintenance": { "type": ["string", "null"] },
         "docker_probe_external": { "type": ["string", "null"] },

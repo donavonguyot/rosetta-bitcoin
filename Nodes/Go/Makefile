@@ -4,6 +4,10 @@ PROOF_DATA_DIR ?= ./data-go-proof
 RESULT_DATE ?= $(shell date +%F)
 SCRIPT_RESULT ?= ../Shared/conformance/results/go_script_corpus_$(RESULT_DATE).json
 STORAGE_RESULT ?= ../Shared/conformance/results/go_storage_gate_$(RESULT_DATE).json
+TESTING_RESULTS_DIR ?= ../Shared/testing/results
+TESTING_CAPABILITY_EMITTER ?= python3 ../Shared/testing/tools/emit_crypto_capability_contract.py
+CRYPTO_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/go_crypto_vectors_$(RESULT_DATE).json
+BLOCK_CONNECT_BACKEND_RESULT ?= $(TESTING_RESULTS_DIR)/go_block_connect_backend_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/go_script_corpus_docker_$(RESULT_DATE).json
 DOCKER_STORAGE_RESULT ?= /results/go_storage_gate_docker_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= /tmp/go_docker_baseline_5k_benchmark_$(RESULT_DATE).json
@@ -15,6 +19,8 @@ DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.e
 include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_PROOF_VOLUME ?= gobitnode_proof_data
+POST_100K_TIP_VOLUME ?= gobitnode_post_100k_to_tip_data
+POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_RPC_REPLAY_VOLUME ?= gobitnode_local_reference_proof_data
 DOCKER_SYNC_VOLUME ?= gobitnode_sync_data
 DOCKER_REBUILD ?= 0
@@ -30,7 +36,7 @@ DOCKER_SYNC_TARGET ?= 5000
 DOCKER_RPC_URL ?= http://host.docker.internal:48332
 BENCHMARK_GATE ?= baseline_5k
 
-.PHONY: build test go-node-status go-node-storage-proof go-node-script-corpus go-node-sync-local go-node-connect-local go-node-native-crypto-test docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-rpc-replay docker-smoke-once clean
+.PHONY: build test go-node-status go-node-storage-proof go-node-script-corpus go-node-sync-local go-node-connect-local go-node-native-crypto-test docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-proof-rpc-replay docker-smoke-once clean
 
 build:
 	$(GO) build ./cmd/...
@@ -55,6 +61,12 @@ go-node-connect-local:
 
 go-node-native-crypto-test:
 	$(GO) test ./internal/crypto -run TestNativeCryptoAvailable
+
+test-crypto-vectors:
+	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port go --backend libsecp256k1 --result-path $(CRYPTO_CAPABILITY_RESULT)
+
+test-block-connect-backend:
+	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port go --backend libsecp256k1 --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 docker-config:
 	$(DOCKER_COMPOSE) config
@@ -81,7 +93,7 @@ docker-script-corpus:
 
 docker-proof-local:
 	$(REFERENCE_P2P_CHECK)
-	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true; fi
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) GOBITNODE_RUNTIME_SURFACE=docker \
 	  GOBITNODE_PAR_SCRIPT_VERIFY=1 GOBITNODE_BLOCK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) GOBITNODE_ROCKSDB_BLOCK_CACHE_MB=512 \
 	  $(DOCKER_COMPOSE) run --rm gobitnode-local-reference-proof \
@@ -113,6 +125,14 @@ docker-proof-100k:
 	  DOCKER_SYNC_TARGET=100000 \
 	  DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_100K_PROOF_RESULT) \
 	  BENCHMARK_GATE=performance_100k
+
+docker-proof-post-100k-to-tip:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=$(POST_100K_TIP_VOLUME) \
+	  DOCKER_SYNC_TARGET=$(POST_100K_TIP_TARGET) \
+	  DOCKER_LOCAL_PROOF_RESULT=/tmp/go_docker_post_100k_to_tip_debug_$(RESULT_DATE).json \
+	  BENCHMARK_GATE=post_100k_to_tip \
+	  PRESERVE_PROOF_VOLUME=1
 
 docker-proof-rpc-replay:
 	@for i in $$(seq 1 60); do \

@@ -15,6 +15,10 @@ BENCHMARK_GATE ?= baseline_5k
 RESULT_DATE ?= $(shell date +%F)
 STORAGE_RESULT ?= ../Shared/conformance/results/rust_storage_gate_$(RESULT_DATE).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/rust_script_corpus_$(RESULT_DATE).json
+TESTING_RESULTS_DIR ?= ../Shared/testing/results
+TESTING_CAPABILITY_EMITTER ?= python3 ../Shared/testing/tools/emit_crypto_capability_contract.py
+CRYPTO_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/rust_crypto_vectors_$(RESULT_DATE).json
+BLOCK_CONNECT_BACKEND_RESULT ?= $(TESTING_RESULTS_DIR)/rust_block_connect_backend_$(RESULT_DATE).json
 BENCHMARK_DEBUG_DIR ?= .benchmark-results
 LOCAL_REFERENCE_RESULT ?= $(BENCHMARK_DEBUG_DIR)/rust_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 LOCAL_REFERENCE_10K_RESULT ?= ../Shared/conformance/results/rust_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
@@ -32,13 +36,15 @@ include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_REBUILD ?= 0
 DOCKER_LOCAL_PROOF_VOLUME ?= rsbitnode_proof_data
+POST_100K_TIP_VOLUME ?= rsbitnode_post_100k_to_tip_data
+POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_TUNING_SOURCE_VOLUME ?= rsbitnode_50k_proof_data
 DOCKER_TUNING_100K_VOLUME ?= rsbitnode_tuning_50k_to_100k_data
 TUNING_SOURCE_50K_ARTIFACT ?= ../Shared/conformance/results/rust_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_EXTERNAL_P2P_PEER ?=
 DOCKER_EXTERNAL_PROBE_VOLUME ?= rsbitnode_external_5k_probe_data
 
-.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-tuning-100k-from-50k docker-proof-rpc-replay docker-probe-external docker-proof-local-fast docker-smoke-once clean
+.PHONY: build test rust-node-status rust-node-storage-proof rust-node-codec-vectors rust-node-native-crypto-vectors rust-node-script-corpus rust-node-sync-local rust-node-connect-local rust-node-local-reference-proof rust-node-local-reference-proof-fast docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-tuning-100k-from-50k docker-proof-rpc-replay docker-probe-external docker-proof-local-fast docker-smoke-once clean
 
 build:
 	$(CARGO) build
@@ -57,6 +63,12 @@ rust-node-codec-vectors:
 
 rust-node-native-crypto-vectors:
 	$(CARGO) run -- native-crypto-vectors
+
+test-crypto-vectors:
+	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port rust --backend rust-secp256k1 --result-path $(CRYPTO_CAPABILITY_RESULT)
+
+test-block-connect-backend:
+	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port rust --backend rust-secp256k1 --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 rust-node-script-corpus:
 	$(CARGO) run -- script-corpus --result-path $(SCRIPT_RESULT)
@@ -93,7 +105,7 @@ docker-script-corpus:
 
 docker-proof-local:
 	$(REFERENCE_P2P_CHECK)
-	@docker volume rm -f $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then docker volume rm -f $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true; fi
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps -e RSBITNODE_BLOCK_PREFETCH_DEPTH=$(PREFETCH_DEPTH) rsbitnode-local-reference-proof rsbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --byte-source p2p --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker
 
 docker-proof-10k:
@@ -116,6 +128,14 @@ docker-proof-100k:
 	  SYNC_TARGET=100000 \
 	  DOCKER_LOCAL_REFERENCE_RESULT=$(DOCKER_LOCAL_REFERENCE_100K_RESULT) \
 	  BENCHMARK_GATE=performance_100k
+
+docker-proof-post-100k-to-tip:
+	$(MAKE) docker-proof-local \
+	  DOCKER_LOCAL_PROOF_VOLUME=$(POST_100K_TIP_VOLUME) \
+	  SYNC_TARGET=$(POST_100K_TIP_TARGET) \
+	  DOCKER_LOCAL_REFERENCE_RESULT=/tmp/rust_docker_post_100k_to_tip_debug_$(RESULT_DATE).json \
+	  BENCHMARK_GATE=post_100k_to_tip \
+	  PRESERVE_PROOF_VOLUME=1
 
 docker-tuning-100k-from-50k:
 	$(REFERENCE_P2P_CHECK)

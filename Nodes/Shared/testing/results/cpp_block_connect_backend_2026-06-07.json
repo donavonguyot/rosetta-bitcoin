@@ -1,0 +1,40 @@
+{
+  "captured_at": "2026-06-07T23:42:21Z",
+  "category": "test_capability_contracts",
+  "contracts": [
+    {
+      "backend": "libsecp256k1",
+      "blocking_for": [
+        "pure_crypto_experiment"
+      ],
+      "capability": "block_connect_with_backend",
+      "command_key": "test_block_connect_backend",
+      "contract_id": "cpp.block_connect_with_backend",
+      "does_not_prove": "Missing means this port has not emitted bounded block-connect evidence that observes the selected backend on ECDSA and Taproot/Schnorr fixture paths.",
+      "evidence_kind": "suite",
+      "evidence_path": "Nodes/Shared/testing/fixtures/block_connect_backend_probe_v1.json",
+      "port": "cpp",
+      "provenance": [
+        "rb_live_chain_regression",
+        "proof_derived"
+      ],
+      "scope": "host",
+      "status": "missing"
+    }
+  ],
+  "port": "cpp",
+  "schema": "port.test_capability_contract.v1",
+  "suites": [
+    {
+      "case_total": 2,
+      "does_not_prove": "Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template.",
+      "provenance": [
+        "rb_live_chain_regression",
+        "proof_derived"
+      ],
+      "suite_hash": "b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f",
+      "suite_id": "rb.block_connect_backend_probe_v1",
+      "suite_version": "2026-06-07"
+    }
+  ]
+}

@@ -59,6 +59,7 @@ GATE_CLAIMS = {
     "baseline_5k": "baseline_5k",
     "shakedown_50k": "shakedown_50k",
     "performance_100k": "performance_100k",
+    "post_100k_to_tip": "post_100k_to_tip",
     "tip_once": "tip_once",
     "tip_maintenance": "tip_maintenance",
 }
@@ -97,7 +98,9 @@ REQUIRED_BUCKETS = (
 )
 LONG_RUN_GATES = {gate for gate, spec in _validator.GATES.items() if spec.get("long_run")}
 ACTIVE_CONTROL_PORTS = {"rust", "zig", "cpp", "go", "swift", "csharp", "java", "ocaml"}
-CONTROL_REQUIRED_GATES = {"baseline_5k", "shakedown_50k", "performance_100k"}
+CONTROL_REQUIRED_GATES = {"baseline_5k", "shakedown_50k", "performance_100k", "post_100k_to_tip"}
+CHECKPOINT_HELPER = ROOT / "Project/scripts/manage_benchmark_checkpoint.py"
+REFERENCE_TIP_HELPER = ROOT / "Project/scripts/reference_tip.py"
 
 
 def utc_now() -> str:
@@ -325,12 +328,18 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
         ) or {}
         status = "pending"
         reason = ""
+        checkpoint: dict[str, Any] = {}
         if not warm:
             status = "not_ready"
             reason = "missing supported docker_warm command"
         elif not proof:
             status = "not_ready"
             reason = f"missing supported {proof_key} command"
+        elif args.gate == "post_100k_to_tip":
+            checkpoint = checkpoint_status(port)
+            if checkpoint.get("status") != "ready":
+                status = "not_ready"
+                reason = checkpoint.get("reason") or "missing performance_100k checkpoint"
         entries.append(
             {
                 "port": port,
@@ -340,6 +349,7 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
                 "reason": reason,
                 "warm_command": warm,
                 "proof_command": proof,
+                "checkpoint": checkpoint,
                 "prior_total_ms": latest_prior_total_ms(conn, args.gate, port),
                 "artifact_path": "",
                 "telemetry_quality": "",
@@ -402,6 +412,58 @@ def run_preflight(db: str, gate: str, port: str) -> tuple[int, str]:
     ]
     completed = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     return completed.returncode, completed.stdout + completed.stderr
+
+
+def reference_tip() -> dict[str, Any]:
+    completed = subprocess.run(
+        [sys.executable, str(REFERENCE_TIP_HELPER), "--json"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+    if not payload.get("ok"):
+        raise RuntimeError(str(payload.get("error") or "reference tip check failed"))
+    return payload
+
+
+def checkpoint_status(port: str) -> dict[str, Any]:
+    completed = subprocess.run(
+        [sys.executable, str(CHECKPOINT_HELPER), "--ports", port, "--check", "--json"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        payload = json.loads(completed.stdout)
+        results = payload.get("results")
+        result = results[0] if isinstance(results, list) and results else {}
+    except json.JSONDecodeError:
+        result = {}
+    if not result:
+        result = {"port": port, "status": "error", "reason": (completed.stdout + completed.stderr).strip()}
+    if completed.returncode not in (0, 2) and result.get("status") != "ready":
+        result.setdefault("reason", completed.stderr.strip() or "checkpoint check failed")
+    return result
+
+
+def restore_checkpoint(port: str) -> dict[str, Any]:
+    completed = subprocess.run(
+        [sys.executable, str(CHECKPOINT_HELPER), "--ports", port, "--restore", "--json"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+    results = payload.get("results")
+    if not isinstance(results, list) or not results:
+        raise RuntimeError("checkpoint helper returned no restore result")
+    result = results[0]
+    if result.get("status") != "ready":
+        raise RuntimeError(str(result.get("reason") or "checkpoint restore failed"))
+    return result
 
 
 def ms_duration(ms: float | None) -> str:
@@ -792,6 +854,8 @@ def print_dry_run(campaign: dict[str, Any]) -> None:
             print(f"  warm: {entry['warm_command']}")
         if entry["proof_command"]:
             print(f"  proof: {entry['proof_command']}")
+        if entry.get("checkpoint"):
+            print(f"  checkpoint: {entry['checkpoint']}")
         if entry["prior_total_ms"] is not None:
             print(f"  prior_total_ms: {entry['prior_total_ms']}")
 
@@ -845,6 +909,28 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
                 return 1
             continue
 
+        checkpoint_metadata: dict[str, Any] = {}
+        reference_finish: dict[str, Any] = {}
+        if campaign["gate"] == "post_100k_to_tip":
+            try:
+                checkpoint_metadata = restore_checkpoint(port)
+                entry["checkpoint"] = checkpoint_metadata
+                reference_finish = reference_tip()
+                entry["reference_finish"] = reference_finish
+                append_event(
+                    campaign,
+                    port,
+                    "checkpoint_restored",
+                    f"{checkpoint_metadata.get('target_volume', '')} -> {reference_finish.get('height', '')}",
+                )
+            except Exception as exc:
+                entry["status"] = "failed"
+                entry["errors"].append(f"checkpoint/reference setup failed: {exc}")
+                append_event(campaign, port, "checkpoint_setup_failed", str(exc))
+                if campaign_should_pause(campaign, port, "checkpoint_setup_failed"):
+                    return 1
+                continue
+
         started = time.time()
         entry["started_at"] = utc_now()
         entry["status"] = "running"
@@ -854,7 +940,15 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         protected_artifact = current_evidence_artifact(current_evidence_path, port, campaign["gate"])
         protected_snapshot = snapshot_file(protected_artifact)
         startup_timeout = campaign.get("startup_timeout_sec", 0) if campaign["gate"] in LONG_RUN_GATES else 0
-        exit_code = run_shell(entry["proof_command"], proof_log, startup_timeout_sec=int(startup_timeout or 0))
+        proof_command = entry["proof_command"]
+        if campaign["gate"] == "post_100k_to_tip":
+            proof_command = (
+                f"REFERENCE_FINISH_HEIGHT={int(reference_finish['height'])} "
+                f"REFERENCE_FINISH_HASH={reference_finish['hash']} "
+                f"POST_100K_TIP_TARGET={int(reference_finish['height'])} "
+                f"{proof_command}"
+            )
+        exit_code = run_shell(proof_command, proof_log, startup_timeout_sec=int(startup_timeout or 0))
         finished = time.time()
         entry["finished_at"] = utc_now()
         entry["exit_code"] = exit_code
@@ -877,6 +971,9 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
             proof_log=proof_log,
             elapsed_ms=int(max(0, finished - started) * 1000),
             expected_peer=expected_peer,
+            reference_finish_height=int(reference_finish["height"]) if reference_finish else None,
+            reference_finish_hash=str(reference_finish["hash"]) if reference_finish else None,
+            checkpoint_metadata=checkpoint_metadata,
         )
         telemetry_log = control_result.telemetry_log_path if control_result is not None else proof_log
         if control_result is not None:

@@ -7,7 +7,7 @@ suite, not a permanent architecture lock-in.
 The consensus runway continues this baseline toward longer validation stages and
 tip. See `Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`.
 The benchmark suite continues through `shakedown_50k`, `performance_100k`,
-`tip_once`, and `tip_maintenance`; see
+`post_100k_to_tip`, `tip_once`, and `tip_maintenance`; see
 `Nodes/Shared/conformance/BENCHMARK_CONTRACT.md`.
 
 Project may mark a port `baseline_retired` after this gate. That preserves the

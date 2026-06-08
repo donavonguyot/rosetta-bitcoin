@@ -13,14 +13,19 @@
     "runtime": "ocaml/opam:debian-12-ocaml-5.2",
     "os_family": "Debian",
     "package_manager": "apt plus opam",
-    "native_dependencies": ["librocksdb-dev", "libsecp256k1-dev", "opam:secp256k1=0.5.0"]
+    "native_dependencies": [
+      "librocksdb-dev",
+      "libsecp256k1-dev",
+      "opam:secp256k1=0.5.0"
+    ]
   },
   "volumes": {
     "data": "ocbitnode_data",
     "proof": "ocbitnode_proof_data",
     "proof_50k": "ocbitnode_50k_proof_data",
     "proof_100k": "ocbitnode_100k_proof_data",
-    "supervisor": "ocbitnode_supervisor_data"
+    "supervisor": "ocbitnode_supervisor_data",
+    "post_100k_to_tip": "ocbitnode_post_100k_to_tip_data"
   },
   "commands": {
     "docker_config": "cd Nodes/OCaml && make docker-config",
@@ -34,6 +39,7 @@
     "docker_proof_10k": null,
     "docker_proof_50k": "cd Nodes/OCaml && make docker-proof-50k",
     "docker_proof_100k": "cd Nodes/OCaml && make docker-proof-100k",
+    "docker_proof_post_100k_to_tip": "cd Nodes/OCaml && make docker-proof-post-100k-to-tip",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_probe_external": null,
@@ -48,19 +54,35 @@
       "supported": true,
       "command": "cd Nodes/OCaml && make docker-proof-local",
       "peer": "${REFERENCE_P2P_PEER}",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "external_manual": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+      "required_recorded_facts": [
+        "peer",
+        "disconnects",
+        "advertised_start_height",
+        "validated_height"
+      ]
     },
     "external_seed": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+      "required_recorded_facts": [
+        "selected_peer",
+        "seed_source",
+        "disconnects",
+        "validated_height"
+      ]
     }
   },
   "supervisor": {
@@ -70,7 +92,19 @@
     "check_sec": 5
   },
   "tick_json": {
-    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+    "required_fields": [
+      "phase",
+      "runtime_surface",
+      "peer_mode",
+      "peer",
+      "validated_height",
+      "header_height",
+      "stored_block_height",
+      "sync_status",
+      "delta_since_last",
+      "process_running",
+      "current_blocker"
+    ]
   },
   "proof_artifacts": {
     "docker_contract_result": null,
@@ -80,7 +114,7 @@
     "local_reference_debug_result": "Nodes/OCaml/.benchmark-results/ocaml_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_debug_result": "Nodes/OCaml/.benchmark-results/ocaml_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
     "performance_100k_debug_result": "Nodes/OCaml/.benchmark-results/ocaml_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "OCaml has strict Docker/local Reference P2P baseline 5k and shakedown 50k evidence with RocksDB runtime truth, WAL enabled, native libsecp256k1, Codec v2 chainstate, live telemetry, and native Shared script corpus proof. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. 100k command surface is available but unattempted."
+    "notes": "OCaml has strict Docker/local Reference P2P baseline 5k and shakedown 50k evidence with RocksDB runtime truth, WAL enabled, native libsecp256k1, Codec v2 chainstate, live telemetry, and native Shared script corpus proof. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. 100k command surface is available but unattempted post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
   },
   "known_caveats": [
     "Local Reference P2P baseline 5k and shakedown 50k lanes are implemented",

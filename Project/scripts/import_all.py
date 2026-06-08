@@ -17,6 +17,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, replace
 from io import StringIO
 from pathlib import Path
@@ -287,6 +288,32 @@ BENCHMARK_GATES: tuple[dict[str, Any], ...] = (
         "notes": "Primary optimization lane: Docker/local Reference P2P with WAL enabled, fresh state, fixed knobs, full telemetry, and complete timing import. Existing primary_100k artifacts remain import-compatible aliases.",
     },
     {
+        "gate_id": "post_100k_to_tip",
+        "target_height": -1,
+        "target_label": "100k to tip",
+        "benchmark_kind": "post_100k_to_tip_p2p",
+        "role": "tip readiness from canonical 100k checkpoint",
+        "preferred_runtime_surface": "docker",
+        "preferred_command_key": "docker_proof_post_100k_to_tip",
+        "official_lane": "post_100k_to_tip_p2p",
+        "official_byte_source": "local_reference_p2p",
+        "official_peer_mode": "local_reference",
+        "official_proof_mode": "p2p_sync",
+        "official_header_target_height": -1,
+        "official_prefetch_depth": 4,
+        "official_script_runner_mode": "parallel",
+        "official_utxo_accounting_policy": "core_spendable_v1",
+        "official_chainstate_utxo_count": -1,
+        "fresh_state_required": 0,
+        "local_reference_required": 1,
+        "durable_required": 1,
+        "wal_disabled_required": 0,
+        "resume_supported_required": 1,
+        "binary_gate_status": "not_attempted",
+        "result_name_pattern": "<port>_<surface>_post_100k_to_tip_<YYYY-MM-DD>.json",
+        "notes": "Immediate tip readiness lane: restore canonical performance_100k checkpoint state, sync to fixed local Reference finish height/hash, and build current evidence from Project control harness product progress. Not an empty-state tip_once audit.",
+    },
+    {
         "gate_id": "tip_once",
         "target_height": -1,
         "target_label": "tip once",
@@ -349,6 +376,7 @@ COMMAND_PURPOSES: dict[str, str] = {
     "docker_proof_10k": "run historical/diagnostic Docker/local-reference P2P 10k proof",
     "docker_proof_50k": "run official shakedown_50k Docker/local-reference P2P proof",
     "docker_proof_100k": "run official performance_100k Docker/local-reference P2P proof",
+    "docker_proof_post_100k_to_tip": "run official post_100k_to_tip Docker/local-reference P2P proof from a restored 100k checkpoint",
     "docker_tuning_100k_from_50k": "run historical/diagnostic resumed 50k-to-100k proof",
     "docker_proof_tip_once": "run one-time empty-state-to-tip credibility proof",
     "docker_tip_maintenance": "run near-tip operational maintenance proof",
@@ -367,6 +395,8 @@ COMMAND_PURPOSES: dict[str, str] = {
 TEST_COMMAND_PURPOSES = {
     "test_unit": "run the port's normal unit/regression test suite",
     "test_coverage": "run optional local coverage telemetry",
+    "test_crypto_vectors": "run shared crypto vector capability contracts",
+    "test_block_connect_backend": "run bounded block-connect backend capability probe",
 }
 
 TEST_CAPABILITY_STATUSES = {"pass", "fail", "missing", "not_applicable"}
@@ -885,6 +915,28 @@ def discover_test_commands(root: Path, port: str, root_path: str) -> dict[str, d
         "discovery_method": "not_default_posture",
         "notes": "Coverage is optional local telemetry, not part of Project default test posture.",
     }
+    for command_key, target, category, notes in (
+        (
+            "test_crypto_vectors",
+            "test-crypto-vectors",
+            "capability_contract",
+            "Shared crypto vector capability contract command.",
+        ),
+        (
+            "test_block_connect_backend",
+            "test-block-connect-backend",
+            "capability_contract",
+            "Bounded block-connect backend capability contract command.",
+        ),
+    ):
+        supported = makefile_has_target(makefile, target)
+        commands[command_key] = {
+            "category": category,
+            "command": f"cd {root_path} && make {target}" if supported else "",
+            "supported": 1 if supported else 0,
+            "discovery_method": f"makefile:{target}" if supported else "missing",
+            "notes": notes if supported else f"No {target} Makefile target discovered.",
+        }
     return commands
 
 
@@ -2565,6 +2617,49 @@ def self_test() -> int:
         "does_not_prove": "Project-local script fixture corpus; not community-complete Bitcoin script coverage.",
     }
     validate_capability_suite(valid_suite, "self-test:suite")
+    for extra_suite in (
+        {
+            "suite_id": "bitcoin.bip340_schnorr_vectors",
+            "suite_version": "2026-06-07",
+            "suite_hash": "01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb",
+            "case_total": 19,
+            "provenance": ["bip_standard_vector"],
+            "does_not_prove": "BIP340 verification vectors do not prove ECDSA or block-connect usage.",
+        },
+        {
+            "suite_id": "rb.crypto_backend_equivalence_v1",
+            "suite_version": "2026-06-07",
+            "suite_hash": "ef27cd3e8c2f7f83923d88aaee4d50ef9130fe42c5ccc14713478772d06209af",
+            "case_total": 27,
+            "provenance": ["bip_standard_vector", "proof_derived"],
+            "does_not_prove": "Backend equivalence vectors do not prove every libsecp256k1 internal test.",
+        },
+        {
+            "suite_id": "rb.block_connect_backend_probe_v1",
+            "suite_version": "2026-06-07",
+            "suite_hash": "b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f",
+            "case_total": 2,
+            "provenance": ["rb_live_chain_regression", "proof_derived"],
+            "does_not_prove": "Bounded backend probe does not prove long-sync safety.",
+        },
+    ):
+        validate_capability_suite(extra_suite, f"self-test:suite:{extra_suite['suite_id']}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = Path(tmp)
+        port_root = tmp_root / "Nodes/Go"
+        port_root.mkdir(parents=True)
+        (port_root / "Makefile").write_text(
+            "test:\n\ttrue\n"
+            "test-crypto-vectors:\n\ttrue\n"
+            "test-block-connect-backend:\n\ttrue\n",
+            encoding="utf-8",
+        )
+        discovered = discover_test_commands(tmp_root, "go", "Nodes/Go")
+        assert discovered["test_crypto_vectors"]["supported"] == 1
+        assert discovered["test_crypto_vectors"]["command"] == "cd Nodes/Go && make test-crypto-vectors"
+        assert discovered["test_block_connect_backend"]["supported"] == 1
+        assert discovered["test_block_connect_backend"]["command"] == "cd Nodes/Go && make test-block-connect-backend"
 
     valid_contract = {
         "port": "go",

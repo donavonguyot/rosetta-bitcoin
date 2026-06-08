@@ -13,12 +13,16 @@
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
     "package_manager": "apt plus Zig tarball",
-    "native_dependencies": ["librocksdb-dev", "libsecp256k1-dev"]
+    "native_dependencies": [
+      "librocksdb-dev",
+      "libsecp256k1-dev"
+    ]
   },
   "volumes": {
     "data": "zigbitnode_data",
     "proof": "zigbitnode_proof_data",
-    "supervisor": "zigbitnode_supervisor_data"
+    "supervisor": "zigbitnode_supervisor_data",
+    "post_100k_to_tip": "zigbitnode_post_100k_to_tip_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Zig && make docker-config",
@@ -31,6 +35,7 @@
     "docker_proof_10k": "cd Nodes/Zig && make docker-proof-10k",
     "docker_proof_50k": "cd Nodes/Zig && make docker-proof-50k",
     "docker_proof_100k": "cd Nodes/Zig && make docker-proof-100k",
+    "docker_proof_post_100k_to_tip": "cd Nodes/Zig && make docker-proof-post-100k-to-tip",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_probe_external": null,
@@ -45,19 +50,35 @@
       "supported": true,
       "command": "cd Nodes/Zig && make docker-proof-local",
       "peer": "${REFERENCE_P2P_PEER}",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "external_manual": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+      "required_recorded_facts": [
+        "peer",
+        "disconnects",
+        "advertised_start_height",
+        "validated_height"
+      ]
     },
     "external_seed": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+      "required_recorded_facts": [
+        "selected_peer",
+        "seed_source",
+        "disconnects",
+        "validated_height"
+      ]
     }
   },
   "supervisor": {
@@ -67,7 +88,19 @@
     "check_sec": 5
   },
   "tick_json": {
-    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+    "required_fields": [
+      "phase",
+      "runtime_surface",
+      "peer_mode",
+      "peer",
+      "validated_height",
+      "header_height",
+      "stored_block_height",
+      "sync_status",
+      "delta_since_last",
+      "process_running",
+      "current_blocker"
+    ]
   },
   "proof_artifacts": {
     "storage_gate_result": "Nodes/Shared/conformance/results/zig_storage_gate_docker_<YYYY-MM-DD>.json",
@@ -76,7 +109,7 @@
     "diagnostic_10k_result": "Nodes/Shared/conformance/results/zig_docker_diagnostic_10k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_debug_result": "Nodes/Zig/.benchmark-results/zig_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
     "performance_100k_debug_result": "Nodes/Zig/.benchmark-results/zig_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, and official local Reference P2P benchmark commands. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts."
+    "notes": "Zig proof_partial owns native RocksDB, Docker surfaces, script corpus 45/45, and official local Reference P2P benchmark commands. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
   },
   "known_caveats": [
     "Zig script corpus is 45/45 with engine=zig_native and delegated=false",

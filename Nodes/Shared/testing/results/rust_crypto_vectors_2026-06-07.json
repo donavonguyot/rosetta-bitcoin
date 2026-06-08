@@ -1,0 +1,68 @@
+{
+  "captured_at": "2026-06-07T23:44:38Z",
+  "category": "test_capability_contracts",
+  "contracts": [
+    {
+      "backend": "rust-secp256k1",
+      "blocking_for": [
+        "pure_crypto_experiment"
+      ],
+      "capability": "crypto_bip340_vectors",
+      "command_key": "test_crypto_vectors",
+      "contract_id": "rust.crypto_bip340_vectors",
+      "does_not_prove": "Missing means this port has not emitted a BIP340 vector result for the shared suite.",
+      "evidence_kind": "suite",
+      "evidence_path": "Nodes/Shared/testing/fixtures/bip340/test-vectors.csv",
+      "port": "rust",
+      "provenance": [
+        "bip_standard_vector"
+      ],
+      "scope": "host",
+      "status": "missing"
+    },
+    {
+      "backend": "rust-secp256k1",
+      "blocking_for": [
+        "pure_crypto_experiment"
+      ],
+      "capability": "crypto_libsecp256k1_equivalence",
+      "command_key": "test_crypto_vectors",
+      "contract_id": "rust.crypto_libsecp256k1_equivalence",
+      "does_not_prove": "Missing means this port has not compared its selected backend against the shared libsecp256k1-equivalence vector suite.",
+      "evidence_kind": "suite",
+      "evidence_path": "Nodes/Shared/testing/fixtures/crypto_backend_equivalence_v1.json",
+      "port": "rust",
+      "provenance": [
+        "bip_standard_vector",
+        "proof_derived"
+      ],
+      "scope": "host",
+      "status": "missing"
+    }
+  ],
+  "port": "rust",
+  "schema": "port.test_capability_contract.v1",
+  "suites": [
+    {
+      "case_total": 19,
+      "does_not_prove": "BIP340 verification vectors do not prove ECDSA, Taproot tweak handling, block connect usage, or every secp256k1 implementation behavior.",
+      "provenance": [
+        "bip_standard_vector"
+      ],
+      "suite_hash": "01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb",
+      "suite_id": "bitcoin.bip340_schnorr_vectors",
+      "suite_version": "2026-06-07"
+    },
+    {
+      "case_total": 27,
+      "does_not_prove": "Backend equivalence vectors do not prove every libsecp256k1 internal test, every consensus path, or block-connect usage.",
+      "provenance": [
+        "bip_standard_vector",
+        "proof_derived"
+      ],
+      "suite_hash": "ef27cd3e8c2f7f83923d88aaee4d50ef9130fe42c5ccc14713478772d06209af",
+      "suite_id": "rb.crypto_backend_equivalence_v1",
+      "suite_version": "2026-06-07"
+    }
+  ]
+}

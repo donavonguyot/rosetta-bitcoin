@@ -87,6 +87,35 @@ levels such as "level 1" or "gold" when adding them.
 - Provenance: `rb_live_chain_regression`, `rb_synthetic_edge_case`
 - Does not prove: community-complete Bitcoin script coverage, tip readiness, or every future consensus rule.
 
+`bitcoin.bip340_schnorr_vectors`
+
+- Manifest: `Nodes/Shared/testing/fixtures/bip340/test-vectors.csv`
+- Source: `https://github.com/bitcoin/bips/blob/master/bip-0340/test-vectors.csv`
+- Suite version: `2026-06-07`
+- Suite hash: `01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb`
+- Case total: `19`
+- Provenance: `bip_standard_vector`
+- Does not prove: ECDSA, Taproot tweak handling, block-connect usage, or every secp256k1 implementation behavior.
+
+`rb.crypto_backend_equivalence_v1`
+
+- Manifest: `Nodes/Shared/testing/fixtures/crypto_backend_equivalence_v1.json`
+- Reference backend: `https://github.com/bitcoin-core/secp256k1`
+- Suite version: `2026-06-07`
+- Suite hash: `ef27cd3e8c2f7f83923d88aaee4d50ef9130fe42c5ccc14713478772d06209af`
+- Case total: `27`
+- Provenance: `bip_standard_vector`, `proof_derived`
+- Does not prove: every libsecp256k1 internal test, every consensus path, or block-connect usage.
+
+`rb.block_connect_backend_probe_v1`
+
+- Manifest: `Nodes/Shared/testing/fixtures/block_connect_backend_probe_v1.json`
+- Suite version: `2026-06-07`
+- Suite hash: `b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f`
+- Case total: `2`
+- Provenance: `rb_live_chain_regression`, `proof_derived`
+- Does not prove: long-sync safety, tip maintenance, or every future script template.
+
 ## Project Reports
 
 ```bash

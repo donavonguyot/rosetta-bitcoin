@@ -966,7 +966,7 @@ WITH benchmark_rows AS (
     coalesce(
       json_extract(b.result_json, '$.telemetry_quality'),
       json_extract(b.settings_json, '$.telemetry_quality'),
-      CASE WHEN bg.target_height IN (50000, 100000) THEN 'missing' ELSE 'clean' END
+      CASE WHEN bg.gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') THEN 'missing' ELSE 'clean' END
     ) AS telemetry_quality,
     CASE WHEN coalesce(a.raw_json, '') LIKE '%"slow_blocks"%' THEN 1 ELSE 0 END AS has_slow_blocks,
     (
@@ -990,13 +990,13 @@ WITH benchmark_rows AS (
     b.captured_at,
     b.source_artifact_id
   FROM benchmark_gates bg
-  JOIN benchmarks b ON b.height = bg.target_height
-  JOIN project_node_ports np ON np.node_id = b.node_id
-  JOIN artifacts a ON a.artifact_id = b.source_artifact_id
   JOIN evidence_index_entries eie
-    ON eie.path = a.path
-   AND eie.status = 'current'
+    ON eie.status = 'current'
    AND eie.gate_id = bg.gate_id
+  JOIN artifacts a ON a.path = eie.path
+  JOIN benchmarks b ON b.source_artifact_id = a.artifact_id
+  JOIN project_node_ports np ON np.node_id = b.node_id
+   AND np.port = eie.port
 ),
 classified AS (
   SELECT
@@ -1005,6 +1005,7 @@ classified AS (
       WHEN reported_lane IN ('supporting_5k_p2p', 'baseline_5k_p2p') THEN 'baseline_5k_p2p'
       WHEN reported_lane IN ('supporting_50k_p2p', 'shakedown_50k_p2p') THEN 'shakedown_50k_p2p'
       WHEN reported_lane IN ('primary_100k_p2p', 'performance_100k_p2p') THEN 'performance_100k_p2p'
+      WHEN reported_lane = 'post_100k_to_tip_p2p' THEN 'post_100k_to_tip_p2p'
       WHEN reported_lane <> '' THEN reported_lane
       WHEN peer_mode = 'local_reference_rpc' OR byte_source = 'local_reference_rpc' OR proof_mode IN ('rpc_replay', 'pipeline') THEN replace(official_lane, '_p2p', '_rpc_replay')
       WHEN peer_mode = 'local_reference' OR byte_source = 'local_reference_p2p' THEN official_lane
@@ -1033,7 +1034,7 @@ scored AS (
       CASE WHEN byte_source <> official_byte_source THEN 'byte_source;' ELSE '' END ||
       CASE WHEN peer_mode <> official_peer_mode THEN 'peer_mode;' ELSE '' END ||
       CASE WHEN proof_mode <> official_proof_mode THEN 'proof_mode;' ELSE '' END ||
-      CASE WHEN header_target_height <> official_header_target_height THEN 'header_target_height;' ELSE '' END ||
+      CASE WHEN official_header_target_height >= 0 AND header_target_height <> official_header_target_height THEN 'header_target_height;' ELSE '' END ||
       CASE WHEN prefetch_depth <> official_prefetch_depth THEN 'prefetch_depth;' ELSE '' END ||
       CASE WHEN script_runner_mode <> official_script_runner_mode THEN 'script_runner_mode;' ELSE '' END ||
       CASE WHEN official_utxo_accounting_policy <> '' AND utxo_accounting_policy <> official_utxo_accounting_policy THEN 'utxo_accounting_policy;' ELSE '' END ||
@@ -1041,10 +1042,10 @@ scored AS (
       CASE WHEN rocksdb_wal_disabled <> wal_disabled_required THEN 'rocksdb_wal;' ELSE '' END ||
       CASE WHEN resume_supported <> resume_supported_required THEN 'resume_supported;' ELSE '' END ||
       CASE WHEN fresh_state_required = 1 AND fresh_state <> 1 THEN 'fresh_state;' ELSE '' END ||
-      CASE WHEN target_height IN (50000, 100000) AND telemetry_schema <> 'benchmark.telemetry_tick.v1' THEN 'telemetry_schema;' ELSE '' END ||
-      CASE WHEN target_height IN (50000, 100000) AND telemetry_quality <> 'clean' THEN 'telemetry_quality;' ELSE '' END ||
-      CASE WHEN target_height IN (50000, 100000) AND has_slow_blocks <> 1 THEN 'slow_blocks;' ELSE '' END ||
-      CASE WHEN target_height IN (50000, 100000) AND long_run_timing_bucket_count < 7 THEN 'long_run_timing_buckets;' ELSE '' END ||
+      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') AND telemetry_schema <> 'benchmark.telemetry_tick.v1' THEN 'telemetry_schema;' ELSE '' END ||
+      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') AND telemetry_quality <> 'clean' THEN 'telemetry_quality;' ELSE '' END ||
+      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once') AND has_slow_blocks <> 1 THEN 'slow_blocks;' ELSE '' END ||
+      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') AND long_run_timing_bucket_count < 7 THEN 'long_run_timing_buckets;' ELSE '' END ||
       CASE WHEN binary_gate_status <> required_binary_gate_status THEN 'binary_gate_status;' ELSE '' END
     ) AS comparability_notes
   FROM classified
@@ -1064,12 +1065,14 @@ SELECT
   native_crypto_backend,
   native_crypto_available,
   CASE
+    WHEN target_height < 0 AND result IN ('passed', 'target_reached', 'ok', 'success') THEN 'passed'
     WHEN validated_height >= target_height AND result IN ('passed', 'target_reached', 'ok', 'success') THEN 'passed'
+    WHEN target_height < 0 AND result = '' THEN 'recorded'
     WHEN validated_height >= target_height AND result = '' THEN 'recorded'
     ELSE coalesce(nullif(result, ''), 'recorded')
   END AS gate_status,
   CASE
-    WHEN validated_height < target_height OR result IN ('failed', 'blocked', 'error') THEN 'failed'
+    WHEN (target_height >= 0 AND validated_height < target_height) OR result IN ('failed', 'blocked', 'error') THEN 'failed'
     WHEN evidence_lane LIKE '%_rpc_replay' THEN 'evidence_only'
     WHEN comparability_notes = '' THEN 'comparable'
     WHEN rocksdb_wal_disabled <> wal_disabled_required OR runtime_surface <> preferred_runtime_surface THEN 'diagnostic'
@@ -1217,7 +1220,7 @@ SELECT
   bgm.fresh_state,
   coalesce(bc.binary_gate_status, '') AS binary_gate_status,
   coalesce(bc.artifact_quality, 'incomplete') AS artifact_quality,
-  coalesce(bc.telemetry_quality, CASE WHEN bgm.target_height IN (50000, 100000) THEN 'missing' ELSE 'clean' END) AS telemetry_quality,
+  coalesce(bc.telemetry_quality, CASE WHEN bgm.gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') THEN 'missing' ELSE 'clean' END) AS telemetry_quality,
   coalesce(json_extract(a.raw_json, '$.control_harness.artifact_source'), 'port_authored_or_historical') AS artifact_source,
   bgm.utxo_accounting_policy,
   bgm.chainstate_utxo_count,
@@ -1733,6 +1736,54 @@ WHERE NOT EXISTS (
   WHERE suite_id = 'rb.shared_script_corpus'
     AND suite_version = '2026-06-07'
     AND suite_hash = '9f338ff205087144c38679ebd67bde5bf372bea3082922bde5f28013e4727d06'
+)
+UNION ALL
+SELECT
+  'bitcoin.bip340_schnorr_vectors' AS suite_id,
+  '2026-06-07' AS suite_version,
+  '01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb' AS suite_hash,
+  19 AS case_total,
+  '["bip_standard_vector"]' AS provenance_json,
+  'BIP340 verification vectors do not prove ECDSA, Taproot tweak handling, block-connect usage, or every secp256k1 implementation behavior.' AS does_not_prove,
+  '' AS source_artifact_id
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM test_capability_suites
+  WHERE suite_id = 'bitcoin.bip340_schnorr_vectors'
+    AND suite_version = '2026-06-07'
+    AND suite_hash = '01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb'
+)
+UNION ALL
+SELECT
+  'rb.crypto_backend_equivalence_v1' AS suite_id,
+  '2026-06-07' AS suite_version,
+  'ef27cd3e8c2f7f83923d88aaee4d50ef9130fe42c5ccc14713478772d06209af' AS suite_hash,
+  27 AS case_total,
+  '["bip_standard_vector","proof_derived"]' AS provenance_json,
+  'Backend equivalence vectors do not prove every libsecp256k1 internal test, every consensus path, or block-connect usage.' AS does_not_prove,
+  '' AS source_artifact_id
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM test_capability_suites
+  WHERE suite_id = 'rb.crypto_backend_equivalence_v1'
+    AND suite_version = '2026-06-07'
+    AND suite_hash = 'ef27cd3e8c2f7f83923d88aaee4d50ef9130fe42c5ccc14713478772d06209af'
+)
+UNION ALL
+SELECT
+  'rb.block_connect_backend_probe_v1' AS suite_id,
+  '2026-06-07' AS suite_version,
+  'b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f' AS suite_hash,
+  2 AS case_total,
+  '["rb_live_chain_regression","proof_derived"]' AS provenance_json,
+  'Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template.' AS does_not_prove,
+  '' AS source_artifact_id
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM test_capability_suites
+  WHERE suite_id = 'rb.block_connect_backend_probe_v1'
+    AND suite_version = '2026-06-07'
+    AND suite_hash = 'b746732dfd78cd1a2b2fb00513dc01c77edc8421df745109f9a803193e4c697f'
 );
 
 CREATE VIEW IF NOT EXISTS test_capability_contract_matrix AS
@@ -1932,7 +1983,7 @@ ranked AS (
   SELECT
     *,
     row_number() OVER (
-      PARTITION BY port, capability, coalesce(nullif(scope, ''), '*'), coalesce(nullif(backend, ''), '*')
+      PARTITION BY port, capability
       ORDER BY CASE WHEN evidence_source_type = 'explicit_contract' THEN 0 ELSE 1 END
     ) AS rn
   FROM combined

@@ -23,6 +23,11 @@ EXPECTED_HASHES = {
     "shakedown_50k": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
     "performance_100k": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
 }
+PERFORMANCE_100K_START = {
+    "height": 100000,
+    "hash": EXPECTED_HASHES["performance_100k"],
+    "utxo_count": 13154991,
+}
 
 GATES: dict[str, dict[str, Any]] = {
     "baseline_5k": {
@@ -54,6 +59,18 @@ GATES: dict[str, dict[str, Any]] = {
         "utxo_count": 13154991,
         "long_run": True,
         "tip": False,
+    },
+    "post_100k_to_tip": {
+        "target_height": -1,
+        "target_label": "100k to tip",
+        "benchmark_gate": "post_100k_to_tip",
+        "benchmark_kind": "post_100k_to_tip_p2p",
+        "benchmark_lane": "post_100k_to_tip_p2p",
+        "utxo_count": -1,
+        "long_run": True,
+        "tip": True,
+        "from_checkpoint": True,
+        "checkpoint_source_gate": "performance_100k",
     },
     "tip_once": {
         "target_height": -1,
@@ -166,6 +183,14 @@ REQUIRED_TIP_FIELDS = (
     "captured_at",
     "telemetry_schema",
     "telemetry_summary",
+)
+
+REQUIRED_POST_100K_TO_TIP_FIELDS = (
+    "checkpoint_source_gate",
+    "checkpoint_source_height",
+    "checkpoint_source_hash",
+    "checkpoint_source_utxo_count",
+    "fresh_state",
 )
 
 REQUIRED_MAINTENANCE_FIELDS = (
@@ -327,6 +352,11 @@ def validate_payload(
         if field not in payload:
             errors.append(f"missing required field {field}")
 
+    if spec.get("from_checkpoint"):
+        for field in REQUIRED_POST_100K_TO_TIP_FIELDS:
+            if field not in payload:
+                errors.append(f"missing post-100k-to-tip field {field}")
+
     if spec.get("maintenance"):
         for field in REQUIRED_MAINTENANCE_FIELDS:
             if field not in payload:
@@ -386,6 +416,21 @@ def validate_payload(
             errors.append("reference_finish_hash must match validated_hash")
         if payload.get("reference_finish_height") != payload.get("validated_height"):
             errors.append("reference_finish_height must match validated_height")
+        if spec.get("from_checkpoint"):
+            if payload.get("checkpoint_source_gate") != "performance_100k":
+                errors.append("checkpoint_source_gate must be performance_100k")
+            if payload.get("checkpoint_source_height") != PERFORMANCE_100K_START["height"]:
+                errors.append(f"checkpoint_source_height={payload.get('checkpoint_source_height')!r}; expected {PERFORMANCE_100K_START['height']!r}")
+            if payload.get("checkpoint_source_hash") != PERFORMANCE_100K_START["hash"]:
+                errors.append("checkpoint_source_hash must match performance_100k hash")
+            if payload.get("checkpoint_source_utxo_count") != PERFORMANCE_100K_START["utxo_count"]:
+                errors.append(f"checkpoint_source_utxo_count={payload.get('checkpoint_source_utxo_count')!r}; expected {PERFORMANCE_100K_START['utxo_count']!r}")
+            if payload.get("reference_start_height") != PERFORMANCE_100K_START["height"]:
+                errors.append(f"reference_start_height={payload.get('reference_start_height')!r}; expected {PERFORMANCE_100K_START['height']!r}")
+            if payload.get("reference_start_hash") != PERFORMANCE_100K_START["hash"]:
+                errors.append("reference_start_hash must match performance_100k hash")
+            if as_bool(payload.get("fresh_state")):
+                errors.append("post_100k_to_tip must report fresh_state=false")
         if payload.get("skipped_consensus_rules") not in (None, [], {}, 0):
             errors.append("skipped_consensus_rules must be empty")
         if not isinstance(payload.get("telemetry_summary"), dict):
@@ -399,7 +444,7 @@ def validate_payload(
         errors.append(f"rocksdb_wal_disabled={payload.get('rocksdb_wal_disabled')!r}; expected false")
     if not as_bool(payload.get("resume_supported")):
         errors.append(f"resume_supported={payload.get('resume_supported')!r}; expected true")
-    if not spec.get("maintenance") and not as_bool(payload.get("fresh_state")):
+    if not spec.get("maintenance") and not spec.get("from_checkpoint") and not as_bool(payload.get("fresh_state")):
         errors.append(f"fresh_state={payload.get('fresh_state')!r}; expected true")
     if not str(payload.get("native_crypto_backend") or "").strip():
         errors.append("native_crypto_backend must be present")
@@ -607,6 +652,53 @@ def self_test() -> int:
                 },
             },
             "tip_once",
+            True,
+        ),
+        (
+            "post_100k_to_tip_pass",
+            {
+                **base,
+                "benchmark_gate": "post_100k_to_tip",
+                "benchmark_lane": "post_100k_to_tip_p2p",
+                "benchmark_kind": "post_100k_to_tip_p2p",
+                "target_height": 123456,
+                "target_label": "100k to tip",
+                "header_target_height": 123456,
+                "reference_start_height": 100000,
+                "reference_start_hash": EXPECTED_HASHES["performance_100k"],
+                "reference_finish_height": 123456,
+                "reference_finish_hash": "0000000000000000000000000000000000000000000000000000000000000002",
+                "validated_height": 123456,
+                "validated_hash": "0000000000000000000000000000000000000000000000000000000000000002",
+                "chainstate_utxo_count": 999,
+                "fresh_state": False,
+                "checkpoint_source_gate": "performance_100k",
+                "checkpoint_source_height": 100000,
+                "checkpoint_source_hash": EXPECTED_HASHES["performance_100k"],
+                "checkpoint_source_utxo_count": 13154991,
+                "telemetry_schema": "benchmark.telemetry_tick.v1",
+                "telemetry_summary": {
+                    "telemetry_quality": "clean",
+                    "tick_count": 8,
+                    "heartbeat_max_gap_ms": 1000,
+                    "lifecycle_markers": {
+                        "run_started": 0,
+                        "container_started": 1,
+                        "node_started": 2,
+                        "first_peer_byte": 3,
+                        "first_block_connected": 4,
+                        "target_reached": 5,
+                        "run_finished": 6,
+                    },
+                },
+                "skipped_consensus_rules": [],
+                "timing_summary": {
+                    "total_ms": 2,
+                    "stage_totals_ms": {bucket: 1 for bucket in REQUIRED_BUCKETS},
+                    "slow_blocks": [{"height": 100001, "ms": 1}],
+                },
+            },
+            "post_100k_to_tip",
             True,
         ),
     ]

@@ -8,6 +8,7 @@ REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_top
 DOCKER_COMPOSE="${DOCKER_COMPOSE:-docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml}"
 
 VOLUME="${DOCKER_PROOF_VOLUME:-cpbitnode_proof_data}"
+PRESERVE_PROOF_VOLUME="${PRESERVE_PROOF_VOLUME:-0}"
 TARGET="${DOCKER_BENCHMARK_TARGET:-5000}"
 BLOCKS_MAX="${DOCKER_BENCHMARK_BLOCKS_MAX:-5000}"
 PEERS="${DOCKER_BENCHMARK_PEERS:-${REFERENCE_P2P_PEER:?REFERENCE_P2P_PEER missing}}"
@@ -34,6 +35,10 @@ REFERENCE_FINISH_HEIGHT="${REFERENCE_FINISH_HEIGHT:-$TARGET}"
 REFERENCE_FINISH_HASH="${REFERENCE_FINISH_HASH:-$(reference_hash "$REFERENCE_FINISH_HEIGHT")}"
 
 python3 scripts/target_readiness_check.py --target "$TARGET"
+
+if [[ "$PRESERVE_PROOF_VOLUME" != "1" ]]; then
+  docker volume rm -f "$VOLUME" >/dev/null 2>&1 || true
+fi
 
 start_ms="$(now_ms)"
 set +e

@@ -34,6 +34,7 @@ SECTIONS = (
     "baseline-5k",
     "shakedown-50k",
     "performance-100k",
+    "post-100k-to-tip",
     "tip-once",
     "tip-maintenance",
     "port-baseline-5k",
@@ -46,6 +47,7 @@ GATES = (
     "baseline_5k",
     "shakedown_50k",
     "performance_100k",
+    "post_100k_to_tip",
     "tip_once",
     "tip_maintenance",
 )
@@ -77,6 +79,9 @@ SECTION_ALIASES = {
     "port-baseline-5k": "baseline-5k",
     "50k": "shakedown-50k",
     "100k": "performance-100k",
+    "post-100k": "post-100k-to-tip",
+    "100k-to-tip": "post-100k-to-tip",
+    "tip-readiness": "post-100k-to-tip",
     "runway": "consensus-runway",
     "consensus": "consensus-runway",
     "benchmarks": "benchmark-summary",
@@ -563,9 +568,10 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
             when 'baseline_5k' then 0
             when 'shakedown_50k' then 1
             when 'performance_100k' then 2
-            when 'tip_once' then 3
-            when 'tip_maintenance' then 4
-            else 5
+            when 'post_100k_to_tip' then 3
+            when 'tip_once' then 4
+            when 'tip_maintenance' then 5
+            else 6
           end
         """,
     )
@@ -585,9 +591,10 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
             when 'baseline_5k' then 0
             when 'shakedown_50k' then 1
             when 'performance_100k' then 2
-            when 'tip_once' then 3
-            when 'tip_maintenance' then 4
-            else 5
+            when 'post_100k_to_tip' then 3
+            when 'tip_once' then 4
+            when 'tip_maintenance' then 5
+            else 6
           end,
           port
         """,
@@ -674,6 +681,8 @@ def print_benchmark_suite(connection: sqlite3.Connection) -> None:
     print()
     print_gate_matrix(connection, "performance_100k", "Performance 100k")
     print()
+    print_gate_matrix(connection, "post_100k_to_tip", "Post 100k To Tip")
+    print()
     print_gate_matrix(connection, "tip_once", "Tip Once")
     print()
     print_gate_matrix(connection, "tip_maintenance", "Tip Maintenance")
@@ -700,8 +709,9 @@ def print_leaderboard(connection: sqlite3.Connection, gate_id: str | None = None
             when 'baseline_5k' then 0
             when 'shakedown_50k' then 1
             when 'performance_100k' then 2
-            when 'tip_once' then 3
-            when 'tip_maintenance' then 4
+            when 'post_100k_to_tip' then 3
+            when 'tip_once' then 4
+            when 'tip_maintenance' then 5
             else 5
           end,
           rank,
@@ -926,6 +936,7 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "baseline-5k": print_port_baseline_5k,
     "shakedown-50k": lambda connection: print_gate_matrix(connection, "shakedown_50k", "Shakedown 50k"),
     "performance-100k": lambda connection: print_gate_matrix(connection, "performance_100k", "Performance 100k"),
+    "post-100k-to-tip": lambda connection: print_gate_matrix(connection, "post_100k_to_tip", "Post 100k To Tip"),
     "tip-once": lambda connection: print_gate_matrix(connection, "tip_once", "Tip Once"),
     "tip-maintenance": lambda connection: print_gate_matrix(connection, "tip_maintenance", "Tip Maintenance"),
     "consensus-runway": print_consensus_runway,

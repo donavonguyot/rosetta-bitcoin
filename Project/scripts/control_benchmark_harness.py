@@ -275,28 +275,30 @@ def synthesize_ticks(
     gate_id: str,
     entries: list[dict[str, Any]],
     elapsed_ms: int,
+    target_height_override: int | None = None,
+    started_height: int = 0,
 ) -> list[dict[str, Any]]:
     spec = gate_spec(gate_id)
-    target_height = None if spec.get("tip") else int(spec["target_height"])
+    target_height = target_height_override if target_height_override is not None else (None if spec.get("tip") else int(spec["target_height"]))
     run_id = f"{port}-{gate_id}-control"
     first = entries[0] if entries else {}
     final = best_final_progress(entries)
     ticks = [
-        progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first, event="run_started", phase="startup", target_height=target_height, monotonic_ms=0),
-        progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first, event="container_started", phase="startup", target_height=target_height, monotonic_ms=1),
-        progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first, event="node_started", phase="startup", target_height=target_height, monotonic_ms=2),
+        progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first, event="run_started", phase="startup", target_height=target_height, monotonic_ms=0, started_height=started_height),
+        progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first, event="container_started", phase="startup", target_height=target_height, monotonic_ms=1, started_height=started_height),
+        progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first, event="node_started", phase="startup", target_height=target_height, monotonic_ms=2, started_height=started_height),
     ]
     first_header = next((entry for entry in entries if as_int(entry.get("header_height"), 0) > 0), first)
-    first_block = next((entry for entry in entries if as_int(entry.get("validated_height"), 0) > 0), first)
-    ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first_header, event="first_peer_byte", phase="peer_connect", target_height=target_height, monotonic_ms=3))
-    ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first_block, event="first_block_connected", phase="block_connect", target_height=target_height, monotonic_ms=4))
+    first_block = next((entry for entry in entries if as_int(entry.get("validated_height"), 0) > started_height), first)
+    ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first_header, event="first_peer_byte", phase="peer_connect", target_height=target_height, monotonic_ms=3, started_height=started_height))
+    ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first_block, event="first_block_connected", phase="block_connect", target_height=target_height, monotonic_ms=4, started_height=started_height))
     if entries:
         span = max(1, elapsed_ms - 6)
         for offset, entry in enumerate(entries, start=1):
             monotonic = 5 + int(span * offset / max(1, len(entries) + 1))
-            ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=entry, event="heartbeat", phase="heartbeat", target_height=target_height, monotonic_ms=monotonic))
-    ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=final, event="target_reached", phase="complete", target_height=target_height, monotonic_ms=max(elapsed_ms - 1, 5)))
-    ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=final, event="run_finished", phase="complete", target_height=target_height, monotonic_ms=max(elapsed_ms, 6)))
+            ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=entry, event="heartbeat", phase="heartbeat", target_height=target_height, monotonic_ms=monotonic, started_height=started_height))
+    ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=final, event="target_reached", phase="complete", target_height=target_height, monotonic_ms=max(elapsed_ms - 1, 5), started_height=started_height))
+    ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=final, event="run_finished", phase="complete", target_height=target_height, monotonic_ms=max(elapsed_ms, 6), started_height=started_height))
     return ticks
 
 
@@ -317,6 +319,9 @@ def build_artifact(
     telemetry_log_path: Path,
     elapsed_ms: int,
     expected_peer: str | None = None,
+    reference_finish_height: int | None = None,
+    reference_finish_hash: str | None = None,
+    checkpoint_metadata: dict[str, Any] | None = None,
 ) -> ControlBuildResult | None:
     entries = progress_entries(proof_log)
     if not entries:
@@ -324,9 +329,21 @@ def build_artifact(
     spec = gate_spec(gate_id)
     final = best_final_progress(entries)
     expected_peer = expected_peer or read_env().get("REFERENCE_P2P_PEER", "bitcoin-core-testnet4:48333")
-    ticks = synthesize_ticks(port=port, gate_id=gate_id, entries=entries, elapsed_ms=max(0, elapsed_ms))
+    checkpoint_start = getattr(_artifact_validator, "PERFORMANCE_100K_START", {"height": 100000, "hash": _artifact_validator.EXPECTED_HASHES["performance_100k"], "utxo_count": 13154991})
+    started_height = int(checkpoint_start["height"]) if spec.get("from_checkpoint") else 0
+    if spec.get("from_checkpoint"):
+        target_height = reference_finish_height or as_int(final.get("validated_height"), started_height)
+    else:
+        target_height = None if spec.get("tip") else int(spec["target_height"])
+    ticks = synthesize_ticks(
+        port=port,
+        gate_id=gate_id,
+        entries=entries,
+        elapsed_ms=max(0, elapsed_ms),
+        target_height_override=target_height,
+        started_height=started_height,
+    )
     write_telemetry_log(telemetry_log_path, ticks)
-    target_height = None if spec.get("tip") else int(spec["target_height"])
     telemetry_validation = _telemetry_validator.validate_ticks(
         ticks,
         gate=gate_id,
@@ -338,8 +355,11 @@ def build_artifact(
     observed_stages = timing_from_benchmark_ticks(proof_log)
     if any(observed_stages.values()):
         timing["stage_totals_ms"] = observed_stages
-    target = int(spec["target_height"]) if not spec.get("tip") else as_int(final.get("validated_height"), 0)
-    expected_hash = _artifact_validator.EXPECTED_HASHES.get(gate_id, final.get("validated_hash", ""))
+    target = int(spec["target_height"]) if not spec.get("tip") else as_int(reference_finish_height, as_int(final.get("validated_height"), 0))
+    expected_hash = _artifact_validator.EXPECTED_HASHES.get(gate_id, reference_finish_hash or final.get("validated_hash", ""))
+    reference_start_height = started_height if spec.get("from_checkpoint") else 0
+    reference_start_hash = str(checkpoint_start["hash"]) if spec.get("from_checkpoint") else TESTNET4_GENESIS_HASH
+    fresh_state = False if spec.get("from_checkpoint") else True
     payload = {
         "implementation": f"{port} product node",
         "port": port,
@@ -349,17 +369,17 @@ def build_artifact(
         "benchmark_lane": spec["benchmark_lane"],
         "benchmark_kind": spec["benchmark_kind"],
         "target_height": target,
-        "target_label": spec["target_label"] if not spec.get("tip") else "tip",
+        "target_label": spec["target_label"] if (not spec.get("tip") or spec.get("from_checkpoint")) else "tip",
         "header_target_height": target,
         "byte_source": "local_reference_p2p",
-        "reference_start_height": 0,
-        "reference_start_hash": TESTNET4_GENESIS_HASH,
+        "reference_start_height": reference_start_height,
+        "reference_start_hash": reference_start_hash,
         "reference_finish_height": target,
         "reference_finish_hash": expected_hash,
         "validated_height": as_int(final.get("validated_height"), 0),
         "validated_hash": final.get("validated_hash"),
-        "blocks_fetched": as_int(final.get("downloaded_blocks"), as_int(final.get("validated_height"), 0)),
-        "blocks_connected": as_int(final.get("connected_blocks"), as_int(final.get("validated_height"), 0)),
+        "blocks_fetched": as_int(final.get("downloaded_blocks"), max(0, as_int(final.get("validated_height"), 0) - started_height)),
+        "blocks_connected": as_int(final.get("connected_blocks"), max(0, as_int(final.get("validated_height"), 0) - started_height)),
         "current_blocker": final.get("current_blocker"),
         "binary_gate_status": "not_attempted",
         "chainstate_backend": "rocksdb",
@@ -373,7 +393,7 @@ def build_artifact(
         "rocksdb_wal_disabled": False,
         "prefetch_depth": 4,
         "resume_supported": True,
-        "fresh_state": True,
+        "fresh_state": fresh_state,
         "result": "passed" if not final.get("current_blocker") else "failed",
         "failures": [],
         "captured_at": utc_now(),
@@ -399,6 +419,19 @@ def build_artifact(
             "telemetry_log": str(telemetry_log_path),
         },
     }
+    if spec.get("from_checkpoint"):
+        payload.update(
+            {
+                "checkpoint_source_gate": spec.get("checkpoint_source_gate", "performance_100k"),
+                "checkpoint_source_height": int(checkpoint_start["height"]),
+                "checkpoint_source_hash": str(checkpoint_start["hash"]),
+                "checkpoint_source_utxo_count": int(checkpoint_start["utxo_count"]),
+                "checkpoint_metadata": checkpoint_metadata or {},
+                "skipped_consensus_rules": [],
+            }
+        )
+        payload["control_harness"]["checkpoint_source_gate"] = "performance_100k"
+        payload["control_harness"]["checkpoint_metadata"] = checkpoint_metadata or {}
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     artifact_path.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
     return ControlBuildResult(

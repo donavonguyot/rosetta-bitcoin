@@ -2,7 +2,10 @@ JAVA_HOME ?= /opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
 MVN = JAVA_HOME="$(JAVA_HOME)" PATH="$(JAVA_HOME)/bin:$$PATH" mvn
 MAVEN_OPTS ?= -Xmx4g -XX:+ExitOnOutOfMemoryError
 export MAVEN_OPTS
+RESULT_DATE ?= $(shell date +%F)
 DOCKER_PROOF_VOLUME ?= jbitnode_proof_data
+POST_100K_TIP_VOLUME ?= jbitnode_post_100k_to_tip_data
+POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 BENCHMARK_DEBUG_DIR ?= .benchmark-results
 DOCKER_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/java_docker_baseline_5k_benchmark_$(shell date +%F).json
 DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_diagnostic_10k_benchmark_$(shell date +%F).json
@@ -10,6 +13,10 @@ DOCKER_50K_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/java_docker_shakedown_50k_
 DOCKER_100K_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/java_docker_performance_100k_benchmark_$(shell date +%F).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/java_script_corpus_$(shell date +%F).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/java_script_corpus_docker_$(shell date +%F).json
+TESTING_RESULTS_DIR ?= ../Shared/testing/results
+TESTING_CAPABILITY_EMITTER ?= python3 ../Shared/testing/tools/emit_crypto_capability_contract.py
+CRYPTO_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/java_crypto_vectors_$(RESULT_DATE).json
+BLOCK_CONNECT_BACKEND_RESULT ?= $(TESTING_RESULTS_DIR)/java_block_connect_backend_$(RESULT_DATE).json
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_HEADERS_MAX ?= 5000
@@ -33,7 +40,7 @@ VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benc
 DOCKER_REBUILD ?= 0
 BENCHMARK_GATE ?= baseline_5k
 
-.PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-supporting-10k-proof docker-java-supporting-50k-proof docker-java-primary-100k-proof docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume docker-smoke-once java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
+.PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-supporting-10k-proof docker-java-supporting-50k-proof docker-java-primary-100k-proof docker-java-post-100k-to-tip-proof docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume docker-smoke-once java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
 
 test:
 	$(MVN) test
@@ -72,13 +79,14 @@ docker-java-native-crypto-proof:
 docker-java-supporting-5k-proof:
 	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build jbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
-	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true; fi
 	  DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),native) \
 	  DOCKER_BENCHMARK_TARGET=$(DOCKER_BENCHMARK_TARGET) DOCKER_BENCHMARK_BLOCKS_MAX=$(DOCKER_BENCHMARK_BLOCKS_MAX) \
 	  DOCKER_BENCHMARK_HEADERS_MAX=$(DOCKER_BENCHMARK_HEADERS_MAX) DOCKER_BENCHMARK_HEADER_BATCHES_MAX=$(DOCKER_BENCHMARK_HEADER_BATCHES_MAX) \
 	  PEERS=$(DOCKER_P2P_PEER) \
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
 	  POLL_SEC=$(DOCKER_BENCHMARK_POLL_SEC) \
+	  PRESERVE_PROOF_VOLUME=$(PRESERVE_PROOF_VOLUME) \
 		  scripts/docker_5k_benchmark.sh
 
 docker-java-supporting-10k-proof:
@@ -110,6 +118,17 @@ docker-java-primary-100k-proof:
 	  DOCKER_BENCHMARK_HEADERS_MAX=100000 \
 	  DOCKER_BENCHMARK_HEADER_BATCHES_MAX=50 \
 	  BENCHMARK_GATE=performance_100k
+
+docker-java-post-100k-to-tip-proof:
+	$(MAKE) docker-java-supporting-5k-proof \
+	  DOCKER_PROOF_VOLUME=$(POST_100K_TIP_VOLUME) \
+	  DOCKER_BENCHMARK_RESULT=$(BENCHMARK_DEBUG_DIR)/java_docker_post_100k_to_tip_debug_$(RESULT_DATE).json \
+	  DOCKER_BENCHMARK_TARGET=$(POST_100K_TIP_TARGET) \
+	  DOCKER_BENCHMARK_BLOCKS_MAX=$(POST_100K_TIP_TARGET) \
+	  DOCKER_BENCHMARK_HEADERS_MAX=$(POST_100K_TIP_TARGET) \
+	  DOCKER_BENCHMARK_HEADER_BATCHES_MAX=50 \
+	  BENCHMARK_GATE=post_100k_to_tip \
+	  PRESERVE_PROOF_VOLUME=1
 
 docker-java-native-crypto-long-sync-proof:
 	$(REFERENCE_P2P_CHECK)
@@ -188,6 +207,12 @@ java-node-native-status:
 
 java-node-script-corpus:
 	SECP256K1_BACKEND=native $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ScriptCorpus -Dexec.args="--result-path $(SCRIPT_RESULT)"
+
+test-crypto-vectors:
+	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port java --backend libsecp256k1-acinq --result-path $(CRYPTO_CAPABILITY_RESULT)
+
+test-block-connect-backend:
+	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port java --backend libsecp256k1-acinq --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 java-node-project-export:
 	@TMP=$$(mktemp); \

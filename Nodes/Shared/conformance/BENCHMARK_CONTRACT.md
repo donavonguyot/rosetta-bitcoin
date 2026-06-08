@@ -18,6 +18,7 @@ meet the same proof burden.
 | `baseline_5k` | Birth certificate. Cheap enough to run often. | `docker_proof_local` | `baseline_5k_p2p` |
 | `shakedown_50k` | Serious readiness and telemetry shakedown. | `docker_proof_50k` | `shakedown_50k_p2p` |
 | `performance_100k` | Primary optimization and ranking lane. | `docker_proof_100k` | `performance_100k_p2p` |
+| `post_100k_to_tip` | Immediate tip-readiness from canonical 100k state. | `docker_proof_post_100k_to_tip` | `post_100k_to_tip_p2p` |
 | `tip_once` | One-time empty-state-to-tip credibility proof. | `docker_proof_tip_once` | `tip_once_p2p` |
 | `tip_maintenance` | Operational reality near/at tip. | `docker_tip_maintenance` | `tip_maintenance_p2p` |
 
@@ -126,6 +127,25 @@ Required:
 
 This is the primary performance comparison lane for optimization work.
 
+### `post_100k_to_tip`
+
+Required:
+
+- Start from the same port's current canonical `performance_100k` checkpoint:
+  height `100000`, expected 100k hash, `chainstate_utxo_count=13154991`, and
+  `core_spendable_v1`.
+- Restore state from ignored Project checkpoint storage; do not silently rerun
+  0-100k when a checkpoint is missing.
+- `fresh_state=false`, `checkpoint_source_gate=performance_100k`, and
+  `proof_mode=p2p_sync`.
+- Finish height/hash selected from local Reference Core before the run.
+- Final validated height/hash match the selected Reference finish height/hash.
+- Full control-owned telemetry and timing buckets, no blocker, no skipped
+  consensus rules.
+
+This is the immediate tip-readiness lane after 100k. It is not the later
+empty-state `tip_once` audit.
+
 ### `tip_once`
 
 Required:
@@ -162,8 +182,8 @@ archaeology. Current active-port benchmark evidence for `baseline_5k`,
 benchmark JSON under `Nodes/Shared/conformance/results/`; any local port JSON is
 ignored debug output.
 
-Long runs (`shakedown_50k`, `performance_100k`, `tip_once`, and
-`tip_maintenance`) must emit lines consumable by
+Long runs (`shakedown_50k`, `performance_100k`, `post_100k_to_tip`,
+`tip_once`, and `tip_maintenance`) must emit lines consumable by
 `Project/scripts/monitor_benchmark_telemetry.py`:
 
 ```text

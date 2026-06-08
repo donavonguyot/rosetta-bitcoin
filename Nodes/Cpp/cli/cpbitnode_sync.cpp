@@ -115,6 +115,8 @@ int syncBlocksRun(const Settings& settings) {
 
         const auto syncState = state->getSyncState(chain.name);
         const int syncBest = syncState.has_value() ? std::stoi((*syncState).at("best_height")) : 0;
+        // Honest start_height: advertise the best validated/runtime tip available to this datadir,
+        // not a header-only horizon.
         const int handshakeHeight = std::max(resolveBootstrapStartHeight(*state, chain, settings),
                                              chainstate->readTip(chain.name).height);
         manager.bootstrap(manualPeers, handshakeHeight);

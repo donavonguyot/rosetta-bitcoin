@@ -32,7 +32,8 @@ root-owned monorepo. There is exactly one Git repository, at the workspace root.
 ## Compliance Boundaries
 
 The official benchmark suite is `baseline_5k`, `shakedown_50k`,
-`performance_100k`, `tip_once`, and `tip_maintenance`. The first comparable
+`performance_100k`, `post_100k_to_tip`, `tip_once`, and `tip_maintenance`.
+The first comparable
 readiness standard is the 5k baseline: RocksDB runtime truth, native crypto, the
 shared `45/45` script corpus, Docker local Reference P2P proof, fixed benchmark
 knobs, `core_spendable_v1` UTXO accounting, and Project-importable artifacts.
@@ -61,7 +62,8 @@ python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --por
 Current benchmark leaderboards rank only passed, comparable artifacts that pass
 the shared benchmark validator and import as `artifact_quality=canonical`.
 Long-run gates also require `telemetry_quality=clean`; `shakedown_50k` is the
-telemetry discipline gate before `performance_100k`. Historical evidence
+telemetry discipline gate before `performance_100k`, and `post_100k_to_tip`
+is the immediate tip-readiness lane from canonical 100k state. Historical evidence
 remains queryable, but it does not support current rank.
 
 Project reports consensus readiness from the Shared rule ledger through staged

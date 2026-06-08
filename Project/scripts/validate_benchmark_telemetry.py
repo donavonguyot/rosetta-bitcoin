@@ -88,7 +88,7 @@ REQUIRED_LIFECYCLE_EVENTS = (
     "run_finished",
 )
 
-LONG_RUN_GATES = {"shakedown_50k", "performance_100k", "tip_once", "tip_maintenance"}
+LONG_RUN_GATES = {"shakedown_50k", "performance_100k", "post_100k_to_tip", "tip_once", "tip_maintenance"}
 
 
 @dataclass

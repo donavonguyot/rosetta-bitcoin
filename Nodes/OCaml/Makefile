@@ -4,6 +4,10 @@ DATA_DIR ?= ./data-ocaml
 RESULTS_DIR ?= ../Shared/conformance/results
 SCRIPT_MANIFEST ?= ../Shared/conformance/fixtures/scripts/manifest.json
 CRYPTO_VECTORS ?= ../Shared/conformance/fixtures/native_crypto_v1_vectors.json
+TESTING_RESULTS_DIR ?= ../Shared/testing/results
+TESTING_CAPABILITY_EMITTER ?= python3 ../Shared/testing/tools/emit_crypto_capability_contract.py
+CRYPTO_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/ocaml_crypto_vectors_$(RESULT_DATE).json
+BLOCK_CONNECT_BACKEND_RESULT ?= $(TESTING_RESULTS_DIR)/ocaml_block_connect_backend_$(RESULT_DATE).json
 RESULT_DATE ?= $(shell date -u +%F)
 FIXTURE_ID ?=
 FIXTURE_ARG := $(if $(FIXTURE_ID),--fixture-id $(FIXTURE_ID),)
@@ -20,6 +24,8 @@ DOCKER_50K_TELEMETRY_LOG ?= /tmp/ocaml_docker_shakedown_50k_telemetry_$(RESULT_D
 DOCKER_100K_PROOF_VOLUME ?= ocbitnode_100k_proof_data
 DOCKER_100K_REFERENCE_RESULT ?= /tmp/ocaml_docker_performance_100k_benchmark_$(RESULT_DATE).json
 DOCKER_100K_TELEMETRY_LOG ?= /tmp/ocaml_docker_performance_100k_telemetry_$(RESULT_DATE).log
+POST_100K_TIP_VOLUME ?= ocbitnode_post_100k_to_tip_data
+POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_50K_PROFILE_VOLUME ?= ocbitnode_50k_profile_data
 DOCKER_50K_PROFILE_RESULT ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(DOCKER_50K_PROFILE_TARGET)_$(RESULT_DATE).json
 DOCKER_50K_PROFILE_TELEMETRY_LOG ?= /workspace/Shared/conformance/results/ocaml_docker_shakedown_50k_profile_$(DOCKER_50K_PROFILE_TARGET)_$(RESULT_DATE).log
@@ -28,7 +34,7 @@ include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 
 .PHONY: build test docker-test ocbitnode-status ocbitnode-storage-proof ocbitnode-native-crypto-vectors ocbitnode-script-corpus
-.PHONY: docker-config docker-build docker-warm docker-status docker-storage-proof docker-native-crypto-vectors docker-script-corpus docker-proof-local docker-proof-50k docker-proof-100k docker-proof-50k-profile docker-smoke-once
+.PHONY: docker-config docker-build docker-warm docker-status docker-storage-proof docker-native-crypto-vectors docker-script-corpus docker-proof-local docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-proof-50k-profile docker-smoke-once
 
 build:
 	opam exec -- dune build @install
@@ -51,6 +57,12 @@ ocbitnode-storage-proof:
 
 ocbitnode-native-crypto-vectors:
 	opam exec -- dune exec -- ocbitnode native-crypto-vectors --vectors $(CRYPTO_VECTORS) --result-path $(RESULTS_DIR)/ocaml_native_crypto_vectors_$(RESULT_DATE).json
+
+test-crypto-vectors:
+	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port ocaml --backend libsecp256k1 --result-path $(CRYPTO_CAPABILITY_RESULT)
+
+test-block-connect-backend:
+	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port ocaml --backend libsecp256k1 --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 ocbitnode-script-corpus:
 	opam exec -- dune exec -- ocbitnode script-corpus --manifest $(SCRIPT_MANIFEST) --result-path $(RESULTS_DIR)/ocaml_script_corpus_$(RESULT_DATE).json --runtime-surface host $(FIXTURE_ARG)
@@ -78,7 +90,7 @@ docker-script-corpus:
 docker-proof-local:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
-	@docker volume rm $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then docker volume rm $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true; fi
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_LOCAL_TELEMETRY_LOG)
 
 docker-proof-50k:
@@ -92,6 +104,11 @@ docker-proof-100k:
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_100K_PROOF_VOLUME) docker_$(DOCKER_100K_PROOF_VOLUME) >/dev/null 2>&1 || true
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_100K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target 100000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_100K_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_100K_TELEMETRY_LOG)
+
+docker-proof-post-100k-to-tip:
+	$(REFERENCE_P2P_CHECK)
+	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
+	DOCKER_LOCAL_PROOF_VOLUME=$(POST_100K_TIP_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target $(POST_100K_TIP_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path /tmp/ocaml_docker_post_100k_to_tip_debug_$(RESULT_DATE).json --runtime-surface docker --telemetry-log /tmp/ocaml_docker_post_100k_to_tip_telemetry_$(RESULT_DATE).log
 
 docker-proof-50k-profile:
 	$(REFERENCE_P2P_CHECK)

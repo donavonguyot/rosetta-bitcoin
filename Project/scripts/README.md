@@ -110,10 +110,29 @@ does not fail merely because a port has no gate result yet; missing evidence
 means the run still needs to happen.
 
 The official benchmark suite is `baseline_5k`, `shakedown_50k`,
-`performance_100k`, `tip_once`, and `tip_maintenance`. Historical 10k and
-50k-to-100k artifacts may still import, but they are not official gates.
+`performance_100k`, `post_100k_to_tip`, `tip_once`, and `tip_maintenance`.
+Historical 10k and 50k-to-100k artifacts may still import, but they are not
+official gates.
 Project lifecycle rows decide whether missing future gates are active work,
 active-development runway, or deliberate baseline retirement.
+
+`post_100k_to_tip` starts from a captured local checkpoint of the same port's
+canonical `performance_100k` Docker volume. Checkpoints live under ignored
+`Project/.checkpoints/` and are operational state, not evidence:
+
+```bash
+python3 Project/scripts/manage_benchmark_checkpoint.py \
+  --db Project/project.db \
+  --gate performance_100k \
+  --ports rust,zig,cpp,go,swift,csharp,java,ocaml \
+  --dry-run
+```
+
+Capture available checkpoint volumes explicitly with `--capture`; the campaign
+will only restore already captured checkpoints.
+
+If a checkpoint is missing, the campaign reports the port as `not_ready`; it
+does not rerun 0-100k behind the tip command.
 
 ## Serialized Benchmark Campaigns
 
@@ -159,7 +178,7 @@ The runner updates `Nodes/Shared/conformance/current_evidence.json` only after
 the fresh control-built artifact passes the shared benchmark artifact validator,
 Project import, and anomaly checks. Compatibility artifact fallback is explicit
 and historical-only by default. For `shakedown_50k`,
-`performance_100k`, and tip gates, the runner also validates control-owned
+`performance_100k`, `post_100k_to_tip`, and tip gates, the runner also validates control-owned
 telemetry with `validate_benchmark_telemetry.py` and requires
 `telemetry_quality=clean`. A failed command, missing product progress or
 artifact, rejected artifact, telemetry rejection, or suspicious regression
@@ -320,6 +339,18 @@ python3 Project/scripts/report.py \
 See `Nodes/Shared/testing/TEST_CAPABILITY_CONTRACT.md` for the artifact schema,
 allowed provenance classes, and the rule that denominators require a named suite
 with a version and hash.
+
+Crypto experiment readiness uses dedicated command keys:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section test-commands
+cd Nodes/<Port> && make test-crypto-vectors
+cd Nodes/<Port> && make test-block-connect-backend
+```
+
+These commands emit capability artifacts under `Nodes/Shared/testing/results/`.
+Missing rows are valid evidence of absence; do not promote old native-sync
+artifacts into BIP340 or libsecp256k1-equivalence passes.
 
 Test coverage reports are for standalone product-node quality: consensus,
 storage, P2P, runtime smoke, and status/reporting behavior. Benchmark gates,

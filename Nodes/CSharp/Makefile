@@ -6,6 +6,8 @@ DATA_DIR ?= ./data-csharp
 PEERS ?= 127.0.0.1:48333
 
 DOCKER_PROOF_VOLUME ?= csbitnode_proof_data
+POST_100K_TIP_VOLUME ?= csbitnode_post_100k_to_tip_data
+POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/csharp_native_crypto_docker_smoke_2026-06-01.json
 RESULT_DATE ?= $(shell date +%F)
 BENCHMARK_DEBUG_DIR ?= .benchmark-results
@@ -15,6 +17,10 @@ SUPPORTING_50K_RESULT ?= $(BENCHMARK_DEBUG_DIR)/csharp_docker_shakedown_50k_benc
 PRIMARY_100K_RESULT ?= $(BENCHMARK_DEBUG_DIR)/csharp_docker_performance_100k_benchmark_$(RESULT_DATE).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/csharp_script_corpus_$(RESULT_DATE).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/csharp_script_corpus_docker_$(RESULT_DATE).json
+TESTING_RESULTS_DIR ?= ../Shared/testing/results
+TESTING_CAPABILITY_EMITTER ?= python3 ../Shared/testing/tools/emit_crypto_capability_contract.py
+CRYPTO_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/csharp_crypto_vectors_$(RESULT_DATE).json
+BLOCK_CONNECT_BACKEND_RESULT ?= $(TESTING_RESULTS_DIR)/csharp_block_connect_backend_$(RESULT_DATE).json
 DOCKER_HEADERS_MAX ?= 200
 DOCKER_HEADER_BATCHES_MAX ?= 1
 DOCKER_BLOCKS_MAX ?= 2
@@ -32,7 +38,7 @@ VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benc
 DOCKER_REBUILD ?= 0
 BENCHMARK_GATE ?= baseline_5k
 
-.PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume docker-smoke-once export-snapshots clean
+.PHONY: build test docker-config docker-build docker-warm node-status sync-local csharp-node-native-sync csharp-node-native-status csharp-node-storage-proof csharp-node-script-corpus csharp-node-rocksdb-replay-proof csharp-node-native-crypto-test docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-csharp-native-crypto-proof docker-csharp-native-crypto-bounded-sync-proof docker-csharp-sync-supervisor docker-csharp-sync-status docker-csharp-sync-stop docker-csharp-sync-resume docker-smoke-once export-snapshots clean
 
 build:
 	$(DOTNET) build $(PROJECT) -c Release
@@ -50,6 +56,12 @@ test:
 
 csharp-node-native-crypto-test:
 	SECP256K1_BACKEND=native $(DOTNET) test $(TEST_PROJECT) -c Release
+
+test-crypto-vectors:
+	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port csharp --backend libsecp256k1-secp256k1.net --result-path $(CRYPTO_CAPABILITY_RESULT)
+
+test-block-connect-backend:
+	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port csharp --backend libsecp256k1-secp256k1.net --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 csharp-node-script-corpus:
 	SECP256K1_BACKEND=native $(DOTNET) run --project $(PROJECT) -c Release -- script-corpus --result-path $(SCRIPT_RESULT)
@@ -85,7 +97,7 @@ csharp-node-rocksdb-replay-proof:
 
 docker-csharp-native-crypto-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build csbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
-	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true; fi
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) SECP256K1_BACKEND=native \
 	  HEADERS_MAX=$(DOCKER_HEADERS_MAX) HEADER_BATCHES_MAX=$(DOCKER_HEADER_BATCHES_MAX) BLOCKS_MAX=$(DOCKER_BLOCKS_MAX) \
 	  PEERS=$(DOCKER_P2P_PEER) \
@@ -178,6 +190,23 @@ docker-proof-100k:
 	  PROOF_COMMAND="make docker-proof-100k" \
 	  POLL_SEC=10 \
 	  BENCHMARK_GATE=performance_100k
+
+docker-proof-post-100k-to-tip:
+	$(REFERENCE_P2P_CHECK)
+	$(MAKE) docker-csharp-native-crypto-proof \
+	  DOCKER_PROOF_VOLUME=$(POST_100K_TIP_VOLUME) \
+	  DOCKER_PROOF_PATH=$(BENCHMARK_DEBUG_DIR)/csharp_docker_post_100k_to_tip_debug_$(RESULT_DATE).json \
+	  DOCKER_HEADERS_MAX=$(POST_100K_TIP_TARGET) \
+	  DOCKER_HEADER_BATCHES_MAX=200 \
+	  DOCKER_BLOCKS_MAX=$(POST_100K_TIP_TARGET) \
+	  DOCKER_PREFETCH_DEPTH=4 \
+	  DOCKER_SCRIPT_RUNNER_MODE=parallel \
+	  CSBITNODE_SYNC_TIMING=1 \
+	  STANDARD_BENCHMARK_ARTIFACT=0 \
+	  PROOF_COMMAND="make docker-proof-post-100k-to-tip" \
+	  POLL_SEC=10 \
+	  BENCHMARK_GATE=post_100k_to_tip \
+	  PRESERVE_PROOF_VOLUME=1
 
 docker-csharp-native-crypto-bounded-sync-proof:
 	$(MAKE) docker-csharp-native-crypto-proof \

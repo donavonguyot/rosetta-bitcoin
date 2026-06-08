@@ -13,12 +13,16 @@
     "runtime": "swift:6.0-bookworm",
     "os_family": "Debian-family Swift image",
     "package_manager": "apt plus SwiftPM",
-    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "libsecp256k1-dev/libsecp256k1-1"]
+    "native_dependencies": [
+      "librocksdb-dev/librocksdb7.8",
+      "libsecp256k1-dev/libsecp256k1-1"
+    ]
   },
   "volumes": {
     "data": "swiftbitnode_data",
     "proof": "swiftbitnode_proof_data",
-    "supervisor": "swiftbitnode_supervisor_data"
+    "supervisor": "swiftbitnode_supervisor_data",
+    "post_100k_to_tip": "swiftbitnode_post_100k_to_tip_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Swift && make docker-config",
@@ -30,6 +34,7 @@
     "docker_proof_10k": "cd Nodes/Swift && make docker-proof-10k",
     "docker_proof_50k": "cd Nodes/Swift && make docker-proof-50k",
     "docker_proof_100k": "cd Nodes/Swift && make docker-proof-100k",
+    "docker_proof_post_100k_to_tip": "cd Nodes/Swift && make docker-proof-post-100k-to-tip",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_probe_external": null,
@@ -44,19 +49,35 @@
       "supported": true,
       "command": "cd Nodes/Swift && make docker-proof-local",
       "peer": "${REFERENCE_P2P_PEER}",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "external_manual": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+      "required_recorded_facts": [
+        "peer",
+        "disconnects",
+        "advertised_start_height",
+        "validated_height"
+      ]
     },
     "external_seed": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+      "required_recorded_facts": [
+        "selected_peer",
+        "seed_source",
+        "disconnects",
+        "validated_height"
+      ]
     }
   },
   "supervisor": {
@@ -66,7 +87,19 @@
     "check_sec": 5
   },
   "tick_json": {
-    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+    "required_fields": [
+      "phase",
+      "runtime_surface",
+      "peer_mode",
+      "peer",
+      "validated_height",
+      "header_height",
+      "stored_block_height",
+      "sync_status",
+      "delta_since_last",
+      "process_running",
+      "current_blocker"
+    ]
   },
   "proof_artifacts": {
     "script_corpus_result": "Nodes/Shared/conformance/results/swift_script_corpus_<YYYY-MM-DD>.json",
@@ -74,7 +107,10 @@
     "diagnostic_10k_result": "Nodes/Shared/conformance/results/swift_docker_diagnostic_10k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_debug_result": "Nodes/Swift/.benchmark-results/swift_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
     "performance_100k_debug_result": "Nodes/Swift/.benchmark-results/swift_docker_performance_100k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only."
+    "notes": "Swift proof_partial: native 45/45 script corpus and RocksDB-backed Docker status are present. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. docker_proof_10k remains diagnostic only post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
   },
-  "known_caveats": ["Swift supervisor is chunked local-reference catch-up, not external peer discovery", "Binary gate remains not_attempted until imported tip proof reaches current Reference tip"]
+  "known_caveats": [
+    "Swift supervisor is chunked local-reference catch-up, not external peer discovery",
+    "Binary gate remains not_attempted until imported tip proof reaches current Reference tip"
+  ]
 }

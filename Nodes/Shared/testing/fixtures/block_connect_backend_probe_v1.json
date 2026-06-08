@@ -1,0 +1,23 @@
+{
+  "case_total": 2,
+  "does_not_prove": "Bounded backend probe does not prove long-sync safety, tip maintenance, or every future script template.",
+  "fixtures": [
+    {
+      "backend_path": "ecdsa",
+      "fixture_id": "scripts.p2wpkh_739",
+      "required_observation": "block connect observes selected backend while verifying an ECDSA spend"
+    },
+    {
+      "backend_path": "schnorr_taproot",
+      "fixture_id": "scripts.p2tr_scriptpath_44295",
+      "required_observation": "block connect observes selected backend while verifying a Taproot/Schnorr spend"
+    }
+  ],
+  "provenance": [
+    "rb_live_chain_regression",
+    "proof_derived"
+  ],
+  "schema": "rb.block_connect_backend_probe_manifest.v1",
+  "suite_id": "rb.block_connect_backend_probe_v1",
+  "suite_version": "2026-06-07"
+}

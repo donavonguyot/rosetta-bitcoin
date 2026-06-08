@@ -1,0 +1,31 @@
+{
+  "case_total": 27,
+  "components": [
+    {
+      "case_total": 19,
+      "path": "Nodes/Shared/testing/fixtures/bip340/test-vectors.csv",
+      "provenance": [
+        "bip_standard_vector"
+      ],
+      "sha256": "01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb",
+      "source": "bitcoin/bips bip-0340/test-vectors.csv"
+    },
+    {
+      "case_total": 8,
+      "path": "Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json",
+      "provenance": [
+        "rb_synthetic_edge_case"
+      ],
+      "sha256": "d8f1e6fb3f0f873d4c47599ef2159c5896086c354a3a15a1d659de10e560b1af",
+      "source": "RosettaBitcoin native crypto fixture set"
+    }
+  ],
+  "does_not_prove": "Backend equivalence vectors do not prove every libsecp256k1 internal test, every consensus path, or block-connect usage.",
+  "reference_backend": {
+    "name": "bitcoin-core/secp256k1",
+    "url": "https://github.com/bitcoin-core/secp256k1"
+  },
+  "schema": "rb.crypto_backend_equivalence_manifest.v1",
+  "suite_id": "rb.crypto_backend_equivalence_v1",
+  "suite_version": "2026-06-07"
+}

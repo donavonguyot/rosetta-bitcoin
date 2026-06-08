@@ -13,14 +13,18 @@
     "runtime": "eclipse-temurin:21-jre",
     "os_family": "Debian-family Temurin image",
     "package_manager": "Maven/BuildKit cache plus apt in base image",
-    "native_dependencies": ["rocksdbjni via Maven", "secp256k1 native backend when enabled"]
+    "native_dependencies": [
+      "rocksdbjni via Maven",
+      "secp256k1 native backend when enabled"
+    ]
   },
   "volumes": {
     "data": "jbitnode_data",
     "proof": "jbitnode_proof_data",
     "proof_50k": "jbitnode_50k_proof_data",
     "proof_100k": "jbitnode_100k_proof_data",
-    "supervisor": "jbitnode_sync_data"
+    "supervisor": "jbitnode_sync_data",
+    "post_100k_to_tip": "jbitnode_post_100k_to_tip_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Java && docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml config",
@@ -32,6 +36,7 @@
     "docker_proof_10k": "cd Nodes/Java && make docker-java-supporting-10k-proof",
     "docker_proof_50k": "cd Nodes/Java && make docker-java-supporting-50k-proof",
     "docker_proof_100k": "cd Nodes/Java && make docker-java-primary-100k-proof",
+    "docker_proof_post_100k_to_tip": "cd Nodes/Java && make docker-java-post-100k-to-tip-proof",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_probe_external": null,
@@ -46,19 +51,35 @@
       "supported": true,
       "command": "cd Nodes/Java && make docker-java-native-crypto-proof",
       "peer": "${REFERENCE_P2P_PEER}",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "external_manual": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+      "required_recorded_facts": [
+        "peer",
+        "disconnects",
+        "advertised_start_height",
+        "validated_height"
+      ]
     },
     "external_seed": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+      "required_recorded_facts": [
+        "selected_peer",
+        "seed_source",
+        "disconnects",
+        "validated_height"
+      ]
     }
   },
   "supervisor": {
@@ -68,12 +89,26 @@
     "check_sec": 5
   },
   "tick_json": {
-    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+    "required_fields": [
+      "phase",
+      "runtime_surface",
+      "peer_mode",
+      "peer",
+      "validated_height",
+      "header_height",
+      "stored_block_height",
+      "sync_status",
+      "delta_since_last",
+      "process_running",
+      "current_blocker"
+    ]
   },
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/java_rocksdb_docker_local_peer_sync_2026-06-01.json",
-    "notes": "docker_proof_local, docker_proof_50k, and docker_proof_100k run local-reference Docker benchmark commands with native secp256k1, RocksDB, WAL enabled, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts."
+    "notes": "docker_proof_local, docker_proof_50k, and docker_proof_100k run local-reference Docker benchmark commands with native secp256k1, RocksDB, WAL enabled, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
   },
-  "known_caveats": ["External network probe command not standardized"]
+  "known_caveats": [
+    "External network probe command not standardized"
+  ]
 }

@@ -1,6 +1,7 @@
 DATA_DIR ?= ./data-cpp
 PEERS ?= 127.0.0.1:48333
 BUILD_DIR ?= build-core
+RESULT_DATE ?= $(shell date +%F)
 
 DOCKER_COMPOSE ?= docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 include ../Shared/docker/reference_topology.mk
@@ -8,6 +9,8 @@ VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benc
 DOCKER_BENCHMARK_PEERS ?= $(REFERENCE_P2P_PEER)
 REFERENCE_P2P_CHECK_PEER = $(DOCKER_BENCHMARK_PEERS)
 DOCKER_PROOF_VOLUME ?= cpbitnode_proof_data
+POST_100K_TIP_VOLUME ?= cpbitnode_post_100k_to_tip_data
+POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_PROOF_PATH ?= ../Shared/conformance/results/cpp_rocksdb_codec_v2_storage.json
 DOCKER_REBUILD ?= 0
 BENCHMARK_DEBUG_DIR ?= .benchmark-results
@@ -17,6 +20,10 @@ DOCKER_50K_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/cpp_docker_shakedown_50k_b
 DOCKER_100K_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/cpp_docker_performance_100k_benchmark_$(shell date +%F).json
 SCRIPT_RESULT ?= ../Shared/conformance/results/cpp_script_corpus_$(shell date +%F).json
 DOCKER_SCRIPT_RESULT ?= /shared/conformance/results/cpp_script_corpus_docker_$(shell date +%F).json
+TESTING_RESULTS_DIR ?= ../Shared/testing/results
+TESTING_CAPABILITY_EMITTER ?= python3 ../Shared/testing/tools/emit_crypto_capability_contract.py
+CRYPTO_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/cpp_crypto_vectors_$(RESULT_DATE).json
+BLOCK_CONNECT_BACKEND_RESULT ?= $(TESTING_RESULTS_DIR)/cpp_block_connect_backend_$(RESULT_DATE).json
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_PREFETCH_DEPTH ?= 4
@@ -30,7 +37,7 @@ DOCKER_SYNC_BLOCKS_MAX ?= 500
 DOCKER_SYNC_POLL_SEC ?= 120
 DOCKER_SYNC_CHECK_SEC ?= 5
 
-.PHONY: build test test-core test-wire test-runtime docker-config docker-build docker-warm node-status sync-local cpp-node-storage-proof cpp-node-script-corpus cpp-node-native-crypto-test docker-cpp-native-crypto-proof docker-cpp-supporting-5k-proof docker-cpp-supporting-10k-proof docker-cpp-supporting-50k-proof docker-cpp-primary-100k-proof docker-cpp-rocksdb-storage-proof docker-script-corpus docker-cpp-sync-supervisor docker-cpp-sync-status docker-cpp-sync-stop docker-cpp-sync-resume clean
+.PHONY: build test test-core test-wire test-runtime docker-config docker-build docker-warm node-status sync-local cpp-node-storage-proof cpp-node-script-corpus cpp-node-native-crypto-test docker-cpp-native-crypto-proof docker-cpp-supporting-5k-proof docker-cpp-supporting-10k-proof docker-cpp-supporting-50k-proof docker-cpp-primary-100k-proof docker-cpp-post-100k-to-tip-proof docker-cpp-rocksdb-storage-proof docker-script-corpus docker-cpp-sync-supervisor docker-cpp-sync-status docker-cpp-sync-stop docker-cpp-sync-resume clean
 
 build:
 	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
@@ -73,6 +80,12 @@ cpp-node-native-crypto-test:
 	cmake --build $(BUILD_DIR)-native
 	ctest --test-dir $(BUILD_DIR)-native --output-on-failure
 
+test-crypto-vectors:
+	$(TESTING_CAPABILITY_EMITTER) crypto-vectors --port cpp --backend libsecp256k1 --result-path $(CRYPTO_CAPABILITY_RESULT)
+
+test-block-connect-backend:
+	$(TESTING_CAPABILITY_EMITTER) block-connect-backend --port cpp --backend libsecp256k1 --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
+
 docker-cpp-native-crypto-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	$(DOCKER_COMPOSE) run --rm --no-deps \
@@ -82,11 +95,11 @@ docker-cpp-native-crypto-proof:
 docker-cpp-supporting-5k-proof:
 	$(REFERENCE_P2P_CHECK)
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
-	@docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then docker volume rm -f $(DOCKER_PROOF_VOLUME) >/dev/null 2>&1 || true; fi
 	DOCKER_PROOF_VOLUME=$(DOCKER_PROOF_VOLUME) DOCKER_BENCHMARK_TARGET=$(DOCKER_BENCHMARK_TARGET) \
 	  DOCKER_BENCHMARK_BLOCKS_MAX=$(DOCKER_BENCHMARK_BLOCKS_MAX) DOCKER_BENCHMARK_PEERS=$(DOCKER_BENCHMARK_PEERS) \
 	  DOCKER_BENCHMARK_PREFETCH_DEPTH=$(DOCKER_BENCHMARK_PREFETCH_DEPTH) DOCKER_BENCHMARK_RESULT=$(DOCKER_BENCHMARK_RESULT) \
-		  scripts/docker_5k_benchmark.sh
+	  PRESERVE_PROOF_VOLUME=$(PRESERVE_PROOF_VOLUME) scripts/docker_5k_benchmark.sh
 
 docker-cpp-supporting-10k-proof:
 	$(MAKE) docker-cpp-supporting-5k-proof \
@@ -111,6 +124,15 @@ docker-cpp-primary-100k-proof:
 	  DOCKER_BENCHMARK_TARGET=100000 \
 	  DOCKER_BENCHMARK_BLOCKS_MAX=100000 \
 	  BENCHMARK_GATE=performance_100k
+
+docker-cpp-post-100k-to-tip-proof:
+	$(MAKE) docker-cpp-supporting-5k-proof \
+	  DOCKER_PROOF_VOLUME=$(POST_100K_TIP_VOLUME) \
+	  DOCKER_BENCHMARK_RESULT=$(BENCHMARK_DEBUG_DIR)/cpp_docker_post_100k_to_tip_debug_$(RESULT_DATE).json \
+	  DOCKER_BENCHMARK_TARGET=$(POST_100K_TIP_TARGET) \
+	  DOCKER_BENCHMARK_BLOCKS_MAX=$(POST_100K_TIP_TARGET) \
+	  BENCHMARK_GATE=post_100k_to_tip \
+	  PRESERVE_PROOF_VOLUME=1
 
 docker-cpp-rocksdb-storage-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi

@@ -39,7 +39,8 @@ Before editing a port, read:
 18. The target port's README and blocker ledger.
 
 The official benchmark suite is `baseline_5k`, `shakedown_50k`,
-`performance_100k`, `tip_once`, and `tip_maintenance`. The first comparable
+`performance_100k`, `post_100k_to_tip`, `tip_once`, and `tip_maintenance`.
+The first comparable
 readiness standard is the **5k baseline**. A port is not baseline-ready until
 Project can show: RocksDB runtime truth, native crypto, Shared script corpus
 `45/45`, Docker local Reference P2P to height `5000`, fresh proof state, WAL
@@ -48,7 +49,9 @@ enabled, fixed benchmark knobs, `core_spendable_v1` UTXO accounting with
 `artifact_quality=canonical`.
 Long-run gates (`shakedown_50k`, `performance_100k`, and tip lanes) also require
 `telemetry_quality=clean`; `shakedown_50k` is the telemetry acceptance gate
-before any current `performance_100k` attempt.
+before any current `performance_100k` attempt. `post_100k_to_tip` is the
+immediate tip-readiness lane from canonical 100k state; `tip_once` remains the
+later empty-state audit.
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --list-sections

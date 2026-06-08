@@ -13,14 +13,18 @@
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
     "package_manager": "apt plus go",
-    "native_dependencies": ["librocksdb-dev/librocksdb7.8", "libsecp256k1-dev/libsecp256k1-1"]
+    "native_dependencies": [
+      "librocksdb-dev/librocksdb7.8",
+      "libsecp256k1-dev/libsecp256k1-1"
+    ]
   },
   "volumes": {
     "data": "gobitnode_data",
     "proof": "gobitnode_proof_data",
     "proof_50k": "gobitnode_50k_proof_data",
     "proof_100k": "gobitnode_100k_proof_data",
-    "supervisor": "gobitnode_sync_data"
+    "supervisor": "gobitnode_sync_data",
+    "post_100k_to_tip": "gobitnode_post_100k_to_tip_data"
   },
   "commands": {
     "docker_config": "cd Nodes/Go && make docker-config",
@@ -32,6 +36,7 @@
     "docker_proof_10k": "cd Nodes/Go && make docker-proof-10k",
     "docker_proof_50k": "cd Nodes/Go && make docker-proof-50k",
     "docker_proof_100k": "cd Nodes/Go && make docker-proof-100k",
+    "docker_proof_post_100k_to_tip": "cd Nodes/Go && make docker-proof-post-100k-to-tip",
     "docker_proof_tip_once": null,
     "docker_tip_maintenance": null,
     "docker_proof_rpc_replay": "cd Nodes/Go && make docker-proof-rpc-replay",
@@ -47,25 +52,47 @@
       "supported": true,
       "command": "cd Nodes/Go && make docker-proof-local",
       "peer": "${REFERENCE_P2P_PEER}",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "local_reference_rpc": {
       "supported": true,
       "command": "cd Nodes/Go && make docker-proof-rpc-replay",
       "peer": "http://host.docker.internal:48332",
-      "required_recorded_facts": ["peer", "validated_height", "header_height", "stored_block_height", "sync_status"]
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
     },
     "external_manual": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["peer", "disconnects", "advertised_start_height", "validated_height"]
+      "required_recorded_facts": [
+        "peer",
+        "disconnects",
+        "advertised_start_height",
+        "validated_height"
+      ]
     },
     "external_seed": {
       "supported": false,
       "command": null,
       "peer": null,
-      "required_recorded_facts": ["selected_peer", "seed_source", "disconnects", "validated_height"]
+      "required_recorded_facts": [
+        "selected_peer",
+        "seed_source",
+        "disconnects",
+        "validated_height"
+      ]
     }
   },
   "supervisor": {
@@ -75,14 +102,30 @@
     "check_sec": 5
   },
   "tick_json": {
-    "required_fields": ["phase", "runtime_surface", "peer_mode", "peer", "validated_height", "header_height", "stored_block_height", "sync_status", "delta_since_last", "process_running", "current_blocker"]
+    "required_fields": [
+      "phase",
+      "runtime_surface",
+      "peer_mode",
+      "peer",
+      "validated_height",
+      "header_height",
+      "stored_block_height",
+      "sync_status",
+      "delta_since_last",
+      "process_running",
+      "current_blocker"
+    ]
   },
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/go_storage_gate_2026-06-03.json",
     "local_reference_debug_result": "Nodes/Go/.benchmark-results/go_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "script_corpus_result": "Nodes/Shared/conformance/results/go_script_corpus_docker_2026-06-03.json",
-    "notes": "Go is proof_partial: Docker storage/status/smoke, native 45/45 script corpus, bounded local-reference RPC replay through height 10000, and official local Reference P2P benchmark commands. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. The P2P comparator uses the same storage/connect pipeline as replay but acquires block bytes through Bitcoin P2P getheaders/getdata."
+    "notes": "Go is proof_partial: Docker storage/status/smoke, native 45/45 script corpus, bounded local-reference RPC replay through height 10000, and official local Reference P2P benchmark commands. Active benchmark commands stream rb.port_progress; Project builds current benchmark artifacts. The P2P comparator uses the same storage/connect pipeline as replay but acquires block bytes through Bitcoin P2P getheaders/getdata post_100k_to_tip uses restored performance_100k checkpoint state; Project builds current tip-readiness artifacts."
   },
-  "known_caveats": ["The local Reference P2P comparator is a bounded proof harness, not live tip maintenance", "docker_smoke_once is a one-shot supervisor tick smoke, not persistent supervisor support", "Persistent live P2P supervisor is still a follow-up surface"]
+  "known_caveats": [
+    "The local Reference P2P comparator is a bounded proof harness, not live tip maintenance",
+    "docker_smoke_once is a one-shot supervisor tick smoke, not persistent supervisor support",
+    "Persistent live P2P supervisor is still a follow-up surface"
+  ]
 }
