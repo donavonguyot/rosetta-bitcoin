@@ -23,6 +23,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from post_100k_source_state import classify_source_state, source_state_ready
+
 
 ROOT = Path(__file__).resolve().parents[2]
 RESULTS_DIR = ROOT / "Nodes/Shared/conformance/results"
@@ -169,18 +171,6 @@ def rows(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -> li
 def one(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
     row = conn.execute(sql, params).fetchone()
     return dict(row) if row else None
-
-
-def extract_json_object(text: str) -> dict[str, Any] | None:
-    start = text.find("{")
-    end = text.rfind("}")
-    if start < 0 or end <= start:
-        return None
-    try:
-        payload = json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return None
-    return payload if isinstance(payload, dict) else None
 
 
 def rel(path: Path) -> str:
@@ -449,36 +439,6 @@ def reference_tip() -> dict[str, Any]:
     if not payload.get("ok"):
         raise RuntimeError(str(payload.get("error") or "reference tip check failed"))
     return payload
-
-
-def check_post_100k_source_state(command: str, log_path: Path) -> tuple[bool, str, dict[str, Any]]:
-    if not command:
-        return False, "missing post_100k source status command", {}
-    completed = subprocess.run(command, cwd=ROOT, shell=True, capture_output=True, text=True)
-    output = completed.stdout + completed.stderr
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text(output, encoding="utf-8")
-    if completed.returncode != 0:
-        return False, f"source status command failed; see {rel(log_path)}", {}
-    status = extract_json_object(output)
-    if status is None:
-        return False, f"source status output was not parseable JSON; see {rel(log_path)}", {}
-    height = int(num(status.get("validated_height"), -1))
-    state_hash = str(status.get("validated_hash") or "")
-    utxos = int(num(status.get("chainstate_utxo_count"), -1))
-    if height < 100000:
-        return False, f"source durable state height={height}; expected >=100000", status
-    if not state_hash:
-        return False, "source durable state hash is blank", status
-    if utxos <= 0:
-        return False, f"source durable state UTXO count={utxos}; expected positive", status
-    if height == 100000:
-        expected_hash = EXPECTED_HASHES["performance_100k"]
-        if state_hash != expected_hash:
-            return False, f"source durable state hash mismatch at 100000: {state_hash}", status
-        if utxos != 13154991:
-            return False, f"source durable state UTXO count={utxos}; expected 13154991 at 100000", status
-    return True, f"source durable state height={height} hash={state_hash} utxos={utxos}", status
 
 
 def ms_duration(ms: float | None) -> str:
@@ -931,9 +891,16 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         reference_finish: dict[str, Any] = {}
         if campaign["gate"] == "post_100k_to_tip":
             source_log = campaign_dir(campaign) / "logs" / f"{port}_source_state.log"
-            ok, reason, source_status = check_post_100k_source_state(str(entry.get("source_state_command") or ""), source_log)
+            source_status = classify_source_state(
+                conn,
+                port,
+                str(entry.get("source_state_volume") or ""),
+                None,
+                log_path=source_log,
+            )
+            reason = str(source_status.get("reason") or source_status.get("status") or "source state not ready")
             entry["source_state_status"] = source_status
-            if not ok:
+            if not source_state_ready(source_status):
                 entry["status"] = "not_ready"
                 entry["reason"] = reason
                 entry["errors"].append(f"{reason}; see {rel(source_log)}")

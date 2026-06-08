@@ -129,6 +129,14 @@ height/hash/UTXO count, and captures the local Reference finish height/hash
 without starting sync:
 
 ```bash
+python3 Project/scripts/report.py \
+  --db Project/project.db \
+  --section post-100k-readiness
+```
+
+Use the verbose preflight when JSON or structural command details are needed:
+
+```bash
 python3 Project/scripts/preflight_benchmark_gate.py \
   --db Project/project.db \
   --gate post_100k_to_tip \
@@ -141,6 +149,9 @@ Expected source-state statuses are `ready`, `state_missing`, `below_100k`,
 `hash_mismatch`, `utxo_mismatch`, `status_unparseable`, or
 `command_missing`. Missing or stale source state is a truthful `not_ready`
 condition for this lane, not something Project repairs during a campaign.
+`post_100k_to_tip` starts only from port-owned durable product state at or
+beyond 100k; if that state is missing, below 100k, or cannot report
+height/hash/UTXO truth, the port is not ready for this lane.
 
 ## Serialized Benchmark Campaigns
 

@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
 import subprocess
 from pathlib import Path
 from typing import Callable, Iterable
+
+from post_100k_source_state import classify_source_state, reference_finish_truth
 
 
 SECTIONS = (
@@ -34,6 +37,7 @@ SECTIONS = (
     "baseline-5k",
     "shakedown-50k",
     "performance-100k",
+    "post-100k-readiness",
     "post-100k-to-tip",
     "tip-once",
     "tip-maintenance",
@@ -82,6 +86,7 @@ SECTION_ALIASES = {
     "post-100k": "post-100k-to-tip",
     "100k-to-tip": "post-100k-to-tip",
     "tip-readiness": "post-100k-to-tip",
+    "tip-source-readiness": "post-100k-readiness",
     "runway": "consensus-runway",
     "consensus": "consensus-runway",
     "benchmarks": "benchmark-summary",
@@ -124,6 +129,20 @@ def tracked_result_paths() -> list[str]:
         text=True,
     )
     return sorted(line.strip() for line in completed.stdout.splitlines() if line.strip())
+
+
+def manifest_source_volume(port: str) -> str:
+    path = repo_root() / "Nodes/Shared/docker/ports" / f"{port}.docker.json"
+    if not path.exists():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return ""
+    volumes = payload.get("volumes")
+    if not isinstance(volumes, dict):
+        return ""
+    return str(volumes.get("proof_100k") or "").strip()
 
 
 def table(headers: Iterable[str], rows_: Iterable[Iterable[object]]) -> str:
@@ -672,6 +691,74 @@ def print_gate_matrix(connection: sqlite3.Connection, gate_id: str, title: str) 
     )
 
 
+def print_post_100k_readiness(connection: sqlite3.Connection) -> None:
+    print("## Post-100k Readiness")
+    print()
+    reference_finish = reference_finish_truth()
+    ports = rows(
+        connection,
+        """
+        select
+          dc.port,
+          coalesce(pl.lifecycle_status, 'active_contender') as lifecycle_status,
+          max(case when pcs.command_key = 'docker_proof_post_100k_to_tip' then pcs.supported else 0 end) as post_command_supported,
+          max(case when pcs.command_key = 'docker_proof_post_100k_to_tip' then pcs.command else '' end) as post_command,
+          max(case when pcs.command_key = 'docker_status_100k' then pcs.supported else 0 end) as status_command_supported,
+          max(case when pcs.command_key = 'docker_status_100k' then pcs.command else '' end) as status_command
+        from docker_contracts dc
+        left join port_lifecycle pl on pl.port = dc.port
+        left join port_command_surface pcs on pcs.port = dc.port
+          and pcs.command_key in ('docker_proof_post_100k_to_tip', 'docker_status_100k')
+        where dc.port <> 'reference'
+          and coalesce(pl.lifecycle_status, 'active_contender') = 'active_contender'
+        group by dc.port, coalesce(pl.lifecycle_status, 'active_contender')
+        order by dc.port
+        """,
+    )
+    rendered = []
+    ref_height = reference_finish.get("height", "") if reference_finish.get("ok") else ""
+    ref_hash = reference_finish.get("hash", "") if reference_finish.get("ok") else ""
+    for port_row in ports:
+        port = str(port_row["port"])
+        source_volume = manifest_source_volume(port)
+        source = classify_source_state(connection, port, source_volume, reference_finish)
+        rendered.append(
+            (
+                port,
+                port_row["lifecycle_status"],
+                "yes" if int(port_row["post_command_supported"] or 0) else "no",
+                "yes" if int(port_row["status_command_supported"] or 0) else "no",
+                source_volume,
+                source.get("status", ""),
+                source.get("height", ""),
+                source.get("hash", ""),
+                source.get("utxo_count", ""),
+                ref_height,
+                ref_hash,
+                source.get("reason", ""),
+            )
+        )
+    print(
+        table(
+            (
+                "port",
+                "lifecycle",
+                "post_cmd",
+                "status_cmd",
+                "source_volume",
+                "source_status",
+                "source_height",
+                "source_hash",
+                "source_utxos",
+                "ref_height",
+                "ref_hash",
+                "reason",
+            ),
+            rendered,
+        )
+    )
+
+
 def print_benchmark_suite(connection: sqlite3.Connection) -> None:
     print_benchmark_gates(connection)
     print()
@@ -936,6 +1023,7 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "baseline-5k": print_port_baseline_5k,
     "shakedown-50k": lambda connection: print_gate_matrix(connection, "shakedown_50k", "Shakedown 50k"),
     "performance-100k": lambda connection: print_gate_matrix(connection, "performance_100k", "Performance 100k"),
+    "post-100k-readiness": print_post_100k_readiness,
     "post-100k-to-tip": lambda connection: print_gate_matrix(connection, "post_100k_to_tip", "Post 100k To Tip"),
     "tip-once": lambda connection: print_gate_matrix(connection, "tip_once", "Tip Once"),
     "tip-maintenance": lambda connection: print_gate_matrix(connection, "tip_maintenance", "Tip Maintenance"),

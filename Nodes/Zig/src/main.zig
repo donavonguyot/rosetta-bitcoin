@@ -81,21 +81,33 @@ fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u
     defer allocator.free(db_path);
 
     var validated_height: []const u8 = "0";
+    var validated_hash: []const u8 = "";
+    var header_height: []const u8 = "0";
+    var header_hash: []const u8 = "";
+    var stored_block_height: []const u8 = "0";
+    var stored_block_hash: []const u8 = "";
     var backend: []const u8 = "none";
     var utxo_count: []const u8 = "0";
     var chainstate_status: []const u8 = "missing";
+    var sync_status: []const u8 = "starting";
     if (core.RocksDb.open(allocator, db_path)) |db0| {
         var db = db0;
         defer db.close();
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validated_height"))) |value| validated_height = value;
+        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validated_hash"))) |value| validated_hash = value;
+        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "header_height"))) |value| header_height = value;
+        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "header_hash"))) |value| header_hash = value;
+        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "stored_block_height"))) |value| stored_block_height = value;
+        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "stored_block_hash"))) |value| stored_block_hash = value;
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_backend"))) |value| backend = value;
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_utxo_count"))) |value| utxo_count = value;
+        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "sync_status"))) |value| sync_status = value;
         chainstate_status = if (std.mem.eql(u8, backend, "rocksdb")) "usable" else "missing";
     } else |_| {}
 
     try out.print(
-        "{{\"schema\":\"port.status.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"datadir\":\"{s}\",\"sync_status\":\"starting\",\"chainstate_backend\":\"{s}\",\"chainstate_status\":\"{s}\",\"validated_height\":{s},\"header_height\":0,\"stored_block_height\":0,\"chainstate_utxo_count\":{s},\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\"}}\n",
-        .{ surface, datadir, backend, chainstate_status, validated_height, utxo_count },
+        "{{\"schema\":\"port.status.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"datadir\":\"{s}\",\"sync_status\":\"{s}\",\"chainstate_backend\":\"{s}\",\"chainstate_status\":\"{s}\",\"validated_height\":{s},\"validated_hash\":\"{s}\",\"header_height\":{s},\"header_hash\":\"{s}\",\"stored_block_height\":{s},\"stored_block_hash\":\"{s}\",\"chainstate_utxo_count\":{s},\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\"}}\n",
+        .{ surface, datadir, sync_status, backend, chainstate_status, validated_height, validated_hash, header_height, header_hash, stored_block_height, stored_block_hash, utxo_count },
     );
 }
 
