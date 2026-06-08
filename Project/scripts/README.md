@@ -194,6 +194,44 @@ mode records failed or rejected ports, preserves candidates under the ignored
 campaign directory, and continues to the next port. It still updates current
 evidence only for artifacts that pass validation and Project preflight.
 
+## Parallel Development Campaigns
+
+Use the parallel campaign runner when the goal is fast development comparison or
+single-Reference topology stress. It warms ports serially, then launches the
+proof commands concurrently against the same local Reference P2P node. The
+default launch order is intentionally reverse-weighted:
+`ocaml,java,csharp,swift,go,cpp,zig,rust`.
+
+Parallel campaigns are not the serial audit lane. They do not update
+`Nodes/Shared/conformance/current_evidence.json`, rebuild or import
+`Project/project.db`, or replace current-evidence leaderboards. Logs and JSON
+summaries stay under ignored `Project/.campaigns/`.
+
+```bash
+python3 Project/scripts/run_parallel_benchmark_campaign.py \
+  --gate baseline_5k \
+  --dry-run
+
+python3 Project/scripts/run_parallel_benchmark_campaign.py \
+  --gate shakedown_50k \
+  --run
+
+python3 Project/scripts/run_parallel_benchmark_campaign.py \
+  --gate performance_100k \
+  --run \
+  --compare-to Project/.campaigns/<old>/parallel_reference_performance_100k/summary.json
+```
+
+The summary schema is `benchmark.parallel_experiment`. It records field wall
+time, per-port outcomes, final product progress, proof/warm log paths, and
+selected timing buckets. A comparison run writes `comparison.json` with
+per-port development classes such as `improved`, `regressed`, `recovered`, and
+`new_failure`.
+
+`Project/scripts/run_parallel_reference_smoke.py` remains as a compatibility
+wrapper for older prompts, but new work should call
+`run_parallel_benchmark_campaign.py` directly.
+
 Validate a benchmark artifact directly:
 
 ```bash
