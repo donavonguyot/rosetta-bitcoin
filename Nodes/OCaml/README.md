@@ -4,6 +4,18 @@
 This first phase intentionally stops before P2P sync and 5k readiness. It proves
 the risky native foundations first:
 
+For code structure and honest scope, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For imported OCaml posture, use Project reports from the repository root:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
+```
+
+Query Project for current imported runway posture instead of treating README
+proof notes as live status.
+
 - stock OCaml 5 on Debian/Bookworm-style Docker images
 - an owned minimal RocksDB C binding for runtime truth
 - native `libsecp256k1` through opam `secp256k1` `0.5.0`

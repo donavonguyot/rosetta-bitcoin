@@ -149,6 +149,7 @@ struct P2PMessage {
     let payload: Data
 }
 
+// Outbound P2P for proof/sync: deferred advanced negotiation and honest start_height.
 final class P2PClient: @unchecked Sendable {
     private let connection: TCPConnection
     private let startHeight: Int

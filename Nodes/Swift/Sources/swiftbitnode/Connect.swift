@@ -100,6 +100,7 @@ private struct SpendInput: Sendable {
     let prev: StoredUtxo
 }
 
+/// Block-local UTXO view, script verification, then atomic chainstate commit. Missing rules become validation blockers.
 enum BlockConnector {
     static func connect(raw: Data, height: Int, store: ChainStore, timing: inout TimingCollector) throws -> Bool {
         let state = try store.load()

@@ -122,6 +122,7 @@ let with_block_file datadir fn =
   let oc = open_out_gen [ Open_creat; Open_wronly; Open_trunc; Open_binary ] 0o644 path in
   Fun.protect ~finally:(fun () -> close_out_noerr oc) (fun () -> fn oc)
 
+(* Single-writer datadir lock for local-reference connect; overlapping writers corrupt runtime truth. *)
 let with_sync_lock datadir fn =
   Util.ensure_dir datadir;
   let path = Filename.concat datadir ".ocbitnode_sync.lock" in

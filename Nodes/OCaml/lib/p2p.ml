@@ -111,6 +111,7 @@ let connect peer =
   Unix.connect fd addr;
   { ic = Unix.in_channel_of_descr fd; oc = Unix.out_channel_of_descr fd }
 
+(* Deferred advanced negotiation: version/verack/sendheaders only; honest start_height in version_payload. *)
 let handshake client =
   send client "version" (version_payload ());
   let seen_version = ref false in

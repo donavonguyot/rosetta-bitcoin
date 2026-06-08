@@ -614,6 +614,7 @@ let verify_script_jobs ?script_pool tx_array txid_array height block_hash script
         (Connect_error
            (blocker ~height ~block_hash ~txid:txid_array.(tx_index) ~input:input_index ~missing_rule:"script_verify_failed" ~failure))
 
+(* Block-local UTXO view, script verification, then atomic chainstate commit. Missing rules -> validation blocker. *)
 let connect_block ~script_pool ~db ~height ~target ~raw ~expected_hash ~expected_prev ~file_number ~file_offset ~utxo_count =
   let block_started = now_ms () in
   let timing = empty_timing () in

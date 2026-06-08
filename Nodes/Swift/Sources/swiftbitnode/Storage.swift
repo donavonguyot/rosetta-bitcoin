@@ -79,6 +79,7 @@ struct StoreState: Codable, Sendable {
     var utxos: [String: StoredUtxo] = [:]
 }
 
+/// RocksDB runtime truth for the datadir; acquireLock enforces the single-writer datadir lock.
 final class ChainStore {
     let datadir: URL
     let blocksDir: URL
