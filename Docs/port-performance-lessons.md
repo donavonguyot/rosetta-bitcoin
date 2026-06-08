@@ -187,7 +187,7 @@ Minimum safe flow:
 ```bash
 # Python example; choose a work path outside the repo or under a scratch dir.
 cp -a /path/to/quiescent/Nodes/Python/data /tmp/pybitnode-bench-data
-cd /Users/donavonguyot/RB/Nodes/Python
+cd <workspace-root>/Nodes/Python
 SYNC_TIMING=1 PAR_SCRIPT_VERIFY=1 PAR_SCRIPT_THREADS=8 \
   .venv/bin/pybitnode-sync --datadir /tmp/pybitnode-bench-data \
   --connect-only --blocks-max 1 --log-level info

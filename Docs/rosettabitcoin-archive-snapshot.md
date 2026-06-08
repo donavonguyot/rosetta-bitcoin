@@ -2,7 +2,7 @@
 
 Snapshot time: `2026-06-06T20:42:56Z`
 
-Archive root: `/Users/donavonguyot/RosettaBitcoin`
+Archive root: `/Users/donavonguyot/ArchiveRosettaBitcoin`
 
 Cleaned size: `753M`
 
@@ -69,8 +69,8 @@ audio files, `roadmap.db`, and `rosetta-bitcoin/state/canonical.sqlite3`.
 Verify from the archive root:
 
 ```bash
-cd /Users/donavonguyot/RosettaBitcoin
-shasum -a 256 -c /Users/donavonguyot/RB/Docs/rosettabitcoin-archive-checksums.sha256
+cd /Users/donavonguyot/ArchiveRosettaBitcoin
+shasum -a 256 -c <workspace-root>/Docs/rosettabitcoin-archive-checksums.sha256
 ```
 
 ## Restore And Use Rules

@@ -1,9 +1,10 @@
 # Nodes Git Topology
 
-`~/RB` is a single root-owned monorepo. There is exactly one Git repository:
+The workspace root is a single root-owned monorepo. There is exactly one Git
+repository:
 
 ```text
-/Users/donavonguyot/RB/.git
+<workspace-root>/.git
 ```
 
 Nested Git repositories under `Nodes/<Port>/` are legacy cruft and must not be

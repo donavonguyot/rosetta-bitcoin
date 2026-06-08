@@ -6,15 +6,15 @@ root worktrees. Replace bracketed placeholders before use.
 ## Bring a port to the 5k baseline
 
 ```text
-You are working on [PORT_NAME] in /Users/donavonguyot/RB/Nodes/[PORT_DIR].
+You are working on [PORT_NAME] in <workspace-root>/Nodes/[PORT_DIR].
 
 Read first:
-- /Users/donavonguyot/RB/AGENTS.md
-- /Users/donavonguyot/RB/Docs/port-baseline-5k.md
-- /Users/donavonguyot/RB/Nodes/Shared/consensus/CONSENSUS_RUNWAY.md
-- /Users/donavonguyot/RB/Nodes/Shared/conformance/BENCHMARK_CONTRACT.md
-- /Users/donavonguyot/RB/Nodes/Shared/templates/port-baseline-5k/README.md
-- /Users/donavonguyot/RB/Nodes/Shared/docker/ports/[port].docker.json if it exists
+- <workspace-root>/AGENTS.md
+- <workspace-root>/Docs/port-baseline-5k.md
+- <workspace-root>/Nodes/Shared/consensus/CONSENSUS_RUNWAY.md
+- <workspace-root>/Nodes/Shared/conformance/BENCHMARK_CONTRACT.md
+- <workspace-root>/Nodes/Shared/templates/port-baseline-5k/README.md
+- <workspace-root>/Nodes/Shared/docker/ports/[port].docker.json if it exists
 
 Goal:
 Make this port clear the strict 5k baseline.
@@ -60,11 +60,11 @@ runway, not live blocker rediscovery.
 ```text
 You are working on [PORT_NAME] in [PORT_PATH].
 
-Read /Users/donavonguyot/RB/AGENTS.md first.
-Read /Users/donavonguyot/RB/Nodes/Shared/consensus/CONSENSUS_RUNWAY.md and
-/Users/donavonguyot/RB/Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json
+Read <workspace-root>/AGENTS.md first.
+Read <workspace-root>/Nodes/Shared/consensus/CONSENSUS_RUNWAY.md and
+<workspace-root>/Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json
 for the rule inventory. Read
-/Users/donavonguyot/RB/Docs/consensus-blockers-testnet4.md for historical
+<workspace-root>/Docs/consensus-blockers-testnet4.md for historical
 blocker provenance.
 
 Goal:
@@ -113,7 +113,7 @@ Return:
 ```text
 You are working on [PORT_NAME] in [PORT_PATH].
 
-Read /Users/donavonguyot/RB/AGENTS.md first.
+Read <workspace-root>/AGENTS.md first.
 
 Goal:
 Harvest a deterministic test fixture for blocker height [HEIGHT].
@@ -152,10 +152,10 @@ Return:
 You are comparing Python and Java for consensus rule [RULE].
 
 Read:
-- /Users/donavonguyot/RB/Nodes/Shared/consensus/CONSENSUS_RUNWAY.md
-- /Users/donavonguyot/RB/Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json
-- /Users/donavonguyot/RB/Docs/consensus-blockers-testnet4.md
-- /Users/donavonguyot/RB/Docs/script-semantics-gotchas.md
+- <workspace-root>/Nodes/Shared/consensus/CONSENSUS_RUNWAY.md
+- <workspace-root>/Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json
+- <workspace-root>/Docs/consensus-blockers-testnet4.md
+- <workspace-root>/Docs/script-semantics-gotchas.md
 - relevant Python and Java script/sighash/connect code
 
 Goal:
@@ -187,7 +187,7 @@ Return:
 ```text
 You cleared a consensus blocker in [PORT_NAME].
 
-Read /Users/donavonguyot/RB/AGENTS.md and the port's existing blocker ledger.
+Read <workspace-root>/AGENTS.md and the port's existing blocker ledger.
 
 Goal:
 Record enough information for the next follower port to reproduce the fix
@@ -225,7 +225,7 @@ Rules:
 ```text
 You are doing a read-only status/survey pass for [PORT_NAME].
 
-Read /Users/donavonguyot/RB/AGENTS.md first.
+Read <workspace-root>/AGENTS.md first.
 
 Goal:
 Report current progress and likely next blocker without changing live state.
@@ -236,7 +236,7 @@ Tasks:
    and binary_gate_status.
 3. If a script survey tool exists, run it in read-only mode only.
 4. Compare the next few blocker heights against the Shared rule ledger and
-   /Users/donavonguyot/RB/Docs/consensus-blockers-testnet4.md provenance notes.
+   <workspace-root>/Docs/consensus-blockers-testnet4.md provenance notes.
 5. For project-level status context, query Project reports instead of
    hand-maintained Markdown:
 
@@ -258,8 +258,8 @@ Rules:
 ```text
 You are working on [PORT_NAME] in [PORT_PATH].
 
-Read /Users/donavonguyot/RB/AGENTS.md first.
-Read /Users/donavonguyot/RB/Docs/port-performance-lessons.md.
+Read <workspace-root>/AGENTS.md first.
+Read <workspace-root>/Docs/port-performance-lessons.md.
 
 Goal:
 Port the proven Java/Python block-connect performance pattern without changing
@@ -305,17 +305,17 @@ Return:
 
 Use this prompt for comment, docblock, or port-architecture work. Copy the brief
 shape from
-`/Users/donavonguyot/RB/Nodes/Shared/code-documentation/agent_brief_template.md`
+`<workspace-root>/Nodes/Shared/code-documentation/agent_brief_template.md`
 and keep the batch ephemeral.
 
 ```text
-You are working on [PORT_NAME] in /Users/donavonguyot/RB/Nodes/[PORT_DIR].
+You are working on [PORT_NAME] in <workspace-root>/Nodes/[PORT_DIR].
 
 Read first:
-- /Users/donavonguyot/RB/AGENTS.md
-- /Users/donavonguyot/RB/Nodes/Shared/CODE_DOCUMENTATION.md
-- /Users/donavonguyot/RB/Nodes/Shared/code-documentation/review_questions.md
-- /Users/donavonguyot/RB/Nodes/Shared/code-documentation/agent_brief_template.md
+- <workspace-root>/AGENTS.md
+- <workspace-root>/Nodes/Shared/CODE_DOCUMENTATION.md
+- <workspace-root>/Nodes/Shared/code-documentation/review_questions.md
+- <workspace-root>/Nodes/Shared/code-documentation/agent_brief_template.md
 - [Shared contract paths named in the brief]
 
 Goal:

@@ -4,7 +4,7 @@
 
 # Public-boundary guards: old archive copies and local env files must not drift
 # into the deliverable workspace.
-/RosettaBitcoin/
+/ArchiveRosettaBitcoin/
 /rosetta-bitcoin/
 /rosetta-bitcoin-portal/
 /rosetta-bitcoin-book/

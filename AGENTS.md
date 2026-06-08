@@ -1,7 +1,8 @@
 # AGENTS.md — Nodes workspace guide for AI agents
 
-Quick context for agents working under `~/RB`. Read this before touching P2P
-handshake, sync, consensus validation, datadirs, or port-following work.
+Quick context for agents working from the RosettaBitcoin workspace root. Read
+this before touching P2P handshake, sync, consensus validation, datadirs, or
+port-following work.
 
 ---
 
@@ -129,7 +130,7 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
 python3 Project/scripts/preflight_test_coverage.py --db Project/project.db --all --level inventory
 ```
 
-This workspace has exactly one Git repository: `/Users/donavonguyot/RB/.git`.
+This workspace has exactly one Git repository: `<workspace-root>/.git`.
 All `Nodes/<Port>/` directories are root-owned source directories. Nested
 `.git/` directories are legacy cruft and must not be recreated.
 
@@ -139,15 +140,15 @@ All `Nodes/<Port>/` directories are root-owned source directories. Nested
 
 | Path | Package | Role |
 |------|---------|------|
-| `~/RB/Nodes/Python` | **pybitnode** | RocksDB/native-crypto reference implementation and provenance source |
-| `~/RB/Nodes/TypeScript` | **tsbitnode** | RocksDB/native-crypto follower |
-| `~/RB/Nodes/Cpp` | **cpbitnode** | Systems follower |
-| `~/RB/Nodes/CSharp` | **csbitnode** | Managed-runtime follower |
-| `~/RB/Nodes/Go` | **gobitnode** | Fast native follower |
-| `~/RB/Nodes/Java` | **jbitnode** | Clean Java follower and provenance source |
-| `~/RB/Nodes/OCaml` | **ocbitnode** | Stock OCaml 5 native/RocksDB follower foundation |
-| `~/RB/Nodes/Rust` | **rsbitnode** | Native follower |
-| `~/RB/Nodes/Elixir` | **exbitnode** | BEAM follower |
+| `<workspace-root>/Nodes/Python` | **pybitnode** | RocksDB/native-crypto reference implementation and provenance source |
+| `<workspace-root>/Nodes/TypeScript` | **tsbitnode** | RocksDB/native-crypto follower |
+| `<workspace-root>/Nodes/Cpp` | **cpbitnode** | Systems follower |
+| `<workspace-root>/Nodes/CSharp` | **csbitnode** | Managed-runtime follower |
+| `<workspace-root>/Nodes/Go` | **gobitnode** | Fast native follower |
+| `<workspace-root>/Nodes/Java` | **jbitnode** | Clean Java follower and provenance source |
+| `<workspace-root>/Nodes/OCaml` | **ocbitnode** | Stock OCaml 5 native/RocksDB follower foundation |
+| `<workspace-root>/Nodes/Rust` | **rsbitnode** | Native follower |
+| `<workspace-root>/Nodes/Elixir` | **exbitnode** | BEAM follower |
 
 All active nodes target **Bitcoin testnet4**. They can run in parallel only with
 isolated state and deliberate peer allocation.

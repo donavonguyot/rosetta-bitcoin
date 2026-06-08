@@ -1,7 +1,8 @@
 # RosettaBitcoin Workspace
 
-`~/RB` is a multi-port Bitcoin testnet4 validation workspace and a single
-root-owned monorepo. There is exactly one Git repository, at the workspace root.
+RosettaBitcoin is a multi-port Bitcoin testnet4 validation workspace and a
+single root-owned monorepo. There is exactly one Git repository, at the
+workspace root.
 
 ## Canonical Read Order
 
@@ -94,8 +95,7 @@ project claim belongs under `Nodes/Shared/conformance/results/`; see
 ## Public Release Posture
 
 This workspace is being prepared for eventual publication as RosettaBitcoin.
-The local path `~/RB` is a working-directory name, not a separate public
-project identity.
+The local working-directory path is not a separate public project identity.
 
 Public status claims must come from Project reports and current RB evidence,
 not hand-maintained tables or retired archive material. RosettaBitcoin uses the
@@ -110,9 +110,9 @@ public archive summary in
 
 ## Legacy Archive Boundary
 
-The retired `/Users/donavonguyot/RosettaBitcoin` workspace is retained
-archaeology, with a compressed backup already taken. `~/RB` is the current
-deliverable workspace and the source of operational truth.
+The retired `/Users/donavonguyot/ArchiveRosettaBitcoin` workspace is retained
+archaeology, with a compressed backup already taken. The current workspace is
+the deliverable workspace and the source of operational truth.
 
 Old RosettaBitcoin material may inform RB only after it is re-expressed as
 RB-owned documentation, contracts, fixtures, or compact proof evidence. Static

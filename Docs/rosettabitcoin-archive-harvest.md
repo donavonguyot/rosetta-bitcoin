@@ -1,14 +1,14 @@
 # RosettaBitcoin Archive Harvest
 
 This document records the Stage 1 harvest boundary for the retired
-`/Users/donavonguyot/RosettaBitcoin` workspace. A compressed backup exists, so
+`/Users/donavonguyot/ArchiveRosettaBitcoin` workspace. A compressed backup exists, so
 this workspace can now be treated as source archaeology instead of active
 project state.
 
-`/Users/donavonguyot/RB` remains the deliverable workspace. Old RosettaBitcoin
-material may inform language, contracts, fixtures, and compact evidence only
-after it is re-expressed in RB-owned form and reviewed under the current
-Project, Shared, and artifact-retention rules.
+The current RosettaBitcoin workspace remains the deliverable workspace. Old
+RosettaBitcoin material may inform language, contracts, fixtures, and compact
+evidence only after it is re-expressed in RB-owned form and reviewed under the
+current Project, Shared, and artifact-retention rules.
 
 ## Surface Classification
 

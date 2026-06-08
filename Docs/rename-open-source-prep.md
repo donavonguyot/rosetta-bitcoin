@@ -1,7 +1,7 @@
 # Rename/Open-Source Prep
 
 This document records the Stage 5 preparation boundary for eventually publishing
-this workspace as RosettaBitcoin. It does not rename `/Users/donavonguyot/RB`,
+this workspace as RosettaBitcoin. It does not rename the workspace directory,
 change Git remotes, publish a repository, or move code.
 
 ## Public Identity
@@ -40,7 +40,7 @@ Public claims must be backed by current RB evidence:
 - current evidence selected in `Nodes/Shared/conformance/current_evidence.json`;
 - compact proof JSON under `Nodes/Shared/conformance/results/`.
 
-Do not use the retired `/Users/donavonguyot/RosettaBitcoin` archive, IL,
+Do not use the retired `/Users/donavonguyot/ArchiveRosettaBitcoin` archive, IL,
 old proof ladders, old generated reports, comparison witnesses, or narrative
 assets as support for current claims. They may be cited only as provenance or
 archive context.
@@ -61,7 +61,7 @@ README table that implies those gates are complete.
 
 ## Public Archive Boundary
 
-The old `/Users/donavonguyot/RosettaBitcoin` workspace remains external
+The old `/Users/donavonguyot/ArchiveRosettaBitcoin` workspace remains external
 archaeology. Do not copy these into the public repository:
 
 - portal, book, or audio bulk assets;
@@ -73,6 +73,18 @@ archaeology. Do not copy these into the public repository:
 
 If a historical fact matters, rewrite it into an RB-native doc, Shared
 contract, fixture, or compact proof artifact before using it.
+
+## Rename Readiness
+
+The top-level `~/RosettaBitcoin` name has been freed by moving the retired
+workspace to `~/ArchiveRosettaBitcoin`. The actual filesystem rename is a later
+operational step, not part of this preparation pass.
+
+Before renaming the current workspace, stop Reference Core/OrbStack activity and
+close path-rooted tools such as editors, terminals, or agent sessions that hold
+open files under the old workspace path. Historical proof JSON and Project DB
+rows may keep old absolute paths as run metadata; do not rewrite them solely for
+the directory rename.
 
 ## Release Checklist
 
