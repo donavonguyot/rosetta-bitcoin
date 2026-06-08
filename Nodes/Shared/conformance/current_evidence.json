@@ -394,6 +394,30 @@
       "path": "Nodes/Shared/conformance/results/ocaml_control_performance_100k_benchmark_20260607T230208Z.json",
       "status": "current",
       "notes": "Current comparable ocaml performance_100k proof accepted by campaign performance_100k_20260607_154349."
+    },
+    {
+      "port": "zig",
+      "claim": "post_100k_to_tip",
+      "gate_id": "post_100k_to_tip",
+      "path": "Nodes/Shared/conformance/results/zig_control_post_100k_to_tip_benchmark_20260608T073447Z.json",
+      "status": "current",
+      "notes": "Current comparable zig post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_003131."
+    },
+    {
+      "port": "cpp",
+      "claim": "post_100k_to_tip",
+      "gate_id": "post_100k_to_tip",
+      "path": "Nodes/Shared/conformance/results/cpp_control_post_100k_to_tip_benchmark_20260608T073657Z.json",
+      "status": "current",
+      "notes": "Current comparable cpp post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_003131."
+    },
+    {
+      "port": "swift",
+      "claim": "post_100k_to_tip",
+      "gate_id": "post_100k_to_tip",
+      "path": "Nodes/Shared/conformance/results/swift_control_post_100k_to_tip_benchmark_20260608T074111Z.json",
+      "status": "current",
+      "notes": "Current comparable swift post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_003131."
     }
   ]
 }

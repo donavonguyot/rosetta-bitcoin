@@ -1,0 +1,123 @@
+{
+  "implementation": "zig product node",
+  "port": "zig",
+  "runtime_surface": "docker",
+  "benchmark_contract_version": 1,
+  "benchmark_gate": "post_100k_to_tip",
+  "benchmark_lane": "post_100k_to_tip_p2p",
+  "benchmark_kind": "post_100k_to_tip_p2p",
+  "target_height": 138504,
+  "target_label": "100k to tip",
+  "header_target_height": 138504,
+  "byte_source": "local_reference_p2p",
+  "reference_start_height": 100100,
+  "reference_start_hash": "000000000c7ff504765e910556f7f7b19790f775c13e3c427c052bf905a0e30b",
+  "reference_finish_height": 138504,
+  "reference_finish_hash": "000000000073a2c941dc61bee753ea0a4fe7311440562b26e93a31013cdc0c38",
+  "validated_height": 138504,
+  "validated_hash": "000000000073a2c941dc61bee753ea0a4fe7311440562b26e93a31013cdc0c38",
+  "blocks_fetched": 38404,
+  "blocks_connected": 38404,
+  "current_blocker": null,
+  "binary_gate_status": "not_attempted",
+  "chainstate_backend": "rocksdb",
+  "chainstate_utxo_count": 14116747,
+  "utxo_accounting_policy": "core_spendable_v1",
+  "native_crypto_backend": "libsecp256k1",
+  "proof_mode": "p2p_sync",
+  "peer_mode": "local_reference",
+  "peer": "bitcoin-core-testnet4:48333",
+  "script_runner_mode": "parallel",
+  "rocksdb_wal_disabled": false,
+  "prefetch_depth": 4,
+  "resume_supported": true,
+  "fresh_state": false,
+  "result": "passed",
+  "failures": [],
+  "captured_at": "2026-06-08T07:34:47Z",
+  "telemetry_schema": "benchmark.telemetry_tick.v1",
+  "telemetry_summary": {
+    "tick_count": 91,
+    "lifecycle_markers": {
+      "run_started": 0,
+      "container_started": 1,
+      "node_started": 2,
+      "first_peer_byte": 3,
+      "first_block_connected": 4,
+      "heartbeat": 1164,
+      "target_reached": 98566,
+      "run_finished": 98567
+    },
+    "heartbeat_max_gap_ms": 1160,
+    "heartbeat_target_ms": 15000,
+    "heartbeat_grace_ms": 5000,
+    "heartbeat_warning_ms": 15000,
+    "heartbeat_failure_ms": 20000,
+    "heartbeat_hard_failure_ms": 30000,
+    "heartbeat_limit_ms": 20000,
+    "phase_counts": {
+      "block_connect": 1,
+      "complete": 2,
+      "heartbeat": 84,
+      "peer_connect": 1,
+      "startup": 3
+    },
+    "stall_class_counts": {
+      "none": 91
+    },
+    "slow_blocks": [],
+    "heartbeat_gaps_over_target": 0,
+    "heartbeat_gaps_over_failure": 0,
+    "telemetry_quality": "clean"
+  },
+  "timing_summary": {
+    "total_ms": 98567,
+    "stage_totals_ms": {
+      "p2p_fetch": 22275,
+      "block_parse_validate": 16651,
+      "utxo_load": 16888,
+      "script_verify": 17280,
+      "utxo_apply": 5411,
+      "commit": 5411,
+      "block_connect_store_commit": 52928
+    },
+    "slow_blocks": []
+  },
+  "pipeline_timing_summary": {
+    "total_ms": 98567,
+    "stage_totals_ms": {
+      "p2p_fetch": 22275,
+      "block_parse_validate": 16651,
+      "utxo_load": 16888,
+      "script_verify": 17280,
+      "utxo_apply": 5411,
+      "commit": 5411,
+      "block_connect_store_commit": 52928
+    },
+    "slow_blocks": []
+  },
+  "status": {
+    "chain": "testnet4",
+    "sync_status": "blocks_current",
+    "header_height": 138504,
+    "validated_height": 138504,
+    "validated_hash": "000000000073a2c941dc61bee753ea0a4fe7311440562b26e93a31013cdc0c38",
+    "stored_block_height": 138504,
+    "chainstate_utxo_count": 14116747,
+    "current_blocker": null
+  },
+  "control_harness": {
+    "artifact_source": "project_control_harness",
+    "product_progress_prefix": "rb.port_progress",
+    "product_progress_count": 84,
+    "proof_log": "Project/.campaigns/post_100k_to_tip_20260608_003131/logs/zig_proof.log",
+    "telemetry_log": "Project/.campaigns/post_100k_to_tip_20260608_003131/logs/zig_control_telemetry.log",
+    "resume_source": "port_durable_state"
+  },
+  "source_state_gate": "performance_100k",
+  "source_state_origin": "port_durable_state",
+  "source_state_height": 100100,
+  "source_state_hash": "000000000c7ff504765e910556f7f7b19790f775c13e3c427c052bf905a0e30b",
+  "source_state_utxo_count": 13157163,
+  "skipped_consensus_rules": []
+}
