@@ -4,29 +4,11 @@ This ledger tracks Swift consensus and sync blockers. Passing benchmark gates is
 evidence, not a substitute for the binary end gate: independently validate and
 maintain testnet4 tip.
 
-## Imported Evidence
+## Historical Evidence Notes
 
-```text
-script_corpus:
-result: passed
-passed: 45
-failed: 0
-artifact: Nodes/Shared/conformance/results/swift_script_corpus_2026-06-04.json
-
-baseline_5k:
-result: passed
-validated_height: 5000
-chainstate_utxo_count: 4574
-chainstate_backend: rocksdb
-artifact: Nodes/Shared/conformance/results/swift_docker_baseline_5k_benchmark_2026-06-04.json
-
-diagnostic_10k:
-result: passed
-validated_height: 10000
-chainstate_utxo_count: 9519
-chainstate_backend: rocksdb
-artifact: Nodes/Shared/conformance/results/swift_docker_diagnostic_10k_benchmark_2026-06-04.json
-```
+Query Project for current imported Swift evidence, benchmark gates, and
+consensus runway posture. Older bounded proof summaries are historical handoff
+context and must not be treated as live gate status.
 
 ## Known Unproven Surfaces Before Tip Claim
 

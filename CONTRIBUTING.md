@@ -22,8 +22,8 @@ old archive notes for current claims.
 
 ## Evidence Rules
 
-- Keep ports independent. Do not treat Reference Core, btcg, another RB port,
-  or retired archive material as a validity oracle.
+- Keep ports independent. Do not treat Reference Core, btcg, another
+  RosettaBitcoin port, or retired archive material as a validity oracle.
 - Consensus changes should include or update fixtures, rule cards, blocker
   facts, and proof artifacts where applicable.
 - Proof artifacts that support project claims belong under
@@ -46,8 +46,9 @@ dependency trees, generated build output, Docker volumes, private env files, or
 nested `.git` histories.
 
 Historical RosettaBitcoin archive material is provenance only. If a historical
-fact matters, rewrite it into an RB-native doc, Shared contract, fixture, rule
-card, or compact proof artifact before using it to support a claim.
+fact matters, rewrite it into a RosettaBitcoin-native doc, Shared contract,
+fixture, rule card, or compact proof artifact before using it to support a
+claim.
 
 ## Pull Request Expectations
 

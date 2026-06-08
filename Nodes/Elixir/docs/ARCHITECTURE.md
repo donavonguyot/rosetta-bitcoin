@@ -14,10 +14,10 @@ Shared contracts own the cross-port rules:
 - [Docker runtime contract](../../Shared/docker/DOCKER_RUNTIME_CONTRACT.md)
 - [Consensus runway](../../Shared/consensus/CONSENSUS_RUNWAY.md)
 
-## Current Milestone (Honest Scope)
+## Implementation Scope
 
-Elixir is a baseline-retired supervised follower with live sync toward known
-consensus blockers:
+Elixir is a baseline-retired supervised follower with durable OTP and RocksDB
+implementation surfaces:
 
 - OTP `PeerSupervisor` / `Sync.Worker` for isolated sync tasks
 - RocksDB native chainstate (`Exbitnode.Db.RocksDbChainstateStore`)
@@ -25,8 +25,7 @@ consensus blockers:
 - block connect with validation blockers for unsupported script templates
 - Docker local-reference proof lanes (5k / 10k / 50k)
 
-It does **not** claim binary-gate tip maintenance. Query Project for imported
-runway posture instead of README milestone notes.
+Query Project for imported runway posture instead of README milestone notes.
 
 ## Module Layout
 

@@ -14,9 +14,9 @@ Shared contracts own the cross-port rules:
 - [Docker runtime contract](../../Shared/docker/DOCKER_RUNTIME_CONTRACT.md)
 - [Consensus runway](../../Shared/consensus/CONSENSUS_RUNWAY.md)
 
-## Current Milestone (Honest Scope)
+## Implementation Scope
 
-OCaml today proves native foundations and bounded benchmark lanes:
+OCaml exposes native foundation and bounded benchmark surfaces:
 
 - stock OCaml 5 with owned RocksDB C stubs (`lib/rocks.ml`, `ocbitnode_rocks_stubs.c`)
 - native `libsecp256k1` through opam `secp256k1`
@@ -25,9 +25,8 @@ OCaml today proves native foundations and bounded benchmark lanes:
 - transaction/block parsing and block connect with validation blockers
 - `local-reference-proof` — Reference P2P fetch + connect for baseline/shakedown targets
 
-It does **not** yet claim a durable unattended sync supervisor, binary-gate tip
-maintenance, or the full wire surface of mature follower ports. Treat README
-proof notes and this doc as structure, not live gate posture.
+Treat README proof notes and this doc as structure, not live gate posture.
+Project owns current benchmark and runway claims.
 
 ## Module Layout
 

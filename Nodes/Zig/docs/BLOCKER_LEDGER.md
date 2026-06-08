@@ -3,7 +3,7 @@
 ZigNode starts from the Shared consensus runway and should not rediscover known
 script blockers by syncing until failure.
 
-## Current Blockers
+## Historical Regression Anchors
 
 ### Shared Script Corpus Verifier
 
@@ -17,7 +17,7 @@ failure: cleared by Zig-native script verifier
 missing_rule:
 python_fix: see Nodes/Shared/consensus runway and port references
 test_fixture: Nodes/Shared/conformance/fixtures/scripts/manifest.json
-follower_notes: Current proof reports 45/45 with engine=zig_native, delegated=false, and crypto_backend=libsecp256k1. Keep this entry as the regression anchor before 5k baseline work.
+follower_notes: Project owns current imported script-corpus posture. Keep this entry as a regression anchor for Zig-native script verification.
 ```
 
 ### Local Reference P2P 5k Gate
@@ -32,5 +32,5 @@ failure: cleared by Zig local Reference P2P proof
 missing_rule:
 python_fix:
 test_fixture: baseline_5k_p2p benchmark gate
-follower_notes: Current Docker proof emits zig_docker_baseline_5k_benchmark_2026-06-05-zig-5k.json with validated_height=5000, chainstate_utxo_count=4574, fresh_state=true, WAL enabled, current_blocker=null, and binary_gate_status=not_attempted. Live external P2P discovery, tip maintenance, and binary gate remain out of scope.
+follower_notes: Project owns current imported benchmark posture. Live external P2P discovery, tip maintenance, and binary gate remain separate gates.
 ```

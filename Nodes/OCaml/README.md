@@ -1,8 +1,8 @@
 # ocbitnode
 
-`ocbitnode` is the OCaml follower foundation for RosettaBitcoin testnet4 node proof work.
-This first phase intentionally stops before P2P sync and 5k readiness. It proves
-the risky native foundations first:
+`ocbitnode` is the OCaml follower foundation for RosettaBitcoin testnet4 node
+proof work. This README describes command surfaces and implementation shape;
+Project reports own the current imported gate posture.
 
 For code structure and honest scope, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 For imported OCaml posture, use Project reports from the repository root:
@@ -57,7 +57,7 @@ ocbitnode script-corpus --manifest ../Shared/conformance/fixtures/scripts/manife
 ocbitnode script-corpus --manifest ../Shared/conformance/fixtures/scripts/manifest.json --result-path /tmp/ocaml_one.json --runtime-surface host --fixture-id scripts.p2tr_tapscript_71267
 ```
 
-## Current Boundary
+## Implementation Boundary
 
 The script-corpus command parses the fixture transaction and prevouts, dispatches
 the spend template, computes legacy/BIP143/Taproot sighashes, and verifies the
@@ -65,6 +65,6 @@ spend with OCaml consensus/script code backed by native `libsecp256k1`. It emits
 an importable `port.script_corpus_result.v1` artifact with verifier metadata
 `engine=ocbitnode-native-script` and `delegated=false`.
 
-The parser and block-connect prep modules are internal only. OCaml still makes
-no Docker/local Reference P2P 5k claim; `docker_proof_local` and larger proof
-commands remain `null` until sync exists.
+The parser and block-connect modules are internal implementation surfaces.
+Query Project for current Docker/local Reference gate posture instead of
+treating this README as live status.

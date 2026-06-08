@@ -2,7 +2,7 @@
 
 ZigNode is the Zig follower port for the RosettaBitcoin workspace.
 
-For code structure and scaffold scope, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+For code structure and implementation scope, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 For imported Zig posture, use Project reports from the repository root:
 
 ```bash
@@ -12,7 +12,7 @@ python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 ```
 
 Query Project for current imported runway posture instead of treating README
-scaffold notes as live status.
+implementation notes as live status.
 
 Public names:
 
@@ -30,7 +30,7 @@ Local prerequisites assume Homebrew:
 brew install zig rocksdb secp256k1
 ```
 
-Current scaffold status:
+Implementation surfaces:
 
 - RocksDB native storage smoke path is implemented.
 - Chainstate Codec v2 golden vector checks are implemented.
@@ -38,8 +38,8 @@ Current scaffold status:
 - Shared script corpus is implemented with a Zig-native verifier and reports
   `45/45` with `engine=zig_native`, `delegated=false`, and
   `crypto_backend=libsecp256k1`.
-- Local Reference P2P proof command emits contract-shaped not-ready JSON, but
-  it does not yet fetch/connect blocks.
+- Local Reference P2P proof commands emit product progress for Project-owned
+  benchmark artifact assembly.
 
 Useful commands:
 

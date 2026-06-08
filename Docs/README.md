@@ -57,8 +57,8 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
 - `core-btcg-comparison-lane.md` - Stage 4 boundary for using Core and future
   btcg evidence as comparison/witness material without treating it as port
   proof.
-- `rename-open-source-prep.md` - Stage 5 public-release boundary for the
-  eventual RosettaBitcoin rename/open-source pass.
+- `rename-open-source-prep.md` - Stage 5 publication boundary after the
+  completed workspace rename.
 - `public-archive-provenance.md` - public summary of the retired archive and
   the IL-to-evidence-framework transition.
 - `consensus-blockers-testnet4.md` - shared blocker provenance and fixture anchors.
@@ -114,4 +114,4 @@ facts must land in canonical docs, Shared contracts, fixtures, or compact
 evidence before they can influence current claims. Comparison-lane docs calibrate
 public claims, but they do not create a parallel authority system or replace
 port-owned evidence. Rename/open-source prep records publication blockers and
-claim boundaries; it does not publish or rename the project by itself.
+claim boundaries; it does not publish the project by itself.

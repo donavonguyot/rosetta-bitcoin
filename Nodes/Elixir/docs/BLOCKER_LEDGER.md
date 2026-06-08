@@ -4,12 +4,16 @@ Handoff notes for exbitnode. Current consensus runway truth comes from
 Project plus the Shared consensus rule ledger and script corpus; historical
 Python notes are provenance only.
 
-## Last recorded evidence
+## Historical handoff note
 
 ```bash
-cd ElixirNode
+cd Nodes/Elixir
 make status
 ```
+
+This ledger preserves historical blocker and milestone facts. Current Elixir
+baseline-retired posture and imported evidence are Project projections, not
+live status from this Markdown file.
 
 ## M1 — header sync from local Core
 

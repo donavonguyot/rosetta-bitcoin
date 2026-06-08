@@ -1,10 +1,8 @@
 # gobitnode
 
-`gobitnode` is a Go follower port for the RosettaBitcoin workspace. The current
-milestone is an offline/Core-native proof surface: status, storage proof,
-native crypto reporting, Docker smoke surfaces, native Shared script corpus,
-local-reference stored-block replay, and a bounded local Reference P2P
-comparator for the 5k supporting gate.
+`gobitnode` is a Go follower port for the RosettaBitcoin workspace. This README
+describes command surfaces and implementation shape; Project reports own the
+current imported gate posture.
 
 For code structure and design rationale, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 For imported Go posture, use Project reports from the repository root:
@@ -66,20 +64,9 @@ speaks Bitcoin P2P to `REFERENCE_P2P_PEER` from `Nodes/Shared/docker/reference_t
 through `getheaders`/`getdata`, then uses the same Go storage/connect pipeline.
 `docker-proof-rpc-replay` preserves the older local Reference RPC replay lane.
 
-The current Docker P2P 5k comparator starts from a fresh Docker volume, streams
-`rb.port_progress`, stores and validates through height 5000, and is classified
-by Project as comparable after the control harness builds the current artifact:
-
-```text
-artifact_source: project_control_harness
-runtime_surface: docker
-peer_mode: local_reference
-validated_height: 5000
-validated_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
-sync_status: blocks_current
-current_blocker: null
-native_crypto_backend: libsecp256k1
-```
+Docker P2P comparator artifacts are built by the Project control harness from
+product progress. Query Project for the current accepted artifact, validated
+height, comparability, and timing posture.
 
 The historical Docker RPC replay proof started from a fresh Docker volume,
 stored blocks through height 10000, and validated/connected through height 10000:

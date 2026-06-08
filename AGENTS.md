@@ -544,10 +544,18 @@ record exact blocker -> add/link Shared fixture and rule card
 
 ---
 
-## Current state (conversation snapshot)
+## Mission-control and live inspection examples
 
-Static status here will go stale quickly. Use the commands below before making
-claims about current progress:
+Use Project reports before making all-port or gate-status claims:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+```
+
+Use port-local status commands only when you need live runtime truth for a
+specific datadir or process:
 
 ```bash
 cd Nodes/Python && .venv/bin/pybitnode-status --state-path ./data/chainstate-rocksdb

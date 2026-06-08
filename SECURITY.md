@@ -27,6 +27,6 @@ When reporting, include:
 - expected and observed behavior;
 - any relevant fixture, proof artifact, log excerpt, or Project report.
 
-Security reports are evaluated against RB-owned evidence. Another port,
-Reference Core, btcg, old IL, or archive material may help explain a report, but
-they do not clear or prove a RosettaBitcoin claim by themselves.
+Security reports are evaluated against RosettaBitcoin-owned evidence. Another
+port, Reference Core, btcg, old IL, or archive material may help explain a
+report, but they do not clear or prove a RosettaBitcoin claim by themselves.

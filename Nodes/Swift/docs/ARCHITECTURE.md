@@ -14,9 +14,9 @@ Shared contracts own the cross-port rules:
 - [Docker runtime contract](../../Shared/docker/DOCKER_RUNTIME_CONTRACT.md)
 - [Consensus runway](../../Shared/consensus/CONSENSUS_RUNWAY.md)
 
-## Current Milestone (Honest Scope)
+## Implementation Scope
 
-SwiftNode targets the strict 5k Project interface with a growing connect stack:
+SwiftNode exposes proof and connect surfaces that Project can import and rank:
 
 - `status`, `script-corpus`, and `proof-local` CLI surfaces
 - RocksDB-backed `ChainStore` with Codec v2-style keys
@@ -25,7 +25,7 @@ SwiftNode targets the strict 5k Project interface with a growing connect stack:
 - local Reference P2P fetch + connect with benchmark telemetry
 - `sync-supervisor` for chunked unattended catch-up experiments
 
-Binary testnet4 tip maintenance remains outside the initial baseline scope.
+Binary testnet4 tip maintenance remains a separate Project gate.
 Query Project for imported runway posture instead of treating README notes as
 live gate status.
 

@@ -1,9 +1,9 @@
 # zigbitnode Architecture
 
-This document maps the Zig implementation at its current scaffold stage: module
-roles, proof commands, and the boundaries that will expand when live fetch/connect
-lands. For commands, use [README.md](../README.md). For live mission-control
-posture, query Project reports instead of reading this file as status.
+This document maps the Zig implementation: module roles, proof commands, and
+the boundaries that will expand as live fetch/connect matures. For commands, use
+[README.md](../README.md). For live mission-control posture, query Project
+reports instead of reading this file as status.
 
 Shared contracts own the cross-port rules:
 
@@ -14,9 +14,9 @@ Shared contracts own the cross-port rules:
 - [Docker runtime contract](../../Shared/docker/DOCKER_RUNTIME_CONTRACT.md)
 - [Consensus runway](../../Shared/consensus/CONSENSUS_RUNWAY.md)
 
-## Current Milestone (Honest Scope)
+## Implementation Scope
 
-ZigNode today proves:
+ZigNode exposes:
 
 - RocksDB native storage smoke and status JSON
 - Chainstate Codec v2 vector checks
@@ -25,9 +25,8 @@ ZigNode today proves:
 - Docker proof/supervisor command surfaces
 - Contract-shaped local-reference proof scaffolding
 
-It does **not** yet claim a full live P2P sync backbone, independent block
-connect to tip, or binary-gate completion. Document and implement against that
-scope until fetch/connect modules match Go/Rust comparator maturity.
+Do not treat this structure map as a current gate claim. Project owns imported
+benchmark, runway, and binary-gate posture.
 
 ## Module Layout
 

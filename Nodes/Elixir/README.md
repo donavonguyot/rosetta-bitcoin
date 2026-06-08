@@ -40,7 +40,7 @@ corpus before live-sync discovery.
 ## Commands
 
 ```bash
-cd ElixirNode
+cd Nodes/Elixir
 
 # Fetch deps, compile, run tests
 make test
@@ -120,7 +120,7 @@ one-shot supervisor so long runs emit both `AGENT_LOOP_TICK_chatreport` and
 - **OTP:** `PeerServer` under `PeerSupervisor` (temporary child); `Sync.Worker` GenServer serializes `sync-local`
 - Block sync through height **3411** on local Core (`HEADERS_MAX=0 BLOCKS_MAX=1000`); no consensus blocker yet
 
-## M5 scope (in progress)
+## M5 scope (historical)
 
 - **Peer reconnect:** `BlockSync` retries block download on transport errors (`:closed`, timeout, etc.) with fresh TCP handshake
 - **P2TR key-path:** BIP341 TapSchnorr sighash + BIP340 Schnorr verification; fixture at block **6975**
@@ -130,7 +130,7 @@ one-shot supervisor so long runs emit both `AGENT_LOOP_TICK_chatreport` and
 HEADERS_MAX=0 BLOCKS_MAX=1000 make sync-local
 ```
 
-## M6 next
+## Historical next-step notes
 
 - Continue sync past P2TR toward **P2WSH/multisig ~25207+** and nested segwit **~27903**
 - P2TR script-path (BIP342 tapscript subset)

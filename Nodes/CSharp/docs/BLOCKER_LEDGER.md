@@ -4,25 +4,17 @@ Handoff notes for csbitnode. Current consensus runway truth comes from Project
 plus the Shared consensus rule ledger and script corpus; historical Python notes
 are provenance only.
 
-## Last recorded evidence
+## Historical evidence notes
 
 ```bash
 cd Nodes/CSharp
 make node-status
 ```
 
-Latest durable supervisor frontier:
-
-```text
-validated_height: 22829
-current_blocker: 22830 P2TR script-path / BIP342
-sync_surface: Docker persistent supervisor, RocksDB chainstate, native crypto
-baseline_5k_p2p: passed in Docker local Reference P2P proof
-baseline_5k_p2p_artifact: Nodes/Shared/conformance/results/csharp_docker_baseline_5k_benchmark_2026-06-04.json
-baseline_5k_p2p_validated_height: 5000
-baseline_5k_p2p_validated_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
-binary_gate_status: not_attempted
-```
+This ledger preserves durable blocker facts and implementation handoff notes.
+Current C# status, benchmark gates, and consensus runway posture are Project
+projections; query `Project/project.db` instead of treating this ledger as live
+status.
 
 The old blocker serialization failure was not consensus. It was fixed by
 persisting `ValidationBlockerRecord` instead of serializing the raw

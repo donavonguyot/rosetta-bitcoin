@@ -1,27 +1,8 @@
 # gobitnode blocker ledger
 
-Go has no current blocker inside the bounded local-reference proof through
-height 10000. The current milestone remains offline/Core-native proof plus
-bounded local-reference replay and a 5k local Reference P2P comparator; this is
-not live P2P tip maintenance or binary-gate completion.
-
-## Last recorded evidence
-
-```text
-runtime_surface: docker
-peer_mode: local_reference
-peer: see proof artifact; current reruns use REFERENCE_P2P_PEER
-evidence_lane: baseline_5k_p2p
-header_height: 5000
-stored_block_height: 5000
-validated_height: 5000
-validated_hash: 000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2
-sync_status: blocks_current
-current_blocker: null
-chainstate_backend: rocksdb
-native_crypto_backend: libsecp256k1
-proof_result: Nodes/Shared/conformance/results/go_docker_baseline_5k_benchmark_2026-06-04.json
-```
+This ledger preserves durable Go blocker facts. Query Project for current
+imported Go evidence, benchmark gates, and consensus runway posture; bounded
+proof summaries in this ledger are historical handoff context, not live status.
 
 ## Cleared: height 739 — first spend-path script verification
 

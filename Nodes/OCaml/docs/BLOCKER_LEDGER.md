@@ -1,15 +1,8 @@
 # OCaml Blocker Ledger
 
-No live-chain blockers have been discovered for `ocbitnode`.
-
-Foundation status:
-
-```text
-binary_gate_status: not_attempted
-p2p_sync: not_implemented
-current_phase: native foundation
-current_blocker: none
-```
+No live-chain blockers have been recorded here for `ocbitnode`. Query Project
+for current imported OCaml evidence, benchmark gates, and consensus runway
+posture; this ledger is only for durable blocker facts.
 
 When a real P2P or consensus blocker appears, record:
 
@@ -25,4 +18,3 @@ python_fix:
 test_fixture:
 follower_notes:
 ```
-

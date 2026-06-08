@@ -1,12 +1,8 @@
 # rsbitnode
 
-`rsbitnode` is the Rust follower port for the RosettaBitcoin workspace. The
-current milestone is a Core-native scaffold plus bounded local-reference proof:
-RocksDB-owned storage metadata, status JSON, storage proof output, Chainstate
-Codec v2 vector checks, native crypto vector checks, Docker smoke/proof
-surfaces, raw block/transaction parsing, and a Rust script-corpus harness for
-the shared 45-fixture Shared corpus. Rust also exposes a narrow local Reference
-P2P comparator for the 5k supporting gate.
+`rsbitnode` is the Rust follower port for the RosettaBitcoin workspace. This
+README describes command surfaces and implementation shape; Project reports own
+the current imported gate posture.
 
 For code structure and design rationale, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 For imported Rust posture, use Project reports from the repository root:

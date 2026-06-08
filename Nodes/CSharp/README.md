@@ -153,21 +153,11 @@ DOCKER_SYNC_VOLUME=csbitnode_sync_smoke_data DOCKER_SYNC_BLOCKS_MAX=2 DOCKER_SYN
 Only export a fresh proof artifact after a useful checkpoint or blocker is understood;
 do not use fresh proof volumes as the normal blocker-hunting loop.
 
-## Current milestone
+## Implementation surface
 
-Current durable status:
-
-```text
-validated_height: 22829
-header_height: 10000+ evidence from bounded proof, higher during supervisor run
-current_blocker: block 22830 P2TR script-path / BIP342
-binary_gate_status: not_attempted
-```
-
-CSharp has cleared the first Taproot key-path range and 10k bounded sync
-surface with native RocksDB and native crypto. The next consensus rule is
-Taproot script-path validation, which should start with a first-class C#
-diagnostic/fixture for block 22830 before implementing tapscript.
+This README describes csbitnode commands and durable implementation shape, not
+current gate posture. Query Project for imported status, benchmark gates, and
+consensus runway state before making readiness or blocker claims.
 
 Implemented surface:
 
