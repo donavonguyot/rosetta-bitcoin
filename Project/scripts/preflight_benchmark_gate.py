@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sqlite3
 import sys
 from pathlib import Path
@@ -74,6 +75,9 @@ POST_100K_TO_TIP_ARTIFACT_FIELDS = (
     "source_state_utxo_count",
 )
 
+EXPECTED_100K_HASH = "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1"
+EXPECTED_100K_UTXO_COUNT = 13154991
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -83,6 +87,11 @@ def parse_args() -> argparse.Namespace:
     group.add_argument("--port", help="Port to preflight")
     group.add_argument("--all", action="store_true", help="Preflight all non-reference ports")
     parser.add_argument("--json", action="store_true", help="Emit JSON")
+    parser.add_argument(
+        "--check-source-state",
+        action="store_true",
+        help="For post_100k_to_tip, run docker_status_100k and classify 100k source-state readiness",
+    )
     return parser.parse_args()
 
 
@@ -157,6 +166,124 @@ def load_json_object(raw: str, label: str, errors: list[str]) -> dict[str, Any]:
     return parsed
 
 
+def extract_json_object(text: str) -> dict[str, Any] | None:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        parsed = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def reference_finish_truth() -> dict[str, Any]:
+    completed = subprocess.run(
+        [sys.executable, "Project/scripts/reference_tip.py", "--check-local-reference", "--json"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return {"ok": False, "error": (completed.stdout + completed.stderr).strip()}
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        return {"ok": False, "error": f"reference_tip output is not JSON: {exc}"}
+    return payload if isinstance(payload, dict) else {"ok": False, "error": "reference_tip output must be a JSON object"}
+
+
+def command_surface_row(conn: sqlite3.Connection, port: str, command_key: str) -> dict[str, Any] | None:
+    return one(
+        conn,
+        """
+        SELECT supported, command
+        FROM port_command_surface
+        WHERE port = ? AND command_key = ?
+        """,
+        (port, command_key),
+    )
+
+
+def classify_source_state(
+    conn: sqlite3.Connection,
+    port: str,
+    source_state_volume: str,
+    reference_finish: dict[str, Any] | None,
+) -> dict[str, Any]:
+    command = command_surface_row(conn, port, "docker_status_100k")
+    result: dict[str, Any] = {
+        "status": "command_missing",
+        "reason": "",
+        "command_key": "docker_status_100k",
+        "command": "",
+        "source_state_volume": source_state_volume,
+        "height": -1,
+        "hash": "",
+        "utxo_count": -1,
+        "reference_finish": reference_finish or {},
+    }
+    if not source_state_volume:
+        result["status"] = "state_missing"
+        result["reason"] = "missing volumes.proof_100k"
+        return result
+    if not command or not as_bool(command.get("supported")) or not str(command.get("command") or "").strip():
+        result["reason"] = "missing supported docker_status_100k command"
+        return result
+
+    command_text = str(command["command"]).strip()
+    result["command"] = command_text
+    completed = subprocess.run(command_text, cwd=ROOT, shell=True, capture_output=True, text=True)
+    output = completed.stdout + completed.stderr
+    result["exit_code"] = completed.returncode
+    result["output_excerpt"] = output[-2000:]
+    if completed.returncode != 0:
+        result["status"] = "state_missing"
+        result["reason"] = "docker_status_100k failed; durable state may be missing"
+        return result
+    payload = extract_json_object(output)
+    if payload is None:
+        result["status"] = "status_unparseable"
+        result["reason"] = "docker_status_100k output did not contain a JSON object"
+        return result
+
+    try:
+        height = int(payload.get("validated_height") or -1)
+    except (TypeError, ValueError):
+        height = -1
+    state_hash = str(payload.get("validated_hash") or "")
+    try:
+        utxos = int(payload.get("chainstate_utxo_count") or payload.get("utxo_count") or -1)
+    except (TypeError, ValueError):
+        utxos = -1
+    result.update(
+        {
+            "height": height,
+            "hash": state_hash,
+            "utxo_count": utxos,
+            "sync_status": payload.get("sync_status", ""),
+            "current_blocker": payload.get("current_blocker"),
+        }
+    )
+    if height < 0 or not state_hash or utxos < 0:
+        result["status"] = "state_missing"
+        result["reason"] = "source status lacks height/hash/UTXO truth"
+    elif height < 100000:
+        result["status"] = "below_100k"
+        result["reason"] = f"source state height={height}; expected >=100000"
+    elif height == 100000 and state_hash != EXPECTED_100K_HASH:
+        result["status"] = "hash_mismatch"
+        result["reason"] = f"source state hash mismatch at 100000: {state_hash}"
+    elif height == 100000 and utxos != EXPECTED_100K_UTXO_COUNT:
+        result["status"] = "utxo_mismatch"
+        result["reason"] = f"source state UTXO count={utxos}; expected {EXPECTED_100K_UTXO_COUNT}"
+    else:
+        result["status"] = "ready"
+        result["reason"] = f"source state height={height} hash={state_hash} utxos={utxos}"
+    return result
+
+
 def manifest_volumes(port: str, errors: list[str]) -> dict[str, Any]:
     path = ROOT / "Nodes/Shared/docker/ports" / f"{port}.docker.json"
     if not path.exists():
@@ -218,7 +345,14 @@ def required_artifact_fields(gate: dict[str, Any]) -> list[str]:
     return fields
 
 
-def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) -> dict[str, Any]:
+def preflight_port(
+    conn: sqlite3.Connection,
+    gate: dict[str, Any],
+    port: str,
+    *,
+    check_source_state: bool = False,
+    reference_finish: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
     expected_reference_peer = reference_topology().get("REFERENCE_P2P_PEER", "")
@@ -362,6 +496,9 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         source_state_volume = str(volumes.get("proof_100k") or "").strip()
         if not source_state_volume:
             errors.append("post_100k_to_tip requires volumes.proof_100k as the source durable state")
+        status_command = command_surface_row(conn, port, "docker_status_100k")
+        if status_command is None or not as_bool(status_command.get("supported")):
+            errors.append("post_100k_to_tip requires supported docker_status_100k command for source-state readiness checks")
 
     if gate["durable_required"]:
         durable_volume = source_state_volume if gate["gate_id"] == "post_100k_to_tip" else str(contract["proof_volume"]).strip()
@@ -434,7 +571,7 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
             "next official run should report local_reference"
         )
 
-    return {
+    result = {
         "gate": gate["gate_id"],
         "port": port,
         "lifecycle_status": gate_row.get("lifecycle_status") if gate_row else "",
@@ -460,6 +597,9 @@ def preflight_port(conn: sqlite3.Connection, gate: dict[str, Any], port: str) ->
         "errors": errors,
         "warnings": warnings,
     }
+    if check_source_state and gate["gate_id"] == "post_100k_to_tip":
+        result["source_state_check"] = classify_source_state(conn, port, source_state_volume, reference_finish)
+    return result
 
 
 def print_text(results: list[dict[str, Any]]) -> None:
@@ -498,6 +638,20 @@ def print_text(results: list[dict[str, Any]]) -> None:
             print(f"  proof_volume={result['proof_volume']}")
         if result.get("source_state_volume"):
             print(f"  source_state_volume={result['source_state_volume']}")
+        source_state = result.get("source_state_check") or {}
+        if source_state:
+            print(
+                "  source_state_check="
+                f"{source_state.get('status')} "
+                f"height={source_state.get('height')} "
+                f"utxos={source_state.get('utxo_count')} "
+                f"reason={source_state.get('reason', '')}"
+            )
+            if source_state.get("command"):
+                print(f"  source_state_command={source_state['command']}")
+            reference_finish = source_state.get("reference_finish") or {}
+            if reference_finish:
+                print(f"  reference_finish={json.dumps(reference_finish, sort_keys=True)}")
         if result.get("supervisor_volume"):
             print(f"  supervisor_volume={result['supervisor_volume']}")
         local_reference = result.get("local_reference") or {}
@@ -532,8 +686,21 @@ def main() -> int:
     if gate is None:
         raise SystemExit(f"missing benchmark gate: {args.gate}")
 
+    if args.check_source_state and gate_id != "post_100k_to_tip":
+        raise SystemExit("--check-source-state is only supported for post_100k_to_tip")
+    reference_finish = reference_finish_truth() if args.check_source_state else None
+
     ports = benchmark_ports(conn) if args.all else [args.port]
-    results = [preflight_port(conn, gate, port) for port in ports]
+    results = [
+        preflight_port(
+            conn,
+            gate,
+            port,
+            check_source_state=args.check_source_state,
+            reference_finish=reference_finish,
+        )
+        for port in ports
+    ]
     error_count = sum(len(result["errors"]) for result in results)
     warning_count = sum(len(result["warnings"]) for result in results)
 

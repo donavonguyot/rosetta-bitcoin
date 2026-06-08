@@ -30,6 +30,7 @@
     "docker_build": "cd Nodes/Swift && make docker-build",
     "docker_warm": "cd Nodes/Swift && make docker-warm",
     "docker_status": "cd Nodes/Swift && make docker-status",
+    "docker_status_100k": "cd Nodes/Swift && DOCKER_DATA_VOLUME=swiftbitnode_100k_proof_data make docker-status",
     "docker_script_corpus": "cd Nodes/Swift && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Swift && make docker-proof-local",
     "docker_proof_10k": "cd Nodes/Swift && make docker-proof-10k",

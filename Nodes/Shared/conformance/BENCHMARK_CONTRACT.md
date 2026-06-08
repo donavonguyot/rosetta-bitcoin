@@ -135,6 +135,10 @@ Required:
   `performance_100k` truth. If the observed source state is exactly height
   `100000`, it must match the expected 100k hash and
   `chainstate_utxo_count=13154991`.
+- Source-state readiness is checked through the Project-visible
+  `docker_status_100k` command. The check is read-only and classifies missing,
+  below-100k, hash-mismatched, UTXO-mismatched, or unparseable state before any
+  sync run starts.
 - Project does not archive or restore state for this lane. Ports run like
   products: inspect durable state, reconnect, continue, or report failure.
 - `fresh_state=false`, `source_state_origin=port_durable_state`, and

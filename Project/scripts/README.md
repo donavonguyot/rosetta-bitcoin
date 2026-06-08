@@ -118,10 +118,29 @@ active-development runway, or deliberate baseline retirement.
 
 `post_100k_to_tip` resumes the port's own durable Docker state at or beyond
 the current `performance_100k` truth. Project does not archive, restore, or
-preserve golden volumes for this lane. If a port has no usable durable state,
+preserve benchmark-owned state for this lane. If a port has no usable durable state,
 the product run must report that truthfully or rebuild state through its normal
 sync path; Project only observes the product progress and validates the final
 control-built artifact.
+
+Before any unattended post-100k run, check the source state explicitly. This is
+read-only: it runs each port's `docker_status_100k` command, reports the source
+height/hash/UTXO count, and captures the local Reference finish height/hash
+without starting sync:
+
+```bash
+python3 Project/scripts/preflight_benchmark_gate.py \
+  --db Project/project.db \
+  --gate post_100k_to_tip \
+  --all \
+  --check-source-state \
+  --json
+```
+
+Expected source-state statuses are `ready`, `state_missing`, `below_100k`,
+`hash_mismatch`, `utxo_mismatch`, `status_unparseable`, or
+`command_missing`. Missing or stale source state is a truthful `not_ready`
+condition for this lane, not something Project repairs during a campaign.
 
 ## Serialized Benchmark Campaigns
 

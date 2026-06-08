@@ -30,6 +30,7 @@
     "docker_build": "cd Nodes/Cpp && make docker-build",
     "docker_warm": "cd Nodes/Cpp && make docker-warm",
     "docker_status": "cd Nodes/Cpp && make docker-cpp-sync-status",
+    "docker_status_100k": "cd Nodes/Cpp && DOCKER_SYNC_VOLUME=cpbitnode_100k_proof_data make docker-cpp-sync-status",
     "docker_script_corpus": "cd Nodes/Cpp && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Cpp && make docker-cpp-supporting-5k-proof",
     "docker_proof_10k": "cd Nodes/Cpp && make docker-cpp-supporting-10k-proof",

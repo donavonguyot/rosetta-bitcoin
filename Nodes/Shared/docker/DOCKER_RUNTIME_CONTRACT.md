@@ -128,7 +128,7 @@ storage proofs.
 
 Benchmark campaigns should use warm Docker runtimes and fresh proof state:
 run `docker-warm` before the campaign, keep images/build cache until the
-campaign checkpoint is complete, and reset only the proof volume for each fresh
+campaign run is complete, and reset only the proof volume for each fresh
 gate run. Proof targets should not force an image rebuild by default; use
 `DOCKER_REBUILD=1` when the operator intentionally wants a clean rebuild.
 

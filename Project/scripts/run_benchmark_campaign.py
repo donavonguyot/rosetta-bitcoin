@@ -100,24 +100,6 @@ LONG_RUN_GATES = {gate for gate, spec in _validator.GATES.items() if spec.get("l
 ACTIVE_CONTROL_PORTS = {"rust", "zig", "cpp", "go", "swift", "csharp", "java", "ocaml"}
 CONTROL_REQUIRED_GATES = {"baseline_5k", "shakedown_50k", "performance_100k", "post_100k_to_tip"}
 REFERENCE_TIP_HELPER = ROOT / "Project/scripts/reference_tip.py"
-POST_100K_SOURCE_STATUS_COMMANDS = {
-    "rust": "cd Nodes/Rust && DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_100k_proof_data make docker-status",
-    "zig": "cd Nodes/Zig && DOCKER_PROOF_VOLUME=zigbitnode_100k_proof_data make docker-status",
-    "cpp": "cd Nodes/Cpp && DOCKER_PROOF_VOLUME=cpbitnode_100k_proof_data make docker-cpp-sync-status",
-    "go": "cd Nodes/Go && DOCKER_PROOF_VOLUME=gobitnode_100k_proof_data make docker-status",
-    "swift": "cd Nodes/Swift && DOCKER_PROOF_VOLUME=swiftbitnode_100k_proof_data make docker-status",
-    "csharp": (
-        "cd Nodes/CSharp && DOCKER_PROOF_VOLUME=csbitnode_100k_proof_data SECP256K1_BACKEND=native "
-        "docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml "
-        "run --rm --no-deps csbitnode-sync-proof status"
-    ),
-    "java": (
-        "cd Nodes/Java && DOCKER_PROOF_VOLUME=jbitnode_100k_proof_data SECP256K1_BACKEND=native "
-        "docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml "
-        "run --rm --no-deps jbitnode-sync-proof com.jbitnode.cli.DbStatus"
-    ),
-    "ocaml": "cd Nodes/OCaml && DOCKER_LOCAL_PROOF_VOLUME=ocbitnode_100k_proof_data make docker-status",
-}
 
 
 def utc_now() -> str:
@@ -255,6 +237,17 @@ def command_for(conn: sqlite3.Connection, port: str, command_key: str) -> str:
     return str(row["command"]).strip()
 
 
+def manifest_source_volume(port: str) -> str:
+    path = ROOT / "Nodes/Shared/docker/ports" / f"{port}.docker.json"
+    if not path.exists():
+        return ""
+    payload = read_json(path)
+    volumes = payload.get("volumes") if isinstance(payload, dict) else {}
+    if not isinstance(volumes, dict):
+        return ""
+    return str(volumes.get("proof_100k") or "").strip()
+
+
 def gate_row(conn: sqlite3.Connection, gate: str) -> dict[str, Any]:
     row = one(conn, "SELECT * FROM benchmark_gates WHERE gate_id = ?", (gate,))
     if row is None:
@@ -350,6 +343,8 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
     for port in ports:
         warm = command_for(conn, port, "docker_warm")
         proof = command_for(conn, port, proof_key)
+        source_state_command = command_for(conn, port, "docker_status_100k") if args.gate == "post_100k_to_tip" else ""
+        source_state_volume = manifest_source_volume(port) if args.gate == "post_100k_to_tip" else ""
         lifecycle = one(
             conn,
             "SELECT lifecycle_status, benchmark_scope FROM port_lifecycle WHERE port = ?",
@@ -363,6 +358,9 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
         elif not proof:
             status = "not_ready"
             reason = f"missing supported {proof_key} command"
+        elif args.gate == "post_100k_to_tip" and not source_state_command:
+            status = "not_ready"
+            reason = "missing supported docker_status_100k command"
         entries.append(
             {
                 "port": port,
@@ -373,6 +371,8 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
                 "warm_command": warm,
                 "proof_command": proof,
                 "resume_source": "port_durable_state" if args.gate == "post_100k_to_tip" else "",
+                "source_state_command": source_state_command,
+                "source_state_volume": source_state_volume,
                 "prior_total_ms": latest_prior_total_ms(conn, args.gate, port),
                 "artifact_path": "",
                 "telemetry_quality": "",
@@ -451,8 +451,7 @@ def reference_tip() -> dict[str, Any]:
     return payload
 
 
-def check_post_100k_source_state(port: str, log_path: Path) -> tuple[bool, str, dict[str, Any]]:
-    command = POST_100K_SOURCE_STATUS_COMMANDS.get(port)
+def check_post_100k_source_state(command: str, log_path: Path) -> tuple[bool, str, dict[str, Any]]:
     if not command:
         return False, "missing post_100k source status command", {}
     completed = subprocess.run(command, cwd=ROOT, shell=True, capture_output=True, text=True)
@@ -872,6 +871,10 @@ def print_dry_run(campaign: dict[str, Any]) -> None:
             print(f"  proof: {entry['proof_command']}")
         if entry.get("resume_source"):
             print(f"  resume_source: {entry['resume_source']}")
+        if entry.get("source_state_volume"):
+            print(f"  source_state_volume: {entry['source_state_volume']}")
+        if entry.get("source_state_command"):
+            print(f"  source_state_command: {entry['source_state_command']}")
         if entry["prior_total_ms"] is not None:
             print(f"  prior_total_ms: {entry['prior_total_ms']}")
 
@@ -928,7 +931,7 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
         reference_finish: dict[str, Any] = {}
         if campaign["gate"] == "post_100k_to_tip":
             source_log = campaign_dir(campaign) / "logs" / f"{port}_source_state.log"
-            ok, reason, source_status = check_post_100k_source_state(port, source_log)
+            ok, reason, source_status = check_post_100k_source_state(str(entry.get("source_state_command") or ""), source_log)
             entry["source_state_status"] = source_status
             if not ok:
                 entry["status"] = "not_ready"

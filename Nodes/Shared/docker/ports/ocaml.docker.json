@@ -31,6 +31,7 @@
     "docker_build": "cd Nodes/OCaml && make docker-build",
     "docker_warm": "cd Nodes/OCaml && make docker-warm",
     "docker_status": "cd Nodes/OCaml && make docker-status",
+    "docker_status_100k": "cd Nodes/OCaml && DOCKER_LOCAL_PROOF_VOLUME=ocbitnode_100k_proof_data make docker-status",
     "docker_storage_proof": "cd Nodes/OCaml && make docker-storage-proof",
     "docker_script_corpus": "cd Nodes/OCaml && make docker-script-corpus",
     "docker_native_crypto_vectors": "cd Nodes/OCaml && make docker-native-crypto-vectors",

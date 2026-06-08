@@ -372,6 +372,7 @@ COMMAND_PURPOSES: dict[str, str] = {
     "docker_build": "build the Docker runtime/proof image",
     "docker_warm": "warm Docker images before a benchmark campaign",
     "docker_status": "read status from inside the Docker runtime surface",
+    "docker_status_100k": "read status from the port-owned durable 100k proof volume",
     "docker_proof_local": "run official baseline_5k Docker/local-reference P2P proof",
     "docker_proof_10k": "run historical/diagnostic Docker/local-reference P2P 10k proof",
     "docker_proof_50k": "run official shakedown_50k Docker/local-reference P2P proof",

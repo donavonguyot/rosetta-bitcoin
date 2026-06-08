@@ -79,6 +79,7 @@
         "docker_config": { "type": ["string", "null"] },
         "docker_build": { "type": ["string", "null"] },
         "docker_status": { "type": ["string", "null"] },
+        "docker_status_100k": { "type": ["string", "null"] },
         "docker_proof_local": { "type": ["string", "null"] },
         "docker_proof_10k": { "type": ["string", "null"] },
         "docker_proof_50k": { "type": ["string", "null"] },

@@ -33,6 +33,7 @@
     "docker_build": "cd Nodes/Rust && make docker-build",
     "docker_warm": "cd Nodes/Rust && make docker-warm",
     "docker_status": "cd Nodes/Rust && make docker-status",
+    "docker_status_100k": "cd Nodes/Rust && DOCKER_LOCAL_PROOF_VOLUME=rsbitnode_100k_proof_data docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml run --rm --no-deps rsbitnode-local-reference-proof rsbitnode status --datadir /data --runtime-surface docker",
     "docker_storage_proof": "cd Nodes/Rust && make docker-storage-proof",
     "docker_script_corpus": "cd Nodes/Rust && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Rust && make docker-proof-local",

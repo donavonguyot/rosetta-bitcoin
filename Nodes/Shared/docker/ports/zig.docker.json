@@ -30,6 +30,7 @@
     "docker_build": "cd Nodes/Zig && make docker-build",
     "docker_warm": "cd Nodes/Zig && make docker-warm",
     "docker_status": "cd Nodes/Zig && make docker-status",
+    "docker_status_100k": "cd Nodes/Zig && DOCKER_DATA_VOLUME=zigbitnode_100k_proof_data make docker-status",
     "docker_storage_proof": "cd Nodes/Zig && make docker-storage-proof",
     "docker_script_corpus": "cd Nodes/Zig && make docker-script-corpus",
     "docker_proof_local": "cd Nodes/Zig && make docker-proof-local",
