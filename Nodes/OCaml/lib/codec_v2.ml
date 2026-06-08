@@ -19,6 +19,40 @@ let compact_size value =
             (Int64.to_int
                (Int64.logand (Int64.shift_right_logical v (8 * (i - 1))) 0xffL)))
 
+let byte_at raw offset =
+  if offset >= String.length raw then invalid_arg "truncated codec v2 byte";
+  Char.code raw.[offset]
+
+let le16_at raw offset =
+  byte_at raw offset lor (byte_at raw (offset + 1) lsl 8)
+
+let le32_at raw offset =
+  byte_at raw offset lor (byte_at raw (offset + 1) lsl 8) lor (byte_at raw (offset + 2) lsl 16)
+  lor (byte_at raw (offset + 3) lsl 24)
+
+let le64_at raw offset =
+  let value = ref 0L in
+  for i = 0 to 7 do
+    value := Int64.logor !value (Int64.shift_left (Int64.of_int (byte_at raw (offset + i))) (8 * i))
+  done;
+  !value
+
+let read_compact_size raw offset =
+  let first = byte_at raw offset in
+  match first with
+  | 0xfd ->
+      if offset + 3 > String.length raw then invalid_arg "truncated codec v2 compactsize16";
+      le16_at raw (offset + 1), offset + 3
+  | 0xfe ->
+      if offset + 5 > String.length raw then invalid_arg "truncated codec v2 compactsize32";
+      le32_at raw (offset + 1), offset + 5
+  | 0xff ->
+      if offset + 9 > String.length raw then invalid_arg "truncated codec v2 compactsize64";
+      let value = le64_at raw (offset + 1) in
+      if value > Int64.of_int max_int then invalid_arg "codec v2 compactsize too large";
+      Int64.to_int value, offset + 9
+  | value -> value, offset + 1
+
 let be32 value =
   String.init 4 (fun i -> Char.chr ((value lsr ((3 - i) * 8)) land 0xff))
 

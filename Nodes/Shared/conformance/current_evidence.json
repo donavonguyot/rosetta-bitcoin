@@ -434,6 +434,30 @@
       "path": "Nodes/Shared/conformance/results/go_control_post_100k_to_tip_benchmark_20260608T075534Z.json",
       "status": "current",
       "notes": "Current comparable go post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_005528."
+    },
+    {
+      "port": "csharp",
+      "claim": "post_100k_to_tip",
+      "gate_id": "post_100k_to_tip",
+      "path": "Nodes/Shared/conformance/results/csharp_control_post_100k_to_tip_benchmark_20260608T084639Z.json",
+      "status": "current",
+      "notes": "Current comparable csharp post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_014624."
+    },
+    {
+      "port": "java",
+      "claim": "post_100k_to_tip",
+      "gate_id": "post_100k_to_tip",
+      "path": "Nodes/Shared/conformance/results/java_control_post_100k_to_tip_benchmark_20260608T084649Z.json",
+      "status": "current",
+      "notes": "Current comparable java post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_014624."
+    },
+    {
+      "port": "ocaml",
+      "claim": "post_100k_to_tip",
+      "gate_id": "post_100k_to_tip",
+      "path": "Nodes/Shared/conformance/results/ocaml_control_post_100k_to_tip_benchmark_20260608T090019Z.json",
+      "status": "current",
+      "notes": "Current comparable ocaml post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_015935."
     }
   ]
 }

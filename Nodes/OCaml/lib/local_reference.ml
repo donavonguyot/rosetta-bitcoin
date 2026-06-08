@@ -160,6 +160,13 @@ let metadata_int db name default =
 let metadata_string db name default =
   Option.value ~default (Rocks.get db (Codec_v2.metadata_key name))
 
+let ensure_static_metadata db =
+  ignore
+    (Rocks.write_batch_timed db ~disable_wal:false ~sync:false (fun batch ->
+         Rocks.batch_put batch (Codec_v2.metadata_key "utxo_accounting_policy") "core_spendable_v1";
+         Rocks.batch_put batch (Codec_v2.metadata_key "native_crypto_backend") "libsecp256k1";
+         Rocks.batch_put batch (Codec_v2.metadata_key "rocksdb_sync_writes") "false"))
+
 let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetry_log =
   let result_path = if result_path = "" then default_result_path () else result_path in
   let db_path = Filename.concat datadir "chainstate-rocksdb" in
@@ -173,6 +180,9 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
   let last_result = ref None in
   let current_blocker = ref `Null in
   let target_reached = ref false in
+  let source_start_height = ref 0 in
+  let source_start_hash = ref P2p.genesis_hash in
+  let source_start_utxos = ref 0 in
   let resume_height = ref 0 in
   let resume_hash = ref "" in
   let resume_utxos = ref 0 in
@@ -280,13 +290,16 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
   let raw_result =
     try
       if (target = 5000 || target = 50000) && Block_connect.script_threads () < 2 then failwith "official gates require parallel script runner";
-      Block_connect.with_script_worker_pool (Block_connect.script_threads ()) (fun script_pool ->
       with_sync_lock datadir (fun () ->
       with_block_file datadir (fun block_oc ->
         Rocks.with_db db_path (fun db ->
+        ensure_static_metadata db;
         let stored_height = max 0 (metadata_int db "validated_height" 0) in
         let stored_hash = metadata_string db "validated_hash" "" in
         let stored_utxos = max 0 (metadata_int db "chainstate_utxo_count" 0) in
+        source_start_height := stored_height;
+        source_start_hash := if stored_height = 0 || stored_hash = "" then P2p.genesis_hash else stored_hash;
+        source_start_utxos := stored_utxos;
         resume_height := stored_height;
         resume_hash := stored_hash;
         resume_utxos := stored_utxos;
@@ -301,7 +314,8 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
           target_reached := true;
           emit_telemetry ~event:"target_reached" ~phase:"complete" ~height:stored_height ~utxos:stored_utxos
             ~last_block_ms:0 ?block_hash:(if stored_hash = "" then None else Some stored_hash) ())
-        else (
+        else
+          Block_connect.with_script_worker_pool (Block_connect.script_threads ()) (fun script_pool ->
           let utxo_count = ref stored_utxos in
           let expected_prev = ref (if stored_hash = "" then None else Some stored_hash) in
           let start_height = stored_height + 1 in
@@ -342,7 +356,7 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
                   ~utxos:connect.chainstate_utxo_count ~last_block_ms:connect.timing.block_connect_store_commit_ms
                   ~block_hash:connect.block_hash ~tx_count:connect.tx_count ~vin_count:connect.vin_count
                   ~script_input_count:connect.script_input_count ()));
-        target_reached := !resume_height >= target))));
+        target_reached := !resume_height >= target)));
       "passed"
     with
     | Block_connect.Connect_error blocker ->
@@ -446,8 +460,8 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
       "peer", `String peer;
       "byte_source", `String "local_reference_p2p";
       "proof_mode", `String "p2p_sync";
-      "reference_start_height", `Int 0;
-      "reference_start_hash", `String P2p.genesis_hash;
+      "reference_start_height", `Int !source_start_height;
+      "reference_start_hash", `String !source_start_hash;
       "reference_finish_height", `Int target;
       "reference_finish_hash", `String validated_hash;
       "target_height", `Int target;
@@ -474,7 +488,11 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
       "rocksdb_wal_disabled", `Bool false;
       "rocksdb_sync_writes", `Bool false;
       "rocksdb_tuning", `String Rocks.tuning_mode;
-      "fresh_state", `Bool true;
+      "fresh_state", `Bool (!source_start_height = 0);
+      "source_state_height", `Int !source_start_height;
+      "source_state_hash", `String !source_start_hash;
+      "source_state_utxo_count", `Int !source_start_utxos;
+      "source_state_origin", `String (if !source_start_height = 0 then "fresh_state" else "port_durable_state");
       "prefetch_depth", `Int prefetch_depth;
       "script_runner_mode", `String (if total_timing.script_active_workers > 1 then "parallel" else "sequential");
       "script_threads", `Int (Block_connect.script_threads ());

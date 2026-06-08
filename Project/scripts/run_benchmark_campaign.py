@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from post_100k_source_state import classify_source_state, source_state_ready
+from port_progress_posture import source_audit
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -841,6 +842,8 @@ def print_dry_run(campaign: dict[str, Any]) -> None:
         status = entry["status"]
         reason = f" reason={entry['reason']}" if entry["reason"] else ""
         print(f"- {entry['port']}: {status}{reason}")
+        posture = source_audit(entry["port"])
+        print(f"  progress_posture: {posture['posture']} source_progress={posture['source_progress']} atomicity={posture['line_atomicity']}")
         if entry["warm_command"]:
             print(f"  warm: {entry['warm_command']}")
         if entry["proof_command"]:

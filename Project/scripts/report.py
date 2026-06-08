@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from post_100k_source_state import classify_source_state, reference_finish_truth
+from port_progress_posture import audit_ports
 
 
 SECTIONS = (
@@ -38,6 +39,7 @@ SECTIONS = (
     "shakedown-50k",
     "performance-100k",
     "post-100k-readiness",
+    "port-progress-posture",
     "post-100k-to-tip",
     "tip-once",
     "tip-maintenance",
@@ -87,6 +89,8 @@ SECTION_ALIASES = {
     "100k-to-tip": "post-100k-to-tip",
     "tip-readiness": "post-100k-to-tip",
     "tip-source-readiness": "post-100k-readiness",
+    "progress-posture": "port-progress-posture",
+    "product-progress": "port-progress-posture",
     "runway": "consensus-runway",
     "consensus": "consensus-runway",
     "benchmarks": "benchmark-summary",
@@ -759,6 +763,64 @@ def print_post_100k_readiness(connection: sqlite3.Connection) -> None:
     )
 
 
+def print_port_progress_posture(connection: sqlite3.Connection) -> None:
+    print("## Port Progress Posture")
+    print()
+    lifecycle = {
+        row["port"]: row["lifecycle_status"]
+        for row in rows(
+            connection,
+            """
+            select port, coalesce(lifecycle_status, 'active_contender') as lifecycle_status
+            from port_lifecycle
+            """,
+        )
+    }
+    data = []
+    for row in audit_ports():
+        recommended = ",".join(row["recommended_seen"]) if row["recommended_seen"] else ""
+        missing = ",".join(row["missing_required"]) if row["missing_required"] else ""
+        data.append(
+            (
+                row["port"],
+                lifecycle.get(row["port"], "active_contender"),
+                row["posture"],
+                "yes" if row["source_progress"] else "no",
+                f"{row['parseable_lines']}/{row['progress_lines']}",
+                f"{row['complete_lines']}/{row['parseable_lines']}",
+                "yes" if row["required_ok"] else "no" if row["progress_lines"] else "unknown",
+                row["line_atomicity"],
+                "yes" if row["before_first_block"] else "no" if row["progress_lines"] else "unknown",
+                "yes" if row["after_first_block"] else "no" if row["progress_lines"] else "unknown",
+                row["final_height"] if row["final_height"] is not None else "",
+                recommended,
+                missing,
+                row["notes"],
+            )
+        )
+    print(
+        table(
+            (
+                "port",
+                "lifecycle",
+                "posture",
+                "source",
+                "parseable",
+                "complete",
+                "required",
+                "atomic",
+                "pre-block",
+                "post-block",
+                "final_height",
+                "recommended_seen",
+                "missing_required",
+                "notes",
+            ),
+            data,
+        )
+    )
+
+
 def print_benchmark_suite(connection: sqlite3.Connection) -> None:
     print_benchmark_gates(connection)
     print()
@@ -1024,6 +1086,7 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "shakedown-50k": lambda connection: print_gate_matrix(connection, "shakedown_50k", "Shakedown 50k"),
     "performance-100k": lambda connection: print_gate_matrix(connection, "performance_100k", "Performance 100k"),
     "post-100k-readiness": print_post_100k_readiness,
+    "port-progress-posture": print_port_progress_posture,
     "post-100k-to-tip": lambda connection: print_gate_matrix(connection, "post_100k_to_tip", "Post 100k To Tip"),
     "tip-once": lambda connection: print_gate_matrix(connection, "tip_once", "Tip Once"),
     "tip-maintenance": lambda connection: print_gate_matrix(connection, "tip_maintenance", "Tip Maintenance"),

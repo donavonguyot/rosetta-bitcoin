@@ -37,6 +37,7 @@ public static class NodeStatusService
             ["runtime_status"] = lockInfo.Busy ? "syncing" : "idle",
             ["sync_status"] = syncState?.SyncStatus ?? "not_started",
             ["header_height"] = syncState?.BestHeight ?? 0,
+            ["header_hash"] = syncState?.BestHash ?? "",
             ["validated_height"] = Math.Max(0, validatedHeight),
             ["validated_hash"] = store.GetValidatedHash(chain) ?? "",
             ["header_count"] = store.HeaderCount(chain),

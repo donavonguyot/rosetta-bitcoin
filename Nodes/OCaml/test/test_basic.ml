@@ -62,30 +62,36 @@ let test_rocks_multi_get_utxos () =
       Rocks.with_db dir (fun db ->
           let txid_a = String.make 32 '\001' in
           let txid_b = String.make 32 '\002' in
+          let txid_c = String.make 32 '\004' in
           let script_a = Util.bytes_of_hex "76a914111111111111111111111111111111111111111188ac" in
+          let script_c = String.make 253 '\x6a' in
           let key_a = Codec_v2.utxo_key ~chain:"testnet4" ~txid:txid_a ~vout:1 in
           let key_b = Codec_v2.utxo_key ~chain:"testnet4" ~txid:txid_b ~vout:2 in
+          let key_c = Codec_v2.utxo_key ~chain:"testnet4" ~txid:txid_c ~vout:3 in
           Rocks.write_batch db ~disable_wal:false ~sync:false (fun batch ->
               Rocks.batch_put batch key_a (Codec_v2.utxo_value ~height:101 ~vout:1 ~value_sats:5000L ~coinbase:false ~script_pubkey:script_a);
-              Rocks.batch_put batch key_b (Codec_v2.utxo_value ~height:102 ~vout:2 ~value_sats:6000L ~coinbase:true ~script_pubkey:"\x51"));
+              Rocks.batch_put batch key_b (Codec_v2.utxo_value ~height:102 ~vout:2 ~value_sats:6000L ~coinbase:true ~script_pubkey:"\x51");
+              Rocks.batch_put batch key_c (Codec_v2.utxo_value ~height:103 ~vout:3 ~value_sats:7000L ~coinbase:false ~script_pubkey:script_c));
           let outpoints = [|
             { Rocks.txid = txid_a; vout = 1 };
             { Rocks.txid = String.make 32 '\003'; vout = 9 };
             { Rocks.txid = txid_b; vout = 2 };
             { Rocks.txid = txid_a; vout = 1 };
+            { Rocks.txid = txid_c; vout = 3 };
           |] in
           let rows, stats = Rocks.multi_get_utxos db ~chain:"testnet4" outpoints in
-          Alcotest.(check int) "lookup count" 4 stats.lookup_count;
-          Alcotest.(check int) "key bytes" (4 * (1 + 1 + String.length "testnet4" + 32 + 4)) stats.key_bytes;
+          Alcotest.(check int) "lookup count" 5 stats.lookup_count;
+          Alcotest.(check int) "key bytes" (5 * (1 + 1 + String.length "testnet4" + 32 + 4)) stats.key_bytes;
           Alcotest.(check bool) "value bytes positive" true (stats.value_bytes > 0);
-          Alcotest.(check int) "result length" 4 (Array.length rows);
-          (match rows.(0), rows.(1), rows.(2), rows.(3) with
-          | Some a, None, Some b, Some dup ->
+          Alcotest.(check int) "result length" 5 (Array.length rows);
+          (match rows.(0), rows.(1), rows.(2), rows.(3), rows.(4) with
+          | Some a, None, Some b, Some dup, Some c ->
               Alcotest.(check int) "a height" 101 a.height;
               Alcotest.(check int64) "a value" 5000L a.value_sats;
               Alcotest.(check string) "a script" script_a a.script_pubkey;
               Alcotest.(check bool) "b coinbase" true b.coinbase;
-              Alcotest.(check int) "duplicate vout" a.vout dup.vout
+              Alcotest.(check int) "duplicate vout" a.vout dup.vout;
+              Alcotest.(check string) "compactsize script" script_c c.script_pubkey
           | _ -> Alcotest.fail "unexpected typed UTXO multi_get result")))
 
 let test_sighash_cache_equivalence () =

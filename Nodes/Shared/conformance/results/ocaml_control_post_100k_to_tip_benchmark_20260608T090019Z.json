@@ -1,0 +1,123 @@
+{
+  "implementation": "ocaml product node",
+  "port": "ocaml",
+  "runtime_surface": "docker",
+  "benchmark_contract_version": 1,
+  "benchmark_gate": "post_100k_to_tip",
+  "benchmark_lane": "post_100k_to_tip_p2p",
+  "benchmark_kind": "post_100k_to_tip_p2p",
+  "target_height": 138512,
+  "target_label": "100k to tip",
+  "header_target_height": 138512,
+  "byte_source": "local_reference_p2p",
+  "reference_start_height": 118554,
+  "reference_start_hash": "000000002497b1d0de0b5b7c5e0444167b0f436fbfdcff973ced5095552aefae",
+  "reference_finish_height": 138512,
+  "reference_finish_hash": "00000000009947a36e93e271a11cf7d7864d54d317f59c48a12f153f0eac6404",
+  "validated_height": 138512,
+  "validated_hash": "00000000009947a36e93e271a11cf7d7864d54d317f59c48a12f153f0eac6404",
+  "blocks_fetched": 19958,
+  "blocks_connected": 19958,
+  "current_blocker": null,
+  "binary_gate_status": "not_attempted",
+  "chainstate_backend": "rocksdb",
+  "chainstate_utxo_count": 14116852,
+  "utxo_accounting_policy": "core_spendable_v1",
+  "native_crypto_backend": "libsecp256k1",
+  "proof_mode": "p2p_sync",
+  "peer_mode": "local_reference",
+  "peer": "bitcoin-core-testnet4:48333",
+  "script_runner_mode": "parallel",
+  "rocksdb_wal_disabled": false,
+  "prefetch_depth": 4,
+  "resume_supported": true,
+  "fresh_state": false,
+  "result": "passed",
+  "failures": [],
+  "captured_at": "2026-06-08T09:00:19Z",
+  "telemetry_schema": "benchmark.telemetry_tick.v1",
+  "telemetry_summary": {
+    "tick_count": 34,
+    "lifecycle_markers": {
+      "run_started": 0,
+      "container_started": 1,
+      "node_started": 2,
+      "first_peer_byte": 3,
+      "first_block_connected": 4,
+      "heartbeat": 1516,
+      "target_reached": 42340,
+      "run_finished": 42341
+    },
+    "heartbeat_max_gap_ms": 1512,
+    "heartbeat_target_ms": 15000,
+    "heartbeat_grace_ms": 5000,
+    "heartbeat_warning_ms": 15000,
+    "heartbeat_failure_ms": 20000,
+    "heartbeat_hard_failure_ms": 30000,
+    "heartbeat_limit_ms": 20000,
+    "phase_counts": {
+      "block_connect": 1,
+      "complete": 2,
+      "heartbeat": 27,
+      "peer_connect": 1,
+      "startup": 3
+    },
+    "stall_class_counts": {
+      "none": 34
+    },
+    "slow_blocks": [],
+    "heartbeat_gaps_over_target": 0,
+    "heartbeat_gaps_over_failure": 0,
+    "telemetry_quality": "clean"
+  },
+  "timing_summary": {
+    "total_ms": 42341,
+    "stage_totals_ms": {
+      "p2p_fetch": 492,
+      "block_parse_validate": 3286,
+      "utxo_load": 7559,
+      "script_verify": 8550,
+      "utxo_apply": 9,
+      "commit": 5901,
+      "block_connect_store_commit": 37214
+    },
+    "slow_blocks": []
+  },
+  "pipeline_timing_summary": {
+    "total_ms": 42341,
+    "stage_totals_ms": {
+      "p2p_fetch": 492,
+      "block_parse_validate": 3286,
+      "utxo_load": 7559,
+      "script_verify": 8550,
+      "utxo_apply": 9,
+      "commit": 5901,
+      "block_connect_store_commit": 37214
+    },
+    "slow_blocks": []
+  },
+  "status": {
+    "chain": "testnet4",
+    "sync_status": "blocks_current",
+    "header_height": 138512,
+    "validated_height": 138512,
+    "validated_hash": "00000000009947a36e93e271a11cf7d7864d54d317f59c48a12f153f0eac6404",
+    "stored_block_height": 138512,
+    "chainstate_utxo_count": 14116852,
+    "current_blocker": null
+  },
+  "control_harness": {
+    "artifact_source": "project_control_harness",
+    "product_progress_prefix": "rb.port_progress",
+    "product_progress_count": 27,
+    "proof_log": "Project/.campaigns/post_100k_to_tip_20260608_015935/logs/ocaml_proof.log",
+    "telemetry_log": "Project/.campaigns/post_100k_to_tip_20260608_015935/logs/ocaml_control_telemetry.log",
+    "resume_source": "port_durable_state"
+  },
+  "source_state_gate": "performance_100k",
+  "source_state_origin": "port_durable_state",
+  "source_state_height": 118554,
+  "source_state_hash": "000000002497b1d0de0b5b7c5e0444167b0f436fbfdcff973ced5095552aefae",
+  "source_state_utxo_count": 13845146,
+  "skipped_consensus_rules": []
+}

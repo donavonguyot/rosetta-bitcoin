@@ -1,0 +1,77 @@
+{
+  "schema": "port.native_crypto_vectors.v1",
+  "category": "native_crypto",
+  "port": "ocaml",
+  "implementation": "ocbitnode",
+  "node_id": "OCamlNode",
+  "captured_at": "2026-06-08T08:27:12Z",
+  "vector_source": "/workspace/Shared/conformance/fixtures/native_crypto_v1_vectors.json",
+  "native_crypto_backend": "libsecp256k1",
+  "secp256k1_binding": "opam:secp256k1=0.5.0",
+  "vector_count": 8,
+  "passed": 8,
+  "failed": 0,
+  "result": "passed",
+  "wrapper_smoke": {
+    "id": "ocaml-xonly-parse-serialize-smoke",
+    "result": "passed"
+  },
+  "results": [
+    {
+      "id": "ecdsa-valid-privkey-1-deadbeef",
+      "operation": "verify_ecdsa",
+      "expected": "valid",
+      "observed": "valid",
+      "result": "passed"
+    },
+    {
+      "id": "ecdsa-consensus-invalid-wrong-message",
+      "operation": "verify_ecdsa",
+      "expected": "consensus_invalid",
+      "observed": "consensus_invalid",
+      "result": "passed"
+    },
+    {
+      "id": "ecdsa-malformed-empty-pubkey",
+      "operation": "verify_ecdsa",
+      "expected": "malformed_input",
+      "observed": "malformed_input",
+      "result": "passed"
+    },
+    {
+      "id": "schnorr-valid-privkey-12345-cafebabe",
+      "operation": "verify_schnorr",
+      "expected": "valid",
+      "observed": "valid",
+      "result": "passed"
+    },
+    {
+      "id": "schnorr-consensus-invalid-mutated-signature",
+      "operation": "verify_schnorr",
+      "expected": "consensus_invalid",
+      "observed": "consensus_invalid",
+      "result": "passed"
+    },
+    {
+      "id": "schnorr-malformed-zero-pubkey",
+      "operation": "verify_schnorr",
+      "expected": "malformed_input",
+      "observed": "malformed_input",
+      "result": "passed"
+    },
+    {
+      "id": "taproot-valid-privkey-300-c0ffee",
+      "operation": "taproot_tweak_xonly",
+      "expected": "valid",
+      "observed": "valid",
+      "result": "passed"
+    },
+    {
+      "id": "taproot-malformed-short-key",
+      "operation": "taproot_tweak_xonly",
+      "expected": "malformed_input",
+      "observed": "malformed_input",
+      "result": "passed"
+    }
+  ]
+}

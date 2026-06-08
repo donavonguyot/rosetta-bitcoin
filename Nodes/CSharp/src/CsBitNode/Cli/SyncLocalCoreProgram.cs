@@ -126,14 +126,17 @@ public static class SyncLocalCoreService
         var reconnects = 0;
         while (true)
         {
+            ResetUnvalidatedHeaderTipForTarget(tracker, chain.Name, targetBlockHeight);
             var startHeight = tracker.BootstrapStartHeight(chain.Name);
             using var connection = new PeerConnection(peer.Host, peer.Port, chain, tracker, startHeight);
             connection.Connect();
 
-            var headerResult = HeaderSync.SyncFromPeer(connection, chain, tracker, maxHeaders, maxBatches);
+            var headerResult = HeaderSync.SyncFromPeer(connection, chain, tracker, maxHeaders, maxBatches, targetBlockHeight);
             output.WriteLine($"  stored_headers={headerResult.StoredTotal}");
             output.WriteLine($"  header_height={headerResult.BestHeight}");
             output.WriteLine($"  sync_status={headerResult.SyncStatus}");
+            if (progressJson)
+                PrintCurrentProgressJson(output, chain.Name, tracker, headerResult.SyncStatus);
 
             if (skipBlocks)
                 break;
@@ -141,6 +144,22 @@ public static class SyncLocalCoreService
             try
             {
                 var currentHeight = tracker.GetValidatedHeight(chain.Name);
+                if (targetBlockHeight > 0 && currentHeight >= headerResult.BestHeight && headerResult.BestHeight < targetBlockHeight)
+                {
+                    if (reconnects < maxReconnects)
+                    {
+                        reconnects += 1;
+                        output.WriteLine($"  peer_reconnects={reconnects}");
+                        output.WriteLine($"  reconnect_reason=header unavailable below target height {targetBlockHeight}");
+                        tracker.UpsertSyncState(chain.Name, new SyncStatePatch(null, null, null, "peer_reconnecting"));
+                        if (progressJson)
+                            PrintCurrentProgressJson(output, chain.Name, tracker, "peer_reconnecting");
+                        continue;
+                    }
+                    output.WriteLine($"  current_blocker=header unavailable below target height {targetBlockHeight}");
+                    syncExitCode = 3;
+                    break;
+                }
                 var targetRemaining = targetBlockHeight > 0 ? Math.Max(0, targetBlockHeight - currentHeight) : maxBlocks;
                 var commandRemaining = maxBlocks <= 0 ? targetRemaining : Math.Max(0, maxBlocks - connectedTotal);
                 var remainingBlocks =
@@ -171,6 +190,16 @@ public static class SyncLocalCoreService
                 PersistTimingSummary(tracker, chain.Name, timingSink, output);
                 if (blockResult.BlockerMessage is not null)
                     output.WriteLine($"  current_blocker={blockResult.BlockerMessage}");
+                if (IsTransientBlockUnavailable(blockResult) && reconnects < maxReconnects && (targetBlockHeight <= 0 || tracker.GetValidatedHeight(chain.Name) < targetBlockHeight))
+                {
+                    reconnects += 1;
+                    output.WriteLine($"  peer_reconnects={reconnects}");
+                    output.WriteLine("  reconnect_reason=block unavailable from peer");
+                    tracker.UpsertSyncState(chain.Name, new SyncStatePatch(null, null, null, "peer_reconnecting"));
+                    if (progressJson)
+                        PrintCurrentProgressJson(output, chain.Name, tracker, "peer_reconnecting");
+                    continue;
+                }
                 syncExitCode = blockResult.SyncStatus is "blocked" or "failed" ? 3 : 0;
                 if (syncExitCode != 0 || (targetBlockHeight > 0 && tracker.GetValidatedHeight(chain.Name) >= targetBlockHeight) || maxBlocks <= 0 || connectedTotal >= maxBlocks || blockResult.Connected == 0)
                     break;
@@ -181,6 +210,8 @@ public static class SyncLocalCoreService
                 output.WriteLine($"  peer_reconnects={reconnects}");
                 output.WriteLine($"  reconnect_reason={ex.Message}");
                 tracker.UpsertSyncState(chain.Name, new SyncStatePatch(null, null, null, "peer_reconnecting"));
+                if (progressJson)
+                    PrintCurrentProgressJson(output, chain.Name, tracker, "peer_reconnecting");
                 continue;
             }
         }
@@ -200,6 +231,23 @@ public static class SyncLocalCoreService
                 return true;
         }
         return false;
+    }
+
+    private static bool IsTransientBlockUnavailable(BlockSyncResult result) =>
+        result.SyncStatus == "blocked" && string.IsNullOrWhiteSpace(result.BlockerMessage);
+
+    private static void ResetUnvalidatedHeaderTipForTarget(IChainstateStore tracker, string chain, int targetBlockHeight)
+    {
+        if (targetBlockHeight <= 0)
+            return;
+        var syncState = tracker.GetSyncState(chain);
+        var validatedHeight = tracker.GetValidatedHeight(chain);
+        if (syncState is null || syncState.BestHeight <= validatedHeight || validatedHeight >= targetBlockHeight)
+            return;
+        var validatedHash = tracker.GetValidatedHash(chain);
+        if (string.IsNullOrWhiteSpace(validatedHash))
+            return;
+        tracker.UpsertSyncState(chain, new SyncStatePatch(validatedHeight, validatedHash, null, "headers_syncing"));
     }
 
     private static void PersistTimingSummary(IChainstateStore tracker, string chain, ConsoleTimingSink? timingSink, TextWriter output)
@@ -258,6 +306,35 @@ public static class SyncLocalCoreService
             ["current_blocker"] = null,
             ["downloaded_blocks"] = snapshot.Downloaded,
             ["connected_blocks"] = snapshot.Connected,
+        };
+        var raw = JsonSerializer.Serialize(progress);
+        output.WriteLine($"sync_progress_json={raw}");
+        output.WriteLine($"rb.port_progress {raw}");
+        output.Flush();
+    }
+
+    private static void PrintCurrentProgressJson(
+        TextWriter output,
+        string chain,
+        IChainstateStore tracker,
+        string syncStatus)
+    {
+        var syncState = tracker.GetSyncState(chain);
+        var validatedHeight = Math.Max(0, tracker.GetValidatedHeight(chain));
+        var utxoCount = tracker.UtxoCount(chain);
+        var blockerJson = tracker.CurrentBlockerJson(chain);
+        var progress = new Dictionary<string, object?>
+        {
+            ["chain"] = chain,
+            ["sync_status"] = syncStatus,
+            ["header_height"] = syncState?.BestHeight ?? 0,
+            ["header_hash"] = syncState?.BestHash ?? "",
+            ["validated_height"] = validatedHeight,
+            ["validated_hash"] = tracker.GetValidatedHash(chain) ?? "",
+            ["stored_block_height"] = tracker.MaxStoredBlockHeight(chain),
+            ["utxo_count"] = utxoCount,
+            ["chainstate_utxo_count"] = utxoCount,
+            ["current_blocker"] = string.IsNullOrWhiteSpace(blockerJson) ? null : blockerJson,
         };
         var raw = JsonSerializer.Serialize(progress);
         output.WriteLine($"sync_progress_json={raw}");

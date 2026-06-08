@@ -23,6 +23,7 @@ POLL_SEC="${POLL_SEC:-10}"
 CHECK_SEC="${CHECK_SEC:-1}"
 CONTAINER_NAME="${CONTAINER_NAME:-jbitnode-sync-proof-run}"
 PROGRESS_INTERVAL="${PROGRESS_INTERVAL:-250}"
+PROGRESS_STATE_TMP="$(mktemp)"
 
 reference_hash() {
   docker exec rosetta-bitcoin-core-testnet4 \
@@ -35,7 +36,7 @@ now_ms() {
 
 RUN_LOG_TMP="$(mktemp)"
 STATUS_TMP="$(mktemp)"
-trap 'rm -f "$RUN_LOG_TMP" "$STATUS_TMP"' EXIT
+trap 'rm -f "$RUN_LOG_TMP" "$STATUS_TMP" "$PROGRESS_STATE_TMP"' EXIT
 
 REFERENCE_START_HASH="${REFERENCE_START_HASH:-$(reference_hash "$REFERENCE_START_HEIGHT")}"
 REFERENCE_FINISH_HEIGHT="${REFERENCE_FINISH_HEIGHT:-$TARGET}"
@@ -105,18 +106,22 @@ log_tick() {
   printf '%s\n' "$line" | tee -a "$RUN_LOG_TMP"
 }
 
-log_product_progress() {
-  local json="$1"
-  printf '%s\n' "$json" | python3 -c 'import json, sys
-raw = sys.stdin.read().strip()
-if not raw:
-    raise SystemExit
+pass_through_product_progress() {
+  docker logs "$CONTAINER_NAME" 2>/dev/null | python3 - "$PROGRESS_STATE_TMP" <<'PY'
+import pathlib
+import sys
+
+state_path = pathlib.Path(sys.argv[1])
 try:
-    payload = json.loads(raw)
-except json.JSONDecodeError:
-    raise SystemExit
-if payload:
-    print("rb.port_progress " + json.dumps(payload, sort_keys=True))' | tee -a "$RUN_LOG_TMP"
+    previous = int(state_path.read_text(encoding="utf-8").strip())
+except Exception:
+    previous = 0
+lines = sys.stdin.read().splitlines()
+for line in lines[previous:]:
+    if "rb.port_progress " in line or "rb.port_progress=" in line:
+        print(line)
+state_path.write_text(str(len(lines)), encoding="utf-8")
+PY
 }
 
 : > "$RUN_LOG_TMP"
@@ -153,7 +158,7 @@ if [[ "$start_exit" -eq 0 ]]; then
     if [[ "$h" =~ ^[0-9]+$ ]]; then
       last_height="$h"
     fi
-    log_product_progress "$json" || true
+    pass_through_product_progress | tee -a "$RUN_LOG_TMP" || true
     if [[ "$first_peer_byte" == "0" ]] && [[ "$header" =~ ^[0-9]+$ ]] && (( header > 0 )); then
       log_tick "$json" "$previous_height" peer_connect first_peer_byte 1
       first_peer_byte=1
@@ -175,6 +180,7 @@ if [[ "$start_exit" -eq 0 ]]; then
     log_tick "$final_json" "$last_height" complete target_reached 0
   fi
   log_tick "$final_json" "$last_height" complete run_finished 0
+  pass_through_product_progress | tee -a "$RUN_LOG_TMP" || true
   docker logs "$CONTAINER_NAME" 2>&1 | tee -a "$RUN_LOG_TMP" || true
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 else

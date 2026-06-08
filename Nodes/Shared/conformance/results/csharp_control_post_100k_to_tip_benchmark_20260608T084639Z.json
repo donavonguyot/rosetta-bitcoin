@@ -1,0 +1,123 @@
+{
+  "implementation": "csharp product node",
+  "port": "csharp",
+  "runtime_surface": "docker",
+  "benchmark_contract_version": 1,
+  "benchmark_gate": "post_100k_to_tip",
+  "benchmark_lane": "post_100k_to_tip_p2p",
+  "benchmark_kind": "post_100k_to_tip_p2p",
+  "target_height": 138511,
+  "target_label": "100k to tip",
+  "header_target_height": 138511,
+  "byte_source": "local_reference_p2p",
+  "reference_start_height": 138474,
+  "reference_start_hash": "00000000009cce95f2b790ea829c55a0f0225548199febe0972e86bdd2b4b689",
+  "reference_finish_height": 138511,
+  "reference_finish_hash": "0000000000070f75118b448d0a6c4529c522e8075a8d0a6e563dbf5a7df74045",
+  "validated_height": 138511,
+  "validated_hash": "0000000000070f75118b448d0a6c4529c522e8075a8d0a6e563dbf5a7df74045",
+  "blocks_fetched": 37,
+  "blocks_connected": 37,
+  "current_blocker": null,
+  "binary_gate_status": "not_attempted",
+  "chainstate_backend": "rocksdb",
+  "chainstate_utxo_count": 14116851,
+  "utxo_accounting_policy": "core_spendable_v1",
+  "native_crypto_backend": "libsecp256k1-secp256k1.net",
+  "proof_mode": "p2p_sync",
+  "peer_mode": "local_reference",
+  "peer": "bitcoin-core-testnet4:48333",
+  "script_runner_mode": "parallel",
+  "rocksdb_wal_disabled": false,
+  "prefetch_depth": 4,
+  "resume_supported": true,
+  "fresh_state": false,
+  "result": "passed",
+  "failures": [],
+  "captured_at": "2026-06-08T08:46:39Z",
+  "telemetry_schema": "benchmark.telemetry_tick.v1",
+  "telemetry_summary": {
+    "tick_count": 12,
+    "lifecycle_markers": {
+      "run_started": 0,
+      "container_started": 1,
+      "node_started": 2,
+      "first_peer_byte": 3,
+      "first_block_connected": 4,
+      "heartbeat": 2062,
+      "target_reached": 12349,
+      "run_finished": 12350
+    },
+    "heartbeat_max_gap_ms": 2058,
+    "heartbeat_target_ms": 15000,
+    "heartbeat_grace_ms": 5000,
+    "heartbeat_warning_ms": 15000,
+    "heartbeat_failure_ms": 20000,
+    "heartbeat_hard_failure_ms": 30000,
+    "heartbeat_limit_ms": 20000,
+    "phase_counts": {
+      "block_connect": 1,
+      "complete": 2,
+      "heartbeat": 5,
+      "peer_connect": 1,
+      "startup": 3
+    },
+    "stall_class_counts": {
+      "none": 12
+    },
+    "slow_blocks": [],
+    "heartbeat_gaps_over_target": 0,
+    "heartbeat_gaps_over_failure": 0,
+    "telemetry_quality": "clean"
+  },
+  "timing_summary": {
+    "total_ms": 12350,
+    "stage_totals_ms": {
+      "p2p_fetch": 0,
+      "block_parse_validate": 0,
+      "utxo_load": 49,
+      "script_verify": 89,
+      "utxo_apply": 1,
+      "commit": 14,
+      "block_connect_store_commit": 171
+    },
+    "slow_blocks": []
+  },
+  "pipeline_timing_summary": {
+    "total_ms": 12350,
+    "stage_totals_ms": {
+      "p2p_fetch": 0,
+      "block_parse_validate": 0,
+      "utxo_load": 49,
+      "script_verify": 89,
+      "utxo_apply": 1,
+      "commit": 14,
+      "block_connect_store_commit": 171
+    },
+    "slow_blocks": []
+  },
+  "status": {
+    "chain": "testnet4",
+    "sync_status": "blocks_syncing",
+    "header_height": 138511,
+    "validated_height": 138511,
+    "validated_hash": "0000000000070f75118b448d0a6c4529c522e8075a8d0a6e563dbf5a7df74045",
+    "stored_block_height": 138511,
+    "chainstate_utxo_count": 14116851,
+    "current_blocker": null
+  },
+  "control_harness": {
+    "artifact_source": "project_control_harness",
+    "product_progress_prefix": "rb.port_progress",
+    "product_progress_count": 5,
+    "proof_log": "Project/.campaigns/post_100k_to_tip_20260608_014624/logs/csharp_proof.log",
+    "telemetry_log": "Project/.campaigns/post_100k_to_tip_20260608_014624/logs/csharp_control_telemetry.log",
+    "resume_source": "port_durable_state"
+  },
+  "source_state_gate": "performance_100k",
+  "source_state_origin": "port_durable_state",
+  "source_state_height": 138474,
+  "source_state_hash": "00000000009cce95f2b790ea829c55a0f0225548199febe0972e86bdd2b4b689",
+  "source_state_utxo_count": 14115895,
+  "skipped_consensus_rules": []
+}

@@ -15,6 +15,8 @@ SYNC_TARGET ?= 5000
 DOCKER_50K_PROFILE_TARGET ?= $(if $(filter 5000,$(SYNC_TARGET)),26700,$(SYNC_TARGET))
 PREFETCH_DEPTH ?= 4
 PROGRESS ?= 1000
+OCBITNODE_SCRIPT_THREADS ?= 8
+OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS ?= 16
 DOCKER_LOCAL_PROOF_VOLUME ?= ocbitnode_5k_proof_data
 DOCKER_LOCAL_REFERENCE_RESULT ?= /tmp/ocaml_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_TELEMETRY_LOG ?= /tmp/ocaml_docker_baseline_5k_telemetry_$(RESULT_DATE).log
@@ -109,29 +111,29 @@ docker-proof-local:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then docker volume rm $(DOCKER_LOCAL_PROOF_VOLUME) docker_$(DOCKER_LOCAL_PROOF_VOLUME) >/dev/null 2>&1 || true; fi
-	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_LOCAL_TELEMETRY_LOG)
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_LOCAL_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm -e OCBITNODE_SCRIPT_THREADS=$(OCBITNODE_SCRIPT_THREADS) -e OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS=$(OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS) ocbitnode local-reference-proof --datadir /data --target $(SYNC_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_LOCAL_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_LOCAL_TELEMETRY_LOG)
 
 docker-proof-50k:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_50K_PROOF_VOLUME) docker_$(DOCKER_50K_PROOF_VOLUME) >/dev/null 2>&1 || true
-	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target 50000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_TELEMETRY_LOG)
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm -e OCBITNODE_SCRIPT_THREADS=$(OCBITNODE_SCRIPT_THREADS) -e OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS=$(OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS) ocbitnode local-reference-proof --datadir /data --target 50000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_TELEMETRY_LOG)
 
 docker-proof-100k:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_100K_PROOF_VOLUME) docker_$(DOCKER_100K_PROOF_VOLUME) >/dev/null 2>&1 || true
-	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_100K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target 100000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_100K_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_100K_TELEMETRY_LOG)
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_100K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm -e OCBITNODE_SCRIPT_THREADS=$(OCBITNODE_SCRIPT_THREADS) -e OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS=$(OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS) ocbitnode local-reference-proof --datadir /data --target 100000 --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_100K_REFERENCE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_100K_TELEMETRY_LOG)
 
 docker-proof-post-100k-to-tip:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
-	DOCKER_LOCAL_PROOF_VOLUME=$(POST_100K_TIP_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target $(POST_100K_TIP_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path /tmp/ocaml_docker_post_100k_to_tip_debug_$(RESULT_DATE).json --runtime-surface docker --telemetry-log /tmp/ocaml_docker_post_100k_to_tip_telemetry_$(RESULT_DATE).log
+	DOCKER_LOCAL_PROOF_VOLUME=$(POST_100K_TIP_VOLUME) $(DOCKER_COMPOSE) run --rm -e OCBITNODE_SCRIPT_THREADS=$(OCBITNODE_SCRIPT_THREADS) -e OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS=$(OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS) ocbitnode local-reference-proof --datadir /data --target $(POST_100K_TIP_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path /tmp/ocaml_docker_post_100k_to_tip_debug_$(RESULT_DATE).json --runtime-surface docker --telemetry-log /tmp/ocaml_docker_post_100k_to_tip_telemetry_$(RESULT_DATE).log
 
 docker-proof-50k-profile:
 	$(REFERENCE_P2P_CHECK)
 	@$(DOCKER_COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker volume rm $(DOCKER_50K_PROFILE_VOLUME) docker_$(DOCKER_50K_PROFILE_VOLUME) >/dev/null 2>&1 || true
-	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROFILE_VOLUME) $(DOCKER_COMPOSE) run --rm ocbitnode local-reference-proof --datadir /data --target $(DOCKER_50K_PROFILE_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_PROFILE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_PROFILE_TELEMETRY_LOG)
+	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROFILE_VOLUME) $(DOCKER_COMPOSE) run --rm -e OCBITNODE_SCRIPT_THREADS=$(OCBITNODE_SCRIPT_THREADS) -e OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS=$(OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS) ocbitnode local-reference-proof --datadir /data --target $(DOCKER_50K_PROFILE_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_PROFILE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_PROFILE_TELEMETRY_LOG)
 
 docker-smoke-once: docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus

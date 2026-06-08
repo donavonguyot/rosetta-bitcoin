@@ -54,6 +54,7 @@ public final class SyncLocalCoreService {
         PeerConfig.parseIntValue(env.get("HEADER_BATCHES_MAX"), HeaderSync.DEFAULT_HEADER_BATCHES_MAX);
     int maxBlocks = PeerConfig.parseIntValue(env.get("BLOCKS_MAX"), 64);
     int targetBlockHeight = PeerConfig.parseIntValue(env.get("TARGET_BLOCK_HEIGHT"), 0);
+    int maxReconnects = Math.max(0, PeerConfig.parseIntValue(env.get("JBITNODE_MAX_RECONNECTS"), 5));
     boolean skipBlocks = PeerConfig.parseBoolean(env.get("SKIP_BLOCKS"), false);
     boolean syncTiming = PeerConfig.parseBoolean(env.get("SYNC_TIMING"), false);
     boolean progressJson = PeerConfig.parseBoolean(env.get("PROGRESS_JSON"), false);
@@ -90,84 +91,163 @@ public final class SyncLocalCoreService {
     try (ChainstateSession session =
         ChainstateSession.openReadWrite(dataDir, dbPath, chain, env, true)) {
       ProjectTracker tracker = session.tracker();
-      int startHeight = tracker.bootstrapStartHeight(chain.name());
-      try (PeerConnection connection =
-          new PeerConnection(peer.host(), peer.port(), chain, tracker, startHeight)) {
-        out.println("  utxo_backend=" + session.chainstateStore().backend());
-        connection.connect();
-        HeaderSync.Result headerResult =
-            HeaderSync.syncFromPeer(connection, chain, tracker, maxHeaders, maxBatches);
-        out.println("  stored_headers=" + headerResult.storedTotal());
-        out.println("  header_height=" + headerResult.bestHeight());
-        out.println("  sync_status=" + headerResult.syncStatus());
+      int reconnects = 0;
+      int downloadedTotal = 0;
+      int connectedTotal = 0;
+      BlockSync.Result blockResult = null;
+      HeaderSync.Result headerResult = null;
+      String finalSyncStatus = "starting";
 
-        BlockSync.Result blockResult = null;
-        if (!skipBlocks) {
+      while (true) {
+        resetUnvalidatedHeaderTipForTarget(tracker, chain.name(), targetBlockHeight);
+        int startHeight = tracker.bootstrapStartHeight(chain.name());
+        try (PeerConnection connection =
+            new PeerConnection(peer.host(), peer.port(), chain, tracker, startHeight)) {
+          out.println("  utxo_backend=" + session.chainstateStore().backend());
+          connection.connect();
+          headerResult =
+              HeaderSync.syncFromPeer(
+                  connection, chain, tracker, maxHeaders, maxBatches, targetBlockHeight);
+          out.println("  stored_headers=" + headerResult.storedTotal());
+          out.println("  header_height=" + headerResult.bestHeight());
+          out.println("  sync_status=" + headerResult.syncStatus());
+          if (progressJson) {
+            printCurrentProgressJson(
+                out, chain.name(), headerResult.syncStatus(), session.chainstateStore(), tracker);
+          }
+
+          if (skipBlocks) {
+            finalSyncStatus = headerResult.syncStatus();
+            break;
+          }
+
+          int validatedBeforeBlocks = tracker.getValidatedHeight(chain.name());
+          if (targetBlockHeight > 0
+              && validatedBeforeBlocks >= headerResult.bestHeight()
+              && headerResult.bestHeight() < targetBlockHeight) {
+            if (reconnects < maxReconnects) {
+              reconnects += 1;
+              out.println("  peer_reconnects=" + reconnects);
+              out.println(
+                  "  reconnect_reason=header unavailable below target height " + targetBlockHeight);
+              tracker.upsertSyncState(
+                  chain.name(), new ProjectTracker.SyncStatePatch(null, null, null, "peer_reconnecting"));
+              if (progressJson) {
+                printCurrentProgressJson(
+                    out, chain.name(), "peer_reconnecting", session.chainstateStore(), tracker);
+              }
+              continue;
+            }
+            out.println("  current_blocker=header unavailable below target height " + targetBlockHeight);
+            finalSyncStatus = "blocks_blocked";
+            break;
+          }
+
           int effectiveMaxBlocks = maxBlocks;
           if (targetBlockHeight > 0) {
-            int validatedBeforeBlocks = tracker.getValidatedHeight(chain.name());
             int remainingToTarget = Math.max(0, targetBlockHeight - validatedBeforeBlocks);
             if (remainingToTarget == 0) {
               effectiveMaxBlocks = 0;
             } else if (effectiveMaxBlocks <= 0) {
               effectiveMaxBlocks = remainingToTarget;
             } else {
-              effectiveMaxBlocks = Math.min(effectiveMaxBlocks, remainingToTarget);
+              int remainingCommandBudget = Math.max(0, effectiveMaxBlocks - connectedTotal);
+              effectiveMaxBlocks = Math.min(remainingCommandBudget, remainingToTarget);
             }
           }
           if (effectiveMaxBlocks == 0) {
             out.println("  downloaded_blocks=0");
             out.println("  connected_blocks=0");
             out.println("  sync_status=blocks_current");
-          } else {
-            blockResult =
-                BlockSync.syncFromPeer(
-                    connection,
-                    chain,
-                    tracker,
-                    session.blockStorage(),
-                    session.chainstateStore(),
-                    effectiveMaxBlocks,
-                    BlockSync.TimingSink.none(),
-                    false,
-                    progressJson
-                        ? progress ->
-                            printProgressJson(
-                                out,
-                                chain.name(),
-                                headerResult.bestHeight(),
-                                session.chainstateStore(),
-                                progress,
-                                progressInterval)
-                        : BlockSync.ProgressSink.none());
-            out.println("  downloaded_blocks=" + blockResult.downloaded());
-            out.println("  connected_blocks=" + blockResult.connected());
-            out.println("  sync_status=" + blockResult.syncStatus());
-            if (syncTiming) {
-              printTimingSummary(out, blockResult.timingSummary());
-            }
-            if (blockResult.blockerMessage() != null) {
-              out.println("  current_blocker=" + blockResult.blockerMessage());
-            }
+            finalSyncStatus = "blocks_current";
+            break;
           }
+
+          HeaderSync.Result progressHeaderResult = headerResult;
+          blockResult =
+              BlockSync.syncFromPeer(
+                  connection,
+                  chain,
+                  tracker,
+                  session.blockStorage(),
+                  session.chainstateStore(),
+                  effectiveMaxBlocks,
+                  BlockSync.TimingSink.none(),
+                  false,
+                  progressJson
+                      ? progress ->
+                          printProgressJson(
+                              out,
+                              chain.name(),
+                              progressHeaderResult.bestHeight(),
+                              session.chainstateStore(),
+                              progress,
+                              progressInterval)
+                      : BlockSync.ProgressSink.none());
+          downloadedTotal += blockResult.downloaded();
+          connectedTotal += blockResult.connected();
+          out.println("  downloaded_blocks=" + downloadedTotal);
+          out.println("  connected_blocks=" + connectedTotal);
+          out.println("  peer_reconnects=" + reconnects);
+          out.println("  sync_status=" + blockResult.syncStatus());
+          if (syncTiming) {
+            printTimingSummary(out, blockResult.timingSummary());
+          }
+          if (blockResult.blockerMessage() != null) {
+            out.println("  current_blocker=" + blockResult.blockerMessage());
+          }
+
+          finalSyncStatus = blockResult.syncStatus();
+          if (targetBlockHeight > 0 && tracker.getValidatedHeight(chain.name()) >= targetBlockHeight) {
+            finalSyncStatus = "blocks_current";
+            break;
+          }
+          if (isTransientBlockUnavailable(blockResult)
+              && reconnects < maxReconnects
+              && belowTarget(tracker, chain.name(), targetBlockHeight)) {
+            reconnects += 1;
+            out.println("  peer_reconnects=" + reconnects);
+            out.println("  reconnect_reason=block unavailable from peer");
+            tracker.upsertSyncState(chain.name(), new ProjectTracker.SyncStatePatch(null, null, null, "peer_reconnecting"));
+            if (progressJson) {
+              printCurrentProgressJson(
+                  out, chain.name(), "peer_reconnecting", session.chainstateStore(), tracker);
+            }
+            continue;
+          }
+          break;
+        } catch (IOException error) {
+          if (reconnects < maxReconnects && belowTarget(tracker, chain.name(), targetBlockHeight)) {
+            reconnects += 1;
+            out.println("  peer_reconnects=" + reconnects);
+            out.println("  reconnect_reason=" + error.getMessage());
+            tracker.upsertSyncState(chain.name(), new ProjectTracker.SyncStatePatch(null, null, null, "peer_reconnecting"));
+            if (progressJson) {
+              printCurrentProgressJson(
+                  out, chain.name(), "peer_reconnecting", session.chainstateStore(), tracker);
+            }
+            continue;
+          }
+          throw error;
         }
-
-        int validatedHeight = tracker.getValidatedHeight(chain.name());
-        out.println("  validated_height=" + validatedHeight);
-        ChainstateStatus chainstateStatus =
-            ChainstateStatus.capture(session.chainstateStore(), chain.name());
-        out.println("  utxo_count=" + chainstateStatus.backendUtxoCount());
-        chainstateStatus.print(out);
-        out.println("  binary_gate_status=not_attempted");
-
-        String finalSyncStatus =
-            blockResult != null ? blockResult.syncStatus() : headerResult.syncStatus();
-        int exitCode = exitCodeForSyncStatus(finalSyncStatus);
-        printExitSummary(out, exitCode, blockResult, validatedHeight, finalSyncStatus);
-        completedNormally.set(true);
-        removeShutdownHookQuietly(shutdownHook);
-        return exitCode;
       }
+
+      int validatedHeight = tracker.getValidatedHeight(chain.name());
+      out.println("  validated_height=" + validatedHeight);
+      ChainstateStatus chainstateStatus =
+          ChainstateStatus.capture(session.chainstateStore(), chain.name());
+      out.println("  utxo_count=" + chainstateStatus.backendUtxoCount());
+      chainstateStatus.print(out);
+      out.println("  binary_gate_status=not_attempted");
+
+      if (headerResult != null && blockResult == null && !"blocks_current".equals(finalSyncStatus)) {
+        finalSyncStatus = headerResult.syncStatus();
+      }
+      int exitCode = exitCodeForSyncStatus(finalSyncStatus);
+      printExitSummary(out, exitCode, blockResult, validatedHeight, finalSyncStatus);
+      completedNormally.set(true);
+      removeShutdownHookQuietly(shutdownHook);
+      return exitCode;
     } catch (DatadirLockBusyException e) {
       completedNormally.set(true);
       removeShutdownHookQuietly(shutdownHook);
@@ -208,6 +288,38 @@ public final class SyncLocalCoreService {
       return EXIT_BLOCKED;
     }
     return 0;
+  }
+
+  static boolean belowTarget(ProjectTracker tracker, String chain, int targetBlockHeight)
+      throws SQLException {
+    return targetBlockHeight <= 0 || tracker.getValidatedHeight(chain) < targetBlockHeight;
+  }
+
+  static boolean isTransientBlockUnavailable(BlockSync.Result result) {
+    return result != null
+        && "blocks_blocked".equals(result.syncStatus())
+        && result.blockerMessage() != null
+        && result.blockerMessage().startsWith("block unavailable at height ");
+  }
+
+  static void resetUnvalidatedHeaderTipForTarget(
+      ProjectTracker tracker, String chain, int targetBlockHeight) throws SQLException {
+    if (targetBlockHeight <= 0) {
+      return;
+    }
+    ProjectTracker.SyncState syncState = tracker.getSyncState(chain).orElse(null);
+    int validatedHeight = tracker.getValidatedHeight(chain);
+    if (syncState == null || syncState.bestHeight() <= validatedHeight || validatedHeight >= targetBlockHeight) {
+      return;
+    }
+    String validatedHash = tracker.getValidatedHash(chain);
+    if (validatedHash == null || validatedHash.isBlank()) {
+      return;
+    }
+    tracker.upsertSyncState(
+        chain,
+        new ProjectTracker.SyncStatePatch(
+            validatedHeight, validatedHash, null, "headers_syncing"));
   }
 
   static void printExitSummary(
@@ -476,6 +588,44 @@ public final class SyncLocalCoreService {
             + progress.downloaded()
             + ",\"connected_blocks\":"
             + progress.connected()
+            + "}";
+    out.println("sync_progress_json=" + progressJson);
+    out.println("rb.port_progress " + progressJson);
+    out.flush();
+  }
+
+  static void printCurrentProgressJson(
+      PrintStream out,
+      String chain,
+      String syncStatus,
+      com.jbitnode.db.ChainstateStore chainstateStore,
+      ProjectTracker tracker)
+      throws SQLException {
+    ChainstateStatus chainstateStatus = ChainstateStatus.capture(chainstateStore, chain);
+    ProjectTracker.SyncState syncState = tracker.getSyncState(chain).orElse(null);
+    int validatedHeight = Math.max(0, tracker.getValidatedHeight(chain));
+    String progressJson =
+        "{"
+            + "\"chain\":\""
+            + escapeJson(chain)
+            + "\",\"sync_status\":\""
+            + escapeJson(syncStatus)
+            + "\",\"header_height\":"
+            + (syncState != null ? syncState.bestHeight() : 0)
+            + ",\"header_hash\":\""
+            + escapeJson(syncState != null ? syncState.bestHash() : "")
+            + "\""
+            + ",\"validated_height\":"
+            + validatedHeight
+            + ",\"validated_hash\":\""
+            + escapeJson(tracker.getValidatedHash(chain))
+            + "\",\"stored_block_height\":"
+            + tracker.maxStoredBlockHeight(chain)
+            + ",\"utxo_count\":"
+            + chainstateStatus.backendUtxoCount()
+            + ",\"chainstate_utxo_count\":"
+            + chainstateStatus.backendUtxoCount()
+            + ",\"current_blocker\":null"
             + "}";
     out.println("sync_progress_json=" + progressJson);
     out.println("rb.port_progress " + progressJson);

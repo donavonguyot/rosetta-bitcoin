@@ -500,49 +500,50 @@ const char* envOrEmpty(const char* name) {
 }
 
 void emitTiming(int height, std::string_view blockHash, int utxoCount, const ConnectTiming& timing) {
-    std::cerr << "cpbitnode_sync_timing"
-              << " height=" << height
-              << " unit=us"
-              << " utxo_count=" << utxoCount
-              << " utxo_load=" << timing.utxoLoad
-              << " script_verify=" << timing.scriptVerify
-              << " script_verify_worker_cpu=" << timing.scriptVerifyWorkerCpu
-              << " utxo_apply=" << timing.utxoApply
-              << " commit=" << timing.commit
-              << " block_connect_store_commit=" << timing.blockConnectStoreCommit
-              << " tx_count=" << timing.txCount
-              << " vin_count=" << timing.vinCount
-              << " vout_count=" << timing.voutCount
-              << " script_input_count=" << timing.scriptInputCount
-              << " input_shape_counts=" << compactCounts(timing.inputShapeCounts)
-              << " spent_prevout_script_types=" << compactCounts(timing.spentPrevoutScriptTypes)
-              << " output_script_types=" << compactCounts(timing.outputScriptTypes)
-              << "\n";
-    std::cout << "rb.port_progress "
-              << "{\"chain\":\"testnet4\""
-              << ",\"sync_status\":\"blocks_connecting\""
-              << ",\"header_height\":" << height
-              << ",\"validated_height\":" << height
-              << ",\"validated_hash\":\"" << blockHash << "\""
-              << ",\"stored_block_height\":" << height
-              << ",\"chainstate_utxo_count\":" << utxoCount
-              << ",\"current_blocker\":null"
-              << ",\"peer\":\"" << envOrEmpty("PEERS") << "\""
-              << ",\"current_block_height\":" << height
-              << ",\"current_block_hash\":\"" << blockHash << "\""
-              << ",\"current_block_tx_count\":" << timing.txCount
-              << ",\"current_block_vin_count\":" << timing.vinCount
-              << ",\"current_block_script_input_count\":" << timing.scriptInputCount
-              << ",\"last_block_ms\":" << timing.blockConnectStoreCommit / 1000
-              << ",\"native_crypto_backend\":\"libsecp256k1\""
-              << ",\"timing_buckets_ms\":{"
-              << "\"utxo_load\":" << timing.utxoLoad / 1000
-              << ",\"script_verify\":" << timing.scriptVerify / 1000
-              << ",\"utxo_apply\":" << timing.utxoApply / 1000
-              << ",\"commit\":" << timing.commit / 1000
-              << ",\"block_connect_store_commit\":" << timing.blockConnectStoreCommit / 1000
-              << "}}"
-              << "\n";
+    std::ostringstream timingLine;
+    timingLine << "cpbitnode_sync_timing"
+               << " height=" << height
+               << " unit=us"
+               << " utxo_count=" << utxoCount
+               << " utxo_load=" << timing.utxoLoad
+               << " script_verify=" << timing.scriptVerify
+               << " script_verify_worker_cpu=" << timing.scriptVerifyWorkerCpu
+               << " utxo_apply=" << timing.utxoApply
+               << " commit=" << timing.commit
+               << " block_connect_store_commit=" << timing.blockConnectStoreCommit
+               << " tx_count=" << timing.txCount
+               << " vin_count=" << timing.vinCount
+               << " vout_count=" << timing.voutCount
+               << " script_input_count=" << timing.scriptInputCount
+               << " input_shape_counts=" << compactCounts(timing.inputShapeCounts)
+               << " spent_prevout_script_types=" << compactCounts(timing.spentPrevoutScriptTypes)
+               << " output_script_types=" << compactCounts(timing.outputScriptTypes);
+    std::ostringstream progressLine;
+    progressLine << "rb.port_progress "
+                 << "{\"chain\":\"testnet4\""
+                 << ",\"sync_status\":\"blocks_connecting\""
+                 << ",\"header_height\":" << height
+                 << ",\"validated_height\":" << height
+                 << ",\"validated_hash\":\"" << blockHash << "\""
+                 << ",\"stored_block_height\":" << height
+                 << ",\"chainstate_utxo_count\":" << utxoCount
+                 << ",\"current_blocker\":null"
+                 << ",\"peer\":\"" << envOrEmpty("PEERS") << "\""
+                 << ",\"current_block_height\":" << height
+                 << ",\"current_block_hash\":\"" << blockHash << "\""
+                 << ",\"current_block_tx_count\":" << timing.txCount
+                 << ",\"current_block_vin_count\":" << timing.vinCount
+                 << ",\"current_block_script_input_count\":" << timing.scriptInputCount
+                 << ",\"last_block_ms\":" << timing.blockConnectStoreCommit / 1000
+                 << ",\"native_crypto_backend\":\"libsecp256k1\""
+                 << ",\"timing_buckets_ms\":{"
+                 << "\"utxo_load\":" << timing.utxoLoad / 1000
+                 << ",\"script_verify\":" << timing.scriptVerify / 1000
+                 << ",\"utxo_apply\":" << timing.utxoApply / 1000
+                 << ",\"commit\":" << timing.commit / 1000
+                 << ",\"block_connect_store_commit\":" << timing.blockConnectStoreCommit / 1000
+                 << "}}";
+    std::cout << timingLine.str() << '\n' << progressLine.str() << '\n' << std::flush;
 }
 
 }  // namespace detail

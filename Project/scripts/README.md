@@ -213,6 +213,17 @@ writer-owned log channel. Campaign proofs should not rely on a second sidecar
 process opening live RocksDB/chainstate state while the writer is active;
 sidecar status reads are reserved for final post-exit status capture.
 
+Use the progress posture report before changing emitters:
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-progress-posture
+```
+
+`writer_owned` is the preferred model. Low-maintenance direct emitters should
+stay direct; `mixed` wrapper paths such as C# and Java should pass through
+writer-emitted `rb.port_progress` and keep wrapper work limited to benchmark
+control and final status collection.
+
 For long-run gates, the campaign runner also applies a startup visibility
 timeout. If `first_block_connected` is not observed within the configured
 window, the proof is terminated and recorded as failed before operators spend a

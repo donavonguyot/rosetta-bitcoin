@@ -9,6 +9,7 @@ CONTAINER_NAME="${CONTAINER_NAME:-csbitnode-sync-proof-run}"
 STATUS_FILE="${STATUS_FILE:-.docker-csharp-proof-status.json}"
 EXIT_FILE="${EXIT_FILE:-.docker-csharp-proof-exit}"
 RUN_FILE="${RUN_FILE:-.docker-csharp-proof-run.json}"
+PROGRESS_STATE_FILE="${PROGRESS_STATE_FILE:-.docker-csharp-proof-progress.state}"
 PROGRESS_INTERVAL="${PROGRESS_INTERVAL:-250}"
 
 log_line() {
@@ -71,18 +72,22 @@ emit_benchmark_tick() {
     python3 scripts/emit_benchmark_telemetry_tick.py
 }
 
-emit_product_progress() {
-  local json="$1"
-  printf '%s\n' "$json" | python3 -c 'import json, sys
-raw = sys.stdin.read().strip()
-if not raw:
-    raise SystemExit
+pass_through_product_progress() {
+  docker logs "$CONTAINER_NAME" 2>/dev/null | python3 - "$PROGRESS_STATE_FILE" <<'PY'
+import pathlib
+import sys
+
+state_path = pathlib.Path(sys.argv[1])
 try:
-    payload = json.loads(raw)
-except json.JSONDecodeError:
-    raise SystemExit
-if payload:
-    print("rb.port_progress " + json.dumps(payload, sort_keys=True))'
+    previous = int(state_path.read_text(encoding="utf-8").strip())
+except Exception:
+    previous = 0
+lines = sys.stdin.read().splitlines()
+for line in lines[previous:]:
+    if "rb.port_progress " in line or "rb.port_progress=" in line:
+        print(line)
+state_path.write_text(str(len(lines)), encoding="utf-8")
+PY
 }
 
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -90,7 +95,7 @@ started_ms="$(now_ms)"
 run_id="csharp-$(benchmark_gate)-$started_ms"
 log_line "$(emit_benchmark_tick '{}' 0 startup run_started 0)"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-rm -f "$STATUS_FILE" "$EXIT_FILE" "$RUN_FILE"
+rm -f "$STATUS_FILE" "$EXIT_FILE" "$RUN_FILE" "$PROGRESS_STATE_FILE"
 DOCKER_PROOF_VOLUME="${DOCKER_PROOF_VOLUME:-csbitnode_proof_data}" \
   SECP256K1_BACKEND="${SECP256K1_BACKEND:-native}" \
   HEADERS_MAX="${HEADERS_MAX:-200}" HEADER_BATCHES_MAX="${HEADER_BATCHES_MAX:-1}" BLOCKS_MAX="${BLOCKS_MAX:-2}" \
@@ -118,10 +123,10 @@ while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
     last_height="$h"
   fi
   log_line "AGENT_LOOP_TICK_chatreport {\"validated_height\":$h,\"header_height\":$header,\"stored_block_height\":$stored,\"sync_status\":\"$status\",\"delta_since_last\":$delta,\"process_running\":1}"
-  progress_line="$(emit_product_progress "$json" || true)"
-  if [[ -n "$progress_line" ]]; then
+  while IFS= read -r progress_line; do
+    [[ -z "$progress_line" ]] && continue
     log_line "$progress_line"
-  fi
+  done < <(pass_through_product_progress || true)
   if [[ "$first_peer_byte" == "0" ]] && [[ "$header" =~ ^[0-9]+$ ]] && (( header > 0 )); then
     log_line "$(emit_benchmark_tick "$json" "$previous_height" peer_connect first_peer_byte 1)"
     first_peer_byte=1
@@ -132,6 +137,11 @@ while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
   fi
   log_line "$(emit_benchmark_tick "$json" "$previous_height" heartbeat heartbeat 1)"
 done
+
+while IFS= read -r progress_line; do
+  [[ -z "$progress_line" ]] && continue
+  log_line "$progress_line"
+done < <(pass_through_product_progress || true)
 
 exit_code="$(docker inspect "$CONTAINER_NAME" --format '{{.State.ExitCode}}' 2>/dev/null || echo 125)"
 echo "$exit_code" > "$EXIT_FILE"

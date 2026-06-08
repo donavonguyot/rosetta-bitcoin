@@ -64,6 +64,7 @@ public final class DbStatusService {
       root.put("header_count", headerCount);
       root.put("block_count", tracker.blockCount(chain));
       root.put("header_height", headerHeight);
+      root.put("header_hash", tracker.getHeaderHash(chain, headerHeight));
       root.put("stored_block_height", storedBlockHeight);
       root.put("stored_minus_validated", storedBlockHeight - tip.height());
       root.put("block_gap_count", tracker.countBlockStorageGaps(chain, Math.max(tip.height(), 0)));

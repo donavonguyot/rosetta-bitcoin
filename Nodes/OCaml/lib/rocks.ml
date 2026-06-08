@@ -69,9 +69,9 @@ let decode_utxo_value txid vout raw =
   if stored_vout <> vout then invalid_arg "codec v2 utxo vout mismatch";
   let value_sats = be64_at raw 8 in
   let coinbase = Char.code raw.[16] <> 0 in
-  let script_len = Char.code raw.[17] in
-  if 18 + script_len <> String.length raw then invalid_arg "codec v2 utxo script length mismatch";
-  let script_pubkey = String.sub raw 18 script_len in
+  let script_len, script_offset = Codec_v2.read_compact_size raw 17 in
+  if script_offset + script_len <> String.length raw then invalid_arg "codec v2 utxo script length mismatch";
+  let script_pubkey = String.sub raw script_offset script_len in
   { txid; vout; height; value_sats; coinbase; script_pubkey }
 
 let multi_get_utxos db ~chain outpoints =

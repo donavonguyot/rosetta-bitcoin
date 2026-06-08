@@ -21,7 +21,8 @@ public static class HeaderSync
         ChainParams chain,
         IChainstateStore tracker,
         int maxHeaders,
-        int maxBatches)
+        int maxBatches,
+        int targetHeight = 0)
     {
         var genesis = Genesis.ForChain(chain.Name);
         var genesisHash = chain.GenesisHash;
@@ -36,7 +37,7 @@ public static class HeaderSync
         {
             var state = tracker.GetSyncState(chain.Name);
             var bestHeight = state?.BestHeight ?? 0;
-            if (ShouldSkip(peerHeight, bestHeight))
+            if (ShouldSkip(peerHeight, bestHeight, targetHeight))
             {
                 MarkHeadersCurrent(chain, tracker);
                 return new Result(totalStored, bestHeight, "headers_current");
@@ -54,17 +55,24 @@ public static class HeaderSync
 
             if (headers.Count == 0)
             {
-                MarkHeadersCurrent(chain, tracker);
+                if (targetHeight > 0 && bestHeight < targetHeight)
+                    tracker.UpsertSyncState(chain.Name, new SyncStatePatch(null, null, null, "headers_syncing"));
+                else
+                    MarkHeadersCurrent(chain, tracker);
                 break;
             }
 
             var stored = PersistHeaders(chain, tracker, headers, genesisHashInternal);
             totalStored += stored;
             batches += 1;
+            var currentBestHeight = tracker.GetSyncState(chain.Name)?.BestHeight ?? bestHeight;
 
-            if (stored == 0 || HeadersSyncDone(bestHeight, peerHeight, headers.Count))
+            if (stored == 0 || HeadersSyncDone(currentBestHeight, peerHeight, headers.Count, targetHeight))
             {
-                MarkHeadersCurrent(chain, tracker);
+                if (targetHeight > 0 && currentBestHeight < targetHeight)
+                    tracker.UpsertSyncState(chain.Name, new SyncStatePatch(null, null, null, "headers_syncing"));
+                else
+                    MarkHeadersCurrent(chain, tracker);
                 break;
             }
 
@@ -82,11 +90,13 @@ public static class HeaderSync
         return new Result(totalStored, tip, status);
     }
 
-    public static bool ShouldSkip(int peerHeight, int localHeight) =>
-        peerHeight >= 0 && localHeight >= peerHeight - NearPeerTip;
+    public static bool ShouldSkip(int peerHeight, int localHeight, int targetHeight = 0) =>
+        peerHeight >= 0 && localHeight >= peerHeight - NearPeerTip && (targetHeight <= 0 || localHeight >= targetHeight);
 
-    private static bool HeadersSyncDone(int bestHeight, int peerHeight, int batchCount) =>
-        batchCount == 0 || (peerHeight >= 0 && bestHeight >= peerHeight);
+    private static bool HeadersSyncDone(int bestHeight, int peerHeight, int batchCount, int targetHeight = 0) =>
+        targetHeight > 0
+            ? bestHeight >= targetHeight || batchCount == 0
+            : batchCount == 0 || (peerHeight >= 0 && bestHeight >= peerHeight);
 
     private static int PersistHeaders(
         ChainParams chain,

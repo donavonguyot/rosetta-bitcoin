@@ -37,6 +37,17 @@ public final class HeaderSync {
       int maxHeaders,
       int maxBatches)
       throws IOException, SQLException {
+    return syncFromPeer(peer, chain, tracker, maxHeaders, maxBatches, 0);
+  }
+
+  public static Result syncFromPeer(
+      PeerConnection peer,
+      ChainParams chain,
+      ProjectTracker tracker,
+      int maxHeaders,
+      int maxBatches,
+      int targetHeight)
+      throws IOException, SQLException {
     BlockHeader genesis = Genesis.forChain(chain.name());
     String genesisHash = chain.genesisHash();
     tracker.ensureGenesis(chain.name(), genesis, genesisHash);
@@ -51,7 +62,7 @@ public final class HeaderSync {
       ProjectTracker.SyncState state =
           tracker.getSyncState(chain.name()).orElse(null);
       int bestHeight = state != null ? state.bestHeight() : 0;
-      if (shouldSkip(peerHeight, bestHeight)) {
+      if (shouldSkip(peerHeight, bestHeight, targetHeight)) {
         markHeadersCurrent(chain, tracker);
         return new Result(totalStored, bestHeight, "headers_current");
       }
@@ -68,16 +79,28 @@ public final class HeaderSync {
             new HeadersMessage.Message(message.headers().subList(0, remainingBudget));
       }
       if (message.headers().isEmpty()) {
-        markHeadersCurrent(chain, tracker);
+        if (targetHeight > 0 && bestHeight < targetHeight) {
+          tracker.upsertSyncState(
+              chain.name(), new SyncStatePatch(null, null, null, "headers_syncing"));
+        } else {
+          markHeadersCurrent(chain, tracker);
+        }
         break;
       }
 
       int stored = persistHeaders(chain, tracker, message, genesisHashInternal);
       totalStored += stored;
       batches += 1;
+      int currentBestHeight =
+          tracker.getSyncState(chain.name()).map(ProjectTracker.SyncState::bestHeight).orElse(bestHeight);
 
-      if (stored == 0 || headersSyncDone(bestHeight, peerHeight, message.headers().size())) {
-        markHeadersCurrent(chain, tracker);
+      if (stored == 0 || headersSyncDone(currentBestHeight, peerHeight, message.headers().size(), targetHeight)) {
+        if (targetHeight > 0 && currentBestHeight < targetHeight) {
+          tracker.upsertSyncState(
+              chain.name(), new SyncStatePatch(null, null, null, "headers_syncing"));
+        } else {
+          markHeadersCurrent(chain, tracker);
+        }
         break;
       }
       if (totalStored >= maxHeaders) {
@@ -96,12 +119,25 @@ public final class HeaderSync {
   }
 
   static boolean shouldSkip(int peerHeight, int localHeight) {
-    return peerHeight >= 0 && localHeight >= peerHeight - NEAR_PEER_TIP;
+    return shouldSkip(peerHeight, localHeight, 0);
+  }
+
+  static boolean shouldSkip(int peerHeight, int localHeight, int targetHeight) {
+    return peerHeight >= 0
+        && localHeight >= peerHeight - NEAR_PEER_TIP
+        && (targetHeight <= 0 || localHeight >= targetHeight);
   }
 
   static boolean headersSyncDone(int bestHeight, int peerHeight, int batchCount) {
+    return headersSyncDone(bestHeight, peerHeight, batchCount, 0);
+  }
+
+  static boolean headersSyncDone(int bestHeight, int peerHeight, int batchCount, int targetHeight) {
     if (batchCount == 0) {
       return true;
+    }
+    if (targetHeight > 0) {
+      return bestHeight >= targetHeight;
     }
     return peerHeight >= 0 && bestHeight >= peerHeight;
   }

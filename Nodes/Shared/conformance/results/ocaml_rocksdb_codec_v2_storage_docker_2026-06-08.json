@@ -1,0 +1,107 @@
+{
+  "$schema": "https://shared.local/conformance/storage_gate.schema.json",
+  "implementation": "ocbitnode",
+  "commit": "unknown",
+  "node_id": "OCamlNode",
+  "category": "storage",
+  "captured_at": "2026-06-08T08:27:12Z",
+  "datadir": "/data/chainstate-rocksdb",
+  "chain": "testnet4",
+  "chainstate_backend": "rocksdb",
+  "runtime_truth_backend": "rocksdb",
+  "rocksdb_runtime_truth": true,
+  "native_storage": true,
+  "native_crypto_backend": "libsecp256k1",
+  "rocksdb_version": "rocksdb-c-api",
+  "codec": {
+    "name": "chainstate_codec_v2",
+    "version": 2,
+    "byte_for_byte_vectors": "Nodes/Shared/conformance/fixtures/chainstate_codec_v2_vectors.json"
+  },
+  "validated_height": 2,
+  "validated_hash": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+  "header_height": 2,
+  "stored_block_height": 2,
+  "chainstate_status": "foundation_ready",
+  "verification": {
+    "dune": "dune runtest",
+    "tests_run": 7,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "maven": "not_applicable",
+    "jacoco_line_minimum": 0,
+    "surefire_broad_exclusions": false
+  },
+  "project_export": {
+    "importable": true,
+    "port": "ocaml",
+    "artifact_kind": "storage_gate",
+    "project_db": "Project/project.db",
+    "node_id": "OCamlNode",
+    "script": "Project/scripts/import_all.py",
+    "result": "passed"
+  },
+  "results": [
+    {
+      "fixture_id": "metadata.codec_version",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+      "chainstate_backend": "rocksdb",
+      "failure": ""
+    },
+    {
+      "fixture_id": "tip.roundtrip",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+      "chainstate_backend": "rocksdb",
+      "failure": ""
+    },
+    {
+      "fixture_id": "header.roundtrip",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+      "chainstate_backend": "rocksdb",
+      "failure": ""
+    },
+    {
+      "fixture_id": "block_index.roundtrip",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+      "chainstate_backend": "rocksdb",
+      "failure": ""
+    },
+    {
+      "fixture_id": "utxo.roundtrip",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+      "chainstate_backend": "rocksdb",
+      "failure": ""
+    },
+    {
+      "fixture_id": "undo.roundtrip",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+      "chainstate_backend": "rocksdb",
+      "failure": ""
+    },
+    {
+      "fixture_id": "metadata.prefix_iterator",
+      "result": "passed",
+      "validated_height": 2,
+      "validated_hash": "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f",
+      "chainstate_backend": "rocksdb",
+      "failure": ""
+    }
+  ],
+  "commands": [
+    "cd Nodes/OCaml && make ocbitnode-storage-proof",
+    "cd Nodes/OCaml && make docker-storage-proof"
+  ]
+}
