@@ -97,7 +97,7 @@ project claim belongs under `Nodes/Shared/conformance/results/`; see
 This workspace is being prepared for eventual publication as RosettaBitcoin.
 The local working-directory path is not a separate public project identity.
 
-Public status claims must come from Project reports and current RB evidence,
+Public status claims must come from Project reports and current RosettaBitcoin evidence,
 not hand-maintained tables or retired archive material. RosettaBitcoin uses the
 MIT License and plans to use GitHub private vulnerability reporting after the
 public repository exists. Repository host/name and final publication mechanics
@@ -114,8 +114,8 @@ The retired `/Users/donavonguyot/ArchiveRosettaBitcoin` workspace is retained
 archaeology, with a compressed backup already taken. The current workspace is
 the deliverable workspace and the source of operational truth.
 
-Old RosettaBitcoin material may inform RB only after it is re-expressed as
-RB-owned documentation, contracts, fixtures, or compact proof evidence. Static
+Old RosettaBitcoin material may inform the current project only after it is re-expressed as
+RosettaBitcoin-owned documentation, contracts, fixtures, or compact proof evidence. Static
 IL, old proof ladders, nested repositories, generated artifacts, and historical
 runtime state are provenance or archive material; they do not support current
 claims by themselves. See

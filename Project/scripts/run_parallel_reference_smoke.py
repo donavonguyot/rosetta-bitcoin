@@ -141,7 +141,7 @@ def campaign_id(args: argparse.Namespace, spec: GateSpec) -> str:
 
 
 def compose_project_name(run_id: str) -> str:
-    return f"rb_parallel_{run_id}".replace("-", "_")
+    return f"rosettabitcoin_parallel_{run_id}".replace("-", "_")
 
 
 def load_plan(ports: list[str], run_id: str, spec: GateSpec) -> list[PortPlan]:
@@ -224,7 +224,7 @@ def cleanup_unused_smoke_networks(*, exclude_project: str | None = None) -> list
     removed: list[str] = []
     excluded = f"{exclude_project}_default" if exclude_project else ""
     for name in completed.stdout.splitlines():
-        if not name.startswith("rb_parallel_") or name == excluded:
+        if not name.startswith("rosettabitcoin_parallel_") or name == excluded:
             continue
         inspected = subprocess.run(
             ["docker", "network", "inspect", name, "--format", "{{json .Containers}}"],
@@ -445,7 +445,7 @@ def run_smoke(args: argparse.Namespace) -> int:
         return 1
 
     base_env = os.environ.copy()
-    base_env.setdefault("RB_PARALLEL_REFERENCE_SMOKE", "1")
+    base_env.setdefault("ROSETTABITCOIN_PARALLEL_REFERENCE_SMOKE", "1")
     summary: dict[str, Any] = {
         "schema": "rb.parallel_reference_smoke",
         "campaign_id": run_id,
@@ -469,7 +469,7 @@ def run_smoke(args: argparse.Namespace) -> int:
         warm_log = logs_dir / f"{item.port}_warm.log"
         env = dict(base_env)
         env["COMPOSE_PROJECT_NAME"] = item.compose_project_name
-        env["RB_PARALLEL_SMOKE_PORT"] = item.port
+        env["ROSETTABITCOIN_PARALLEL_SMOKE_PORT"] = item.port
         code = run_shell(item.warm_command, warm_log, env)
         if code != 0:
             summary["ports"].append(
@@ -497,7 +497,7 @@ def run_smoke(args: argparse.Namespace) -> int:
         warm_log = logs_dir / f"{item.port}_warm.log"
         env = dict(base_env)
         env["COMPOSE_PROJECT_NAME"] = item.compose_project_name
-        env["RB_PARALLEL_SMOKE_PORT"] = item.port
+        env["ROSETTABITCOIN_PARALLEL_SMOKE_PORT"] = item.port
         launched_at = utc_now()
         started = time.time()
         process = launch_shell(item.proof_command, proof_log, env)

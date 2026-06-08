@@ -1,6 +1,6 @@
 # Benchmark Contract
 
-RB benchmarks are developer-experience infrastructure. They measure how quickly
+RosettaBitcoin benchmarks are developer-experience infrastructure. They measure how quickly
 and cleanly a port can prove correctness, expose bottlenecks, and reproduce
 evidence during development. They are not production node bragging rights, and
 they are not a permanent architecture mandate.

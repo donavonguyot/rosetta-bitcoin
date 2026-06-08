@@ -24,7 +24,7 @@ The current RosettaBitcoin approach is different:
 Old archive material, IL assertions, proof ladders, portal/book/audio assets,
 DBs, generated reports, generated ports, runtime state, and nested Git histories
 are provenance only. They do not support current claims unless rewritten into
-RB-native docs, Shared contracts, fixtures, rule cards, or compact proof
+RosettaBitcoin-native docs, Shared contracts, fixtures, rule cards, or compact proof
 artifacts.
 
 Public claims should point to current evidence: Project reports, Shared

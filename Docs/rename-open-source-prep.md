@@ -1,15 +1,15 @@
 # Rename/Open-Source Prep
 
-This document records the Stage 5 preparation boundary for eventually publishing
-this workspace as RosettaBitcoin. It does not rename the workspace directory,
-change Git remotes, publish a repository, or move code.
+This document records the Stage 5 preparation boundary for publishing this
+workspace as RosettaBitcoin. The workspace directory has been renamed to
+`/Users/donavonguyot/RosettaBitcoin`; this document does not create Git remotes
+or publish a repository.
 
 ## Public Identity
 
-The intended public project name is `RosettaBitcoin`. The local path `RB` is a
-working-directory name only. Public documentation should use RosettaBitcoin for
-the project and reserve `RB` for local path examples or internal workspace
-references.
+The public project name and active local workspace name are `RosettaBitcoin`.
+Public documentation should use RosettaBitcoin for the project. `RB` may remain
+only as an intentional short nickname or internal package identifier.
 
 ## Selected Policy
 
@@ -33,7 +33,7 @@ Enable GitHub private vulnerability reporting when the public repository exists.
 
 ## Public Claim Rules
 
-Public claims must be backed by current RB evidence:
+Public claims must be backed by current RosettaBitcoin evidence:
 
 - Project reports from `Project/project.db`;
 - Shared contracts, fixtures, and rule ledgers;
@@ -71,24 +71,21 @@ archaeology. Do not copy these into the public repository:
 - old roadmap/control-room state;
 - nested `.git` histories.
 
-If a historical fact matters, rewrite it into an RB-native doc, Shared
+If a historical fact matters, rewrite it into a RosettaBitcoin-native doc, Shared
 contract, fixture, or compact proof artifact before using it.
 
-## Rename Readiness
+## Rename Status
 
-The top-level `~/RosettaBitcoin` name has been freed by moving the retired
-workspace to `~/ArchiveRosettaBitcoin`. The actual filesystem rename is a later
-operational step, not part of this preparation pass.
+The active workspace now lives at `~/RosettaBitcoin`. The retired workspace
+remains external at `~/ArchiveRosettaBitcoin`.
 
-Before renaming the current workspace, stop Reference Core/OrbStack activity and
-close path-rooted tools such as editors, terminals, or agent sessions that hold
-open files under the old workspace path. Historical proof JSON and Project DB
-rows may keep old absolute paths as run metadata; do not rewrite them solely for
-the directory rename.
+Historical proof JSON and Project DB rows may keep old absolute paths as run
+metadata until fresh post-rename evidence replaces them. Future artifact writers
+should use repo-relative paths or omit ephemeral log paths.
 
 ## Release Checklist
 
-Before the actual rename or publication:
+Before publication:
 
 1. Confirm repository host/name and enable GitHub private vulnerability
    reporting.

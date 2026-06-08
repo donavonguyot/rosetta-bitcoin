@@ -62,6 +62,14 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def sanitize_output(text: str, root: Path | None = None) -> str:
+    root = root or repo_root()
+    sanitized = text.replace(str(root), "<workspace-root>")
+    old_root = root.with_name("RB")
+    sanitized = sanitized.replace(str(old_root), "<workspace-root>")
+    return sanitized
+
+
 def utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -210,10 +218,10 @@ def print_plan(plan: list[PlannedCommand], run_requested: bool) -> None:
         )
 
 
-def output_tail(stdout: str, stderr: str, max_lines: int = 30) -> str:
+def output_tail(stdout: str, stderr: str, max_lines: int = 30, root: Path | None = None) -> str:
     combined = "\n".join(part for part in (stdout.strip(), stderr.strip()) if part)
     lines = combined.splitlines()
-    return "\n".join(lines[-max_lines:])
+    return sanitize_output("\n".join(lines[-max_lines:]), root)
 
 
 def parse_test_summary(output: str) -> dict[str, int]:
@@ -385,6 +393,7 @@ def build_test_artifact(
     duration_ms: int,
     stdout: str,
     stderr: str,
+    root: Path | None = None,
 ) -> dict[str, Any]:
     combined = "\n".join(part for part in (stdout, stderr) if part)
     summary = parse_test_summary(combined)
@@ -400,7 +409,7 @@ def build_test_artifact(
         "exit_code": exit_code,
         "captured_at": captured_at,
         "duration_ms": duration_ms,
-        "summary": output_tail(stdout, stderr),
+        "summary": output_tail(stdout, stderr, root=root),
     }
     payload.update(summary)
     return payload
@@ -431,7 +440,7 @@ def build_coverage_artifact(
         "captured_at": captured_at,
         "duration_ms": duration_ms,
         "metrics": metrics,
-        "summary": output_tail(stdout, stderr),
+        "summary": output_tail(stdout, stderr, root=root),
     }
     payload.update(metrics)
     return payload
@@ -447,7 +456,7 @@ def execute_plan(root: Path, results_dir: Path, plan: list[PlannedCommand]) -> i
         captured_at = utc_now()
         exit_code, duration_ms, stdout, stderr = run_shell(root, item.command)
         artifact = (
-            build_test_artifact(item, captured_at, exit_code, duration_ms, stdout, stderr)
+            build_test_artifact(item, captured_at, exit_code, duration_ms, stdout, stderr, root=root)
             if item.kind == "test"
             else build_coverage_artifact(root, item, captured_at, exit_code, duration_ms, stdout, stderr)
         )

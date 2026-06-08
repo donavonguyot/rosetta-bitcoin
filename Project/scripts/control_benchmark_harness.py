@@ -61,6 +61,13 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def rel(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 def read_env(path: Path = REFERENCE_TOPOLOGY) -> dict[str, str]:
     values: dict[str, str] = {}
     if not path.exists():
@@ -417,8 +424,8 @@ def build_artifact(
             "artifact_source": "project_control_harness",
             "product_progress_prefix": "rb.port_progress",
             "product_progress_count": len(entries),
-            "proof_log": str(proof_log),
-            "telemetry_log": str(telemetry_log_path),
+            "proof_log": rel(proof_log),
+            "telemetry_log": rel(telemetry_log_path),
         },
     }
     if spec.get("resume_from_state"):

@@ -21,7 +21,7 @@ unless they have been promoted to a canonical result.
 
 Retired workspaces such as `/Users/donavonguyot/ArchiveRosettaBitcoin` are external
 archives. A harvest may add small Markdown summaries, checksum/manifests,
-rewritten RB-native contracts, or deliberately promoted compact proof JSON. It
+rewritten RosettaBitcoin-native contracts, or deliberately promoted compact proof JSON. It
 must not import live DBs, nested `.git` directories, dependency trees, generated
 build output, portal/book/audio bulk assets, old proof scratch, local blocks,
 chainstate, logs, or runtime state.

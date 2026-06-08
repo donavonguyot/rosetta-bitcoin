@@ -107,7 +107,7 @@ still-current rules into canonical docs, then delete the plan file or move the
 facts into `Nodes/Shared/` contracts.
 
 Harvest plans follow the same rule: once a legacy-workspace harvest is complete,
-keep only the durable RB-native facts in canonical docs, Project evidence,
+keep only the durable RosettaBitcoin-native facts in canonical docs, Project evidence,
 Shared contracts, or compact artifacts. Do not let old archive maps become a
 parallel authority system. IL audit records are triage notes only; promoted
 facts must land in canonical docs, Shared contracts, fixtures, or compact

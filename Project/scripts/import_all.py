@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import canonical RB evidence into Project/project.db.
+"""Import canonical RosettaBitcoin evidence into Project/project.db.
 
 This is Project mission-control import tooling. It writes only the Project
 database; it never opens port-local operational datadirs.

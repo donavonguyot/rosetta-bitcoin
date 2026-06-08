@@ -13,6 +13,6 @@
   "result": "passed",
   "schema": "port.test_result",
   "skipped": 0,
-  "summary": "ctest --test-dir build-core --output-on-failure\nTest project /Users/donavonguyot/RB/Nodes/Cpp/build-core\n    Start 1: shared_script_corpus\n1/2 Test #1: shared_script_corpus .............   Passed    0.36 sec\n    Start 2: cpbitnode_tests\n2/2 Test #2: cpbitnode_tests ..................   Passed    2.55 sec\n\n100% tests passed, 0 tests failed out of 2\n\nTotal Test time (real) =   2.91 sec",
+  "summary": "ctest --test-dir build-core --output-on-failure\nTest project <workspace-root>/Nodes/Cpp/build-core\n    Start 1: shared_script_corpus\n1/2 Test #1: shared_script_corpus .............   Passed    0.36 sec\n    Start 2: cpbitnode_tests\n2/2 Test #2: cpbitnode_tests ..................   Passed    2.55 sec\n\n100% tests passed, 0 tests failed out of 2\n\nTotal Test time (real) =   2.91 sec",
   "total": 2
 }

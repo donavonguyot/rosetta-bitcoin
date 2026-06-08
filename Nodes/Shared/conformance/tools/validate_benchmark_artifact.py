@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate RB benchmark proof artifacts.
+"""Validate RosettaBitcoin benchmark proof artifacts.
 
 Project import remains compatibility-friendly for historical artifacts. This
 tool is the strict current-evidence gate used by proof commands and campaign

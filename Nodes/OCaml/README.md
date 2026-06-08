@@ -1,6 +1,6 @@
 # ocbitnode
 
-`ocbitnode` is the OCaml follower foundation for RB testnet4 node proof work.
+`ocbitnode` is the OCaml follower foundation for RosettaBitcoin testnet4 node proof work.
 This first phase intentionally stops before P2P sync and 5k readiness. It proves
 the risky native foundations first:
 

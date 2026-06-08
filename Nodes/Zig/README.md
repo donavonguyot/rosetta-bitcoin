@@ -1,6 +1,6 @@
 # ZigNode
 
-ZigNode is the Zig follower port for the RB node workspace.
+ZigNode is the Zig follower port for the RosettaBitcoin workspace.
 
 For code structure and scaffold scope, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 For imported Zig posture, use Project reports from the repository root:
