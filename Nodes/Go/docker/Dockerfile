@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM golang:1.23-bookworm AS build
 
 RUN apt-get update \
@@ -6,9 +7,12 @@ RUN apt-get update \
 
 WORKDIR /src
 COPY go.mod go.sum* ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 COPY . .
-RUN go build -o /out/gobitnode ./cmd/gobitnode \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -o /out/gobitnode ./cmd/gobitnode \
     && go build -o /out/gobitnode-sync ./cmd/gobitnode-sync \
     && go build -o /out/gobitnode-connect ./cmd/gobitnode-connect \
     && go build -o /out/gobitnode-status ./cmd/gobitnode-status \

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM rust:1-bookworm AS build
 
 RUN apt-get update \
@@ -8,7 +9,12 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
 COPY tests ./tests
-RUN cargo build --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/src/target \
+    cargo build --release \
+    && mkdir -p /out \
+    && cp /src/target/release/rsbitnode /out/rsbitnode
 
 FROM debian:bookworm-slim
 
@@ -16,7 +22,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates librocksdb7.8 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /src/target/release/rsbitnode /usr/local/bin/rsbitnode
+COPY --from=build /out/rsbitnode /usr/local/bin/rsbitnode
 COPY scripts/docker_supervisor_once.sh /usr/local/bin/rsbitnode-supervisor-once
 
 ENV CHAIN=testnet4

@@ -12,7 +12,7 @@
     "base": "golang:1.23-bookworm",
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
-    "package_manager": "apt plus go",
+    "package_manager": "apt plus go/BuildKit module and build cache",
     "native_dependencies": [
       "librocksdb-dev/librocksdb7.8",
       "libsecp256k1-dev/libsecp256k1-1"

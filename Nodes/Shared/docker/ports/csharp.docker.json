@@ -12,7 +12,7 @@
     "base": "mcr.microsoft.com/dotnet/sdk:8.0",
     "runtime": "mcr.microsoft.com/dotnet/runtime:8.0",
     "os_family": "Debian-family Microsoft .NET image",
-    "package_manager": "apt",
+    "package_manager": "NuGet/BuildKit cache plus apt in base image",
     "native_dependencies": [
       "RocksDB native package or bundled library",
       "libsecp256k1 native backend"

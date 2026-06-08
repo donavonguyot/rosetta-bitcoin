@@ -12,7 +12,7 @@
     "base": "rust:1-bookworm",
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
-    "package_manager": "apt plus cargo",
+    "package_manager": "apt plus cargo/BuildKit cache",
     "native_dependencies": [
       "librocksdb-dev/librocksdb7.8",
       "rust-secp256k1"
