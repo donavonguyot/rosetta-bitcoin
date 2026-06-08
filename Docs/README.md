@@ -41,6 +41,8 @@ python3 Project/scripts/report.py --db Project/project.db --section test-coverag
 - `../Nodes/Shared/README.md` - map of Shared contracts and runbooks.
 - `../Nodes/Shared/CODE_DOCUMENTATION.md` - code documentation philosophy,
   shared vocabulary, and agent/human review guidance.
+- `../Nodes/Shared/code-documentation/DOCUMENTATION_ROLLOUT_PLAN.md` -
+  multi-port documentation rollout waves and acceptance workflow.
 - `../Nodes/Shared/storage/STORAGE_GATE.md` - storage gate expectations.
 - `../Nodes/Shared/chainstate/CHAINSTATE_STORE.md` - native chainstate contract.
 - `../Nodes/Shared/docker/DOCKER_RUNTIME_CONTRACT.md` - Docker runtime contract.
