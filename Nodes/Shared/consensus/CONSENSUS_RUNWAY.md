@@ -54,11 +54,25 @@ historical blocker notes in Project. For example, if a Markdown ledger still has
 an old `open` note for a height but the Shared rule ledger marks that height's
 rule as `proved`, Project reports the current blocker state as cleared.
 
+The generated consensus rule projection sits beside the ledger as an
+implementation map:
+
+```text
+Nodes/Shared/consensus/generated/consensus_rule_projection.json
+Nodes/Shared/consensus/CONSENSUS_RULE_PROJECTION.md
+```
+
+It joins each rule card to the Shared script fixture details that exercise it.
+The projection is `authority=projection_only`; it does not define Bitcoin
+consensus, prove a port, or add a readiness gate.
+
 Validate and refresh the generated readable matrix with:
 
 ```bash
 python3 Nodes/Shared/consensus/tools/validate_consensus_ledger.py \
   Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json
+python3 Nodes/Shared/consensus/tools/build_consensus_rule_projection.py \
+  --output Nodes/Shared/consensus/generated/consensus_rule_projection.json
 python3 Nodes/Shared/consensus/tools/build_rule_matrix.py \
   --rules Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json \
   --output Nodes/Shared/consensus/generated/rule_matrix.md
