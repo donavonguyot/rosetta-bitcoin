@@ -1,0 +1,116 @@
+{
+  "manifest_version": 1,
+  "port": "mojo",
+  "status": "proof_partial",
+  "paths": {
+    "root": "Nodes/Mojo",
+    "dockerfile": "Nodes/Mojo/docker/Dockerfile",
+    "compose": "Nodes/Mojo/docker/docker-compose.yml",
+    "dockerignore": "Nodes/Mojo/docker/.dockerignore"
+  },
+  "images": {
+    "base": "debian:bookworm-slim plus Mojo installed by uv",
+    "runtime": "debian:bookworm-slim",
+    "os_family": "Debian",
+    "package_manager": "apt plus uv pip install mojo",
+    "native_dependencies": [
+      "librocksdb-dev",
+      "libsecp256k1-dev",
+      "libssl-dev"
+    ]
+  },
+  "volumes": {
+    "data": "mojobitnode_data",
+    "proof": "mojobitnode_proof_data",
+    "supervisor": "mojobitnode_supervisor_data"
+  },
+  "commands": {
+    "docker_config": "cd Nodes/Mojo && make docker-config",
+    "docker_build": "cd Nodes/Mojo && make docker-build",
+    "docker_warm": "cd Nodes/Mojo && make docker-warm",
+    "docker_status": "cd Nodes/Mojo && make docker-status",
+    "docker_storage_proof": "cd Nodes/Mojo && make docker-storage-proof",
+    "docker_native_crypto_vectors": "cd Nodes/Mojo && make docker-native-crypto-vectors",
+    "docker_script_corpus": null,
+    "docker_proof_local": null,
+    "docker_proof_10k": null,
+    "docker_proof_50k": null,
+    "docker_proof_100k": null,
+    "docker_proof_post_100k_to_tip": null,
+    "docker_proof_tip_once": null,
+    "docker_tip_maintenance": null,
+    "docker_probe_external": null,
+    "docker_supervisor": null,
+    "docker_supervisor_status": null,
+    "docker_supervisor_stop": null,
+    "docker_supervisor_resume": null,
+    "docker_smoke_once": "cd Nodes/Mojo && make docker-smoke-once"
+  },
+  "peer_modes": {
+    "local_reference": {
+      "supported": false,
+      "command": null,
+      "peer": "${REFERENCE_P2P_PEER}",
+      "required_recorded_facts": [
+        "peer",
+        "validated_height",
+        "header_height",
+        "stored_block_height",
+        "sync_status"
+      ]
+    },
+    "external_manual": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": [
+        "peer",
+        "disconnects",
+        "advertised_start_height",
+        "validated_height"
+      ]
+    },
+    "external_seed": {
+      "supported": false,
+      "command": null,
+      "peer": null,
+      "required_recorded_facts": [
+        "selected_peer",
+        "seed_source",
+        "disconnects",
+        "validated_height"
+      ]
+    }
+  },
+  "supervisor": {
+    "stop_marker": ".mojobitnode_supervisor_stop",
+    "resume_marker": ".mojobitnode_supervisor_resume",
+    "poll_sec": 120,
+    "check_sec": 5
+  },
+  "tick_json": {
+    "required_fields": [
+      "phase",
+      "runtime_surface",
+      "peer_mode",
+      "peer",
+      "validated_height",
+      "header_height",
+      "stored_block_height",
+      "sync_status",
+      "delta_since_last",
+      "process_running",
+      "current_blocker"
+    ]
+  },
+  "proof_artifacts": {
+    "docker_contract_result": null,
+    "storage_result": "Nodes/Mojo/.spike-results/mojo_rocksdb_storage_proof_<YYYY-MM-DD>.json",
+    "notes": "Mojo proof_partial is a Debian feasibility spike only: Mojo install, Project-shaped status, libsecp256k1 vectors, and RocksDB smoke. It has no P2P, script corpus, 5k baseline, supervisor, Project current-evidence update, or benchmark claim."
+  },
+  "known_caveats": [
+    "Debian bookworm is mandatory for the spike; Ubuntu fallback is intentionally disallowed.",
+    "The spike binary is a minimal native proof surface for Mojo runtime feasibility and C ABI dependencies, not a full Mojo node implementation.",
+    "Binary gate and 5k baseline are not attempted."
+  ]
+}

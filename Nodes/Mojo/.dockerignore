@@ -1,0 +1,10 @@
+.git
+.venv
+build
+.benchmark-results
+data-mojo
+data-mojo-*
+*.log
+*.db
+*.sqlite
+*.sqlite3

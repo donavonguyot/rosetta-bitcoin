@@ -1,0 +1,26 @@
+services:
+  mojobitnode:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      MOJOBITNODE_RUNTIME_SURFACE: docker
+    volumes:
+      - mojobitnode_data:/data
+      - ../../Shared:/workspace/Shared:ro
+    networks:
+      - default
+      - reference
+
+volumes:
+  mojobitnode_data:
+    name: ${DOCKER_DATA_VOLUME:-mojobitnode_data}
+  mojobitnode_proof_data:
+    name: ${DOCKER_PROOF_VOLUME:-mojobitnode_proof_data}
+  mojobitnode_supervisor_data:
+    name: ${DOCKER_SUPERVISOR_VOLUME:-mojobitnode_supervisor_data}
+
+networks:
+  reference:
+    name: ${REFERENCE_DOCKER_NETWORK:?set REFERENCE_DOCKER_NETWORK from Nodes/Shared/docker/reference_topology.env}
+    external: true

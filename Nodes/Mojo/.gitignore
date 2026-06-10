@@ -1,0 +1,5 @@
+.venv/
+build/
+data-mojo/
+data-mojo-proof/
+.benchmark-results/
