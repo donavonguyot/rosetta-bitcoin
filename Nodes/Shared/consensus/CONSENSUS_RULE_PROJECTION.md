@@ -51,6 +51,8 @@ Each projected rule row includes:
 - explicit boundary fields: `authority=projection_only`,
   `source_of_truth=["rule_ledger","script_fixture_manifest"]`, and
   `does_not_prove=["port_pass","live_sync","benchmark_readiness","full_node_validity"]`
+- SHA256 digests for the rule ledger and fixture manifest used to generate the
+  projection
 
 The projection can make implementation obligations easier to inspect. It does
 not declare that any port passes a rule, reaches tip, satisfies a benchmark, or
@@ -181,6 +183,16 @@ Checklist items are always unchecked because they are implementation prompts,
 not evidence. A port still has to prove the work with its own
 `port.script_corpus_result.v1` artifact.
 
+Checklist output separates concrete implementation obligations from navigation
+coverage:
+
+- `Rule/Opcode Items` are closer to implementation work, such as opcodes,
+  locktime, sighash, hash, multisig, signature, and altstack behavior.
+- `Template/Semantic Coverage` labels describe the fixture family or planning
+  scope, such as `p2tr`, `P2TR script-path`, `p2wsh`, `p2sh`, `tapscript`, or
+  `bare_legacy`. They are useful coverage labels, but they are not always
+  directly implementable rules.
+
 When checklist mode uses `--domain`, output separates the selected domain's
 declared core tags from the additional obligations carried by the matched
 fixtures:
@@ -198,7 +210,14 @@ python3 Nodes/Shared/consensus/tools/query_consensus_rule_projection.py \
   --checklist --domain tapscript --markdown
 python3 Nodes/Shared/consensus/tools/query_consensus_rule_projection.py \
   --checklist --domain relative-locktime --fixture scripts.p2wsh_rot_62754 --markdown
+python3 Nodes/Shared/consensus/tools/query_consensus_rule_projection.py \
+  --checklist --domain arithmetic --json
 ```
+
+Markdown checklists compact large fixture file sets by default. They show key
+file categories and summarize repeated witness files so work bundles remain
+pasteable. Checklist JSON keeps the complete `required_fixture_files` array for
+tooling and full audit detail.
 
 The query helper preserves the projection boundary in its output:
 `authority=projection_only` and

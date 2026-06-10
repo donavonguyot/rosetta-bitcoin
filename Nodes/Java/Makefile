@@ -6,6 +6,21 @@ RESULT_DATE ?= $(shell date +%F)
 DOCKER_PROOF_VOLUME ?= jbitnode_proof_data
 POST_100K_TIP_VOLUME ?= jbitnode_100k_proof_data
 POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
+TIP_MAINTENANCE_VOLUME ?= $(POST_100K_TIP_VOLUME)
+TIP_MAINTENANCE_HEADERS_MAX ?= 2000
+TIP_MAINTENANCE_HEADER_BATCHES_MAX ?= 50
+TIP_MAINTENANCE_BLOCKS_MAX ?= 64
+TIP_MAINTENANCE_ITERATIONS ?= 3
+TIP_MAINTENANCE_POLL_MS ?= 5000
+TIP_MAINTENANCE_RECONNECT_MS ?= 5000
+PUBLIC_PROBE_VOLUME ?= $(TIP_MAINTENANCE_VOLUME)
+PUBLIC_PROBE_HEADERS_MAX ?= 2000
+PUBLIC_PROBE_HEADER_BATCHES_MAX ?= 50
+PUBLIC_PROBE_BLOCKS_MAX ?= 64
+PUBLIC_ROTATION_VOLUME ?= $(PUBLIC_PROBE_VOLUME)
+PUBLIC_ROTATION_HEADERS_MAX ?= $(PUBLIC_PROBE_HEADERS_MAX)
+PUBLIC_ROTATION_HEADER_BATCHES_MAX ?= $(PUBLIC_PROBE_HEADER_BATCHES_MAX)
+PUBLIC_ROTATION_BLOCKS_MAX ?= $(PUBLIC_PROBE_BLOCKS_MAX)
 BENCHMARK_DEBUG_DIR ?= .benchmark-results
 DOCKER_BENCHMARK_RESULT ?= $(BENCHMARK_DEBUG_DIR)/java_docker_baseline_5k_benchmark_$(shell date +%F).json
 DOCKER_10K_BENCHMARK_RESULT ?= ../Shared/conformance/results/java_docker_diagnostic_10k_benchmark_$(shell date +%F).json
@@ -17,6 +32,8 @@ TESTING_RESULTS_DIR ?= ../Shared/testing/results
 TESTING_CAPABILITY_EMITTER ?= python3 ../Shared/testing/tools/emit_crypto_capability_contract.py
 CRYPTO_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/java_crypto_vectors_$(RESULT_DATE).json
 BLOCK_CONNECT_BACKEND_RESULT ?= $(TESTING_RESULTS_DIR)/java_block_connect_backend_$(RESULT_DATE).json
+PUBLIC_PEER_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/java_full_node_public_peer_probe_$(RESULT_DATE).json
+PUBLIC_ROTATION_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/java_full_node_peer_rotation_reconnect_$(RESULT_DATE).json
 DOCKER_BENCHMARK_TARGET ?= 5000
 DOCKER_BENCHMARK_BLOCKS_MAX ?= 5000
 DOCKER_BENCHMARK_HEADERS_MAX ?= 5000
@@ -40,7 +57,7 @@ VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benc
 DOCKER_REBUILD ?= 0
 BENCHMARK_GATE ?= baseline_5k
 
-.PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-supporting-10k-proof docker-java-supporting-50k-proof docker-java-primary-100k-proof docker-java-post-100k-to-tip-proof docker-proof-post-100k-to-tip docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume docker-smoke-once java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
+.PHONY: test coverage docker-config docker-build docker-warm docker-script-corpus docker-java-sync-proof docker-java-native-crypto-proof docker-java-supporting-5k-proof docker-java-supporting-10k-proof docker-java-supporting-50k-proof docker-java-primary-100k-proof docker-java-post-100k-to-tip-proof docker-proof-post-100k-to-tip docker-java-tip-maintenance docker-java-public-peer-probe docker-java-peer-rotation-probe docker-java-native-crypto-long-sync-proof docker-java-native-crypto-50k-sync-proof docker-java-native-crypto-tip-sync-proof docker-java-proof-status docker-java-sync-supervisor docker-java-sync-status docker-java-sync-stop docker-java-sync-resume docker-smoke-once java-node-status java-node-db-status java-node-native-status java-node-native-sync java-node-script-corpus java-node-project-export java-node-preflight java-node-sync-local-core java-node-live java-node-sync-catchup java-node-sync-chunk java-node-sync-rocksdb java-node-sync-chunk-overnight java-node-sync-supervisor java-node-export-snapshots java-node-survey-scripts java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-chainstate-backend-replay java-node-chainstate-backend-replay-native-crypto java-node-chainstate-backend-benchmark java-node-replay-corpus-export
 
 test:
 	$(MVN) test
@@ -131,6 +148,31 @@ docker-java-post-100k-to-tip-proof:
 	  PRESERVE_PROOF_VOLUME=1
 
 docker-proof-post-100k-to-tip: docker-java-post-100k-to-tip-proof
+
+docker-java-tip-maintenance:
+	$(REFERENCE_P2P_CHECK)
+	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build jbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
+	DOCKER_PROOF_VOLUME=$(TIP_MAINTENANCE_VOLUME) SECP256K1_BACKEND=native \
+	  HEADERS_MAX=$(TIP_MAINTENANCE_HEADERS_MAX) HEADER_BATCHES_MAX=$(TIP_MAINTENANCE_HEADER_BATCHES_MAX) \
+	  BLOCKS_MAX=$(TIP_MAINTENANCE_BLOCKS_MAX) LIVE_MAX_ITERATIONS=$(TIP_MAINTENANCE_ITERATIONS) \
+	  LIVE_POLL_MS=$(TIP_MAINTENANCE_POLL_MS) LIVE_RECONNECT_MS=$(TIP_MAINTENANCE_RECONNECT_MS) \
+	  PEERS=$(DOCKER_P2P_PEER) scripts/docker_tip_maintenance.sh
+
+docker-java-public-peer-probe:
+	@if [ -n "$(PUBLIC_PEERS)" ]; then :; else echo "PUBLIC_PEERS=<public-testnet4-peer:48333> is required" >&2; exit 2; fi
+	DOCKER_PROOF_VOLUME=$(PUBLIC_PROBE_VOLUME) SECP256K1_BACKEND=native \
+	  HEADERS_MAX=$(PUBLIC_PROBE_HEADERS_MAX) HEADER_BATCHES_MAX=$(PUBLIC_PROBE_HEADER_BATCHES_MAX) \
+	  BLOCKS_MAX=$(PUBLIC_PROBE_BLOCKS_MAX) PUBLIC_PEERS="$(PUBLIC_PEERS)" \
+	  PUBLIC_PEER_CAPABILITY_RESULT=$(PUBLIC_PEER_CAPABILITY_RESULT) \
+	  scripts/docker_public_peer_probe.sh
+
+docker-java-peer-rotation-probe:
+	@if [ -n "$(PUBLIC_PEERS)" ]; then :; else echo "PUBLIC_PEERS=<peer1:48333,peer2:48333,...> is required" >&2; exit 2; fi
+	DOCKER_PROOF_VOLUME=$(PUBLIC_ROTATION_VOLUME) SECP256K1_BACKEND=native \
+	  HEADERS_MAX=$(PUBLIC_ROTATION_HEADERS_MAX) HEADER_BATCHES_MAX=$(PUBLIC_ROTATION_HEADER_BATCHES_MAX) \
+	  BLOCKS_MAX=$(PUBLIC_ROTATION_BLOCKS_MAX) PUBLIC_PEERS="$(PUBLIC_PEERS)" \
+	  PUBLIC_ROTATION_CAPABILITY_RESULT=$(PUBLIC_ROTATION_CAPABILITY_RESULT) \
+	  scripts/docker_peer_rotation_probe.sh
 
 docker-java-native-crypto-long-sync-proof:
 	$(REFERENCE_P2P_CHECK)

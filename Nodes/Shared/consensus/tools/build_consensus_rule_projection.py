@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -15,6 +17,7 @@ AUTHORITY = "projection_only"
 SOURCE_OF_TRUTH = ["rule_ledger", "script_fixture_manifest"]
 DOES_NOT_PROVE = ["port_pass", "live_sync", "benchmark_readiness", "full_node_validity"]
 VALID_RULE_STATUSES = {"candidate", "fixture_backed", "blocker_backed", "proved"}
+SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
 
 
 def repo_root() -> Path:
@@ -27,6 +30,14 @@ def repo_root() -> Path:
 def load_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def rules_from(data: Any) -> list[dict[str, Any]]:
@@ -117,7 +128,15 @@ def evidence_summary(rule: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_projection(rules: list[dict[str, Any]], fixtures: list[dict[str, Any]]) -> dict[str, Any]:
+def build_projection(
+    rules: list[dict[str, Any]],
+    fixtures: list[dict[str, Any]],
+    *,
+    rule_ledger_path: Path,
+    fixture_manifest_path: Path,
+    rule_ledger_input: str,
+    fixture_manifest_input: str,
+) -> dict[str, Any]:
     fixtures_by_id = {str(item.get("fixture_id")): item for item in fixtures if item.get("fixture_id")}
     projected_rules: list[dict[str, Any]] = []
     for rule in sorted(rules, key=sort_key):
@@ -152,14 +171,25 @@ def build_projection(rules: list[dict[str, Any]], fixtures: list[dict[str, Any]]
         "rule_count": len(projected_rules),
         "fixture_count": len(covered_fixtures),
         "inputs": {
-            "rule_ledger": "Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json",
-            "script_fixture_manifest": "Nodes/Shared/conformance/fixtures/scripts/manifest.json",
+            "rule_ledger": rule_ledger_input,
+            "script_fixture_manifest": fixture_manifest_input,
+        },
+        "input_sha256": {
+            "rule_ledger": sha256_file(rule_ledger_path),
+            "script_fixture_manifest": sha256_file(fixture_manifest_path),
         },
         "rules": projected_rules,
     }
 
 
-def validate_projection(projection: dict[str, Any], rules: list[dict[str, Any]], fixtures: list[dict[str, Any]]) -> list[str]:
+def validate_projection(
+    projection: dict[str, Any],
+    rules: list[dict[str, Any]],
+    fixtures: list[dict[str, Any]],
+    *,
+    rule_ledger_path: Path | None = None,
+    fixture_manifest_path: Path | None = None,
+) -> list[str]:
     errors: list[str] = []
     rule_ids = {str(rule.get("rule_id")) for rule in rules if rule.get("rule_id")}
     fixture_ids = {str(fixture.get("fixture_id")) for fixture in fixtures if fixture.get("fixture_id")}
@@ -172,6 +202,19 @@ def validate_projection(projection: dict[str, Any], rules: list[dict[str, Any]],
         errors.append("projection source_of_truth changed")
     if projection.get("does_not_prove") != DOES_NOT_PROVE:
         errors.append("projection does_not_prove changed")
+    input_sha256 = projection.get("input_sha256")
+    if not isinstance(input_sha256, dict):
+        errors.append("projection input_sha256 must be an object")
+    else:
+        expected_inputs = ("rule_ledger", "script_fixture_manifest")
+        for key in expected_inputs:
+            value = input_sha256.get(key)
+            if not isinstance(value, str) or not SHA256_HEX_RE.fullmatch(value):
+                errors.append(f"projection input_sha256.{key} must be a SHA256 hex digest")
+        if rule_ledger_path is not None and input_sha256.get("rule_ledger") != sha256_file(rule_ledger_path):
+            errors.append("projection input_sha256.rule_ledger does not match source")
+        if fixture_manifest_path is not None and input_sha256.get("script_fixture_manifest") != sha256_file(fixture_manifest_path):
+            errors.append("projection input_sha256.script_fixture_manifest does not match source")
     if not isinstance(projected_rules, list):
         return errors + ["projection rules must be an array"]
 
@@ -228,10 +271,25 @@ def main() -> int:
     parser.add_argument("--self-test", action="store_true", help="build and validate without writing")
     args = parser.parse_args()
 
-    rules = rules_from(load_json(root / args.rules))
-    fixtures = fixtures_from(load_json(root / args.manifest))
-    projection = build_projection(rules, fixtures)
-    errors = validate_projection(projection, rules, fixtures)
+    rules_path = root / args.rules
+    manifest_path = root / args.manifest
+    rules = rules_from(load_json(rules_path))
+    fixtures = fixtures_from(load_json(manifest_path))
+    projection = build_projection(
+        rules,
+        fixtures,
+        rule_ledger_path=rules_path,
+        fixture_manifest_path=manifest_path,
+        rule_ledger_input=args.rules,
+        fixture_manifest_input=args.manifest,
+    )
+    errors = validate_projection(
+        projection,
+        rules,
+        fixtures,
+        rule_ledger_path=rules_path,
+        fixture_manifest_path=manifest_path,
+    )
     if errors:
         for error in errors:
             print(f"error: {error}")

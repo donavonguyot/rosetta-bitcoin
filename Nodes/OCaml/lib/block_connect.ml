@@ -27,6 +27,7 @@ type timing_buckets = {
   mutable created_utxos : int;
   mutable spent_external : int;
   mutable same_block_spends : int;
+  mutable same_block_prevout_skipped : int;
   mutable tx_count_total : int;
   mutable input_count_total : int;
   mutable utxo_key_encode_ms : int;
@@ -93,6 +94,7 @@ let empty_timing () =
     created_utxos = 0;
     spent_external = 0;
     same_block_spends = 0;
+    same_block_prevout_skipped = 0;
     tx_count_total = 0;
     input_count_total = 0;
     utxo_key_encode_ms = 0;
@@ -130,6 +132,7 @@ let add_timing total row =
   total.created_utxos <- total.created_utxos + row.created_utxos;
   total.spent_external <- total.spent_external + row.spent_external;
   total.same_block_spends <- total.same_block_spends + row.same_block_spends;
+  total.same_block_prevout_skipped <- total.same_block_prevout_skipped + row.same_block_prevout_skipped;
   total.tx_count_total <- total.tx_count_total + row.tx_count_total;
   total.input_count_total <- total.input_count_total + row.input_count_total;
   total.utxo_key_encode_ms <- total.utxo_key_encode_ms + row.utxo_key_encode_ms;
@@ -223,7 +226,20 @@ let list_filter_mapi fn rows =
   in
   loop 0 [] rows
 
-let gather_external_prevouts tx_array =
+let build_in_block_spendable_outputs tx_array =
+  let outputs = Hashtbl.create 128 in
+  Array.iteri
+    (fun tx_index tx ->
+      let txid = Tx.txid_internal tx in
+      tx.Tx.outputs
+      |> List.iteri (fun vout output ->
+             if is_spendable_output output.Tx.script_pubkey then
+               Hashtbl.replace outputs (outpoint_key txid vout) tx_index))
+    tx_array;
+  outputs
+
+let gather_external_prevouts tx_array timing =
+  let in_block_outputs = build_in_block_spendable_outputs tx_array in
   let seen = Hashtbl.create 128 in
   let rows = ref [] in
   for tx_index = 1 to Array.length tx_array - 1 do
@@ -233,6 +249,10 @@ let gather_external_prevouts tx_array =
         let txid = input.Tx.previous_output.hash in
         let vout = Int32.to_int input.previous_output.index in
         let key = outpoint_key txid vout in
+        match Hashtbl.find_opt in_block_outputs key with
+        | Some creator_index when creator_index < tx_index ->
+            timing.same_block_prevout_skipped <- timing.same_block_prevout_skipped + 1
+        | _ ->
         if not (Hashtbl.mem seen key) then (
           Hashtbl.add seen key true;
           rows := { Rocks.txid; vout } :: !rows))
@@ -241,7 +261,7 @@ let gather_external_prevouts tx_array =
   Array.of_list (List.rev !rows)
 
 let load_prevouts db tx_array timing =
-  let prevouts = gather_external_prevouts tx_array in
+  let prevouts = gather_external_prevouts tx_array timing in
   let rows, stats = Rocks.multi_get_utxos db ~chain prevouts in
   timing.utxo_lookup_count <- timing.utxo_lookup_count + stats.lookup_count;
   timing.utxo_key_bytes <- timing.utxo_key_bytes + stats.key_bytes;

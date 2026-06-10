@@ -88,6 +88,7 @@ public final class LiveNodeService {
                 tracker.getValidatedHeight(chain.name())));
         int iterations = 0;
         int reconnects = 0;
+        int stalls = 0;
         while (true) {
           if (Files.exists(stopFile)) {
             tracker.logEvent("live", "live_stop", "info", "{\"reason\":\"stop_file\"}");
@@ -113,14 +114,17 @@ public final class LiveNodeService {
                     maxBlocks,
                     syncTiming,
                     out);
-            logIteration(tracker, chain.name(), iterations, result);
             if ("blocks_blocked".equals(result.syncStatus())) {
               if (isTransientBlocker(result)) {
+                stalls += 1;
+                reconnects += 1;
                 tracker.logEvent(
                     "live",
                     "peer_reconnect",
                     "warning",
                     details("peer", peer.host() + ":" + peer.port(), "error", result.blockerMessage()));
+                logIteration(tracker, chain.name(), iterations, result);
+                printProgressJson(out, chain.name(), peer, iterations, reconnects, stalls, result);
                 if (maxIterations > 0 && iterations >= maxIterations) {
                   tracker.logEvent("live", "live_stop", "info", "{\"reason\":\"max_iterations\"}");
                   out.println(
@@ -130,6 +134,9 @@ public final class LiveNodeService {
                 sleep(sleeper, reconnectMillis);
                 continue;
               }
+              stalls += 1;
+              logIteration(tracker, chain.name(), iterations, result);
+              printProgressJson(out, chain.name(), peer, iterations, reconnects, stalls, result);
               out.println(
                   "live_exit_summary exit_code="
                       + EXIT_BLOCKED
@@ -137,6 +144,8 @@ public final class LiveNodeService {
                       + iterations);
               return EXIT_BLOCKED;
             }
+            logIteration(tracker, chain.name(), iterations, result);
+            printProgressJson(out, chain.name(), peer, iterations, reconnects, stalls, result);
             sleep(sleeper, pollMillis);
           } catch (IOException error) {
             reconnects += 1;
@@ -218,6 +227,10 @@ public final class LiveNodeService {
       int after = tracker.getValidatedHeight(chain.name());
       ChainstateStatus chainstateStatus =
           ChainstateStatus.capture(session.chainstateStore(), chain.name());
+      ProjectTracker.SyncState syncState = tracker.getSyncState(chain.name()).orElse(null);
+      int headerHeight = syncState != null ? syncState.bestHeight() : 0;
+      int storedBlockHeight = tracker.maxStoredBlockHeight(chain.name());
+      String validatedHash = tracker.getValidatedHash(chain.name());
       chainstateStatus.print(out);
       out.println(
           "live_iteration_summary header_status="
@@ -233,6 +246,10 @@ public final class LiveNodeService {
           blockResult.syncStatus(),
           before,
           after,
+          validatedHash,
+          headerHeight,
+          storedBlockHeight,
+          chainstateStatus.backendUtxoCount(),
           blockResult.downloaded(),
           blockResult.connected(),
           blockResult.blockerMessage());
@@ -267,6 +284,59 @@ public final class LiveNodeService {
           "info",
           details("chain", chain, "validated_height", result.validatedAfter()));
     }
+  }
+
+  private static void printProgressJson(
+      PrintStream out,
+      String chain,
+      PeerEndpoint peer,
+      int iteration,
+      int reconnectCount,
+      int stallCount,
+      IterationResult result) {
+    boolean blocksCurrent =
+        "blocks_current".equals(result.syncStatus()) && result.validatedAfter() >= result.headerHeight();
+    String blocker = result.blockerMessage();
+    String progressJson =
+        "{"
+            + "\"chain\":\""
+            + escapeJson(chain)
+            + "\",\"sync_status\":\""
+            + escapeJson(result.syncStatus())
+            + "\",\"header_status\":\""
+            + escapeJson(result.headerStatus())
+            + "\",\"header_height\":"
+            + result.headerHeight()
+            + ",\"validated_height\":"
+            + result.validatedAfter()
+            + ",\"validated_hash\":\""
+            + escapeJson(result.validatedHash())
+            + "\",\"stored_block_height\":"
+            + result.storedBlockHeight()
+            + ",\"utxo_count\":"
+            + result.chainstateUtxoCount()
+            + ",\"chainstate_utxo_count\":"
+            + result.chainstateUtxoCount()
+            + ",\"current_blocker\":"
+            + (blocker == null ? "null" : "\"" + escapeJson(blocker) + "\"")
+            + ",\"peer\":\""
+            + escapeJson(peer.host() + ":" + peer.port())
+            + "\",\"live_iteration\":"
+            + iteration
+            + ",\"reconnect_count\":"
+            + reconnectCount
+            + ",\"stall_count\":"
+            + stallCount
+            + ",\"restart_recovery_count\":0"
+            + ",\"blocks_current\":"
+            + blocksCurrent
+            + ",\"downloaded_blocks\":"
+            + result.downloaded()
+            + ",\"connected_blocks\":"
+            + result.connected()
+            + "}";
+    out.println("rb.port_progress " + progressJson);
+    out.flush();
   }
 
   private static void sleep(Sleeper sleeper, long millis) throws IOException {
@@ -317,11 +387,22 @@ public final class LiveNodeService {
     return builder.append('}').toString();
   }
 
+  private static String escapeJson(String value) {
+    if (value == null) {
+      return "";
+    }
+    return value.replace("\\", "\\\\").replace("\"", "\\\"");
+  }
+
   private record IterationResult(
       String headerStatus,
       String syncStatus,
       int validatedBefore,
       int validatedAfter,
+      String validatedHash,
+      int headerHeight,
+      int storedBlockHeight,
+      long chainstateUtxoCount,
       int downloaded,
       int connected,
       String blockerMessage) {}

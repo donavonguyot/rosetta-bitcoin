@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,18 @@ DEFAULT_PROJECTION = "Nodes/Shared/consensus/generated/consensus_rule_projection
 AUTHORITY = "projection_only"
 DOES_NOT_PROVE = ["port_pass", "live_sync", "benchmark_readiness", "full_node_validity"]
 HISTORICAL_PROVENANCE = "fixture origin and rule discovery context, not port proof"
+SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
+RULE_OPCODE_LABELS = {
+    "altstack",
+    "cltv",
+    "csv",
+    "hash",
+    "locktime",
+    "multisig",
+    "relative_locktime",
+    "sighash",
+    "signature",
+}
 
 
 # Semantic navigation bundles. These are query-time aids only; they are not
@@ -259,6 +272,43 @@ def format_files(fixture: dict[str, Any]) -> str:
     return ", ".join(parts) if parts else "-"
 
 
+def format_file_items(files: list[dict[str, Any]]) -> str:
+    if not files:
+        return "-"
+    parts: list[str] = []
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        category = item.get("category") or "file"
+        path = item.get("path") or ""
+        if path:
+            parts.append(f"{category}:{path}")
+    return ", ".join(parts) if parts else "-"
+
+
+def format_markdown_file_items(files: list[dict[str, Any]]) -> str:
+    if not files:
+        return "-"
+    by_category: dict[str, list[str]] = {}
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        category = str(item.get("category") or "file")
+        path = str(item.get("path") or "")
+        if path:
+            by_category.setdefault(category, []).append(path)
+    parts: list[str] = []
+    for category in sorted(by_category):
+        paths = sorted(by_category[category])
+        if category == "witness" and len(paths) > 1:
+            parts.append(f"{category}: {len(paths)} files")
+        elif len(paths) == 1:
+            parts.append(f"{category}:{paths[0]}")
+        else:
+            parts.append(f"{category}: {len(paths)} files, first={paths[0]}")
+    return ", ".join(parts) if parts else "-"
+
+
 def text_summary(projection: dict[str, Any], rules: list[dict[str, Any]]) -> str:
     lines = [
         f"authority={projection.get('authority')}",
@@ -366,36 +416,79 @@ def domains_markdown_output(projection: dict[str, Any], rules: list[dict[str, An
 # Checklist Payloads
 
 
+def checklist_item_kind(label: str) -> str:
+    value = label.strip()
+    lower = value.lower()
+    if lower.startswith("op_") or lower in RULE_OPCODE_LABELS:
+        return "rule_opcode"
+    return "template_semantic"
+
+
+def checklist_item_text(kind: str, label: str) -> str:
+    if kind == "rule_opcode":
+        return f"implement/verify {label}"
+    return f"cover template/semantic {label}"
+
+
+def checklist_item(label: str, sources: set[str]) -> dict[str, Any]:
+    kind = checklist_item_kind(label)
+    return {
+        "checked": False,
+        "kind": kind,
+        "label": label,
+        "source": ",".join(sorted(sources)),
+        "item": checklist_item_text(kind, label),
+    }
+
+
+def sorted_items(labels: dict[str, set[str]]) -> list[dict[str, Any]]:
+    return [checklist_item(label, labels[label]) for label in sorted(label for label in labels if label)]
+
+
+def items_by_kind(items: list[dict[str, Any]], kind: str) -> list[dict[str, Any]]:
+    return [item for item in items if item.get("kind") == kind]
+
+
+def add_label(labels: dict[str, set[str]], value: Any, source: str) -> None:
+    label = str(value)
+    if label:
+        labels.setdefault(label, set()).add(source)
+
+
 def checklist_payload(projection: dict[str, Any], rules: list[dict[str, Any]], domain: str | None = None) -> dict[str, Any]:
-    observed_values: set[str] = set()
-    domain_values = matched_domain_tags(domain)
+    observed_values: dict[str, set[str]] = {}
+    domain_values: dict[str, set[str]] = {}
+    for value in matched_domain_tags(domain):
+        add_label(domain_values, value, "domain_tags")
     fixture_map: dict[str, dict[str, Any]] = {}
     for rule in rules:
-        observed_values.update(str(value) for value in rule.get("required_rules", []))
+        for value in rule.get("required_rules", []):
+            add_label(observed_values, value, "rule_required_rules")
         for fixture in rule.get("fixtures", []):
             if not isinstance(fixture, dict):
                 continue
             fixture_id = str(fixture.get("fixture_id", ""))
             if fixture_id:
                 fixture_map[fixture_id] = fixture
-            observed_values.update(str(value) for value in fixture.get("groups", []))
-            observed_values.update(str(value) for value in fixture.get("required_rules", []))
+            for value in fixture.get("groups", []):
+                add_label(observed_values, value, "fixture_groups")
+            for value in fixture.get("required_rules", []):
+                add_label(observed_values, value, "fixture_required_rules")
 
-    domain_core_values = sorted(value for value in domain_values if value)
-    supporting_values = sorted(value for value in observed_values - set(domain_core_values) if value)
-    implementation_values = domain_core_values + supporting_values if domain else sorted(value for value in observed_values if value)
-    domain_core_items = [
-        {"checked": False, "item": f"implement/verify {value}"}
-        for value in domain_core_values
-    ]
-    supporting_items = [
-        {"checked": False, "item": f"implement/verify {value}"}
-        for value in supporting_values
-    ]
-    implementation_items = [
-        {"checked": False, "item": f"implement/verify {value}"}
-        for value in implementation_values
-    ]
+    supporting_values = {
+        label: sources
+        for label, sources in observed_values.items()
+        if label not in domain_values
+    }
+    implementation_values = {**observed_values}
+    if domain:
+        for label, sources in domain_values.items():
+            implementation_values.setdefault(label, set()).update(sources)
+    domain_core_items = sorted_items(domain_values)
+    supporting_items = sorted_items(supporting_values)
+    implementation_items = sorted_items(implementation_values)
+    rule_opcode_items = items_by_kind(implementation_items, "rule_opcode")
+    template_semantic_items = items_by_kind(implementation_items, "template_semantic")
     fixture_items = []
     for fixture_id, fixture in sorted(
         fixture_map.items(),
@@ -404,11 +497,20 @@ def checklist_payload(projection: dict[str, Any], rules: list[dict[str, Any]], d
             item[0],
         ),
     ):
+        required_fixture_files = fixture.get("required_fixture_files", [])
+        if not isinstance(required_fixture_files, list):
+            required_fixture_files = []
         fixture_items.append(
             {
                 "checked": False,
                 "fixture_id": fixture_id,
                 "height": fixture.get("height"),
+                "template": fixture.get("template") or "",
+                "expected_result": fixture.get("expected_result") or "",
+                "missing_rule": fixture.get("missing_rule") or "",
+                "required_rules": fixture.get("required_rules", []),
+                "groups": fixture.get("groups", []),
+                "required_fixture_files": required_fixture_files,
                 "item": f"run fixture {fixture_id}",
             }
         )
@@ -424,6 +526,8 @@ def checklist_payload(projection: dict[str, Any], rules: list[dict[str, Any]], d
         "fixture_count": len(fixture_items),
         "domain_core_items": domain_core_items,
         "supporting_items": supporting_items,
+        "rule_opcode_items": rule_opcode_items,
+        "template_semantic_items": template_semantic_items,
         "implementation_items": implementation_items,
         "fixture_items": fixture_items,
         "proof_items": proof_items,
@@ -446,6 +550,14 @@ def filter_label(args: argparse.Namespace) -> str:
 
 
 def checklist_markdown(payload: dict[str, Any], label: str) -> str:
+    def extend_kind_section(title: str, items: list[dict[str, Any]]) -> None:
+        lines.append(f"### {title}")
+        if items:
+            lines.extend(f"- [ ] {item['item']}" for item in items)
+        else:
+            lines.append("None.")
+        lines.append("")
+
     lines = [
         f"# Consensus Work Bundle: {label}",
         "",
@@ -461,16 +573,37 @@ def checklist_markdown(payload: dict[str, Any], label: str) -> str:
     ]
     if payload["domain_core_items"]:
         lines.append("## Domain-Core Items")
-        lines.extend(f"- [ ] {item['item']}" for item in payload["domain_core_items"])
-        lines.append("")
+        extend_kind_section("Rule/Opcode Items", items_by_kind(payload["domain_core_items"], "rule_opcode"))
+        extend_kind_section("Template/Semantic Coverage", items_by_kind(payload["domain_core_items"], "template_semantic"))
         lines.append("## Supporting Items")
-        lines.extend(f"- [ ] {item['item']}" for item in payload["supporting_items"])
+        extend_kind_section("Rule/Opcode Items", items_by_kind(payload["supporting_items"], "rule_opcode"))
+        extend_kind_section("Template/Semantic Coverage", items_by_kind(payload["supporting_items"], "template_semantic"))
     else:
-        lines.append("## Implementation Items")
-        lines.extend(f"- [ ] {item['item']}" for item in payload["implementation_items"])
-    lines.append("")
+        lines.append("## Rule/Opcode Items")
+        if payload["rule_opcode_items"]:
+            lines.extend(f"- [ ] {item['item']}" for item in payload["rule_opcode_items"])
+        else:
+            lines.append("None.")
+        lines.append("")
+        lines.append("## Template/Semantic Coverage")
+        if payload["template_semantic_items"]:
+            lines.extend(f"- [ ] {item['item']}" for item in payload["template_semantic_items"])
+        else:
+            lines.append("None.")
+        lines.append("")
     lines.append("## Fixtures")
-    lines.extend(f"- [ ] {item['item']} at height {item['height']}" for item in payload["fixture_items"])
+    for item in payload["fixture_items"]:
+        lines.append(f"- [ ] `{item['fixture_id']}` at height {item['height']}")
+        lines.append(f"  - template: {item['template'] or '-'}")
+        lines.append(f"  - expected_result: {item['expected_result'] or '-'}")
+        lines.append(f"  - missing_rule: {item['missing_rule'] or '-'}")
+        groups = ", ".join(item.get("groups", [])) or "-"
+        required = ", ".join(item.get("required_rules", [])) or "-"
+        lines.append(f"  - groups: {groups}")
+        lines.append(f"  - required_rules: {required}")
+        fixture_files = item.get("required_fixture_files", [])
+        lines.append(f"  - total_fixture_files={len(fixture_files)}")
+        lines.append(f"  - files: {format_markdown_file_items(fixture_files)}")
     lines.append("")
     lines.append("## Proof Follow-up")
     lines.extend(f"- [ ] {item['item']}" for item in payload["proof_items"])
@@ -500,16 +633,31 @@ def checklist_output(
     ]
     if payload["domain_core_items"]:
         lines.append("Domain-core items:")
-        lines.extend(f"[ ] {item['item']}" for item in payload["domain_core_items"])
+        lines.append("  Rule/opcode items:")
+        lines.extend(f"[ ] {item['item']}" for item in items_by_kind(payload["domain_core_items"], "rule_opcode"))
+        lines.append("  Template/semantic coverage:")
+        lines.extend(f"[ ] {item['item']}" for item in items_by_kind(payload["domain_core_items"], "template_semantic"))
         lines.append("")
         lines.append("Supporting items:")
-        lines.extend(f"[ ] {item['item']}" for item in payload["supporting_items"])
+        lines.append("  Rule/opcode items:")
+        lines.extend(f"[ ] {item['item']}" for item in items_by_kind(payload["supporting_items"], "rule_opcode"))
+        lines.append("  Template/semantic coverage:")
+        lines.extend(f"[ ] {item['item']}" for item in items_by_kind(payload["supporting_items"], "template_semantic"))
     else:
-        lines.append("Implementation items:")
-        lines.extend(f"[ ] {item['item']}" for item in payload["implementation_items"])
+        lines.append("Rule/opcode items:")
+        lines.extend(f"[ ] {item['item']}" for item in payload["rule_opcode_items"])
+        lines.append("")
+        lines.append("Template/semantic coverage:")
+        lines.extend(f"[ ] {item['item']}" for item in payload["template_semantic_items"])
     lines.append("")
     lines.append("Fixture items:")
-    lines.extend(f"[ ] {item['item']} (height={item['height']})" for item in payload["fixture_items"])
+    for item in payload["fixture_items"]:
+        lines.append(
+            f"[ ] {item['item']} "
+            + f"(height={item['height']} expected={item['expected_result'] or '-'} template={item['template'] or '-'})"
+        )
+        lines.append(f"    missing_rule={item['missing_rule'] or '-'}")
+        lines.append(f"    files={format_file_items(item.get('required_fixture_files', []))}")
     lines.append("")
     lines.append("Proof follow-up:")
     lines.extend(f"[ ] {item['item']}" for item in payload["proof_items"])
@@ -558,11 +706,21 @@ def assert_tag_and_domain_lists(rules: list[dict[str, Any]]) -> None:
         raise AssertionError("unknown domain did not fail")
 
 
+def assert_projection_metadata(projection: dict[str, Any]) -> None:
+    input_sha256 = projection.get("input_sha256")
+    if not isinstance(input_sha256, dict):
+        raise AssertionError("projection missing input_sha256 metadata")
+    for key in ("rule_ledger", "script_fixture_manifest"):
+        value = input_sha256.get(key)
+        if not isinstance(value, str) or not SHA256_HEX_RE.fullmatch(value):
+            raise AssertionError(f"projection input_sha256.{key} must be a SHA256 hex digest")
+
+
 def assert_checklist_payloads(projection: dict[str, Any], rules: list[dict[str, Any]]) -> None:
     stack_payload = checklist_payload(projection, filter_rules(rules, domain="stack"), "stack")
     if stack_payload["fixture_count"] != 18:
         raise AssertionError(f"stack checklist fixture_count expected 18, got {stack_payload['fixture_count']}")
-    stack_items = {item["item"] for item in stack_payload["implementation_items"]}
+    stack_items = {item["item"] for item in stack_payload["rule_opcode_items"]}
     for item in ("implement/verify op_2drop", "implement/verify op_depth", "implement/verify op_swap"):
         if item not in stack_items:
             raise AssertionError(f"stack checklist missing {item}")
@@ -570,6 +728,13 @@ def assert_checklist_payloads(projection: dict[str, Any], rules: list[dict[str, 
     tapscript_payload = checklist_payload(projection, filter_rules(rules, domain="tapscript"), "tapscript")
     if tapscript_payload["fixture_count"] != 15:
         raise AssertionError(f"tapscript checklist fixture_count expected 15, got {tapscript_payload['fixture_count']}")
+    tapscript_template_items = {item["item"] for item in tapscript_payload["template_semantic_items"]}
+    for item in ("cover template/semantic p2tr", "cover template/semantic P2TR script-path"):
+        if item not in tapscript_template_items:
+            raise AssertionError(f"tapscript checklist missing template coverage {item}")
+    for item in tapscript_payload["template_semantic_items"]:
+        if item["item"].startswith("implement/verify"):
+            raise AssertionError(f"template/semantic item uses implementation wording: {item['item']}")
 
     relative_payload = checklist_payload(
         projection,
@@ -595,6 +760,8 @@ def assert_checklist_payloads(projection: dict[str, Any], rules: list[dict[str, 
         "historical_provenance",
         "domain_core_items",
         "supporting_items",
+        "rule_opcode_items",
+        "template_semantic_items",
         "implementation_items",
         "fixture_items",
         "proof_items",
@@ -603,6 +770,16 @@ def assert_checklist_payloads(projection: dict[str, Any], rules: list[dict[str, 
             raise AssertionError(f"checklist JSON payload missing {key}")
     if relative_payload["historical_provenance"] != HISTORICAL_PROVENANCE:
         raise AssertionError("checklist JSON payload has wrong historical provenance boundary")
+    relative_fixture = relative_payload["fixture_items"][0]
+    for key in ("template", "expected_result", "missing_rule", "required_fixture_files"):
+        if key not in relative_fixture:
+            raise AssertionError(f"fixture item missing {key}")
+    if not relative_fixture["required_fixture_files"]:
+        raise AssertionError("fixture item required_fixture_files should be non-empty")
+    for item in relative_payload["implementation_items"]:
+        for key in ("checked", "kind", "label", "source", "item"):
+            if key not in item:
+                raise AssertionError(f"typed checklist item missing {key}")
 
 
 def assert_renderers(projection: dict[str, Any], rules: list[dict[str, Any]]) -> None:
@@ -627,6 +804,20 @@ def assert_renderers(projection: dict[str, Any], rules: list[dict[str, Any]]) ->
             raise AssertionError(f"markdown checklist missing {heading}")
     if f"- historical_provenance: {HISTORICAL_PROVENANCE}" not in markdown_text:
         raise AssertionError("markdown checklist missing historical provenance boundary")
+    tapscript_markdown = checklist_output(
+        projection,
+        filter_rules(rules, domain="tapscript"),
+        "tapscript",
+        False,
+        True,
+        "domain tapscript",
+    )
+    for forbidden in ("implement/verify p2tr", "implement/verify P2TR script-path"):
+        if forbidden in tapscript_markdown:
+            raise AssertionError(f"markdown checklist contains template implementation wording: {forbidden}")
+    for expected in ("## Domain-Core Items", "### Rule/Opcode Items", "### Template/Semantic Coverage"):
+        if expected not in tapscript_markdown:
+            raise AssertionError(f"markdown checklist missing typed heading {expected}")
     if "- [ ]" not in markdown_text:
         raise AssertionError("markdown checklist missing unchecked items")
     if "- [x]" in markdown_text.lower():
@@ -647,10 +838,46 @@ def assert_renderers(projection: dict[str, Any], rules: list[dict[str, Any]]) ->
         True,
         "fixture scripts.p2wsh_rot_62754",
     )
-    if "## Implementation Items" not in non_domain_markdown:
-        raise AssertionError("non-domain markdown checklist should keep Implementation Items")
+    if "## Rule/Opcode Items" not in non_domain_markdown:
+        raise AssertionError("non-domain markdown checklist should include Rule/Opcode Items")
+    if "## Template/Semantic Coverage" not in non_domain_markdown:
+        raise AssertionError("non-domain markdown checklist should include Template/Semantic Coverage")
     if "## Domain-Core Items" in non_domain_markdown:
         raise AssertionError("non-domain markdown checklist should not include Domain-Core Items")
+    template_only_markdown = checklist_output(
+        projection,
+        filter_rules(rules, fixture_id="scripts.p2tr_tapscript_133634"),
+        None,
+        False,
+        True,
+        "fixture scripts.p2tr_tapscript_133634",
+    )
+    if "## Rule/Opcode Items\nNone." not in template_only_markdown:
+        raise AssertionError("empty non-domain Rule/Opcode Items section should render None.")
+    for expected in ("template:", "expected_result:", "missing_rule:", "files:"):
+        if expected not in non_domain_markdown:
+            raise AssertionError(f"markdown fixture item missing {expected}")
+    if "total_fixture_files=" not in markdown_text:
+        raise AssertionError("markdown checklist missing total fixture file count")
+    tapscript_mega_markdown = checklist_output(
+        projection,
+        filter_rules(rules, fixture_id="scripts.p2tr_tapscript_121035"),
+        None,
+        False,
+        True,
+        "fixture scripts.p2tr_tapscript_121035",
+    )
+    if "witness: 552 files" not in tapscript_mega_markdown:
+        raise AssertionError("markdown mega-witness fixture should summarize witness files")
+    if "tx_p2tr_tapscript_121035_witness_551.hex" in tapscript_mega_markdown:
+        raise AssertionError("markdown mega-witness fixture should not expand every witness path")
+    mega_json = checklist_payload(projection, filter_rules(rules, fixture_id="scripts.p2tr_tapscript_121035"), None)
+    mega_fixture = mega_json["fixture_items"][0]
+    if len(mega_fixture["required_fixture_files"]) < 500:
+        raise AssertionError("JSON checklist fixture should keep full required_fixture_files")
+    focused_text = checklist_output(projection, filter_rules(rules, fixture_id="scripts.p2wsh_rot_62754"), None, False)
+    if "witness_script:scripts.p2wsh_rot_62754/tx_p2wsh_rot_62754_witness_script.hex" not in focused_text:
+        raise AssertionError("text checklist fixture should keep full file paths")
 
     sample_text = text_summary(projection, filter_rules(rules, rule_id="script.scripts_p2wsh_booland_136369"))
     for forbidden in ("full_node ready", "benchmark ready", "port ready"):
@@ -684,6 +911,7 @@ def run_self_test(projection: dict[str, Any]) -> None:
     rules = projection["rules"]
     assert_filter_counts(rules)
     assert_tag_and_domain_lists(rules)
+    assert_projection_metadata(projection)
     assert_checklist_payloads(projection, rules)
     assert_renderers(projection, rules)
     assert_cli_guardrails()

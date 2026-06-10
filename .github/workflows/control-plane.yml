@@ -1,0 +1,45 @@
+name: Control Plane
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docs-and-control-plane:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check documentation drift
+        run: python3 Project/scripts/check_doc_drift.py
+
+      - name: Validate Docker contract metadata
+        run: python3 Nodes/Shared/docker/validate_docker_contract.py
+
+      - name: List Project report sections
+        run: python3 Project/scripts/report.py --db Project/project.db --list-sections
+
+      - name: Report port status
+        run: python3 Project/scripts/report.py --db Project/project.db --section port-status
+
+      - name: Report benchmark suite
+        run: python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+
+      - name: Report consensus runway
+        run: python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+
+      - name: Report current evidence
+        run: python3 Project/scripts/report.py --db Project/project.db --section current-evidence

@@ -4,7 +4,7 @@
   "commit": "unknown",
   "node_id": "OCamlNode",
   "category": "storage",
-  "captured_at": "2026-06-08T08:27:12Z",
+  "captured_at": "2026-06-08T09:38:49Z",
   "datadir": "/data/chainstate-rocksdb",
   "chain": "testnet4",
   "chainstate_backend": "rocksdb",

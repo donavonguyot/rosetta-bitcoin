@@ -38,8 +38,8 @@
     "docker_proof_100k": "cd Nodes/Java && make docker-java-primary-100k-proof",
     "docker_proof_post_100k_to_tip": "cd Nodes/Java && make docker-java-post-100k-to-tip-proof",
     "docker_proof_tip_once": null,
-    "docker_tip_maintenance": null,
-    "docker_probe_external": null,
+    "docker_tip_maintenance": "cd Nodes/Java && make docker-java-tip-maintenance",
+    "docker_probe_external": "cd Nodes/Java && make docker-java-public-peer-probe",
     "docker_supervisor": "cd Nodes/Java && make docker-java-sync-supervisor",
     "docker_supervisor_status": "cd Nodes/Java && make docker-java-sync-status",
     "docker_supervisor_stop": "cd Nodes/Java && make docker-java-sync-stop",
@@ -60,14 +60,24 @@
       ]
     },
     "external_manual": {
-      "supported": false,
-      "command": null,
-      "peer": null,
+      "supported": true,
+      "command": "cd Nodes/Java && PUBLIC_PEERS=<public-testnet4-peer:48333> make docker-java-public-peer-probe",
+      "peer": "${PUBLIC_PEERS}",
       "required_recorded_facts": [
         "peer",
-        "disconnects",
-        "advertised_start_height",
-        "validated_height"
+        "selected_peers",
+        "attempted_peers",
+        "disconnect_error_count",
+        "reconnect_count",
+        "peer_advertised_start_height",
+        "local_advertised_start_height",
+        "start_header_height",
+        "end_header_height",
+        "start_validated_height",
+        "end_validated_height",
+        "blocks_downloaded",
+        "blocks_connected",
+        "final_status"
       ]
     },
     "external_seed": {
@@ -106,9 +116,9 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Shared/conformance/results/java_rocksdb_docker_local_peer_sync_2026-06-01.json",
-    "notes": "docker_proof_local, docker_proof_50k, and docker_proof_100k run local-reference Docker benchmark commands with native secp256k1, RocksDB, WAL enabled, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. post_100k_to_tip resumes the port-owned 100k proof volume as durable product state; Project builds current tip-readiness artifacts."
+    "notes": "docker_proof_local, docker_proof_50k, and docker_proof_100k run local-reference Docker benchmark commands with native secp256k1, RocksDB, WAL enabled, rb.port_progress, and fresh proof volumes. Project builds current benchmark artifacts. post_100k_to_tip resumes the port-owned 100k proof volume as durable product state; Project builds current tip-readiness artifacts. docker_probe_external runs operator-supplied public testnet4 peer lists; docker-java-public-peer-probe emits only full_node_public_peer_sync_probe evidence, and docker-java-peer-rotation-probe emits only full_node_peer_rotation_reconnect evidence."
   },
   "known_caveats": [
-    "External network probe command not standardized"
+    "Public external probe requires PUBLIC_PEERS; DNS seed selection is not implemented"
   ]
 }

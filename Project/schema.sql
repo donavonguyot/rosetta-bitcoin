@@ -411,6 +411,9 @@ DROP VIEW IF EXISTS current_evidence_status;
 DROP VIEW IF EXISTS critical_test_domain_coverage;
 DROP VIEW IF EXISTS test_coverage_matrix;
 DROP VIEW IF EXISTS experiment_readiness;
+DROP VIEW IF EXISTS full_node_readiness;
+DROP VIEW IF EXISTS full_node_gaps;
+DROP VIEW IF EXISTS full_node_capabilities;
 DROP VIEW IF EXISTS test_capability_gaps;
 DROP VIEW IF EXISTS test_capability_contract_matrix;
 DROP VIEW IF EXISTS test_capability_suite_registry;
@@ -1848,6 +1851,55 @@ storage AS (
   WHERE cr.category = 'storage'
   GROUP BY np.port
 ),
+full_node_benchmarks AS (
+  SELECT
+    port,
+    max(CASE
+      WHEN gate_id = 'tip_once'
+       AND gate_status = 'passed'
+       AND comparability_status = 'comparable'
+       AND artifact_quality = 'canonical'
+       AND telemetry_quality = 'clean'
+      THEN 1 ELSE 0 END) AS has_tip_once,
+    max(CASE
+      WHEN gate_id = 'tip_maintenance'
+       AND gate_status = 'passed'
+       AND comparability_status = 'comparable'
+       AND artifact_quality = 'canonical'
+       AND telemetry_quality = 'clean'
+      THEN 1 ELSE 0 END) AS has_tip_maintenance,
+    max(CASE
+      WHEN gate_id = 'tip_once'
+       AND gate_status = 'passed'
+       AND comparability_status = 'comparable'
+       AND artifact_quality = 'canonical'
+       AND telemetry_quality = 'clean'
+      THEN artifact_path ELSE '' END) AS tip_once_path,
+    max(CASE
+      WHEN gate_id = 'tip_maintenance'
+       AND gate_status = 'passed'
+       AND comparability_status = 'comparable'
+       AND artifact_quality = 'canonical'
+       AND telemetry_quality = 'clean'
+      THEN artifact_path ELSE '' END) AS tip_maintenance_path,
+    max(CASE
+      WHEN gate_id = 'tip_once'
+       AND gate_status = 'passed'
+       AND comparability_status = 'comparable'
+       AND artifact_quality = 'canonical'
+       AND telemetry_quality = 'clean'
+      THEN source_artifact_id ELSE '' END) AS tip_once_artifact_id,
+    max(CASE
+      WHEN gate_id = 'tip_maintenance'
+       AND gate_status = 'passed'
+       AND comparability_status = 'comparable'
+       AND artifact_quality = 'canonical'
+       AND telemetry_quality = 'clean'
+      THEN source_artifact_id ELSE '' END) AS tip_maintenance_artifact_id
+  FROM current_benchmark_results
+  WHERE gate_id IN ('tip_once', 'tip_maintenance')
+  GROUP BY port
+),
 commands AS (
   SELECT
     p.port,
@@ -1876,7 +1928,23 @@ capability_names(capability, blocking_for_json) AS (
     ('script_corpus_with_backend', '["pure_crypto_experiment"]'),
     ('block_connect_with_backend', '["pure_crypto_experiment"]'),
     ('storage_codec_vectors', '["storage_codec_change"]'),
-    ('storage_restart_after_codec_change', '["storage_codec_change"]')
+    ('storage_restart_after_codec_change', '["storage_codec_change"]'),
+    ('full_node_empty_state_tip_sync', '["validator_follower","full_node"]'),
+    ('full_node_near_tip_maintenance', '["validator_follower","full_node"]'),
+    ('full_node_public_peer_sync_probe', '["validator_follower","full_node"]'),
+    ('full_node_peer_rotation_reconnect', '["validator_follower","full_node"]'),
+    ('full_node_inbound_headers_serving', '["serving_peer","full_node"]'),
+    ('full_node_inbound_block_serving', '["serving_peer","full_node"]'),
+    ('full_node_block_inv_announcement', '["serving_peer","full_node"]'),
+    ('full_node_mempool_valid_tx_admission', '["relay_peer","full_node"]'),
+    ('full_node_mempool_invalid_tx_rejection', '["relay_peer","full_node"]'),
+    ('full_node_tx_inventory_relay', '["relay_peer","full_node"]'),
+    ('full_node_fork_choice_chainwork', '["survivor","full_node"]'),
+    ('full_node_reorg_disconnect_reconnect', '["survivor","full_node"]'),
+    ('full_node_crash_mid_commit_recovery', '["survivor","full_node"]'),
+    ('full_node_restart_at_tip_soak', '["survivor","full_node"]'),
+    ('full_node_bad_peer_protocol_safety', '["survivor","full_node"]'),
+    ('full_node_resource_bound_safety', '["survivor","full_node"]')
 ),
 derived AS (
   SELECT
@@ -1907,6 +1975,32 @@ derived AS (
       WHEN 'script_corpus_with_backend' THEN CASE WHEN coalesce(scb.script_corpus_status, '') = 'passed' AND coalesce(pb.native_crypto_backend, '') <> '' THEN 'pass' ELSE 'missing' END
       WHEN 'storage_codec_vectors' THEN CASE WHEN coalesce(st.has_codec_vector, 0) = 1 THEN 'pass' ELSE 'missing' END
       WHEN 'storage_restart_after_codec_change' THEN CASE WHEN coalesce(st.has_restart, 0) = 1 THEN 'pass' ELSE 'missing' END
+      WHEN 'full_node_empty_state_tip_sync' THEN
+        CASE
+          WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable'
+          WHEN coalesce(fnb.has_tip_once, 0) = 1 THEN 'pass'
+          ELSE 'missing'
+        END
+      WHEN 'full_node_near_tip_maintenance' THEN
+        CASE
+          WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable'
+          WHEN coalesce(fnb.has_tip_maintenance, 0) = 1 THEN 'pass'
+          ELSE 'missing'
+        END
+      WHEN 'full_node_public_peer_sync_probe' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_peer_rotation_reconnect' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_inbound_headers_serving' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_inbound_block_serving' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_block_inv_announcement' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_mempool_valid_tx_admission' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_mempool_invalid_tx_rejection' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_tx_inventory_relay' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_fork_choice_chainwork' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_reorg_disconnect_reconnect' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_crash_mid_commit_recovery' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_restart_at_tip_soak' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_bad_peer_protocol_safety' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
+      WHEN 'full_node_resource_bound_safety' THEN CASE WHEN p.lifecycle_status = 'baseline_retired' THEN 'not_applicable' ELSE 'missing' END
       ELSE 'missing'
     END AS status,
     CASE cn.capability
@@ -1914,6 +2008,22 @@ derived AS (
       WHEN 'p2p_deferred_handshake' THEN coalesce(pb.runtime_surface, '')
       WHEN 'shared_script_corpus' THEN 'host_or_docker'
       WHEN 'sighash_and_witness_regressions' THEN 'host_or_docker'
+      WHEN 'full_node_empty_state_tip_sync' THEN 'docker'
+      WHEN 'full_node_near_tip_maintenance' THEN 'docker'
+      WHEN 'full_node_public_peer_sync_probe' THEN 'public_peer'
+      WHEN 'full_node_peer_rotation_reconnect' THEN 'public_peer'
+      WHEN 'full_node_inbound_headers_serving' THEN 'inbound_peer'
+      WHEN 'full_node_inbound_block_serving' THEN 'inbound_peer'
+      WHEN 'full_node_block_inv_announcement' THEN 'inbound_peer'
+      WHEN 'full_node_mempool_valid_tx_admission' THEN 'live_peer'
+      WHEN 'full_node_mempool_invalid_tx_rejection' THEN 'live_peer'
+      WHEN 'full_node_tx_inventory_relay' THEN 'live_peer'
+      WHEN 'full_node_fork_choice_chainwork' THEN 'host_or_docker'
+      WHEN 'full_node_reorg_disconnect_reconnect' THEN 'host_or_docker'
+      WHEN 'full_node_crash_mid_commit_recovery' THEN 'host_or_docker'
+      WHEN 'full_node_restart_at_tip_soak' THEN 'host_or_docker'
+      WHEN 'full_node_bad_peer_protocol_safety' THEN 'host_or_docker'
+      WHEN 'full_node_resource_bound_safety' THEN 'host_or_docker'
       ELSE ''
     END AS scope,
     CASE cn.capability
@@ -1935,6 +2045,8 @@ derived AS (
       WHEN 'script_corpus_with_backend' THEN 'suite'
       WHEN 'storage_codec_vectors' THEN 'storage_proof'
       WHEN 'storage_restart_after_codec_change' THEN 'storage_proof'
+      WHEN 'full_node_empty_state_tip_sync' THEN CASE WHEN coalesce(fnb.has_tip_once, 0) = 1 THEN 'tip_once' ELSE 'missing' END
+      WHEN 'full_node_near_tip_maintenance' THEN CASE WHEN coalesce(fnb.has_tip_maintenance, 0) = 1 THEN 'tip_maintenance' ELSE 'missing' END
       ELSE 'missing'
     END AS evidence_kind,
     CASE cn.capability
@@ -1945,6 +2057,8 @@ derived AS (
       WHEN 'rocksdb_restart_persistence' THEN coalesce(st.evidence_path, '')
       WHEN 'storage_codec_vectors' THEN coalesce(st.evidence_path, '')
       WHEN 'storage_restart_after_codec_change' THEN coalesce(st.evidence_path, '')
+      WHEN 'full_node_empty_state_tip_sync' THEN coalesce(fnb.tip_once_path, '')
+      WHEN 'full_node_near_tip_maintenance' THEN coalesce(fnb.tip_maintenance_path, '')
       ELSE coalesce((SELECT a.path FROM artifacts a WHERE a.artifact_id = pb.source_artifact_id), '')
     END AS evidence_path,
     CASE cn.capability WHEN 'unit_surface' THEN 'test_unit' ELSE '' END AS command_key,
@@ -1957,6 +2071,7 @@ derived AS (
       WHEN cn.capability IN ('shared_script_corpus', 'sighash_and_witness_regressions', 'script_corpus_with_backend') THEN '["rb_live_chain_regression","rb_synthetic_edge_case"]'
       WHEN cn.capability = 'unit_surface' THEN '["port_regression"]'
       WHEN cn.capability IN ('utxo_apply_undo_accounting','block_connect_local_reference','rocksdb_restart_persistence','p2p_deferred_handshake','status_reporting','crypto_backend_reporting','storage_codec_vectors','storage_restart_after_codec_change') THEN '["proof_derived"]'
+      WHEN cn.capability IN ('full_node_empty_state_tip_sync','full_node_near_tip_maintenance') THEN '["proof_derived"]'
       ELSE '[]'
     END AS provenance_json,
     CASE
@@ -1964,11 +2079,22 @@ derived AS (
       WHEN cn.capability = 'p2p_deferred_handshake' THEN 'Local Reference P2P proof does not prove every live-peer serving or mempool path.'
       WHEN cn.capability = 'block_connect_local_reference' THEN '5k local-reference block connect does not prove tip maintenance or every future consensus rule.'
       WHEN cn.capability IN ('crypto_bip340_vectors','crypto_libsecp256k1_equivalence') THEN 'Missing means no community-anchored crypto vector evidence is currently imported.'
+      WHEN cn.capability = 'full_node_empty_state_tip_sync' THEN 'Tip once proves empty-state catch-up only; it does not prove ongoing operation, serving, relay, or adversarial safety.'
+      WHEN cn.capability = 'full_node_near_tip_maintenance' THEN 'Tip maintenance proves near-tip operation only; it does not prove serving, relay, reorg, or public-peer breadth.'
+      WHEN cn.capability = 'full_node_public_peer_sync_probe' THEN 'Local Reference P2P proof does not prove public-peer network participation.'
+      WHEN cn.capability LIKE 'full_node_inbound_%' OR cn.capability = 'full_node_block_inv_announcement' THEN 'Validation proof does not prove useful inbound peer serving.'
+      WHEN cn.capability LIKE 'full_node_mempool_%' OR cn.capability = 'full_node_tx_inventory_relay' THEN 'Block validation proof does not prove mempool policy or transaction relay.'
+      WHEN cn.capability IN ('full_node_fork_choice_chainwork','full_node_reorg_disconnect_reconnect') THEN 'Linear replay proof does not prove fork choice or reorg recovery.'
+      WHEN cn.capability LIKE 'full_node_%' THEN 'Existing benchmark evidence does not prove this full-node operational behavior.'
       ELSE ''
     END AS does_not_prove,
     cn.blocking_for_json,
     'derived_from_current_project_evidence' AS evidence_source_type,
-    coalesce(pb.source_artifact_id, '') AS source_artifact_id,
+    CASE cn.capability
+      WHEN 'full_node_empty_state_tip_sync' THEN coalesce(fnb.tip_once_artifact_id, '')
+      WHEN 'full_node_near_tip_maintenance' THEN coalesce(fnb.tip_maintenance_artifact_id, '')
+      ELSE coalesce(pb.source_artifact_id, '')
+    END AS source_artifact_id,
     '' AS notes
   FROM ports p
   CROSS JOIN capability_names cn
@@ -1977,6 +2103,7 @@ derived AS (
   LEFT JOIN port_baseline_5k pb ON pb.port = p.port
   LEFT JOIN storage st ON st.port = p.port
   LEFT JOIN current_claims cc ON cc.port = p.port
+  LEFT JOIN full_node_benchmarks fnb ON fnb.port = p.port
 ),
 explicit AS (
   SELECT
@@ -2058,6 +2185,84 @@ SELECT *
 FROM test_capability_contract_matrix
 WHERE status IN ('fail', 'missing')
   AND lifecycle_status <> 'baseline_retired';
+
+CREATE VIEW IF NOT EXISTS full_node_capabilities AS
+SELECT *
+FROM test_capability_contract_matrix
+WHERE capability LIKE 'full_node_%';
+
+CREATE VIEW IF NOT EXISTS full_node_gaps AS
+SELECT *
+FROM full_node_capabilities
+WHERE status IN ('fail', 'missing')
+  AND lifecycle_status <> 'baseline_retired';
+
+CREATE VIEW IF NOT EXISTS full_node_readiness AS
+WITH profile_requirements(profile, capability) AS (
+  VALUES
+    ('validator_follower', 'full_node_empty_state_tip_sync'),
+    ('validator_follower', 'full_node_near_tip_maintenance'),
+    ('validator_follower', 'full_node_public_peer_sync_probe'),
+    ('validator_follower', 'full_node_peer_rotation_reconnect'),
+    ('serving_peer', 'full_node_inbound_headers_serving'),
+    ('serving_peer', 'full_node_inbound_block_serving'),
+    ('serving_peer', 'full_node_block_inv_announcement'),
+    ('relay_peer', 'full_node_mempool_valid_tx_admission'),
+    ('relay_peer', 'full_node_mempool_invalid_tx_rejection'),
+    ('relay_peer', 'full_node_tx_inventory_relay'),
+    ('survivor', 'full_node_fork_choice_chainwork'),
+    ('survivor', 'full_node_reorg_disconnect_reconnect'),
+    ('survivor', 'full_node_crash_mid_commit_recovery'),
+    ('survivor', 'full_node_restart_at_tip_soak'),
+    ('survivor', 'full_node_bad_peer_protocol_safety'),
+    ('survivor', 'full_node_resource_bound_safety'),
+    ('full_node', 'full_node_empty_state_tip_sync'),
+    ('full_node', 'full_node_near_tip_maintenance'),
+    ('full_node', 'full_node_public_peer_sync_probe'),
+    ('full_node', 'full_node_peer_rotation_reconnect'),
+    ('full_node', 'full_node_inbound_headers_serving'),
+    ('full_node', 'full_node_inbound_block_serving'),
+    ('full_node', 'full_node_block_inv_announcement'),
+    ('full_node', 'full_node_mempool_valid_tx_admission'),
+    ('full_node', 'full_node_mempool_invalid_tx_rejection'),
+    ('full_node', 'full_node_tx_inventory_relay'),
+    ('full_node', 'full_node_fork_choice_chainwork'),
+    ('full_node', 'full_node_reorg_disconnect_reconnect'),
+    ('full_node', 'full_node_crash_mid_commit_recovery'),
+    ('full_node', 'full_node_restart_at_tip_soak'),
+    ('full_node', 'full_node_bad_peer_protocol_safety'),
+    ('full_node', 'full_node_resource_bound_safety')
+),
+checks AS (
+  SELECT
+    fnc.port,
+    fnc.node_id,
+    fnc.lifecycle_status,
+    pr.profile,
+    pr.capability,
+    coalesce(fcap.status, 'missing') AS status
+  FROM (
+    SELECT DISTINCT port, node_id, lifecycle_status
+    FROM full_node_capabilities
+  ) fnc
+  CROSS JOIN profile_requirements pr
+  LEFT JOIN full_node_capabilities fcap
+    ON fcap.port = fnc.port
+   AND fcap.capability = pr.capability
+)
+SELECT
+  port,
+  node_id,
+  lifecycle_status,
+  profile,
+  CASE
+    WHEN lifecycle_status = 'baseline_retired' THEN 'not_applicable'
+    WHEN sum(CASE WHEN status NOT IN ('pass', 'not_applicable') THEN 1 ELSE 0 END) = 0 THEN 'ready'
+    ELSE 'blocked'
+  END AS readiness,
+  coalesce(group_concat(CASE WHEN status NOT IN ('pass', 'not_applicable') THEN capability || '=' || status END), '') AS blocking_capabilities
+FROM checks
+GROUP BY port, node_id, lifecycle_status, profile;
 
 CREATE VIEW IF NOT EXISTS experiment_readiness AS
 WITH experiment_requirements(experiment, capability) AS (

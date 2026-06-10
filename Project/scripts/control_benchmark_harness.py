@@ -32,6 +32,7 @@ BASELINE_CRYPTO_BACKENDS = {
     "go": "libsecp256k1",
     "java": "libsecp256k1-acinq",
 }
+NON_CUMULATIVE_TIMING_BUCKETS = {"script_parallel_efficiency"}
 
 
 def _load_module(name: str, path: Path):
@@ -186,6 +187,17 @@ def canonical_timing(raw: Any) -> dict[str, int]:
     return timing
 
 
+def full_timing(raw: Any) -> dict[str, int | float]:
+    timing: dict[str, int | float] = canonical_timing(raw)
+    if not isinstance(raw, dict):
+        return timing
+    for bucket, value in raw.items():
+        if not isinstance(bucket, str) or isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        timing[bucket] = max(0, value)
+    return timing
+
+
 def timing_from_progress(entries: list[dict[str, Any]], elapsed_ms: int) -> dict[str, Any]:
     stages = zero_timing()
     for entry in entries:
@@ -195,6 +207,26 @@ def timing_from_progress(entries: list[dict[str, Any]], elapsed_ms: int) -> dict
         for bucket in stages:
             value = as_int(raw.get(bucket), 0)
             if value > stages[bucket]:
+                stages[bucket] = value
+    if not any(stages.values()):
+        stages["block_connect_store_commit"] = max(0, elapsed_ms)
+    return {
+        "total_ms": max(0, elapsed_ms),
+        "stage_totals_ms": stages,
+        "slow_blocks": [],
+    }
+
+
+def full_timing_from_progress(entries: list[dict[str, Any]], elapsed_ms: int) -> dict[str, Any]:
+    stages: dict[str, int | float] = zero_timing()
+    for entry in entries:
+        raw = entry.get("timing_counters") or entry.get("timing_buckets_ms") or entry.get("timing")
+        if not isinstance(raw, dict):
+            continue
+        for bucket, value in full_timing(raw).items():
+            if bucket in NON_CUMULATIVE_TIMING_BUCKETS:
+                stages[bucket] = value
+            elif value > stages.get(bucket, 0):
                 stages[bucket] = value
     if not any(stages.values()):
         stages["block_connect_store_commit"] = max(0, elapsed_ms)
@@ -218,6 +250,20 @@ def timing_from_benchmark_ticks(log_path: Path) -> dict[str, int]:
     return stages
 
 
+def full_timing_from_benchmark_ticks(log_path: Path) -> dict[str, int | float]:
+    stages: dict[str, int | float] = zero_timing()
+    for tick in benchmark_tick_entries(log_path):
+        raw = tick.get("timing_buckets_ms")
+        if not isinstance(raw, dict):
+            continue
+        for bucket, value in full_timing(raw).items():
+            if bucket in NON_CUMULATIVE_TIMING_BUCKETS:
+                stages[bucket] = value
+            elif value > stages.get(bucket, 0):
+                stages[bucket] = value
+    return stages
+
+
 def best_final_progress(entries: list[dict[str, Any]]) -> dict[str, Any]:
     if not entries:
         return {}
@@ -227,6 +273,39 @@ def best_final_progress(entries: list[dict[str, Any]]) -> dict[str, Any]:
         if str(entry.get("validated_hash") or "").strip():
             return entry
     return same_height[-1] if same_height else entries[-1]
+
+
+def max_progress_int(entries: list[dict[str, Any]], key: str) -> int:
+    return max((as_int(entry.get(key), 0) for entry in entries), default=0)
+
+
+def blocks_current(entry: dict[str, Any]) -> bool:
+    if as_bool(entry.get("blocks_current")):
+        return True
+    header_height = as_int(entry.get("header_height"), 0)
+    validated_height = as_int(entry.get("validated_height"), 0)
+    return entry.get("sync_status") == "blocks_current" and header_height > 0 and validated_height >= header_height
+
+
+def health_ticks(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ticks: list[dict[str, Any]] = []
+    for entry in entries:
+        ticks.append(
+            {
+                "iteration": as_int(entry.get("live_iteration"), len(ticks) + 1),
+                "sync_status": entry.get("sync_status", ""),
+                "header_height": as_int(entry.get("header_height"), 0),
+                "validated_height": as_int(entry.get("validated_height"), 0),
+                "validated_hash": entry.get("validated_hash", ""),
+                "stored_block_height": as_int(entry.get("stored_block_height"), 0),
+                "chainstate_utxo_count": as_int(entry.get("chainstate_utxo_count", entry.get("utxo_count")), 0),
+                "blocks_current": blocks_current(entry),
+                "reconnect_count": as_int(entry.get("reconnect_count"), 0),
+                "stall_count": as_int(entry.get("stall_count"), 0),
+                "current_blocker": entry.get("current_blocker"),
+            }
+        )
+    return ticks
 
 
 def progress_tick(
@@ -244,7 +323,7 @@ def progress_tick(
     height = as_int(entry.get("validated_height"), started_height)
     target = target_height or max(height, 0)
     percent = round((height / target * 100.0), 3) if target > 0 else None
-    timing = canonical_timing(entry.get("timing_buckets_ms"))
+    timing = full_timing(entry.get("timing_buckets_ms"))
     return {
         "schema": "benchmark.telemetry_tick.v1",
         "port": port,
@@ -298,7 +377,10 @@ def synthesize_ticks(
     first_header = next((entry for entry in entries if as_int(entry.get("header_height"), 0) > 0), first)
     first_block = next((entry for entry in entries if as_int(entry.get("validated_height"), 0) > started_height), first)
     ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first_header, event="first_peer_byte", phase="peer_connect", target_height=target_height, monotonic_ms=3, started_height=started_height))
-    ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first_block, event="first_block_connected", phase="block_connect", target_height=target_height, monotonic_ms=4, started_height=started_height))
+    if gate_id == "tip_maintenance":
+        ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first_block, event="first_health_tick", phase="heartbeat", target_height=target_height, monotonic_ms=4, started_height=started_height))
+    else:
+        ticks.append(progress_tick(port=port, gate_id=gate_id, run_id=run_id, entry=first_block, event="first_block_connected", phase="block_connect", target_height=target_height, monotonic_ms=4, started_height=started_height))
     if entries:
         span = max(1, elapsed_ms - 6)
         for offset, entry in enumerate(entries, start=1):
@@ -354,9 +436,16 @@ def build_artifact(
         ),
         0,
     )
-    started_height = source_state_height if spec.get("resume_from_state") else 0
+    maintenance = bool(spec.get("maintenance"))
+    started_height = (
+        source_state_height
+        if spec.get("resume_from_state")
+        else as_int(first.get("validated_height"), 0) if maintenance else 0
+    )
     if spec.get("resume_from_state"):
         target_height = reference_finish_height or as_int(final.get("validated_height"), started_height)
+    elif maintenance:
+        target_height = as_int(final.get("validated_height"), started_height)
     else:
         target_height = None if spec.get("tip") else int(spec["target_height"])
     ticks = synthesize_ticks(
@@ -379,11 +468,22 @@ def build_artifact(
     observed_stages = timing_from_benchmark_ticks(proof_log)
     if any(observed_stages.values()):
         timing["stage_totals_ms"] = observed_stages
+    pipeline_timing = full_timing_from_progress(entries, max(0, elapsed_ms))
+    observed_pipeline_stages = full_timing_from_benchmark_ticks(proof_log)
+    if any(observed_pipeline_stages.values()):
+        pipeline_timing["stage_totals_ms"] = observed_pipeline_stages
     target = int(spec["target_height"]) if not spec.get("tip") else as_int(reference_finish_height, as_int(final.get("validated_height"), 0))
     expected_hash = _artifact_validator.EXPECTED_HASHES.get(gate_id, reference_finish_hash or final.get("validated_hash", ""))
-    reference_start_height = started_height if spec.get("resume_from_state") else 0
-    reference_start_hash = str(source_state_hash or "") if spec.get("resume_from_state") else TESTNET4_GENESIS_HASH
-    fresh_state = False if spec.get("resume_from_state") else True
+    if maintenance:
+        target = as_int(final.get("validated_height"), started_height)
+        expected_hash = str(final.get("validated_hash") or "")
+    reference_start_height = started_height if (spec.get("resume_from_state") or maintenance) else 0
+    reference_start_hash = (
+        str(source_state_hash or first.get("validated_hash") or "")
+        if (spec.get("resume_from_state") or maintenance)
+        else TESTNET4_GENESIS_HASH
+    )
+    fresh_state = False if (spec.get("resume_from_state") or maintenance) else True
     payload = {
         "implementation": f"{port} product node",
         "port": port,
@@ -395,7 +495,7 @@ def build_artifact(
         "target_height": target,
         "target_label": spec["target_label"] if (not spec.get("tip") or spec.get("resume_from_state")) else "tip",
         "header_target_height": target,
-        "byte_source": "local_reference_p2p",
+        "byte_source": "network_or_local_reference_p2p" if maintenance else "local_reference_p2p",
         "reference_start_height": reference_start_height,
         "reference_start_hash": reference_start_hash,
         "reference_finish_height": target,
@@ -410,8 +510,8 @@ def build_artifact(
         "chainstate_utxo_count": as_int(final.get("chainstate_utxo_count", final.get("utxo_count")), 0),
         "utxo_accounting_policy": "core_spendable_v1",
         "native_crypto_backend": str(final.get("native_crypto_backend") or BASELINE_CRYPTO_BACKENDS.get(port, "baseline-native")),
-        "proof_mode": "p2p_sync",
-        "peer_mode": "local_reference",
+        "proof_mode": "tip_maintenance" if maintenance else "p2p_sync",
+        "peer_mode": "tip_peer" if maintenance else "local_reference",
         "peer": str(final.get("peer") or expected_peer),
         "script_runner_mode": "parallel",
         "rocksdb_wal_disabled": False,
@@ -424,7 +524,7 @@ def build_artifact(
         "telemetry_schema": "benchmark.telemetry_tick.v1",
         "telemetry_summary": telemetry_validation.summary,
         "timing_summary": timing,
-        "pipeline_timing_summary": timing,
+        "pipeline_timing_summary": pipeline_timing,
         "status": {
             "chain": final.get("chain", "testnet4"),
             "sync_status": final.get("sync_status", ""),
@@ -455,6 +555,30 @@ def build_artifact(
             }
         )
         payload["control_harness"]["resume_source"] = "port_durable_state"
+    if maintenance:
+        payload.update(
+            {
+                "maintenance_window_seconds": max(0, int(elapsed_ms / 1000)),
+                "start_height": as_int(first.get("validated_height"), 0),
+                "start_hash": first.get("validated_hash", ""),
+                "end_height": as_int(final.get("validated_height"), 0),
+                "end_hash": final.get("validated_hash", ""),
+                "blocks_current": blocks_current(final),
+                "reconnect_count": max_progress_int(entries, "reconnect_count"),
+                "stall_count": max_progress_int(entries, "stall_count"),
+                "restart_recovery_count": max_progress_int(entries, "restart_recovery_count"),
+                "health_ticks": health_ticks(entries),
+                "final_status": {
+                    "sync_status": final.get("sync_status", ""),
+                    "header_height": as_int(final.get("header_height"), 0),
+                    "validated_height": as_int(final.get("validated_height"), 0),
+                    "validated_hash": final.get("validated_hash", ""),
+                    "stored_block_height": as_int(final.get("stored_block_height"), 0),
+                    "chainstate_utxo_count": as_int(final.get("chainstate_utxo_count", final.get("utxo_count")), 0),
+                    "current_blocker": final.get("current_blocker"),
+                },
+            }
+        )
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     artifact_path.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
     return ControlBuildResult(
@@ -562,7 +686,75 @@ def self_test() -> int:
             if post_payload.get("source_state_hash") != _artifact_validator.EXPECTED_HASHES["performance_100k"]:
                 failures += 1
                 print("self_test post_100k_to_tip source hash was not preserved")
-    print(f"control_benchmark_harness_self_test cases=2 failures={failures}")
+        maintenance_hash = "0000000000000000000000000000000000000000000000000000000000000003"
+        maintenance_log = tmp_path / "maintenance-proof.log"
+        maintenance_progress = [
+            {
+                "chain": "testnet4",
+                "sync_status": "blocks_current",
+                "header_height": 123456,
+                "validated_height": 123456,
+                "validated_hash": maintenance_hash,
+                "stored_block_height": 123456,
+                "chainstate_utxo_count": 999,
+                "current_blocker": None,
+                "peer": "bitcoin-core-testnet4:48333",
+                "live_iteration": 1,
+                "reconnect_count": 0,
+                "stall_count": 0,
+                "restart_recovery_count": 0,
+                "blocks_current": True,
+            },
+            {
+                "chain": "testnet4",
+                "sync_status": "blocks_current",
+                "header_height": 123456,
+                "validated_height": 123456,
+                "validated_hash": maintenance_hash,
+                "stored_block_height": 123456,
+                "chainstate_utxo_count": 999,
+                "current_blocker": None,
+                "peer": "bitcoin-core-testnet4:48333",
+                "live_iteration": 2,
+                "reconnect_count": 0,
+                "stall_count": 0,
+                "restart_recovery_count": 0,
+                "blocks_current": True,
+            },
+        ]
+        maintenance_log.write_text(
+            "\n".join(PRODUCT_PREFIX + json.dumps(item) for item in maintenance_progress),
+            encoding="utf-8",
+        )
+        maintenance_result = build_artifact(
+            port="java",
+            gate_id="tip_maintenance",
+            proof_log=maintenance_log,
+            artifact_path=tmp_path / "java_control_tip_maintenance.json",
+            telemetry_log_path=tmp_path / "java_control_tip_maintenance_telemetry.log",
+            elapsed_ms=10_000,
+            expected_peer="bitcoin-core-testnet4:48333",
+        )
+        if maintenance_result is None:
+            failures += 1
+            print("self_test: failed to build tip_maintenance artifact")
+        else:
+            maintenance_payload = json.loads(maintenance_result.artifact_path.read_text(encoding="utf-8"))
+            maintenance_errors, _ = _artifact_validator.validate_payload(
+                maintenance_payload,
+                gate_id="tip_maintenance",
+                path=maintenance_result.artifact_path,
+                port="java",
+                expected_peer="bitcoin-core-testnet4:48333",
+                strict_current=True,
+            )
+            if maintenance_errors:
+                failures += 1
+                print("self_test tip_maintenance artifact errors:", maintenance_errors)
+            if maintenance_result.telemetry_quality != "clean":
+                failures += 1
+                print("self_test tip_maintenance telemetry quality:", maintenance_result.telemetry_quality)
+    print(f"control_benchmark_harness_self_test cases=3 failures={failures}")
     return 1 if failures else 0
 
 

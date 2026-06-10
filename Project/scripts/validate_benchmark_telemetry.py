@@ -91,6 +91,20 @@ REQUIRED_LIFECYCLE_EVENTS = (
 LONG_RUN_GATES = {"shakedown_50k", "performance_100k", "post_100k_to_tip", "tip_once", "tip_maintenance"}
 
 
+def required_lifecycle_events(gate: str | None) -> tuple[str, ...]:
+    if gate == "tip_maintenance":
+        return (
+            "run_started",
+            "container_started",
+            "node_started",
+            "first_peer_byte",
+            "first_health_tick",
+            "target_reached",
+            "run_finished",
+        )
+    return REQUIRED_LIFECYCLE_EVENTS
+
+
 @dataclass
 class TelemetryValidation:
     quality: str
@@ -326,7 +340,7 @@ def validate_ticks(
         last_elapsed = elapsed
         last_monotonic = monotonic
     events = {str(tick.get("event", "")) for tick in ticks}
-    missing_events = [event for event in REQUIRED_LIFECYCLE_EVENTS if event not in events]
+    missing_events = [event for event in required_lifecycle_events(gate) if event not in events]
     if missing_events:
         warnings.append("missing lifecycle events: " + ",".join(missing_events))
         sparse = True

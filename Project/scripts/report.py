@@ -28,6 +28,9 @@ SECTIONS = (
     "test-capabilities",
     "test-capability-gaps",
     "experiment-readiness",
+    "full-node-capabilities",
+    "full-node-gaps",
+    "full-node-readiness",
     "conformance",
     "blocker-catalog",
     "blocker-matrix",
@@ -72,6 +75,9 @@ SECTION_ALIASES = {
     "capabilities": "test-capabilities",
     "capability-gaps": "test-capability-gaps",
     "experiments": "experiment-readiness",
+    "full-node": "full-node-readiness",
+    "full-node-capability-gaps": "full-node-gaps",
+    "node-reality": "full-node-readiness",
     "blockers": "blocker-catalog",
     "benchmark-suite": "benchmark-suite",
     "rankings": "leaderboard",
@@ -502,6 +508,108 @@ def print_experiment_readiness(connection: sqlite3.Connection) -> None:
         """,
     )
     print(table(("port", "lifecycle", "experiment", "readiness", "blocking_contracts"), data))
+
+
+def print_full_node_capabilities(connection: sqlite3.Connection) -> None:
+    print("## Full Node Capabilities")
+    print()
+    data = rows(
+        connection,
+        """
+        select port,
+               lifecycle_status,
+               capability,
+               status,
+               scope,
+               evidence_kind,
+               evidence_path,
+               does_not_prove,
+               evidence_source_type
+        from full_node_capabilities
+        order by port,
+          case capability
+            when 'full_node_empty_state_tip_sync' then 0
+            when 'full_node_near_tip_maintenance' then 1
+            when 'full_node_public_peer_sync_probe' then 2
+            when 'full_node_peer_rotation_reconnect' then 3
+            when 'full_node_inbound_headers_serving' then 4
+            when 'full_node_inbound_block_serving' then 5
+            when 'full_node_block_inv_announcement' then 6
+            when 'full_node_mempool_valid_tx_admission' then 7
+            when 'full_node_mempool_invalid_tx_rejection' then 8
+            when 'full_node_tx_inventory_relay' then 9
+            when 'full_node_fork_choice_chainwork' then 10
+            when 'full_node_reorg_disconnect_reconnect' then 11
+            when 'full_node_crash_mid_commit_recovery' then 12
+            when 'full_node_restart_at_tip_soak' then 13
+            when 'full_node_bad_peer_protocol_safety' then 14
+            when 'full_node_resource_bound_safety' then 15
+            else 20
+          end
+        """,
+    )
+    print(
+        table(
+            (
+                "port",
+                "lifecycle",
+                "capability",
+                "status",
+                "scope",
+                "evidence",
+                "path",
+                "does_not_prove",
+                "source",
+            ),
+            data,
+        )
+    )
+
+
+def print_full_node_gaps(connection: sqlite3.Connection) -> None:
+    print("## Full Node Gaps")
+    print()
+    data = rows(
+        connection,
+        """
+        select port,
+               lifecycle_status,
+               capability,
+               status,
+               blocking_for_json,
+               evidence_kind,
+               does_not_prove
+        from full_node_gaps
+        order by port, capability
+        """,
+    )
+    print(table(("port", "lifecycle", "capability", "status", "blocking_for", "evidence", "does_not_prove"), data))
+
+
+def print_full_node_readiness(connection: sqlite3.Connection) -> None:
+    print("## Full Node Readiness")
+    print()
+    data = rows(
+        connection,
+        """
+        select port,
+               lifecycle_status,
+               profile,
+               readiness,
+               blocking_capabilities
+        from full_node_readiness
+        order by port,
+          case profile
+            when 'validator_follower' then 0
+            when 'serving_peer' then 1
+            when 'relay_peer' then 2
+            when 'survivor' then 3
+            when 'full_node' then 4
+            else 5
+          end
+        """,
+    )
+    print(table(("port", "lifecycle", "profile", "readiness", "blocking_capabilities"), data))
 
 
 def print_conformance(connection: sqlite3.Connection) -> None:
@@ -1077,6 +1185,9 @@ REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "test-capabilities": print_test_capabilities,
     "test-capability-gaps": print_test_capability_gaps,
     "experiment-readiness": print_experiment_readiness,
+    "full-node-capabilities": print_full_node_capabilities,
+    "full-node-gaps": print_full_node_gaps,
+    "full-node-readiness": print_full_node_readiness,
     "conformance": print_conformance,
     "blocker-catalog": print_blocker_catalog,
     "blocker-matrix": print_blocker_matrix,

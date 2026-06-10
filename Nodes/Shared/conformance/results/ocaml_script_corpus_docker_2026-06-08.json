@@ -6,7 +6,7 @@
   "implementation": "ocbitnode",
   "node_id": "OCamlNode",
   "runtime_surface": "docker",
-  "captured_at": "2026-06-08T08:27:12Z",
+  "captured_at": "2026-06-08T09:38:49Z",
   "commit": "unknown",
   "manifest": "/workspace/Shared/conformance/fixtures/scripts/manifest.json",
   "fixture_count": 45,

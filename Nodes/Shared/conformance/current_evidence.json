@@ -391,9 +391,9 @@
       "port": "ocaml",
       "claim": "performance_100k",
       "gate_id": "performance_100k",
-      "path": "Nodes/Shared/conformance/results/ocaml_control_performance_100k_benchmark_20260607T230208Z.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_control_performance_100k_benchmark_20260608T101546Z.json",
       "status": "current",
-      "notes": "Current comparable ocaml performance_100k proof accepted by campaign performance_100k_20260607_154349."
+      "notes": "Current comparable ocaml performance_100k proof accepted by campaign performance_100k_20260608_025756."
     },
     {
       "port": "zig",
@@ -458,6 +458,14 @@
       "path": "Nodes/Shared/conformance/results/ocaml_control_post_100k_to_tip_benchmark_20260608T090019Z.json",
       "status": "current",
       "notes": "Current comparable ocaml post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260608_015935."
+    },
+    {
+      "port": "java",
+      "claim": "tip_maintenance",
+      "gate_id": "tip_maintenance",
+      "path": "Nodes/Shared/conformance/results/java_control_tip_maintenance_benchmark_20260608T195815Z.json",
+      "status": "current",
+      "notes": "Current comparable java tip_maintenance proof accepted by campaign tip_maintenance_20260608_125743."
     }
   ]
 }

@@ -568,7 +568,7 @@ def run_shell(
             log.write(line)
             log.flush()
             tick = parse_tick(line)
-            if tick and tick.get("event") == "first_block_connected":
+            if tick and tick.get("event") in {"first_block_connected", "first_health_tick"}:
                 first_block_connected = True
             if tick and should_emit_tick(tick, last_tick):
                 print(fmt_tick(tick), flush=True)

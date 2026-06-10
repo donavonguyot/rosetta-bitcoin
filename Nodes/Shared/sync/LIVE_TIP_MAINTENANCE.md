@@ -32,6 +32,13 @@ live_stop
 Events may be exported to `Project/project.db`, but live mode must not depend on
 the project DB.
 
+## Full-Node Capability Boundary
+
+Tip maintenance is one full-node capability, not complete full-node proof. It
+shows that a port can stay near tip with health/status telemetry. Separate
+capability rows track public-peer sync, inbound serving, mempool relay, reorg
+handling, crash recovery, restart soak, and bad-peer/resource safety.
+
 ## Java Extraction Notes
 
 Use `Nodes/Java/src/main/java/com/jbitnode/cli/LiveNodeService.java` as the lead

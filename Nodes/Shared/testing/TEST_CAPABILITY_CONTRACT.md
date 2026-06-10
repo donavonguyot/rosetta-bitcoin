@@ -73,8 +73,34 @@ Experiment-focused contracts:
 - `storage_codec_vectors`
 - `storage_restart_after_codec_change`
 
+Full-node capability contracts:
+
+- `full_node_empty_state_tip_sync`
+- `full_node_near_tip_maintenance`
+- `full_node_public_peer_sync_probe`
+- `full_node_peer_rotation_reconnect`
+- `full_node_inbound_headers_serving`
+- `full_node_inbound_block_serving`
+- `full_node_block_inv_announcement`
+- `full_node_mempool_valid_tx_admission`
+- `full_node_mempool_invalid_tx_rejection`
+- `full_node_tx_inventory_relay`
+- `full_node_fork_choice_chainwork`
+- `full_node_reorg_disconnect_reconnect`
+- `full_node_crash_mid_commit_recovery`
+- `full_node_restart_at_tip_soak`
+- `full_node_bad_peer_protocol_safety`
+- `full_node_resource_bound_safety`
+
 Project may add capabilities when a new risk surface appears. Do not introduce
 levels such as "level 1" or "gold" when adding them.
+
+Full-node capabilities are not benchmark gates. They make network-peer reality
+visible beside replay competence: public peer sync, serving, relay, reorgs,
+crash recovery, and adversarial safety. Project derives `pass` only for
+canonical clean `tip_once` and `tip_maintenance` evidence; all other full-node
+capabilities stay `missing` until a port-owned explicit capability artifact
+proves them. Baseline-retired ports are `not_applicable` for these rows.
 
 ## Registered Suites
 
@@ -140,6 +166,9 @@ levels such as "level 1" or "gold" when adding them.
 python3 Project/scripts/report.py --db Project/project.db --section test-capabilities
 python3 Project/scripts/report.py --db Project/project.db --section test-capability-gaps
 python3 Project/scripts/report.py --db Project/project.db --section experiment-readiness
+python3 Project/scripts/report.py --db Project/project.db --section full-node-capabilities
+python3 Project/scripts/report.py --db Project/project.db --section full-node-gaps
+python3 Project/scripts/report.py --db Project/project.db --section full-node-readiness
 ```
 
 Use these reports to answer concrete safety questions:
@@ -148,6 +177,7 @@ Use these reports to answer concrete safety questions:
 - Can we optimize block connect?
 - Can we change storage codec keys?
 - Can we rewrite P2P handshake timing?
+- Which full-node behaviors are unproved beyond replay validation?
 
 The answer should be `ready` or `blocked`, with exact missing contracts.
 

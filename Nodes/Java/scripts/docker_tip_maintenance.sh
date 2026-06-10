@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+REFERENCE_TOPOLOGY_ENV="${REFERENCE_TOPOLOGY_ENV:-../Shared/docker/reference_topology.env}"
+# shellcheck source=/dev/null
+. "$REFERENCE_TOPOLOGY_ENV"
+
+DOCKER_COMPOSE=(docker compose --env-file "$REFERENCE_TOPOLOGY_ENV" -f docker/docker-compose.yml)
+VOLUME="${DOCKER_PROOF_VOLUME:-jbitnode_100k_proof_data}"
+PEER="${PEERS:-${REFERENCE_P2P_PEER:?REFERENCE_P2P_PEER missing}}"
+BACKEND="${SECP256K1_BACKEND:-native}"
+HEADERS_MAX="${HEADERS_MAX:-2000}"
+HEADER_BATCHES_MAX="${HEADER_BATCHES_MAX:-50}"
+BLOCKS_MAX="${BLOCKS_MAX:-64}"
+LIVE_MAX_ITERATIONS="${LIVE_MAX_ITERATIONS:-3}"
+LIVE_POLL_MS="${LIVE_POLL_MS:-5000}"
+LIVE_RECONNECT_MS="${LIVE_RECONNECT_MS:-5000}"
+
+echo "tip_maintenance_start volume=$VOLUME peer=$PEER iterations=$LIVE_MAX_ITERATIONS"
+
+DOCKER_PROOF_VOLUME="$VOLUME" \
+PEERS="$PEER" \
+SECP256K1_BACKEND="$BACKEND" \
+HEADERS_MAX="$HEADERS_MAX" \
+HEADER_BATCHES_MAX="$HEADER_BATCHES_MAX" \
+BLOCKS_MAX="$BLOCKS_MAX" \
+LIVE_MAX_ITERATIONS="$LIVE_MAX_ITERATIONS" \
+LIVE_POLL_MS="$LIVE_POLL_MS" \
+LIVE_RECONNECT_MS="$LIVE_RECONNECT_MS" \
+"${DOCKER_COMPOSE[@]}" run --rm --no-deps \
+  -e PAR_SCRIPT_VERIFY=1 \
+  -e SYNC_TIMING=1 \
+  -e SECP256K1_BACKEND="$BACKEND" \
+  -e PEERS="$PEER" \
+  -e HEADERS_MAX="$HEADERS_MAX" \
+  -e HEADER_BATCHES_MAX="$HEADER_BATCHES_MAX" \
+  -e BLOCKS_MAX="$BLOCKS_MAX" \
+  -e LIVE_MAX_ITERATIONS="$LIVE_MAX_ITERATIONS" \
+  -e LIVE_POLL_MS="$LIVE_POLL_MS" \
+  -e LIVE_RECONNECT_MS="$LIVE_RECONNECT_MS" \
+  jbitnode-sync-proof com.jbitnode.cli.LiveNode
+
+echo "tip_maintenance_status volume=$VOLUME"
+DOCKER_PROOF_VOLUME="$VOLUME" \
+SECP256K1_BACKEND="$BACKEND" \
+"${DOCKER_COMPOSE[@]}" run --rm --no-deps jbitnode-sync-proof com.jbitnode.cli.DbStatus

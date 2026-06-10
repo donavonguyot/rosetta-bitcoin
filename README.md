@@ -1,8 +1,69 @@
-# RosettaBitcoin Workspace
+# RosettaBitcoin
 
 RosettaBitcoin is a multi-port Bitcoin testnet4 validation workspace and a
 single root-owned monorepo. There is exactly one Git repository, at the
 workspace root.
+
+## What This Is
+
+RosettaBitcoin compares independently implemented Bitcoin testnet4 validation
+nodes across language ports. The project is evidence-first: public claims are
+grounded in Project reports, Shared conformance fixtures, curated evidence
+selection, and compact proof artifacts.
+
+The goal is not a wallet, custody system, production security product, or
+shortcut around Bitcoin validation. The goal is to make each serious port prove
+what it can actually validate, store, resume, and maintain on testnet4 without
+treating another implementation as an oracle.
+
+The binary end gate remains:
+
+```text
+From empty local state on Bitcoin testnet4, the node reaches and maintains tip
+while independently validating every stored connected block.
+```
+
+Bounded gates and benchmark lanes are useful evidence. They are not the binary
+gate unless they reach and maintain current tip independently.
+
+## Ports
+
+RosettaBitcoin contains implementation directories for C++, C#, Elixir, Go,
+Java, OCaml, Python, Rust, Swift, TypeScript, and Zig.
+
+`Nodes/Reference/` contains the local Bitcoin Core recipe used as a byte source
+and comparison surface. Port readiness, benchmark rank, evidence selection, and
+consensus runway state are reported by Project, not by this README.
+
+## Evidence Orientation
+
+Do not treat README prose as a status table. Use Project reports for the live
+mission-control view before quoting port posture, readiness, benchmark rank,
+current evidence, or consensus runway state.
+
+```bash
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
+python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
+python3 Project/scripts/report.py --db Project/project.db --section current-evidence
+```
+
+## Invitation To Bitcoin Node Reviewers
+
+Correctness review from Bitcoin Core contributors and other node implementers is
+welcome, especially when it sharpens consensus fixtures, script behavior,
+P2P/sync assumptions, storage safety, benchmark claims, or evidence boundaries.
+
+This is an invitation, not an obligation. There is no expectation of review
+bandwidth, no roadmap dependency on a response, and no request for public
+critique. General correctness notes and semantic-drift observations can use
+GitHub Issues after publication; security-sensitive reports should follow
+[`SECURITY.md`](SECURITY.md).
+
+Reference Core is used as a byte source and comparison surface. It is not a
+RosettaBitcoin validity oracle. RosettaBitcoin ports stand or fall on their own
+Project-imported evidence, Shared fixtures, and port-owned proof artifacts. See
+[`Docs/core-btcg-comparison-lane.md`](Docs/core-btcg-comparison-lane.md).
 
 ## Canonical Read Order
 
@@ -32,13 +93,13 @@ workspace root.
 
 ## Compliance Boundaries
 
-The official benchmark suite is `baseline_5k`, `shakedown_50k`,
-`performance_100k`, `post_100k_to_tip`, `tip_once`, and `tip_maintenance`.
-The first comparable
-readiness standard is the 5k baseline: RocksDB runtime truth, native crypto, the
-shared `45/45` script corpus, Docker local Reference P2P proof, fixed benchmark
-knobs, `core_spendable_v1` UTXO accounting, and Project-importable artifacts.
-See [`Docs/port-baseline-5k.md`](Docs/port-baseline-5k.md).
+The official benchmark suite and gate labels live in
+[`Nodes/Shared/conformance/BENCHMARK_CONTRACT.md`](Nodes/Shared/conformance/BENCHMARK_CONTRACT.md)
+and Project reports. The first comparable readiness standard is the 5k baseline:
+RocksDB runtime truth, native crypto, the shared `45/45` script corpus,
+Docker local Reference P2P proof, fixed benchmark knobs, `core_spendable_v1`
+UTXO accounting, and Project-importable artifacts. See
+[`Docs/port-baseline-5k.md`](Docs/port-baseline-5k.md).
 
 Core Node compliance requires separate evidence for consensus progress, RocksDB
 runtime truth, status import, and Docker runtime/proof behavior. Project
@@ -60,8 +121,8 @@ python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 python3 Project/scripts/preflight_port_baseline.py --db Project/project.db --port <port> --strict
 ```
 
-Current benchmark leaderboards rank only passed, comparable artifacts that pass
-the shared benchmark validator and import as `artifact_quality=canonical`.
+Benchmark leaderboards are generated from comparable canonical artifacts that
+satisfy the shared validator and import as `artifact_quality=canonical`.
 Long-run gates also require `telemetry_quality=clean`; `shakedown_50k` is the
 telemetry discipline gate before `performance_100k`, and `post_100k_to_tip`
 is the immediate tip-readiness lane from canonical 100k state. Historical evidence
@@ -94,38 +155,24 @@ project claim belongs under `Nodes/Shared/conformance/results/`; see
 
 ## Public Release Posture
 
-This workspace is being prepared for eventual publication as RosettaBitcoin.
-The local working-directory path is not a separate public project identity.
+This workspace is being prepared for publication at
+`donavonguyot/rosetta-bitcoin`. The local working-directory path is not a
+separate public project identity.
 
-Public status claims must come from Project reports and current RosettaBitcoin evidence,
-not hand-maintained tables or retired archive material. RosettaBitcoin uses the
-MIT License and plans to use GitHub private vulnerability reporting after the
-public repository exists. Repository host/name and final publication mechanics
-are still pre-publication decisions.
+Public status claims must come from Project reports and Project-backed
+RosettaBitcoin evidence, not hand-maintained prose or narrative summaries.
+RosettaBitcoin uses the MIT License and plans to use GitHub private
+vulnerability reporting when public visibility is enabled. Final publication
+still requires a Project evidence refresh, artifact/ignore review, and
+repository security settings check.
 
-Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md),
-[`Docs/rename-open-source-prep.md`](Docs/rename-open-source-prep.md), and the
-public archive summary in
-[`Docs/public-archive-provenance.md`](Docs/public-archive-provenance.md).
-
-## Legacy Archive Boundary
-
-The retired `/Users/donavonguyot/ArchiveRosettaBitcoin` workspace is retained
-archaeology, with a compressed backup already taken. The current workspace is
-the deliverable workspace and the source of operational truth.
-
-Old RosettaBitcoin material may inform the current project only after it is re-expressed as
-RosettaBitcoin-owned documentation, contracts, fixtures, or compact proof evidence. Static
-IL, old proof ladders, nested repositories, generated artifacts, and historical
-runtime state are provenance or archive material; they do not support current
-claims by themselves. See
-[`Docs/public-archive-provenance.md`](Docs/public-archive-provenance.md) for the
-public summary and [`Docs/rosettabitcoin-archive-harvest.md`](Docs/rosettabitcoin-archive-harvest.md)
-for the detailed local harvest boundary.
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md) and
+[`SECURITY.md`](SECURITY.md).
 
 ## Binary Gate
 
-The binary gate for any serious node remains:
+The binary gate is repeated here because it is the project boundary that matters
+most:
 
 ```text
 From empty local state on Bitcoin testnet4, the node reaches and maintains tip

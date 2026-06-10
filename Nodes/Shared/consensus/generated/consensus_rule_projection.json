@@ -9,6 +9,10 @@
   ],
   "domain": "script",
   "fixture_count": 45,
+  "input_sha256": {
+    "rule_ledger": "85f6dbde93f69e80218cdee0aef8438b0d37b6042dbed13d88bdce9440fdaf01",
+    "script_fixture_manifest": "9f338ff205087144c38679ebd67bde5bf372bea3082922bde5f28013e4727d06"
+  },
   "inputs": {
     "rule_ledger": "Nodes/Shared/consensus/rules/testnet4_script_rules_v1.json",
     "script_fixture_manifest": "Nodes/Shared/conformance/fixtures/scripts/manifest.json"

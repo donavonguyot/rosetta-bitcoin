@@ -403,11 +403,30 @@ python3 Project/scripts/report.py \
 python3 Project/scripts/report.py \
   --db Project/project.db \
   --section experiment-readiness
+
+python3 Project/scripts/report.py \
+  --db Project/project.db \
+  --section full-node-capabilities
+
+python3 Project/scripts/report.py \
+  --db Project/project.db \
+  --section full-node-gaps
+
+python3 Project/scripts/report.py \
+  --db Project/project.db \
+  --section full-node-readiness
 ```
 
 See `Nodes/Shared/testing/TEST_CAPABILITY_CONTRACT.md` for the artifact schema,
 allowed provenance classes, and the rule that denominators require a named suite
 with a version and hash.
+
+Full-node capability reports sit beside benchmark gates. They separate validated
+replay competence from network-peer behavior: public peer sync, inbound serving,
+mempool relay, reorgs, crash recovery, restart soak, and adversarial/resource
+safety. Canonical clean `tip_once` and `tip_maintenance` evidence can derive the
+matching full-node rows; other full-node rows remain missing until explicit
+port-owned capability artifacts prove them.
 
 Crypto experiment readiness uses dedicated command keys:
 

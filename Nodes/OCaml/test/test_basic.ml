@@ -94,6 +94,74 @@ let test_rocks_multi_get_utxos () =
               Alcotest.(check string) "compactsize script" script_c c.script_pubkey
           | _ -> Alcotest.fail "unexpected typed UTXO multi_get result")))
 
+let test_same_block_prevout_pruning () =
+  let open Ocbitnode in
+  let spendable_script = "\x51" in
+  let op_return_script = "\x6a" in
+  let external_a = String.make 32 '\x11' in
+  let external_b = String.make 32 '\x22' in
+  let external_c = String.make 32 '\x33' in
+  let coinbase =
+    {
+      Tx.version = 1l;
+      inputs = [];
+      outputs = [ { value = 50L; script_pubkey = spendable_script } ];
+      lock_time = 0l;
+      witness = [];
+    }
+  in
+  let future_creator =
+    {
+      Tx.version = 1l;
+      inputs = [ { previous_output = { hash = external_c; index = 2l }; script_sig = ""; sequence = 0xffffffffl } ];
+      outputs = [ { value = 40L; script_pubkey = spendable_script } ];
+      lock_time = 0l;
+      witness = [];
+    }
+  in
+  let future_txid = Tx.txid_internal future_creator in
+  let prior_creator =
+    {
+      Tx.version = 1l;
+      inputs =
+        [
+          { previous_output = { hash = future_txid; index = 0l }; script_sig = ""; sequence = 0xffffffffl };
+          { previous_output = { hash = external_a; index = 0l }; script_sig = ""; sequence = 0xffffffffl };
+        ];
+      outputs =
+        [
+          { value = 30L; script_pubkey = spendable_script };
+          { value = 0L; script_pubkey = op_return_script };
+        ];
+      lock_time = 0l;
+      witness = [];
+    }
+  in
+  let prior_txid = Tx.txid_internal prior_creator in
+  let same_block_spender =
+    {
+      Tx.version = 1l;
+      inputs =
+        [
+          { previous_output = { hash = prior_txid; index = 0l }; script_sig = ""; sequence = 0xffffffffl };
+          { previous_output = { hash = prior_txid; index = 1l }; script_sig = ""; sequence = 0xffffffffl };
+          { previous_output = { hash = external_b; index = 5l }; script_sig = ""; sequence = 0xffffffffl };
+          { previous_output = { hash = external_b; index = 5l }; script_sig = ""; sequence = 0xffffffffl };
+        ];
+      outputs = [ { value = 20L; script_pubkey = spendable_script } ];
+      lock_time = 0l;
+      witness = [];
+    }
+  in
+  let timing = Block_connect.empty_timing () in
+  let prevouts = Block_connect.gather_external_prevouts [| coinbase; prior_creator; future_creator; same_block_spender |] timing in
+  let observed = Array.to_list prevouts |> List.map (fun (row : Rocks.outpoint) -> row.txid, row.vout) in
+  Alcotest.(check (list (pair string int)))
+    "external prevouts"
+    [ future_txid, 0; external_a, 0; external_c, 2; prior_txid, 1; external_b, 5 ]
+    observed;
+  Alcotest.(check int) "same-block skip count" 1 timing.Block_connect.same_block_prevout_skipped
+
 let test_sighash_cache_equivalence () =
   let open Ocbitnode in
   let p2wpkh_script = Util.bytes_of_hex "00141111111111111111111111111111111111111111" in
@@ -239,6 +307,7 @@ let () =
 	      Alcotest.test_case "block merkle" `Quick test_block_merkle;
 	      Alcotest.test_case "rocks multi_get and sync-off batch" `Quick test_rocks_multi_get_and_sync_off_batch;
 	      Alcotest.test_case "rocks typed UTXO multi_get" `Quick test_rocks_multi_get_utxos;
+	      Alcotest.test_case "same-block prevout pruning" `Quick test_same_block_prevout_pruning;
 	      Alcotest.test_case "sighash cache equivalence" `Quick test_sighash_cache_equivalence;
       Alcotest.test_case "legacy sighash cache equivalence" `Quick test_legacy_sighash_cache_equivalence;
       Alcotest.test_case "block 52404 tapscript verify" `Quick test_block_52404_tapscript_verify;

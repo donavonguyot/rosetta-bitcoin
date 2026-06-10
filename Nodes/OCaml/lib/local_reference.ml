@@ -54,6 +54,7 @@ let json_of_timing timing =
     "created_utxos", `Int timing.created_utxos;
     "spent_external", `Int timing.spent_external;
     "same_block_spends", `Int timing.same_block_spends;
+    "same_block_prevout_skipped", `Int timing.same_block_prevout_skipped;
     "tx_count", `Int timing.tx_count_total;
     "input_count", `Int timing.input_count_total;
     "utxo_key_encode", `Int timing.utxo_key_encode_ms;
