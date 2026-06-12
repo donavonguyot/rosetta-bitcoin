@@ -15,14 +15,14 @@ python3 Project/scripts/report.py --db Project/project.db --section docker-cover
 python3 Project/scripts/report.py --db Project/project.db --section conformance
 ```
 
-Use SQLite Utils for exact rows:
+Use the read-only Project query helper for exact rows:
 
 ```bash
-sqlite-utils query Project/project.db \
-  "select * from latest_port_status order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from latest_port_status order by port"
 
-sqlite-utils query Project/project.db \
-  "select * from docker_coverage order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from docker_coverage order by port"
 ```
 
 ## Update Rule

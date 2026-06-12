@@ -7,12 +7,13 @@ storage.
 
 They must not mutate node operational datadirs.
 
-Use SQLite Utils as the operator interface:
+Use Project reports as the operator interface:
 
 ```bash
-sqlite-utils tables Project/project.db --counts
-sqlite-utils query Project/project.db \
-  "select node_id, max(validated_height) as validated_height from status_snapshots group by node_id order by node_id"
+python3 Project/scripts/report.py --db Project/project.db --section summary
+python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/query_db.py \
+  --sql "select node_id, max(validated_height) as validated_height from status_snapshots group by node_id order by node_id"
 ```
 
 ## Import Current Evidence
@@ -460,55 +461,55 @@ Warm the port image before a benchmark campaign, then run fresh proof volumes
 without rebuilding unless a clean rebuild is intentional:
 
 ```bash
-sqlite-utils query Project/project.db \
-  "select port, command from port_command_surface where command_key='docker_warm' order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select port, command from port_command_surface where command_key='docker_warm' order by port"
 
 cd Nodes/<Port> && make docker-warm
-sqlite-utils query Project/project.db \
-  "select port, command from port_command_surface where command_key='docker_proof_local' order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select port, command from port_command_surface where command_key='docker_proof_local' order by port"
 # Run docker_proof_local only for the official local Reference P2P lane.
 # Add DOCKER_REBUILD=1 only for an intentional rebuild.
 
-sqlite-utils query Project/project.db \
-  "select port, command from port_command_surface where command_key='docker_proof_rpc_replay' order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select port, command from port_command_surface where command_key='docker_proof_rpc_replay' order by port"
 # RPC replay proof is evidence-only and is not ranked against P2P sync runs.
 ```
 
 Project exposes stable projection views for direct queries:
 
 ```bash
-sqlite-utils query Project/project.db \
-  "select * from latest_port_status order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from latest_port_status order by port"
 
-sqlite-utils query Project/project.db \
-  "select * from docker_coverage order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from docker_coverage order by port"
 
-sqlite-utils query Project/project.db \
-  "select port, command_key, supported, command from port_command_surface order by port, command_key"
+python3 Project/scripts/query_db.py \
+  --sql "select port, command_key, supported, command from port_command_surface order by port, command_key"
 
-sqlite-utils query Project/project.db \
-  "select port, baseline_par_status, coverage_control_status from test_coverage_matrix order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select port, baseline_par_status, coverage_control_status from test_coverage_matrix order by port"
 
-sqlite-utils query Project/project.db \
-  "select port, domain, domain_status, evidence from critical_test_domain_coverage order by port, domain"
+python3 Project/scripts/query_db.py \
+  --sql "select port, domain, domain_status, evidence from critical_test_domain_coverage order by port, domain"
 
-sqlite-utils query Project/project.db \
-  "select * from follower_blocker_matrix order by height, port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from follower_blocker_matrix order by height, port"
 
-sqlite-utils query Project/project.db \
-  "select * from current_benchmark_results order by gate_id, port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from current_benchmark_results order by gate_id, port"
 
-sqlite-utils query Project/project.db \
-  "select * from benchmark_leaderboard where gate_id='shakedown_50k' order by rank"
+python3 Project/scripts/query_db.py \
+  --sql "select * from benchmark_leaderboard where gate_id='shakedown_50k' order by rank"
 
-sqlite-utils query Project/project.db \
-  "select port, gate_id, artifact_quality from current_benchmark_results order by gate_id, port"
+python3 Project/scripts/query_db.py \
+  --sql "select port, gate_id, artifact_quality from current_benchmark_results order by gate_id, port"
 
-sqlite-utils query Project/project.db \
-  "select * from port_baseline_5k order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from port_baseline_5k order by port"
 
-sqlite-utils query Project/project.db \
-  "select * from consensus_runway order by port, target_height"
+python3 Project/scripts/query_db.py \
+  --sql "select * from consensus_runway order by port, target_height"
 ```
 
 Generated reports are stdout-only. Do not add or commit a generated

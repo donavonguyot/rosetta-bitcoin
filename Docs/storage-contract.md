@@ -34,8 +34,8 @@ Current storage evidence is indexed by Project:
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section conformance
-sqlite-utils query Project/project.db \
-  "select port, category, result, result_count, max_validated_height from conformance_summary order by port, category, result"
+python3 Project/scripts/query_db.py \
+  --sql "select port, category, result, result_count, max_validated_height from conformance_summary order by port, category, result"
 ```
 
 See `Nodes/Shared/storage/STORAGE_GATE.md` for the portable fixture contract.

@@ -7,8 +7,8 @@ Use Project for current imported script-corpus results:
 
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
-sqlite-utils query Project/project.db \
-  "select port, result, result_count from conformance_summary where category = 'script_corpus' order by port, result"
+python3 Project/scripts/query_db.py \
+  --sql "select port, result, result_count from conformance_summary where category = 'script_corpus' order by port, result"
 ```
 
 Use `manifest.json` for structural fixture truth:

@@ -30,8 +30,8 @@ Current native-crypto proof artifacts are indexed by Project:
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section conformance
-sqlite-utils query Project/project.db \
-  "select port, category, result, result_count from conformance_summary where category like '%crypto%' order by port, result"
+python3 Project/scripts/query_db.py \
+  --sql "select port, category, result, result_count from conformance_summary where category like '%crypto%' order by port, result"
 ```
 
 The durable shared API and vector contract lives in

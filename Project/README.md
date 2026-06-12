@@ -42,25 +42,30 @@ runtime truth.
 
 ## Operator Interface
 
-Use SQLite Utils for Project inspection:
+Use Project reports for operator-readable inspection:
 
 ```bash
-sqlite-utils tables Project/project.db --counts
-sqlite-utils query Project/project.db \
-  "select * from latest_port_status order by port"
+python3 Project/scripts/report.py --db Project/project.db --section summary
+python3 Project/scripts/report.py --db Project/project.db --section port-status
 ```
 
-Mission-control projections are also available through the report script:
+Use the read-only query helper only when you need exact Project rows:
 
 ```bash
-python3 Project/scripts/report.py --db Project/project.db --section port-status
+python3 Project/scripts/query_db.py \
+  --sql "select * from latest_port_status order by port"
+```
+
+Mission-control projections are available through the report script:
+
+```bash
 python3 Project/scripts/report.py --db Project/project.db --section blocker-matrix
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 python3 Project/scripts/report.py --db Project/project.db --section command-surface
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-suite
 python3 Project/scripts/report.py --db Project/project.db --section leaderboard --gate shakedown_50k
-sqlite-utils query Project/project.db \
-  "select * from benchmark_leaderboard where gate_id='shakedown_50k' order by rank"
+python3 Project/scripts/query_db.py \
+  --sql "select * from benchmark_leaderboard where gate_id='shakedown_50k' order by rank"
 ```
 
 Current benchmark leaderboards rank only canonical artifacts: passed,

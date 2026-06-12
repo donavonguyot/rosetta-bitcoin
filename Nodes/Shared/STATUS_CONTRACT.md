@@ -162,6 +162,6 @@ The root all-port workflow is:
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 python3 Project/scripts/report.py --db Project/project.db --section port-status
-sqlite-utils query Project/project.db \
-  "select * from latest_port_status order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from latest_port_status order by port"
 ```

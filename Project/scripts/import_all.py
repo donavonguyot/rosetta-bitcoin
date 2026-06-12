@@ -13,7 +13,6 @@ import hashlib
 import importlib.util
 import json
 import re
-import shutil
 import sqlite3
 import subprocess
 import sys
@@ -453,7 +452,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--blocker-ledger", action="append", default=[], help="Additional blocker ledger Markdown path")
     parser.add_argument("--include-history", action="store_true", help="Import every result JSON instead of only current_evidence entries")
     parser.add_argument("--tracked-only", action="store_true", help="Import only git-tracked default manifest/result/status/ledger files")
-    parser.add_argument("--skip-sqlite-utils-check", action="store_true", help="Do not require the sqlite-utils CLI")
     parser.add_argument("--self-test", action="store_true", help="Run importer validation self-tests without importing")
     return parser.parse_args()
 
@@ -2748,8 +2746,6 @@ def self_test() -> int:
 
 
 def import_all(args: argparse.Namespace) -> dict[str, int]:
-    if not args.skip_sqlite_utils_check and shutil.which("sqlite-utils") is None:
-        raise SystemExit("sqlite-utils CLI is required; install it or pass --skip-sqlite-utils-check")
     root = repo_root()
     db_path = root / args.db
     if args.rebuild and db_path.exists():
@@ -2776,7 +2772,6 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
         if initialize_schema:
             init_db(connection, root / "Project/schema.sql")
         connection.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('schema', 'mission-control-baseline')")
-        connection.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('sqlite_utils_cli', 'required')")
         import_benchmark_gates(connection)
         import_port_lifecycle(connection)
         current_evidence_paths = import_current_evidence_index(

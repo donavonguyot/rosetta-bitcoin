@@ -10,11 +10,11 @@ python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section conformance
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 
-sqlite-utils query Project/project.db \
-  "select port, validated_height, chainstate_backend, chainstate_status from latest_port_status order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select port, validated_height, chainstate_backend, chainstate_status from latest_port_status order by port"
 
-sqlite-utils query Project/project.db \
-  "select port, category, result, result_count, max_validated_height from conformance_summary order by port, category, result"
+python3 Project/scripts/query_db.py \
+  --sql "select port, category, result, result_count, max_validated_height from conformance_summary order by port, category, result"
 ```
 
 ## Readiness Definition

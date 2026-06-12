@@ -9,11 +9,11 @@ Use Project for current evidence rows:
 ```bash
 python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 
-sqlite-utils query Project/project.db \
-  "select port, claim, gate_id, imported, path from current_evidence_status order by port, claim"
+python3 Project/scripts/query_db.py \
+  --sql "select port, claim, gate_id, imported, path from current_evidence_status order by port, claim"
 
-sqlite-utils query Project/project.db \
-  "select port, category, result, result_count, max_validated_height from conformance_summary order by port, category, result"
+python3 Project/scripts/query_db.py \
+  --sql "select port, category, result, result_count, max_validated_height from conformance_summary order by port, category, result"
 
 python3 Project/scripts/report.py --db Project/project.db --section conformance
 python3 Project/scripts/report.py --db Project/project.db --section benchmark-summary

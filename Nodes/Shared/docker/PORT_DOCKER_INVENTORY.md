@@ -18,11 +18,11 @@ python3 Project/scripts/import_all.py --db Project/project.db --rebuild
 python3 Project/scripts/report.py --db Project/project.db --section docker-coverage
 python3 Project/scripts/report.py --db Project/project.db --section command-surface
 
-sqlite-utils query Project/project.db \
-  "select * from docker_coverage order by port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from docker_coverage order by port"
 
-sqlite-utils query Project/project.db \
-  "select port, command_key, supported, command from port_command_surface order by port, command_key"
+python3 Project/scripts/query_db.py \
+  --sql "select port, command_key, supported, command from port_command_surface order by port, command_key"
 ```
 
 ## Durable Rules

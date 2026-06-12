@@ -13,8 +13,8 @@ python3 Project/scripts/report.py --db Project/project.db --section blocker-matr
 For row-oriented SQL:
 
 ```bash
-sqlite-utils query Project/project.db \
-  "select * from follower_blocker_matrix order by height, port"
+python3 Project/scripts/query_db.py \
+  --sql "select * from follower_blocker_matrix order by height, port"
 ```
 
 ## Status Meanings

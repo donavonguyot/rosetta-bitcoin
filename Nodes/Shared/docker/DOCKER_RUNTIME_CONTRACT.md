@@ -104,8 +104,8 @@ can compare run surfaces without reading every port directory:
 
 ```bash
 python3 Project/scripts/report.py --db Project/project.db --section command-surface
-sqlite-utils query Project/project.db \
-  "select port, command_key, supported, command from port_command_surface order by port, command_key"
+python3 Project/scripts/query_db.py \
+  --sql "select port, command_key, supported, command from port_command_surface order by port, command_key"
 ```
 
 | Contract command | Meaning |
