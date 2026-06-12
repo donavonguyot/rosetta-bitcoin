@@ -91,3 +91,4 @@ venv/
 
 # Build caches (defense in depth; ports also ignore locally)
 /Nodes/*/.zig-cache/
+/Project/logs/
