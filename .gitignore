@@ -88,3 +88,6 @@ venv/
 
 # Elixir Docker proof scratch; canonical proof JSON lives under Nodes/Shared.
 /Nodes/Elixir/.docker-elixir-*
+
+# Build caches (defense in depth; ports also ignore locally)
+/Nodes/*/.zig-cache/

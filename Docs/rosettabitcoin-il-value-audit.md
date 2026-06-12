@@ -2,7 +2,7 @@
 
 Audit date: `2026-06-06`
 
-Archive root: `/Users/donavonguyot/ArchiveRosettaBitcoin`
+Archive root: the retired archive workspace
 
 Verification dependency: `Docs/rosettabitcoin-archive-snapshot.md` and
 `Docs/rosettabitcoin-archive-checksums.sha256`.

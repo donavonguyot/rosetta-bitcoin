@@ -26,6 +26,9 @@ jobs:
       - name: Check documentation drift
         run: python3 Project/scripts/check_doc_drift.py
 
+      - name: Check path hygiene
+        run: python3 Project/scripts/check_path_hygiene.py
+
       - name: Validate Docker contract metadata
         run: python3 Nodes/Shared/docker/validate_docker_contract.py
 

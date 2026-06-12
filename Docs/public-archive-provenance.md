@@ -1,7 +1,7 @@
 # Public Archive Provenance
 
 RosettaBitcoin grew out of a retired workspace at
-`/Users/donavonguyot/ArchiveRosettaBitcoin`. That workspace is preserved as
+the retired archive workspace. That workspace is preserved as
 external archaeology with a compressed backup and checksum snapshot. It is not
 the public project source of truth.
 

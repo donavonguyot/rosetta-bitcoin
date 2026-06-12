@@ -110,7 +110,7 @@
     "artifact_source": "project_control_harness",
     "product_progress_prefix": "rb.port_progress",
     "product_progress_count": 42,
-    "proof_log": "/Users/donavonguyot/RB/Project/.campaigns/baseline_5k_20260607_122549/logs/csharp_proof.log",
-    "telemetry_log": "/Users/donavonguyot/RB/Project/.campaigns/baseline_5k_20260607_122549/logs/csharp_control_telemetry.log"
+    "proof_log": "Project/.campaigns/baseline_5k_20260607_122549/logs/csharp_proof.log",
+    "telemetry_log": "Project/.campaigns/baseline_5k_20260607_122549/logs/csharp_control_telemetry.log"
   }
 }

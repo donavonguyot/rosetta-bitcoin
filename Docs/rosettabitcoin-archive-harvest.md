@@ -1,7 +1,7 @@
 # RosettaBitcoin Archive Harvest
 
 This document records the Stage 1 harvest boundary for the retired
-`/Users/donavonguyot/ArchiveRosettaBitcoin` workspace. A compressed backup exists, so
+the retired archive workspace workspace. A compressed backup exists, so
 this workspace can now be treated as source archaeology instead of active
 project state.
 

@@ -2,7 +2,7 @@
 
 This document records the Stage 5 preparation boundary for publishing this
 workspace as RosettaBitcoin. The workspace directory has been renamed to
-`/Users/donavonguyot/RosettaBitcoin`; this document does not create Git remotes
+the workspace root; this document does not create Git remotes
 or publish a repository.
 
 ## Public Identity
@@ -40,7 +40,7 @@ Public claims must be backed by current RosettaBitcoin evidence:
 - current evidence selected in `Nodes/Shared/conformance/current_evidence.json`;
 - compact proof JSON under `Nodes/Shared/conformance/results/`.
 
-Do not use the retired `/Users/donavonguyot/ArchiveRosettaBitcoin` archive, IL,
+Do not use the retired the retired archive workspace archive, IL,
 old proof ladders, old generated reports, comparison witnesses, or narrative
 assets as support for current claims. They may be cited only as provenance or
 archive context.
@@ -61,7 +61,7 @@ README table that implies those gates are complete.
 
 ## Public Archive Boundary
 
-The old `/Users/donavonguyot/ArchiveRosettaBitcoin` workspace remains external
+The old the retired archive workspace workspace remains external
 archaeology. Do not copy these into the public repository:
 
 - portal, book, or audio bulk assets;

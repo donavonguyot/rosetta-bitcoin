@@ -110,7 +110,7 @@
     "artifact_source": "project_control_harness",
     "product_progress_prefix": "rb.port_progress",
     "product_progress_count": 26,
-    "proof_log": "/Users/donavonguyot/RB/Project/.campaigns/shakedown_50k_20260607_123016/logs/swift_proof.log",
-    "telemetry_log": "/Users/donavonguyot/RB/Project/.campaigns/shakedown_50k_20260607_123016/logs/swift_control_telemetry.log"
+    "proof_log": "Project/.campaigns/shakedown_50k_20260607_123016/logs/swift_proof.log",
+    "telemetry_log": "Project/.campaigns/shakedown_50k_20260607_123016/logs/swift_control_telemetry.log"
   }
 }

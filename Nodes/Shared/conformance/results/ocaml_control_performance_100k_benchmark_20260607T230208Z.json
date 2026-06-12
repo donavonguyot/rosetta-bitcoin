@@ -110,7 +110,7 @@
     "artifact_source": "project_control_harness",
     "product_progress_prefix": "rb.port_progress",
     "product_progress_count": 107,
-    "proof_log": "/Users/donavonguyot/RB/Project/.campaigns/performance_100k_20260607_154349/logs/ocaml_proof.log",
-    "telemetry_log": "/Users/donavonguyot/RB/Project/.campaigns/performance_100k_20260607_154349/logs/ocaml_control_telemetry.log"
+    "proof_log": "Project/.campaigns/performance_100k_20260607_154349/logs/ocaml_proof.log",
+    "telemetry_log": "Project/.campaigns/performance_100k_20260607_154349/logs/ocaml_control_telemetry.log"
   }
 }

@@ -19,7 +19,7 @@ unless they have been promoted to a canonical result.
 
 ## Legacy Workspace Harvests
 
-Retired workspaces such as `/Users/donavonguyot/ArchiveRosettaBitcoin` are external
+The retired archive workspace is external
 archives. A harvest may add small Markdown summaries, checksum/manifests,
 rewritten RosettaBitcoin-native contracts, or deliberately promoted compact proof JSON. It
 must not import live DBs, nested `.git` directories, dependency trees, generated

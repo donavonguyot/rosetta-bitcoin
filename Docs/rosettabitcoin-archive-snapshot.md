@@ -2,7 +2,7 @@
 
 Snapshot time: `2026-06-06T20:42:56Z`
 
-Archive root: `/Users/donavonguyot/ArchiveRosettaBitcoin`
+Archive root: `<archive-root>` (the retired pre-publication workspace)
 
 Cleaned size: `753M`
 
@@ -69,7 +69,7 @@ audio files, `roadmap.db`, and `rosetta-bitcoin/state/canonical.sqlite3`.
 Verify from the archive root:
 
 ```bash
-cd /Users/donavonguyot/ArchiveRosettaBitcoin
+cd <archive-root>
 shasum -a 256 -c <workspace-root>/Docs/rosettabitcoin-archive-checksums.sha256
 ```
 
