@@ -238,7 +238,7 @@ success as binary-gate completion or live tip maintenance.
   not deferred-handshake completion on a live serving node.
 
 These are Go choices for the same Bitcoin pipeline described in Shared docs.
-Java and TypeScript currently document fuller live sync surfaces; Go documents
+Java and TypeScript document fuller live sync surfaces; Go documents
 the native storage + connect + comparator path honestly.
 
 ## Mission-Control Queries

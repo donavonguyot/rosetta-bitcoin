@@ -1,5 +1,8 @@
 # Shared Blocker Ledger Contract
 
+> **Normative field contract:** [`AGENTS.md`](../AGENTS.md) (blocker ledger section).
+> This page is guidance; if it ever disagrees with AGENTS.md, AGENTS.md wins.
+
 Every consensus unblock must leave a handoff row that another port can reproduce
 without reading chat transcripts or another implementation's chainstate.
 

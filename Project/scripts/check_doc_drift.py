@@ -195,6 +195,26 @@ def line_implies_alias_normalized_timing(path: Path, text: str) -> bool:
     return not any(marker in lower for marker in allowed)
 
 
+def line_claims_binary_gate_passed(path: Path, text: str) -> bool:
+    """Live binary-gate claims belong in Project/project.db, never in prose.
+
+    Historical entries are allowed only when explicitly marked as legacy
+    vocabulary. Per-blocker regression results must use `regression_status:`.
+    """
+    if path.suffix.lower() != ".md":
+        return False
+    lower = text.lower()
+    claims = (
+        "binary_gate_status: passed" in lower
+        or "binary_gate_status: met" in lower
+        or re.search(r"binary\s+gate\s+(?:passed|met|achieved|complete)", lower)
+    )
+    if not claims:
+        return False
+    exemptions = ("legacy", "historical", "vocabulary note", "does not", "not pass")
+    return not any(marker in lower for marker in exemptions)
+
+
 def markdown_link_target(raw_target: str) -> str:
     target = raw_target.strip()
     if target.startswith("<") and target.endswith(">"):
@@ -281,6 +301,8 @@ def main() -> int:
                     errors.append(f"{rel_path}:{index}: noncanonical evidence must not support current leaderboards: {line.strip()}")
                 if line_implies_alias_normalized_timing(path, line):
                     errors.append(f"{rel_path}:{index}: current benchmark docs must require canonical timing, not alias-normalized timing: {line.strip()}")
+                if line_claims_binary_gate_passed(path, line):
+                    errors.append(f"{rel_path}:{index}: binary-gate status claims belong in Project, not prose (mark historical entries as legacy): {line.strip()}")
                 if path.suffix.lower() == ".md":
                     for match in MARKDOWN_LINK.finditer(line):
                         target = markdown_link_target(match.group(1))

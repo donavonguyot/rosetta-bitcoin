@@ -1,5 +1,9 @@
 # Rename/Open-Source Prep
 
+> **Archive Record.** This document describes a completed process and is preserved
+> for provenance and decision history only. It is not active guidance. Query
+> Project for current status.
+
 This document records the Stage 5 preparation boundary for publishing this
 workspace as RosettaBitcoin. The workspace directory has been renamed to
 the workspace root; this document does not create Git remotes

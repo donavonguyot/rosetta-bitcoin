@@ -1,5 +1,8 @@
 # Follower Blocker Matrix Projection
 
+> Scope: blocker-matrix queries only. Storage-readiness queries live in
+> [`Nodes/Shared/FOLLOWER_STORAGE_READINESS.md`](../Nodes/Shared/FOLLOWER_STORAGE_READINESS.md).
+
 The follower blocker matrix is generated from Project mission-control data. The
 matrix combines imported blocker ledgers, latest imported status snapshots, and
 conformance fixture results. It is not maintained by editing this Markdown file.

@@ -6,7 +6,13 @@ or run logs when recording a blocker.
 
 ## Historical checkpoint (2026-05-29)
 
-Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **binary gate passed @136863; sync stopped via `.stop_sync`**:
+> **Vocabulary note.** "Binary gate" in this 2026-05-29 checkpoint used the early
+> catch-up definition: validate every stored block while catching up to the local
+> Reference Core tip. Under the current workspace definition (reach and maintain
+> tip from empty state on the public network), the binary gate remains
+> **not attempted** for every port — query Project for current posture.
+
+Catch-up from local Core (`127.0.0.1:48333`, `DATA_DIR=./data-java`), single-writer — **catch-up validation complete @136863 (legacy gate definition; see note above); sync stopped via `.stop_sync`**:
 
 ```text
 checkpoint_height: 136863
@@ -16,7 +22,7 @@ sync_status: blocks_current
 current_blocker: (none — stale header warning @136567 prev_block mismatch from pre-fork repair)
 missing_rule: none
 ledger_entry_written: yes
-binary_gate_status: passed (independent validation through 136863 on Core-aligned chain)
+binary_gate_status: passed under legacy catch-up definition (through 136863 on Core-aligned chain; see vocabulary note)
 next_exact_rule: rm .stop_sync + preflight + supervisor or periodic HEADERS_MAX/BLOCKS_MAX tip refresh
 peer: 127.0.0.1:48333
 ```
@@ -79,7 +85,7 @@ sync_status: resuming
 current_blocker: (none — legacy P2SH OP_ABS @132361 script verify landed)
 missing_rule: (none for 132361) — was OP_ABS (0x90) in legacy P2SH redeem evaluation
 ledger_entry_written: yes
-binary_gate_status: passed (P2shAbs132361RegressionTest)
+regression_status: passed (P2shAbs132361RegressionTest)
 next_exact_rule: CHUNK_TOTAL=55000 SUBCHUNK_SIZE=1000 ./scripts/sync_supervisor.sh background from 132360
 peer: 127.0.0.1:48333
 ```
@@ -112,7 +118,7 @@ sync_status: resuming
 current_blocker: (none for 126975 script verify — header-tip prev_block mismatch @136567 is operational, not consensus)
 missing_rule: (none for 126975) — was tapscript OP_2OVER (0x70) + OP_OVER (0x78)
 ledger_entry_written: yes
-binary_gate_status: passed (P2trTapscript126975RegressionTest)
+regression_status: passed (P2trTapscript126975RegressionTest)
 next_exact_rule: supervisor active with CHUNK_TOTAL=55000 SUBCHUNK_SIZE=1000 from 126974
 peer: 127.0.0.1:48333
 ```
@@ -145,7 +151,7 @@ sync_status: resuming (126034 reached in first 5000-block subchunk batch)
 current_blocker: (none for 121035 script verify — header-tip prev_block mismatch @136567 is operational, not consensus)
 missing_rule: (none for 121035) — was tapscript OP_BOOLOR (0x9b) boolean-or stack op
 ledger_entry_written: yes
-binary_gate_status: passed (P2trTapscript121035RegressionTest)
+regression_status: passed (P2trTapscript121035RegressionTest)
 next_exact_rule: supervisor already resumed with CHUNK_TOTAL=55000 SUBCHUNK_SIZE=1000 from 121034
 peer: 127.0.0.1:48333
 ```
@@ -178,7 +184,7 @@ sync_status: resuming
 current_blocker: (none — bare legacy @118555 script verify landed)
 missing_rule: (none for 118555) — was isBareLegacyScript + OP_DEPTH/OP_ROLL/OP_MIN + bare-puzzle CHECKMULTISIG placeholder strip
 ledger_entry_written: yes
-binary_gate_status: passed (BareLegacy118555RegressionTest)
+regression_status: passed (BareLegacy118555RegressionTest)
 next_exact_rule: CHUNK_TOTAL=55000 SUBCHUNK_SIZE=1000 ./scripts/sync_supervisor.sh background from 118554
 peer: 127.0.0.1:48333
 ```
@@ -211,7 +217,7 @@ sync_status: blocks_blocked
 current_blocker: (none — legacy P2SH OP_RIPEMD160 landed)
 missing_rule: OP_RIPEMD160 (0xa6) in legacy P2SH redeem (resolved)
 ledger_entry_written: yes
-binary_gate_status: passed (P2sh116040RegressionTest)
+regression_status: passed (P2sh116040RegressionTest)
 next_exact_rule: make java-node-sync-supervisor DATA_DIR=./data-java PEERS=127.0.0.1:48333 CHUNK_TOTAL=55000 SUBCHUNK_SIZE=1000 from 116039
 block_hash: 000000008111179882de773ffb40e062ab1423c58bd8373e516a9daa023e5714
 txid: a0a9fcb8a99ea3517d8fac76913ec4255066e9890c5f576ae2a4efc532302120
@@ -267,7 +273,7 @@ sync_status: blocks_blocked
 current_blocker: height=108972 block_hash=00000000000000018efb8d326b651300cc066ffbd804b4cfc0f41a5f00fe0552 txid=9a3d5d60b83e3b0d0469be19e8df6510c04d6d89f7e9db14b509dbf853da79f0 input_index=0 spent_script_pubkey=a914844a0e2219b6b30d31fddb92f78581e17031a2de87
 missing_rule: tapscript OP_1SUB (0x8c) (resolved)
 ledger_entry_written: yes
-binary_gate_status: passed (P2trTapscript108508RegressionTest)
+regression_status: passed (P2trTapscript108508RegressionTest)
 next_exact_rule: harvest @108972 P2SH script-path, then resume supervisor
 peer: 127.0.0.1:48333
 ```

@@ -1,5 +1,8 @@
 # Follower Storage Readiness Projection
 
+> Scope: storage-readiness queries only. Blocker-matrix queries live in
+> [`Docs/follower-port-matrix.md`](../../Docs/follower-port-matrix.md).
+
 Current follower storage readiness is Project mission-control knowledge, not a
 hand-maintained Markdown matrix. Query Project for current imported port status,
 storage/conformance results, Docker coverage, and command surfaces:

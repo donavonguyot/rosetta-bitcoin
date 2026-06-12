@@ -1,5 +1,9 @@
 # RosettaBitcoin Archive Harvest
 
+> **Archive Record.** This document describes a completed process and is preserved
+> for provenance and decision history only. It is not active guidance. Query
+> Project for current status.
+
 This document records the Stage 1 harvest boundary for the retired
 the retired archive workspace workspace. A compressed backup exists, so
 this workspace can now be treated as source archaeology instead of active

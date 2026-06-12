@@ -1,5 +1,8 @@
 # 5k Port Baseline
 
+> **Normative source:** [`Nodes/Shared/conformance/BENCHMARK_CONTRACT.md`](../Nodes/Shared/conformance/BENCHMARK_CONTRACT.md).
+> This page is operational guidance; if it ever disagrees with the contract, the contract wins.
+
 The 5k baseline is the first standard a port must clear before readiness claims
 are treated as comparable. It is the birth certificate in the official benchmark
 suite, not a permanent architecture lock-in.

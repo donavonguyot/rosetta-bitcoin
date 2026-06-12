@@ -1,5 +1,9 @@
 # RosettaBitcoin Archive Snapshot
 
+> **Archive Record.** This document describes a completed process and is preserved
+> for provenance and decision history only. It is not active guidance. Query
+> Project for current status.
+
 Snapshot time: `2026-06-06T20:42:56Z`
 
 Archive root: `<archive-root>` (the retired pre-publication workspace)

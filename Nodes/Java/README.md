@@ -16,10 +16,10 @@ python3 Project/scripts/report.py --db Project/project.db --section baseline-5k
 
 ## Binary gate
 
-From empty local state on Bitcoin testnet4, the node reaches and maintains tip
-while independently validating every stored connected block. Partial sync,
-headers-only sync, trusted import, or skipping unknown consensus rules does
-**not** pass.
+This port works toward the workspace binary gate defined in
+[`Nodes/Shared/SPEC.md`](../Shared/SPEC.md): reach and maintain tip from empty
+local state while independently validating every stored connected block. Partial
+sync, trusted import, or skipping unknown consensus rules does **not** pass.
 
 This README does not restate Java's latest proof or benchmark posture. Project
 imports own those status claims, and the Java docs stay focused on commands,

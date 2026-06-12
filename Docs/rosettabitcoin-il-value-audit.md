@@ -1,5 +1,9 @@
 # RosettaBitcoin IL Value Audit
 
+> **Archive Record.** This document describes a completed process and is preserved
+> for provenance and decision history only. It is not active guidance. Query
+> Project for current status.
+
 Audit date: `2026-06-06`
 
 Archive root: the retired archive workspace

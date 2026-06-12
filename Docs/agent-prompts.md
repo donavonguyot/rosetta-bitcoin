@@ -1,5 +1,9 @@
 # Reusable follower-agent prompts
 
+> Requirements duplicated here are convenience copies; the normative sources are
+> [`Nodes/Shared/conformance/BENCHMARK_CONTRACT.md`](../Nodes/Shared/conformance/BENCHMARK_CONTRACT.md) and
+> [`Nodes/Shared/consensus/CONSENSUS_RUNWAY.md`](../Nodes/Shared/consensus/CONSENSUS_RUNWAY.md).
+
 These prompts are for agents working in root-owned port directories or isolated
 root worktrees. Replace bracketed placeholders before use.
 

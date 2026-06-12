@@ -19,9 +19,10 @@ proof notes as live status.
 
 ## Binary gate
 
-From empty local state on Bitcoin testnet4, the node reaches and maintains tip while
-independently validating every stored connected block. Partial sync, headers-only sync,
-trusted import, or skipping unknown consensus rules does **not** pass.
+This port works toward the workspace binary gate defined in
+[`Nodes/Shared/SPEC.md`](../Shared/SPEC.md): reach and maintain tip from empty
+local state while independently validating every stored connected block. Partial
+sync, trusted import, or skipping unknown consensus rules does **not** pass.
 
 ## Follower discipline
 

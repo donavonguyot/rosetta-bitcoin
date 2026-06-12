@@ -5,7 +5,7 @@ shared runtime library. Each language implementation owns its code, but every
 serious node must implement the same storage, chainstate, sync, status, rebuild,
 and conformance rules.
 
-JavaNode is the lead implementation for this contract because it has exposed the
+JavaNode has served as the lead implementation for this contract, having exposed the
 production concerns that matter most: high-volume block connection, hot UTXO
 backend alignment, live tip maintenance, rebuild safety, status truth, and
 performance attribution.
