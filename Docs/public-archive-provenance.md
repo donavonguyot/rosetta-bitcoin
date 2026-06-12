@@ -1,9 +1,17 @@
 # Public Archive Provenance
 
-RosettaBitcoin grew out of a retired workspace at
-the retired archive workspace. That workspace is preserved as
-external archaeology with a compressed backup and checksum snapshot. It is not
-the public project source of truth.
+RosettaBitcoin grew out of a retired pre-publication workspace. That workspace
+is preserved as external archaeology with a compressed backup and checksum
+snapshot. It is not the public project source of truth.
+
+## Hashed Provenance Manifest
+
+[`Project/provenance/archive_provenance_v1.json`](../Project/provenance/archive_provenance_v1.json)
+imports the archive's *measurements* — commit anchors, file hashes, line counts,
+roadmap row counts — without importing the retired material itself. It carries
+`semantic_authority=false`: citation material for provenance claims only, never
+behavior guidance. The false starts are documented by their measured depth so
+nobody has to crawl down a dead-end tunnel to verify how deep it went.
 
 ## Durable Lesson
 

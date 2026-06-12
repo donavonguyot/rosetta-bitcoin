@@ -65,6 +65,10 @@ RosettaBitcoin validity oracle. RosettaBitcoin ports stand or fall on their own
 Project-imported evidence, Shared fixtures, and port-owned proof artifacts. See
 [`Docs/core-btcg-comparison-lane.md`](Docs/core-btcg-comparison-lane.md).
 
+Contributors looking for open experiments — benchmark races, new language
+ports, the must-reject corpus, and the standing native-backend dares — should
+start with [`CHALLENGES.md`](CHALLENGES.md).
+
 ## Canonical Read Order
 
 1. [`AGENTS.md`](AGENTS.md) — operating rules and current sync cautions.

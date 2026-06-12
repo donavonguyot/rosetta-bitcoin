@@ -1,0 +1,161 @@
+{
+  "artifact": "archive_provenance_v1",
+  "version": 1,
+  "generated_at": "2026-06-12",
+  "purpose": "Compact, hashed provenance of the pre-RosettaBitcoin archive eras. Imports MEASUREMENTS of retired artifacts, never the artifacts themselves. Documents false starts as measured tunnel depths so the cost-velocity narrative is artifact-backed without re-exposing dead-end material to active agents.",
+  "authority": {
+    "semantic_authority": false,
+    "active_behavior_source": false,
+    "authority_class": "historical_il_audit",
+    "note": "Per the archive's own authority-and-constraints contract: historical/audit rows may coexist with active evidence but must never define Bitcoin semantics, select behavior, or serve as implementation guidance. This artifact is citation material for provenance claims only."
+  },
+  "source_repositories": {
+    "archive_workspace": {
+      "local_path_at_capture": "ArchiveRosettaBitcoin/",
+      "components": ["rosetta-bitcoin (child proof repo)", "rosetta-java-node (extracted product repo)", "roadmap.db (parent coordination DB)", "rosetta-bitcoin-book", "rosetta-bitcoin-portal", "rosetta-bitcoin-audio"]
+    },
+    "successor_workspace": {
+      "public": "github.com/donavonguyot/rosetta-bitcoin",
+      "note": "All successor-era anchors are independently verifiable in the public repository's git history and Project/project.db."
+    }
+  },
+  "timeline_anchors": [
+    {
+      "era": "genesis",
+      "date": "2026-04-20T17:05:28-07:00",
+      "event": "Project genesis: SQLite-authoritative seed pipeline bootstrap",
+      "repo": "archive/rosetta-bitcoin",
+      "commit": "e4a212041ad147cd3d4dd5ad4e161507f523459b"
+    },
+    {
+      "era": "formalization_dead_end",
+      "date": "2026-05-04T11:40:29-07:00",
+      "event": "IL harvest and port-grid experiments promoted to archive status (dead end acknowledged and frozen in-era)",
+      "repo": "archive/rosetta-bitcoin",
+      "commit": "1a3bbca812d15a9454bc908d071411cf308fc0a3",
+      "archived_components": ["001-chainhash-poc", "002-btcd-il-harvest", "003-port-grid-experiment", "004-methodology-notes", "MANIFEST.md"]
+    },
+    {
+      "era": "process_era",
+      "date_range": ["2026-05-03T20:06:55", "2026-05-23T06:47:52"],
+      "event": "Witness/claims coordination era, quantified by parent roadmap database",
+      "source": "archive/roadmap.db",
+      "measurements": { "phases": 13, "sprints": 169, "decisions": 285 }
+    },
+    {
+      "era": "product_pivot",
+      "date": "2026-05-23T09:15:55-07:00",
+      "event": "Pivot to runnable node: 'Start Java node product track'",
+      "repo": "archive/rosetta-bitcoin",
+      "commit": "07d9d5b8250f1bfe5384b61c60cc0d215d507326"
+    },
+    {
+      "era": "product_extraction",
+      "date": "2026-05-24T08:42:16-07:00",
+      "event": "Initial Java node product extraction to standalone repo",
+      "repo": "archive/rosetta-java-node",
+      "commit": "a3a392a89d168a52d16e4f00af066c9a172e3261",
+      "companion_commit": { "repo": "archive/rosetta-bitcoin", "commit": "54026e26b5a4053d4243acfd0f801e659d7e8e54", "event": "Record Java node product repo extraction", "date": "2026-05-24T08:42:56-07:00" }
+    },
+    {
+      "era": "successor_workspace_genesis",
+      "date": "2026-05-25T01:26:56-07:00",
+      "event": "RosettaBitcoin coordination workspace initialized",
+      "repo": "successor (public)",
+      "commit": "b01d74077ada272779f5ea54e5f2c3920861de55"
+    },
+    {
+      "era": "scar_removal",
+      "date": "2026-06-02T17:53:17-07:00",
+      "event": "'Remove Bouncy Castle from Java.' — managed-runtime crypto scar removed; native libsecp256k1 contract era begins",
+      "repo": "successor (public)",
+      "commit": "4292c3ec0f4b6d95402d82aeb02954abcb90c644"
+    },
+    {
+      "era": "follower_regeneration",
+      "date": "2026-06-05",
+      "event": "Zig follower regenerated from compiled substrate",
+      "repo": "successor (public)",
+      "commits": [
+        { "commit": "2a64b70a1b4cb08101b4c9db710a5473f3bb93ff", "date": "2026-06-05T12:38:26-07:00", "event": "Add ZigNode baseline scaffold" },
+        { "commit": "d8fcbe2e3597321dbd88a20080d4bc8b080f3e3d", "date": "2026-06-05T14:14:11-07:00", "event": "Add Zig 5k baseline proof (scaffold +95m45s)" },
+        { "commit": "c88dd6ced259342cba6a10c89684ebf736400feb", "date": "2026-06-05T15:56:23-07:00", "event": "Add Zig 50k shakedown proof (scaffold +3h17m57s)" }
+      ]
+    },
+    {
+      "era": "convergence",
+      "date": "2026-06-08",
+      "event": "Eight ports independently validated to ~138,500 blocks",
+      "source": "successor Project/project.db status_snapshots (query: report.py --section port-status)"
+    }
+  ],
+  "il_corpus_manifest": {
+    "description": "The retired btcd assertion-IL harvest. Fully specified, internally consistent, never executed against reality: assertions without executors cannot fail, and an unfalsifiable artifact compiles no knowledge. Frozen in archive/002-btcd-il-harvest/il/. Measured here so its depth is citable without the material being re-imported anywhere agents work.",
+    "file_count": 19,
+    "total_lines": 30549,
+    "files": [
+      { "file": "addrmgr.il.md", "lines": 1218, "sha256_16": "21db52f98504cd31" },
+      { "file": "blockchain.il.md", "lines": 3392, "sha256_16": "daa2d15a98c074e9" },
+      { "file": "btcec.il.md", "lines": 1658, "sha256_16": "be6d6d16f3fb5148" },
+      { "file": "btcjson.il.md", "lines": 2462, "sha256_16": "316bdedc32bb69be" },
+      { "file": "btcutil.il.md", "lines": 1992, "sha256_16": "d9dd8ee2b532e322" },
+      { "file": "chaincfg.il.md", "lines": 1480, "sha256_16": "7e078bee54263775" },
+      { "file": "chainhash.il.md", "lines": 303, "sha256_16": "f9b4dc9e7783cc25" },
+      { "file": "connmgr.il.md", "lines": 914, "sha256_16": "a7ee3e23d36a408c" },
+      { "file": "database.il.md", "lines": 1825, "sha256_16": "dea6a1c81e1d6a19" },
+      { "file": "indexers.il.md", "lines": 1046, "sha256_16": "90eef459d8ee99a0" },
+      { "file": "mempool.il.md", "lines": 1801, "sha256_16": "5edbc1007f6af191" },
+      { "file": "mining.il.md", "lines": 1402, "sha256_16": "0aac9a501341d8fc" },
+      { "file": "netsync.il.md", "lines": 1156, "sha256_16": "2167a7ab07faca4a" },
+      { "file": "peer.il.md", "lines": 1353, "sha256_16": "aa42cfc1d905573a" },
+      { "file": "root.il.md", "lines": 3090, "sha256_16": "b6fae191c240e89f" },
+      { "file": "rpcclient.il.md", "lines": 687, "sha256_16": "fc224237ff51fe03" },
+      { "file": "txscript.il.md", "lines": 2033, "sha256_16": "cc42c4ac68372cf4" },
+      { "file": "v2transport.il.md", "lines": 549, "sha256_16": "c3b337424020cad1" },
+      { "file": "wire.il.md", "lines": 2188, "sha256_16": "068505b39627ffed" }
+    ]
+  },
+  "scar_citations": [
+    {
+      "scar": "managed_runtime_crypto",
+      "claim": "The lead's first crypto backend was a managed-runtime library, chosen expediently by a scout-phase agent; it carried the port through early consensus discovery before failing the native-performance bar.",
+      "in_situ_evidence": {
+        "repo": "archive/rosetta-java-node",
+        "file": "pom.xml",
+        "sha256_16": "5c0babd656a1c886",
+        "content_anchor": "<bouncycastle.version>1.78.1</bouncycastle.version>"
+      },
+      "removal_evidence": {
+        "repo": "successor (public)",
+        "commit": "4292c3ec0f4b6d95402d82aeb02954abcb90c644",
+        "date": "2026-06-02T17:53:17-07:00"
+      },
+      "compiled_constraint": "Native libsecp256k1 bindings required for consensus cryptography (successor baseline contract).",
+      "premises": "Scoped to consensus-path crypto under sync load; managed-runtime crypto remains acceptable for non-consensus tooling."
+    },
+    {
+      "scar": "embedded_sql_chainstate",
+      "claim": "The lead's first UTXO accounting ran on SQLite, chosen expediently by a scout-phase agent; it carried early sync before failing under high-churn concurrent chainstate load.",
+      "in_situ_evidence": {
+        "repo": "archive/rosetta-java-node",
+        "file": "src/main/java/org/rosettabitcoin/javanode/StorageRecoveryMain.java",
+        "sha256_16": "a8a092eae97f45a2"
+      },
+      "compiled_constraint": "RocksDB as runtime chainstate truth (successor baseline contract).",
+      "premises": "Scoped to high-churn concurrent chainstate at scale. SQLite remains correct for single-writer evidence stores — including the successor's own mission-control database — and this scope limit is the canonical example of a premise-scoped fixture."
+    }
+  ],
+  "velocity_summary": {
+    "description": "Tunnel depths, measured. Each era's cost is a commit/database span, not testimony.",
+    "eras": [
+      { "era": "formalization (genesis -> IL archived)", "span": "2026-04-20 -> 2026-05-04", "days": 14, "output": "30,549-line IL corpus, archived as dead end in-era" },
+      { "era": "process (witness/claims coordination)", "span": "2026-05-03 -> 2026-05-23", "days": 20, "output": "13 phases, 169 sprints, 285 decisions; no runnable node" },
+      { "era": "lead product (pivot -> 138k validated)", "span": "2026-05-23 -> 2026-06-08", "days": 16, "output": "Java node: product track to ~138,591 validated blocks" },
+      { "era": "follower regeneration (Zig)", "span": "2026-06-05 12:38 -> 15:56", "days": 0.14, "output": "Scaffold to 50k shakedown in 3h18m; ~138,504 validated by 2026-06-08" },
+      { "era": "predicted next point (Mojo)", "span": "unmeasured", "days": null, "output": "Single instrumented run predicted; first invocation-instrumented point on the curve" }
+    ]
+  },
+  "import_instructions": {
+    "note": "Import this artifact into Project/project.db via the standard validating import path with authority flags as declared above. Do not import IL file contents, roadmap.db rows, or archive documents into any active workspace. Verification of any claim herein: clone the archive (or request access), recompute hashes with sha256sum, recompute spans with git log."
+  }
+}
