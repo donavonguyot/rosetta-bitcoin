@@ -142,7 +142,7 @@ const EvalContext = struct {
     amount: i64,
     script_code: []const u8,
     mode: VerifyMode,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     code_separator_offset: usize = 0,
     spent_prevouts: []const SpentPrevout = &.{},
     sighash_cache: ?*const SighashCache = null,
@@ -160,7 +160,7 @@ pub fn verifyInput(
 ) !void {
     var verifier = try crypto.NativeVerifier.create();
     defer verifier.destroy();
-    return verifyInputWithVerifier(allocator, transaction, input_index, spent_prevouts, &verifier, null);
+    return verifyInputWithVerifier(allocator, transaction, input_index, spent_prevouts, .{ .native = &verifier }, null);
 }
 
 pub fn verifyInputWithVerifier(
@@ -168,7 +168,7 @@ pub fn verifyInputWithVerifier(
     transaction: tx.Transaction,
     input_index: usize,
     spent_prevouts: []const SpentPrevout,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     sighash_cache: ?*const SighashCache,
 ) !void {
     if (input_index >= transaction.inputs.len or input_index >= spent_prevouts.len) return error.InputIndexOutOfRange;
@@ -210,7 +210,7 @@ fn verifyP2PKH(
     script_sig: []const u8,
     script_pubkey: []const u8,
     witness: []const []const u8,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     sighash_cache: ?*const SighashCache,
 ) !void {
     if (witness.len != 0) return error.LegacyWitnessUnexpected;
@@ -230,7 +230,7 @@ fn verifyP2WPKH(
     script_sig: []const u8,
     script_pubkey: []const u8,
     witness: []const []const u8,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     sighash_cache: ?*const SighashCache,
 ) !void {
     if (script_sig.len != 0) return error.WitnessScriptSigNotEmpty;
@@ -254,7 +254,7 @@ fn verifyP2WSH(
     script_sig: []const u8,
     script_pubkey: []const u8,
     witness: []const []const u8,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     sighash_cache: ?*const SighashCache,
 ) !void {
     if (script_sig.len != 0) return error.WitnessScriptSigNotEmpty;
@@ -278,7 +278,7 @@ fn verifyP2SH(
     script_sig: []const u8,
     script_pubkey: []const u8,
     witness: []const []const u8,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     sighash_cache: ?*const SighashCache,
 ) !void {
     const pushes = try parsePushOnly(allocator, script_sig);
@@ -310,7 +310,7 @@ fn verifyP2WSHWitnessProgram(
     amount: i64,
     program: []const u8,
     witness: []const []const u8,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     sighash_cache: ?*const SighashCache,
 ) !void {
     if (witness.len < 1) return error.WitnessStackEmpty;
@@ -333,7 +333,7 @@ fn verifyP2TR(
     script_pubkey: []const u8,
     witness_in: []const []const u8,
     spent_prevouts: []const SpentPrevout,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     sighash_cache: ?*const SighashCache,
 ) !void {
     if (script_sig.len != 0) return error.TaprootScriptSigNotEmpty;
@@ -357,7 +357,7 @@ fn verifyTaprootAfterAnnex(
     annex: ?[]const u8,
     serialized_witness: []const u8,
     spent_prevouts: []const SpentPrevout,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     sighash_cache: ?*const SighashCache,
 ) !void {
     if (witness.len >= 2) return verifyTaprootScriptPath(allocator, transaction, input_index, script_pubkey, witness, annex, serialized_witness, spent_prevouts, verifier, sighash_cache);
@@ -389,7 +389,7 @@ fn verifyTaprootScriptPath(
     annex: ?[]const u8,
     serialized_witness: []const u8,
     spent_prevouts: []const SpentPrevout,
-    verifier: *crypto.NativeVerifier,
+    verifier: crypto.CryptoVerifier,
     sighash_cache: ?*const SighashCache,
 ) !void {
     if (witness.len < 2) return error.InvalidTaprootScriptPathWitness;

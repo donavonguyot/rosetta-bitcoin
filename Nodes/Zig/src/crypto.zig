@@ -1,4 +1,7 @@
 const std = @import("std");
+const pure_secp = @import("pure_secp.zig");
+pub const PureVerifier = pure_secp.PureVerifier;
+pub const TweakResult = pure_secp.TweakResult;
 
 const c = @cImport({
     @cInclude("secp256k1.h");
@@ -58,7 +61,7 @@ pub const NativeVerifier = struct {
         self: *NativeVerifier,
         internal_xonly: []const u8,
         tweak32: *const [32]u8,
-    ) ?struct { output_xonly: [32]u8, parity: u8 } {
+    ) ?TweakResult {
         if (internal_xonly.len != 32) return null;
         var internal: c.secp256k1_xonly_pubkey = undefined;
         if (c.secp256k1_xonly_pubkey_parse(self.ctx, &internal, internal_xonly.ptr) != 1) return null;
@@ -73,10 +76,66 @@ pub const NativeVerifier = struct {
     }
 };
 
+pub const CryptoVerifier = union(enum) {
+    native: *NativeVerifier,
+    pure: *PureVerifier,
+
+    pub fn verifyEcdsaDer(self: CryptoVerifier, pubkey_bytes: []const u8, der_sig: []const u8, msg32: *const [32]u8) bool {
+        return switch (self) {
+            .native => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
+            .pure => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
+        };
+    }
+
+    pub fn verifySchnorr(self: CryptoVerifier, xonly_pubkey_bytes: []const u8, sig64: []const u8, msg: []const u8) bool {
+        return switch (self) {
+            .native => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
+            .pure => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
+        };
+    }
+
+    pub fn taprootTweakAddCheck(
+        self: CryptoVerifier,
+        tweaked_xonly: []const u8,
+        parity: u8,
+        internal_xonly: []const u8,
+        tweak32: *const [32]u8,
+    ) bool {
+        return switch (self) {
+            .native => |verifier| verifier.taprootTweakAddCheck(tweaked_xonly, parity, internal_xonly, tweak32),
+            .pure => |verifier| verifier.taprootTweakAddCheck(tweaked_xonly, parity, internal_xonly, tweak32),
+        };
+    }
+
+    pub fn taprootTweakPubkeyXOnly(
+        self: CryptoVerifier,
+        internal_xonly: []const u8,
+        tweak32: *const [32]u8,
+    ) ?TweakResult {
+        return switch (self) {
+            .native => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
+            .pure => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
+        };
+    }
+};
+
 pub fn available() bool {
     var verifier = NativeVerifier.create() catch return false;
     verifier.destroy();
     return true;
+}
+
+test "pure schnorr verifier accepts BIP340 variable-length messages" {
+    const allocator = std.testing.allocator;
+    var verifier = PureVerifier.create();
+    defer verifier.destroy();
+    const pubkey = try fromHexAlloc(allocator, "778CAA53B4393AC467774D09497A87224BF9FAB6F6E68B23086497324D6FD117");
+    defer allocator.free(pubkey);
+    const msg = try fromHexAlloc(allocator, "99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999");
+    defer allocator.free(msg);
+    const sig = try fromHexAlloc(allocator, "403B12B0D8555A344175EA7EC746566303321E5DBFA8BE6F091635163ECA79A8585ED3E3170807E7C03B720FC54C7B23897FCBA0E9D0B4A06894CFD249F22367");
+    defer allocator.free(sig);
+    try std.testing.expect(verifier.verifySchnorr(pubkey, sig, msg));
 }
 
 pub fn sha256(data: []const u8) [32]u8 {

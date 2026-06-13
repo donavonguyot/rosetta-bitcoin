@@ -23,7 +23,7 @@ POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_SYNC_TARGET ?= 5000
 BENCHMARK_GATE ?= baseline_5k
 
-.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once clean
+.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once clean
 
 build:
 	$(ZIG) build
@@ -60,6 +60,12 @@ zig-node-script-corpus:
 	$(ZIG) build run -- script-corpus \
 	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
 	  --output $(SCRIPT_RESULT)
+
+zig-node-script-corpus-shadow:
+	$(ZIG) build run -- script-corpus \
+	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --output ../Shared/conformance/results/zig_shadow_crypto_script_corpus_$(RESULT_DATE).json \
+	  --shadow-crypto
 
 docker-config:
 	$(DOCKER_COMPOSE) config >/dev/null

@@ -71,7 +71,7 @@ fn usage(out: anytype) !void {
         \\  codec-vectors
         \\  native-crypto-vectors
         \\  test-capability --kind crypto-vectors --outcome-path path
-        \\  script-corpus [--manifest path] [--output path]
+        \\  script-corpus [--manifest path] [--output path] [--shadow-crypto]
         \\  local-reference-proof [--target <height>] [--peer <host:port>] [--output path]
         \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
         \\
@@ -133,27 +133,41 @@ fn cmdTestCapability(allocator: std.mem.Allocator, io: std.Io, out: anytype, arg
 }
 
 fn cryptoCapabilityOutcomes(allocator: std.mem.Allocator, io: std.Io) ![]u8 {
-    var verifier = try core.crypto.NativeVerifier.create();
-    defer verifier.destroy();
-    const bip = try runBip340Vectors(allocator, io, &verifier);
-    const native = try runNativeCryptoVectors(allocator, io, &verifier);
+    var native_verifier = try core.crypto.NativeVerifier.create();
+    defer native_verifier.destroy();
+    var pure_verifier = core.crypto.PureVerifier.create();
+    defer pure_verifier.destroy();
+    const native_backend = core.crypto.CryptoVerifier{ .native = &native_verifier };
+    const pure_backend = core.crypto.CryptoVerifier{ .pure = &pure_verifier };
+    const bip = try runBip340Vectors(allocator, io, native_backend);
+    const native = try runNativeCryptoVectors(allocator, io, native_backend);
+    const pure_bip = try runBip340Vectors(allocator, io, pure_backend);
+    const pure_native = try runNativeCryptoVectors(allocator, io, pure_backend);
     const eq_passed = bip.passed + native.passed;
     const eq_total = bip.total + native.total;
+    const shadow_passed = pure_bip.passed + pure_native.passed;
+    const shadow_total = pure_bip.total + pure_native.total;
+    const combined_passed = eq_passed + shadow_passed;
+    const combined_total = eq_total + shadow_total;
     return std.fmt.allocPrint(
         allocator,
-        "{{\"port\":\"zig\",\"backend\":\"libsecp256k1\",\"outcomes\":[{{\"capability\":\"crypto_bip340_vectors\",\"status\":\"{s}\",\"case_passed\":{},\"case_total\":{},\"notes\":\"{s}\"}},{{\"capability\":\"crypto_libsecp256k1_equivalence\",\"status\":\"{s}\",\"case_passed\":{},\"case_total\":{},\"notes\":\"BIP340 {}/{} plus native crypto vectors {}/{}\"}}]}}\n",
+        "{{\"port\":\"zig\",\"backend\":\"libsecp256k1\",\"shadow_backend\":\"zig-secp256k1\",\"outcomes\":[{{\"capability\":\"crypto_bip340_vectors\",\"status\":\"{s}\",\"case_passed\":{},\"case_total\":{},\"notes\":\"{s}\"}},{{\"capability\":\"crypto_libsecp256k1_equivalence\",\"status\":\"{s}\",\"case_passed\":{},\"case_total\":{},\"notes\":\"libsecp256k1 BIP340 {}/{} plus native crypto vectors {}/{}; pure Zig shadow BIP340 {}/{} plus native crypto vectors {}/{}\"}}]}}\n",
         .{
             if (bip.passed == bip.total) "pass" else "fail",
             bip.passed,
             bip.total,
             if (bip.passed == bip.total) "all BIP340 vectors matched expected verification result" else "one or more BIP340 vectors mismatched expected verification result",
-            if (eq_passed == eq_total) "pass" else "fail",
-            eq_passed,
-            eq_total,
+            if (combined_passed == combined_total) "pass" else "fail",
+            combined_passed,
+            combined_total,
             bip.passed,
             bip.total,
             native.passed,
             native.total,
+            pure_bip.passed,
+            pure_bip.total,
+            pure_native.passed,
+            pure_native.total,
         },
     );
 }
@@ -163,7 +177,7 @@ const Count = struct {
     total: usize,
 };
 
-fn runBip340Vectors(allocator: std.mem.Allocator, io: std.Io, verifier: *core.crypto.NativeVerifier) !Count {
+fn runBip340Vectors(allocator: std.mem.Allocator, io: std.Io, verifier: core.crypto.CryptoVerifier) !Count {
     const path = "../Shared/testing/fixtures/bip340/test-vectors.csv";
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(2 * 1024 * 1024));
     defer allocator.free(bytes);
@@ -192,7 +206,7 @@ fn runBip340Vectors(allocator: std.mem.Allocator, io: std.Io, verifier: *core.cr
     return .{ .passed = passed, .total = total };
 }
 
-fn runNativeCryptoVectors(allocator: std.mem.Allocator, io: std.Io, verifier: *core.crypto.NativeVerifier) !Count {
+fn runNativeCryptoVectors(allocator: std.mem.Allocator, io: std.Io, verifier: core.crypto.CryptoVerifier) !Count {
     const path = "../Shared/conformance/fixtures/native_crypto_v1_vectors.json";
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(2 * 1024 * 1024));
     defer allocator.free(bytes);
@@ -208,7 +222,7 @@ fn runNativeCryptoVectors(allocator: std.mem.Allocator, io: std.Io, verifier: *c
     return .{ .passed = passed, .total = vectors.array.items.len };
 }
 
-fn nativeVectorMatches(allocator: std.mem.Allocator, verifier: *core.crypto.NativeVerifier, obj: std.json.ObjectMap) !bool {
+fn nativeVectorMatches(allocator: std.mem.Allocator, verifier: core.crypto.CryptoVerifier, obj: std.json.ObjectMap) !bool {
     const expected = jsonString(obj.get("expected")) orelse return false;
     const want_valid = std.mem.eql(u8, expected, "valid");
     const operation = jsonString(obj.get("operation")) orelse return false;
@@ -294,6 +308,7 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
 fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8) !void {
     const manifest = valueArg(args, "--manifest") orelse "../Shared/conformance/fixtures/scripts/manifest.json";
     const output = valueArg(args, "--output") orelse (ResultPaths{}).script;
+    const shadow_crypto = flagArg(args, "--shadow-crypto");
 
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, manifest, allocator, .limited(20 * 1024 * 1024));
     defer allocator.free(bytes);
@@ -337,7 +352,7 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
 
         if (i != 0) try rows.appendSlice(allocator, ",");
         if (loader_error == null) {
-            verifyScriptFixture(allocator, io, manifest, obj) catch |err| {
+            verifyScriptFixture(allocator, io, manifest, obj, shadow_crypto) catch |err| {
                 failed += 1;
                 const row = try std.fmt.allocPrint(allocator, "{{\"fixture_id\":\"{s}\",\"result\":\"failed\",\"failure\":\"{s}\"}}", .{ fixture_id, @errorName(err) });
                 defer allocator.free(row);
@@ -356,11 +371,18 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     }
     const passed = fixtures.array.items.len - failed;
     const result = if (failed == 0) "passed" else "failed";
-    const json = try std.fmt.allocPrint(
-        allocator,
-        "{{\"schema\":\"port.script_corpus_result.v1\",\"category\":\"script_corpus\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"runtime_surface\":\"{s}\",\"native_crypto_backend\":\"libsecp256k1\",\"fixture_count\":{},\"passed\":{},\"failed\":{},\"result\":\"{s}\",\"verifier\":{{\"engine\":\"zig_native\",\"delegated\":false,\"crypto_backend\":\"libsecp256k1\",\"implemented\":true,\"source\":\"Nodes/Zig/src/script.zig\"}},\"results\":[{s}]}}\n",
-        .{ surface, fixtures.array.items.len, passed, failed, result, rows.items },
-    );
+    const json = if (shadow_crypto)
+        try std.fmt.allocPrint(
+            allocator,
+            "{{\"schema\":\"port.script_corpus_shadow_crypto.v1\",\"category\":\"script_corpus\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"runtime_surface\":\"{s}\",\"native_crypto_backend\":\"libsecp256k1\",\"shadow_crypto_backend\":\"zig-secp256k1\",\"fixture_count\":{},\"passed\":{},\"failed\":{},\"result\":\"{s}\",\"verifier\":{{\"engine\":\"zig_native\",\"delegated\":false,\"crypto_backend\":\"libsecp256k1\",\"shadow_crypto\":true,\"implemented\":true,\"source\":\"Nodes/Zig/src/script.zig\"}},\"results\":[{s}]}}\n",
+            .{ surface, fixtures.array.items.len, passed, failed, result, rows.items },
+        )
+    else
+        try std.fmt.allocPrint(
+            allocator,
+            "{{\"schema\":\"port.script_corpus_result.v1\",\"category\":\"script_corpus\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"runtime_surface\":\"{s}\",\"native_crypto_backend\":\"libsecp256k1\",\"fixture_count\":{},\"passed\":{},\"failed\":{},\"result\":\"{s}\",\"verifier\":{{\"engine\":\"zig_native\",\"delegated\":false,\"crypto_backend\":\"libsecp256k1\",\"implemented\":true,\"source\":\"Nodes/Zig/src/script.zig\"}},\"results\":[{s}]}}\n",
+            .{ surface, fixtures.array.items.len, passed, failed, result, rows.items },
+        );
     defer allocator.free(json);
     try writeFileEnsuringParent(io, output, json);
     try out.print("{s}", .{json});
@@ -710,7 +732,7 @@ fn elapsedMs(start_ms: i64) i64 {
     return @max(0, core.nowMs() - start_ms);
 }
 
-fn verifyScriptFixture(allocator: std.mem.Allocator, io: std.Io, manifest: []const u8, obj: std.json.ObjectMap) !void {
+fn verifyScriptFixture(allocator: std.mem.Allocator, io: std.Io, manifest: []const u8, obj: std.json.ObjectMap, shadow_crypto: bool) !void {
     const tx_path = try firstFixturePath(allocator, manifest, obj, "tx");
     defer allocator.free(tx_path);
     const raw_tx = try readHexFile(allocator, io, tx_path);
@@ -755,7 +777,28 @@ fn verifyScriptFixture(allocator: std.mem.Allocator, io: std.Io, manifest: []con
     }
     if (input_index >= loaded_prevouts.len) return error.InputIndexOutOfRange;
 
-    try core.script.verifyInput(allocator, parsed.transaction, input_index, loaded_prevouts);
+    if (!shadow_crypto) {
+        try core.script.verifyInput(allocator, parsed.transaction, input_index, loaded_prevouts);
+        return;
+    }
+
+    var native_verifier = try core.crypto.NativeVerifier.create();
+    defer native_verifier.destroy();
+    var pure_verifier = core.crypto.PureVerifier.create();
+    defer pure_verifier.destroy();
+    var native_result: ?anyerror = null;
+    core.script.verifyInputWithVerifier(allocator, parsed.transaction, input_index, loaded_prevouts, .{ .native = &native_verifier }, null) catch |err| {
+        native_result = err;
+    };
+    var pure_result: ?anyerror = null;
+    core.script.verifyInputWithVerifier(allocator, parsed.transaction, input_index, loaded_prevouts, .{ .pure = &pure_verifier }, null) catch |err| {
+        pure_result = err;
+    };
+    if (native_result) |native_err| {
+        if (pure_result == null or !std.mem.eql(u8, @errorName(native_err), @errorName(pure_result.?))) return error.ShadowCryptoDisagreement;
+        return native_err;
+    }
+    if (pure_result != null) return error.ShadowCryptoDisagreement;
 }
 
 fn loadFixturePrevouts(allocator: std.mem.Allocator, io: std.Io, manifest: []const u8, obj: std.json.ObjectMap) ![]core.script.SpentPrevout {
@@ -806,6 +849,13 @@ fn valueArg(args: []const []const u8, name: []const u8) ?[]const u8 {
         if (std.mem.eql(u8, args[i], name) and i + 1 < args.len) return args[i + 1];
     }
     return null;
+}
+
+fn flagArg(args: []const []const u8, name: []const u8) bool {
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, name)) return true;
+    }
+    return false;
 }
 
 fn tryMetadataKey(allocator: std.mem.Allocator, name: []const u8) []u8 {

@@ -1182,7 +1182,7 @@ fn scriptVerifySchedulerWorker(
 
 fn verifyScriptInputJob(transaction: tx.Transaction, job: ScriptJob, result: *ScriptThreadResult, verifier: ?*crypto.NativeVerifier) void {
     if (verifier) |native| {
-        script.verifyInputWithVerifier(std.heap.c_allocator, transaction, job.input_index, job.prevouts, native, job.sighash_cache) catch |err| {
+        script.verifyInputWithVerifier(std.heap.c_allocator, transaction, job.input_index, job.prevouts, .{ .native = native }, job.sighash_cache) catch |err| {
             storeScriptFailure(transaction, job, result, err);
             return;
         };
@@ -1193,7 +1193,7 @@ fn verifyScriptInputJob(transaction: tx.Transaction, job: ScriptJob, result: *Sc
         return;
     };
     defer native.destroy();
-    script.verifyInputWithVerifier(std.heap.c_allocator, transaction, job.input_index, job.prevouts, &native, job.sighash_cache) catch |err| {
+    script.verifyInputWithVerifier(std.heap.c_allocator, transaction, job.input_index, job.prevouts, .{ .native = &native }, job.sighash_cache) catch |err| {
         storeScriptFailure(transaction, job, result, err);
         return;
     };
