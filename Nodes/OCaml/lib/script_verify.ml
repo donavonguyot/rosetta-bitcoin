@@ -24,6 +24,9 @@ type script_timing = {
   mutable script_ecdsa_verify_ms : int;
   mutable script_schnorr_verify_ms : int;
   mutable script_interpreter_eval_ms : int;
+  mutable script_legacy_find_delete_ms : int;
+  mutable script_legacy_preimage_build_ms : int;
+  mutable script_legacy_hash_ms : int;
 }
 
 type sighash_cache = {
@@ -36,9 +39,15 @@ type sighash_cache = {
   has_legacy : bool;
   has_bip143 : bool;
   has_taproot : bool;
+  legacy_input_count : string;
+  legacy_output_count : string;
+  legacy_outpoints : string array;
+  legacy_sequences : string array;
+  legacy_serialized_outputs : string array;
   legacy_empty_inputs_all : string array;
   legacy_empty_inputs_zero_sequence : string array;
   legacy_outputs_all : string;
+  legacy_null_output : string;
   bip143_prevouts : string;
   bip143_sequence : string;
   bip143_outputs_all : string;
@@ -59,6 +68,9 @@ let empty_timing () =
     script_ecdsa_verify_ms = 0;
     script_schnorr_verify_ms = 0;
     script_interpreter_eval_ms = 0;
+    script_legacy_find_delete_ms = 0;
+    script_legacy_preimage_build_ms = 0;
+    script_legacy_hash_ms = 0;
   }
 
 let add_timing into row =
@@ -67,9 +79,13 @@ let add_timing into row =
   into.script_sighash_taproot_ms <- into.script_sighash_taproot_ms + row.script_sighash_taproot_ms;
   into.script_ecdsa_verify_ms <- into.script_ecdsa_verify_ms + row.script_ecdsa_verify_ms;
   into.script_schnorr_verify_ms <- into.script_schnorr_verify_ms + row.script_schnorr_verify_ms;
-  into.script_interpreter_eval_ms <- into.script_interpreter_eval_ms + row.script_interpreter_eval_ms
+  into.script_interpreter_eval_ms <- into.script_interpreter_eval_ms + row.script_interpreter_eval_ms;
+  into.script_legacy_find_delete_ms <- into.script_legacy_find_delete_ms + row.script_legacy_find_delete_ms;
+  into.script_legacy_preimage_build_ms <- into.script_legacy_preimage_build_ms + row.script_legacy_preimage_build_ms;
+  into.script_legacy_hash_ms <- into.script_legacy_hash_ms + row.script_legacy_hash_ms
 
 let now_ms () = int_of_float (Unix.gettimeofday () *. 1000.0)
+let elapsed start = max 0 (now_ms () - start)
 
 let measure add fn =
   let started = now_ms () in
@@ -507,15 +523,42 @@ let legacy_outputs_all transaction =
   List.iter (fun output -> Buffer.add_string buf (Tx.serialize_txout output)) transaction.outputs;
   Buffer.contents buf
 
-(* Legacy pre-segwit sighash; consensus byte-shape must match Shared script fixtures. *)
-let legacy_sighash ?cache transaction input_index script_code sighash_type =
+let legacy_null_output = Tx.serialize_txout { value = -1L; script_pubkey = "" }
+
+let u32_string value =
+  let buf = Buffer.create 4 in
+  Tx.put_u32 buf value;
+  Buffer.contents buf
+
+let add_legacy_input buf outpoint sequence script_code base_type signing =
+  Buffer.add_string buf outpoint;
+  if signing then (
+    Buffer.add_string buf (Tx.compact_size (String.length script_code));
+    Buffer.add_string buf script_code)
+  else Buffer.add_char buf '\000';
+  if base_type = 1 || signing then Buffer.add_string buf sequence else Buffer.add_string buf "\000\000\000\000"
+
+let legacy_preimage_capacity input_count output_count script_len input_index base_type anyone_can_pay =
+  let input_bytes =
+    if anyone_can_pay then 36 + String.length (Tx.compact_size script_len) + script_len + 4
+    else (input_count - 1) * 41 + 36 + String.length (Tx.compact_size script_len) + script_len + 4
+  in
+  let output_bytes =
+    if base_type = 2 then 1
+    else if base_type = 3 then String.length (Tx.compact_size (input_index + 1)) + (input_index * String.length legacy_null_output) + 64
+    else String.length (Tx.compact_size output_count) + (output_count * 48)
+  in
+  4 + String.length (Tx.compact_size (if anyone_can_pay then 1 else input_count)) + input_bytes + output_bytes + 8
+
+(* Reference legacy pre-segwit sighash; kept as a byte-for-byte oracle for optimized paths. *)
+let legacy_sighash_reference ?cache transaction input_index script_code sighash_type =
   ensure (input_index < input_count ?cache transaction) "input index out of range";
   let base_type = sighash_type land 0x1f in
   let anyone_can_pay = sighash_type land 0x80 <> 0 in
   if base_type = 3 && input_index >= output_count ?cache transaction then "\001" ^ String.make 31 '\000'
   else
     let buf = Buffer.create 512 in
-    Tx.put_u32 buf transaction.version;
+    Tx.put_u32 buf transaction.Tx.version;
     if anyone_can_pay then (
       Buffer.add_string buf (Tx.compact_size 1);
       Buffer.add_string buf (legacy_input (input_at ?cache transaction input_index) script_code base_type true))
@@ -542,9 +585,58 @@ let legacy_sighash ?cache transaction input_index script_code sighash_type =
       match cache_matches cache transaction with
       | Some cache when cache.has_legacy -> Buffer.add_string buf cache.legacy_outputs_all
       | Some _ | None -> Buffer.add_string buf (legacy_outputs_all transaction));
-    Tx.put_u32 buf transaction.lock_time;
+    Tx.put_u32 buf transaction.Tx.lock_time;
     Tx.put_u32 buf (Int32.of_int sighash_type);
     double_sha (Buffer.contents buf)
+
+let legacy_sighash_cached_fast ?timing cache transaction input_index script_code sighash_type =
+  ensure (input_index < Array.length cache.inputs) "input index out of range";
+  let base_type = sighash_type land 0x1f in
+  let anyone_can_pay = sighash_type land 0x80 <> 0 in
+  if base_type = 3 && input_index >= Array.length cache.outputs then "\001" ^ String.make 31 '\000'
+  else
+    let build_started = now_ms () in
+    let buf =
+      Buffer.create
+        (legacy_preimage_capacity
+           (Array.length cache.inputs)
+           (Array.length cache.outputs)
+           (String.length script_code)
+           input_index
+           base_type
+           anyone_can_pay)
+    in
+    Tx.put_u32 buf transaction.Tx.version;
+    if anyone_can_pay then (
+      Buffer.add_string buf (Tx.compact_size 1);
+      add_legacy_input buf cache.legacy_outpoints.(input_index) cache.legacy_sequences.(input_index) script_code base_type true)
+    else (
+      Buffer.add_string buf cache.legacy_input_count;
+      Array.iteri
+        (fun index _input ->
+          add_legacy_input buf cache.legacy_outpoints.(index) cache.legacy_sequences.(index) script_code base_type (index = input_index))
+        cache.inputs);
+    if base_type = 2 then Buffer.add_char buf '\000'
+    else if base_type = 3 then (
+      Buffer.add_string buf (Tx.compact_size (input_index + 1));
+      for _ = 0 to input_index - 1 do Buffer.add_string buf cache.legacy_null_output done;
+      Buffer.add_string buf cache.legacy_serialized_outputs.(input_index))
+    else Buffer.add_string buf cache.legacy_outputs_all;
+    Tx.put_u32 buf transaction.Tx.lock_time;
+    Tx.put_u32 buf (Int32.of_int sighash_type);
+    let preimage = Buffer.contents buf in
+    Option.iter (fun timing -> timing.script_legacy_preimage_build_ms <- timing.script_legacy_preimage_build_ms + elapsed build_started) timing;
+    let hash_started = now_ms () in
+    let digest = double_sha preimage in
+    Option.iter (fun timing -> timing.script_legacy_hash_ms <- timing.script_legacy_hash_ms + elapsed hash_started) timing;
+    digest
+
+(* Legacy pre-segwit sighash; consensus byte-shape must match Shared script fixtures. *)
+let legacy_sighash ?cache ?timing transaction input_index script_code sighash_type =
+  match cache_matches cache transaction with
+  | Some cache when cache.has_legacy ->
+      legacy_sighash_cached_fast ?timing cache transaction input_index script_code sighash_type
+  | Some _ | None -> legacy_sighash_reference ?cache transaction input_index script_code sighash_type
 
 (* BIP143 witness sighash; amount and script_code come from spent prevout runtime truth. *)
 let bip143_sighash ?cache transaction input_index script_code amount sighash_type =
@@ -646,7 +738,10 @@ let check_ecdsa_signature context signature pubkey =
     let sig_der = sub signature 0 (String.length signature - 1) in
     let script_code =
       if context.witness then effective_script_code context
-      else legacy_find_and_delete (effective_script_code context) signature
+      else
+        measure
+          (fun ms -> Option.iter (fun timing -> timing.script_legacy_find_delete_ms <- timing.script_legacy_find_delete_ms + ms) context.timing)
+          (fun () -> legacy_find_and_delete (effective_script_code context) signature)
     in
     let digest =
       try
@@ -658,7 +753,7 @@ let check_ecdsa_signature context signature pubkey =
            else
              measure
                (fun ms -> Option.iter (fun timing -> timing.script_sighash_legacy_ms <- timing.script_sighash_legacy_ms + ms) context.timing)
-               (fun () -> legacy_sighash ?cache:context.cache context.tx context.input_index script_code sighash_type))
+               (fun () -> legacy_sighash ?cache:context.cache ?timing:context.timing context.tx context.input_index script_code sighash_type))
       with Script_error _ -> None
     in
     let primary =
@@ -746,8 +841,11 @@ let check_multisig stack context =
     if context.witness then context
     else
       let script_code =
-        List.init sig_count (fun offset -> Stack.item_from_top stack (sig_start + offset))
-        |> List.fold_left legacy_find_and_delete (effective_script_code context)
+        measure
+          (fun ms -> Option.iter (fun timing -> timing.script_legacy_find_delete_ms <- timing.script_legacy_find_delete_ms + ms) context.timing)
+          (fun () ->
+            List.init sig_count (fun offset -> Stack.item_from_top stack (sig_start + offset))
+            |> List.fold_left legacy_find_and_delete (effective_script_code context))
       in
       { context with script_code; code_separator_offset = 0 }
   in
@@ -1048,6 +1146,8 @@ let create_sighash_cache_for_array transaction (spent_prevouts_array : spent_pre
   let sequence_bytes = lazy (serialize_sequences ()) in
   let outputs_bytes = lazy (serialize_outputs_all ()) in
   let serialized_outputs = lazy (Array.map Tx.serialize_txout outputs) in
+  let legacy_outpoints = if needs.needs_legacy then Array.map (fun input -> Tx.serialize_outpoint input.Tx.previous_output) inputs else [||] in
+  let legacy_sequences = if needs.needs_legacy then Array.map (fun input -> u32_string input.Tx.sequence) inputs else [||] in
   let bip143_single_outputs = if needs.needs_bip143 then Array.map double_sha (Lazy.force serialized_outputs) else [||] in
   let taproot_single_outputs = if needs.needs_taproot then Array.map sha256_bytes (Lazy.force serialized_outputs) else [||] in
   let taproot_amount_bytes =
@@ -1078,9 +1178,15 @@ let create_sighash_cache_for_array transaction (spent_prevouts_array : spent_pre
     has_legacy = needs.needs_legacy;
     has_bip143 = needs.needs_bip143;
     has_taproot = needs.needs_taproot;
+    legacy_input_count = if needs.needs_legacy then Tx.compact_size (Array.length inputs) else "";
+    legacy_output_count = if needs.needs_legacy then Tx.compact_size (Array.length outputs) else "";
+    legacy_outpoints;
+    legacy_sequences;
+    legacy_serialized_outputs = if needs.needs_legacy then Lazy.force serialized_outputs else [||];
     legacy_empty_inputs_all = if needs.needs_legacy then Array.map (fun input -> legacy_empty_input input input.Tx.sequence) inputs else [||];
     legacy_empty_inputs_zero_sequence = if needs.needs_legacy then Array.map (fun input -> legacy_empty_input input 0l) inputs else [||];
     legacy_outputs_all = if needs.needs_legacy then legacy_outputs_all transaction else "";
+    legacy_null_output = if needs.needs_legacy then legacy_null_output else "";
     bip143_prevouts = if needs.needs_bip143 then double_sha (Lazy.force hash_prevouts) else "";
     bip143_sequence = if needs.needs_bip143 then double_sha (Lazy.force sequence_bytes) else "";
     bip143_outputs_all = if needs.needs_bip143 then double_sha (Lazy.force outputs_bytes) else "";
@@ -1474,10 +1580,11 @@ let verify_transaction_input transaction input_index options =
 let test_cast_to_bool = cast_to_bool
 let test_decode_script_num = decode_script_num
 let test_encode_script_num = encode_script_num
-let test_legacy_sighash = legacy_sighash
+let test_legacy_sighash = legacy_sighash_reference
 let test_legacy_sighash_cached transaction spent_prevouts input_index script_code sighash_type =
   let cache = create_sighash_cache transaction spent_prevouts in
   legacy_sighash ~cache transaction input_index script_code sighash_type
+let test_legacy_find_and_delete = legacy_find_and_delete
 let test_bip143_sighash transaction input_index script_code amount sighash_type =
   bip143_sighash transaction input_index script_code amount sighash_type
 

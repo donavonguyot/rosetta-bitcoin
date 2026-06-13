@@ -22,8 +22,8 @@ let worker_crypto_context_mode () =
 let json_of_counts rows =
   `Assoc (List.map (fun (name, count) -> name, `Int count) rows)
 
-let json_of_timing timing =
-  `Assoc [
+let json_of_timing ?(include_pipeline = false) timing =
+  let base = [
     "p2p_fetch", `Int timing.Block_connect.p2p_fetch_ms;
     "block_parse_validate", `Int timing.block_parse_validate_ms;
     "block_store", `Int timing.block_store_ms;
@@ -69,7 +69,17 @@ let json_of_timing timing =
     "commit", `Int timing.commit_ms;
     "block_connect_store_commit", `Int timing.block_connect_store_commit_ms;
     "connect_total", `Int timing.block_connect_store_commit_ms;
-  ]
+  ] in
+  let pipeline =
+    if include_pipeline then
+      [
+        "script_legacy_find_delete_ms", `Int timing.script_legacy_find_delete_ms;
+        "script_legacy_preimage_build_ms", `Int timing.script_legacy_preimage_build_ms;
+        "script_legacy_hash_ms", `Int timing.script_legacy_hash_ms;
+      ]
+    else []
+  in
+  `Assoc (base @ pipeline)
 
 let json_of_slow_block (block : P2p.block) (connect : Block_connect.result) =
   let worker_wall_ratio =
@@ -87,7 +97,7 @@ let json_of_slow_block (block : P2p.block) (connect : Block_connect.result) =
     "spent_prevout_script_types", json_of_counts connect.spent_prevout_script_types;
     "output_script_types", json_of_counts connect.output_script_types;
     "block_size", `Int connect.block_size;
-    "stage_timings_ms", json_of_timing connect.timing;
+    "stage_timings_ms", json_of_timing ~include_pipeline:true connect.timing;
     "script_worker_cpu_wall_ratio", `Float worker_wall_ratio;
     "block_connect_store_commit_ms", `Int connect.timing.block_connect_store_commit_ms;
   ]
@@ -246,7 +256,7 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
         "current_block_tx_count", `Int tx_count;
         "current_block_vin_count", `Int vin_count;
         "current_block_script_input_count", `Int script_input_count;
-        "timing_buckets_ms", json_of_timing total_timing;
+        "timing_buckets_ms", json_of_timing ~include_pipeline:true total_timing;
       ]
     in
     let line = "benchmark.telemetry_tick " ^ Yojson.Safe.to_string payload in
@@ -268,7 +278,7 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
         "current_block_script_input_count", `Int script_input_count;
         "last_block_ms", `Int last_block_ms;
         "native_crypto_backend", `String "libsecp256k1";
-        "timing_buckets_ms", json_of_timing total_timing;
+        "timing_buckets_ms", json_of_timing ~include_pipeline:true total_timing;
       ]
     in
     let progress_line = "rb.port_progress " ^ Yojson.Safe.to_string product_progress in
@@ -525,6 +535,10 @@ let run ~datadir ~target ~peer ~result_path ~runtime_surface ~progress ~telemetr
       "timing_summary", `Assoc [
         "total_ms", `Int elapsed_ms;
         "stage_totals_ms", json_of_timing total_timing;
+      ];
+      "pipeline_timing_summary", `Assoc [
+        "total_ms", `Int elapsed_ms;
+        "stage_totals_ms", json_of_timing ~include_pipeline:true total_timing;
       ];
       "stage_totals_ms", json_of_timing total_timing;
     ]

@@ -15,6 +15,9 @@ type timing_buckets = {
   mutable script_ecdsa_verify_ms : int;
   mutable script_schnorr_verify_ms : int;
   mutable script_interpreter_eval_ms : int;
+  mutable script_legacy_find_delete_ms : int;
+  mutable script_legacy_preimage_build_ms : int;
+  mutable script_legacy_hash_ms : int;
   mutable script_runner_wait_ms : int;
   mutable script_verify_worker_cpu_ms : int;
   mutable script_sighash_cache_build_ms : int;
@@ -87,6 +90,9 @@ let empty_timing () =
     script_ecdsa_verify_ms = 0;
     script_schnorr_verify_ms = 0;
     script_interpreter_eval_ms = 0;
+    script_legacy_find_delete_ms = 0;
+    script_legacy_preimage_build_ms = 0;
+    script_legacy_hash_ms = 0;
     script_runner_wait_ms = 0;
     script_verify_worker_cpu_ms = 0;
     script_sighash_cache_build_ms = 0;
@@ -130,6 +136,9 @@ let add_timing total row =
   total.script_ecdsa_verify_ms <- total.script_ecdsa_verify_ms + row.script_ecdsa_verify_ms;
   total.script_schnorr_verify_ms <- total.script_schnorr_verify_ms + row.script_schnorr_verify_ms;
   total.script_interpreter_eval_ms <- total.script_interpreter_eval_ms + row.script_interpreter_eval_ms;
+  total.script_legacy_find_delete_ms <- total.script_legacy_find_delete_ms + row.script_legacy_find_delete_ms;
+  total.script_legacy_preimage_build_ms <- total.script_legacy_preimage_build_ms + row.script_legacy_preimage_build_ms;
+  total.script_legacy_hash_ms <- total.script_legacy_hash_ms + row.script_legacy_hash_ms;
   total.script_runner_wait_ms <- total.script_runner_wait_ms + row.script_runner_wait_ms;
   total.script_verify_worker_cpu_ms <- total.script_verify_worker_cpu_ms + row.script_verify_worker_cpu_ms;
   total.script_sighash_cache_build_ms <- total.script_sighash_cache_build_ms + row.script_sighash_cache_build_ms;
@@ -365,6 +374,9 @@ type script_timing_snapshot = {
   mutable ss_ecdsa_verify_ms : int;
   mutable ss_schnorr_verify_ms : int;
   mutable ss_interpreter_eval_ms : int;
+  mutable ss_legacy_find_delete_ms : int;
+  mutable ss_legacy_preimage_build_ms : int;
+  mutable ss_legacy_hash_ms : int;
 }
 
 type script_outcome = (int * int * string) option * script_timing_snapshot * string * string
@@ -387,6 +399,9 @@ let fresh_script_timing_snapshot () =
     ss_ecdsa_verify_ms = 0;
     ss_schnorr_verify_ms = 0;
     ss_interpreter_eval_ms = 0;
+    ss_legacy_find_delete_ms = 0;
+    ss_legacy_preimage_build_ms = 0;
+    ss_legacy_hash_ms = 0;
   }
 
 let empty_script_timing_snapshot = fresh_script_timing_snapshot ()
@@ -399,6 +414,9 @@ let snapshot_script_timing (row : Script_verify.script_timing) =
     ss_ecdsa_verify_ms = row.script_ecdsa_verify_ms;
     ss_schnorr_verify_ms = row.script_schnorr_verify_ms;
     ss_interpreter_eval_ms = row.script_interpreter_eval_ms;
+    ss_legacy_find_delete_ms = row.script_legacy_find_delete_ms;
+    ss_legacy_preimage_build_ms = row.script_legacy_preimage_build_ms;
+    ss_legacy_hash_ms = row.script_legacy_hash_ms;
   }
 
 let add_snapshot into row =
@@ -407,7 +425,10 @@ let add_snapshot into row =
   into.ss_sighash_taproot_ms <- into.ss_sighash_taproot_ms + row.ss_sighash_taproot_ms;
   into.ss_ecdsa_verify_ms <- into.ss_ecdsa_verify_ms + row.ss_ecdsa_verify_ms;
   into.ss_schnorr_verify_ms <- into.ss_schnorr_verify_ms + row.ss_schnorr_verify_ms;
-  into.ss_interpreter_eval_ms <- into.ss_interpreter_eval_ms + row.ss_interpreter_eval_ms
+  into.ss_interpreter_eval_ms <- into.ss_interpreter_eval_ms + row.ss_interpreter_eval_ms;
+  into.ss_legacy_find_delete_ms <- into.ss_legacy_find_delete_ms + row.ss_legacy_find_delete_ms;
+  into.ss_legacy_preimage_build_ms <- into.ss_legacy_preimage_build_ms + row.ss_legacy_preimage_build_ms;
+  into.ss_legacy_hash_ms <- into.ss_legacy_hash_ms + row.ss_legacy_hash_ms
 
 let earlier_failure current candidate =
   match current, candidate with
@@ -647,7 +668,10 @@ let add_script_timing timing row =
   timing.script_sighash_taproot_ms <- timing.script_sighash_taproot_ms + row.ss_sighash_taproot_ms;
   timing.script_ecdsa_verify_ms <- timing.script_ecdsa_verify_ms + row.ss_ecdsa_verify_ms;
   timing.script_schnorr_verify_ms <- timing.script_schnorr_verify_ms + row.ss_schnorr_verify_ms;
-  timing.script_interpreter_eval_ms <- timing.script_interpreter_eval_ms + row.ss_interpreter_eval_ms
+  timing.script_interpreter_eval_ms <- timing.script_interpreter_eval_ms + row.ss_interpreter_eval_ms;
+  timing.script_legacy_find_delete_ms <- timing.script_legacy_find_delete_ms + row.ss_legacy_find_delete_ms;
+  timing.script_legacy_preimage_build_ms <- timing.script_legacy_preimage_build_ms + row.ss_legacy_preimage_build_ms;
+  timing.script_legacy_hash_ms <- timing.script_legacy_hash_ms + row.ss_legacy_hash_ms
 
 let verify_script_jobs ?script_pool tx_array txid_array height block_hash script_jobs timing input_shape_counts spent_prevout_script_types =
   let verify_one verifier (task : script_input) =

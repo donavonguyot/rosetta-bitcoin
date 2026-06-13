@@ -183,9 +183,9 @@
       "port": "ocaml",
       "claim": "shakedown_50k",
       "gate_id": "shakedown_50k",
-      "path": "Nodes/Shared/conformance/results/ocaml_control_shakedown_50k_benchmark_20260613T042009Z.json",
+      "path": "Nodes/Shared/conformance/results/ocaml_control_shakedown_50k_benchmark_20260613T051110Z.json",
       "status": "current",
-      "notes": "Current comparable ocaml shakedown_50k proof accepted by campaign shakedown_50k_20260612_211840."
+      "notes": "Current comparable ocaml shakedown_50k proof accepted by campaign shakedown_50k_20260612_220946."
     },
     {
       "port": "python",
