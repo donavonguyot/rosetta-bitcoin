@@ -23,7 +23,7 @@ POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_SYNC_TARGET ?= 5000
 BENCHMARK_GATE ?= baseline_5k
 
-.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once clean
+.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once clean
 
 build:
 	$(ZIG) build
@@ -48,6 +48,15 @@ test-crypto-vectors:
 	trap 'rm -f "$$tmp"' EXIT; \
 	$(ZIG) build run -- test-capability --kind crypto-vectors --outcome-path "$$tmp"; \
 	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT)
+
+test-crypto-mutations:
+	@set -e; \
+	for mutation in schnorr-accept-bad-s schnorr-accept-bad-xonly taproot-ignore-output-check; do \
+	  tmp=$$(mktemp); \
+	  $(ZIG) build run -- test-capability --kind crypto-vectors --outcome-path "$$tmp" --mutation "$$mutation" >/dev/null; \
+	  python3 -c 'import json,sys; p,m=sys.argv[1:3]; expected={"schnorr-accept-bad-s":"schnorr-consensus-invalid-s-zero","schnorr-accept-bad-xonly":"schnorr-malformed-x-ge-field","taproot-ignore-output-check":"taproot-consensus-invalid-wrong-output"}[m]; d=json.load(open(p)); o=next(row for row in d["outcomes"] if row["capability"]=="crypto_libsecp256k1_equivalence"); notes=o.get("notes",""); assert o["status"]=="fail", o; assert o["case_passed"] < o["case_total"], o; assert "zig-secp256k1:" + expected in notes, notes; print(m + ": red-lighted " + expected)' "$$tmp" "$$mutation"; \
+	  rm -f "$$tmp"; \
+	done
 
 test-block-connect-backend:
 	@tmp=$$(mktemp); \

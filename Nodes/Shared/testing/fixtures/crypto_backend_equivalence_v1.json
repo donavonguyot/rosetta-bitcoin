@@ -1,5 +1,5 @@
 {
-  "case_total": 27,
+  "case_total": 52,
   "components": [
     {
       "case_total": 19,
@@ -11,12 +11,12 @@
       "source": "bitcoin/bips bip-0340/test-vectors.csv"
     },
     {
-      "case_total": 8,
+      "case_total": 33,
       "path": "Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json",
       "provenance": [
         "rb_synthetic_edge_case"
       ],
-      "sha256": "d8f1e6fb3f0f873d4c47599ef2159c5896086c354a3a15a1d659de10e560b1af",
+      "sha256": "880b6bf5046161441a84ffce5c59b19add70e4b084467cb8645789eec2e901b6",
       "source": "RosettaBitcoin native crypto fixture set"
     }
   ],

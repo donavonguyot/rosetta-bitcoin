@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-13T07:57:55Z",
+  "captured_at": "2026-06-13T09:06:38Z",
   "category": "test_capability_contracts",
   "contracts": [
     {
@@ -32,14 +32,14 @@
         "pure_crypto_experiment"
       ],
       "capability": "crypto_libsecp256k1_equivalence",
-      "case_passed": 54,
-      "case_total": 54,
+      "case_passed": 104,
+      "case_total": 104,
       "command_key": "test_crypto_vectors",
       "contract_id": "zig.crypto_libsecp256k1_equivalence",
       "does_not_prove": "Backend equivalence vectors do not prove every libsecp256k1 internal test, every consensus path, or block-connect usage.",
       "evidence_kind": "suite",
       "evidence_path": "Nodes/Shared/testing/fixtures/crypto_backend_equivalence_v1.json",
-      "notes": "libsecp256k1 BIP340 19/19 plus native crypto vectors 8/8; pure Zig shadow BIP340 19/19 plus native crypto vectors 8/8",
+      "notes": "libsecp256k1 BIP340 19/19 plus native crypto vectors 33/33; pure Zig shadow BIP340 19/19 plus native crypto vectors 33/33",
       "port": "zig",
       "provenance": [
         "bip_standard_vector",
@@ -47,7 +47,7 @@
       ],
       "scope": "host",
       "status": "pass",
-      "suite_hash": "ef27cd3e8c2f7f83923d88aaee4d50ef9130fe42c5ccc14713478772d06209af",
+      "suite_hash": "67d87dd5d9d35aa0345c398d40d71b11f04bfb74b0902116d66a7308a8fa6897",
       "suite_id": "rb.crypto_backend_equivalence_v1",
       "suite_version": "2026-06-07"
     }
@@ -62,9 +62,9 @@
       "suite_id": "bitcoin.bip340_schnorr_vectors"
     },
     {
-      "case_passed": 54,
-      "case_total": 54,
-      "notes": "libsecp256k1 BIP340 19/19 plus native crypto vectors 8/8; pure Zig shadow BIP340 19/19 plus native crypto vectors 8/8",
+      "case_passed": 104,
+      "case_total": 104,
+      "notes": "libsecp256k1 BIP340 19/19 plus native crypto vectors 33/33; pure Zig shadow BIP340 19/19 plus native crypto vectors 33/33",
       "result": "pass",
       "suite_id": "rb.crypto_backend_equivalence_v1"
     }
@@ -82,13 +82,13 @@
       "suite_version": "2026-06-07"
     },
     {
-      "case_total": 27,
+      "case_total": 52,
       "does_not_prove": "Backend equivalence vectors do not prove every libsecp256k1 internal test, every consensus path, or block-connect usage.",
       "provenance": [
         "bip_standard_vector",
         "proof_derived"
       ],
-      "suite_hash": "ef27cd3e8c2f7f83923d88aaee4d50ef9130fe42c5ccc14713478772d06209af",
+      "suite_hash": "67d87dd5d9d35aa0345c398d40d71b11f04bfb74b0902116d66a7308a8fa6897",
       "suite_id": "rb.crypto_backend_equivalence_v1",
       "suite_version": "2026-06-07"
     }

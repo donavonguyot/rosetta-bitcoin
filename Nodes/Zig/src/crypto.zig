@@ -138,6 +138,42 @@ test "pure schnorr verifier accepts BIP340 variable-length messages" {
     try std.testing.expect(verifier.verifySchnorr(pubkey, sig, msg));
 }
 
+test "pure taproot tweak edge cases match native backend" {
+    const allocator = std.testing.allocator;
+    var native = try NativeVerifier.create();
+    defer native.destroy();
+    var pure = PureVerifier.create();
+    defer pure.destroy();
+
+    const generator_x = try fromHexAlloc(allocator, "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798");
+    defer allocator.free(generator_x);
+    const order_bytes = try fromHexAlloc(allocator, "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
+    defer allocator.free(order_bytes);
+    const order_minus_one_bytes = try fromHexAlloc(allocator, "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140");
+    defer allocator.free(order_minus_one_bytes);
+
+    var order: [32]u8 = undefined;
+    @memcpy(&order, order_bytes[0..32]);
+    var order_minus_one: [32]u8 = undefined;
+    @memcpy(&order_minus_one, order_minus_one_bytes[0..32]);
+    const zero = [_]u8{0} ** 32;
+
+    try std.testing.expect(native.taprootTweakPubkeyXOnly(generator_x, &order) == null);
+    try std.testing.expect(pure.taprootTweakPubkeyXOnly(generator_x, &order) == null);
+
+    try std.testing.expect(native.taprootTweakPubkeyXOnly(generator_x, &order_minus_one) == null);
+    try std.testing.expect(pure.taprootTweakPubkeyXOnly(generator_x, &order_minus_one) == null);
+
+    const native_zero = native.taprootTweakPubkeyXOnly(generator_x, &zero).?;
+    const pure_zero = pure.taprootTweakPubkeyXOnly(generator_x, &zero).?;
+    try std.testing.expectEqual(native_zero.parity, pure_zero.parity);
+    try std.testing.expectEqualSlices(u8, native_zero.output_xonly[0..], pure_zero.output_xonly[0..]);
+
+    const wrong_parity = native_zero.parity ^ 1;
+    try std.testing.expect(!native.taprootTweakAddCheck(native_zero.output_xonly[0..], wrong_parity, generator_x, &zero));
+    try std.testing.expect(!pure.taprootTweakAddCheck(pure_zero.output_xonly[0..], wrong_parity, generator_x, &zero));
+}
+
 pub fn sha256(data: []const u8) [32]u8 {
     var out: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(data, &out, .{});
