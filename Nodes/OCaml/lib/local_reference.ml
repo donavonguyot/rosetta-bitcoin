@@ -44,6 +44,11 @@ let json_of_timing timing =
     "script_job_dispatch", `Int timing.script_job_dispatch_ms;
     "script_active_workers", `Int timing.script_active_workers;
     "script_worker_jobs", `Int timing.script_worker_jobs;
+    "script_chunk_count", `Int timing.script_chunk_count;
+    "script_chunk_size", `Int timing.script_chunk_size;
+    "script_worker_loop_ms", `Int timing.script_worker_loop_ms;
+    "script_worker_join_ms", `Int timing.script_worker_join_ms;
+    "script_dispatch_setup_ms", `Int timing.script_dispatch_setup_ms;
     "runner_batches", `Int timing.runner_batches;
     "script_wall_ms", `Int timing.script_wall_ms;
     "script_parallel_efficiency",

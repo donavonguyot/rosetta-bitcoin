@@ -4,6 +4,7 @@
 #include <caml/memory.h>
 #include <caml/mlvalues.h>
 #include <rocksdb/c.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -268,6 +269,70 @@ static void encode_be32(char *dst, int value) {
   dst[3] = (char)(value & 0xff);
 }
 
+static void encode_be64(char *dst, int64_t value) {
+  uint64_t raw = (uint64_t)value;
+  for (int i = 0; i < 8; i++) {
+    dst[i] = (char)((raw >> ((7 - i) * 8)) & 0xff);
+  }
+}
+
+static size_t compact_size_len(size_t value) {
+  if (value < 0xfd) return 1;
+  if (value <= 0xffff) return 3;
+  if (value <= 0xffffffffULL) return 5;
+  return 9;
+}
+
+static size_t encode_compact_size(char *dst, size_t value) {
+  if (value < 0xfd) {
+    dst[0] = (char)value;
+    return 1;
+  }
+  if (value <= 0xffff) {
+    dst[0] = (char)0xfd;
+    dst[1] = (char)(value & 0xff);
+    dst[2] = (char)((value >> 8) & 0xff);
+    return 3;
+  }
+  if (value <= 0xffffffffULL) {
+    dst[0] = (char)0xfe;
+    for (int i = 0; i < 4; i++) dst[1 + i] = (char)((value >> (8 * i)) & 0xff);
+    return 5;
+  }
+  dst[0] = (char)0xff;
+  for (int i = 0; i < 8; i++) dst[1 + i] = (char)(((uint64_t)value >> (8 * i)) & 0xff);
+  return 9;
+}
+
+static size_t utxo_key_len(size_t chain_len) {
+  return 1 + compact_size_len(chain_len) + chain_len + 32 + 4;
+}
+
+static void encode_utxo_key(char *dst, const char *chain, size_t chain_len, const char *txid, int vout) {
+  dst[0] = 'u';
+  size_t cursor = 1;
+  cursor += encode_compact_size(dst + cursor, chain_len);
+  memcpy(dst + cursor, chain, chain_len);
+  cursor += chain_len;
+  memcpy(dst + cursor, txid, 32);
+  cursor += 32;
+  encode_be32(dst + cursor, vout);
+}
+
+static size_t utxo_value_len(size_t script_len) {
+  return 4 + 4 + 8 + 1 + compact_size_len(script_len) + script_len;
+}
+
+static void encode_utxo_value(char *dst, int height, int vout, int64_t value_sats, int coinbase, const char *script, size_t script_len) {
+  encode_be32(dst, height);
+  encode_be32(dst + 4, vout);
+  encode_be64(dst + 8, value_sats);
+  dst[16] = coinbase ? 1 : 0;
+  size_t cursor = 17;
+  cursor += encode_compact_size(dst + cursor, script_len);
+  memcpy(dst + cursor, script, script_len);
+}
+
 CAMLprim value ocbitnode_rocks_multi_get_utxo_raw(value db_v, value chain_v, value outpoints_v) {
   CAMLparam3(db_v, chain_v, outpoints_v);
   CAMLlocal5(result, value_s, some, stats, pair);
@@ -375,6 +440,34 @@ CAMLprim value ocbitnode_rocks_multi_get_utxo_raw(value db_v, value chain_v, val
   CAMLreturn(pair);
 }
 
+CAMLprim value ocbitnode_rocks_utxo_key_raw(value chain_v, value outpoint_v) {
+  CAMLparam2(chain_v, outpoint_v);
+  CAMLlocal1(result);
+  value txid_v = Field(outpoint_v, 0);
+  int vout = Int_val(Field(outpoint_v, 1));
+  size_t chain_len = caml_string_length(chain_v);
+  if (caml_string_length(txid_v) != 32) caml_invalid_argument("UTXO txid must be 32 bytes");
+  size_t key_len = utxo_key_len(chain_len);
+  result = caml_alloc_string(key_len);
+  encode_utxo_key((char *)Bytes_val(result), String_val(chain_v), chain_len, String_val(txid_v), vout);
+  CAMLreturn(result);
+}
+
+CAMLprim value ocbitnode_rocks_utxo_value_raw(value row_v) {
+  CAMLparam1(row_v);
+  CAMLlocal1(result);
+  int vout = Int_val(Field(row_v, 1));
+  int height = Int_val(Field(row_v, 2));
+  int64_t value_sats = Int64_val(Field(row_v, 3));
+  int coinbase = Bool_val(Field(row_v, 4));
+  value script_v = Field(row_v, 5);
+  size_t script_len = caml_string_length(script_v);
+  size_t value_len = utxo_value_len(script_len);
+  result = caml_alloc_string(value_len);
+  encode_utxo_value((char *)Bytes_val(result), height, vout, value_sats, coinbase, String_val(script_v), script_len);
+  CAMLreturn(result);
+}
+
 CAMLprim value ocbitnode_rocks_delete(value db_v, value key_v, value disable_wal_v, value sync_v) {
   CAMLparam4(db_v, key_v, disable_wal_v, sync_v);
   char *err = NULL;
@@ -406,6 +499,75 @@ CAMLprim value ocbitnode_rocks_batch_put(value batch_v, value key_v, value value
 CAMLprim value ocbitnode_rocks_batch_delete(value batch_v, value key_v) {
   CAMLparam2(batch_v, key_v);
   rocksdb_writebatch_delete(batch_val(batch_v)->batch, String_val(key_v), caml_string_length(key_v));
+  CAMLreturn(Val_unit);
+}
+
+CAMLprim value ocbitnode_rocks_batch_delete_utxos_raw(value batch_v, value chain_v, value outpoints_v) {
+  CAMLparam3(batch_v, chain_v, outpoints_v);
+  rocksdb_writebatch_t *batch = batch_val(batch_v)->batch;
+  const char *chain = String_val(chain_v);
+  size_t chain_len = caml_string_length(chain_v);
+  size_t key_len = utxo_key_len(chain_len);
+  char *key = malloc(key_len);
+  if (key == NULL) caml_failwith("out of memory");
+  mlsize_t count = Wosize_val(outpoints_v);
+  for (mlsize_t i = 0; i < count; i++) {
+    value outpoint_v = Field(outpoints_v, i);
+    value txid_v = Field(outpoint_v, 0);
+    int vout = Int_val(Field(outpoint_v, 1));
+    if (caml_string_length(txid_v) != 32) {
+      free(key);
+      caml_invalid_argument("UTXO txid must be 32 bytes");
+    }
+    encode_utxo_key(key, chain, chain_len, String_val(txid_v), vout);
+    rocksdb_writebatch_delete(batch, key, key_len);
+  }
+  free(key);
+  CAMLreturn(Val_unit);
+}
+
+CAMLprim value ocbitnode_rocks_batch_put_utxos_raw(value batch_v, value chain_v, value rows_v) {
+  CAMLparam3(batch_v, chain_v, rows_v);
+  rocksdb_writebatch_t *batch = batch_val(batch_v)->batch;
+  const char *chain = String_val(chain_v);
+  size_t chain_len = caml_string_length(chain_v);
+  size_t key_len = utxo_key_len(chain_len);
+  char *key = malloc(key_len);
+  if (key == NULL) caml_failwith("out of memory");
+  char *encoded_value = NULL;
+  size_t encoded_value_cap = 0;
+  mlsize_t count = Wosize_val(rows_v);
+  for (mlsize_t i = 0; i < count; i++) {
+    value row_v = Field(rows_v, i);
+    value txid_v = Field(row_v, 0);
+    int vout = Int_val(Field(row_v, 1));
+    int height = Int_val(Field(row_v, 2));
+    int64_t value_sats = Int64_val(Field(row_v, 3));
+    int coinbase = Bool_val(Field(row_v, 4));
+    value script_v = Field(row_v, 5);
+    size_t script_len = caml_string_length(script_v);
+    size_t value_len = utxo_value_len(script_len);
+    if (caml_string_length(txid_v) != 32) {
+      free(key);
+      free(encoded_value);
+      caml_invalid_argument("UTXO txid must be 32 bytes");
+    }
+    if (value_len > encoded_value_cap) {
+      char *next = realloc(encoded_value, value_len);
+      if (next == NULL) {
+        free(key);
+        free(encoded_value);
+        caml_failwith("out of memory");
+      }
+      encoded_value = next;
+      encoded_value_cap = value_len;
+    }
+    encode_utxo_key(key, chain, chain_len, String_val(txid_v), vout);
+    encode_utxo_value(encoded_value, height, vout, value_sats, coinbase, String_val(script_v), script_len);
+    rocksdb_writebatch_put(batch, key, key_len, encoded_value, value_len);
+  }
+  free(encoded_value);
+  free(key);
   CAMLreturn(Val_unit);
 }
 

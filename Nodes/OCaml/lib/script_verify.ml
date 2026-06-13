@@ -1446,6 +1446,25 @@ let verify_transaction_input_with_cache_and_timing ?cache ?verifier transaction 
     Ok (), timing
   with Script_error message -> Error message, timing
 
+let verify_transaction_input_cached_fields_with_timing ~cache ?verifier transaction input_index ~script_pubkey ~amount =
+  let timing = empty_timing () in
+  try
+    ensure (input_index < input_count ~cache transaction) "input index out of range";
+    (match witness_version script_pubkey with Some version -> ensure (version <= 1) "unsupported witness program version" | None -> ());
+    ensure
+      (is_p2pk script_pubkey || is_p2pkh script_pubkey || is_p2wpkh script_pubkey || is_p2wsh script_pubkey
+       || is_p2sh script_pubkey || is_p2tr script_pubkey || is_bare_op_n script_pubkey || is_bare_multisig script_pubkey
+      || is_bare_legacy_script script_pubkey)
+      ("unsupported OCaml scriptPubKey template: " ^ Util.hex_of_bytes script_pubkey);
+    let witness = if input_index < Array.length cache.witness then cache.witness.(input_index) else [] in
+    let timing_opt = Some timing in
+    ensure
+      (verify_script ~cache ?timing:timing_opt ?verifier (input_at ~cache transaction input_index).script_sig script_pubkey transaction input_index
+         amount witness cache.spent_prevouts)
+      (Printf.sprintf "script verification failed for input %d" input_index);
+    Ok (), timing
+  with Script_error message -> Error message, timing
+
 let verify_transaction_input_with_timing transaction input_index options =
   verify_transaction_input_with_cache_and_timing transaction input_index options
 

@@ -22,6 +22,11 @@ type timing_buckets = {
   mutable script_wall_ms : int;
   mutable script_active_workers : int;
   mutable script_worker_jobs : int;
+  mutable script_chunk_count : int;
+  mutable script_chunk_size : int;
+  mutable script_worker_loop_ms : int;
+  mutable script_worker_join_ms : int;
+  mutable script_dispatch_setup_ms : int;
   mutable runner_batches : int;
   mutable utxo_apply_ms : int;
   mutable created_utxos : int;
@@ -89,6 +94,11 @@ let empty_timing () =
     script_wall_ms = 0;
     script_active_workers = 0;
     script_worker_jobs = 0;
+    script_chunk_count = 0;
+    script_chunk_size = 0;
+    script_worker_loop_ms = 0;
+    script_worker_join_ms = 0;
+    script_dispatch_setup_ms = 0;
     runner_batches = 0;
     utxo_apply_ms = 0;
     created_utxos = 0;
@@ -127,6 +137,11 @@ let add_timing total row =
   total.script_wall_ms <- total.script_wall_ms + row.script_wall_ms;
   total.script_active_workers <- max total.script_active_workers row.script_active_workers;
   total.script_worker_jobs <- total.script_worker_jobs + row.script_worker_jobs;
+  total.script_chunk_count <- total.script_chunk_count + row.script_chunk_count;
+  total.script_chunk_size <- max total.script_chunk_size row.script_chunk_size;
+  total.script_worker_loop_ms <- total.script_worker_loop_ms + row.script_worker_loop_ms;
+  total.script_worker_join_ms <- total.script_worker_join_ms + row.script_worker_join_ms;
+  total.script_dispatch_setup_ms <- total.script_dispatch_setup_ms + row.script_dispatch_setup_ms;
   total.runner_batches <- total.runner_batches + row.runner_batches;
   total.utxo_apply_ms <- total.utxo_apply_ms + row.utxo_apply_ms;
   total.created_utxos <- total.created_utxos + row.created_utxos;
@@ -142,12 +157,12 @@ let add_timing total row =
   total.commit_ms <- total.commit_ms + row.commit_ms;
   total.block_connect_store_commit_ms <- total.block_connect_store_commit_ms + row.block_connect_store_commit_ms
 
-let outpoint_key txid vout = txid ^ Codec_v2.be32 vout
+let outpoint txid vout : Rocks.outpoint = { Rocks.txid; vout }
 
-let utxo_key utxo = outpoint_key utxo.txid utxo.vout
+let utxo_outpoint utxo = outpoint utxo.txid utxo.vout
 
-let spent_key input =
-  outpoint_key input.Tx.previous_output.hash (Int32.to_int input.previous_output.index)
+let spent_outpoint input =
+  outpoint input.Tx.previous_output.hash (Int32.to_int input.previous_output.index)
 
 let encode_int value = string_of_int value
 let decode_int = int_of_string
@@ -226,36 +241,45 @@ let list_filter_mapi fn rows =
   in
   loop 0 [] rows
 
-let build_in_block_spendable_outputs tx_array =
-  let outputs = Hashtbl.create 128 in
+let block_mutation_shape tx_array =
+  let spends = ref 0 in
+  let creates = ref 0 in
+  Array.iteri
+    (fun tx_index tx ->
+      if tx_index <> 0 then spends := !spends + List.length tx.Tx.inputs;
+      List.iter (fun output -> if is_spendable_output output.Tx.script_pubkey then incr creates) tx.Tx.outputs)
+    tx_array;
+  !spends, !creates
+
+let build_in_block_spendable_outputs tx_array expected_creates =
+  let outputs = Hashtbl.create (max 16 expected_creates) in
   Array.iteri
     (fun tx_index tx ->
       let txid = Tx.txid_internal tx in
       tx.Tx.outputs
       |> List.iteri (fun vout output ->
              if is_spendable_output output.Tx.script_pubkey then
-               Hashtbl.replace outputs (outpoint_key txid vout) tx_index))
+               Hashtbl.replace outputs (outpoint txid vout) tx_index))
     tx_array;
   outputs
 
 let gather_external_prevouts tx_array timing =
-  let in_block_outputs = build_in_block_spendable_outputs tx_array in
-  let seen = Hashtbl.create 128 in
+  let expected_spends, expected_creates = block_mutation_shape tx_array in
+  let in_block_outputs = build_in_block_spendable_outputs tx_array expected_creates in
+  let seen = Hashtbl.create (max 16 expected_spends) in
   let rows = ref [] in
   for tx_index = 1 to Array.length tx_array - 1 do
     let tx = tx_array.(tx_index) in
     List.iter
       (fun input ->
-        let txid = input.Tx.previous_output.hash in
-        let vout = Int32.to_int input.previous_output.index in
-        let key = outpoint_key txid vout in
+        let key = spent_outpoint input in
         match Hashtbl.find_opt in_block_outputs key with
         | Some creator_index when creator_index < tx_index ->
             timing.same_block_prevout_skipped <- timing.same_block_prevout_skipped + 1
         | _ ->
         if not (Hashtbl.mem seen key) then (
           Hashtbl.add seen key true;
-          rows := { Rocks.txid; vout } :: !rows))
+          rows := key :: !rows))
       tx.Tx.inputs
   done;
   Array.of_list (List.rev !rows)
@@ -269,13 +293,12 @@ let load_prevouts db tx_array timing =
   timing.utxo_key_encode_ms <- timing.utxo_key_encode_ms + stats.multi_get_ms;
   timing.utxo_value_decode_ms <- timing.utxo_value_decode_ms + stats.decode_ms;
   let fill_started = now_ms () in
-  let loaded = Hashtbl.create (Array.length prevouts) in
+  let loaded = Hashtbl.create (max 16 (Array.length prevouts)) in
   Array.iteri
     (fun index value ->
       match value with
       | Some (row : Rocks.utxo_row) ->
-          let key = outpoint_key prevouts.(index).txid prevouts.(index).vout in
-          Hashtbl.add loaded key
+          Hashtbl.add loaded prevouts.(index)
             {
               txid = row.txid;
               vout = row.vout;
@@ -318,10 +341,15 @@ let sighash_needs_for_prevouts prevouts =
     prevouts;
   !needs
 
-type script_task = {
+type script_input = {
   tx_index : int;
   input_index : int;
   job_index : int;
+}
+
+type script_chunk = {
+  first_task : int;
+  task_count : int;
 }
 
 type script_job = {
@@ -339,13 +367,16 @@ type script_timing_snapshot = {
   mutable ss_interpreter_eval_ms : int;
 }
 
-type script_outcome = (int * int * string) option * script_timing_snapshot * int
+type script_outcome = (int * int * string) option * script_timing_snapshot * string * string
 
 type script_worker_summary = {
   sw_failure : (int * int * string) option;
   sw_timing : script_timing_snapshot;
   sw_worker_ms : int;
   sw_jobs : int;
+  sw_loop_ms : int;
+  sw_input_shape_counts : (string, int) Hashtbl.t;
+  sw_spent_prevout_script_types : (string, int) Hashtbl.t;
 }
 
 let fresh_script_timing_snapshot () =
@@ -386,20 +417,29 @@ let earlier_failure current candidate =
       if compare (b_tx, b_input) (a_tx, a_input) < 0 then candidate else current
 
 let empty_worker_summary () =
-  { sw_failure = None; sw_timing = fresh_script_timing_snapshot (); sw_worker_ms = 0; sw_jobs = 0 }
+  {
+    sw_failure = None;
+    sw_timing = fresh_script_timing_snapshot ();
+    sw_worker_ms = 0;
+    sw_jobs = 0;
+    sw_loop_ms = 0;
+    sw_input_shape_counts = Hashtbl.create 16;
+    sw_spent_prevout_script_types = Hashtbl.create 16;
+  }
 
 type script_worker_pool = {
   mutex : Mutex.t;
   started : Condition.t;
   finished : Condition.t;
-  mutable jobs : script_task array;
+  mutable inputs : script_input array;
+  mutable chunk_size : int;
   mutable summaries : script_worker_summary option array;
   next_index : int Atomic.t;
   mutable active_workers : int;
   mutable completed_workers : int;
   mutable generation : int;
   mutable stopping : bool;
-  mutable verify : (Crypto.verifier -> script_task -> script_outcome) option;
+  mutable verify : (Crypto.verifier -> script_input -> script_outcome) option;
   mutable workers : unit Domain.t list;
 }
 
@@ -409,6 +449,9 @@ let incr_count counts key =
 let counts_to_list counts =
   Hashtbl.fold (fun key value acc -> (key, value) :: acc) counts []
   |> List.sort (fun (a, _) (b, _) -> String.compare a b)
+
+let merge_counts into from =
+  Hashtbl.iter (fun key value -> Hashtbl.replace into key (value + Option.value ~default:0 (Hashtbl.find_opt into key))) from
 
 let input_shape_from_cache (cache : Script_verify.sighash_cache) input_index (prevout : Script_verify.spent_prevout) =
   let witness_items = if input_index < Array.length cache.witness then List.length cache.witness.(input_index) else 0 in
@@ -425,25 +468,77 @@ let script_parallel_min_inputs () =
   try int_of_string (Sys.getenv "OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS")
   with _ -> 64
 
-let process_one_script_task summary verifier jobs verify index =
-  let failure, script_timing, worker_ms = verify verifier jobs.(index) in
+let script_chunk_size () =
+  let configured =
+    try int_of_string (Sys.getenv "OCBITNODE_SCRIPT_CHUNK_SIZE")
+    with _ -> 4
+  in
+  max 1 configured
+
+let build_script_chunks task_count chunk_size =
+  let chunk_size = max 1 chunk_size in
+  if task_count <= 0 then [||]
+  else
+    let chunk_count = (task_count + chunk_size - 1) / chunk_size in
+    Array.init chunk_count (fun index ->
+        let first_task = index * chunk_size in
+        { first_task; task_count = min chunk_size (task_count - first_task) })
+
+let script_chunk_bounds chunks =
+  Array.map (fun chunk -> chunk.first_task, chunk.task_count) chunks
+
+let process_one_script_input summary verifier inputs verify index =
+  let failure, script_timing, spent_prevout_script_type, input_shape = verify verifier inputs.(index) in
   let current = !summary in
   let merged_timing = current.sw_timing in
   add_snapshot merged_timing script_timing;
+  incr_count current.sw_spent_prevout_script_types spent_prevout_script_type;
+  incr_count current.sw_input_shape_counts input_shape;
   summary :=
     {
       sw_failure = earlier_failure current.sw_failure failure;
       sw_timing = merged_timing;
-      sw_worker_ms = current.sw_worker_ms + worker_ms;
+      sw_worker_ms = current.sw_worker_ms;
       sw_jobs = current.sw_jobs + 1;
+      sw_loop_ms = current.sw_loop_ms;
+      sw_input_shape_counts = current.sw_input_shape_counts;
+      sw_spent_prevout_script_types = current.sw_spent_prevout_script_types;
     }
 
-let process_worker_cursor verifier jobs verify next_index =
+let merge_worker_summary into row =
+  let current = !into in
+  add_snapshot current.sw_timing row.sw_timing;
+  merge_counts current.sw_input_shape_counts row.sw_input_shape_counts;
+  merge_counts current.sw_spent_prevout_script_types row.sw_spent_prevout_script_types;
+  into :=
+    {
+      sw_failure = earlier_failure current.sw_failure row.sw_failure;
+      sw_timing = current.sw_timing;
+      sw_worker_ms = current.sw_worker_ms + row.sw_worker_ms;
+      sw_jobs = current.sw_jobs + row.sw_jobs;
+      sw_loop_ms = current.sw_loop_ms + row.sw_loop_ms;
+      sw_input_shape_counts = current.sw_input_shape_counts;
+      sw_spent_prevout_script_types = current.sw_spent_prevout_script_types;
+    }
+
+let process_one_script_chunk verifier inputs verify first_task task_count =
   let summary = ref (empty_worker_summary ()) in
+  let loop_started = now_ms () in
+  for offset = 0 to task_count - 1 do
+    process_one_script_input summary verifier inputs verify (first_task + offset)
+  done;
+  let worker_ms = elapsed loop_started in
+  let current = !summary in
+  { current with sw_worker_ms = current.sw_worker_ms + worker_ms; sw_loop_ms = current.sw_loop_ms + worker_ms }
+
+let process_worker_cursor verifier inputs verify next_index chunk_size =
+  let summary = ref (empty_worker_summary ()) in
+  let chunk_size = max 1 chunk_size in
   let rec loop () =
-    let index = Atomic.fetch_and_add next_index 1 in
-    if index < Array.length jobs then (
-      process_one_script_task summary verifier jobs verify index;
+    let index = Atomic.fetch_and_add next_index chunk_size in
+    if index < Array.length inputs then (
+      let task_count = min chunk_size (Array.length inputs - index) in
+      merge_worker_summary summary (process_one_script_chunk verifier inputs verify index task_count);
       loop ())
   in
   loop ();
@@ -460,7 +555,8 @@ let script_worker_loop pool worker_index =
     else
       let generation = pool.generation in
       let active_workers = pool.active_workers in
-      let jobs = pool.jobs in
+      let inputs = pool.inputs in
+      let chunk_size = pool.chunk_size in
       let next_index = pool.next_index in
       let verify = pool.verify in
       Mutex.unlock pool.mutex;
@@ -469,7 +565,7 @@ let script_worker_loop pool worker_index =
         else
           match verify with
           | None -> empty_worker_summary ()
-          | Some verify -> process_worker_cursor verifier jobs verify next_index
+          | Some verify -> process_worker_cursor verifier inputs verify next_index chunk_size
       in
       Mutex.lock pool.mutex;
       if (not pool.stopping) && pool.generation = generation && worker_index < pool.active_workers then (
@@ -490,7 +586,8 @@ let create_script_worker_pool threads =
       mutex = Mutex.create ();
       started = Condition.create ();
       finished = Condition.create ();
-      jobs = [||];
+      inputs = [||];
+      chunk_size = 1;
       summaries = [||];
       next_index = Atomic.make 0;
       active_workers = 0;
@@ -517,14 +614,14 @@ let with_script_worker_pool threads fn =
   let pool = create_script_worker_pool threads in
   Fun.protect ~finally:(fun () -> stop_script_worker_pool pool) (fun () -> fn pool)
 
-let run_script_worker_pool pool tasks verify =
-  let task_array = tasks in
-  if Array.length task_array = 0 then ([], 0)
+let run_script_worker_pool pool inputs chunk_count chunk_size verify =
+  if chunk_count = 0 then ([], 0, 0)
   else (
     let worker_count = max 1 (List.length pool.workers) in
-    let active_workers = min worker_count (Array.length task_array) in
+    let active_workers = min worker_count chunk_count in
     Mutex.lock pool.mutex;
-    pool.jobs <- task_array;
+    pool.inputs <- inputs;
+    pool.chunk_size <- max 1 chunk_size;
     pool.summaries <- Array.make active_workers None;
     Atomic.set pool.next_index 0;
     pool.completed_workers <- 0;
@@ -532,14 +629,17 @@ let run_script_worker_pool pool tasks verify =
     pool.verify <- Some verify;
     pool.generation <- pool.generation + 1;
     Condition.broadcast pool.started;
+    let join_started = now_ms () in
     while pool.completed_workers < pool.active_workers && not pool.stopping do
       Condition.wait pool.finished pool.mutex
     done;
+    let join_ms = elapsed join_started in
     let summaries = Array.to_list pool.summaries |> List.map (function Some row -> row | None -> empty_worker_summary ()) in
-    pool.jobs <- [||];
+    pool.inputs <- [||];
+    pool.chunk_size <- 1;
     pool.active_workers <- 0;
     Mutex.unlock pool.mutex;
-    summaries, active_workers)
+    summaries, active_workers, join_ms)
 
 let add_script_timing timing row =
   timing.script_sighash_legacy_ms <- timing.script_sighash_legacy_ms + row.ss_sighash_legacy_ms;
@@ -550,26 +650,25 @@ let add_script_timing timing row =
   timing.script_interpreter_eval_ms <- timing.script_interpreter_eval_ms + row.ss_interpreter_eval_ms
 
 let verify_script_jobs ?script_pool tx_array txid_array height block_hash script_jobs timing input_shape_counts spent_prevout_script_types =
-  let verify_one verifier (task : script_task) =
-    let started = now_ms () in
+  let verify_one verifier (task : script_input) =
     try
       let tx = tx_array.(task.tx_index) in
       let job = script_jobs.(task.job_index) in
       let prevout = job.job_spent_prevouts.(task.input_index) in
       let cache = job.job_cache in
-      let spent_prevouts = (cache : Script_verify.sighash_cache).spent_prevouts in
-      let options : Script_verify.verify_input_options =
-        { script_pubkey = prevout.script_pubkey; amount = prevout.amount; spent_prevouts }
+      let result, script_timing =
+        Script_verify.verify_transaction_input_cached_fields_with_timing ~cache ~verifier tx task.input_index ~script_pubkey:prevout.script_pubkey
+          ~amount:prevout.amount
       in
-      let result, script_timing = Script_verify.verify_transaction_input_with_cache_and_timing ~cache ~verifier tx task.input_index options in
       let failure = match result with Ok () -> None | Error failure -> Some (task.tx_index, task.input_index, failure) in
-      failure, snapshot_script_timing script_timing, elapsed started
-    with exn -> Some (task.tx_index, task.input_index, Printexc.to_string exn), empty_script_timing_snapshot, elapsed started
+      failure, snapshot_script_timing script_timing, classify_script prevout.script_pubkey, input_shape_from_cache cache task.input_index prevout
+    with exn -> Some (task.tx_index, task.input_index, Printexc.to_string exn), empty_script_timing_snapshot, "unknown", "unknown"
   in
   let task_count =
     Array.fold_left (fun total job -> total + Array.length job.job_spent_prevouts) 0 script_jobs
   in
-  let tasks =
+  let setup_started = now_ms () in
+  let inputs =
     let rows = Array.make task_count { tx_index = 0; input_index = 0; job_index = 0 } in
     let offset = ref 0 in
     Array.iteri
@@ -582,51 +681,55 @@ let verify_script_jobs ?script_pool tx_array txid_array height block_hash script
       script_jobs;
     rows
   in
+  let chunk_size = script_chunk_size () in
+  let chunk_count = if task_count <= 0 then 0 else (task_count + chunk_size - 1) / chunk_size in
+  timing.script_dispatch_setup_ms <- timing.script_dispatch_setup_ms + elapsed setup_started;
+  timing.script_chunk_count <- timing.script_chunk_count + chunk_count;
+  if task_count > 0 then timing.script_chunk_size <- max timing.script_chunk_size chunk_size;
   let failures =
     let dispatch_started = now_ms () in
-    let summaries, active_workers =
-      if task_count = 0 then ([], 0)
+    let summaries, active_workers, join_ms =
+      if task_count = 0 then ([], 0, 0)
       else if task_count < script_parallel_min_inputs () || script_threads () <= 1 then (
         let verifier = Crypto.create_worker_verifier () in
         let summary =
           Fun.protect ~finally:(fun () -> Crypto.close_verifier verifier) (fun () ->
-              process_worker_cursor verifier tasks verify_one (Atomic.make 0))
+              process_worker_cursor verifier inputs verify_one (Atomic.make 0) chunk_size)
         in
-        [ summary ], 1)
+        [ summary ], 1, 0)
       else
         match script_pool with
-        | Some pool -> run_script_worker_pool pool tasks verify_one
+        | Some pool -> run_script_worker_pool pool inputs chunk_count chunk_size verify_one
         | None ->
-            let active_workers = min (script_threads ()) task_count in
+            let active_workers = min (script_threads ()) chunk_count in
             let next_index = Atomic.make 0 in
             let worker worker_index =
               ignore worker_index;
               let verifier = Crypto.create_worker_verifier () in
               Fun.protect ~finally:(fun () -> Crypto.close_verifier verifier) (fun () ->
-                  process_worker_cursor verifier tasks verify_one next_index)
+                  process_worker_cursor verifier inputs verify_one next_index chunk_size)
             in
             let domains = List.init active_workers (fun worker_index -> Domain.spawn (fun () -> worker worker_index)) in
-            List.map Domain.join domains, active_workers
+            let join_started = now_ms () in
+            let summaries = List.map Domain.join domains in
+            summaries, active_workers, elapsed join_started
     in
     if task_count > 0 then timing.runner_batches <- timing.runner_batches + 1;
     timing.script_job_dispatch_ms <- timing.script_job_dispatch_ms + elapsed dispatch_started;
     timing.script_runner_wait_ms <- timing.script_runner_wait_ms + elapsed dispatch_started;
+    timing.script_worker_join_ms <- timing.script_worker_join_ms + join_ms;
     timing.script_active_workers <- max timing.script_active_workers active_workers;
     List.iter
       (fun summary ->
         add_script_timing timing summary.sw_timing;
         timing.script_verify_worker_cpu_ms <- timing.script_verify_worker_cpu_ms + summary.sw_worker_ms;
-        timing.script_worker_jobs <- timing.script_worker_jobs + summary.sw_jobs)
+        timing.script_worker_jobs <- timing.script_worker_jobs + summary.sw_jobs;
+        timing.script_worker_loop_ms <- timing.script_worker_loop_ms + summary.sw_loop_ms;
+        merge_counts input_shape_counts summary.sw_input_shape_counts;
+        merge_counts spent_prevout_script_types summary.sw_spent_prevout_script_types)
       summaries;
     List.filter_map (fun summary -> summary.sw_failure) summaries
   in
-  Array.iter
-    (fun (task : script_task) ->
-      let job = script_jobs.(task.job_index) in
-      let prevout = job.job_spent_prevouts.(task.input_index) in
-      incr_count spent_prevout_script_types (classify_script prevout.script_pubkey);
-      incr_count input_shape_counts (input_shape_from_cache job.job_cache task.input_index prevout))
-    tasks;
   match List.sort (fun (a_tx, a_in, _) (b_tx, b_in, _) -> compare (a_tx, a_in) (b_tx, b_in)) failures with
   | [] -> ()
   | (tx_index, input_index, failure) :: _ ->
@@ -643,14 +746,15 @@ let connect_block ~script_pool ~db ~height ~target ~raw ~expected_hash ~expected
 	  timing.block_parse_validate_ms <- elapsed parse_started;
 	  let txs = block.Block.transactions in
 	  let tx_array = Array.of_list txs in
+    let expected_spends, expected_creates = block_mutation_shape tx_array in
 	  timing.tx_count_total <- Array.length tx_array;
 	  if txs = [] || not (Tx.is_coinbase (List.hd txs)) then
 	    raise (Connect_error (blocker ~height ~block_hash ~txid:"" ~input:0 ~missing_rule:"block_first_transaction_not_coinbase" ~failure:"block does not begin with a coinbase transaction"));
 	  let load_started = now_ms () in
 	  let loaded = load_prevouts db tx_array timing in
 	  timing.utxo_load_ms <- elapsed load_started;
-	  let created = Hashtbl.create 128 in
-	  let spent = Hashtbl.create 64 in
+	  let created = Hashtbl.create (max 16 expected_creates) in
+	  let spent = Hashtbl.create (max 16 expected_spends) in
 	  let spent_external = ref [] in
 	  let same_block_spends = ref 0 in
 	  let undo_entries = ref [] in
@@ -679,7 +783,7 @@ let connect_block ~script_pool ~db ~height ~target ~raw ~expected_hash ~expected
 		if height <> 0 then
 		  List.iter
 		    (fun utxo ->
-		      Hashtbl.replace created (utxo_key utxo) utxo;
+		      Hashtbl.replace created (utxo_outpoint utxo) utxo;
 		      timing.created_utxos <- timing.created_utxos + 1)
 		    (output_utxos height tx txid_internal true))
 	      else (
@@ -690,7 +794,7 @@ let connect_block ~script_pool ~db ~height ~target ~raw ~expected_hash ~expected
 		let input_keys = Hashtbl.create input_count in
 		List.iteri
 		  (fun input_index input ->
-		    let key = spent_key input in
+		    let key = spent_outpoint input in
 		    if Hashtbl.mem input_keys key || Hashtbl.mem spent key then
 		      raise (Connect_error (blocker ~height ~block_hash ~txid ~input:input_index ~missing_rule:"duplicate_spend" ~failure:"duplicate spend inside block"));
 		    Hashtbl.add input_keys key true;
@@ -725,7 +829,7 @@ let connect_block ~script_pool ~db ~height ~target ~raw ~expected_hash ~expected
 		  input_utxos;
 		List.iter
 		  (fun utxo ->
-		    Hashtbl.replace created (utxo_key utxo) utxo;
+		    Hashtbl.replace created (utxo_outpoint utxo) utxo;
 		    timing.created_utxos <- timing.created_utxos + 1)
 		  (output_utxos height tx txid_internal false)))
 	    tx_array;
@@ -750,9 +854,8 @@ let connect_block ~script_pool ~db ~height ~target ~raw ~expected_hash ~expected
       Rocks.batch_put batch (Codec_v2.height_key "b" chain height)
         (Codec_v2.block_index_value ~hash:(Block.header_hash block.header) ~file_number ~file_offset ~block_size:(String.length raw));
       Rocks.batch_put batch (Codec_v2.height_key "d" chain height) (Codec_v2.undo_value !undo_entries);
-	      List.iter
-		(fun (_key, utxo) -> Rocks.batch_delete batch (Codec_v2.utxo_key ~chain ~txid:utxo.txid ~vout:utxo.vout))
-		!spent_external;
+      let spent_outpoints = !spent_external |> List.map fst |> Array.of_list in
+      Rocks.batch_delete_utxos batch ~chain spent_outpoints;
       Hashtbl.iter
         (fun _key utxo ->
           Rocks.batch_put batch (Codec_v2.utxo_key ~chain ~txid:utxo.txid ~vout:utxo.vout)

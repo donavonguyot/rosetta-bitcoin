@@ -68,10 +68,26 @@ let test_rocks_multi_get_utxos () =
           let key_a = Codec_v2.utxo_key ~chain:"testnet4" ~txid:txid_a ~vout:1 in
           let key_b = Codec_v2.utxo_key ~chain:"testnet4" ~txid:txid_b ~vout:2 in
           let key_c = Codec_v2.utxo_key ~chain:"testnet4" ~txid:txid_c ~vout:3 in
+          let row_a : Rocks.utxo_row =
+            { txid = txid_a; vout = 1; height = 101; value_sats = 5000L; coinbase = false; script_pubkey = script_a }
+          in
+          let row_b : Rocks.utxo_row =
+            { txid = txid_b; vout = 2; height = 102; value_sats = 6000L; coinbase = true; script_pubkey = "\x51" }
+          in
+          let row_c : Rocks.utxo_row =
+            { txid = txid_c; vout = 3; height = 103; value_sats = 7000L; coinbase = false; script_pubkey = script_c }
+          in
+          Alcotest.(check string) "c-backed key a" key_a (Rocks.utxo_key ~chain:"testnet4" { txid = txid_a; vout = 1 });
+          Alcotest.(check string) "c-backed key b" key_b (Rocks.utxo_key ~chain:"testnet4" { txid = txid_b; vout = 2 });
+          Alcotest.(check string) "c-backed key c" key_c (Rocks.utxo_key ~chain:"testnet4" { txid = txid_c; vout = 3 });
+          Alcotest.(check string) "c-backed value a"
+            (Codec_v2.utxo_value ~height:101 ~vout:1 ~value_sats:5000L ~coinbase:false ~script_pubkey:script_a)
+            (Rocks.utxo_value row_a);
+          Alcotest.(check string) "c-backed value c"
+            (Codec_v2.utxo_value ~height:103 ~vout:3 ~value_sats:7000L ~coinbase:false ~script_pubkey:script_c)
+            (Rocks.utxo_value row_c);
           Rocks.write_batch db ~disable_wal:false ~sync:false (fun batch ->
-              Rocks.batch_put batch key_a (Codec_v2.utxo_value ~height:101 ~vout:1 ~value_sats:5000L ~coinbase:false ~script_pubkey:script_a);
-              Rocks.batch_put batch key_b (Codec_v2.utxo_value ~height:102 ~vout:2 ~value_sats:6000L ~coinbase:true ~script_pubkey:"\x51");
-              Rocks.batch_put batch key_c (Codec_v2.utxo_value ~height:103 ~vout:3 ~value_sats:7000L ~coinbase:false ~script_pubkey:script_c));
+              Rocks.batch_put_utxos batch ~chain:"testnet4" [| row_a; row_b; row_c |]);
           let outpoints = [|
             { Rocks.txid = txid_a; vout = 1 };
             { Rocks.txid = String.make 32 '\003'; vout = 9 };
@@ -93,6 +109,37 @@ let test_rocks_multi_get_utxos () =
               Alcotest.(check int) "duplicate vout" a.vout dup.vout;
               Alcotest.(check string) "compactsize script" script_c c.script_pubkey
           | _ -> Alcotest.fail "unexpected typed UTXO multi_get result")))
+
+let test_rocks_utxo_batch_delete_preserves_ordered_misses () =
+  let open Ocbitnode in
+  let dir = Filename.concat (Filename.get_temp_dir_name ()) ("ocbitnode-rocks-utxo-batch-test-" ^ string_of_int (Unix.getpid ())) in
+  Util.ensure_dir dir;
+  Fun.protect
+    ~finally:(fun () -> ignore (Sys.command ("rm -rf " ^ Filename.quote dir)))
+    (fun () ->
+      Rocks.with_db dir (fun db ->
+          let row_a : Rocks.utxo_row =
+            { txid = String.make 32 '\011'; vout = 0; height = 50; value_sats = 1000L; coinbase = false; script_pubkey = "\x51" }
+          in
+          let row_b : Rocks.utxo_row =
+            { txid = String.make 32 '\012'; vout = 1; height = 51; value_sats = 2000L; coinbase = true; script_pubkey = "\x51\x51" }
+          in
+          let missing = { Rocks.txid = String.make 32 '\013'; vout = 2 } in
+          let outpoints = [| { Rocks.txid = row_a.txid; vout = row_a.vout }; missing; { Rocks.txid = row_b.txid; vout = row_b.vout } |] in
+          Rocks.write_batch db ~disable_wal:false ~sync:false (fun batch ->
+              Rocks.batch_put_utxos batch ~chain:"testnet4" [| row_a; row_b |]);
+          let rows_before, _stats_before = Rocks.multi_get_utxos db ~chain:"testnet4" outpoints in
+          (match rows_before.(0), rows_before.(1), rows_before.(2) with
+          | Some a, None, Some b ->
+              Alcotest.(check int64) "first row value" row_a.value_sats a.value_sats;
+              Alcotest.(check int64) "third row value" row_b.value_sats b.value_sats
+          | _ -> Alcotest.fail "unexpected ordered rows before delete");
+          Rocks.write_batch db ~disable_wal:false ~sync:false (fun batch ->
+              Rocks.batch_delete_utxos batch ~chain:"testnet4" [| { Rocks.txid = row_a.txid; vout = row_a.vout } |]);
+          let rows_after, _stats_after = Rocks.multi_get_utxos db ~chain:"testnet4" outpoints in
+          (match rows_after.(0), rows_after.(1), rows_after.(2) with
+          | None, None, Some b -> Alcotest.(check int64) "surviving row value" row_b.value_sats b.value_sats
+          | _ -> Alcotest.fail "unexpected ordered rows after delete")))
 
 let test_same_block_prevout_pruning () =
   let open Ocbitnode in
@@ -161,6 +208,24 @@ let test_same_block_prevout_pruning () =
     [ future_txid, 0; external_a, 0; external_c, 2; prior_txid, 1; external_b, 5 ]
     observed;
   Alcotest.(check int) "same-block skip count" 1 timing.Block_connect.same_block_prevout_skipped
+
+let test_script_chunk_builder_and_failure_ordering () =
+  let open Ocbitnode in
+  let bounds chunk_count chunk_size =
+    Block_connect.build_script_chunks chunk_count chunk_size
+    |> Block_connect.script_chunk_bounds
+    |> Array.to_list
+  in
+  Alcotest.(check (list (pair int int))) "empty chunks" [] (bounds 0 64);
+  Alcotest.(check (list (pair int int))) "single full chunk" [ 0, 64 ] (bounds 64 64);
+  Alcotest.(check (list (pair int int))) "tail chunk" [ 0, 64; 64, 64; 128, 2 ] (bounds 130 64);
+  Alcotest.(check (list (pair int int))) "clamped chunk size" [ 0, 1; 1, 1; 2, 1 ] (bounds 3 0);
+  Alcotest.(check (option (triple int int string))) "earlier candidate failure"
+    (Some (1, 2, "early"))
+    (Block_connect.earlier_failure (Some (4, 0, "late")) (Some (1, 2, "early")));
+  Alcotest.(check (option (triple int int string))) "keep earlier current failure"
+    (Some (1, 2, "early"))
+    (Block_connect.earlier_failure (Some (1, 2, "early")) (Some (1, 3, "late")))
 
 let test_sighash_cache_equivalence () =
   let open Ocbitnode in
@@ -307,7 +372,9 @@ let () =
 	      Alcotest.test_case "block merkle" `Quick test_block_merkle;
 	      Alcotest.test_case "rocks multi_get and sync-off batch" `Quick test_rocks_multi_get_and_sync_off_batch;
 	      Alcotest.test_case "rocks typed UTXO multi_get" `Quick test_rocks_multi_get_utxos;
+	      Alcotest.test_case "rocks typed UTXO batch delete" `Quick test_rocks_utxo_batch_delete_preserves_ordered_misses;
 	      Alcotest.test_case "same-block prevout pruning" `Quick test_same_block_prevout_pruning;
+	      Alcotest.test_case "script chunk builder and failure ordering" `Quick test_script_chunk_builder_and_failure_ordering;
 	      Alcotest.test_case "sighash cache equivalence" `Quick test_sighash_cache_equivalence;
       Alcotest.test_case "legacy sighash cache equivalence" `Quick test_legacy_sighash_cache_equivalence;
       Alcotest.test_case "block 52404 tapscript verify" `Quick test_block_52404_tapscript_verify;

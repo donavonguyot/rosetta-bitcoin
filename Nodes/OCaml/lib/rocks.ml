@@ -33,6 +33,10 @@ external delete : db -> string -> bool -> bool -> unit = "ocbitnode_rocks_delete
 external batch_create : unit -> batch = "ocbitnode_rocks_batch_create"
 external batch_put : batch -> string -> string -> unit = "ocbitnode_rocks_batch_put"
 external batch_delete : batch -> string -> unit = "ocbitnode_rocks_batch_delete"
+external utxo_key_raw : string -> outpoint -> string = "ocbitnode_rocks_utxo_key_raw"
+external utxo_value_raw : utxo_row -> string = "ocbitnode_rocks_utxo_value_raw"
+external batch_delete_utxos_raw : batch -> string -> outpoint array -> unit = "ocbitnode_rocks_batch_delete_utxos_raw"
+external batch_put_utxos_raw : batch -> string -> utxo_row array -> unit = "ocbitnode_rocks_batch_put_utxos_raw"
 external batch_write : db -> batch -> bool -> bool -> unit = "ocbitnode_rocks_batch_write"
 external batch_write_timed : db -> batch -> bool -> bool -> int = "ocbitnode_rocks_batch_write_timed"
 external iter_prefix : db -> string -> (string * string) list = "ocbitnode_rocks_iter_prefix"
@@ -88,6 +92,11 @@ let multi_get_utxos db ~chain outpoints =
       raw_values
   in
   rows, { lookup_count; key_bytes; value_bytes; multi_get_ms; decode_ms = elapsed decode_started }
+
+let utxo_key ~chain outpoint = utxo_key_raw chain outpoint
+let utxo_value row = utxo_value_raw row
+let batch_delete_utxos batch ~chain outpoints = batch_delete_utxos_raw batch chain outpoints
+let batch_put_utxos batch ~chain rows = batch_put_utxos_raw batch chain rows
 
 let write_batch db ?(disable_wal = false) ?(sync = true) fill =
   let batch = batch_create () in
