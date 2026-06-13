@@ -862,16 +862,34 @@ pub fn defaultScriptThreadCount() usize {
     return @min(@max(minus_one, 1), 8);
 }
 
+pub const ScriptCryptoBackend = enum {
+    native,
+    pure,
+
+    pub fn label(self: ScriptCryptoBackend) []const u8 {
+        return switch (self) {
+            .native => "libsecp256k1",
+            .pure => "zig-secp256k1",
+        };
+    }
+};
+
 pub const ScriptVerifyRunner = struct {
     allocator: std.mem.Allocator,
     thread_count: usize,
+    crypto_backend: ScriptCryptoBackend,
 
     pub fn create(allocator: std.mem.Allocator, requested_threads: usize) !*ScriptVerifyRunner {
+        return createWithCryptoBackend(allocator, requested_threads, .native);
+    }
+
+    pub fn createWithCryptoBackend(allocator: std.mem.Allocator, requested_threads: usize, crypto_backend: ScriptCryptoBackend) !*ScriptVerifyRunner {
         const thread_count = @max(requested_threads, 1);
         const self = try allocator.create(ScriptVerifyRunner);
         self.* = .{
             .allocator = allocator,
             .thread_count = thread_count,
+            .crypto_backend = crypto_backend,
         };
         return self;
     }
@@ -894,7 +912,7 @@ pub const ScriptVerifyRunner = struct {
         defer std.heap.c_allocator.free(worker_cpu);
         for (worker_cpu) |*value| value.* = 0;
         for (threads, 0..) |*thread, worker_index| {
-            thread.* = try std.Thread.spawn(.{}, scriptVerifySchedulerWorker, .{ transactions, jobs, results, &next_job, &worker_cpu[worker_index] });
+            thread.* = try std.Thread.spawn(.{}, scriptVerifySchedulerWorker, .{ transactions, jobs, results, &next_job, &worker_cpu[worker_index], self.crypto_backend });
         }
         for (threads) |thread| thread.join();
         var worker_cpu_ms: i64 = 0;
@@ -1133,7 +1151,7 @@ fn verifyScriptJobsParallel(transactions: []const tx.Transaction, jobs: []const 
     defer std.heap.c_allocator.free(results);
     for (jobs, 0..) |job, i| {
         results[i] = .{};
-        threads[i] = try std.Thread.spawn(.{}, verifyScriptInputJob, .{ transactions[job.tx_index], job, &results[i], null });
+        threads[i] = try std.Thread.spawn(.{}, verifyScriptInputJobWithNative, .{ transactions[job.tx_index], job, &results[i] });
     }
     for (threads) |thread| thread.join();
     if (firstScriptFailure(results)) |result| {
@@ -1155,45 +1173,63 @@ fn scriptVerifySchedulerWorker(
     results: []ScriptThreadResult,
     next_job: *std.atomic.Value(usize),
     worker_cpu_ms: *i64,
+    crypto_backend: ScriptCryptoBackend,
 ) void {
-    var verifier = crypto.NativeVerifier.create() catch {
-        while (true) {
-            const job_index = next_job.fetchAdd(1, .monotonic);
-            if (job_index >= jobs.len) return;
-            const job = jobs[job_index];
-            results[job_index] = .{
-                .err = error.NativeCryptoUnavailable,
-                .tx_index = job.tx_index,
-                .input_index = job.input_index,
-                .txid = transactions[job.tx_index].txid(),
+    switch (crypto_backend) {
+        .native => {
+            var verifier = crypto.NativeVerifier.create() catch {
+                while (true) {
+                    const job_index = next_job.fetchAdd(1, .monotonic);
+                    if (job_index >= jobs.len) return;
+                    const job = jobs[job_index];
+                    results[job_index] = .{
+                        .err = error.NativeCryptoUnavailable,
+                        .tx_index = job.tx_index,
+                        .input_index = job.input_index,
+                        .txid = transactions[job.tx_index].txid(),
+                    };
+                }
             };
-        }
-    };
-    defer verifier.destroy();
+            defer verifier.destroy();
+            return scriptVerifySchedulerWorkerLoop(transactions, jobs, results, next_job, worker_cpu_ms, .{ .native = &verifier });
+        },
+        .pure => {
+            var verifier = crypto.PureVerifier.create();
+            defer verifier.destroy();
+            return scriptVerifySchedulerWorkerLoop(transactions, jobs, results, next_job, worker_cpu_ms, .{ .pure = &verifier });
+        },
+    }
+}
+
+fn scriptVerifySchedulerWorkerLoop(
+    transactions: []const tx.Transaction,
+    jobs: []const ScriptJob,
+    results: []ScriptThreadResult,
+    next_job: *std.atomic.Value(usize),
+    worker_cpu_ms: *i64,
+    verifier: crypto.CryptoVerifier,
+) void {
     while (true) {
         const job_index = next_job.fetchAdd(1, .monotonic);
         if (job_index >= jobs.len) return;
         const job = jobs[job_index];
         const started = nowMs();
-        verifyScriptInputJob(transactions[job.tx_index], job, &results[job_index], &verifier);
+        verifyScriptInputJob(transactions[job.tx_index], job, &results[job_index], verifier);
         worker_cpu_ms.* += elapsedMs(started);
     }
 }
 
-fn verifyScriptInputJob(transaction: tx.Transaction, job: ScriptJob, result: *ScriptThreadResult, verifier: ?*crypto.NativeVerifier) void {
-    if (verifier) |native| {
-        script.verifyInputWithVerifier(std.heap.c_allocator, transaction, job.input_index, job.prevouts, .{ .native = native }, job.sighash_cache) catch |err| {
-            storeScriptFailure(transaction, job, result, err);
-            return;
-        };
-        return;
-    }
+fn verifyScriptInputJobWithNative(transaction: tx.Transaction, job: ScriptJob, result: *ScriptThreadResult) void {
     var native = crypto.NativeVerifier.create() catch |err| {
         storeScriptFailure(transaction, job, result, err);
         return;
     };
     defer native.destroy();
-    script.verifyInputWithVerifier(std.heap.c_allocator, transaction, job.input_index, job.prevouts, .{ .native = &native }, job.sighash_cache) catch |err| {
+    verifyScriptInputJob(transaction, job, result, .{ .native = &native });
+}
+
+fn verifyScriptInputJob(transaction: tx.Transaction, job: ScriptJob, result: *ScriptThreadResult, verifier: crypto.CryptoVerifier) void {
+    script.verifyInputWithVerifier(std.heap.c_allocator, transaction, job.input_index, job.prevouts, verifier, job.sighash_cache) catch |err| {
         storeScriptFailure(transaction, job, result, err);
         return;
     };
