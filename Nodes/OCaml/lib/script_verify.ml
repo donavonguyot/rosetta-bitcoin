@@ -222,6 +222,12 @@ module Stack = struct
 
   let push_all t items = List.iter (push t) items
 
+  let push_from_stack ?(drop_top = 0) dst src =
+    ensure (drop_top >= 0 && drop_top <= src.size) "stack copy out of range";
+    for i = 0 to src.size - drop_top - 1 do
+      push dst src.items.(i)
+    done
+
   let roll_from_top t depth =
     ensure (depth < size t) "OP_ROLL out of range";
     let source = t.size - 1 - depth in
@@ -231,6 +237,24 @@ module Stack = struct
     done;
     t.items.(t.size - 1) <- item
 end
+
+let push_list_prefix stack items count =
+  ensure (count >= 0) "negative stack prefix";
+  let rec loop remaining rows =
+    if remaining = 0 then ()
+    else
+      match rows with
+      | [] -> err "stack prefix out of range"
+      | item :: rest ->
+          Stack.push stack item;
+          loop (remaining - 1) rest
+  in
+  loop count items
+
+let push_list_except_tail stack items tail_count =
+  let total = List.length items in
+  ensure (tail_count >= 0 && tail_count <= total) "stack tail out of range";
+  push_list_prefix stack items (total - tail_count)
 
 type eval_context = {
   tx : Tx.t;
@@ -530,18 +554,18 @@ let u32_string value =
   Tx.put_u32 buf value;
   Buffer.contents buf
 
-let add_legacy_input buf outpoint sequence script_code base_type signing =
+let add_legacy_input buf outpoint sequence script_code_len script_code base_type signing =
   Buffer.add_string buf outpoint;
   if signing then (
-    Buffer.add_string buf (Tx.compact_size (String.length script_code));
+    Buffer.add_string buf script_code_len;
     Buffer.add_string buf script_code)
   else Buffer.add_char buf '\000';
   if base_type = 1 || signing then Buffer.add_string buf sequence else Buffer.add_string buf "\000\000\000\000"
 
-let legacy_preimage_capacity input_count output_count script_len input_index base_type anyone_can_pay =
+let legacy_preimage_capacity input_count output_count script_len script_len_size input_index base_type anyone_can_pay =
   let input_bytes =
-    if anyone_can_pay then 36 + String.length (Tx.compact_size script_len) + script_len + 4
-    else (input_count - 1) * 41 + 36 + String.length (Tx.compact_size script_len) + script_len + 4
+    if anyone_can_pay then 36 + script_len_size + script_len + 4
+    else (input_count - 1) * 41 + 36 + script_len_size + script_len + 4
   in
   let output_bytes =
     if base_type = 2 then 1
@@ -596,12 +620,14 @@ let legacy_sighash_cached_fast ?timing cache transaction input_index script_code
   if base_type = 3 && input_index >= Array.length cache.outputs then "\001" ^ String.make 31 '\000'
   else
     let build_started = now_ms () in
+    let script_code_len = Tx.compact_size (String.length script_code) in
     let buf =
       Buffer.create
         (legacy_preimage_capacity
            (Array.length cache.inputs)
            (Array.length cache.outputs)
            (String.length script_code)
+           (String.length script_code_len)
            input_index
            base_type
            anyone_can_pay)
@@ -609,12 +635,12 @@ let legacy_sighash_cached_fast ?timing cache transaction input_index script_code
     Tx.put_u32 buf transaction.Tx.version;
     if anyone_can_pay then (
       Buffer.add_string buf (Tx.compact_size 1);
-      add_legacy_input buf cache.legacy_outpoints.(input_index) cache.legacy_sequences.(input_index) script_code base_type true)
+      add_legacy_input buf cache.legacy_outpoints.(input_index) cache.legacy_sequences.(input_index) script_code_len script_code base_type true)
     else (
       Buffer.add_string buf cache.legacy_input_count;
       Array.iteri
         (fun index _input ->
-          add_legacy_input buf cache.legacy_outpoints.(index) cache.legacy_sequences.(index) script_code base_type (index = input_index))
+          add_legacy_input buf cache.legacy_outpoints.(index) cache.legacy_sequences.(index) script_code_len script_code base_type (index = input_index))
         cache.inputs);
     if base_type = 2 then Buffer.add_char buf '\000'
     else if base_type = 3 then (
@@ -844,8 +870,11 @@ let check_multisig stack context =
         measure
           (fun ms -> Option.iter (fun timing -> timing.script_legacy_find_delete_ms <- timing.script_legacy_find_delete_ms + ms) context.timing)
           (fun () ->
-            List.init sig_count (fun offset -> Stack.item_from_top stack (sig_start + offset))
-            |> List.fold_left legacy_find_and_delete (effective_script_code context))
+            let cleaned = ref (effective_script_code context) in
+            for offset = 0 to sig_count - 1 do
+              cleaned := legacy_find_and_delete !cleaned (Stack.item_from_top stack (sig_start + offset))
+            done;
+            !cleaned)
       in
       { context with script_code; code_separator_offset = 0 }
   in
@@ -876,13 +905,21 @@ let eval_opcode opcode stack alt context _tapscript instr_at =
   | x when x = op_2dup ->
       let x2 = Stack.pop stack in
       let x1 = Stack.pop stack in
-      List.iter (Stack.push stack) [ x1; x2; x1; x2 ];
+      Stack.push stack x1;
+      Stack.push stack x2;
+      Stack.push stack x1;
+      Stack.push stack x2;
       context
   | x when x = op_3dup ->
       let x3 = Stack.pop stack in
       let x2 = Stack.pop stack in
       let x1 = Stack.pop stack in
-      List.iter (Stack.push stack) [ x1; x2; x3; x1; x2; x3 ];
+      Stack.push stack x1;
+      Stack.push stack x2;
+      Stack.push stack x3;
+      Stack.push stack x1;
+      Stack.push stack x2;
+      Stack.push stack x3;
       context
   | x when x = op_2over ->
       ensure (Stack.size stack >= 4) "OP_2OVER underflow";
@@ -896,7 +933,10 @@ let eval_opcode opcode stack alt context _tapscript instr_at =
       let x3 = Stack.pop stack in
       let x2 = Stack.pop stack in
       let x1 = Stack.pop stack in
-      List.iter (Stack.push stack) [ x3; x4; x1; x2 ];
+      Stack.push stack x3;
+      Stack.push stack x4;
+      Stack.push stack x1;
+      Stack.push stack x2;
       context
   | x when x = op_depth -> Stack.push stack (encode_script_num (Int64.of_int (Stack.size stack)) 4); context
   | x when x = op_pick ->
@@ -920,7 +960,9 @@ let eval_opcode opcode stack alt context _tapscript instr_at =
       let x3 = Stack.pop stack in
       let x2 = Stack.pop stack in
       let x1 = Stack.pop stack in
-      List.iter (Stack.push stack) [ x2; x3; x1 ];
+      Stack.push stack x2;
+      Stack.push stack x3;
+      Stack.push stack x1;
       context
   | x when x = op_swap ->
       let a = Stack.pop stack in
@@ -931,7 +973,9 @@ let eval_opcode opcode stack alt context _tapscript instr_at =
   | x when x = op_tuck ->
       let top = Stack.pop stack in
       let second = Stack.pop stack in
-      List.iter (Stack.push stack) [ top; second; top ];
+      Stack.push stack top;
+      Stack.push stack second;
+      Stack.push stack top;
       context
   | x when x = op_size -> Stack.push stack (encode_script_num (Int64.of_int (String.length (Stack.peek stack))) 4); context
   | x when x = op_sha1 -> Stack.push stack (sha1 (Stack.pop stack)); context
@@ -1058,7 +1102,7 @@ let verify_p2wsh_witness ?cache ?timing ?verifier witness_program transaction in
     if witness_script = "" || String.length witness_script > max_consensus_script_size || sha256_bytes witness_script <> witness_program then false
     else
       let stack = Stack.create () in
-      List.iter (Stack.push stack) (List.rev (List.tl (List.rev witness)));
+      push_list_except_tail stack witness 1;
       let context = make_context ?cache ?timing ?verifier ~tx:transaction ~input_index ~script_code:witness_script ~code_separator_offset:0 ~amount ~witness:true () in
       timed_eval timing witness_script stack context;
       terminal_strict stack
@@ -1080,15 +1124,14 @@ let verify_p2sh ?cache ?timing ?verifier script_sig script_pubkey transaction in
     if Stack.size stack_sig = 0 || Stack.peek stack_sig <> redeem then false
     else
       let outer = Stack.create () in
-      Stack.push_all outer (Stack.snapshot stack_sig);
+      Stack.push_from_stack outer stack_sig;
       timed_eval timing script_pubkey outer context;
       if (not (terminal_relaxed outer)) || hash160 redeem <> sub script_pubkey 2 20 then false
       else if is_p2wpkh redeem then verify_p2wpkh_witness ?cache ?timing ?verifier redeem transaction input_index amount witness
       else if is_p2wsh redeem then verify_p2wsh_witness ?cache ?timing ?verifier (sub redeem 2 32) transaction input_index amount witness 1
       else
         let inner = Stack.create () in
-        let snap = Stack.snapshot stack_sig in
-        snap |> List.rev |> List.tl |> List.rev |> List.iter (Stack.push inner);
+        Stack.push_from_stack ~drop_top:1 inner stack_sig;
         let inner_context = make_context ?cache ?timing ?verifier ~tx:transaction ~input_index ~script_code:redeem ~code_separator_offset:0 ~amount ~witness:false () in
         timed_eval timing redeem inner inner_context;
         terminal_relaxed inner
@@ -1418,9 +1461,9 @@ let evaluate_tapscript ?cache ?timing ?verifier script stack transaction input_i
 let verify_taproot_script_path ?cache ?timing ?verifier script_pubkey witness annex transaction input_index spent_prevouts serialized_witness =
   if List.length spent_prevouts <> List.length transaction.Tx.inputs || List.length witness < 2 then false
   else
-    let script_bytes = List.nth witness (List.length witness - 2) in
-    let control = List.nth witness (List.length witness - 1) in
-    let stack_items = witness |> List.rev |> List.tl |> List.tl |> List.rev in
+    let witness_len = List.length witness in
+    let script_bytes = List.nth witness (witness_len - 2) in
+    let control = List.nth witness (witness_len - 1) in
     if script_bytes = "" || String.length control < 33 || String.length control > 33 + (128 * 32) || (String.length control - 33) mod 32 <> 0 then false
     else
       let leaf_masked = byte control 0 land 0xfe in
@@ -1445,11 +1488,25 @@ let verify_taproot_script_path ?cache ?timing ?verifier script_pubkey witness an
             if sub script_pubkey 2 32 <> output_xonly || byte control 0 <> (leaf_masked lor parity) then false
             else if leaf_masked <> taproot_leaf_tapscript then true
             else if prescan_op_success script_bytes then true
-            else if List.length stack_items > max_tapscript_stack_items || List.exists (fun item -> String.length item > max_script_element_size) stack_items then false
+            else if witness_len - 2 > max_tapscript_stack_items then false
+            else if
+              let oversized = ref false in
+              let remaining = ref (witness_len - 2) in
+              let rows = ref witness in
+              while !remaining > 0 do
+                match !rows with
+                | [] -> oversized := true; remaining := 0
+                | item :: rest ->
+                    if String.length item > max_script_element_size then oversized := true;
+                    rows := rest;
+                    decr remaining
+              done;
+              !oversized
+            then false
             else
               let budget = ref (tap_validation_offset + String.length serialized_witness) in
               let stack = Stack.create () in
-              List.iter (Stack.push stack) stack_items;
+              push_list_prefix stack witness (witness_len - 2);
               measure
                 (fun ms -> Option.iter (fun timing -> timing.script_interpreter_eval_ms <- timing.script_interpreter_eval_ms + ms) timing)
                 (fun () -> evaluate_tapscript ?cache ?timing ?verifier script_bytes stack transaction input_index leaf spent_prevouts annex budget);
@@ -1509,7 +1566,7 @@ let verify_script ?cache ?timing ?verifier script_sig script_pubkey transaction 
           let stack_sig = Stack.create () in
           timed_eval timing script_sig stack_sig context;
           let stack = Stack.create () in
-          Stack.push_all stack (Stack.snapshot stack_sig);
+          Stack.push_from_stack stack stack_sig;
           timed_eval timing script_pubkey stack context;
           terminal_strict stack)
     else if (is_bare_op_n script_pubkey || is_bare_multisig script_pubkey || is_bare_legacy_script script_pubkey) && witness <> [] then false
@@ -1517,7 +1574,7 @@ let verify_script ?cache ?timing ?verifier script_sig script_pubkey transaction 
       let stack_sig = Stack.create () in
       timed_eval timing script_sig stack_sig context;
       let stack = Stack.create () in
-      Stack.push_all stack (Stack.snapshot stack_sig);
+      Stack.push_from_stack stack stack_sig;
       timed_eval timing script_pubkey stack context;
       if (is_bare_op_n script_pubkey && String.length script_pubkey > 1) || is_bare_legacy_script script_pubkey || is_p2pkh script_pubkey then
         terminal_relaxed stack
@@ -1585,6 +1642,18 @@ let test_legacy_sighash_cached transaction spent_prevouts input_index script_cod
   let cache = create_sighash_cache transaction spent_prevouts in
   legacy_sighash ~cache transaction input_index script_code sighash_type
 let test_legacy_find_and_delete = legacy_find_and_delete
+let test_push_list_except_tail items tail_count =
+  let stack = Stack.create () in
+  push_list_except_tail stack items tail_count;
+  Stack.snapshot stack
+
+let test_stack_copy ?(drop_top = 0) items =
+  let source = Stack.create () in
+  Stack.push_all source items;
+  let target = Stack.create () in
+  Stack.push_from_stack ~drop_top target source;
+  Stack.snapshot target
+
 let test_bip143_sighash transaction input_index script_code amount sighash_type =
   bip143_sighash transaction input_index script_code amount sighash_type
 

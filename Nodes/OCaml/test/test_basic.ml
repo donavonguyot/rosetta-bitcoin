@@ -27,6 +27,26 @@ let test_script_num_and_bool () =
   Alcotest.(check int64) "decode -1" (-1L) (Ocbitnode.Script_verify.test_decode_script_num "\x81" 4);
   Alcotest.(check string) "encode -1" "\x81" (Ocbitnode.Script_verify.test_encode_script_num (-1L) 4)
 
+let test_script_stack_prefix_helpers () =
+  let open Ocbitnode in
+  let witness = [ "sig-a"; "sig-b"; "witness-script" ] in
+  Alcotest.(check (list string))
+    "p2wsh drops script tail"
+    [ "sig-a"; "sig-b" ]
+    (Script_verify.test_push_list_except_tail witness 1);
+  Alcotest.(check (list string))
+    "taproot drops script/control tail"
+    [ "arg-a"; "arg-b" ]
+    (Script_verify.test_push_list_except_tail [ "arg-a"; "arg-b"; "tap-script"; "control" ] 2);
+  Alcotest.(check (list string))
+    "p2sh copy full stack"
+    [ "sig"; "redeem" ]
+    (Script_verify.test_stack_copy [ "sig"; "redeem" ]);
+  Alcotest.(check (list string))
+    "p2sh copy without redeem"
+    [ "sig" ]
+    (Script_verify.test_stack_copy ~drop_top:1 [ "sig"; "redeem" ])
+
 let test_block_merkle () =
   let tx_raw =
     Ocbitnode.Util.bytes_of_hex
@@ -436,6 +456,7 @@ let () =
       Alcotest.test_case "codec metadata key" `Quick test_codec_vector_keys;
       Alcotest.test_case "tx roundtrip" `Quick test_tx_roundtrip;
       Alcotest.test_case "script num and bool" `Quick test_script_num_and_bool;
+      Alcotest.test_case "script stack prefix helpers" `Quick test_script_stack_prefix_helpers;
       Alcotest.test_case "sighash cache equivalence" `Quick test_sighash_cache_equivalence;
       Alcotest.test_case "legacy sighash cache equivalence" `Quick test_legacy_sighash_cache_equivalence;
       Alcotest.test_case "legacy cached fixture verification" `Quick test_legacy_cached_fixture_verification;
