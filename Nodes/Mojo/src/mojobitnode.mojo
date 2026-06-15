@@ -3,19 +3,19 @@ from std.os import getenv
 from std.sys import argv
 
 
-fn bool_json(value: Bool) -> String:
+def bool_json(value: Bool) -> String:
     if value:
         return String("true")
     return String("false")
 
 
-fn result_json(value: Bool) -> String:
+def result_json(value: Bool) -> String:
     if value:
         return String("passed")
     return String("failed")
 
 
-fn actual_json(code: Int32) -> String:
+def actual_json(code: Int32) -> String:
     if code == 0:
         return String("valid")
     if code == 1:
@@ -25,7 +25,7 @@ fn actual_json(code: Int32) -> String:
     return String("unknown")
 
 
-fn vector_id(index: Int) -> String:
+def vector_id(index: Int) -> String:
     if index == 0:
         return String("ecdsa-valid-privkey-1-deadbeef")
     if index == 1:
@@ -43,7 +43,7 @@ fn vector_id(index: Int) -> String:
     return String("taproot-malformed-short-key")
 
 
-fn vector_operation(index: Int) -> String:
+def vector_operation(index: Int) -> String:
     if index < 3:
         return String("verify_ecdsa")
     if index < 6:
@@ -51,7 +51,7 @@ fn vector_operation(index: Int) -> String:
     return String("taproot_tweak_xonly")
 
 
-fn expected_code(index: Int) -> Int32:
+def expected_code(index: Int) -> Int32:
     if index == 0 or index == 3 or index == 6:
         return 0
     if index == 1 or index == 4:
@@ -59,7 +59,7 @@ fn expected_code(index: Int) -> Int32:
     return 2
 
 
-fn main() raises:
+def main() raises:
     var args = argv()
     if len(args) < 2:
         print("usage: mojobitnode <status|native-crypto-vectors|storage-proof> [options]")

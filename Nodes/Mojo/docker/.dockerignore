@@ -2,6 +2,7 @@
 .venv
 build
 .benchmark-results
+.mojo-docs
 data-mojo
 data-mojo-*
 *.log

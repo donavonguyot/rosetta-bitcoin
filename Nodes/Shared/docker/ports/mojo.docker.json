@@ -9,10 +9,10 @@
     "dockerignore": "Nodes/Mojo/docker/.dockerignore"
   },
   "images": {
-    "base": "debian:bookworm-slim plus Mojo installed by uv",
+    "base": "debian:bookworm-slim plus Mojo 1.0.0b1 installed by uv",
     "runtime": "debian:bookworm-slim",
     "os_family": "Debian",
-    "package_manager": "apt plus uv pip install mojo",
+    "package_manager": "apt plus uv with pinned mojo==1.0.0b1 package",
     "native_dependencies": [
       "librocksdb-dev",
       "libsecp256k1-dev",
@@ -106,7 +106,7 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Mojo/.spike-results/mojo_rocksdb_storage_proof_<YYYY-MM-DD>.json",
-    "notes": "Mojo proof_partial is a Debian feasibility spike only: Mojo install, Project-shaped status, libsecp256k1 vectors, and RocksDB smoke. It has no P2P, script corpus, 5k baseline, supervisor, Project current-evidence update, or benchmark claim."
+    "notes": "Mojo proof_partial is a Debian feasibility spike only: pinned Mojo 1.0.0b1 install, Project-shaped status, libsecp256k1 vectors, and RocksDB smoke. It has no P2P, script corpus, 5k baseline, supervisor, Project current-evidence update, or benchmark claim."
   },
   "known_caveats": [
     "Debian bookworm is mandatory for the spike; Ubuntu fallback is intentionally disallowed.",

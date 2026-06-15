@@ -41,6 +41,7 @@
 /Nodes/*/.vitest/
 /Nodes/*/coverage/
 /Nodes/*/.benchmark-results/
+/Nodes/*/.mojo-docs/
 /Nodes/*/*.log
 /Nodes/*/*.db
 /Nodes/*/*.sqlite
