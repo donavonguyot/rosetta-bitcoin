@@ -100,3 +100,8 @@ npx skills update
 ```
 
 Those skills are not vendored and are not required by the spike.
+
+For future parallel script-runner work, also read
+`docs/PARALLEL_RUNNER_RESEARCH.md`. It maps the cached Mojo 1.0.0b1
+parallelization, async runtime, atomic, and lock docs to the runner proof
+requirements for this port.

@@ -75,6 +75,16 @@ npx skills add modular/skills --skill mojo-syntax
 npx skills update
 ```
 
+For parallel script-runner work, read `docs/PARALLEL_RUNNER_RESEARCH.md` after
+refreshing the cache. The local cache includes current Mojo 1.0.0b1 pages for
+CPU `parallelize`, `sync_parallelize`, async `TaskGroup`, atomics, locks, and
+logical core discovery. `sync_parallelize` currently warns that callback
+exceptions trap instead of propagating, so consensus failures must be captured in
+owned result records and reduced deterministically after the parallel section.
+Do not report `script_runner_mode: "parallel"` until concurrent execution,
+deterministic first-failure ordering, and official artifact validation are all
+proven.
+
 Do not use `mojo test`; current Mojo testing uses `TestSuite` and runs with
 `mojo run`:
 

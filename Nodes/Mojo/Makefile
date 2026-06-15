@@ -155,6 +155,11 @@ mojo-docs-cache:
 
 mojo-docs-status:
 	@test -s "$(MOJO_DOCS_DIR)/llms.txt" || { echo "missing $(MOJO_DOCS_DIR)/llms.txt; run 'make mojo-docs-cache'" >&2; exit 1; }
+	@test -s "$(MOJO_DOCS_DIR)/stdlib-parallelize-function.md" || { echo "missing $(MOJO_DOCS_DIR)/stdlib-parallelize-function.md; run 'make mojo-docs-cache'" >&2; exit 1; }
+	@test -s "$(MOJO_DOCS_DIR)/stdlib-sync-parallelize.md" || { echo "missing $(MOJO_DOCS_DIR)/stdlib-sync-parallelize.md; run 'make mojo-docs-cache'" >&2; exit 1; }
+	@test -s "$(MOJO_DOCS_DIR)/stdlib-asyncrt-task-group.md" || { echo "missing $(MOJO_DOCS_DIR)/stdlib-asyncrt-task-group.md; run 'make mojo-docs-cache'" >&2; exit 1; }
+	@test -s "$(MOJO_DOCS_DIR)/stdlib-atomic.md" || { echo "missing $(MOJO_DOCS_DIR)/stdlib-atomic.md; run 'make mojo-docs-cache'" >&2; exit 1; }
+	@test -s "$(MOJO_DOCS_DIR)/stdlib-lock-blocking-spin-lock.md" || { echo "missing $(MOJO_DOCS_DIR)/stdlib-lock-blocking-spin-lock.md; run 'make mojo-docs-cache'" >&2; exit 1; }
 	@$(PYTHON) -c 'import json; from pathlib import Path; manifest = json.loads(Path("$(MOJO_DOCS_DIR)/manifest.json").read_text()); print("mojo_docs_cache fetched_at={} files={}".format(manifest["fetched_at"], len(manifest["files"])))'
 
 docker-config:
