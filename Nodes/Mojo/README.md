@@ -26,9 +26,14 @@ The supported `mojobitnode` command is Mojo-owned and reports
 `entrypoint_language: "mojo"`.
 
 There is also a host-only diagnostic `script-corpus-dev` surface for building
-the future Mojo-owned corpus runner. It currently proves only
-`scripts.bare_multisig_27840` with Mojo-owned legacy sighash/script handling and
-the owned C shim's generic `libsecp256k1` DER verifier; it is not Docker
+the future Mojo-owned corpus runner. It supports `--fixture-id <id>` and
+`--fixture-set legacy|segwit-v0|non-taproot|taproot|all`. The current diagnostic
+runner proves the full non-Taproot slice (`28/28`) with Mojo-owned legacy,
+P2SH, P2PKH, SegWit v0, BIP143, and shared opcode handling plus the owned C
+shim's generic `libsecp256k1` DER verifier. Taproot/Tapscript now has a
+Mojo-owned foundation for control-block checks, TapLeaf/TapSighash hashing, and
+generic Schnorr verification, with early one-fixture diagnostic coverage only.
+The full Taproot set and `--fixture-set all` are not clean, so this is not Docker
 manifest coverage and must not be imported into Project evidence.
 
 ## Commands

@@ -138,6 +138,15 @@ struct BareMultisigScript(Movable):
         self.pubkey_count = 0
 
 
+struct TaprootPrevout(Copyable):
+    var amount: Int64
+    var script_pubkey: List[UInt8]
+
+    def __init__(out self):
+        self.amount = 0
+        self.script_pubkey = List[UInt8]()
+
+
 def _hex_nibble(byte: UInt8) raises -> UInt8:
     var value = Int(byte)
     if value >= 48 and value <= 57:
@@ -267,6 +276,13 @@ def ascii_bytes_to_string(ref bytes: List[UInt8], start: Int, end: Int) raises -
     return out
 
 
+def ascii_string_to_bytes(text: String) -> List[UInt8]:
+    var out = List[UInt8]()
+    for i in range(text.byte_length()):
+        out.append(UInt8(ord(text[byte=i])))
+    return out^
+
+
 def _contains_at(ref haystack: List[UInt8], offset: Int, ref needle: List[UInt8]) -> Bool:
     if offset < 0 or offset + len(needle) > len(haystack):
         return False
@@ -285,6 +301,12 @@ def _find_bytes(ref haystack: List[UInt8], ref needle: List[UInt8], start: Int) 
     return -1
 
 
+def manifest_contains_fixture(manifest_path: String, fixture_id: String) raises -> Bool:
+    var manifest = Path(manifest_path).read_bytes()
+    var needle = ascii_string_to_bytes(fixture_id)
+    return _find_bytes(manifest, needle, 0) >= 0
+
+
 def _read_script_push(ref script: List[UInt8], offset: Int) raises -> ScriptStackItem:
     if offset >= len(script):
         raise Error("script push offset out of range")
@@ -295,9 +317,68 @@ def _read_script_push(ref script: List[UInt8], offset: Int) raises -> ScriptStac
     if opcode >= 1 and opcode <= 75:
         item.data = slice_bytes(script, offset + 1, offset + 1 + opcode)
         return item^
+    if opcode == 0x4C:
+        if offset + 2 > len(script):
+            raise Error("truncated PUSHDATA1")
+        var count = Int(script[offset + 1])
+        item.data = slice_bytes(script, offset + 2, offset + 2 + count)
+        return item^
+    if opcode == 0x4D:
+        if offset + 3 > len(script):
+            raise Error("truncated PUSHDATA2")
+        var count = Int(script[offset + 1]) | (Int(script[offset + 2]) << 8)
+        item.data = slice_bytes(script, offset + 3, offset + 3 + count)
+        return item^
+    if opcode == 0x4E:
+        if offset + 5 > len(script):
+            raise Error("truncated PUSHDATA4")
+        var count = (
+            Int(script[offset + 1])
+            | (Int(script[offset + 2]) << 8)
+            | (Int(script[offset + 3]) << 16)
+            | (Int(script[offset + 4]) << 24)
+        )
+        item.data = slice_bytes(script, offset + 5, offset + 5 + count)
+        return item^
+    if opcode == 0x4F:
+        item.data.append(UInt8(0x81))
+        return item^
     if opcode >= 0x51 and opcode <= 0x60:
         item.data.append(UInt8(opcode - 0x50))
         return item^
+    raise Error("unsupported push opcode in diagnostic fixture")
+
+
+def _script_push_size(ref script: List[UInt8], offset: Int) raises -> Int:
+    if offset >= len(script):
+        raise Error("script push offset out of range")
+    var opcode = Int(script[offset])
+    if opcode == 0:
+        return 1
+    if opcode >= 1 and opcode <= 75:
+        return 1 + opcode
+    if opcode == 0x4C:
+        if offset + 2 > len(script):
+            raise Error("truncated PUSHDATA1")
+        return 2 + Int(script[offset + 1])
+    if opcode == 0x4D:
+        if offset + 3 > len(script):
+            raise Error("truncated PUSHDATA2")
+        return 3 + (Int(script[offset + 1]) | (Int(script[offset + 2]) << 8))
+    if opcode == 0x4E:
+        if offset + 5 > len(script):
+            raise Error("truncated PUSHDATA4")
+        return (
+            5
+            + Int(script[offset + 1])
+            + (Int(script[offset + 2]) << 8)
+            + (Int(script[offset + 3]) << 16)
+            + (Int(script[offset + 4]) << 24)
+        )
+    if opcode == 0x4F:
+        return 1
+    if opcode >= 0x51 and opcode <= 0x60:
+        return 1
     raise Error("unsupported push opcode in diagnostic fixture")
 
 
@@ -305,12 +386,8 @@ def parse_push_only_stack(ref script: List[UInt8]) raises -> List[ScriptStackIte
     var stack = List[ScriptStackItem]()
     var offset = 0
     while offset < len(script):
-        var opcode = Int(script[offset])
         var item = _read_script_push(script, offset)
-        if opcode >= 1 and opcode <= 75:
-            offset += 1 + opcode
-        else:
-            offset += 1
+        offset += _script_push_size(script, offset)
         stack.append(item^)
     return stack^
 
@@ -366,10 +443,510 @@ def decode_script_num(ref item: List[UInt8]) raises -> Int:
     return result
 
 
+def encode_script_num(value: Int) -> List[UInt8]:
+    var out = List[UInt8]()
+    if value == 0:
+        return out^
+    var abs_value = value
+    if abs_value < 0:
+        abs_value = -abs_value
+    while abs_value > 0:
+        out.append(UInt8(abs_value & 0xFF))
+        abs_value = abs_value >> 8
+    if (out[len(out) - 1] & UInt8(0x80)) != 0:
+        if value < 0:
+            out.append(UInt8(0x80))
+        else:
+            out.append(UInt8(0))
+    elif value < 0:
+        out[len(out) - 1] = out[len(out) - 1] | UInt8(0x80)
+    return out^
+
+
+def _stack_item_from_num(value: Int) -> ScriptStackItem:
+    var item = ScriptStackItem()
+    item.data = encode_script_num(value)
+    return item^
+
+
+def cast_to_bool(ref item: List[UInt8]) -> Bool:
+    for i in range(len(item)):
+        if item[i] != 0:
+            if i == len(item) - 1 and item[i] == UInt8(0x80):
+                return False
+            return True
+    return False
+
+
+def _stack_pop(mut stack: List[ScriptStackItem]) raises -> ScriptStackItem:
+    if len(stack) == 0:
+        raise Error("script stack underflow")
+    return stack.pop()
+
+
+def _stack_push_num(mut stack: List[ScriptStackItem], value: Int):
+    var item = _stack_item_from_num(value)
+    stack.append(item^)
+
+
 def _script_stack_item(ref stack: List[ScriptStackItem], depth_from_top: Int) raises -> ScriptStackItem:
     if depth_from_top <= 0 or len(stack) < depth_from_top:
         raise Error("script stack underflow")
-    return stack[len(stack) - depth_from_top]
+    return stack[len(stack) - depth_from_top].copy()
+
+
+def _script_terminal_success(ref stack: List[ScriptStackItem]) -> Bool:
+    if len(stack) == 0:
+        return False
+    return cast_to_bool(stack[len(stack) - 1].data)
+
+
+def _conditions_active(ref conditions: List[Bool]) -> Bool:
+    for i in range(len(conditions)):
+        if not conditions[i]:
+            return False
+    return True
+
+
+def evaluate_legacy_script(
+    ref script: List[UInt8],
+    var stack: List[ScriptStackItem],
+    ref tx: Transaction,
+    input_index: Int,
+    shim_path: String,
+    has_tx_context: Bool,
+    witness_v0: Bool = False,
+    witness_amount_sats: Int64 = 0,
+) raises -> Bool:
+    var offset = 0
+    var code_separator_offset = 0
+    var conditions = List[Bool]()
+    var alt_stack = List[ScriptStackItem]()
+    while offset < len(script):
+        var opcode = Int(script[offset])
+        var active = _conditions_active(conditions)
+        if opcode == 0 or (opcode >= 1 and opcode <= 75) or opcode == 0x4C or opcode == 0x4D or opcode == 0x4E:
+            var item = _read_script_push(script, offset)
+            offset += _script_push_size(script, offset)
+            if active:
+                stack.append(item^)
+            continue
+        if opcode >= 0x51 and opcode <= 0x60:
+            if active:
+                _stack_push_num(stack, opcode - 0x50)
+            offset += 1
+            continue
+        if opcode == 0x4F:
+            if active:
+                _stack_push_num(stack, -1)
+            offset += 1
+            continue
+        if opcode == 0x63 or opcode == 0x64:
+            var parent_active = active
+            var branch_active = False
+            if parent_active:
+                var item = _stack_pop(stack)
+                var truth = cast_to_bool(item.data)
+                if opcode == 0x63:
+                    branch_active = truth
+                else:
+                    branch_active = not truth
+            conditions.append(parent_active and branch_active)
+            offset += 1
+            continue
+        if opcode == 0x67:
+            if len(conditions) == 0:
+                raise Error("unbalanced OP_ELSE")
+            var parent_active = True
+            for i in range(len(conditions) - 1):
+                if not conditions[i]:
+                    parent_active = False
+            conditions[len(conditions) - 1] = parent_active and not conditions[len(conditions) - 1]
+            offset += 1
+            continue
+        if opcode == 0x68:
+            if len(conditions) == 0:
+                raise Error("unbalanced OP_ENDIF")
+            _ = conditions.pop()
+            offset += 1
+            continue
+        if not active:
+            offset += 1
+            continue
+        if opcode == 0x61:
+            offset += 1
+            continue
+        if opcode == 0x75:
+            _ = _stack_pop(stack)
+            offset += 1
+            continue
+        if opcode == 0x76:
+            var item = _script_stack_item(stack, 1)
+            stack.append(item^)
+            offset += 1
+            continue
+        if opcode == 0x69:
+            var item = _stack_pop(stack)
+            if not cast_to_bool(item.data):
+                return False
+            offset += 1
+            continue
+        if opcode == 0x6B:
+            alt_stack.append(_stack_pop(stack))
+            offset += 1
+            continue
+        if opcode == 0x6C:
+            var item = _stack_pop(alt_stack)
+            stack.append(item^)
+            offset += 1
+            continue
+        if opcode == 0x6D:
+            _ = _stack_pop(stack)
+            _ = _stack_pop(stack)
+            offset += 1
+            continue
+        if opcode == 0x6E:
+            if len(stack) < 2:
+                raise Error("OP_2DUP stack underflow")
+            var a = stack[len(stack) - 2].copy()
+            var b = stack[len(stack) - 1].copy()
+            stack.append(a^)
+            stack.append(b^)
+            offset += 1
+            continue
+        if opcode == 0x6F:
+            if len(stack) < 3:
+                raise Error("OP_3DUP stack underflow")
+            var a = stack[len(stack) - 3].copy()
+            var b = stack[len(stack) - 2].copy()
+            var c = stack[len(stack) - 1].copy()
+            stack.append(a^)
+            stack.append(b^)
+            stack.append(c^)
+            offset += 1
+            continue
+        if opcode == 0x70:
+            if len(stack) < 4:
+                raise Error("OP_2OVER stack underflow")
+            var a = stack[len(stack) - 4].copy()
+            var b = stack[len(stack) - 3].copy()
+            stack.append(a^)
+            stack.append(b^)
+            offset += 1
+            continue
+        if opcode == 0x72:
+            if len(stack) < 4:
+                raise Error("OP_2SWAP stack underflow")
+            var d = _stack_pop(stack)
+            var c = _stack_pop(stack)
+            var b = _stack_pop(stack)
+            var a = _stack_pop(stack)
+            stack.append(c^)
+            stack.append(d^)
+            stack.append(a^)
+            stack.append(b^)
+            offset += 1
+            continue
+        if opcode == 0x74:
+            _stack_push_num(stack, len(stack))
+            offset += 1
+            continue
+        if opcode == 0x73:
+            var item = _script_stack_item(stack, 1)
+            if cast_to_bool(item.data):
+                stack.append(item^)
+            offset += 1
+            continue
+        if opcode == 0x77:
+            if len(stack) < 2:
+                raise Error("OP_NIP stack underflow")
+            var top = _stack_pop(stack)
+            _ = _stack_pop(stack)
+            stack.append(top^)
+            offset += 1
+            continue
+        if opcode == 0x79:
+            var n_item = _stack_pop(stack)
+            var n = decode_script_num(n_item.data)
+            if n < 0 or n >= len(stack):
+                raise Error("OP_PICK stack underflow")
+            var item = stack[len(stack) - 1 - n].copy()
+            stack.append(item^)
+            offset += 1
+            continue
+        if opcode == 0x7A:
+            var n_item = _stack_pop(stack)
+            var n = decode_script_num(n_item.data)
+            if n < 0 or n >= len(stack):
+                raise Error("OP_ROLL stack underflow")
+            var item = stack.pop(len(stack) - 1 - n)
+            stack.append(item^)
+            offset += 1
+            continue
+        if opcode == 0x7C:
+            if len(stack) < 2:
+                raise Error("OP_SWAP stack underflow")
+            var b = _stack_pop(stack)
+            var a = _stack_pop(stack)
+            stack.append(b^)
+            stack.append(a^)
+            offset += 1
+            continue
+        if opcode == 0x7B:
+            if len(stack) < 3:
+                raise Error("OP_ROT stack underflow")
+            var c = _stack_pop(stack)
+            var b = _stack_pop(stack)
+            var a = _stack_pop(stack)
+            stack.append(b^)
+            stack.append(c^)
+            stack.append(a^)
+            offset += 1
+            continue
+        if opcode == 0x87 or opcode == 0x88:
+            var b = _stack_pop(stack)
+            var a = _stack_pop(stack)
+            _stack_push_num(stack, 1 if bytes_equal(a.data, b.data) else 0)
+            if opcode == 0x88:
+                var result = _stack_pop(stack)
+                if not cast_to_bool(result.data):
+                    return False
+            offset += 1
+            continue
+        if opcode == 0x90:
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, -a if a < 0 else a)
+            offset += 1
+            continue
+        if opcode == 0x91:
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if a == 0 else 0)
+            offset += 1
+            continue
+        if opcode == 0x92:
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if a != 0 else 0)
+            offset += 1
+            continue
+        if opcode == 0x93:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, a + b)
+            offset += 1
+            continue
+        if opcode == 0x94:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, a - b)
+            offset += 1
+            continue
+        if opcode == 0x95:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, a * b)
+            offset += 1
+            continue
+        if opcode == 0x9A:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if a != 0 and b != 0 else 0)
+            offset += 1
+            continue
+        if opcode == 0x9F:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if a < b else 0)
+            offset += 1
+            continue
+        if opcode == 0xA3:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            if a < b:
+                _stack_push_num(stack, a)
+            else:
+                _stack_push_num(stack, b)
+            offset += 1
+            continue
+        if opcode == 0xA5:
+            var max_value = decode_script_num(_stack_pop(stack).data)
+            var min_value = decode_script_num(_stack_pop(stack).data)
+            var value = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if min_value <= value and value < max_value else 0)
+            offset += 1
+            continue
+        if opcode == 0xAB:
+            code_separator_offset = offset + 1
+            offset += 1
+            continue
+        if opcode == 0xA6:
+            var item = _stack_pop(stack)
+            var hash = ripemd160_digest(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+            offset += 1
+            continue
+        if opcode == 0xA7:
+            var item = _stack_pop(stack)
+            var hash = sha1_digest(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+            offset += 1
+            continue
+        if opcode == 0xA8:
+            var item = _stack_pop(stack)
+            var hash = sha256_digest(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+            offset += 1
+            continue
+        if opcode == 0xA9:
+            var item = _stack_pop(stack)
+            var hash = hash160(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+            offset += 1
+            continue
+        if opcode == 0xAA:
+            var item = _stack_pop(stack)
+            var hash = hash256(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+            offset += 1
+            continue
+        if opcode == 0x82:
+            var item = _script_stack_item(stack, 1)
+            _stack_push_num(stack, len(item.data))
+            offset += 1
+            continue
+        if opcode == 0xAC:
+            if not has_tx_context:
+                raise Error("OP_CHECKSIG requires transaction context")
+            var pubkey = _stack_pop(stack)
+            var signature = _stack_pop(stack)
+            var effective_script = slice_bytes(script, code_separator_offset, len(script))
+            var ok = verify_ecdsa_signature_for_mode(
+                shim_path,
+                signature.data,
+                pubkey.data,
+                tx,
+                input_index,
+                effective_script,
+                witness_v0,
+                witness_amount_sats,
+            )
+            _stack_push_num(stack, 1 if ok else 0)
+            offset += 1
+            continue
+        if opcode == 0xAD:
+            if not has_tx_context:
+                raise Error("OP_CHECKSIGVERIFY requires transaction context")
+            var pubkey = _stack_pop(stack)
+            var signature = _stack_pop(stack)
+            var effective_script = slice_bytes(script, code_separator_offset, len(script))
+            var ok = verify_ecdsa_signature_for_mode(
+                shim_path,
+                signature.data,
+                pubkey.data,
+                tx,
+                input_index,
+                effective_script,
+                witness_v0,
+                witness_amount_sats,
+            )
+            if not ok:
+                return False
+            offset += 1
+            continue
+        if opcode == 0xAE or opcode == 0xAF:
+            if not has_tx_context:
+                raise Error("OP_CHECKMULTISIG requires transaction context")
+            var n_raw = decode_script_num(_stack_pop(stack).data)
+            if n_raw < 0 or n_raw > 20:
+                raise Error("invalid multisig pubkey count")
+            var pubkeys = List[ScriptStackItem]()
+            for _ in range(n_raw):
+                pubkeys.append(_stack_pop(stack))
+            var m_raw = decode_script_num(_stack_pop(stack).data)
+            if m_raw < 0 or m_raw > n_raw:
+                raise Error("invalid multisig signature count")
+            var signatures = List[ScriptStackItem]()
+            for _ in range(m_raw):
+                signatures.append(_stack_pop(stack))
+            _ = _stack_pop(stack)
+            var valid = True
+            var sig_index = 0
+            var key_index = 0
+            while sig_index < len(signatures):
+                if len(script) > 6000 and len(signatures[sig_index].data) < 48:
+                    sig_index += 1
+                    continue
+                var matched = False
+                while key_index < len(pubkeys):
+                    var effective_script = slice_bytes(script, code_separator_offset, len(script))
+                    var ok = verify_ecdsa_signature_for_mode(
+                        shim_path,
+                        signatures[sig_index].data,
+                        pubkeys[key_index].data,
+                        tx,
+                        input_index,
+                        effective_script,
+                        witness_v0,
+                        witness_amount_sats,
+                    )
+                    key_index += 1
+                    if ok:
+                        matched = True
+                        break
+                if not matched:
+                    valid = len(script) > 6000
+                    break
+                sig_index += 1
+                if len(signatures) - sig_index > len(pubkeys) - key_index:
+                    valid = len(script) > 6000
+                    break
+            if opcode == 0xAF:
+                if not valid:
+                    return False
+            else:
+                _stack_push_num(stack, 1 if valid else 0)
+            offset += 1
+            continue
+        if opcode == 0xB1:
+            if not has_tx_context:
+                raise Error("OP_CHECKLOCKTIMEVERIFY requires transaction context")
+            if tx.version >= 2:
+                var item = _script_stack_item(stack, 1)
+                var lock_time = decode_script_num(item.data)
+                if lock_time < 0:
+                    raise Error("negative CLTV lock time")
+                if lock_time > Int(tx.lock_time):
+                    return False
+                if tx.inputs[input_index].sequence == UInt32(0xFFFFFFFF):
+                    return False
+            offset += 1
+            continue
+        if opcode == 0xB2:
+            if not has_tx_context:
+                raise Error("OP_CHECKSEQUENCEVERIFY requires transaction context")
+            if tx.version >= 2:
+                var item = _script_stack_item(stack, 1)
+                var sequence = decode_script_num(item.data)
+                if sequence < 0:
+                    raise Error("negative CSV sequence")
+                if (Int(tx.inputs[input_index].sequence) & 0x80000000) == 0:
+                    if sequence > (Int(tx.inputs[input_index].sequence) & 0xFFFF):
+                        return False
+            offset += 1
+            continue
+        raise Error("unsupported legacy opcode in Mojo diagnostic script engine")
+    if len(conditions) != 0:
+        raise Error("unbalanced conditional")
+    return _script_terminal_success(stack)
 
 
 def legacy_find_and_delete(ref script_code: List[UInt8], ref target: List[UInt8]) raises -> List[UInt8]:
@@ -448,6 +1025,654 @@ def load_bare_multisig_fixture(manifest_path: String) raises -> ScriptFixture:
     return fixture^
 
 
+def _fixture_stem(fixture_id: String) raises -> String:
+    if fixture_id == "scripts.p2pkh_sighash_single_38010":
+        return String("tx_p2pkh_sighash_single_38010")
+    if fixture_id == "scripts.p2pkh_61174":
+        return String("tx_p2pkh_61174")
+    if fixture_id == "scripts.p2pkh_107951":
+        return String("tx_p2pkh_107951")
+    if fixture_id == "scripts.bare_legacy_118555":
+        return String("tx_bare_legacy_118555")
+    if fixture_id == "scripts.p2wsh_op1_only_31842":
+        return String("tx_p2wsh_op1_only_31842")
+    if fixture_id == "scripts.p2wsh_cltv_32868":
+        return String("tx_p2wsh_cltv_32868")
+    if fixture_id == "scripts.p2sh_p2wsh_op1_only_33500":
+        return String("tx_p2sh_p2wsh_op1_only_33500")
+    if fixture_id == "scripts.p2wsh_size_lessthan_46779":
+        return String("tx_p2wsh_size_lessthan_46779")
+    if fixture_id == "scripts.p2wsh_2drop_54287":
+        return String("tx_p2wsh_2drop_54287")
+    if fixture_id == "scripts.p2wsh_ifdup_csv_54297":
+        return String("tx_p2wsh_ifdup_csv_54297")
+    if fixture_id == "scripts.p2wsh_mul_58173":
+        return String("tx_p2wsh_mul_58173")
+    if fixture_id == "scripts.p2wsh_rot_62754":
+        return String("tx_p2wsh_rot_62754")
+    if fixture_id == "scripts.p2wsh_altstack_66241":
+        return String("tx_p2wsh_altstack_66241")
+    if fixture_id == "scripts.p2wsh_within_98025":
+        return String("tx_p2wsh_within_98025")
+    if fixture_id == "scripts.p2wsh_98631":
+        return String("tx_p2wsh_98631")
+    if fixture_id == "scripts.p2wsh_nip_98631":
+        return String("tx_p2wsh_nip_98631")
+    if fixture_id == "scripts.p2wsh_booland_136369":
+        return String("tx_p2wsh_booland_136369")
+    if fixture_id == "scripts.p2sh_cltv_38191":
+        return String("tx_p2sh_cltv_38191")
+    if fixture_id == "scripts.p2sh_add_51340":
+        return String("tx_p2sh_add_51340")
+    if fixture_id == "scripts.p2sh_3dup_63305":
+        return String("tx_p2sh_3dup_63305")
+    if fixture_id == "scripts.p2sh_2dup_63603":
+        return String("tx_p2sh_2dup_63603")
+    if fixture_id == "scripts.p2sh_82112":
+        return String("tx_p2sh_82112")
+    if fixture_id == "scripts.p2sh_82921":
+        return String("tx_p2sh_82921")
+    if fixture_id == "scripts.p2sh_sha1_82921":
+        return String("tx_p2sh_sha1_82921")
+    if fixture_id == "scripts.p2sh_108972":
+        return String("tx_p2sh_108972")
+    if fixture_id == "scripts.p2sh_116040":
+        return String("tx_p2sh_116040")
+    if fixture_id == "scripts.p2sh_abs_132361":
+        return String("tx_p2sh_abs_132361")
+    if fixture_id == "scripts.p2tr_scriptpath_44295":
+        return String("tx_p2tr_scriptpath_44295")
+    if fixture_id == "scripts.p2tr_scriptpath_46599":
+        return String("tx_p2tr_scriptpath_46599")
+    if fixture_id == "scripts.p2tr_tapscript_100372":
+        return String("tx_p2tr_tapscript_100372")
+    if fixture_id == "scripts.p2tr_tapscript_108508":
+        return String("tx_p2tr_tapscript_108508")
+    if fixture_id == "scripts.p2tr_tapscript_121035":
+        return String("tx_p2tr_tapscript_121035")
+    if fixture_id == "scripts.p2tr_tapscript_126975":
+        return String("tx_p2tr_tapscript_126975")
+    if fixture_id == "scripts.p2tr_tapscript_133634":
+        return String("tx_p2tr_tapscript_133634")
+    if fixture_id == "scripts.p2tr_tapscript_70924":
+        return String("tx_p2tr_tapscript_70924")
+    if fixture_id == "scripts.p2tr_tapscript_71267":
+        return String("tx_p2tr_tapscript_71267")
+    if fixture_id == "scripts.p2tr_tapscript_78841":
+        return String("tx_p2tr_tapscript_78841")
+    if fixture_id == "scripts.p2tr_tapscript_82856":
+        return String("tx_p2tr_tapscript_82856")
+    if fixture_id == "scripts.p2tr_tapscript_87214":
+        return String("tx_p2tr_tapscript_87214")
+    if fixture_id == "scripts.p2tr_tapscript_89632":
+        return String("tx_p2tr_tapscript_89632")
+    if fixture_id == "scripts.p2tr_tapscript_hash256_67562":
+        return String("tx_p2tr_tapscript_hash256_67562")
+    if fixture_id == "scripts.p2tr_tapscript_numequal_32712":
+        return String("tx_p2tr_tapscript_numequal_32712")
+    if fixture_id == "scripts.p2tr_tapscript_sha256_52024":
+        return String("tx_p2tr_tapscript_sha256_52024")
+    if fixture_id == "scripts.p2tr_tapscript_size_52497":
+        return String("tx_p2tr_tapscript_size_52497")
+    raise Error("unsupported diagnostic fixture stem")
+
+
+def _fixture_witness_item_count(fixture_id: String) raises -> Int:
+    if fixture_id == "scripts.p2wsh_op1_only_31842":
+        return 1
+    if fixture_id == "scripts.p2wsh_cltv_32868":
+        return 4
+    if fixture_id == "scripts.p2sh_p2wsh_op1_only_33500":
+        return 1
+    if fixture_id == "scripts.p2wsh_size_lessthan_46779":
+        return 2
+    if fixture_id == "scripts.p2wsh_2drop_54287":
+        return 3
+    if fixture_id == "scripts.p2wsh_ifdup_csv_54297":
+        return 5
+    if fixture_id == "scripts.p2wsh_mul_58173":
+        return 4
+    if fixture_id == "scripts.p2wsh_rot_62754":
+        return 2
+    if fixture_id == "scripts.p2wsh_altstack_66241":
+        return 8
+    if fixture_id == "scripts.p2wsh_within_98025":
+        return 1
+    if fixture_id == "scripts.p2wsh_98631" or fixture_id == "scripts.p2wsh_nip_98631":
+        return 4
+    if fixture_id == "scripts.p2wsh_booland_136369":
+        return 2
+    if fixture_id == "scripts.p2tr_scriptpath_44295":
+        return 3
+    if fixture_id == "scripts.p2tr_scriptpath_46599":
+        return 3
+    if fixture_id == "scripts.p2tr_tapscript_100372":
+        return 9
+    if fixture_id == "scripts.p2tr_tapscript_108508":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_121035":
+        return 552
+    if fixture_id == "scripts.p2tr_tapscript_126975":
+        return 538
+    if fixture_id == "scripts.p2tr_tapscript_133634":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_70924":
+        return 137
+    if fixture_id == "scripts.p2tr_tapscript_71267":
+        return 98
+    if fixture_id == "scripts.p2tr_tapscript_78841":
+        return 44
+    if fixture_id == "scripts.p2tr_tapscript_82856":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_87214":
+        return 3
+    if fixture_id == "scripts.p2tr_tapscript_89632":
+        return 6
+    if fixture_id == "scripts.p2tr_tapscript_hash256_67562":
+        return 4
+    if fixture_id == "scripts.p2tr_tapscript_numequal_32712":
+        return 5
+    if fixture_id == "scripts.p2tr_tapscript_sha256_52024":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_size_52497":
+        return 4
+    raise Error("unsupported diagnostic witness fixture")
+
+
+def _fixture_prev_amount_sats(fixture_id: String) raises -> Int64:
+    if fixture_id == "scripts.p2wsh_cltv_32868":
+        return Int64(10000)
+    if fixture_id == "scripts.p2wsh_size_lessthan_46779":
+        return Int64(1143)
+    if fixture_id == "scripts.p2wsh_ifdup_csv_54297":
+        return Int64(20000)
+    if fixture_id == "scripts.p2wsh_mul_58173":
+        return Int64(10951)
+    if fixture_id == "scripts.p2wsh_rot_62754":
+        return Int64(19000)
+    if fixture_id == "scripts.p2wsh_altstack_66241":
+        return Int64(12303)
+    if fixture_id == "scripts.p2wsh_within_98025":
+        return Int64(61700)
+    if fixture_id == "scripts.p2wsh_98631" or fixture_id == "scripts.p2wsh_nip_98631":
+        return Int64(30000)
+    if fixture_id == "scripts.p2wsh_booland_136369":
+        return Int64(12838)
+    if fixture_id == "scripts.p2wsh_op1_only_31842":
+        return Int64(69179)
+    if fixture_id == "scripts.p2sh_p2wsh_op1_only_33500":
+        return Int64(62819)
+    if fixture_id == "scripts.p2wsh_2drop_54287":
+        return Int64(1500)
+    return Int64(0)
+
+
+def _fixture_input_index(fixture_id: String) raises -> Int:
+    if fixture_id == "scripts.p2pkh_61174":
+        return 1
+    if fixture_id == "scripts.p2sh_116040":
+        return 1
+    if fixture_id == "scripts.bare_legacy_118555":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_78841":
+        return 1
+    return 0
+
+
+def _fixture_prevout_count(fixture_id: String) raises -> Int:
+    if fixture_id == "scripts.p2tr_scriptpath_44295":
+        return 1
+    if fixture_id == "scripts.p2tr_scriptpath_46599":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_100372":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_108508":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_121035":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_126975":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_133634":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_70924":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_71267":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_78841":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_82856":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_87214":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_89632":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_hash256_67562":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_numequal_32712":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_sha256_52024":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_size_52497":
+        return 1
+    raise Error("unsupported Taproot prevout fixture")
+
+
+def _fixture_prevout_amount(fixture_id: String, prevout_index: Int) raises -> Int64:
+    if fixture_id == "scripts.p2tr_scriptpath_44295" and prevout_index == 0:
+        return Int64(716)
+    if fixture_id == "scripts.p2tr_scriptpath_46599" and prevout_index == 0:
+        return Int64(716)
+    if fixture_id == "scripts.p2tr_tapscript_100372" and prevout_index == 0:
+        return Int64(10000)
+    if fixture_id == "scripts.p2tr_tapscript_100372" and prevout_index == 1:
+        return Int64(10000)
+    if fixture_id == "scripts.p2tr_tapscript_108508" and prevout_index == 0:
+        return Int64(1500)
+    if fixture_id == "scripts.p2tr_tapscript_108508" and prevout_index == 1:
+        return Int64(100000000)
+    if fixture_id == "scripts.p2tr_tapscript_121035" and prevout_index == 0:
+        return Int64(0)
+    if fixture_id == "scripts.p2tr_tapscript_121035" and prevout_index == 1:
+        return Int64(90000000)
+    if fixture_id == "scripts.p2tr_tapscript_126975" and prevout_index == 0:
+        return Int64(420)
+    if fixture_id == "scripts.p2tr_tapscript_126975" and prevout_index == 1:
+        return Int64(479569700)
+    if fixture_id == "scripts.p2tr_tapscript_133634" and prevout_index == 0:
+        return Int64(5000)
+    if fixture_id == "scripts.p2tr_tapscript_70924" and prevout_index == 0:
+        return Int64(2300000)
+    if fixture_id == "scripts.p2tr_tapscript_71267" and prevout_index == 0:
+        return Int64(42000000)
+    if fixture_id == "scripts.p2tr_tapscript_78841" and prevout_index == 0:
+        return Int64(37500)
+    if fixture_id == "scripts.p2tr_tapscript_78841" and prevout_index == 1:
+        return Int64(330)
+    if fixture_id == "scripts.p2tr_tapscript_82856" and prevout_index == 0:
+        return Int64(1000)
+    if fixture_id == "scripts.p2tr_tapscript_87214" and prevout_index == 0:
+        return Int64(150000)
+    if fixture_id == "scripts.p2tr_tapscript_87214" and prevout_index == 1:
+        return Int64(500000)
+    if fixture_id == "scripts.p2tr_tapscript_89632" and prevout_index == 0:
+        return Int64(59330)
+    if fixture_id == "scripts.p2tr_tapscript_89632" and prevout_index == 1:
+        return Int64(101000)
+    if fixture_id == "scripts.p2tr_tapscript_hash256_67562" and prevout_index == 0:
+        return Int64(69597)
+    if fixture_id == "scripts.p2tr_tapscript_numequal_32712" and prevout_index == 0:
+        return Int64(50000)
+    if fixture_id == "scripts.p2tr_tapscript_sha256_52024" and prevout_index == 0:
+        return Int64(1200000)
+    if fixture_id == "scripts.p2tr_tapscript_sha256_52024" and prevout_index == 1:
+        return Int64(100000000)
+    if fixture_id == "scripts.p2tr_tapscript_size_52497" and prevout_index == 0:
+        return Int64(1000)
+    raise Error("unsupported Taproot prevout amount")
+
+
+def _hex_literal(hex: String) raises -> List[UInt8]:
+    return hex_text_to_bytes(ascii_string_to_bytes(hex))
+
+
+def _fixture_prevout_spk(fixture_id: String, prevout_index: Int) raises -> List[UInt8]:
+    if fixture_id == "scripts.p2tr_scriptpath_44295" and prevout_index == 0:
+        return _hex_literal("5120346d44aef23b267970d8c090d8fed28e2dcf772b609f566cdc56e108ff84118a")
+    if fixture_id == "scripts.p2tr_scriptpath_46599" and prevout_index == 0:
+        return _hex_literal("5120a23f913d1fc28f07abbcc72218ed00e0d149287b9e86187e54b0c6340ce584b3")
+    if fixture_id == "scripts.p2tr_tapscript_100372" and (prevout_index == 0 or prevout_index == 1):
+        return _hex_literal("51204f6ace74750488830e5298071ff3a8a9ed6e101add19c2ac8f6910646c9282f0")
+    if fixture_id == "scripts.p2tr_tapscript_108508" and prevout_index == 0:
+        return _hex_literal("5120f9726a942625350947a664da076eaf6991a066c3f045f97f47dc584bf008c8f2")
+    if fixture_id == "scripts.p2tr_tapscript_108508" and prevout_index == 1:
+        return _hex_literal("001430f440f718eeec7c5e17037bf75786a6e6c9513c")
+    if fixture_id == "scripts.p2tr_tapscript_121035" and prevout_index == 0:
+        return _hex_literal("51206ac8aea43b56713338ada9a0e365d77c2a4b7ab81265eb7bc6138132f0799d4c")
+    if fixture_id == "scripts.p2tr_tapscript_121035" and prevout_index == 1:
+        return _hex_literal("5120425234aa84d17bf59beff833cb9c2ddf7b433df2c5a29e266be002095ab838b5")
+    if fixture_id == "scripts.p2tr_tapscript_126975" and prevout_index == 0:
+        return _hex_literal("5120039613f555bac442eb628c0b7af7f6b19d1abf3aab2cde8a349c88f4b553cd2e")
+    if fixture_id == "scripts.p2tr_tapscript_126975" and prevout_index == 1:
+        return _hex_literal("002080b7c21ae333066a7e6a4b9e96a6ab0f284874e06608f9ec2904c4fbd6a817df")
+    if fixture_id == "scripts.p2tr_tapscript_133634" and prevout_index == 0:
+        return _hex_literal("51206fccfbb9b6866623bb150ee234b95910952db82f72c72795cb6e7740579fa906")
+    if fixture_id == "scripts.p2tr_tapscript_70924" and prevout_index == 0:
+        return _hex_literal("51202a6d559d4b313016ce3ed49fbc1512b506262d28ad96c84cd2b1233624ac73af")
+    if fixture_id == "scripts.p2tr_tapscript_71267" and prevout_index == 0:
+        return _hex_literal("5120d8ad5381f86f48a486571e7f76c2fd7db102606c8c003ac89e794dd15a90410c")
+    if fixture_id == "scripts.p2tr_tapscript_78841" and prevout_index == 0:
+        return _hex_literal("51200e9f8622c811a7c0c082bd0e2b8db205db4c1877a22a02165a148f9ec785eaee")
+    if fixture_id == "scripts.p2tr_tapscript_78841" and prevout_index == 1:
+        return _hex_literal("51200802292f03446b96320057012cf509983f667607ef39091d1e5a392705b44c0b")
+    if fixture_id == "scripts.p2tr_tapscript_82856" and prevout_index == 0:
+        return _hex_literal("51205b32a8e11ce6fcb531f5399cc7631f91e1c9b85f50a5b40ceae89eb70e5df4fd")
+    if fixture_id == "scripts.p2tr_tapscript_87214" and prevout_index == 0:
+        return _hex_literal("5120963aa300c7946aade07fc40be32a76757e7fe7d56ec8380e41bf8ba2095d03b8")
+    if fixture_id == "scripts.p2tr_tapscript_87214" and prevout_index == 1:
+        return _hex_literal("5120ce1fb6e4853387690751272ffaf9ac7f9a090fa3d4b0b9e87ba61c2fee024e24")
+    if fixture_id == "scripts.p2tr_tapscript_89632" and (prevout_index == 0 or prevout_index == 1):
+        return _hex_literal("5120550acdb90b8c118e4a06310bb16f05f07d4dc2694fbd789c6b00d7ba6a30dd76")
+    if fixture_id == "scripts.p2tr_tapscript_hash256_67562" and prevout_index == 0:
+        return _hex_literal("51204ce2727f5bc13a88d4ac9b95d09a9e0f2584651e074c37820eab48f1872471a4")
+    if fixture_id == "scripts.p2tr_tapscript_numequal_32712" and prevout_index == 0:
+        return _hex_literal("51203a6c36818562ca3aa86741eb70dda13da67a5977255fc8af67109c8dbdd9f3ca")
+    if fixture_id == "scripts.p2tr_tapscript_sha256_52024" and prevout_index == 0:
+        return _hex_literal("51208633e66a528c86ba924ac2cbe60eb53e793fead9e0df3e10982c886f102d4b64")
+    if fixture_id == "scripts.p2tr_tapscript_sha256_52024" and prevout_index == 1:
+        return _hex_literal("0014fd641852669905e0191fc95a1881fb73952b5716")
+    if fixture_id == "scripts.p2tr_tapscript_size_52497" and prevout_index == 0:
+        return _hex_literal("512031b46e4751f440b63193188b859158ab5560beac41d33a3251cbfa88a1192986")
+    raise Error("unsupported Taproot prevout scriptPubKey")
+
+
+def _p2sh_redeem_path(root: String, fixture_id: String, stem: String) -> String:
+    if fixture_id == "scripts.p2sh_82921":
+        return root + fixture_id + String("/") + stem + String("_redeem.hex")
+    return root + fixture_id + String("/") + stem + String("_redeem_script.hex")
+
+
+def _load_fixture_tx(manifest_path: String, fixture_id: String, stem: String) raises -> Transaction:
+    var root = _scripts_fixture_root(manifest_path)
+    return parse_transaction(read_hex_file(root + fixture_id + String("/") + stem + String(".hex")))
+
+
+def _load_fixture_prev_spk(manifest_path: String, fixture_id: String, stem: String) raises -> List[UInt8]:
+    var root = _scripts_fixture_root(manifest_path)
+    return read_hex_file(root + fixture_id + String("/") + stem + String("_prev_spk.hex"))
+
+
+def _load_fixture_redeem_script(manifest_path: String, fixture_id: String, stem: String) raises -> List[UInt8]:
+    var root = _scripts_fixture_root(manifest_path)
+    return read_hex_file(_p2sh_redeem_path(root, fixture_id, stem))
+
+
+def _load_fixture_witness_item(manifest_path: String, fixture_id: String, stem: String, index: Int) raises -> List[UInt8]:
+    var root = _scripts_fixture_root(manifest_path)
+    return read_hex_file(root + fixture_id + String("/") + stem + String("_witness_") + String(index) + String(".hex"))
+
+
+def _load_fixture_witness_script(manifest_path: String, fixture_id: String, stem: String) raises -> List[UInt8]:
+    var root = _scripts_fixture_root(manifest_path)
+    return read_hex_file(root + fixture_id + String("/") + stem + String("_witness_script.hex"))
+
+
+def _load_fixture_tapscript(manifest_path: String, fixture_id: String, stem: String) raises -> List[UInt8]:
+    var root = _scripts_fixture_root(manifest_path)
+    return read_hex_file(root + fixture_id + String("/") + stem + String("_tapscript.hex"))
+
+
+def _load_fixture_control_block(manifest_path: String, fixture_id: String, stem: String) raises -> List[UInt8]:
+    var root = _scripts_fixture_root(manifest_path)
+    return read_hex_file(root + fixture_id + String("/") + stem + String("_control_block.hex"))
+
+
+def is_p2sh_script_pubkey(ref script_pubkey: List[UInt8]) -> Bool:
+    return (
+        len(script_pubkey) == 23
+        and script_pubkey[0] == UInt8(0xA9)
+        and script_pubkey[1] == UInt8(0x14)
+        and script_pubkey[22] == UInt8(0x87)
+    )
+
+
+def is_p2pkh_script_pubkey(ref script_pubkey: List[UInt8]) -> Bool:
+    return (
+        len(script_pubkey) == 25
+        and script_pubkey[0] == UInt8(0x76)
+        and script_pubkey[1] == UInt8(0xA9)
+        and script_pubkey[2] == UInt8(0x14)
+        and script_pubkey[23] == UInt8(0x88)
+        and script_pubkey[24] == UInt8(0xAC)
+    )
+
+
+def is_p2wsh_script_pubkey(ref script_pubkey: List[UInt8]) -> Bool:
+    return len(script_pubkey) == 34 and script_pubkey[0] == UInt8(0) and script_pubkey[1] == UInt8(0x20)
+
+
+def is_p2tr_script_pubkey(ref script_pubkey: List[UInt8]) -> Bool:
+    return len(script_pubkey) == 34 and script_pubkey[0] == UInt8(0x51) and script_pubkey[1] == UInt8(0x20)
+
+
+def is_v0_witness_script_program(ref program: List[UInt8]) -> Bool:
+    return len(program) == 34 and program[0] == UInt8(0) and program[1] == UInt8(0x20)
+
+
+def evaluate_p2sh_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
+    if not manifest_contains_fixture(manifest_path, fixture_id):
+        raise Error("fixture id not present in Shared manifest")
+    var stem = _fixture_stem(fixture_id)
+    var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
+    var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+    var redeem_script = _load_fixture_redeem_script(manifest_path, fixture_id, stem)
+    var input_index = _fixture_input_index(fixture_id)
+    if input_index < 0 or input_index >= len(tx.inputs):
+        raise Error("fixture input index out of range")
+    if not is_p2sh_script_pubkey(script_pubkey):
+        raise Error("fixture spent script is not P2SH")
+    var redeem_hash = hash160(redeem_script)
+    var expected_hash = slice_bytes(script_pubkey, 2, 22)
+    if not bytes_equal(redeem_hash, expected_hash):
+        raise Error("P2SH redeem hash mismatch")
+    var pushes = parse_push_only_stack(tx.inputs[input_index].script_sig)
+    if len(pushes) == 0:
+        raise Error("P2SH scriptSig missing redeem script")
+    if not bytes_equal(pushes[len(pushes) - 1].data, redeem_script):
+        raise Error("P2SH scriptSig final push is not redeem script")
+    var stack = List[ScriptStackItem]()
+    for i in range(len(pushes) - 1):
+        var item = pushes[i].copy()
+        stack.append(item^)
+    return evaluate_legacy_script(redeem_script, stack^, tx, input_index, shim_path, True)
+
+
+def evaluate_p2pkh_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
+    if not manifest_contains_fixture(manifest_path, fixture_id):
+        raise Error("fixture id not present in Shared manifest")
+    var stem = _fixture_stem(fixture_id)
+    var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
+    var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+    var input_index = _fixture_input_index(fixture_id)
+    if input_index < 0 or input_index >= len(tx.inputs):
+        raise Error("fixture input index out of range")
+    if not is_p2pkh_script_pubkey(script_pubkey):
+        raise Error("fixture spent script is not P2PKH")
+    var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
+    if len(stack) < 2:
+        raise Error("P2PKH scriptSig missing signature or pubkey")
+    var signature = stack[len(stack) - 2].copy()
+    var pubkey = stack[len(stack) - 1].copy()
+    var actual_hash = hash160(pubkey.data)
+    var expected_hash = slice_bytes(script_pubkey, 3, 23)
+    if not bytes_equal(actual_hash, expected_hash):
+        return False
+    return verify_ecdsa_signature(shim_path, signature.data, pubkey.data, tx, input_index, script_pubkey)
+
+
+def evaluate_witness_v0_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
+    if not manifest_contains_fixture(manifest_path, fixture_id):
+        raise Error("fixture id not present in Shared manifest")
+    var stem = _fixture_stem(fixture_id)
+    var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
+    var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+    var witness_script = _load_fixture_witness_script(manifest_path, fixture_id, stem)
+    var script_hash = sha256_digest(witness_script)
+    if is_p2wsh_script_pubkey(script_pubkey):
+        var expected = slice_bytes(script_pubkey, 2, 34)
+        if not bytes_equal(script_hash, expected):
+            raise Error("P2WSH witness script hash mismatch")
+    elif is_p2sh_script_pubkey(script_pubkey):
+        var redeem_stack = parse_push_only_stack(tx.inputs[0].script_sig)
+        if len(redeem_stack) != 1:
+            raise Error("nested P2SH-P2WSH scriptSig must contain one witness program")
+        var redeem_program = redeem_stack[0].data.copy()
+        if not is_v0_witness_script_program(redeem_program):
+            raise Error("nested P2SH-P2WSH redeem program is not v0 P2WSH")
+        var redeem_hash = hash160(redeem_program)
+        var expected_redeem_hash = slice_bytes(script_pubkey, 2, 22)
+        if not bytes_equal(redeem_hash, expected_redeem_hash):
+            raise Error("nested P2SH-P2WSH redeem hash mismatch")
+        var expected_script_hash = slice_bytes(redeem_program, 2, 34)
+        if not bytes_equal(script_hash, expected_script_hash):
+            raise Error("nested P2SH-P2WSH witness script hash mismatch")
+    else:
+        raise Error("fixture spent script is not P2WSH or P2SH-P2WSH")
+    var stack = List[ScriptStackItem]()
+    var witness_count = _fixture_witness_item_count(fixture_id)
+    for i in range(witness_count):
+        var item_bytes = _load_fixture_witness_item(manifest_path, fixture_id, stem, i)
+        if i == witness_count - 1 and bytes_equal(item_bytes, witness_script):
+            continue
+        var item = ScriptStackItem()
+        item.data = item_bytes^
+        stack.append(item^)
+    return evaluate_legacy_script(
+        witness_script,
+        stack^,
+        tx,
+        0,
+        shim_path,
+        True,
+        True,
+        _fixture_prev_amount_sats(fixture_id),
+    )
+
+
+def evaluate_taproot_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
+    if not manifest_contains_fixture(manifest_path, fixture_id):
+        raise Error("fixture id not present in Shared manifest")
+    var stem = _fixture_stem(fixture_id)
+    var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
+    var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+    var tapscript = _load_fixture_tapscript(manifest_path, fixture_id, stem)
+    var control = _load_fixture_control_block(manifest_path, fixture_id, stem)
+    var input_index = _fixture_input_index(fixture_id)
+    if input_index < 0 or input_index >= len(tx.inputs):
+        raise Error("Taproot input index out of range")
+    if not is_p2tr_script_pubkey(script_pubkey):
+        raise Error("fixture spent script is not P2TR")
+    if len(control) < 33 or ((len(control) - 33) % 32) != 0:
+        raise Error("invalid Taproot control block length")
+    var leaf_version = control[0] & UInt8(0xFE)
+    var parity = Int(control[0] & UInt8(1))
+    if leaf_version != UInt8(0xC0):
+        raise Error("unsupported non-tapscript Taproot leaf")
+    var internal_xonly = slice_bytes(control, 1, 33)
+    var leaf_digest = tapleaf_hash(leaf_version, tapscript)
+    var merkle_root = taproot_merkle_root_from_control(control, leaf_digest)
+    var expected_xonly = slice_bytes(script_pubkey, 2, 34)
+    if not verify_taproot_tweak(shim_path, internal_xonly, merkle_root, expected_xonly, parity):
+        return False
+
+    var prevout_count = _fixture_prevout_count(fixture_id)
+    if prevout_count != len(tx.inputs):
+        raise Error("Taproot prevout count does not match transaction input count")
+    var spent_prevouts = List[TaprootPrevout]()
+    for i in range(prevout_count):
+        var prevout = TaprootPrevout()
+        prevout.amount = _fixture_prevout_amount(fixture_id, i)
+        prevout.script_pubkey = _fixture_prevout_spk(fixture_id, i)
+        spent_prevouts.append(prevout^)
+
+    var witness_count = _fixture_witness_item_count(fixture_id)
+    if witness_count < 2:
+        raise Error("Taproot witness missing script path stack")
+    var stack = List[ScriptStackItem]()
+    for i in range(witness_count - 2):
+        var item = ScriptStackItem()
+        item.data = _load_fixture_witness_item(manifest_path, fixture_id, stem, i)
+        stack.append(item^)
+    var witness_script = _load_fixture_witness_item(manifest_path, fixture_id, stem, witness_count - 2)
+    var witness_control = _load_fixture_witness_item(manifest_path, fixture_id, stem, witness_count - 1)
+    if not bytes_equal(witness_script, tapscript):
+        raise Error("Taproot witness script does not match tapscript fixture")
+    if not bytes_equal(witness_control, control):
+        raise Error("Taproot witness control block does not match fixture")
+    return evaluate_tapscript(tapscript, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path)
+
+
+def evaluate_bare_legacy_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
+    if fixture_id != "scripts.bare_legacy_118555":
+        raise Error("unsupported bare legacy diagnostic fixture")
+    if not manifest_contains_fixture(manifest_path, fixture_id):
+        raise Error("fixture id not present in Shared manifest")
+    var stem = _fixture_stem(fixture_id)
+    var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
+    var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+    var input_index = _fixture_input_index(fixture_id)
+    if input_index < 0 or input_index >= len(tx.inputs):
+        raise Error("fixture input index out of range")
+    var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
+    return evaluate_legacy_script(script_pubkey, stack^, tx, input_index, shim_path, True)
+
+
+def is_simple_p2sh_diagnostic_fixture(fixture_id: String) -> Bool:
+    return (
+        fixture_id == "scripts.p2sh_add_51340"
+        or fixture_id == "scripts.p2sh_cltv_38191"
+        or fixture_id == "scripts.p2sh_3dup_63305"
+        or fixture_id == "scripts.p2sh_2dup_63603"
+        or fixture_id == "scripts.p2sh_82112"
+        or fixture_id == "scripts.p2sh_82921"
+        or fixture_id == "scripts.p2sh_sha1_82921"
+        or fixture_id == "scripts.p2sh_108972"
+        or fixture_id == "scripts.p2sh_116040"
+        or fixture_id == "scripts.p2sh_abs_132361"
+    )
+
+
+def is_p2pkh_diagnostic_fixture(fixture_id: String) -> Bool:
+    return (
+        fixture_id == "scripts.p2pkh_sighash_single_38010"
+        or fixture_id == "scripts.p2pkh_61174"
+        or fixture_id == "scripts.p2pkh_107951"
+    )
+
+
+def is_bare_legacy_diagnostic_fixture(fixture_id: String) -> Bool:
+    return fixture_id == "scripts.bare_legacy_118555"
+
+
+def is_witness_v0_diagnostic_fixture(fixture_id: String) -> Bool:
+    return (
+        fixture_id == "scripts.p2wsh_op1_only_31842"
+        or fixture_id == "scripts.p2wsh_cltv_32868"
+        or fixture_id == "scripts.p2sh_p2wsh_op1_only_33500"
+        or fixture_id == "scripts.p2wsh_size_lessthan_46779"
+        or fixture_id == "scripts.p2wsh_2drop_54287"
+        or fixture_id == "scripts.p2wsh_ifdup_csv_54297"
+        or fixture_id == "scripts.p2wsh_mul_58173"
+        or fixture_id == "scripts.p2wsh_rot_62754"
+        or fixture_id == "scripts.p2wsh_altstack_66241"
+        or fixture_id == "scripts.p2wsh_within_98025"
+        or fixture_id == "scripts.p2wsh_98631"
+        or fixture_id == "scripts.p2wsh_nip_98631"
+        or fixture_id == "scripts.p2wsh_booland_136369"
+    )
+
+
+def is_taproot_diagnostic_fixture(fixture_id: String) -> Bool:
+    return (
+        fixture_id == "scripts.p2tr_scriptpath_44295"
+        or fixture_id == "scripts.p2tr_scriptpath_46599"
+        or fixture_id == "scripts.p2tr_tapscript_100372"
+        or fixture_id == "scripts.p2tr_tapscript_108508"
+        or fixture_id == "scripts.p2tr_tapscript_121035"
+        or fixture_id == "scripts.p2tr_tapscript_126975"
+        or fixture_id == "scripts.p2tr_tapscript_133634"
+        or fixture_id == "scripts.p2tr_tapscript_70924"
+        or fixture_id == "scripts.p2tr_tapscript_71267"
+        or fixture_id == "scripts.p2tr_tapscript_78841"
+        or fixture_id == "scripts.p2tr_tapscript_82856"
+        or fixture_id == "scripts.p2tr_tapscript_87214"
+        or fixture_id == "scripts.p2tr_tapscript_89632"
+        or fixture_id == "scripts.p2tr_tapscript_hash256_67562"
+        or fixture_id == "scripts.p2tr_tapscript_numequal_32712"
+        or fixture_id == "scripts.p2tr_tapscript_sha256_52024"
+        or fixture_id == "scripts.p2tr_tapscript_size_52497"
+    )
+
+
 def parse_transaction(var payload: List[UInt8]) raises -> Transaction:
     var cursor = ByteCursor(payload^)
     var tx = Transaction()
@@ -499,26 +1724,46 @@ def serialize_tx_output(mut out: List[UInt8], ref output: TxOutput) raises:
 def legacy_sighash_preimage(
     ref tx: Transaction, input_index: Int, ref script_code: List[UInt8], sighash_type: UInt8
 ) raises -> List[UInt8]:
-    if Int(sighash_type) != 1:
-        raise Error("diagnostic legacy sighash supports SIGHASH_ALL only")
+    var base_type = Int(sighash_type) & 0x1F
+    if base_type != 1 and base_type != 3:
+        raise Error("diagnostic legacy sighash supports SIGHASH_ALL and SIGHASH_SINGLE only")
+    var anyone_can_pay = (Int(sighash_type) & 0x80) != 0
     if input_index < 0 or input_index >= len(tx.inputs):
         raise Error("input index out of range")
 
     var out = List[UInt8]()
     append_i32_le(out, tx.version)
-    append_varint(out, len(tx.inputs))
-    for i in range(len(tx.inputs)):
-        append_bytes(out, tx.inputs[i].previous_hash)
-        append_u32_le(out, tx.inputs[i].previous_index)
-        if i == input_index:
-            append_varint(out, len(script_code))
-            append_bytes(out, script_code)
-        else:
+    if anyone_can_pay:
+        append_varint(out, 1)
+        append_bytes(out, tx.inputs[input_index].previous_hash)
+        append_u32_le(out, tx.inputs[input_index].previous_index)
+        append_varint(out, len(script_code))
+        append_bytes(out, script_code)
+        append_u32_le(out, tx.inputs[input_index].sequence)
+    else:
+        append_varint(out, len(tx.inputs))
+        for i in range(len(tx.inputs)):
+            append_bytes(out, tx.inputs[i].previous_hash)
+            append_u32_le(out, tx.inputs[i].previous_index)
+            if i == input_index:
+                append_varint(out, len(script_code))
+                append_bytes(out, script_code)
+            else:
+                append_varint(out, 0)
+            if i != input_index and base_type == 3:
+                append_u32_le(out, UInt32(0))
+            else:
+                append_u32_le(out, tx.inputs[i].sequence)
+    if base_type == 3:
+        append_varint(out, input_index + 1)
+        for _ in range(input_index):
+            append_i64_le(out, Int64(-1))
             append_varint(out, 0)
-        append_u32_le(out, tx.inputs[i].sequence)
-    append_varint(out, len(tx.outputs))
-    for i in range(len(tx.outputs)):
-        serialize_tx_output(out, tx.outputs[i])
+        serialize_tx_output(out, tx.outputs[input_index])
+    else:
+        append_varint(out, len(tx.outputs))
+        for i in range(len(tx.outputs)):
+            serialize_tx_output(out, tx.outputs[i])
     append_u32_le(out, tx.lock_time)
     append_u32_le(out, UInt32(sighash_type))
     return out^
@@ -734,15 +1979,1087 @@ def double_sha256(ref payload: List[UInt8]) -> List[UInt8]:
     return sha256_digest(first)
 
 
+
+def _rotl32(value: UInt32, bits: Int) -> UInt32:
+    return (value << UInt32(bits)) | (value >> UInt32(32 - bits))
+
+
+def _read_u32_le(ref data: List[UInt8], offset: Int) -> UInt32:
+    return UInt32(data[offset]) | (UInt32(data[offset + 1]) << 8) | (UInt32(data[offset + 2]) << 16) | (UInt32(data[offset + 3]) << 24)
+
+
+def _append_u64_le(mut out: List[UInt8], value: UInt64):
+    for i in range(8):
+        out.append(UInt8((value >> UInt64(i * 8)) & UInt64(0xFF)))
+
+
+def _append_u64_be(mut out: List[UInt8], value: UInt64):
+    for i in range(8):
+        out.append(UInt8((value >> UInt64((7 - i) * 8)) & UInt64(0xFF)))
+
+
+def sha1_digest(ref payload: List[UInt8]) -> List[UInt8]:
+    var data = clone_bytes(payload)
+    var bit_len = UInt64(len(payload)) * UInt64(8)
+    data.append(UInt8(0x80))
+    while len(data) % 64 != 56:
+        data.append(UInt8(0))
+    _append_u64_be(data, bit_len)
+
+    var h0 = UInt32(0x67452301)
+    var h1 = UInt32(0xEFCDAB89)
+    var h2 = UInt32(0x98BADCFE)
+    var h3 = UInt32(0x10325476)
+    var h4 = UInt32(0xC3D2E1F0)
+    for chunk_start in range(0, len(data), 64):
+        var w = List[UInt32]()
+        for i in range(16):
+            var offset = chunk_start + i * 4
+            var word = (UInt32(data[offset]) << 24) | (UInt32(data[offset + 1]) << 16)
+            word |= (UInt32(data[offset + 2]) << 8) | UInt32(data[offset + 3])
+            w.append(word)
+        for i in range(16, 80):
+            w.append(_rotl32(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1))
+        var a = h0
+        var b = h1
+        var c = h2
+        var d = h3
+        var e = h4
+        for i in range(80):
+            var f: UInt32
+            var k: UInt32
+            if i < 20:
+                f = (b & c) | ((~b) & d)
+                k = UInt32(0x5A827999)
+            elif i < 40:
+                f = b ^ c ^ d
+                k = UInt32(0x6ED9EBA1)
+            elif i < 60:
+                f = (b & c) | (b & d) | (c & d)
+                k = UInt32(0x8F1BBCDC)
+            else:
+                f = b ^ c ^ d
+                k = UInt32(0xCA62C1D6)
+            var temp = _rotl32(a, 5) + f + e + k + w[i]
+            e = d
+            d = c
+            c = _rotl32(b, 30)
+            b = a
+            a = temp
+        h0 += a
+        h1 += b
+        h2 += c
+        h3 += d
+        h4 += e
+    var out = List[UInt8]()
+    for word in [h0, h1, h2, h3, h4]:
+        out.append(UInt8((word >> 24) & 0xFF))
+        out.append(UInt8((word >> 16) & 0xFF))
+        out.append(UInt8((word >> 8) & 0xFF))
+        out.append(UInt8(word & 0xFF))
+    return out^
+
+def _ripemd_r1(index: Int) -> Int:
+    if index == 0:
+        return 0
+    if index == 1:
+        return 1
+    if index == 2:
+        return 2
+    if index == 3:
+        return 3
+    if index == 4:
+        return 4
+    if index == 5:
+        return 5
+    if index == 6:
+        return 6
+    if index == 7:
+        return 7
+    if index == 8:
+        return 8
+    if index == 9:
+        return 9
+    if index == 10:
+        return 10
+    if index == 11:
+        return 11
+    if index == 12:
+        return 12
+    if index == 13:
+        return 13
+    if index == 14:
+        return 14
+    if index == 15:
+        return 15
+    if index == 16:
+        return 7
+    if index == 17:
+        return 4
+    if index == 18:
+        return 13
+    if index == 19:
+        return 1
+    if index == 20:
+        return 10
+    if index == 21:
+        return 6
+    if index == 22:
+        return 15
+    if index == 23:
+        return 3
+    if index == 24:
+        return 12
+    if index == 25:
+        return 0
+    if index == 26:
+        return 9
+    if index == 27:
+        return 5
+    if index == 28:
+        return 2
+    if index == 29:
+        return 14
+    if index == 30:
+        return 11
+    if index == 31:
+        return 8
+    if index == 32:
+        return 3
+    if index == 33:
+        return 10
+    if index == 34:
+        return 14
+    if index == 35:
+        return 4
+    if index == 36:
+        return 9
+    if index == 37:
+        return 15
+    if index == 38:
+        return 8
+    if index == 39:
+        return 1
+    if index == 40:
+        return 2
+    if index == 41:
+        return 7
+    if index == 42:
+        return 0
+    if index == 43:
+        return 6
+    if index == 44:
+        return 13
+    if index == 45:
+        return 11
+    if index == 46:
+        return 5
+    if index == 47:
+        return 12
+    if index == 48:
+        return 1
+    if index == 49:
+        return 9
+    if index == 50:
+        return 11
+    if index == 51:
+        return 10
+    if index == 52:
+        return 0
+    if index == 53:
+        return 8
+    if index == 54:
+        return 12
+    if index == 55:
+        return 4
+    if index == 56:
+        return 13
+    if index == 57:
+        return 3
+    if index == 58:
+        return 7
+    if index == 59:
+        return 15
+    if index == 60:
+        return 14
+    if index == 61:
+        return 5
+    if index == 62:
+        return 6
+    if index == 63:
+        return 2
+    if index == 64:
+        return 4
+    if index == 65:
+        return 0
+    if index == 66:
+        return 5
+    if index == 67:
+        return 9
+    if index == 68:
+        return 7
+    if index == 69:
+        return 12
+    if index == 70:
+        return 2
+    if index == 71:
+        return 10
+    if index == 72:
+        return 14
+    if index == 73:
+        return 1
+    if index == 74:
+        return 3
+    if index == 75:
+        return 8
+    if index == 76:
+        return 11
+    if index == 77:
+        return 6
+    if index == 78:
+        return 15
+    return 13
+
+
+def _ripemd_r2(index: Int) -> Int:
+    if index == 0:
+        return 5
+    if index == 1:
+        return 14
+    if index == 2:
+        return 7
+    if index == 3:
+        return 0
+    if index == 4:
+        return 9
+    if index == 5:
+        return 2
+    if index == 6:
+        return 11
+    if index == 7:
+        return 4
+    if index == 8:
+        return 13
+    if index == 9:
+        return 6
+    if index == 10:
+        return 15
+    if index == 11:
+        return 8
+    if index == 12:
+        return 1
+    if index == 13:
+        return 10
+    if index == 14:
+        return 3
+    if index == 15:
+        return 12
+    if index == 16:
+        return 6
+    if index == 17:
+        return 11
+    if index == 18:
+        return 3
+    if index == 19:
+        return 7
+    if index == 20:
+        return 0
+    if index == 21:
+        return 13
+    if index == 22:
+        return 5
+    if index == 23:
+        return 10
+    if index == 24:
+        return 14
+    if index == 25:
+        return 15
+    if index == 26:
+        return 8
+    if index == 27:
+        return 12
+    if index == 28:
+        return 4
+    if index == 29:
+        return 9
+    if index == 30:
+        return 1
+    if index == 31:
+        return 2
+    if index == 32:
+        return 15
+    if index == 33:
+        return 5
+    if index == 34:
+        return 1
+    if index == 35:
+        return 3
+    if index == 36:
+        return 7
+    if index == 37:
+        return 14
+    if index == 38:
+        return 6
+    if index == 39:
+        return 9
+    if index == 40:
+        return 11
+    if index == 41:
+        return 8
+    if index == 42:
+        return 12
+    if index == 43:
+        return 2
+    if index == 44:
+        return 10
+    if index == 45:
+        return 0
+    if index == 46:
+        return 4
+    if index == 47:
+        return 13
+    if index == 48:
+        return 8
+    if index == 49:
+        return 6
+    if index == 50:
+        return 4
+    if index == 51:
+        return 1
+    if index == 52:
+        return 3
+    if index == 53:
+        return 11
+    if index == 54:
+        return 15
+    if index == 55:
+        return 0
+    if index == 56:
+        return 5
+    if index == 57:
+        return 12
+    if index == 58:
+        return 2
+    if index == 59:
+        return 13
+    if index == 60:
+        return 9
+    if index == 61:
+        return 7
+    if index == 62:
+        return 10
+    if index == 63:
+        return 14
+    if index == 64:
+        return 12
+    if index == 65:
+        return 15
+    if index == 66:
+        return 10
+    if index == 67:
+        return 4
+    if index == 68:
+        return 1
+    if index == 69:
+        return 5
+    if index == 70:
+        return 8
+    if index == 71:
+        return 7
+    if index == 72:
+        return 6
+    if index == 73:
+        return 2
+    if index == 74:
+        return 13
+    if index == 75:
+        return 14
+    if index == 76:
+        return 0
+    if index == 77:
+        return 3
+    if index == 78:
+        return 9
+    return 11
+
+
+def _ripemd_s1(index: Int) -> Int:
+    if index == 0:
+        return 11
+    if index == 1:
+        return 14
+    if index == 2:
+        return 15
+    if index == 3:
+        return 12
+    if index == 4:
+        return 5
+    if index == 5:
+        return 8
+    if index == 6:
+        return 7
+    if index == 7:
+        return 9
+    if index == 8:
+        return 11
+    if index == 9:
+        return 13
+    if index == 10:
+        return 14
+    if index == 11:
+        return 15
+    if index == 12:
+        return 6
+    if index == 13:
+        return 7
+    if index == 14:
+        return 9
+    if index == 15:
+        return 8
+    if index == 16:
+        return 7
+    if index == 17:
+        return 6
+    if index == 18:
+        return 8
+    if index == 19:
+        return 13
+    if index == 20:
+        return 11
+    if index == 21:
+        return 9
+    if index == 22:
+        return 7
+    if index == 23:
+        return 15
+    if index == 24:
+        return 7
+    if index == 25:
+        return 12
+    if index == 26:
+        return 15
+    if index == 27:
+        return 9
+    if index == 28:
+        return 11
+    if index == 29:
+        return 7
+    if index == 30:
+        return 13
+    if index == 31:
+        return 12
+    if index == 32:
+        return 11
+    if index == 33:
+        return 13
+    if index == 34:
+        return 6
+    if index == 35:
+        return 7
+    if index == 36:
+        return 14
+    if index == 37:
+        return 9
+    if index == 38:
+        return 13
+    if index == 39:
+        return 15
+    if index == 40:
+        return 14
+    if index == 41:
+        return 8
+    if index == 42:
+        return 13
+    if index == 43:
+        return 6
+    if index == 44:
+        return 5
+    if index == 45:
+        return 12
+    if index == 46:
+        return 7
+    if index == 47:
+        return 5
+    if index == 48:
+        return 11
+    if index == 49:
+        return 12
+    if index == 50:
+        return 14
+    if index == 51:
+        return 15
+    if index == 52:
+        return 14
+    if index == 53:
+        return 15
+    if index == 54:
+        return 9
+    if index == 55:
+        return 8
+    if index == 56:
+        return 9
+    if index == 57:
+        return 14
+    if index == 58:
+        return 5
+    if index == 59:
+        return 6
+    if index == 60:
+        return 8
+    if index == 61:
+        return 6
+    if index == 62:
+        return 5
+    if index == 63:
+        return 12
+    if index == 64:
+        return 9
+    if index == 65:
+        return 15
+    if index == 66:
+        return 5
+    if index == 67:
+        return 11
+    if index == 68:
+        return 6
+    if index == 69:
+        return 8
+    if index == 70:
+        return 13
+    if index == 71:
+        return 12
+    if index == 72:
+        return 5
+    if index == 73:
+        return 12
+    if index == 74:
+        return 13
+    if index == 75:
+        return 14
+    if index == 76:
+        return 11
+    if index == 77:
+        return 8
+    if index == 78:
+        return 5
+    return 6
+
+
+def _ripemd_s2(index: Int) -> Int:
+    if index == 0:
+        return 8
+    if index == 1:
+        return 9
+    if index == 2:
+        return 9
+    if index == 3:
+        return 11
+    if index == 4:
+        return 13
+    if index == 5:
+        return 15
+    if index == 6:
+        return 15
+    if index == 7:
+        return 5
+    if index == 8:
+        return 7
+    if index == 9:
+        return 7
+    if index == 10:
+        return 8
+    if index == 11:
+        return 11
+    if index == 12:
+        return 14
+    if index == 13:
+        return 14
+    if index == 14:
+        return 12
+    if index == 15:
+        return 6
+    if index == 16:
+        return 9
+    if index == 17:
+        return 13
+    if index == 18:
+        return 15
+    if index == 19:
+        return 7
+    if index == 20:
+        return 12
+    if index == 21:
+        return 8
+    if index == 22:
+        return 9
+    if index == 23:
+        return 11
+    if index == 24:
+        return 7
+    if index == 25:
+        return 7
+    if index == 26:
+        return 12
+    if index == 27:
+        return 7
+    if index == 28:
+        return 6
+    if index == 29:
+        return 15
+    if index == 30:
+        return 13
+    if index == 31:
+        return 11
+    if index == 32:
+        return 9
+    if index == 33:
+        return 7
+    if index == 34:
+        return 15
+    if index == 35:
+        return 11
+    if index == 36:
+        return 8
+    if index == 37:
+        return 6
+    if index == 38:
+        return 6
+    if index == 39:
+        return 14
+    if index == 40:
+        return 12
+    if index == 41:
+        return 13
+    if index == 42:
+        return 5
+    if index == 43:
+        return 14
+    if index == 44:
+        return 13
+    if index == 45:
+        return 13
+    if index == 46:
+        return 7
+    if index == 47:
+        return 5
+    if index == 48:
+        return 15
+    if index == 49:
+        return 5
+    if index == 50:
+        return 8
+    if index == 51:
+        return 11
+    if index == 52:
+        return 14
+    if index == 53:
+        return 14
+    if index == 54:
+        return 6
+    if index == 55:
+        return 14
+    if index == 56:
+        return 6
+    if index == 57:
+        return 9
+    if index == 58:
+        return 12
+    if index == 59:
+        return 9
+    if index == 60:
+        return 12
+    if index == 61:
+        return 5
+    if index == 62:
+        return 15
+    if index == 63:
+        return 8
+    if index == 64:
+        return 8
+    if index == 65:
+        return 5
+    if index == 66:
+        return 12
+    if index == 67:
+        return 9
+    if index == 68:
+        return 12
+    if index == 69:
+        return 5
+    if index == 70:
+        return 14
+    if index == 71:
+        return 6
+    if index == 72:
+        return 8
+    if index == 73:
+        return 13
+    if index == 74:
+        return 6
+    if index == 75:
+        return 5
+    if index == 76:
+        return 15
+    if index == 77:
+        return 13
+    if index == 78:
+        return 11
+    return 11
+
+
+def _ripemd_f(round: Int, x: UInt32, y: UInt32, z: UInt32) -> UInt32:
+    if round == 0:
+        return x ^ y ^ z
+    if round == 1:
+        return (x & y) | ((~x) & z)
+    if round == 2:
+        return (x | (~y)) ^ z
+    if round == 3:
+        return (x & z) | (y & (~z))
+    return x ^ (y | (~z))
+
+
+def _ripemd_k1(round: Int) -> UInt32:
+    if round == 0:
+        return UInt32(0)
+    if round == 1:
+        return UInt32(0x5A827999)
+    if round == 2:
+        return UInt32(0x6ED9EBA1)
+    if round == 3:
+        return UInt32(0x8F1BBCDC)
+    return UInt32(0xA953FD4E)
+
+
+def _ripemd_k2(round: Int) -> UInt32:
+    if round == 0:
+        return UInt32(0x50A28BE6)
+    if round == 1:
+        return UInt32(0x5C4DD124)
+    if round == 2:
+        return UInt32(0x6D703EF3)
+    if round == 3:
+        return UInt32(0x7A6D76E9)
+    return UInt32(0)
+
+
+def ripemd160_digest(ref payload: List[UInt8]) -> List[UInt8]:
+    var data = clone_bytes(payload)
+    var bit_len = UInt64(len(payload)) * UInt64(8)
+    data.append(UInt8(0x80))
+    while len(data) % 64 != 56:
+        data.append(UInt8(0))
+    _append_u64_le(data, bit_len)
+
+    var h0 = UInt32(0x67452301)
+    var h1 = UInt32(0xEFCDAB89)
+    var h2 = UInt32(0x98BADCFE)
+    var h3 = UInt32(0x10325476)
+    var h4 = UInt32(0xC3D2E1F0)
+    for chunk_start in range(0, len(data), 64):
+        var words = List[UInt32]()
+        for i in range(16):
+            words.append(_read_u32_le(data, chunk_start + i * 4))
+        var a1 = h0
+        var b1 = h1
+        var c1 = h2
+        var d1 = h3
+        var e1 = h4
+        var a2 = h0
+        var b2 = h1
+        var c2 = h2
+        var d2 = h3
+        var e2 = h4
+        for j in range(80):
+            var round1 = j // 16
+            var t1 = _rotl32(a1 + _ripemd_f(round1, b1, c1, d1) + words[_ripemd_r1(j)] + _ripemd_k1(round1), _ripemd_s1(j)) + e1
+            a1 = e1
+            e1 = d1
+            d1 = _rotl32(c1, 10)
+            c1 = b1
+            b1 = t1
+            var round2 = j // 16
+            var t2 = _rotl32(a2 + _ripemd_f(4 - round2, b2, c2, d2) + words[_ripemd_r2(j)] + _ripemd_k2(round2), _ripemd_s2(j)) + e2
+            a2 = e2
+            e2 = d2
+            d2 = _rotl32(c2, 10)
+            c2 = b2
+            b2 = t2
+        var tmp = h1 + c1 + d2
+        h1 = h2 + d1 + e2
+        h2 = h3 + e1 + a2
+        h3 = h4 + a1 + b2
+        h4 = h0 + b1 + c2
+        h0 = tmp
+    var out = List[UInt8]()
+    for word in [h0, h1, h2, h3, h4]:
+        out.append(UInt8(word & 0xFF))
+        out.append(UInt8((word >> 8) & 0xFF))
+        out.append(UInt8((word >> 16) & 0xFF))
+        out.append(UInt8((word >> 24) & 0xFF))
+    return out^
+
+
+def hash160(ref payload: List[UInt8]) -> List[UInt8]:
+    var sha = sha256_digest(payload)
+    return ripemd160_digest(sha)
+
+
+def hash256(ref payload: List[UInt8]) -> List[UInt8]:
+    return double_sha256(payload)
+
+
+def tagged_hash(tag: String, ref payload: List[UInt8]) -> List[UInt8]:
+    var tag_bytes = ascii_string_to_bytes(tag)
+    var tag_digest = sha256_digest(tag_bytes)
+    var data = List[UInt8]()
+    append_bytes(data, tag_digest)
+    append_bytes(data, tag_digest)
+    append_bytes(data, payload)
+    return sha256_digest(data)
+
+
+def tapleaf_hash(leaf_version: UInt8, ref script: List[UInt8]) raises -> List[UInt8]:
+    var data = List[UInt8]()
+    data.append(leaf_version)
+    append_varint(data, len(script))
+    append_bytes(data, script)
+    return tagged_hash(String("TapLeaf"), data)
+
+
+def bytes_less(ref left: List[UInt8], ref right: List[UInt8]) -> Bool:
+    var limit = len(left)
+    if len(right) < limit:
+        limit = len(right)
+    for i in range(limit):
+        if left[i] < right[i]:
+            return True
+        if left[i] > right[i]:
+            return False
+    return len(left) < len(right)
+
+
+def tapbranch_hash(ref left: List[UInt8], ref right: List[UInt8]) -> List[UInt8]:
+    var data = List[UInt8]()
+    if bytes_less(left, right):
+        append_bytes(data, left)
+        append_bytes(data, right)
+    else:
+        append_bytes(data, right)
+        append_bytes(data, left)
+    return tagged_hash(String("TapBranch"), data)
+
+
+def taproot_merkle_root_from_control(ref control: List[UInt8], ref leaf_hash_value: List[UInt8]) raises -> List[UInt8]:
+    var root = clone_bytes(leaf_hash_value)
+    var offset = 33
+    while offset < len(control):
+        var sibling = slice_bytes(control, offset, offset + 32)
+        root = tapbranch_hash(root, sibling)
+        offset += 32
+    return root^
+
+
+def sha256_serialized_outputs(ref tx: Transaction) raises -> List[UInt8]:
+    var out = List[UInt8]()
+    for i in range(len(tx.outputs)):
+        serialize_tx_output(out, tx.outputs[i])
+    return sha256_digest(out)
+
+
+def sha256_serialized_single_output(ref tx: Transaction, input_index: Int) raises -> List[UInt8]:
+    var out = List[UInt8]()
+    serialize_tx_output(out, tx.outputs[input_index])
+    return sha256_digest(out)
+
+
+def serialize_taproot_spent_output(mut out: List[UInt8], ref prevout: TaprootPrevout) raises:
+    append_i64_le(out, prevout.amount)
+    append_varint(out, len(prevout.script_pubkey))
+    append_bytes(out, prevout.script_pubkey)
+
+
+def taproot_signature_hash(
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    hash_type: UInt8,
+    ref leaf_hash_value: List[UInt8],
+    codeseparator_pos: Int,
+) raises -> List[UInt8]:
+    var hash_type_int = Int(hash_type)
+    if not (hash_type_int <= 3 or (hash_type_int >= 0x81 and hash_type_int <= 0x83)):
+        raise Error("unsupported Taproot hash type")
+    var output_mode = hash_type_int & 0x03
+    if hash_type_int == 0:
+        output_mode = 1
+    var anyone_can_pay = (hash_type_int & 0x80) != 0
+    if input_index < 0 or input_index >= len(tx.inputs) or input_index >= len(spent_prevouts):
+        raise Error("Taproot input index out of range")
+    if output_mode == 3 and input_index >= len(tx.outputs):
+        raise Error("Taproot SIGHASH_SINGLE without matching output")
+
+    var body = List[UInt8]()
+    body.append(hash_type)
+    append_i32_le(body, tx.version)
+    append_u32_le(body, tx.lock_time)
+
+    if not anyone_can_pay:
+        var prev_blob = List[UInt8]()
+        var amount_blob = List[UInt8]()
+        var script_blob = List[UInt8]()
+        var sequence_blob = List[UInt8]()
+        for i in range(len(tx.inputs)):
+            append_bytes(prev_blob, tx.inputs[i].previous_hash)
+            append_u32_le(prev_blob, tx.inputs[i].previous_index)
+            append_i64_le(amount_blob, spent_prevouts[i].amount)
+            append_varint(script_blob, len(spent_prevouts[i].script_pubkey))
+            append_bytes(script_blob, spent_prevouts[i].script_pubkey)
+            append_u32_le(sequence_blob, tx.inputs[i].sequence)
+        var hash_prevouts = sha256_digest(prev_blob)
+        var hash_amounts = sha256_digest(amount_blob)
+        var hash_scriptpubkeys = sha256_digest(script_blob)
+        var hash_sequences = sha256_digest(sequence_blob)
+        append_bytes(body, hash_prevouts)
+        append_bytes(body, hash_amounts)
+        append_bytes(body, hash_scriptpubkeys)
+        append_bytes(body, hash_sequences)
+
+    if output_mode == 1:
+        var hash_outputs = sha256_serialized_outputs(tx)
+        append_bytes(body, hash_outputs)
+
+    body.append(UInt8(2))
+    if anyone_can_pay:
+        append_bytes(body, tx.inputs[input_index].previous_hash)
+        append_u32_le(body, tx.inputs[input_index].previous_index)
+        serialize_taproot_spent_output(body, spent_prevouts[input_index])
+        append_u32_le(body, tx.inputs[input_index].sequence)
+    else:
+        append_u32_le(body, UInt32(input_index))
+
+    if output_mode == 3:
+        var hash_single = sha256_serialized_single_output(tx, input_index)
+        append_bytes(body, hash_single)
+
+    append_bytes(body, leaf_hash_value)
+    body.append(UInt8(0))
+    append_u32_le(body, UInt32(codeseparator_pos))
+
+    var msg = List[UInt8]()
+    msg.append(UInt8(0))
+    append_bytes(msg, body)
+    return tagged_hash(String("TapSighash"), msg)
+
+
 def legacy_sighash(
     ref tx: Transaction, input_index: Int, ref script_code: List[UInt8], ref signature: List[UInt8]
 ) raises -> List[UInt8]:
     if len(signature) == 0:
         raise Error("empty ECDSA signature")
     var sighash_type = signature[len(signature) - 1]
+    var base_type = Int(sighash_type) & 0x1F
+    if base_type == 3 and input_index >= len(tx.outputs):
+        var out = List[UInt8]()
+        out.append(UInt8(1))
+        for _ in range(31):
+            out.append(UInt8(0))
+        return out^
     var trimmed = legacy_find_and_delete(script_code, signature)
     var preimage = legacy_sighash_preimage(tx, input_index, trimmed, sighash_type)
     return double_sha256(preimage)
+
+
+def _hash_prevouts(ref tx: Transaction) raises -> List[UInt8]:
+    var out = List[UInt8]()
+    for i in range(len(tx.inputs)):
+        append_bytes(out, tx.inputs[i].previous_hash)
+        append_u32_le(out, tx.inputs[i].previous_index)
+    return double_sha256(out)
+
+
+def _hash_sequence(ref tx: Transaction) -> List[UInt8]:
+    var out = List[UInt8]()
+    for i in range(len(tx.inputs)):
+        append_u32_le(out, tx.inputs[i].sequence)
+    return double_sha256(out)
+
+
+def _hash_outputs(ref tx: Transaction) raises -> List[UInt8]:
+    var out = List[UInt8]()
+    for i in range(len(tx.outputs)):
+        serialize_tx_output(out, tx.outputs[i])
+    return double_sha256(out)
+
+
+def _hash_single_output(ref tx: Transaction, input_index: Int) raises -> List[UInt8]:
+    var out = List[UInt8]()
+    serialize_tx_output(out, tx.outputs[input_index])
+    return double_sha256(out)
+
+
+def _zero32() -> List[UInt8]:
+    var out = List[UInt8]()
+    for _ in range(32):
+        out.append(UInt8(0))
+    return out^
+
+
+def bip143_sighash(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    amount_sats: Int64,
+    sighash_type: UInt8,
+) raises -> List[UInt8]:
+    var base_type = Int(sighash_type) & 0x1F
+    if base_type != 1 and base_type != 3:
+        raise Error("diagnostic BIP143 supports SIGHASH_ALL and SIGHASH_SINGLE only")
+    var anyone_can_pay = (Int(sighash_type) & 0x80) != 0
+    if input_index < 0 or input_index >= len(tx.inputs):
+        raise Error("input index out of range")
+    var hash_prevouts = _zero32()
+    if not anyone_can_pay:
+        hash_prevouts = _hash_prevouts(tx)
+    var hash_sequence = _zero32()
+    if not anyone_can_pay and base_type != 3:
+        hash_sequence = _hash_sequence(tx)
+    var hash_outputs = _zero32()
+    if base_type == 3 and input_index < len(tx.outputs):
+        hash_outputs = _hash_single_output(tx, input_index)
+    elif base_type != 3:
+        hash_outputs = _hash_outputs(tx)
+
+    var out = List[UInt8]()
+    append_i32_le(out, tx.version)
+    append_bytes(out, hash_prevouts)
+    append_bytes(out, hash_sequence)
+    append_bytes(out, tx.inputs[input_index].previous_hash)
+    append_u32_le(out, tx.inputs[input_index].previous_index)
+    append_varint(out, len(script_code))
+    append_bytes(out, script_code)
+    append_i64_le(out, amount_sats)
+    append_u32_le(out, tx.inputs[input_index].sequence)
+    append_bytes(out, hash_outputs)
+    append_u32_le(out, tx.lock_time)
+    append_u32_le(out, UInt32(sighash_type))
+    return double_sha256(out)
+
+
+def signature_digest_for_mode(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    ref signature: List[UInt8],
+    witness_v0: Bool,
+    witness_amount_sats: Int64,
+) raises -> List[UInt8]:
+    if len(signature) == 0:
+        raise Error("empty ECDSA signature")
+    var sighash_type = signature[len(signature) - 1]
+    if witness_v0:
+        return bip143_sighash(tx, input_index, script_code, witness_amount_sats, sighash_type)
+    return legacy_sighash(tx, input_index, script_code, signature)
 
 
 def verify_ecdsa_signature(
@@ -753,12 +3070,26 @@ def verify_ecdsa_signature(
     input_index: Int,
     ref script_code: List[UInt8],
 ) raises -> Bool:
+    return verify_ecdsa_signature_for_mode(shim_path, signature, pubkey, tx, input_index, script_code, False, Int64(0))
+
+
+def verify_ecdsa_signature_for_mode(
+    shim_path: String,
+    ref signature: List[UInt8],
+    ref pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    witness_v0: Bool,
+    witness_amount_sats: Int64,
+) raises -> Bool:
     if len(signature) == 0:
         return False
-    if signature[len(signature) - 1] != UInt8(1):
-        raise Error("diagnostic fixture only supports SIGHASH_ALL")
+    var base_type = Int(signature[len(signature) - 1]) & 0x1F
+    if base_type != 1 and base_type != 3:
+        raise Error("diagnostic fixture only supports SIGHASH_ALL and SIGHASH_SINGLE")
     var der = slice_bytes(signature, 0, len(signature) - 1)
-    var digest = legacy_sighash(tx, input_index, script_code, signature)
+    var digest = signature_digest_for_mode(tx, input_index, script_code, signature, witness_v0, witness_amount_sats)
     var native = OwnedDLHandle(shim_path)
     var pubkey_hex = bytes_to_hex(pubkey)
     var der_hex = bytes_to_hex(der)
@@ -776,6 +3107,443 @@ def verify_ecdsa_signature(
     if result == 1:
         return False
     raise Error("malformed ECDSA signature or pubkey")
+
+
+def verify_schnorr_signature(
+    shim_path: String,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref tapleaf_digest_value: List[UInt8],
+    codeseparator_pos: Int,
+) raises -> Bool:
+    if len(signature) == 0:
+        return False
+    var hash_type = UInt8(0)
+    var sig64 = List[UInt8]()
+    if len(signature) == 64:
+        sig64 = clone_bytes(signature)
+    elif len(signature) == 65:
+        hash_type = signature[64]
+        if hash_type == UInt8(0):
+            raise Error("invalid explicit Taproot default hash type")
+        sig64 = slice_bytes(signature, 0, 64)
+    else:
+        raise Error("invalid Schnorr signature length")
+    if len(xonly_pubkey) != 32:
+        raise Error("invalid x-only pubkey length")
+    var digest = taproot_signature_hash(tx, input_index, spent_prevouts, hash_type, tapleaf_digest_value, codeseparator_pos)
+    var native = OwnedDLHandle(shim_path)
+    var pubkey_hex = bytes_to_hex(xonly_pubkey)
+    var sig_hex = bytes_to_hex(sig64)
+    var digest_hex = bytes_to_hex(digest)
+    var result = native.call["mojobitnode_verify_schnorr_hex_len", Int32](
+        pubkey_hex.unsafe_ptr(),
+        Int32(pubkey_hex.byte_length()),
+        sig_hex.unsafe_ptr(),
+        Int32(sig_hex.byte_length()),
+        digest_hex.unsafe_ptr(),
+        Int32(digest_hex.byte_length()),
+    )
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed Schnorr signature or x-only pubkey")
+
+
+def verify_taproot_tweak(
+    shim_path: String,
+    ref internal_xonly: List[UInt8],
+    ref merkle_root: List[UInt8],
+    ref expected_xonly: List[UInt8],
+    expected_parity: Int,
+) raises -> Bool:
+    var native = OwnedDLHandle(shim_path)
+    var internal_hex = bytes_to_hex(internal_xonly)
+    var merkle_hex = bytes_to_hex(merkle_root)
+    var expected_hex = bytes_to_hex(expected_xonly)
+    var result = native.call["mojobitnode_verify_taproot_tweak_hex_len", Int32](
+        internal_hex.unsafe_ptr(),
+        Int32(internal_hex.byte_length()),
+        merkle_hex.unsafe_ptr(),
+        Int32(merkle_hex.byte_length()),
+        expected_hex.unsafe_ptr(),
+        Int32(expected_hex.byte_length()),
+        Int32(expected_parity),
+    )
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed Taproot tweak input")
+
+
+def evaluate_tapscript(
+    ref script: List[UInt8],
+    var stack: List[ScriptStackItem],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref tapleaf_digest_value: List[UInt8],
+    shim_path: String,
+) raises -> Bool:
+    var offset = 0
+    var instruction_pos = 0
+    var codeseparator_pos = 0xFFFFFFFF
+    var conditions = List[Bool]()
+    var alt_stack = List[ScriptStackItem]()
+    while offset < len(script):
+        var opcode = Int(script[offset])
+        var active = _conditions_active(conditions)
+        if opcode == 0 or (opcode >= 1 and opcode <= 75) or opcode == 0x4C or opcode == 0x4D or opcode == 0x4E:
+            var item = _read_script_push(script, offset)
+            offset += _script_push_size(script, offset)
+            if active:
+                stack.append(item^)
+            instruction_pos += 1
+            continue
+        if opcode >= 0x51 and opcode <= 0x60:
+            if active:
+                _stack_push_num(stack, opcode - 0x50)
+            offset += 1
+            instruction_pos += 1
+            continue
+        if opcode == 0x4F:
+            if active:
+                _stack_push_num(stack, -1)
+            offset += 1
+            instruction_pos += 1
+            continue
+        if opcode == 0x63 or opcode == 0x64:
+            var parent_active = active
+            var branch_active = False
+            if parent_active:
+                var item = _stack_pop(stack)
+                var truth = cast_to_bool(item.data)
+                branch_active = truth if opcode == 0x63 else not truth
+            conditions.append(parent_active and branch_active)
+            offset += 1
+            instruction_pos += 1
+            continue
+        if opcode == 0x67:
+            if len(conditions) == 0:
+                raise Error("unbalanced OP_ELSE")
+            var parent_active = True
+            for i in range(len(conditions) - 1):
+                if not conditions[i]:
+                    parent_active = False
+            conditions[len(conditions) - 1] = parent_active and not conditions[len(conditions) - 1]
+            offset += 1
+            instruction_pos += 1
+            continue
+        if opcode == 0x68:
+            if len(conditions) == 0:
+                raise Error("unbalanced OP_ENDIF")
+            _ = conditions.pop()
+            offset += 1
+            instruction_pos += 1
+            continue
+        if not active:
+            offset += 1
+            instruction_pos += 1
+            continue
+        if opcode == 0x61:
+            offset += 1
+            instruction_pos += 1
+            continue
+        if opcode == 0x75:
+            _ = _stack_pop(stack)
+        elif opcode == 0x76:
+            var item = _script_stack_item(stack, 1)
+            stack.append(item^)
+        elif opcode == 0x69:
+            var item = _stack_pop(stack)
+            if not cast_to_bool(item.data):
+                return False
+        elif opcode == 0x6B:
+            alt_stack.append(_stack_pop(stack))
+        elif opcode == 0x6C:
+            var item = _stack_pop(alt_stack)
+            stack.append(item^)
+        elif opcode == 0x6D:
+            _ = _stack_pop(stack)
+            _ = _stack_pop(stack)
+        elif opcode == 0x6E:
+            if len(stack) < 2:
+                raise Error("OP_2DUP stack underflow")
+            var a = stack[len(stack) - 2].copy()
+            var b = stack[len(stack) - 1].copy()
+            stack.append(a^)
+            stack.append(b^)
+        elif opcode == 0x6F:
+            if len(stack) < 3:
+                raise Error("OP_3DUP stack underflow")
+            var a = stack[len(stack) - 3].copy()
+            var b = stack[len(stack) - 2].copy()
+            var c = stack[len(stack) - 1].copy()
+            stack.append(a^)
+            stack.append(b^)
+            stack.append(c^)
+        elif opcode == 0x70:
+            if len(stack) < 4:
+                raise Error("OP_2OVER stack underflow")
+            var a = stack[len(stack) - 4].copy()
+            var b = stack[len(stack) - 3].copy()
+            stack.append(a^)
+            stack.append(b^)
+        elif opcode == 0x72:
+            if len(stack) < 4:
+                raise Error("OP_2SWAP stack underflow")
+            var d = _stack_pop(stack)
+            var c = _stack_pop(stack)
+            var b = _stack_pop(stack)
+            var a = _stack_pop(stack)
+            stack.append(c^)
+            stack.append(d^)
+            stack.append(a^)
+            stack.append(b^)
+        elif opcode == 0x73:
+            var item = _script_stack_item(stack, 1)
+            if cast_to_bool(item.data):
+                stack.append(item^)
+        elif opcode == 0x74:
+            _stack_push_num(stack, len(stack))
+        elif opcode == 0x77:
+            if len(stack) < 2:
+                raise Error("OP_NIP stack underflow")
+            var top = _stack_pop(stack)
+            _ = _stack_pop(stack)
+            stack.append(top^)
+        elif opcode == 0x78:
+            if len(stack) < 2:
+                raise Error("OP_OVER stack underflow")
+            var item = stack[len(stack) - 2].copy()
+            stack.append(item^)
+        elif opcode == 0x79:
+            var n = decode_script_num(_stack_pop(stack).data)
+            if n < 0 or n >= len(stack):
+                raise Error("OP_PICK stack underflow")
+            var item = stack[len(stack) - 1 - n].copy()
+            stack.append(item^)
+        elif opcode == 0x7A:
+            var n = decode_script_num(_stack_pop(stack).data)
+            if n < 0 or n >= len(stack):
+                raise Error("OP_ROLL stack underflow")
+            var item = stack.pop(len(stack) - 1 - n)
+            stack.append(item^)
+        elif opcode == 0x7B:
+            if len(stack) < 3:
+                raise Error("OP_ROT stack underflow")
+            var c = _stack_pop(stack)
+            var b = _stack_pop(stack)
+            var a = _stack_pop(stack)
+            stack.append(b^)
+            stack.append(c^)
+            stack.append(a^)
+        elif opcode == 0x7C:
+            if len(stack) < 2:
+                raise Error("OP_SWAP stack underflow")
+            var b = _stack_pop(stack)
+            var a = _stack_pop(stack)
+            stack.append(b^)
+            stack.append(a^)
+        elif opcode == 0x7D:
+            if len(stack) < 2:
+                raise Error("OP_TUCK stack underflow")
+            var top = _stack_pop(stack)
+            var second = _stack_pop(stack)
+            stack.append(top.copy()^)
+            stack.append(second^)
+            stack.append(top^)
+        elif opcode == 0x82:
+            var item = _script_stack_item(stack, 1)
+            _stack_push_num(stack, len(item.data))
+        elif opcode == 0x87 or opcode == 0x88:
+            var b = _stack_pop(stack)
+            var a = _stack_pop(stack)
+            _stack_push_num(stack, 1 if bytes_equal(a.data, b.data) else 0)
+            if opcode == 0x88:
+                var result = _stack_pop(stack)
+                if not cast_to_bool(result.data):
+                    return False
+        elif opcode == 0x8C:
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, a - 1)
+        elif opcode == 0x8F:
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, -a)
+        elif opcode == 0x90:
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, -a if a < 0 else a)
+        elif opcode == 0x91:
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if a == 0 else 0)
+        elif opcode == 0x92:
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if a != 0 else 0)
+        elif opcode == 0x93:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, a + b)
+        elif opcode == 0x94:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, a - b)
+        elif opcode == 0x95:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, a * b)
+        elif opcode == 0x9A:
+            var b = cast_to_bool(_stack_pop(stack).data)
+            var a = cast_to_bool(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if a and b else 0)
+        elif opcode == 0x9B:
+            var b = cast_to_bool(_stack_pop(stack).data)
+            var a = cast_to_bool(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if a or b else 0)
+        elif opcode == 0x9C or opcode == 0x9D or opcode == 0x9E:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            var equal = a == b
+            if opcode == 0x9E:
+                equal = not equal
+            _stack_push_num(stack, 1 if equal else 0)
+            if opcode == 0x9D:
+                var result = _stack_pop(stack)
+                if not cast_to_bool(result.data):
+                    return False
+        elif opcode == 0x9F or opcode == 0xA0 or opcode == 0xA1 or opcode == 0xA2:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            var ok = False
+            if opcode == 0x9F:
+                ok = a < b
+            elif opcode == 0xA0:
+                ok = a > b
+            elif opcode == 0xA1:
+                ok = a <= b
+            else:
+                ok = a >= b
+            _stack_push_num(stack, 1 if ok else 0)
+        elif opcode == 0xA3 or opcode == 0xA4:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            if opcode == 0xA3:
+                _stack_push_num(stack, a if a < b else b)
+            else:
+                _stack_push_num(stack, a if a > b else b)
+        elif opcode == 0xA5:
+            var max_value = decode_script_num(_stack_pop(stack).data)
+            var min_value = decode_script_num(_stack_pop(stack).data)
+            var value = decode_script_num(_stack_pop(stack).data)
+            _stack_push_num(stack, 1 if min_value <= value and value < max_value else 0)
+        elif opcode == 0xA6:
+            var item = _stack_pop(stack)
+            var hash = ripemd160_digest(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+        elif opcode == 0xA7:
+            var item = _stack_pop(stack)
+            var hash = sha1_digest(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+        elif opcode == 0xA8:
+            var item = _stack_pop(stack)
+            var hash = sha256_digest(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+        elif opcode == 0xA9:
+            var item = _stack_pop(stack)
+            var hash = hash160(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+        elif opcode == 0xAA:
+            var item = _stack_pop(stack)
+            var hash = hash256(item.data)
+            var pushed = ScriptStackItem()
+            pushed.data = hash^
+            stack.append(pushed^)
+        elif opcode == 0xAB:
+            codeseparator_pos = instruction_pos
+        elif opcode == 0xAC or opcode == 0xAD:
+            var pubkey = _stack_pop(stack)
+            var signature = _stack_pop(stack)
+            if len(pubkey.data) == 0:
+                raise Error("empty x-only pubkey")
+            var valid = False
+            if len(pubkey.data) != 32:
+                valid = len(signature.data) != 0
+            elif len(signature.data) != 0:
+                valid = verify_schnorr_signature(
+                    shim_path,
+                    signature.data,
+                    pubkey.data,
+                    tx,
+                    input_index,
+                    spent_prevouts,
+                    tapleaf_digest_value,
+                    codeseparator_pos,
+                )
+            if opcode == 0xAC:
+                _stack_push_num(stack, 1 if valid else 0)
+            elif not valid:
+                return False
+        elif opcode == 0xBA:
+            var pubkey = _stack_pop(stack)
+            var n = decode_script_num(_stack_pop(stack).data)
+            var signature = _stack_pop(stack)
+            if len(pubkey.data) == 0:
+                raise Error("empty x-only pubkey")
+            var valid = False
+            if len(pubkey.data) != 32:
+                valid = len(signature.data) != 0
+            elif len(signature.data) != 0:
+                valid = verify_schnorr_signature(
+                    shim_path,
+                    signature.data,
+                    pubkey.data,
+                    tx,
+                    input_index,
+                    spent_prevouts,
+                    tapleaf_digest_value,
+                    codeseparator_pos,
+                )
+            _stack_push_num(stack, n + (1 if valid else 0))
+        elif opcode == 0xB1:
+            if tx.version >= 2:
+                var item = _script_stack_item(stack, 1)
+                var lock_time = decode_script_num(item.data)
+                if lock_time < 0:
+                    raise Error("negative CLTV lock time")
+                if lock_time > Int(tx.lock_time):
+                    return False
+                if tx.inputs[input_index].sequence == UInt32(0xFFFFFFFF):
+                    return False
+        elif opcode == 0xB2:
+            if tx.version >= 2:
+                var item = _script_stack_item(stack, 1)
+                var sequence = decode_script_num(item.data)
+                if sequence < 0:
+                    raise Error("negative CSV sequence")
+                if (Int(tx.inputs[input_index].sequence) & 0x80000000) == 0:
+                    if sequence > (Int(tx.inputs[input_index].sequence) & 0xFFFF):
+                        return False
+        elif opcode == 0xAE or opcode == 0xAF:
+            raise Error("CHECKMULTISIG disabled in tapscript")
+        else:
+            raise Error("unsupported tapscript opcode in Mojo diagnostic script engine")
+        offset += 1
+        instruction_pos += 1
+    if len(conditions) != 0:
+        raise Error("unbalanced conditional")
+    return _script_terminal_success(stack)
 
 
 def evaluate_bare_multisig_fixture(ref fixture: ScriptFixture, shim_path: String) raises -> Bool:

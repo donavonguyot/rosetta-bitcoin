@@ -2,7 +2,22 @@ from std.ffi import OwnedDLHandle
 from std.os import getenv
 from std.sys import argv
 
-from script_corpus_foundation import evaluate_bare_multisig_fixture, load_bare_multisig_fixture
+from script_corpus_foundation import (
+    evaluate_bare_legacy_fixture,
+    evaluate_bare_multisig_fixture,
+    evaluate_p2pkh_fixture,
+    evaluate_p2sh_fixture,
+    evaluate_taproot_fixture,
+    evaluate_witness_v0_fixture,
+    is_bare_legacy_diagnostic_fixture,
+    is_p2pkh_diagnostic_fixture,
+    is_simple_p2sh_diagnostic_fixture,
+    is_taproot_diagnostic_fixture,
+    is_witness_v0_diagnostic_fixture,
+    load_bare_multisig_fixture,
+    manifest_contains_fixture,
+)
+from script_corpus_table import fixture_meta, selected_fixture_ids
 
 
 def bool_json(value: Bool) -> String:
@@ -86,7 +101,8 @@ def main() raises:
     var result_path = String("")
     var vectors_path = String("../Shared/conformance/fixtures/native_crypto_v1_vectors.json")
     var manifest_path = String("../Shared/conformance/fixtures/scripts/manifest.json")
-    var fixture_id = String("scripts.bare_multisig_27840")
+    var fixture_id = String("")
+    var fixture_set = String("all")
     for i in range(len(args)):
         if args[i] == "--datadir" and i + 1 < len(args):
             datadir = String(args[i + 1])
@@ -98,11 +114,12 @@ def main() raises:
             manifest_path = String(args[i + 1])
         if args[i] == "--fixture-id" and i + 1 < len(args):
             fixture_id = String(args[i + 1])
-
-    var native = OwnedDLHandle(shim_path)
-    var crypto_available = native.call["mojobitnode_native_crypto_available", Int32]() == 1
+        if args[i] == "--fixture-set" and i + 1 < len(args):
+            fixture_set = String(args[i + 1])
 
     if command == "status":
+        var native = OwnedDLHandle(shim_path)
+        var crypto_available = native.call["mojobitnode_native_crypto_available", Int32]() == 1
         var json = (
             String('{"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","chain":"testnet4",')
             + String('"runtime_surface":"')
@@ -121,6 +138,7 @@ def main() raises:
         return
 
     if command == "native-crypto-vectors":
+        var native = OwnedDLHandle(shim_path)
         var case_total = native.call["mojobitnode_native_crypto_vector_count", Int32]()
         var passed_count = 0
         var results = String("")
@@ -169,25 +187,66 @@ def main() raises:
         return
 
     if command == "script-corpus-dev":
-        if fixture_id != "scripts.bare_multisig_27840":
-            var unsupported_json = (
-                String('{"schema":"port.script_corpus_result.v1","category":"script_corpus",')
-                + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
-                + surface
-                + String('","entrypoint_language":"mojo","native_crypto_backend":"libsecp256k1",')
-                + String('"native_shim":"owned_c","verifier":{"engine":"mojo_dev_foundation","delegated":false},')
-                + String('"fixture_count":1,"passed":0,"failed":1,"result":"failed",')
-                + String('"results":[{"fixture_id":"')
-                + fixture_id
-                + String('","result":"failed","failure":"unsupported fixture in Mojo diagnostic foundation"}]}')
+        var selected = selected_fixture_ids(fixture_id, fixture_set)
+        var passed_count = 0
+        var failed_count = 0
+        var results = String("")
+        for i in range(len(selected)):
+            var current_id = selected[i]
+            var meta = fixture_meta(current_id)
+            var eval_id = String(meta.fixture_id)
+            var current_passed = False
+            var failure = String("")
+            if not manifest_contains_fixture(manifest_path, eval_id):
+                failure = String("fixture id not present in Shared manifest")
+            elif eval_id == "scripts.bare_multisig_27840":
+                var fixture = load_bare_multisig_fixture(manifest_path)
+                current_passed = evaluate_bare_multisig_fixture(fixture, shim_path)
+                if not current_passed:
+                    failure = String("Mojo bare multisig evaluator returned false")
+            elif is_simple_p2sh_diagnostic_fixture(eval_id):
+                current_passed = evaluate_p2sh_fixture(manifest_path, eval_id, shim_path)
+                if not current_passed:
+                    failure = String("Mojo P2SH evaluator returned false")
+            elif is_p2pkh_diagnostic_fixture(eval_id):
+                current_passed = evaluate_p2pkh_fixture(manifest_path, eval_id, shim_path)
+                if not current_passed:
+                    failure = String("Mojo P2PKH evaluator returned false")
+            elif is_bare_legacy_diagnostic_fixture(eval_id):
+                current_passed = evaluate_bare_legacy_fixture(manifest_path, eval_id, shim_path)
+                if not current_passed:
+                    failure = String("Mojo bare legacy evaluator returned false")
+            elif is_witness_v0_diagnostic_fixture(eval_id):
+                current_passed = evaluate_witness_v0_fixture(manifest_path, eval_id, shim_path)
+                if not current_passed:
+                    failure = String("Mojo witness v0 evaluator returned false")
+            elif is_taproot_diagnostic_fixture(eval_id):
+                current_passed = evaluate_taproot_fixture(manifest_path, eval_id, shim_path)
+                if not current_passed:
+                    failure = String("Mojo Taproot/Tapscript evaluator returned false")
+            else:
+                failure = String("unsupported fixture in Mojo diagnostic corpus runner")
+            if current_passed:
+                passed_count += 1
+            else:
+                failed_count += 1
+            if i != 0:
+                results += String(",")
+            results += (
+                String('{"fixture_id":"')
+                + current_id
+                + String('","height":')
+                + String(meta.height)
+                + String(',"required_rules":"')
+                + meta.required_rules
+                + String('","result":"')
+                + result_json(current_passed)
+                + String('"')
             )
-            print(unsupported_json)
-            if result_path != "":
-                _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), unsupported_json.unsafe_ptr())
-            return
-
-        var fixture = load_bare_multisig_fixture(manifest_path)
-        var fixture_passed = evaluate_bare_multisig_fixture(fixture, shim_path)
+            if not current_passed:
+                results += String(',"failure":"') + failure + String('"')
+            results += String("}")
+        var all_passed = failed_count == 0
         var json = (
             String('{"schema":"port.script_corpus_result.v1","category":"script_corpus",')
             + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
@@ -196,31 +255,29 @@ def main() raises:
             + String('"native_shim":"owned_c","verifier":{"engine":"mojo_dev_foundation","delegated":false},')
             + String('"manifest":"')
             + manifest_path
-            + String('","fixture_count":1,"passed":')
-            + passed_count_json(fixture_passed)
+            + String('","fixture_set":"')
+            + fixture_set
+            + String('","fixture_count":')
+            + String(len(selected))
+            + String(',"passed":')
+            + String(passed_count)
             + String(',"failed":')
-            + failed_count_json(fixture_passed)
+            + String(failed_count)
             + String(',"result":"')
-            + result_json(fixture_passed)
+            + result_json(all_passed)
             + String('",')
-            + String('"results":[{"fixture_id":"')
-            + fixture.fixture_id
-            + String('","height":')
-            + String(fixture.height)
-            + String(',"input_index":')
-            + String(fixture.input_index)
-            + String(',"required_rules":["')
-            + fixture.required_rule
-            + String('"],"result":"')
-            + result_json(fixture_passed)
-            + String('"}]}')
+            + String('"results":[')
+            + results
+            + String("]}")
         )
         print(json)
         if result_path != "":
+            var native = OwnedDLHandle(shim_path)
             _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), json.unsafe_ptr())
         return
 
     if command == "storage-proof":
+        var native = OwnedDLHandle(shim_path)
         var mask = native.call["mojobitnode_storage_probe", Int32](datadir.unsafe_ptr())
         var create_ok = (mask & 1) != 0
         var read_ok = (mask & 2) != 0

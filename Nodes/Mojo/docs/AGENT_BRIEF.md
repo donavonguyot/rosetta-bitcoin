@@ -36,11 +36,15 @@ The CLI is Mojo-owned and must continue to report
 separate C proof executable.
 
 `script-corpus-dev --manifest <path> --fixture-id <id> --result-path <path>` is
-a host diagnostic foundation for the future corpus runner. It currently supports
-only `scripts.bare_multisig_27840`, which now passes through Mojo-owned legacy
-sighash/script handling plus the owned C shim's generic `libsecp256k1` DER
-verifier. Keep it out of `current_evidence.json` and Docker manifest coverage
-until it is a real 45/45 corpus command.
+a host diagnostic foundation for the future corpus runner. It also accepts
+`--fixture-set legacy|segwit-v0|non-taproot|taproot|all`. The current diagnostic
+runner passes the non-Taproot slice (`28/28`) through Mojo-owned legacy, P2SH,
+P2PKH, SegWit v0, BIP143, and shared opcode handling plus the owned C shim's
+generic `libsecp256k1` DER verifier. Taproot/Tapscript has started: the
+foundation includes Taproot script-path commitment checks, TapLeaf/TapSighash
+hashing, generic Schnorr verification, and a first passing diagnostic fixture.
+The full Taproot set is not clean. Keep this out of `current_evidence.json` and
+Docker manifest coverage until it is a real 45/45 corpus command.
 
 ## Native Boundary
 

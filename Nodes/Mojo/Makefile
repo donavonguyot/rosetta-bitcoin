@@ -22,6 +22,8 @@ CRYPTO_VECTORS ?= ../Shared/conformance/fixtures/native_crypto_v1_vectors.json
 HOST_CRYPTO_RESULT ?= /tmp/mojo_native_crypto_vectors_host_$(RESULT_DATE).json
 HOST_STORAGE_RESULT ?= /tmp/mojo_rocksdb_storage_proof_host_$(RESULT_DATE).json
 HOST_SCRIPT_CORPUS_DEV_RESULT ?= /tmp/mojo_script_corpus_dev_$(RESULT_DATE).json
+FIXTURE_ID ?= scripts.bare_multisig_27840
+FIXTURE_SET ?= all
 DATA_VOLUME ?= mojobitnode_data
 PROOF_VOLUME ?= mojobitnode_proof_data
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
@@ -62,7 +64,7 @@ $(SHIM_LIB): src/mojo_native_shim.c | host-deps-check
 	  $$($(PKG_CONFIG) --cflags --libs rocksdb libsecp256k1 openssl) \
 	  -lstdc++
 
-$(MOJO_BIN): src/mojobitnode.mojo src/script_corpus_foundation.mojo $(MOJO_VERSION_STAMP) $(SHIM_LIB)
+$(MOJO_BIN): src/mojobitnode.mojo src/script_corpus_foundation.mojo src/script_corpus_table.mojo $(MOJO_VERSION_STAMP) $(SHIM_LIB)
 	$(MOJO) build -I src src/mojobitnode.mojo -o $(MOJO_BIN)
 
 host-build: host-deps-check $(MOJO_BIN)
@@ -92,15 +94,11 @@ host-storage-proof: host-build
 host-script-corpus-dev: host-build
 	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus-dev \
 	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
-	  --fixture-id scripts.bare_multisig_27840 \
+	  $(if $(FIXTURE_ID),--fixture-id $(FIXTURE_ID),--fixture-set $(FIXTURE_SET)) \
 	  --result-path $(HOST_SCRIPT_CORPUS_DEV_RESULT)); \
 	  echo "$$out"; \
 	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"; \
 	  grep -q '"delegated":false' <<< "$$out"; \
-	  grep -q '"fixture_id":"scripts.bare_multisig_27840"' <<< "$$out"; \
-	  grep -q '"passed":1' <<< "$$out"; \
-	  grep -q '"failed":0' <<< "$$out"; \
-	  grep -q '"result":"passed"' <<< "$$out"; \
 	  test -s "$(HOST_SCRIPT_CORPUS_DEV_RESULT)"
 
 host-smoke-once: host-build

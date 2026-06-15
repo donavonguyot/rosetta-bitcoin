@@ -263,6 +263,38 @@ static int32_t verify_schnorr(secp256k1_context *ctx, const crypto_vector *vecto
              : CRYPTO_RESULT_CONSENSUS_INVALID;
 }
 
+int32_t mojobitnode_verify_schnorr_hex_len(const char *xonly_hex, int32_t xonly_hex_len,
+                                           const char *signature_hex, int32_t signature_hex_len,
+                                           const char *msg_hash_hex, int32_t msg_hash_hex_len) {
+  if (!xonly_hex || !signature_hex || !msg_hash_hex || xonly_hex_len != 64 || signature_hex_len != 128 ||
+      msg_hash_hex_len != 64) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  uint8_t xonly[32];
+  uint8_t sig[64];
+  uint8_t msg[32];
+  if (!hex_to_bytes_len(xonly_hex, (size_t)xonly_hex_len, xonly, sizeof(xonly)) ||
+      !hex_to_bytes_len(signature_hex, (size_t)signature_hex_len, sig, sizeof(sig)) ||
+      !hex_to_bytes_len(msg_hash_hex, (size_t)msg_hash_hex_len, msg, sizeof(msg))) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  if (!ctx) {
+    return CRYPTO_RESULT_UNKNOWN;
+  }
+  secp256k1_xonly_pubkey pubkey;
+  int32_t result = CRYPTO_RESULT_MALFORMED_INPUT;
+  if (secp256k1_xonly_pubkey_parse(ctx, &pubkey, xonly) == 1) {
+    result = secp256k1_schnorrsig_verify(ctx, sig, msg, sizeof(msg), &pubkey) == 1
+                 ? CRYPTO_RESULT_VALID
+                 : CRYPTO_RESULT_CONSENSUS_INVALID;
+  }
+  secp256k1_context_destroy(ctx);
+  return result;
+}
+
 static int32_t verify_taproot(secp256k1_context *ctx, const crypto_vector *vector) {
   uint8_t internal_xonly[32];
   uint8_t tweak[32];
@@ -287,6 +319,63 @@ static int32_t verify_taproot(secp256k1_context *ctx, const crypto_vector *vecto
                  parity == vector->expected_parity
              ? CRYPTO_RESULT_VALID
              : CRYPTO_RESULT_CONSENSUS_INVALID;
+}
+
+int32_t mojobitnode_verify_taproot_tweak_hex_len(const char *internal_xonly_hex, int32_t internal_xonly_hex_len,
+                                                 const char *merkle_root_hex, int32_t merkle_root_hex_len,
+                                                 const char *expected_xonly_hex, int32_t expected_xonly_hex_len,
+                                                 int32_t expected_parity) {
+  if (!internal_xonly_hex || !merkle_root_hex || !expected_xonly_hex || internal_xonly_hex_len != 64 ||
+      expected_xonly_hex_len != 64 || (merkle_root_hex_len != 0 && merkle_root_hex_len != 64) ||
+      (expected_parity != 0 && expected_parity != 1)) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  uint8_t internal_xonly[32];
+  uint8_t merkle_root[32];
+  if (!hex_to_bytes_len(internal_xonly_hex, (size_t)internal_xonly_hex_len, internal_xonly,
+                        sizeof(internal_xonly))) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+  if (merkle_root_hex_len == 64 &&
+      !hex_to_bytes_len(merkle_root_hex, (size_t)merkle_root_hex_len, merkle_root, sizeof(merkle_root))) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  char merkle_root_buffer[65];
+  merkle_root_buffer[0] = '\0';
+  if (merkle_root_hex_len == 64) {
+    bytes_to_hex(merkle_root, sizeof(merkle_root), merkle_root_buffer);
+  }
+
+  uint8_t tweak[32];
+  if (!taproot_tweak_hash(internal_xonly, merkle_root_buffer, tweak)) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  if (!ctx) {
+    return CRYPTO_RESULT_UNKNOWN;
+  }
+
+  secp256k1_xonly_pubkey internal;
+  secp256k1_pubkey output;
+  secp256k1_xonly_pubkey output_xonly_pubkey;
+  uint8_t output_xonly[32];
+  int parity = 0;
+  int32_t result = CRYPTO_RESULT_MALFORMED_INPUT;
+  if (secp256k1_xonly_pubkey_parse(ctx, &internal, internal_xonly) == 1 &&
+      secp256k1_xonly_pubkey_tweak_add(ctx, &output, &internal, tweak) == 1 &&
+      secp256k1_xonly_pubkey_from_pubkey(ctx, &output_xonly_pubkey, &parity, &output) == 1 &&
+      secp256k1_xonly_pubkey_serialize(ctx, output_xonly, &output_xonly_pubkey) == 1) {
+    char output_hex[65];
+    bytes_to_hex(output_xonly, sizeof(output_xonly), output_hex);
+    result = strcmp(output_hex, expected_xonly_hex) == 0 && parity == expected_parity
+                 ? CRYPTO_RESULT_VALID
+                 : CRYPTO_RESULT_CONSENSUS_INVALID;
+  }
+  secp256k1_context_destroy(ctx);
+  return result;
 }
 
 static bool ensure_dir(const char *path) {
