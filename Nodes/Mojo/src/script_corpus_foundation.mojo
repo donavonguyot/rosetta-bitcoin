@@ -1,5 +1,6 @@
 from std.collections import List
 from std.ffi import OwnedDLHandle
+from std.memory.unsafe_pointer import alloc
 from std.pathlib import Path
 
 
@@ -586,6 +587,7 @@ def evaluate_legacy_script(
 ) raises -> Bool:
     var offset = 0
     var code_separator_offset = 0
+    var sighash_precompute = build_sighash_precompute(tx)
     var conditions = List[Bool]()
     var alt_stack = List[ScriptStackItem]()
     while offset < len(script):
@@ -923,7 +925,7 @@ def evaluate_legacy_script(
             var pubkey = _stack_pop(stack)
             var signature = _stack_pop(stack)
             var effective_script = slice_bytes(script, code_separator_offset, len(script))
-            var ok = verify_ecdsa_signature_for_mode(
+            var ok = verify_ecdsa_signature_for_mode_cached(
                 shim_path,
                 signature.data,
                 pubkey.data,
@@ -932,6 +934,7 @@ def evaluate_legacy_script(
                 effective_script,
                 witness_v0,
                 witness_amount_sats,
+                sighash_precompute,
             )
             _stack_push_num(stack, 1 if ok else 0)
             offset += 1
@@ -942,7 +945,7 @@ def evaluate_legacy_script(
             var pubkey = _stack_pop(stack)
             var signature = _stack_pop(stack)
             var effective_script = slice_bytes(script, code_separator_offset, len(script))
-            var ok = verify_ecdsa_signature_for_mode(
+            var ok = verify_ecdsa_signature_for_mode_cached(
                 shim_path,
                 signature.data,
                 pubkey.data,
@@ -951,6 +954,7 @@ def evaluate_legacy_script(
                 effective_script,
                 witness_v0,
                 witness_amount_sats,
+                sighash_precompute,
             )
             if not ok:
                 return False
@@ -980,9 +984,9 @@ def evaluate_legacy_script(
                     sig_index += 1
                     continue
                 var matched = False
+                var effective_script = slice_bytes(script, code_separator_offset, len(script))
                 while key_index < len(pubkeys):
-                    var effective_script = slice_bytes(script, code_separator_offset, len(script))
-                    var ok = verify_ecdsa_signature_for_mode(
+                    var ok = verify_ecdsa_signature_for_mode_cached(
                         shim_path,
                         signatures[sig_index].data,
                         pubkeys[key_index].data,
@@ -991,6 +995,7 @@ def evaluate_legacy_script(
                         effective_script,
                         witness_v0,
                         witness_amount_sats,
+                        sighash_precompute,
                     )
                     key_index += 1
                     if ok:
@@ -3004,6 +3009,76 @@ def serialize_taproot_spent_output(mut out: List[UInt8], ref prevout: TaprootPre
     append_bytes(out, prevout.script_pubkey)
 
 
+struct SighashPrecompute(Copyable):
+    var bip143_available: Bool
+    var bip143_hash_prevouts: List[UInt8]
+    var bip143_hash_sequence: List[UInt8]
+    var bip143_hash_outputs: List[UInt8]
+    var bip143_hash_single_outputs: List[List[UInt8]]
+    var taproot_available: Bool
+    var taproot_hash_prevouts: List[UInt8]
+    var taproot_hash_amounts: List[UInt8]
+    var taproot_hash_scriptpubkeys: List[UInt8]
+    var taproot_hash_sequences: List[UInt8]
+    var taproot_hash_outputs: List[UInt8]
+    var taproot_hash_single_outputs: List[List[UInt8]]
+
+    def __init__(out self):
+        self.bip143_available = False
+        self.bip143_hash_prevouts = List[UInt8]()
+        self.bip143_hash_sequence = List[UInt8]()
+        self.bip143_hash_outputs = List[UInt8]()
+        self.bip143_hash_single_outputs = List[List[UInt8]]()
+        self.taproot_available = False
+        self.taproot_hash_prevouts = List[UInt8]()
+        self.taproot_hash_amounts = List[UInt8]()
+        self.taproot_hash_scriptpubkeys = List[UInt8]()
+        self.taproot_hash_sequences = List[UInt8]()
+        self.taproot_hash_outputs = List[UInt8]()
+        self.taproot_hash_single_outputs = List[List[UInt8]]()
+
+
+def build_sighash_precompute(ref tx: Transaction) raises -> SighashPrecompute:
+    var empty_prevouts = List[TaprootPrevout]()
+    return build_sighash_precompute_with_taproot(tx, empty_prevouts)
+
+
+def build_sighash_precompute_with_taproot(
+    ref tx: Transaction, ref spent_prevouts: List[TaprootPrevout]
+) raises -> SighashPrecompute:
+    var cache = SighashPrecompute()
+    cache.bip143_hash_prevouts = _hash_prevouts(tx)
+    cache.bip143_hash_sequence = _hash_sequence(tx)
+    cache.bip143_hash_outputs = _hash_outputs(tx)
+    for i in range(len(tx.outputs)):
+        var single = _hash_single_output(tx, i)
+        cache.bip143_hash_single_outputs.append(single^)
+    cache.bip143_available = True
+
+    if len(spent_prevouts) == len(tx.inputs):
+        var prev_blob = List[UInt8]()
+        var amount_blob = List[UInt8]()
+        var script_blob = List[UInt8]()
+        var sequence_blob = List[UInt8]()
+        for i in range(len(tx.inputs)):
+            append_bytes(prev_blob, tx.inputs[i].previous_hash)
+            append_u32_le(prev_blob, tx.inputs[i].previous_index)
+            append_i64_le(amount_blob, spent_prevouts[i].amount)
+            append_varint(script_blob, len(spent_prevouts[i].script_pubkey))
+            append_bytes(script_blob, spent_prevouts[i].script_pubkey)
+            append_u32_le(sequence_blob, tx.inputs[i].sequence)
+        cache.taproot_hash_prevouts = sha256_digest(prev_blob)
+        cache.taproot_hash_amounts = sha256_digest(amount_blob)
+        cache.taproot_hash_scriptpubkeys = sha256_digest(script_blob)
+        cache.taproot_hash_sequences = sha256_digest(sequence_blob)
+        cache.taproot_hash_outputs = sha256_serialized_outputs(tx)
+        for i in range(len(tx.outputs)):
+            var single = sha256_serialized_single_output(tx, i)
+            cache.taproot_hash_single_outputs.append(single^)
+        cache.taproot_available = True
+    return cache^
+
+
 def taproot_signature_hash(
     ref tx: Transaction,
     input_index: Int,
@@ -3077,6 +3152,67 @@ def taproot_signature_hash(
     return tagged_hash(String("TapSighash"), msg)
 
 
+def taproot_signature_hash_cached(
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    hash_type: UInt8,
+    ref leaf_hash_value: List[UInt8],
+    codeseparator_pos: Int,
+    ref precompute: SighashPrecompute,
+) raises -> List[UInt8]:
+    var hash_type_int = Int(hash_type)
+    if not (hash_type_int <= 3 or (hash_type_int >= 0x81 and hash_type_int <= 0x83)):
+        raise Error("unsupported Taproot hash type")
+    var output_mode = hash_type_int & 0x03
+    if hash_type_int == 0:
+        output_mode = 1
+    var anyone_can_pay = (hash_type_int & 0x80) != 0
+    if input_index < 0 or input_index >= len(tx.inputs) or input_index >= len(spent_prevouts):
+        raise Error("Taproot input index out of range")
+    if len(spent_prevouts) != len(tx.inputs):
+        raise Error("Taproot spent prevouts length mismatch")
+    if output_mode == 3 and input_index >= len(tx.outputs):
+        raise Error("Taproot SIGHASH_SINGLE without matching output")
+    if not precompute.taproot_available:
+        return taproot_signature_hash(tx, input_index, spent_prevouts, hash_type, leaf_hash_value, codeseparator_pos)
+
+    var body = List[UInt8]()
+    body.append(hash_type)
+    append_i32_le(body, tx.version)
+    append_u32_le(body, tx.lock_time)
+
+    if not anyone_can_pay:
+        append_bytes(body, precompute.taproot_hash_prevouts)
+        append_bytes(body, precompute.taproot_hash_amounts)
+        append_bytes(body, precompute.taproot_hash_scriptpubkeys)
+        append_bytes(body, precompute.taproot_hash_sequences)
+
+    if output_mode == 1:
+        append_bytes(body, precompute.taproot_hash_outputs)
+
+    body.append(UInt8(2))
+    if anyone_can_pay:
+        append_bytes(body, tx.inputs[input_index].previous_hash)
+        append_u32_le(body, tx.inputs[input_index].previous_index)
+        serialize_taproot_spent_output(body, spent_prevouts[input_index])
+        append_u32_le(body, tx.inputs[input_index].sequence)
+    else:
+        append_u32_le(body, UInt32(input_index))
+
+    if output_mode == 3:
+        append_bytes(body, precompute.taproot_hash_single_outputs[input_index])
+
+    append_bytes(body, leaf_hash_value)
+    body.append(UInt8(0))
+    append_u32_le(body, UInt32(codeseparator_pos))
+
+    var msg = List[UInt8]()
+    msg.append(UInt8(0))
+    append_bytes(msg, body)
+    return tagged_hash(String("TapSighash"), msg)
+
+
 def taproot_key_path_signature_hash(
     ref tx: Transaction,
     input_index: Int,
@@ -3139,6 +3275,61 @@ def taproot_key_path_signature_hash(
     if output_mode == 3:
         var hash_single = sha256_serialized_single_output(tx, input_index)
         append_bytes(body, hash_single)
+
+    var msg = List[UInt8]()
+    msg.append(UInt8(0))
+    append_bytes(msg, body)
+    return tagged_hash(String("TapSighash"), msg)
+
+
+def taproot_key_path_signature_hash_cached(
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    hash_type: UInt8,
+    ref precompute: SighashPrecompute,
+) raises -> List[UInt8]:
+    var hash_type_int = Int(hash_type)
+    if not (hash_type_int <= 3 or (hash_type_int >= 0x81 and hash_type_int <= 0x83)):
+        raise Error("unsupported Taproot hash type")
+    var output_mode = hash_type_int & 0x03
+    if hash_type_int == 0:
+        output_mode = 1
+    var anyone_can_pay = (hash_type_int & 0x80) != 0
+    if input_index < 0 or input_index >= len(tx.inputs) or input_index >= len(spent_prevouts):
+        raise Error("Taproot input index out of range")
+    if len(spent_prevouts) != len(tx.inputs):
+        raise Error("Taproot spent prevouts length mismatch")
+    if output_mode == 3 and input_index >= len(tx.outputs):
+        raise Error("Taproot SIGHASH_SINGLE without matching output")
+    if not precompute.taproot_available:
+        return taproot_key_path_signature_hash(tx, input_index, spent_prevouts, hash_type)
+
+    var body = List[UInt8]()
+    body.append(hash_type)
+    append_i32_le(body, tx.version)
+    append_u32_le(body, tx.lock_time)
+
+    if not anyone_can_pay:
+        append_bytes(body, precompute.taproot_hash_prevouts)
+        append_bytes(body, precompute.taproot_hash_amounts)
+        append_bytes(body, precompute.taproot_hash_scriptpubkeys)
+        append_bytes(body, precompute.taproot_hash_sequences)
+
+    if output_mode == 1:
+        append_bytes(body, precompute.taproot_hash_outputs)
+
+    body.append(UInt8(0))
+    if anyone_can_pay:
+        append_bytes(body, tx.inputs[input_index].previous_hash)
+        append_u32_le(body, tx.inputs[input_index].previous_index)
+        serialize_taproot_spent_output(body, spent_prevouts[input_index])
+        append_u32_le(body, tx.inputs[input_index].sequence)
+    else:
+        append_u32_le(body, UInt32(input_index))
+
+    if output_mode == 3:
+        append_bytes(body, precompute.taproot_hash_single_outputs[input_index])
 
     var msg = List[UInt8]()
     msg.append(UInt8(0))
@@ -3240,6 +3431,51 @@ def bip143_sighash(
     return double_sha256(out)
 
 
+def bip143_sighash_cached(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    amount_sats: Int64,
+    sighash_type: UInt8,
+    ref precompute: SighashPrecompute,
+) raises -> List[UInt8]:
+    var base_type = Int(sighash_type) & 0x1F
+    if base_type != 1 and base_type != 2 and base_type != 3:
+        raise Error("diagnostic BIP143 supports SIGHASH_ALL, SIGHASH_NONE, and SIGHASH_SINGLE only")
+    var anyone_can_pay = (Int(sighash_type) & 0x80) != 0
+    if input_index < 0 or input_index >= len(tx.inputs):
+        raise Error("input index out of range")
+    if not precompute.bip143_available:
+        return bip143_sighash(tx, input_index, script_code, amount_sats, sighash_type)
+
+    var hash_prevouts = _zero32()
+    if not anyone_can_pay:
+        hash_prevouts = precompute.bip143_hash_prevouts.copy()
+    var hash_sequence = _zero32()
+    if not anyone_can_pay and base_type != 2 and base_type != 3:
+        hash_sequence = precompute.bip143_hash_sequence.copy()
+    var hash_outputs = _zero32()
+    if base_type == 3 and input_index < len(tx.outputs):
+        hash_outputs = precompute.bip143_hash_single_outputs[input_index].copy()
+    elif base_type != 2 and base_type != 3:
+        hash_outputs = precompute.bip143_hash_outputs.copy()
+
+    var out = List[UInt8]()
+    append_i32_le(out, tx.version)
+    append_bytes(out, hash_prevouts)
+    append_bytes(out, hash_sequence)
+    append_bytes(out, tx.inputs[input_index].previous_hash)
+    append_u32_le(out, tx.inputs[input_index].previous_index)
+    append_varint(out, len(script_code))
+    append_bytes(out, script_code)
+    append_i64_le(out, amount_sats)
+    append_u32_le(out, tx.inputs[input_index].sequence)
+    append_bytes(out, hash_outputs)
+    append_u32_le(out, tx.lock_time)
+    append_u32_le(out, UInt32(sighash_type))
+    return double_sha256(out)
+
+
 def signature_digest_for_mode(
     ref tx: Transaction,
     input_index: Int,
@@ -3253,6 +3489,23 @@ def signature_digest_for_mode(
     var sighash_type = signature[len(signature) - 1]
     if witness_v0:
         return bip143_sighash(tx, input_index, script_code, witness_amount_sats, sighash_type)
+    return legacy_sighash(tx, input_index, script_code, signature)
+
+
+def signature_digest_for_mode_cached(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    ref signature: List[UInt8],
+    witness_v0: Bool,
+    witness_amount_sats: Int64,
+    ref precompute: SighashPrecompute,
+) raises -> List[UInt8]:
+    if len(signature) == 0:
+        raise Error("empty ECDSA signature")
+    var sighash_type = signature[len(signature) - 1]
+    if witness_v0:
+        return bip143_sighash_cached(tx, input_index, script_code, witness_amount_sats, sighash_type, precompute)
     return legacy_sighash(tx, input_index, script_code, signature)
 
 
@@ -3285,17 +3538,74 @@ def verify_ecdsa_signature_for_mode(
     var der = slice_bytes(signature, 0, len(signature) - 1)
     var digest = signature_digest_for_mode(tx, input_index, script_code, signature, witness_v0, witness_amount_sats)
     var native = OwnedDLHandle(shim_path)
-    var pubkey_hex = bytes_to_hex(pubkey)
-    var der_hex = bytes_to_hex(der)
-    var digest_hex = bytes_to_hex(digest)
-    var result = native.call["mojobitnode_verify_ecdsa_der_hex_len", Int32](
-        pubkey_hex.unsafe_ptr(),
-        Int32(pubkey_hex.byte_length()),
-        der_hex.unsafe_ptr(),
-        Int32(der_hex.byte_length()),
-        digest_hex.unsafe_ptr(),
-        Int32(digest_hex.byte_length()),
+    var pubkey_ptr = alloc[UInt8](len(pubkey))
+    var der_ptr = alloc[UInt8](len(der))
+    var digest_ptr = alloc[UInt8](len(digest))
+    for i in range(len(pubkey)):
+        pubkey_ptr[i] = pubkey[i]
+    for i in range(len(der)):
+        der_ptr[i] = der[i]
+    for i in range(len(digest)):
+        digest_ptr[i] = digest[i]
+    var result = native.call["mojobitnode_verify_ecdsa_der_bytes_len", Int32](
+        pubkey_ptr,
+        Int32(len(pubkey)),
+        der_ptr,
+        Int32(len(der)),
+        digest_ptr,
+        Int32(len(digest)),
     )
+    pubkey_ptr.free()
+    der_ptr.free()
+    digest_ptr.free()
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed ECDSA signature or pubkey")
+
+
+def verify_ecdsa_signature_for_mode_cached(
+    shim_path: String,
+    ref signature: List[UInt8],
+    ref pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    witness_v0: Bool,
+    witness_amount_sats: Int64,
+    ref precompute: SighashPrecompute,
+) raises -> Bool:
+    if len(signature) == 0:
+        return False
+    var base_type = Int(signature[len(signature) - 1]) & 0x1F
+    if base_type != 1 and base_type != 2 and base_type != 3:
+        raise Error("diagnostic fixture only supports SIGHASH_ALL, SIGHASH_NONE, and SIGHASH_SINGLE")
+    var der = slice_bytes(signature, 0, len(signature) - 1)
+    var digest = signature_digest_for_mode_cached(
+        tx, input_index, script_code, signature, witness_v0, witness_amount_sats, precompute
+    )
+    var native = OwnedDLHandle(shim_path)
+    var pubkey_ptr = alloc[UInt8](len(pubkey))
+    var der_ptr = alloc[UInt8](len(der))
+    var digest_ptr = alloc[UInt8](len(digest))
+    for i in range(len(pubkey)):
+        pubkey_ptr[i] = pubkey[i]
+    for i in range(len(der)):
+        der_ptr[i] = der[i]
+    for i in range(len(digest)):
+        digest_ptr[i] = digest[i]
+    var result = native.call["mojobitnode_verify_ecdsa_der_bytes_len", Int32](
+        pubkey_ptr,
+        Int32(len(pubkey)),
+        der_ptr,
+        Int32(len(der)),
+        digest_ptr,
+        Int32(len(digest)),
+    )
+    pubkey_ptr.free()
+    der_ptr.free()
+    digest_ptr.free()
     if result == 0:
         return True
     if result == 1:
@@ -3330,17 +3640,83 @@ def verify_schnorr_signature(
         raise Error("invalid x-only pubkey length")
     var digest = taproot_signature_hash(tx, input_index, spent_prevouts, hash_type, tapleaf_digest_value, codeseparator_pos)
     var native = OwnedDLHandle(shim_path)
-    var pubkey_hex = bytes_to_hex(xonly_pubkey)
-    var sig_hex = bytes_to_hex(sig64)
-    var digest_hex = bytes_to_hex(digest)
-    var result = native.call["mojobitnode_verify_schnorr_hex_len", Int32](
-        pubkey_hex.unsafe_ptr(),
-        Int32(pubkey_hex.byte_length()),
-        sig_hex.unsafe_ptr(),
-        Int32(sig_hex.byte_length()),
-        digest_hex.unsafe_ptr(),
-        Int32(digest_hex.byte_length()),
+    var pubkey_ptr = alloc[UInt8](len(xonly_pubkey))
+    var sig_ptr = alloc[UInt8](len(sig64))
+    var digest_ptr = alloc[UInt8](len(digest))
+    for i in range(len(xonly_pubkey)):
+        pubkey_ptr[i] = xonly_pubkey[i]
+    for i in range(len(sig64)):
+        sig_ptr[i] = sig64[i]
+    for i in range(len(digest)):
+        digest_ptr[i] = digest[i]
+    var result = native.call["mojobitnode_verify_schnorr_bytes_len", Int32](
+        pubkey_ptr,
+        Int32(len(xonly_pubkey)),
+        sig_ptr,
+        Int32(len(sig64)),
+        digest_ptr,
+        Int32(len(digest)),
     )
+    pubkey_ptr.free()
+    sig_ptr.free()
+    digest_ptr.free()
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed Schnorr signature or x-only pubkey")
+
+
+def verify_schnorr_signature_cached(
+    shim_path: String,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref tapleaf_digest_value: List[UInt8],
+    codeseparator_pos: Int,
+    ref precompute: SighashPrecompute,
+) raises -> Bool:
+    if len(signature) == 0:
+        return False
+    var hash_type = UInt8(0)
+    var sig64 = List[UInt8]()
+    if len(signature) == 64:
+        sig64 = clone_bytes(signature)
+    elif len(signature) == 65:
+        hash_type = signature[64]
+        if hash_type == UInt8(0):
+            raise Error("invalid explicit Taproot default hash type")
+        sig64 = slice_bytes(signature, 0, 64)
+    else:
+        raise Error("invalid Schnorr signature length")
+    if len(xonly_pubkey) != 32:
+        raise Error("invalid x-only pubkey length")
+    var digest = taproot_signature_hash_cached(
+        tx, input_index, spent_prevouts, hash_type, tapleaf_digest_value, codeseparator_pos, precompute
+    )
+    var native = OwnedDLHandle(shim_path)
+    var pubkey_ptr = alloc[UInt8](len(xonly_pubkey))
+    var sig_ptr = alloc[UInt8](len(sig64))
+    var digest_ptr = alloc[UInt8](len(digest))
+    for i in range(len(xonly_pubkey)):
+        pubkey_ptr[i] = xonly_pubkey[i]
+    for i in range(len(sig64)):
+        sig_ptr[i] = sig64[i]
+    for i in range(len(digest)):
+        digest_ptr[i] = digest[i]
+    var result = native.call["mojobitnode_verify_schnorr_bytes_len", Int32](
+        pubkey_ptr,
+        Int32(len(xonly_pubkey)),
+        sig_ptr,
+        Int32(len(sig64)),
+        digest_ptr,
+        Int32(len(digest)),
+    )
+    pubkey_ptr.free()
+    sig_ptr.free()
+    digest_ptr.free()
     if result == 0:
         return True
     if result == 1:
@@ -3373,17 +3749,79 @@ def verify_schnorr_key_path_signature(
         raise Error("invalid x-only pubkey length")
     var digest = taproot_key_path_signature_hash(tx, input_index, spent_prevouts, hash_type)
     var native = OwnedDLHandle(shim_path)
-    var pubkey_hex = bytes_to_hex(xonly_pubkey)
-    var sig_hex = bytes_to_hex(sig64)
-    var digest_hex = bytes_to_hex(digest)
-    var result = native.call["mojobitnode_verify_schnorr_hex_len", Int32](
-        pubkey_hex.unsafe_ptr(),
-        Int32(pubkey_hex.byte_length()),
-        sig_hex.unsafe_ptr(),
-        Int32(sig_hex.byte_length()),
-        digest_hex.unsafe_ptr(),
-        Int32(digest_hex.byte_length()),
+    var pubkey_ptr = alloc[UInt8](len(xonly_pubkey))
+    var sig_ptr = alloc[UInt8](len(sig64))
+    var digest_ptr = alloc[UInt8](len(digest))
+    for i in range(len(xonly_pubkey)):
+        pubkey_ptr[i] = xonly_pubkey[i]
+    for i in range(len(sig64)):
+        sig_ptr[i] = sig64[i]
+    for i in range(len(digest)):
+        digest_ptr[i] = digest[i]
+    var result = native.call["mojobitnode_verify_schnorr_bytes_len", Int32](
+        pubkey_ptr,
+        Int32(len(xonly_pubkey)),
+        sig_ptr,
+        Int32(len(sig64)),
+        digest_ptr,
+        Int32(len(digest)),
     )
+    pubkey_ptr.free()
+    sig_ptr.free()
+    digest_ptr.free()
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed Schnorr signature or x-only pubkey")
+
+
+def verify_schnorr_key_path_signature_cached(
+    shim_path: String,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref precompute: SighashPrecompute,
+) raises -> Bool:
+    if len(signature) == 0:
+        return False
+    var hash_type = UInt8(0)
+    var sig64 = List[UInt8]()
+    if len(signature) == 64:
+        sig64 = clone_bytes(signature)
+    elif len(signature) == 65:
+        hash_type = signature[64]
+        if hash_type == UInt8(0):
+            raise Error("invalid explicit Taproot default hash type")
+        sig64 = slice_bytes(signature, 0, 64)
+    else:
+        raise Error("invalid Schnorr signature length")
+    if len(xonly_pubkey) != 32:
+        raise Error("invalid x-only pubkey length")
+    var digest = taproot_key_path_signature_hash_cached(tx, input_index, spent_prevouts, hash_type, precompute)
+    var native = OwnedDLHandle(shim_path)
+    var pubkey_ptr = alloc[UInt8](len(xonly_pubkey))
+    var sig_ptr = alloc[UInt8](len(sig64))
+    var digest_ptr = alloc[UInt8](len(digest))
+    for i in range(len(xonly_pubkey)):
+        pubkey_ptr[i] = xonly_pubkey[i]
+    for i in range(len(sig64)):
+        sig_ptr[i] = sig64[i]
+    for i in range(len(digest)):
+        digest_ptr[i] = digest[i]
+    var result = native.call["mojobitnode_verify_schnorr_bytes_len", Int32](
+        pubkey_ptr,
+        Int32(len(xonly_pubkey)),
+        sig_ptr,
+        Int32(len(sig64)),
+        digest_ptr,
+        Int32(len(digest)),
+    )
+    pubkey_ptr.free()
+    sig_ptr.free()
+    digest_ptr.free()
     if result == 0:
         return True
     if result == 1:
@@ -3399,18 +3837,30 @@ def verify_taproot_tweak(
     expected_parity: Int,
 ) raises -> Bool:
     var native = OwnedDLHandle(shim_path)
-    var internal_hex = bytes_to_hex(internal_xonly)
-    var merkle_hex = bytes_to_hex(merkle_root)
-    var expected_hex = bytes_to_hex(expected_xonly)
-    var result = native.call["mojobitnode_verify_taproot_tweak_hex_len", Int32](
-        internal_hex.unsafe_ptr(),
-        Int32(internal_hex.byte_length()),
-        merkle_hex.unsafe_ptr(),
-        Int32(merkle_hex.byte_length()),
-        expected_hex.unsafe_ptr(),
-        Int32(expected_hex.byte_length()),
+    var internal_ptr = alloc[UInt8](len(internal_xonly))
+    var merkle_alloc_len = len(merkle_root)
+    if merkle_alloc_len == 0:
+        merkle_alloc_len = 1
+    var merkle_ptr = alloc[UInt8](merkle_alloc_len)
+    var expected_ptr = alloc[UInt8](len(expected_xonly))
+    for i in range(len(internal_xonly)):
+        internal_ptr[i] = internal_xonly[i]
+    for i in range(len(merkle_root)):
+        merkle_ptr[i] = merkle_root[i]
+    for i in range(len(expected_xonly)):
+        expected_ptr[i] = expected_xonly[i]
+    var result = native.call["mojobitnode_verify_taproot_tweak_bytes_len", Int32](
+        internal_ptr,
+        Int32(len(internal_xonly)),
+        merkle_ptr,
+        Int32(len(merkle_root)),
+        expected_ptr,
+        Int32(len(expected_xonly)),
         Int32(expected_parity),
     )
+    internal_ptr.free()
+    merkle_ptr.free()
+    expected_ptr.free()
     if result == 0:
         return True
     if result == 1:
@@ -3430,6 +3880,7 @@ def evaluate_tapscript(
     var offset = 0
     var instruction_pos = 0
     var codeseparator_pos = 0xFFFFFFFF
+    var sighash_precompute = build_sighash_precompute_with_taproot(tx, spent_prevouts)
     var conditions = List[Bool]()
     var alt_stack = List[ScriptStackItem]()
     while offset < len(script):
@@ -3718,7 +4169,7 @@ def evaluate_tapscript(
             if len(pubkey.data) != 32:
                 valid = len(signature.data) != 0
             elif len(signature.data) != 0:
-                valid = verify_schnorr_signature(
+                valid = verify_schnorr_signature_cached(
                     shim_path,
                     signature.data,
                     pubkey.data,
@@ -3727,6 +4178,7 @@ def evaluate_tapscript(
                     spent_prevouts,
                     tapleaf_digest_value,
                     codeseparator_pos,
+                    sighash_precompute,
                 )
             if opcode == 0xAC:
                 _stack_push_num(stack, 1 if valid else 0)
@@ -3742,7 +4194,7 @@ def evaluate_tapscript(
             if len(pubkey.data) != 32:
                 valid = len(signature.data) != 0
             elif len(signature.data) != 0:
-                valid = verify_schnorr_signature(
+                valid = verify_schnorr_signature_cached(
                     shim_path,
                     signature.data,
                     pubkey.data,
@@ -3751,6 +4203,7 @@ def evaluate_tapscript(
                     spent_prevouts,
                     tapleaf_digest_value,
                     codeseparator_pos,
+                    sighash_precompute,
                 )
             _stack_push_num(stack, n + (1 if valid else 0))
         elif opcode == 0xB1:

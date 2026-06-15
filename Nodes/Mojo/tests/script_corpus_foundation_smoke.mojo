@@ -1,5 +1,10 @@
 from script_corpus_foundation import (
+    bip143_sighash,
+    bip143_sighash_cached,
+    build_sighash_precompute,
+    build_sighash_precompute_with_taproot,
     bytes_to_hex,
+    bytes_equal,
     evaluate_taproot_fixture,
     hash160,
     hash256,
@@ -12,8 +17,11 @@ from script_corpus_foundation import (
     sha1_digest,
     sha256_digest,
     slice_bytes,
+    taproot_key_path_signature_hash,
+    taproot_key_path_signature_hash_cached,
     tapleaf_hash,
     taproot_signature_hash,
+    taproot_signature_hash_cached,
     TaprootPrevout,
     verify_taproot_tweak,
     verify_schnorr_signature,
@@ -155,6 +163,39 @@ def test_taproot_numequal_sighash_vector() raises:
         bytes_to_hex(digest),
         String("d67ca3429e15437f51892a84390a719c9295db708211b4f82e7cdcd6ed0b9b48"),
     )
+
+
+def test_bip143_sighash_cache_matches_uncached() raises:
+    var tx = parse_transaction(read_hex_file(WITNESS_FIXTURE_TX))
+    var script_code = read_hex_file("../Shared/conformance/fixtures/scripts/scripts.p2wsh_op1_only_31842/tx_p2wsh_op1_only_31842_witness_script.hex")
+    var cache = build_sighash_precompute(tx)
+    var all_uncached = bip143_sighash(tx, 0, script_code, Int64(69179), UInt8(1))
+    var all_cached = bip143_sighash_cached(tx, 0, script_code, Int64(69179), UInt8(1), cache)
+    assert_true(bytes_equal(all_uncached, all_cached))
+    var none_uncached = bip143_sighash(tx, 0, script_code, Int64(69179), UInt8(2))
+    var none_cached = bip143_sighash_cached(tx, 0, script_code, Int64(69179), UInt8(2), cache)
+    assert_true(bytes_equal(none_uncached, none_cached))
+    var single_uncached = bip143_sighash(tx, 0, script_code, Int64(69179), UInt8(3))
+    var single_cached = bip143_sighash_cached(tx, 0, script_code, Int64(69179), UInt8(3), cache)
+    assert_true(bytes_equal(single_uncached, single_cached))
+
+
+def test_taproot_sighash_cache_matches_uncached() raises:
+    var tx = parse_transaction(read_hex_file(TAPROOT_NUMEQUAL_TX))
+    var tapscript = read_hex_file(TAPROOT_NUMEQUAL_SCRIPT)
+    var leaf_hash = tapleaf_hash(UInt8(0xC0), tapscript)
+    var prevout = TaprootPrevout()
+    prevout.amount = Int64(50000)
+    prevout.script_pubkey = read_hex_file(TAPROOT_NUMEQUAL_PREV_SPK)
+    var spent_prevouts = List[TaprootPrevout]()
+    spent_prevouts.append(prevout^)
+    var cache = build_sighash_precompute_with_taproot(tx, spent_prevouts)
+    var script_uncached = taproot_signature_hash(tx, 0, spent_prevouts, UInt8(0), leaf_hash, 0xFFFFFFFF)
+    var script_cached = taproot_signature_hash_cached(tx, 0, spent_prevouts, UInt8(0), leaf_hash, 0xFFFFFFFF, cache)
+    assert_true(bytes_equal(script_uncached, script_cached))
+    var key_uncached = taproot_key_path_signature_hash(tx, 0, spent_prevouts, UInt8(0))
+    var key_cached = taproot_key_path_signature_hash_cached(tx, 0, spent_prevouts, UInt8(0), cache)
+    assert_true(bytes_equal(key_uncached, key_cached))
 
 
 def test_taproot_numequal_schnorr_wrapper() raises:

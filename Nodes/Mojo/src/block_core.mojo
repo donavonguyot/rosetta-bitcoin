@@ -4,6 +4,7 @@ from std.memory.unsafe_pointer import alloc
 
 from script_corpus_foundation import (
     ByteCursor,
+    SighashPrecompute,
     ScriptStackItem,
     TaprootPrevout,
     Transaction,
@@ -18,6 +19,7 @@ from script_corpus_foundation import (
     bytes_equal,
     bytes_to_hex,
     cast_to_bool,
+    build_sighash_precompute_with_taproot,
     clone_bytes,
     evaluate_tapscript,
     evaluate_legacy_script,
@@ -37,7 +39,9 @@ from script_corpus_foundation import (
     tx_witness_count,
     tx_witness_item,
     verify_ecdsa_signature,
+    verify_ecdsa_signature_for_mode_cached,
     verify_ecdsa_signature_for_mode,
+    verify_schnorr_key_path_signature_cached,
     verify_schnorr_key_path_signature,
     verify_taproot_tweak,
 )
@@ -154,6 +158,14 @@ struct Native(Movable):
             raise Error("RocksDB get failed")
         return out^
 
+    def crypto_metrics_reset(self):
+        _ = self.handle.call["mojobitnode_crypto_metrics_reset", Int32]()
+
+    def crypto_metric(self, name: String) -> Int64:
+        return self.handle.call["mojobitnode_crypto_metric_len", Int64](
+            name.unsafe_ptr(), Int32(name.byte_length())
+        )
+
 
 struct BlockTx(Copyable):
     var tx: Transaction
@@ -200,6 +212,13 @@ struct ConnectTiming(Copyable):
     var utxo_apply: Int64
     var commit: Int64
     var block_connect_store_commit: Int64
+    var script_inputs: Int64
+    var ecdsa_calls: Int64
+    var ecdsa_ms: Int64
+    var schnorr_calls: Int64
+    var schnorr_ms: Int64
+    var taproot_tweak_calls: Int64
+    var taproot_tweak_ms: Int64
 
     def __init__(out self):
         self.p2p_fetch = 0
@@ -209,6 +228,13 @@ struct ConnectTiming(Copyable):
         self.utxo_apply = 0
         self.commit = 0
         self.block_connect_store_commit = 0
+        self.script_inputs = 0
+        self.ecdsa_calls = 0
+        self.ecdsa_ms = 0
+        self.schnorr_calls = 0
+        self.schnorr_ms = 0
+        self.taproot_tweak_calls = 0
+        self.taproot_tweak_ms = 0
 
 
 struct ProofResult(Copyable):
@@ -564,7 +590,13 @@ def is_spendable_output(ref output: TxOutput) -> Bool:
     return True
 
 
-def verify_p2wpkh_spend(shim_path: String, ref tx: Transaction, input_index: Int, ref prevout: Utxo) raises -> Bool:
+def verify_p2wpkh_spend(
+    shim_path: String,
+    ref tx: Transaction,
+    input_index: Int,
+    ref prevout: Utxo,
+    ref sighash_precompute: SighashPrecompute,
+) raises -> Bool:
     if tx_witness_count(tx, input_index) != 2:
         return False
     var sig = tx_witness_item(tx, input_index, 0)
@@ -580,14 +612,20 @@ def verify_p2wpkh_spend(shim_path: String, ref tx: Transaction, input_index: Int
     append_bytes(script_code, expected)
     script_code.append(UInt8(0x88))
     script_code.append(UInt8(0xAC))
-    return verify_ecdsa_signature_for_mode(
-        shim_path, sig.data, pubkey.data, tx, input_index, script_code, True, prevout.value_sats
+    return verify_ecdsa_signature_for_mode_cached(
+        shim_path, sig.data, pubkey.data, tx, input_index, script_code, True, prevout.value_sats, sighash_precompute
     )
 
 
-def verify_witness_v0_spend(shim_path: String, ref tx: Transaction, input_index: Int, ref prevout: Utxo) raises -> Bool:
+def verify_witness_v0_spend(
+    shim_path: String,
+    ref tx: Transaction,
+    input_index: Int,
+    ref prevout: Utxo,
+    ref sighash_precompute: SighashPrecompute,
+) raises -> Bool:
     if len(prevout.script_pubkey) == 22 and prevout.script_pubkey[0] == UInt8(0) and prevout.script_pubkey[1] == UInt8(0x14):
-        return verify_p2wpkh_spend(shim_path, tx, input_index, prevout)
+        return verify_p2wpkh_spend(shim_path, tx, input_index, prevout, sighash_precompute)
     if is_p2wsh_script_pubkey(prevout.script_pubkey):
         var witness_count = tx_witness_count(tx, input_index)
         if witness_count < 1:
@@ -624,9 +662,11 @@ def verify_taproot_spend(
     shim_path: String,
     ref tx: Transaction,
     input_index: Int,
-    ref prevout: Utxo,
     ref all_prevouts: List[Utxo],
+    ref spent_prevouts: List[TaprootPrevout],
+    ref sighash_precompute: SighashPrecompute,
 ) raises -> Bool:
+    var prevout = all_prevouts[input_index].copy()
     if len(tx.inputs[input_index].script_sig) != 0:
         return False
     if len(all_prevouts) != len(tx.inputs):
@@ -642,11 +682,12 @@ def verify_taproot_spend(
         var invalid_annex_position = tx_witness_item(tx, input_index, witness_count - 1)
         if len(invalid_annex_position.data) > 0 and invalid_annex_position.data[0] == UInt8(0x50):
             return False
-    var spent_prevouts = taproot_prevouts_from_utxos(all_prevouts)
     if effective_count == 1:
         var signature = tx_witness_item(tx, input_index, 0)
         var xonly = slice_bytes(prevout.script_pubkey, 2, 34)
-        return verify_schnorr_key_path_signature(shim_path, signature.data, xonly, tx, input_index, spent_prevouts)
+        return verify_schnorr_key_path_signature_cached(
+            shim_path, signature.data, xonly, tx, input_index, spent_prevouts, sighash_precompute
+        )
     if effective_count < 2:
         return False
     var script_item = tx_witness_item(tx, input_index, effective_count - 2)
@@ -678,9 +719,11 @@ def verify_spend(
     shim_path: String,
     ref tx: Transaction,
     input_index: Int,
-    ref prevout: Utxo,
     ref all_prevouts: List[Utxo],
+    ref spent_prevouts: List[TaprootPrevout],
+    ref sighash_precompute: SighashPrecompute,
 ) raises -> Bool:
+    var prevout = all_prevouts[input_index].copy()
     if is_p2pkh_script_pubkey(prevout.script_pubkey):
         var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
         if len(stack) < 2:
@@ -691,7 +734,17 @@ def verify_spend(
         var expected_hash = slice_bytes(prevout.script_pubkey, 3, 23)
         if not bytes_equal(actual_hash, expected_hash):
             return False
-        return verify_ecdsa_signature(shim_path, signature.data, pubkey.data, tx, input_index, prevout.script_pubkey)
+        return verify_ecdsa_signature_for_mode_cached(
+            shim_path,
+            signature.data,
+            pubkey.data,
+            tx,
+            input_index,
+            prevout.script_pubkey,
+            False,
+            Int64(0),
+            sighash_precompute,
+        )
     if is_p2sh_script_pubkey(prevout.script_pubkey):
         var pushes = parse_push_only_stack(tx.inputs[input_index].script_sig)
         if len(pushes) == 0:
@@ -707,16 +760,16 @@ def verify_spend(
             nested.value_sats = prevout.value_sats
             nested.coinbase = prevout.coinbase
             nested.script_pubkey = redeem_script^
-            return verify_witness_v0_spend(shim_path, tx, input_index, nested)
+            return verify_witness_v0_spend(shim_path, tx, input_index, nested, sighash_precompute)
         var stack = List[ScriptStackItem]()
         for i in range(len(pushes) - 1):
             var item = pushes[i].copy()
             stack.append(item^)
         return evaluate_legacy_script(redeem_script, stack^, tx, input_index, shim_path, True)
     if len(prevout.script_pubkey) >= 2 and prevout.script_pubkey[0] == UInt8(0):
-        return verify_witness_v0_spend(shim_path, tx, input_index, prevout)
+        return verify_witness_v0_spend(shim_path, tx, input_index, prevout, sighash_precompute)
     if is_p2tr_script_pubkey(prevout.script_pubkey):
-        return verify_taproot_spend(shim_path, tx, input_index, prevout, all_prevouts)
+        return verify_taproot_spend(shim_path, tx, input_index, all_prevouts, spent_prevouts, sighash_precompute)
     var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
     return evaluate_legacy_script(prevout.script_pubkey, stack^, tx, input_index, shim_path, True)
 
@@ -798,13 +851,14 @@ def connect_block(
             tx_prev_hashes.append(prev_hash^)
             tx_prev_vouts.append(prev_index)
         timing.utxo_load += native.now_ms() - tx_load_started
+        timing.script_inputs += Int64(len(tx.inputs))
+        var spent_prevouts = taproot_prevouts_from_utxos(tx_prevouts)
+        var sighash_precompute = build_sighash_precompute_with_taproot(tx, spent_prevouts)
         for input_index in range(len(tx.inputs)):
             var verify_started = native.now_ms()
-            var current_prevout = tx_prevouts[input_index].copy()
-            var all_prevouts_for_verify = tx_prevouts.copy()
             var verified = False
             try:
-                verified = verify_spend(shim_path, tx, input_index, current_prevout, all_prevouts_for_verify)
+                verified = verify_spend(shim_path, tx, input_index, tx_prevouts, spent_prevouts, sighash_precompute)
             except e:
                 raise Error(
                     String("script verification error at height ")
@@ -1134,10 +1188,33 @@ def emit_progress(
         + String(timing.commit)
         + String(',"block_connect_store_commit":')
         + String(timing.block_connect_store_commit)
-        + String('},"last_block_ms":')
+        + String('},"script_metrics":{"script_inputs":')
+        + String(timing.script_inputs)
+        + String(',"ecdsa_calls":')
+        + String(timing.ecdsa_calls)
+        + String(',"ecdsa_ms":')
+        + String(timing.ecdsa_ms)
+        + String(',"schnorr_calls":')
+        + String(timing.schnorr_calls)
+        + String(',"schnorr_ms":')
+        + String(timing.schnorr_ms)
+        + String(',"taproot_tweak_calls":')
+        + String(timing.taproot_tweak_calls)
+        + String(',"taproot_tweak_ms":')
+        + String(timing.taproot_tweak_ms)
+        + String(',"script_runner_actual_mode":"sequential"},"last_block_ms":')
         + String(last_block_ms)
         + String("}")
     )
+
+
+def refresh_crypto_metrics(mut native: Native, mut timing: ConnectTiming):
+    timing.ecdsa_calls = native.crypto_metric(String("ecdsa_calls"))
+    timing.ecdsa_ms = native.crypto_metric(String("ecdsa_ms"))
+    timing.schnorr_calls = native.crypto_metric(String("schnorr_calls"))
+    timing.schnorr_ms = native.crypto_metric(String("schnorr_ms"))
+    timing.taproot_tweak_calls = native.crypto_metric(String("taproot_tweak_calls"))
+    timing.taproot_tweak_ms = native.crypto_metric(String("taproot_tweak_ms"))
 
 
 def emit_telemetry(
@@ -1152,6 +1229,9 @@ def emit_telemetry(
     elapsed_ms: Int64,
     last_block_ms: Int64,
     ref timing: ConnectTiming,
+    current_block_tx_count: Int,
+    current_block_vin_count: Int,
+    current_block_script_input_count: Int,
 ):
     print(
         String("benchmark.telemetry_tick {")
@@ -1179,7 +1259,12 @@ def emit_telemetry(
         + String(last_block_ms)
         + String(',"current_block_height":')
         + String(height)
-        + String(',"current_block_tx_count":0,"current_block_vin_count":0,"current_block_script_input_count":0')
+        + String(',"current_block_tx_count":')
+        + String(current_block_tx_count)
+        + String(',"current_block_vin_count":')
+        + String(current_block_vin_count)
+        + String(',"current_block_script_input_count":')
+        + String(current_block_script_input_count)
         + String(',"peer":"')
         + peer
         + String('","timing_buckets_ms":{"p2p_fetch":')
@@ -1196,7 +1281,21 @@ def emit_telemetry(
         + String(timing.commit)
         + String(',"block_connect_store_commit":')
         + String(timing.block_connect_store_commit)
-        + String("}}")
+        + String('},"script_metrics":{"script_inputs":')
+        + String(timing.script_inputs)
+        + String(',"ecdsa_calls":')
+        + String(timing.ecdsa_calls)
+        + String(',"ecdsa_ms":')
+        + String(timing.ecdsa_ms)
+        + String(',"schnorr_calls":')
+        + String(timing.schnorr_calls)
+        + String(',"schnorr_ms":')
+        + String(timing.schnorr_ms)
+        + String(',"taproot_tweak_calls":')
+        + String(timing.taproot_tweak_calls)
+        + String(',"taproot_tweak_ms":')
+        + String(timing.taproot_tweak_ms)
+        + String(',"script_runner_actual_mode":"sequential"}}')
     )
 
 
@@ -1215,6 +1314,7 @@ def local_reference_proof(
     var expected_hash = expected_hash_for_target(target)
     var expected_utxos = expected_utxos_for_target(target)
     var native = Native(shim_path)
+    native.crypto_metrics_reset()
     var started = native.now_ms()
     var parts = split_peer(peer)
     var fd = native.socket_connect(parts[0], parts[1])
@@ -1224,14 +1324,14 @@ def local_reference_proof(
     var blocks_fetched = 0
     var blocks_connected = 0
     try:
-        emit_telemetry(benchmark_gate, String("run_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
-        emit_telemetry(benchmark_gate, String("container_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
+        emit_telemetry(benchmark_gate, String("run_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
+        emit_telemetry(benchmark_gate, String("container_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
         db_put_string(native, db, String("chainstate_backend"), String("rocksdb"))
         db_put_string(native, db, String("native_crypto_backend"), String("libsecp256k1"))
         db_put_string(native, db, String("sync_status"), String("headers_syncing"))
-        emit_telemetry(benchmark_gate, String("node_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
+        emit_telemetry(benchmark_gate, String("node_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
         handshake(native, fd)
-        emit_telemetry(benchmark_gate, String("first_peer_byte"), String("peer_connect"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
+        emit_telemetry(benchmark_gate, String("first_peer_byte"), String("peer_connect"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
         var headers = headers_through(native, fd, target)
         var cursor = 0
         while cursor <= target:
@@ -1248,14 +1348,22 @@ def local_reference_proof(
                 var prev_hash = headers[height - 1].copy() if height > 0 else hash_from_display(String(GENESIS_HASH_DISPLAY))
                 verify_block_header(height, blocks[i], headers[height], prev_hash)
                 timing.block_parse_validate += native.now_ms() - parse_started
+                var current_block_tx_count = len(blocks[i].txs)
+                var current_block_vin_count = 0
+                var current_block_script_input_count = 0
+                for tx_count_index in range(len(blocks[i].txs)):
+                    if tx_count_index != 0:
+                        current_block_vin_count += len(blocks[i].txs[tx_count_index].tx.inputs)
+                        current_block_script_input_count += len(blocks[i].txs[tx_count_index].tx.inputs)
                 current_utxos = connect_block(native, db, shim_path, height, blocks[i], current_utxos, timing)
+                refresh_crypto_metrics(native, timing)
                 timing.block_connect_store_commit += native.now_ms() - block_started
                 blocks_fetched += 1
                 blocks_connected += 1
                 var h = display_hash(blocks[i].hash)
                 var last_block_ms = native.now_ms() - block_started
                 if height == 1:
-                    emit_telemetry(benchmark_gate, String("first_block_connected"), String("block_connect"), height, target, h, peer, current_utxos, native.now_ms() - started, last_block_ms, timing)
+                    emit_telemetry(benchmark_gate, String("first_block_connected"), String("block_connect"), height, target, h, peer, current_utxos, native.now_ms() - started, last_block_ms, timing, current_block_tx_count, current_block_vin_count, current_block_script_input_count)
                 if progress_interval > 0 and (height == 0 or height == target or height % progress_interval == 0):
                     emit_progress(height, target, h, peer, current_utxos, last_block_ms, timing)
                     emit_telemetry(
@@ -1270,6 +1378,9 @@ def local_reference_proof(
                         native.now_ms() - started,
                         last_block_ms,
                         timing,
+                        current_block_tx_count,
+                        current_block_vin_count,
+                        current_block_script_input_count,
                     )
             cursor = end
         db_put_string(native, db, String("sync_status"), String("blocks_current"))
@@ -1279,7 +1390,8 @@ def local_reference_proof(
         if current_utxos != expected_utxos:
             raise Error(benchmark_gate + String(" UTXO count mismatch: ") + String(current_utxos))
         var total_ms = native.now_ms() - started
-        emit_telemetry(benchmark_gate, String("run_finished"), String("complete"), target, target, finish_hash, peer, current_utxos, total_ms, 0, timing)
+        refresh_crypto_metrics(native, timing)
+        emit_telemetry(benchmark_gate, String("run_finished"), String("complete"), target, target, finish_hash, peer, current_utxos, total_ms, 0, timing, 0, 0, 0)
         var telemetry_tick_count = telemetry_tick_count_for_target(target, progress_interval)
         var json = (
             String('{"schema":"port.local_reference_proof.v1","category":"local_reference_sync",')
@@ -1302,7 +1414,7 @@ def local_reference_proof(
             + String('",')
             + String('"peer_mode":"local_reference","peer":"')
             + peer
-            + String('","byte_source":"local_reference_p2p","proof_mode":"p2p_sync","prefetch_depth":4,"script_runner_mode":"parallel",')
+            + String('","byte_source":"local_reference_p2p","proof_mode":"p2p_sync","prefetch_depth":4,"script_runner_mode":"sequential","script_runner_actual_mode":"sequential",')
             + String('"rocksdb_wal_disabled":false,"fresh_state":true,"resume_supported":true,"datadir":"')
             + datadir
             + String('","chainstate_backend":"rocksdb","chainstate_status":"usable","native_storage":true,')
@@ -1353,6 +1465,14 @@ def local_reference_proof(
             + String(timing.commit)
             + String(',"block_connect_store_commit":')
             + String(timing.block_connect_store_commit)
+            + String(',"script_inputs":')
+            + String(timing.script_inputs)
+            + String(',"ecdsa_verify":')
+            + String(timing.ecdsa_ms)
+            + String(',"schnorr_verify":')
+            + String(timing.schnorr_ms)
+            + String(',"taproot_tweak":')
+            + String(timing.taproot_tweak_ms)
             + String('}},"stage_totals_ms":{"utxo_load":')
             + String(timing.utxo_load)
             + String(',"script_verify":')
@@ -1363,7 +1483,29 @@ def local_reference_proof(
             + String(timing.commit)
             + String(',"block_connect_store_commit":')
             + String(timing.block_connect_store_commit)
-            + String('},"slow_blocks":[]}')
+            + String(',"script_inputs":')
+            + String(timing.script_inputs)
+            + String(',"ecdsa_verify":')
+            + String(timing.ecdsa_ms)
+            + String(',"schnorr_verify":')
+            + String(timing.schnorr_ms)
+            + String(',"taproot_tweak":')
+            + String(timing.taproot_tweak_ms)
+            + String('},"script_metrics":{"script_inputs":')
+            + String(timing.script_inputs)
+            + String(',"ecdsa_calls":')
+            + String(timing.ecdsa_calls)
+            + String(',"ecdsa_ms":')
+            + String(timing.ecdsa_ms)
+            + String(',"schnorr_calls":')
+            + String(timing.schnorr_calls)
+            + String(',"schnorr_ms":')
+            + String(timing.schnorr_ms)
+            + String(',"taproot_tweak_calls":')
+            + String(timing.taproot_tweak_calls)
+            + String(',"taproot_tweak_ms":')
+            + String(timing.taproot_tweak_ms)
+            + String(',"script_runner_actual_mode":"sequential"},"slow_blocks":[]}')
         )
         if result_path != "":
             _ = native.handle.call["mojobitnode_write_text_len", Int32](

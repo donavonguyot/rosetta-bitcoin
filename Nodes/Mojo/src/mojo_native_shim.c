@@ -122,6 +122,64 @@ static void bytes_to_hex(const uint8_t *bytes, size_t len, char *out) {
   out[len * 2] = '\0';
 }
 
+static int64_t monotonic_ms(void) {
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+    return 0;
+  }
+  return ((int64_t)ts.tv_sec * 1000) + ((int64_t)ts.tv_nsec / 1000000);
+}
+
+static int64_t crypto_ecdsa_calls = 0;
+static int64_t crypto_ecdsa_ms = 0;
+static int64_t crypto_schnorr_calls = 0;
+static int64_t crypto_schnorr_ms = 0;
+static int64_t crypto_taproot_tweak_calls = 0;
+static int64_t crypto_taproot_tweak_ms = 0;
+
+int32_t mojobitnode_crypto_metrics_reset(void) {
+  crypto_ecdsa_calls = 0;
+  crypto_ecdsa_ms = 0;
+  crypto_schnorr_calls = 0;
+  crypto_schnorr_ms = 0;
+  crypto_taproot_tweak_calls = 0;
+  crypto_taproot_tweak_ms = 0;
+  return 1;
+}
+
+int64_t mojobitnode_crypto_metric_len(const char *name, int32_t name_len) {
+  if (!name || name_len < 0) {
+    return -1;
+  }
+  if (name_len == 11 && strncmp(name, "ecdsa_calls", (size_t)name_len) == 0) {
+    return crypto_ecdsa_calls;
+  }
+  if (name_len == 8 && strncmp(name, "ecdsa_ms", (size_t)name_len) == 0) {
+    return crypto_ecdsa_ms;
+  }
+  if (name_len == 13 && strncmp(name, "schnorr_calls", (size_t)name_len) == 0) {
+    return crypto_schnorr_calls;
+  }
+  if (name_len == 10 && strncmp(name, "schnorr_ms", (size_t)name_len) == 0) {
+    return crypto_schnorr_ms;
+  }
+  if (name_len == 19 && strncmp(name, "taproot_tweak_calls", (size_t)name_len) == 0) {
+    return crypto_taproot_tweak_calls;
+  }
+  if (name_len == 16 && strncmp(name, "taproot_tweak_ms", (size_t)name_len) == 0) {
+    return crypto_taproot_tweak_ms;
+  }
+  return -1;
+}
+
+static secp256k1_context *shared_verify_context(void) {
+  static secp256k1_context *ctx = NULL;
+  if (!ctx) {
+    ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  }
+  return ctx;
+}
+
 static void sha256_once(const uint8_t *data, size_t len, uint8_t out[32]) {
   SHA256(data, len, out);
 }
@@ -182,7 +240,7 @@ static int32_t verify_ecdsa(secp256k1_context *ctx, const crypto_vector *vector)
 
 static int32_t verify_ecdsa_der_bytes(const uint8_t *pubkey_bytes, size_t pubkey_len, const uint8_t *sig_bytes,
                                       size_t sig_len, const uint8_t msg[32]) {
-  secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  secp256k1_context *ctx = shared_verify_context();
   if (!ctx) {
     return CRYPTO_RESULT_UNKNOWN;
   }
@@ -196,7 +254,22 @@ static int32_t verify_ecdsa_der_bytes(const uint8_t *pubkey_bytes, size_t pubkey
     result = secp256k1_ecdsa_verify(ctx, &sig, msg, &pubkey) == 1 ? CRYPTO_RESULT_VALID
                                                                   : CRYPTO_RESULT_CONSENSUS_INVALID;
   }
-  secp256k1_context_destroy(ctx);
+  return result;
+}
+
+int32_t mojobitnode_verify_ecdsa_der_bytes_len(const uint8_t *pubkey_bytes, int32_t pubkey_len,
+                                               const uint8_t *signature_bytes, int32_t signature_len,
+                                               const uint8_t *msg_hash_bytes, int32_t msg_hash_len) {
+  int64_t started = monotonic_ms();
+  crypto_ecdsa_calls++;
+  if (!pubkey_bytes || !signature_bytes || !msg_hash_bytes || (pubkey_len != 33 && pubkey_len != 65) ||
+      signature_len <= 0 || signature_len > 72 || msg_hash_len != 32) {
+    crypto_ecdsa_ms += monotonic_ms() - started;
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+  int32_t result = verify_ecdsa_der_bytes(pubkey_bytes, (size_t)pubkey_len, signature_bytes, (size_t)signature_len,
+                                          msg_hash_bytes);
+  crypto_ecdsa_ms += monotonic_ms() - started;
   return result;
 }
 
@@ -286,7 +359,7 @@ int32_t mojobitnode_verify_schnorr_hex_len(const char *xonly_hex, int32_t xonly_
     return CRYPTO_RESULT_MALFORMED_INPUT;
   }
 
-  secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  secp256k1_context *ctx = shared_verify_context();
   if (!ctx) {
     return CRYPTO_RESULT_UNKNOWN;
   }
@@ -297,7 +370,33 @@ int32_t mojobitnode_verify_schnorr_hex_len(const char *xonly_hex, int32_t xonly_
                  ? CRYPTO_RESULT_VALID
                  : CRYPTO_RESULT_CONSENSUS_INVALID;
   }
-  secp256k1_context_destroy(ctx);
+  return result;
+}
+
+int32_t mojobitnode_verify_schnorr_bytes_len(const uint8_t *xonly_bytes, int32_t xonly_len,
+                                             const uint8_t *signature_bytes, int32_t signature_len,
+                                             const uint8_t *msg_hash_bytes, int32_t msg_hash_len) {
+  int64_t started = monotonic_ms();
+  crypto_schnorr_calls++;
+  if (!xonly_bytes || !signature_bytes || !msg_hash_bytes || xonly_len != 32 || signature_len != 64 ||
+      msg_hash_len != 32) {
+    crypto_schnorr_ms += monotonic_ms() - started;
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  secp256k1_context *ctx = shared_verify_context();
+  if (!ctx) {
+    crypto_schnorr_ms += monotonic_ms() - started;
+    return CRYPTO_RESULT_UNKNOWN;
+  }
+  secp256k1_xonly_pubkey pubkey;
+  int32_t result = CRYPTO_RESULT_MALFORMED_INPUT;
+  if (secp256k1_xonly_pubkey_parse(ctx, &pubkey, xonly_bytes) == 1) {
+    result = secp256k1_schnorrsig_verify(ctx, signature_bytes, msg_hash_bytes, (size_t)msg_hash_len, &pubkey) == 1
+                 ? CRYPTO_RESULT_VALID
+                 : CRYPTO_RESULT_CONSENSUS_INVALID;
+  }
+  crypto_schnorr_ms += monotonic_ms() - started;
   return result;
 }
 
@@ -359,7 +458,7 @@ int32_t mojobitnode_verify_taproot_tweak_hex_len(const char *internal_xonly_hex,
     return CRYPTO_RESULT_MALFORMED_INPUT;
   }
 
-  secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  secp256k1_context *ctx = shared_verify_context();
   if (!ctx) {
     return CRYPTO_RESULT_UNKNOWN;
   }
@@ -381,7 +480,55 @@ int32_t mojobitnode_verify_taproot_tweak_hex_len(const char *internal_xonly_hex,
                  ? CRYPTO_RESULT_VALID
                  : CRYPTO_RESULT_CONSENSUS_INVALID;
   }
-  secp256k1_context_destroy(ctx);
+  return result;
+}
+
+int32_t mojobitnode_verify_taproot_tweak_bytes_len(const uint8_t *internal_xonly, int32_t internal_xonly_len,
+                                                   const uint8_t *merkle_root, int32_t merkle_root_len,
+                                                   const uint8_t *expected_xonly, int32_t expected_xonly_len,
+                                                   int32_t expected_parity) {
+  int64_t started = monotonic_ms();
+  crypto_taproot_tweak_calls++;
+  if (!internal_xonly || !expected_xonly || internal_xonly_len != 32 || expected_xonly_len != 32 ||
+      (merkle_root_len != 0 && merkle_root_len != 32) || (merkle_root_len == 32 && !merkle_root) ||
+      (expected_parity != 0 && expected_parity != 1)) {
+    crypto_taproot_tweak_ms += monotonic_ms() - started;
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  char merkle_root_buffer[65];
+  merkle_root_buffer[0] = '\0';
+  if (merkle_root_len == 32) {
+    bytes_to_hex(merkle_root, 32, merkle_root_buffer);
+  }
+
+  uint8_t tweak[32];
+  if (!taproot_tweak_hash(internal_xonly, merkle_root_buffer, tweak)) {
+    crypto_taproot_tweak_ms += monotonic_ms() - started;
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  secp256k1_context *ctx = shared_verify_context();
+  if (!ctx) {
+    crypto_taproot_tweak_ms += monotonic_ms() - started;
+    return CRYPTO_RESULT_UNKNOWN;
+  }
+
+  secp256k1_xonly_pubkey internal;
+  secp256k1_pubkey output;
+  secp256k1_xonly_pubkey output_xonly_pubkey;
+  uint8_t output_xonly[32];
+  int parity = 0;
+  int32_t result = CRYPTO_RESULT_MALFORMED_INPUT;
+  if (secp256k1_xonly_pubkey_parse(ctx, &internal, internal_xonly) == 1 &&
+      secp256k1_xonly_pubkey_tweak_add(ctx, &output, &internal, tweak) == 1 &&
+      secp256k1_xonly_pubkey_from_pubkey(ctx, &output_xonly_pubkey, &parity, &output) == 1 &&
+      secp256k1_xonly_pubkey_serialize(ctx, output_xonly, &output_xonly_pubkey) == 1) {
+    result = memcmp(output_xonly, expected_xonly, 32) == 0 && parity == expected_parity
+                 ? CRYPTO_RESULT_VALID
+                 : CRYPTO_RESULT_CONSENSUS_INVALID;
+  }
+  crypto_taproot_tweak_ms += monotonic_ms() - started;
   return result;
 }
 
@@ -411,11 +558,7 @@ static bool copy_string_len(const char *src, int32_t src_len, char *dst, size_t 
 }
 
 int64_t mojobitnode_now_ms(void) {
-  struct timespec ts;
-  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
-    return 0;
-  }
-  return ((int64_t)ts.tv_sec * 1000) + ((int64_t)ts.tv_nsec / 1000000);
+  return monotonic_ms();
 }
 
 int32_t mojobitnode_socket_connect_len(const char *host, int32_t host_len, const char *port, int32_t port_len) {

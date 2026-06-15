@@ -19,6 +19,9 @@ from script_corpus_foundation import (
     parse_transaction,
     read_hex_file,
     serialize_tx_output,
+    slice_bytes,
+    tapleaf_hash,
+    verify_taproot_tweak,
 )
 from std.collections import List
 from std.os import getenv
@@ -26,6 +29,9 @@ from std.testing import assert_equal, assert_true, TestSuite
 
 
 comptime FIRST_FIXTURE_TX = "../Shared/conformance/fixtures/scripts/scripts.bare_multisig_27840/tx_bare_multisig_27840.hex"
+comptime TAPROOT_SCRIPTPATH_44295_SCRIPT = "../Shared/conformance/fixtures/scripts/scripts.p2tr_scriptpath_44295/tx_p2tr_scriptpath_44295_tapscript.hex"
+comptime TAPROOT_SCRIPTPATH_44295_CONTROL = "../Shared/conformance/fixtures/scripts/scripts.p2tr_scriptpath_44295/tx_p2tr_scriptpath_44295_control_block.hex"
+comptime TAPROOT_SCRIPTPATH_44295_PREV_SPK = "../Shared/conformance/fixtures/scripts/scripts.p2tr_scriptpath_44295/tx_p2tr_scriptpath_44295_prev_spk.hex"
 
 
 def test_transaction_and_merkle_parse() raises:
@@ -86,6 +92,26 @@ def test_status_persistence() raises:
     assert_equal(db_get_string(native, db, String("validated_height")), String("5000"))
     assert_equal(db_get_string(native, db, String("chainstate_backend")), String("rocksdb"))
     native.rocksdb_close(db)
+
+
+def test_native_crypto_metrics() raises:
+    var shim = getenv("MOJOBITNODE_SHIM_PATH", "./build/libmojobitnode_shim.dylib")
+    var native = Native(shim)
+    native.crypto_metrics_reset()
+    var tapscript = read_hex_file(TAPROOT_SCRIPTPATH_44295_SCRIPT)
+    var control = read_hex_file(TAPROOT_SCRIPTPATH_44295_CONTROL)
+    var script_pubkey = read_hex_file(TAPROOT_SCRIPTPATH_44295_PREV_SPK)
+    assert_true(
+        verify_taproot_tweak(
+            shim,
+            slice_bytes(control, 1, 33),
+            tapleaf_hash(UInt8(0xC0), tapscript),
+            slice_bytes(script_pubkey, 2, 34),
+            Int(control[0] & UInt8(1)),
+        )
+    )
+    assert_equal(native.crypto_metric(String("taproot_tweak_calls")), Int64(1))
+    assert_true(native.crypto_metric(String("taproot_tweak_ms")) >= 0)
 
 
 def main() raises:
