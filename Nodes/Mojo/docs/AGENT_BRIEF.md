@@ -30,6 +30,7 @@ native-crypto-vectors --vectors <path> --result-path <path>
 storage-proof --datadir <path> --result-path <path>
 script-corpus --manifest <path> --result-path <path>
 local-reference-proof --datadir <path> --target 5000 --peer <host:port> --result-path <path>
+local-reference-proof --datadir <path> --target 50000 --peer <host:port> --result-path <path>
 ```
 
 The CLI is Mojo-owned and must continue to report
@@ -43,10 +44,11 @@ still available for fixture-level diagnosis. It also accepts
 `script-corpus` command is the canonical evidence path and must stay Mojo-owned,
 with no Python or other-port delegation.
 
-`local-reference-proof` is the bounded 5k candidate path. It must use local
-Reference P2P bytes, RocksDB operational truth, native `libsecp256k1`, and
-`core_spendable_v1` UTXO accounting. Do not hand-edit a baseline claim; Project's
-campaign harness owns accepted control artifacts and current benchmark evidence.
+`local-reference-proof` is the bounded local Reference proof path for 5k and
+50k. It must use local Reference P2P bytes, RocksDB operational truth, native
+`libsecp256k1`, and `core_spendable_v1` UTXO accounting. Do not hand-edit a
+benchmark claim; Project's campaign harness owns accepted control artifacts and
+current benchmark evidence.
 
 ## Native Boundary
 
@@ -83,8 +85,10 @@ make host-script-corpus-foundation-smoke
 make host-block-core-smoke
 make host-script-corpus
 make host-local-reference-proof
+make host-shakedown-50k-proof
 make docker-script-corpus
 make docker-proof-local
+make docker-proof-50k
 ```
 
 ## Current Gate Order
@@ -92,13 +96,14 @@ make docker-proof-local
 The current port order is:
 
 1. Keep Shared script corpus proof clean in Docker.
-2. Keep local Reference P2P/block-connect proof clean to height 5000.
-3. Let Project run the strict baseline campaign and own accepted evidence.
-4. Only after baseline acceptance, plan the next gate separately.
+2. Keep Project-accepted baseline 5k evidence clean.
+3. Use `host-shakedown-50k-proof` and `docker-proof-50k` for 50k shakedown
+   debug proof.
+4. Let Project run the strict 50k campaign and own accepted evidence.
 
-Strict 5k requires RocksDB runtime truth, native crypto, WAL,
-   fixed benchmark knobs, `core_spendable_v1` UTXO accounting, and canonical
-   importable proof JSON.
+Strict 5k/50k proof requires RocksDB runtime truth, native crypto, WAL, fixed
+benchmark knobs, `core_spendable_v1` UTXO accounting, and canonical importable
+proof JSON.
 
-Until Project accepts the control artifact, keep status language at candidate
-level even when local debug proof passes.
+Until Project accepts a control artifact for a gate, keep status language at
+candidate/debug level even when local or Docker debug proof passes.

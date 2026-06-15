@@ -27,17 +27,20 @@ HOST_SCRIPT_CORPUS_DEV_RESULT ?= /tmp/mojo_script_corpus_dev_$(RESULT_DATE).json
 SCRIPT_CORPUS_RESULT ?= ../Shared/conformance/results/mojo_script_corpus_$(RESULT_DATE).json
 HOST_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_host_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+HOST_50K_PROOF_RESULT ?= .benchmark-results/mojo_host_shakedown_50k_benchmark_$(RESULT_DATE).json
+DOCKER_50K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 FIXTURE_ID ?= scripts.bare_multisig_27840
 FIXTURE_SET ?= all
 DATA_VOLUME ?= mojobitnode_data
 PROOF_VOLUME ?= mojobitnode_proof_data
+PROOF_50K_VOLUME ?= mojobitnode_50k_proof_data
 DOCKER_SYNC_TARGET ?= 5000
 PROGRESS ?= 500
 HOST_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-local-reference-proof host-smoke-once host-toolchain-smoke host-script-corpus-foundation-smoke host-block-core-smoke
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-proof-local docker-smoke-once docker-toolchain-smoke
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-local-reference-proof host-shakedown-50k-proof host-smoke-once host-toolchain-smoke host-script-corpus-foundation-smoke host-block-core-smoke
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-proof-local docker-proof-50k docker-smoke-once docker-toolchain-smoke
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -130,6 +133,9 @@ host-local-reference-proof: host-build
 	  --progress $(PROGRESS) \
 	  --result-path $(HOST_LOCAL_PROOF_RESULT)
 
+host-shakedown-50k-proof:
+	$(MAKE) host-local-reference-proof DOCKER_SYNC_TARGET=50000 HOST_LOCAL_PROOF_RESULT=$(HOST_50K_PROOF_RESULT) PROGRESS=$(PROGRESS)
+
 host-smoke-once: host-build
 	@MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) status --datadir $(DATA_DIR) --json >/tmp/mojo_status.json; \
 	  grep -q '"entrypoint_language":"mojo"' /tmp/mojo_status.json; \
@@ -208,7 +214,10 @@ docker-proof-local:
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
 	  --progress $(PROGRESS) \
-	  --result-path /benchmark-results/mojo_docker_baseline_5k_benchmark_$(RESULT_DATE).json
+	  --result-path /benchmark-results/$(notdir $(DOCKER_LOCAL_PROOF_RESULT))
+
+docker-proof-50k:
+	$(MAKE) docker-proof-local PROOF_VOLUME=$(PROOF_50K_VOLUME) DOCKER_SYNC_TARGET=50000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_50K_PROOF_RESULT) PROGRESS=$(PROGRESS)
 
 docker-smoke-once:
 	@out=$$(DOCKER_DATA_VOLUME=$(DATA_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps --entrypoint /bin/sh mojobitnode -lc 'mojobitnode status --datadir /data --json >/tmp/status.json && printf "%s %s\n" "AGENT_LOOP_TICK_chatreport" "$$(cat /tmp/status.json)"'); \

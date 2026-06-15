@@ -19,11 +19,12 @@ native prerequisites a future port would need?
 - RocksDB runtime truth smoke against `chainstate-rocksdb`.
 - Project-shaped status JSON.
 - Docker Shared script corpus proof (`45/45`).
-- Local Reference P2P proof surface for the strict 5k baseline candidate.
+- Local Reference P2P proof surfaces for strict 5k baseline and 50k shakedown
+  candidates.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
-local Reference 5k proof paths, but it does not implement external peers,
-supervisor loops, long-run benchmark lanes, or tip maintenance.
+local Reference 5k/50k proof paths, but it does not implement external peers,
+supervisor loops, 100k/tip benchmark lanes, or tip maintenance.
 
 The supported `mojobitnode` command is Mojo-owned and reports
 `entrypoint_language: "mojo"`.
@@ -48,6 +49,7 @@ make host-storage-proof
 make host-script-corpus-dev
 make host-script-corpus
 make host-local-reference-proof
+make host-shakedown-50k-proof
 make host-smoke-once
 make host-toolchain-smoke
 make host-script-corpus-foundation-smoke
@@ -70,6 +72,7 @@ make docker-native-crypto-vectors
 make docker-storage-proof
 make docker-script-corpus
 make docker-proof-local
+make docker-proof-50k
 make docker-smoke-once
 make docker-toolchain-smoke
 ```

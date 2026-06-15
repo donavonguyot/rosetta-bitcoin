@@ -482,6 +482,14 @@
       "path": "Nodes/Shared/conformance/results/mojo_control_baseline_5k_benchmark_20260615T220424Z.json",
       "status": "current",
       "notes": "Current comparable mojo baseline_5k proof accepted by campaign baseline_5k_20260615_150418."
+    },
+    {
+      "port": "mojo",
+      "claim": "shakedown_50k",
+      "gate_id": "shakedown_50k",
+      "path": "Nodes/Shared/conformance/results/mojo_control_shakedown_50k_benchmark_20260615T230521Z.json",
+      "status": "current",
+      "notes": "Current comparable mojo shakedown_50k proof accepted by campaign shakedown_50k_20260615_160338."
     }
   ]
 }

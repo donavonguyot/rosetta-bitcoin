@@ -818,16 +818,44 @@ def evaluate_legacy_script(
             _stack_push_num(stack, 1 if a != 0 and b != 0 else 0)
             offset += 1
             continue
-        if opcode == 0x9F:
+        if opcode == 0x9B:
             var b = decode_script_num(_stack_pop(stack).data)
             var a = decode_script_num(_stack_pop(stack).data)
-            _stack_push_num(stack, 1 if a < b else 0)
+            _stack_push_num(stack, 1 if a != 0 or b != 0 else 0)
             offset += 1
             continue
-        if opcode == 0xA3:
+        if opcode == 0x9C or opcode == 0x9D or opcode == 0x9E:
             var b = decode_script_num(_stack_pop(stack).data)
             var a = decode_script_num(_stack_pop(stack).data)
-            if a < b:
+            var equal = a == b
+            if opcode == 0x9E:
+                equal = not equal
+            _stack_push_num(stack, 1 if equal else 0)
+            if opcode == 0x9D:
+                var result = _stack_pop(stack)
+                if not cast_to_bool(result.data):
+                    return False
+            offset += 1
+            continue
+        if opcode == 0x9F or opcode == 0xA0 or opcode == 0xA1 or opcode == 0xA2:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            var ok = False
+            if opcode == 0x9F:
+                ok = a < b
+            elif opcode == 0xA0:
+                ok = a > b
+            elif opcode == 0xA1:
+                ok = a <= b
+            else:
+                ok = a >= b
+            _stack_push_num(stack, 1 if ok else 0)
+            offset += 1
+            continue
+        if opcode == 0xA3 or opcode == 0xA4:
+            var b = decode_script_num(_stack_pop(stack).data)
+            var a = decode_script_num(_stack_pop(stack).data)
+            if (opcode == 0xA3 and a < b) or (opcode == 0xA4 and a > b):
                 _stack_push_num(stack, a)
             else:
                 _stack_push_num(stack, b)
@@ -1006,7 +1034,7 @@ def evaluate_legacy_script(
                     return False
             offset += 1
             continue
-        raise Error("unsupported legacy opcode in Mojo diagnostic script engine")
+        raise Error(String("unsupported legacy opcode in Mojo diagnostic script engine: 0x") + bytes_to_hex(slice_bytes(script, offset, offset + 1)))
     if len(conditions) != 0:
         raise Error("unbalanced conditional")
     return _script_terminal_success(stack)
@@ -1820,8 +1848,8 @@ def legacy_sighash_preimage(
     ref tx: Transaction, input_index: Int, ref script_code: List[UInt8], sighash_type: UInt8
 ) raises -> List[UInt8]:
     var base_type = Int(sighash_type) & 0x1F
-    if base_type != 1 and base_type != 3:
-        raise Error("diagnostic legacy sighash supports SIGHASH_ALL and SIGHASH_SINGLE only")
+    if base_type != 1 and base_type != 2 and base_type != 3:
+        raise Error("diagnostic legacy sighash supports SIGHASH_ALL, SIGHASH_NONE, and SIGHASH_SINGLE only")
     var anyone_can_pay = (Int(sighash_type) & 0x80) != 0
     if input_index < 0 or input_index >= len(tx.inputs):
         raise Error("input index out of range")
@@ -1845,11 +1873,13 @@ def legacy_sighash_preimage(
                 append_bytes(out, script_code)
             else:
                 append_varint(out, 0)
-            if i != input_index and base_type == 3:
+            if i != input_index and (base_type == 2 or base_type == 3):
                 append_u32_le(out, UInt32(0))
             else:
                 append_u32_le(out, tx.inputs[i].sequence)
-    if base_type == 3:
+    if base_type == 2:
+        append_varint(out, 0)
+    elif base_type == 3:
         append_varint(out, input_index + 1)
         for _ in range(input_index):
             append_i64_le(out, Int64(-1))
@@ -3047,6 +3077,75 @@ def taproot_signature_hash(
     return tagged_hash(String("TapSighash"), msg)
 
 
+def taproot_key_path_signature_hash(
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    hash_type: UInt8,
+) raises -> List[UInt8]:
+    var hash_type_int = Int(hash_type)
+    if not (hash_type_int <= 3 or (hash_type_int >= 0x81 and hash_type_int <= 0x83)):
+        raise Error("unsupported Taproot hash type")
+    var output_mode = hash_type_int & 0x03
+    if hash_type_int == 0:
+        output_mode = 1
+    var anyone_can_pay = (hash_type_int & 0x80) != 0
+    if input_index < 0 or input_index >= len(tx.inputs) or input_index >= len(spent_prevouts):
+        raise Error("Taproot input index out of range")
+    if len(spent_prevouts) != len(tx.inputs):
+        raise Error("Taproot spent prevouts length mismatch")
+    if output_mode == 3 and input_index >= len(tx.outputs):
+        raise Error("Taproot SIGHASH_SINGLE without matching output")
+
+    var body = List[UInt8]()
+    body.append(hash_type)
+    append_i32_le(body, tx.version)
+    append_u32_le(body, tx.lock_time)
+
+    if not anyone_can_pay:
+        var prev_blob = List[UInt8]()
+        var amount_blob = List[UInt8]()
+        var script_blob = List[UInt8]()
+        var sequence_blob = List[UInt8]()
+        for i in range(len(tx.inputs)):
+            append_bytes(prev_blob, tx.inputs[i].previous_hash)
+            append_u32_le(prev_blob, tx.inputs[i].previous_index)
+            append_i64_le(amount_blob, spent_prevouts[i].amount)
+            append_varint(script_blob, len(spent_prevouts[i].script_pubkey))
+            append_bytes(script_blob, spent_prevouts[i].script_pubkey)
+            append_u32_le(sequence_blob, tx.inputs[i].sequence)
+        var hash_prevouts = sha256_digest(prev_blob)
+        var hash_amounts = sha256_digest(amount_blob)
+        var hash_scriptpubkeys = sha256_digest(script_blob)
+        var hash_sequences = sha256_digest(sequence_blob)
+        append_bytes(body, hash_prevouts)
+        append_bytes(body, hash_amounts)
+        append_bytes(body, hash_scriptpubkeys)
+        append_bytes(body, hash_sequences)
+
+    if output_mode == 1:
+        var hash_outputs = sha256_serialized_outputs(tx)
+        append_bytes(body, hash_outputs)
+
+    body.append(UInt8(0))
+    if anyone_can_pay:
+        append_bytes(body, tx.inputs[input_index].previous_hash)
+        append_u32_le(body, tx.inputs[input_index].previous_index)
+        serialize_taproot_spent_output(body, spent_prevouts[input_index])
+        append_u32_le(body, tx.inputs[input_index].sequence)
+    else:
+        append_u32_le(body, UInt32(input_index))
+
+    if output_mode == 3:
+        var hash_single = sha256_serialized_single_output(tx, input_index)
+        append_bytes(body, hash_single)
+
+    var msg = List[UInt8]()
+    msg.append(UInt8(0))
+    append_bytes(msg, body)
+    return tagged_hash(String("TapSighash"), msg)
+
+
 def legacy_sighash(
     ref tx: Transaction, input_index: Int, ref script_code: List[UInt8], ref signature: List[UInt8]
 ) raises -> List[UInt8]:
@@ -3108,8 +3207,8 @@ def bip143_sighash(
     sighash_type: UInt8,
 ) raises -> List[UInt8]:
     var base_type = Int(sighash_type) & 0x1F
-    if base_type != 1 and base_type != 3:
-        raise Error("diagnostic BIP143 supports SIGHASH_ALL and SIGHASH_SINGLE only")
+    if base_type != 1 and base_type != 2 and base_type != 3:
+        raise Error("diagnostic BIP143 supports SIGHASH_ALL, SIGHASH_NONE, and SIGHASH_SINGLE only")
     var anyone_can_pay = (Int(sighash_type) & 0x80) != 0
     if input_index < 0 or input_index >= len(tx.inputs):
         raise Error("input index out of range")
@@ -3117,12 +3216,12 @@ def bip143_sighash(
     if not anyone_can_pay:
         hash_prevouts = _hash_prevouts(tx)
     var hash_sequence = _zero32()
-    if not anyone_can_pay and base_type != 3:
+    if not anyone_can_pay and base_type != 2 and base_type != 3:
         hash_sequence = _hash_sequence(tx)
     var hash_outputs = _zero32()
     if base_type == 3 and input_index < len(tx.outputs):
         hash_outputs = _hash_single_output(tx, input_index)
-    elif base_type != 3:
+    elif base_type != 2 and base_type != 3:
         hash_outputs = _hash_outputs(tx)
 
     var out = List[UInt8]()
@@ -3181,8 +3280,8 @@ def verify_ecdsa_signature_for_mode(
     if len(signature) == 0:
         return False
     var base_type = Int(signature[len(signature) - 1]) & 0x1F
-    if base_type != 1 and base_type != 3:
-        raise Error("diagnostic fixture only supports SIGHASH_ALL and SIGHASH_SINGLE")
+    if base_type != 1 and base_type != 2 and base_type != 3:
+        raise Error("diagnostic fixture only supports SIGHASH_ALL, SIGHASH_NONE, and SIGHASH_SINGLE")
     var der = slice_bytes(signature, 0, len(signature) - 1)
     var digest = signature_digest_for_mode(tx, input_index, script_code, signature, witness_v0, witness_amount_sats)
     var native = OwnedDLHandle(shim_path)
@@ -3230,6 +3329,49 @@ def verify_schnorr_signature(
     if len(xonly_pubkey) != 32:
         raise Error("invalid x-only pubkey length")
     var digest = taproot_signature_hash(tx, input_index, spent_prevouts, hash_type, tapleaf_digest_value, codeseparator_pos)
+    var native = OwnedDLHandle(shim_path)
+    var pubkey_hex = bytes_to_hex(xonly_pubkey)
+    var sig_hex = bytes_to_hex(sig64)
+    var digest_hex = bytes_to_hex(digest)
+    var result = native.call["mojobitnode_verify_schnorr_hex_len", Int32](
+        pubkey_hex.unsafe_ptr(),
+        Int32(pubkey_hex.byte_length()),
+        sig_hex.unsafe_ptr(),
+        Int32(sig_hex.byte_length()),
+        digest_hex.unsafe_ptr(),
+        Int32(digest_hex.byte_length()),
+    )
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed Schnorr signature or x-only pubkey")
+
+
+def verify_schnorr_key_path_signature(
+    shim_path: String,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+) raises -> Bool:
+    if len(signature) == 0:
+        return False
+    var hash_type = UInt8(0)
+    var sig64 = List[UInt8]()
+    if len(signature) == 64:
+        sig64 = clone_bytes(signature)
+    elif len(signature) == 65:
+        hash_type = signature[64]
+        if hash_type == UInt8(0):
+            raise Error("invalid explicit Taproot default hash type")
+        sig64 = slice_bytes(signature, 0, 64)
+    else:
+        raise Error("invalid Schnorr signature length")
+    if len(xonly_pubkey) != 32:
+        raise Error("invalid x-only pubkey length")
+    var digest = taproot_key_path_signature_hash(tx, input_index, spent_prevouts, hash_type)
     var native = OwnedDLHandle(shim_path)
     var pubkey_hex = bytes_to_hex(xonly_pubkey)
     var sig_hex = bytes_to_hex(sig64)

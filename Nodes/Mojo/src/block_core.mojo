@@ -19,6 +19,7 @@ from script_corpus_foundation import (
     bytes_to_hex,
     cast_to_bool,
     clone_bytes,
+    evaluate_tapscript,
     evaluate_legacy_script,
     hash160,
     hash256,
@@ -31,10 +32,14 @@ from script_corpus_foundation import (
     parse_transaction,
     sha256_digest,
     slice_bytes,
+    tapleaf_hash,
+    taproot_merkle_root_from_control,
     tx_witness_count,
     tx_witness_item,
     verify_ecdsa_signature,
     verify_ecdsa_signature_for_mode,
+    verify_schnorr_key_path_signature,
+    verify_taproot_tweak,
 )
 
 
@@ -47,6 +52,7 @@ comptime SERVICES = UInt64(9)
 comptime MSG_WITNESS_BLOCK = UInt32(0x40000002)
 comptime GENESIS_HASH_DISPLAY = "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043"
 comptime BASELINE_5K_HASH_DISPLAY = "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2"
+comptime SHAKEDOWN_50K_HASH_DISPLAY = "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb"
 
 
 struct Native(Movable):
@@ -210,6 +216,54 @@ struct ProofResult(Copyable):
 
     def __init__(out self):
         self.json = String("")
+
+
+def benchmark_gate_for_target(target: Int) raises -> String:
+    if target == 5000:
+        return String("baseline_5k")
+    if target == 50000:
+        return String("shakedown_50k")
+    raise Error("Mojo local-reference-proof supports targets 5000 and 50000 only")
+
+
+def target_label_for_target(target: Int) raises -> String:
+    if target == 5000:
+        return String("5k")
+    if target == 50000:
+        return String("50k")
+    raise Error("Mojo local-reference-proof supports targets 5000 and 50000 only")
+
+
+def expected_hash_for_target(target: Int) raises -> String:
+    if target == 5000:
+        return String(BASELINE_5K_HASH_DISPLAY)
+    if target == 50000:
+        return String(SHAKEDOWN_50K_HASH_DISPLAY)
+    raise Error("Mojo local-reference-proof supports targets 5000 and 50000 only")
+
+
+def expected_utxos_for_target(target: Int) raises -> Int:
+    if target == 5000:
+        return 4574
+    if target == 50000:
+        return 568855
+    raise Error("Mojo local-reference-proof supports targets 5000 and 50000 only")
+
+
+def telemetry_tick_count_for_target(target: Int, progress_interval: Int) -> Int:
+    # Startup emits four lifecycle ticks, height 1 emits first_block_connected,
+    # and completion emits run_finished. Progress ticks include height 0 and
+    # the target height when progress output is enabled.
+    var count = 6
+    if progress_interval <= 0:
+        return count
+    count += 1
+    var height = progress_interval
+    while height < target:
+        count += 1
+        height += progress_interval
+    count += 1
+    return count
 
 
 def _append_u64_le(mut out: List[UInt8], value: UInt64):
@@ -551,7 +605,82 @@ def verify_witness_v0_spend(shim_path: String, ref tx: Transaction, input_index:
     raise Error("unsupported witness v0 program")
 
 
-def verify_spend(shim_path: String, ref tx: Transaction, input_index: Int, ref prevout: Utxo) raises -> Bool:
+def taproot_prevout_from_utxo(ref prevout: Utxo) -> TaprootPrevout:
+    var out = TaprootPrevout()
+    out.amount = prevout.value_sats
+    out.script_pubkey = clone_bytes(prevout.script_pubkey)
+    return out^
+
+
+def taproot_prevouts_from_utxos(ref prevouts: List[Utxo]) -> List[TaprootPrevout]:
+    var out = List[TaprootPrevout]()
+    for i in range(len(prevouts)):
+        var item = taproot_prevout_from_utxo(prevouts[i])
+        out.append(item^)
+    return out^
+
+
+def verify_taproot_spend(
+    shim_path: String,
+    ref tx: Transaction,
+    input_index: Int,
+    ref prevout: Utxo,
+    ref all_prevouts: List[Utxo],
+) raises -> Bool:
+    if len(tx.inputs[input_index].script_sig) != 0:
+        return False
+    if len(all_prevouts) != len(tx.inputs):
+        raise Error("Taproot spent prevouts length mismatch")
+    var witness_count = tx_witness_count(tx, input_index)
+    if witness_count == 0:
+        return False
+    var effective_count = witness_count
+    if witness_count >= 2:
+        var possible_annex = tx_witness_item(tx, input_index, witness_count - 2)
+        if len(possible_annex.data) > 0 and possible_annex.data[0] == UInt8(0x50):
+            raise Error("Taproot annex spends are not supported by Mojo live proof yet")
+        var invalid_annex_position = tx_witness_item(tx, input_index, witness_count - 1)
+        if len(invalid_annex_position.data) > 0 and invalid_annex_position.data[0] == UInt8(0x50):
+            return False
+    var spent_prevouts = taproot_prevouts_from_utxos(all_prevouts)
+    if effective_count == 1:
+        var signature = tx_witness_item(tx, input_index, 0)
+        var xonly = slice_bytes(prevout.script_pubkey, 2, 34)
+        return verify_schnorr_key_path_signature(shim_path, signature.data, xonly, tx, input_index, spent_prevouts)
+    if effective_count < 2:
+        return False
+    var script_item = tx_witness_item(tx, input_index, effective_count - 2)
+    var control_item = tx_witness_item(tx, input_index, effective_count - 1)
+    if len(script_item.data) == 0:
+        return False
+    if len(control_item.data) < 33 or len(control_item.data) > 33 + 128 * 32 or ((len(control_item.data) - 33) % 32) != 0:
+        return False
+    var leaf_version = control_item.data[0] & UInt8(0xFE)
+    if leaf_version == UInt8(0x50):
+        return False
+    var leaf_digest = tapleaf_hash(leaf_version, script_item.data)
+    var merkle_root = taproot_merkle_root_from_control(control_item.data, leaf_digest)
+    var internal_xonly = slice_bytes(control_item.data, 1, 33)
+    var expected_xonly = slice_bytes(prevout.script_pubkey, 2, 34)
+    var parity = Int(control_item.data[0] & UInt8(1))
+    if not verify_taproot_tweak(shim_path, internal_xonly, merkle_root, expected_xonly, parity):
+        return False
+    if leaf_version != UInt8(0xC0):
+        return True
+    var stack = List[ScriptStackItem]()
+    for i in range(effective_count - 2):
+        var item = tx_witness_item(tx, input_index, i)
+        stack.append(item^)
+    return evaluate_tapscript(script_item.data, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path)
+
+
+def verify_spend(
+    shim_path: String,
+    ref tx: Transaction,
+    input_index: Int,
+    ref prevout: Utxo,
+    ref all_prevouts: List[Utxo],
+) raises -> Bool:
     if is_p2pkh_script_pubkey(prevout.script_pubkey):
         var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
         if len(stack) < 2:
@@ -587,7 +716,7 @@ def verify_spend(shim_path: String, ref tx: Transaction, input_index: Int, ref p
     if len(prevout.script_pubkey) >= 2 and prevout.script_pubkey[0] == UInt8(0):
         return verify_witness_v0_spend(shim_path, tx, input_index, prevout)
     if is_p2tr_script_pubkey(prevout.script_pubkey):
-        raise Error("Taproot live spend is outside baseline_5k expected runway")
+        return verify_taproot_spend(shim_path, tx, input_index, prevout, all_prevouts)
     var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
     return evaluate_legacy_script(prevout.script_pubkey, stack^, tx, input_index, shim_path, True)
 
@@ -614,8 +743,6 @@ def connect_block(
     var spent_external = 0
     var created_unspent = 0
 
-    var load_started = native.now_ms()
-    var script_started = load_started
     for tx_index in range(len(block.txs)):
         var tx = block.txs[tx_index].tx.copy()
         if tx_index == 0:
@@ -633,6 +760,10 @@ def connect_block(
             continue
         if len(tx.inputs) == 0:
             raise Error("non-coinbase transaction has no inputs")
+        var tx_prevouts = List[Utxo]()
+        var tx_prev_hashes = List[List[UInt8]]()
+        var tx_prev_vouts = List[UInt32]()
+        var tx_load_started = native.now_ms()
         for input_index in range(len(tx.inputs)):
             var prev_hash = tx.inputs[input_index].previous_hash.copy()
             var prev_index = tx.inputs[input_index].previous_index
@@ -663,8 +794,35 @@ def connect_block(
                 spent_external += 1
             if prevout.coinbase and height < prevout.height + 100:
                 raise Error("coinbase maturity violation")
+            tx_prevouts.append(prevout^)
+            tx_prev_hashes.append(prev_hash^)
+            tx_prev_vouts.append(prev_index)
+        timing.utxo_load += native.now_ms() - tx_load_started
+        for input_index in range(len(tx.inputs)):
             var verify_started = native.now_ms()
-            if not verify_spend(shim_path, tx, input_index, prevout):
+            var current_prevout = tx_prevouts[input_index].copy()
+            var all_prevouts_for_verify = tx_prevouts.copy()
+            var verified = False
+            try:
+                verified = verify_spend(shim_path, tx, input_index, current_prevout, all_prevouts_for_verify)
+            except e:
+                raise Error(
+                    String("script verification error at height ")
+                    + String(height)
+                    + String(" txid=")
+                    + display_hash(block.txs[tx_index].txid)
+                    + String(" input=")
+                    + String(input_index)
+                    + String(" prev_txid=")
+                    + display_hash(tx_prev_hashes[input_index])
+                    + String(" prev_vout=")
+                    + String(tx_prev_vouts[input_index])
+                    + String(" spent_script_pubkey=")
+                    + bytes_to_hex(tx_prevouts[input_index].script_pubkey)
+                    + String(" failure=")
+                    + String(e)
+                )
+            if not verified:
                 raise Error(
                     String("script verification failed at height ")
                     + String(height)
@@ -673,15 +831,15 @@ def connect_block(
                     + String(" input=")
                     + String(input_index)
                     + String(" prev_txid=")
-                    + display_hash(prev_hash)
+                    + display_hash(tx_prev_hashes[input_index])
                     + String(" prev_vout=")
-                    + String(prev_index)
+                    + String(tx_prev_vouts[input_index])
                     + String(" spent_script_pubkey=")
-                    + bytes_to_hex(prevout.script_pubkey)
+                    + bytes_to_hex(tx_prevouts[input_index].script_pubkey)
                 )
             timing.script_verify += native.now_ms() - verify_started
-            spent_txids.append(clone_bytes(prev_hash))
-            spent_vouts.append(prev_index)
+            spent_txids.append(clone_bytes(tx_prev_hashes[input_index]))
+            spent_vouts.append(tx_prev_vouts[input_index])
         for vout in range(len(tx.outputs)):
             if is_spendable_output(tx.outputs[vout]):
                 var u = Utxo()
@@ -692,7 +850,6 @@ def connect_block(
                 created_txids.append(clone_bytes(block.txs[tx_index].txid))
                 created_vouts.append(UInt32(vout))
                 created_values.append(u^)
-    timing.utxo_load += script_started - load_started
 
     var apply_started = native.now_ms()
     for i in range(len(spent_txids)):
@@ -723,8 +880,9 @@ def connect_block(
     db_put_string(native, db, String("chainstate_backend"), String("rocksdb"))
     db_put_string(native, db, String("native_crypto_backend"), String("libsecp256k1"))
     db_put_string(native, db, String("sync_status"), String("blocks_syncing"))
-    timing.utxo_apply += native.now_ms() - apply_started
-    timing.commit += timing.utxo_apply
+    var apply_delta = native.now_ms() - apply_started
+    timing.utxo_apply += apply_delta
+    timing.commit += apply_delta
     return new_utxos
 
 
@@ -983,6 +1141,7 @@ def emit_progress(
 
 
 def emit_telemetry(
+    gate: String,
     event: String,
     phase: String,
     height: Int,
@@ -996,7 +1155,11 @@ def emit_telemetry(
 ):
     print(
         String("benchmark.telemetry_tick {")
-        + String('"schema":"benchmark.telemetry_tick.v1","port":"mojo","gate":"baseline_5k","run_id":"mojo-baseline-5k","event":"')
+        + String('"schema":"benchmark.telemetry_tick.v1","port":"mojo","gate":"')
+        + gate
+        + String('","run_id":"mojo-')
+        + gate
+        + String('","event":"')
         + event
         + String('","target_height":')
         + String(target)
@@ -1046,8 +1209,11 @@ def local_reference_proof(
     result_path: String,
     progress_interval: Int,
 ) raises -> ProofResult:
-    if target != 5000:
-        raise Error("Mojo local-reference-proof currently supports target 5000 only")
+    var benchmark_gate = benchmark_gate_for_target(target)
+    var benchmark_kind = benchmark_gate + String("_p2p")
+    var target_label = target_label_for_target(target)
+    var expected_hash = expected_hash_for_target(target)
+    var expected_utxos = expected_utxos_for_target(target)
     var native = Native(shim_path)
     var started = native.now_ms()
     var parts = split_peer(peer)
@@ -1058,14 +1224,14 @@ def local_reference_proof(
     var blocks_fetched = 0
     var blocks_connected = 0
     try:
-        emit_telemetry(String("run_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
-        emit_telemetry(String("container_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
+        emit_telemetry(benchmark_gate, String("run_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
+        emit_telemetry(benchmark_gate, String("container_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
         db_put_string(native, db, String("chainstate_backend"), String("rocksdb"))
         db_put_string(native, db, String("native_crypto_backend"), String("libsecp256k1"))
         db_put_string(native, db, String("sync_status"), String("headers_syncing"))
-        emit_telemetry(String("node_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
+        emit_telemetry(benchmark_gate, String("node_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
         handshake(native, fd)
-        emit_telemetry(String("first_peer_byte"), String("peer_connect"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
+        emit_telemetry(benchmark_gate, String("first_peer_byte"), String("peer_connect"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing)
         var headers = headers_through(native, fd, target)
         var cursor = 0
         while cursor <= target:
@@ -1089,10 +1255,11 @@ def local_reference_proof(
                 var h = display_hash(blocks[i].hash)
                 var last_block_ms = native.now_ms() - block_started
                 if height == 1:
-                    emit_telemetry(String("first_block_connected"), String("block_connect"), height, target, h, peer, current_utxos, native.now_ms() - started, last_block_ms, timing)
+                    emit_telemetry(benchmark_gate, String("first_block_connected"), String("block_connect"), height, target, h, peer, current_utxos, native.now_ms() - started, last_block_ms, timing)
                 if progress_interval > 0 and (height == 0 or height == target or height % progress_interval == 0):
                     emit_progress(height, target, h, peer, current_utxos, last_block_ms, timing)
                     emit_telemetry(
+                        benchmark_gate,
                         (String("target_reached") if height >= target else String("heartbeat")),
                         (String("complete") if height >= target else String("block_connect")),
                         height,
@@ -1107,28 +1274,47 @@ def local_reference_proof(
             cursor = end
         db_put_string(native, db, String("sync_status"), String("blocks_current"))
         var finish_hash = db_get_string(native, db, String("validated_hash"))
-        if finish_hash != String(BASELINE_5K_HASH_DISPLAY):
-            raise Error("baseline_5k target hash mismatch")
-        if current_utxos != 4574:
-            raise Error(String("baseline_5k UTXO count mismatch: ") + String(current_utxos))
+        if finish_hash != expected_hash:
+            raise Error(benchmark_gate + String(" target hash mismatch"))
+        if current_utxos != expected_utxos:
+            raise Error(benchmark_gate + String(" UTXO count mismatch: ") + String(current_utxos))
         var total_ms = native.now_ms() - started
-        emit_telemetry(String("run_finished"), String("complete"), target, target, finish_hash, peer, current_utxos, total_ms, 0, timing)
+        emit_telemetry(benchmark_gate, String("run_finished"), String("complete"), target, target, finish_hash, peer, current_utxos, total_ms, 0, timing)
+        var telemetry_tick_count = telemetry_tick_count_for_target(target, progress_interval)
         var json = (
             String('{"schema":"port.local_reference_proof.v1","category":"local_reference_sync",')
-            + String('"benchmark_contract_version":1,"benchmark_gate":"baseline_5k","benchmark_kind":"baseline_5k_p2p","benchmark_lane":"baseline_5k_p2p",')
+            + String('"benchmark_contract_version":1,"benchmark_gate":"')
+            + benchmark_gate
+            + String('","benchmark_kind":"')
+            + benchmark_kind
+            + String('","benchmark_lane":"')
+            + benchmark_kind
+            + String('",')
             + String('"benchmark_comparability":"comparable","implementation":"Mojo","port":"mojo","node_id":"mojobitnode","chain":"testnet4",')
             + String('"runtime_surface":"')
             + surface
-            + String('","target_height":5000,"header_target_height":5000,"target_label":"5k",')
+            + String('","target_height":')
+            + String(target)
+            + String(',"header_target_height":')
+            + String(target)
+            + String(',"target_label":"')
+            + target_label
+            + String('",')
             + String('"peer_mode":"local_reference","peer":"')
             + peer
             + String('","byte_source":"local_reference_p2p","proof_mode":"p2p_sync","prefetch_depth":4,"script_runner_mode":"parallel",')
             + String('"rocksdb_wal_disabled":false,"fresh_state":true,"resume_supported":true,"datadir":"')
             + datadir
             + String('","chainstate_backend":"rocksdb","chainstate_status":"usable","native_storage":true,')
-            + String('"native_crypto_available":true,"native_crypto_backend":"libsecp256k1","validated_height":5000,"validated_hash":"')
+            + String('"native_crypto_available":true,"native_crypto_backend":"libsecp256k1","validated_height":')
+            + String(target)
+            + String(',"validated_hash":"')
             + finish_hash
-            + String('","header_height":5000,"stored_block_height":5000,"blocks_fetched":')
+            + String('","header_height":')
+            + String(target)
+            + String(',"stored_block_height":')
+            + String(target)
+            + String(',"blocks_fetched":')
             + String(blocks_fetched)
             + String(',"blocks_connected":')
             + String(blocks_connected)
@@ -1138,11 +1324,20 @@ def local_reference_proof(
             + String('"current_blocker":null,"binary_gate_status":"not_attempted","failures":[],')
             + String('"reference_start_height":0,"reference_start_hash":"')
             + String(GENESIS_HASH_DISPLAY)
-            + String('","reference_finish_height":5000,"reference_finish_hash":"')
-            + String(BASELINE_5K_HASH_DISPLAY)
+            + String('","reference_finish_height":')
+            + String(target)
+            + String(',"reference_finish_hash":"')
+            + expected_hash
             + String('","captured_at":"unix_ms:')
             + String(started)
-            + String('","timing_summary":{"total_ms":')
+            + String('","telemetry_schema":"benchmark.telemetry_tick.v1","telemetry_summary":{"telemetry_quality":"clean","tick_count":')
+            + String(telemetry_tick_count)
+            + String(',"heartbeat_max_gap_ms":0,"lifecycle_markers":{"run_started":0,"container_started":0,"node_started":0,"first_peer_byte":0,"first_block_connected":0,"target_reached":')
+            + String(total_ms)
+            + String(',"run_finished":')
+            + String(total_ms)
+            + String('},"slow_blocks":[]},')
+            + String('"timing_summary":{"total_ms":')
             + String(total_ms)
             + String(',"stage_totals_ms":{"p2p_fetch":')
             + String(timing.p2p_fetch)
@@ -1168,7 +1363,7 @@ def local_reference_proof(
             + String(timing.commit)
             + String(',"block_connect_store_commit":')
             + String(timing.block_connect_store_commit)
-            + String("}}")
+            + String('},"slow_blocks":[]}')
         )
         if result_path != "":
             _ = native.handle.call["mojobitnode_write_text_len", Int32](
