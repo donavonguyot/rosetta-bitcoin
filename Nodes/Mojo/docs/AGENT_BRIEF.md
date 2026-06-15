@@ -35,6 +35,13 @@ The CLI is Mojo-owned and must continue to report
 `delegated: false` where applicable. Do not reintroduce Python delegation or a
 separate C proof executable.
 
+`script-corpus-dev --manifest <path> --fixture-id <id> --result-path <path>` is
+a host diagnostic foundation for the future corpus runner. It currently supports
+only `scripts.bare_multisig_27840`, which now passes through Mojo-owned legacy
+sighash/script handling plus the owned C shim's generic `libsecp256k1` DER
+verifier. Keep it out of `current_evidence.json` and Docker manifest coverage
+until it is a real 45/45 corpus command.
+
 ## Native Boundary
 
 `src/mojo_native_shim.c` is the owned native boundary for RocksDB and
@@ -66,6 +73,7 @@ Do not use `mojo test`; current Mojo testing uses `TestSuite` and runs with
 ```bash
 make host-toolchain-smoke
 make docker-toolchain-smoke
+make host-script-corpus-foundation-smoke
 ```
 
 ## Future 5k Order

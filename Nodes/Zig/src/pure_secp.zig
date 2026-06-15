@@ -2,6 +2,12 @@ const std = @import("std");
 
 const Secp256k1 = std.crypto.ecc.Secp256k1;
 const Ecdsa = std.crypto.sign.ecdsa.EcdsaSecp256k1Sha256;
+const bip340_challenge_tag_hash = [_]u8{
+    0x7b, 0xb5, 0x2d, 0x7a, 0x9f, 0xef, 0x58, 0x32,
+    0x3e, 0xb1, 0xbf, 0x7a, 0x40, 0x7d, 0xb3, 0x82,
+    0xd2, 0xf3, 0xf2, 0xd8, 0x1b, 0xb1, 0x22, 0x4f,
+    0x49, 0xfe, 0x51, 0x8f, 0x6d, 0x48, 0xd3, 0x7c,
+};
 
 pub const TweakResult = struct {
     output_xonly: [32]u8,
@@ -29,9 +35,8 @@ pub const PureVerifier = struct {
         const s = Secp256k1.scalar.Scalar.fromBytes(sig64[32..64].*, .big) catch return false;
         if (s.isZero()) return false;
         const e = schnorrChallenge(sig64[0..32], xonly_pubkey_bytes, msg);
-        const s_g = Secp256k1.basePoint.mulPublic(s.toBytes(.big), .big) catch return false;
-        const e_p = point.mulPublic(e.toBytes(.big), .big) catch return false;
-        const r = s_g.sub(e_p);
+        const neg_e = Secp256k1.scalar.neg(e.toBytes(.big), .big) catch return false;
+        const r = Secp256k1.mulDoubleBasePublic(Secp256k1.basePoint, s.toBytes(.big), point, neg_e, .big) catch return false;
         r.rejectIdentity() catch return false;
         const affine = r.affineCoordinates();
         return !affine.y.isOdd() and affine.x.equivalent(r_x);
@@ -73,10 +78,9 @@ fn liftX(xonly: []const u8) !Secp256k1 {
 }
 
 fn schnorrChallenge(r_x: []const u8, pubkey_x: []const u8, msg: []const u8) Secp256k1.scalar.Scalar {
-    const tag_hash = sha256("BIP0340/challenge");
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
-    hasher.update(tag_hash[0..]);
-    hasher.update(tag_hash[0..]);
+    hasher.update(bip340_challenge_tag_hash[0..]);
+    hasher.update(bip340_challenge_tag_hash[0..]);
     hasher.update(r_x[0..32]);
     hasher.update(pubkey_x[0..32]);
     hasher.update(msg);

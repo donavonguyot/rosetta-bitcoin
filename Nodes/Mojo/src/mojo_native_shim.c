@@ -92,6 +92,21 @@ static bool hex_to_bytes(const char *hex, uint8_t *out, size_t out_len) {
   return true;
 }
 
+static bool hex_to_bytes_len(const char *hex, size_t hex_len, uint8_t *out, size_t out_len) {
+  if (!hex || hex_len != out_len * 2) {
+    return false;
+  }
+  for (size_t i = 0; i < out_len; i++) {
+    uint8_t hi = 0;
+    uint8_t lo = 0;
+    if (!hex_nibble(hex[i * 2], &hi) || !hex_nibble(hex[i * 2 + 1], &lo)) {
+      return false;
+    }
+    out[i] = (uint8_t)((hi << 4) | lo);
+  }
+  return true;
+}
+
 static void bytes_to_hex(const uint8_t *bytes, size_t len, char *out) {
   static const char *alphabet = "0123456789abcdef";
   for (size_t i = 0; i < len; i++) {
@@ -157,6 +172,76 @@ static int32_t verify_ecdsa(secp256k1_context *ctx, const crypto_vector *vector)
   secp256k1_ecdsa_signature_normalize(ctx, &sig, &sig);
   return secp256k1_ecdsa_verify(ctx, &sig, msg, &pubkey) == 1 ? CRYPTO_RESULT_VALID
                                                                : CRYPTO_RESULT_CONSENSUS_INVALID;
+}
+
+static int32_t verify_ecdsa_der_bytes(const uint8_t *pubkey_bytes, size_t pubkey_len, const uint8_t *sig_bytes,
+                                      size_t sig_len, const uint8_t msg[32]) {
+  secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  if (!ctx) {
+    return CRYPTO_RESULT_UNKNOWN;
+  }
+
+  secp256k1_pubkey pubkey;
+  secp256k1_ecdsa_signature sig;
+  int32_t result = CRYPTO_RESULT_MALFORMED_INPUT;
+  if (secp256k1_ec_pubkey_parse(ctx, &pubkey, pubkey_bytes, pubkey_len) == 1 &&
+      secp256k1_ecdsa_signature_parse_der(ctx, &sig, sig_bytes, sig_len) == 1) {
+    secp256k1_ecdsa_signature_normalize(ctx, &sig, &sig);
+    result = secp256k1_ecdsa_verify(ctx, &sig, msg, &pubkey) == 1 ? CRYPTO_RESULT_VALID
+                                                                  : CRYPTO_RESULT_CONSENSUS_INVALID;
+  }
+  secp256k1_context_destroy(ctx);
+  return result;
+}
+
+int32_t mojobitnode_verify_ecdsa_der_hex(const char *pubkey_hex, const char *signature_hex,
+                                         const char *msg_hash_hex) {
+  if (!pubkey_hex || !signature_hex || !msg_hash_hex) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+  const size_t pubkey_hex_len = strlen(pubkey_hex);
+  const size_t signature_hex_len = strlen(signature_hex);
+  const size_t msg_hash_hex_len = strlen(msg_hash_hex);
+  const size_t pubkey_len = pubkey_hex_len / 2;
+  const size_t sig_len = signature_hex_len / 2;
+  if (pubkey_hex_len != pubkey_len * 2 || signature_hex_len != sig_len * 2 || msg_hash_hex_len != 64 ||
+      (pubkey_len != 33 && pubkey_len != 65) || sig_len == 0 || sig_len > 72) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  uint8_t pubkey_bytes[65];
+  uint8_t sig_bytes[72];
+  uint8_t msg[32];
+  if (!hex_to_bytes(pubkey_hex, pubkey_bytes, pubkey_len) ||
+      !hex_to_bytes(signature_hex, sig_bytes, sig_len) || !hex_to_bytes(msg_hash_hex, msg, sizeof(msg))) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+  return verify_ecdsa_der_bytes(pubkey_bytes, pubkey_len, sig_bytes, sig_len, msg);
+}
+
+int32_t mojobitnode_verify_ecdsa_der_hex_len(const char *pubkey_hex, int32_t pubkey_hex_len,
+                                             const char *signature_hex, int32_t signature_hex_len,
+                                             const char *msg_hash_hex, int32_t msg_hash_hex_len) {
+  if (!pubkey_hex || !signature_hex || !msg_hash_hex || pubkey_hex_len < 0 || signature_hex_len < 0 ||
+      msg_hash_hex_len != 64) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+  const size_t pubkey_len = (size_t)pubkey_hex_len / 2;
+  const size_t sig_len = (size_t)signature_hex_len / 2;
+  if ((size_t)pubkey_hex_len != pubkey_len * 2 || (size_t)signature_hex_len != sig_len * 2 ||
+      (pubkey_len != 33 && pubkey_len != 65) || sig_len == 0 || sig_len > 72) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+
+  uint8_t pubkey_bytes[65];
+  uint8_t sig_bytes[72];
+  uint8_t msg[32];
+  if (!hex_to_bytes_len(pubkey_hex, (size_t)pubkey_hex_len, pubkey_bytes, pubkey_len) ||
+      !hex_to_bytes_len(signature_hex, (size_t)signature_hex_len, sig_bytes, sig_len) ||
+      !hex_to_bytes_len(msg_hash_hex, (size_t)msg_hash_hex_len, msg, sizeof(msg))) {
+    return CRYPTO_RESULT_MALFORMED_INPUT;
+  }
+  return verify_ecdsa_der_bytes(pubkey_bytes, pubkey_len, sig_bytes, sig_len, msg);
 }
 
 static int32_t verify_schnorr(secp256k1_context *ctx, const crypto_vector *vector) {

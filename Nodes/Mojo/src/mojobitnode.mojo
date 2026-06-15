@@ -2,6 +2,8 @@ from std.ffi import OwnedDLHandle
 from std.os import getenv
 from std.sys import argv
 
+from script_corpus_foundation import evaluate_bare_multisig_fixture, load_bare_multisig_fixture
+
 
 def bool_json(value: Bool) -> String:
     if value:
@@ -13,6 +15,18 @@ def result_json(value: Bool) -> String:
     if value:
         return String("passed")
     return String("failed")
+
+
+def passed_count_json(value: Bool) -> String:
+    if value:
+        return String("1")
+    return String("0")
+
+
+def failed_count_json(value: Bool) -> String:
+    if value:
+        return String("0")
+    return String("1")
 
 
 def actual_json(code: Int32) -> String:
@@ -62,7 +76,7 @@ def expected_code(index: Int) -> Int32:
 def main() raises:
     var args = argv()
     if len(args) < 2:
-        print("usage: mojobitnode <status|native-crypto-vectors|storage-proof> [options]")
+        print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus-dev> [options]")
         return
 
     var command = String(args[1])
@@ -71,6 +85,8 @@ def main() raises:
     var datadir = String("./data-mojo")
     var result_path = String("")
     var vectors_path = String("../Shared/conformance/fixtures/native_crypto_v1_vectors.json")
+    var manifest_path = String("../Shared/conformance/fixtures/scripts/manifest.json")
+    var fixture_id = String("scripts.bare_multisig_27840")
     for i in range(len(args)):
         if args[i] == "--datadir" and i + 1 < len(args):
             datadir = String(args[i + 1])
@@ -78,6 +94,10 @@ def main() raises:
             result_path = String(args[i + 1])
         if args[i] == "--vectors" and i + 1 < len(args):
             vectors_path = String(args[i + 1])
+        if args[i] == "--manifest" and i + 1 < len(args):
+            manifest_path = String(args[i + 1])
+        if args[i] == "--fixture-id" and i + 1 < len(args):
+            fixture_id = String(args[i + 1])
 
     var native = OwnedDLHandle(shim_path)
     var crypto_available = native.call["mojobitnode_native_crypto_available", Int32]() == 1
@@ -148,6 +168,58 @@ def main() raises:
             _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), json.unsafe_ptr())
         return
 
+    if command == "script-corpus-dev":
+        if fixture_id != "scripts.bare_multisig_27840":
+            var unsupported_json = (
+                String('{"schema":"port.script_corpus_result.v1","category":"script_corpus",')
+                + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
+                + surface
+                + String('","entrypoint_language":"mojo","native_crypto_backend":"libsecp256k1",')
+                + String('"native_shim":"owned_c","verifier":{"engine":"mojo_dev_foundation","delegated":false},')
+                + String('"fixture_count":1,"passed":0,"failed":1,"result":"failed",')
+                + String('"results":[{"fixture_id":"')
+                + fixture_id
+                + String('","result":"failed","failure":"unsupported fixture in Mojo diagnostic foundation"}]}')
+            )
+            print(unsupported_json)
+            if result_path != "":
+                _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), unsupported_json.unsafe_ptr())
+            return
+
+        var fixture = load_bare_multisig_fixture(manifest_path)
+        var fixture_passed = evaluate_bare_multisig_fixture(fixture, shim_path)
+        var json = (
+            String('{"schema":"port.script_corpus_result.v1","category":"script_corpus",')
+            + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
+            + surface
+            + String('","entrypoint_language":"mojo","native_crypto_backend":"libsecp256k1",')
+            + String('"native_shim":"owned_c","verifier":{"engine":"mojo_dev_foundation","delegated":false},')
+            + String('"manifest":"')
+            + manifest_path
+            + String('","fixture_count":1,"passed":')
+            + passed_count_json(fixture_passed)
+            + String(',"failed":')
+            + failed_count_json(fixture_passed)
+            + String(',"result":"')
+            + result_json(fixture_passed)
+            + String('",')
+            + String('"results":[{"fixture_id":"')
+            + fixture.fixture_id
+            + String('","height":')
+            + String(fixture.height)
+            + String(',"input_index":')
+            + String(fixture.input_index)
+            + String(',"required_rules":["')
+            + fixture.required_rule
+            + String('"],"result":"')
+            + result_json(fixture_passed)
+            + String('"}]}')
+        )
+        print(json)
+        if result_path != "":
+            _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), json.unsafe_ptr())
+        return
+
     if command == "storage-proof":
         var mask = native.call["mojobitnode_storage_probe", Int32](datadir.unsafe_ptr())
         var create_ok = (mask & 1) != 0
@@ -182,4 +254,4 @@ def main() raises:
             _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), json.unsafe_ptr())
         return
 
-    print("usage: mojobitnode <status|native-crypto-vectors|storage-proof> [options]")
+    print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus-dev> [options]")

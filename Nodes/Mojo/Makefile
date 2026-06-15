@@ -14,17 +14,19 @@ SHIM_FLAG := $(if $(filter Darwin,$(shell uname -s)),-dynamiclib,-shared)
 SHIM_LIB ?= $(BUILD_DIR)/libmojobitnode_shim.$(SHIM_EXT)
 MOJO_DOCS_DIR ?= ./.mojo-docs
 MOJO_TOOLCHAIN_SMOKE ?= tests/toolchain_smoke.mojo
+MOJO_SCRIPT_CORPUS_FOUNDATION_SMOKE ?= tests/script_corpus_foundation_smoke.mojo
 UV ?= uv
 PYTHON ?= /opt/homebrew/bin/python3.11
 PKG_CONFIG ?= pkg-config
 CRYPTO_VECTORS ?= ../Shared/conformance/fixtures/native_crypto_v1_vectors.json
 HOST_CRYPTO_RESULT ?= /tmp/mojo_native_crypto_vectors_host_$(RESULT_DATE).json
 HOST_STORAGE_RESULT ?= /tmp/mojo_rocksdb_storage_proof_host_$(RESULT_DATE).json
+HOST_SCRIPT_CORPUS_DEV_RESULT ?= /tmp/mojo_script_corpus_dev_$(RESULT_DATE).json
 DATA_VOLUME ?= mojobitnode_data
 PROOF_VOLUME ?= mojobitnode_proof_data
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-smoke-once host-toolchain-smoke
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-smoke-once host-toolchain-smoke host-script-corpus-foundation-smoke
 .PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-smoke-once docker-toolchain-smoke
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
@@ -60,8 +62,8 @@ $(SHIM_LIB): src/mojo_native_shim.c | host-deps-check
 	  $$($(PKG_CONFIG) --cflags --libs rocksdb libsecp256k1 openssl) \
 	  -lstdc++
 
-$(MOJO_BIN): src/mojobitnode.mojo $(MOJO_VERSION_STAMP) $(SHIM_LIB)
-	$(MOJO) build src/mojobitnode.mojo -o $(MOJO_BIN)
+$(MOJO_BIN): src/mojobitnode.mojo src/script_corpus_foundation.mojo $(MOJO_VERSION_STAMP) $(SHIM_LIB)
+	$(MOJO) build -I src src/mojobitnode.mojo -o $(MOJO_BIN)
 
 host-build: host-deps-check $(MOJO_BIN)
 
@@ -87,6 +89,20 @@ host-storage-proof: host-build
 	  echo "$$out"; \
 	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"
 
+host-script-corpus-dev: host-build
+	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus-dev \
+	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --fixture-id scripts.bare_multisig_27840 \
+	  --result-path $(HOST_SCRIPT_CORPUS_DEV_RESULT)); \
+	  echo "$$out"; \
+	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"; \
+	  grep -q '"delegated":false' <<< "$$out"; \
+	  grep -q '"fixture_id":"scripts.bare_multisig_27840"' <<< "$$out"; \
+	  grep -q '"passed":1' <<< "$$out"; \
+	  grep -q '"failed":0' <<< "$$out"; \
+	  grep -q '"result":"passed"' <<< "$$out"; \
+	  test -s "$(HOST_SCRIPT_CORPUS_DEV_RESULT)"
+
 host-smoke-once: host-build
 	@MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) status --datadir $(DATA_DIR) --json >/tmp/mojo_status.json; \
 	  grep -q '"entrypoint_language":"mojo"' /tmp/mojo_status.json; \
@@ -94,6 +110,9 @@ host-smoke-once: host-build
 
 host-toolchain-smoke: $(MOJO_VERSION_STAMP)
 	$(MOJO) run $(MOJO_TOOLCHAIN_SMOKE)
+
+host-script-corpus-foundation-smoke: $(MOJO_VERSION_STAMP)
+	$(MOJO) run -I src $(MOJO_SCRIPT_CORPUS_FOUNDATION_SMOKE)
 
 mojo-docs-cache:
 	$(PYTHON) scripts/cache_mojo_docs.py --output-dir $(MOJO_DOCS_DIR)

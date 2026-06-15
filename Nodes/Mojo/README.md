@@ -25,6 +25,12 @@ updates.
 The supported `mojobitnode` command is Mojo-owned and reports
 `entrypoint_language: "mojo"`.
 
+There is also a host-only diagnostic `script-corpus-dev` surface for building
+the future Mojo-owned corpus runner. It currently proves only
+`scripts.bare_multisig_27840` with Mojo-owned legacy sighash/script handling and
+the owned C shim's generic `libsecp256k1` DER verifier; it is not Docker
+manifest coverage and must not be imported into Project evidence.
+
 ## Commands
 
 Host/local surface:
@@ -38,8 +44,10 @@ make host-build
 make host-status
 make host-native-crypto-vectors
 make host-storage-proof
+make host-script-corpus-dev
 make host-smoke-once
 make host-toolchain-smoke
+make host-script-corpus-foundation-smoke
 ```
 
 Homebrew provides `uv`, `rocksdb`, `secp256k1`, `pkgconf`, `openssl@3`, and

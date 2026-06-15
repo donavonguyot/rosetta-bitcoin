@@ -29,7 +29,7 @@ RUN cc -O2 -Wall -Wextra -std=c11 -fPIC -shared \
   $(pkg-config --cflags --libs rocksdb libsecp256k1 openssl) \
   -lstdc++
 RUN /opt/mojo/bin/mojo run tests/toolchain_smoke.mojo
-RUN /opt/mojo/bin/mojo build src/mojobitnode.mojo -o /usr/local/bin/mojobitnode
+RUN /opt/mojo/bin/mojo build -I src src/mojobitnode.mojo -o /usr/local/bin/mojobitnode
 
 FROM debian:bookworm-slim
 RUN apt-get update \

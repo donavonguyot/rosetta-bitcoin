@@ -48,10 +48,18 @@ admission gate for the standing dares below.
 
 ## 4. Standing dare: secp256k1 verification in your language
 
-Every port shares one cryptography dependency behind a contract seam. The dare:
-a verification-only secp256k1 backend in the port's own language — ECDSA and
-BIP340 Schnorr verification, field and scalar arithmetic, point decompression.
-No signing, no key handling: validation research, never for use with funds.
+Every port's canonical path runs on one cryptography dependency behind a contract
+seam: libsecp256k1. The dare: a verification-only secp256k1 backend in the port's
+own language — ECDSA and BIP340 Schnorr verification, field and scalar arithmetic,
+point decompression. No signing, no key handling: validation research, never for
+use with funds.
+
+Reference instance: the Zig port already ships a pure-Zig verification backend
+(`Nodes/Zig/src/pure_secp.zig`) running as a shadow against libsecp256k1. Note
+that Zig's standard library provides the secp256k1 curve, so that is the easy end
+of the dare; the open frontier is languages with no curve in the standard library
+(hand-rolled field arithmetic), and — for every backend, Zig included — surviving
+the must-reject corpus of challenge 3, which does not yet exist.
 
 Rails (all three are mandatory):
 
