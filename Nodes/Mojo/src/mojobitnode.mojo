@@ -8,6 +8,7 @@ from script_corpus_foundation import (
     evaluate_p2pkh_fixture,
     evaluate_p2sh_fixture,
     evaluate_taproot_fixture,
+    evaluate_taproot_fixture_diagnostic,
     evaluate_witness_v0_fixture,
     is_bare_legacy_diagnostic_fixture,
     is_p2pkh_diagnostic_fixture,
@@ -15,9 +16,8 @@ from script_corpus_foundation import (
     is_taproot_diagnostic_fixture,
     is_witness_v0_diagnostic_fixture,
     load_bare_multisig_fixture,
-    manifest_contains_fixture,
 )
-from script_corpus_table import fixture_meta, selected_fixture_ids
+from script_corpus_table import fixture_id_at, fixture_in_set, fixture_meta, script_fixture_count
 
 
 def bool_json(value: Bool) -> String:
@@ -42,6 +42,24 @@ def failed_count_json(value: Bool) -> String:
     if value:
         return String("0")
     return String("1")
+
+
+def diagnostic_failure_stage(message: String) -> String:
+    if "manifest" in message or "fixture id" in message or "fixture stem" in message or "hex" in message or "transaction parser" in message:
+        return String("fixture_load")
+    if "prevout" in message or "spent script" in message or "input index" in message or "scriptPubKey" in message:
+        return String("prevout_shape")
+    if "control block" in message or "leaf" in message or "witness script" in message or "witness control" in message:
+        return String("control_block")
+    if "Taproot tweak" in message or "tweak" in message:
+        return String("taproot_tweak")
+    if "SIGHASH" in message or "Taproot hash type" in message or "TapSighash" in message:
+        return String("tapsighash")
+    if "Schnorr" in message or "x-only" in message:
+        return String("schnorr_verify")
+    if "stack" in message or "opcode" in message or "OP_" in message or "conditional" in message:
+        return String("opcode_execution")
+    return String("fixture_evaluation")
 
 
 def actual_json(code: Int32) -> String:
@@ -91,7 +109,7 @@ def expected_code(index: Int) -> Int32:
 def main() raises:
     var args = argv()
     if len(args) < 2:
-        print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus-dev> [options]")
+        print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus|script-corpus-dev> [options]")
         return
 
     var command = String(args[1])
@@ -186,52 +204,75 @@ def main() raises:
             _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), json.unsafe_ptr())
         return
 
-    if command == "script-corpus-dev":
-        var selected = selected_fixture_ids(fixture_id, fixture_set)
+    if command == "script-corpus-dev" or command == "script-corpus":
+        var verifier_engine = String("mojo_dev_foundation")
+        if command == "script-corpus":
+            fixture_id = String("")
+            fixture_set = String("all")
+            verifier_engine = String("mojo_native")
+        if fixture_id != "":
+            _ = fixture_meta(fixture_id)
         var passed_count = 0
         var failed_count = 0
+        var fixture_count = 0
         var results = String("")
-        for i in range(len(selected)):
-            var current_id = selected[i]
+        for i in range(script_fixture_count()):
+            var current_id = fixture_id_at(i)
+            if fixture_id != "" and current_id != fixture_id:
+                continue
+            if fixture_id == "" and not fixture_in_set(current_id, fixture_set):
+                continue
             var meta = fixture_meta(current_id)
             var eval_id = String(meta.fixture_id)
             var current_passed = False
             var failure = String("")
-            if not manifest_contains_fixture(manifest_path, eval_id):
-                failure = String("fixture id not present in Shared manifest")
-            elif eval_id == "scripts.bare_multisig_27840":
-                var fixture = load_bare_multisig_fixture(manifest_path)
-                current_passed = evaluate_bare_multisig_fixture(fixture, shim_path)
-                if not current_passed:
-                    failure = String("Mojo bare multisig evaluator returned false")
-            elif is_simple_p2sh_diagnostic_fixture(eval_id):
-                current_passed = evaluate_p2sh_fixture(manifest_path, eval_id, shim_path)
-                if not current_passed:
-                    failure = String("Mojo P2SH evaluator returned false")
-            elif is_p2pkh_diagnostic_fixture(eval_id):
-                current_passed = evaluate_p2pkh_fixture(manifest_path, eval_id, shim_path)
-                if not current_passed:
-                    failure = String("Mojo P2PKH evaluator returned false")
-            elif is_bare_legacy_diagnostic_fixture(eval_id):
-                current_passed = evaluate_bare_legacy_fixture(manifest_path, eval_id, shim_path)
-                if not current_passed:
-                    failure = String("Mojo bare legacy evaluator returned false")
-            elif is_witness_v0_diagnostic_fixture(eval_id):
-                current_passed = evaluate_witness_v0_fixture(manifest_path, eval_id, shim_path)
-                if not current_passed:
-                    failure = String("Mojo witness v0 evaluator returned false")
-            elif is_taproot_diagnostic_fixture(eval_id):
-                current_passed = evaluate_taproot_fixture(manifest_path, eval_id, shim_path)
-                if not current_passed:
-                    failure = String("Mojo Taproot/Tapscript evaluator returned false")
-            else:
-                failure = String("unsupported fixture in Mojo diagnostic corpus runner")
+            var failure_stage = String("")
+            try:
+                if eval_id == "scripts.bare_multisig_27840":
+                    var fixture = load_bare_multisig_fixture(manifest_path)
+                    current_passed = evaluate_bare_multisig_fixture(fixture, shim_path)
+                    if not current_passed:
+                        failure_stage = String("opcode_execution")
+                        failure = String("bare multisig script terminal result was false")
+                elif is_simple_p2sh_diagnostic_fixture(eval_id):
+                    current_passed = evaluate_p2sh_fixture(manifest_path, eval_id, shim_path)
+                    if not current_passed:
+                        failure_stage = String("opcode_execution")
+                        failure = String("P2SH script terminal result was false")
+                elif is_p2pkh_diagnostic_fixture(eval_id):
+                    current_passed = evaluate_p2pkh_fixture(manifest_path, eval_id, shim_path)
+                    if not current_passed:
+                        failure_stage = String("schnorr_verify")
+                        failure = String("P2PKH ECDSA verification returned false")
+                elif is_bare_legacy_diagnostic_fixture(eval_id):
+                    current_passed = evaluate_bare_legacy_fixture(manifest_path, eval_id, shim_path)
+                    if not current_passed:
+                        failure_stage = String("opcode_execution")
+                        failure = String("bare legacy script terminal result was false")
+                elif is_witness_v0_diagnostic_fixture(eval_id):
+                    current_passed = evaluate_witness_v0_fixture(manifest_path, eval_id, shim_path)
+                    if not current_passed:
+                        failure_stage = String("opcode_execution")
+                        failure = String("witness v0 script terminal result was false")
+                elif is_taproot_diagnostic_fixture(eval_id):
+                    var taproot_result = evaluate_taproot_fixture_diagnostic(manifest_path, eval_id, shim_path)
+                    current_passed = taproot_result.passed
+                    failure_stage = taproot_result.failure_stage
+                    failure = taproot_result.failure
+                else:
+                    failure_stage = String("unsupported_template")
+                    failure = String("unsupported fixture in Mojo diagnostic corpus runner")
+            except e:
+                current_passed = False
+                failure = String(e)
+                failure_stage = diagnostic_failure_stage(failure)
             if current_passed:
                 passed_count += 1
             else:
                 failed_count += 1
-            if i != 0:
+            if fixture_count != 0:
                 results += String(",")
+            fixture_count += 1
             results += (
                 String('{"fixture_id":"')
                 + current_id
@@ -244,7 +285,13 @@ def main() raises:
                 + String('"')
             )
             if not current_passed:
-                results += String(',"failure":"') + failure + String('"')
+                results += (
+                    String(',"failure_stage":"')
+                    + failure_stage
+                    + String('","failure":"')
+                    + failure
+                    + String('"')
+                )
             results += String("}")
         var all_passed = failed_count == 0
         var json = (
@@ -252,13 +299,15 @@ def main() raises:
             + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
             + surface
             + String('","entrypoint_language":"mojo","native_crypto_backend":"libsecp256k1",')
-            + String('"native_shim":"owned_c","verifier":{"engine":"mojo_dev_foundation","delegated":false},')
+            + String('"native_shim":"owned_c","verifier":{"engine":"')
+            + verifier_engine
+            + String('","delegated":false},')
             + String('"manifest":"')
             + manifest_path
             + String('","fixture_set":"')
             + fixture_set
             + String('","fixture_count":')
-            + String(len(selected))
+            + String(fixture_count)
             + String(',"passed":')
             + String(passed_count)
             + String(',"failed":')
@@ -311,4 +360,4 @@ def main() raises:
             _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), json.unsafe_ptr())
         return
 
-    print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus-dev> [options]")
+    print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus|script-corpus-dev> [options]")

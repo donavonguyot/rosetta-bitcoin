@@ -156,6 +156,14 @@
       "notes": "Current comparable java shakedown_50k proof accepted by campaign shakedown_50k_20260607_123016."
     },
     {
+      "port": "mojo",
+      "claim": "script_corpus",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/mojo_script_corpus_2026-06-15.json",
+      "status": "current",
+      "notes": "Current Mojo Docker 45/45 script corpus proof."
+    },
+    {
       "port": "ocaml",
       "claim": "script_corpus",
       "gate_id": "",

@@ -44,10 +44,19 @@ struct TxOutput(Copyable):
         self.script_pubkey = List[UInt8]()
 
 
+struct ScriptStackItem(Copyable):
+    var data: List[UInt8]
+
+    def __init__(out self):
+        self.data = List[UInt8]()
+
+
 struct Transaction(Movable):
     var version: Int32
     var inputs: List[TxInput]
     var outputs: List[TxOutput]
+    var witness_items: List[ScriptStackItem]
+    var witness_item_offsets_by_input: List[Int]
     var witness_item_count_by_input: List[Int]
     var lock_time: UInt32
     var has_witness: Bool
@@ -56,6 +65,8 @@ struct Transaction(Movable):
         self.version = 0
         self.inputs = List[TxInput]()
         self.outputs = List[TxOutput]()
+        self.witness_items = List[ScriptStackItem]()
+        self.witness_item_offsets_by_input = List[Int]()
         self.witness_item_count_by_input = List[Int]()
         self.lock_time = 0
         self.has_witness = False
@@ -120,13 +131,6 @@ struct ByteCursor(Movable):
         return Int(value)
 
 
-struct ScriptStackItem(Copyable):
-    var data: List[UInt8]
-
-    def __init__(out self):
-        self.data = List[UInt8]()
-
-
 struct BareMultisigScript(Movable):
     var required_signatures: Int
     var pubkeys: List[ScriptStackItem]
@@ -145,6 +149,49 @@ struct TaprootPrevout(Copyable):
     def __init__(out self):
         self.amount = 0
         self.script_pubkey = List[UInt8]()
+
+
+struct DiagnosticEvalResult(Copyable):
+    var passed: Bool
+    var failure_stage: String
+    var failure: String
+
+    def __init__(out self):
+        self.passed = False
+        self.failure_stage = String("")
+        self.failure = String("")
+
+
+def _diagnostic_success() -> DiagnosticEvalResult:
+    var result = DiagnosticEvalResult()
+    result.passed = True
+    return result^
+
+
+def _diagnostic_failure(stage: String, failure: String) -> DiagnosticEvalResult:
+    var result = DiagnosticEvalResult()
+    result.passed = False
+    result.failure_stage = stage
+    result.failure = failure
+    return result^
+
+
+def diagnostic_failure_stage(message: String) -> String:
+    if "manifest" in message or "fixture id" in message or "fixture stem" in message or "hex" in message or "transaction parser" in message:
+        return String("fixture_load")
+    if "prevout" in message or "spent script" in message or "input index" in message or "scriptPubKey" in message:
+        return String("prevout_shape")
+    if "control block" in message or "leaf" in message or "witness script" in message or "witness control" in message:
+        return String("control_block")
+    if "Taproot tweak" in message or "tweak" in message:
+        return String("taproot_tweak")
+    if "SIGHASH" in message or "Taproot hash type" in message or "TapSighash" in message:
+        return String("tapsighash")
+    if "Schnorr" in message or "x-only" in message:
+        return String("schnorr_verify")
+    if "stack" in message or "opcode" in message or "OP_" in message or "conditional" in message:
+        return String("opcode_execution")
+    return String("fixture_evaluation")
 
 
 def _hex_nibble(byte: UInt8) raises -> UInt8:
@@ -426,8 +473,8 @@ def parse_bare_multisig_script(ref script: List[UInt8]) raises -> BareMultisigSc
     raise Error("bare multisig script ended before OP_CHECKMULTISIG")
 
 
-def decode_script_num(ref item: List[UInt8]) raises -> Int:
-    if len(item) > 4:
+def decode_script_num_with_max(ref item: List[UInt8], max_len: Int) raises -> Int:
+    if len(item) > max_len:
         raise Error("script number overflow")
     if len(item) == 0:
         return 0
@@ -441,6 +488,25 @@ def decode_script_num(ref item: List[UInt8]) raises -> Int:
     if negative:
         return -result
     return result
+
+
+def decode_script_num(ref item: List[UInt8]) raises -> Int:
+    return decode_script_num_with_max(item, 4)
+
+
+def csv_sequence_satisfied(ref tx: Transaction, input_index: Int, sequence: Int) raises -> Bool:
+    if sequence < 0:
+        raise Error("negative CSV sequence")
+    if (sequence & 0x80000000) != 0:
+        return True
+    var input_sequence = Int(tx.inputs[input_index].sequence)
+    if input_sequence == 0xFFFFFFFF:
+        return False
+    if (input_sequence & 0x80000000) != 0:
+        return False
+    if (sequence & 0x00400000) != (input_sequence & 0x00400000):
+        return False
+    return (sequence & 0x0000FFFF) <= (input_sequence & 0x0000FFFF)
 
 
 def encode_script_num(value: Int) -> List[UInt8]:
@@ -921,7 +987,7 @@ def evaluate_legacy_script(
                 raise Error("OP_CHECKLOCKTIMEVERIFY requires transaction context")
             if tx.version >= 2:
                 var item = _script_stack_item(stack, 1)
-                var lock_time = decode_script_num(item.data)
+                var lock_time = decode_script_num_with_max(item.data, 5)
                 if lock_time < 0:
                     raise Error("negative CLTV lock time")
                 if lock_time > Int(tx.lock_time):
@@ -935,12 +1001,9 @@ def evaluate_legacy_script(
                 raise Error("OP_CHECKSEQUENCEVERIFY requires transaction context")
             if tx.version >= 2:
                 var item = _script_stack_item(stack, 1)
-                var sequence = decode_script_num(item.data)
-                if sequence < 0:
-                    raise Error("negative CSV sequence")
-                if (Int(tx.inputs[input_index].sequence) & 0x80000000) == 0:
-                    if sequence > (Int(tx.inputs[input_index].sequence) & 0xFFFF):
-                        return False
+                var sequence = decode_script_num_with_max(item.data, 5)
+                if not csv_sequence_satisfied(tx, input_index, sequence):
+                    return False
             offset += 1
             continue
         raise Error("unsupported legacy opcode in Mojo diagnostic script engine")
@@ -1539,56 +1602,69 @@ def evaluate_witness_v0_fixture(manifest_path: String, fixture_id: String, shim_
 
 
 def evaluate_taproot_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
-    if not manifest_contains_fixture(manifest_path, fixture_id):
-        raise Error("fixture id not present in Shared manifest")
-    var stem = _fixture_stem(fixture_id)
-    var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
-    var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
-    var tapscript = _load_fixture_tapscript(manifest_path, fixture_id, stem)
-    var control = _load_fixture_control_block(manifest_path, fixture_id, stem)
-    var input_index = _fixture_input_index(fixture_id)
-    if input_index < 0 or input_index >= len(tx.inputs):
-        raise Error("Taproot input index out of range")
-    if not is_p2tr_script_pubkey(script_pubkey):
-        raise Error("fixture spent script is not P2TR")
-    if len(control) < 33 or ((len(control) - 33) % 32) != 0:
-        raise Error("invalid Taproot control block length")
-    var leaf_version = control[0] & UInt8(0xFE)
-    var parity = Int(control[0] & UInt8(1))
-    if leaf_version != UInt8(0xC0):
-        raise Error("unsupported non-tapscript Taproot leaf")
-    var internal_xonly = slice_bytes(control, 1, 33)
-    var leaf_digest = tapleaf_hash(leaf_version, tapscript)
-    var merkle_root = taproot_merkle_root_from_control(control, leaf_digest)
-    var expected_xonly = slice_bytes(script_pubkey, 2, 34)
-    if not verify_taproot_tweak(shim_path, internal_xonly, merkle_root, expected_xonly, parity):
-        return False
+    return evaluate_taproot_fixture_diagnostic(manifest_path, fixture_id, shim_path).passed
 
-    var prevout_count = _fixture_prevout_count(fixture_id)
-    if prevout_count != len(tx.inputs):
-        raise Error("Taproot prevout count does not match transaction input count")
-    var spent_prevouts = List[TaprootPrevout]()
-    for i in range(prevout_count):
-        var prevout = TaprootPrevout()
-        prevout.amount = _fixture_prevout_amount(fixture_id, i)
-        prevout.script_pubkey = _fixture_prevout_spk(fixture_id, i)
-        spent_prevouts.append(prevout^)
 
-    var witness_count = _fixture_witness_item_count(fixture_id)
-    if witness_count < 2:
-        raise Error("Taproot witness missing script path stack")
-    var stack = List[ScriptStackItem]()
-    for i in range(witness_count - 2):
-        var item = ScriptStackItem()
-        item.data = _load_fixture_witness_item(manifest_path, fixture_id, stem, i)
-        stack.append(item^)
-    var witness_script = _load_fixture_witness_item(manifest_path, fixture_id, stem, witness_count - 2)
-    var witness_control = _load_fixture_witness_item(manifest_path, fixture_id, stem, witness_count - 1)
-    if not bytes_equal(witness_script, tapscript):
-        raise Error("Taproot witness script does not match tapscript fixture")
-    if not bytes_equal(witness_control, control):
-        raise Error("Taproot witness control block does not match fixture")
-    return evaluate_tapscript(tapscript, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path)
+def evaluate_taproot_fixture_diagnostic(
+    manifest_path: String, fixture_id: String, shim_path: String
+) raises -> DiagnosticEvalResult:
+    try:
+        if not manifest_contains_fixture(manifest_path, fixture_id):
+            return _diagnostic_failure(String("fixture_load"), String("fixture id not present in Shared manifest"))
+        var stem = _fixture_stem(fixture_id)
+        var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
+        var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+        var tapscript = _load_fixture_tapscript(manifest_path, fixture_id, stem)
+        var control = _load_fixture_control_block(manifest_path, fixture_id, stem)
+        var input_index = _fixture_input_index(fixture_id)
+        if input_index < 0 or input_index >= len(tx.inputs):
+            return _diagnostic_failure(String("prevout_shape"), String("Taproot input index out of range"))
+        if not is_p2tr_script_pubkey(script_pubkey):
+            return _diagnostic_failure(String("prevout_shape"), String("fixture spent script is not P2TR"))
+        if len(control) < 33 or ((len(control) - 33) % 32) != 0:
+            return _diagnostic_failure(String("control_block"), String("invalid Taproot control block length"))
+        var leaf_version = control[0] & UInt8(0xFE)
+        var parity = Int(control[0] & UInt8(1))
+        if leaf_version != UInt8(0xC0):
+            return _diagnostic_failure(String("control_block"), String("unsupported non-tapscript Taproot leaf"))
+        var internal_xonly = slice_bytes(control, 1, 33)
+        var leaf_digest = tapleaf_hash(leaf_version, tapscript)
+        var merkle_root = taproot_merkle_root_from_control(control, leaf_digest)
+        var expected_xonly = slice_bytes(script_pubkey, 2, 34)
+        if not verify_taproot_tweak(shim_path, internal_xonly, merkle_root, expected_xonly, parity):
+            return _diagnostic_failure(String("taproot_tweak"), String("Taproot tweak verification returned false"))
+
+        var prevout_count = _fixture_prevout_count(fixture_id)
+        if prevout_count != len(tx.inputs):
+            return _diagnostic_failure(String("prevout_shape"), String("Taproot prevout count does not match transaction input count"))
+        var spent_prevouts = List[TaprootPrevout]()
+        for i in range(prevout_count):
+            var prevout = TaprootPrevout()
+            prevout.amount = _fixture_prevout_amount(fixture_id, i)
+            prevout.script_pubkey = _fixture_prevout_spk(fixture_id, i)
+            spent_prevouts.append(prevout^)
+
+        var witness_count = tx_witness_count(tx, input_index)
+        if witness_count < 2:
+            return _diagnostic_failure(String("fixture_load"), String("Taproot witness missing script path stack"))
+        var stack = List[ScriptStackItem]()
+        for i in range(witness_count - 2):
+            var item = tx_witness_item(tx, input_index, i)
+            stack.append(item^)
+        var witness_script_item = tx_witness_item(tx, input_index, witness_count - 2)
+        var witness_control_item = tx_witness_item(tx, input_index, witness_count - 1)
+        var witness_script = witness_script_item.data.copy()
+        var witness_control = witness_control_item.data.copy()
+        if not bytes_equal(witness_script, tapscript):
+            return _diagnostic_failure(String("control_block"), String("Taproot witness script does not match tapscript fixture"))
+        if not bytes_equal(witness_control, control):
+            return _diagnostic_failure(String("control_block"), String("Taproot witness control block does not match fixture"))
+        if not evaluate_tapscript(tapscript, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path):
+            return _diagnostic_failure(String("stack_terminal_result"), String("Taproot/Tapscript evaluator terminal result was false"))
+        return _diagnostic_success()
+    except e:
+        var message = String(e)
+        return _diagnostic_failure(diagnostic_failure_stage(message), message)
 
 
 def evaluate_bare_legacy_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
@@ -1705,14 +1781,33 @@ def parse_transaction(var payload: List[UInt8]) raises -> Transaction:
     if tx.has_witness:
         for _ in range(input_count):
             var stack_count = cursor.read_varint()
+            tx.witness_item_offsets_by_input.append(len(tx.witness_items))
             tx.witness_item_count_by_input.append(stack_count)
             for _ in range(stack_count):
-                _ = cursor.read_bytes(cursor.read_varint())
+                var item = ScriptStackItem()
+                item.data = cursor.read_bytes(cursor.read_varint())
+                tx.witness_items.append(item^)
 
     tx.lock_time = cursor.read_u32_le()
     if cursor.remaining() != 0:
         raise Error("transaction parser consumed partial payload")
     return tx^
+
+
+def tx_witness_count(ref tx: Transaction, input_index: Int) raises -> Int:
+    if not tx.has_witness:
+        return 0
+    if input_index < 0 or input_index >= len(tx.witness_item_count_by_input):
+        raise Error("witness input index out of range")
+    return tx.witness_item_count_by_input[input_index]
+
+
+def tx_witness_item(ref tx: Transaction, input_index: Int, item_index: Int) raises -> ScriptStackItem:
+    var count = tx_witness_count(tx, input_index)
+    if item_index < 0 or item_index >= count:
+        raise Error("witness item index out of range")
+    var offset = tx.witness_item_offsets_by_input[input_index]
+    return tx.witness_items[offset + item_index].copy()
 
 
 def serialize_tx_output(mut out: List[UInt8], ref output: TxOutput) raises:
@@ -3519,7 +3614,7 @@ def evaluate_tapscript(
         elif opcode == 0xB1:
             if tx.version >= 2:
                 var item = _script_stack_item(stack, 1)
-                var lock_time = decode_script_num(item.data)
+                var lock_time = decode_script_num_with_max(item.data, 5)
                 if lock_time < 0:
                     raise Error("negative CLTV lock time")
                 if lock_time > Int(tx.lock_time):
@@ -3529,12 +3624,9 @@ def evaluate_tapscript(
         elif opcode == 0xB2:
             if tx.version >= 2:
                 var item = _script_stack_item(stack, 1)
-                var sequence = decode_script_num(item.data)
-                if sequence < 0:
-                    raise Error("negative CSV sequence")
-                if (Int(tx.inputs[input_index].sequence) & 0x80000000) == 0:
-                    if sequence > (Int(tx.inputs[input_index].sequence) & 0xFFFF):
-                        return False
+                var sequence = decode_script_num_with_max(item.data, 5)
+                if not csv_sequence_satisfied(tx, input_index, sequence):
+                    return False
         elif opcode == 0xAE or opcode == 0xAF:
             raise Error("CHECKMULTISIG disabled in tapscript")
         else:

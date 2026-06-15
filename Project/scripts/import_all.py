@@ -37,6 +37,7 @@ PORTS: dict[str, tuple[str, str, str]] = {
     "elixir": ("ElixirNode", "Elixir", "follower"),
     "go": ("GoNode", "Go", "follower"),
     "java": ("JavaNode", "Java", "lead"),
+    "mojo": ("Mojo", "Mojo", "follower"),
     "ocaml": ("OCamlNode", "OCaml", "follower"),
     "python": ("PythonNode", "Python", "scout"),
     "reference": ("BitcoinCoreReference", "C++", "reference"),
@@ -57,6 +58,8 @@ IMPLEMENTATION_PORTS: tuple[tuple[str, str], ...] = (
     ("gobitnode", "go"),
     ("java", "java"),
     ("jbitnode", "java"),
+    ("mojo", "mojo"),
+    ("mojobitnode", "mojo"),
     ("ocaml", "ocaml"),
     ("ocbitnode", "ocaml"),
     ("python", "python"),
@@ -105,6 +108,14 @@ PORT_LIFECYCLE: tuple[dict[str, str], ...] = (
         "retired_at_gate": "",
         "retired_reason": "",
         "notes": "Serious JVM contender; continue through the full official benchmark suite.",
+    },
+    {
+        "port": "mojo",
+        "lifecycle_status": "active_contender",
+        "benchmark_scope": "full_suite",
+        "retired_at_gate": "",
+        "retired_reason": "",
+        "notes": "Mojo Debian feasibility spike promoted through Shared script corpus; 5k baseline remains a future gate.",
     },
     {
         "port": "rust",
@@ -590,6 +601,8 @@ def port_for_payload(path: Path, payload: dict[str, Any]) -> str:
 
 def node_for_port(port: str) -> tuple[str, str, str, str]:
     implementation, language, role = PORTS.get(port, ("UnknownNode", "unknown", "unknown"))
+    if port == "mojo":
+        return "mojobitnode", implementation, language, role
     return port, implementation, language, role
 
 

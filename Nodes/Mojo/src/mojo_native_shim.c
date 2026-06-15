@@ -370,7 +370,8 @@ int32_t mojobitnode_verify_taproot_tweak_hex_len(const char *internal_xonly_hex,
       secp256k1_xonly_pubkey_serialize(ctx, output_xonly, &output_xonly_pubkey) == 1) {
     char output_hex[65];
     bytes_to_hex(output_xonly, sizeof(output_xonly), output_hex);
-    result = strcmp(output_hex, expected_xonly_hex) == 0 && parity == expected_parity
+    result = strncmp(output_hex, expected_xonly_hex, (size_t)expected_xonly_hex_len) == 0 &&
+                     output_hex[expected_xonly_hex_len] == '\0' && parity == expected_parity
                  ? CRYPTO_RESULT_VALID
                  : CRYPTO_RESULT_CONSENSUS_INVALID;
   }

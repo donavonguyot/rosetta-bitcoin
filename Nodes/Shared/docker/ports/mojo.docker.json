@@ -31,7 +31,7 @@
     "docker_status": "cd Nodes/Mojo && make docker-status",
     "docker_storage_proof": "cd Nodes/Mojo && make docker-storage-proof",
     "docker_native_crypto_vectors": "cd Nodes/Mojo && make docker-native-crypto-vectors",
-    "docker_script_corpus": null,
+    "docker_script_corpus": "cd Nodes/Mojo && make docker-script-corpus",
     "docker_proof_local": null,
     "docker_proof_10k": null,
     "docker_proof_50k": null,
@@ -106,7 +106,8 @@
   "proof_artifacts": {
     "docker_contract_result": null,
     "storage_result": "Nodes/Mojo/.spike-results/mojo_rocksdb_storage_proof_<YYYY-MM-DD>.json",
-    "notes": "Mojo proof_partial is a Debian feasibility spike only: pinned Mojo 1.0.0b1 install, Project-shaped status, libsecp256k1 vectors, and RocksDB smoke. It has no P2P, script corpus, 5k baseline, supervisor, Project current-evidence update, or benchmark claim."
+    "script_corpus_result": "Nodes/Shared/conformance/results/mojo_script_corpus_<YYYY-MM-DD>.json",
+    "notes": "Mojo proof_partial is a Debian feasibility spike plus Shared script corpus proof: pinned Mojo 1.0.0b1 install, Project-shaped status, libsecp256k1 vectors, RocksDB smoke, and Docker 45/45 script corpus. It has no P2P, 5k baseline, supervisor, or benchmark claim."
   },
   "known_caveats": [
     "Debian bookworm is mandatory for the spike; Ubuntu fallback is intentionally disallowed.",

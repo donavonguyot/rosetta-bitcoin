@@ -22,14 +22,15 @@ CRYPTO_VECTORS ?= ../Shared/conformance/fixtures/native_crypto_v1_vectors.json
 HOST_CRYPTO_RESULT ?= /tmp/mojo_native_crypto_vectors_host_$(RESULT_DATE).json
 HOST_STORAGE_RESULT ?= /tmp/mojo_rocksdb_storage_proof_host_$(RESULT_DATE).json
 HOST_SCRIPT_CORPUS_DEV_RESULT ?= /tmp/mojo_script_corpus_dev_$(RESULT_DATE).json
+SCRIPT_CORPUS_RESULT ?= ../Shared/conformance/results/mojo_script_corpus_$(RESULT_DATE).json
 FIXTURE_ID ?= scripts.bare_multisig_27840
 FIXTURE_SET ?= all
 DATA_VOLUME ?= mojobitnode_data
 PROOF_VOLUME ?= mojobitnode_proof_data
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-smoke-once host-toolchain-smoke host-script-corpus-foundation-smoke
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-smoke-once docker-toolchain-smoke
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-smoke-once host-toolchain-smoke host-script-corpus-foundation-smoke
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-smoke-once docker-toolchain-smoke
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -101,6 +102,18 @@ host-script-corpus-dev: host-build
 	  grep -q '"delegated":false' <<< "$$out"; \
 	  test -s "$(HOST_SCRIPT_CORPUS_DEV_RESULT)"
 
+host-script-corpus: host-build
+	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus \
+	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json); \
+	  echo "$$out"; \
+	  printf "%s\n" "$$out" > $(SCRIPT_CORPUS_RESULT); \
+	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"; \
+	  grep -q '"delegated":false' <<< "$$out"; \
+	  grep -q '"fixture_count":45' <<< "$$out"; \
+	  grep -q '"passed":45' <<< "$$out"; \
+	  grep -q '"failed":0' <<< "$$out"; \
+	  test -s "$(SCRIPT_CORPUS_RESULT)"
+
 host-smoke-once: host-build
 	@MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) status --datadir $(DATA_DIR) --json >/tmp/mojo_status.json; \
 	  grep -q '"entrypoint_language":"mojo"' /tmp/mojo_status.json; \
@@ -151,6 +164,19 @@ docker-storage-proof:
 	  --result-path /tmp/mojo_rocksdb_storage_proof_$(RESULT_DATE).json); \
 	  echo "$$out"; \
 	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"
+
+docker-script-corpus:
+	@out=$$($(DOCKER_COMPOSE) run --rm --no-deps mojobitnode script-corpus \
+	  --manifest /workspace/Shared/conformance/fixtures/scripts/manifest.json); \
+	  echo "$$out"; \
+	  printf "%s\n" "$$out" > $(SCRIPT_CORPUS_RESULT); \
+	  grep -q '"runtime_surface":"docker"' <<< "$$out"; \
+	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"; \
+	  grep -q '"delegated":false' <<< "$$out"; \
+	  grep -q '"fixture_count":45' <<< "$$out"; \
+	  grep -q '"passed":45' <<< "$$out"; \
+	  grep -q '"failed":0' <<< "$$out"; \
+	  test -s "$(SCRIPT_CORPUS_RESULT)"
 
 docker-smoke-once:
 	@out=$$(DOCKER_DATA_VOLUME=$(DATA_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps --entrypoint /bin/sh mojobitnode -lc 'mojobitnode status --datadir /data --json >/tmp/status.json && printf "%s %s\n" "AGENT_LOOP_TICK_chatreport" "$$(cat /tmp/status.json)"'); \

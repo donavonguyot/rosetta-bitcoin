@@ -444,6 +444,7 @@ WITH mapped AS (
       WHEN lower(node_id) LIKE '%elixir%' OR lower(node_id) LIKE '%exbitnode%' OR lower(implementation) LIKE 'elixir%' THEN 'elixir'
       WHEN lower(node_id) LIKE '%go%' OR lower(node_id) LIKE '%gobitnode%' OR lower(implementation) LIKE 'go%' THEN 'go'
       WHEN lower(node_id) LIKE '%java%' OR lower(node_id) LIKE '%jbitnode%' OR lower(implementation) LIKE 'java%' THEN 'java'
+      WHEN lower(node_id) LIKE '%mojo%' OR lower(node_id) LIKE '%mojobitnode%' OR lower(implementation) LIKE 'mojo%' THEN 'mojo'
       WHEN lower(node_id) LIKE '%ocaml%' OR lower(node_id) LIKE '%ocbitnode%' OR lower(implementation) LIKE 'ocaml%' OR lower(implementation) LIKE 'ocbitnode%' THEN 'ocaml'
       WHEN lower(node_id) LIKE '%python%' OR lower(node_id) LIKE '%pybitnode%' OR lower(implementation) LIKE 'python%' THEN 'python'
       WHEN lower(node_id) LIKE '%rust%' OR lower(node_id) LIKE '%rsbitnode%' OR lower(implementation) LIKE 'rust%' THEN 'rust'

@@ -15,6 +15,7 @@ from script_corpus_foundation import (
     tapleaf_hash,
     taproot_signature_hash,
     TaprootPrevout,
+    verify_taproot_tweak,
     verify_schnorr_signature,
 )
 from std.collections import List
@@ -28,6 +29,10 @@ comptime TAPROOT_NUMEQUAL_TX = "../Shared/conformance/fixtures/scripts/scripts.p
 comptime TAPROOT_NUMEQUAL_SCRIPT = "../Shared/conformance/fixtures/scripts/scripts.p2tr_tapscript_numequal_32712/tx_p2tr_tapscript_numequal_32712_tapscript.hex"
 comptime TAPROOT_NUMEQUAL_PREV_SPK = "../Shared/conformance/fixtures/scripts/scripts.p2tr_tapscript_numequal_32712/tx_p2tr_tapscript_numequal_32712_prev_spk.hex"
 comptime TAPROOT_NUMEQUAL_WITNESS_2 = "../Shared/conformance/fixtures/scripts/scripts.p2tr_tapscript_numequal_32712/tx_p2tr_tapscript_numequal_32712_witness_2.hex"
+comptime TAPROOT_SCRIPTPATH_44295_TX = "../Shared/conformance/fixtures/scripts/scripts.p2tr_scriptpath_44295/tx_p2tr_scriptpath_44295.hex"
+comptime TAPROOT_SCRIPTPATH_44295_SCRIPT = "../Shared/conformance/fixtures/scripts/scripts.p2tr_scriptpath_44295/tx_p2tr_scriptpath_44295_tapscript.hex"
+comptime TAPROOT_SCRIPTPATH_44295_CONTROL = "../Shared/conformance/fixtures/scripts/scripts.p2tr_scriptpath_44295/tx_p2tr_scriptpath_44295_control_block.hex"
+comptime TAPROOT_SCRIPTPATH_44295_PREV_SPK = "../Shared/conformance/fixtures/scripts/scripts.p2tr_scriptpath_44295/tx_p2tr_scriptpath_44295_prev_spk.hex"
 
 
 def test_read_hex_file() raises:
@@ -182,6 +187,40 @@ def test_taproot_numequal_fixture() raises:
         evaluate_taproot_fixture(
             SCRIPT_MANIFEST,
             String("scripts.p2tr_tapscript_numequal_32712"),
+            String("./build/libmojobitnode_shim.dylib"),
+        )
+    )
+
+
+def test_taproot_scriptpath_44295_leaf_vector() raises:
+    var tapscript = read_hex_file(TAPROOT_SCRIPTPATH_44295_SCRIPT)
+    assert_equal(len(tapscript), 199)
+    assert_equal(
+        bytes_to_hex(tapleaf_hash(UInt8(0xC0), tapscript)),
+        String("ed29ea908b65d979e36dc910f4d6d79c294c90bed47e9612116bcff2b7bb81ed"),
+    )
+
+
+def test_taproot_scriptpath_44295_tweak_wrapper() raises:
+    var tapscript = read_hex_file(TAPROOT_SCRIPTPATH_44295_SCRIPT)
+    var control = read_hex_file(TAPROOT_SCRIPTPATH_44295_CONTROL)
+    var script_pubkey = read_hex_file(TAPROOT_SCRIPTPATH_44295_PREV_SPK)
+    assert_true(
+        verify_taproot_tweak(
+            String("./build/libmojobitnode_shim.dylib"),
+            slice_bytes(control, 1, 33),
+            tapleaf_hash(UInt8(0xC0), tapscript),
+            slice_bytes(script_pubkey, 2, 34),
+            Int(control[0] & UInt8(1)),
+        )
+    )
+
+
+def test_taproot_scriptpath_44295_fixture() raises:
+    assert_true(
+        evaluate_taproot_fixture(
+            SCRIPT_MANIFEST,
+            String("scripts.p2tr_scriptpath_44295"),
             String("./build/libmojobitnode_shim.dylib"),
         )
     )
