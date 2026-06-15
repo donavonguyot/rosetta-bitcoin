@@ -8,6 +8,7 @@ services:
     volumes:
       - mojobitnode_data:/data
       - ../../Shared:/workspace/Shared:ro
+      - ../.benchmark-results:/benchmark-results
     networks:
       - default
       - reference

@@ -474,6 +474,14 @@
       "path": "Nodes/Shared/conformance/results/java_control_tip_maintenance_benchmark_20260608T195815Z.json",
       "status": "current",
       "notes": "Current comparable java tip_maintenance proof accepted by campaign tip_maintenance_20260608_125743."
+    },
+    {
+      "port": "mojo",
+      "claim": "baseline_5k",
+      "gate_id": "baseline_5k",
+      "path": "Nodes/Shared/conformance/results/mojo_control_baseline_5k_benchmark_20260615T220424Z.json",
+      "status": "current",
+      "notes": "Current comparable mojo baseline_5k proof accepted by campaign baseline_5k_20260615_150418."
     }
   ]
 }

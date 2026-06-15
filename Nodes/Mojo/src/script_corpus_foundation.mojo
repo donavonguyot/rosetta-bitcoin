@@ -51,7 +51,7 @@ struct ScriptStackItem(Copyable):
         self.data = List[UInt8]()
 
 
-struct Transaction(Movable):
+struct Transaction(Copyable):
     var version: Int32
     var inputs: List[TxInput]
     var outputs: List[TxOutput]

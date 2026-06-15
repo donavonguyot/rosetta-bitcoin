@@ -1,8 +1,8 @@
 # Mojo Agent Brief
 
-This directory is a bounded Mojo feasibility spike, not a full RosettaBitcoin
-port. Current work should preserve the spike boundary unless a later plan
-explicitly adds consensus, P2P, or baseline gates.
+This directory is a bounded Mojo contender, not a tip-capable RosettaBitcoin
+port. Current work should preserve the active gate boundary unless a later plan
+explicitly adds external peers, supervisor loops, long-run lanes, or tip work.
 
 ## Current Toolchain
 
@@ -22,12 +22,14 @@ make docker-mojo-version
 
 ## Public CLI Surface
 
-The supported executable is `mojobitnode` with exactly these spike commands:
+The supported executable is `mojobitnode` with these public commands:
 
 ```text
 status --datadir <path> --json
 native-crypto-vectors --vectors <path> --result-path <path>
 storage-proof --datadir <path> --result-path <path>
+script-corpus --manifest <path> --result-path <path>
+local-reference-proof --datadir <path> --target 5000 --peer <host:port> --result-path <path>
 ```
 
 The CLI is Mojo-owned and must continue to report
@@ -36,15 +38,15 @@ The CLI is Mojo-owned and must continue to report
 separate C proof executable.
 
 `script-corpus-dev --manifest <path> --fixture-id <id> --result-path <path>` is
-a host diagnostic foundation for the future corpus runner. It also accepts
-`--fixture-set legacy|segwit-v0|non-taproot|taproot|all`. The current diagnostic
-runner passes the non-Taproot slice (`28/28`) through Mojo-owned legacy, P2SH,
-P2PKH, SegWit v0, BIP143, and shared opcode handling plus the owned C shim's
-generic `libsecp256k1` DER verifier. Taproot/Tapscript has started: the
-foundation includes Taproot script-path commitment checks, TapLeaf/TapSighash
-hashing, generic Schnorr verification, and a first passing diagnostic fixture.
-The full Taproot set is not clean. Keep this out of `current_evidence.json` and
-Docker manifest coverage until it is a real 45/45 corpus command.
+still available for fixture-level diagnosis. It also accepts
+`--fixture-set legacy|segwit-v0|non-taproot|taproot|all`. The public
+`script-corpus` command is the canonical evidence path and must stay Mojo-owned,
+with no Python or other-port delegation.
+
+`local-reference-proof` is the bounded 5k candidate path. It must use local
+Reference P2P bytes, RocksDB operational truth, native `libsecp256k1`, and
+`core_spendable_v1` UTXO accounting. Do not hand-edit a baseline claim; Project's
+campaign harness owns accepted control artifacts and current benchmark evidence.
 
 ## Native Boundary
 
@@ -78,17 +80,25 @@ Do not use `mojo test`; current Mojo testing uses `TestSuite` and runs with
 make host-toolchain-smoke
 make docker-toolchain-smoke
 make host-script-corpus-foundation-smoke
+make host-block-core-smoke
+make host-script-corpus
+make host-local-reference-proof
+make docker-script-corpus
+make docker-proof-local
 ```
 
-## Future 5k Order
+## Current Gate Order
 
-Do not jump from this spike directly to a live 5k claim. The future port order is:
+The current port order is:
 
-1. Shared script corpus command and proof shape.
-2. Strict corpus preflight clean in Project.
-3. Local Reference P2P/block-connect implementation.
-4. Strict 5k baseline proof with RocksDB runtime truth, native crypto, WAL,
+1. Keep Shared script corpus proof clean in Docker.
+2. Keep local Reference P2P/block-connect proof clean to height 5000.
+3. Let Project run the strict baseline campaign and own accepted evidence.
+4. Only after baseline acceptance, plan the next gate separately.
+
+Strict 5k requires RocksDB runtime truth, native crypto, WAL,
    fixed benchmark knobs, `core_spendable_v1` UTXO accounting, and canonical
    importable proof JSON.
 
-Until those gates exist, keep Project status language at feasibility-spike level.
+Until Project accepts the control artifact, keep status language at candidate
+level even when local debug proof passes.

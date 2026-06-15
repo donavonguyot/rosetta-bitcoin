@@ -2,6 +2,8 @@
 
 #include <errno.h>
 #include <openssl/sha.h>
+#include <netdb.h>
+#include <netinet/tcp.h>
 #include <rocksdb/c.h>
 #include <secp256k1.h>
 #include <secp256k1_extrakeys.h>
@@ -12,6 +14,10 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <time.h>
+#include <unistd.h>
 
 enum {
   CRYPTO_RESULT_VALID = 0,
@@ -395,6 +401,193 @@ static bool ensure_dir(const char *path) {
   return mkdir(tmp, 0775) == 0 || errno == EEXIST;
 }
 
+static bool copy_string_len(const char *src, int32_t src_len, char *dst, size_t dst_len) {
+  if (!src || src_len < 0 || (size_t)src_len >= dst_len) {
+    return false;
+  }
+  memcpy(dst, src, (size_t)src_len);
+  dst[src_len] = '\0';
+  return true;
+}
+
+int64_t mojobitnode_now_ms(void) {
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+    return 0;
+  }
+  return ((int64_t)ts.tv_sec * 1000) + ((int64_t)ts.tv_nsec / 1000000);
+}
+
+int32_t mojobitnode_socket_connect_len(const char *host, int32_t host_len, const char *port, int32_t port_len) {
+  char host_buf[256];
+  char port_buf[32];
+  if (!copy_string_len(host, host_len, host_buf, sizeof(host_buf)) ||
+      !copy_string_len(port, port_len, port_buf, sizeof(port_buf))) {
+    return -1;
+  }
+
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = IPPROTO_TCP;
+
+  struct addrinfo *result = NULL;
+  if (getaddrinfo(host_buf, port_buf, &hints, &result) != 0) {
+    return -2;
+  }
+
+  int fd = -1;
+  for (struct addrinfo *ai = result; ai != NULL; ai = ai->ai_next) {
+    fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+    if (fd < 0) {
+      continue;
+    }
+    int one = 1;
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+    struct timeval read_timeout = {.tv_sec = 120, .tv_usec = 0};
+    struct timeval write_timeout = {.tv_sec = 30, .tv_usec = 0};
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof(read_timeout));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &write_timeout, sizeof(write_timeout));
+    if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0) {
+      break;
+    }
+    close(fd);
+    fd = -1;
+  }
+  freeaddrinfo(result);
+  return fd;
+}
+
+int32_t mojobitnode_socket_close(int32_t fd) {
+  if (fd < 0) {
+    return 0;
+  }
+  return close(fd) == 0 ? 1 : 0;
+}
+
+int32_t mojobitnode_socket_send_all(int32_t fd, const uint8_t *bytes, int32_t len) {
+  if (fd < 0 || !bytes || len < 0) {
+    return 0;
+  }
+  int32_t offset = 0;
+  while (offset < len) {
+    ssize_t n = send(fd, bytes + offset, (size_t)(len - offset), 0);
+    if (n <= 0) {
+      return 0;
+    }
+    offset += (int32_t)n;
+  }
+  return 1;
+}
+
+int32_t mojobitnode_socket_recv_exact(int32_t fd, uint8_t *bytes, int32_t len) {
+  if (fd < 0 || !bytes || len < 0) {
+    return 0;
+  }
+  int32_t offset = 0;
+  while (offset < len) {
+    ssize_t n = recv(fd, bytes + offset, (size_t)(len - offset), 0);
+    if (n <= 0) {
+      return 0;
+    }
+    offset += (int32_t)n;
+  }
+  return 1;
+}
+
+int64_t mojobitnode_rocksdb_open_len(const char *datadir, int32_t datadir_len) {
+  char dir_buf[1024];
+  if (!copy_string_len(datadir, datadir_len, dir_buf, sizeof(dir_buf))) {
+    return 0;
+  }
+  char dbpath[1200];
+  snprintf(dbpath, sizeof(dbpath), "%s/chainstate-rocksdb", dir_buf);
+  if (!ensure_dir(dir_buf)) {
+    return 0;
+  }
+
+  char *err = NULL;
+  rocksdb_options_t *options = rocksdb_options_create();
+  rocksdb_options_set_create_if_missing(options, 1);
+  rocksdb_t *db = rocksdb_open(options, dbpath, &err);
+  rocksdb_options_destroy(options);
+  if (err) {
+    rocksdb_free(err);
+    return 0;
+  }
+  return (int64_t)(intptr_t)db;
+}
+
+int32_t mojobitnode_rocksdb_close_handle(int64_t handle) {
+  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
+  if (!db) {
+    return 0;
+  }
+  rocksdb_close(db);
+  return 1;
+}
+
+int32_t mojobitnode_rocksdb_put(int64_t handle, const uint8_t *key, int32_t key_len, const uint8_t *value,
+                                int32_t value_len) {
+  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
+  if (!db || !key || key_len < 0 || !value || value_len < 0) {
+    return 0;
+  }
+  char *err = NULL;
+  rocksdb_writeoptions_t *write_options = rocksdb_writeoptions_create();
+  rocksdb_put(db, write_options, (const char *)key, (size_t)key_len, (const char *)value, (size_t)value_len, &err);
+  rocksdb_writeoptions_destroy(write_options);
+  if (err) {
+    rocksdb_free(err);
+    return 0;
+  }
+  return 1;
+}
+
+int32_t mojobitnode_rocksdb_delete(int64_t handle, const uint8_t *key, int32_t key_len) {
+  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
+  if (!db || !key || key_len < 0) {
+    return 0;
+  }
+  char *err = NULL;
+  rocksdb_writeoptions_t *write_options = rocksdb_writeoptions_create();
+  rocksdb_delete(db, write_options, (const char *)key, (size_t)key_len, &err);
+  rocksdb_writeoptions_destroy(write_options);
+  if (err) {
+    rocksdb_free(err);
+    return 0;
+  }
+  return 1;
+}
+
+int32_t mojobitnode_rocksdb_get(int64_t handle, const uint8_t *key, int32_t key_len, uint8_t *out,
+                                int32_t out_cap) {
+  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
+  if (!db || !key || key_len < 0 || !out || out_cap < 0) {
+    return -1;
+  }
+  char *err = NULL;
+  size_t value_len = 0;
+  rocksdb_readoptions_t *read_options = rocksdb_readoptions_create();
+  char *value = rocksdb_get(db, read_options, (const char *)key, (size_t)key_len, &value_len, &err);
+  rocksdb_readoptions_destroy(read_options);
+  if (err) {
+    rocksdb_free(err);
+    return -1;
+  }
+  if (!value) {
+    return -2;
+  }
+  if (value_len > (size_t)out_cap) {
+    rocksdb_free(value);
+    return -3;
+  }
+  memcpy(out, value, value_len);
+  rocksdb_free(value);
+  return (int32_t)value_len;
+}
+
 int32_t mojobitnode_native_crypto_available(void) {
   secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
   if (!ctx) {
@@ -530,6 +723,30 @@ int32_t mojobitnode_write_text(const char *path, const char *text) {
     return 0;
   }
   fputs(text ? text : "", f);
+  fclose(f);
+  return 1;
+}
+
+int32_t mojobitnode_write_text_len(
+    const char *path,
+    int32_t path_len,
+    const char *text,
+    int32_t text_len) {
+  char path_copy[4096];
+  if (!copy_string_len(path, path_len, path_copy, sizeof(path_copy)) || !path_copy[0]) {
+    return 1;
+  }
+  FILE *f = fopen(path_copy, "w");
+  if (!f) {
+    return 0;
+  }
+  if (text && text_len > 0) {
+    size_t written = fwrite(text, 1, (size_t)text_len, f);
+    if (written != (size_t)text_len) {
+      fclose(f);
+      return 0;
+    }
+  }
   fclose(f);
   return 1;
 }

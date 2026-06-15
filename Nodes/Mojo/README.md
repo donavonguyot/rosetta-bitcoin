@@ -1,7 +1,8 @@
 # mojobitnode
 
-`mojobitnode` is a bounded Mojo feasibility spike for RosettaBitcoin. It is not
-a full port and does not claim 5k baseline readiness.
+`mojobitnode` is a bounded Mojo contender for RosettaBitcoin. It is not a
+tip-capable full node, and Project control artifacts remain the source of
+accepted benchmark truth.
 
 The spike asks one narrow question: can Mojo install reproducibly and prove the
 native prerequisites a future port would need?
@@ -17,24 +18,19 @@ native prerequisites a future port would need?
 - Native `libsecp256k1` vector checks.
 - RocksDB runtime truth smoke against `chainstate-rocksdb`.
 - Project-shaped status JSON.
+- Docker Shared script corpus proof (`45/45`).
+- Local Reference P2P proof surface for the strict 5k baseline candidate.
 
-The proof binary is intentionally small. It does not implement P2P, script
-corpus, block connect, benchmark artifacts, supervisor loops, or Project evidence
-updates.
+The proof binary is intentionally bounded. It implements the offline corpus and
+local Reference 5k proof paths, but it does not implement external peers,
+supervisor loops, long-run benchmark lanes, or tip maintenance.
 
 The supported `mojobitnode` command is Mojo-owned and reports
 `entrypoint_language: "mojo"`.
 
-There is also a host-only diagnostic `script-corpus-dev` surface for building
-the future Mojo-owned corpus runner. It supports `--fixture-id <id>` and
-`--fixture-set legacy|segwit-v0|non-taproot|taproot|all`. The current diagnostic
-runner proves the full non-Taproot slice (`28/28`) with Mojo-owned legacy,
-P2SH, P2PKH, SegWit v0, BIP143, and shared opcode handling plus the owned C
-shim's generic `libsecp256k1` DER verifier. Taproot/Tapscript now has a
-Mojo-owned foundation for control-block checks, TapLeaf/TapSighash hashing, and
-generic Schnorr verification, with early one-fixture diagnostic coverage only.
-The full Taproot set and `--fixture-set all` are not clean, so this is not Docker
-manifest coverage and must not be imported into Project evidence.
+The diagnostic `script-corpus-dev` surface remains available for fixture-level
+debugging. The public `script-corpus` command is the evidence surface and emits
+canonical `port.script_corpus_result.v1` JSON with Mojo-owned `45/45` coverage.
 
 ## Commands
 
@@ -50,9 +46,12 @@ make host-status
 make host-native-crypto-vectors
 make host-storage-proof
 make host-script-corpus-dev
+make host-script-corpus
+make host-local-reference-proof
 make host-smoke-once
 make host-toolchain-smoke
 make host-script-corpus-foundation-smoke
+make host-block-core-smoke
 ```
 
 Homebrew provides `uv`, `rocksdb`, `secp256k1`, `pkgconf`, `openssl@3`, and
@@ -69,6 +68,8 @@ make docker-warm
 make docker-status
 make docker-native-crypto-vectors
 make docker-storage-proof
+make docker-script-corpus
+make docker-proof-local
 make docker-smoke-once
 make docker-toolchain-smoke
 ```

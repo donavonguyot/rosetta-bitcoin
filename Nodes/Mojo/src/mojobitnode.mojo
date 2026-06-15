@@ -2,6 +2,7 @@ from std.ffi import OwnedDLHandle
 from std.os import getenv
 from std.sys import argv
 
+from block_core import local_reference_proof
 from script_corpus_foundation import (
     evaluate_bare_legacy_fixture,
     evaluate_bare_multisig_fixture,
@@ -109,7 +110,7 @@ def expected_code(index: Int) -> Int32:
 def main() raises:
     var args = argv()
     if len(args) < 2:
-        print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus|script-corpus-dev> [options]")
+        print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")
         return
 
     var command = String(args[1])
@@ -121,6 +122,9 @@ def main() raises:
     var manifest_path = String("../Shared/conformance/fixtures/scripts/manifest.json")
     var fixture_id = String("")
     var fixture_set = String("all")
+    var peer = getenv("REFERENCE_P2P_PEER", "127.0.0.1:48333")
+    var target = 5000
+    var progress = 500
     for i in range(len(args)):
         if args[i] == "--datadir" and i + 1 < len(args):
             datadir = String(args[i + 1])
@@ -134,6 +138,12 @@ def main() raises:
             fixture_id = String(args[i + 1])
         if args[i] == "--fixture-set" and i + 1 < len(args):
             fixture_set = String(args[i + 1])
+        if args[i] == "--peer" and i + 1 < len(args):
+            peer = String(args[i + 1])
+        if args[i] == "--target" and i + 1 < len(args):
+            target = Int(String(args[i + 1]))
+        if args[i] == "--progress" and i + 1 < len(args):
+            progress = Int(String(args[i + 1]))
 
     if command == "status":
         var native = OwnedDLHandle(shim_path)
@@ -201,7 +211,12 @@ def main() raises:
         )
         print(json)
         if result_path != "":
-            _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), json.unsafe_ptr())
+            _ = native.call["mojobitnode_write_text_len", Int32](
+                result_path.unsafe_ptr(),
+                Int32(result_path.byte_length()),
+                json.unsafe_ptr(),
+                Int32(json.byte_length()),
+            )
         return
 
     if command == "script-corpus-dev" or command == "script-corpus":
@@ -322,7 +337,12 @@ def main() raises:
         print(json)
         if result_path != "":
             var native = OwnedDLHandle(shim_path)
-            _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), json.unsafe_ptr())
+            _ = native.call["mojobitnode_write_text_len", Int32](
+                result_path.unsafe_ptr(),
+                Int32(result_path.byte_length()),
+                json.unsafe_ptr(),
+                Int32(json.byte_length()),
+            )
         return
 
     if command == "storage-proof":
@@ -357,7 +377,17 @@ def main() raises:
         )
         print(json)
         if result_path != "":
-            _ = native.call["mojobitnode_write_text", Int32](result_path.unsafe_ptr(), json.unsafe_ptr())
+            _ = native.call["mojobitnode_write_text_len", Int32](
+                result_path.unsafe_ptr(),
+                Int32(result_path.byte_length()),
+                json.unsafe_ptr(),
+                Int32(json.byte_length()),
+            )
         return
 
-    print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus|script-corpus-dev> [options]")
+    if command == "local-reference-proof":
+        var proof = local_reference_proof(shim_path, surface, datadir, peer, target, result_path, progress)
+        print(proof.json)
+        return
+
+    print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")

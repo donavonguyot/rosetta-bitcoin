@@ -1,4 +1,5 @@
 SHELL := /bin/bash
+include ../Shared/docker/reference_topology.mk
 
 RESULT_DATE ?= $(shell date -u +%F)
 DATA_DIR ?= ./data-mojo
@@ -15,6 +16,7 @@ SHIM_LIB ?= $(BUILD_DIR)/libmojobitnode_shim.$(SHIM_EXT)
 MOJO_DOCS_DIR ?= ./.mojo-docs
 MOJO_TOOLCHAIN_SMOKE ?= tests/toolchain_smoke.mojo
 MOJO_SCRIPT_CORPUS_FOUNDATION_SMOKE ?= tests/script_corpus_foundation_smoke.mojo
+MOJO_BLOCK_CORE_SMOKE ?= tests/block_core_smoke.mojo
 UV ?= uv
 PYTHON ?= /opt/homebrew/bin/python3.11
 PKG_CONFIG ?= pkg-config
@@ -23,14 +25,19 @@ HOST_CRYPTO_RESULT ?= /tmp/mojo_native_crypto_vectors_host_$(RESULT_DATE).json
 HOST_STORAGE_RESULT ?= /tmp/mojo_rocksdb_storage_proof_host_$(RESULT_DATE).json
 HOST_SCRIPT_CORPUS_DEV_RESULT ?= /tmp/mojo_script_corpus_dev_$(RESULT_DATE).json
 SCRIPT_CORPUS_RESULT ?= ../Shared/conformance/results/mojo_script_corpus_$(RESULT_DATE).json
+HOST_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_host_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 FIXTURE_ID ?= scripts.bare_multisig_27840
 FIXTURE_SET ?= all
 DATA_VOLUME ?= mojobitnode_data
 PROOF_VOLUME ?= mojobitnode_proof_data
+DOCKER_SYNC_TARGET ?= 5000
+PROGRESS ?= 500
+HOST_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-smoke-once host-toolchain-smoke host-script-corpus-foundation-smoke
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-smoke-once docker-toolchain-smoke
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-local-reference-proof host-smoke-once host-toolchain-smoke host-script-corpus-foundation-smoke host-block-core-smoke
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-proof-local docker-smoke-once docker-toolchain-smoke
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -65,7 +72,7 @@ $(SHIM_LIB): src/mojo_native_shim.c | host-deps-check
 	  $$($(PKG_CONFIG) --cflags --libs rocksdb libsecp256k1 openssl) \
 	  -lstdc++
 
-$(MOJO_BIN): src/mojobitnode.mojo src/script_corpus_foundation.mojo src/script_corpus_table.mojo $(MOJO_VERSION_STAMP) $(SHIM_LIB)
+$(MOJO_BIN): src/mojobitnode.mojo src/block_core.mojo src/script_corpus_foundation.mojo src/script_corpus_table.mojo $(MOJO_VERSION_STAMP) $(SHIM_LIB)
 	$(MOJO) build -I src src/mojobitnode.mojo -o $(MOJO_BIN)
 
 host-build: host-deps-check $(MOJO_BIN)
@@ -114,6 +121,15 @@ host-script-corpus: host-build
 	  grep -q '"failed":0' <<< "$$out"; \
 	  test -s "$(SCRIPT_CORPUS_RESULT)"
 
+host-local-reference-proof: host-build
+	@mkdir -p .benchmark-results
+	@MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) local-reference-proof \
+	  --datadir $(PROOF_DATA_DIR) \
+	  --target $(DOCKER_SYNC_TARGET) \
+	  --peer $(HOST_P2P_PEER) \
+	  --progress $(PROGRESS) \
+	  --result-path $(HOST_LOCAL_PROOF_RESULT)
+
 host-smoke-once: host-build
 	@MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) status --datadir $(DATA_DIR) --json >/tmp/mojo_status.json; \
 	  grep -q '"entrypoint_language":"mojo"' /tmp/mojo_status.json; \
@@ -124,6 +140,9 @@ host-toolchain-smoke: $(MOJO_VERSION_STAMP)
 
 host-script-corpus-foundation-smoke: $(MOJO_VERSION_STAMP)
 	$(MOJO) run -I src $(MOJO_SCRIPT_CORPUS_FOUNDATION_SMOKE)
+
+host-block-core-smoke: host-build
+	MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO) run -I src $(MOJO_BLOCK_CORE_SMOKE)
 
 mojo-docs-cache:
 	$(PYTHON) scripts/cache_mojo_docs.py --output-dir $(MOJO_DOCS_DIR)
@@ -177,6 +196,19 @@ docker-script-corpus:
 	  grep -q '"passed":45' <<< "$$out"; \
 	  grep -q '"failed":0' <<< "$$out"; \
 	  test -s "$(SCRIPT_CORPUS_RESULT)"
+
+docker-proof-local:
+	$(REFERENCE_P2P_CHECK)
+	@mkdir -p .benchmark-results
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then docker volume rm -f $(PROOF_VOLUME) docker_$(PROOF_VOLUME) >/dev/null 2>&1 || true; fi
+	DOCKER_DATA_VOLUME=$(PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps \
+	  -e REFERENCE_P2P_PEER=$(DOCKER_P2P_PEER) \
+	  mojobitnode local-reference-proof \
+	  --datadir /data \
+	  --target $(DOCKER_SYNC_TARGET) \
+	  --peer $(DOCKER_P2P_PEER) \
+	  --progress $(PROGRESS) \
+	  --result-path /benchmark-results/mojo_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 
 docker-smoke-once:
 	@out=$$(DOCKER_DATA_VOLUME=$(DATA_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps --entrypoint /bin/sh mojobitnode -lc 'mojobitnode status --datadir /data --json >/tmp/status.json && printf "%s %s\n" "AGENT_LOOP_TICK_chatreport" "$$(cat /tmp/status.json)"'); \

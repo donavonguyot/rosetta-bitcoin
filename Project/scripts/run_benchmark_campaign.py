@@ -100,7 +100,7 @@ REQUIRED_BUCKETS = (
     *_validator.REQUIRED_BUCKETS,
 )
 LONG_RUN_GATES = {gate for gate, spec in _validator.GATES.items() if spec.get("long_run")}
-ACTIVE_CONTROL_PORTS = {"rust", "zig", "cpp", "go", "swift", "csharp", "java", "ocaml"}
+ACTIVE_CONTROL_PORTS = {"rust", "zig", "cpp", "go", "swift", "csharp", "java", "ocaml", "mojo"}
 CONTROL_REQUIRED_GATES = {"baseline_5k", "shakedown_50k", "performance_100k", "post_100k_to_tip"}
 REFERENCE_TIP_HELPER = ROOT / "Project/scripts/reference_tip.py"
 
