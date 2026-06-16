@@ -8,8 +8,10 @@ replacement for the comparable `libsecp256k1` proof lane.
 The implementation follows formulas and structure from Bitcoin Core's
 `secp256k1` project:
 
-- `src/field_10x26_impl.h`: field normalization and multiplication discipline.
-- `src/scalar_8x32_impl.h`: fixed-width scalar parsing/order checks.
+- `src/field_5x52_impl.h` and field entrypoints: field normalization and
+  multiplication discipline.
+- `src/scalar_4x64_impl.h`: fixed-width scalar parsing/order checks and
+  complement-fold product reduction.
 - `src/group_impl.h`: affine/Jacobian point operations.
 - `src/ecmult_impl.h`: double-base multiplication and wNAF verification shape.
 - `modules/schnorrsig/main_impl.h`: BIP340 verification flow.
@@ -22,12 +24,19 @@ The implementation follows formulas and structure from Bitcoin Core's
   helper API still accepts and emits 32-byte big-endian values, so current tests
   and backend wrappers stay stable while the hot path avoids heap-backed
   `List[UInt32]` field/scalar temporaries.
-- Field multiplication now uses fixed-limb schoolbook multiplication plus the
-  secp256k1 pseudo-Mersenne fold `2^256 = 2^32 + 977`.
+- Field multiplication now uses fixed-limb schoolbook multiplication plus a
+  fixed two-fold reducer for the secp256k1 pseudo-Mersenne identity
+  `2^256 = 2^32 + 977`. The old iterative high-limb fold/normalize loop is
+  not in the verifier hot path.
+- Field squaring has a dedicated 4x64 square product: four diagonal products
+  plus six doubled cross-products, followed by the same fixed field reducer.
+  `_fe_sqr` no longer routes through `_fe_mul(a, a)`.
 - Scalar multiplication/reduction now uses the same 4x64 product shape with
-  `UInt128` carry handling, and field/scalar callers route directly to their
-  modulus-specific multiplication paths instead of paying runtime modulus
-  dispatch in the verifier hot path.
+  `UInt128` carry handling plus the libsecp 4x64 complement constants
+  `N_C_0 = 0x402DA1732FC9BEBF`, `N_C_1 = 0x4551231950B75FC4`, and `N_C_2 = 1`.
+  The old shifted compare/subtract scalar reducer is not in the verifier hot
+  path. Field/scalar callers route directly to their modulus-specific
+  multiplication paths instead of paying runtime modulus dispatch.
 - Group operations use Jacobian points internally, with mixed affine additions,
   so scalar multiplication no longer performs a field inversion for every
   point add/double.
@@ -70,3 +79,11 @@ benchmark truth.
 
 This implementation does not claim constant-time hardening. It is a verifier
 shadow path for differential testing and language-specific learning.
+
+## Deferred Libsecp Shapes
+
+The current pure path still uses the existing inversion algorithms, the current
+Schnorr/Taproot multiplication routing, and exact 4x64 normalization after each
+operation. Inversion addition chains, safegcd, GLV decomposition, broader fixed
+generator tables, tagged-hash midstates, and any 5x52 lazy field representation
+are intentionally deferred to later measured slices.

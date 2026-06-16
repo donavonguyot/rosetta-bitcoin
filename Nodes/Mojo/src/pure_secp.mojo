@@ -382,45 +382,6 @@ def _mul_mod(ref a: U256, ref b: U256, ref modulus: U256) -> U256:
     return result^
 
 
-def _shifted_limb(ref value: U256, shift: Int, index: Int) -> UInt64:
-    var limb_shift = shift // 64
-    var bit_shift = shift - limb_shift * 64
-    var out = UInt64(0)
-    var src = index - limb_shift
-    if src >= 0 and src < 4:
-        out |= value.limbs[src] << UInt64(bit_shift)
-    if bit_shift != 0:
-        var carry_src = src - 1
-        if carry_src >= 0 and carry_src < 4:
-            out |= value.limbs[carry_src] >> UInt64(64 - bit_shift)
-    return out
-
-
-def _limbs_ge_shifted(mut limbs: InlineArray[UInt64, 9], ref value: U256, shift: Int) -> Bool:
-    for j in range(9):
-        var i = 8 - j
-        var lhs = limbs[i]
-        var rhs = _shifted_limb(value, shift, i)
-        if lhs > rhs:
-            return True
-        if lhs < rhs:
-            return False
-    return True
-
-
-def _limbs_sub_shifted(mut limbs: InlineArray[UInt64, 9], ref value: U256, shift: Int):
-    var borrow = UInt128(0)
-    for i in range(9):
-        var rhs = UInt128(_shifted_limb(value, shift, i)) + borrow
-        var lhs = UInt128(limbs[i])
-        if lhs >= rhs:
-            limbs[i] = UInt64(lhs - rhs)
-            borrow = UInt128(0)
-        else:
-            limbs[i] = UInt64((UInt128(1) << UInt128(64)) + lhs - rhs)
-            borrow = UInt128(1)
-
-
 def _add_product_carry(mut product: InlineArray[UInt64, 9], index: Int, carry_in: UInt128):
     var idx = index
     var carry = carry_in
@@ -429,6 +390,10 @@ def _add_product_carry(mut product: InlineArray[UInt64, 9], index: Int, carry_in
         product[idx] = _low64(total)
         carry = total >> UInt128(64)
         idx += 1
+
+
+def _add_product_term(mut product: InlineArray[UInt64, 9], index: Int, term: UInt128):
+    _add_product_carry(product, index, term)
 
 
 def _schoolbook_product_4x64(ref a: U256, ref b: U256) -> InlineArray[UInt64, 9]:
@@ -444,23 +409,66 @@ def _schoolbook_product_4x64(ref a: U256, ref b: U256) -> InlineArray[UInt64, 9]
     return product^
 
 
-def _mul_mod_scalar_fast(ref a: U256, ref b: U256) -> U256:
-    var product = _schoolbook_product_4x64(a, b)
+def _schoolbook_square_4x64(ref a: U256) -> InlineArray[UInt64, 9]:
+    var product = InlineArray[UInt64, 9](fill=UInt64(0))
+    for i in range(4):
+        _add_product_term(product, i + i, UInt128(a.limbs[i]) * UInt128(a.limbs[i]))
+        for j in range(i + 1, 4):
+            var term = UInt128(a.limbs[i]) * UInt128(a.limbs[j])
+            _add_product_term(product, i + j, term)
+            _add_product_term(product, i + j, term)
+    return product^
 
-    var n = _scalar_n()
-    for j in range(257):
-        var shift = 256 - j
-        if _limbs_ge_shifted(product, n, shift):
-            _limbs_sub_shifted(product, n, shift)
+
+def _normalize_scalar_limbs(mut limbs: InlineArray[UInt128, 12]):
+    for i in range(11):
+        var carry = limbs[i] >> UInt128(64)
+        limbs[i] = limbs[i] & UInt128(0xFFFFFFFFFFFFFFFF)
+        limbs[i + 1] += carry
+
+
+def _scalar_fold_word(mut limbs: InlineArray[UInt128, 12], offset: Int, high: UInt128):
+    if high == UInt128(0):
+        return
+    limbs[offset] += high * UInt128(0x402DA1732FC9BEBF)
+    limbs[offset + 1] += high * UInt128(0x4551231950B75FC4)
+    limbs[offset + 2] += high
+
+
+def _scalar_fold_high_once(mut limbs: InlineArray[UInt128, 12]):
+    _normalize_scalar_limbs(limbs)
+    var high = InlineArray[UInt128, 8](fill=UInt128(0))
+    for i in range(8):
+        high[i] = limbs[i + 4]
+        limbs[i + 4] = UInt128(0)
+    for i in range(8):
+        _scalar_fold_word(limbs, i, high[i])
+    _normalize_scalar_limbs(limbs)
+
+
+def _reduce_scalar_product(mut product: InlineArray[UInt64, 9]) -> U256:
+    var limbs = InlineArray[UInt128, 12](fill=UInt128(0))
+    for i in range(9):
+        limbs[i] = UInt128(product[i])
+
+    _scalar_fold_high_once(limbs)
+    _scalar_fold_high_once(limbs)
+    _scalar_fold_high_once(limbs)
 
     var out = U256()
     for i in range(4):
-        out.limbs[i] = product[i]
+        out.limbs[i] = _low64(limbs[i])
+    var n = _scalar_n()
     for _ in range(4):
         if _cmp(out, n) < 0:
             break
         out = _sub_raw(out, n)
     return out^
+
+
+def _mul_mod_scalar_fast(ref a: U256, ref b: U256) -> U256:
+    var product = _schoolbook_product_4x64(a, b)
+    return _reduce_scalar_product(product)
 
 
 def _pow_mod(ref base: U256, ref exponent: U256, ref modulus: U256) -> U256:
@@ -490,42 +498,51 @@ def _mul_mod_field_fast(ref a: U256, ref b: U256) -> U256:
     return _reduce_field_product(product)
 
 
-def _normalize_u128_limbs(mut limbs: InlineArray[UInt128, 12]):
-    for i in range(11):
+def _sqr_mod_field_fast(ref a: U256) -> U256:
+    var product = _schoolbook_square_4x64(a)
+    return _reduce_field_product(product)
+
+
+def _normalize_field_limbs(mut limbs: InlineArray[UInt128, 6]):
+    for i in range(5):
         var carry = limbs[i] >> UInt128(64)
         limbs[i] = limbs[i] & UInt128(0xFFFFFFFFFFFFFFFF)
         limbs[i + 1] += carry
 
 
+def _field_fold_word(mut limbs: InlineArray[UInt128, 6], offset: Int, high: UInt128):
+    if high == UInt128(0):
+        return
+    limbs[offset] += high * UInt128(977)
+    limbs[offset] += (high & UInt128(0xFFFFFFFF)) << UInt128(32)
+    limbs[offset + 1] += high >> UInt128(32)
+
+
 def _reduce_field_product(mut product: InlineArray[UInt64, 9]) -> U256:
     # secp256k1 field reduction uses p = 2^256 - 2^32 - 977, so
     # every high 2^256 limb folds into one shifted limb plus 977 low limbs.
-    var limbs = InlineArray[UInt128, 12](fill=UInt128(0))
-    for i in range(9):
+    var limbs = InlineArray[UInt128, 6](fill=UInt128(0))
+    for i in range(4):
         limbs[i] = UInt128(product[i])
 
-    for _ in range(16):
-        _normalize_u128_limbs(limbs)
-        var moved = False
-        for k in range(4, 12):
-            var high = limbs[k]
-            if high != UInt128(0):
-                limbs[k] = UInt128(0)
-                var low_index = k - 4
-                limbs[low_index] += high * UInt128(977)
-                limbs[low_index] += (high & UInt128(0xFFFFFFFF)) << UInt128(32)
-                limbs[low_index + 1] += high >> UInt128(32)
-                moved = True
-        if not moved:
-            break
+    for i in range(5):
+        _field_fold_word(limbs, i, UInt128(product[i + 4]))
+    _normalize_field_limbs(limbs)
 
-    _normalize_u128_limbs(limbs)
+    var high4 = limbs[4]
+    var high5 = limbs[5]
+    limbs[4] = UInt128(0)
+    limbs[5] = UInt128(0)
+    _field_fold_word(limbs, 0, high4)
+    _field_fold_word(limbs, 1, high5)
+    _normalize_field_limbs(limbs)
+
     var out = U256()
     for i in range(4):
         out.limbs[i] = _low64(limbs[i])
 
     var p = _field_p()
-    for _ in range(8):
+    for _ in range(4):
         if _cmp(out, p) < 0:
             break
         out = _sub_raw(out, p)
@@ -587,8 +604,7 @@ def _fe_mul(ref a: U256, ref b: U256) -> U256:
 
 
 def _fe_sqr(ref a: U256) -> U256:
-    var tmp = a.copy()
-    return _fe_mul(a, tmp)
+    return _sqr_mod_field_fast(a)
 
 
 def _fe_inv(ref a: U256) -> U256:
@@ -1344,6 +1360,12 @@ def pure_test_u256_mul_mod(ref a: List[UInt8], ref b: List[UInt8], ref modulus: 
     var bv = _from_be32(b)
     var mv = _from_be32(modulus)
     return _to_be32(_mul_mod(_reduce_once(av, mv), _reduce_once(bv, mv), mv))
+
+
+def pure_test_u256_square_field(ref a: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var p = _field_p()
+    return _to_be32(_fe_sqr(_reduce_once(av, p)))
 
 
 def pure_test_u256_inv_mod(ref a: List[UInt8], ref modulus: List[UInt8]) raises -> List[UInt8]:
