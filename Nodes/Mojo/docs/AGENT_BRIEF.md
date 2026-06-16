@@ -59,6 +59,18 @@ fixture/result shaping, storage-proof operation sequencing, command dispatch,
 JSON shaping, and user-visible CLI behavior in Mojo. The shim should expose
 primitives only when Mojo interop is not sufficient for the spike.
 
+The live proof path routes signature and Taproot tweak checks through a
+Mojo-owned `NativeCrypto` wrapper so a block-level script job batch does not
+construct a dynamic-library handle for every signature. Small fixture/debug
+helpers may keep compatibility one-shot wrappers, but long proof paths should
+thread the reusable boundary through the verifier.
+
+Native crypto call counts are part of proof telemetry. Per-call crypto timing is
+profiling-only: set `MOJOBITNODE_PROFILE_CRYPTO=1` when investigating
+`ecdsa_ms`, `schnorr_ms`, `taproot_tweak_ms`, or `native_bridge_ms`. Comparable
+benchmark runs should leave it unset and use `script_verify` / `script_wall_ms`
+for hot-path cost.
+
 Before trusting a new native proof, run:
 
 ```bash

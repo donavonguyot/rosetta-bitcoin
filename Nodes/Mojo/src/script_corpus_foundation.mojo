@@ -132,6 +132,99 @@ struct ByteCursor(Movable):
         return Int(value)
 
 
+struct NativeCrypto(Movable):
+    var handle: OwnedDLHandle
+
+    def __init__(out self, shim_path: String) raises:
+        self.handle = OwnedDLHandle(shim_path)
+
+    def verify_ecdsa_der_bytes(
+        ref self,
+        ref pubkey: List[UInt8],
+        ref der: List[UInt8],
+        ref digest: List[UInt8],
+    ) raises -> Int32:
+        var pubkey_ptr = alloc[UInt8](len(pubkey))
+        var der_ptr = alloc[UInt8](len(der))
+        var digest_ptr = alloc[UInt8](len(digest))
+        for i in range(len(pubkey)):
+            pubkey_ptr[i] = pubkey[i]
+        for i in range(len(der)):
+            der_ptr[i] = der[i]
+        for i in range(len(digest)):
+            digest_ptr[i] = digest[i]
+        var result = self.handle.call["mojobitnode_verify_ecdsa_der_bytes_len", Int32](
+            pubkey_ptr,
+            Int32(len(pubkey)),
+            der_ptr,
+            Int32(len(der)),
+            digest_ptr,
+            Int32(len(digest)),
+        )
+        pubkey_ptr.free()
+        der_ptr.free()
+        digest_ptr.free()
+        return result
+
+    def verify_schnorr_bytes(
+        ref self,
+        ref xonly_pubkey: List[UInt8],
+        ref signature: List[UInt8],
+        ref digest: List[UInt8],
+    ) raises -> Int32:
+        var pubkey_ptr = alloc[UInt8](len(xonly_pubkey))
+        var sig_ptr = alloc[UInt8](len(signature))
+        var digest_ptr = alloc[UInt8](len(digest))
+        for i in range(len(xonly_pubkey)):
+            pubkey_ptr[i] = xonly_pubkey[i]
+        for i in range(len(signature)):
+            sig_ptr[i] = signature[i]
+        for i in range(len(digest)):
+            digest_ptr[i] = digest[i]
+        var result = self.handle.call["mojobitnode_verify_schnorr_bytes_len", Int32](
+            pubkey_ptr,
+            Int32(len(xonly_pubkey)),
+            sig_ptr,
+            Int32(len(signature)),
+            digest_ptr,
+            Int32(len(digest)),
+        )
+        pubkey_ptr.free()
+        sig_ptr.free()
+        digest_ptr.free()
+        return result
+
+    def verify_taproot_tweak_precomputed(
+        ref self,
+        ref internal_xonly: List[UInt8],
+        ref tweak: List[UInt8],
+        ref expected_xonly: List[UInt8],
+        expected_parity: Int,
+    ) raises -> Int32:
+        var internal_ptr = alloc[UInt8](len(internal_xonly))
+        var tweak_ptr = alloc[UInt8](len(tweak))
+        var expected_ptr = alloc[UInt8](len(expected_xonly))
+        for i in range(len(internal_xonly)):
+            internal_ptr[i] = internal_xonly[i]
+        for i in range(len(tweak)):
+            tweak_ptr[i] = tweak[i]
+        for i in range(len(expected_xonly)):
+            expected_ptr[i] = expected_xonly[i]
+        var result = self.handle.call["mojobitnode_verify_taproot_tweak_precomputed_bytes_len", Int32](
+            internal_ptr,
+            Int32(len(internal_xonly)),
+            tweak_ptr,
+            Int32(len(tweak)),
+            expected_ptr,
+            Int32(len(expected_xonly)),
+            Int32(expected_parity),
+        )
+        internal_ptr.free()
+        tweak_ptr.free()
+        expected_ptr.free()
+        return result
+
+
 struct BareMultisigScript(Movable):
     var required_signatures: Int
     var pubkeys: List[ScriptStackItem]
@@ -585,6 +678,31 @@ def evaluate_legacy_script(
     witness_v0: Bool = False,
     witness_amount_sats: Int64 = 0,
 ) raises -> Bool:
+    var crypto = NativeCrypto(shim_path)
+    return evaluate_legacy_script_with_crypto(
+        script,
+        stack^,
+        tx,
+        input_index,
+        shim_path,
+        crypto,
+        has_tx_context,
+        witness_v0,
+        witness_amount_sats,
+    )
+
+
+def evaluate_legacy_script_with_crypto(
+    ref script: List[UInt8],
+    var stack: List[ScriptStackItem],
+    ref tx: Transaction,
+    input_index: Int,
+    shim_path: String,
+    ref crypto: NativeCrypto,
+    has_tx_context: Bool,
+    witness_v0: Bool = False,
+    witness_amount_sats: Int64 = 0,
+) raises -> Bool:
     var offset = 0
     var code_separator_offset = 0
     var sighash_precompute = build_sighash_precompute(tx)
@@ -925,8 +1043,8 @@ def evaluate_legacy_script(
             var pubkey = _stack_pop(stack)
             var signature = _stack_pop(stack)
             var effective_script = slice_bytes(script, code_separator_offset, len(script))
-            var ok = verify_ecdsa_signature_for_mode_cached(
-                shim_path,
+            var ok = verify_ecdsa_signature_for_mode_cached_with_crypto(
+                crypto,
                 signature.data,
                 pubkey.data,
                 tx,
@@ -945,8 +1063,8 @@ def evaluate_legacy_script(
             var pubkey = _stack_pop(stack)
             var signature = _stack_pop(stack)
             var effective_script = slice_bytes(script, code_separator_offset, len(script))
-            var ok = verify_ecdsa_signature_for_mode_cached(
-                shim_path,
+            var ok = verify_ecdsa_signature_for_mode_cached_with_crypto(
+                crypto,
                 signature.data,
                 pubkey.data,
                 tx,
@@ -986,8 +1104,8 @@ def evaluate_legacy_script(
                 var matched = False
                 var effective_script = slice_bytes(script, code_separator_offset, len(script))
                 while key_index < len(pubkeys):
-                    var ok = verify_ecdsa_signature_for_mode_cached(
-                        shim_path,
+                    var ok = verify_ecdsa_signature_for_mode_cached_with_crypto(
+                        crypto,
                         signatures[sig_index].data,
                         pubkeys[key_index].data,
                         tx,
@@ -3527,11 +3645,30 @@ def verify_ecdsa_signature(
     input_index: Int,
     ref script_code: List[UInt8],
 ) raises -> Bool:
-    return verify_ecdsa_signature_for_mode(shim_path, signature, pubkey, tx, input_index, script_code, False, Int64(0))
+    var crypto = NativeCrypto(shim_path)
+    return verify_ecdsa_signature_for_mode_with_crypto(
+        crypto, signature, pubkey, tx, input_index, script_code, False, Int64(0)
+    )
 
 
 def verify_ecdsa_signature_for_mode(
     shim_path: String,
+    ref signature: List[UInt8],
+    ref pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    witness_v0: Bool,
+    witness_amount_sats: Int64,
+) raises -> Bool:
+    var crypto = NativeCrypto(shim_path)
+    return verify_ecdsa_signature_for_mode_with_crypto(
+        crypto, signature, pubkey, tx, input_index, script_code, witness_v0, witness_amount_sats
+    )
+
+
+def verify_ecdsa_signature_for_mode_with_crypto(
+    ref crypto: NativeCrypto,
     ref signature: List[UInt8],
     ref pubkey: List[UInt8],
     ref tx: Transaction,
@@ -3547,27 +3684,7 @@ def verify_ecdsa_signature_for_mode(
         raise Error("diagnostic fixture only supports SIGHASH_ALL, SIGHASH_NONE, and SIGHASH_SINGLE")
     var der = slice_bytes(signature, 0, len(signature) - 1)
     var digest = signature_digest_for_mode(tx, input_index, script_code, signature, witness_v0, witness_amount_sats)
-    var native = OwnedDLHandle(shim_path)
-    var pubkey_ptr = alloc[UInt8](len(pubkey))
-    var der_ptr = alloc[UInt8](len(der))
-    var digest_ptr = alloc[UInt8](len(digest))
-    for i in range(len(pubkey)):
-        pubkey_ptr[i] = pubkey[i]
-    for i in range(len(der)):
-        der_ptr[i] = der[i]
-    for i in range(len(digest)):
-        digest_ptr[i] = digest[i]
-    var result = native.call["mojobitnode_verify_ecdsa_der_bytes_len", Int32](
-        pubkey_ptr,
-        Int32(len(pubkey)),
-        der_ptr,
-        Int32(len(der)),
-        digest_ptr,
-        Int32(len(digest)),
-    )
-    pubkey_ptr.free()
-    der_ptr.free()
-    digest_ptr.free()
+    var result = crypto.verify_ecdsa_der_bytes(pubkey, der, digest)
     if result == 0:
         return True
     if result == 1:
@@ -3586,6 +3703,31 @@ def verify_ecdsa_signature_for_mode_cached(
     witness_amount_sats: Int64,
     ref precompute: SighashPrecompute,
 ) raises -> Bool:
+    var crypto = NativeCrypto(shim_path)
+    return verify_ecdsa_signature_for_mode_cached_with_crypto(
+        crypto,
+        signature,
+        pubkey,
+        tx,
+        input_index,
+        script_code,
+        witness_v0,
+        witness_amount_sats,
+        precompute,
+    )
+
+
+def verify_ecdsa_signature_for_mode_cached_with_crypto(
+    ref crypto: NativeCrypto,
+    ref signature: List[UInt8],
+    ref pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    witness_v0: Bool,
+    witness_amount_sats: Int64,
+    ref precompute: SighashPrecompute,
+) raises -> Bool:
     if len(signature) == 0:
         return False
     var base_type = Int(signature[len(signature) - 1]) & 0x1F
@@ -3595,27 +3737,7 @@ def verify_ecdsa_signature_for_mode_cached(
     var digest = signature_digest_for_mode_cached(
         tx, input_index, script_code, signature, witness_v0, witness_amount_sats, precompute
     )
-    var native = OwnedDLHandle(shim_path)
-    var pubkey_ptr = alloc[UInt8](len(pubkey))
-    var der_ptr = alloc[UInt8](len(der))
-    var digest_ptr = alloc[UInt8](len(digest))
-    for i in range(len(pubkey)):
-        pubkey_ptr[i] = pubkey[i]
-    for i in range(len(der)):
-        der_ptr[i] = der[i]
-    for i in range(len(digest)):
-        digest_ptr[i] = digest[i]
-    var result = native.call["mojobitnode_verify_ecdsa_der_bytes_len", Int32](
-        pubkey_ptr,
-        Int32(len(pubkey)),
-        der_ptr,
-        Int32(len(der)),
-        digest_ptr,
-        Int32(len(digest)),
-    )
-    pubkey_ptr.free()
-    der_ptr.free()
-    digest_ptr.free()
+    var result = crypto.verify_ecdsa_der_bytes(pubkey, der, digest)
     if result == 0:
         return True
     if result == 1:
@@ -3625,6 +3747,29 @@ def verify_ecdsa_signature_for_mode_cached(
 
 def verify_schnorr_signature(
     shim_path: String,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref tapleaf_digest_value: List[UInt8],
+    codeseparator_pos: Int,
+) raises -> Bool:
+    var crypto = NativeCrypto(shim_path)
+    return verify_schnorr_signature_with_crypto(
+        crypto,
+        signature,
+        xonly_pubkey,
+        tx,
+        input_index,
+        spent_prevouts,
+        tapleaf_digest_value,
+        codeseparator_pos,
+    )
+
+
+def verify_schnorr_signature_with_crypto(
+    ref crypto: NativeCrypto,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -3649,27 +3794,7 @@ def verify_schnorr_signature(
     if len(xonly_pubkey) != 32:
         raise Error("invalid x-only pubkey length")
     var digest = taproot_signature_hash(tx, input_index, spent_prevouts, hash_type, tapleaf_digest_value, codeseparator_pos)
-    var native = OwnedDLHandle(shim_path)
-    var pubkey_ptr = alloc[UInt8](len(xonly_pubkey))
-    var sig_ptr = alloc[UInt8](len(sig64))
-    var digest_ptr = alloc[UInt8](len(digest))
-    for i in range(len(xonly_pubkey)):
-        pubkey_ptr[i] = xonly_pubkey[i]
-    for i in range(len(sig64)):
-        sig_ptr[i] = sig64[i]
-    for i in range(len(digest)):
-        digest_ptr[i] = digest[i]
-    var result = native.call["mojobitnode_verify_schnorr_bytes_len", Int32](
-        pubkey_ptr,
-        Int32(len(xonly_pubkey)),
-        sig_ptr,
-        Int32(len(sig64)),
-        digest_ptr,
-        Int32(len(digest)),
-    )
-    pubkey_ptr.free()
-    sig_ptr.free()
-    digest_ptr.free()
+    var result = crypto.verify_schnorr_bytes(xonly_pubkey, sig64, digest)
     if result == 0:
         return True
     if result == 1:
@@ -3679,6 +3804,31 @@ def verify_schnorr_signature(
 
 def verify_schnorr_signature_cached(
     shim_path: String,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref tapleaf_digest_value: List[UInt8],
+    codeseparator_pos: Int,
+    ref precompute: SighashPrecompute,
+) raises -> Bool:
+    var crypto = NativeCrypto(shim_path)
+    return verify_schnorr_signature_cached_with_crypto(
+        crypto,
+        signature,
+        xonly_pubkey,
+        tx,
+        input_index,
+        spent_prevouts,
+        tapleaf_digest_value,
+        codeseparator_pos,
+        precompute,
+    )
+
+
+def verify_schnorr_signature_cached_with_crypto(
+    ref crypto: NativeCrypto,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -3706,27 +3856,7 @@ def verify_schnorr_signature_cached(
     var digest = taproot_signature_hash_cached(
         tx, input_index, spent_prevouts, hash_type, tapleaf_digest_value, codeseparator_pos, precompute
     )
-    var native = OwnedDLHandle(shim_path)
-    var pubkey_ptr = alloc[UInt8](len(xonly_pubkey))
-    var sig_ptr = alloc[UInt8](len(sig64))
-    var digest_ptr = alloc[UInt8](len(digest))
-    for i in range(len(xonly_pubkey)):
-        pubkey_ptr[i] = xonly_pubkey[i]
-    for i in range(len(sig64)):
-        sig_ptr[i] = sig64[i]
-    for i in range(len(digest)):
-        digest_ptr[i] = digest[i]
-    var result = native.call["mojobitnode_verify_schnorr_bytes_len", Int32](
-        pubkey_ptr,
-        Int32(len(xonly_pubkey)),
-        sig_ptr,
-        Int32(len(sig64)),
-        digest_ptr,
-        Int32(len(digest)),
-    )
-    pubkey_ptr.free()
-    sig_ptr.free()
-    digest_ptr.free()
+    var result = crypto.verify_schnorr_bytes(xonly_pubkey, sig64, digest)
     if result == 0:
         return True
     if result == 1:
@@ -3736,6 +3866,20 @@ def verify_schnorr_signature_cached(
 
 def verify_schnorr_key_path_signature(
     shim_path: String,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+) raises -> Bool:
+    var crypto = NativeCrypto(shim_path)
+    return verify_schnorr_key_path_signature_with_crypto(
+        crypto, signature, xonly_pubkey, tx, input_index, spent_prevouts
+    )
+
+
+def verify_schnorr_key_path_signature_with_crypto(
+    ref crypto: NativeCrypto,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -3758,27 +3902,7 @@ def verify_schnorr_key_path_signature(
     if len(xonly_pubkey) != 32:
         raise Error("invalid x-only pubkey length")
     var digest = taproot_key_path_signature_hash(tx, input_index, spent_prevouts, hash_type)
-    var native = OwnedDLHandle(shim_path)
-    var pubkey_ptr = alloc[UInt8](len(xonly_pubkey))
-    var sig_ptr = alloc[UInt8](len(sig64))
-    var digest_ptr = alloc[UInt8](len(digest))
-    for i in range(len(xonly_pubkey)):
-        pubkey_ptr[i] = xonly_pubkey[i]
-    for i in range(len(sig64)):
-        sig_ptr[i] = sig64[i]
-    for i in range(len(digest)):
-        digest_ptr[i] = digest[i]
-    var result = native.call["mojobitnode_verify_schnorr_bytes_len", Int32](
-        pubkey_ptr,
-        Int32(len(xonly_pubkey)),
-        sig_ptr,
-        Int32(len(sig64)),
-        digest_ptr,
-        Int32(len(digest)),
-    )
-    pubkey_ptr.free()
-    sig_ptr.free()
-    digest_ptr.free()
+    var result = crypto.verify_schnorr_bytes(xonly_pubkey, sig64, digest)
     if result == 0:
         return True
     if result == 1:
@@ -3788,6 +3912,21 @@ def verify_schnorr_key_path_signature(
 
 def verify_schnorr_key_path_signature_cached(
     shim_path: String,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref precompute: SighashPrecompute,
+) raises -> Bool:
+    var crypto = NativeCrypto(shim_path)
+    return verify_schnorr_key_path_signature_cached_with_crypto(
+        crypto, signature, xonly_pubkey, tx, input_index, spent_prevouts, precompute
+    )
+
+
+def verify_schnorr_key_path_signature_cached_with_crypto(
+    ref crypto: NativeCrypto,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -3811,27 +3950,7 @@ def verify_schnorr_key_path_signature_cached(
     if len(xonly_pubkey) != 32:
         raise Error("invalid x-only pubkey length")
     var digest = taproot_key_path_signature_hash_cached(tx, input_index, spent_prevouts, hash_type, precompute)
-    var native = OwnedDLHandle(shim_path)
-    var pubkey_ptr = alloc[UInt8](len(xonly_pubkey))
-    var sig_ptr = alloc[UInt8](len(sig64))
-    var digest_ptr = alloc[UInt8](len(digest))
-    for i in range(len(xonly_pubkey)):
-        pubkey_ptr[i] = xonly_pubkey[i]
-    for i in range(len(sig64)):
-        sig_ptr[i] = sig64[i]
-    for i in range(len(digest)):
-        digest_ptr[i] = digest[i]
-    var result = native.call["mojobitnode_verify_schnorr_bytes_len", Int32](
-        pubkey_ptr,
-        Int32(len(xonly_pubkey)),
-        sig_ptr,
-        Int32(len(sig64)),
-        digest_ptr,
-        Int32(len(digest)),
-    )
-    pubkey_ptr.free()
-    sig_ptr.free()
-    digest_ptr.free()
+    var result = crypto.verify_schnorr_bytes(xonly_pubkey, sig64, digest)
     if result == 0:
         return True
     if result == 1:
@@ -3846,29 +3965,19 @@ def verify_taproot_tweak(
     ref expected_xonly: List[UInt8],
     expected_parity: Int,
 ) raises -> Bool:
+    var crypto = NativeCrypto(shim_path)
+    return verify_taproot_tweak_with_crypto(crypto, internal_xonly, merkle_root, expected_xonly, expected_parity)
+
+
+def verify_taproot_tweak_with_crypto(
+    ref crypto: NativeCrypto,
+    ref internal_xonly: List[UInt8],
+    ref merkle_root: List[UInt8],
+    ref expected_xonly: List[UInt8],
+    expected_parity: Int,
+) raises -> Bool:
     var tweak = taproot_tweak_hash(internal_xonly, merkle_root)
-    var native = OwnedDLHandle(shim_path)
-    var internal_ptr = alloc[UInt8](len(internal_xonly))
-    var tweak_ptr = alloc[UInt8](len(tweak))
-    var expected_ptr = alloc[UInt8](len(expected_xonly))
-    for i in range(len(internal_xonly)):
-        internal_ptr[i] = internal_xonly[i]
-    for i in range(len(tweak)):
-        tweak_ptr[i] = tweak[i]
-    for i in range(len(expected_xonly)):
-        expected_ptr[i] = expected_xonly[i]
-    var result = native.call["mojobitnode_verify_taproot_tweak_precomputed_bytes_len", Int32](
-        internal_ptr,
-        Int32(len(internal_xonly)),
-        tweak_ptr,
-        Int32(len(tweak)),
-        expected_ptr,
-        Int32(len(expected_xonly)),
-        Int32(expected_parity),
-    )
-    internal_ptr.free()
-    tweak_ptr.free()
-    expected_ptr.free()
+    var result = crypto.verify_taproot_tweak_precomputed(internal_xonly, tweak, expected_xonly, expected_parity)
     if result == 0:
         return True
     if result == 1:
@@ -3884,6 +3993,29 @@ def evaluate_tapscript(
     ref spent_prevouts: List[TaprootPrevout],
     ref tapleaf_digest_value: List[UInt8],
     shim_path: String,
+) raises -> Bool:
+    var crypto = NativeCrypto(shim_path)
+    return evaluate_tapscript_with_crypto(
+        script,
+        stack^,
+        tx,
+        input_index,
+        spent_prevouts,
+        tapleaf_digest_value,
+        shim_path,
+        crypto,
+    )
+
+
+def evaluate_tapscript_with_crypto(
+    ref script: List[UInt8],
+    var stack: List[ScriptStackItem],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref tapleaf_digest_value: List[UInt8],
+    shim_path: String,
+    ref crypto: NativeCrypto,
 ) raises -> Bool:
     var offset = 0
     var instruction_pos = 0
@@ -4177,8 +4309,8 @@ def evaluate_tapscript(
             if len(pubkey.data) != 32:
                 valid = len(signature.data) != 0
             elif len(signature.data) != 0:
-                valid = verify_schnorr_signature_cached(
-                    shim_path,
+                valid = verify_schnorr_signature_cached_with_crypto(
+                    crypto,
                     signature.data,
                     pubkey.data,
                     tx,
@@ -4202,8 +4334,8 @@ def evaluate_tapscript(
             if len(pubkey.data) != 32:
                 valid = len(signature.data) != 0
             elif len(signature.data) != 0:
-                valid = verify_schnorr_signature_cached(
-                    shim_path,
+                valid = verify_schnorr_signature_cached_with_crypto(
+                    crypto,
                     signature.data,
                     pubkey.data,
                     tx,

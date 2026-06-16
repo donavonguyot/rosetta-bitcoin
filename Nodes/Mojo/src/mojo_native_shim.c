@@ -12,6 +12,7 @@
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -89,6 +90,26 @@ static atomic_llong crypto_schnorr_ms = 0;
 static atomic_llong crypto_taproot_tweak_calls = 0;
 static atomic_llong crypto_taproot_tweak_ms = 0;
 
+static pthread_once_t crypto_profile_once = PTHREAD_ONCE_INIT;
+static bool crypto_profile_enabled = false;
+
+static void init_crypto_profile(void) {
+  const char *value = getenv("MOJOBITNODE_PROFILE_CRYPTO");
+  crypto_profile_enabled =
+      value && (strcmp(value, "1") == 0 || strcmp(value, "true") == 0 || strcmp(value, "TRUE") == 0);
+}
+
+static bool should_profile_crypto(void) {
+  pthread_once(&crypto_profile_once, init_crypto_profile);
+  return crypto_profile_enabled;
+}
+
+static void record_crypto_ms(atomic_llong *metric, int64_t started) {
+  if (started != 0) {
+    atomic_fetch_add(metric, monotonic_ms() - started);
+  }
+}
+
 int32_t mojobitnode_crypto_metrics_reset(void) {
   atomic_store(&crypto_ecdsa_calls, 0);
   atomic_store(&crypto_ecdsa_ms, 0);
@@ -158,16 +179,16 @@ static int32_t verify_ecdsa_der_bytes(const uint8_t *pubkey_bytes, size_t pubkey
 int32_t mojobitnode_verify_ecdsa_der_bytes_len(const uint8_t *pubkey_bytes, int32_t pubkey_len,
                                                const uint8_t *signature_bytes, int32_t signature_len,
                                                const uint8_t *msg_hash_bytes, int32_t msg_hash_len) {
-  int64_t started = monotonic_ms();
+  int64_t started = should_profile_crypto() ? monotonic_ms() : 0;
   atomic_fetch_add(&crypto_ecdsa_calls, 1);
   if (!pubkey_bytes || !signature_bytes || !msg_hash_bytes || (pubkey_len != 33 && pubkey_len != 65) ||
       signature_len <= 0 || signature_len > 72 || msg_hash_len != 32) {
-    atomic_fetch_add(&crypto_ecdsa_ms, monotonic_ms() - started);
+    record_crypto_ms(&crypto_ecdsa_ms, started);
     return CRYPTO_RESULT_MALFORMED_INPUT;
   }
   int32_t result = verify_ecdsa_der_bytes(pubkey_bytes, (size_t)pubkey_len, signature_bytes, (size_t)signature_len,
                                           msg_hash_bytes);
-  atomic_fetch_add(&crypto_ecdsa_ms, monotonic_ms() - started);
+  record_crypto_ms(&crypto_ecdsa_ms, started);
   return result;
 }
 
@@ -255,17 +276,17 @@ int32_t mojobitnode_verify_schnorr_hex_len(const char *xonly_hex, int32_t xonly_
 int32_t mojobitnode_verify_schnorr_bytes_len(const uint8_t *xonly_bytes, int32_t xonly_len,
                                              const uint8_t *signature_bytes, int32_t signature_len,
                                              const uint8_t *msg_hash_bytes, int32_t msg_hash_len) {
-  int64_t started = monotonic_ms();
+  int64_t started = should_profile_crypto() ? monotonic_ms() : 0;
   atomic_fetch_add(&crypto_schnorr_calls, 1);
   if (!xonly_bytes || !signature_bytes || !msg_hash_bytes || xonly_len != 32 || signature_len != 64 ||
       msg_hash_len != 32) {
-    atomic_fetch_add(&crypto_schnorr_ms, monotonic_ms() - started);
+    record_crypto_ms(&crypto_schnorr_ms, started);
     return CRYPTO_RESULT_MALFORMED_INPUT;
   }
 
   secp256k1_context *ctx = shared_verify_context();
   if (!ctx) {
-    atomic_fetch_add(&crypto_schnorr_ms, monotonic_ms() - started);
+    record_crypto_ms(&crypto_schnorr_ms, started);
     return CRYPTO_RESULT_UNKNOWN;
   }
   secp256k1_xonly_pubkey pubkey;
@@ -275,7 +296,7 @@ int32_t mojobitnode_verify_schnorr_bytes_len(const uint8_t *xonly_bytes, int32_t
                  ? CRYPTO_RESULT_VALID
                  : CRYPTO_RESULT_CONSENSUS_INVALID;
   }
-  atomic_fetch_add(&crypto_schnorr_ms, monotonic_ms() - started);
+  record_crypto_ms(&crypto_schnorr_ms, started);
   return result;
 }
 
@@ -286,17 +307,17 @@ int32_t mojobitnode_verify_taproot_tweak_precomputed_bytes_len(const uint8_t *in
                                                                const uint8_t *expected_xonly,
                                                                int32_t expected_xonly_len,
                                                                int32_t expected_parity) {
-  int64_t started = monotonic_ms();
+  int64_t started = should_profile_crypto() ? monotonic_ms() : 0;
   atomic_fetch_add(&crypto_taproot_tweak_calls, 1);
   if (!internal_xonly || !tweak || !expected_xonly || internal_xonly_len != 32 || tweak_len != 32 ||
       expected_xonly_len != 32 || (expected_parity != 0 && expected_parity != 1)) {
-    atomic_fetch_add(&crypto_taproot_tweak_ms, monotonic_ms() - started);
+    record_crypto_ms(&crypto_taproot_tweak_ms, started);
     return CRYPTO_RESULT_MALFORMED_INPUT;
   }
 
   secp256k1_context *ctx = shared_verify_context();
   if (!ctx) {
-    atomic_fetch_add(&crypto_taproot_tweak_ms, monotonic_ms() - started);
+    record_crypto_ms(&crypto_taproot_tweak_ms, started);
     return CRYPTO_RESULT_UNKNOWN;
   }
 
@@ -314,7 +335,7 @@ int32_t mojobitnode_verify_taproot_tweak_precomputed_bytes_len(const uint8_t *in
                  ? CRYPTO_RESULT_VALID
                  : CRYPTO_RESULT_CONSENSUS_INVALID;
   }
-  atomic_fetch_add(&crypto_taproot_tweak_ms, monotonic_ms() - started);
+  record_crypto_ms(&crypto_taproot_tweak_ms, started);
   return result;
 }
 

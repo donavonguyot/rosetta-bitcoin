@@ -6,6 +6,7 @@ from std.os import getenv
 
 from script_corpus_foundation import (
     ByteCursor,
+    NativeCrypto,
     SighashPrecompute,
     ScriptStackItem,
     TaprootPrevout,
@@ -24,7 +25,9 @@ from script_corpus_foundation import (
     build_sighash_precompute_with_taproot,
     clone_bytes,
     evaluate_tapscript,
+    evaluate_tapscript_with_crypto,
     evaluate_legacy_script,
+    evaluate_legacy_script_with_crypto,
     hash160,
     hash256,
     is_p2pkh_script_pubkey,
@@ -42,10 +45,13 @@ from script_corpus_foundation import (
     tx_witness_item,
     verify_ecdsa_signature,
     verify_ecdsa_signature_for_mode_cached,
+    verify_ecdsa_signature_for_mode_cached_with_crypto,
     verify_ecdsa_signature_for_mode,
     verify_schnorr_key_path_signature_cached,
+    verify_schnorr_key_path_signature_cached_with_crypto,
     verify_schnorr_key_path_signature,
     verify_taproot_tweak,
+    verify_taproot_tweak_with_crypto,
 )
 
 
@@ -928,6 +934,7 @@ def is_spendable_output(ref output: TxOutput) -> Bool:
 
 def verify_p2wpkh_spend(
     shim_path: String,
+    ref crypto: NativeCrypto,
     ref tx: Transaction,
     input_index: Int,
     ref prevout: Utxo,
@@ -948,20 +955,21 @@ def verify_p2wpkh_spend(
     append_bytes(script_code, expected)
     script_code.append(UInt8(0x88))
     script_code.append(UInt8(0xAC))
-    return verify_ecdsa_signature_for_mode_cached(
-        shim_path, sig.data, pubkey.data, tx, input_index, script_code, True, prevout.value_sats, sighash_precompute
+    return verify_ecdsa_signature_for_mode_cached_with_crypto(
+        crypto, sig.data, pubkey.data, tx, input_index, script_code, True, prevout.value_sats, sighash_precompute
     )
 
 
 def verify_witness_v0_spend(
     shim_path: String,
+    ref crypto: NativeCrypto,
     ref tx: Transaction,
     input_index: Int,
     ref prevout: Utxo,
     ref sighash_precompute: SighashPrecompute,
-) raises -> Bool:
+    ) raises -> Bool:
     if len(prevout.script_pubkey) == 22 and prevout.script_pubkey[0] == UInt8(0) and prevout.script_pubkey[1] == UInt8(0x14):
-        return verify_p2wpkh_spend(shim_path, tx, input_index, prevout, sighash_precompute)
+        return verify_p2wpkh_spend(shim_path, crypto, tx, input_index, prevout, sighash_precompute)
     if is_p2wsh_script_pubkey(prevout.script_pubkey):
         var witness_count = tx_witness_count(tx, input_index)
         if witness_count < 1:
@@ -975,7 +983,9 @@ def verify_witness_v0_spend(
         for i in range(witness_count - 1):
             var item = tx_witness_item(tx, input_index, i)
             stack.append(item^)
-        return evaluate_legacy_script(script_item.data, stack^, tx, input_index, shim_path, True, True, prevout.value_sats)
+        return evaluate_legacy_script_with_crypto(
+            script_item.data, stack^, tx, input_index, shim_path, crypto, True, True, prevout.value_sats
+        )
     raise Error("unsupported witness v0 program")
 
 
@@ -996,6 +1006,7 @@ def taproot_prevouts_from_utxos(ref prevouts: List[Utxo]) -> List[TaprootPrevout
 
 def verify_taproot_spend(
     shim_path: String,
+    ref crypto: NativeCrypto,
     ref tx: Transaction,
     input_index: Int,
     ref all_prevouts: List[Utxo],
@@ -1021,8 +1032,8 @@ def verify_taproot_spend(
     if effective_count == 1:
         var signature = tx_witness_item(tx, input_index, 0)
         var xonly = slice_bytes(prevout.script_pubkey, 2, 34)
-        return verify_schnorr_key_path_signature_cached(
-            shim_path, signature.data, xonly, tx, input_index, spent_prevouts, sighash_precompute
+        return verify_schnorr_key_path_signature_cached_with_crypto(
+            crypto, signature.data, xonly, tx, input_index, spent_prevouts, sighash_precompute
         )
     if effective_count < 2:
         return False
@@ -1040,7 +1051,7 @@ def verify_taproot_spend(
     var internal_xonly = slice_bytes(control_item.data, 1, 33)
     var expected_xonly = slice_bytes(prevout.script_pubkey, 2, 34)
     var parity = Int(control_item.data[0] & UInt8(1))
-    if not verify_taproot_tweak(shim_path, internal_xonly, merkle_root, expected_xonly, parity):
+    if not verify_taproot_tweak_with_crypto(crypto, internal_xonly, merkle_root, expected_xonly, parity):
         return False
     if leaf_version != UInt8(0xC0):
         return True
@@ -1048,11 +1059,14 @@ def verify_taproot_spend(
     for i in range(effective_count - 2):
         var item = tx_witness_item(tx, input_index, i)
         stack.append(item^)
-    return evaluate_tapscript(script_item.data, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path)
+    return evaluate_tapscript_with_crypto(
+        script_item.data, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path, crypto
+    )
 
 
 def verify_spend(
     shim_path: String,
+    ref crypto: NativeCrypto,
     ref tx: Transaction,
     input_index: Int,
     ref all_prevouts: List[Utxo],
@@ -1070,8 +1084,8 @@ def verify_spend(
         var expected_hash = slice_bytes(prevout.script_pubkey, 3, 23)
         if not bytes_equal(actual_hash, expected_hash):
             return False
-        return verify_ecdsa_signature_for_mode_cached(
-            shim_path,
+        return verify_ecdsa_signature_for_mode_cached_with_crypto(
+            crypto,
             signature.data,
             pubkey.data,
             tx,
@@ -1096,18 +1110,18 @@ def verify_spend(
             nested.value_sats = prevout.value_sats
             nested.coinbase = prevout.coinbase
             nested.script_pubkey = redeem_script^
-            return verify_witness_v0_spend(shim_path, tx, input_index, nested, sighash_precompute)
+            return verify_witness_v0_spend(shim_path, crypto, tx, input_index, nested, sighash_precompute)
         var stack = List[ScriptStackItem]()
         for i in range(len(pushes) - 1):
             var item = pushes[i].copy()
             stack.append(item^)
-        return evaluate_legacy_script(redeem_script, stack^, tx, input_index, shim_path, True)
+        return evaluate_legacy_script_with_crypto(redeem_script, stack^, tx, input_index, shim_path, crypto, True)
     if len(prevout.script_pubkey) >= 2 and prevout.script_pubkey[0] == UInt8(0):
-        return verify_witness_v0_spend(shim_path, tx, input_index, prevout, sighash_precompute)
+        return verify_witness_v0_spend(shim_path, crypto, tx, input_index, prevout, sighash_precompute)
     if is_p2tr_script_pubkey(prevout.script_pubkey):
-        return verify_taproot_spend(shim_path, tx, input_index, all_prevouts, spent_prevouts, sighash_precompute)
+        return verify_taproot_spend(shim_path, crypto, tx, input_index, all_prevouts, spent_prevouts, sighash_precompute)
     var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
-    return evaluate_legacy_script(prevout.script_pubkey, stack^, tx, input_index, shim_path, True)
+    return evaluate_legacy_script_with_crypto(prevout.script_pubkey, stack^, tx, input_index, shim_path, crypto, True)
 
 
 def script_verification_failure_message(
@@ -1165,6 +1179,7 @@ def first_failed_script_result_index(ref results: List[ScriptVerifyResult]) -> I
 
 def verify_script_job(
     shim_path: String,
+    ref crypto: NativeCrypto,
     ref job: ScriptVerifyJob,
     ref contexts: List[ScriptVerifyContext],
 ) -> ScriptVerifyResult:
@@ -1174,6 +1189,7 @@ def verify_script_job(
             raise Error("script job context index out of range")
         var verified = verify_spend(
             shim_path,
+            crypto,
             contexts[job.context_index].tx,
             job.input_index,
             contexts[job.context_index].tx_prevouts,
@@ -1207,10 +1223,12 @@ def verify_script_jobs_sequential(
     stats.threads = 1
     var started = native.now_ms()
     var results = List[ScriptVerifyResult]()
+    var crypto = NativeCrypto(shim_path)
     for i in range(len(jobs)):
         var job_started = native.now_ms()
         var result = verify_script_job(
             shim_path,
+            crypto,
             jobs[i],
             contexts,
         )
@@ -1256,12 +1274,15 @@ def verify_script_jobs_parallel_diagnostic(
         var result = script_verify_result_for_job(jobs[i])
         results.append(result^)
 
+    var crypto = NativeCrypto(shim_path)
+
     @parameter
     def verify_one(index: Int) capturing:
         # The callback must not mutate chainstate or raise across parallelize.
         # Each worker owns exactly one result slot.
         var result = verify_script_job(
             shim_path,
+            crypto,
             jobs[index],
             contexts,
         )

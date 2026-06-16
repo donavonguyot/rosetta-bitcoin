@@ -17,6 +17,9 @@ native prerequisites a future port would need?
 - Native calls go through owned C shims, not Python delegation:
   `libsecp256k1` primitives, RocksDB primitives, and non-consensus POSIX
   runtime glue for sockets/time/file writes.
+- Live proof script verification reuses a Mojo-owned native crypto handle across
+  the block-level job batch; compatibility fixture helpers may still construct
+  one-shot handles for small diagnostic runs.
 - Native `libsecp256k1` vector checks.
 - RocksDB runtime truth smoke against `chainstate-rocksdb`.
 - Project-shaped status JSON.
@@ -123,6 +126,12 @@ creates, undo, block storage, and metadata are still staged by Mojo and
 committed through one RocksDB batch only after script verification passes.
 Project evidence promotion remains a later explicit step after a fresh artifact
 self-proves positive parallel batch metrics and passes the benchmark contract.
+Native crypto call counters are always emitted, but per-call crypto timing is
+profiling-only to keep benchmark hot paths lean. Set
+`MOJOBITNODE_PROFILE_CRYPTO=1` when a run specifically needs `ecdsa_ms`,
+`schnorr_ms`, `taproot_tweak_ms`, or `native_bridge_ms`; default benchmark
+proofs should treat those timing fields as zero and use `script_verify` /
+`script_wall_ms` for comparable script cost.
 
 Use the native-boundary audit targets before trusting new proof output. They
 fail on direct SSL-family crypto linkage or unclassified exported
