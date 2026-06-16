@@ -22,6 +22,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Require diagnostic timing fields for attempted pure-shadow rows",
     )
+    parser.add_argument(
+        "--max-shadow-row-ms",
+        type=int,
+        default=None,
+        help="Reject artifacts with any attempted pure-shadow row above this duration",
+    )
     return parser.parse_args()
 
 
@@ -33,7 +39,12 @@ def nonnegative_int(value: Any) -> bool:
     return isinstance(value, int) and value >= 0 and not isinstance(value, bool)
 
 
-def validate(path: Path, *, require_shadow_timing: bool = False) -> dict[str, Any]:
+def validate(
+    path: Path,
+    *,
+    require_shadow_timing: bool = False,
+    max_shadow_row_ms: int | None = None,
+) -> dict[str, Any]:
     errors: list[str] = []
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -106,6 +117,8 @@ def validate(path: Path, *, require_shadow_timing: bool = False) -> dict[str, An
                 if row.get("shadow_supported") is True:
                     supported_timing_total += duration
                 max_row_ms = max(max_row_ms, duration)
+                if max_shadow_row_ms is not None and duration > max_shadow_row_ms:
+                    errors.append(f"results[{index}] shadow_duration_ms exceeds {max_shadow_row_ms}")
 
     if payload.get("shadow_supported") != supported:
         errors.append("shadow_supported count mismatch")
@@ -149,7 +162,14 @@ def validate(path: Path, *, require_shadow_timing: bool = False) -> dict[str, An
 
 def main() -> int:
     args = parse_args()
-    results = [validate(Path(path), require_shadow_timing=args.require_shadow_timing) for path in args.artifacts]
+    results = [
+        validate(
+            Path(path),
+            require_shadow_timing=args.require_shadow_timing,
+            max_shadow_row_ms=args.max_shadow_row_ms,
+        )
+        for path in args.artifacts
+    ]
     if args.json:
         print(json.dumps(results, indent=2, sort_keys=True))
     else:

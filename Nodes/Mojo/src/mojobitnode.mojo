@@ -76,8 +76,8 @@ def diagnostic_failure_stage(message: String) -> String:
 
 def pure_shadow_fixture_enabled(fixture_id: String) -> Bool:
     # Keep pure-shadow corpus coverage operationally bounded. These rows prove
-    # the injected pure backend through shared Taproot evaluators while broader
-    # fixture coverage waits on runtime evidence.
+    # the injected pure backend through shared Taproot evaluators. The very
+    # large Taproot fixtures remain disabled until a dedicated scaling pass.
     return (
         fixture_id == "scripts.p2tr_tapscript_numequal_32712"
         or fixture_id == "scripts.p2tr_scriptpath_44295"
@@ -85,9 +85,14 @@ def pure_shadow_fixture_enabled(fixture_id: String) -> Bool:
         or fixture_id == "scripts.p2tr_tapscript_sha256_52024"
         or fixture_id == "scripts.p2tr_tapscript_size_52497"
         or fixture_id == "scripts.p2tr_tapscript_hash256_67562"
+        or fixture_id == "scripts.p2tr_tapscript_70924"
+        or fixture_id == "scripts.p2tr_tapscript_78841"
+        or fixture_id == "scripts.p2tr_tapscript_82856"
         or fixture_id == "scripts.p2tr_tapscript_87214"
         or fixture_id == "scripts.p2tr_tapscript_89632"
+        or fixture_id == "scripts.p2tr_tapscript_100372"
         or fixture_id == "scripts.p2tr_tapscript_108508"
+        or fixture_id == "scripts.p2tr_tapscript_133634"
     )
 
 
