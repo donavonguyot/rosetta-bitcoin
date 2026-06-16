@@ -71,11 +71,10 @@ ECDSA/DER is enabled only for focused diagnostic vectors, the three timing-gated
 P2PKH shadow rows: `scripts.p2pkh_sighash_single_38010`,
 `scripts.p2pkh_61174`, and `scripts.p2pkh_107951`, the first bare legacy and
 bare multisig rows: `scripts.bare_legacy_118555` and
-`scripts.bare_multisig_27840`, and the 10 simple P2SH legacy rows. P2PKH shadow
-rows emit ECDSA sighash, verify, total, and signature-count timing fields.
-SegWit v0 ECDSA corpus shapes remain unsupported until a later measured slice
-proves zero disagreements and the 5000ms per-row shadow guardrail. The pure
-backend must not fall back to native.
+`scripts.bare_multisig_27840`, the 10 simple P2SH legacy rows, and all SegWit
+v0/P2WSH rows. P2PKH shadow rows emit ECDSA sighash, verify, total, and
+signature-count timing fields. Full corpus shadow support remains diagnostic
+and native-first; the pure backend must not fall back to native.
 
 The live `local-reference-proof --shadow-crypto` path follows the same boundary:
 native validation remains the block-acceptance oracle, while pure Mojo crypto

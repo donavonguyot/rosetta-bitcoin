@@ -35,6 +35,7 @@ from script_corpus_foundation import (
     evaluate_taproot_fixture_diagnostic_with_crypto,
     evaluate_p2pkh_fixture_with_crypto_timed,
     evaluate_witness_v0_fixture,
+    evaluate_witness_v0_fixture_with_crypto,
     hex_text_to_bytes,
     is_bare_legacy_diagnostic_fixture,
     is_p2pkh_diagnostic_fixture,
@@ -111,6 +112,19 @@ def pure_shadow_fixture_enabled(fixture_id: String) -> Bool:
         or fixture_id == "scripts.p2sh_108972"
         or fixture_id == "scripts.p2sh_116040"
         or fixture_id == "scripts.p2sh_abs_132361"
+        or fixture_id == "scripts.p2wsh_op1_only_31842"
+        or fixture_id == "scripts.p2wsh_cltv_32868"
+        or fixture_id == "scripts.p2sh_p2wsh_op1_only_33500"
+        or fixture_id == "scripts.p2wsh_size_lessthan_46779"
+        or fixture_id == "scripts.p2wsh_2drop_54287"
+        or fixture_id == "scripts.p2wsh_ifdup_csv_54297"
+        or fixture_id == "scripts.p2wsh_mul_58173"
+        or fixture_id == "scripts.p2wsh_rot_62754"
+        or fixture_id == "scripts.p2wsh_altstack_66241"
+        or fixture_id == "scripts.p2wsh_within_98025"
+        or fixture_id == "scripts.p2wsh_98631"
+        or fixture_id == "scripts.p2wsh_nip_98631"
+        or fixture_id == "scripts.p2wsh_booland_136369"
         or fixture_id == "scripts.p2tr_tapscript_numequal_32712"
         or fixture_id == "scripts.p2tr_scriptpath_44295"
         or fixture_id == "scripts.p2tr_scriptpath_46599"
@@ -782,6 +796,7 @@ def main() raises:
                     or is_p2pkh_diagnostic_fixture(eval_id)
                     or is_bare_legacy_diagnostic_fixture(eval_id)
                     or is_simple_p2sh_diagnostic_fixture(eval_id)
+                    or is_witness_v0_diagnostic_fixture(eval_id)
                     or eval_id == "scripts.bare_multisig_27840"
                 ):
                     if not pure_shadow_fixture_enabled(eval_id):
@@ -828,6 +843,10 @@ def main() raises:
                                     )
                                 elif is_simple_p2sh_diagnostic_fixture(eval_id):
                                     pure_passed = evaluate_p2sh_fixture_with_crypto(
+                                        manifest_path, eval_id, shim_path, pure_crypto
+                                    )
+                                elif is_witness_v0_diagnostic_fixture(eval_id):
+                                    pure_passed = evaluate_witness_v0_fixture_with_crypto(
                                         manifest_path, eval_id, shim_path, pure_crypto
                                     )
                                 else:

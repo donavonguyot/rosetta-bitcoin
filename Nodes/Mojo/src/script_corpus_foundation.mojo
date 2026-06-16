@@ -2136,6 +2136,13 @@ def evaluate_p2pkh_fixture_with_crypto_timed(
 
 
 def evaluate_witness_v0_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
+    return evaluate_witness_v0_fixture_with_crypto(manifest_path, fixture_id, shim_path, crypto)
+
+
+def evaluate_witness_v0_fixture_with_crypto(
+    manifest_path: String, fixture_id: String, shim_path: String, ref crypto: CryptoBackend
+) raises -> Bool:
     if not manifest_contains_fixture(manifest_path, fixture_id):
         raise Error("fixture id not present in Shared manifest")
     var stem = _fixture_stem(fixture_id)
@@ -2172,12 +2179,13 @@ def evaluate_witness_v0_fixture(manifest_path: String, fixture_id: String, shim_
         var item = ScriptStackItem()
         item.data = item_bytes^
         stack.append(item^)
-    return evaluate_legacy_script(
+    return evaluate_legacy_script_with_crypto(
         witness_script,
         stack^,
         tx,
         0,
         shim_path,
+        crypto,
         True,
         True,
         _fixture_prev_amount_sats(fixture_id),

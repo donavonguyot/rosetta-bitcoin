@@ -63,11 +63,12 @@ native prerequisites a future port would need?
   `scripts.p2tr_tapscript_126975` stress rows, plus all three timing-gated
   P2PKH/ECDSA rows: `scripts.p2pkh_sighash_single_38010`,
   `scripts.p2pkh_61174`, and `scripts.p2pkh_107951`, the first legacy ECDSA
-  rows `scripts.bare_legacy_118555` and `scripts.bare_multisig_27840`, and
-  the 10 simple P2SH legacy rows. P2PKH shadow rows also report ECDSA sighash,
-  verify, total, and signature-count timing fields. SegWit v0 ECDSA shapes
-  remain unsupported until a later measured slice enables them with zero
-  disagreements and the 5000ms per-row guardrail. See
+  rows `scripts.bare_legacy_118555` and `scripts.bare_multisig_27840`, the 10
+  simple P2SH legacy rows, and all SegWit v0/P2WSH rows. P2PKH shadow rows also
+  report ECDSA sighash, verify, total, and signature-count timing fields. Full
+  corpus shadow support is diagnostic only: native remains the comparable proof
+  backend, and any future pure-only claim would need its own plan and evidence.
+  See
   `docs/LIBSECP_TRANSLATION_NOTES.md` before changing the pure secp internals.
 - `local-reference-proof --shadow-crypto` is a separate diagnostic live-chain
   replay. Native validation still determines 5k/50k proof success, while pure
@@ -89,10 +90,10 @@ The diagnostic `script-corpus-dev` surface remains available for fixture-level
 debugging. The public `script-corpus` command is the evidence surface and emits
 canonical `port.script_corpus_result.v1` JSON with Mojo-owned `45/45` coverage.
 `script-corpus --shadow-crypto` is a separate diagnostic comparator surface and
-must not be imported as canonical corpus evidence. Unsupported rows are still
-expected for SegWit v0 ECDSA-bearing fixtures; the current diagnostic ECDSA
-corpus support includes the three P2PKH rows, first bare legacy and bare
-multisig rows, and simple P2SH legacy rows.
+must not be imported as canonical corpus evidence. The current diagnostic shadow
+corpus covers all 45 fixtures with native-first comparison, zero native
+fallback, and disagreement reporting. It is still not a canonical corpus
+artifact or Project evidence claim.
 
 ## Commands
 
