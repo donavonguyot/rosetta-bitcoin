@@ -46,12 +46,16 @@ native prerequisites a future port would need?
   across `SIGHASH_ALL`, `NONE`, `SINGLE`, and `ANYONECANPAY` variants.
 - Zig-style shadow crypto is diagnostic-only. Native `libsecp256k1` remains the
   comparable proof backend; the pure Mojo backend now implements correctness-
-  first BIP340 Schnorr verification and Taproot tweak checks while leaving
-  ECDSA unsupported. `--shadow-crypto` emits a separate
+  first BIP340 Schnorr verification and Taproot tweak checks with
+  libsecp-guided fixed-limb field multiplication and Jacobian group operations,
+  while leaving ECDSA unsupported. `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
   support/unsupported rows and no native fallback. The current corpus shadow
-  slice supports `scripts.p2tr_tapscript_numequal_32712`; broader Taproot
-  shadow coverage waits on pure affine secp performance work.
+  slice supports `scripts.p2tr_tapscript_numequal_32712` and
+  `scripts.p2tr_scriptpath_44295`; broader Taproot shadow coverage waits on
+  evidence that the diagnostic pure path remains practical for larger fixture
+  sets. See `docs/LIBSECP_TRANSLATION_NOTES.md` before changing the pure secp
+  internals.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,

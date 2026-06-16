@@ -50,10 +50,12 @@ as the default/comparable lane, then records whether the pure Mojo backend
 supports each fixture without using native fallback. Its
 `port.script_corpus_shadow_crypto.v1` output belongs in Mojo-local debug paths,
 not Project current evidence. The pure backend currently supports BIP340
-Schnorr and Taproot tweak primitives, leaves ECDSA unsupported, and enables only
-the bounded `scripts.p2tr_tapscript_numequal_32712` corpus shadow row until the
-simple affine secp implementation is optimized enough for broader Taproot
-shadow coverage.
+Schnorr and Taproot tweak primitives through libsecp-guided fixed-limb field
+multiplication and Jacobian group operations, leaves ECDSA unsupported, and
+enables only the bounded `scripts.p2tr_tapscript_numequal_32712` and
+`scripts.p2tr_scriptpath_44295` corpus shadow rows until runtime evidence
+justifies broader Taproot shadow coverage. Read
+`docs/LIBSECP_TRANSLATION_NOTES.md` before changing pure secp internals.
 
 `local-reference-proof` is the bounded local Reference proof path for 5k and
 50k. It must use local Reference P2P bytes, RocksDB operational truth, native

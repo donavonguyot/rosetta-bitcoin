@@ -82,7 +82,7 @@ $(SHIM_LIB): src/mojo_native_shim.c | host-deps-check
 	  $$($(PKG_CONFIG) --cflags --libs rocksdb libsecp256k1) \
 	  -lstdc++
 
-$(MOJO_BIN): src/mojobitnode.mojo src/block_core.mojo src/script_corpus_foundation.mojo src/script_corpus_table.mojo $(MOJO_VERSION_STAMP) $(SHIM_LIB)
+$(MOJO_BIN): src/mojobitnode.mojo src/block_core.mojo src/script_corpus_foundation.mojo src/script_corpus_table.mojo src/pure_secp.mojo $(MOJO_VERSION_STAMP) $(SHIM_LIB)
 	$(MOJO) build -I src src/mojobitnode.mojo -o $(MOJO_BIN)
 
 host-build: host-deps-check $(MOJO_BIN)

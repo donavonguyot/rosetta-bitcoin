@@ -27,6 +27,19 @@ struct Point(Copyable):
         self.infinity = True
 
 
+struct JacobianPoint(Copyable):
+    var x: U256
+    var y: U256
+    var z: U256
+    var infinity: Bool
+
+    def __init__(out self):
+        self.x = U256()
+        self.y = U256()
+        self.z = U256()
+        self.infinity = True
+
+
 def pure_backend_label() -> String:
     return String("mojo-pure-secp256k1")
 
@@ -230,6 +243,9 @@ def _sub_mod(ref a: U256, ref b: U256, ref modulus: U256) -> U256:
 
 
 def _mul_mod(ref a: U256, ref b: U256, ref modulus: U256) -> U256:
+    var p = _field_p()
+    if _eq(modulus, p):
+        return _mul_mod_field_fast(a, b)
     var result = _zero()
     var addend = a.copy()
     for i in range(256):
@@ -249,6 +265,72 @@ def _pow_mod(ref base: U256, ref exponent: U256, ref modulus: U256) -> U256:
         var power_copy = power.copy()
         power = _mul_mod(power, power_copy, modulus)
     return result^
+
+
+def _mul_mod_field_fast(ref a: U256, ref b: U256) -> U256:
+    var product = List[UInt32]()
+    for _ in range(18):
+        product.append(UInt32(0))
+
+    for i in range(8):
+        var carry = UInt64(0)
+        for j in range(8):
+            var k = i + j
+            var total = UInt64(product[k]) + UInt64(a.limbs[i]) * UInt64(b.limbs[j]) + carry
+            product[k] = UInt32(total & UInt64(0xFFFFFFFF))
+            carry = total >> UInt64(32)
+        var idx = i + 8
+        while carry != UInt64(0):
+            var total = UInt64(product[idx]) + carry
+            product[idx] = UInt32(total & UInt64(0xFFFFFFFF))
+            carry = total >> UInt64(32)
+            idx += 1
+
+    return _reduce_field_product(product)
+
+
+def _normalize_u64_limbs(mut limbs: List[UInt64]):
+    for i in range(len(limbs) - 1):
+        var carry = limbs[i] >> UInt64(32)
+        limbs[i] = limbs[i] & UInt64(0xFFFFFFFF)
+        limbs[i + 1] += carry
+
+
+def _reduce_field_product(ref product: List[UInt32]) -> U256:
+    # secp256k1 field reduction uses p = 2^256 - 2^32 - 977, so
+    # every high 2^256 limb folds into one shifted limb plus 977 low limbs.
+    var limbs = List[UInt64]()
+    for i in range(24):
+        if i < len(product):
+            limbs.append(UInt64(product[i]))
+        else:
+            limbs.append(UInt64(0))
+
+    for _ in range(6):
+        _normalize_u64_limbs(limbs)
+        var moved = False
+        for k in range(8, len(limbs) - 1):
+            var high = limbs[k]
+            if high != UInt64(0):
+                limbs[k] = UInt64(0)
+                var low_index = k - 8
+                limbs[low_index] += high * UInt64(977)
+                limbs[low_index + 1] += high
+                moved = True
+        if not moved:
+            break
+
+    _normalize_u64_limbs(limbs)
+    var out = U256()
+    for i in range(8):
+        out.limbs[i] = UInt32(limbs[i] & UInt64(0xFFFFFFFF))
+
+    var p = _field_p()
+    for _ in range(8):
+        if _cmp(out, p) < 0:
+            break
+        out = _sub_raw(out, p)
+    return out^
 
 
 def _reduce_once(ref value: U256, ref modulus: U256) -> U256:
@@ -298,6 +380,11 @@ def _fe_mul(ref a: U256, ref b: U256) -> U256:
     return _mul_mod(a, b, p)
 
 
+def _fe_sqr(ref a: U256) -> U256:
+    var tmp = a.copy()
+    return _fe_mul(a, tmp)
+
+
 def _fe_inv(ref a: U256) -> U256:
     var p = _field_p()
     var exp = _field_p_minus_2()
@@ -323,6 +410,128 @@ def _point_neg(ref point: Point) -> Point:
         var p = _field_p()
         out.y = _sub_raw(p, out.y)
     return out^
+
+
+def _jacobian_from_affine(ref point: Point) -> JacobianPoint:
+    var out = JacobianPoint()
+    if point.infinity:
+        return out^
+    out.x = point.x.copy()
+    out.y = point.y.copy()
+    out.z = _one()
+    out.infinity = False
+    return out^
+
+
+def _jacobian_to_affine(ref point: JacobianPoint) -> Point:
+    var out = Point()
+    if point.infinity:
+        return out^
+    var z_inv = _fe_inv(point.z)
+    var z_inv2 = _fe_sqr(z_inv)
+    var z_inv3 = _fe_mul(z_inv2, z_inv)
+    out.x = _fe_mul(point.x, z_inv2)
+    out.y = _fe_mul(point.y, z_inv3)
+    out.infinity = False
+    return out^
+
+
+def _jacobian_double(ref point: JacobianPoint) -> JacobianPoint:
+    if point.infinity or _is_zero(point.y):
+        return JacobianPoint()
+    var yy = _fe_sqr(point.y)
+    var yyyy = _fe_sqr(yy)
+    var xx = _fe_sqr(point.x)
+    var x_times_yy = _fe_mul(point.x, yy)
+    var x_times_yy_copy = x_times_yy.copy()
+    var two_x_times_yy = _fe_add(x_times_yy, x_times_yy_copy)
+    var two_x_times_yy_copy = two_x_times_yy.copy()
+    var s = _fe_add(two_x_times_yy, two_x_times_yy_copy)
+    var xx_copy = xx.copy()
+    var two_xx = _fe_add(xx, xx_copy)
+    var m = _fe_add(xx, two_xx)
+    var m2 = _fe_sqr(m)
+    var s_copy = s.copy()
+    var two_s = _fe_add(s, s_copy)
+    var x3 = _fe_sub(m2, two_s)
+    var s_minus_x3 = _fe_sub(s, x3)
+    var y3_part = _fe_mul(m, s_minus_x3)
+    var eight_yyyy = yyyy.copy()
+    for _ in range(3):
+        var tmp = eight_yyyy.copy()
+        eight_yyyy = _fe_add(eight_yyyy, tmp)
+    var y3 = _fe_sub(y3_part, eight_yyyy)
+    var yz = _fe_mul(point.y, point.z)
+    var yz_copy = yz.copy()
+    var z3 = _fe_add(yz, yz_copy)
+    var out = JacobianPoint()
+    out.x = x3^
+    out.y = y3^
+    out.z = z3^
+    out.infinity = False
+    return out^
+
+
+def _jacobian_add_affine(ref point: JacobianPoint, ref affine: Point) -> JacobianPoint:
+    if affine.infinity:
+        return point.copy()
+    if point.infinity:
+        return _jacobian_from_affine(affine)
+
+    var z1z1 = _fe_sqr(point.z)
+    var u2 = _fe_mul(affine.x, z1z1)
+    var z1_cubed = _fe_mul(z1z1, point.z)
+    var s2 = _fe_mul(affine.y, z1_cubed)
+    var h = _fe_sub(u2, point.x)
+    var r = _fe_sub(s2, point.y)
+    if _is_zero(h):
+        if _is_zero(r):
+            return _jacobian_double(point)
+        return JacobianPoint()
+
+    var hh = _fe_sqr(h)
+    var hhh = _fe_mul(hh, h)
+    var v = _fe_mul(point.x, hh)
+    var r2 = _fe_sqr(r)
+    var v_copy = v.copy()
+    var two_v = _fe_add(v, v_copy)
+    var x3 = _fe_sub(_fe_sub(r2, hhh), two_v)
+    var v_minus_x3 = _fe_sub(v, x3)
+    var y3 = _fe_sub(_fe_mul(r, v_minus_x3), _fe_mul(point.y, hhh))
+    var z3 = _fe_mul(point.z, h)
+
+    var out = JacobianPoint()
+    out.x = x3^
+    out.y = y3^
+    out.z = z3^
+    out.infinity = False
+    return out^
+
+
+def _scalar_mul_jacobian(ref scalar: U256, ref point: Point) -> JacobianPoint:
+    var result = JacobianPoint()
+    if _is_zero(scalar) or point.infinity:
+        return result^
+    for j in range(256):
+        var bit_index = 255 - j
+        if not result.infinity:
+            result = _jacobian_double(result)
+        if _bit(scalar, bit_index):
+            result = _jacobian_add_affine(result, point)
+    return result^
+
+
+def _double_base_mul(ref s: U256, ref generator: Point, ref e: U256, ref pubkey: Point) -> JacobianPoint:
+    var result = JacobianPoint()
+    for j in range(256):
+        var bit_index = 255 - j
+        if not result.infinity:
+            result = _jacobian_double(result)
+        if _bit(s, bit_index):
+            result = _jacobian_add_affine(result, generator)
+        if _bit(e, bit_index):
+            result = _jacobian_add_affine(result, pubkey)
+    return result^
 
 
 def _point_double(ref point: Point) -> Point:
@@ -377,13 +586,7 @@ def _point_add(ref a: Point, ref b: Point) -> Point:
 
 
 def _scalar_mul(ref scalar: U256, ref point: Point) -> Point:
-    var result = Point()
-    var addend = point.copy()
-    for i in range(_bit_length(scalar)):
-        if _bit(scalar, i):
-            result = _point_add(result, addend)
-        addend = _point_double(addend)
-    return result^
+    return _jacobian_to_affine(_scalar_mul_jacobian(scalar, point))
 
 
 def _lift_x(ref x: U256) raises -> Point:
@@ -626,10 +829,9 @@ def pure_verify_schnorr_bytes(
     if _is_zero(s) or _cmp(s, n) >= 0:
         return CONSENSUS_INVALID
     var e = _schnorr_challenge(rx_bytes, xonly_pubkey, digest)
-    var s_g = _scalar_mul(s, _generator())
-    var neg_pubkey = _point_neg(pubkey)
-    var e_neg_p = _scalar_mul(e, neg_pubkey)
-    var r = _point_add(s_g, e_neg_p)
+    var neg_e = _sub_mod(_zero(), e, n)
+    var r_j = _double_base_mul(s, _generator(), neg_e, pubkey)
+    var r = _jacobian_to_affine(r_j)
     if r.infinity:
         return CONSENSUS_INVALID
     if _is_odd(r.y):
@@ -664,7 +866,9 @@ def pure_verify_taproot_tweak_precomputed(
         return MALFORMED
     var output = internal.copy()
     if not _is_zero(tweak_scalar):
-        output = _point_add(internal, _scalar_mul(tweak_scalar, _generator()))
+        var tweaked = _scalar_mul_jacobian(tweak_scalar, _generator())
+        tweaked = _jacobian_add_affine(tweaked, internal)
+        output = _jacobian_to_affine(tweaked)
     if output.infinity:
         return MALFORMED
     var expected = _from_be32(expected_xonly)
@@ -718,6 +922,11 @@ def pure_test_scalar_mul_g_y(ref scalar: List[UInt8]) raises -> List[UInt8]:
     if point.infinity:
         raise Error("scalar multiply returned infinity")
     return _to_be32(point.y)
+
+
+def pure_test_scalar_mul_g_is_infinity(ref scalar: List[UInt8]) raises -> Bool:
+    var sv = _from_be32(scalar)
+    return _scalar_mul_jacobian(sv, _generator()).infinity
 
 
 def pure_test_schnorr_challenge(ref rx: List[UInt8], ref pubkey: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:

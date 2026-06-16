@@ -71,6 +71,7 @@ from script_corpus_foundation import (
     verify_taproot_tweak,
 )
 from pure_secp import (
+    pure_test_scalar_mul_g_is_infinity,
     pure_test_scalar_mul_g_x,
     pure_test_scalar_mul_g_y,
     pure_test_schnorr_challenge,
@@ -399,6 +400,8 @@ def test_pure_secp_arithmetic_known_vectors() raises:
         bytes_to_hex(pure_test_scalar_mul_g_y(scalar_12345)),
         String("0eba29d0f0c5408ed681984dc525982abefccd9f7ff01dd26da4999cf3f6a295"),
     )
+    var scalar_n = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"))
+    assert_true(pure_test_scalar_mul_g_is_infinity(scalar_n))
 
 
 def test_pure_schnorr_and_taproot_vectors() raises:

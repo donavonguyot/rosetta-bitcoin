@@ -75,10 +75,13 @@ def diagnostic_failure_stage(message: String) -> String:
 
 
 def pure_shadow_fixture_enabled(fixture_id: String) -> Bool:
-    # Keep the first pure-shadow corpus slice operationally bounded. Pure
-    # Schnorr/Taproot vectors cover BIP340 and tweak primitives; this corpus row
-    # proves the injected pure backend through the shared Taproot evaluator.
-    return fixture_id == "scripts.p2tr_tapscript_numequal_32712"
+    # Keep pure-shadow corpus coverage operationally bounded. These rows prove
+    # the injected pure backend through shared Taproot evaluators while broader
+    # fixture coverage waits on runtime evidence.
+    return (
+        fixture_id == "scripts.p2tr_tapscript_numequal_32712"
+        or fixture_id == "scripts.p2tr_scriptpath_44295"
+    )
 
 
 def actual_json(code: Int32) -> String:
