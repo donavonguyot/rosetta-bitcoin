@@ -1,11 +1,21 @@
 from block_core import (
+    BlockUtxoDelta,
+    ConnectTiming,
     Native,
     ScriptVerifyResult,
+    Utxo,
+    _utxo_key,
+    append_delta_created,
+    append_delta_metadata,
+    append_delta_undo,
+    apply_block_delta,
+    block_delta_unspent_created,
     check_pow,
     db_get_string,
     db_put_string,
     decode_utxo,
     encode_utxo,
+    encode_block_undo,
     first_failed_script_result_index,
     hash_from_display,
     merkle_root,
@@ -15,6 +25,7 @@ from script_corpus_foundation import (
     append_bytes,
     append_u32_le,
     append_varint,
+    ascii_string_to_bytes,
     bytes_to_hex,
     hash160,
     hash256,
@@ -146,6 +157,49 @@ def test_block_job_failure_reduction_uses_lowest_tx_input_order() raises:
     results.append(low^)
 
     assert_equal(first_failed_script_result_index(results), 2)
+
+
+def test_block_delta_batch_apply_and_undo() raises:
+    var shim = getenv("MOJOBITNODE_SHIM_PATH", "./build/libmojobitnode_shim.dylib")
+    var native = Native(shim)
+    var db = native.rocksdb_open(String("/tmp/mojo_block_core_batch_smoke"))
+    var suffix = String(native.now_ms())
+
+    var delta = BlockUtxoDelta()
+    var txid = List[UInt8]()
+    for i in range(32):
+        txid.append(UInt8(i))
+    var script = List[UInt8]()
+    script.append(UInt8(0x51))
+    var utxo = Utxo()
+    utxo.height = 77
+    utxo.value_sats = Int64(12345)
+    utxo.coinbase = False
+    utxo.script_pubkey = script.copy()
+
+    append_delta_created(delta, txid, UInt32(0), utxo)
+    delta.created_spent[0] = True
+    assert_equal(block_delta_unspent_created(delta), 0)
+    append_delta_undo(delta, 2, 1, txid, UInt32(0), utxo, True)
+
+    delta.block_key = ascii_string_to_bytes(String("batch_smoke:block:") + suffix)
+    delta.block_value = ascii_string_to_bytes(String("block-ok"))
+    delta.undo_key = ascii_string_to_bytes(String("batch_smoke:undo:") + suffix)
+    delta.undo_value = encode_block_undo(77, delta)
+    var meta_name = String("batch_smoke_meta_") + suffix
+    append_delta_metadata(delta, meta_name, String("meta-ok"))
+
+    assert_equal(len(native.rocksdb_get(db, delta.block_key, 64)), 0)
+    var timing = ConnectTiming()
+    apply_block_delta(native, db, timing, delta)
+
+    assert_equal(bytes_to_hex(native.rocksdb_get(db, delta.block_key, 64)), bytes_to_hex(delta.block_value))
+    assert_true(len(native.rocksdb_get(db, delta.undo_key, 4096)) > 0)
+    assert_equal(db_get_string(native, db, meta_name), String("meta-ok"))
+    var suppressed_key = _utxo_key(txid, UInt32(0))
+    assert_equal(len(native.rocksdb_get(db, suppressed_key, 4096)), 0)
+    assert_true(timing.rocksdb_write >= 0)
+    native.rocksdb_close(db)
 
 
 def main() raises:

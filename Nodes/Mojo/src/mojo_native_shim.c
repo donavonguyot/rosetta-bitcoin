@@ -490,6 +490,56 @@ int32_t mojobitnode_rocksdb_delete(int64_t handle, const uint8_t *key, int32_t k
   return 1;
 }
 
+int64_t mojobitnode_rocksdb_batch_create(void) {
+  rocksdb_writebatch_t *batch = rocksdb_writebatch_create();
+  return (int64_t)(intptr_t)batch;
+}
+
+int32_t mojobitnode_rocksdb_batch_put(int64_t batch_handle, const uint8_t *key, int32_t key_len,
+                                      const uint8_t *value, int32_t value_len) {
+  rocksdb_writebatch_t *batch = (rocksdb_writebatch_t *)(intptr_t)batch_handle;
+  if (!batch || !key || key_len < 0 || !value || value_len < 0) {
+    return 0;
+  }
+  rocksdb_writebatch_put(batch, (const char *)key, (size_t)key_len, (const char *)value, (size_t)value_len);
+  return 1;
+}
+
+int32_t mojobitnode_rocksdb_batch_delete(int64_t batch_handle, const uint8_t *key, int32_t key_len) {
+  rocksdb_writebatch_t *batch = (rocksdb_writebatch_t *)(intptr_t)batch_handle;
+  if (!batch || !key || key_len < 0) {
+    return 0;
+  }
+  rocksdb_writebatch_delete(batch, (const char *)key, (size_t)key_len);
+  return 1;
+}
+
+int32_t mojobitnode_rocksdb_batch_write(int64_t handle, int64_t batch_handle) {
+  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
+  rocksdb_writebatch_t *batch = (rocksdb_writebatch_t *)(intptr_t)batch_handle;
+  if (!db || !batch) {
+    return 0;
+  }
+  char *err = NULL;
+  rocksdb_writeoptions_t *write_options = rocksdb_writeoptions_create();
+  rocksdb_write(db, write_options, batch, &err);
+  rocksdb_writeoptions_destroy(write_options);
+  if (err) {
+    rocksdb_free(err);
+    return 0;
+  }
+  return 1;
+}
+
+int32_t mojobitnode_rocksdb_batch_destroy(int64_t batch_handle) {
+  rocksdb_writebatch_t *batch = (rocksdb_writebatch_t *)(intptr_t)batch_handle;
+  if (!batch) {
+    return 0;
+  }
+  rocksdb_writebatch_destroy(batch);
+  return 1;
+}
+
 int32_t mojobitnode_rocksdb_get(int64_t handle, const uint8_t *key, int32_t key_len, uint8_t *out,
                                 int32_t out_cap) {
   rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;

@@ -24,8 +24,8 @@ native prerequisites a future port would need?
 - Local Reference P2P proof surfaces for strict 5k baseline and 50k shakedown
   candidates.
 - Fast-port-shaped block-level script-verification job/result layer with
-  sequential proof execution. Parallel runner research stays diagnostic until
-  runner truth is self-proving.
+  sequential proof execution plus one RocksDB batch commit per connected block.
+  Parallel runner research stays diagnostic until runner truth is self-proving.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,
@@ -116,8 +116,10 @@ Those skills are not vendored and are not required by the spike.
 For parallel script-runner work, also read
 `docs/PARALLEL_RUNNER_RESEARCH.md`. Comparable proof paths now collect a
 deterministic block-level script-job batch and execute it sequentially;
-`parallelize` work is a separate diagnostic surface until a later artifact
-proves real batch execution and passes the stricter benchmark contract.
+UTXO deletes, unspent creates, undo, block storage, and metadata are staged by
+Mojo and committed through one RocksDB batch after script verification passes.
+`parallelize` work is a separate diagnostic surface until a later artifact proves
+real batch execution and passes the stricter benchmark contract.
 
 Use the native-boundary audit targets before trusting new proof output. They
 fail on direct SSL-family crypto linkage or unclassified exported

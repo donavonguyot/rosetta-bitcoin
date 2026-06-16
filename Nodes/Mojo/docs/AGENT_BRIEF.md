@@ -95,12 +95,14 @@ logical core discovery. `sync_parallelize` currently warns that callback
 exceptions trap instead of propagating, so consensus failures must be captured in
 owned result records and reduced deterministically after the parallel section.
 The proof path currently uses a fast-port-shaped block-level script job/result
-layer but executes it sequentially. `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` is not a
-comparable proof claim in this slice; `parallelize` work remains a separate
-diagnostic surface until runner safety and artifact truth are proven. Do not
-report `script_runner_mode: "parallel"` unless a later run actually executed at
-least one parallel batch and the artifact includes runner batch metrics accepted
-by the benchmark validator.
+layer but executes it sequentially. After verification passes, Mojo stages UTXO
+deletes, unspent creates, undo, block storage, and metadata, then commits them
+through one RocksDB batch. `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` is not a comparable
+proof claim in this slice; `parallelize` work remains a separate diagnostic
+surface until runner safety and artifact truth are proven. Do not report
+`script_runner_mode: "parallel"` unless a later run actually executed at least
+one parallel batch and the artifact includes runner batch metrics accepted by
+the benchmark validator.
 
 Do not use `mojo test`; current Mojo testing uses `TestSuite` and runs with
 `mojo run`:

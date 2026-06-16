@@ -139,6 +139,44 @@ struct Native(Movable):
         if ok != 1:
             raise Error("RocksDB delete failed")
 
+    def rocksdb_batch_create(self) raises -> Int64:
+        var batch = self.handle.call["mojobitnode_rocksdb_batch_create", Int64]()
+        if batch == 0:
+            raise Error("RocksDB batch create failed")
+        return batch
+
+    def rocksdb_batch_put(self, batch: Int64, ref key: List[UInt8], ref value: List[UInt8]) raises:
+        var key_ptr = alloc[UInt8](len(key))
+        var value_ptr = alloc[UInt8](len(value))
+        for i in range(len(key)):
+            key_ptr[i] = key[i]
+        for i in range(len(value)):
+            value_ptr[i] = value[i]
+        var ok = self.handle.call["mojobitnode_rocksdb_batch_put", Int32](
+            batch, key_ptr, Int32(len(key)), value_ptr, Int32(len(value))
+        )
+        key_ptr.free()
+        value_ptr.free()
+        if ok != 1:
+            raise Error("RocksDB batch put failed")
+
+    def rocksdb_batch_delete(self, batch: Int64, ref key: List[UInt8]) raises:
+        var key_ptr = alloc[UInt8](len(key))
+        for i in range(len(key)):
+            key_ptr[i] = key[i]
+        var ok = self.handle.call["mojobitnode_rocksdb_batch_delete", Int32](batch, key_ptr, Int32(len(key)))
+        key_ptr.free()
+        if ok != 1:
+            raise Error("RocksDB batch delete failed")
+
+    def rocksdb_batch_write(self, db: Int64, batch: Int64) raises:
+        var ok = self.handle.call["mojobitnode_rocksdb_batch_write", Int32](db, batch)
+        if ok != 1:
+            raise Error("RocksDB batch write failed")
+
+    def rocksdb_batch_destroy(self, batch: Int64):
+        _ = self.handle.call["mojobitnode_rocksdb_batch_destroy", Int32](batch)
+
     def rocksdb_get(self, db: Int64, ref key: List[UInt8], cap: Int) raises -> List[UInt8]:
         var key_ptr = alloc[UInt8](len(key))
         var out_ptr = alloc[UInt8](cap)
@@ -213,6 +251,11 @@ struct ConnectTiming(Copyable):
     var utxo_apply: Int64
     var commit: Int64
     var block_connect_store_commit: Int64
+    var utxo_delete_prepare: Int64
+    var utxo_put_prepare: Int64
+    var undo_put_prepare: Int64
+    var metadata_put_prepare: Int64
+    var rocksdb_write: Int64
     var script_inputs: Int64
     var ecdsa_calls: Int64
     var ecdsa_ms: Int64
@@ -235,6 +278,11 @@ struct ConnectTiming(Copyable):
         self.utxo_apply = 0
         self.commit = 0
         self.block_connect_store_commit = 0
+        self.utxo_delete_prepare = 0
+        self.utxo_put_prepare = 0
+        self.undo_put_prepare = 0
+        self.metadata_put_prepare = 0
+        self.rocksdb_write = 0
         self.script_inputs = 0
         self.ecdsa_calls = 0
         self.ecdsa_ms = 0
@@ -333,6 +381,47 @@ struct ScriptVerifyStats(Copyable):
         self.worker_cpu_ms = 0
         self.batches = 0
         self.threads = 1
+
+
+struct BlockUtxoDelta(Copyable):
+    var external_spend_keys: List[List[UInt8]]
+    var created_txids: List[List[UInt8]]
+    var created_vouts: List[UInt32]
+    var created_values: List[Utxo]
+    var created_spent: List[Bool]
+    var undo_tx_indexes: List[Int]
+    var undo_input_indexes: List[Int]
+    var undo_prev_hashes: List[List[UInt8]]
+    var undo_prev_vouts: List[UInt32]
+    var undo_prevouts: List[Utxo]
+    var undo_same_block: List[Bool]
+    var metadata_keys: List[List[UInt8]]
+    var metadata_values: List[List[UInt8]]
+    var block_key: List[UInt8]
+    var block_value: List[UInt8]
+    var undo_key: List[UInt8]
+    var undo_value: List[UInt8]
+    var external_spends: Int
+
+    def __init__(out self):
+        self.external_spend_keys = List[List[UInt8]]()
+        self.created_txids = List[List[UInt8]]()
+        self.created_vouts = List[UInt32]()
+        self.created_values = List[Utxo]()
+        self.created_spent = List[Bool]()
+        self.undo_tx_indexes = List[Int]()
+        self.undo_input_indexes = List[Int]()
+        self.undo_prev_hashes = List[List[UInt8]]()
+        self.undo_prev_vouts = List[UInt32]()
+        self.undo_prevouts = List[Utxo]()
+        self.undo_same_block = List[Bool]()
+        self.metadata_keys = List[List[UInt8]]()
+        self.metadata_values = List[List[UInt8]]()
+        self.block_key = List[UInt8]()
+        self.block_value = List[UInt8]()
+        self.undo_key = List[UInt8]()
+        self.undo_value = List[UInt8]()
+        self.external_spends = 0
 
 
 struct ProofResult(Copyable):
@@ -530,6 +619,10 @@ def _block_key(height: Int) -> List[UInt8]:
     return ascii_string_to_bytes(String("block:") + String(height))
 
 
+def _undo_key(height: Int) -> List[UInt8]:
+    return ascii_string_to_bytes(String("undo:") + String(height))
+
+
 def encode_utxo(height: Int, value_sats: Int64, coinbase: Bool, ref script_pubkey: List[UInt8]) -> List[UInt8]:
     var out = List[UInt8]()
     _append_u32_be(out, UInt32(height))
@@ -552,6 +645,121 @@ def decode_utxo(ref bytes: List[UInt8]) raises -> Utxo:
     out.coinbase = bytes[12] == UInt8(1)
     out.script_pubkey = slice_bytes(bytes, 17, 17 + script_len)
     return out^
+
+
+def append_delta_created(mut delta: BlockUtxoDelta, ref txid: List[UInt8], vout: UInt32, ref utxo: Utxo):
+    delta.created_txids.append(clone_bytes(txid))
+    delta.created_vouts.append(vout)
+    delta.created_values.append(utxo.copy())
+    delta.created_spent.append(False)
+
+
+def mark_delta_created_spent(mut delta: BlockUtxoDelta, ref txid: List[UInt8], vout: UInt32) -> Bool:
+    for i in range(len(delta.created_txids)):
+        if delta.created_vouts[i] == vout and bytes_equal(delta.created_txids[i], txid):
+            delta.created_spent[i] = True
+            return True
+    return False
+
+
+def append_delta_external_spend(mut delta: BlockUtxoDelta, ref prev_hash: List[UInt8], prev_vout: UInt32):
+    var key = _utxo_key(prev_hash, prev_vout)
+    delta.external_spend_keys.append(key^)
+    delta.external_spends += 1
+
+
+def append_delta_undo(
+    mut delta: BlockUtxoDelta,
+    tx_index: Int,
+    input_index: Int,
+    ref prev_hash: List[UInt8],
+    prev_vout: UInt32,
+    ref prevout: Utxo,
+    same_block: Bool,
+):
+    delta.undo_tx_indexes.append(tx_index)
+    delta.undo_input_indexes.append(input_index)
+    delta.undo_prev_hashes.append(clone_bytes(prev_hash))
+    delta.undo_prev_vouts.append(prev_vout)
+    delta.undo_prevouts.append(prevout.copy())
+    delta.undo_same_block.append(same_block)
+
+
+def append_delta_metadata(mut delta: BlockUtxoDelta, name: String, value: String):
+    var key = _meta_key(name)
+    var bytes = ascii_string_to_bytes(value)
+    delta.metadata_keys.append(key^)
+    delta.metadata_values.append(bytes^)
+
+
+def block_delta_unspent_created(ref delta: BlockUtxoDelta) -> Int:
+    var count = 0
+    for i in range(len(delta.created_spent)):
+        if not delta.created_spent[i]:
+            count += 1
+    return count
+
+
+def encode_block_undo(height: Int, ref delta: BlockUtxoDelta) raises -> List[UInt8]:
+    var out = ascii_string_to_bytes(String("mojo_undo_v1"))
+    append_u32_le(out, UInt32(height))
+    append_varint(out, len(delta.undo_prevouts))
+    for i in range(len(delta.undo_prevouts)):
+        append_u32_le(out, UInt32(delta.undo_tx_indexes[i]))
+        append_u32_le(out, UInt32(delta.undo_input_indexes[i]))
+        append_bytes(out, delta.undo_prev_hashes[i])
+        append_u32_le(out, delta.undo_prev_vouts[i])
+        out.append(UInt8(1) if delta.undo_same_block[i] else UInt8(0))
+        var encoded = encode_utxo(
+            delta.undo_prevouts[i].height,
+            delta.undo_prevouts[i].value_sats,
+            delta.undo_prevouts[i].coinbase,
+            delta.undo_prevouts[i].script_pubkey,
+        )
+        append_varint(out, len(encoded))
+        append_bytes(out, encoded)
+    return out^
+
+
+def apply_block_delta(mut native: Native, db: Int64, mut timing: ConnectTiming, ref delta: BlockUtxoDelta) raises:
+    var batch = native.rocksdb_batch_create()
+    try:
+        var delete_prepare_started = native.now_ms()
+        for i in range(len(delta.external_spend_keys)):
+            native.rocksdb_batch_delete(batch, delta.external_spend_keys[i])
+        timing.utxo_delete_prepare += native.now_ms() - delete_prepare_started
+
+        var put_prepare_started = native.now_ms()
+        for i in range(len(delta.created_txids)):
+            if delta.created_spent[i]:
+                continue
+            var key = _utxo_key(delta.created_txids[i], delta.created_vouts[i])
+            var value = encode_utxo(
+                delta.created_values[i].height,
+                delta.created_values[i].value_sats,
+                delta.created_values[i].coinbase,
+                delta.created_values[i].script_pubkey,
+            )
+            native.rocksdb_batch_put(batch, key, value)
+        timing.utxo_put_prepare += native.now_ms() - put_prepare_started
+
+        var undo_prepare_started = native.now_ms()
+        native.rocksdb_batch_put(batch, delta.undo_key, delta.undo_value)
+        timing.undo_put_prepare += native.now_ms() - undo_prepare_started
+
+        var metadata_prepare_started = native.now_ms()
+        native.rocksdb_batch_put(batch, delta.block_key, delta.block_value)
+        for i in range(len(delta.metadata_keys)):
+            native.rocksdb_batch_put(batch, delta.metadata_keys[i], delta.metadata_values[i])
+        timing.metadata_put_prepare += native.now_ms() - metadata_prepare_started
+
+        var write_started = native.now_ms()
+        native.rocksdb_batch_write(db, batch)
+        timing.rocksdb_write += native.now_ms() - write_started
+    except e:
+        native.rocksdb_batch_destroy(batch)
+        raise Error(String(e))
+    native.rocksdb_batch_destroy(batch)
 
 
 def db_put_string(mut native: Native, db: Int64, name: String, value: String) raises:
@@ -1040,13 +1248,9 @@ def connect_block(
     if not is_coinbase(block.txs[0].tx):
         raise Error("first transaction is not coinbase")
 
-    var created_txids = List[List[UInt8]]()
-    var created_vouts = List[UInt32]()
-    var created_values = List[Utxo]()
+    var delta = BlockUtxoDelta()
     var spent_txids = List[List[UInt8]]()
     var spent_vouts = List[UInt32]()
-    var spent_external = 0
-    var created_unspent = 0
     var next_script_job_index = 0
     var verify_contexts = List[ScriptVerifyContext]()
     var script_jobs = List[ScriptVerifyJob]()
@@ -1062,9 +1266,7 @@ def connect_block(
                         u.value_sats = tx.outputs[vout].value
                         u.coinbase = True
                         u.script_pubkey = clone_bytes(tx.outputs[vout].script_pubkey)
-                        created_txids.append(clone_bytes(block.txs[tx_index].txid))
-                        created_vouts.append(UInt32(vout))
-                        created_values.append(u^)
+                        append_delta_created(delta, block.txs[tx_index].txid, UInt32(vout), u)
             continue
         if len(tx.inputs) == 0:
             raise Error("non-coinbase transaction has no inputs")
@@ -1109,10 +1311,10 @@ def connect_block(
             tx_seen_vouts.append(prev_index)
             var found_created = False
             var prevout = Utxo()
-            for i in range(len(created_txids)):
-                if created_vouts[i] == prev_index and bytes_equal(created_txids[i], prev_hash):
+            for i in range(len(delta.created_txids)):
+                if delta.created_vouts[i] == prev_index and bytes_equal(delta.created_txids[i], prev_hash):
                     found_created = True
-                    prevout = created_values[i].copy()
+                    prevout = delta.created_values[i].copy()
                     break
             if not found_created:
                 var key = _utxo_key(prev_hash, prev_index)
@@ -1131,9 +1333,12 @@ def connect_block(
                         + String(prev_index)
                     )
                 prevout = decode_utxo(value)
-                spent_external += 1
+                append_delta_external_spend(delta, prev_hash, prev_index)
+            else:
+                _ = mark_delta_created_spent(delta, prev_hash, prev_index)
             if prevout.coinbase and height < prevout.height + 100:
                 raise Error("coinbase maturity violation")
+            append_delta_undo(delta, tx_index, input_index, prev_hash, prev_index, prevout, found_created)
             tx_prevouts.append(prevout^)
             tx_prev_hashes.append(prev_hash^)
             tx_prev_vouts.append(prev_index)
@@ -1171,9 +1376,7 @@ def connect_block(
                 u.value_sats = tx.outputs[vout].value
                 u.coinbase = False
                 u.script_pubkey = clone_bytes(tx.outputs[vout].script_pubkey)
-                created_txids.append(clone_bytes(block.txs[tx_index].txid))
-                created_vouts.append(UInt32(vout))
-                created_values.append(u^)
+                append_delta_created(delta, block.txs[tx_index].txid, UInt32(vout), u)
 
     var verify_stats = verify_script_jobs_sequential(
         native,
@@ -1189,34 +1392,22 @@ def connect_block(
     timing.script_runner_thread_count = verify_stats.threads
 
     var apply_started = native.now_ms()
-    for i in range(len(spent_txids)):
-        var key = _utxo_key(spent_txids[i], spent_vouts[i])
-        native.rocksdb_delete(db, key)
-    for i in range(len(created_txids)):
-        var already_spent = False
-        for j in range(len(spent_txids)):
-            if spent_vouts[j] == created_vouts[i] and bytes_equal(spent_txids[j], created_txids[i]):
-                already_spent = True
-                break
-        if already_spent:
-            continue
-        var key = _utxo_key(created_txids[i], created_vouts[i])
-        var value = encode_utxo(created_values[i].height, created_values[i].value_sats, created_values[i].coinbase, created_values[i].script_pubkey)
-        native.rocksdb_put(db, key, value)
-        created_unspent += 1
-    var block_key = _block_key(height)
-    native.rocksdb_put(db, block_key, block.header)
-    var new_utxos = current_utxos - spent_external + created_unspent
-    db_put_string(native, db, String("validated_height"), String(height))
-    db_put_string(native, db, String("stored_block_height"), String(height))
-    db_put_string(native, db, String("header_height"), String(height))
-    db_put_string(native, db, String("validated_hash"), display_hash(block.hash))
-    db_put_string(native, db, String("stored_block_hash"), display_hash(block.hash))
-    db_put_string(native, db, String("header_hash"), display_hash(block.hash))
-    db_put_string(native, db, String("chainstate_utxo_count"), String(new_utxos))
-    db_put_string(native, db, String("chainstate_backend"), String("rocksdb"))
-    db_put_string(native, db, String("native_crypto_backend"), String("libsecp256k1"))
-    db_put_string(native, db, String("sync_status"), String("blocks_syncing"))
+    var new_utxos = current_utxos - delta.external_spends + block_delta_unspent_created(delta)
+    delta.block_key = _block_key(height)
+    delta.block_value = block.header.copy()
+    delta.undo_key = _undo_key(height)
+    delta.undo_value = encode_block_undo(height, delta)
+    append_delta_metadata(delta, String("validated_height"), String(height))
+    append_delta_metadata(delta, String("stored_block_height"), String(height))
+    append_delta_metadata(delta, String("header_height"), String(height))
+    append_delta_metadata(delta, String("validated_hash"), display_hash(block.hash))
+    append_delta_metadata(delta, String("stored_block_hash"), display_hash(block.hash))
+    append_delta_metadata(delta, String("header_hash"), display_hash(block.hash))
+    append_delta_metadata(delta, String("chainstate_utxo_count"), String(new_utxos))
+    append_delta_metadata(delta, String("chainstate_backend"), String("rocksdb"))
+    append_delta_metadata(delta, String("native_crypto_backend"), String("libsecp256k1"))
+    append_delta_metadata(delta, String("sync_status"), String("blocks_syncing"))
+    apply_block_delta(native, db, timing, delta)
     var apply_delta = native.now_ms() - apply_started
     timing.utxo_apply += apply_delta
     timing.commit += apply_delta
@@ -1475,6 +1666,16 @@ def emit_progress(
         + String(timing.commit)
         + String(',"block_connect_store_commit":')
         + String(timing.block_connect_store_commit)
+        + String(',"utxo_delete_prepare":')
+        + String(timing.utxo_delete_prepare)
+        + String(',"utxo_put_prepare":')
+        + String(timing.utxo_put_prepare)
+        + String(',"undo_put_prepare":')
+        + String(timing.undo_put_prepare)
+        + String(',"metadata_put_prepare":')
+        + String(timing.metadata_put_prepare)
+        + String(',"rocksdb_write":')
+        + String(timing.rocksdb_write)
         + String('},"script_metrics":{"script_inputs":')
         + String(timing.script_inputs)
         + String(',"ecdsa_calls":')
@@ -1584,6 +1785,16 @@ def emit_telemetry(
         + String(timing.commit)
         + String(',"block_connect_store_commit":')
         + String(timing.block_connect_store_commit)
+        + String(',"utxo_delete_prepare":')
+        + String(timing.utxo_delete_prepare)
+        + String(',"utxo_put_prepare":')
+        + String(timing.utxo_put_prepare)
+        + String(',"undo_put_prepare":')
+        + String(timing.undo_put_prepare)
+        + String(',"metadata_put_prepare":')
+        + String(timing.metadata_put_prepare)
+        + String(',"rocksdb_write":')
+        + String(timing.rocksdb_write)
         + String('},"script_metrics":{"script_inputs":')
         + String(timing.script_inputs)
         + String(',"ecdsa_calls":')
@@ -1788,6 +1999,16 @@ def local_reference_proof(
             + String(timing.commit)
             + String(',"block_connect_store_commit":')
             + String(timing.block_connect_store_commit)
+            + String(',"utxo_delete_prepare":')
+            + String(timing.utxo_delete_prepare)
+            + String(',"utxo_put_prepare":')
+            + String(timing.utxo_put_prepare)
+            + String(',"undo_put_prepare":')
+            + String(timing.undo_put_prepare)
+            + String(',"metadata_put_prepare":')
+            + String(timing.metadata_put_prepare)
+            + String(',"rocksdb_write":')
+            + String(timing.rocksdb_write)
             + String(',"script_inputs":')
             + String(timing.script_inputs)
             + String(',"ecdsa_verify":')
@@ -1812,6 +2033,16 @@ def local_reference_proof(
             + String(timing.commit)
             + String(',"block_connect_store_commit":')
             + String(timing.block_connect_store_commit)
+            + String(',"utxo_delete_prepare":')
+            + String(timing.utxo_delete_prepare)
+            + String(',"utxo_put_prepare":')
+            + String(timing.utxo_put_prepare)
+            + String(',"undo_put_prepare":')
+            + String(timing.undo_put_prepare)
+            + String(',"metadata_put_prepare":')
+            + String(timing.metadata_put_prepare)
+            + String(',"rocksdb_write":')
+            + String(timing.rocksdb_write)
             + String(',"script_inputs":')
             + String(timing.script_inputs)
             + String(',"ecdsa_verify":')
