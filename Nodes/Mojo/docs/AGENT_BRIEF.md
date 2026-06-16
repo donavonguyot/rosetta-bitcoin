@@ -94,12 +94,13 @@ CPU `parallelize`, `sync_parallelize`, async `TaskGroup`, atomics, locks, and
 logical core discovery. `sync_parallelize` currently warns that callback
 exceptions trap instead of propagating, so consensus failures must be captured in
 owned result records and reduced deterministically after the parallel section.
-The proof path has a diagnostic `parallelize` runner behind
-`MOJOBITNODE_PAR_SCRIPT_VERIFY=1`, but raw CLI and proof Make defaults are
-sequential while runner safety is under audit. Do not report
-`script_runner_mode: "parallel"` unless a run actually executed at least one
-parallel batch and the artifact includes runner batch metrics accepted by the
-benchmark validator.
+The proof path currently uses the fast-port-shaped script job/result layer but
+executes it sequentially. `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` is not a comparable
+proof claim in this slice; `parallelize` work remains a separate diagnostic
+surface until runner safety and artifact truth are proven. Do not report
+`script_runner_mode: "parallel"` unless a later run actually executed at least
+one parallel batch and the artifact includes runner batch metrics accepted by
+the benchmark validator.
 
 Do not use `mojo test`; current Mojo testing uses `TestSuite` and runs with
 `mojo run`:
@@ -128,7 +129,7 @@ The current port order is:
 1. Keep Shared script corpus proof clean in Docker.
 2. Keep Project-accepted baseline 5k evidence clean.
 3. Keep Project-accepted 50k shakedown evidence quarantined to the prior
-   accepted artifact while the newer parallel-runner promotion is audited.
+   accepted artifact while parallel-runner promotion remains under audit.
 4. Treat 100k as the next missing gate; do not start it without a separate plan.
 
 Strict 5k/50k proof requires RocksDB runtime truth, native crypto, WAL, fixed

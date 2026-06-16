@@ -1,10 +1,12 @@
 from block_core import (
     Native,
+    ScriptVerifyResult,
     check_pow,
     db_get_string,
     db_put_string,
     decode_utxo,
     encode_utxo,
+    first_failed_script_result_index,
     hash_from_display,
     merkle_root,
     parse_block,
@@ -112,6 +114,38 @@ def test_native_crypto_metrics() raises:
     )
     assert_equal(native.crypto_metric(String("taproot_tweak_calls")), Int64(1))
     assert_true(native.crypto_metric(String("taproot_tweak_ms")) >= 0)
+
+
+def test_script_failure_reduction_uses_lowest_job_index() raises:
+    var high = ScriptVerifyResult()
+    high.job_index = 9
+    high.completed = True
+    high.ok = False
+    high.tx_index = 4
+    high.input_index = 0
+    high.failure_stage = String("error")
+    high.failure = String("late failure")
+
+    var passed_result = ScriptVerifyResult()
+    passed_result.job_index = 1
+    passed_result.completed = True
+    passed_result.ok = True
+
+    var low = ScriptVerifyResult()
+    low.job_index = 3
+    low.completed = True
+    low.ok = False
+    low.tx_index = 2
+    low.input_index = 1
+    low.failure_stage = String("failed")
+    low.failure = String("first failure")
+
+    var results = List[ScriptVerifyResult]()
+    results.append(high^)
+    results.append(passed_result^)
+    results.append(low^)
+
+    assert_equal(first_failed_script_result_index(results), 2)
 
 
 def main() raises:

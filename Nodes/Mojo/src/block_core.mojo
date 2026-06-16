@@ -1,4 +1,3 @@
-from std.algorithm.backend.cpu.parallelize import parallelize
 from std.collections import List
 from std.ffi import OwnedDLHandle
 from std.memory.unsafe_pointer import alloc
@@ -225,6 +224,8 @@ struct ConnectTiming(Copyable):
     var script_parallel_batches: Int64
     var script_runner_thread_count: Int64
     var sighash_precompute_transactions: Int64
+    var script_wall_ms: Int64
+    var script_worker_cpu_ms: Int64
 
     def __init__(out self):
         self.p2p_fetch = 0
@@ -243,8 +244,10 @@ struct ConnectTiming(Copyable):
         self.taproot_tweak_ms = 0
         self.script_jobs = 0
         self.script_parallel_batches = 0
-        self.script_runner_thread_count = 0
+        self.script_runner_thread_count = 1
         self.sighash_precompute_transactions = 0
+        self.script_wall_ms = 0
+        self.script_worker_cpu_ms = 0
 
 
 struct ScriptRunnerConfig(Copyable):
@@ -259,6 +262,7 @@ struct ScriptRunnerConfig(Copyable):
 
 
 struct ScriptVerifyResult(Copyable):
+    var job_index: Int
     var ok: Bool
     var completed: Bool
     var tx_index: Int
@@ -270,6 +274,7 @@ struct ScriptVerifyResult(Copyable):
     var failure: String
 
     def __init__(out self):
+        self.job_index = 0
         self.ok = False
         self.completed = False
         self.tx_index = 0
@@ -279,6 +284,40 @@ struct ScriptVerifyResult(Copyable):
         self.spent_script_pubkey = String("")
         self.failure_stage = String("")
         self.failure = String("")
+
+
+struct ScriptVerifyJob(Copyable):
+    var job_index: Int
+    var tx_index: Int
+    var input_index: Int
+    var txid: List[UInt8]
+    var prev_hash: List[UInt8]
+    var prev_vout: UInt32
+    var prevout: Utxo
+
+    def __init__(out self):
+        self.job_index = 0
+        self.tx_index = 0
+        self.input_index = 0
+        self.txid = List[UInt8]()
+        self.prev_hash = List[UInt8]()
+        self.prev_vout = UInt32(0)
+        self.prevout = Utxo()
+
+
+struct ScriptVerifyStats(Copyable):
+    var jobs: Int64
+    var wall_ms: Int64
+    var worker_cpu_ms: Int64
+    var batches: Int64
+    var threads: Int64
+
+    def __init__(out self):
+        self.jobs = 0
+        self.wall_ms = 0
+        self.worker_cpu_ms = 0
+        self.batches = 0
+        self.threads = 1
 
 
 struct ProofResult(Copyable):
@@ -849,7 +888,7 @@ def verify_spend(
 
 def script_verification_failure_message(
     height: Int,
-    ref block_txid: List[UInt8],
+    ref txid: List[UInt8],
     input_index: Int,
     ref prev_hash: List[UInt8],
     prev_vout: UInt32,
@@ -863,7 +902,7 @@ def script_verification_failure_message(
         + String(" at height ")
         + String(height)
         + String(" txid=")
-        + display_hash(block_txid)
+        + display_hash(txid)
         + String(" input=")
         + String(input_index)
         + String(" prev_txid=")
@@ -878,89 +917,105 @@ def script_verification_failure_message(
     return message^
 
 
-def verify_transaction_inputs_parallel(
+def script_verify_result_for_job(ref job: ScriptVerifyJob) -> ScriptVerifyResult:
+    var result = ScriptVerifyResult()
+    result.job_index = job.job_index
+    result.tx_index = job.tx_index
+    result.input_index = job.input_index
+    result.prev_txid = display_hash(job.prev_hash)
+    result.prev_vout = job.prev_vout
+    result.spent_script_pubkey = bytes_to_hex(job.prevout.script_pubkey)
+    return result^
+
+
+def first_failed_script_result_index(ref results: List[ScriptVerifyResult]) -> Int:
+    var best_index = -1
+    var best_job_index = 0
+    for i in range(len(results)):
+        if results[i].completed and not results[i].ok:
+            if best_index < 0 or results[i].job_index < best_job_index:
+                best_index = i
+                best_job_index = results[i].job_index
+    return best_index
+
+
+def verify_script_job(
     shim_path: String,
-    height: Int,
-    tx_index: Int,
-    ref block_txid: List[UInt8],
     ref tx: Transaction,
+    ref job: ScriptVerifyJob,
     ref tx_prevouts: List[Utxo],
-    ref tx_prev_hashes: List[List[UInt8]],
-    ref tx_prev_vouts: List[UInt32],
     ref spent_prevouts: List[TaprootPrevout],
     ref sighash_precompute: SighashPrecompute,
-    ref runner_config: ScriptRunnerConfig,
-) raises:
+) -> ScriptVerifyResult:
+    var result = script_verify_result_for_job(job)
+    try:
+        var verified = verify_spend(
+            shim_path,
+            tx,
+            job.input_index,
+            tx_prevouts,
+            spent_prevouts,
+            sighash_precompute,
+        )
+        result.ok = verified
+        if not verified:
+            result.failure_stage = String("failed")
+            result.failure = String("evaluator returned false")
+    except e:
+        result.ok = False
+        result.failure_stage = String("error")
+        result.failure = String(e)
+    result.completed = True
+    return result^
+
+
+def verify_script_jobs_sequential(
+    mut native: Native,
+    shim_path: String,
+    height: Int,
+    ref tx: Transaction,
+    ref tx_prevouts: List[Utxo],
+    ref spent_prevouts: List[TaprootPrevout],
+    ref sighash_precompute: SighashPrecompute,
+    ref jobs: List[ScriptVerifyJob],
+) raises -> ScriptVerifyStats:
+    var stats = ScriptVerifyStats()
+    stats.jobs = Int64(len(jobs))
+    if len(jobs) == 0:
+        return stats^
+    stats.batches = 1
+    stats.threads = 1
+    var started = native.now_ms()
     var results = List[ScriptVerifyResult]()
-    for input_index in range(len(tx.inputs)):
-        var result = ScriptVerifyResult()
-        result.tx_index = tx_index
-        result.input_index = input_index
-        result.prev_txid = display_hash(tx_prev_hashes[input_index])
-        result.prev_vout = tx_prev_vouts[input_index]
-        result.spent_script_pubkey = bytes_to_hex(tx_prevouts[input_index].script_pubkey)
+    for i in range(len(jobs)):
+        var job_started = native.now_ms()
+        var result = verify_script_job(
+            shim_path,
+            tx,
+            jobs[i],
+            tx_prevouts,
+            spent_prevouts,
+            sighash_precompute,
+        )
+        stats.worker_cpu_ms += native.now_ms() - job_started
         results.append(result^)
-
-    @parameter
-    def verify_job(input_index: Int) capturing:
-        var result = ScriptVerifyResult()
-        result.tx_index = tx_index
-        result.input_index = input_index
-        result.prev_txid = display_hash(tx_prev_hashes[input_index])
-        result.prev_vout = tx_prev_vouts[input_index]
-        result.spent_script_pubkey = bytes_to_hex(tx_prevouts[input_index].script_pubkey)
-        try:
-            var verified = verify_spend(
-                shim_path,
-                tx,
-                input_index,
-                tx_prevouts,
-                spent_prevouts,
-                sighash_precompute,
+    stats.wall_ms = native.now_ms() - started
+    var failed_index = first_failed_script_result_index(results)
+    if failed_index >= 0:
+        var failed_job = jobs[failed_index].copy()
+        raise Error(
+            script_verification_failure_message(
+                height,
+                failed_job.txid,
+                failed_job.input_index,
+                failed_job.prev_hash,
+                failed_job.prev_vout,
+                failed_job.prevout.script_pubkey,
+                results[failed_index].failure_stage,
+                results[failed_index].failure,
             )
-            result.ok = verified
-            if not verified:
-                result.failure_stage = String("failed")
-                result.failure = String("evaluator returned false")
-        except e:
-            result.ok = False
-            result.failure_stage = String("error")
-            result.failure = String(e)
-        result.completed = True
-        results[input_index] = result^
-
-    if runner_config.threads > 0:
-        parallelize[verify_job](len(tx.inputs), runner_config.threads)
-    else:
-        parallelize[verify_job](len(tx.inputs))
-
-    for input_index in range(len(tx.inputs)):
-        if not results[input_index].completed:
-            raise Error(
-                script_verification_failure_message(
-                    height,
-                    block_txid,
-                    input_index,
-                    tx_prev_hashes[input_index],
-                    tx_prev_vouts[input_index],
-                    tx_prevouts[input_index].script_pubkey,
-                    String("error"),
-                    String("parallel callback did not complete"),
-                )
-            )
-        if not results[input_index].ok:
-            raise Error(
-                script_verification_failure_message(
-                    height,
-                    block_txid,
-                    input_index,
-                    tx_prev_hashes[input_index],
-                    tx_prev_vouts[input_index],
-                    tx_prevouts[input_index].script_pubkey,
-                    results[input_index].failure_stage,
-                    results[input_index].failure,
-                )
-            )
+        )
+    return stats^
 
 
 def connect_block(
@@ -971,7 +1026,6 @@ def connect_block(
     ref block: Block,
     current_utxos: Int,
     mut timing: ConnectTiming,
-    ref runner_config: ScriptRunnerConfig,
 ) raises -> Int:
     if len(block.txs) == 0:
         raise Error("block has no transactions")
@@ -985,6 +1039,7 @@ def connect_block(
     var spent_vouts = List[UInt32]()
     var spent_external = 0
     var created_unspent = 0
+    var next_script_job_index = 0
 
     for tx_index in range(len(block.txs)):
         var tx = block.txs[tx_index].tx.copy()
@@ -1045,59 +1100,33 @@ def connect_block(
         var spent_prevouts = taproot_prevouts_from_utxos(tx_prevouts)
         var sighash_precompute = build_sighash_precompute_with_taproot(tx, spent_prevouts)
         timing.sighash_precompute_transactions += 1
-        timing.script_jobs += Int64(len(tx.inputs))
-        var use_parallel_runner = runner_config.enabled and len(tx.inputs) >= runner_config.min_inputs
-        if use_parallel_runner:
-            var verify_started = native.now_ms()
-            verify_transaction_inputs_parallel(
-                shim_path,
-                height,
-                tx_index,
-                block.txs[tx_index].txid,
-                tx,
-                tx_prevouts,
-                tx_prev_hashes,
-                tx_prev_vouts,
-                spent_prevouts,
-                sighash_precompute,
-                runner_config,
-            )
-            timing.script_verify += native.now_ms() - verify_started
-            timing.script_parallel_batches += 1
-            timing.script_runner_thread_count = Int64(runner_config.threads)
-        else:
-            for input_index in range(len(tx.inputs)):
-                var verify_started = native.now_ms()
-                var verified = False
-                try:
-                    verified = verify_spend(shim_path, tx, input_index, tx_prevouts, spent_prevouts, sighash_precompute)
-                except e:
-                    raise Error(
-                        script_verification_failure_message(
-                            height,
-                            block.txs[tx_index].txid,
-                            input_index,
-                            tx_prev_hashes[input_index],
-                            tx_prev_vouts[input_index],
-                            tx_prevouts[input_index].script_pubkey,
-                            String("error"),
-                            String(e),
-                        )
-                    )
-                if not verified:
-                    raise Error(
-                        script_verification_failure_message(
-                            height,
-                            block.txs[tx_index].txid,
-                            input_index,
-                            tx_prev_hashes[input_index],
-                            tx_prev_vouts[input_index],
-                            tx_prevouts[input_index].script_pubkey,
-                            String("failed"),
-                            String("evaluator returned false"),
-                        )
-                    )
-                timing.script_verify += native.now_ms() - verify_started
+        var script_jobs = List[ScriptVerifyJob]()
+        for input_index in range(len(tx.inputs)):
+            var job = ScriptVerifyJob()
+            job.job_index = next_script_job_index
+            job.tx_index = tx_index
+            job.input_index = input_index
+            job.txid = clone_bytes(block.txs[tx_index].txid)
+            job.prev_hash = clone_bytes(tx_prev_hashes[input_index])
+            job.prev_vout = tx_prev_vouts[input_index]
+            job.prevout = tx_prevouts[input_index].copy()
+            script_jobs.append(job^)
+            next_script_job_index += 1
+        var verify_stats = verify_script_jobs_sequential(
+            native,
+            shim_path,
+            height,
+            tx,
+            tx_prevouts,
+            spent_prevouts,
+            sighash_precompute,
+            script_jobs,
+        )
+        timing.script_verify += verify_stats.wall_ms
+        timing.script_wall_ms += verify_stats.wall_ms
+        timing.script_worker_cpu_ms += verify_stats.worker_cpu_ms
+        timing.script_jobs += verify_stats.jobs
+        timing.script_runner_thread_count = verify_stats.threads
         for input_index in range(len(tx.inputs)):
             spent_txids.append(clone_bytes(tx_prev_hashes[input_index]))
             spent_vouts.append(tx_prev_vouts[input_index])
@@ -1389,6 +1418,10 @@ def emit_progress(
         + String(timing.utxo_load)
         + String(',"script_verify":')
         + String(timing.script_verify)
+        + String(',"script_wall_ms":')
+        + String(timing.script_wall_ms)
+        + String(',"script_worker_cpu_ms":')
+        + String(timing.script_worker_cpu_ms)
         + String(',"utxo_apply":')
         + String(timing.utxo_apply)
         + String(',"commit":')
@@ -1494,6 +1527,10 @@ def emit_telemetry(
         + String(timing.utxo_load)
         + String(',"script_verify":')
         + String(timing.script_verify)
+        + String(',"script_wall_ms":')
+        + String(timing.script_wall_ms)
+        + String(',"script_worker_cpu_ms":')
+        + String(timing.script_worker_cpu_ms)
         + String(',"utxo_apply":')
         + String(timing.utxo_apply)
         + String(',"commit":')
@@ -1551,7 +1588,6 @@ def local_reference_proof(
     var fd = native.socket_connect(parts[0], parts[1])
     var db = native.rocksdb_open(datadir)
     var timing = ConnectTiming()
-    var runner_config = script_runner_config_from_env()
     var current_utxos = 0
     var blocks_fetched = 0
     var blocks_connected = 0
@@ -1587,7 +1623,7 @@ def local_reference_proof(
                     if tx_count_index != 0:
                         current_block_vin_count += len(blocks[i].txs[tx_count_index].tx.inputs)
                         current_block_script_input_count += len(blocks[i].txs[tx_count_index].tx.inputs)
-                current_utxos = connect_block(native, db, shim_path, height, blocks[i], current_utxos, timing, runner_config)
+                current_utxos = connect_block(native, db, shim_path, height, blocks[i], current_utxos, timing)
                 refresh_crypto_metrics(native, timing)
                 timing.block_connect_store_commit += native.now_ms() - block_started
                 blocks_fetched += 1
@@ -1695,6 +1731,10 @@ def local_reference_proof(
             + String(timing.utxo_load)
             + String(',"script_verify":')
             + String(timing.script_verify)
+            + String(',"script_wall_ms":')
+            + String(timing.script_wall_ms)
+            + String(',"script_worker_cpu_ms":')
+            + String(timing.script_worker_cpu_ms)
             + String(',"utxo_apply":')
             + String(timing.utxo_apply)
             + String(',"commit":')
@@ -1715,6 +1755,10 @@ def local_reference_proof(
             + String(timing.utxo_load)
             + String(',"script_verify":')
             + String(timing.script_verify)
+            + String(',"script_wall_ms":')
+            + String(timing.script_wall_ms)
+            + String(',"script_worker_cpu_ms":')
+            + String(timing.script_worker_cpu_ms)
             + String(',"utxo_apply":')
             + String(timing.utxo_apply)
             + String(',"commit":')
