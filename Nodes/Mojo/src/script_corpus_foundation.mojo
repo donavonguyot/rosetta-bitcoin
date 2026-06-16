@@ -2032,6 +2032,13 @@ def is_v0_witness_script_program(ref program: List[UInt8]) -> Bool:
 
 
 def evaluate_p2sh_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
+    return evaluate_p2sh_fixture_with_crypto(manifest_path, fixture_id, shim_path, crypto)
+
+
+def evaluate_p2sh_fixture_with_crypto(
+    manifest_path: String, fixture_id: String, shim_path: String, ref crypto: CryptoBackend
+) raises -> Bool:
     if not manifest_contains_fixture(manifest_path, fixture_id):
         raise Error("fixture id not present in Shared manifest")
     var stem = _fixture_stem(fixture_id)
@@ -2056,7 +2063,7 @@ def evaluate_p2sh_fixture(manifest_path: String, fixture_id: String, shim_path: 
     for i in range(len(pushes) - 1):
         var item = pushes[i].copy()
         stack.append(item^)
-    return evaluate_legacy_script(redeem_script, stack^, tx, input_index, shim_path, True)
+    return evaluate_legacy_script_with_crypto(redeem_script, stack^, tx, input_index, shim_path, crypto, True)
 
 
 def evaluate_p2pkh_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:

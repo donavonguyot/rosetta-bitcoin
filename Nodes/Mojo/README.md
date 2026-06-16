@@ -62,11 +62,11 @@ native prerequisites a future port would need?
   `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and
   `scripts.p2tr_tapscript_126975` stress rows, plus all three timing-gated
   P2PKH/ECDSA rows: `scripts.p2pkh_sighash_single_38010`,
-  `scripts.p2pkh_61174`, and `scripts.p2pkh_107951`, plus the first legacy
-  ECDSA rows `scripts.bare_legacy_118555` and
-  `scripts.bare_multisig_27840`. P2PKH shadow rows also report ECDSA sighash,
-  verify, total, and signature-count timing fields. P2SH and SegWit v0 ECDSA
-  shapes remain unsupported until later measured slices enable them with zero
+  `scripts.p2pkh_61174`, and `scripts.p2pkh_107951`, the first legacy ECDSA
+  rows `scripts.bare_legacy_118555` and `scripts.bare_multisig_27840`, and
+  the 10 simple P2SH legacy rows. P2PKH shadow rows also report ECDSA sighash,
+  verify, total, and signature-count timing fields. SegWit v0 ECDSA shapes
+  remain unsupported until a later measured slice enables them with zero
   disagreements and the 5000ms per-row guardrail. See
   `docs/LIBSECP_TRANSLATION_NOTES.md` before changing the pure secp internals.
 - `local-reference-proof --shadow-crypto` is a separate diagnostic live-chain
@@ -90,9 +90,9 @@ debugging. The public `script-corpus` command is the evidence surface and emits
 canonical `port.script_corpus_result.v1` JSON with Mojo-owned `45/45` coverage.
 `script-corpus --shadow-crypto` is a separate diagnostic comparator surface and
 must not be imported as canonical corpus evidence. Unsupported rows are still
-expected for P2SH and SegWit v0 ECDSA-bearing fixtures; the current diagnostic
-ECDSA corpus support is limited to the three P2PKH rows plus the first bare
-legacy and bare multisig rows.
+expected for SegWit v0 ECDSA-bearing fixtures; the current diagnostic ECDSA
+corpus support includes the three P2PKH rows, first bare legacy and bare
+multisig rows, and simple P2SH legacy rows.
 
 ## Commands
 
