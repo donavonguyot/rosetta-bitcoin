@@ -2251,6 +2251,13 @@ def evaluate_taproot_fixture_diagnostic_with_crypto(
 
 
 def evaluate_bare_legacy_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
+    return evaluate_bare_legacy_fixture_with_crypto(manifest_path, fixture_id, shim_path, crypto)
+
+
+def evaluate_bare_legacy_fixture_with_crypto(
+    manifest_path: String, fixture_id: String, shim_path: String, ref crypto: CryptoBackend
+) raises -> Bool:
     if fixture_id != "scripts.bare_legacy_118555":
         raise Error("unsupported bare legacy diagnostic fixture")
     if not manifest_contains_fixture(manifest_path, fixture_id):
@@ -2262,7 +2269,7 @@ def evaluate_bare_legacy_fixture(manifest_path: String, fixture_id: String, shim
     if input_index < 0 or input_index >= len(tx.inputs):
         raise Error("fixture input index out of range")
     var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
-    return evaluate_legacy_script(script_pubkey, stack^, tx, input_index, shim_path, True)
+    return evaluate_legacy_script_with_crypto(script_pubkey, stack^, tx, input_index, shim_path, crypto, True)
 
 
 def is_simple_p2sh_diagnostic_fixture(fixture_id: String) -> Bool:
@@ -5306,6 +5313,13 @@ def evaluate_tapscript_with_crypto_profiled(
 
 
 def evaluate_bare_multisig_fixture(ref fixture: ScriptFixture, shim_path: String) raises -> Bool:
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
+    return evaluate_bare_multisig_fixture_with_crypto(fixture, shim_path, crypto)
+
+
+def evaluate_bare_multisig_fixture_with_crypto(
+    ref fixture: ScriptFixture, shim_path: String, ref crypto: CryptoBackend
+) raises -> Bool:
     if fixture.input_index < 0 or fixture.input_index >= len(fixture.tx.inputs):
         raise Error("fixture input index out of range")
     var stack = parse_push_only_stack(fixture.tx.inputs[fixture.input_index].script_sig)
@@ -5326,13 +5340,15 @@ def evaluate_bare_multisig_fixture(ref fixture: ScriptFixture, shim_path: String
         var key_index = parsed.pubkey_count - 1 - key_offset
         if sig_index <= 0 or key_index < 0:
             raise Error("CHECKMULTISIG stack underflow")
-        var ok = verify_ecdsa_signature(
-            shim_path,
+        var ok = verify_ecdsa_signature_for_mode_with_crypto(
+            crypto,
             stack[sig_index].data,
             parsed.pubkeys[key_index].data,
             fixture.tx,
             fixture.input_index,
             fixture.spent_script_pubkey,
+            False,
+            Int64(0),
         )
         if ok:
             sig_offset += 1

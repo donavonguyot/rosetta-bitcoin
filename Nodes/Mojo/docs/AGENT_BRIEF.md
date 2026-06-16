@@ -63,10 +63,12 @@ including the large
 `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and
 `scripts.p2tr_tapscript_126975` stress rows, plus all three timing-gated
 P2PKH/ECDSA rows: `scripts.p2pkh_sighash_single_38010`,
-`scripts.p2pkh_61174`, and `scripts.p2pkh_107951`. P2PKH shadow rows report
-ECDSA sighash, verify, total, and signature-count timings. Other ECDSA-bearing
-non-Taproot shapes remain unsupported until a later measured slice enables them
-with zero disagreement and the 5000ms per-row guardrail. Shadow artifacts
+`scripts.p2pkh_61174`, and `scripts.p2pkh_107951`, plus the first bare legacy
+and bare multisig rows: `scripts.bare_legacy_118555` and
+`scripts.bare_multisig_27840`. P2PKH shadow rows report ECDSA sighash, verify,
+total, and signature-count timings. P2SH and SegWit v0 ECDSA shapes remain
+unsupported until later measured slices enable them with zero disagreement and
+the 5000ms per-row guardrail. Shadow artifacts
 include per-attempt `shadow_duration_ms`, aggregate timing fields, and
 large-fixture size metrics; do not broaden support unless new rows have zero
 disagreement and stay under the 5000ms per-row guardrail. Read
@@ -79,9 +81,9 @@ benchmark claim; Project's campaign harness owns accepted control artifacts and
 current benchmark evidence.
 
 `local-reference-proof --shadow-crypto` is diagnostic-only. Native validation
-still accepts or rejects blocks; pure Mojo crypto only replays supported P2PKH
-and Taproot script jobs beside the native path and reports unsupported
-non-P2PKH ECDSA families explicitly. These artifacts must report
+still accepts or rejects blocks; pure Mojo crypto only replays supported P2PKH,
+bare legacy, bare multisig, and Taproot script jobs beside the native path and
+reports unsupported P2SH/SegWit v0 ECDSA families explicitly. These artifacts must report
 an explicit diagnostic non-comparable marker and pass
 `validate_shadow_crypto_proof.py`; they are not Project-imported benchmark truth.
 

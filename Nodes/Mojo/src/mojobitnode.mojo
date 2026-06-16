@@ -24,7 +24,9 @@ from script_corpus_foundation import (
     CRYPTO_BACKEND_PURE,
     CryptoBackend,
     evaluate_bare_legacy_fixture,
+    evaluate_bare_legacy_fixture_with_crypto,
     evaluate_bare_multisig_fixture,
+    evaluate_bare_multisig_fixture_with_crypto,
     evaluate_p2pkh_fixture,
     evaluate_p2sh_fixture,
     evaluate_taproot_fixture,
@@ -96,6 +98,8 @@ def pure_shadow_fixture_enabled(fixture_id: String) -> Bool:
         fixture_id == "scripts.p2pkh_sighash_single_38010"
         or fixture_id == "scripts.p2pkh_61174"
         or fixture_id == "scripts.p2pkh_107951"
+        or fixture_id == "scripts.bare_legacy_118555"
+        or fixture_id == "scripts.bare_multisig_27840"
         or fixture_id == "scripts.p2tr_tapscript_numequal_32712"
         or fixture_id == "scripts.p2tr_scriptpath_44295"
         or fixture_id == "scripts.p2tr_scriptpath_46599"
@@ -762,7 +766,12 @@ def main() raises:
                 var shadow_ecdsa_verify_ms = Int64(0)
                 var shadow_ecdsa_total_ms = Int64(0)
                 var shadow_ecdsa_signature_count = 0
-                if is_taproot_diagnostic_fixture(eval_id) or is_p2pkh_diagnostic_fixture(eval_id):
+                if (
+                    is_taproot_diagnostic_fixture(eval_id)
+                    or is_p2pkh_diagnostic_fixture(eval_id)
+                    or is_bare_legacy_diagnostic_fixture(eval_id)
+                    or eval_id == "scripts.bare_multisig_27840"
+                ):
                     if not pure_shadow_fixture_enabled(eval_id):
                         support_status = String("pure_backend_diagnostic_slice_not_enabled")
                     else:
@@ -790,22 +799,34 @@ def main() raises:
                                         shadow_failure_stage = pure_result.failure_stage
                                         shadow_failure = pure_result.failure
                             else:
-                                var p2pkh_timer = OwnedDLHandle(shim_path)
-                                var pure_result = evaluate_p2pkh_fixture_with_crypto_timed(
-                                    manifest_path, eval_id, shim_path, pure_crypto, p2pkh_timer
-                                )
+                                var pure_passed: Bool
+                                if is_p2pkh_diagnostic_fixture(eval_id):
+                                    var p2pkh_timer = OwnedDLHandle(shim_path)
+                                    var timed_result = evaluate_p2pkh_fixture_with_crypto_timed(
+                                        manifest_path, eval_id, shim_path, pure_crypto, p2pkh_timer
+                                    )
+                                    shadow_ecdsa_sighash_ms = timed_result.sighash_ms
+                                    shadow_ecdsa_verify_ms = timed_result.verify_ms
+                                    shadow_ecdsa_total_ms = timed_result.total_ms
+                                    shadow_ecdsa_signature_count = timed_result.signature_count
+                                    pure_passed = timed_result.passed
+                                elif is_bare_legacy_diagnostic_fixture(eval_id):
+                                    pure_passed = evaluate_bare_legacy_fixture_with_crypto(
+                                        manifest_path, eval_id, shim_path, pure_crypto
+                                    )
+                                else:
+                                    var fixture = load_bare_multisig_fixture(manifest_path)
+                                    pure_passed = evaluate_bare_multisig_fixture_with_crypto(
+                                        fixture, shim_path, pure_crypto
+                                    )
                                 shadow_duration_ms = shadow_clock.now_ms() - shadow_started
-                                shadow_ecdsa_sighash_ms = pure_result.sighash_ms
-                                shadow_ecdsa_verify_ms = pure_result.verify_ms
-                                shadow_ecdsa_total_ms = pure_result.total_ms
-                                shadow_ecdsa_signature_count = pure_result.signature_count
                                 shadow_supported = True
-                                shadow_result = result_json(pure_result.passed)
-                                shadow_agreed = pure_result.passed == current_passed
+                                shadow_result = result_json(pure_passed)
+                                shadow_agreed = pure_passed == current_passed
                                 support_status = String("supported")
-                                if not pure_result.passed:
+                                if not pure_passed:
                                     shadow_failure_stage = String("ecdsa_verify")
-                                    shadow_failure = String("P2PKH pure ECDSA verification returned false")
+                                    shadow_failure = String("pure ECDSA verification returned false")
                         except e:
                             shadow_duration_ms = shadow_clock.now_ms() - shadow_started
                             shadow_failure = String(e)
