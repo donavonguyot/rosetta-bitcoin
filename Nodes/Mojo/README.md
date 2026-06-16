@@ -50,12 +50,15 @@ native prerequisites a future port would need?
   libsecp-guided fixed-limb field multiplication and Jacobian group operations,
   while leaving ECDSA unsupported. `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
-  support/unsupported rows and no native fallback. The current corpus shadow
-  slice supports `scripts.p2tr_tapscript_numequal_32712` and
-  `scripts.p2tr_scriptpath_44295`; broader Taproot shadow coverage waits on
-  evidence that the diagnostic pure path remains practical for larger fixture
-  sets. See `docs/LIBSECP_TRANSLATION_NOTES.md` before changing the pure secp
-  internals.
+  support/unsupported rows, per-attempt `shadow_duration_ms`, aggregate shadow
+  timing, and no native fallback. The current corpus shadow slice supports
+  `scripts.p2tr_tapscript_numequal_32712`, `scripts.p2tr_scriptpath_44295`,
+  `scripts.p2tr_scriptpath_46599`, `scripts.p2tr_tapscript_sha256_52024`,
+  `scripts.p2tr_tapscript_size_52497`, `scripts.p2tr_tapscript_hash256_67562`,
+  `scripts.p2tr_tapscript_87214`, `scripts.p2tr_tapscript_89632`, and
+  `scripts.p2tr_tapscript_108508`. Broader Taproot shadow coverage waits on
+  zero-disagreement rows that stay under the 5000ms per-row guardrail. See
+  `docs/LIBSECP_TRANSLATION_NOTES.md` before changing the pure secp internals.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,

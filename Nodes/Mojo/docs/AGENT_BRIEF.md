@@ -52,10 +52,15 @@ supports each fixture without using native fallback. Its
 not Project current evidence. The pure backend currently supports BIP340
 Schnorr and Taproot tweak primitives through libsecp-guided fixed-limb field
 multiplication and Jacobian group operations, leaves ECDSA unsupported, and
-enables only the bounded `scripts.p2tr_tapscript_numequal_32712` and
-`scripts.p2tr_scriptpath_44295` corpus shadow rows until runtime evidence
-justifies broader Taproot shadow coverage. Read
-`docs/LIBSECP_TRANSLATION_NOTES.md` before changing pure secp internals.
+enables only the bounded measured Taproot shadow set:
+`scripts.p2tr_tapscript_numequal_32712`, `scripts.p2tr_scriptpath_44295`,
+`scripts.p2tr_scriptpath_46599`, `scripts.p2tr_tapscript_sha256_52024`,
+`scripts.p2tr_tapscript_size_52497`, `scripts.p2tr_tapscript_hash256_67562`,
+`scripts.p2tr_tapscript_87214`, `scripts.p2tr_tapscript_89632`, and
+`scripts.p2tr_tapscript_108508`. Shadow artifacts include per-attempt
+`shadow_duration_ms` plus aggregate timing fields; do not broaden support unless
+new rows have zero disagreement and stay under the 5000ms per-row guardrail.
+Read `docs/LIBSECP_TRANSLATION_NOTES.md` before changing pure secp internals.
 
 `local-reference-proof` is the bounded local Reference proof path for 5k and
 50k. It must use local Reference P2P bytes, RocksDB operational truth, native

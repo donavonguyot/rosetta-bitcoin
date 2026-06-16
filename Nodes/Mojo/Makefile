@@ -144,7 +144,7 @@ host-script-corpus-shadow: host-build
 	  grep -q '"schema":"port.script_corpus_shadow_crypto.v1"' <<< "$$out"; \
 	  grep -q '"shadow_crypto_backend":"mojo-pure-secp256k1"' <<< "$$out"; \
 	  grep -q '"shadow_used_native_fallback":false' <<< "$$out"; \
-	  python3 ../Shared/conformance/tools/validate_script_corpus_shadow_crypto.py $(HOST_SCRIPT_CORPUS_SHADOW_RESULT)
+	  python3 ../Shared/conformance/tools/validate_script_corpus_shadow_crypto.py --require-shadow-timing $(HOST_SCRIPT_CORPUS_SHADOW_RESULT)
 
 host-local-reference-proof: host-build
 	@mkdir -p .benchmark-results
@@ -256,7 +256,7 @@ docker-script-corpus-shadow:
 	  grep -q '"schema":"port.script_corpus_shadow_crypto.v1"' <<< "$$out"; \
 	  grep -q '"runtime_surface":"docker"' <<< "$$out"; \
 	  grep -q '"shadow_used_native_fallback":false' <<< "$$out"; \
-	  python3 ../Shared/conformance/tools/validate_script_corpus_shadow_crypto.py $(DOCKER_SCRIPT_CORPUS_SHADOW_RESULT)
+	  python3 ../Shared/conformance/tools/validate_script_corpus_shadow_crypto.py --require-shadow-timing $(DOCKER_SCRIPT_CORPUS_SHADOW_RESULT)
 
 docker-proof-local:
 	$(REFERENCE_P2P_CHECK)

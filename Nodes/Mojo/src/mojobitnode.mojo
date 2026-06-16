@@ -81,6 +81,13 @@ def pure_shadow_fixture_enabled(fixture_id: String) -> Bool:
     return (
         fixture_id == "scripts.p2tr_tapscript_numequal_32712"
         or fixture_id == "scripts.p2tr_scriptpath_44295"
+        or fixture_id == "scripts.p2tr_scriptpath_46599"
+        or fixture_id == "scripts.p2tr_tapscript_sha256_52024"
+        or fixture_id == "scripts.p2tr_tapscript_size_52497"
+        or fixture_id == "scripts.p2tr_tapscript_hash256_67562"
+        or fixture_id == "scripts.p2tr_tapscript_87214"
+        or fixture_id == "scripts.p2tr_tapscript_89632"
+        or fixture_id == "scripts.p2tr_tapscript_108508"
     )
 
 
@@ -433,7 +440,11 @@ def main() raises:
         var shadow_supported_count = 0
         var shadow_agreed_count = 0
         var shadow_disagreement_count = 0
+        var shadow_eval_ms = Int64(0)
+        var shadow_supported_eval_ms = Int64(0)
+        var shadow_max_row_ms = Int64(0)
         var results = String("")
+        var shadow_clock = Native(shim_path)
         for i in range(script_fixture_count()):
             var current_id = fixture_id_at(i)
             if fixture_id != "" and current_id != fixture_id:
@@ -498,15 +509,20 @@ def main() raises:
                 var shadow_failure_stage = String("")
                 var shadow_failure = String("")
                 var support_status = String("pure_backend_crypto_unsupported")
+                var shadow_attempted = False
+                var shadow_duration_ms = Int64(0)
                 if is_taproot_diagnostic_fixture(eval_id):
                     if not pure_shadow_fixture_enabled(eval_id):
                         support_status = String("pure_backend_diagnostic_slice_not_enabled")
                     else:
+                        shadow_attempted = True
+                        var shadow_started = shadow_clock.now_ms()
                         try:
                             var pure_crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_PURE)
                             var pure_result = evaluate_taproot_fixture_diagnostic_with_crypto(
                                 manifest_path, eval_id, shim_path, pure_crypto
                             )
+                            shadow_duration_ms = shadow_clock.now_ms() - shadow_started
                             if pure_result.failure_stage == "unsupported_crypto":
                                 shadow_failure_stage = pure_result.failure_stage
                                 shadow_failure = pure_result.failure
@@ -519,6 +535,7 @@ def main() raises:
                                     shadow_failure_stage = pure_result.failure_stage
                                     shadow_failure = pure_result.failure
                         except e:
+                            shadow_duration_ms = shadow_clock.now_ms() - shadow_started
                             shadow_failure = String(e)
                             shadow_failure_stage = diagnostic_failure_stage(shadow_failure)
                             if shadow_failure_stage != "unsupported_crypto":
@@ -526,6 +543,11 @@ def main() raises:
                                 shadow_result = String("failed")
                                 shadow_agreed = False
                                 support_status = String("supported")
+                        shadow_eval_ms += shadow_duration_ms
+                        if shadow_supported:
+                            shadow_supported_eval_ms += shadow_duration_ms
+                        if shadow_duration_ms > shadow_max_row_ms:
+                            shadow_max_row_ms = shadow_duration_ms
                 if shadow_supported:
                     shadow_supported_count += 1
                 if shadow_agreed:
@@ -552,6 +574,11 @@ def main() raises:
                     + support_status
                     + String('"')
                 )
+                if shadow_attempted:
+                    results += (
+                        String(',"shadow_duration_ms":')
+                        + String(shadow_duration_ms)
+                    )
                 if not current_passed:
                     results += (
                         String(',"native_failure_stage":"')
@@ -616,6 +643,12 @@ def main() raises:
                 + String(shadow_agreed_count)
                 + String(',"disagreements":')
                 + String(shadow_disagreement_count)
+                + String(',"shadow_eval_ms":')
+                + String(shadow_eval_ms)
+                + String(',"shadow_supported_eval_ms":')
+                + String(shadow_supported_eval_ms)
+                + String(',"shadow_max_row_ms":')
+                + String(shadow_max_row_ms)
                 + String(',"result":"diagnostic","results":[')
                 + results
                 + String("]}")
