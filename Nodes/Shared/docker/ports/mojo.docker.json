@@ -15,8 +15,7 @@
     "package_manager": "apt plus uv with pinned mojo==1.0.0b1 package",
     "native_dependencies": [
       "librocksdb-dev",
-      "libsecp256k1-dev",
-      "libssl-dev"
+      "libsecp256k1-dev"
     ]
   },
   "volumes": {
@@ -109,11 +108,11 @@
     "script_corpus_result": "Nodes/Shared/conformance/results/mojo_script_corpus_<YYYY-MM-DD>.json",
     "local_reference_debug_result": "Nodes/Mojo/.benchmark-results/mojo_docker_baseline_5k_benchmark_<YYYY-MM-DD>.json",
     "shakedown_50k_debug_result": "Nodes/Mojo/.benchmark-results/mojo_docker_shakedown_50k_benchmark_<YYYY-MM-DD>.json",
-    "notes": "Mojo proof_partial is a Debian feasibility spike plus Shared script corpus proof and local Reference proof surface: pinned Mojo 1.0.0b1 install, Project-shaped status, libsecp256k1 vectors, RocksDB runtime proof, Docker 45/45 script corpus, Docker/local-reference 5k proof command, and Docker/local-reference 50k debug proof command. Optimized port-authored proof output reports script_runner_actual_mode=sequential and must not be promoted as new Project-current benchmark evidence until a real parallel runner satisfies the official contract. Project control artifacts remain the source of accepted benchmark truth."
+    "notes": "Mojo proof_partial is a Debian feasibility spike plus Shared script corpus proof and local Reference proof surface: pinned Mojo 1.0.0b1 install, Project-shaped status, libsecp256k1 vectors, RocksDB runtime proof, Docker 45/45 script corpus, Docker/local-reference 5k proof command, and Docker/local-reference 50k proof command. The parallel script runner is under audit; proof targets default to sequential and may report script_runner_actual_mode=parallel only after a fresh artifact self-proves batch metrics. Project control artifacts remain the source of accepted benchmark truth."
   },
   "known_caveats": [
     "Debian bookworm is mandatory for the spike; Ubuntu fallback is intentionally disallowed.",
-    "The spike binary now owns offline corpus and local Reference 5k/50k proof paths, but newly optimized debug artifacts are sequential-runner evidence until parallel script verification is implemented.",
+    "The spike binary owns offline corpus and local Reference 5k/50k proof paths; the env-gated parallel script verifier is diagnostic while runner safety is audited.",
     "Binary gate, external peers, 10k, 100k, supervisor, and tip lanes are not attempted."
   ]
 }

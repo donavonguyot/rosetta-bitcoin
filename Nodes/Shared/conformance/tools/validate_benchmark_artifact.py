@@ -331,6 +331,39 @@ def has_nonempty(value: Any) -> bool:
     return True
 
 
+def validate_parallel_runner_truth(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if payload.get("script_runner_mode") != "parallel":
+        return errors, warnings
+
+    metrics = payload.get("script_metrics")
+    if not isinstance(metrics, dict):
+        metrics = {}
+    has_runner_truth_contract = (
+        payload.get("runner_truth_contract_version") is not None
+        or "script_runner_actual_mode" in payload
+        or bool(metrics)
+    )
+    if not has_runner_truth_contract:
+        warnings.append("parallel runner truth fields are absent; treating as legacy artifact shape")
+        return errors, warnings
+
+    actual_mode = payload.get("script_runner_actual_mode") or metrics.get("script_runner_actual_mode")
+    if actual_mode != "parallel":
+        errors.append(f"script_runner_actual_mode={actual_mode!r}; expected 'parallel' for a parallel claim")
+
+    parallel_batches = as_int(metrics.get("script_parallel_batches", payload.get("script_parallel_batches")), 0)
+    script_jobs = as_int(metrics.get("script_jobs", payload.get("script_jobs")), 0)
+    if parallel_batches is None or parallel_batches <= 0:
+        errors.append("script_parallel_batches must be positive for a parallel claim")
+    if script_jobs is None or script_jobs <= 0:
+        errors.append("script_jobs must be positive for a parallel claim")
+    if "script_runner_thread_count" not in metrics and "script_runner_thread_count" not in payload:
+        errors.append("script_runner_thread_count must be present for a parallel claim")
+    return errors, warnings
+
+
 def validate_payload(
     payload: dict[str, Any],
     *,
@@ -389,6 +422,10 @@ def validate_payload(
         actual_cmp = label(actual) if key in {"benchmark_gate", "benchmark_kind", "benchmark_lane"} else actual
         if actual_cmp != expected:
             errors.append(f"{key}={actual!r}; expected {expected!r}")
+
+    runner_errors, runner_warnings = validate_parallel_runner_truth(payload)
+    errors.extend(runner_errors)
+    warnings.extend(runner_warnings)
 
     if not spec.get("tip"):
         target = spec["target_height"]
@@ -585,6 +622,38 @@ def self_test() -> int:
         ("missing_captured_at", {**base, "captured_at": ""}, "baseline_5k", False),
         ("wrong_peer", {**base, "peer": "host.docker.internal:48333"}, "baseline_5k", False),
         ("alias_only_lane", {**base, "benchmark_gate": "supporting_5k", "benchmark_lane": "supporting_5k_p2p"}, "baseline_5k", False),
+        (
+            "parallel_runner_truth_pass",
+            {
+                **base,
+                "runner_truth_contract_version": 1,
+                "script_runner_actual_mode": "parallel",
+                "script_metrics": {
+                    "script_jobs": 2,
+                    "script_parallel_batches": 1,
+                    "script_runner_thread_count": 0,
+                    "script_runner_actual_mode": "parallel",
+                },
+            },
+            "baseline_5k",
+            True,
+        ),
+        (
+            "parallel_runner_truth_missing_batches",
+            {
+                **base,
+                "runner_truth_contract_version": 1,
+                "script_runner_actual_mode": "parallel",
+                "script_metrics": {
+                    "script_jobs": 2,
+                    "script_parallel_batches": 0,
+                    "script_runner_thread_count": 0,
+                    "script_runner_actual_mode": "parallel",
+                },
+            },
+            "baseline_5k",
+            False,
+        ),
         (
             "long_run_pass",
             {

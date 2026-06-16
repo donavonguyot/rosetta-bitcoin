@@ -1,8 +1,8 @@
 # Mojo Parallel Runner Research
 
-This note records the local documentation surface for a future honest Mojo
-parallel script runner. It is research only; it does not claim that Mojo
-currently has a Project-promotable parallel verifier.
+This note records the local documentation surface behind Mojo's diagnostic
+parallel script runner. The runner is under audit; comparable proof targets must
+stay sequential unless a fresh artifact self-proves actual parallel batches.
 
 ## Official Docs Cached Locally
 
@@ -56,12 +56,12 @@ state and native shim calls.
 state. They are useful for a minimal first-failure index and completion counters,
 but they should not become a broad mutable verifier state bag.
 
-## Candidate Runner Shape
+## Runner Shape
 
-Build deterministic `ScriptVerifyJob` records sequentially in transaction/input
-order. Each job should hold only immutable or copy-owned data needed by the
-verifier: tx/input index, spent prevout data, script/witness data, and the
-precomputed sighash material for that transaction.
+Build deterministic verifier work sequentially in transaction/input order. Each
+job uses immutable or copy-owned data needed by the verifier: tx/input index,
+spent prevout data, script/witness data, and the precomputed sighash material
+for that transaction.
 
 Execute the jobs with a non-raising callback. The callback should catch verifier
 errors locally and write an owned result slot:
@@ -80,7 +80,7 @@ After all jobs complete, reduce results sequentially in job order and report the
 first failing job by lowest transaction/input index. Only apply UTXO deletes and
 creates after every input for the transaction passes.
 
-Initial controls should remain opt-in:
+Runner controls:
 
 ```text
 MOJOBITNODE_PAR_SCRIPT_VERIFY=1
@@ -88,9 +88,13 @@ MOJOBITNODE_SCRIPT_THREADS=<n>
 MOJOBITNODE_SCRIPT_MIN_INPUTS=<n>
 ```
 
-## Proof Requirements Before Promotion
+The raw CLI and proof Make target defaults for `MOJOBITNODE_PAR_SCRIPT_VERIFY`
+are `0`. Set `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` only for diagnostic runner work
+until the result-storage and artifact-truth audit is complete.
 
-A new artifact may report `script_runner_mode="parallel"` only after all of the
+## Proof Requirements For Promotion
+
+A new artifact may report `script_runner_mode="parallel"` only when all of the
 following are true:
 
 - A small Mojo toolchain smoke proves the chosen parallel API actually runs more
@@ -102,6 +106,5 @@ following are true:
 - Fresh Docker 5k and 50k proofs preserve target hash and UTXO count.
 - The `shakedown_50k` artifact validates under the official benchmark contract.
 
-Until then, optimized debug artifacts must continue reporting
+If any of those conditions fails, debug artifacts must report
 `script_runner_mode="sequential"` and `script_runner_actual_mode="sequential"`.
-

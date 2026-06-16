@@ -264,6 +264,22 @@ def full_timing_from_benchmark_ticks(log_path: Path) -> dict[str, int | float]:
     return stages
 
 
+def runner_metrics_from_entries(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    metrics: dict[str, Any] = {}
+    for entry in entries:
+        raw = entry.get("script_metrics")
+        if not isinstance(raw, dict):
+            continue
+        for key, value in raw.items():
+            if key == "script_runner_actual_mode" and isinstance(value, str) and value.strip():
+                metrics[key] = value.strip()
+            elif isinstance(value, bool):
+                continue
+            elif isinstance(value, (int, float)):
+                metrics[key] = max(value, metrics.get(key, 0))
+    return metrics
+
+
 def best_final_progress(entries: list[dict[str, Any]]) -> dict[str, Any]:
     if not entries:
         return {}
@@ -324,7 +340,7 @@ def progress_tick(
     target = target_height or max(height, 0)
     percent = round((height / target * 100.0), 3) if target > 0 else None
     timing = full_timing(entry.get("timing_buckets_ms"))
-    return {
+    tick = {
         "schema": "benchmark.telemetry_tick.v1",
         "port": port,
         "gate": gate_id,
@@ -353,6 +369,11 @@ def progress_tick(
         "header_height": as_int(entry.get("header_height"), height),
         "stored_block_height": as_int(entry.get("stored_block_height"), height),
     }
+    if isinstance(entry.get("script_metrics"), dict):
+        tick["script_metrics"] = entry["script_metrics"]
+    if isinstance(entry.get("script_runner_actual_mode"), str):
+        tick["script_runner_actual_mode"] = entry["script_runner_actual_mode"]
+    return tick
 
 
 def synthesize_ticks(
@@ -472,6 +493,11 @@ def build_artifact(
     observed_pipeline_stages = full_timing_from_benchmark_ticks(proof_log)
     if any(observed_pipeline_stages.values()):
         pipeline_timing["stage_totals_ms"] = observed_pipeline_stages
+    script_metrics = runner_metrics_from_entries(entries)
+    runner_actual_mode = str(script_metrics.get("script_runner_actual_mode") or "").strip()
+    if not runner_actual_mode:
+        runner_actual_mode = "parallel" if not script_metrics else "sequential"
+    runner_mode = "parallel" if runner_actual_mode == "parallel" else "sequential"
     target = int(spec["target_height"]) if not spec.get("tip") else as_int(reference_finish_height, as_int(final.get("validated_height"), 0))
     expected_hash = _artifact_validator.EXPECTED_HASHES.get(gate_id, reference_finish_hash or final.get("validated_hash", ""))
     if maintenance:
@@ -513,7 +539,7 @@ def build_artifact(
         "proof_mode": "tip_maintenance" if maintenance else "p2p_sync",
         "peer_mode": "tip_peer" if maintenance else "local_reference",
         "peer": str(final.get("peer") or expected_peer),
-        "script_runner_mode": "parallel",
+        "script_runner_mode": runner_mode,
         "rocksdb_wal_disabled": False,
         "prefetch_depth": 4,
         "resume_supported": True,
@@ -543,6 +569,10 @@ def build_artifact(
             "telemetry_log": rel(telemetry_log_path),
         },
     }
+    if script_metrics:
+        payload["runner_truth_contract_version"] = 1
+        payload["script_runner_actual_mode"] = runner_actual_mode
+        payload["script_metrics"] = script_metrics
     if spec.get("resume_from_state"):
         payload.update(
             {

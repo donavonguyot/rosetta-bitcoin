@@ -39,6 +39,7 @@ PORT_DOC_STATUS_HEADINGS = re.compile(r"^##\s+(?:Live status|Current status|Curr
 MARKDOWN_LINK = re.compile(r"!?\[[^\]\n]+\]\(([^)\n]+)\)")
 IGNORED_PATH_PARTS = {
     ".git",
+    ".mojo-docs",
     ".pytest_cache",
     ".venv",
     "_build",

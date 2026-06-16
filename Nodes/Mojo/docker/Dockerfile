@@ -9,7 +9,6 @@ RUN apt-get update \
     curl \
     librocksdb-dev \
     libsecp256k1-dev \
-    libssl-dev \
     pkg-config \
     python3 \
     python3-venv \
@@ -26,7 +25,7 @@ COPY tests ./tests
 RUN cc -O2 -Wall -Wextra -std=c11 -fPIC -shared \
   -o /usr/local/lib/libmojobitnode_shim.so \
   src/mojo_native_shim.c \
-  $(pkg-config --cflags --libs rocksdb libsecp256k1 openssl) \
+  $(pkg-config --cflags --libs rocksdb libsecp256k1) \
   -lstdc++
 RUN /opt/mojo/bin/mojo run tests/toolchain_smoke.mojo
 RUN /opt/mojo/bin/mojo build -I src src/mojobitnode.mojo -o /usr/local/bin/mojobitnode
@@ -37,7 +36,6 @@ RUN apt-get update \
     ca-certificates \
     librocksdb-dev \
     libsecp256k1-dev \
-    libssl-dev \
     python3 \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /opt/mojo /opt/mojo

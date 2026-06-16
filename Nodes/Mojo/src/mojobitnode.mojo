@@ -1,9 +1,13 @@
+from std.collections import List
 from std.ffi import OwnedDLHandle
+from std.memory.unsafe_pointer import alloc
 from std.os import getenv
 from std.sys import argv
 
-from block_core import local_reference_proof
+from block_core import Native, local_reference_proof
 from script_corpus_foundation import (
+    ascii_string_to_bytes,
+    bytes_equal,
     evaluate_bare_legacy_fixture,
     evaluate_bare_multisig_fixture,
     evaluate_p2pkh_fixture,
@@ -11,12 +15,14 @@ from script_corpus_foundation import (
     evaluate_taproot_fixture,
     evaluate_taproot_fixture_diagnostic,
     evaluate_witness_v0_fixture,
+    hex_text_to_bytes,
     is_bare_legacy_diagnostic_fixture,
     is_p2pkh_diagnostic_fixture,
     is_simple_p2sh_diagnostic_fixture,
     is_taproot_diagnostic_fixture,
     is_witness_v0_diagnostic_fixture,
     load_bare_multisig_fixture,
+    taproot_tweak_hash,
 )
 from script_corpus_table import fixture_id_at, fixture_in_set, fixture_meta, script_fixture_count
 
@@ -107,6 +113,180 @@ def expected_code(index: Int) -> Int32:
     return 2
 
 
+def hex_string_to_bytes(text: String) raises -> List[UInt8]:
+    return hex_text_to_bytes(ascii_string_to_bytes(text))
+
+
+def vector_pubkey_hex(index: Int) -> String:
+    if index == 0 or index == 1:
+        return String("0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")
+    return String("")
+
+
+def vector_xonly_hex(index: Int) -> String:
+    if index == 3 or index == 4:
+        return String("f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f")
+    if index == 5:
+        return String("0000000000000000000000000000000000000000000000000000000000000000")
+    if index == 6:
+        return String("85a7b790fc9d962493788317e4874a4ab07f1e9c78c773c47f2f6c96df756f05")
+    if index == 7:
+        return String("00")
+    return String("")
+
+
+def vector_msg_hash_hex(index: Int) -> String:
+    if index == 0:
+        return String("281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5")
+    if index == 1:
+        return String("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+    if index == 2 or index == 5:
+        return String("0000000000000000000000000000000000000000000000000000000000000000")
+    if index == 3 or index == 4:
+        return String("3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9")
+    return String("")
+
+
+def vector_signature_hex(index: Int) -> String:
+    if index == 0 or index == 1:
+        return String("3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4")
+    if index == 3:
+        return String("632f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784c80478f3845b4719c92c339fe1032890f9d96b6b0b44a8ea05da6ce88a133b7b")
+    if index == 4:
+        return String("622f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784c80478f3845b4719c92c339fe1032890f9d96b6b0b44a8ea05da6ce88a133b7b")
+    return String("")
+
+
+def vector_merkle_root_hex(index: Int) -> String:
+    if index == 6:
+        return String("446ba384864eb34196e08044029fb463d97748e4549dfd0e2612f60d74c4f165")
+    return String("")
+
+
+def vector_expected_xonly_hex(index: Int) -> String:
+    if index == 6:
+        return String("4b3e30f94e0ae82945cbb40d83088b8f3bea370c24c575b7788889ad5e64da8b")
+    return String("")
+
+
+def vector_expected_parity(index: Int) -> Int:
+    if index == 6:
+        return 1
+    return -1
+
+
+def native_vector_actual(shim_path: String, index: Int) raises -> Int32:
+    var native = OwnedDLHandle(shim_path)
+    if vector_operation(index) == "verify_ecdsa":
+        var pubkey = hex_string_to_bytes(vector_pubkey_hex(index))
+        var sig = hex_string_to_bytes(vector_signature_hex(index))
+        var msg = hex_string_to_bytes(vector_msg_hash_hex(index))
+        var pubkey_alloc_len = len(pubkey)
+        if pubkey_alloc_len == 0:
+            pubkey_alloc_len = 1
+        var sig_alloc_len = len(sig)
+        if sig_alloc_len == 0:
+            sig_alloc_len = 1
+        var msg_alloc_len = len(msg)
+        if msg_alloc_len == 0:
+            msg_alloc_len = 1
+        var pubkey_ptr = alloc[UInt8](pubkey_alloc_len)
+        var sig_ptr = alloc[UInt8](sig_alloc_len)
+        var msg_ptr = alloc[UInt8](msg_alloc_len)
+        for i in range(len(pubkey)):
+            pubkey_ptr[i] = pubkey[i]
+        for i in range(len(sig)):
+            sig_ptr[i] = sig[i]
+        for i in range(len(msg)):
+            msg_ptr[i] = msg[i]
+        var result = native.call["mojobitnode_verify_ecdsa_der_bytes_len", Int32](
+            pubkey_ptr,
+            Int32(len(pubkey)),
+            sig_ptr,
+            Int32(len(sig)),
+            msg_ptr,
+            Int32(len(msg)),
+        )
+        pubkey_ptr.free()
+        sig_ptr.free()
+        msg_ptr.free()
+        return result
+    if vector_operation(index) == "verify_schnorr":
+        var xonly = hex_string_to_bytes(vector_xonly_hex(index))
+        var sig = hex_string_to_bytes(vector_signature_hex(index))
+        var msg = hex_string_to_bytes(vector_msg_hash_hex(index))
+        var xonly_alloc_len = len(xonly)
+        if xonly_alloc_len == 0:
+            xonly_alloc_len = 1
+        var sig_alloc_len = len(sig)
+        if sig_alloc_len == 0:
+            sig_alloc_len = 1
+        var msg_alloc_len = len(msg)
+        if msg_alloc_len == 0:
+            msg_alloc_len = 1
+        var xonly_ptr = alloc[UInt8](xonly_alloc_len)
+        var sig_ptr = alloc[UInt8](sig_alloc_len)
+        var msg_ptr = alloc[UInt8](msg_alloc_len)
+        for i in range(len(xonly)):
+            xonly_ptr[i] = xonly[i]
+        for i in range(len(sig)):
+            sig_ptr[i] = sig[i]
+        for i in range(len(msg)):
+            msg_ptr[i] = msg[i]
+        var result = native.call["mojobitnode_verify_schnorr_bytes_len", Int32](
+            xonly_ptr,
+            Int32(len(xonly)),
+            sig_ptr,
+            Int32(len(sig)),
+            msg_ptr,
+            Int32(len(msg)),
+        )
+        xonly_ptr.free()
+        sig_ptr.free()
+        msg_ptr.free()
+        return result
+    var internal = hex_string_to_bytes(vector_xonly_hex(index))
+    var merkle_root = hex_string_to_bytes(vector_merkle_root_hex(index))
+    var expected = hex_string_to_bytes(vector_expected_xonly_hex(index))
+    var tweak = List[UInt8]()
+    if index == 7:
+        for _ in range(32):
+            tweak.append(UInt8(0))
+    else:
+        tweak = taproot_tweak_hash(internal, merkle_root)
+    var internal_alloc_len = len(internal)
+    if internal_alloc_len == 0:
+        internal_alloc_len = 1
+    var tweak_alloc_len = len(tweak)
+    if tweak_alloc_len == 0:
+        tweak_alloc_len = 1
+    var expected_alloc_len = len(expected)
+    if expected_alloc_len == 0:
+        expected_alloc_len = 1
+    var internal_ptr = alloc[UInt8](internal_alloc_len)
+    var tweak_ptr = alloc[UInt8](tweak_alloc_len)
+    var expected_ptr = alloc[UInt8](expected_alloc_len)
+    for i in range(len(internal)):
+        internal_ptr[i] = internal[i]
+    for i in range(len(tweak)):
+        tweak_ptr[i] = tweak[i]
+    for i in range(len(expected)):
+        expected_ptr[i] = expected[i]
+    var result = native.call["mojobitnode_verify_taproot_tweak_precomputed_bytes_len", Int32](
+        internal_ptr,
+        Int32(len(internal)),
+        tweak_ptr,
+        Int32(len(tweak)),
+        expected_ptr,
+        Int32(len(expected)),
+        Int32(vector_expected_parity(index)),
+    )
+    internal_ptr.free()
+    tweak_ptr.free()
+    expected_ptr.free()
+    return result
+
+
 def main() raises:
     var args = argv()
     if len(args) < 2:
@@ -166,12 +346,11 @@ def main() raises:
         return
 
     if command == "native-crypto-vectors":
-        var native = OwnedDLHandle(shim_path)
-        var case_total = native.call["mojobitnode_native_crypto_vector_count", Int32]()
+        var case_total = 8
         var passed_count = 0
         var results = String("")
-        for i in range(Int(case_total)):
-            var actual_code = native.call["mojobitnode_native_crypto_vector_actual", Int32](Int32(i))
+        for i in range(case_total):
+            var actual_code = native_vector_actual(shim_path, i)
             var expected = expected_code(i)
             var passed = actual_code == expected
             if passed:
@@ -211,7 +390,8 @@ def main() raises:
         )
         print(json)
         if result_path != "":
-            _ = native.call["mojobitnode_write_text_len", Int32](
+            var writer = OwnedDLHandle(shim_path)
+            _ = writer.call["mojobitnode_write_text_len", Int32](
                 result_path.unsafe_ptr(),
                 Int32(result_path.byte_length()),
                 json.unsafe_ptr(),
@@ -346,13 +526,33 @@ def main() raises:
         return
 
     if command == "storage-proof":
-        var native = OwnedDLHandle(shim_path)
-        var mask = native.call["mojobitnode_storage_probe", Int32](datadir.unsafe_ptr())
-        var create_ok = (mask & 1) != 0
-        var read_ok = (mask & 2) != 0
-        var delete_ok = (mask & 4) != 0
-        var batch_read_ok = (mask & 8) != 0
-        var passed = mask == 15
+        var native = Native(shim_path)
+        var db = Int64(0)
+        var create_ok = False
+        var read_ok = False
+        var delete_ok = False
+        var batch_read_ok = False
+        try:
+            db = native.rocksdb_open(datadir)
+            var key1 = ascii_string_to_bytes(String("mojo:owned:key1"))
+            var key2 = ascii_string_to_bytes(String("mojo:owned:key2"))
+            var value1 = ascii_string_to_bytes(String("value1"))
+            var value2 = ascii_string_to_bytes(String("value2"))
+            native.rocksdb_put(db, key1, value1)
+            create_ok = True
+            var read_value1 = native.rocksdb_get(db, key1, 128)
+            read_ok = bytes_equal(read_value1, value1)
+            native.rocksdb_put(db, key2, value2)
+            native.rocksdb_delete(db, key1)
+            delete_ok = True
+            var missing_value1 = native.rocksdb_get(db, key1, 128)
+            var read_value2 = native.rocksdb_get(db, key2, 128)
+            batch_read_ok = len(missing_value1) == 0 and bytes_equal(read_value2, value2)
+        except e:
+            pass
+        if db != 0:
+            native.rocksdb_close(db)
+        var passed = create_ok and read_ok and delete_ok and batch_read_ok
         var json = (
             String('{"schema":"port.storage_proof.v1","implementation":"Mojo",')
             + String('"port":"mojo","node_id":"mojobitnode","runtime_surface":"')
@@ -377,7 +577,7 @@ def main() raises:
         )
         print(json)
         if result_path != "":
-            _ = native.call["mojobitnode_write_text_len", Int32](
+            _ = native.handle.call["mojobitnode_write_text_len", Int32](
                 result_path.unsafe_ptr(),
                 Int32(result_path.byte_length()),
                 json.unsafe_ptr(),

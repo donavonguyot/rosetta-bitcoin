@@ -489,7 +489,7 @@
       "gate_id": "shakedown_50k",
       "path": "Nodes/Shared/conformance/results/mojo_control_shakedown_50k_benchmark_20260615T230521Z.json",
       "status": "current",
-      "notes": "Current comparable mojo shakedown_50k proof accepted by campaign shakedown_50k_20260615_160338."
+      "notes": "Current comparable mojo shakedown_50k proof accepted by campaign shakedown_50k_20260615_160338; parallel runner evidence is under audit before any newer 50k promotion."
     }
   ]
 }

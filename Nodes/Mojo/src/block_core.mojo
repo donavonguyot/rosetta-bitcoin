@@ -1,6 +1,8 @@
+from std.algorithm.backend.cpu.parallelize import parallelize
 from std.collections import List
 from std.ffi import OwnedDLHandle
 from std.memory.unsafe_pointer import alloc
+from std.os import getenv
 
 from script_corpus_foundation import (
     ByteCursor,
@@ -219,6 +221,9 @@ struct ConnectTiming(Copyable):
     var schnorr_ms: Int64
     var taproot_tweak_calls: Int64
     var taproot_tweak_ms: Int64
+    var script_jobs: Int64
+    var script_parallel_batches: Int64
+    var script_runner_thread_count: Int64
 
     def __init__(out self):
         self.p2p_fetch = 0
@@ -235,6 +240,43 @@ struct ConnectTiming(Copyable):
         self.schnorr_ms = 0
         self.taproot_tweak_calls = 0
         self.taproot_tweak_ms = 0
+        self.script_jobs = 0
+        self.script_parallel_batches = 0
+        self.script_runner_thread_count = 0
+
+
+struct ScriptRunnerConfig(Copyable):
+    var enabled: Bool
+    var threads: Int
+    var min_inputs: Int
+
+    def __init__(out self):
+        self.enabled = False
+        self.threads = 0
+        self.min_inputs = 2
+
+
+struct ScriptVerifyResult(Copyable):
+    var ok: Bool
+    var completed: Bool
+    var tx_index: Int
+    var input_index: Int
+    var prev_txid: String
+    var prev_vout: UInt32
+    var spent_script_pubkey: String
+    var failure_stage: String
+    var failure: String
+
+    def __init__(out self):
+        self.ok = False
+        self.completed = False
+        self.tx_index = 0
+        self.input_index = 0
+        self.prev_txid = String("")
+        self.prev_vout = UInt32(0)
+        self.spent_script_pubkey = String("")
+        self.failure_stage = String("")
+        self.failure = String("")
 
 
 struct ProofResult(Copyable):
@@ -274,6 +316,35 @@ def expected_utxos_for_target(target: Int) raises -> Int:
     if target == 50000:
         return 568855
     raise Error("Mojo local-reference-proof supports targets 5000 and 50000 only")
+
+
+def _parse_non_negative_int(value: String, default_value: Int) -> Int:
+    if value.byte_length() == 0:
+        return default_value
+    var out = 0
+    for i in range(value.byte_length()):
+        var code = ord(value[byte=i])
+        if code < 48 or code > 57:
+            return default_value
+        out = out * 10 + (code - 48)
+    return out
+
+
+def script_runner_config_from_env() -> ScriptRunnerConfig:
+    var config = ScriptRunnerConfig()
+    var enabled = getenv("MOJOBITNODE_PAR_SCRIPT_VERIFY", "0")
+    config.enabled = enabled == "1" or enabled == "true" or enabled == "TRUE"
+    config.threads = _parse_non_negative_int(getenv("MOJOBITNODE_SCRIPT_THREADS", "0"), 0)
+    config.min_inputs = _parse_non_negative_int(getenv("MOJOBITNODE_SCRIPT_MIN_INPUTS", "2"), 2)
+    if config.min_inputs < 1:
+        config.min_inputs = 1
+    return config^
+
+
+def script_runner_mode(ref timing: ConnectTiming) -> String:
+    if timing.script_parallel_batches > 0:
+        return String("parallel")
+    return String("sequential")
 
 
 def telemetry_tick_count_for_target(target: Int, progress_interval: Int) -> Int:
@@ -774,6 +845,122 @@ def verify_spend(
     return evaluate_legacy_script(prevout.script_pubkey, stack^, tx, input_index, shim_path, True)
 
 
+def script_verification_failure_message(
+    height: Int,
+    ref block_txid: List[UInt8],
+    input_index: Int,
+    ref prev_hash: List[UInt8],
+    prev_vout: UInt32,
+    ref spent_script_pubkey: List[UInt8],
+    failure_stage: String,
+    failure: String,
+) -> String:
+    var message = (
+        String("script verification ")
+        + failure_stage
+        + String(" at height ")
+        + String(height)
+        + String(" txid=")
+        + display_hash(block_txid)
+        + String(" input=")
+        + String(input_index)
+        + String(" prev_txid=")
+        + display_hash(prev_hash)
+        + String(" prev_vout=")
+        + String(prev_vout)
+        + String(" spent_script_pubkey=")
+        + bytes_to_hex(spent_script_pubkey)
+    )
+    if failure != "":
+        message += String(" failure=") + failure
+    return message^
+
+
+def verify_transaction_inputs_parallel(
+    shim_path: String,
+    height: Int,
+    tx_index: Int,
+    ref block_txid: List[UInt8],
+    ref tx: Transaction,
+    ref tx_prevouts: List[Utxo],
+    ref tx_prev_hashes: List[List[UInt8]],
+    ref tx_prev_vouts: List[UInt32],
+    ref spent_prevouts: List[TaprootPrevout],
+    ref sighash_precompute: SighashPrecompute,
+    ref runner_config: ScriptRunnerConfig,
+) raises:
+    var results = List[ScriptVerifyResult]()
+    for input_index in range(len(tx.inputs)):
+        var result = ScriptVerifyResult()
+        result.tx_index = tx_index
+        result.input_index = input_index
+        result.prev_txid = display_hash(tx_prev_hashes[input_index])
+        result.prev_vout = tx_prev_vouts[input_index]
+        result.spent_script_pubkey = bytes_to_hex(tx_prevouts[input_index].script_pubkey)
+        results.append(result^)
+
+    @parameter
+    def verify_job(input_index: Int) capturing:
+        var result = ScriptVerifyResult()
+        result.tx_index = tx_index
+        result.input_index = input_index
+        result.prev_txid = display_hash(tx_prev_hashes[input_index])
+        result.prev_vout = tx_prev_vouts[input_index]
+        result.spent_script_pubkey = bytes_to_hex(tx_prevouts[input_index].script_pubkey)
+        try:
+            var verified = verify_spend(
+                shim_path,
+                tx,
+                input_index,
+                tx_prevouts,
+                spent_prevouts,
+                sighash_precompute,
+            )
+            result.ok = verified
+            if not verified:
+                result.failure_stage = String("failed")
+                result.failure = String("evaluator returned false")
+        except e:
+            result.ok = False
+            result.failure_stage = String("error")
+            result.failure = String(e)
+        result.completed = True
+        results[input_index] = result^
+
+    if runner_config.threads > 0:
+        parallelize[verify_job](len(tx.inputs), runner_config.threads)
+    else:
+        parallelize[verify_job](len(tx.inputs))
+
+    for input_index in range(len(tx.inputs)):
+        if not results[input_index].completed:
+            raise Error(
+                script_verification_failure_message(
+                    height,
+                    block_txid,
+                    input_index,
+                    tx_prev_hashes[input_index],
+                    tx_prev_vouts[input_index],
+                    tx_prevouts[input_index].script_pubkey,
+                    String("error"),
+                    String("parallel callback did not complete"),
+                )
+            )
+        if not results[input_index].ok:
+            raise Error(
+                script_verification_failure_message(
+                    height,
+                    block_txid,
+                    input_index,
+                    tx_prev_hashes[input_index],
+                    tx_prev_vouts[input_index],
+                    tx_prevouts[input_index].script_pubkey,
+                    results[input_index].failure_stage,
+                    results[input_index].failure,
+                )
+            )
+
+
 def connect_block(
     mut native: Native,
     db: Int64,
@@ -782,6 +969,7 @@ def connect_block(
     ref block: Block,
     current_utxos: Int,
     mut timing: ConnectTiming,
+    ref runner_config: ScriptRunnerConfig,
 ) raises -> Int:
     if len(block.txs) == 0:
         raise Error("block has no transactions")
@@ -854,44 +1042,60 @@ def connect_block(
         timing.script_inputs += Int64(len(tx.inputs))
         var spent_prevouts = taproot_prevouts_from_utxos(tx_prevouts)
         var sighash_precompute = build_sighash_precompute_with_taproot(tx, spent_prevouts)
-        for input_index in range(len(tx.inputs)):
+        timing.script_jobs += Int64(len(tx.inputs))
+        var use_parallel_runner = runner_config.enabled and len(tx.inputs) >= runner_config.min_inputs
+        if use_parallel_runner:
             var verify_started = native.now_ms()
-            var verified = False
-            try:
-                verified = verify_spend(shim_path, tx, input_index, tx_prevouts, spent_prevouts, sighash_precompute)
-            except e:
-                raise Error(
-                    String("script verification error at height ")
-                    + String(height)
-                    + String(" txid=")
-                    + display_hash(block.txs[tx_index].txid)
-                    + String(" input=")
-                    + String(input_index)
-                    + String(" prev_txid=")
-                    + display_hash(tx_prev_hashes[input_index])
-                    + String(" prev_vout=")
-                    + String(tx_prev_vouts[input_index])
-                    + String(" spent_script_pubkey=")
-                    + bytes_to_hex(tx_prevouts[input_index].script_pubkey)
-                    + String(" failure=")
-                    + String(e)
-                )
-            if not verified:
-                raise Error(
-                    String("script verification failed at height ")
-                    + String(height)
-                    + String(" txid=")
-                    + display_hash(block.txs[tx_index].txid)
-                    + String(" input=")
-                    + String(input_index)
-                    + String(" prev_txid=")
-                    + display_hash(tx_prev_hashes[input_index])
-                    + String(" prev_vout=")
-                    + String(tx_prev_vouts[input_index])
-                    + String(" spent_script_pubkey=")
-                    + bytes_to_hex(tx_prevouts[input_index].script_pubkey)
-                )
+            verify_transaction_inputs_parallel(
+                shim_path,
+                height,
+                tx_index,
+                block.txs[tx_index].txid,
+                tx,
+                tx_prevouts,
+                tx_prev_hashes,
+                tx_prev_vouts,
+                spent_prevouts,
+                sighash_precompute,
+                runner_config,
+            )
             timing.script_verify += native.now_ms() - verify_started
+            timing.script_parallel_batches += 1
+            timing.script_runner_thread_count = Int64(runner_config.threads)
+        else:
+            for input_index in range(len(tx.inputs)):
+                var verify_started = native.now_ms()
+                var verified = False
+                try:
+                    verified = verify_spend(shim_path, tx, input_index, tx_prevouts, spent_prevouts, sighash_precompute)
+                except e:
+                    raise Error(
+                        script_verification_failure_message(
+                            height,
+                            block.txs[tx_index].txid,
+                            input_index,
+                            tx_prev_hashes[input_index],
+                            tx_prev_vouts[input_index],
+                            tx_prevouts[input_index].script_pubkey,
+                            String("error"),
+                            String(e),
+                        )
+                    )
+                if not verified:
+                    raise Error(
+                        script_verification_failure_message(
+                            height,
+                            block.txs[tx_index].txid,
+                            input_index,
+                            tx_prev_hashes[input_index],
+                            tx_prev_vouts[input_index],
+                            tx_prevouts[input_index].script_pubkey,
+                            String("failed"),
+                            String("evaluator returned false"),
+                        )
+                    )
+                timing.script_verify += native.now_ms() - verify_started
+        for input_index in range(len(tx.inputs)):
             spent_txids.append(clone_bytes(tx_prev_hashes[input_index]))
             spent_vouts.append(tx_prev_vouts[input_index])
         for vout in range(len(tx.outputs)):
@@ -1202,7 +1406,15 @@ def emit_progress(
         + String(timing.taproot_tweak_calls)
         + String(',"taproot_tweak_ms":')
         + String(timing.taproot_tweak_ms)
-        + String(',"script_runner_actual_mode":"sequential"},"last_block_ms":')
+        + String(',"script_jobs":')
+        + String(timing.script_jobs)
+        + String(',"script_parallel_batches":')
+        + String(timing.script_parallel_batches)
+        + String(',"script_runner_thread_count":')
+        + String(timing.script_runner_thread_count)
+        + String(',"script_runner_actual_mode":"')
+        + script_runner_mode(timing)
+        + String('"},"last_block_ms":')
         + String(last_block_ms)
         + String("}")
     )
@@ -1295,7 +1507,15 @@ def emit_telemetry(
         + String(timing.taproot_tweak_calls)
         + String(',"taproot_tweak_ms":')
         + String(timing.taproot_tweak_ms)
-        + String(',"script_runner_actual_mode":"sequential"}}')
+        + String(',"script_jobs":')
+        + String(timing.script_jobs)
+        + String(',"script_parallel_batches":')
+        + String(timing.script_parallel_batches)
+        + String(',"script_runner_thread_count":')
+        + String(timing.script_runner_thread_count)
+        + String(',"script_runner_actual_mode":"')
+        + script_runner_mode(timing)
+        + String('"}}')
     )
 
 
@@ -1320,6 +1540,7 @@ def local_reference_proof(
     var fd = native.socket_connect(parts[0], parts[1])
     var db = native.rocksdb_open(datadir)
     var timing = ConnectTiming()
+    var runner_config = script_runner_config_from_env()
     var current_utxos = 0
     var blocks_fetched = 0
     var blocks_connected = 0
@@ -1355,7 +1576,7 @@ def local_reference_proof(
                     if tx_count_index != 0:
                         current_block_vin_count += len(blocks[i].txs[tx_count_index].tx.inputs)
                         current_block_script_input_count += len(blocks[i].txs[tx_count_index].tx.inputs)
-                current_utxos = connect_block(native, db, shim_path, height, blocks[i], current_utxos, timing)
+                current_utxos = connect_block(native, db, shim_path, height, blocks[i], current_utxos, timing, runner_config)
                 refresh_crypto_metrics(native, timing)
                 timing.block_connect_store_commit += native.now_ms() - block_started
                 blocks_fetched += 1
@@ -1414,7 +1635,11 @@ def local_reference_proof(
             + String('",')
             + String('"peer_mode":"local_reference","peer":"')
             + peer
-            + String('","byte_source":"local_reference_p2p","proof_mode":"p2p_sync","prefetch_depth":4,"script_runner_mode":"sequential","script_runner_actual_mode":"sequential",')
+            + String('","byte_source":"local_reference_p2p","proof_mode":"p2p_sync","prefetch_depth":4,"script_runner_mode":"')
+            + script_runner_mode(timing)
+            + String('","script_runner_actual_mode":"')
+            + script_runner_mode(timing)
+            + String('",')
             + String('"rocksdb_wal_disabled":false,"fresh_state":true,"resume_supported":true,"datadir":"')
             + datadir
             + String('","chainstate_backend":"rocksdb","chainstate_status":"usable","native_storage":true,')
@@ -1505,7 +1730,15 @@ def local_reference_proof(
             + String(timing.taproot_tweak_calls)
             + String(',"taproot_tweak_ms":')
             + String(timing.taproot_tweak_ms)
-            + String(',"script_runner_actual_mode":"sequential"},"slow_blocks":[]}')
+            + String(',"script_jobs":')
+            + String(timing.script_jobs)
+            + String(',"script_parallel_batches":')
+            + String(timing.script_parallel_batches)
+            + String(',"script_runner_thread_count":')
+            + String(timing.script_runner_thread_count)
+            + String(',"script_runner_actual_mode":"')
+            + script_runner_mode(timing)
+            + String('"},"slow_blocks":[]}')
         )
         if result_path != "":
             _ = native.handle.call["mojobitnode_write_text_len", Int32](

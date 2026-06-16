@@ -11,7 +11,7 @@ explicitly adds external peers, supervisor loops, long-run lanes, or tip work.
 - Docker install surface: Debian `bookworm-slim` with the same pinned Mojo
   package.
 - Mojo is not provided by Homebrew. Homebrew only provides `uv`, `python@3.11`,
-  RocksDB, `secp256k1`, `pkgconf`, and OpenSSL.
+  RocksDB, `secp256k1`, and `pkgconf`.
 
 Use the version checks before trusting local output:
 
@@ -52,10 +52,12 @@ current benchmark evidence.
 
 ## Native Boundary
 
-`src/mojo_native_shim.c` is the owned native boundary for RocksDB and
-`libsecp256k1`. Keep command dispatch, JSON shaping, and user-visible CLI
-behavior in Mojo. The shim should expose primitives only when Mojo interop is
-not sufficient for the spike.
+`src/mojo_native_shim.c` is the owned native boundary for `libsecp256k1`
+primitives, RocksDB primitives, and non-consensus POSIX runtime glue for
+sockets/time/file writes. Keep consensus logic, hashes, TapTweak construction,
+fixture/result shaping, storage-proof operation sequencing, command dispatch,
+JSON shaping, and user-visible CLI behavior in Mojo. The shim should expose
+primitives only when Mojo interop is not sufficient for the spike.
 
 ## Docs And Testing
 
@@ -81,16 +83,21 @@ CPU `parallelize`, `sync_parallelize`, async `TaskGroup`, atomics, locks, and
 logical core discovery. `sync_parallelize` currently warns that callback
 exceptions trap instead of propagating, so consensus failures must be captured in
 owned result records and reduced deterministically after the parallel section.
-Do not report `script_runner_mode: "parallel"` until concurrent execution,
-deterministic first-failure ordering, and official artifact validation are all
-proven.
+The proof path has a diagnostic `parallelize` runner behind
+`MOJOBITNODE_PAR_SCRIPT_VERIFY=1`, but raw CLI and proof Make defaults are
+sequential while runner safety is under audit. Do not report
+`script_runner_mode: "parallel"` unless a run actually executed at least one
+parallel batch and the artifact includes runner batch metrics accepted by the
+benchmark validator.
 
 Do not use `mojo test`; current Mojo testing uses `TestSuite` and runs with
 `mojo run`:
 
 ```bash
 make host-toolchain-smoke
+make host-parallel-runner-smoke
 make docker-toolchain-smoke
+make docker-parallel-runner-smoke
 make host-script-corpus-foundation-smoke
 make host-block-core-smoke
 make host-script-corpus
@@ -107,13 +114,15 @@ The current port order is:
 
 1. Keep Shared script corpus proof clean in Docker.
 2. Keep Project-accepted baseline 5k evidence clean.
-3. Use `host-shakedown-50k-proof` and `docker-proof-50k` for 50k shakedown
-   debug proof.
-4. Let Project run the strict 50k campaign and own accepted evidence.
+3. Keep Project-accepted 50k shakedown evidence quarantined to the prior
+   accepted artifact while the newer parallel-runner promotion is audited.
+4. Treat 100k as the next missing gate; do not start it without a separate plan.
 
 Strict 5k/50k proof requires RocksDB runtime truth, native crypto, WAL, fixed
 benchmark knobs, `core_spendable_v1` UTXO accounting, and canonical importable
 proof JSON.
 
 Until Project accepts a control artifact for a gate, keep status language at
-candidate/debug level even when local or Docker debug proof passes.
+candidate/debug level even when local or Docker debug proof passes. A proof may
+only report `script_runner_mode: "parallel"` when at least one script batch
+actually ran through the parallel verifier and the artifact validates.

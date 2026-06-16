@@ -14,13 +14,17 @@ native prerequisites a future port would need?
 - Mojo installed with the official `uv pip install` route, pinned to
   `mojo==1.0.0b1`.
 - `mojobitnode` is a compiled Mojo entrypoint.
-- Native calls go through a tiny owned C shim, not Python delegation.
+- Native calls go through owned C shims, not Python delegation:
+  `libsecp256k1` primitives, RocksDB primitives, and non-consensus POSIX
+  runtime glue for sockets/time/file writes.
 - Native `libsecp256k1` vector checks.
 - RocksDB runtime truth smoke against `chainstate-rocksdb`.
 - Project-shaped status JSON.
 - Docker Shared script corpus proof (`45/45`).
 - Local Reference P2P proof surfaces for strict 5k baseline and 50k shakedown
   candidates.
+- Diagnostic `parallelize` script-verification runner under audit; comparable
+  proof targets default to sequential until runner truth is self-proving.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,
@@ -28,6 +32,9 @@ supervisor loops, 100k/tip benchmark lanes, or tip maintenance.
 
 The supported `mojobitnode` command is Mojo-owned and reports
 `entrypoint_language: "mojo"`.
+Consensus logic, hashes, TapTweak construction, script execution,
+fixture/result shaping, and storage-proof orchestration stay in Mojo. The C
+boundary is limited to generic native primitives and non-consensus runtime glue.
 
 The diagnostic `script-corpus-dev` surface remains available for fixture-level
 debugging. The public `script-corpus` command is the evidence surface and emits
@@ -52,11 +59,12 @@ make host-local-reference-proof
 make host-shakedown-50k-proof
 make host-smoke-once
 make host-toolchain-smoke
+make host-parallel-runner-smoke
 make host-script-corpus-foundation-smoke
 make host-block-core-smoke
 ```
 
-Homebrew provides `uv`, `rocksdb`, `secp256k1`, `pkgconf`, `openssl@3`, and
+Homebrew provides `uv`, `rocksdb`, `secp256k1`, `pkgconf`, and
 `python@3.11`. Mojo itself is not installed by Homebrew; the host surface uses a
 repo-local `.venv` and installs the pinned Mojo package with `uv`.
 
@@ -75,6 +83,7 @@ make docker-proof-local
 make docker-proof-50k
 make docker-smoke-once
 make docker-toolchain-smoke
+make docker-parallel-runner-smoke
 ```
 
 If Debian cannot install or run Mojo, stop the spike and record that as the
@@ -101,7 +110,7 @@ npx skills update
 
 Those skills are not vendored and are not required by the spike.
 
-For future parallel script-runner work, also read
-`docs/PARALLEL_RUNNER_RESEARCH.md`. It maps the cached Mojo 1.0.0b1
-parallelization, async runtime, atomic, and lock docs to the runner proof
-requirements for this port.
+For parallel script-runner work, also read
+`docs/PARALLEL_RUNNER_RESEARCH.md`. The proof binary has a diagnostic Mojo CPU
+`parallelize` path, but comparable proof Make targets default to sequential while
+the runner is under audit.

@@ -2949,6 +2949,16 @@ def tagged_hash(tag: String, ref payload: List[UInt8]) -> List[UInt8]:
     return sha256_digest(data)
 
 
+def taproot_tweak_hash(ref internal_xonly: List[UInt8], ref merkle_root: List[UInt8]) raises -> List[UInt8]:
+    if len(internal_xonly) != 32:
+        raise Error("Taproot internal key must be 32 bytes")
+    if len(merkle_root) != 0 and len(merkle_root) != 32:
+        raise Error("Taproot merkle root must be empty or 32 bytes")
+    var payload = clone_bytes(internal_xonly)
+    append_bytes(payload, merkle_root)
+    return tagged_hash(String("TapTweak"), payload)
+
+
 def tapleaf_hash(leaf_version: UInt8, ref script: List[UInt8]) raises -> List[UInt8]:
     var data = List[UInt8]()
     data.append(leaf_version)
@@ -3836,30 +3846,28 @@ def verify_taproot_tweak(
     ref expected_xonly: List[UInt8],
     expected_parity: Int,
 ) raises -> Bool:
+    var tweak = taproot_tweak_hash(internal_xonly, merkle_root)
     var native = OwnedDLHandle(shim_path)
     var internal_ptr = alloc[UInt8](len(internal_xonly))
-    var merkle_alloc_len = len(merkle_root)
-    if merkle_alloc_len == 0:
-        merkle_alloc_len = 1
-    var merkle_ptr = alloc[UInt8](merkle_alloc_len)
+    var tweak_ptr = alloc[UInt8](len(tweak))
     var expected_ptr = alloc[UInt8](len(expected_xonly))
     for i in range(len(internal_xonly)):
         internal_ptr[i] = internal_xonly[i]
-    for i in range(len(merkle_root)):
-        merkle_ptr[i] = merkle_root[i]
+    for i in range(len(tweak)):
+        tweak_ptr[i] = tweak[i]
     for i in range(len(expected_xonly)):
         expected_ptr[i] = expected_xonly[i]
-    var result = native.call["mojobitnode_verify_taproot_tweak_bytes_len", Int32](
+    var result = native.call["mojobitnode_verify_taproot_tweak_precomputed_bytes_len", Int32](
         internal_ptr,
         Int32(len(internal_xonly)),
-        merkle_ptr,
-        Int32(len(merkle_root)),
+        tweak_ptr,
+        Int32(len(tweak)),
         expected_ptr,
         Int32(len(expected_xonly)),
         Int32(expected_parity),
     )
     internal_ptr.free()
-    merkle_ptr.free()
+    tweak_ptr.free()
     expected_ptr.free()
     if result == 0:
         return True
