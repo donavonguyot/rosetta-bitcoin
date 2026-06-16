@@ -1,3 +1,4 @@
+from std.algorithm.backend.cpu.parallelize import parallelize
 from std.collections import List
 from std.ffi import OwnedDLHandle
 from std.memory.unsafe_pointer import alloc
@@ -1202,7 +1203,7 @@ def verify_script_jobs_sequential(
     stats.jobs = Int64(len(jobs))
     if len(jobs) == 0:
         return stats^
-    stats.batches = 1
+    stats.batches = 0
     stats.threads = 1
     var started = native.now_ms()
     var results = List[ScriptVerifyResult]()
@@ -1216,6 +1217,74 @@ def verify_script_jobs_sequential(
         stats.worker_cpu_ms += native.now_ms() - job_started
         results.append(result^)
     stats.wall_ms = native.now_ms() - started
+    var failed_index = first_failed_script_result_index(results)
+    if failed_index >= 0:
+        var failed_job = jobs[failed_index].copy()
+        raise Error(
+            script_verification_failure_message(
+                height,
+                failed_job.txid,
+                failed_job.input_index,
+                failed_job.prev_hash,
+                failed_job.prev_vout,
+                failed_job.prevout.script_pubkey,
+                results[failed_index].failure_stage,
+                results[failed_index].failure,
+            )
+        )
+    return stats^
+
+
+def verify_script_jobs_parallel_diagnostic(
+    mut native: Native,
+    shim_path: String,
+    height: Int,
+    ref contexts: List[ScriptVerifyContext],
+    ref jobs: List[ScriptVerifyJob],
+    config: ScriptRunnerConfig,
+) raises -> ScriptVerifyStats:
+    var stats = ScriptVerifyStats()
+    stats.jobs = Int64(len(jobs))
+    stats.threads = Int64(config.threads)
+    if len(jobs) == 0:
+        return stats^
+    if config.threads == 1:
+        return verify_script_jobs_sequential(native, shim_path, height, contexts, jobs)
+
+    var results = List[ScriptVerifyResult]()
+    for i in range(len(jobs)):
+        var result = script_verify_result_for_job(jobs[i])
+        results.append(result^)
+
+    @parameter
+    def verify_one(index: Int) capturing:
+        # The callback must not mutate chainstate or raise across parallelize.
+        # Each worker owns exactly one result slot.
+        var result = verify_script_job(
+            shim_path,
+            jobs[index],
+            contexts,
+        )
+        results[index] = result^
+
+    var started = native.now_ms()
+    if config.threads > 1:
+        parallelize[verify_one](len(jobs), config.threads)
+    else:
+        parallelize[verify_one](len(jobs))
+    stats.wall_ms = native.now_ms() - started
+    stats.worker_cpu_ms = 0
+    stats.batches = 1
+
+    for i in range(len(results)):
+        if not results[i].completed:
+            raise Error(
+                String("parallel script job did not complete at height ")
+                + String(height)
+                + String(" job_index=")
+                + String(jobs[i].job_index)
+            )
+
     var failed_index = first_failed_script_result_index(results)
     if failed_index >= 0:
         var failed_job = jobs[failed_index].copy()
@@ -1378,18 +1447,32 @@ def connect_block(
                 u.script_pubkey = clone_bytes(tx.outputs[vout].script_pubkey)
                 append_delta_created(delta, block.txs[tx_index].txid, UInt32(vout), u)
 
-    var verify_stats = verify_script_jobs_sequential(
-        native,
-        shim_path,
-        height,
-        verify_contexts,
-        script_jobs,
-    )
+    var runner_config = script_runner_config_from_env()
+    var verify_stats: ScriptVerifyStats
+    if runner_config.enabled and len(script_jobs) > 1 and len(script_jobs) >= runner_config.min_inputs and runner_config.threads != 1:
+        verify_stats = verify_script_jobs_parallel_diagnostic(
+            native,
+            shim_path,
+            height,
+            verify_contexts,
+            script_jobs,
+            runner_config,
+        )
+    else:
+        verify_stats = verify_script_jobs_sequential(
+            native,
+            shim_path,
+            height,
+            verify_contexts,
+            script_jobs,
+        )
     timing.script_verify += verify_stats.wall_ms
     timing.script_wall_ms += verify_stats.wall_ms
     timing.script_worker_cpu_ms += verify_stats.worker_cpu_ms
     timing.script_jobs += verify_stats.jobs
-    timing.script_runner_thread_count = verify_stats.threads
+    timing.script_parallel_batches += verify_stats.batches
+    if verify_stats.batches > 0 or timing.script_parallel_batches == 0:
+        timing.script_runner_thread_count = verify_stats.threads
 
     var apply_started = native.now_ms()
     var new_utxos = current_utxos - delta.external_spends + block_delta_unspent_created(delta)

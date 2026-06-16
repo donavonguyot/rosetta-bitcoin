@@ -1,6 +1,32 @@
 from std.algorithm.backend.cpu.parallelize import parallelize
+from std.atomic import Atomic
 from std.collections import List
-from std.testing import assert_equal, TestSuite
+from std.testing import assert_equal, assert_true, TestSuite
+
+
+def test_parallelize_proves_concurrent_overlap() raises:
+    var entered = Atomic[DType.int64](0)
+    var released = Atomic[DType.int64](0)
+    var overlapped = List[Bool]()
+    for _ in range(2):
+        overlapped.append(False)
+
+    @parameter
+    def rendezvous(index: Int) capturing:
+        _ = entered.fetch_add(1)
+        var spins = 0
+        while spins < 50_000_000 and entered.load() < 2:
+            spins += 1
+        if entered.load() >= 2:
+            overlapped[index] = True
+            _ = released.fetch_add(1)
+
+    parallelize[rendezvous](2, 2)
+
+    assert_equal(entered.load(), 2)
+    assert_equal(released.load(), 2)
+    assert_true(overlapped[0])
+    assert_true(overlapped[1])
 
 
 def test_parallelize_writes_result_slots() raises:

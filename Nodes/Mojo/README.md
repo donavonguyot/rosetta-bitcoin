@@ -114,12 +114,15 @@ npx skills update
 Those skills are not vendored and are not required by the spike.
 
 For parallel script-runner work, also read
-`docs/PARALLEL_RUNNER_RESEARCH.md`. Comparable proof paths now collect a
-deterministic block-level script-job batch and execute it sequentially;
-UTXO deletes, unspent creates, undo, block storage, and metadata are staged by
-Mojo and committed through one RocksDB batch after script verification passes.
-`parallelize` work is a separate diagnostic surface until a later artifact proves
-real batch execution and passes the stricter benchmark contract.
+`docs/PARALLEL_RUNNER_RESEARCH.md`. Comparable proof paths collect a
+deterministic block-level script-job batch; defaults execute it sequentially.
+Setting `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` enables the diagnostic Mojo
+`parallelize` runner when a block has at least `MOJOBITNODE_SCRIPT_MIN_INPUTS`
+script jobs and `MOJOBITNODE_SCRIPT_THREADS` is not `1`. UTXO deletes, unspent
+creates, undo, block storage, and metadata are still staged by Mojo and
+committed through one RocksDB batch only after script verification passes.
+Project evidence promotion remains a later explicit step after a fresh artifact
+self-proves positive parallel batch metrics and passes the benchmark contract.
 
 Use the native-boundary audit targets before trusting new proof output. They
 fail on direct SSL-family crypto linkage or unclassified exported

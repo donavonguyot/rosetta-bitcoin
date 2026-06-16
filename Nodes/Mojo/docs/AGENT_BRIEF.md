@@ -94,15 +94,17 @@ CPU `parallelize`, `sync_parallelize`, async `TaskGroup`, atomics, locks, and
 logical core discovery. `sync_parallelize` currently warns that callback
 exceptions trap instead of propagating, so consensus failures must be captured in
 owned result records and reduced deterministically after the parallel section.
-The proof path currently uses a fast-port-shaped block-level script job/result
-layer but executes it sequentially. After verification passes, Mojo stages UTXO
-deletes, unspent creates, undo, block storage, and metadata, then commits them
-through one RocksDB batch. `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` is not a comparable
-proof claim in this slice; `parallelize` work remains a separate diagnostic
-surface until runner safety and artifact truth are proven. Do not report
-`script_runner_mode: "parallel"` unless a later run actually executed at least
-one parallel batch and the artifact includes runner batch metrics accepted by
-the benchmark validator.
+The proof path uses a fast-port-shaped block-level script job/result layer.
+Defaults execute that batch sequentially. Setting
+`MOJOBITNODE_PAR_SCRIPT_VERIFY=1` enables the diagnostic Mojo `parallelize`
+runner only when the block has at least `MOJOBITNODE_SCRIPT_MIN_INPUTS` script
+jobs and `MOJOBITNODE_SCRIPT_THREADS` is not `1`; `0` means the Mojo runtime
+default worker count. After verification passes, Mojo stages UTXO deletes,
+unspent creates, undo, block storage, and metadata, then commits them through
+one RocksDB batch. Do not treat the env flag as a comparable proof claim by
+itself. A proof may report `script_runner_mode: "parallel"` only when at least
+one parallel batch actually executed and the artifact includes runner batch
+metrics accepted by the benchmark validator.
 
 Do not use `mojo test`; current Mojo testing uses `TestSuite` and runs with
 `mojo run`:
@@ -131,7 +133,7 @@ The current port order is:
 1. Keep Shared script corpus proof clean in Docker.
 2. Keep Project-accepted baseline 5k evidence clean.
 3. Keep Project-accepted 50k shakedown evidence quarantined to the prior
-   accepted artifact while parallel-runner promotion remains under audit.
+   accepted artifact while the diagnostic parallel runner is validated.
 4. Treat 100k as the next missing gate; do not start it without a separate plan.
 
 Strict 5k/50k proof requires RocksDB runtime truth, native crypto, WAL, fixed
