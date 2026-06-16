@@ -48,11 +48,13 @@ The implementation follows formulas and structure from Bitcoin Core's
 
 The pure backend is diagnostic-only. Native `libsecp256k1` remains the default
 and comparable backend for script corpus, 5k, 50k, and later proof lanes. Pure
-ECDSA/DER is enabled only for focused diagnostic vectors and the first
-timing-gated P2PKH shadow row, `scripts.p2pkh_sighash_single_38010`. Other
-ECDSA-bearing non-Taproot corpus rows remain unsupported until a later measured
-slice proves zero disagreements and the 5000ms per-row shadow guardrail. The
-pure backend must not fall back to native.
+ECDSA/DER is enabled only for focused diagnostic vectors and the three
+timing-gated P2PKH shadow rows: `scripts.p2pkh_sighash_single_38010`,
+`scripts.p2pkh_61174`, and `scripts.p2pkh_107951`. P2PKH shadow rows emit
+ECDSA sighash, verify, total, and signature-count timing fields. Other
+ECDSA-bearing non-Taproot corpus shapes remain unsupported until a later
+measured slice proves zero disagreements and the 5000ms per-row shadow
+guardrail. The pure backend must not fall back to native.
 
 This implementation does not claim constant-time hardening. It is a verifier
 shadow path for differential testing and language-specific learning.

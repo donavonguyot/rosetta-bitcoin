@@ -113,6 +113,15 @@ def validate(
             supported += 1
             if require_shadow_timing and not nonnegative_int(row.get("shadow_duration_ms")):
                 errors.append(f"results[{index}] supported row missing shadow_duration_ms")
+            if require_shadow_timing and text(row.get("fixture_id")).startswith("scripts.p2pkh"):
+                for field in (
+                    "shadow_ecdsa_sighash_ms",
+                    "shadow_ecdsa_verify_ms",
+                    "shadow_ecdsa_total_ms",
+                    "shadow_ecdsa_signature_count",
+                ):
+                    if not nonnegative_int(row.get(field)):
+                        errors.append(f"results[{index}] {field} missing or invalid")
         if row.get("shadow_agreed") is True:
             agreed += 1
         if row.get("shadow_supported") is True and row.get("shadow_agreed") is not True:

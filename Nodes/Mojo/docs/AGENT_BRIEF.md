@@ -61,14 +61,16 @@ reference double-base, wNAF double-base, affine conversion, and native-result
 comparison. The measured shadow set enables all 17 Taproot corpus rows,
 including the large
 `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and
-`scripts.p2tr_tapscript_126975` stress rows, plus
-`scripts.p2pkh_sighash_single_38010` as the first timing-gated P2PKH/ECDSA
-row. Other ECDSA-bearing non-Taproot rows remain unsupported until a later
-measured slice enables them with zero disagreement and the 5000ms per-row
-guardrail. Shadow artifacts include per-attempt `shadow_duration_ms`, aggregate
-timing fields, and large-fixture size metrics; do not broaden support unless
-new rows have zero disagreement and stay under the 5000ms per-row guardrail.
-Read `docs/LIBSECP_TRANSLATION_NOTES.md` before changing pure secp internals.
+`scripts.p2tr_tapscript_126975` stress rows, plus all three timing-gated
+P2PKH/ECDSA rows: `scripts.p2pkh_sighash_single_38010`,
+`scripts.p2pkh_61174`, and `scripts.p2pkh_107951`. P2PKH shadow rows report
+ECDSA sighash, verify, total, and signature-count timings. Other ECDSA-bearing
+non-Taproot shapes remain unsupported until a later measured slice enables them
+with zero disagreement and the 5000ms per-row guardrail. Shadow artifacts
+include per-attempt `shadow_duration_ms`, aggregate timing fields, and
+large-fixture size metrics; do not broaden support unless new rows have zero
+disagreement and stay under the 5000ms per-row guardrail. Read
+`docs/LIBSECP_TRANSLATION_NOTES.md` before changing pure secp internals.
 
 `local-reference-proof` is the bounded local Reference proof path for 5k and
 50k. It must use local Reference P2P bytes, RocksDB operational truth, native

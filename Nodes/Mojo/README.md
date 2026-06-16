@@ -60,10 +60,13 @@ native prerequisites a future port would need?
   timing, large-fixture size metrics, and no native fallback. The current corpus
   shadow slice supports all 17 Taproot fixtures, including the large
   `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and
-  `scripts.p2tr_tapscript_126975` stress rows, plus the first timing-gated
-  P2PKH/ECDSA row, `scripts.p2pkh_sighash_single_38010`. Other ECDSA-bearing
-  non-Taproot rows remain unsupported until a later measured slice enables them
-  with zero disagreements and the 5000ms per-row guardrail. See
+  `scripts.p2tr_tapscript_126975` stress rows, plus all three timing-gated
+  P2PKH/ECDSA rows: `scripts.p2pkh_sighash_single_38010`,
+  `scripts.p2pkh_61174`, and `scripts.p2pkh_107951`. P2PKH shadow rows also
+  report ECDSA sighash, verify, total, and signature-count timing fields.
+  Other ECDSA-bearing non-Taproot shapes remain unsupported until a later
+  measured slice enables them with zero disagreements and the 5000ms per-row
+  guardrail. See
   `docs/LIBSECP_TRANSLATION_NOTES.md` before changing the pure secp internals.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
@@ -81,8 +84,8 @@ debugging. The public `script-corpus` command is the evidence surface and emits
 canonical `port.script_corpus_result.v1` JSON with Mojo-owned `45/45` coverage.
 `script-corpus --shadow-crypto` is a separate diagnostic comparator surface and
 must not be imported as canonical corpus evidence. Unsupported rows are still
-expected for most ECDSA-bearing fixtures; the current diagnostic ECDSA corpus
-support is limited to `scripts.p2pkh_sighash_single_38010`.
+expected for non-P2PKH ECDSA-bearing fixtures; the current diagnostic ECDSA
+corpus support is limited to the three P2PKH rows.
 
 ## Commands
 

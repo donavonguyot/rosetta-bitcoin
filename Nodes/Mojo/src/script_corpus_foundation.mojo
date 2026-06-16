@@ -39,6 +39,21 @@ struct ScriptFixture(Movable):
         self.spent_script_pubkey = List[UInt8]()
 
 
+struct P2pkhShadowEcdsaResult(Movable):
+    var passed: Bool
+    var sighash_ms: Int64
+    var verify_ms: Int64
+    var total_ms: Int64
+    var signature_count: Int
+
+    def __init__(out self):
+        self.passed = False
+        self.sighash_ms = 0
+        self.verify_ms = 0
+        self.total_ms = 0
+        self.signature_count = 0
+
+
 struct TxInput(Copyable):
     var previous_hash: List[UInt8]
     var previous_index: UInt32
@@ -2074,6 +2089,43 @@ def evaluate_p2pkh_fixture_with_crypto(
     return verify_ecdsa_signature_for_mode_with_crypto(
         crypto, signature.data, pubkey.data, tx, input_index, script_pubkey, False, Int64(0)
     )
+
+
+def evaluate_p2pkh_fixture_with_crypto_timed(
+    manifest_path: String,
+    fixture_id: String,
+    shim_path: String,
+    ref crypto: CryptoBackend,
+    ref timer: OwnedDLHandle,
+) raises -> P2pkhShadowEcdsaResult:
+    var total_started = timer.call["mojobitnode_now_ms", Int64]()
+    var result = P2pkhShadowEcdsaResult()
+    if not manifest_contains_fixture(manifest_path, fixture_id):
+        raise Error("fixture id not present in Shared manifest")
+    var stem = _fixture_stem(fixture_id)
+    var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
+    var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+    var input_index = _fixture_input_index(fixture_id)
+    if input_index < 0 or input_index >= len(tx.inputs):
+        raise Error("fixture input index out of range")
+    if not is_p2pkh_script_pubkey(script_pubkey):
+        raise Error("fixture spent script is not P2PKH")
+    var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
+    if len(stack) < 2:
+        raise Error("P2PKH scriptSig missing signature or pubkey")
+    var signature = stack[len(stack) - 2].copy()
+    var pubkey = stack[len(stack) - 1].copy()
+    var actual_hash = hash160(pubkey.data)
+    var expected_hash = slice_bytes(script_pubkey, 3, 23)
+    if not bytes_equal(actual_hash, expected_hash):
+        result.passed = False
+        result.total_ms = timer.call["mojobitnode_now_ms", Int64]() - total_started
+        return result^
+    result = verify_ecdsa_signature_for_mode_with_crypto_timed(
+        crypto, signature.data, pubkey.data, tx, input_index, script_pubkey, False, Int64(0), timer
+    )
+    result.total_ms = timer.call["mojobitnode_now_ms", Int64]() - total_started
+    return result^
 
 
 def evaluate_witness_v0_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
@@ -4359,6 +4411,45 @@ def verify_ecdsa_signature_for_mode_with_crypto(
     if result == 1:
         return False
     if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for ECDSA")
+    raise Error("malformed ECDSA signature or pubkey")
+
+
+def verify_ecdsa_signature_for_mode_with_crypto_timed(
+    ref crypto: CryptoBackend,
+    ref signature: List[UInt8],
+    ref pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    witness_v0: Bool,
+    witness_amount_sats: Int64,
+    ref timer: OwnedDLHandle,
+) raises -> P2pkhShadowEcdsaResult:
+    var result = P2pkhShadowEcdsaResult()
+    var total_started = timer.call["mojobitnode_now_ms", Int64]()
+    if len(signature) == 0:
+        result.total_ms = timer.call["mojobitnode_now_ms", Int64]() - total_started
+        return result^
+    var base_type = Int(signature[len(signature) - 1]) & 0x1F
+    if base_type != 1 and base_type != 2 and base_type != 3:
+        raise Error("diagnostic fixture only supports SIGHASH_ALL, SIGHASH_NONE, and SIGHASH_SINGLE")
+    var der = slice_bytes(signature, 0, len(signature) - 1)
+    var sighash_started = timer.call["mojobitnode_now_ms", Int64]()
+    var digest = signature_digest_for_mode(tx, input_index, script_code, signature, witness_v0, witness_amount_sats)
+    result.sighash_ms = timer.call["mojobitnode_now_ms", Int64]() - sighash_started
+    var verify_started = timer.call["mojobitnode_now_ms", Int64]()
+    var crypto_result = crypto.verify_ecdsa_der_bytes(pubkey, der, digest)
+    result.verify_ms = timer.call["mojobitnode_now_ms", Int64]() - verify_started
+    result.signature_count = 1
+    result.total_ms = timer.call["mojobitnode_now_ms", Int64]() - total_started
+    if crypto_result == 0:
+        result.passed = True
+        return result^
+    if crypto_result == 1:
+        result.passed = False
+        return result^
+    if crypto_result == CRYPTO_RESULT_UNSUPPORTED:
         raise Error("unsupported crypto backend for ECDSA")
     raise Error("malformed ECDSA signature or pubkey")
 
