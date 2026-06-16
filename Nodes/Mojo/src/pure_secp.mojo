@@ -1,4 +1,4 @@
-from std.collections import List
+from std.collections import InlineArray, List
 
 
 comptime VALID = Int32(0)
@@ -8,12 +8,10 @@ comptime UNSUPPORTED = Int32(3)
 
 
 struct U256(Copyable):
-    var limbs: List[UInt32]
+    var limbs: InlineArray[UInt64, 4]
 
     def __init__(out self):
-        self.limbs = List[UInt32]()
-        for _ in range(8):
-            self.limbs.append(UInt32(0))
+        self.limbs = InlineArray[UInt64, 4](fill=UInt64(0))
 
 
 struct Point(Copyable):
@@ -64,15 +62,15 @@ def _u256(
     l7: UInt32,
 ) -> U256:
     var out = U256()
-    out.limbs[0] = l0
-    out.limbs[1] = l1
-    out.limbs[2] = l2
-    out.limbs[3] = l3
-    out.limbs[4] = l4
-    out.limbs[5] = l5
-    out.limbs[6] = l6
-    out.limbs[7] = l7
+    out.limbs[0] = UInt64(l0) | (UInt64(l1) << UInt64(32))
+    out.limbs[1] = UInt64(l2) | (UInt64(l3) << UInt64(32))
+    out.limbs[2] = UInt64(l4) | (UInt64(l5) << UInt64(32))
+    out.limbs[3] = UInt64(l6) | (UInt64(l7) << UInt64(32))
     return out^
+
+
+def _low64(value: UInt128) -> UInt64:
+    return UInt64(value & UInt128(0xFFFFFFFFFFFFFFFF))
 
 
 def _zero() -> U256:
@@ -225,8 +223,8 @@ def _generator_odd_multiple(index: Int) raises -> Point:
 
 
 def _cmp(ref a: U256, ref b: U256) -> Int:
-    for j in range(8):
-        var i = 7 - j
+    for j in range(4):
+        var i = 3 - j
         if a.limbs[i] > b.limbs[i]:
             return 1
         if a.limbs[i] < b.limbs[i]:
@@ -239,29 +237,29 @@ def _eq(ref a: U256, ref b: U256) -> Bool:
 
 
 def _is_zero(ref a: U256) -> Bool:
-    for i in range(8):
-        if a.limbs[i] != UInt32(0):
+    for i in range(4):
+        if a.limbs[i] != UInt64(0):
             return False
     return True
 
 
 def _is_one_value(ref a: U256) -> Bool:
-    if a.limbs[0] != UInt32(1):
+    if a.limbs[0] != UInt64(1):
         return False
-    for i in range(1, 8):
-        if a.limbs[i] != UInt32(0):
+    for i in range(1, 4):
+        if a.limbs[i] != UInt64(0):
             return False
     return True
 
 
 def _is_odd(ref a: U256) -> Bool:
-    return (a.limbs[0] & UInt32(1)) == UInt32(1)
+    return (a.limbs[0] & UInt64(1)) == UInt64(1)
 
 
 def _bit(ref a: U256, bit: Int) -> Bool:
-    var limb = bit // 32
-    var shift = bit - limb * 32
-    return ((a.limbs[limb] >> UInt32(shift)) & UInt32(1)) == UInt32(1)
+    var limb = bit // 64
+    var shift = bit - limb * 64
+    return ((a.limbs[limb] >> UInt64(shift)) & UInt64(1)) == UInt64(1)
 
 
 def _bit_length(ref a: U256) -> Int:
@@ -274,64 +272,64 @@ def _bit_length(ref a: U256) -> Int:
 
 def _add_raw(ref a: U256, ref b: U256) -> U256:
     var out = U256()
-    var carry = UInt64(0)
-    for i in range(8):
-        var total = UInt64(a.limbs[i]) + UInt64(b.limbs[i]) + carry
-        out.limbs[i] = UInt32(total & UInt64(0xFFFFFFFF))
-        carry = total >> UInt64(32)
+    var carry = UInt128(0)
+    for i in range(4):
+        var total = UInt128(a.limbs[i]) + UInt128(b.limbs[i]) + carry
+        out.limbs[i] = _low64(total)
+        carry = total >> UInt128(64)
     return out^
 
 
 def _sub_raw(ref a: U256, ref b: U256) -> U256:
     var out = U256()
-    var borrow = UInt64(0)
-    for i in range(8):
-        var av = UInt64(a.limbs[i])
-        var bv = UInt64(b.limbs[i]) + borrow
+    var borrow = UInt128(0)
+    for i in range(4):
+        var av = UInt128(a.limbs[i])
+        var bv = UInt128(b.limbs[i]) + borrow
         if av >= bv:
-            out.limbs[i] = UInt32(av - bv)
-            borrow = UInt64(0)
+            out.limbs[i] = UInt64(av - bv)
+            borrow = UInt128(0)
         else:
-            out.limbs[i] = UInt32((UInt64(1) << UInt64(32)) + av - bv)
-            borrow = UInt64(1)
+            out.limbs[i] = UInt64((UInt128(1) << UInt128(64)) + av - bv)
+            borrow = UInt128(1)
     return out^
 
 
 def _shr1(ref a: U256) -> U256:
     var out = U256()
-    var carry = UInt32(0)
-    for j in range(8):
-        var i = 7 - j
-        out.limbs[i] = (a.limbs[i] >> UInt32(1)) | (carry << UInt32(31))
-        carry = a.limbs[i] & UInt32(1)
+    var carry = UInt64(0)
+    for j in range(4):
+        var i = 3 - j
+        out.limbs[i] = (a.limbs[i] >> UInt64(1)) | (carry << UInt64(63))
+        carry = a.limbs[i] & UInt64(1)
     return out^
 
 
 def _add_small_raw(ref a: U256, value: UInt32) -> U256:
     var out = a.copy()
-    var carry = UInt64(value)
-    for i in range(8):
-        if carry == UInt64(0):
+    var carry = UInt128(value)
+    for i in range(4):
+        if carry == UInt128(0):
             break
-        var total = UInt64(out.limbs[i]) + carry
-        out.limbs[i] = UInt32(total & UInt64(0xFFFFFFFF))
-        carry = total >> UInt64(32)
+        var total = UInt128(out.limbs[i]) + carry
+        out.limbs[i] = _low64(total)
+        carry = total >> UInt128(64)
     return out^
 
 
 def _sub_small_raw(ref a: U256, value: UInt32) -> U256:
     var out = a.copy()
-    var borrow = UInt64(value)
-    for i in range(8):
-        if borrow == UInt64(0):
+    var borrow = UInt128(value)
+    for i in range(4):
+        if borrow == UInt128(0):
             break
-        var av = UInt64(out.limbs[i])
+        var av = UInt128(out.limbs[i])
         if av >= borrow:
-            out.limbs[i] = UInt32(av - borrow)
-            borrow = UInt64(0)
+            out.limbs[i] = UInt64(av - borrow)
+            borrow = UInt128(0)
         else:
-            out.limbs[i] = UInt32((UInt64(1) << UInt64(32)) + av - borrow)
-            borrow = UInt64(1)
+            out.limbs[i] = UInt64((UInt128(1) << UInt128(64)) + av - borrow)
+            borrow = UInt128(1)
     return out^
 
 
@@ -339,19 +337,17 @@ def _scalar_half(ref value: U256) -> U256:
     if not _is_odd(value):
         return _shr1(value)
     var n = _scalar_n()
-    var sum = List[UInt32]()
-    for _ in range(9):
-        sum.append(UInt32(0))
-    var carry = UInt64(0)
-    for i in range(8):
-        var total = UInt64(value.limbs[i]) + UInt64(n.limbs[i]) + carry
-        sum[i] = UInt32(total & UInt64(0xFFFFFFFF))
-        carry = total >> UInt64(32)
-    sum[8] = UInt32(carry)
+    var sum = InlineArray[UInt64, 5](fill=UInt64(0))
+    var carry = UInt128(0)
+    for i in range(4):
+        var total = UInt128(value.limbs[i]) + UInt128(n.limbs[i]) + carry
+        sum[i] = _low64(total)
+        carry = total >> UInt128(64)
+    sum[4] = UInt64(carry)
 
     var out = U256()
-    for i in range(8):
-        out.limbs[i] = (sum[i] >> UInt32(1)) | ((sum[i + 1] & UInt32(1)) << UInt32(31))
+    for i in range(4):
+        out.limbs[i] = (sum[i] >> UInt64(1)) | ((sum[i + 1] & UInt64(1)) << UInt64(63))
     return out^
 
 
@@ -387,23 +383,23 @@ def _mul_mod(ref a: U256, ref b: U256, ref modulus: U256) -> U256:
 
 
 def _shifted_limb(ref value: U256, shift: Int, index: Int) -> UInt64:
-    var limb_shift = shift // 32
-    var bit_shift = shift - limb_shift * 32
+    var limb_shift = shift // 64
+    var bit_shift = shift - limb_shift * 64
     var out = UInt64(0)
     var src = index - limb_shift
-    if src >= 0 and src < 8:
-        out |= (UInt64(value.limbs[src]) << UInt64(bit_shift)) & UInt64(0xFFFFFFFF)
+    if src >= 0 and src < 4:
+        out |= value.limbs[src] << UInt64(bit_shift)
     if bit_shift != 0:
         var carry_src = src - 1
-        if carry_src >= 0 and carry_src < 8:
-            out |= UInt64(value.limbs[carry_src]) >> UInt64(32 - bit_shift)
+        if carry_src >= 0 and carry_src < 4:
+            out |= value.limbs[carry_src] >> UInt64(64 - bit_shift)
     return out
 
 
-def _limbs_ge_shifted(ref limbs: List[UInt32], ref value: U256, shift: Int) -> Bool:
-    for j in range(17):
-        var i = 16 - j
-        var lhs = UInt64(limbs[i])
+def _limbs_ge_shifted(mut limbs: InlineArray[UInt64, 9], ref value: U256, shift: Int) -> Bool:
+    for j in range(9):
+        var i = 8 - j
+        var lhs = limbs[i]
         var rhs = _shifted_limb(value, shift, i)
         if lhs > rhs:
             return True
@@ -412,37 +408,44 @@ def _limbs_ge_shifted(ref limbs: List[UInt32], ref value: U256, shift: Int) -> B
     return True
 
 
-def _limbs_sub_shifted(mut limbs: List[UInt32], ref value: U256, shift: Int):
-    var borrow = UInt64(0)
-    for i in range(17):
-        var rhs = _shifted_limb(value, shift, i) + borrow
-        var lhs = UInt64(limbs[i])
+def _limbs_sub_shifted(mut limbs: InlineArray[UInt64, 9], ref value: U256, shift: Int):
+    var borrow = UInt128(0)
+    for i in range(9):
+        var rhs = UInt128(_shifted_limb(value, shift, i)) + borrow
+        var lhs = UInt128(limbs[i])
         if lhs >= rhs:
-            limbs[i] = UInt32(lhs - rhs)
-            borrow = UInt64(0)
+            limbs[i] = UInt64(lhs - rhs)
+            borrow = UInt128(0)
         else:
-            limbs[i] = UInt32((UInt64(1) << UInt64(32)) + lhs - rhs)
-            borrow = UInt64(1)
+            limbs[i] = UInt64((UInt128(1) << UInt128(64)) + lhs - rhs)
+            borrow = UInt128(1)
+
+
+def _add_product_carry(mut product: InlineArray[UInt64, 9], index: Int, carry_in: UInt128):
+    var idx = index
+    var carry = carry_in
+    while carry != UInt128(0) and idx < 9:
+        var total = UInt128(product[idx]) + carry
+        product[idx] = _low64(total)
+        carry = total >> UInt128(64)
+        idx += 1
+
+
+def _schoolbook_product_4x64(ref a: U256, ref b: U256) -> InlineArray[UInt64, 9]:
+    var product = InlineArray[UInt64, 9](fill=UInt64(0))
+    for i in range(4):
+        var carry = UInt128(0)
+        for j in range(4):
+            var k = i + j
+            var total = UInt128(product[k]) + UInt128(a.limbs[i]) * UInt128(b.limbs[j]) + carry
+            product[k] = _low64(total)
+            carry = total >> UInt128(64)
+        _add_product_carry(product, i + 4, carry)
+    return product^
 
 
 def _mul_mod_scalar_fast(ref a: U256, ref b: U256) -> U256:
-    var product = List[UInt32]()
-    for _ in range(17):
-        product.append(UInt32(0))
-
-    for i in range(8):
-        var carry = UInt64(0)
-        for j in range(8):
-            var k = i + j
-            var total = UInt64(product[k]) + UInt64(a.limbs[i]) * UInt64(b.limbs[j]) + carry
-            product[k] = UInt32(total & UInt64(0xFFFFFFFF))
-            carry = total >> UInt64(32)
-        var idx = i + 8
-        while carry != UInt64(0):
-            var total = UInt64(product[idx]) + carry
-            product[idx] = UInt32(total & UInt64(0xFFFFFFFF))
-            carry = total >> UInt64(32)
-            idx += 1
+    var product = _schoolbook_product_4x64(a, b)
 
     var n = _scalar_n()
     for j in range(257):
@@ -451,7 +454,7 @@ def _mul_mod_scalar_fast(ref a: U256, ref b: U256) -> U256:
             _limbs_sub_shifted(product, n, shift)
 
     var out = U256()
-    for i in range(8):
+    for i in range(4):
         out.limbs[i] = product[i]
     for _ in range(4):
         if _cmp(out, n) < 0:
@@ -471,63 +474,55 @@ def _pow_mod(ref base: U256, ref exponent: U256, ref modulus: U256) -> U256:
     return result^
 
 
+def _pow_mod_field(ref base: U256, ref exponent: U256) -> U256:
+    var result = _one()
+    var power = base.copy()
+    for i in range(256):
+        if _bit(exponent, i):
+            result = _mul_mod_field_fast(result, power)
+        var power_copy = power.copy()
+        power = _mul_mod_field_fast(power, power_copy)
+    return result^
+
+
 def _mul_mod_field_fast(ref a: U256, ref b: U256) -> U256:
-    var product = List[UInt32]()
-    for _ in range(18):
-        product.append(UInt32(0))
-
-    for i in range(8):
-        var carry = UInt64(0)
-        for j in range(8):
-            var k = i + j
-            var total = UInt64(product[k]) + UInt64(a.limbs[i]) * UInt64(b.limbs[j]) + carry
-            product[k] = UInt32(total & UInt64(0xFFFFFFFF))
-            carry = total >> UInt64(32)
-        var idx = i + 8
-        while carry != UInt64(0):
-            var total = UInt64(product[idx]) + carry
-            product[idx] = UInt32(total & UInt64(0xFFFFFFFF))
-            carry = total >> UInt64(32)
-            idx += 1
-
+    var product = _schoolbook_product_4x64(a, b)
     return _reduce_field_product(product)
 
 
-def _normalize_u64_limbs(mut limbs: List[UInt64]):
-    for i in range(len(limbs) - 1):
-        var carry = limbs[i] >> UInt64(32)
-        limbs[i] = limbs[i] & UInt64(0xFFFFFFFF)
+def _normalize_u128_limbs(mut limbs: InlineArray[UInt128, 12]):
+    for i in range(11):
+        var carry = limbs[i] >> UInt128(64)
+        limbs[i] = limbs[i] & UInt128(0xFFFFFFFFFFFFFFFF)
         limbs[i + 1] += carry
 
 
-def _reduce_field_product(ref product: List[UInt32]) -> U256:
+def _reduce_field_product(mut product: InlineArray[UInt64, 9]) -> U256:
     # secp256k1 field reduction uses p = 2^256 - 2^32 - 977, so
     # every high 2^256 limb folds into one shifted limb plus 977 low limbs.
-    var limbs = List[UInt64]()
-    for i in range(24):
-        if i < len(product):
-            limbs.append(UInt64(product[i]))
-        else:
-            limbs.append(UInt64(0))
+    var limbs = InlineArray[UInt128, 12](fill=UInt128(0))
+    for i in range(9):
+        limbs[i] = UInt128(product[i])
 
-    for _ in range(6):
-        _normalize_u64_limbs(limbs)
+    for _ in range(16):
+        _normalize_u128_limbs(limbs)
         var moved = False
-        for k in range(8, len(limbs) - 1):
+        for k in range(4, 12):
             var high = limbs[k]
-            if high != UInt64(0):
-                limbs[k] = UInt64(0)
-                var low_index = k - 8
-                limbs[low_index] += high * UInt64(977)
-                limbs[low_index + 1] += high
+            if high != UInt128(0):
+                limbs[k] = UInt128(0)
+                var low_index = k - 4
+                limbs[low_index] += high * UInt128(977)
+                limbs[low_index] += (high & UInt128(0xFFFFFFFF)) << UInt128(32)
+                limbs[low_index + 1] += high >> UInt128(32)
                 moved = True
         if not moved:
             break
 
-    _normalize_u64_limbs(limbs)
+    _normalize_u128_limbs(limbs)
     var out = U256()
-    for i in range(8):
-        out.limbs[i] = UInt32(limbs[i] & UInt64(0xFFFFFFFF))
+    for i in range(4):
+        out.limbs[i] = _low64(limbs[i])
 
     var p = _field_p()
     for _ in range(8):
@@ -547,25 +542,33 @@ def _from_be32(ref bytes: List[UInt8]) raises -> U256:
     if len(bytes) != 32:
         raise Error("invalid u256 byte length")
     var out = U256()
-    for limb in range(8):
-        var offset = 28 - limb * 4
+    for limb in range(4):
+        var offset = 24 - limb * 8
         out.limbs[limb] = (
-            (UInt32(bytes[offset]) << UInt32(24))
-            | (UInt32(bytes[offset + 1]) << UInt32(16))
-            | (UInt32(bytes[offset + 2]) << UInt32(8))
-            | UInt32(bytes[offset + 3])
+            (UInt64(bytes[offset]) << UInt64(56))
+            | (UInt64(bytes[offset + 1]) << UInt64(48))
+            | (UInt64(bytes[offset + 2]) << UInt64(40))
+            | (UInt64(bytes[offset + 3]) << UInt64(32))
+            | (UInt64(bytes[offset + 4]) << UInt64(24))
+            | (UInt64(bytes[offset + 5]) << UInt64(16))
+            | (UInt64(bytes[offset + 6]) << UInt64(8))
+            | UInt64(bytes[offset + 7])
         )
     return out^
 
 
 def _to_be32(ref value: U256) -> List[UInt8]:
     var out = List[UInt8]()
-    for j in range(8):
-        var limb = value.limbs[7 - j]
-        out.append(UInt8((limb >> UInt32(24)) & UInt32(0xFF)))
-        out.append(UInt8((limb >> UInt32(16)) & UInt32(0xFF)))
-        out.append(UInt8((limb >> UInt32(8)) & UInt32(0xFF)))
-        out.append(UInt8(limb & UInt32(0xFF)))
+    for j in range(4):
+        var limb = value.limbs[3 - j]
+        out.append(UInt8((limb >> UInt64(56)) & UInt64(0xFF)))
+        out.append(UInt8((limb >> UInt64(48)) & UInt64(0xFF)))
+        out.append(UInt8((limb >> UInt64(40)) & UInt64(0xFF)))
+        out.append(UInt8((limb >> UInt64(32)) & UInt64(0xFF)))
+        out.append(UInt8((limb >> UInt64(24)) & UInt64(0xFF)))
+        out.append(UInt8((limb >> UInt64(16)) & UInt64(0xFF)))
+        out.append(UInt8((limb >> UInt64(8)) & UInt64(0xFF)))
+        out.append(UInt8(limb & UInt64(0xFF)))
     return out^
 
 
@@ -580,8 +583,7 @@ def _fe_sub(ref a: U256, ref b: U256) -> U256:
 
 
 def _fe_mul(ref a: U256, ref b: U256) -> U256:
-    var p = _field_p()
-    return _mul_mod(a, b, p)
+    return _mul_mod_field_fast(a, b)
 
 
 def _fe_sqr(ref a: U256) -> U256:
@@ -590,15 +592,13 @@ def _fe_sqr(ref a: U256) -> U256:
 
 
 def _fe_inv(ref a: U256) -> U256:
-    var p = _field_p()
     var exp = _field_p_minus_2()
-    return _pow_mod(a, exp, p)
+    return _pow_mod_field(a, exp)
 
 
 def _fe_sqrt(ref a: U256) -> U256:
-    var p = _field_p()
     var exp = _field_sqrt_exp()
-    return _pow_mod(a, exp, p)
+    return _pow_mod_field(a, exp)
 
 
 def _scalar_add(ref a: U256, ref b: U256) -> U256:
@@ -607,8 +607,7 @@ def _scalar_add(ref a: U256, ref b: U256) -> U256:
 
 
 def _scalar_mul_mod(ref a: U256, ref b: U256) -> U256:
-    var n = _scalar_n()
-    return _mul_mod(a, b, n)
+    return _mul_mod_scalar_fast(a, b)
 
 
 def _scalar_inv(ref a: U256) -> U256:
@@ -774,7 +773,7 @@ def _wnaf_recode(ref scalar: U256, width: Int) -> List[Int]:
     for _ in range(width):
         base *= 2
     var half = base // 2
-    var mask = UInt32(base - 1)
+    var mask = UInt64(base - 1)
     while not _is_zero(k):
         var digit = 0
         if _is_odd(k):

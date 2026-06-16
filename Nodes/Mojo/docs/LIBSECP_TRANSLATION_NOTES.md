@@ -17,11 +17,17 @@ The implementation follows formulas and structure from Bitcoin Core's
 
 ## Mojo Translation Choices
 
-- The public byte-facing type remains the existing `U256` with eight
-  little-endian `UInt32` limbs. This keeps current tests and backend wrappers
-  stable while replacing the slow repeated-add field multiplication.
+- The public byte-facing type remains `U256`, but its internal representation is
+  now a stack-resident `InlineArray[UInt64, 4]` with little-endian limbs. The
+  helper API still accepts and emits 32-byte big-endian values, so current tests
+  and backend wrappers stay stable while the hot path avoids heap-backed
+  `List[UInt32]` field/scalar temporaries.
 - Field multiplication now uses fixed-limb schoolbook multiplication plus the
   secp256k1 pseudo-Mersenne fold `2^256 = 2^32 + 977`.
+- Scalar multiplication/reduction now uses the same 4x64 product shape with
+  `UInt128` carry handling, and field/scalar callers route directly to their
+  modulus-specific multiplication paths instead of paying runtime modulus
+  dispatch in the verifier hot path.
 - Group operations use Jacobian points internally, with mixed affine additions,
   so scalar multiplication no longer performs a field inversion for every
   point add/double.
