@@ -94,13 +94,13 @@ CPU `parallelize`, `sync_parallelize`, async `TaskGroup`, atomics, locks, and
 logical core discovery. `sync_parallelize` currently warns that callback
 exceptions trap instead of propagating, so consensus failures must be captured in
 owned result records and reduced deterministically after the parallel section.
-The proof path currently uses the fast-port-shaped script job/result layer but
-executes it sequentially. `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` is not a comparable
-proof claim in this slice; `parallelize` work remains a separate diagnostic
-surface until runner safety and artifact truth are proven. Do not report
-`script_runner_mode: "parallel"` unless a later run actually executed at least
-one parallel batch and the artifact includes runner batch metrics accepted by
-the benchmark validator.
+The proof path currently uses a fast-port-shaped block-level script job/result
+layer but executes it sequentially. `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` is not a
+comparable proof claim in this slice; `parallelize` work remains a separate
+diagnostic surface until runner safety and artifact truth are proven. Do not
+report `script_runner_mode: "parallel"` unless a later run actually executed at
+least one parallel batch and the artifact includes runner batch metrics accepted
+by the benchmark validator.
 
 Do not use `mojo test`; current Mojo testing uses `TestSuite` and runs with
 `mojo run`:

@@ -288,6 +288,7 @@ struct ScriptVerifyResult(Copyable):
 
 struct ScriptVerifyJob(Copyable):
     var job_index: Int
+    var context_index: Int
     var tx_index: Int
     var input_index: Int
     var txid: List[UInt8]
@@ -297,12 +298,26 @@ struct ScriptVerifyJob(Copyable):
 
     def __init__(out self):
         self.job_index = 0
+        self.context_index = 0
         self.tx_index = 0
         self.input_index = 0
         self.txid = List[UInt8]()
         self.prev_hash = List[UInt8]()
         self.prev_vout = UInt32(0)
         self.prevout = Utxo()
+
+
+struct ScriptVerifyContext(Copyable):
+    var tx: Transaction
+    var tx_prevouts: List[Utxo]
+    var spent_prevouts: List[TaprootPrevout]
+    var sighash_precompute: SighashPrecompute
+
+    def __init__(out self):
+        self.tx = Transaction()
+        self.tx_prevouts = List[Utxo]()
+        self.spent_prevouts = List[TaprootPrevout]()
+        self.sighash_precompute = SighashPrecompute()
 
 
 struct ScriptVerifyStats(Copyable):
@@ -941,21 +956,20 @@ def first_failed_script_result_index(ref results: List[ScriptVerifyResult]) -> I
 
 def verify_script_job(
     shim_path: String,
-    ref tx: Transaction,
     ref job: ScriptVerifyJob,
-    ref tx_prevouts: List[Utxo],
-    ref spent_prevouts: List[TaprootPrevout],
-    ref sighash_precompute: SighashPrecompute,
+    ref contexts: List[ScriptVerifyContext],
 ) -> ScriptVerifyResult:
     var result = script_verify_result_for_job(job)
     try:
+        if job.context_index < 0 or job.context_index >= len(contexts):
+            raise Error("script job context index out of range")
         var verified = verify_spend(
             shim_path,
-            tx,
+            contexts[job.context_index].tx,
             job.input_index,
-            tx_prevouts,
-            spent_prevouts,
-            sighash_precompute,
+            contexts[job.context_index].tx_prevouts,
+            contexts[job.context_index].spent_prevouts,
+            contexts[job.context_index].sighash_precompute,
         )
         result.ok = verified
         if not verified:
@@ -973,10 +987,7 @@ def verify_script_jobs_sequential(
     mut native: Native,
     shim_path: String,
     height: Int,
-    ref tx: Transaction,
-    ref tx_prevouts: List[Utxo],
-    ref spent_prevouts: List[TaprootPrevout],
-    ref sighash_precompute: SighashPrecompute,
+    ref contexts: List[ScriptVerifyContext],
     ref jobs: List[ScriptVerifyJob],
 ) raises -> ScriptVerifyStats:
     var stats = ScriptVerifyStats()
@@ -991,11 +1002,8 @@ def verify_script_jobs_sequential(
         var job_started = native.now_ms()
         var result = verify_script_job(
             shim_path,
-            tx,
             jobs[i],
-            tx_prevouts,
-            spent_prevouts,
-            sighash_precompute,
+            contexts,
         )
         stats.worker_cpu_ms += native.now_ms() - job_started
         results.append(result^)
@@ -1040,6 +1048,8 @@ def connect_block(
     var spent_external = 0
     var created_unspent = 0
     var next_script_job_index = 0
+    var verify_contexts = List[ScriptVerifyContext]()
+    var script_jobs = List[ScriptVerifyJob]()
 
     for tx_index in range(len(block.txs)):
         var tx = block.txs[tx_index].tx.copy()
@@ -1061,10 +1071,42 @@ def connect_block(
         var tx_prevouts = List[Utxo]()
         var tx_prev_hashes = List[List[UInt8]]()
         var tx_prev_vouts = List[UInt32]()
+        var tx_seen_hashes = List[List[UInt8]]()
+        var tx_seen_vouts = List[UInt32]()
         var tx_load_started = native.now_ms()
         for input_index in range(len(tx.inputs)):
             var prev_hash = tx.inputs[input_index].previous_hash.copy()
             var prev_index = tx.inputs[input_index].previous_index
+            for seen_index in range(len(tx_seen_hashes)):
+                if tx_seen_vouts[seen_index] == prev_index and bytes_equal(tx_seen_hashes[seen_index], prev_hash):
+                    raise Error(
+                        String("duplicate spend inside transaction at height ")
+                        + String(height)
+                        + String(" txid=")
+                        + display_hash(block.txs[tx_index].txid)
+                        + String(" input=")
+                        + String(input_index)
+                        + String(" prev_txid=")
+                        + display_hash(prev_hash)
+                        + String(" prev_vout=")
+                        + String(prev_index)
+                    )
+            for spent_index in range(len(spent_txids)):
+                if spent_vouts[spent_index] == prev_index and bytes_equal(spent_txids[spent_index], prev_hash):
+                    raise Error(
+                        String("duplicate spend inside block at height ")
+                        + String(height)
+                        + String(" txid=")
+                        + display_hash(block.txs[tx_index].txid)
+                        + String(" input=")
+                        + String(input_index)
+                        + String(" prev_txid=")
+                        + display_hash(prev_hash)
+                        + String(" prev_vout=")
+                        + String(prev_index)
+                    )
+            tx_seen_hashes.append(clone_bytes(prev_hash))
+            tx_seen_vouts.append(prev_index)
             var found_created = False
             var prevout = Utxo()
             for i in range(len(created_txids)):
@@ -1100,10 +1142,17 @@ def connect_block(
         var spent_prevouts = taproot_prevouts_from_utxos(tx_prevouts)
         var sighash_precompute = build_sighash_precompute_with_taproot(tx, spent_prevouts)
         timing.sighash_precompute_transactions += 1
-        var script_jobs = List[ScriptVerifyJob]()
+        var context_index = len(verify_contexts)
+        var context = ScriptVerifyContext()
+        context.tx = tx.copy()
+        context.tx_prevouts = tx_prevouts.copy()
+        context.spent_prevouts = spent_prevouts.copy()
+        context.sighash_precompute = sighash_precompute.copy()
+        verify_contexts.append(context^)
         for input_index in range(len(tx.inputs)):
             var job = ScriptVerifyJob()
             job.job_index = next_script_job_index
+            job.context_index = context_index
             job.tx_index = tx_index
             job.input_index = input_index
             job.txid = clone_bytes(block.txs[tx_index].txid)
@@ -1112,21 +1161,6 @@ def connect_block(
             job.prevout = tx_prevouts[input_index].copy()
             script_jobs.append(job^)
             next_script_job_index += 1
-        var verify_stats = verify_script_jobs_sequential(
-            native,
-            shim_path,
-            height,
-            tx,
-            tx_prevouts,
-            spent_prevouts,
-            sighash_precompute,
-            script_jobs,
-        )
-        timing.script_verify += verify_stats.wall_ms
-        timing.script_wall_ms += verify_stats.wall_ms
-        timing.script_worker_cpu_ms += verify_stats.worker_cpu_ms
-        timing.script_jobs += verify_stats.jobs
-        timing.script_runner_thread_count = verify_stats.threads
         for input_index in range(len(tx.inputs)):
             spent_txids.append(clone_bytes(tx_prev_hashes[input_index]))
             spent_vouts.append(tx_prev_vouts[input_index])
@@ -1140,6 +1174,19 @@ def connect_block(
                 created_txids.append(clone_bytes(block.txs[tx_index].txid))
                 created_vouts.append(UInt32(vout))
                 created_values.append(u^)
+
+    var verify_stats = verify_script_jobs_sequential(
+        native,
+        shim_path,
+        height,
+        verify_contexts,
+        script_jobs,
+    )
+    timing.script_verify += verify_stats.wall_ms
+    timing.script_wall_ms += verify_stats.wall_ms
+    timing.script_worker_cpu_ms += verify_stats.worker_cpu_ms
+    timing.script_jobs += verify_stats.jobs
+    timing.script_runner_thread_count = verify_stats.threads
 
     var apply_started = native.now_ms()
     for i in range(len(spent_txids)):

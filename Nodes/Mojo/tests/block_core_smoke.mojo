@@ -116,7 +116,7 @@ def test_native_crypto_metrics() raises:
     assert_true(native.crypto_metric(String("taproot_tweak_ms")) >= 0)
 
 
-def test_script_failure_reduction_uses_lowest_job_index() raises:
+def test_block_job_failure_reduction_uses_lowest_tx_input_order() raises:
     var high = ScriptVerifyResult()
     high.job_index = 9
     high.completed = True
