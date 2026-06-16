@@ -30,17 +30,24 @@ from block_core import (
     rocksdb_multi_get_rows,
 )
 from script_corpus_foundation import (
+    HotPathProfile,
+    NativeCrypto,
+    ScriptStackItem,
     append_bytes,
     append_u32_le,
     append_varint,
     ascii_string_to_bytes,
     bytes_to_hex,
+    clone_bytes_profiled,
+    evaluate_legacy_script_with_crypto_profiled,
     hash160,
     hash256,
+    legacy_sighash_profiled,
     parse_transaction,
     read_hex_file,
     serialize_tx_output,
     slice_bytes,
+    slice_bytes_profiled,
     tapleaf_hash,
     verify_taproot_tweak,
 )
@@ -245,6 +252,50 @@ def test_block_job_failure_reduction_uses_lowest_tx_input_order() raises:
     results.append(low^)
 
     assert_equal(first_failed_script_result_index(results), 2)
+
+
+def test_hotpath_profile_counters_are_passive_and_nonzero() raises:
+    var shim = getenv("MOJOBITNODE_SHIM_PATH", "./build/libmojobitnode_shim.dylib")
+    var profile = HotPathProfile()
+    profile.enabled = True
+
+    var tx_bytes = read_hex_file(FIRST_FIXTURE_TX)
+    var tx = parse_transaction(tx_bytes.copy())
+    var cloned = clone_bytes_profiled(tx_bytes, profile)
+    _ = slice_bytes_profiled(cloned, 0, 8, profile)
+
+    var script = List[UInt8]()
+    script.append(UInt8(0x51))
+    script.append(UInt8(0x76))
+    script.append(UInt8(0x75))
+    var stack = List[ScriptStackItem]()
+    var crypto = NativeCrypto(shim)
+    assert_true(
+        evaluate_legacy_script_with_crypto_profiled(
+            script,
+            stack^,
+            tx,
+            0,
+            shim,
+            crypto,
+            profile,
+            False,
+        )
+    )
+
+    var sig = List[UInt8]()
+    sig.append(UInt8(0x30))
+    sig.append(UInt8(0x01))
+    _ = legacy_sighash_profiled(tx, 0, script, sig, profile)
+
+    assert_true(profile.clone_calls > 0)
+    assert_true(profile.slice_calls > 0)
+    assert_true(profile.script_stack_pushes > 0)
+    assert_true(profile.script_stack_pops > 0)
+    assert_true(profile.script_stack_dup_copy_ops > 0)
+    assert_true(profile.script_stack_max_depth > 0)
+    assert_true(profile.legacy_sighash_calls > 0)
+    assert_true(profile.legacy_sighash_bytes > 0)
 
 
 def test_block_delta_batch_apply_and_undo() raises:

@@ -35,6 +35,11 @@ native prerequisites a future port would need?
 - Generic packed RocksDB batch apply is available for diagnostic profiling via
   `MOJOBITNODE_PACKED_ROCKSDB_BATCH=1`; default proof commits keep the proven
   WriteBatch primitive path because packed encoding regressed 50k wall time.
+- Debug-only hot-path allocation/copy telemetry is available with
+  `MOJOBITNODE_PROFILE_HOTPATH=1`. It emits a `hotpath_profile` object for
+  slice/clone/list-copy, script stack churn, sighash assembly, job/context copy,
+  and native argument-prep counters. Leave it unset for comparable benchmark
+  artifacts; use it to choose the next narrow optimization.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,
@@ -146,6 +151,10 @@ profiling-only to keep benchmark hot paths lean. Set
 `schnorr_ms`, `taproot_tweak_ms`, or `native_bridge_ms`; default benchmark
 proofs should treat those timing fields as zero and use `script_verify` /
 `script_wall_ms` for comparable script cost.
+Set `MOJOBITNODE_PROFILE_HOTPATH=1` only for diagnostic runs that need
+`hotpath_profile` counters. The profile is passive and should preserve target
+hashes, UTXO counts, runner truth, and required telemetry fields, but its
+overhead should not be used as leaderboard evidence.
 
 Use the native-boundary audit targets before trusting new proof output. They
 fail on direct SSL-family crypto linkage or unclassified exported

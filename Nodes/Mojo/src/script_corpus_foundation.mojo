@@ -1,6 +1,7 @@
 from std.collections import List
 from std.ffi import OwnedDLHandle
 from std.memory.unsafe_pointer import alloc
+from std.os import getenv
 from std.pathlib import Path
 
 
@@ -256,6 +257,223 @@ struct DiagnosticEvalResult(Copyable):
         self.failure = String("")
 
 
+struct HotPathProfile(Copyable):
+    var enabled: Bool
+    var clone_calls: Int64
+    var clone_bytes: Int64
+    var slice_calls: Int64
+    var slice_bytes: Int64
+    var list_copy_calls: Int64
+    var list_copy_items: Int64
+    var script_stack_pushes: Int64
+    var script_stack_pops: Int64
+    var script_stack_dup_copy_ops: Int64
+    var script_stack_reorder_ops: Int64
+    var script_stack_max_depth: Int64
+    var script_opcodes: Int64
+    var legacy_sighash_calls: Int64
+    var legacy_sighash_bytes: Int64
+    var bip143_sighash_calls: Int64
+    var bip143_sighash_bytes: Int64
+    var taproot_sighash_calls: Int64
+    var taproot_sighash_bytes: Int64
+    var script_verify_context_copies: Int64
+    var script_verify_job_copies: Int64
+    var native_arg_bytes_ecdsa: Int64
+    var native_arg_bytes_schnorr: Int64
+    var native_arg_bytes_taproot_tweak: Int64
+
+    def __init__(out self):
+        self.enabled = False
+        self.clone_calls = 0
+        self.clone_bytes = 0
+        self.slice_calls = 0
+        self.slice_bytes = 0
+        self.list_copy_calls = 0
+        self.list_copy_items = 0
+        self.script_stack_pushes = 0
+        self.script_stack_pops = 0
+        self.script_stack_dup_copy_ops = 0
+        self.script_stack_reorder_ops = 0
+        self.script_stack_max_depth = 0
+        self.script_opcodes = 0
+        self.legacy_sighash_calls = 0
+        self.legacy_sighash_bytes = 0
+        self.bip143_sighash_calls = 0
+        self.bip143_sighash_bytes = 0
+        self.taproot_sighash_calls = 0
+        self.taproot_sighash_bytes = 0
+        self.script_verify_context_copies = 0
+        self.script_verify_job_copies = 0
+        self.native_arg_bytes_ecdsa = 0
+        self.native_arg_bytes_schnorr = 0
+        self.native_arg_bytes_taproot_tweak = 0
+
+
+def hotpath_profile_from_env() -> HotPathProfile:
+    var profile = HotPathProfile()
+    profile.enabled = getenv("MOJOBITNODE_PROFILE_HOTPATH", "0") == "1"
+    return profile^
+
+
+def hotpath_add(mut target: HotPathProfile, ref source: HotPathProfile):
+    if not source.enabled:
+        return
+    target.enabled = target.enabled or source.enabled
+    target.clone_calls += source.clone_calls
+    target.clone_bytes += source.clone_bytes
+    target.slice_calls += source.slice_calls
+    target.slice_bytes += source.slice_bytes
+    target.list_copy_calls += source.list_copy_calls
+    target.list_copy_items += source.list_copy_items
+    target.script_stack_pushes += source.script_stack_pushes
+    target.script_stack_pops += source.script_stack_pops
+    target.script_stack_dup_copy_ops += source.script_stack_dup_copy_ops
+    target.script_stack_reorder_ops += source.script_stack_reorder_ops
+    if source.script_stack_max_depth > target.script_stack_max_depth:
+        target.script_stack_max_depth = source.script_stack_max_depth
+    target.script_opcodes += source.script_opcodes
+    target.legacy_sighash_calls += source.legacy_sighash_calls
+    target.legacy_sighash_bytes += source.legacy_sighash_bytes
+    target.bip143_sighash_calls += source.bip143_sighash_calls
+    target.bip143_sighash_bytes += source.bip143_sighash_bytes
+    target.taproot_sighash_calls += source.taproot_sighash_calls
+    target.taproot_sighash_bytes += source.taproot_sighash_bytes
+    target.script_verify_context_copies += source.script_verify_context_copies
+    target.script_verify_job_copies += source.script_verify_job_copies
+    target.native_arg_bytes_ecdsa += source.native_arg_bytes_ecdsa
+    target.native_arg_bytes_schnorr += source.native_arg_bytes_schnorr
+    target.native_arg_bytes_taproot_tweak += source.native_arg_bytes_taproot_tweak
+
+
+def hotpath_record_clone(mut profile: HotPathProfile, byte_count: Int):
+    if profile.enabled:
+        profile.clone_calls += 1
+        profile.clone_bytes += Int64(byte_count)
+
+
+def hotpath_record_slice(mut profile: HotPathProfile, byte_count: Int):
+    if profile.enabled:
+        profile.slice_calls += 1
+        profile.slice_bytes += Int64(byte_count)
+
+
+def hotpath_record_list_copy(mut profile: HotPathProfile, item_count: Int):
+    if profile.enabled:
+        profile.list_copy_calls += 1
+        profile.list_copy_items += Int64(item_count)
+
+
+def hotpath_record_legacy_sighash(mut profile: HotPathProfile, byte_count: Int):
+    if profile.enabled:
+        profile.legacy_sighash_calls += 1
+        profile.legacy_sighash_bytes += Int64(byte_count)
+
+
+def hotpath_record_bip143_sighash(mut profile: HotPathProfile, byte_count: Int):
+    if profile.enabled:
+        profile.bip143_sighash_calls += 1
+        profile.bip143_sighash_bytes += Int64(byte_count)
+
+
+def hotpath_record_taproot_sighash(mut profile: HotPathProfile, byte_count: Int):
+    if profile.enabled:
+        profile.taproot_sighash_calls += 1
+        profile.taproot_sighash_bytes += Int64(byte_count)
+
+
+def hotpath_record_native_ecdsa(mut profile: HotPathProfile, pubkey_len: Int, der_len: Int, digest_len: Int):
+    if profile.enabled:
+        profile.native_arg_bytes_ecdsa += Int64(pubkey_len + der_len + digest_len)
+
+
+def hotpath_record_native_schnorr(mut profile: HotPathProfile, pubkey_len: Int, sig_len: Int, digest_len: Int):
+    if profile.enabled:
+        profile.native_arg_bytes_schnorr += Int64(pubkey_len + sig_len + digest_len)
+
+
+def hotpath_record_native_taproot_tweak(mut profile: HotPathProfile, internal_len: Int, tweak_len: Int, expected_len: Int):
+    if profile.enabled:
+        profile.native_arg_bytes_taproot_tweak += Int64(internal_len + tweak_len + expected_len)
+
+
+def hotpath_record_script_opcode(mut profile: HotPathProfile, opcode: Int, stack_depth: Int, alt_depth: Int):
+    if not profile.enabled:
+        return
+    profile.script_opcodes += 1
+    var depth = stack_depth
+    if alt_depth > depth:
+        depth = alt_depth
+    if Int64(depth) > profile.script_stack_max_depth:
+        profile.script_stack_max_depth = Int64(depth)
+    if opcode == 0 or (opcode >= 1 and opcode <= 75) or opcode == 0x4C or opcode == 0x4D or opcode == 0x4E or (opcode >= 0x51 and opcode <= 0x60) or opcode == 0x4F:
+        profile.script_stack_pushes += 1
+    if opcode == 0x75 or opcode == 0x69:
+        profile.script_stack_pops += 1
+    elif opcode == 0x6D or opcode == 0x87 or opcode == 0x88 or opcode == 0x7C:
+        profile.script_stack_pops += 2
+    elif opcode == 0x72 or opcode == 0x7B:
+        profile.script_stack_pops += 3
+    elif opcode == 0x76 or opcode == 0x6E or opcode == 0x6F or opcode == 0x70 or opcode == 0x73 or opcode == 0x78 or opcode == 0x79 or opcode == 0x7D:
+        profile.script_stack_dup_copy_ops += 1
+    if opcode == 0x72 or opcode == 0x77 or opcode == 0x7A or opcode == 0x7B or opcode == 0x7C or opcode == 0x7D:
+        profile.script_stack_reorder_ops += 1
+
+
+def hotpath_profile_json_field(ref profile: HotPathProfile) -> String:
+    if not profile.enabled:
+        return String("")
+    return (
+        String(',"hotpath_profile":{"clone_calls":')
+        + String(profile.clone_calls)
+        + String(',"clone_bytes":')
+        + String(profile.clone_bytes)
+        + String(',"slice_calls":')
+        + String(profile.slice_calls)
+        + String(',"slice_bytes":')
+        + String(profile.slice_bytes)
+        + String(',"list_copy_calls":')
+        + String(profile.list_copy_calls)
+        + String(',"list_copy_items":')
+        + String(profile.list_copy_items)
+        + String(',"script_stack_pushes":')
+        + String(profile.script_stack_pushes)
+        + String(',"script_stack_pops":')
+        + String(profile.script_stack_pops)
+        + String(',"script_stack_dup_copy_ops":')
+        + String(profile.script_stack_dup_copy_ops)
+        + String(',"script_stack_reorder_ops":')
+        + String(profile.script_stack_reorder_ops)
+        + String(',"script_stack_max_depth":')
+        + String(profile.script_stack_max_depth)
+        + String(',"script_opcodes":')
+        + String(profile.script_opcodes)
+        + String(',"legacy_sighash_calls":')
+        + String(profile.legacy_sighash_calls)
+        + String(',"legacy_sighash_bytes":')
+        + String(profile.legacy_sighash_bytes)
+        + String(',"bip143_sighash_calls":')
+        + String(profile.bip143_sighash_calls)
+        + String(',"bip143_sighash_bytes":')
+        + String(profile.bip143_sighash_bytes)
+        + String(',"taproot_sighash_calls":')
+        + String(profile.taproot_sighash_calls)
+        + String(',"taproot_sighash_bytes":')
+        + String(profile.taproot_sighash_bytes)
+        + String(',"script_verify_context_copies":')
+        + String(profile.script_verify_context_copies)
+        + String(',"script_verify_job_copies":')
+        + String(profile.script_verify_job_copies)
+        + String(',"native_arg_bytes_ecdsa":')
+        + String(profile.native_arg_bytes_ecdsa)
+        + String(',"native_arg_bytes_schnorr":')
+        + String(profile.native_arg_bytes_schnorr)
+        + String(',"native_arg_bytes_taproot_tweak":')
+        + String(profile.native_arg_bytes_taproot_tweak)
+        + String("}")
+    )
+
+
 def _diagnostic_success() -> DiagnosticEvalResult:
     var result = DiagnosticEvalResult()
     result.passed = True
@@ -330,6 +548,11 @@ def clone_bytes(ref bytes: List[UInt8]) -> List[UInt8]:
     return out^
 
 
+def clone_bytes_profiled(ref bytes: List[UInt8], mut profile: HotPathProfile) -> List[UInt8]:
+    hotpath_record_clone(profile, len(bytes))
+    return clone_bytes(bytes)
+
+
 def slice_bytes(ref bytes: List[UInt8], start: Int, end: Int) raises -> List[UInt8]:
     if start < 0 or end < start or end > len(bytes):
         raise Error("invalid byte slice bounds")
@@ -337,6 +560,11 @@ def slice_bytes(ref bytes: List[UInt8], start: Int, end: Int) raises -> List[UIn
     for i in range(start, end):
         out.append(bytes[i])
     return out^
+
+
+def slice_bytes_profiled(ref bytes: List[UInt8], start: Int, end: Int, mut profile: HotPathProfile) raises -> List[UInt8]:
+    hotpath_record_slice(profile, end - start)
+    return slice_bytes(bytes, start, end)
 
 
 def bytes_equal(ref left: List[UInt8], ref right: List[UInt8]) -> Bool:
@@ -703,6 +931,33 @@ def evaluate_legacy_script_with_crypto(
     witness_v0: Bool = False,
     witness_amount_sats: Int64 = 0,
 ) raises -> Bool:
+    var profile = HotPathProfile()
+    return evaluate_legacy_script_with_crypto_profiled(
+        script,
+        stack^,
+        tx,
+        input_index,
+        shim_path,
+        crypto,
+        profile,
+        has_tx_context,
+        witness_v0,
+        witness_amount_sats,
+    )
+
+
+def evaluate_legacy_script_with_crypto_profiled(
+    ref script: List[UInt8],
+    var stack: List[ScriptStackItem],
+    ref tx: Transaction,
+    input_index: Int,
+    shim_path: String,
+    ref crypto: NativeCrypto,
+    mut profile: HotPathProfile,
+    has_tx_context: Bool,
+    witness_v0: Bool = False,
+    witness_amount_sats: Int64 = 0,
+) raises -> Bool:
     var offset = 0
     var code_separator_offset = 0
     var sighash_precompute = build_sighash_precompute(tx)
@@ -710,6 +965,7 @@ def evaluate_legacy_script_with_crypto(
     var alt_stack = List[ScriptStackItem]()
     while offset < len(script):
         var opcode = Int(script[offset])
+        hotpath_record_script_opcode(profile, opcode, len(stack), len(alt_stack))
         var active = _conditions_active(conditions)
         if opcode == 0 or (opcode >= 1 and opcode <= 75) or opcode == 0x4C or opcode == 0x4D or opcode == 0x4E:
             var item = _read_script_push(script, offset)
@@ -1042,8 +1298,8 @@ def evaluate_legacy_script_with_crypto(
                 raise Error("OP_CHECKSIG requires transaction context")
             var pubkey = _stack_pop(stack)
             var signature = _stack_pop(stack)
-            var effective_script = slice_bytes(script, code_separator_offset, len(script))
-            var ok = verify_ecdsa_signature_for_mode_cached_with_crypto(
+            var effective_script = slice_bytes_profiled(script, code_separator_offset, len(script), profile)
+            var ok = verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
                 crypto,
                 signature.data,
                 pubkey.data,
@@ -1053,6 +1309,7 @@ def evaluate_legacy_script_with_crypto(
                 witness_v0,
                 witness_amount_sats,
                 sighash_precompute,
+                profile,
             )
             _stack_push_num(stack, 1 if ok else 0)
             offset += 1
@@ -1062,8 +1319,8 @@ def evaluate_legacy_script_with_crypto(
                 raise Error("OP_CHECKSIGVERIFY requires transaction context")
             var pubkey = _stack_pop(stack)
             var signature = _stack_pop(stack)
-            var effective_script = slice_bytes(script, code_separator_offset, len(script))
-            var ok = verify_ecdsa_signature_for_mode_cached_with_crypto(
+            var effective_script = slice_bytes_profiled(script, code_separator_offset, len(script), profile)
+            var ok = verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
                 crypto,
                 signature.data,
                 pubkey.data,
@@ -1073,6 +1330,7 @@ def evaluate_legacy_script_with_crypto(
                 witness_v0,
                 witness_amount_sats,
                 sighash_precompute,
+                profile,
             )
             if not ok:
                 return False
@@ -1102,9 +1360,9 @@ def evaluate_legacy_script_with_crypto(
                     sig_index += 1
                     continue
                 var matched = False
-                var effective_script = slice_bytes(script, code_separator_offset, len(script))
+                var effective_script = slice_bytes_profiled(script, code_separator_offset, len(script), profile)
                 while key_index < len(pubkeys):
-                    var ok = verify_ecdsa_signature_for_mode_cached_with_crypto(
+                    var ok = verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
                         crypto,
                         signatures[sig_index].data,
                         pubkeys[key_index].data,
@@ -1114,6 +1372,7 @@ def evaluate_legacy_script_with_crypto(
                         witness_v0,
                         witness_amount_sats,
                         sighash_precompute,
+                        profile,
                     )
                     key_index += 1
                     if ok:
@@ -3351,6 +3610,22 @@ def taproot_signature_hash_cached(
     return tagged_hash(String("TapSighash"), msg)
 
 
+def taproot_signature_hash_cached_profiled(
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    hash_type: UInt8,
+    ref leaf_hash_value: List[UInt8],
+    codeseparator_pos: Int,
+    ref precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
+) raises -> List[UInt8]:
+    hotpath_record_taproot_sighash(profile, 96 + len(leaf_hash_value) + len(tx.inputs) * 4)
+    return taproot_signature_hash_cached(
+        tx, input_index, spent_prevouts, hash_type, leaf_hash_value, codeseparator_pos, precompute
+    )
+
+
 def taproot_key_path_signature_hash(
     ref tx: Transaction,
     input_index: Int,
@@ -3475,8 +3750,31 @@ def taproot_key_path_signature_hash_cached(
     return tagged_hash(String("TapSighash"), msg)
 
 
+def taproot_key_path_signature_hash_cached_profiled(
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    hash_type: UInt8,
+    ref precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
+) raises -> List[UInt8]:
+    hotpath_record_taproot_sighash(profile, 64 + len(tx.inputs) * 4)
+    return taproot_key_path_signature_hash_cached(tx, input_index, spent_prevouts, hash_type, precompute)
+
+
 def legacy_sighash(
     ref tx: Transaction, input_index: Int, ref script_code: List[UInt8], ref signature: List[UInt8]
+) raises -> List[UInt8]:
+    var profile = HotPathProfile()
+    return legacy_sighash_profiled(tx, input_index, script_code, signature, profile)
+
+
+def legacy_sighash_profiled(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    ref signature: List[UInt8],
+    mut profile: HotPathProfile,
 ) raises -> List[UInt8]:
     if len(signature) == 0:
         raise Error("empty ECDSA signature")
@@ -3490,6 +3788,7 @@ def legacy_sighash(
         return out^
     var trimmed = legacy_find_and_delete(script_code, signature)
     var preimage = legacy_sighash_preimage(tx, input_index, trimmed, sighash_type)
+    hotpath_record_legacy_sighash(profile, len(preimage))
     return double_sha256(preimage)
 
 
@@ -3614,6 +3913,19 @@ def bip143_sighash_cached(
     return double_sha256(out)
 
 
+def bip143_sighash_cached_profiled(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    amount_sats: Int64,
+    sighash_type: UInt8,
+    ref precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
+) raises -> List[UInt8]:
+    hotpath_record_bip143_sighash(profile, 156 + len(script_code))
+    return bip143_sighash_cached(tx, input_index, script_code, amount_sats, sighash_type, precompute)
+
+
 def signature_digest_for_mode(
     ref tx: Transaction,
     input_index: Int,
@@ -3645,6 +3957,26 @@ def signature_digest_for_mode_cached(
     if witness_v0:
         return bip143_sighash_cached(tx, input_index, script_code, witness_amount_sats, sighash_type, precompute)
     return legacy_sighash(tx, input_index, script_code, signature)
+
+
+def signature_digest_for_mode_cached_profiled(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    ref signature: List[UInt8],
+    witness_v0: Bool,
+    witness_amount_sats: Int64,
+    ref precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
+) raises -> List[UInt8]:
+    if len(signature) == 0:
+        raise Error("empty ECDSA signature")
+    var sighash_type = signature[len(signature) - 1]
+    if witness_v0:
+        return bip143_sighash_cached_profiled(
+            tx, input_index, script_code, witness_amount_sats, sighash_type, precompute, profile
+        )
+    return legacy_sighash_profiled(tx, input_index, script_code, signature, profile)
 
 
 def verify_ecdsa_signature(
@@ -3747,6 +4079,36 @@ def verify_ecdsa_signature_for_mode_cached_with_crypto(
     var digest = signature_digest_for_mode_cached(
         tx, input_index, script_code, signature, witness_v0, witness_amount_sats, precompute
     )
+    var result = crypto.verify_ecdsa_der_bytes(pubkey, der, digest)
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed ECDSA signature or pubkey")
+
+
+def verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
+    ref crypto: NativeCrypto,
+    ref signature: List[UInt8],
+    ref pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    witness_v0: Bool,
+    witness_amount_sats: Int64,
+    ref precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
+) raises -> Bool:
+    if len(signature) == 0:
+        return False
+    var base_type = Int(signature[len(signature) - 1]) & 0x1F
+    if base_type != 1 and base_type != 2 and base_type != 3:
+        raise Error("diagnostic fixture only supports SIGHASH_ALL, SIGHASH_NONE, and SIGHASH_SINGLE")
+    var der = slice_bytes_profiled(signature, 0, len(signature) - 1, profile)
+    var digest = signature_digest_for_mode_cached_profiled(
+        tx, input_index, script_code, signature, witness_v0, witness_amount_sats, precompute, profile
+    )
+    hotpath_record_native_ecdsa(profile, len(pubkey), len(der), len(digest))
     var result = crypto.verify_ecdsa_der_bytes(pubkey, der, digest)
     if result == 0:
         return True
@@ -3874,6 +4236,45 @@ def verify_schnorr_signature_cached_with_crypto(
     raise Error("malformed Schnorr signature or x-only pubkey")
 
 
+def verify_schnorr_signature_cached_with_crypto_profiled(
+    ref crypto: NativeCrypto,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref tapleaf_digest_value: List[UInt8],
+    codeseparator_pos: Int,
+    ref precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
+) raises -> Bool:
+    if len(signature) == 0:
+        return False
+    var hash_type = UInt8(0)
+    var sig64 = List[UInt8]()
+    if len(signature) == 64:
+        sig64 = clone_bytes_profiled(signature, profile)
+    elif len(signature) == 65:
+        hash_type = signature[64]
+        if hash_type == UInt8(0):
+            raise Error("invalid explicit Taproot default hash type")
+        sig64 = slice_bytes_profiled(signature, 0, 64, profile)
+    else:
+        raise Error("invalid Schnorr signature length")
+    if len(xonly_pubkey) != 32:
+        raise Error("invalid x-only pubkey length")
+    var digest = taproot_signature_hash_cached_profiled(
+        tx, input_index, spent_prevouts, hash_type, tapleaf_digest_value, codeseparator_pos, precompute, profile
+    )
+    hotpath_record_native_schnorr(profile, len(xonly_pubkey), len(sig64), len(digest))
+    var result = crypto.verify_schnorr_bytes(xonly_pubkey, sig64, digest)
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed Schnorr signature or x-only pubkey")
+
+
 def verify_schnorr_key_path_signature(
     shim_path: String,
     ref signature: List[UInt8],
@@ -3968,6 +4369,41 @@ def verify_schnorr_key_path_signature_cached_with_crypto(
     raise Error("malformed Schnorr signature or x-only pubkey")
 
 
+def verify_schnorr_key_path_signature_cached_with_crypto_profiled(
+    ref crypto: NativeCrypto,
+    ref signature: List[UInt8],
+    ref xonly_pubkey: List[UInt8],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
+) raises -> Bool:
+    if len(signature) == 0:
+        return False
+    var hash_type = UInt8(0)
+    var sig64 = List[UInt8]()
+    if len(signature) == 64:
+        sig64 = clone_bytes_profiled(signature, profile)
+    elif len(signature) == 65:
+        hash_type = signature[64]
+        if hash_type == UInt8(0):
+            raise Error("invalid explicit Taproot default hash type")
+        sig64 = slice_bytes_profiled(signature, 0, 64, profile)
+    else:
+        raise Error("invalid Schnorr signature length")
+    if len(xonly_pubkey) != 32:
+        raise Error("invalid x-only pubkey length")
+    var digest = taproot_key_path_signature_hash_cached_profiled(tx, input_index, spent_prevouts, hash_type, precompute, profile)
+    hotpath_record_native_schnorr(profile, len(xonly_pubkey), len(sig64), len(digest))
+    var result = crypto.verify_schnorr_bytes(xonly_pubkey, sig64, digest)
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed Schnorr signature or x-only pubkey")
+
+
 def verify_taproot_tweak(
     shim_path: String,
     ref internal_xonly: List[UInt8],
@@ -3987,6 +4423,24 @@ def verify_taproot_tweak_with_crypto(
     expected_parity: Int,
 ) raises -> Bool:
     var tweak = taproot_tweak_hash(internal_xonly, merkle_root)
+    var result = crypto.verify_taproot_tweak_precomputed(internal_xonly, tweak, expected_xonly, expected_parity)
+    if result == 0:
+        return True
+    if result == 1:
+        return False
+    raise Error("malformed Taproot tweak input")
+
+
+def verify_taproot_tweak_with_crypto_profiled(
+    ref crypto: NativeCrypto,
+    ref internal_xonly: List[UInt8],
+    ref merkle_root: List[UInt8],
+    ref expected_xonly: List[UInt8],
+    expected_parity: Int,
+    mut profile: HotPathProfile,
+) raises -> Bool:
+    var tweak = taproot_tweak_hash(internal_xonly, merkle_root)
+    hotpath_record_native_taproot_tweak(profile, len(internal_xonly), len(tweak), len(expected_xonly))
     var result = crypto.verify_taproot_tweak_precomputed(internal_xonly, tweak, expected_xonly, expected_parity)
     if result == 0:
         return True
@@ -4027,6 +4481,31 @@ def evaluate_tapscript_with_crypto(
     shim_path: String,
     ref crypto: NativeCrypto,
 ) raises -> Bool:
+    var profile = HotPathProfile()
+    return evaluate_tapscript_with_crypto_profiled(
+        script,
+        stack^,
+        tx,
+        input_index,
+        spent_prevouts,
+        tapleaf_digest_value,
+        shim_path,
+        crypto,
+        profile,
+    )
+
+
+def evaluate_tapscript_with_crypto_profiled(
+    ref script: List[UInt8],
+    var stack: List[ScriptStackItem],
+    ref tx: Transaction,
+    input_index: Int,
+    ref spent_prevouts: List[TaprootPrevout],
+    ref tapleaf_digest_value: List[UInt8],
+    shim_path: String,
+    ref crypto: NativeCrypto,
+    mut profile: HotPathProfile,
+) raises -> Bool:
     var offset = 0
     var instruction_pos = 0
     var codeseparator_pos = 0xFFFFFFFF
@@ -4035,6 +4514,7 @@ def evaluate_tapscript_with_crypto(
     var alt_stack = List[ScriptStackItem]()
     while offset < len(script):
         var opcode = Int(script[offset])
+        hotpath_record_script_opcode(profile, opcode, len(stack), len(alt_stack))
         var active = _conditions_active(conditions)
         if opcode == 0 or (opcode >= 1 and opcode <= 75) or opcode == 0x4C or opcode == 0x4D or opcode == 0x4E:
             var item = _read_script_push(script, offset)
@@ -4319,7 +4799,7 @@ def evaluate_tapscript_with_crypto(
             if len(pubkey.data) != 32:
                 valid = len(signature.data) != 0
             elif len(signature.data) != 0:
-                valid = verify_schnorr_signature_cached_with_crypto(
+                valid = verify_schnorr_signature_cached_with_crypto_profiled(
                     crypto,
                     signature.data,
                     pubkey.data,
@@ -4329,6 +4809,7 @@ def evaluate_tapscript_with_crypto(
                     tapleaf_digest_value,
                     codeseparator_pos,
                     sighash_precompute,
+                    profile,
                 )
             if opcode == 0xAC:
                 _stack_push_num(stack, 1 if valid else 0)
@@ -4344,7 +4825,7 @@ def evaluate_tapscript_with_crypto(
             if len(pubkey.data) != 32:
                 valid = len(signature.data) != 0
             elif len(signature.data) != 0:
-                valid = verify_schnorr_signature_cached_with_crypto(
+                valid = verify_schnorr_signature_cached_with_crypto_profiled(
                     crypto,
                     signature.data,
                     pubkey.data,
@@ -4354,6 +4835,7 @@ def evaluate_tapscript_with_crypto(
                     tapleaf_digest_value,
                     codeseparator_pos,
                     sighash_precompute,
+                    profile,
                 )
             _stack_push_num(stack, n + (1 if valid else 0))
         elif opcode == 0xB1:

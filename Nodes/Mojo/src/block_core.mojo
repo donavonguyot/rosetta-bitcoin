@@ -6,6 +6,7 @@ from std.os import getenv
 
 from script_corpus_foundation import (
     ByteCursor,
+    HotPathProfile,
     NativeCrypto,
     SighashPrecompute,
     ScriptStackItem,
@@ -25,12 +26,20 @@ from script_corpus_foundation import (
     build_sighash_precompute_with_taproot,
     build_sighash_precompute_for_modes,
     clone_bytes,
+    clone_bytes_profiled,
     evaluate_tapscript,
     evaluate_tapscript_with_crypto,
+    evaluate_tapscript_with_crypto_profiled,
     evaluate_legacy_script,
     evaluate_legacy_script_with_crypto,
+    evaluate_legacy_script_with_crypto_profiled,
     hash160,
     hash256,
+    hotpath_add,
+    hotpath_profile_from_env,
+    hotpath_profile_json_field,
+    hotpath_record_clone,
+    hotpath_record_list_copy,
     is_p2pkh_script_pubkey,
     is_p2sh_script_pubkey,
     is_p2tr_script_pubkey,
@@ -40,6 +49,7 @@ from script_corpus_foundation import (
     parse_transaction,
     sha256_digest,
     slice_bytes,
+    slice_bytes_profiled,
     tapleaf_hash,
     taproot_merkle_root_from_control,
     tx_witness_count,
@@ -47,12 +57,15 @@ from script_corpus_foundation import (
     verify_ecdsa_signature,
     verify_ecdsa_signature_for_mode_cached,
     verify_ecdsa_signature_for_mode_cached_with_crypto,
+    verify_ecdsa_signature_for_mode_cached_with_crypto_profiled,
     verify_ecdsa_signature_for_mode,
     verify_schnorr_key_path_signature_cached,
     verify_schnorr_key_path_signature_cached_with_crypto,
+    verify_schnorr_key_path_signature_cached_with_crypto_profiled,
     verify_schnorr_key_path_signature,
     verify_taproot_tweak,
     verify_taproot_tweak_with_crypto,
+    verify_taproot_tweak_with_crypto_profiled,
 )
 
 
@@ -327,6 +340,7 @@ struct ConnectTiming(Copyable):
     var sighash_precompute_ms: Int64
     var script_wall_ms: Int64
     var script_worker_cpu_ms: Int64
+    var hotpath: HotPathProfile
 
     def __init__(out self):
         self.p2p_fetch = 0
@@ -364,6 +378,7 @@ struct ConnectTiming(Copyable):
         self.sighash_precompute_ms = 0
         self.script_wall_ms = 0
         self.script_worker_cpu_ms = 0
+        self.hotpath = HotPathProfile()
 
 
 struct ScriptRunnerConfig(Copyable):
@@ -388,6 +403,7 @@ struct ScriptVerifyResult(Copyable):
     var spent_script_pubkey: String
     var failure_stage: String
     var failure: String
+    var hotpath: HotPathProfile
 
     def __init__(out self):
         self.job_index = 0
@@ -400,6 +416,7 @@ struct ScriptVerifyResult(Copyable):
         self.spent_script_pubkey = String("")
         self.failure_stage = String("")
         self.failure = String("")
+        self.hotpath = HotPathProfile()
 
 
 struct ScriptVerifyJob(Copyable):
@@ -442,6 +459,7 @@ struct ScriptVerifyStats(Copyable):
     var worker_cpu_ms: Int64
     var batches: Int64
     var threads: Int64
+    var hotpath: HotPathProfile
 
     def __init__(out self):
         self.jobs = 0
@@ -449,6 +467,7 @@ struct ScriptVerifyStats(Copyable):
         self.worker_cpu_ms = 0
         self.batches = 0
         self.threads = 1
+        self.hotpath = HotPathProfile()
 
 
 struct BlockUtxoDelta(Copyable):
@@ -1273,13 +1292,14 @@ def verify_p2wpkh_spend(
     input_index: Int,
     ref prevout: Utxo,
     ref sighash_precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
 ) raises -> Bool:
     if tx_witness_count(tx, input_index) != 2:
         return False
     var sig = tx_witness_item(tx, input_index, 0)
     var pubkey = tx_witness_item(tx, input_index, 1)
     var actual = hash160(pubkey.data)
-    var expected = slice_bytes(prevout.script_pubkey, 2, 22)
+    var expected = slice_bytes_profiled(prevout.script_pubkey, 2, 22, profile)
     if not bytes_equal(actual, expected):
         return False
     var script_code = List[UInt8]()
@@ -1289,8 +1309,8 @@ def verify_p2wpkh_spend(
     append_bytes(script_code, expected)
     script_code.append(UInt8(0x88))
     script_code.append(UInt8(0xAC))
-    return verify_ecdsa_signature_for_mode_cached_with_crypto(
-        crypto, sig.data, pubkey.data, tx, input_index, script_code, True, prevout.value_sats, sighash_precompute
+    return verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
+        crypto, sig.data, pubkey.data, tx, input_index, script_code, True, prevout.value_sats, sighash_precompute, profile
     )
 
 
@@ -1301,24 +1321,25 @@ def verify_witness_v0_spend(
     input_index: Int,
     ref prevout: Utxo,
     ref sighash_precompute: SighashPrecompute,
-    ) raises -> Bool:
+    mut profile: HotPathProfile,
+) raises -> Bool:
     if len(prevout.script_pubkey) == 22 and prevout.script_pubkey[0] == UInt8(0) and prevout.script_pubkey[1] == UInt8(0x14):
-        return verify_p2wpkh_spend(shim_path, crypto, tx, input_index, prevout, sighash_precompute)
+        return verify_p2wpkh_spend(shim_path, crypto, tx, input_index, prevout, sighash_precompute, profile)
     if is_p2wsh_script_pubkey(prevout.script_pubkey):
         var witness_count = tx_witness_count(tx, input_index)
         if witness_count < 1:
             return False
         var script_item = tx_witness_item(tx, input_index, witness_count - 1)
         var script_hash = sha256_digest(script_item.data)
-        var expected = slice_bytes(prevout.script_pubkey, 2, 34)
+        var expected = slice_bytes_profiled(prevout.script_pubkey, 2, 34, profile)
         if not bytes_equal(script_hash, expected):
             return False
         var stack = List[ScriptStackItem]()
         for i in range(witness_count - 1):
             var item = tx_witness_item(tx, input_index, i)
             stack.append(item^)
-        return evaluate_legacy_script_with_crypto(
-            script_item.data, stack^, tx, input_index, shim_path, crypto, True, True, prevout.value_sats
+        return evaluate_legacy_script_with_crypto_profiled(
+            script_item.data, stack^, tx, input_index, shim_path, crypto, profile, True, True, prevout.value_sats
         )
     raise Error("unsupported witness v0 program")
 
@@ -1346,6 +1367,7 @@ def verify_taproot_spend(
     ref all_prevouts: List[Utxo],
     ref spent_prevouts: List[TaprootPrevout],
     ref sighash_precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
 ) raises -> Bool:
     var prevout = all_prevouts[input_index].copy()
     if len(tx.inputs[input_index].script_sig) != 0:
@@ -1365,9 +1387,9 @@ def verify_taproot_spend(
             return False
     if effective_count == 1:
         var signature = tx_witness_item(tx, input_index, 0)
-        var xonly = slice_bytes(prevout.script_pubkey, 2, 34)
-        return verify_schnorr_key_path_signature_cached_with_crypto(
-            crypto, signature.data, xonly, tx, input_index, spent_prevouts, sighash_precompute
+        var xonly = slice_bytes_profiled(prevout.script_pubkey, 2, 34, profile)
+        return verify_schnorr_key_path_signature_cached_with_crypto_profiled(
+            crypto, signature.data, xonly, tx, input_index, spent_prevouts, sighash_precompute, profile
         )
     if effective_count < 2:
         return False
@@ -1382,10 +1404,10 @@ def verify_taproot_spend(
         return False
     var leaf_digest = tapleaf_hash(leaf_version, script_item.data)
     var merkle_root = taproot_merkle_root_from_control(control_item.data, leaf_digest)
-    var internal_xonly = slice_bytes(control_item.data, 1, 33)
-    var expected_xonly = slice_bytes(prevout.script_pubkey, 2, 34)
+    var internal_xonly = slice_bytes_profiled(control_item.data, 1, 33, profile)
+    var expected_xonly = slice_bytes_profiled(prevout.script_pubkey, 2, 34, profile)
     var parity = Int(control_item.data[0] & UInt8(1))
-    if not verify_taproot_tweak_with_crypto(crypto, internal_xonly, merkle_root, expected_xonly, parity):
+    if not verify_taproot_tweak_with_crypto_profiled(crypto, internal_xonly, merkle_root, expected_xonly, parity, profile):
         return False
     if leaf_version != UInt8(0xC0):
         return True
@@ -1393,8 +1415,8 @@ def verify_taproot_spend(
     for i in range(effective_count - 2):
         var item = tx_witness_item(tx, input_index, i)
         stack.append(item^)
-    return evaluate_tapscript_with_crypto(
-        script_item.data, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path, crypto
+    return evaluate_tapscript_with_crypto_profiled(
+        script_item.data, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path, crypto, profile
     )
 
 
@@ -1406,6 +1428,7 @@ def verify_spend(
     ref all_prevouts: List[Utxo],
     ref spent_prevouts: List[TaprootPrevout],
     ref sighash_precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
 ) raises -> Bool:
     var prevout = all_prevouts[input_index].copy()
     if is_p2pkh_script_pubkey(prevout.script_pubkey):
@@ -1415,10 +1438,10 @@ def verify_spend(
         var signature = stack[len(stack) - 2].copy()
         var pubkey = stack[len(stack) - 1].copy()
         var actual_hash = hash160(pubkey.data)
-        var expected_hash = slice_bytes(prevout.script_pubkey, 3, 23)
+        var expected_hash = slice_bytes_profiled(prevout.script_pubkey, 3, 23, profile)
         if not bytes_equal(actual_hash, expected_hash):
             return False
-        return verify_ecdsa_signature_for_mode_cached_with_crypto(
+        return verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
             crypto,
             signature.data,
             pubkey.data,
@@ -1428,6 +1451,7 @@ def verify_spend(
             False,
             Int64(0),
             sighash_precompute,
+            profile,
         )
     if is_p2sh_script_pubkey(prevout.script_pubkey):
         var pushes = parse_push_only_stack(tx.inputs[input_index].script_sig)
@@ -1435,7 +1459,7 @@ def verify_spend(
             return False
         var redeem_script = pushes[len(pushes) - 1].data.copy()
         var redeem_hash = hash160(redeem_script)
-        var expected_hash = slice_bytes(prevout.script_pubkey, 2, 22)
+        var expected_hash = slice_bytes_profiled(prevout.script_pubkey, 2, 22, profile)
         if not bytes_equal(redeem_hash, expected_hash):
             return False
         if is_v0_witness_script_program(redeem_script):
@@ -1444,18 +1468,18 @@ def verify_spend(
             nested.value_sats = prevout.value_sats
             nested.coinbase = prevout.coinbase
             nested.script_pubkey = redeem_script^
-            return verify_witness_v0_spend(shim_path, crypto, tx, input_index, nested, sighash_precompute)
+            return verify_witness_v0_spend(shim_path, crypto, tx, input_index, nested, sighash_precompute, profile)
         var stack = List[ScriptStackItem]()
         for i in range(len(pushes) - 1):
             var item = pushes[i].copy()
             stack.append(item^)
-        return evaluate_legacy_script_with_crypto(redeem_script, stack^, tx, input_index, shim_path, crypto, True)
+        return evaluate_legacy_script_with_crypto_profiled(redeem_script, stack^, tx, input_index, shim_path, crypto, profile, True)
     if len(prevout.script_pubkey) >= 2 and prevout.script_pubkey[0] == UInt8(0):
-        return verify_witness_v0_spend(shim_path, crypto, tx, input_index, prevout, sighash_precompute)
+        return verify_witness_v0_spend(shim_path, crypto, tx, input_index, prevout, sighash_precompute, profile)
     if is_p2tr_script_pubkey(prevout.script_pubkey):
-        return verify_taproot_spend(shim_path, crypto, tx, input_index, all_prevouts, spent_prevouts, sighash_precompute)
+        return verify_taproot_spend(shim_path, crypto, tx, input_index, all_prevouts, spent_prevouts, sighash_precompute, profile)
     var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
-    return evaluate_legacy_script_with_crypto(prevout.script_pubkey, stack^, tx, input_index, shim_path, crypto, True)
+    return evaluate_legacy_script_with_crypto_profiled(prevout.script_pubkey, stack^, tx, input_index, shim_path, crypto, profile, True)
 
 
 def script_verification_failure_message(
@@ -1516,8 +1540,11 @@ def verify_script_job(
     ref crypto: NativeCrypto,
     ref job: ScriptVerifyJob,
     ref contexts: List[ScriptVerifyContext],
+    profile_enabled: Bool,
 ) -> ScriptVerifyResult:
     var result = script_verify_result_for_job(job)
+    var profile = HotPathProfile()
+    profile.enabled = profile_enabled
     try:
         if job.context_index < 0 or job.context_index >= len(contexts):
             raise Error("script job context index out of range")
@@ -1529,6 +1556,7 @@ def verify_script_job(
             contexts[job.context_index].tx_prevouts,
             contexts[job.context_index].spent_prevouts,
             contexts[job.context_index].sighash_precompute,
+            profile,
         )
         result.ok = verified
         if not verified:
@@ -1539,6 +1567,7 @@ def verify_script_job(
         result.failure_stage = String("error")
         result.failure = String(e)
     result.completed = True
+    result.hotpath = profile^
     return result^
 
 
@@ -1551,6 +1580,7 @@ def verify_script_jobs_sequential(
 ) raises -> ScriptVerifyStats:
     var stats = ScriptVerifyStats()
     stats.jobs = Int64(len(jobs))
+    stats.hotpath.enabled = hotpath_profile_from_env().enabled
     if len(jobs) == 0:
         return stats^
     stats.batches = 0
@@ -1565,8 +1595,10 @@ def verify_script_jobs_sequential(
             crypto,
             jobs[i],
             contexts,
+            stats.hotpath.enabled,
         )
         stats.worker_cpu_ms += native.now_ms() - job_started
+        hotpath_add(stats.hotpath, result.hotpath)
         results.append(result^)
     stats.wall_ms = native.now_ms() - started
     var failed_index = first_failed_script_result_index(results)
@@ -1598,6 +1630,7 @@ def verify_script_jobs_parallel_diagnostic(
     var stats = ScriptVerifyStats()
     stats.jobs = Int64(len(jobs))
     stats.threads = Int64(config.threads)
+    stats.hotpath.enabled = hotpath_profile_from_env().enabled
     if len(jobs) == 0:
         return stats^
     if config.threads == 1:
@@ -1619,6 +1652,7 @@ def verify_script_jobs_parallel_diagnostic(
             crypto,
             jobs[index],
             contexts,
+            stats.hotpath.enabled,
         )
         results[index] = result^
 
@@ -1639,6 +1673,7 @@ def verify_script_jobs_parallel_diagnostic(
                 + String(" job_index=")
                 + String(jobs[i].job_index)
             )
+        hotpath_add(stats.hotpath, results[i].hotpath)
 
     var failed_index = first_failed_script_result_index(results)
     if failed_index >= 0:
@@ -1683,7 +1718,7 @@ def connect_block(
     var block_txids = List[List[UInt8]]()
     var block_txid_index = PackedKeyIndex()
     for tx_index in range(len(block.txs)):
-        block_txids.append(clone_bytes(block.txs[tx_index].txid))
+        block_txids.append(clone_bytes_profiled(block.txs[tx_index].txid, timing.hotpath))
         _ = block_txid_index.add_key(block.txs[tx_index].txid, tx_index)
 
     var external_txids = List[List[UInt8]]()
@@ -1693,10 +1728,11 @@ def connect_block(
         var tx_for_prevouts = block.txs[tx_index].tx.copy()
         for input_index in range(len(tx_for_prevouts.inputs)):
             var prev_hash_for_gather = tx_for_prevouts.inputs[input_index].previous_hash.copy()
+            hotpath_record_list_copy(timing.hotpath, len(prev_hash_for_gather))
             var prev_vout_for_gather = tx_for_prevouts.inputs[input_index].previous_index
             if not block_txid_index.contains_key(prev_hash_for_gather):
                 if external_index.add_outpoint(prev_hash_for_gather, prev_vout_for_gather, len(external_txids)):
-                    external_txids.append(clone_bytes(prev_hash_for_gather))
+                    external_txids.append(clone_bytes_profiled(prev_hash_for_gather, timing.hotpath))
                     external_vouts.append(prev_vout_for_gather)
 
     var loaded_found = List[Bool]()
@@ -1782,7 +1818,7 @@ def connect_block(
                         + String(" prev_vout=")
                         + String(prev_index)
                     )
-            tx_seen_hashes.append(clone_bytes(prev_hash))
+            tx_seen_hashes.append(clone_bytes_profiled(prev_hash, timing.hotpath))
             tx_seen_vouts.append(prev_index)
             _ = tx_seen_index.add_outpoint(prev_hash, prev_index, input_index)
             var found_created = False
@@ -1841,6 +1877,11 @@ def connect_block(
             timing.sighash_precompute_transactions += 1
         var context_index = len(verify_contexts)
         var context = ScriptVerifyContext()
+        if timing.hotpath.enabled:
+            timing.hotpath.script_verify_context_copies += 1
+            hotpath_record_list_copy(timing.hotpath, len(tx.inputs))
+            hotpath_record_list_copy(timing.hotpath, len(tx_prevouts))
+            hotpath_record_list_copy(timing.hotpath, len(spent_prevouts))
         context.tx = tx.copy()
         context.tx_prevouts = tx_prevouts.copy()
         context.spent_prevouts = spent_prevouts.copy()
@@ -1848,18 +1889,20 @@ def connect_block(
         verify_contexts.append(context^)
         for input_index in range(len(tx.inputs)):
             var job = ScriptVerifyJob()
+            if timing.hotpath.enabled:
+                timing.hotpath.script_verify_job_copies += 1
             job.job_index = next_script_job_index
             job.context_index = context_index
             job.tx_index = tx_index
             job.input_index = input_index
-            job.txid = clone_bytes(block.txs[tx_index].txid)
-            job.prev_hash = clone_bytes(tx_prev_hashes[input_index])
+            job.txid = clone_bytes_profiled(block.txs[tx_index].txid, timing.hotpath)
+            job.prev_hash = clone_bytes_profiled(tx_prev_hashes[input_index], timing.hotpath)
             job.prev_vout = tx_prev_vouts[input_index]
             job.prevout = tx_prevouts[input_index].copy()
             script_jobs.append(job^)
             next_script_job_index += 1
         for input_index in range(len(tx.inputs)):
-            spent_txids.append(clone_bytes(tx_prev_hashes[input_index]))
+            spent_txids.append(clone_bytes_profiled(tx_prev_hashes[input_index], timing.hotpath))
             spent_vouts.append(tx_prev_vouts[input_index])
             _ = spent_index.add_outpoint(tx_prev_hashes[input_index], tx_prev_vouts[input_index], len(spent_txids) - 1)
         for vout in range(len(tx.outputs)):
@@ -1896,6 +1939,7 @@ def connect_block(
     timing.script_worker_cpu_ms += verify_stats.worker_cpu_ms
     timing.script_jobs += verify_stats.jobs
     timing.script_parallel_batches += verify_stats.batches
+    hotpath_add(timing.hotpath, verify_stats.hotpath)
     if verify_stats.batches > 0 or timing.script_parallel_batches == 0:
         timing.script_runner_thread_count = verify_stats.threads
 
@@ -2230,7 +2274,9 @@ def emit_progress(
         + String(timing.script_runner_thread_count)
         + String(',"script_runner_actual_mode":"')
         + script_runner_mode(timing)
-        + String('"},"last_block_ms":')
+        + String('"}')
+        + hotpath_profile_json_field(timing.hotpath)
+        + String(',"last_block_ms":')
         + String(last_block_ms)
         + String("}")
     )
@@ -2369,7 +2415,9 @@ def emit_telemetry(
         + String(timing.script_runner_thread_count)
         + String(',"script_runner_actual_mode":"')
         + script_runner_mode(timing)
-        + String('"}}')
+        + String('"}')
+        + hotpath_profile_json_field(timing.hotpath)
+        + String("}")
     )
 
 
@@ -2394,6 +2442,7 @@ def local_reference_proof(
     var fd = native.socket_connect(parts[0], parts[1])
     var db = native.rocksdb_open(datadir)
     var timing = ConnectTiming()
+    timing.hotpath = hotpath_profile_from_env()
     var current_utxos = 0
     var blocks_fetched = 0
     var blocks_connected = 0
@@ -2661,7 +2710,9 @@ def local_reference_proof(
             + String(timing.script_runner_thread_count)
             + String(',"script_runner_actual_mode":"')
             + script_runner_mode(timing)
-            + String('"},"slow_blocks":[]}')
+            + String('"}')
+            + hotpath_profile_json_field(timing.hotpath)
+            + String(',"slow_blocks":[]}')
         )
         if result_path != "":
             _ = native.handle.call["mojobitnode_write_text_len", Int32](

@@ -75,6 +75,11 @@ profiling-only: set `MOJOBITNODE_PROFILE_CRYPTO=1` when investigating
 `ecdsa_ms`, `schnorr_ms`, `taproot_tweak_ms`, or `native_bridge_ms`. Comparable
 benchmark runs should leave it unset and use `script_verify` / `script_wall_ms`
 for hot-path cost.
+Hot-path allocation/copy profiling is also diagnostic-only. Set
+`MOJOBITNODE_PROFILE_HOTPATH=1` when a run needs the `hotpath_profile` object
+for slice/clone/list-copy, script stack churn, sighash assembly, job/context
+copy, and native argument-prep counters. Do not promote or compare a run because
+of these counters; use them to pick the next narrow Mojo optimization.
 
 Before trusting a new native proof, run:
 
