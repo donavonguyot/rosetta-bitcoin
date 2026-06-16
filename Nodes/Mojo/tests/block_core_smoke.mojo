@@ -82,7 +82,9 @@ from pure_secp import (
     pure_test_schnorr_challenge,
     pure_test_u256_add_mod,
     pure_test_u256_inv_mod,
+    pure_test_u256_mul_field_fast,
     pure_test_u256_mul_mod,
+    pure_test_u256_mul_scalar_fast,
     pure_test_u256_square_field,
     pure_test_u256_sub_mod,
 )
@@ -364,6 +366,7 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     var field_p = _hex_bytes(String("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"))
     var two = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000002"))
     var three = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000003"))
+    var four = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000004"))
     var five = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000005"))
     var six = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000006"))
     var one = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000001"))
@@ -372,6 +375,8 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     var p_minus_two = _hex_bytes(String("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2d"))
     var zero = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000000"))
     var inv_two = _hex_bytes(String("7fffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffe18"))
+    var carry_field_b = _hex_bytes(String("fffffffffffffffffffffffffffffffffffffffffffffffffffffffdfffff85e"))
+    var carry_field_expected = _hex_bytes(String("00000000000000000000000000000000000000000000000000000001000003d1"))
     var high_a = _hex_bytes(String("f73dafc19d228263cb4ed5db0500e47f603b61fa65eeae217ccb74acc1d36143"))
     var high_b = _hex_bytes(String("6114c8de454c9b5272e1284cd8f2974118b8b15da4f2439136e5d08b7eb03b7b"))
     var high_a_square = _hex_bytes(String("0af5a4cc9a91fdcec8e6b8f2c606b20f03751f5dd04a98faaa6233e598f62133"))
@@ -382,6 +387,8 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     assert_equal(bytes_to_hex(pure_test_u256_mul_mod(field_p, one, field_p.copy())), bytes_to_hex(zero))
     assert_equal(bytes_to_hex(pure_test_u256_mul_mod(p_plus_one, one, field_p)), bytes_to_hex(one))
     assert_equal(bytes_to_hex(pure_test_u256_inv_mod(two, field_p)), bytes_to_hex(inv_two))
+    assert_equal(bytes_to_hex(pure_test_u256_mul_field_fast(p_minus_one, carry_field_b)), bytes_to_hex(carry_field_expected))
+    assert_equal(bytes_to_hex(pure_test_u256_mul_field_fast(p_minus_two, p_minus_two.copy())), bytes_to_hex(four))
     assert_equal(
         bytes_to_hex(pure_test_u256_add_mod(high_a, high_b, field_p)),
         String("5852789fe26f1db63e2ffe27ddf37bc078f413580ae0f1b2b3b145394083a08f"),
@@ -396,6 +403,7 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     )
     assert_equal(bytes_to_hex(pure_test_u256_square_field(high_a)), bytes_to_hex(high_a_square))
     assert_equal(bytes_to_hex(pure_test_u256_square_field(p_minus_one)), bytes_to_hex(one))
+    assert_equal(bytes_to_hex(pure_test_u256_square_field(p_minus_two)), bytes_to_hex(four))
     assert_equal(
         bytes_to_hex(pure_test_u256_square_field(two)),
         bytes_to_hex(pure_test_u256_mul_mod(two, two.copy(), field_p)),
@@ -422,9 +430,14 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     var scalar_n = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"))
     var scalar_n_minus_one = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"))
     var scalar_n_plus_one = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364142"))
+    var scalar_n_minus_two = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036413f"))
+    var scalar_carry_b = _hex_bytes(String("fffffffffffffffffffffffffffffffdbaaedce6af48a03bbfd25e8cd0364141"))
+    var scalar_carry_expected = _hex_bytes(String("0000000000000000000000000000000200000000000000000000000000000000"))
     assert_equal(bytes_to_hex(pure_test_u256_mul_mod(scalar_n, one, scalar_n.copy())), bytes_to_hex(zero))
     assert_equal(bytes_to_hex(pure_test_u256_mul_mod(scalar_n_plus_one, one, scalar_n)), bytes_to_hex(one))
     assert_equal(bytes_to_hex(pure_test_u256_mul_mod(scalar_n_minus_one, scalar_n_minus_one.copy(), scalar_n)), bytes_to_hex(one))
+    assert_equal(bytes_to_hex(pure_test_u256_mul_scalar_fast(scalar_n_minus_two, scalar_n_minus_two.copy())), bytes_to_hex(four))
+    assert_equal(bytes_to_hex(pure_test_u256_mul_scalar_fast(scalar_n_minus_two, scalar_carry_b)), bytes_to_hex(scalar_carry_expected))
     assert_equal(
         bytes_to_hex(pure_test_u256_mul_mod(high_a, high_b, scalar_n)),
         String("409d760cc8e690cee14030d059b1d84a10c2b3aa3281a64aab2f9655bd397af1"),

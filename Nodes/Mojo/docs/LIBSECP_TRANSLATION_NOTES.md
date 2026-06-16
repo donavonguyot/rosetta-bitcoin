@@ -27,7 +27,9 @@ The implementation follows formulas and structure from Bitcoin Core's
 - Field multiplication now uses fixed-limb schoolbook multiplication plus a
   fixed two-fold reducer for the secp256k1 pseudo-Mersenne identity
   `2^256 = 2^32 + 977`. The old iterative high-limb fold/normalize loop is
-  not in the verifier hot path.
+  not in the verifier hot path. A bounded final carry fold preserves any
+  remaining limb above `2^256` before the conditional subtract step, so the
+  reducer never treats the top carry as zero.
 - Field squaring has a dedicated 4x64 square product: four diagonal products
   plus six doubled cross-products, followed by the same fixed field reducer.
   `_fe_sqr` no longer routes through `_fe_mul(a, a)`.
@@ -35,8 +37,10 @@ The implementation follows formulas and structure from Bitcoin Core's
   `UInt128` carry handling plus the libsecp 4x64 complement constants
   `N_C_0 = 0x402DA1732FC9BEBF`, `N_C_1 = 0x4551231950B75FC4`, and `N_C_2 = 1`.
   The old shifted compare/subtract scalar reducer is not in the verifier hot
-  path. Field/scalar callers route directly to their modulus-specific
-  multiplication paths instead of paying runtime modulus dispatch.
+  path. As with field elements, remaining high scalar limbs are folded back
+  with the complement constants before final overflow correction. Field/scalar
+  callers route directly to their modulus-specific multiplication paths instead
+  of paying runtime modulus dispatch.
 - Group operations use Jacobian points internally, with mixed affine additions,
   so scalar multiplication no longer performs a field inversion for every
   point add/double.

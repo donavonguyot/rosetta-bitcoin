@@ -446,6 +446,24 @@ def _scalar_fold_high_once(mut limbs: InlineArray[UInt128, 12]):
     _normalize_scalar_limbs(limbs)
 
 
+def _scalar_fold_high_until_clear(mut limbs: InlineArray[UInt128, 12]):
+    for _ in range(8):
+        _normalize_scalar_limbs(limbs)
+        var has_high = False
+        for i in range(8):
+            if limbs[i + 4] != UInt128(0):
+                has_high = True
+        if not has_high:
+            break
+        var high = InlineArray[UInt128, 8](fill=UInt128(0))
+        for i in range(8):
+            high[i] = limbs[i + 4]
+            limbs[i + 4] = UInt128(0)
+        for i in range(8):
+            _scalar_fold_word(limbs, i, high[i])
+    _normalize_scalar_limbs(limbs)
+
+
 def _reduce_scalar_product(mut product: InlineArray[UInt64, 9]) -> U256:
     var limbs = InlineArray[UInt128, 12](fill=UInt128(0))
     for i in range(9):
@@ -454,6 +472,7 @@ def _reduce_scalar_product(mut product: InlineArray[UInt64, 9]) -> U256:
     _scalar_fold_high_once(limbs)
     _scalar_fold_high_once(limbs)
     _scalar_fold_high_once(limbs)
+    _scalar_fold_high_until_clear(limbs)
 
     var out = U256()
     for i in range(4):
@@ -488,8 +507,7 @@ def _pow_mod_field(ref base: U256, ref exponent: U256) -> U256:
     for i in range(256):
         if _bit(exponent, i):
             result = _mul_mod_field_fast(result, power)
-        var power_copy = power.copy()
-        power = _mul_mod_field_fast(power, power_copy)
+        power = _sqr_mod_field_fast(power)
     return result^
 
 
@@ -518,6 +536,20 @@ def _field_fold_word(mut limbs: InlineArray[UInt128, 6], offset: Int, high: UInt
     limbs[offset + 1] += high >> UInt128(32)
 
 
+def _field_fold_high_until_clear(mut limbs: InlineArray[UInt128, 6]):
+    for _ in range(8):
+        _normalize_field_limbs(limbs)
+        var high4 = limbs[4]
+        var high5 = limbs[5]
+        if high4 == UInt128(0) and high5 == UInt128(0):
+            break
+        limbs[4] = UInt128(0)
+        limbs[5] = UInt128(0)
+        _field_fold_word(limbs, 0, high4)
+        _field_fold_word(limbs, 1, high5)
+    _normalize_field_limbs(limbs)
+
+
 def _reduce_field_product(mut product: InlineArray[UInt64, 9]) -> U256:
     # secp256k1 field reduction uses p = 2^256 - 2^32 - 977, so
     # every high 2^256 limb folds into one shifted limb plus 977 low limbs.
@@ -536,6 +568,7 @@ def _reduce_field_product(mut product: InlineArray[UInt64, 9]) -> U256:
     _field_fold_word(limbs, 0, high4)
     _field_fold_word(limbs, 1, high5)
     _normalize_field_limbs(limbs)
+    _field_fold_high_until_clear(limbs)
 
     var out = U256()
     for i in range(4):
@@ -1360,6 +1393,20 @@ def pure_test_u256_mul_mod(ref a: List[UInt8], ref b: List[UInt8], ref modulus: 
     var bv = _from_be32(b)
     var mv = _from_be32(modulus)
     return _to_be32(_mul_mod(_reduce_once(av, mv), _reduce_once(bv, mv), mv))
+
+
+def pure_test_u256_mul_field_fast(ref a: List[UInt8], ref b: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var bv = _from_be32(b)
+    var p = _field_p()
+    return _to_be32(_fe_mul(_reduce_once(av, p), _reduce_once(bv, p)))
+
+
+def pure_test_u256_mul_scalar_fast(ref a: List[UInt8], ref b: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var bv = _from_be32(b)
+    var n = _scalar_n()
+    return _to_be32(_scalar_mul_mod(_reduce_once(av, n), _reduce_once(bv, n)))
 
 
 def pure_test_u256_square_field(ref a: List[UInt8]) raises -> List[UInt8]:
