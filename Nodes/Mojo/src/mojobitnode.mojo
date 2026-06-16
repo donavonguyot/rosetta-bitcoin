@@ -302,6 +302,7 @@ def main() raises:
     var manifest_path = String("../Shared/conformance/fixtures/scripts/manifest.json")
     var fixture_id = String("")
     var fixture_set = String("all")
+    var shadow_crypto = False
     var peer = getenv("REFERENCE_P2P_PEER", "127.0.0.1:48333")
     var target = 5000
     var progress = 500
@@ -318,6 +319,8 @@ def main() raises:
             fixture_id = String(args[i + 1])
         if args[i] == "--fixture-set" and i + 1 < len(args):
             fixture_set = String(args[i + 1])
+        if args[i] == "--shadow-crypto":
+            shadow_crypto = True
         if args[i] == "--peer" and i + 1 < len(args):
             peer = String(args[i + 1])
         if args[i] == "--target" and i + 1 < len(args):
@@ -405,11 +408,16 @@ def main() raises:
             fixture_id = String("")
             fixture_set = String("all")
             verifier_engine = String("mojo_native")
+        if command == "script-corpus-dev":
+            shadow_crypto = False
         if fixture_id != "":
             _ = fixture_meta(fixture_id)
         var passed_count = 0
         var failed_count = 0
         var fixture_count = 0
+        var shadow_supported_count = 0
+        var shadow_agreed_count = 0
+        var shadow_disagreement_count = 0
         var results = String("")
         for i in range(script_fixture_count()):
             var current_id = fixture_id_at(i)
@@ -468,52 +476,117 @@ def main() raises:
             if fixture_count != 0:
                 results += String(",")
             fixture_count += 1
-            results += (
-                String('{"fixture_id":"')
-                + current_id
-                + String('","height":')
-                + String(meta.height)
-                + String(',"required_rules":"')
-                + meta.required_rules
-                + String('","result":"')
-                + result_json(current_passed)
-                + String('"')
-            )
-            if not current_passed:
+            if shadow_crypto:
+                var shadow_supported = False
+                var shadow_agreed = False
+                if shadow_supported:
+                    shadow_supported_count += 1
+                if shadow_agreed:
+                    shadow_agreed_count += 1
                 results += (
-                    String(',"failure_stage":"')
-                    + failure_stage
-                    + String('","failure":"')
-                    + failure
+                    String('{"fixture_id":"')
+                    + current_id
+                    + String('","height":')
+                    + String(meta.height)
+                    + String(',"required_rules":"')
+                    + meta.required_rules
+                    + String('","native_result":"')
+                    + result_json(current_passed)
+                    + String('","shadow_result":"unsupported","shadow_supported":')
+                    + bool_json(shadow_supported)
+                    + String(',"shadow_agreed":')
+                    + bool_json(shadow_agreed)
+                    + String(',"shadow_backend":"mojo-pure-secp256k1","shadow_used_native_fallback":false,')
+                    + String('"support_status":"pure_backend_crypto_unsupported"')
+                )
+                if not current_passed:
+                    results += (
+                        String(',"native_failure_stage":"')
+                        + failure_stage
+                        + String('","native_failure":"')
+                        + failure
+                        + String('"')
+                    )
+                results += String("}")
+            else:
+                results += (
+                    String('{"fixture_id":"')
+                    + current_id
+                    + String('","height":')
+                    + String(meta.height)
+                    + String(',"required_rules":"')
+                    + meta.required_rules
+                    + String('","result":"')
+                    + result_json(current_passed)
                     + String('"')
                 )
-            results += String("}")
+                if not current_passed:
+                    results += (
+                        String(',"failure_stage":"')
+                        + failure_stage
+                        + String('","failure":"')
+                        + failure
+                        + String('"')
+                    )
+                results += String("}")
         var all_passed = failed_count == 0
-        var json = (
-            String('{"schema":"port.script_corpus_result.v1","category":"script_corpus",')
-            + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
-            + surface
-            + String('","entrypoint_language":"mojo","native_crypto_backend":"libsecp256k1",')
-            + String('"native_shim":"owned_c","verifier":{"engine":"')
-            + verifier_engine
-            + String('","delegated":false},')
-            + String('"manifest":"')
-            + manifest_path
-            + String('","fixture_set":"')
-            + fixture_set
-            + String('","fixture_count":')
-            + String(fixture_count)
-            + String(',"passed":')
-            + String(passed_count)
-            + String(',"failed":')
-            + String(failed_count)
-            + String(',"result":"')
-            + result_json(all_passed)
-            + String('",')
-            + String('"results":[')
-            + results
-            + String("]}")
-        )
+        var json = String("")
+        if shadow_crypto:
+            json = (
+                String('{"schema":"port.script_corpus_shadow_crypto.v1","category":"script_corpus_shadow_crypto",')
+                + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
+                + surface
+                + String('","entrypoint_language":"mojo","native_crypto_backend":"libsecp256k1",')
+                + String('"shadow_crypto_backend":"mojo-pure-secp256k1","native_shim":"owned_c",')
+                + String('"verifier":{"engine":"mojo_native","delegated":false,"shadow_crypto":true},')
+                + String('"manifest":"')
+                + manifest_path
+                + String('","fixture_set":"all","fixture_count":')
+                + String(fixture_count)
+                + String(',"native_passed":')
+                + String(passed_count)
+                + String(',"native_failed":')
+                + String(failed_count)
+                + String(',"shadow_supported":')
+                + String(shadow_supported_count)
+                + String(',"shadow_unsupported":')
+                + String(fixture_count - shadow_supported_count)
+                + String(',"shadow_agreed":')
+                + String(shadow_agreed_count)
+                + String(',"disagreements":')
+                + String(shadow_disagreement_count)
+                + String(',"result":"diagnostic","results":[')
+                + results
+                + String("]}")
+            )
+        else:
+            json = (
+                String('{"schema":"port.script_corpus_result.v1","category":"script_corpus",')
+                + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
+                + surface
+                + String('","entrypoint_language":"mojo","native_crypto_backend":"libsecp256k1",')
+                + String('"native_shim":"owned_c","verifier":{"engine":"')
+                + verifier_engine
+                + String('","delegated":false},')
+                + String('"manifest":"')
+                + manifest_path
+                + String('","fixture_set":"')
+                + fixture_set
+                + String('","fixture_count":')
+                + String(fixture_count)
+                + String(',"passed":')
+                + String(passed_count)
+                + String(',"failed":')
+                + String(failed_count)
+                + String(',"result":"')
+                + result_json(all_passed)
+                + String('",')
+                + String('"results":[')
+                + results
+                + String("]}")
+            )
+        if shadow_crypto and shadow_disagreement_count != 0:
+            raise Error("shadow crypto disagreement")
         print(json)
         if result_path != "":
             var native = OwnedDLHandle(shim_path)

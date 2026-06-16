@@ -4,6 +4,21 @@ from std.memory.unsafe_pointer import alloc
 from std.os import getenv
 from std.pathlib import Path
 
+from pure_secp import (
+    pure_backend_label,
+    pure_verify_ecdsa_der_bytes,
+    pure_verify_schnorr_bytes,
+    pure_verify_taproot_tweak_precomputed,
+)
+
+
+comptime CRYPTO_BACKEND_NATIVE = 0
+comptime CRYPTO_BACKEND_PURE = 1
+comptime CRYPTO_RESULT_VALID = 0
+comptime CRYPTO_RESULT_CONSENSUS_INVALID = 1
+comptime CRYPTO_RESULT_MALFORMED = 2
+comptime CRYPTO_RESULT_UNSUPPORTED = 3
+
 
 struct ScriptFixture(Movable):
     var fixture_id: String
@@ -226,6 +241,54 @@ struct NativeCrypto(Movable):
         return result
 
 
+struct CryptoBackend(Movable):
+    var kind: Int
+    var native: NativeCrypto
+
+    def __init__(out self, shim_path: String, kind: Int) raises:
+        self.kind = kind
+        self.native = NativeCrypto(shim_path)
+
+    def label(ref self) -> String:
+        if self.kind == CRYPTO_BACKEND_PURE:
+            return pure_backend_label()
+        return String("libsecp256k1")
+
+    def is_pure(ref self) -> Bool:
+        return self.kind == CRYPTO_BACKEND_PURE
+
+    def verify_ecdsa_der_bytes(
+        ref self,
+        ref pubkey: List[UInt8],
+        ref der: List[UInt8],
+        ref digest: List[UInt8],
+    ) raises -> Int32:
+        if self.kind == CRYPTO_BACKEND_PURE:
+            return pure_verify_ecdsa_der_bytes(pubkey, der, digest)
+        return self.native.verify_ecdsa_der_bytes(pubkey, der, digest)
+
+    def verify_schnorr_bytes(
+        ref self,
+        ref xonly_pubkey: List[UInt8],
+        ref signature: List[UInt8],
+        ref digest: List[UInt8],
+    ) raises -> Int32:
+        if self.kind == CRYPTO_BACKEND_PURE:
+            return pure_verify_schnorr_bytes(xonly_pubkey, signature, digest)
+        return self.native.verify_schnorr_bytes(xonly_pubkey, signature, digest)
+
+    def verify_taproot_tweak_precomputed(
+        ref self,
+        ref internal_xonly: List[UInt8],
+        ref tweak: List[UInt8],
+        ref expected_xonly: List[UInt8],
+        expected_parity: Int,
+    ) raises -> Int32:
+        if self.kind == CRYPTO_BACKEND_PURE:
+            return pure_verify_taproot_tweak_precomputed(internal_xonly, tweak, expected_xonly, expected_parity)
+        return self.native.verify_taproot_tweak_precomputed(internal_xonly, tweak, expected_xonly, expected_parity)
+
+
 struct BareMultisigScript(Movable):
     var required_signatures: Int
     var pubkeys: List[ScriptStackItem]
@@ -273,6 +336,11 @@ struct HotPathProfile(Copyable):
     var script_opcodes: Int64
     var legacy_sighash_calls: Int64
     var legacy_sighash_bytes: Int64
+    var legacy_sighash_cached_calls: Int64
+    var legacy_sighash_cached_bytes: Int64
+    var legacy_sighash_reference_calls: Int64
+    var legacy_sighash_reference_bytes: Int64
+    var legacy_sighash_cache_build_bytes: Int64
     var bip143_sighash_calls: Int64
     var bip143_sighash_bytes: Int64
     var taproot_sighash_calls: Int64
@@ -299,6 +367,11 @@ struct HotPathProfile(Copyable):
         self.script_opcodes = 0
         self.legacy_sighash_calls = 0
         self.legacy_sighash_bytes = 0
+        self.legacy_sighash_cached_calls = 0
+        self.legacy_sighash_cached_bytes = 0
+        self.legacy_sighash_reference_calls = 0
+        self.legacy_sighash_reference_bytes = 0
+        self.legacy_sighash_cache_build_bytes = 0
         self.bip143_sighash_calls = 0
         self.bip143_sighash_bytes = 0
         self.taproot_sighash_calls = 0
@@ -335,6 +408,11 @@ def hotpath_add(mut target: HotPathProfile, ref source: HotPathProfile):
     target.script_opcodes += source.script_opcodes
     target.legacy_sighash_calls += source.legacy_sighash_calls
     target.legacy_sighash_bytes += source.legacy_sighash_bytes
+    target.legacy_sighash_cached_calls += source.legacy_sighash_cached_calls
+    target.legacy_sighash_cached_bytes += source.legacy_sighash_cached_bytes
+    target.legacy_sighash_reference_calls += source.legacy_sighash_reference_calls
+    target.legacy_sighash_reference_bytes += source.legacy_sighash_reference_bytes
+    target.legacy_sighash_cache_build_bytes += source.legacy_sighash_cache_build_bytes
     target.bip143_sighash_calls += source.bip143_sighash_calls
     target.bip143_sighash_bytes += source.bip143_sighash_bytes
     target.taproot_sighash_calls += source.taproot_sighash_calls
@@ -364,10 +442,25 @@ def hotpath_record_list_copy(mut profile: HotPathProfile, item_count: Int):
         profile.list_copy_items += Int64(item_count)
 
 
-def hotpath_record_legacy_sighash(mut profile: HotPathProfile, byte_count: Int):
+def hotpath_record_legacy_sighash_reference(mut profile: HotPathProfile, byte_count: Int):
     if profile.enabled:
         profile.legacy_sighash_calls += 1
         profile.legacy_sighash_bytes += Int64(byte_count)
+        profile.legacy_sighash_reference_calls += 1
+        profile.legacy_sighash_reference_bytes += Int64(byte_count)
+
+
+def hotpath_record_legacy_sighash_cached(mut profile: HotPathProfile, byte_count: Int):
+    if profile.enabled:
+        profile.legacy_sighash_calls += 1
+        profile.legacy_sighash_bytes += Int64(byte_count)
+        profile.legacy_sighash_cached_calls += 1
+        profile.legacy_sighash_cached_bytes += Int64(byte_count)
+
+
+def hotpath_record_legacy_sighash_cache_build(mut profile: HotPathProfile, byte_count: Int):
+    if profile.enabled:
+        profile.legacy_sighash_cache_build_bytes += Int64(byte_count)
 
 
 def hotpath_record_bip143_sighash(mut profile: HotPathProfile, byte_count: Int):
@@ -452,6 +545,16 @@ def hotpath_profile_json_field(ref profile: HotPathProfile) -> String:
         + String(profile.legacy_sighash_calls)
         + String(',"legacy_sighash_bytes":')
         + String(profile.legacy_sighash_bytes)
+        + String(',"legacy_sighash_cached_calls":')
+        + String(profile.legacy_sighash_cached_calls)
+        + String(',"legacy_sighash_cached_bytes":')
+        + String(profile.legacy_sighash_cached_bytes)
+        + String(',"legacy_sighash_reference_calls":')
+        + String(profile.legacy_sighash_reference_calls)
+        + String(',"legacy_sighash_reference_bytes":')
+        + String(profile.legacy_sighash_reference_bytes)
+        + String(',"legacy_sighash_cache_build_bytes":')
+        + String(profile.legacy_sighash_cache_build_bytes)
         + String(',"bip143_sighash_calls":')
         + String(profile.bip143_sighash_calls)
         + String(',"bip143_sighash_bytes":')
@@ -906,7 +1009,7 @@ def evaluate_legacy_script(
     witness_v0: Bool = False,
     witness_amount_sats: Int64 = 0,
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return evaluate_legacy_script_with_crypto(
         script,
         stack^,
@@ -926,7 +1029,7 @@ def evaluate_legacy_script_with_crypto(
     ref tx: Transaction,
     input_index: Int,
     shim_path: String,
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     has_tx_context: Bool,
     witness_v0: Bool = False,
     witness_amount_sats: Int64 = 0,
@@ -952,7 +1055,7 @@ def evaluate_legacy_script_with_crypto_profiled(
     ref tx: Transaction,
     input_index: Int,
     shim_path: String,
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     mut profile: HotPathProfile,
     has_tx_context: Bool,
     witness_v0: Bool = False,
@@ -3397,6 +3500,16 @@ def serialize_taproot_spent_output(mut out: List[UInt8], ref prevout: TaprootPre
 
 
 struct SighashPrecompute(Copyable):
+    var legacy_available: Bool
+    var legacy_input_count: List[UInt8]
+    var legacy_output_count: List[UInt8]
+    var legacy_outpoints: List[List[UInt8]]
+    var legacy_sequences: List[List[UInt8]]
+    var legacy_serialized_outputs: List[List[UInt8]]
+    var legacy_outputs_all: List[UInt8]
+    var legacy_null_output: List[UInt8]
+    var legacy_empty_inputs_all: List[List[UInt8]]
+    var legacy_empty_inputs_zero_sequence: List[List[UInt8]]
     var bip143_available: Bool
     var bip143_hash_prevouts: List[UInt8]
     var bip143_hash_sequence: List[UInt8]
@@ -3411,6 +3524,16 @@ struct SighashPrecompute(Copyable):
     var taproot_hash_single_outputs: List[List[UInt8]]
 
     def __init__(out self):
+        self.legacy_available = False
+        self.legacy_input_count = List[UInt8]()
+        self.legacy_output_count = List[UInt8]()
+        self.legacy_outpoints = List[List[UInt8]]()
+        self.legacy_sequences = List[List[UInt8]]()
+        self.legacy_serialized_outputs = List[List[UInt8]]()
+        self.legacy_outputs_all = List[UInt8]()
+        self.legacy_null_output = List[UInt8]()
+        self.legacy_empty_inputs_all = List[List[UInt8]]()
+        self.legacy_empty_inputs_zero_sequence = List[List[UInt8]]()
         self.bip143_available = False
         self.bip143_hash_prevouts = List[UInt8]()
         self.bip143_hash_sequence = List[UInt8]()
@@ -3427,22 +3550,92 @@ struct SighashPrecompute(Copyable):
 
 def build_sighash_precompute(ref tx: Transaction) raises -> SighashPrecompute:
     var empty_prevouts = List[TaprootPrevout]()
-    return build_sighash_precompute_for_modes(tx, empty_prevouts, True, False)
+    return build_sighash_precompute_for_modes(tx, empty_prevouts, True, True, False)
 
 
 def build_sighash_precompute_with_taproot(
     ref tx: Transaction, ref spent_prevouts: List[TaprootPrevout]
 ) raises -> SighashPrecompute:
-    return build_sighash_precompute_for_modes(tx, spent_prevouts, True, True)
+    return build_sighash_precompute_for_modes(tx, spent_prevouts, True, True, True)
+
+
+def serialize_legacy_outpoint(ref input: TxInput) -> List[UInt8]:
+    var out = List[UInt8]()
+    append_bytes(out, input.previous_hash)
+    append_u32_le(out, input.previous_index)
+    return out^
+
+
+def serialize_legacy_sequence(sequence: UInt32) -> List[UInt8]:
+    var out = List[UInt8]()
+    append_u32_le(out, sequence)
+    return out^
+
+
+def serialize_legacy_empty_input(ref input: TxInput, sequence: UInt32) raises -> List[UInt8]:
+    var out = serialize_legacy_outpoint(input)
+    append_varint(out, 0)
+    append_u32_le(out, sequence)
+    return out^
+
+
+def serialize_legacy_null_output() raises -> List[UInt8]:
+    var out = List[UInt8]()
+    append_i64_le(out, Int64(-1))
+    append_varint(out, 0)
+    return out^
+
+
+def build_legacy_sighash_cache(mut cache: SighashPrecompute, ref tx: Transaction) raises:
+    append_varint(cache.legacy_input_count, len(tx.inputs))
+    append_varint(cache.legacy_output_count, len(tx.outputs))
+    cache.legacy_null_output = serialize_legacy_null_output()
+    for i in range(len(tx.inputs)):
+        var outpoint = serialize_legacy_outpoint(tx.inputs[i])
+        var sequence = serialize_legacy_sequence(tx.inputs[i].sequence)
+        var empty_all = serialize_legacy_empty_input(tx.inputs[i], tx.inputs[i].sequence)
+        var empty_zero = serialize_legacy_empty_input(tx.inputs[i], UInt32(0))
+        cache.legacy_outpoints.append(outpoint^)
+        cache.legacy_sequences.append(sequence^)
+        cache.legacy_empty_inputs_all.append(empty_all^)
+        cache.legacy_empty_inputs_zero_sequence.append(empty_zero^)
+    for i in range(len(tx.outputs)):
+        var serialized = List[UInt8]()
+        serialize_tx_output(serialized, tx.outputs[i])
+        append_bytes(cache.legacy_outputs_all, serialized)
+        cache.legacy_serialized_outputs.append(serialized^)
+    cache.legacy_available = True
+
+
+def legacy_sighash_cache_build_bytes(ref cache: SighashPrecompute) -> Int:
+    if not cache.legacy_available:
+        return 0
+    var total = len(cache.legacy_input_count) + len(cache.legacy_output_count)
+    total += len(cache.legacy_outputs_all) + len(cache.legacy_null_output)
+    for i in range(len(cache.legacy_outpoints)):
+        total += len(cache.legacy_outpoints[i])
+    for i in range(len(cache.legacy_sequences)):
+        total += len(cache.legacy_sequences[i])
+    for i in range(len(cache.legacy_serialized_outputs)):
+        total += len(cache.legacy_serialized_outputs[i])
+    for i in range(len(cache.legacy_empty_inputs_all)):
+        total += len(cache.legacy_empty_inputs_all[i])
+    for i in range(len(cache.legacy_empty_inputs_zero_sequence)):
+        total += len(cache.legacy_empty_inputs_zero_sequence[i])
+    return total
 
 
 def build_sighash_precompute_for_modes(
     ref tx: Transaction,
     ref spent_prevouts: List[TaprootPrevout],
+    build_legacy: Bool,
     build_bip143: Bool,
     build_taproot: Bool,
 ) raises -> SighashPrecompute:
     var cache = SighashPrecompute()
+    if build_legacy:
+        build_legacy_sighash_cache(cache, tx)
+
     if build_bip143:
         cache.bip143_hash_prevouts = _hash_prevouts(tx)
         cache.bip143_hash_sequence = _hash_sequence(tx)
@@ -3788,7 +3981,123 @@ def legacy_sighash_profiled(
         return out^
     var trimmed = legacy_find_and_delete(script_code, signature)
     var preimage = legacy_sighash_preimage(tx, input_index, trimmed, sighash_type)
-    hotpath_record_legacy_sighash(profile, len(preimage))
+    hotpath_record_legacy_sighash_reference(profile, len(preimage))
+    return double_sha256(preimage)
+
+
+def append_legacy_input_cached(
+    mut out: List[UInt8],
+    ref cache: SighashPrecompute,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    base_type: Int,
+    signing: Bool,
+) raises:
+    append_bytes(out, cache.legacy_outpoints[input_index])
+    if signing:
+        append_varint(out, len(script_code))
+        append_bytes(out, script_code)
+    else:
+        append_varint(out, 0)
+    if base_type == 1 or signing:
+        append_bytes(out, cache.legacy_sequences[input_index])
+    else:
+        append_u32_le(out, UInt32(0))
+
+
+def legacy_sighash_cached_preimage(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    sighash_type: UInt8,
+    ref precompute: SighashPrecompute,
+) raises -> List[UInt8]:
+    if not precompute.legacy_available:
+        return legacy_sighash_preimage(tx, input_index, script_code, sighash_type)
+    var base_type = Int(sighash_type) & 0x1F
+    if base_type != 1 and base_type != 2 and base_type != 3:
+        raise Error("diagnostic legacy sighash supports SIGHASH_ALL, SIGHASH_NONE, and SIGHASH_SINGLE only")
+    var anyone_can_pay = (Int(sighash_type) & 0x80) != 0
+    if input_index < 0 or input_index >= len(tx.inputs):
+        raise Error("input index out of range")
+    if base_type == 3 and input_index >= len(tx.outputs):
+        var out = List[UInt8]()
+        out.append(UInt8(1))
+        for _ in range(31):
+            out.append(UInt8(0))
+        return out^
+
+    var out = List[UInt8]()
+    append_i32_le(out, tx.version)
+    if anyone_can_pay:
+        append_varint(out, 1)
+        append_legacy_input_cached(out, precompute, input_index, script_code, base_type, True)
+    else:
+        append_bytes(out, precompute.legacy_input_count)
+        for i in range(len(tx.inputs)):
+            append_legacy_input_cached(out, precompute, i, script_code, base_type, i == input_index)
+    if base_type == 2:
+        append_varint(out, 0)
+    elif base_type == 3:
+        append_varint(out, input_index + 1)
+        for _ in range(input_index):
+            append_bytes(out, precompute.legacy_null_output)
+        append_bytes(out, precompute.legacy_serialized_outputs[input_index])
+    else:
+        append_bytes(out, precompute.legacy_output_count)
+        append_bytes(out, precompute.legacy_outputs_all)
+    append_u32_le(out, tx.lock_time)
+    append_u32_le(out, UInt32(sighash_type))
+    return out^
+
+
+def legacy_sighash_cached(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    ref signature: List[UInt8],
+    ref precompute: SighashPrecompute,
+) raises -> List[UInt8]:
+    if len(signature) == 0:
+        raise Error("empty ECDSA signature")
+    if not precompute.legacy_available:
+        return legacy_sighash(tx, input_index, script_code, signature)
+    var sighash_type = signature[len(signature) - 1]
+    var base_type = Int(sighash_type) & 0x1F
+    if base_type == 3 and input_index >= len(tx.outputs):
+        var out = List[UInt8]()
+        out.append(UInt8(1))
+        for _ in range(31):
+            out.append(UInt8(0))
+        return out^
+    var trimmed = legacy_find_and_delete(script_code, signature)
+    var preimage = legacy_sighash_cached_preimage(tx, input_index, trimmed, sighash_type, precompute)
+    return double_sha256(preimage)
+
+
+def legacy_sighash_cached_profiled(
+    ref tx: Transaction,
+    input_index: Int,
+    ref script_code: List[UInt8],
+    ref signature: List[UInt8],
+    ref precompute: SighashPrecompute,
+    mut profile: HotPathProfile,
+) raises -> List[UInt8]:
+    if len(signature) == 0:
+        raise Error("empty ECDSA signature")
+    if not precompute.legacy_available:
+        return legacy_sighash_profiled(tx, input_index, script_code, signature, profile)
+    var sighash_type = signature[len(signature) - 1]
+    var base_type = Int(sighash_type) & 0x1F
+    if base_type == 3 and input_index >= len(tx.outputs):
+        var out = List[UInt8]()
+        out.append(UInt8(1))
+        for _ in range(31):
+            out.append(UInt8(0))
+        return out^
+    var trimmed = legacy_find_and_delete(script_code, signature)
+    var preimage = legacy_sighash_cached_preimage(tx, input_index, trimmed, sighash_type, precompute)
+    hotpath_record_legacy_sighash_cached(profile, len(preimage))
     return double_sha256(preimage)
 
 
@@ -3956,7 +4265,7 @@ def signature_digest_for_mode_cached(
     var sighash_type = signature[len(signature) - 1]
     if witness_v0:
         return bip143_sighash_cached(tx, input_index, script_code, witness_amount_sats, sighash_type, precompute)
-    return legacy_sighash(tx, input_index, script_code, signature)
+    return legacy_sighash_cached(tx, input_index, script_code, signature, precompute)
 
 
 def signature_digest_for_mode_cached_profiled(
@@ -3976,7 +4285,7 @@ def signature_digest_for_mode_cached_profiled(
         return bip143_sighash_cached_profiled(
             tx, input_index, script_code, witness_amount_sats, sighash_type, precompute, profile
         )
-    return legacy_sighash_profiled(tx, input_index, script_code, signature, profile)
+    return legacy_sighash_cached_profiled(tx, input_index, script_code, signature, precompute, profile)
 
 
 def verify_ecdsa_signature(
@@ -3987,7 +4296,7 @@ def verify_ecdsa_signature(
     input_index: Int,
     ref script_code: List[UInt8],
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return verify_ecdsa_signature_for_mode_with_crypto(
         crypto, signature, pubkey, tx, input_index, script_code, False, Int64(0)
     )
@@ -4003,14 +4312,14 @@ def verify_ecdsa_signature_for_mode(
     witness_v0: Bool,
     witness_amount_sats: Int64,
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return verify_ecdsa_signature_for_mode_with_crypto(
         crypto, signature, pubkey, tx, input_index, script_code, witness_v0, witness_amount_sats
     )
 
 
 def verify_ecdsa_signature_for_mode_with_crypto(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref signature: List[UInt8],
     ref pubkey: List[UInt8],
     ref tx: Transaction,
@@ -4045,7 +4354,7 @@ def verify_ecdsa_signature_for_mode_cached(
     witness_amount_sats: Int64,
     ref precompute: SighashPrecompute,
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return verify_ecdsa_signature_for_mode_cached_with_crypto(
         crypto,
         signature,
@@ -4060,7 +4369,7 @@ def verify_ecdsa_signature_for_mode_cached(
 
 
 def verify_ecdsa_signature_for_mode_cached_with_crypto(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref signature: List[UInt8],
     ref pubkey: List[UInt8],
     ref tx: Transaction,
@@ -4088,7 +4397,7 @@ def verify_ecdsa_signature_for_mode_cached_with_crypto(
 
 
 def verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref signature: List[UInt8],
     ref pubkey: List[UInt8],
     ref tx: Transaction,
@@ -4127,7 +4436,7 @@ def verify_schnorr_signature(
     ref tapleaf_digest_value: List[UInt8],
     codeseparator_pos: Int,
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return verify_schnorr_signature_with_crypto(
         crypto,
         signature,
@@ -4141,7 +4450,7 @@ def verify_schnorr_signature(
 
 
 def verify_schnorr_signature_with_crypto(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -4185,7 +4494,7 @@ def verify_schnorr_signature_cached(
     codeseparator_pos: Int,
     ref precompute: SighashPrecompute,
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return verify_schnorr_signature_cached_with_crypto(
         crypto,
         signature,
@@ -4200,7 +4509,7 @@ def verify_schnorr_signature_cached(
 
 
 def verify_schnorr_signature_cached_with_crypto(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -4237,7 +4546,7 @@ def verify_schnorr_signature_cached_with_crypto(
 
 
 def verify_schnorr_signature_cached_with_crypto_profiled(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -4283,14 +4592,14 @@ def verify_schnorr_key_path_signature(
     input_index: Int,
     ref spent_prevouts: List[TaprootPrevout],
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return verify_schnorr_key_path_signature_with_crypto(
         crypto, signature, xonly_pubkey, tx, input_index, spent_prevouts
     )
 
 
 def verify_schnorr_key_path_signature_with_crypto(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -4330,14 +4639,14 @@ def verify_schnorr_key_path_signature_cached(
     ref spent_prevouts: List[TaprootPrevout],
     ref precompute: SighashPrecompute,
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return verify_schnorr_key_path_signature_cached_with_crypto(
         crypto, signature, xonly_pubkey, tx, input_index, spent_prevouts, precompute
     )
 
 
 def verify_schnorr_key_path_signature_cached_with_crypto(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -4370,7 +4679,7 @@ def verify_schnorr_key_path_signature_cached_with_crypto(
 
 
 def verify_schnorr_key_path_signature_cached_with_crypto_profiled(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref signature: List[UInt8],
     ref xonly_pubkey: List[UInt8],
     ref tx: Transaction,
@@ -4411,12 +4720,12 @@ def verify_taproot_tweak(
     ref expected_xonly: List[UInt8],
     expected_parity: Int,
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return verify_taproot_tweak_with_crypto(crypto, internal_xonly, merkle_root, expected_xonly, expected_parity)
 
 
 def verify_taproot_tweak_with_crypto(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref internal_xonly: List[UInt8],
     ref merkle_root: List[UInt8],
     ref expected_xonly: List[UInt8],
@@ -4432,7 +4741,7 @@ def verify_taproot_tweak_with_crypto(
 
 
 def verify_taproot_tweak_with_crypto_profiled(
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref internal_xonly: List[UInt8],
     ref merkle_root: List[UInt8],
     ref expected_xonly: List[UInt8],
@@ -4458,7 +4767,7 @@ def evaluate_tapscript(
     ref tapleaf_digest_value: List[UInt8],
     shim_path: String,
 ) raises -> Bool:
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     return evaluate_tapscript_with_crypto(
         script,
         stack^,
@@ -4479,7 +4788,7 @@ def evaluate_tapscript_with_crypto(
     ref spent_prevouts: List[TaprootPrevout],
     ref tapleaf_digest_value: List[UInt8],
     shim_path: String,
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
 ) raises -> Bool:
     var profile = HotPathProfile()
     return evaluate_tapscript_with_crypto_profiled(
@@ -4503,7 +4812,7 @@ def evaluate_tapscript_with_crypto_profiled(
     ref spent_prevouts: List[TaprootPrevout],
     ref tapleaf_digest_value: List[UInt8],
     shim_path: String,
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     mut profile: HotPathProfile,
 ) raises -> Bool:
     var offset = 0

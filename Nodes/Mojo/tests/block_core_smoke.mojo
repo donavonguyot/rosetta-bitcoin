@@ -30,18 +30,32 @@ from block_core import (
     rocksdb_multi_get_rows,
 )
 from script_corpus_foundation import (
+    CRYPTO_BACKEND_NATIVE,
+    CRYPTO_BACKEND_PURE,
+    CRYPTO_RESULT_UNSUPPORTED,
+    CryptoBackend,
     HotPathProfile,
-    NativeCrypto,
     ScriptStackItem,
+    TaprootPrevout,
+    Transaction,
+    TxInput,
+    TxOutput,
     append_bytes,
     append_u32_le,
     append_varint,
     ascii_string_to_bytes,
+    build_sighash_precompute_for_modes,
     bytes_to_hex,
     clone_bytes_profiled,
     evaluate_legacy_script_with_crypto_profiled,
     hash160,
     hash256,
+    legacy_find_and_delete,
+    legacy_sighash,
+    legacy_sighash_cached_preimage,
+    legacy_sighash_cached_profiled,
+    legacy_sighash_preimage,
+    legacy_sighash_cached,
     legacy_sighash_profiled,
     parse_transaction,
     read_hex_file,
@@ -269,7 +283,7 @@ def test_hotpath_profile_counters_are_passive_and_nonzero() raises:
     script.append(UInt8(0x76))
     script.append(UInt8(0x75))
     var stack = List[ScriptStackItem]()
-    var crypto = NativeCrypto(shim)
+    var crypto = CryptoBackend(shim, CRYPTO_BACKEND_NATIVE)
     assert_true(
         evaluate_legacy_script_with_crypto_profiled(
             script,
@@ -296,6 +310,127 @@ def test_hotpath_profile_counters_are_passive_and_nonzero() raises:
     assert_true(profile.script_stack_max_depth > 0)
     assert_true(profile.legacy_sighash_calls > 0)
     assert_true(profile.legacy_sighash_bytes > 0)
+
+
+def test_crypto_backend_result_classes_do_not_fallback_to_native() raises:
+    var shim = getenv("MOJOBITNODE_SHIM_PATH", "./build/libmojobitnode_shim.dylib")
+    var pubkey = List[UInt8]()
+    var signature = List[UInt8]()
+    var digest = List[UInt8]()
+    var native = CryptoBackend(shim, CRYPTO_BACKEND_NATIVE)
+    var pure = CryptoBackend(shim, CRYPTO_BACKEND_PURE)
+
+    assert_true(not native.is_pure())
+    assert_true(pure.is_pure())
+
+    var native_result = native.verify_ecdsa_der_bytes(pubkey, signature, digest)
+    var pure_result = pure.verify_ecdsa_der_bytes(pubkey, signature, digest)
+    assert_true(native_result != CRYPTO_RESULT_UNSUPPORTED)
+    assert_equal(pure_result, CRYPTO_RESULT_UNSUPPORTED)
+
+    pure_result = pure.verify_schnorr_bytes(pubkey, signature, digest)
+    assert_equal(pure_result, CRYPTO_RESULT_UNSUPPORTED)
+
+    pure_result = pure.verify_taproot_tweak_precomputed(pubkey, signature, digest, 0)
+    assert_equal(pure_result, CRYPTO_RESULT_UNSUPPORTED)
+
+
+def _fake_hash(seed: Int) -> List[UInt8]:
+    var out = List[UInt8]()
+    for i in range(32):
+        out.append(UInt8((seed + i) & 0xFF))
+    return out^
+
+
+def _legacy_cache_test_tx(output_count: Int) -> Transaction:
+    var tx = Transaction()
+    tx.version = Int32(1)
+    tx.lock_time = UInt32(0)
+    for i in range(6):
+        var input = TxInput()
+        input.previous_hash = _fake_hash(i * 17)
+        input.previous_index = UInt32(i)
+        input.sequence = UInt32(0xFFFFFFFE - i)
+        tx.inputs.append(input^)
+    for i in range(output_count):
+        var output = TxOutput()
+        output.value = Int64(900 - i * 100)
+        output.script_pubkey = ascii_string_to_bytes(String("legacy-cache-output-") + String(i))
+        tx.outputs.append(output^)
+    return tx^
+
+
+def _legacy_sig(sighash_type: UInt8) -> List[UInt8]:
+    var sig = List[UInt8]()
+    sig.append(UInt8(0x30))
+    sig.append(UInt8(0x01))
+    sig.append(sighash_type)
+    return sig^
+
+
+def _p2pkh_script_code() -> List[UInt8]:
+    var script = List[UInt8]()
+    script.append(UInt8(0x76))
+    script.append(UInt8(0xA9))
+    script.append(UInt8(0x14))
+    for _ in range(20):
+        script.append(UInt8(0x11))
+    script.append(UInt8(0x88))
+    script.append(UInt8(0xAC))
+    return script^
+
+
+def assert_legacy_cached_matches_reference(ref tx: Transaction, input_index: Int, ref script: List[UInt8], sighash_type: UInt8) raises:
+    var prevouts = List[TaprootPrevout]()
+    var cache = build_sighash_precompute_for_modes(tx, prevouts, True, False, False)
+    var sig = _legacy_sig(sighash_type)
+    if not ((Int(sighash_type) & 0x1F) == 3 and input_index >= len(tx.outputs)):
+        var trimmed = legacy_find_and_delete(script, sig)
+        var reference_preimage = legacy_sighash_preimage(tx, input_index, trimmed, sighash_type)
+        var cached_preimage = legacy_sighash_cached_preimage(tx, input_index, trimmed, sighash_type, cache)
+        assert_equal(bytes_to_hex(cached_preimage), bytes_to_hex(reference_preimage))
+    var reference = legacy_sighash(tx, input_index, script, sig)
+    var cached = legacy_sighash_cached(tx, input_index, script, sig, cache)
+    assert_equal(bytes_to_hex(cached), bytes_to_hex(reference))
+
+
+def test_legacy_sighash_cache_matches_reference_modes() raises:
+    var tx = _legacy_cache_test_tx(3)
+    var one_output_tx = _legacy_cache_test_tx(1)
+    var script = _p2pkh_script_code()
+    for input_index in [0, 2, 5]:
+        for sighash_type in [UInt8(0x01), UInt8(0x02), UInt8(0x03), UInt8(0x81), UInt8(0x82), UInt8(0x83)]:
+            assert_legacy_cached_matches_reference(tx, input_index, script, sighash_type)
+            assert_legacy_cached_matches_reference(one_output_tx, input_index, script, sighash_type)
+
+    var prevouts = List[TaprootPrevout]()
+    var cache = build_sighash_precompute_for_modes(one_output_tx, prevouts, True, False, False)
+    var out_of_range = legacy_sighash_cached(one_output_tx, 2, script, _legacy_sig(UInt8(0x03)), cache)
+    assert_equal(out_of_range[0], UInt8(1))
+    for i in range(1, 32):
+        assert_equal(out_of_range[i], UInt8(0))
+
+    var sig_a = _legacy_sig(UInt8(0x01))
+    sig_a.append(UInt8(0xAA))
+    var sig_b = _legacy_sig(UInt8(0x01))
+    sig_b.append(UInt8(0xBB))
+    var multisig_script = List[UInt8]()
+    multisig_script.append(UInt8(len(sig_a)))
+    append_bytes(multisig_script, sig_a)
+    append_bytes(multisig_script, script)
+    multisig_script.append(UInt8(len(sig_b)))
+    append_bytes(multisig_script, sig_b)
+    var once = legacy_find_and_delete(multisig_script, sig_a)
+    var cleaned = legacy_find_and_delete(once, sig_b)
+    var reference = legacy_sighash(tx, 1, cleaned, _legacy_sig(UInt8(0x01)))
+    var cached = legacy_sighash_cached(tx, 1, cleaned, _legacy_sig(UInt8(0x01)), build_sighash_precompute_for_modes(tx, prevouts, True, False, False))
+    assert_equal(bytes_to_hex(cached), bytes_to_hex(reference))
+
+    var profile = HotPathProfile()
+    profile.enabled = True
+    _ = legacy_sighash_cached_profiled(tx, 0, script, _legacy_sig(UInt8(0x01)), build_sighash_precompute_for_modes(tx, prevouts, True, False, False), profile)
+    assert_true(profile.legacy_sighash_cached_calls > 0)
+    assert_true(profile.legacy_sighash_reference_calls == 0)
 
 
 def test_block_delta_batch_apply_and_undo() raises:

@@ -40,6 +40,14 @@ native prerequisites a future port would need?
   slice/clone/list-copy, script stack churn, sighash assembly, job/context copy,
   and native argument-prep counters. Leave it unset for comparable benchmark
   artifacts; use it to choose the next narrow optimization.
+- Legacy sighash now has a Mojo-owned cached preimage builder using
+  transaction-level serialized input/output components. The uncached builder is
+  kept as the byte-for-byte reference, and focused smokes compare cached output
+  across `SIGHASH_ALL`, `NONE`, `SINGLE`, and `ANYONECANPAY` variants.
+- Zig-style shadow crypto scaffolding is diagnostic-only. Native
+  `libsecp256k1` remains the comparable proof backend; `--shadow-crypto` emits
+  a separate `port.script_corpus_shadow_crypto.v1` artifact with explicit pure
+  backend support/unsupported rows and no native fallback.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,
@@ -54,6 +62,8 @@ boundary is limited to generic native primitives and non-consensus runtime glue.
 The diagnostic `script-corpus-dev` surface remains available for fixture-level
 debugging. The public `script-corpus` command is the evidence surface and emits
 canonical `port.script_corpus_result.v1` JSON with Mojo-owned `45/45` coverage.
+`script-corpus --shadow-crypto` is a separate diagnostic comparator surface and
+must not be imported as canonical corpus evidence.
 
 ## Commands
 
@@ -71,6 +81,7 @@ make host-native-boundary-audit
 make host-storage-proof
 make host-script-corpus-dev
 make host-script-corpus
+make host-script-corpus-shadow
 make host-local-reference-proof
 make host-shakedown-50k-proof
 make host-smoke-once
@@ -96,6 +107,7 @@ make docker-native-crypto-vectors
 make docker-native-boundary-audit
 make docker-storage-proof
 make docker-script-corpus
+make docker-script-corpus-shadow
 make docker-proof-local
 make docker-proof-50k
 make docker-smoke-once
@@ -155,6 +167,9 @@ Set `MOJOBITNODE_PROFILE_HOTPATH=1` only for diagnostic runs that need
 `hotpath_profile` counters. The profile is passive and should preserve target
 hashes, UTXO counts, runner truth, and required telemetry fields, but its
 overhead should not be used as leaderboard evidence.
+The current hot-path target is legacy sighash assembly; stack churn and native
+argument preparation remain secondary until fresh profile evidence says
+otherwise.
 
 Use the native-boundary audit targets before trusting new proof output. They
 fail on direct SSL-family crypto linkage or unclassified exported

@@ -29,6 +29,7 @@ status --datadir <path> --json
 native-crypto-vectors --vectors <path> --result-path <path>
 storage-proof --datadir <path> --result-path <path>
 script-corpus --manifest <path> --result-path <path>
+script-corpus --manifest <path> --shadow-crypto --result-path <path>
 local-reference-proof --datadir <path> --target 5000 --peer <host:port> --result-path <path>
 local-reference-proof --datadir <path> --target 50000 --peer <host:port> --result-path <path>
 ```
@@ -43,6 +44,12 @@ still available for fixture-level diagnosis. It also accepts
 `--fixture-set legacy|segwit-v0|non-taproot|taproot|all`. The public
 `script-corpus` command is the canonical evidence path and must stay Mojo-owned,
 with no Python or other-port delegation.
+
+`script-corpus --shadow-crypto` is diagnostic. It keeps native `libsecp256k1`
+as the default/comparable lane, then records whether the pure Mojo backend
+supports each fixture without using native fallback. Its
+`port.script_corpus_shadow_crypto.v1` output belongs in Mojo-local debug paths,
+not Project current evidence.
 
 `local-reference-proof` is the bounded local Reference proof path for 5k and
 50k. It must use local Reference P2P bytes, RocksDB operational truth, native
@@ -65,10 +72,10 @@ path; `MOJOBITNODE_PACKED_ROCKSDB_BATCH=1` is diagnostic-only unless a later
 profile proves it faster.
 
 The live proof path routes signature and Taproot tweak checks through a
-Mojo-owned `NativeCrypto` wrapper so a block-level script job batch does not
-construct a dynamic-library handle for every signature. Small fixture/debug
-helpers may keep compatibility one-shot wrappers, but long proof paths should
-thread the reusable boundary through the verifier.
+Mojo-owned crypto backend wrapper so a block-level script job batch does not
+construct a dynamic-library handle for every signature. Native `libsecp256k1`
+is the only comparable backend. The pure Mojo backend is explicit diagnostic
+scaffolding and must report unsupported rather than falling back to native.
 
 Native crypto call counts are part of proof telemetry. Per-call crypto timing is
 profiling-only: set `MOJOBITNODE_PROFILE_CRYPTO=1` when investigating
@@ -80,6 +87,9 @@ Hot-path allocation/copy profiling is also diagnostic-only. Set
 for slice/clone/list-copy, script stack churn, sighash assembly, job/context
 copy, and native argument-prep counters. Do not promote or compare a run because
 of these counters; use them to pick the next narrow Mojo optimization.
+The current measured target is legacy sighash assembly. Mojo keeps the uncached
+legacy sighash path as the reference oracle and routes live verification through
+a cached preimage builder only after focused equivalence smokes pass.
 
 Before trusting a new native proof, run:
 
@@ -145,10 +155,12 @@ make docker-parallel-runner-smoke
 make host-script-corpus-foundation-smoke
 make host-block-core-smoke
 make host-script-corpus
+make host-script-corpus-shadow
 make host-native-boundary-audit
 make host-local-reference-proof
 make host-shakedown-50k-proof
 make docker-script-corpus
+make docker-script-corpus-shadow
 make docker-native-boundary-audit
 make docker-proof-local
 make docker-proof-50k

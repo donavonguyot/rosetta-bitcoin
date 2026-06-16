@@ -6,8 +6,9 @@ from std.os import getenv
 
 from script_corpus_foundation import (
     ByteCursor,
+    CRYPTO_BACKEND_NATIVE,
+    CryptoBackend,
     HotPathProfile,
-    NativeCrypto,
     SighashPrecompute,
     ScriptStackItem,
     TaprootPrevout,
@@ -45,6 +46,7 @@ from script_corpus_foundation import (
     is_p2tr_script_pubkey,
     is_p2wsh_script_pubkey,
     is_v0_witness_script_program,
+    legacy_sighash_cache_build_bytes,
     parse_push_only_stack,
     parse_transaction,
     sha256_digest,
@@ -926,6 +928,23 @@ def spent_prevouts_need_bip143_precompute(ref tx: Transaction, ref prevouts: Lis
     return False
 
 
+def spent_prevouts_need_legacy_precompute(ref tx: Transaction, ref prevouts: List[TaprootPrevout]) raises -> Bool:
+    for i in range(len(prevouts)):
+        if is_p2pkh_script_pubkey(prevouts[i].script_pubkey):
+            return True
+        if is_p2sh_script_pubkey(prevouts[i].script_pubkey):
+            if not p2sh_input_redeem_is_witness_program(tx, i):
+                return True
+            continue
+        if (
+            not is_p2wpkh_script_pubkey_local(prevouts[i].script_pubkey)
+            and not is_p2wsh_script_pubkey(prevouts[i].script_pubkey)
+            and not is_p2tr_script_pubkey(prevouts[i].script_pubkey)
+        ):
+            return True
+    return False
+
+
 def spent_prevouts_need_taproot_precompute(ref prevouts: List[TaprootPrevout]) -> Bool:
     for i in range(len(prevouts)):
         if is_p2tr_script_pubkey(prevouts[i].script_pubkey):
@@ -1287,7 +1306,7 @@ def is_spendable_output(ref output: TxOutput) -> Bool:
 
 def verify_p2wpkh_spend(
     shim_path: String,
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref tx: Transaction,
     input_index: Int,
     ref prevout: Utxo,
@@ -1316,7 +1335,7 @@ def verify_p2wpkh_spend(
 
 def verify_witness_v0_spend(
     shim_path: String,
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref tx: Transaction,
     input_index: Int,
     ref prevout: Utxo,
@@ -1361,7 +1380,7 @@ def taproot_prevouts_from_utxos(ref prevouts: List[Utxo]) -> List[TaprootPrevout
 
 def verify_taproot_spend(
     shim_path: String,
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref tx: Transaction,
     input_index: Int,
     ref all_prevouts: List[Utxo],
@@ -1422,7 +1441,7 @@ def verify_taproot_spend(
 
 def verify_spend(
     shim_path: String,
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref tx: Transaction,
     input_index: Int,
     ref all_prevouts: List[Utxo],
@@ -1537,7 +1556,7 @@ def first_failed_script_result_index(ref results: List[ScriptVerifyResult]) -> I
 
 def verify_script_job(
     shim_path: String,
-    ref crypto: NativeCrypto,
+    ref crypto: CryptoBackend,
     ref job: ScriptVerifyJob,
     ref contexts: List[ScriptVerifyContext],
     profile_enabled: Bool,
@@ -1587,7 +1606,7 @@ def verify_script_jobs_sequential(
     stats.threads = 1
     var started = native.now_ms()
     var results = List[ScriptVerifyResult]()
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
     for i in range(len(jobs)):
         var job_started = native.now_ms()
         var result = verify_script_job(
@@ -1641,7 +1660,7 @@ def verify_script_jobs_parallel_diagnostic(
         var result = script_verify_result_for_job(jobs[i])
         results.append(result^)
 
-    var crypto = NativeCrypto(shim_path)
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
 
     @parameter
     def verify_one(index: Int) capturing:
@@ -1855,17 +1874,26 @@ def connect_block(
         timing.script_inputs += Int64(len(tx.inputs))
         var spent_prevouts = taproot_prevouts_from_utxos(tx_prevouts)
         var sighash_precompute = SighashPrecompute()
+        var needs_legacy_precompute = spent_prevouts_need_legacy_precompute(tx, spent_prevouts)
         var needs_bip143_precompute = spent_prevouts_need_bip143_precompute(tx, spent_prevouts)
         var needs_taproot_precompute = spent_prevouts_need_taproot_precompute(spent_prevouts)
-        if needs_bip143_precompute or needs_taproot_precompute:
+        if needs_legacy_precompute or needs_bip143_precompute or needs_taproot_precompute:
             var precompute_started = native.now_ms()
             sighash_precompute = build_sighash_precompute_for_modes(
                 tx,
                 spent_prevouts,
+                needs_legacy_precompute,
                 needs_bip143_precompute,
                 needs_taproot_precompute,
             )
             timing.sighash_precompute_ms += native.now_ms() - precompute_started
+            if needs_legacy_precompute:
+                if not sighash_precompute.legacy_available:
+                    raise Error("Legacy sighash precompute required but unavailable")
+                if timing.hotpath.enabled:
+                    timing.hotpath.legacy_sighash_cache_build_bytes += Int64(
+                        legacy_sighash_cache_build_bytes(sighash_precompute)
+                    )
             if needs_bip143_precompute:
                 if not sighash_precompute.bip143_available:
                     raise Error("BIP143 sighash precompute required but unavailable")

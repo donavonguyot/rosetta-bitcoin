@@ -26,6 +26,8 @@ CRYPTO_VECTORS ?= ../Shared/conformance/fixtures/native_crypto_v1_vectors.json
 HOST_CRYPTO_RESULT ?= /tmp/mojo_native_crypto_vectors_host_$(RESULT_DATE).json
 HOST_STORAGE_RESULT ?= /tmp/mojo_rocksdb_storage_proof_host_$(RESULT_DATE).json
 HOST_SCRIPT_CORPUS_DEV_RESULT ?= /tmp/mojo_script_corpus_dev_$(RESULT_DATE).json
+HOST_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_host_script_corpus_shadow_$(RESULT_DATE).json
+DOCKER_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_docker_script_corpus_shadow_$(RESULT_DATE).json
 SCRIPT_CORPUS_RESULT ?= ../Shared/conformance/results/mojo_script_corpus_$(RESULT_DATE).json
 HOST_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_host_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_docker_baseline_5k_benchmark_$(RESULT_DATE).json
@@ -45,8 +47,8 @@ MOJOBITNODE_PROFILE_HOTPATH ?= 0
 HOST_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-local-reference-proof host-shakedown-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-proof-local docker-proof-50k docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-local-reference-proof host-shakedown-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-proof-local docker-proof-50k docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -131,6 +133,18 @@ host-script-corpus: host-build
 	  grep -q '"passed":45' <<< "$$out"; \
 	  grep -q '"failed":0' <<< "$$out"; \
 	  test -s "$(SCRIPT_CORPUS_RESULT)"
+
+host-script-corpus-shadow: host-build
+	@mkdir -p .benchmark-results
+	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus \
+	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --shadow-crypto \
+	  --result-path $(HOST_SCRIPT_CORPUS_SHADOW_RESULT)); \
+	  echo "$$out"; \
+	  grep -q '"schema":"port.script_corpus_shadow_crypto.v1"' <<< "$$out"; \
+	  grep -q '"shadow_crypto_backend":"mojo-pure-secp256k1"' <<< "$$out"; \
+	  grep -q '"shadow_used_native_fallback":false' <<< "$$out"; \
+	  python3 ../Shared/conformance/tools/validate_script_corpus_shadow_crypto.py $(HOST_SCRIPT_CORPUS_SHADOW_RESULT)
 
 host-local-reference-proof: host-build
 	@mkdir -p .benchmark-results
@@ -230,6 +244,19 @@ docker-script-corpus:
 	  grep -q '"passed":45' <<< "$$out"; \
 	  grep -q '"failed":0' <<< "$$out"; \
 	  test -s "$(SCRIPT_CORPUS_RESULT)"
+
+docker-script-corpus-shadow:
+	@mkdir -p .benchmark-results
+	@out=$$($(DOCKER_COMPOSE) run --rm --no-deps mojobitnode script-corpus \
+	  --manifest /workspace/Shared/conformance/fixtures/scripts/manifest.json \
+	  --shadow-crypto \
+	  --result-path /tmp/mojo_script_corpus_shadow.json); \
+	  echo "$$out"; \
+	  printf "%s\n" "$$out" > $(DOCKER_SCRIPT_CORPUS_SHADOW_RESULT); \
+	  grep -q '"schema":"port.script_corpus_shadow_crypto.v1"' <<< "$$out"; \
+	  grep -q '"runtime_surface":"docker"' <<< "$$out"; \
+	  grep -q '"shadow_used_native_fallback":false' <<< "$$out"; \
+	  python3 ../Shared/conformance/tools/validate_script_corpus_shadow_crypto.py $(DOCKER_SCRIPT_CORPUS_SHADOW_RESULT)
 
 docker-proof-local:
 	$(REFERENCE_P2P_CHECK)
