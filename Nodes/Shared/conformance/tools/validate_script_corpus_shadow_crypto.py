@@ -86,10 +86,14 @@ def validate(path: Path) -> dict[str, Any]:
 
     if payload.get("shadow_supported") != supported:
         errors.append("shadow_supported count mismatch")
+    if supported <= 0:
+        errors.append("shadow_supported must be greater than zero")
     if payload.get("shadow_agreed") != agreed:
         errors.append("shadow_agreed count mismatch")
     if payload.get("disagreements") != disagreements:
         errors.append("disagreements count mismatch")
+    if disagreements != 0:
+        errors.append("shadow crypto disagreements must be zero")
     if payload.get("shadow_unsupported") != payload.get("fixture_count", 0) - supported:
         errors.append("shadow_unsupported count mismatch")
 

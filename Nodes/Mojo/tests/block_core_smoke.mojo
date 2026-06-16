@@ -32,7 +32,10 @@ from block_core import (
 from script_corpus_foundation import (
     CRYPTO_BACKEND_NATIVE,
     CRYPTO_BACKEND_PURE,
+    CRYPTO_RESULT_CONSENSUS_INVALID,
+    CRYPTO_RESULT_MALFORMED,
     CRYPTO_RESULT_UNSUPPORTED,
+    CRYPTO_RESULT_VALID,
     CryptoBackend,
     HotPathProfile,
     ScriptStackItem,
@@ -50,6 +53,7 @@ from script_corpus_foundation import (
     evaluate_legacy_script_with_crypto_profiled,
     hash160,
     hash256,
+    hex_text_to_bytes,
     legacy_find_and_delete,
     legacy_sighash,
     legacy_sighash_cached_preimage,
@@ -63,7 +67,17 @@ from script_corpus_foundation import (
     slice_bytes,
     slice_bytes_profiled,
     tapleaf_hash,
+    taproot_tweak_hash,
     verify_taproot_tweak,
+)
+from pure_secp import (
+    pure_test_scalar_mul_g_x,
+    pure_test_scalar_mul_g_y,
+    pure_test_schnorr_challenge,
+    pure_test_u256_add_mod,
+    pure_test_u256_inv_mod,
+    pure_test_u256_mul_mod,
+    pure_test_u256_sub_mod,
 )
 from std.collections import List
 from std.os import getenv
@@ -329,10 +343,102 @@ def test_crypto_backend_result_classes_do_not_fallback_to_native() raises:
     assert_equal(pure_result, CRYPTO_RESULT_UNSUPPORTED)
 
     pure_result = pure.verify_schnorr_bytes(pubkey, signature, digest)
-    assert_equal(pure_result, CRYPTO_RESULT_UNSUPPORTED)
+    assert_equal(pure_result, CRYPTO_RESULT_MALFORMED)
 
     pure_result = pure.verify_taproot_tweak_precomputed(pubkey, signature, digest, 0)
-    assert_equal(pure_result, CRYPTO_RESULT_UNSUPPORTED)
+    assert_equal(pure_result, CRYPTO_RESULT_MALFORMED)
+
+
+def _hex_bytes(text: String) raises -> List[UInt8]:
+    return hex_text_to_bytes(ascii_string_to_bytes(text))
+
+
+def test_pure_secp_arithmetic_known_vectors() raises:
+    var field_p = _hex_bytes(String("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"))
+    var two = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000002"))
+    var three = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000003"))
+    var five = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000005"))
+    var six = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000006"))
+    var p_minus_two = _hex_bytes(String("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2d"))
+    var inv_two = _hex_bytes(String("7fffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffe18"))
+    var high_a = _hex_bytes(String("f73dafc19d228263cb4ed5db0500e47f603b61fa65eeae217ccb74acc1d36143"))
+    var high_b = _hex_bytes(String("6114c8de454c9b5272e1284cd8f2974118b8b15da4f2439136e5d08b7eb03b7b"))
+
+    assert_equal(bytes_to_hex(pure_test_u256_add_mod(two, three, field_p)), bytes_to_hex(five))
+    assert_equal(bytes_to_hex(pure_test_u256_sub_mod(three, five, field_p)), bytes_to_hex(p_minus_two))
+    assert_equal(bytes_to_hex(pure_test_u256_mul_mod(two, three, field_p)), bytes_to_hex(six))
+    assert_equal(bytes_to_hex(pure_test_u256_inv_mod(two, field_p)), bytes_to_hex(inv_two))
+    assert_equal(
+        bytes_to_hex(pure_test_u256_add_mod(high_a, high_b, field_p)),
+        String("5852789fe26f1db63e2ffe27ddf37bc078f413580ae0f1b2b3b145394083a08f"),
+    )
+    assert_equal(
+        bytes_to_hex(pure_test_u256_sub_mod(high_a, high_b, field_p)),
+        String("9628e6e357d5e711586dad8e2c0e4d3e4782b09cc0fc6a9045e5a421432325c8"),
+    )
+    assert_equal(
+        bytes_to_hex(pure_test_u256_mul_mod(high_a, high_b, field_p)),
+        String("422effa10d0f872f33c4ad3ee7134e1b01485ff67d9fd681aa8caeb057552e0c"),
+    )
+
+    var scalar_two = two.copy()
+    assert_equal(
+        bytes_to_hex(pure_test_scalar_mul_g_x(scalar_two)),
+        String("c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"),
+    )
+    assert_equal(
+        bytes_to_hex(pure_test_scalar_mul_g_y(scalar_two)),
+        String("1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a"),
+    )
+    var scalar_12345 = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000003039"))
+    assert_equal(
+        bytes_to_hex(pure_test_scalar_mul_g_x(scalar_12345)),
+        String("f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f"),
+    )
+    assert_equal(
+        bytes_to_hex(pure_test_scalar_mul_g_y(scalar_12345)),
+        String("0eba29d0f0c5408ed681984dc525982abefccd9f7ff01dd26da4999cf3f6a295"),
+    )
+
+
+def test_pure_schnorr_and_taproot_vectors() raises:
+    var shim = getenv("MOJOBITNODE_SHIM_PATH", "./build/libmojobitnode_shim.dylib")
+    var pure = CryptoBackend(shim, CRYPTO_BACKEND_PURE)
+
+    var schnorr_pubkey = _hex_bytes(String("f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f"))
+    var schnorr_msg = _hex_bytes(String("3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9"))
+    var schnorr_sig = _hex_bytes(String("632f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784c80478f3845b4719c92c339fe1032890f9d96b6b0b44a8ea05da6ce88a133b7b"))
+    var schnorr_r = _hex_bytes(String("632f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784"))
+    assert_equal(
+        bytes_to_hex(pure_test_schnorr_challenge(schnorr_r, schnorr_pubkey, schnorr_msg)),
+        String("f18b17f0caabbdce27f649e8f9b33d3c753c40dd023cea53a3722359ca6db388"),
+    )
+    assert_equal(pure.verify_schnorr_bytes(schnorr_pubkey, schnorr_sig, schnorr_msg), CRYPTO_RESULT_VALID)
+
+    var mutated_sig = schnorr_sig.copy()
+    mutated_sig[63] = mutated_sig[63] ^ UInt8(1)
+    assert_equal(pure.verify_schnorr_bytes(schnorr_pubkey, mutated_sig, schnorr_msg), CRYPTO_RESULT_CONSENSUS_INVALID)
+
+    var short_sig = List[UInt8]()
+    short_sig.append(UInt8(1))
+    assert_equal(pure.verify_schnorr_bytes(schnorr_pubkey, short_sig, schnorr_msg), CRYPTO_RESULT_MALFORMED)
+
+    var taproot_internal = _hex_bytes(String("85a7b790fc9d962493788317e4874a4ab07f1e9c78c773c47f2f6c96df756f05"))
+    var taproot_merkle_root = _hex_bytes(String("446ba384864eb34196e08044029fb463d97748e4549dfd0e2612f60d74c4f165"))
+    var taproot_tweak = taproot_tweak_hash(taproot_internal, taproot_merkle_root)
+    var taproot_expected = _hex_bytes(String("4b3e30f94e0ae82945cbb40d83088b8f3bea370c24c575b7788889ad5e64da8b"))
+    assert_equal(
+        pure.verify_taproot_tweak_precomputed(taproot_internal, taproot_tweak, taproot_expected, 1),
+        CRYPTO_RESULT_VALID,
+    )
+    assert_equal(
+        pure.verify_taproot_tweak_precomputed(taproot_internal, taproot_tweak, taproot_expected, 0),
+        CRYPTO_RESULT_CONSENSUS_INVALID,
+    )
+    assert_equal(
+        pure.verify_taproot_tweak_precomputed(short_sig, taproot_tweak, taproot_expected, 1),
+        CRYPTO_RESULT_MALFORMED,
+    )
 
 
 def _fake_hash(seed: Int) -> List[UInt8]:

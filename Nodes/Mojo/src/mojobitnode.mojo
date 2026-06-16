@@ -8,12 +8,15 @@ from block_core import Native, local_reference_proof
 from script_corpus_foundation import (
     ascii_string_to_bytes,
     bytes_equal,
+    CRYPTO_BACKEND_PURE,
+    CryptoBackend,
     evaluate_bare_legacy_fixture,
     evaluate_bare_multisig_fixture,
     evaluate_p2pkh_fixture,
     evaluate_p2sh_fixture,
     evaluate_taproot_fixture,
     evaluate_taproot_fixture_diagnostic,
+    evaluate_taproot_fixture_diagnostic_with_crypto,
     evaluate_witness_v0_fixture,
     hex_text_to_bytes,
     is_bare_legacy_diagnostic_fixture,
@@ -52,6 +55,8 @@ def failed_count_json(value: Bool) -> String:
 
 
 def diagnostic_failure_stage(message: String) -> String:
+    if "unsupported crypto" in message or "crypto backend unsupported" in message:
+        return String("unsupported_crypto")
     if "manifest" in message or "fixture id" in message or "fixture stem" in message or "hex" in message or "transaction parser" in message:
         return String("fixture_load")
     if "prevout" in message or "spent script" in message or "input index" in message or "scriptPubKey" in message:
@@ -67,6 +72,13 @@ def diagnostic_failure_stage(message: String) -> String:
     if "stack" in message or "opcode" in message or "OP_" in message or "conditional" in message:
         return String("opcode_execution")
     return String("fixture_evaluation")
+
+
+def pure_shadow_fixture_enabled(fixture_id: String) -> Bool:
+    # Keep the first pure-shadow corpus slice operationally bounded. Pure
+    # Schnorr/Taproot vectors cover BIP340 and tweak primitives; this corpus row
+    # proves the injected pure backend through the shared Taproot evaluator.
+    return fixture_id == "scripts.p2tr_tapscript_numequal_32712"
 
 
 def actual_json(code: Int32) -> String:
@@ -479,10 +491,44 @@ def main() raises:
             if shadow_crypto:
                 var shadow_supported = False
                 var shadow_agreed = False
+                var shadow_result = String("unsupported")
+                var shadow_failure_stage = String("")
+                var shadow_failure = String("")
+                var support_status = String("pure_backend_crypto_unsupported")
+                if is_taproot_diagnostic_fixture(eval_id):
+                    if not pure_shadow_fixture_enabled(eval_id):
+                        support_status = String("pure_backend_diagnostic_slice_not_enabled")
+                    else:
+                        try:
+                            var pure_crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_PURE)
+                            var pure_result = evaluate_taproot_fixture_diagnostic_with_crypto(
+                                manifest_path, eval_id, shim_path, pure_crypto
+                            )
+                            if pure_result.failure_stage == "unsupported_crypto":
+                                shadow_failure_stage = pure_result.failure_stage
+                                shadow_failure = pure_result.failure
+                            else:
+                                shadow_supported = True
+                                shadow_result = result_json(pure_result.passed)
+                                shadow_agreed = pure_result.passed == current_passed
+                                support_status = String("supported")
+                                if not pure_result.passed:
+                                    shadow_failure_stage = pure_result.failure_stage
+                                    shadow_failure = pure_result.failure
+                        except e:
+                            shadow_failure = String(e)
+                            shadow_failure_stage = diagnostic_failure_stage(shadow_failure)
+                            if shadow_failure_stage != "unsupported_crypto":
+                                shadow_supported = True
+                                shadow_result = String("failed")
+                                shadow_agreed = False
+                                support_status = String("supported")
                 if shadow_supported:
                     shadow_supported_count += 1
                 if shadow_agreed:
                     shadow_agreed_count += 1
+                if shadow_supported and not shadow_agreed:
+                    shadow_disagreement_count += 1
                 results += (
                     String('{"fixture_id":"')
                     + current_id
@@ -492,12 +538,16 @@ def main() raises:
                     + meta.required_rules
                     + String('","native_result":"')
                     + result_json(current_passed)
-                    + String('","shadow_result":"unsupported","shadow_supported":')
+                    + String('","shadow_result":"')
+                    + shadow_result
+                    + String('","shadow_supported":')
                     + bool_json(shadow_supported)
                     + String(',"shadow_agreed":')
                     + bool_json(shadow_agreed)
                     + String(',"shadow_backend":"mojo-pure-secp256k1","shadow_used_native_fallback":false,')
-                    + String('"support_status":"pure_backend_crypto_unsupported"')
+                    + String('"support_status":"')
+                    + support_status
+                    + String('"')
                 )
                 if not current_passed:
                     results += (
@@ -505,6 +555,14 @@ def main() raises:
                         + failure_stage
                         + String('","native_failure":"')
                         + failure
+                        + String('"')
+                    )
+                if shadow_failure != "":
+                    results += (
+                        String(',"shadow_failure_stage":"')
+                        + shadow_failure_stage
+                        + String('","shadow_failure":"')
+                        + shadow_failure
                         + String('"')
                     )
                 results += String("}")

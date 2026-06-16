@@ -44,10 +44,14 @@ native prerequisites a future port would need?
   transaction-level serialized input/output components. The uncached builder is
   kept as the byte-for-byte reference, and focused smokes compare cached output
   across `SIGHASH_ALL`, `NONE`, `SINGLE`, and `ANYONECANPAY` variants.
-- Zig-style shadow crypto scaffolding is diagnostic-only. Native
-  `libsecp256k1` remains the comparable proof backend; `--shadow-crypto` emits
-  a separate `port.script_corpus_shadow_crypto.v1` artifact with explicit pure
-  backend support/unsupported rows and no native fallback.
+- Zig-style shadow crypto is diagnostic-only. Native `libsecp256k1` remains the
+  comparable proof backend; the pure Mojo backend now implements correctness-
+  first BIP340 Schnorr verification and Taproot tweak checks while leaving
+  ECDSA unsupported. `--shadow-crypto` emits a separate
+  `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
+  support/unsupported rows and no native fallback. The current corpus shadow
+  slice supports `scripts.p2tr_tapscript_numequal_32712`; broader Taproot
+  shadow coverage waits on pure affine secp performance work.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,
@@ -63,7 +67,9 @@ The diagnostic `script-corpus-dev` surface remains available for fixture-level
 debugging. The public `script-corpus` command is the evidence surface and emits
 canonical `port.script_corpus_result.v1` JSON with Mojo-owned `45/45` coverage.
 `script-corpus --shadow-crypto` is a separate diagnostic comparator surface and
-must not be imported as canonical corpus evidence.
+must not be imported as canonical corpus evidence. Unsupported rows are expected
+for ECDSA fixtures and for Taproot fixtures outside the current bounded pure
+shadow slice.
 
 ## Commands
 

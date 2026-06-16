@@ -592,6 +592,8 @@ def _diagnostic_failure(stage: String, failure: String) -> DiagnosticEvalResult:
 
 
 def diagnostic_failure_stage(message: String) -> String:
+    if "unsupported crypto" in message or "crypto backend unsupported" in message:
+        return String("unsupported_crypto")
     if "manifest" in message or "fixture id" in message or "fixture stem" in message or "hex" in message or "transaction parser" in message:
         return String("fixture_load")
     if "prevout" in message or "spent script" in message or "input index" in message or "scriptPubKey" in message:
@@ -2121,6 +2123,13 @@ def evaluate_taproot_fixture(manifest_path: String, fixture_id: String, shim_pat
 def evaluate_taproot_fixture_diagnostic(
     manifest_path: String, fixture_id: String, shim_path: String
 ) raises -> DiagnosticEvalResult:
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
+    return evaluate_taproot_fixture_diagnostic_with_crypto(manifest_path, fixture_id, shim_path, crypto)
+
+
+def evaluate_taproot_fixture_diagnostic_with_crypto(
+    manifest_path: String, fixture_id: String, shim_path: String, ref crypto: CryptoBackend
+) raises -> DiagnosticEvalResult:
     try:
         if not manifest_contains_fixture(manifest_path, fixture_id):
             return _diagnostic_failure(String("fixture_load"), String("fixture id not present in Shared manifest"))
@@ -2144,7 +2153,7 @@ def evaluate_taproot_fixture_diagnostic(
         var leaf_digest = tapleaf_hash(leaf_version, tapscript)
         var merkle_root = taproot_merkle_root_from_control(control, leaf_digest)
         var expected_xonly = slice_bytes(script_pubkey, 2, 34)
-        if not verify_taproot_tweak(shim_path, internal_xonly, merkle_root, expected_xonly, parity):
+        if not verify_taproot_tweak_with_crypto(crypto, internal_xonly, merkle_root, expected_xonly, parity):
             return _diagnostic_failure(String("taproot_tweak"), String("Taproot tweak verification returned false"))
 
         var prevout_count = _fixture_prevout_count(fixture_id)
@@ -2172,7 +2181,7 @@ def evaluate_taproot_fixture_diagnostic(
             return _diagnostic_failure(String("control_block"), String("Taproot witness script does not match tapscript fixture"))
         if not bytes_equal(witness_control, control):
             return _diagnostic_failure(String("control_block"), String("Taproot witness control block does not match fixture"))
-        if not evaluate_tapscript(tapscript, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path):
+        if not evaluate_tapscript_with_crypto(tapscript, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path, crypto):
             return _diagnostic_failure(String("stack_terminal_result"), String("Taproot/Tapscript evaluator terminal result was false"))
         return _diagnostic_success()
     except e:
@@ -4340,6 +4349,8 @@ def verify_ecdsa_signature_for_mode_with_crypto(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for ECDSA")
     raise Error("malformed ECDSA signature or pubkey")
 
 
@@ -4393,6 +4404,8 @@ def verify_ecdsa_signature_for_mode_cached_with_crypto(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for ECDSA")
     raise Error("malformed ECDSA signature or pubkey")
 
 
@@ -4423,6 +4436,8 @@ def verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for ECDSA")
     raise Error("malformed ECDSA signature or pubkey")
 
 
@@ -4480,6 +4495,8 @@ def verify_schnorr_signature_with_crypto(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for Schnorr")
     raise Error("malformed Schnorr signature or x-only pubkey")
 
 
@@ -4542,6 +4559,8 @@ def verify_schnorr_signature_cached_with_crypto(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for Schnorr")
     raise Error("malformed Schnorr signature or x-only pubkey")
 
 
@@ -4581,6 +4600,8 @@ def verify_schnorr_signature_cached_with_crypto_profiled(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for Schnorr")
     raise Error("malformed Schnorr signature or x-only pubkey")
 
 
@@ -4627,6 +4648,8 @@ def verify_schnorr_key_path_signature_with_crypto(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for Schnorr")
     raise Error("malformed Schnorr signature or x-only pubkey")
 
 
@@ -4675,6 +4698,8 @@ def verify_schnorr_key_path_signature_cached_with_crypto(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for Schnorr")
     raise Error("malformed Schnorr signature or x-only pubkey")
 
 
@@ -4710,6 +4735,8 @@ def verify_schnorr_key_path_signature_cached_with_crypto_profiled(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for Schnorr")
     raise Error("malformed Schnorr signature or x-only pubkey")
 
 
@@ -4737,6 +4764,8 @@ def verify_taproot_tweak_with_crypto(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for Taproot tweak")
     raise Error("malformed Taproot tweak input")
 
 
@@ -4755,6 +4784,8 @@ def verify_taproot_tweak_with_crypto_profiled(
         return True
     if result == 1:
         return False
+    if result == CRYPTO_RESULT_UNSUPPORTED:
+        raise Error("unsupported crypto backend for Taproot tweak")
     raise Error("malformed Taproot tweak input")
 
 
