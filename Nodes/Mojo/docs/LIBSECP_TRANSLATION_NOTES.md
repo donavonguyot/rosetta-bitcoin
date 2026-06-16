@@ -11,7 +11,7 @@ The implementation follows formulas and structure from Bitcoin Core's
 - `src/field_10x26_impl.h`: field normalization and multiplication discipline.
 - `src/scalar_8x32_impl.h`: fixed-width scalar parsing/order checks.
 - `src/group_impl.h`: affine/Jacobian point operations.
-- `src/ecmult_impl.h`: double-base multiplication shape for verification.
+- `src/ecmult_impl.h`: double-base multiplication and wNAF verification shape.
 - `modules/schnorrsig/main_impl.h`: BIP340 verification flow.
 - `modules/extrakeys/main_impl.h`: x-only Taproot tweak verification flow.
 
@@ -29,12 +29,30 @@ The implementation follows formulas and structure from Bitcoin Core's
   pass, then applies the BIP340 x-coordinate and even-y checks.
 - Taproot tweak verification computes `Q = P + tweak*G` with Jacobian/mixed
   operations and preserves the native-style result classes.
+- ECDSA/DER parsing is strict and diagnostic-only. Pure verification normalizes
+  high-S signatures to match the current native vector/corpus result classes,
+  rejects malformed DER/pubkeys and zero/out-of-range scalars, and reports
+  unsupported rather than falling back to native.
+- ECDSA keeps the original bit-by-bit double-base verifier as a correctness
+  reference. The diagnostic path now also has a libsecp-guided wNAF verifier:
+  scalar recoding follows the `secp256k1_ecmult_wnaf` shape, generator odd
+  multiples are precomputed for small windows, and arbitrary public-key odd
+  multiples are built per verification call.
+- `pure-crypto-profile` records stage timings for DER parse, pubkey parse/lift,
+  high-S normalization, scalar inverse, scalar multiplication, reference
+  double-base, wNAF double-base, affine conversion, and native-result
+  comparison. Profile JSON is Mojo-local diagnostic output under
+  `.benchmark-results/`.
 
 ## Evidence Boundary
 
 The pure backend is diagnostic-only. Native `libsecp256k1` remains the default
 and comparable backend for script corpus, 5k, 50k, and later proof lanes. Pure
-ECDSA/DER remains unsupported in this slice and must not fall back to native.
+ECDSA/DER is enabled only for focused diagnostic vectors and the first
+timing-gated P2PKH shadow row, `scripts.p2pkh_sighash_single_38010`. Other
+ECDSA-bearing non-Taproot corpus rows remain unsupported until a later measured
+slice proves zero disagreements and the 5000ms per-row shadow guardrail. The
+pure backend must not fall back to native.
 
 This implementation does not claim constant-time hardening. It is a verifier
 shadow path for differential testing and language-specific learning.

@@ -2045,6 +2045,13 @@ def evaluate_p2sh_fixture(manifest_path: String, fixture_id: String, shim_path: 
 
 
 def evaluate_p2pkh_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
+    return evaluate_p2pkh_fixture_with_crypto(manifest_path, fixture_id, shim_path, crypto)
+
+
+def evaluate_p2pkh_fixture_with_crypto(
+    manifest_path: String, fixture_id: String, shim_path: String, ref crypto: CryptoBackend
+) raises -> Bool:
     if not manifest_contains_fixture(manifest_path, fixture_id):
         raise Error("fixture id not present in Shared manifest")
     var stem = _fixture_stem(fixture_id)
@@ -2064,7 +2071,9 @@ def evaluate_p2pkh_fixture(manifest_path: String, fixture_id: String, shim_path:
     var expected_hash = slice_bytes(script_pubkey, 3, 23)
     if not bytes_equal(actual_hash, expected_hash):
         return False
-    return verify_ecdsa_signature(shim_path, signature.data, pubkey.data, tx, input_index, script_pubkey)
+    return verify_ecdsa_signature_for_mode_with_crypto(
+        crypto, signature.data, pubkey.data, tx, input_index, script_pubkey, False, Int64(0)
+    )
 
 
 def evaluate_witness_v0_fixture(manifest_path: String, fixture_id: String, shim_path: String) raises -> Bool:

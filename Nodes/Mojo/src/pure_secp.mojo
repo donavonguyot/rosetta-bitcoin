@@ -186,6 +186,44 @@ def _generator() -> Point:
     return p^
 
 
+def _generator_odd_multiple(index: Int) raises -> Point:
+    var out = Point()
+    out.infinity = False
+    if index == 0:
+        out.x = _u256(UInt32(0x16F81798), UInt32(0x59F2815B), UInt32(0x2DCE28D9), UInt32(0x029BFCDB), UInt32(0xCE870B07), UInt32(0x55A06295), UInt32(0xF9DCBBAC), UInt32(0x79BE667E))
+        out.y = _u256(UInt32(0xFB10D4B8), UInt32(0x9C47D08F), UInt32(0xA6855419), UInt32(0xFD17B448), UInt32(0x0E1108A8), UInt32(0x5DA4FBFC), UInt32(0x26A3C465), UInt32(0x483ADA77))
+        return out^
+    if index == 1:
+        out.x = _u256(UInt32(0xBCE036F9), UInt32(0x8601F113), UInt32(0x836F99B0), UInt32(0xB531C845), UInt32(0xF89D5229), UInt32(0x49344F85), UInt32(0x9258C310), UInt32(0xF9308A01))
+        out.y = _u256(UInt32(0x84B8E672), UInt32(0x6CB9FD75), UInt32(0x34C2231B), UInt32(0x6500A999), UInt32(0x2A37F356), UInt32(0x0FE337E6), UInt32(0x632DE814), UInt32(0x388F7B0F))
+        return out^
+    if index == 2:
+        out.x = _u256(UInt32(0xB240EFE4), UInt32(0xCBA8D569), UInt32(0xDC619AB7), UInt32(0xE88B84BD), UInt32(0x0A5C5128), UInt32(0x55B4A725), UInt32(0x1A072093), UInt32(0x2F8BDE4D))
+        out.y = _u256(UInt32(0xA6AC62D6), UInt32(0xDCA87D3A), UInt32(0xAB0D6840), UInt32(0xF788271B), UInt32(0xA6C9C426), UInt32(0xD4DBA9DD), UInt32(0x36E5E3D6), UInt32(0xD8AC2226))
+        return out^
+    if index == 3:
+        out.x = _u256(UInt32(0xCAC4F9BC), UInt32(0xE92BDDED), UInt32(0x0330E39C), UInt32(0x3D419B7E), UInt32(0xF2EA7A0E), UInt32(0xA398F365), UInt32(0x6E5DB4EA), UInt32(0x5CBDF064))
+        out.y = _u256(UInt32(0x087264DA), UInt32(0xA5082628), UInt32(0x13FDE7B5), UInt32(0xA813D0B8), UInt32(0x861A54DB), UInt32(0xA3178D6D), UInt32(0xBA255960), UInt32(0x6AEBCA40))
+        return out^
+    if index == 4:
+        out.x = _u256(UInt32(0xFC27CCBE), UInt32(0xC35F110D), UInt32(0x4C57E714), UInt32(0xE0979697), UInt32(0x9F559ABD), UInt32(0x09AD178A), UInt32(0xF0C7F653), UInt32(0xACD484E2))
+        out.y = _u256(UInt32(0xC64F9C37), UInt32(0x05CC262A), UInt32(0x375F8E0F), UInt32(0xADD888A4), UInt32(0x763B61E9), UInt32(0x64380971), UInt32(0xB0A7D9FD), UInt32(0xCC338921))
+        return out^
+    if index == 5:
+        out.x = _u256(UInt32(0x5DA008CB), UInt32(0xBBEC1789), UInt32(0xE5C17891), UInt32(0x5649980B), UInt32(0x70C65AAC), UInt32(0x5EF4246B), UInt32(0x58A9411E), UInt32(0x774AE7F8))
+        out.y = _u256(UInt32(0xC953C61B), UInt32(0x301D74C9), UInt32(0xDFF9D6A8), UInt32(0x372DB1E2), UInt32(0xD7B7B365), UInt32(0x0243DD56), UInt32(0xEB6B5E19), UInt32(0xD984A032))
+        return out^
+    if index == 6:
+        out.x = _u256(UInt32(0x19405AA8), UInt32(0xDEEDDF8F), UInt32(0x610E58CD), UInt32(0xB075FBC6), UInt32(0xC3748651), UInt32(0xC7D1D205), UInt32(0xD975288B), UInt32(0xF28773C2))
+        out.y = _u256(UInt32(0xDB03ED81), UInt32(0x29B5CB52), UInt32(0x521FA91F), UInt32(0x3A1A06DA), UInt32(0x65CDAF47), UInt32(0x758212EB), UInt32(0x8D880A89), UInt32(0x0AB0902E))
+        return out^
+    if index == 7:
+        out.x = _u256(UInt32(0xE27E080E), UInt32(0x44ADBCF8), UInt32(0x3C85F79E), UInt32(0x31E5946F), UInt32(0x095FF411), UInt32(0x5A465AE3), UInt32(0x7D43EA96), UInt32(0xD7924D4F))
+        out.y = _u256(UInt32(0xF6A26B58), UInt32(0xC504DC9F), UInt32(0xD896D3A5), UInt32(0xEA40AF2B), UInt32(0x28CC6DEF), UInt32(0x83842EC2), UInt32(0xA86C72A6), UInt32(0x581E2872))
+        return out^
+    raise Error("generator odd multiple index out of range")
+
+
 def _cmp(ref a: U256, ref b: U256) -> Int:
     for j in range(8):
         var i = 7 - j
@@ -266,6 +304,34 @@ def _shr1(ref a: U256) -> U256:
         var i = 7 - j
         out.limbs[i] = (a.limbs[i] >> UInt32(1)) | (carry << UInt32(31))
         carry = a.limbs[i] & UInt32(1)
+    return out^
+
+
+def _add_small_raw(ref a: U256, value: UInt32) -> U256:
+    var out = a.copy()
+    var carry = UInt64(value)
+    for i in range(8):
+        if carry == UInt64(0):
+            break
+        var total = UInt64(out.limbs[i]) + carry
+        out.limbs[i] = UInt32(total & UInt64(0xFFFFFFFF))
+        carry = total >> UInt64(32)
+    return out^
+
+
+def _sub_small_raw(ref a: U256, value: UInt32) -> U256:
+    var out = a.copy()
+    var borrow = UInt64(value)
+    for i in range(8):
+        if borrow == UInt64(0):
+            break
+        var av = UInt64(out.limbs[i])
+        if av >= borrow:
+            out.limbs[i] = UInt32(av - borrow)
+            borrow = UInt64(0)
+        else:
+            out.limbs[i] = UInt32((UInt64(1) << UInt64(32)) + av - borrow)
+            borrow = UInt64(1)
     return out^
 
 
@@ -701,6 +767,89 @@ def _double_base_mul(ref s: U256, ref generator: Point, ref e: U256, ref pubkey:
     return result^
 
 
+def _wnaf_recode(ref scalar: U256, width: Int) -> List[Int]:
+    var digits = List[Int]()
+    var k = scalar.copy()
+    var base = 1
+    for _ in range(width):
+        base *= 2
+    var half = base // 2
+    var mask = UInt32(base - 1)
+    while not _is_zero(k):
+        var digit = 0
+        if _is_odd(k):
+            digit = Int(k.limbs[0] & mask)
+            if digit > half:
+                digit -= base
+            if digit > 0:
+                k = _sub_small_raw(k, UInt32(digit))
+            else:
+                k = _add_small_raw(k, UInt32(0 - digit))
+        digits.append(digit)
+        k = _shr1(k)
+    return digits^
+
+
+def _odd_multiples(ref point: Point, count: Int) -> List[Point]:
+    var table = List[Point]()
+    if count <= 0:
+        return table^
+    table.append(point.copy())
+    if count == 1:
+        return table^
+    var two_point = _point_double(point)
+    for i in range(1, count):
+        table.append(_point_add(table[i - 1], two_point))
+    return table^
+
+
+def _wnaf_table_add(mut result: JacobianPoint, ref table: List[Point], digit: Int) raises -> JacobianPoint:
+    if digit == 0:
+        return result.copy()
+    var abs_digit = digit
+    if abs_digit < 0:
+        abs_digit = 0 - abs_digit
+    var table_index = (abs_digit - 1) // 2
+    var point = table[table_index].copy()
+    if digit < 0:
+        point = _point_neg(point)
+    return _jacobian_add_affine(result, point)
+
+
+def _wnaf_generator_add(mut result: JacobianPoint, digit: Int) raises -> JacobianPoint:
+    if digit == 0:
+        return result.copy()
+    var abs_digit = digit
+    if abs_digit < 0:
+        abs_digit = 0 - abs_digit
+    var table_index = (abs_digit - 1) // 2
+    var point = _generator_odd_multiple(table_index)
+    if digit < 0:
+        point = _point_neg(point)
+    return _jacobian_add_affine(result, point)
+
+
+def _double_base_mul_wnaf(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Point) raises -> JacobianPoint:
+    var width = 5
+    var g_wnaf = _wnaf_recode(g_scalar, width)
+    var p_wnaf = _wnaf_recode(p_scalar, width)
+    var p_table = _odd_multiples(pubkey, 8)
+    var max_len = len(g_wnaf)
+    if len(p_wnaf) > max_len:
+        max_len = len(p_wnaf)
+
+    var result = JacobianPoint()
+    for j in range(max_len):
+        var i = max_len - 1 - j
+        if not result.infinity:
+            result = _jacobian_double(result)
+        if i < len(g_wnaf):
+            result = _wnaf_generator_add(result, g_wnaf[i])
+        if i < len(p_wnaf):
+            result = _wnaf_table_add(result, p_table, p_wnaf[i])
+    return result^
+
+
 def _point_double(ref point: Point) -> Point:
     if point.infinity or _is_zero(point.y):
         return Point()
@@ -1051,6 +1200,15 @@ def pure_verify_ecdsa_der_bytes(
     ref der: List[UInt8],
     ref digest: List[UInt8],
 ) raises -> Int32:
+    return _pure_verify_ecdsa_der_bytes_with_mode(pubkey, der, digest, True)
+
+
+def _pure_verify_ecdsa_der_bytes_with_mode(
+    ref pubkey: List[UInt8],
+    ref der: List[UInt8],
+    ref digest: List[UInt8],
+    use_wnaf: Bool,
+) raises -> Int32:
     if (len(pubkey) != 33 and len(pubkey) != 65) or len(der) == 0 or len(der) > 72 or len(digest) != 32:
         return MALFORMED
     var n = _scalar_n()
@@ -1073,7 +1231,12 @@ def pure_verify_ecdsa_der_bytes(
     var w = _scalar_inv(sig.s)
     var u1 = _scalar_mul_mod(z, w)
     var u2 = _scalar_mul_mod(sig.r, w)
-    var point = _jacobian_to_affine(_double_base_mul(u1, _generator(), u2, q))
+    var product = JacobianPoint()
+    if use_wnaf:
+        product = _double_base_mul_wnaf(u1, u2, q)
+    else:
+        product = _double_base_mul(u1, _generator(), u2, q)
+    var point = _jacobian_to_affine(product)
     if point.infinity:
         return CONSENSUS_INVALID
     var x_mod_n = _reduce_once(point.x, n)
@@ -1224,3 +1387,87 @@ def pure_test_ecdsa_parse_der(ref der: List[UInt8]) raises -> List[UInt8]:
     _append_bytes(out, r)
     _append_bytes(out, s)
     return out^
+
+
+def pure_test_ecdsa_parse_pubkey_x(ref pubkey: List[UInt8]) raises -> List[UInt8]:
+    var point = _parse_pubkey(pubkey)
+    return _to_be32(point.x)
+
+
+def pure_test_ecdsa_normalized_s(ref der: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    return _to_be32(sig.s)
+
+
+def pure_test_ecdsa_inverse_s(ref der: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    return _to_be32(_scalar_inv(sig.s))
+
+
+def pure_test_ecdsa_u_scalars(ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var out = List[UInt8]()
+    _append_bytes(out, _to_be32(u1))
+    _append_bytes(out, _to_be32(u2))
+    return out^
+
+
+def pure_test_ecdsa_reference_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var q = _parse_pubkey(pubkey)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _jacobian_to_affine(_double_base_mul(u1, _generator(), u2, q))
+    if point.infinity:
+        raise Error("ECDSA reference product is infinity")
+    return _to_be32(point.x)
+
+
+def pure_test_ecdsa_wnaf_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var q = _parse_pubkey(pubkey)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _jacobian_to_affine(_double_base_mul_wnaf(u1, u2, q))
+    if point.infinity:
+        raise Error("ECDSA wNAF product is infinity")
+    return _to_be32(point.x)
+
+
+def pure_test_ecdsa_reference_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
+    return _pure_verify_ecdsa_der_bytes_with_mode(pubkey, der, digest, False)
+
+
+def pure_test_ecdsa_wnaf_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
+    return _pure_verify_ecdsa_der_bytes_with_mode(pubkey, der, digest, True)

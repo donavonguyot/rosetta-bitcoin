@@ -50,17 +50,20 @@ native prerequisites a future port would need?
   libsecp-guided fixed-limb field multiplication and Jacobian group operations.
   It also has a pure Mojo ECDSA/DER verifier that matches the native vector
   result classes, including high-S normalization, malformed DER/pubkey handling,
-  and consensus-invalid signatures; ECDSA corpus rows remain disabled because
-  the current pure path is still above the shadow row timing guardrail.
+  and consensus-invalid signatures. A diagnostic `pure-crypto-profile` command
+  records DER parse, pubkey parse/lift, high-S normalization, scalar inverse,
+  scalar multiplication, reference double-base, wNAF double-base, affine
+  conversion, and native-result comparison timings for the focused ECDSA vector.
   `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
   support/unsupported rows, per-attempt `shadow_duration_ms`, aggregate shadow
   timing, large-fixture size metrics, and no native fallback. The current corpus
   shadow slice supports all 17 Taproot fixtures, including the large
   `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and
-  `scripts.p2tr_tapscript_126975` stress rows, while leaving ECDSA-bearing
-  non-Taproot rows unsupported. Broader pure shadow coverage waits on
-  zero-disagreement rows that stay under the 5000ms per-row guardrail. See
+  `scripts.p2tr_tapscript_126975` stress rows, plus the first timing-gated
+  P2PKH/ECDSA row, `scripts.p2pkh_sighash_single_38010`. Other ECDSA-bearing
+  non-Taproot rows remain unsupported until a later measured slice enables them
+  with zero disagreements and the 5000ms per-row guardrail. See
   `docs/LIBSECP_TRANSLATION_NOTES.md` before changing the pure secp internals.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
@@ -77,9 +80,9 @@ The diagnostic `script-corpus-dev` surface remains available for fixture-level
 debugging. The public `script-corpus` command is the evidence surface and emits
 canonical `port.script_corpus_result.v1` JSON with Mojo-owned `45/45` coverage.
 `script-corpus --shadow-crypto` is a separate diagnostic comparator surface and
-must not be imported as canonical corpus evidence. Unsupported rows are expected
-for ECDSA-bearing fixtures until pure ECDSA is fast enough to keep enabled rows
-under the 5000ms per-row guardrail.
+must not be imported as canonical corpus evidence. Unsupported rows are still
+expected for most ECDSA-bearing fixtures; the current diagnostic ECDSA corpus
+support is limited to `scripts.p2pkh_sighash_single_38010`.
 
 ## Commands
 
@@ -93,6 +96,7 @@ make host-mojo-version
 make host-build
 make host-status
 make host-native-crypto-vectors
+make host-pure-crypto-profile
 make host-native-boundary-audit
 make host-storage-proof
 make host-script-corpus-dev
@@ -120,6 +124,7 @@ make docker-mojo-version
 make docker-warm
 make docker-status
 make docker-native-crypto-vectors
+make docker-pure-crypto-profile
 make docker-native-boundary-audit
 make docker-storage-proof
 make docker-script-corpus

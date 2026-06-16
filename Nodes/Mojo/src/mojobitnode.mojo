@@ -6,7 +6,19 @@ from std.pathlib import Path
 from std.sys import argv
 
 from block_core import Native, local_reference_proof
+from pure_secp import (
+    pure_test_ecdsa_inverse_s,
+    pure_test_ecdsa_normalized_s,
+    pure_test_ecdsa_parse_der,
+    pure_test_ecdsa_parse_pubkey_x,
+    pure_test_ecdsa_reference_product_x,
+    pure_test_ecdsa_reference_result,
+    pure_test_ecdsa_u_scalars,
+    pure_test_ecdsa_wnaf_product_x,
+    pure_test_ecdsa_wnaf_result,
+)
 from script_corpus_foundation import (
+    CRYPTO_BACKEND_NATIVE,
     ascii_string_to_bytes,
     bytes_equal,
     CRYPTO_BACKEND_PURE,
@@ -14,6 +26,7 @@ from script_corpus_foundation import (
     evaluate_bare_legacy_fixture,
     evaluate_bare_multisig_fixture,
     evaluate_p2pkh_fixture,
+    evaluate_p2pkh_fixture_with_crypto,
     evaluate_p2sh_fixture,
     evaluate_taproot_fixture,
     evaluate_taproot_fixture_diagnostic,
@@ -77,10 +90,11 @@ def diagnostic_failure_stage(message: String) -> String:
 
 def pure_shadow_fixture_enabled(fixture_id: String) -> Bool:
     # Keep pure-shadow corpus coverage operationally bounded. These rows prove
-    # the injected pure backend through shared Taproot evaluators. The very
-    # large Taproot fixtures remain disabled until a dedicated scaling pass.
+    # the injected pure backend through measured Taproot evaluators plus the
+    # first P2PKH/ECDSA timing-gated probe.
     return (
-        fixture_id == "scripts.p2tr_tapscript_numequal_32712"
+        fixture_id == "scripts.p2pkh_sighash_single_38010"
+        or fixture_id == "scripts.p2tr_tapscript_numequal_32712"
         or fixture_id == "scripts.p2tr_scriptpath_44295"
         or fixture_id == "scripts.p2tr_scriptpath_46599"
         or fixture_id == "scripts.p2tr_tapscript_sha256_52024"
@@ -425,10 +439,119 @@ def native_vector_actual(shim_path: String, index: Int) raises -> Int32:
     return result
 
 
+def pure_crypto_profile_json(shim_path: String, surface: String) raises -> String:
+    var clock = Native(shim_path)
+    var total_started = clock.now_ms()
+    var pubkey = hex_string_to_bytes(vector_pubkey_hex(0))
+    var sig = hex_string_to_bytes(vector_signature_hex(0))
+    var msg = hex_string_to_bytes(vector_msg_hash_hex(0))
+
+    var started = clock.now_ms()
+    var parsed_der = pure_test_ecdsa_parse_der(sig)
+    var der_parse_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var parsed_pubkey = pure_test_ecdsa_parse_pubkey_x(pubkey)
+    var pubkey_parse_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var normalized_s = pure_test_ecdsa_normalized_s(sig)
+    var high_s_normalize_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var inverse_s = pure_test_ecdsa_inverse_s(sig)
+    var scalar_inverse_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var u_scalars = pure_test_ecdsa_u_scalars(sig, msg)
+    var scalar_multiplications_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var reference_x = pure_test_ecdsa_reference_product_x(pubkey, sig, msg)
+    var reference_double_base_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var wnaf_x = pure_test_ecdsa_wnaf_product_x(pubkey, sig, msg)
+    var wnaf_double_base_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var wnaf_result = pure_test_ecdsa_wnaf_result(pubkey, sig, msg)
+    var affine_and_result_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var reference_result = pure_test_ecdsa_reference_result(pubkey, sig, msg)
+    var reference_result_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var native_result = native_vector_actual(shim_path, 0)
+    var native_compare_ms = clock.now_ms() - started
+
+    var wnaf_matches_reference = bytes_equal(wnaf_x, reference_x) and wnaf_result == reference_result
+    var matches_native = wnaf_result == native_result
+    var result = String("diagnostic")
+    if not wnaf_matches_reference or not matches_native:
+        result = String("failed")
+
+    var total_ms = clock.now_ms() - total_started
+    return (
+        String('{"schema":"port.pure_crypto_profile.v1","category":"pure_crypto_profile",')
+        + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
+        + surface
+        + String('","entrypoint_language":"mojo","native_crypto_backend":"libsecp256k1",')
+        + String('"shadow_crypto_backend":"mojo-pure-secp256k1","native_shim":"owned_c",')
+        + String('"target_vector":"ecdsa-valid-privkey-1-deadbeef","operation":"verify_ecdsa",')
+        + String('"stage_ms":{"der_parse":')
+        + String(der_parse_ms)
+        + String(',"pubkey_parse_lift":')
+        + String(pubkey_parse_ms)
+        + String(',"high_s_normalization":')
+        + String(high_s_normalize_ms)
+        + String(',"scalar_inverse":')
+        + String(scalar_inverse_ms)
+        + String(',"scalar_multiplications":')
+        + String(scalar_multiplications_ms)
+        + String(',"reference_double_base_plus_affine":')
+        + String(reference_double_base_ms)
+        + String(',"wnaf_double_base_plus_affine":')
+        + String(wnaf_double_base_ms)
+        + String(',"wnaf_affine_result":')
+        + String(affine_and_result_ms)
+        + String(',"reference_result":')
+        + String(reference_result_ms)
+        + String(',"native_result_compare":')
+        + String(native_compare_ms)
+        + String('},"bytes":{"parsed_der":')
+        + String(len(parsed_der))
+        + String(',"parsed_pubkey_x":')
+        + String(len(parsed_pubkey))
+        + String(',"normalized_s":')
+        + String(len(normalized_s))
+        + String(',"inverse_s":')
+        + String(len(inverse_s))
+        + String(',"u_scalars":')
+        + String(len(u_scalars))
+        + String('},"reference_result_code":')
+        + String(reference_result)
+        + String(',"wnaf_result_code":')
+        + String(wnaf_result)
+        + String(',"native_result_code":')
+        + String(native_result)
+        + String(',"wnaf_matches_reference":')
+        + bool_json(wnaf_matches_reference)
+        + String(',"wnaf_matches_native":')
+        + bool_json(matches_native)
+        + String(',"total_ms":')
+        + String(total_ms)
+        + String(',"p2pkh_shadow_gate_ms":1000,"result":"')
+        + result
+        + String('"}')
+    )
+
+
 def main() raises:
     var args = argv()
     if len(args) < 2:
-        print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")
+        print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")
         return
 
     var command = String(args[1])
@@ -633,32 +756,45 @@ def main() raises:
                 var shadow_tapscript_hex_bytes = Int64(0)
                 var shadow_witness_items = 0
                 var shadow_witness_hex_bytes = Int64(0)
-                if is_taproot_diagnostic_fixture(eval_id):
+                if is_taproot_diagnostic_fixture(eval_id) or is_p2pkh_diagnostic_fixture(eval_id):
                     if not pure_shadow_fixture_enabled(eval_id):
                         support_status = String("pure_backend_diagnostic_slice_not_enabled")
                     else:
                         shadow_attempted = True
                         var shadow_started = shadow_clock.now_ms()
                         try:
-                            shadow_tapscript_hex_bytes = taproot_shadow_tapscript_hex_bytes(manifest_path, eval_id)
-                            shadow_witness_items = taproot_shadow_witness_count(eval_id)
-                            shadow_witness_hex_bytes = taproot_shadow_witness_hex_bytes(manifest_path, eval_id)
                             var pure_crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_PURE)
-                            var pure_result = evaluate_taproot_fixture_diagnostic_with_crypto(
-                                manifest_path, eval_id, shim_path, pure_crypto
-                            )
-                            shadow_duration_ms = shadow_clock.now_ms() - shadow_started
-                            if pure_result.failure_stage == "unsupported_crypto":
-                                shadow_failure_stage = pure_result.failure_stage
-                                shadow_failure = pure_result.failure
-                            else:
-                                shadow_supported = True
-                                shadow_result = result_json(pure_result.passed)
-                                shadow_agreed = pure_result.passed == current_passed
-                                support_status = String("supported")
-                                if not pure_result.passed:
+                            if is_taproot_diagnostic_fixture(eval_id):
+                                shadow_tapscript_hex_bytes = taproot_shadow_tapscript_hex_bytes(manifest_path, eval_id)
+                                shadow_witness_items = taproot_shadow_witness_count(eval_id)
+                                shadow_witness_hex_bytes = taproot_shadow_witness_hex_bytes(manifest_path, eval_id)
+                                var pure_result = evaluate_taproot_fixture_diagnostic_with_crypto(
+                                    manifest_path, eval_id, shim_path, pure_crypto
+                                )
+                                shadow_duration_ms = shadow_clock.now_ms() - shadow_started
+                                if pure_result.failure_stage == "unsupported_crypto":
                                     shadow_failure_stage = pure_result.failure_stage
                                     shadow_failure = pure_result.failure
+                                else:
+                                    shadow_supported = True
+                                    shadow_result = result_json(pure_result.passed)
+                                    shadow_agreed = pure_result.passed == current_passed
+                                    support_status = String("supported")
+                                    if not pure_result.passed:
+                                        shadow_failure_stage = pure_result.failure_stage
+                                        shadow_failure = pure_result.failure
+                            else:
+                                var pure_passed = evaluate_p2pkh_fixture_with_crypto(
+                                    manifest_path, eval_id, shim_path, pure_crypto
+                                )
+                                shadow_duration_ms = shadow_clock.now_ms() - shadow_started
+                                shadow_supported = True
+                                shadow_result = result_json(pure_passed)
+                                shadow_agreed = pure_passed == current_passed
+                                support_status = String("supported")
+                                if not pure_passed:
+                                    shadow_failure_stage = String("ecdsa_verify")
+                                    shadow_failure = String("P2PKH pure ECDSA verification returned false")
                         except e:
                             shadow_duration_ms = shadow_clock.now_ms() - shadow_started
                             shadow_failure = String(e)
@@ -833,6 +969,19 @@ def main() raises:
             )
         return
 
+    if command == "pure-crypto-profile":
+        var json = pure_crypto_profile_json(shim_path, surface)
+        print(json)
+        if result_path != "":
+            var native = OwnedDLHandle(shim_path)
+            _ = native.call["mojobitnode_write_text_len", Int32](
+                result_path.unsafe_ptr(),
+                Int32(result_path.byte_length()),
+                json.unsafe_ptr(),
+                Int32(json.byte_length()),
+            )
+        return
+
     if command == "storage-proof":
         var native = Native(shim_path)
         var db = Int64(0)
@@ -898,4 +1047,4 @@ def main() raises:
         print(proof.json)
         return
 
-    print("usage: mojobitnode <status|native-crypto-vectors|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")
+    print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")

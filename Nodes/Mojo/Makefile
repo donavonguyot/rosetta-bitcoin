@@ -28,6 +28,8 @@ HOST_STORAGE_RESULT ?= /tmp/mojo_rocksdb_storage_proof_host_$(RESULT_DATE).json
 HOST_SCRIPT_CORPUS_DEV_RESULT ?= /tmp/mojo_script_corpus_dev_$(RESULT_DATE).json
 HOST_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_host_script_corpus_shadow_$(RESULT_DATE).json
 DOCKER_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_docker_script_corpus_shadow_$(RESULT_DATE).json
+HOST_PURE_CRYPTO_PROFILE_RESULT ?= .benchmark-results/mojo_host_pure_crypto_profile_$(RESULT_DATE).json
+DOCKER_PURE_CRYPTO_PROFILE_RESULT ?= .benchmark-results/mojo_docker_pure_crypto_profile_$(RESULT_DATE).json
 SCRIPT_CORPUS_RESULT ?= ../Shared/conformance/results/mojo_script_corpus_$(RESULT_DATE).json
 HOST_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_host_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_docker_baseline_5k_benchmark_$(RESULT_DATE).json
@@ -47,8 +49,8 @@ MOJOBITNODE_PROFILE_HOTPATH ?= 0
 HOST_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-local-reference-proof host-shakedown-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-proof-local docker-proof-50k docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-pure-crypto-profile host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-local-reference-proof host-shakedown-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-pure-crypto-profile docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-proof-local docker-proof-50k docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -104,6 +106,16 @@ host-native-crypto-vectors: host-build
 	  echo "$$out"; \
 	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"; \
 	  grep -q '"case_total":8' <<< "$$out"
+
+host-pure-crypto-profile: host-build
+	@mkdir -p .benchmark-results
+	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) pure-crypto-profile \
+	  --result-path $(HOST_PURE_CRYPTO_PROFILE_RESULT)); \
+	  echo "$$out"; \
+	  grep -q '"schema":"port.pure_crypto_profile.v1"' <<< "$$out"; \
+	  grep -q '"wnaf_matches_native":true' <<< "$$out"; \
+	  grep -q '"result":"diagnostic"' <<< "$$out"; \
+	  test -s "$(HOST_PURE_CRYPTO_PROFILE_RESULT)"
 
 host-storage-proof: host-build
 	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) storage-proof \
@@ -224,6 +236,17 @@ docker-native-crypto-vectors:
 	  echo "$$out"; \
 	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"; \
 	  grep -q '"case_total":8' <<< "$$out"
+
+docker-pure-crypto-profile:
+	@mkdir -p .benchmark-results
+	@out=$$($(DOCKER_COMPOSE) run --rm --no-deps mojobitnode pure-crypto-profile \
+	  --result-path /tmp/mojo_pure_crypto_profile.json); \
+	  echo "$$out"; \
+	  printf "%s\n" "$$out" > $(DOCKER_PURE_CRYPTO_PROFILE_RESULT); \
+	  grep -q '"schema":"port.pure_crypto_profile.v1"' <<< "$$out"; \
+	  grep -q '"runtime_surface":"docker"' <<< "$$out"; \
+	  grep -q '"wnaf_matches_native":true' <<< "$$out"; \
+	  grep -q '"result":"diagnostic"' <<< "$$out"
 
 docker-storage-proof:
 	@out=$$(DOCKER_PROOF_VOLUME=$(PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps mojobitnode storage-proof \

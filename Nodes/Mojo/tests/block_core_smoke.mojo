@@ -72,6 +72,10 @@ from script_corpus_foundation import (
 )
 from pure_secp import (
     pure_test_ecdsa_parse_der,
+    pure_test_ecdsa_reference_product_x,
+    pure_test_ecdsa_reference_result,
+    pure_test_ecdsa_wnaf_product_x,
+    pure_test_ecdsa_wnaf_result,
     pure_test_scalar_mul_g_is_infinity,
     pure_test_scalar_mul_g_x,
     pure_test_scalar_mul_g_y,
@@ -461,11 +465,18 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     )
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, msg), native.verify_ecdsa_der_bytes(pubkey, sig, msg))
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, msg), CRYPTO_RESULT_VALID)
+    assert_equal(pure_test_ecdsa_reference_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
+    assert_equal(pure_test_ecdsa_wnaf_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
+    assert_equal(
+        bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, sig, msg)),
+        bytes_to_hex(pure_test_ecdsa_reference_product_x(pubkey, sig, msg)),
+    )
     assert_equal(
         pure.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg),
         native.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg),
     )
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg), CRYPTO_RESULT_CONSENSUS_INVALID)
+    assert_equal(pure_test_ecdsa_wnaf_result(pubkey, sig, wrong_msg), pure_test_ecdsa_reference_result(pubkey, sig, wrong_msg))
 
     var high_s_sig = _hex_bytes(String("3045022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798022100a1dc3b8e6933781adc2049d3a49bb2435842447fa73e783dda3dd8a7c6a90d5d"))
     assert_equal(
@@ -473,6 +484,7 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
         native.verify_ecdsa_der_bytes(pubkey, high_s_sig, msg),
     )
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, high_s_sig, msg), CRYPTO_RESULT_VALID)
+    assert_equal(pure_test_ecdsa_wnaf_result(pubkey, high_s_sig, msg), pure_test_ecdsa_reference_result(pubkey, high_s_sig, msg))
 
     var empty_pubkey = List[UInt8]()
     assert_equal(pure.verify_ecdsa_der_bytes(empty_pubkey, sig, msg), CRYPTO_RESULT_MALFORMED)

@@ -27,6 +27,7 @@ The supported executable is `mojobitnode` with these public commands:
 ```text
 status --datadir <path> --json
 native-crypto-vectors --vectors <path> --result-path <path>
+pure-crypto-profile --result-path <path>
 storage-proof --datadir <path> --result-path <path>
 script-corpus --manifest <path> --result-path <path>
 script-corpus --manifest <path> --shadow-crypto --result-path <path>
@@ -53,17 +54,21 @@ not Project current evidence. The pure backend currently supports BIP340
 Schnorr and Taproot tweak primitives through libsecp-guided fixed-limb field
 multiplication and Jacobian group operations. Pure ECDSA/DER now matches native
 vector result classes, including high-S normalization, malformed DER/pubkey
-handling, and consensus-invalid signatures, but ECDSA corpus rows remain
-disabled because the current pure path exceeds the shadow timing guardrail. The
-measured shadow set enables all 17 Taproot corpus rows, including the large
+handling, and consensus-invalid signatures. The diagnostic
+`pure-crypto-profile` command records ECDSA stage timings for DER parse, pubkey
+parse/lift, high-S normalization, scalar inverse, scalar multiplication,
+reference double-base, wNAF double-base, affine conversion, and native-result
+comparison. The measured shadow set enables all 17 Taproot corpus rows,
+including the large
 `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and
-`scripts.p2tr_tapscript_126975` stress rows. ECDSA-bearing non-Taproot rows
-remain unsupported until pure ECDSA is fast enough for the 5000ms per-row
-guardrail. Shadow artifacts include per-attempt `shadow_duration_ms`,
-aggregate timing fields, and large-fixture size metrics; do not broaden support
-unless new rows have zero disagreement and stay under the 5000ms per-row
-guardrail. Read `docs/LIBSECP_TRANSLATION_NOTES.md` before changing pure secp
-internals.
+`scripts.p2tr_tapscript_126975` stress rows, plus
+`scripts.p2pkh_sighash_single_38010` as the first timing-gated P2PKH/ECDSA
+row. Other ECDSA-bearing non-Taproot rows remain unsupported until a later
+measured slice enables them with zero disagreement and the 5000ms per-row
+guardrail. Shadow artifacts include per-attempt `shadow_duration_ms`, aggregate
+timing fields, and large-fixture size metrics; do not broaden support unless
+new rows have zero disagreement and stay under the 5000ms per-row guardrail.
+Read `docs/LIBSECP_TRANSLATION_NOTES.md` before changing pure secp internals.
 
 `local-reference-proof` is the bounded local Reference proof path for 5k and
 50k. It must use local Reference P2P bytes, RocksDB operational truth, native
@@ -170,11 +175,13 @@ make host-script-corpus-foundation-smoke
 make host-block-core-smoke
 make host-script-corpus
 make host-script-corpus-shadow
+make host-pure-crypto-profile
 make host-native-boundary-audit
 make host-local-reference-proof
 make host-shakedown-50k-proof
 make docker-script-corpus
 make docker-script-corpus-shadow
+make docker-pure-crypto-profile
 make docker-native-boundary-audit
 make docker-proof-local
 make docker-proof-50k
