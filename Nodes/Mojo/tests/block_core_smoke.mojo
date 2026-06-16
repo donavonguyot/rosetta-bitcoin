@@ -71,6 +71,7 @@ from script_corpus_foundation import (
     verify_taproot_tweak,
 )
 from pure_secp import (
+    pure_test_ecdsa_parse_der,
     pure_test_scalar_mul_g_is_infinity,
     pure_test_scalar_mul_g_x,
     pure_test_scalar_mul_g_y,
@@ -341,7 +342,7 @@ def test_crypto_backend_result_classes_do_not_fallback_to_native() raises:
     var native_result = native.verify_ecdsa_der_bytes(pubkey, signature, digest)
     var pure_result = pure.verify_ecdsa_der_bytes(pubkey, signature, digest)
     assert_true(native_result != CRYPTO_RESULT_UNSUPPORTED)
-    assert_equal(pure_result, CRYPTO_RESULT_UNSUPPORTED)
+    assert_equal(pure_result, CRYPTO_RESULT_MALFORMED)
 
     pure_result = pure.verify_schnorr_bytes(pubkey, signature, digest)
     assert_equal(pure_result, CRYPTO_RESULT_MALFORMED)
@@ -442,6 +443,43 @@ def test_pure_schnorr_and_taproot_vectors() raises:
         pure.verify_taproot_tweak_precomputed(short_sig, taproot_tweak, taproot_expected, 1),
         CRYPTO_RESULT_MALFORMED,
     )
+
+
+def test_pure_ecdsa_der_vectors_match_native() raises:
+    var shim = getenv("MOJOBITNODE_SHIM_PATH", "./build/libmojobitnode_shim.dylib")
+    var native = CryptoBackend(shim, CRYPTO_BACKEND_NATIVE)
+    var pure = CryptoBackend(shim, CRYPTO_BACKEND_PURE)
+
+    var pubkey = _hex_bytes(String("0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"))
+    var msg = _hex_bytes(String("281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5"))
+    var wrong_msg = _hex_bytes(String("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+    var sig = _hex_bytes(String("3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4"))
+
+    assert_equal(
+        bytes_to_hex(pure_test_ecdsa_parse_der(sig)),
+        String("79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817985e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4"),
+    )
+    assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, msg), native.verify_ecdsa_der_bytes(pubkey, sig, msg))
+    assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, msg), CRYPTO_RESULT_VALID)
+    assert_equal(
+        pure.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg),
+        native.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg),
+    )
+    assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg), CRYPTO_RESULT_CONSENSUS_INVALID)
+
+    var high_s_sig = _hex_bytes(String("3045022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798022100a1dc3b8e6933781adc2049d3a49bb2435842447fa73e783dda3dd8a7c6a90d5d"))
+    assert_equal(
+        pure.verify_ecdsa_der_bytes(pubkey, high_s_sig, msg),
+        native.verify_ecdsa_der_bytes(pubkey, high_s_sig, msg),
+    )
+    assert_equal(pure.verify_ecdsa_der_bytes(pubkey, high_s_sig, msg), CRYPTO_RESULT_VALID)
+
+    var empty_pubkey = List[UInt8]()
+    assert_equal(pure.verify_ecdsa_der_bytes(empty_pubkey, sig, msg), CRYPTO_RESULT_MALFORMED)
+    var malformed_sig = _hex_bytes(String("3144022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4"))
+    assert_equal(pure.verify_ecdsa_der_bytes(pubkey, malformed_sig, msg), CRYPTO_RESULT_MALFORMED)
+    var zero_r_sig = _hex_bytes(String("3006020100020101"))
+    assert_equal(pure.verify_ecdsa_der_bytes(pubkey, zero_r_sig, msg), CRYPTO_RESULT_CONSENSUS_INVALID)
 
 
 def _fake_hash(seed: Int) -> List[UInt8]:

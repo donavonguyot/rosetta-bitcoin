@@ -47,8 +47,12 @@ native prerequisites a future port would need?
 - Zig-style shadow crypto is diagnostic-only. Native `libsecp256k1` remains the
   comparable proof backend; the pure Mojo backend now implements correctness-
   first BIP340 Schnorr verification and Taproot tweak checks with
-  libsecp-guided fixed-limb field multiplication and Jacobian group operations,
-  while leaving ECDSA unsupported. `--shadow-crypto` emits a separate
+  libsecp-guided fixed-limb field multiplication and Jacobian group operations.
+  It also has a pure Mojo ECDSA/DER verifier that matches the native vector
+  result classes, including high-S normalization, malformed DER/pubkey handling,
+  and consensus-invalid signatures; ECDSA corpus rows remain disabled because
+  the current pure path is still above the shadow row timing guardrail.
+  `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
   support/unsupported rows, per-attempt `shadow_duration_ms`, aggregate shadow
   timing, large-fixture size metrics, and no native fallback. The current corpus
@@ -74,8 +78,8 @@ debugging. The public `script-corpus` command is the evidence surface and emits
 canonical `port.script_corpus_result.v1` JSON with Mojo-owned `45/45` coverage.
 `script-corpus --shadow-crypto` is a separate diagnostic comparator surface and
 must not be imported as canonical corpus evidence. Unsupported rows are expected
-for ECDSA fixtures and for Taproot fixtures outside the current bounded pure
-shadow slice.
+for ECDSA-bearing fixtures until pure ECDSA is fast enough to keep enabled rows
+under the 5000ms per-row guardrail.
 
 ## Commands
 

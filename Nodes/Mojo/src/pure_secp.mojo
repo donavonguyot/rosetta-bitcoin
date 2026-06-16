@@ -40,6 +40,15 @@ struct JacobianPoint(Copyable):
         self.infinity = True
 
 
+struct EcdsaSignature(Copyable):
+    var r: U256
+    var s: U256
+
+    def __init__(out self):
+        self.r = U256()
+        self.s = U256()
+
+
 def pure_backend_label() -> String:
     return String("mojo-pure-secp256k1")
 
@@ -101,6 +110,19 @@ def _scalar_n() -> U256:
         UInt32(0xFFFFFFFF),
         UInt32(0xFFFFFFFF),
         UInt32(0xFFFFFFFF),
+    )
+
+
+def _scalar_half_n() -> U256:
+    return _u256(
+        UInt32(0x681B20A0),
+        UInt32(0x5FE92F46),
+        UInt32(0x57A4501D),
+        UInt32(0x5D576E73),
+        UInt32(0xFFFFFFFF),
+        UInt32(0xFFFFFFFF),
+        UInt32(0xFFFFFFFF),
+        UInt32(0x7FFFFFFF),
     )
 
 
@@ -185,6 +207,15 @@ def _is_zero(ref a: U256) -> Bool:
     return True
 
 
+def _is_one_value(ref a: U256) -> Bool:
+    if a.limbs[0] != UInt32(1):
+        return False
+    for i in range(1, 8):
+        if a.limbs[i] != UInt32(0):
+            return False
+    return True
+
+
 def _is_odd(ref a: U256) -> Bool:
     return (a.limbs[0] & UInt32(1)) == UInt32(1)
 
@@ -228,6 +259,36 @@ def _sub_raw(ref a: U256, ref b: U256) -> U256:
     return out^
 
 
+def _shr1(ref a: U256) -> U256:
+    var out = U256()
+    var carry = UInt32(0)
+    for j in range(8):
+        var i = 7 - j
+        out.limbs[i] = (a.limbs[i] >> UInt32(1)) | (carry << UInt32(31))
+        carry = a.limbs[i] & UInt32(1)
+    return out^
+
+
+def _scalar_half(ref value: U256) -> U256:
+    if not _is_odd(value):
+        return _shr1(value)
+    var n = _scalar_n()
+    var sum = List[UInt32]()
+    for _ in range(9):
+        sum.append(UInt32(0))
+    var carry = UInt64(0)
+    for i in range(8):
+        var total = UInt64(value.limbs[i]) + UInt64(n.limbs[i]) + carry
+        sum[i] = UInt32(total & UInt64(0xFFFFFFFF))
+        carry = total >> UInt64(32)
+    sum[8] = UInt32(carry)
+
+    var out = U256()
+    for i in range(8):
+        out.limbs[i] = (sum[i] >> UInt32(1)) | ((sum[i + 1] & UInt32(1)) << UInt32(31))
+    return out^
+
+
 def _add_mod(ref a: U256, ref b: U256, ref modulus: U256) -> U256:
     var threshold = _sub_raw(modulus, b)
     if _cmp(a, threshold) >= 0:
@@ -246,6 +307,9 @@ def _mul_mod(ref a: U256, ref b: U256, ref modulus: U256) -> U256:
     var p = _field_p()
     if _eq(modulus, p):
         return _mul_mod_field_fast(a, b)
+    var n = _scalar_n()
+    if _eq(modulus, n):
+        return _mul_mod_scalar_fast(a, b)
     var result = _zero()
     var addend = a.copy()
     for i in range(256):
@@ -254,6 +318,80 @@ def _mul_mod(ref a: U256, ref b: U256, ref modulus: U256) -> U256:
         var addend_copy = addend.copy()
         addend = _add_mod(addend, addend_copy, modulus)
     return result^
+
+
+def _shifted_limb(ref value: U256, shift: Int, index: Int) -> UInt64:
+    var limb_shift = shift // 32
+    var bit_shift = shift - limb_shift * 32
+    var out = UInt64(0)
+    var src = index - limb_shift
+    if src >= 0 and src < 8:
+        out |= (UInt64(value.limbs[src]) << UInt64(bit_shift)) & UInt64(0xFFFFFFFF)
+    if bit_shift != 0:
+        var carry_src = src - 1
+        if carry_src >= 0 and carry_src < 8:
+            out |= UInt64(value.limbs[carry_src]) >> UInt64(32 - bit_shift)
+    return out
+
+
+def _limbs_ge_shifted(ref limbs: List[UInt32], ref value: U256, shift: Int) -> Bool:
+    for j in range(17):
+        var i = 16 - j
+        var lhs = UInt64(limbs[i])
+        var rhs = _shifted_limb(value, shift, i)
+        if lhs > rhs:
+            return True
+        if lhs < rhs:
+            return False
+    return True
+
+
+def _limbs_sub_shifted(mut limbs: List[UInt32], ref value: U256, shift: Int):
+    var borrow = UInt64(0)
+    for i in range(17):
+        var rhs = _shifted_limb(value, shift, i) + borrow
+        var lhs = UInt64(limbs[i])
+        if lhs >= rhs:
+            limbs[i] = UInt32(lhs - rhs)
+            borrow = UInt64(0)
+        else:
+            limbs[i] = UInt32((UInt64(1) << UInt64(32)) + lhs - rhs)
+            borrow = UInt64(1)
+
+
+def _mul_mod_scalar_fast(ref a: U256, ref b: U256) -> U256:
+    var product = List[UInt32]()
+    for _ in range(17):
+        product.append(UInt32(0))
+
+    for i in range(8):
+        var carry = UInt64(0)
+        for j in range(8):
+            var k = i + j
+            var total = UInt64(product[k]) + UInt64(a.limbs[i]) * UInt64(b.limbs[j]) + carry
+            product[k] = UInt32(total & UInt64(0xFFFFFFFF))
+            carry = total >> UInt64(32)
+        var idx = i + 8
+        while carry != UInt64(0):
+            var total = UInt64(product[idx]) + carry
+            product[idx] = UInt32(total & UInt64(0xFFFFFFFF))
+            carry = total >> UInt64(32)
+            idx += 1
+
+    var n = _scalar_n()
+    for j in range(257):
+        var shift = 256 - j
+        if _limbs_ge_shifted(product, n, shift):
+            _limbs_sub_shifted(product, n, shift)
+
+    var out = U256()
+    for i in range(8):
+        out.limbs[i] = product[i]
+    for _ in range(4):
+        if _cmp(out, n) < 0:
+            break
+        out = _sub_raw(out, n)
+    return out^
 
 
 def _pow_mod(ref base: U256, ref exponent: U256, ref modulus: U256) -> U256:
@@ -400,6 +538,35 @@ def _fe_sqrt(ref a: U256) -> U256:
 def _scalar_add(ref a: U256, ref b: U256) -> U256:
     var n = _scalar_n()
     return _add_mod(a, b, n)
+
+
+def _scalar_mul_mod(ref a: U256, ref b: U256) -> U256:
+    var n = _scalar_n()
+    return _mul_mod(a, b, n)
+
+
+def _scalar_inv(ref a: U256) -> U256:
+    var n = _scalar_n()
+    var u = _reduce_once(a, n)
+    var v = n.copy()
+    var x1 = _one()
+    var x2 = _zero()
+    while not _is_one_value(u) and not _is_one_value(v):
+        while not _is_odd(u):
+            u = _shr1(u)
+            x1 = _scalar_half(x1)
+        while not _is_odd(v):
+            v = _shr1(v)
+            x2 = _scalar_half(x2)
+        if _cmp(u, v) >= 0:
+            u = _sub_raw(u, v)
+            x1 = _sub_mod(x1, x2, n)
+        else:
+            v = _sub_raw(v, u)
+            x2 = _sub_mod(x2, x1, n)
+    if _is_one_value(u):
+        return x1^
+    return x2^
 
 
 def _point_neg(ref point: Point) -> Point:
@@ -788,15 +955,131 @@ def _schnorr_challenge(ref rx: List[UInt8], ref px: List[UInt8], ref msg: List[U
     return _reduce_once(e, n)
 
 
+def _parse_der_integer(ref der: List[UInt8], offset: Int, length: Int) raises -> U256:
+    if length <= 0 or length > 33:
+        raise Error("invalid DER integer length")
+    if offset + length > len(der):
+        raise Error("truncated DER integer")
+    if (der[offset] & UInt8(0x80)) != UInt8(0):
+        raise Error("negative DER integer")
+    if length > 1 and der[offset] == UInt8(0) and (der[offset + 1] & UInt8(0x80)) == UInt8(0):
+        raise Error("unnecessary DER integer padding")
+
+    var start = offset
+    var count = length
+    if count == 33:
+        if der[start] != UInt8(0):
+            raise Error("oversized DER integer")
+        start += 1
+        count -= 1
+    var out = List[UInt8]()
+    for _ in range(32 - count):
+        out.append(UInt8(0))
+    for i in range(count):
+        out.append(der[start + i])
+    return _from_be32(out)
+
+
+def _parse_ecdsa_der(ref der: List[UInt8]) raises -> EcdsaSignature:
+    if len(der) < 8 or len(der) > 72:
+        raise Error("invalid DER signature length")
+    if der[0] != UInt8(0x30):
+        raise Error("DER signature missing sequence")
+    if Int(der[1]) != len(der) - 2:
+        raise Error("DER sequence length mismatch")
+    if der[2] != UInt8(0x02):
+        raise Error("DER signature missing r integer")
+    var r_len = Int(der[3])
+    var s_marker = 4 + r_len
+    if s_marker + 2 > len(der) or der[s_marker] != UInt8(0x02):
+        raise Error("DER signature missing s integer")
+    var s_len = Int(der[s_marker + 1])
+    if s_marker + 2 + s_len != len(der):
+        raise Error("DER signature trailing data")
+
+    var out = EcdsaSignature()
+    out.r = _parse_der_integer(der, 4, r_len)
+    out.s = _parse_der_integer(der, s_marker + 2, s_len)
+    return out^
+
+
+def _parse_pubkey(ref pubkey: List[UInt8]) raises -> Point:
+    var p = _field_p()
+    if len(pubkey) == 33:
+        if pubkey[0] != UInt8(0x02) and pubkey[0] != UInt8(0x03):
+            raise Error("invalid compressed pubkey prefix")
+        var x_bytes = List[UInt8]()
+        for i in range(32):
+            x_bytes.append(pubkey[i + 1])
+        var x = _from_be32(x_bytes)
+        if _cmp(x, p) >= 0:
+            raise Error("pubkey x out of range")
+        var point = _lift_x(x)
+        var wants_odd = pubkey[0] == UInt8(0x03)
+        if _is_odd(point.y) != wants_odd:
+            point.y = _fe_sub(_zero(), point.y)
+        return point^
+    if len(pubkey) == 65:
+        if pubkey[0] != UInt8(0x04):
+            raise Error("invalid uncompressed pubkey prefix")
+        var x_bytes = List[UInt8]()
+        var y_bytes = List[UInt8]()
+        for i in range(32):
+            x_bytes.append(pubkey[i + 1])
+            y_bytes.append(pubkey[i + 33])
+        var x = _from_be32(x_bytes)
+        var y = _from_be32(y_bytes)
+        if _cmp(x, p) >= 0 or _cmp(y, p) >= 0:
+            raise Error("pubkey coordinate out of range")
+        var x2 = _fe_sqr(x)
+        var x3 = _fe_mul(x2, x)
+        var seven = _u256_from_u32(UInt32(7))
+        var expected_y2 = _fe_add(x3, seven)
+        var y2 = _fe_sqr(y)
+        if not _eq(y2, expected_y2):
+            raise Error("pubkey is not on secp256k1")
+        var point = Point()
+        point.x = x^
+        point.y = y^
+        point.infinity = False
+        return point^
+    raise Error("invalid pubkey length")
+
+
 def pure_verify_ecdsa_der_bytes(
     ref pubkey: List[UInt8],
     ref der: List[UInt8],
     ref digest: List[UInt8],
 ) raises -> Int32:
-    _ = len(pubkey)
-    _ = len(der)
-    _ = len(digest)
-    return UNSUPPORTED
+    if (len(pubkey) != 33 and len(pubkey) != 65) or len(der) == 0 or len(der) > 72 or len(digest) != 32:
+        return MALFORMED
+    var n = _scalar_n()
+    var sig = EcdsaSignature()
+    var q = Point()
+    try:
+        sig = _parse_ecdsa_der(der)
+        q = _parse_pubkey(pubkey)
+    except:
+        return MALFORMED
+    if _is_zero(sig.r) or _is_zero(sig.s) or _cmp(sig.r, n) >= 0 or _cmp(sig.s, n) >= 0:
+        return CONSENSUS_INVALID
+
+    var half_n = _scalar_half_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _jacobian_to_affine(_double_base_mul(u1, _generator(), u2, q))
+    if point.infinity:
+        return CONSENSUS_INVALID
+    var x_mod_n = _reduce_once(point.x, n)
+    if _eq(x_mod_n, sig.r):
+        return VALID
+    return CONSENSUS_INVALID
 
 
 def pure_verify_schnorr_bytes(
@@ -931,3 +1214,13 @@ def pure_test_scalar_mul_g_is_infinity(ref scalar: List[UInt8]) raises -> Bool:
 
 def pure_test_schnorr_challenge(ref rx: List[UInt8], ref pubkey: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
     return _to_be32(_schnorr_challenge(rx, pubkey, digest))
+
+
+def pure_test_ecdsa_parse_der(ref der: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var out = List[UInt8]()
+    var r = _to_be32(sig.r)
+    var s = _to_be32(sig.s)
+    _append_bytes(out, r)
+    _append_bytes(out, s)
+    return out^

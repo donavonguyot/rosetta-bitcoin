@@ -51,11 +51,15 @@ supports each fixture without using native fallback. Its
 `port.script_corpus_shadow_crypto.v1` output belongs in Mojo-local debug paths,
 not Project current evidence. The pure backend currently supports BIP340
 Schnorr and Taproot tweak primitives through libsecp-guided fixed-limb field
-multiplication and Jacobian group operations, leaves ECDSA unsupported, and
-enables all 17 Taproot corpus rows in the measured shadow set, including the
-large `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and
+multiplication and Jacobian group operations. Pure ECDSA/DER now matches native
+vector result classes, including high-S normalization, malformed DER/pubkey
+handling, and consensus-invalid signatures, but ECDSA corpus rows remain
+disabled because the current pure path exceeds the shadow timing guardrail. The
+measured shadow set enables all 17 Taproot corpus rows, including the large
+`scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and
 `scripts.p2tr_tapscript_126975` stress rows. ECDSA-bearing non-Taproot rows
-remain unsupported. Shadow artifacts include per-attempt `shadow_duration_ms`,
+remain unsupported until pure ECDSA is fast enough for the 5000ms per-row
+guardrail. Shadow artifacts include per-attempt `shadow_duration_ms`,
 aggregate timing fields, and large-fixture size metrics; do not broaden support
 unless new rows have zero disagreement and stay under the 5000ms per-row
 guardrail. Read `docs/LIBSECP_TRANSLATION_NOTES.md` before changing pure secp
