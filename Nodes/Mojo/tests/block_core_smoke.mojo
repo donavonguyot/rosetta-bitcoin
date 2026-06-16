@@ -8,18 +8,22 @@ from block_core import (
     append_delta_created,
     append_delta_metadata,
     append_delta_undo,
+    append_outpoint_if_missing,
     apply_block_delta,
     block_delta_unspent_created,
     check_pow,
+    contains_outpoint,
     db_get_string,
     db_put_string,
     decode_utxo,
     encode_utxo,
     encode_block_undo,
+    find_created_delta_index,
     first_failed_script_result_index,
     hash_from_display,
     merkle_root,
     parse_block,
+    rocksdb_multi_get_rows,
 )
 from script_corpus_foundation import (
     append_bytes,
@@ -105,6 +109,62 @@ def test_status_persistence() raises:
     assert_equal(db_get_string(native, db, String("validated_height")), String("5000"))
     assert_equal(db_get_string(native, db, String("chainstate_backend")), String("rocksdb"))
     native.rocksdb_close(db)
+
+
+def test_rocksdb_multi_get_order_and_missing_slots() raises:
+    var shim = getenv("MOJOBITNODE_SHIM_PATH", "./build/libmojobitnode_shim.dylib")
+    var native = Native(shim)
+    var db = native.rocksdb_open(String("/tmp/mojo_block_core_multiget_smoke"))
+    var suffix = String(native.now_ms())
+
+    var key_a = ascii_string_to_bytes(String("multiget:a:") + suffix)
+    var key_missing = ascii_string_to_bytes(String("multiget:missing:") + suffix)
+    var key_b = ascii_string_to_bytes(String("multiget:b:") + suffix)
+    var value_a = ascii_string_to_bytes(String("alpha"))
+    var value_b = ascii_string_to_bytes(String("bravo"))
+    native.rocksdb_put(db, key_a, value_a)
+    native.rocksdb_put(db, key_b, value_b)
+
+    var keys = List[List[UInt8]]()
+    keys.append(key_a.copy())
+    keys.append(key_missing.copy())
+    keys.append(key_b.copy())
+    var rows = rocksdb_multi_get_rows(native, db, keys)
+    assert_equal(len(rows), 3)
+    assert_true(rows[0].found)
+    assert_true(not rows[1].found)
+    assert_true(rows[2].found)
+    assert_equal(bytes_to_hex(rows[0].value), bytes_to_hex(value_a))
+    assert_equal(bytes_to_hex(rows[2].value), bytes_to_hex(value_b))
+    native.rocksdb_close(db)
+
+
+def test_outpoint_helpers_preserve_order_and_detect_duplicates() raises:
+    var txid_a = List[UInt8]()
+    var txid_b = List[UInt8]()
+    for i in range(32):
+        txid_a.append(UInt8(i))
+        txid_b.append(UInt8(31 - i))
+
+    var txids = List[List[UInt8]]()
+    var vouts = List[UInt32]()
+    assert_true(append_outpoint_if_missing(txids, vouts, txid_a, UInt32(0)))
+    assert_true(append_outpoint_if_missing(txids, vouts, txid_b, UInt32(1)))
+    assert_true(not append_outpoint_if_missing(txids, vouts, txid_a, UInt32(0)))
+    assert_equal(len(txids), 2)
+    assert_true(contains_outpoint(txids, vouts, txid_b, UInt32(1)))
+
+    var delta = BlockUtxoDelta()
+    var utxo = Utxo()
+    utxo.height = 1
+    utxo.value_sats = Int64(50)
+    utxo.coinbase = False
+    utxo.script_pubkey = ascii_string_to_bytes(String("script"))
+    append_delta_created(delta, txid_a, UInt32(2), utxo)
+    append_delta_created(delta, txid_b, UInt32(3), utxo)
+    assert_equal(find_created_delta_index(delta, txid_a, UInt32(2)), 0)
+    assert_equal(find_created_delta_index(delta, txid_b, UInt32(3)), 1)
+    assert_equal(find_created_delta_index(delta, txid_b, UInt32(4)), -1)
 
 
 def test_native_crypto_metrics() raises:

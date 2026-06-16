@@ -113,7 +113,11 @@ runner only when the block has at least `MOJOBITNODE_SCRIPT_MIN_INPUTS` script
 jobs and `MOJOBITNODE_SCRIPT_THREADS` is not `1`; `0` means the Mojo runtime
 default worker count. After verification passes, Mojo stages UTXO deletes,
 unspent creates, undo, block storage, and metadata, then commits them through
-one RocksDB batch. Do not treat the env flag as a comparable proof claim by
+one RocksDB batch. The proof path opens RocksDB with the durable fast-port
+tuning profile, gathers distinct external prevouts for each block, loads them
+through ordered `multi_get`, and uses Mojo-owned outpoint lookup helpers for
+created/spent block-local state while preserving ordered lists for undo and
+commit determinism. Do not treat the env flag as a comparable proof claim by
 itself. A proof may report `script_runner_mode: "parallel"` only when at least
 one parallel batch actually executed and the artifact includes runner batch
 metrics accepted by the benchmark validator.

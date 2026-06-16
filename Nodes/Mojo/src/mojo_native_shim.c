@@ -21,6 +21,13 @@
 #include <time.h>
 #include <unistd.h>
 
+typedef struct {
+  rocksdb_t *db;
+  rocksdb_cache_t *block_cache;
+  rocksdb_block_based_table_options_t *block_options;
+  rocksdb_filterpolicy_t *filter_policy;
+} mojo_rocksdb_handle;
+
 enum {
   CRYPTO_RESULT_VALID = 0,
   CRYPTO_RESULT_CONSENSUS_INVALID = 1,
@@ -108,6 +115,22 @@ static void record_crypto_ms(atomic_llong *metric, int64_t started) {
   if (started != 0) {
     atomic_fetch_add(metric, monotonic_ms() - started);
   }
+}
+
+static uint32_t read_u32_be(const uint8_t *bytes) {
+  return ((uint32_t)bytes[0] << 24) | ((uint32_t)bytes[1] << 16) | ((uint32_t)bytes[2] << 8) |
+         (uint32_t)bytes[3];
+}
+
+static void write_u32_be(uint8_t *bytes, uint32_t value) {
+  bytes[0] = (uint8_t)((value >> 24) & 0xff);
+  bytes[1] = (uint8_t)((value >> 16) & 0xff);
+  bytes[2] = (uint8_t)((value >> 8) & 0xff);
+  bytes[3] = (uint8_t)(value & 0xff);
+}
+
+static mojo_rocksdb_handle *rocks_handle(int64_t handle) {
+  return (mojo_rocksdb_handle *)(intptr_t)handle;
 }
 
 int32_t mojobitnode_crypto_metrics_reset(void) {
@@ -460,33 +483,95 @@ int64_t mojobitnode_rocksdb_open_len(const char *datadir, int32_t datadir_len) {
   char *err = NULL;
   rocksdb_options_t *options = rocksdb_options_create();
   rocksdb_options_set_create_if_missing(options, 1);
+  rocksdb_options_increase_parallelism(options, 4);
+  rocksdb_options_set_write_buffer_size(options, 64 * 1024 * 1024);
+  rocksdb_options_set_max_write_buffer_number(options, 4);
+  rocksdb_options_set_max_background_jobs(options, 4);
+
+  rocksdb_cache_t *block_cache = rocksdb_cache_create_lru(256 * 1024 * 1024);
+  rocksdb_block_based_table_options_t *block_options = rocksdb_block_based_options_create();
+  rocksdb_filterpolicy_t *filter_policy = rocksdb_filterpolicy_create_bloom(10.0);
+  if (!block_cache || !block_options || !filter_policy) {
+    if (filter_policy) {
+      rocksdb_filterpolicy_destroy(filter_policy);
+    }
+    if (block_options) {
+      rocksdb_block_based_options_destroy(block_options);
+    }
+    if (block_cache) {
+      rocksdb_cache_destroy(block_cache);
+    }
+    rocksdb_options_destroy(options);
+    return 0;
+  }
+  rocksdb_block_based_options_set_block_cache(block_options, block_cache);
+  rocksdb_block_based_options_set_filter_policy(block_options, filter_policy);
+  rocksdb_block_based_options_set_cache_index_and_filter_blocks(block_options, 1);
+  rocksdb_block_based_options_set_cache_index_and_filter_blocks_with_high_priority(block_options, 1);
+  rocksdb_block_based_options_set_pin_l0_filter_and_index_blocks_in_cache(block_options, 1);
+  rocksdb_options_set_block_based_table_factory(options, block_options);
+
   rocksdb_t *db = rocksdb_open(options, dbpath, &err);
   rocksdb_options_destroy(options);
   if (err) {
     rocksdb_free(err);
+    if (db) {
+      rocksdb_close(db);
+    }
+    rocksdb_filterpolicy_destroy(filter_policy);
+    rocksdb_block_based_options_destroy(block_options);
+    rocksdb_cache_destroy(block_cache);
     return 0;
   }
-  return (int64_t)(intptr_t)db;
+  if (!db) {
+    rocksdb_filterpolicy_destroy(filter_policy);
+    rocksdb_block_based_options_destroy(block_options);
+    rocksdb_cache_destroy(block_cache);
+    return 0;
+  }
+  mojo_rocksdb_handle *wrapped = (mojo_rocksdb_handle *)calloc(1, sizeof(mojo_rocksdb_handle));
+  if (!wrapped) {
+    rocksdb_close(db);
+    rocksdb_filterpolicy_destroy(filter_policy);
+    rocksdb_block_based_options_destroy(block_options);
+    rocksdb_cache_destroy(block_cache);
+    return 0;
+  }
+  wrapped->db = db;
+  wrapped->block_cache = block_cache;
+  wrapped->block_options = block_options;
+  wrapped->filter_policy = filter_policy;
+  return (int64_t)(intptr_t)wrapped;
 }
 
 int32_t mojobitnode_rocksdb_close_handle(int64_t handle) {
-  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
-  if (!db) {
+  mojo_rocksdb_handle *wrapped = rocks_handle(handle);
+  if (!wrapped) {
     return 0;
   }
-  rocksdb_close(db);
+  if (wrapped->db) {
+    rocksdb_close(wrapped->db);
+  }
+  /*
+   * RocksDB's C API stores table option internals behind shared ownership after
+   * open. The faster ports keep these process-lifetime objects rather than
+   * tearing them down on DB close, which avoids double-freeing option internals
+   * on macOS/Homebrew RocksDB.
+   */
+  free(wrapped);
   return 1;
 }
 
 int32_t mojobitnode_rocksdb_put(int64_t handle, const uint8_t *key, int32_t key_len, const uint8_t *value,
                                 int32_t value_len) {
-  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
-  if (!db || !key || key_len < 0 || !value || value_len < 0) {
+  mojo_rocksdb_handle *wrapped = rocks_handle(handle);
+  if (!wrapped || !wrapped->db || !key || key_len < 0 || !value || value_len < 0) {
     return 0;
   }
   char *err = NULL;
   rocksdb_writeoptions_t *write_options = rocksdb_writeoptions_create();
-  rocksdb_put(db, write_options, (const char *)key, (size_t)key_len, (const char *)value, (size_t)value_len, &err);
+  rocksdb_put(wrapped->db, write_options, (const char *)key, (size_t)key_len, (const char *)value,
+              (size_t)value_len, &err);
   rocksdb_writeoptions_destroy(write_options);
   if (err) {
     rocksdb_free(err);
@@ -496,13 +581,13 @@ int32_t mojobitnode_rocksdb_put(int64_t handle, const uint8_t *key, int32_t key_
 }
 
 int32_t mojobitnode_rocksdb_delete(int64_t handle, const uint8_t *key, int32_t key_len) {
-  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
-  if (!db || !key || key_len < 0) {
+  mojo_rocksdb_handle *wrapped = rocks_handle(handle);
+  if (!wrapped || !wrapped->db || !key || key_len < 0) {
     return 0;
   }
   char *err = NULL;
   rocksdb_writeoptions_t *write_options = rocksdb_writeoptions_create();
-  rocksdb_delete(db, write_options, (const char *)key, (size_t)key_len, &err);
+  rocksdb_delete(wrapped->db, write_options, (const char *)key, (size_t)key_len, &err);
   rocksdb_writeoptions_destroy(write_options);
   if (err) {
     rocksdb_free(err);
@@ -536,14 +621,14 @@ int32_t mojobitnode_rocksdb_batch_delete(int64_t batch_handle, const uint8_t *ke
 }
 
 int32_t mojobitnode_rocksdb_batch_write(int64_t handle, int64_t batch_handle) {
-  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
+  mojo_rocksdb_handle *wrapped = rocks_handle(handle);
   rocksdb_writebatch_t *batch = (rocksdb_writebatch_t *)(intptr_t)batch_handle;
-  if (!db || !batch) {
+  if (!wrapped || !wrapped->db || !batch) {
     return 0;
   }
   char *err = NULL;
   rocksdb_writeoptions_t *write_options = rocksdb_writeoptions_create();
-  rocksdb_write(db, write_options, batch, &err);
+  rocksdb_write(wrapped->db, write_options, batch, &err);
   rocksdb_writeoptions_destroy(write_options);
   if (err) {
     rocksdb_free(err);
@@ -563,14 +648,14 @@ int32_t mojobitnode_rocksdb_batch_destroy(int64_t batch_handle) {
 
 int32_t mojobitnode_rocksdb_get(int64_t handle, const uint8_t *key, int32_t key_len, uint8_t *out,
                                 int32_t out_cap) {
-  rocksdb_t *db = (rocksdb_t *)(intptr_t)handle;
-  if (!db || !key || key_len < 0 || !out || out_cap < 0) {
+  mojo_rocksdb_handle *wrapped = rocks_handle(handle);
+  if (!wrapped || !wrapped->db || !key || key_len < 0 || !out || out_cap < 0) {
     return -1;
   }
   char *err = NULL;
   size_t value_len = 0;
   rocksdb_readoptions_t *read_options = rocksdb_readoptions_create();
-  char *value = rocksdb_get(db, read_options, (const char *)key, (size_t)key_len, &value_len, &err);
+  char *value = rocksdb_get(wrapped->db, read_options, (const char *)key, (size_t)key_len, &value_len, &err);
   rocksdb_readoptions_destroy(read_options);
   if (err) {
     rocksdb_free(err);
@@ -586,6 +671,137 @@ int32_t mojobitnode_rocksdb_get(int64_t handle, const uint8_t *key, int32_t key_
   memcpy(out, value, value_len);
   rocksdb_free(value);
   return (int32_t)value_len;
+}
+
+int32_t mojobitnode_rocksdb_multi_get_packed(int64_t handle, const uint8_t *packed_keys, int32_t packed_keys_len,
+                                             uint8_t *out, int32_t out_cap) {
+  mojo_rocksdb_handle *wrapped = rocks_handle(handle);
+  if (!wrapped || !wrapped->db || !packed_keys || packed_keys_len < 4 || !out || out_cap < 4) {
+    return -1;
+  }
+  const uint8_t *cursor = packed_keys;
+  const uint8_t *end = packed_keys + packed_keys_len;
+  uint32_t count = read_u32_be(cursor);
+  cursor += 4;
+  if (count > 1000000U) {
+    return -1;
+  }
+
+  const char **key_ptrs = (const char **)calloc(count ? count : 1, sizeof(char *));
+  size_t *key_lens = (size_t *)calloc(count ? count : 1, sizeof(size_t));
+  char **value_ptrs = (char **)calloc(count ? count : 1, sizeof(char *));
+  size_t *value_lens = (size_t *)calloc(count ? count : 1, sizeof(size_t));
+  char **errs = (char **)calloc(count ? count : 1, sizeof(char *));
+  if (!key_ptrs || !key_lens || !value_ptrs || !value_lens || !errs) {
+    free(key_ptrs);
+    free(key_lens);
+    free(value_ptrs);
+    free(value_lens);
+    free(errs);
+    return -1;
+  }
+
+  for (uint32_t i = 0; i < count; i++) {
+    if (cursor + 4 > end) {
+      free(key_ptrs);
+      free(key_lens);
+      free(value_ptrs);
+      free(value_lens);
+      free(errs);
+      return -1;
+    }
+    uint32_t key_len = read_u32_be(cursor);
+    cursor += 4;
+    if (cursor + key_len > end) {
+      free(key_ptrs);
+      free(key_lens);
+      free(value_ptrs);
+      free(value_lens);
+      free(errs);
+      return -1;
+    }
+    key_ptrs[i] = (const char *)cursor;
+    key_lens[i] = (size_t)key_len;
+    cursor += key_len;
+  }
+  if (cursor != end) {
+    free(key_ptrs);
+    free(key_lens);
+    free(value_ptrs);
+    free(value_lens);
+    free(errs);
+    return -1;
+  }
+
+  rocksdb_readoptions_t *read_options = rocksdb_readoptions_create();
+  rocksdb_multi_get(wrapped->db, read_options, (size_t)count, key_ptrs, key_lens, value_ptrs, value_lens, errs);
+  rocksdb_readoptions_destroy(read_options);
+
+  size_t needed = 4;
+  bool has_error = false;
+  for (uint32_t i = 0; i < count; i++) {
+    if (errs[i]) {
+      has_error = true;
+    }
+    needed += 5;
+    if (value_ptrs[i]) {
+      needed += value_lens[i];
+    }
+  }
+  if (has_error) {
+    for (uint32_t i = 0; i < count; i++) {
+      if (errs[i]) {
+        rocksdb_free(errs[i]);
+      }
+      if (value_ptrs[i]) {
+        rocksdb_free(value_ptrs[i]);
+      }
+    }
+    free(key_ptrs);
+    free(key_lens);
+    free(value_ptrs);
+    free(value_lens);
+    free(errs);
+    return -1;
+  }
+  if (needed > (size_t)out_cap) {
+    for (uint32_t i = 0; i < count; i++) {
+      if (value_ptrs[i]) {
+        rocksdb_free(value_ptrs[i]);
+      }
+    }
+    free(key_ptrs);
+    free(key_lens);
+    free(value_ptrs);
+    free(value_lens);
+    free(errs);
+    return -3;
+  }
+
+  uint8_t *out_cursor = out;
+  write_u32_be(out_cursor, count);
+  out_cursor += 4;
+  for (uint32_t i = 0; i < count; i++) {
+    if (value_ptrs[i]) {
+      *out_cursor++ = 0;
+      write_u32_be(out_cursor, (uint32_t)value_lens[i]);
+      out_cursor += 4;
+      memcpy(out_cursor, value_ptrs[i], value_lens[i]);
+      out_cursor += value_lens[i];
+      rocksdb_free(value_ptrs[i]);
+    } else {
+      *out_cursor++ = 1;
+      write_u32_be(out_cursor, 0);
+      out_cursor += 4;
+    }
+  }
+
+  free(key_ptrs);
+  free(key_lens);
+  free(value_ptrs);
+  free(value_lens);
+  free(errs);
+  return (int32_t)(out_cursor - out);
 }
 
 int32_t mojobitnode_native_crypto_available(void) {

@@ -29,6 +29,8 @@ native prerequisites a future port would need?
 - Fast-port-shaped block-level script-verification job/result layer with
   sequential proof execution plus one RocksDB batch commit per connected block.
   Parallel runner research stays diagnostic until runner truth is self-proving.
+- Tuned RocksDB open options, ordered block-level prevout `multi_get`, and
+  Mojo-owned block-local outpoint lookup helpers for debug 50k profiling.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,
@@ -124,6 +126,10 @@ Setting `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` enables the diagnostic Mojo
 script jobs and `MOJOBITNODE_SCRIPT_THREADS` is not `1`. UTXO deletes, unspent
 creates, undo, block storage, and metadata are still staged by Mojo and
 committed through one RocksDB batch only after script verification passes.
+Before script verification, block connect gathers distinct external prevouts
+for the block, loads them with one ordered RocksDB `multi_get`, and keeps
+same-block created/spent lookup in Mojo-owned indexed helpers while preserving
+ordered undo and commit lists.
 Project evidence promotion remains a later explicit step after a fresh artifact
 self-proves positive parallel batch metrics and passes the benchmark contract.
 Native crypto call counters are always emitted, but per-call crypto timing is
