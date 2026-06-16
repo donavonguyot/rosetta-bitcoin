@@ -224,6 +224,7 @@ struct ConnectTiming(Copyable):
     var script_jobs: Int64
     var script_parallel_batches: Int64
     var script_runner_thread_count: Int64
+    var sighash_precompute_transactions: Int64
 
     def __init__(out self):
         self.p2p_fetch = 0
@@ -243,6 +244,7 @@ struct ConnectTiming(Copyable):
         self.script_jobs = 0
         self.script_parallel_batches = 0
         self.script_runner_thread_count = 0
+        self.sighash_precompute_transactions = 0
 
 
 struct ScriptRunnerConfig(Copyable):
@@ -1042,6 +1044,7 @@ def connect_block(
         timing.script_inputs += Int64(len(tx.inputs))
         var spent_prevouts = taproot_prevouts_from_utxos(tx_prevouts)
         var sighash_precompute = build_sighash_precompute_with_taproot(tx, spent_prevouts)
+        timing.sighash_precompute_transactions += 1
         timing.script_jobs += Int64(len(tx.inputs))
         var use_parallel_runner = runner_config.enabled and len(tx.inputs) >= runner_config.min_inputs
         if use_parallel_runner:
@@ -1406,6 +1409,10 @@ def emit_progress(
         + String(timing.taproot_tweak_calls)
         + String(',"taproot_tweak_ms":')
         + String(timing.taproot_tweak_ms)
+        + String(',"native_bridge_ms":')
+        + String(timing.ecdsa_ms + timing.schnorr_ms + timing.taproot_tweak_ms)
+        + String(',"sighash_precompute_transactions":')
+        + String(timing.sighash_precompute_transactions)
         + String(',"script_jobs":')
         + String(timing.script_jobs)
         + String(',"script_parallel_batches":')
@@ -1507,6 +1514,10 @@ def emit_telemetry(
         + String(timing.taproot_tweak_calls)
         + String(',"taproot_tweak_ms":')
         + String(timing.taproot_tweak_ms)
+        + String(',"native_bridge_ms":')
+        + String(timing.ecdsa_ms + timing.schnorr_ms + timing.taproot_tweak_ms)
+        + String(',"sighash_precompute_transactions":')
+        + String(timing.sighash_precompute_transactions)
         + String(',"script_jobs":')
         + String(timing.script_jobs)
         + String(',"script_parallel_batches":')
@@ -1698,6 +1709,8 @@ def local_reference_proof(
             + String(timing.schnorr_ms)
             + String(',"taproot_tweak":')
             + String(timing.taproot_tweak_ms)
+            + String(',"native_bridge":')
+            + String(timing.ecdsa_ms + timing.schnorr_ms + timing.taproot_tweak_ms)
             + String('}},"stage_totals_ms":{"utxo_load":')
             + String(timing.utxo_load)
             + String(',"script_verify":')
@@ -1716,6 +1729,8 @@ def local_reference_proof(
             + String(timing.schnorr_ms)
             + String(',"taproot_tweak":')
             + String(timing.taproot_tweak_ms)
+            + String(',"native_bridge":')
+            + String(timing.ecdsa_ms + timing.schnorr_ms + timing.taproot_tweak_ms)
             + String('},"script_metrics":{"script_inputs":')
             + String(timing.script_inputs)
             + String(',"ecdsa_calls":')
@@ -1730,6 +1745,10 @@ def local_reference_proof(
             + String(timing.taproot_tweak_calls)
             + String(',"taproot_tweak_ms":')
             + String(timing.taproot_tweak_ms)
+            + String(',"native_bridge_ms":')
+            + String(timing.ecdsa_ms + timing.schnorr_ms + timing.taproot_tweak_ms)
+            + String(',"sighash_precompute_transactions":')
+            + String(timing.sighash_precompute_transactions)
             + String(',"script_jobs":')
             + String(timing.script_jobs)
             + String(',"script_parallel_batches":')

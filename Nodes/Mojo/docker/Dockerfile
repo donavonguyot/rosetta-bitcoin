@@ -33,6 +33,7 @@ RUN /opt/mojo/bin/mojo build -I src src/mojobitnode.mojo -o /usr/local/bin/mojob
 FROM debian:bookworm-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
+    binutils \
     ca-certificates \
     librocksdb-dev \
     libsecp256k1-dev \
@@ -42,6 +43,7 @@ COPY --from=build /opt/mojo /opt/mojo
 COPY --from=build /usr/local/bin/mojobitnode /usr/local/bin/mojobitnode
 COPY --from=build /usr/local/lib/libmojobitnode_shim.so /usr/local/lib/libmojobitnode_shim.so
 COPY --from=build /src/tests /usr/local/share/mojobitnode/tests
+COPY scripts/native_boundary_audit.py /usr/local/share/mojobitnode/scripts/native_boundary_audit.py
 ENV PATH="/opt/mojo/bin:${PATH}" \
     MOJOBITNODE_RUNTIME_SURFACE=docker \
     MOJOBITNODE_SHIM_PATH=/usr/local/lib/libmojobitnode_shim.so

@@ -59,6 +59,17 @@ fixture/result shaping, storage-proof operation sequencing, command dispatch,
 JSON shaping, and user-visible CLI behavior in Mojo. The shim should expose
 primitives only when Mojo interop is not sufficient for the spike.
 
+Before trusting a new native proof, run:
+
+```bash
+make host-native-boundary-audit
+make docker-native-boundary-audit
+```
+
+The audit distinguishes direct shim linkage from Debian package closure. TLS/SSL
+packages may exist in the image because other packages pull them in, but they
+are not allowed to become linked or called Mojo consensus crypto dependencies.
+
 ## Docs And Testing
 
 Mojo syntax changes quickly, and older model knowledge can be stale. Refresh the
@@ -101,9 +112,11 @@ make docker-parallel-runner-smoke
 make host-script-corpus-foundation-smoke
 make host-block-core-smoke
 make host-script-corpus
+make host-native-boundary-audit
 make host-local-reference-proof
 make host-shakedown-50k-proof
 make docker-script-corpus
+make docker-native-boundary-audit
 make docker-proof-local
 make docker-proof-50k
 ```

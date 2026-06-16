@@ -18,6 +18,7 @@ MOJO_TOOLCHAIN_SMOKE ?= tests/toolchain_smoke.mojo
 MOJO_PARALLEL_RUNNER_SMOKE ?= tests/parallel_runner_smoke.mojo
 MOJO_SCRIPT_CORPUS_FOUNDATION_SMOKE ?= tests/script_corpus_foundation_smoke.mojo
 MOJO_BLOCK_CORE_SMOKE ?= tests/block_core_smoke.mojo
+MOJO_NATIVE_BOUNDARY_AUDIT ?= scripts/native_boundary_audit.py
 UV ?= uv
 PYTHON ?= /opt/homebrew/bin/python3.11
 PKG_CONFIG ?= pkg-config
@@ -43,8 +44,8 @@ MOJOBITNODE_SCRIPT_MIN_INPUTS ?= 2
 HOST_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-local-reference-proof host-shakedown-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-proof-local docker-proof-50k docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-storage-proof host-script-corpus-dev host-script-corpus host-local-reference-proof host-shakedown-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus docker-proof-local docker-proof-50k docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -82,6 +83,9 @@ $(MOJO_BIN): src/mojobitnode.mojo src/block_core.mojo src/script_corpus_foundati
 	$(MOJO) build -I src src/mojobitnode.mojo -o $(MOJO_BIN)
 
 host-build: host-deps-check $(MOJO_BIN)
+
+host-native-boundary-audit: host-build
+	$(PYTHON) $(MOJO_NATIVE_BOUNDARY_AUDIT) --shim $(SHIM_LIB)
 
 host-warm: host-build
 
@@ -178,6 +182,12 @@ docker-config:
 
 docker-build:
 	$(DOCKER_COMPOSE) build mojobitnode
+
+docker-native-boundary-audit:
+	$(DOCKER_COMPOSE) run --rm --no-deps --entrypoint python3 mojobitnode \
+	  /usr/local/share/mojobitnode/scripts/native_boundary_audit.py \
+	  --shim /usr/local/lib/libmojobitnode_shim.so \
+	  --package-list-command "dpkg-query -W"
 
 docker-mojo-version:
 	@out=$$($(DOCKER_COMPOSE) run --rm --no-deps --entrypoint /opt/mojo/bin/mojo mojobitnode --version); \

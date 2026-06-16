@@ -52,6 +52,7 @@ make host-mojo-version
 make host-build
 make host-status
 make host-native-crypto-vectors
+make host-native-boundary-audit
 make host-storage-proof
 make host-script-corpus-dev
 make host-script-corpus
@@ -77,6 +78,7 @@ make docker-mojo-version
 make docker-warm
 make docker-status
 make docker-native-crypto-vectors
+make docker-native-boundary-audit
 make docker-storage-proof
 make docker-script-corpus
 make docker-proof-local
@@ -114,3 +116,9 @@ For parallel script-runner work, also read
 `docs/PARALLEL_RUNNER_RESEARCH.md`. The proof binary has a diagnostic Mojo CPU
 `parallelize` path, but comparable proof Make targets default to sequential while
 the runner is under audit.
+
+Use the native-boundary audit targets before trusting new proof output. They
+fail on direct SSL-family crypto linkage or unclassified exported
+`mojobitnode_*` C symbols. The Docker audit may report TLS/SSL packages pulled
+in by Debian package closure; those packages are not accepted as Mojo consensus
+crypto unless the shim directly links or calls them.
