@@ -58,6 +58,11 @@ sockets/time/file writes. Keep consensus logic, hashes, TapTweak construction,
 fixture/result shaping, storage-proof operation sequencing, command dispatch,
 JSON shaping, and user-visible CLI behavior in Mojo. The shim should expose
 primitives only when Mojo interop is not sufficient for the spike.
+Generic RocksDB packed batch application is allowed as a storage primitive, but
+Mojo must own operation ordering, keys, values, undo encoding, metadata, and all
+consensus decisions. Default proof runs use the proven WriteBatch primitive
+path; `MOJOBITNODE_PACKED_ROCKSDB_BATCH=1` is diagnostic-only unless a later
+profile proves it faster.
 
 The live proof path routes signature and Taproot tweak checks through a
 Mojo-owned `NativeCrypto` wrapper so a block-level script job batch does not
@@ -115,12 +120,14 @@ default worker count. After verification passes, Mojo stages UTXO deletes,
 unspent creates, undo, block storage, and metadata, then commits them through
 one RocksDB batch. The proof path opens RocksDB with the durable fast-port
 tuning profile, gathers distinct external prevouts for each block, loads them
-through ordered `multi_get`, and uses Mojo-owned outpoint lookup helpers for
+through ordered `multi_get`, and uses Mojo-owned sorted outpoint indexes for
 created/spent block-local state while preserving ordered lists for undo and
-commit determinism. Do not treat the env flag as a comparable proof claim by
-itself. A proof may report `script_runner_mode: "parallel"` only when at least
-one parallel batch actually executed and the artifact includes runner batch
-metrics accepted by the benchmark validator.
+commit determinism. Sighash precompute is selected by script family: BIP143,
+Taproot, both, or neither, and proof telemetry reports the split counters. Do
+not treat any env flag as a comparable proof claim by itself. A proof may report
+`script_runner_mode: "parallel"` only when at least one parallel batch actually
+executed and the artifact includes runner batch metrics accepted by the
+benchmark validator.
 
 Do not use `mojo test`; current Mojo testing uses `TestSuite` and runs with
 `mojo run`:

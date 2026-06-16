@@ -2,6 +2,7 @@ from script_corpus_foundation import (
     bip143_sighash,
     bip143_sighash_cached,
     build_sighash_precompute,
+    build_sighash_precompute_for_modes,
     build_sighash_precompute_with_taproot,
     bytes_to_hex,
     bytes_equal,
@@ -168,7 +169,10 @@ def test_taproot_numequal_sighash_vector() raises:
 def test_bip143_sighash_cache_matches_uncached() raises:
     var tx = parse_transaction(read_hex_file(WITNESS_FIXTURE_TX))
     var script_code = read_hex_file("../Shared/conformance/fixtures/scripts/scripts.p2wsh_op1_only_31842/tx_p2wsh_op1_only_31842_witness_script.hex")
-    var cache = build_sighash_precompute(tx)
+    var empty_prevouts = List[TaprootPrevout]()
+    var cache = build_sighash_precompute_for_modes(tx, empty_prevouts, True, False)
+    assert_true(cache.bip143_available)
+    assert_true(not cache.taproot_available)
     var all_uncached = bip143_sighash(tx, 0, script_code, Int64(69179), UInt8(1))
     var all_cached = bip143_sighash_cached(tx, 0, script_code, Int64(69179), UInt8(1), cache)
     assert_true(bytes_equal(all_uncached, all_cached))
@@ -189,7 +193,9 @@ def test_taproot_sighash_cache_matches_uncached() raises:
     prevout.script_pubkey = read_hex_file(TAPROOT_NUMEQUAL_PREV_SPK)
     var spent_prevouts = List[TaprootPrevout]()
     spent_prevouts.append(prevout^)
-    var cache = build_sighash_precompute_with_taproot(tx, spent_prevouts)
+    var cache = build_sighash_precompute_for_modes(tx, spent_prevouts, False, True)
+    assert_true(not cache.bip143_available)
+    assert_true(cache.taproot_available)
     var script_uncached = taproot_signature_hash(tx, 0, spent_prevouts, UInt8(0), leaf_hash, 0xFFFFFFFF)
     var script_cached = taproot_signature_hash_cached(tx, 0, spent_prevouts, UInt8(0), leaf_hash, 0xFFFFFFFF, cache)
     assert_true(bytes_equal(script_uncached, script_cached))

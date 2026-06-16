@@ -2,6 +2,7 @@ from block_core import (
     BlockUtxoDelta,
     ConnectTiming,
     Native,
+    PackedKeyIndex,
     ScriptVerifyResult,
     Utxo,
     _utxo_key,
@@ -9,6 +10,8 @@ from block_core import (
     append_delta_metadata,
     append_delta_undo,
     append_outpoint_if_missing,
+    append_packed_batch_delete,
+    append_packed_batch_put,
     apply_block_delta,
     block_delta_unspent_created,
     check_pow,
@@ -22,6 +25,7 @@ from block_core import (
     first_failed_script_result_index,
     hash_from_display,
     merkle_root,
+    outpoint_index_key,
     parse_block,
     rocksdb_multi_get_rows,
 )
@@ -128,15 +132,39 @@ def test_rocksdb_multi_get_order_and_missing_slots() raises:
     var keys = List[List[UInt8]]()
     keys.append(key_a.copy())
     keys.append(key_missing.copy())
+    keys.append(key_missing.copy())
     keys.append(key_b.copy())
     var rows = rocksdb_multi_get_rows(native, db, keys)
-    assert_equal(len(rows), 3)
+    assert_equal(len(rows), 4)
     assert_true(rows[0].found)
     assert_true(not rows[1].found)
-    assert_true(rows[2].found)
+    assert_true(not rows[2].found)
+    assert_true(rows[3].found)
     assert_equal(bytes_to_hex(rows[0].value), bytes_to_hex(value_a))
-    assert_equal(bytes_to_hex(rows[2].value), bytes_to_hex(value_b))
+    assert_equal(bytes_to_hex(rows[3].value), bytes_to_hex(value_b))
     native.rocksdb_close(db)
+
+
+def test_packed_key_index_orders_and_finds_outpoints() raises:
+    var txid_a = List[UInt8]()
+    var txid_b = List[UInt8]()
+    var txid_c = List[UInt8]()
+    for _ in range(32):
+        txid_a.append(UInt8(2))
+        txid_b.append(UInt8(1))
+        txid_c.append(UInt8(3))
+
+    var index = PackedKeyIndex()
+    assert_true(index.add_outpoint(txid_a, UInt32(5), 50))
+    assert_true(index.add_outpoint(txid_b, UInt32(1), 10))
+    assert_true(index.add_outpoint(txid_c, UInt32(2), 20))
+    assert_true(not index.add_outpoint(txid_a, UInt32(5), 99))
+    assert_equal(index.find_outpoint(txid_b, UInt32(1)), 10)
+    assert_equal(index.find_outpoint(txid_c, UInt32(2)), 20)
+    assert_equal(index.find_outpoint(txid_a, UInt32(5)), 50)
+    assert_equal(index.find_outpoint(txid_a, UInt32(6)), -1)
+    var key = outpoint_index_key(txid_a, UInt32(5))
+    assert_equal(len(key), 36)
 
 
 def test_outpoint_helpers_preserve_order_and_detect_duplicates() raises:
@@ -227,8 +255,10 @@ def test_block_delta_batch_apply_and_undo() raises:
 
     var delta = BlockUtxoDelta()
     var txid = List[UInt8]()
+    var txid_unspent = List[UInt8]()
     for i in range(32):
         txid.append(UInt8(i))
+        txid_unspent.append(UInt8(255 - i))
     var script = List[UInt8]()
     script.append(UInt8(0x51))
     var utxo = Utxo()
@@ -241,6 +271,13 @@ def test_block_delta_batch_apply_and_undo() raises:
     delta.created_spent[0] = True
     assert_equal(block_delta_unspent_created(delta), 0)
     append_delta_undo(delta, 2, 1, txid, UInt32(0), utxo, True)
+
+    var external_key = ascii_string_to_bytes(String("batch_smoke:delete:") + suffix)
+    var external_value = ascii_string_to_bytes(String("delete-me"))
+    native.rocksdb_put(db, external_key, external_value)
+    delta.external_spend_keys.append(external_key.copy())
+    delta.external_spends += 1
+    append_delta_created(delta, txid_unspent, UInt32(1), utxo)
 
     delta.block_key = ascii_string_to_bytes(String("batch_smoke:block:") + suffix)
     delta.block_value = ascii_string_to_bytes(String("block-ok"))
@@ -256,9 +293,39 @@ def test_block_delta_batch_apply_and_undo() raises:
     assert_equal(bytes_to_hex(native.rocksdb_get(db, delta.block_key, 64)), bytes_to_hex(delta.block_value))
     assert_true(len(native.rocksdb_get(db, delta.undo_key, 4096)) > 0)
     assert_equal(db_get_string(native, db, meta_name), String("meta-ok"))
+    assert_equal(len(native.rocksdb_get(db, external_key, 64)), 0)
     var suppressed_key = _utxo_key(txid, UInt32(0))
     assert_equal(len(native.rocksdb_get(db, suppressed_key, 4096)), 0)
+    var created_key = _utxo_key(txid_unspent, UInt32(1))
+    assert_true(len(native.rocksdb_get(db, created_key, 4096)) > 0)
     assert_true(timing.rocksdb_write >= 0)
+    assert_true(timing.rocksdb_batch_pack >= 0)
+    native.rocksdb_close(db)
+
+
+def test_packed_rocksdb_batch_apply_order() raises:
+    var shim = getenv("MOJOBITNODE_SHIM_PATH", "./build/libmojobitnode_shim.dylib")
+    var native = Native(shim)
+    var db = native.rocksdb_open(String("/tmp/mojo_block_core_packed_batch_smoke"))
+    var suffix = String(native.now_ms())
+
+    var key_delete = ascii_string_to_bytes(String("packed:delete:") + suffix)
+    var key_put = ascii_string_to_bytes(String("packed:put:") + suffix)
+    var value_old = ascii_string_to_bytes(String("old"))
+    var value_new = ascii_string_to_bytes(String("new"))
+    native.rocksdb_put(db, key_delete, value_old)
+
+    var packed = List[UInt8]()
+    packed.append(UInt8(0))
+    packed.append(UInt8(0))
+    packed.append(UInt8(0))
+    packed.append(UInt8(2))
+    append_packed_batch_delete(packed, key_delete)
+    append_packed_batch_put(packed, key_put, value_new)
+    native.rocksdb_batch_apply_packed(db, packed)
+
+    assert_equal(len(native.rocksdb_get(db, key_delete, 64)), 0)
+    assert_equal(bytes_to_hex(native.rocksdb_get(db, key_put, 64)), bytes_to_hex(value_new))
     native.rocksdb_close(db)
 
 

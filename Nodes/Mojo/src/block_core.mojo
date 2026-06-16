@@ -23,6 +23,7 @@ from script_corpus_foundation import (
     bytes_to_hex,
     cast_to_bool,
     build_sighash_precompute_with_taproot,
+    build_sighash_precompute_for_modes,
     clone_bytes,
     evaluate_tapscript,
     evaluate_tapscript_with_crypto,
@@ -184,6 +185,17 @@ struct Native(Movable):
     def rocksdb_batch_destroy(self, batch: Int64):
         _ = self.handle.call["mojobitnode_rocksdb_batch_destroy", Int32](batch)
 
+    def rocksdb_batch_apply_packed(self, db: Int64, ref packed_ops: List[UInt8]) raises:
+        var ops_ptr = alloc[UInt8](len(packed_ops))
+        for i in range(len(packed_ops)):
+            ops_ptr[i] = packed_ops[i]
+        var ok = self.handle.call["mojobitnode_rocksdb_batch_apply_packed", Int32](
+            db, ops_ptr, Int32(len(packed_ops))
+        )
+        ops_ptr.free()
+        if ok != 1:
+            raise Error("RocksDB packed batch apply failed")
+
     def rocksdb_get(self, db: Int64, ref key: List[UInt8], cap: Int) raises -> List[UInt8]:
         var key_ptr = alloc[UInt8](len(key))
         var out_ptr = alloc[UInt8](cap)
@@ -292,6 +304,7 @@ struct ConnectTiming(Copyable):
     var undo_put_prepare: Int64
     var metadata_put_prepare: Int64
     var rocksdb_write: Int64
+    var rocksdb_batch_pack: Int64
     var prevout_batch_load: Int64
     var prevout_multi_get_call: Int64
     var prevout_utxo_decode: Int64
@@ -309,6 +322,9 @@ struct ConnectTiming(Copyable):
     var script_parallel_batches: Int64
     var script_runner_thread_count: Int64
     var sighash_precompute_transactions: Int64
+    var sighash_precompute_bip143_transactions: Int64
+    var sighash_precompute_taproot_transactions: Int64
+    var sighash_precompute_ms: Int64
     var script_wall_ms: Int64
     var script_worker_cpu_ms: Int64
 
@@ -325,6 +341,7 @@ struct ConnectTiming(Copyable):
         self.undo_put_prepare = 0
         self.metadata_put_prepare = 0
         self.rocksdb_write = 0
+        self.rocksdb_batch_pack = 0
         self.prevout_batch_load = 0
         self.prevout_multi_get_call = 0
         self.prevout_utxo_decode = 0
@@ -342,6 +359,9 @@ struct ConnectTiming(Copyable):
         self.script_parallel_batches = 0
         self.script_runner_thread_count = 1
         self.sighash_precompute_transactions = 0
+        self.sighash_precompute_bip143_transactions = 0
+        self.sighash_precompute_taproot_transactions = 0
+        self.sighash_precompute_ms = 0
         self.script_wall_ms = 0
         self.script_worker_cpu_ms = 0
 
@@ -657,6 +677,109 @@ def rocksdb_multi_get_rows(mut native: Native, db: Int64, ref keys: List[List[UI
     return decode_multi_get_rows(bytes)
 
 
+def compare_byte_lists(ref left: List[UInt8], ref right: List[UInt8]) -> Int:
+    var limit = len(left)
+    if len(right) < limit:
+        limit = len(right)
+    for i in range(limit):
+        if left[i] < right[i]:
+            return -1
+        if left[i] > right[i]:
+            return 1
+    if len(left) < len(right):
+        return -1
+    if len(left) > len(right):
+        return 1
+    return 0
+
+
+def outpoint_index_key(ref txid: List[UInt8], vout: UInt32) -> List[UInt8]:
+    var out = clone_bytes(txid)
+    _append_u32_be(out, vout)
+    return out^
+
+
+struct PackedKeyIndex(Copyable):
+    var keys: List[List[UInt8]]
+    var indexes: List[Int]
+
+    def __init__(out self):
+        self.keys = List[List[UInt8]]()
+        self.indexes = List[Int]()
+
+    def find_key(ref self, ref key: List[UInt8]) -> Int:
+        var low = 0
+        var high = len(self.keys)
+        while low < high:
+            var mid = (low + high) // 2
+            var cmp = compare_byte_lists(self.keys[mid], key)
+            if cmp == 0:
+                return self.indexes[mid]
+            if cmp < 0:
+                low = mid + 1
+            else:
+                high = mid
+        return -1
+
+    def contains_key(ref self, ref key: List[UInt8]) -> Bool:
+        return self.find_key(key) >= 0
+
+    def add_key(mut self, ref key: List[UInt8], index: Int) -> Bool:
+        var low = 0
+        var high = len(self.keys)
+        while low < high:
+            var mid = (low + high) // 2
+            var cmp = compare_byte_lists(self.keys[mid], key)
+            if cmp == 0:
+                return False
+            if cmp < 0:
+                low = mid + 1
+            else:
+                high = mid
+
+        var insert_at = low
+        self.keys.append(clone_bytes(key))
+        self.indexes.append(index)
+        var pos = len(self.keys) - 1
+        while pos > insert_at:
+            self.keys[pos] = self.keys[pos - 1].copy()
+            self.indexes[pos] = self.indexes[pos - 1]
+            pos -= 1
+        self.keys[insert_at] = clone_bytes(key)
+        self.indexes[insert_at] = index
+        return True
+
+    def add_outpoint(mut self, ref txid: List[UInt8], vout: UInt32, index: Int) -> Bool:
+        var key = outpoint_index_key(txid, vout)
+        return self.add_key(key, index)
+
+    def find_outpoint(ref self, ref txid: List[UInt8], vout: UInt32) -> Int:
+        var key = outpoint_index_key(txid, vout)
+        return self.find_key(key)
+
+    def contains_outpoint(ref self, ref txid: List[UInt8], vout: UInt32) -> Bool:
+        return self.find_outpoint(txid, vout) >= 0
+
+
+def append_packed_batch_put(mut out: List[UInt8], ref key: List[UInt8], ref value: List[UInt8]):
+    out.append(UInt8(0))
+    _append_u32_be(out, UInt32(len(key)))
+    append_bytes(out, key)
+    _append_u32_be(out, UInt32(len(value)))
+    append_bytes(out, value)
+
+
+def append_packed_batch_delete(mut out: List[UInt8], ref key: List[UInt8]):
+    out.append(UInt8(1))
+    _append_u32_be(out, UInt32(len(key)))
+    append_bytes(out, key)
+    _append_u32_be(out, UInt32(0))
+
+
+def use_packed_rocksdb_batch_apply() -> Bool:
+    return getenv("MOJOBITNODE_PACKED_ROCKSDB_BATCH", "0") == "1"
+
+
 def reverse_bytes(ref bytes: List[UInt8]) -> List[UInt8]:
     var out = List[UInt8]()
     for i in range(len(bytes)):
@@ -766,6 +889,31 @@ def spent_prevouts_need_sighash_precompute(ref prevouts: List[TaprootPrevout]) -
     return False
 
 
+def p2sh_input_redeem_is_witness_program(ref tx: Transaction, input_index: Int) raises -> Bool:
+    if input_index < 0 or input_index >= len(tx.inputs):
+        return False
+    var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
+    if len(stack) == 0:
+        return False
+    return is_v0_witness_script_program(stack[len(stack) - 1].data)
+
+
+def spent_prevouts_need_bip143_precompute(ref tx: Transaction, ref prevouts: List[TaprootPrevout]) raises -> Bool:
+    for i in range(len(prevouts)):
+        if is_p2wpkh_script_pubkey_local(prevouts[i].script_pubkey) or is_p2wsh_script_pubkey(prevouts[i].script_pubkey):
+            return True
+        if is_p2sh_script_pubkey(prevouts[i].script_pubkey) and p2sh_input_redeem_is_witness_program(tx, i):
+            return True
+    return False
+
+
+def spent_prevouts_need_taproot_precompute(ref prevouts: List[TaprootPrevout]) -> Bool:
+    for i in range(len(prevouts)):
+        if is_p2tr_script_pubkey(prevouts[i].script_pubkey):
+            return True
+    return False
+
+
 def mark_delta_created_spent(mut delta: BlockUtxoDelta, ref txid: List[UInt8], vout: UInt32) -> Bool:
     for i in range(len(delta.created_txids)):
         if delta.created_vouts[i] == vout and bytes_equal(delta.created_txids[i], txid):
@@ -870,44 +1018,89 @@ def encode_block_undo(height: Int, ref delta: BlockUtxoDelta) raises -> List[UIn
 
 
 def apply_block_delta(mut native: Native, db: Int64, mut timing: ConnectTiming, ref delta: BlockUtxoDelta) raises:
-    var batch = native.rocksdb_batch_create()
-    try:
-        var delete_prepare_started = native.now_ms()
-        for i in range(len(delta.external_spend_keys)):
-            native.rocksdb_batch_delete(batch, delta.external_spend_keys[i])
-        timing.utxo_delete_prepare += native.now_ms() - delete_prepare_started
+    if not use_packed_rocksdb_batch_apply():
+        var batch = native.rocksdb_batch_create()
+        try:
+            var delete_prepare_started = native.now_ms()
+            for i in range(len(delta.external_spend_keys)):
+                native.rocksdb_batch_delete(batch, delta.external_spend_keys[i])
+            timing.utxo_delete_prepare += native.now_ms() - delete_prepare_started
 
-        var put_prepare_started = native.now_ms()
-        for i in range(len(delta.created_txids)):
-            if delta.created_spent[i]:
-                continue
-            var key = _utxo_key(delta.created_txids[i], delta.created_vouts[i])
-            var value = encode_utxo(
-                delta.created_values[i].height,
-                delta.created_values[i].value_sats,
-                delta.created_values[i].coinbase,
-                delta.created_values[i].script_pubkey,
-            )
-            native.rocksdb_batch_put(batch, key, value)
-        timing.utxo_put_prepare += native.now_ms() - put_prepare_started
+            var put_prepare_started = native.now_ms()
+            for i in range(len(delta.created_txids)):
+                if delta.created_spent[i]:
+                    continue
+                var key = _utxo_key(delta.created_txids[i], delta.created_vouts[i])
+                var value = encode_utxo(
+                    delta.created_values[i].height,
+                    delta.created_values[i].value_sats,
+                    delta.created_values[i].coinbase,
+                    delta.created_values[i].script_pubkey,
+                )
+                native.rocksdb_batch_put(batch, key, value)
+            timing.utxo_put_prepare += native.now_ms() - put_prepare_started
 
-        var undo_prepare_started = native.now_ms()
-        native.rocksdb_batch_put(batch, delta.undo_key, delta.undo_value)
-        timing.undo_put_prepare += native.now_ms() - undo_prepare_started
+            var undo_prepare_started = native.now_ms()
+            native.rocksdb_batch_put(batch, delta.undo_key, delta.undo_value)
+            timing.undo_put_prepare += native.now_ms() - undo_prepare_started
 
-        var metadata_prepare_started = native.now_ms()
-        native.rocksdb_batch_put(batch, delta.block_key, delta.block_value)
-        for i in range(len(delta.metadata_keys)):
-            native.rocksdb_batch_put(batch, delta.metadata_keys[i], delta.metadata_values[i])
-        timing.metadata_put_prepare += native.now_ms() - metadata_prepare_started
+            var metadata_prepare_started = native.now_ms()
+            native.rocksdb_batch_put(batch, delta.block_key, delta.block_value)
+            for i in range(len(delta.metadata_keys)):
+                native.rocksdb_batch_put(batch, delta.metadata_keys[i], delta.metadata_values[i])
+            timing.metadata_put_prepare += native.now_ms() - metadata_prepare_started
 
-        var write_started = native.now_ms()
-        native.rocksdb_batch_write(db, batch)
-        timing.rocksdb_write += native.now_ms() - write_started
-    except e:
+            var write_started = native.now_ms()
+            native.rocksdb_batch_write(db, batch)
+            timing.rocksdb_write += native.now_ms() - write_started
+        except e:
+            native.rocksdb_batch_destroy(batch)
+            raise Error(String(e))
         native.rocksdb_batch_destroy(batch)
-        raise Error(String(e))
-    native.rocksdb_batch_destroy(batch)
+        return
+
+    var op_count = len(delta.external_spend_keys) + 2 + len(delta.metadata_keys)
+    for i in range(len(delta.created_spent)):
+        if not delta.created_spent[i]:
+            op_count += 1
+
+    var packed = List[UInt8]()
+    var pack_started = native.now_ms()
+    _append_u32_be(packed, UInt32(op_count))
+
+    var delete_prepare_started = native.now_ms()
+    for i in range(len(delta.external_spend_keys)):
+        append_packed_batch_delete(packed, delta.external_spend_keys[i])
+    timing.utxo_delete_prepare += native.now_ms() - delete_prepare_started
+
+    var put_prepare_started = native.now_ms()
+    for i in range(len(delta.created_txids)):
+        if delta.created_spent[i]:
+            continue
+        var key = _utxo_key(delta.created_txids[i], delta.created_vouts[i])
+        var value = encode_utxo(
+            delta.created_values[i].height,
+            delta.created_values[i].value_sats,
+            delta.created_values[i].coinbase,
+            delta.created_values[i].script_pubkey,
+        )
+        append_packed_batch_put(packed, key, value)
+    timing.utxo_put_prepare += native.now_ms() - put_prepare_started
+
+    var undo_prepare_started = native.now_ms()
+    append_packed_batch_put(packed, delta.undo_key, delta.undo_value)
+    timing.undo_put_prepare += native.now_ms() - undo_prepare_started
+
+    var metadata_prepare_started = native.now_ms()
+    append_packed_batch_put(packed, delta.block_key, delta.block_value)
+    for i in range(len(delta.metadata_keys)):
+        append_packed_batch_put(packed, delta.metadata_keys[i], delta.metadata_values[i])
+    timing.metadata_put_prepare += native.now_ms() - metadata_prepare_started
+    timing.rocksdb_batch_pack += native.now_ms() - pack_started
+
+    var write_started = native.now_ms()
+    native.rocksdb_batch_apply_packed(db, packed)
+    timing.rocksdb_write += native.now_ms() - write_started
 
 
 def db_put_string(mut native: Native, db: Int64, name: String, value: String) raises:
@@ -1482,26 +1675,29 @@ def connect_block(
     var delta = BlockUtxoDelta()
     var spent_txids = List[List[UInt8]]()
     var spent_vouts = List[UInt32]()
+    var spent_index = PackedKeyIndex()
+    var created_index = PackedKeyIndex()
     var next_script_job_index = 0
     var verify_contexts = List[ScriptVerifyContext]()
     var script_jobs = List[ScriptVerifyJob]()
     var block_txids = List[List[UInt8]]()
+    var block_txid_index = PackedKeyIndex()
     for tx_index in range(len(block.txs)):
         block_txids.append(clone_bytes(block.txs[tx_index].txid))
+        _ = block_txid_index.add_key(block.txs[tx_index].txid, tx_index)
 
     var external_txids = List[List[UInt8]]()
     var external_vouts = List[UInt32]()
+    var external_index = PackedKeyIndex()
     for tx_index in range(1, len(block.txs)):
         var tx_for_prevouts = block.txs[tx_index].tx.copy()
         for input_index in range(len(tx_for_prevouts.inputs)):
             var prev_hash_for_gather = tx_for_prevouts.inputs[input_index].previous_hash.copy()
-            if not contains_txid(block_txids, prev_hash_for_gather):
-                _ = append_outpoint_if_missing(
-                    external_txids,
-                    external_vouts,
-                    prev_hash_for_gather,
-                    tx_for_prevouts.inputs[input_index].previous_index,
-                )
+            var prev_vout_for_gather = tx_for_prevouts.inputs[input_index].previous_index
+            if not block_txid_index.contains_key(prev_hash_for_gather):
+                if external_index.add_outpoint(prev_hash_for_gather, prev_vout_for_gather, len(external_txids)):
+                    external_txids.append(clone_bytes(prev_hash_for_gather))
+                    external_vouts.append(prev_vout_for_gather)
 
     var loaded_found = List[Bool]()
     var loaded_values = List[Utxo]()
@@ -1543,6 +1739,11 @@ def connect_block(
                         u.coinbase = True
                         u.script_pubkey = clone_bytes(tx.outputs[vout].script_pubkey)
                         append_delta_created(delta, block.txs[tx_index].txid, UInt32(vout), u)
+                        _ = created_index.add_outpoint(
+                            block.txs[tx_index].txid,
+                            UInt32(vout),
+                            len(delta.created_txids) - 1,
+                        )
             continue
         if len(tx.inputs) == 0:
             raise Error("non-coinbase transaction has no inputs")
@@ -1551,10 +1752,11 @@ def connect_block(
         var tx_prev_vouts = List[UInt32]()
         var tx_seen_hashes = List[List[UInt8]]()
         var tx_seen_vouts = List[UInt32]()
+        var tx_seen_index = PackedKeyIndex()
         for input_index in range(len(tx.inputs)):
             var prev_hash = tx.inputs[input_index].previous_hash.copy()
             var prev_index = tx.inputs[input_index].previous_index
-            if contains_outpoint(tx_seen_hashes, tx_seen_vouts, prev_hash, prev_index):
+            if tx_seen_index.contains_outpoint(prev_hash, prev_index):
                     raise Error(
                         String("duplicate spend inside transaction at height ")
                         + String(height)
@@ -1567,7 +1769,7 @@ def connect_block(
                         + String(" prev_vout=")
                         + String(prev_index)
                     )
-            if contains_outpoint(spent_txids, spent_vouts, prev_hash, prev_index):
+            if spent_index.contains_outpoint(prev_hash, prev_index):
                     raise Error(
                         String("duplicate spend inside block at height ")
                         + String(height)
@@ -1582,14 +1784,15 @@ def connect_block(
                     )
             tx_seen_hashes.append(clone_bytes(prev_hash))
             tx_seen_vouts.append(prev_index)
+            _ = tx_seen_index.add_outpoint(prev_hash, prev_index, input_index)
             var found_created = False
             var prevout = Utxo()
-            var created_index = find_created_delta_index(delta, prev_hash, prev_index)
-            if created_index >= 0:
+            var created_delta_index = created_index.find_outpoint(prev_hash, prev_index)
+            if created_delta_index >= 0:
                 found_created = True
-                prevout = delta.created_values[created_index].copy()
+                prevout = delta.created_values[created_delta_index].copy()
             if not found_created:
-                var loaded_index = find_loaded_utxo_index(external_txids, external_vouts, prev_hash, prev_index)
+                var loaded_index = external_index.find_outpoint(prev_hash, prev_index)
                 if loaded_index < 0 or not loaded_found[loaded_index]:
                     raise Error(
                         String("missing UTXO at height ")
@@ -1606,7 +1809,7 @@ def connect_block(
                 prevout = loaded_values[loaded_index].copy()
                 append_delta_external_spend(delta, prev_hash, prev_index)
             else:
-                delta.created_spent[created_index] = True
+                delta.created_spent[created_delta_index] = True
             if prevout.coinbase and height < prevout.height + 100:
                 raise Error("coinbase maturity violation")
             append_delta_undo(delta, tx_index, input_index, prev_hash, prev_index, prevout, found_created)
@@ -1616,8 +1819,25 @@ def connect_block(
         timing.script_inputs += Int64(len(tx.inputs))
         var spent_prevouts = taproot_prevouts_from_utxos(tx_prevouts)
         var sighash_precompute = SighashPrecompute()
-        if spent_prevouts_need_sighash_precompute(spent_prevouts):
-            sighash_precompute = build_sighash_precompute_with_taproot(tx, spent_prevouts)
+        var needs_bip143_precompute = spent_prevouts_need_bip143_precompute(tx, spent_prevouts)
+        var needs_taproot_precompute = spent_prevouts_need_taproot_precompute(spent_prevouts)
+        if needs_bip143_precompute or needs_taproot_precompute:
+            var precompute_started = native.now_ms()
+            sighash_precompute = build_sighash_precompute_for_modes(
+                tx,
+                spent_prevouts,
+                needs_bip143_precompute,
+                needs_taproot_precompute,
+            )
+            timing.sighash_precompute_ms += native.now_ms() - precompute_started
+            if needs_bip143_precompute:
+                if not sighash_precompute.bip143_available:
+                    raise Error("BIP143 sighash precompute required but unavailable")
+                timing.sighash_precompute_bip143_transactions += 1
+            if needs_taproot_precompute:
+                if not sighash_precompute.taproot_available:
+                    raise Error("Taproot sighash precompute required but unavailable")
+                timing.sighash_precompute_taproot_transactions += 1
             timing.sighash_precompute_transactions += 1
         var context_index = len(verify_contexts)
         var context = ScriptVerifyContext()
@@ -1641,6 +1861,7 @@ def connect_block(
         for input_index in range(len(tx.inputs)):
             spent_txids.append(clone_bytes(tx_prev_hashes[input_index]))
             spent_vouts.append(tx_prev_vouts[input_index])
+            _ = spent_index.add_outpoint(tx_prev_hashes[input_index], tx_prev_vouts[input_index], len(spent_txids) - 1)
         for vout in range(len(tx.outputs)):
             if is_spendable_output(tx.outputs[vout]):
                 var u = Utxo()
@@ -1649,6 +1870,7 @@ def connect_block(
                 u.coinbase = False
                 u.script_pubkey = clone_bytes(tx.outputs[vout].script_pubkey)
                 append_delta_created(delta, block.txs[tx_index].txid, UInt32(vout), u)
+                _ = created_index.add_outpoint(block.txs[tx_index].txid, UInt32(vout), len(delta.created_txids) - 1)
 
     var runner_config = script_runner_config_from_env()
     var verify_stats: ScriptVerifyStats
@@ -1968,6 +2190,8 @@ def emit_progress(
         + String(timing.metadata_put_prepare)
         + String(',"rocksdb_write":')
         + String(timing.rocksdb_write)
+        + String(',"rocksdb_batch_pack":')
+        + String(timing.rocksdb_batch_pack)
         + String(',"utxo_lookup_count":')
         + String(timing.utxo_lookup_count)
         + String(',"utxo_key_bytes":')
@@ -1992,6 +2216,12 @@ def emit_progress(
         + String(timing.ecdsa_ms + timing.schnorr_ms + timing.taproot_tweak_ms)
         + String(',"sighash_precompute_transactions":')
         + String(timing.sighash_precompute_transactions)
+        + String(',"sighash_precompute_bip143_transactions":')
+        + String(timing.sighash_precompute_bip143_transactions)
+        + String(',"sighash_precompute_taproot_transactions":')
+        + String(timing.sighash_precompute_taproot_transactions)
+        + String(',"sighash_precompute_ms":')
+        + String(timing.sighash_precompute_ms)
         + String(',"script_jobs":')
         + String(timing.script_jobs)
         + String(',"script_parallel_batches":')
@@ -2099,6 +2329,8 @@ def emit_telemetry(
         + String(timing.metadata_put_prepare)
         + String(',"rocksdb_write":')
         + String(timing.rocksdb_write)
+        + String(',"rocksdb_batch_pack":')
+        + String(timing.rocksdb_batch_pack)
         + String(',"utxo_lookup_count":')
         + String(timing.utxo_lookup_count)
         + String(',"utxo_key_bytes":')
@@ -2123,6 +2355,12 @@ def emit_telemetry(
         + String(timing.ecdsa_ms + timing.schnorr_ms + timing.taproot_tweak_ms)
         + String(',"sighash_precompute_transactions":')
         + String(timing.sighash_precompute_transactions)
+        + String(',"sighash_precompute_bip143_transactions":')
+        + String(timing.sighash_precompute_bip143_transactions)
+        + String(',"sighash_precompute_taproot_transactions":')
+        + String(timing.sighash_precompute_taproot_transactions)
+        + String(',"sighash_precompute_ms":')
+        + String(timing.sighash_precompute_ms)
         + String(',"script_jobs":')
         + String(timing.script_jobs)
         + String(',"script_parallel_batches":')
@@ -2325,6 +2563,8 @@ def local_reference_proof(
             + String(timing.metadata_put_prepare)
             + String(',"rocksdb_write":')
             + String(timing.rocksdb_write)
+            + String(',"rocksdb_batch_pack":')
+            + String(timing.rocksdb_batch_pack)
             + String(',"utxo_lookup_count":')
             + String(timing.utxo_lookup_count)
             + String(',"utxo_key_bytes":')
@@ -2371,6 +2611,8 @@ def local_reference_proof(
             + String(timing.metadata_put_prepare)
             + String(',"rocksdb_write":')
             + String(timing.rocksdb_write)
+            + String(',"rocksdb_batch_pack":')
+            + String(timing.rocksdb_batch_pack)
             + String(',"utxo_lookup_count":')
             + String(timing.utxo_lookup_count)
             + String(',"utxo_key_bytes":')
@@ -2405,6 +2647,12 @@ def local_reference_proof(
             + String(timing.ecdsa_ms + timing.schnorr_ms + timing.taproot_tweak_ms)
             + String(',"sighash_precompute_transactions":')
             + String(timing.sighash_precompute_transactions)
+            + String(',"sighash_precompute_bip143_transactions":')
+            + String(timing.sighash_precompute_bip143_transactions)
+            + String(',"sighash_precompute_taproot_transactions":')
+            + String(timing.sighash_precompute_taproot_transactions)
+            + String(',"sighash_precompute_ms":')
+            + String(timing.sighash_precompute_ms)
             + String(',"script_jobs":')
             + String(timing.script_jobs)
             + String(',"script_parallel_batches":')

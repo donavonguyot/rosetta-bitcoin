@@ -646,6 +646,72 @@ int32_t mojobitnode_rocksdb_batch_destroy(int64_t batch_handle) {
   return 1;
 }
 
+int32_t mojobitnode_rocksdb_batch_apply_packed(int64_t handle, const uint8_t *packed_ops, int32_t packed_ops_len) {
+  mojo_rocksdb_handle *wrapped = rocks_handle(handle);
+  if (!wrapped || !wrapped->db || !packed_ops || packed_ops_len < 4) {
+    return 0;
+  }
+  const uint8_t *cursor = packed_ops;
+  const uint8_t *end = packed_ops + packed_ops_len;
+  uint32_t count = read_u32_be(cursor);
+  cursor += 4;
+  if (count > 5000000U) {
+    return 0;
+  }
+
+  rocksdb_writebatch_t *batch = rocksdb_writebatch_create();
+  if (!batch) {
+    return 0;
+  }
+  for (uint32_t i = 0; i < count; i++) {
+    if (cursor + 9 > end) {
+      rocksdb_writebatch_destroy(batch);
+      return 0;
+    }
+    uint8_t op = *cursor++;
+    uint32_t key_len = read_u32_be(cursor);
+    cursor += 4;
+    if (cursor + key_len + 4 > end) {
+      rocksdb_writebatch_destroy(batch);
+      return 0;
+    }
+    const char *key = (const char *)cursor;
+    cursor += key_len;
+    uint32_t value_len = read_u32_be(cursor);
+    cursor += 4;
+    if (cursor + value_len > end) {
+      rocksdb_writebatch_destroy(batch);
+      return 0;
+    }
+    const char *value = (const char *)cursor;
+    cursor += value_len;
+
+    if (op == 0) {
+      rocksdb_writebatch_put(batch, key, (size_t)key_len, value, (size_t)value_len);
+    } else if (op == 1 && value_len == 0) {
+      rocksdb_writebatch_delete(batch, key, (size_t)key_len);
+    } else {
+      rocksdb_writebatch_destroy(batch);
+      return 0;
+    }
+  }
+  if (cursor != end) {
+    rocksdb_writebatch_destroy(batch);
+    return 0;
+  }
+
+  char *err = NULL;
+  rocksdb_writeoptions_t *write_options = rocksdb_writeoptions_create();
+  rocksdb_write(wrapped->db, write_options, batch, &err);
+  rocksdb_writeoptions_destroy(write_options);
+  rocksdb_writebatch_destroy(batch);
+  if (err) {
+    rocksdb_free(err);
+    return 0;
+  }
+  return 1;
+}
+
 int32_t mojobitnode_rocksdb_get(int64_t handle, const uint8_t *key, int32_t key_len, uint8_t *out,
                                 int32_t out_cap) {
   mojo_rocksdb_handle *wrapped = rocks_handle(handle);

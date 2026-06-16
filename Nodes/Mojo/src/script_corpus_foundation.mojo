@@ -3168,22 +3168,32 @@ struct SighashPrecompute(Copyable):
 
 def build_sighash_precompute(ref tx: Transaction) raises -> SighashPrecompute:
     var empty_prevouts = List[TaprootPrevout]()
-    return build_sighash_precompute_with_taproot(tx, empty_prevouts)
+    return build_sighash_precompute_for_modes(tx, empty_prevouts, True, False)
 
 
 def build_sighash_precompute_with_taproot(
     ref tx: Transaction, ref spent_prevouts: List[TaprootPrevout]
 ) raises -> SighashPrecompute:
-    var cache = SighashPrecompute()
-    cache.bip143_hash_prevouts = _hash_prevouts(tx)
-    cache.bip143_hash_sequence = _hash_sequence(tx)
-    cache.bip143_hash_outputs = _hash_outputs(tx)
-    for i in range(len(tx.outputs)):
-        var single = _hash_single_output(tx, i)
-        cache.bip143_hash_single_outputs.append(single^)
-    cache.bip143_available = True
+    return build_sighash_precompute_for_modes(tx, spent_prevouts, True, True)
 
-    if len(spent_prevouts) == len(tx.inputs):
+
+def build_sighash_precompute_for_modes(
+    ref tx: Transaction,
+    ref spent_prevouts: List[TaprootPrevout],
+    build_bip143: Bool,
+    build_taproot: Bool,
+) raises -> SighashPrecompute:
+    var cache = SighashPrecompute()
+    if build_bip143:
+        cache.bip143_hash_prevouts = _hash_prevouts(tx)
+        cache.bip143_hash_sequence = _hash_sequence(tx)
+        cache.bip143_hash_outputs = _hash_outputs(tx)
+        for i in range(len(tx.outputs)):
+            var single = _hash_single_output(tx, i)
+            cache.bip143_hash_single_outputs.append(single^)
+        cache.bip143_available = True
+
+    if build_taproot and len(spent_prevouts) == len(tx.inputs):
         var prev_blob = List[UInt8]()
         var amount_blob = List[UInt8]()
         var script_blob = List[UInt8]()
