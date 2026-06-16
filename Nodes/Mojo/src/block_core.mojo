@@ -7,6 +7,7 @@ from std.os import getenv
 from script_corpus_foundation import (
     ByteCursor,
     CRYPTO_BACKEND_NATIVE,
+    CRYPTO_BACKEND_PURE,
     CryptoBackend,
     HotPathProfile,
     SighashPrecompute,
@@ -472,6 +473,59 @@ struct ScriptVerifyStats(Copyable):
         self.hotpath = HotPathProfile()
 
 
+struct ShadowCryptoStats(Copyable):
+    var enabled: Bool
+    var attempted: Int64
+    var supported: Int64
+    var unsupported: Int64
+    var agreed: Int64
+    var disagreed: Int64
+    var unsupported_p2sh: Int64
+    var unsupported_segwit_v0: Int64
+    var unsupported_legacy_other: Int64
+    var unsupported_other: Int64
+    var p2pkh_ecdsa_ms: Int64
+    var taproot_schnorr_ms: Int64
+    var taproot_tweak_ms: Int64
+    var p2pkh_ecdsa_inputs: Int64
+    var taproot_inputs: Int64
+    var taproot_script_path_inputs: Int64
+    var first_disagreement_set: Bool
+    var first_disagreement_height: Int
+    var first_disagreement_txid: String
+    var first_disagreement_input_index: Int
+    var first_disagreement_spent_script_pubkey: String
+    var first_disagreement_native_result: String
+    var first_disagreement_shadow_result: String
+    var first_disagreement_failure_stage: String
+
+    def __init__(out self):
+        self.enabled = False
+        self.attempted = 0
+        self.supported = 0
+        self.unsupported = 0
+        self.agreed = 0
+        self.disagreed = 0
+        self.unsupported_p2sh = 0
+        self.unsupported_segwit_v0 = 0
+        self.unsupported_legacy_other = 0
+        self.unsupported_other = 0
+        self.p2pkh_ecdsa_ms = 0
+        self.taproot_schnorr_ms = 0
+        self.taproot_tweak_ms = 0
+        self.p2pkh_ecdsa_inputs = 0
+        self.taproot_inputs = 0
+        self.taproot_script_path_inputs = 0
+        self.first_disagreement_set = False
+        self.first_disagreement_height = 0
+        self.first_disagreement_txid = String("")
+        self.first_disagreement_input_index = 0
+        self.first_disagreement_spent_script_pubkey = String("")
+        self.first_disagreement_native_result = String("")
+        self.first_disagreement_shadow_result = String("")
+        self.first_disagreement_failure_stage = String("")
+
+
 struct BlockUtxoDelta(Copyable):
     var external_spend_keys: List[List[UInt8]]
     var created_txids: List[List[UInt8]]
@@ -579,6 +633,140 @@ def script_runner_mode(ref timing: ConnectTiming) -> String:
     if timing.script_parallel_batches > 0:
         return String("parallel")
     return String("sequential")
+
+
+def json_escape(value: String) -> String:
+    var out = String("")
+    for i in range(value.byte_length()):
+        var code = ord(value[byte=i])
+        if code == 34:
+            out += String("\\\"")
+        elif code == 92:
+            out += String("\\\\")
+        elif code >= 32 and code <= 126:
+            out += chr(code)
+        else:
+            out += String(" ")
+    return out^
+
+
+def bool_json(value: Bool) -> String:
+    if value:
+        return String("true")
+    return String("false")
+
+
+def shadow_crypto_supported_family(ref job: ScriptVerifyJob) -> String:
+    if is_p2pkh_script_pubkey(job.prevout.script_pubkey):
+        return String("p2pkh_ecdsa")
+    if is_p2tr_script_pubkey(job.prevout.script_pubkey):
+        return String("taproot")
+    return String("")
+
+
+def shadow_crypto_unsupported_reason(ref job: ScriptVerifyJob) -> String:
+    if is_p2sh_script_pubkey(job.prevout.script_pubkey):
+        return String("p2sh")
+    if len(job.prevout.script_pubkey) >= 2 and job.prevout.script_pubkey[0] == UInt8(0):
+        return String("segwit_v0")
+    if len(job.prevout.script_pubkey) > 0:
+        return String("legacy_other")
+    return String("other")
+
+
+def shadow_crypto_record_unsupported(mut stats: ShadowCryptoStats, reason: String):
+    stats.unsupported += 1
+    if reason == "p2sh":
+        stats.unsupported_p2sh += 1
+    elif reason == "segwit_v0":
+        stats.unsupported_segwit_v0 += 1
+    elif reason == "legacy_other":
+        stats.unsupported_legacy_other += 1
+    else:
+        stats.unsupported_other += 1
+
+
+def shadow_crypto_record_first_disagreement(
+    mut stats: ShadowCryptoStats,
+    height: Int,
+    ref job: ScriptVerifyJob,
+    ref result: ScriptVerifyResult,
+):
+    if stats.first_disagreement_set:
+        return
+    stats.first_disagreement_set = True
+    stats.first_disagreement_height = height
+    stats.first_disagreement_txid = display_hash(job.txid)
+    stats.first_disagreement_input_index = job.input_index
+    stats.first_disagreement_spent_script_pubkey = bytes_to_hex(job.prevout.script_pubkey)
+    stats.first_disagreement_native_result = String("passed")
+    if result.failure_stage == "error":
+        stats.first_disagreement_shadow_result = String("error")
+    elif not result.ok:
+        stats.first_disagreement_shadow_result = String("failed")
+    else:
+        stats.first_disagreement_shadow_result = String("passed")
+    stats.first_disagreement_failure_stage = result.failure_stage
+
+
+def shadow_crypto_json(ref stats: ShadowCryptoStats) -> String:
+    var first = String("null")
+    if stats.first_disagreement_set:
+        first = (
+            String('{"height":')
+            + String(stats.first_disagreement_height)
+            + String(',"txid":"')
+            + stats.first_disagreement_txid
+            + String('","input_index":')
+            + String(stats.first_disagreement_input_index)
+            + String(',"spent_script_pubkey":"')
+            + stats.first_disagreement_spent_script_pubkey
+            + String('","native_result":"')
+            + stats.first_disagreement_native_result
+            + String('","shadow_result":"')
+            + stats.first_disagreement_shadow_result
+            + String('","failure_stage":"')
+            + json_escape(stats.first_disagreement_failure_stage)
+            + String('"}')
+        )
+    return (
+        String('"shadow_crypto":{"enabled":')
+        + bool_json(stats.enabled)
+        + String(',"backend":"mojo-pure-secp256k1","diagnostic_only":true,')
+        + String('"native_fallback_used":false,"attempted_script_inputs":')
+        + String(stats.attempted)
+        + String(',"supported_script_inputs":')
+        + String(stats.supported)
+        + String(',"unsupported_script_inputs":')
+        + String(stats.unsupported)
+        + String(',"agreed_script_inputs":')
+        + String(stats.agreed)
+        + String(',"disagreed_script_inputs":')
+        + String(stats.disagreed)
+        + String(',"unsupported_by_reason":{"p2sh":')
+        + String(stats.unsupported_p2sh)
+        + String(',"segwit_v0":')
+        + String(stats.unsupported_segwit_v0)
+        + String(',"legacy_other":')
+        + String(stats.unsupported_legacy_other)
+        + String(',"other":')
+        + String(stats.unsupported_other)
+        + String('},"timing_ms":{"p2pkh_ecdsa":')
+        + String(stats.p2pkh_ecdsa_ms)
+        + String(',"taproot_schnorr":')
+        + String(stats.taproot_schnorr_ms)
+        + String(',"taproot_tweak":')
+        + String(stats.taproot_tweak_ms)
+        + String('},"counts_by_supported_family":{"p2pkh_ecdsa":')
+        + String(stats.p2pkh_ecdsa_inputs)
+        + String(',"taproot":')
+        + String(stats.taproot_inputs)
+        + String(',"taproot_script_path":')
+        + String(stats.taproot_script_path_inputs)
+        + String('},"first_disagreement":')
+        + first
+        + String("}")
+    )^
 
 
 def telemetry_tick_count_for_target(target: Int, progress_interval: Int) -> Int:
@@ -1638,6 +1826,50 @@ def verify_script_jobs_sequential(
     return stats^
 
 
+def verify_script_jobs_shadow_crypto_diagnostic(
+    mut native: Native,
+    shim_path: String,
+    height: Int,
+    ref contexts: List[ScriptVerifyContext],
+    ref jobs: List[ScriptVerifyJob],
+    mut shadow_stats: ShadowCryptoStats,
+) raises:
+    if len(jobs) == 0:
+        return
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_PURE)
+    for i in range(len(jobs)):
+        shadow_stats.attempted += 1
+        var family = shadow_crypto_supported_family(jobs[i])
+        if family == "":
+            shadow_crypto_record_unsupported(shadow_stats, shadow_crypto_unsupported_reason(jobs[i]))
+            continue
+        shadow_stats.supported += 1
+        var started = native.now_ms()
+        var result = verify_script_job(
+            shim_path,
+            crypto,
+            jobs[i],
+            contexts,
+            False,
+        )
+        var elapsed = native.now_ms() - started
+        if family == "p2pkh_ecdsa":
+            shadow_stats.p2pkh_ecdsa_ms += elapsed
+            shadow_stats.p2pkh_ecdsa_inputs += 1
+        elif family == "taproot":
+            shadow_stats.taproot_schnorr_ms += elapsed
+            shadow_stats.taproot_inputs += 1
+            if jobs[i].context_index >= 0 and jobs[i].context_index < len(contexts):
+                if tx_witness_count(contexts[jobs[i].context_index].tx, jobs[i].input_index) > 1:
+                    shadow_stats.taproot_tweak_ms += elapsed
+                    shadow_stats.taproot_script_path_inputs += 1
+        if result.ok:
+            shadow_stats.agreed += 1
+        else:
+            shadow_stats.disagreed += 1
+            shadow_crypto_record_first_disagreement(shadow_stats, height, jobs[i], result)
+
+
 def verify_script_jobs_parallel_diagnostic(
     mut native: Native,
     shim_path: String,
@@ -1720,6 +1952,8 @@ def connect_block(
     ref block: Block,
     current_utxos: Int,
     mut timing: ConnectTiming,
+    shadow_crypto_enabled: Bool,
+    mut shadow_stats: ShadowCryptoStats,
 ) raises -> Int:
     if len(block.txs) == 0:
         raise Error("block has no transactions")
@@ -1970,6 +2204,15 @@ def connect_block(
     hotpath_add(timing.hotpath, verify_stats.hotpath)
     if verify_stats.batches > 0 or timing.script_parallel_batches == 0:
         timing.script_runner_thread_count = verify_stats.threads
+    if shadow_crypto_enabled:
+        verify_script_jobs_shadow_crypto_diagnostic(
+            native,
+            shim_path,
+            height,
+            verify_contexts,
+            script_jobs,
+            shadow_stats,
+        )
 
     var apply_started = native.now_ms()
     var new_utxos = current_utxos - delta.external_spends + block_delta_unspent_created(delta)
@@ -2457,6 +2700,7 @@ def local_reference_proof(
     target: Int,
     result_path: String,
     progress_interval: Int,
+    shadow_crypto_enabled: Bool,
 ) raises -> ProofResult:
     var benchmark_gate = benchmark_gate_for_target(target)
     var benchmark_kind = benchmark_gate + String("_p2p")
@@ -2471,6 +2715,8 @@ def local_reference_proof(
     var db = native.rocksdb_open(datadir)
     var timing = ConnectTiming()
     timing.hotpath = hotpath_profile_from_env()
+    var shadow_stats = ShadowCryptoStats()
+    shadow_stats.enabled = shadow_crypto_enabled
     var current_utxos = 0
     var blocks_fetched = 0
     var blocks_connected = 0
@@ -2506,7 +2752,17 @@ def local_reference_proof(
                     if tx_count_index != 0:
                         current_block_vin_count += len(blocks[i].txs[tx_count_index].tx.inputs)
                         current_block_script_input_count += len(blocks[i].txs[tx_count_index].tx.inputs)
-                current_utxos = connect_block(native, db, shim_path, height, blocks[i], current_utxos, timing)
+                current_utxos = connect_block(
+                    native,
+                    db,
+                    shim_path,
+                    height,
+                    blocks[i],
+                    current_utxos,
+                    timing,
+                    shadow_crypto_enabled,
+                    shadow_stats,
+                )
                 refresh_crypto_metrics(native, timing)
                 timing.block_connect_store_commit += native.now_ms() - block_started
                 blocks_fetched += 1
@@ -2553,7 +2809,9 @@ def local_reference_proof(
             + String('","benchmark_lane":"')
             + benchmark_kind
             + String('",')
-            + String('"benchmark_comparability":"comparable","implementation":"Mojo","port":"mojo","node_id":"mojobitnode","chain":"testnet4",')
+            + String('"benchmark_comparability":"')
+            + (String("diagnostic_non_comparable") if shadow_crypto_enabled else String("comparable"))
+            + String('","implementation":"Mojo","port":"mojo","node_id":"mojobitnode","chain":"testnet4",')
             + String('"runtime_surface":"')
             + surface
             + String('","target_height":')
@@ -2589,6 +2847,8 @@ def local_reference_proof(
             + String(current_utxos)
             + String(',"utxo_accounting_policy":"core_spendable_v1","sync_status":"blocks_current","status":"passed","result":"passed",')
             + String('"current_blocker":null,"binary_gate_status":"not_attempted","failures":[],')
+            + shadow_crypto_json(shadow_stats)
+            + String(",")
             + String('"reference_start_height":0,"reference_start_hash":"')
             + String(GENESIS_HASH_DISPLAY)
             + String('","reference_finish_height":')

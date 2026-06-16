@@ -30,18 +30,27 @@ HOST_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_host_script_corpus_s
 DOCKER_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_docker_script_corpus_shadow_$(RESULT_DATE).json
 HOST_PURE_CRYPTO_PROFILE_RESULT ?= .benchmark-results/mojo_host_pure_crypto_profile_$(RESULT_DATE).json
 DOCKER_PURE_CRYPTO_PROFILE_RESULT ?= .benchmark-results/mojo_docker_pure_crypto_profile_$(RESULT_DATE).json
+HOST_SHADOW_5K_PROOF_RESULT ?= .benchmark-results/mojo_host_shadow_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_SHADOW_5K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shadow_baseline_5k_benchmark_$(RESULT_DATE).json
+HOST_SHADOW_50K_PROOF_RESULT ?= .benchmark-results/mojo_host_shadow_shakedown_50k_benchmark_$(RESULT_DATE).json
+DOCKER_SHADOW_50K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shadow_shakedown_50k_benchmark_$(RESULT_DATE).json
 SCRIPT_CORPUS_RESULT ?= ../Shared/conformance/results/mojo_script_corpus_$(RESULT_DATE).json
 HOST_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_host_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_docker_baseline_5k_benchmark_$(RESULT_DATE).json
 HOST_50K_PROOF_RESULT ?= .benchmark-results/mojo_host_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_50K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
+HOST_SHADOW_5K_DATA_DIR ?= ./data-mojo-shadow-5k-proof
+HOST_SHADOW_50K_DATA_DIR ?= ./data-mojo-shadow-50k-proof
 FIXTURE_ID ?= scripts.bare_multisig_27840
 FIXTURE_SET ?= all
 DATA_VOLUME ?= mojobitnode_data
 PROOF_VOLUME ?= mojobitnode_proof_data
 PROOF_50K_VOLUME ?= mojobitnode_50k_proof_data
+SHADOW_5K_PROOF_VOLUME ?= mojobitnode_shadow_5k_proof_data
+SHADOW_50K_PROOF_VOLUME ?= mojobitnode_shadow_50k_proof_data
 DOCKER_SYNC_TARGET ?= 5000
 PROGRESS ?= 500
+PROOF_EXTRA_ARGS ?=
 MOJOBITNODE_PAR_SCRIPT_VERIFY ?= 0
 MOJOBITNODE_SCRIPT_THREADS ?= 0
 MOJOBITNODE_SCRIPT_MIN_INPUTS ?= 2
@@ -49,8 +58,8 @@ MOJOBITNODE_PROFILE_HOTPATH ?= 0
 HOST_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-pure-crypto-profile host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-local-reference-proof host-shakedown-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-pure-crypto-profile docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-proof-local docker-proof-50k docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-pure-crypto-profile host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-local-reference-proof host-shakedown-50k-proof host-shadow-5k-proof host-shadow-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-pure-crypto-profile docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-proof-local docker-proof-50k docker-shadow-5k-proof docker-shadow-50k-proof docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -171,10 +180,21 @@ host-local-reference-proof: host-build
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(HOST_P2P_PEER) \
 	  --progress $(PROGRESS) \
+	  $(PROOF_EXTRA_ARGS) \
 	  --result-path $(HOST_LOCAL_PROOF_RESULT)
 
 host-shakedown-50k-proof:
 	$(MAKE) host-local-reference-proof DOCKER_SYNC_TARGET=50000 HOST_LOCAL_PROOF_RESULT=$(HOST_50K_PROOF_RESULT) PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+
+host-shadow-5k-proof:
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then rm -rf $(HOST_SHADOW_5K_DATA_DIR); fi
+	$(MAKE) host-local-reference-proof DOCKER_SYNC_TARGET=5000 PROOF_DATA_DIR=$(HOST_SHADOW_5K_DATA_DIR) HOST_LOCAL_PROOF_RESULT=$(HOST_SHADOW_5K_PROOF_RESULT) PROOF_EXTRA_ARGS=--shadow-crypto PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate baseline_5k --artifact $(HOST_SHADOW_5K_PROOF_RESULT)
+
+host-shadow-50k-proof:
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then rm -rf $(HOST_SHADOW_50K_DATA_DIR); fi
+	$(MAKE) host-local-reference-proof DOCKER_SYNC_TARGET=50000 PROOF_DATA_DIR=$(HOST_SHADOW_50K_DATA_DIR) HOST_LOCAL_PROOF_RESULT=$(HOST_SHADOW_50K_PROOF_RESULT) PROOF_EXTRA_ARGS=--shadow-crypto PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate shakedown_50k --artifact $(HOST_SHADOW_50K_PROOF_RESULT)
 
 host-smoke-once: host-build
 	@MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) status --datadir $(DATA_DIR) --json >/tmp/mojo_status.json; \
@@ -296,10 +316,19 @@ docker-proof-local:
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
 	  --progress $(PROGRESS) \
+	  $(PROOF_EXTRA_ARGS) \
 	  --result-path /benchmark-results/$(notdir $(DOCKER_LOCAL_PROOF_RESULT))
 
 docker-proof-50k:
 	$(MAKE) docker-proof-local PROOF_VOLUME=$(PROOF_50K_VOLUME) DOCKER_SYNC_TARGET=50000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_50K_PROOF_RESULT) PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+
+docker-shadow-5k-proof:
+	$(MAKE) docker-proof-local PROOF_VOLUME=$(SHADOW_5K_PROOF_VOLUME) DOCKER_SYNC_TARGET=5000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_SHADOW_5K_PROOF_RESULT) PROOF_EXTRA_ARGS=--shadow-crypto PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate baseline_5k --artifact $(DOCKER_SHADOW_5K_PROOF_RESULT)
+
+docker-shadow-50k-proof:
+	$(MAKE) docker-proof-local PROOF_VOLUME=$(SHADOW_50K_PROOF_VOLUME) DOCKER_SYNC_TARGET=50000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_SHADOW_50K_PROOF_RESULT) PROOF_EXTRA_ARGS=--shadow-crypto PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate shakedown_50k --artifact $(DOCKER_SHADOW_50K_PROOF_RESULT)
 
 docker-smoke-once:
 	@out=$$(DOCKER_DATA_VOLUME=$(DATA_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps --entrypoint /bin/sh mojobitnode -lc 'mojobitnode status --datadir /data --json >/tmp/status.json && printf "%s %s\n" "AGENT_LOOP_TICK_chatreport" "$$(cat /tmp/status.json)"'); \

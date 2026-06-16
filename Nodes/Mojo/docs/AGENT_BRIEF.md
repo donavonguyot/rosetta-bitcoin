@@ -78,6 +78,13 @@ disagreement and stay under the 5000ms per-row guardrail. Read
 benchmark claim; Project's campaign harness owns accepted control artifacts and
 current benchmark evidence.
 
+`local-reference-proof --shadow-crypto` is diagnostic-only. Native validation
+still accepts or rejects blocks; pure Mojo crypto only replays supported P2PKH
+and Taproot script jobs beside the native path and reports unsupported
+non-P2PKH ECDSA families explicitly. These artifacts must report
+an explicit diagnostic non-comparable marker and pass
+`validate_shadow_crypto_proof.py`; they are not Project-imported benchmark truth.
+
 ## Native Boundary
 
 `src/mojo_native_shim.c` is the owned native boundary for `libsecp256k1`
@@ -181,12 +188,16 @@ make host-pure-crypto-profile
 make host-native-boundary-audit
 make host-local-reference-proof
 make host-shakedown-50k-proof
+make host-shadow-5k-proof
+make host-shadow-50k-proof
 make docker-script-corpus
 make docker-script-corpus-shadow
 make docker-pure-crypto-profile
 make docker-native-boundary-audit
 make docker-proof-local
 make docker-proof-50k
+make docker-shadow-5k-proof
+make docker-shadow-50k-proof
 ```
 
 ## Current Gate Order

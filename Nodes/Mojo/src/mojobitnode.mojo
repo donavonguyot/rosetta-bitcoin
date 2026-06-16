@@ -1065,7 +1065,16 @@ def main() raises:
         return
 
     if command == "local-reference-proof":
-        var proof = local_reference_proof(shim_path, surface, datadir, peer, target, result_path, progress)
+        var proof = local_reference_proof(
+            shim_path,
+            surface,
+            datadir,
+            peer,
+            target,
+            result_path,
+            progress,
+            shadow_crypto,
+        )
         print(proof.json)
         return
 

@@ -68,6 +68,11 @@ native prerequisites a future port would need?
   measured slice enables them with zero disagreements and the 5000ms per-row
   guardrail. See
   `docs/LIBSECP_TRANSLATION_NOTES.md` before changing the pure secp internals.
+- `local-reference-proof --shadow-crypto` is a separate diagnostic live-chain
+  replay. Native validation still determines 5k/50k proof success, while pure
+  Mojo shadow crypto records supported, unsupported, agreed, and disagreed
+  script-input counts in a `shadow_crypto` object. Shadow proof artifacts carry
+  an explicit diagnostic non-comparable marker and stay Mojo-local.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,
@@ -107,6 +112,8 @@ make host-script-corpus
 make host-script-corpus-shadow
 make host-local-reference-proof
 make host-shakedown-50k-proof
+make host-shadow-5k-proof
+make host-shadow-50k-proof
 make host-smoke-once
 make host-toolchain-smoke
 make host-parallel-runner-smoke
@@ -134,6 +141,8 @@ make docker-script-corpus
 make docker-script-corpus-shadow
 make docker-proof-local
 make docker-proof-50k
+make docker-shadow-5k-proof
+make docker-shadow-50k-proof
 make docker-smoke-once
 make docker-toolchain-smoke
 make docker-parallel-runner-smoke
