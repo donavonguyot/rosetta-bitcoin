@@ -72,13 +72,18 @@ from script_corpus_foundation import (
 )
 from pure_secp import (
     pure_test_ecdsa_parse_der,
+    pure_test_ecdsa_glv_product_x,
+    pure_test_ecdsa_glv_result,
     pure_test_ecdsa_reference_product_x,
     pure_test_ecdsa_reference_result,
     pure_test_ecdsa_wnaf_product_x,
     pure_test_ecdsa_wnaf_result,
+    pure_test_endo_split_not_high,
+    pure_test_glv_constants,
     pure_test_odd_multiples_match_generator,
     pure_test_odd_multiples_match_pubkey,
     pure_test_odd_multiples_match_xonly,
+    pure_test_scalar_split_lambda_identity,
     pure_test_scalar_mul_g_is_infinity,
     pure_test_scalar_mul_g_x,
     pure_test_scalar_mul_g_y,
@@ -467,6 +472,7 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     var scalar_n_minus_one = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"))
     var scalar_n_plus_one = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364142"))
     var scalar_n_minus_two = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036413f"))
+    var scalar_half_n = _hex_bytes(String("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0"))
     var scalar_carry_b = _hex_bytes(String("fffffffffffffffffffffffffffffffdbaaedce6af48a03bbfd25e8cd0364141"))
     var scalar_carry_expected = _hex_bytes(String("0000000000000000000000000000000200000000000000000000000000000000"))
     assert_equal(bytes_to_hex(pure_test_u256_mul_mod(scalar_n, one, scalar_n.copy())), bytes_to_hex(zero))
@@ -479,6 +485,13 @@ def test_pure_secp_arithmetic_known_vectors() raises:
         String("409d760cc8e690cee14030d059b1d84a10c2b3aa3281a64aab2f9655bd397af1"),
     )
     assert_true(pure_test_scalar_mul_g_is_infinity(scalar_n))
+    assert_true(pure_test_glv_constants())
+    assert_true(pure_test_scalar_split_lambda_identity(zero))
+    assert_true(pure_test_scalar_split_lambda_identity(one))
+    assert_true(pure_test_scalar_split_lambda_identity(two))
+    assert_true(pure_test_scalar_split_lambda_identity(scalar_n_minus_one))
+    assert_true(pure_test_scalar_split_lambda_identity(scalar_half_n))
+    assert_true(pure_test_scalar_split_lambda_identity(high_a))
 
 
 def test_pure_schnorr_and_taproot_vectors() raises:
@@ -539,8 +552,13 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, msg), CRYPTO_RESULT_VALID)
     assert_equal(pure_test_ecdsa_reference_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
     assert_equal(pure_test_ecdsa_wnaf_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
+    assert_equal(pure_test_ecdsa_glv_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
     assert_true(pure_test_odd_multiples_match_generator(8))
     assert_true(pure_test_odd_multiples_match_pubkey(pubkey, 8))
+    var scalar_half_n = _hex_bytes(String("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0"))
+    var scalar_high = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"))
+    assert_true(pure_test_endo_split_not_high(scalar_half_n, pubkey))
+    assert_true(pure_test_endo_split_not_high(scalar_high, pubkey))
     var taproot_xonly = _hex_bytes(String("85a7b790fc9d962493788317e4874a4ab07f1e9c78c773c47f2f6c96df756f05"))
     assert_true(pure_test_odd_multiples_match_xonly(taproot_xonly, 8))
     assert_equal(
@@ -548,11 +566,16 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
         bytes_to_hex(pure_test_ecdsa_reference_product_x(pubkey, sig, msg)),
     )
     assert_equal(
+        bytes_to_hex(pure_test_ecdsa_glv_product_x(pubkey, sig, msg)),
+        bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, sig, msg)),
+    )
+    assert_equal(
         pure.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg),
         native.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg),
     )
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg), CRYPTO_RESULT_CONSENSUS_INVALID)
     assert_equal(pure_test_ecdsa_wnaf_result(pubkey, sig, wrong_msg), pure_test_ecdsa_reference_result(pubkey, sig, wrong_msg))
+    assert_equal(pure_test_ecdsa_glv_result(pubkey, sig, wrong_msg), pure_test_ecdsa_wnaf_result(pubkey, sig, wrong_msg))
 
     var high_s_sig = _hex_bytes(String("3045022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798022100a1dc3b8e6933781adc2049d3a49bb2435842447fa73e783dda3dd8a7c6a90d5d"))
     assert_equal(
@@ -561,6 +584,11 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     )
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, high_s_sig, msg), CRYPTO_RESULT_VALID)
     assert_equal(pure_test_ecdsa_wnaf_result(pubkey, high_s_sig, msg), pure_test_ecdsa_reference_result(pubkey, high_s_sig, msg))
+    assert_equal(pure_test_ecdsa_glv_result(pubkey, high_s_sig, msg), pure_test_ecdsa_wnaf_result(pubkey, high_s_sig, msg))
+    assert_equal(
+        bytes_to_hex(pure_test_ecdsa_glv_product_x(pubkey, high_s_sig, msg)),
+        bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, high_s_sig, msg)),
+    )
 
     var empty_pubkey = List[UInt8]()
     assert_equal(pure.verify_ecdsa_der_bytes(empty_pubkey, sig, msg), CRYPTO_RESULT_MALFORMED)

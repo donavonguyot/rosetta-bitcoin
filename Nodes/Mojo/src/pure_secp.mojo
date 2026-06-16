@@ -5,6 +5,9 @@ comptime VALID = Int32(0)
 comptime CONSENSUS_INVALID = Int32(1)
 comptime MALFORMED = Int32(2)
 comptime UNSUPPORTED = Int32(3)
+comptime ECDSA_PRODUCT_REFERENCE = Int(0)
+comptime ECDSA_PRODUCT_WNAF = Int(1)
+comptime ECDSA_PRODUCT_GLV = Int(2)
 
 
 struct U256(Copyable):
@@ -56,6 +59,23 @@ struct FieldPowBlocks(Copyable):
         self.x2 = U256()
         self.x22 = U256()
         self.x223 = U256()
+
+
+struct EndoSplit(Copyable):
+    var s1: U256
+    var p1: Point
+    var s2: U256
+    var p2: Point
+    var s1_negated: Bool
+    var s2_negated: Bool
+
+    def __init__(out self):
+        self.s1 = U256()
+        self.p1 = Point()
+        self.s2 = U256()
+        self.p2 = Point()
+        self.s1_negated = False
+        self.s2_negated = False
 
 
 def pure_backend_label() -> String:
@@ -132,6 +152,84 @@ def _scalar_half_n() -> U256:
         UInt32(0xFFFFFFFF),
         UInt32(0xFFFFFFFF),
         UInt32(0x7FFFFFFF),
+    )
+
+
+def _lambda() -> U256:
+    return _u256(
+        UInt32(0x1B23BD72),
+        UInt32(0xDF02967C),
+        UInt32(0x20816678),
+        UInt32(0x122E22EA),
+        UInt32(0x8812645A),
+        UInt32(0xA5261C02),
+        UInt32(0xC05C30E0),
+        UInt32(0x5363AD4C),
+    )
+
+
+def _minus_b1() -> U256:
+    return _u256(
+        UInt32(0x0ABFE4C3),
+        UInt32(0x6F547FA9),
+        UInt32(0x010E8828),
+        UInt32(0xE4437ED6),
+        UInt32(0x00000000),
+        UInt32(0x00000000),
+        UInt32(0x00000000),
+        UInt32(0x00000000),
+    )
+
+
+def _minus_b2() -> U256:
+    return _u256(
+        UInt32(0x3DB1562C),
+        UInt32(0xD765CDA8),
+        UInt32(0x0774346D),
+        UInt32(0x8A280AC5),
+        UInt32(0xFFFFFFFE),
+        UInt32(0xFFFFFFFF),
+        UInt32(0xFFFFFFFF),
+        UInt32(0xFFFFFFFF),
+    )
+
+
+def _glv_g1() -> U256:
+    return _u256(
+        UInt32(0x45DBB031),
+        UInt32(0xE893209A),
+        UInt32(0x71E8CA7F),
+        UInt32(0x3DAA8A14),
+        UInt32(0x9284EB15),
+        UInt32(0xE86C90E4),
+        UInt32(0xA7D46BCD),
+        UInt32(0x3086D221),
+    )
+
+
+def _glv_g2() -> U256:
+    return _u256(
+        UInt32(0x8AC47F71),
+        UInt32(0x1571B4AE),
+        UInt32(0x9DF506C6),
+        UInt32(0x221208AC),
+        UInt32(0x0ABFE4C4),
+        UInt32(0x6F547FA9),
+        UInt32(0x010E8828),
+        UInt32(0xE4437ED6),
+    )
+
+
+def _beta() -> U256:
+    return _u256(
+        UInt32(0x719501EE),
+        UInt32(0xC1396C28),
+        UInt32(0x12F58995),
+        UInt32(0x9CF04975),
+        UInt32(0xAC3434E9),
+        UInt32(0x6E64479E),
+        UInt32(0x657C0710),
+        UInt32(0x7AE96A2B),
     )
 
 
@@ -1018,6 +1116,89 @@ def _wnaf_generator_add(mut result: JacobianPoint, digit: Int) raises -> Jacobia
     return _jacobian_add_affine(result, point)
 
 
+def _scalar_mul_shift_384(ref a: U256, ref b: U256) -> U256:
+    var product = _schoolbook_product_4x64(a, b)
+    var out = U256()
+    out.limbs[0] = product[6]
+    out.limbs[1] = product[7]
+    out.limbs[2] = product[8]
+    out.limbs[3] = UInt64(0)
+    var roundbit = UInt32((product[5] >> UInt64(63)) & UInt64(1))
+    return _add_small_raw(out, roundbit)
+
+
+def _scalar_split_lambda(ref k: U256) -> EndoSplit:
+    var g1 = _glv_g1()
+    var g2 = _glv_g2()
+    var minus_b1 = _minus_b1()
+    var minus_b2 = _minus_b2()
+    var lam = _lambda()
+    var n = _scalar_n()
+
+    var c1 = _scalar_mul_shift_384(k, g1)
+    var c2 = _scalar_mul_shift_384(k, g2)
+    c1 = _scalar_mul_mod(c1, minus_b1)
+    c2 = _scalar_mul_mod(c2, minus_b2)
+
+    var out = EndoSplit()
+    out.s2 = _scalar_add(c1, c2)
+    out.s1 = _scalar_mul_mod(out.s2, lam)
+    out.s1 = _sub_mod(_zero(), out.s1, n)
+    out.s1 = _scalar_add(out.s1, k)
+    return out^
+
+
+def _scalar_is_high(ref scalar: U256) -> Bool:
+    var half_n = _scalar_half_n()
+    return _cmp(scalar, half_n) > 0
+
+
+def _ge_mul_beta(ref point: Point) -> Point:
+    if point.infinity:
+        return point.copy()
+    var beta = _beta()
+    var out = point.copy()
+    out.x = _fe_mul(out.x, beta)
+    return out^
+
+
+def _endo_split(ref scalar: U256, ref point: Point) -> EndoSplit:
+    var out = _scalar_split_lambda(scalar)
+    var n = _scalar_n()
+    out.p1 = point.copy()
+    out.p2 = _ge_mul_beta(point)
+    if _scalar_is_high(out.s1):
+        out.s1 = _sub_mod(_zero(), out.s1, n)
+        out.p1 = _point_neg(out.p1)
+        out.s1_negated = True
+    if _scalar_is_high(out.s2):
+        out.s2 = _sub_mod(_zero(), out.s2, n)
+        out.p2 = _point_neg(out.p2)
+        out.s2_negated = True
+    return out^
+
+
+def _point_table_copy(ref table: List[Point]) -> List[Point]:
+    var out = List[Point]()
+    for i in range(len(table)):
+        out.append(table[i].copy())
+    return out^
+
+
+def _point_table_neg(ref table: List[Point]) -> List[Point]:
+    var out = List[Point]()
+    for i in range(len(table)):
+        out.append(_point_neg(table[i]))
+    return out^
+
+
+def _point_table_beta(ref table: List[Point]) -> List[Point]:
+    var out = List[Point]()
+    for i in range(len(table)):
+        out.append(_ge_mul_beta(table[i]))
+    return out^
+
+
 def _double_base_mul_wnaf(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Point) raises -> JacobianPoint:
     var width = 5
     var g_wnaf = _wnaf_recode(g_scalar, width)
@@ -1036,6 +1217,42 @@ def _double_base_mul_wnaf(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Po
             result = _wnaf_generator_add(result, g_wnaf[i])
         if i < len(p_wnaf):
             result = _wnaf_table_add(result, p_table, p_wnaf[i])
+    return result^
+
+
+def _double_base_mul_wnaf_glv(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Point) raises -> JacobianPoint:
+    var width = 5
+    var g_wnaf = _wnaf_recode(g_scalar, width)
+    var split = _endo_split(p_scalar, pubkey)
+    var s1_wnaf = _wnaf_recode(split.s1, width)
+    var s2_wnaf = _wnaf_recode(split.s2, width)
+
+    var q_table = _odd_multiples(pubkey, 8)
+    var s1_table = _point_table_copy(q_table)
+    if split.s1_negated:
+        s1_table = _point_table_neg(q_table)
+    var beta_table = _point_table_beta(q_table)
+    var s2_table = _point_table_copy(beta_table)
+    if split.s2_negated:
+        s2_table = _point_table_neg(beta_table)
+
+    var max_len = len(g_wnaf)
+    if len(s1_wnaf) > max_len:
+        max_len = len(s1_wnaf)
+    if len(s2_wnaf) > max_len:
+        max_len = len(s2_wnaf)
+
+    var result = JacobianPoint()
+    for j in range(max_len):
+        var i = max_len - 1 - j
+        if not result.infinity:
+            result = _jacobian_double(result)
+        if i < len(g_wnaf):
+            result = _wnaf_generator_add(result, g_wnaf[i])
+        if i < len(s1_wnaf):
+            result = _wnaf_table_add(result, s1_table, s1_wnaf[i])
+        if i < len(s2_wnaf):
+            result = _wnaf_table_add(result, s2_table, s2_wnaf[i])
     return result^
 
 
@@ -1389,7 +1606,7 @@ def pure_verify_ecdsa_der_bytes(
     ref der: List[UInt8],
     ref digest: List[UInt8],
 ) raises -> Int32:
-    return _pure_verify_ecdsa_der_bytes_with_mode(pubkey, der, digest, True)
+    return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_GLV)
 
 
 def _pure_verify_ecdsa_der_bytes_with_mode(
@@ -1397,6 +1614,17 @@ def _pure_verify_ecdsa_der_bytes_with_mode(
     ref der: List[UInt8],
     ref digest: List[UInt8],
     use_wnaf: Bool,
+) raises -> Int32:
+    if use_wnaf:
+        return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_GLV)
+    return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_REFERENCE)
+
+
+def _pure_verify_ecdsa_der_bytes_with_product_mode(
+    ref pubkey: List[UInt8],
+    ref der: List[UInt8],
+    ref digest: List[UInt8],
+    product_mode: Int,
 ) raises -> Int32:
     if (len(pubkey) != 33 and len(pubkey) != 65) or len(der) == 0 or len(der) > 72 or len(digest) != 32:
         return MALFORMED
@@ -1421,7 +1649,9 @@ def _pure_verify_ecdsa_der_bytes_with_mode(
     var u1 = _scalar_mul_mod(z, w)
     var u2 = _scalar_mul_mod(sig.r, w)
     var product = JacobianPoint()
-    if use_wnaf:
+    if product_mode == ECDSA_PRODUCT_GLV:
+        product = _double_base_mul_wnaf_glv(u1, u2, q)
+    elif product_mode == ECDSA_PRODUCT_WNAF:
         product = _double_base_mul_wnaf(u1, u2, q)
     else:
         product = _double_base_mul(u1, _generator(), u2, q)
@@ -1664,6 +1894,46 @@ def pure_test_ecdsa_u_scalars(ref der: List[UInt8], ref digest: List[UInt8]) rai
     return out^
 
 
+def pure_test_glv_constants() -> Bool:
+    var beta = _beta()
+    var one = _one()
+    var beta_for_square = beta.copy()
+    var beta2 = _fe_mul(beta, beta_for_square)
+    var beta3 = _fe_mul(beta2, beta)
+    if not _eq(beta3, one):
+        return False
+    if _eq(beta, one):
+        return False
+
+    var lam = _lambda()
+    var lam_for_square = lam.copy()
+    var lambda2 = _scalar_mul_mod(lam, lam_for_square)
+    var lambda3 = _scalar_mul_mod(lambda2, lam)
+    if not _eq(lambda3, one):
+        return False
+    if _eq(lam, one):
+        return False
+    return True
+
+
+def pure_test_scalar_split_lambda_identity(ref scalar: List[UInt8]) raises -> Bool:
+    var n = _scalar_n()
+    var k = _reduce_once(_from_be32(scalar), n)
+    var split = _scalar_split_lambda(k)
+    var lam = _lambda()
+    var lambda_r2 = _scalar_mul_mod(lam, split.s2)
+    var recomposed = _scalar_add(split.s1, lambda_r2)
+    return _eq(recomposed, k)
+
+
+def pure_test_endo_split_not_high(ref scalar: List[UInt8], ref pubkey: List[UInt8]) raises -> Bool:
+    var n = _scalar_n()
+    var k = _reduce_once(_from_be32(scalar), n)
+    var q = _parse_pubkey(pubkey)
+    var split = _endo_split(k, q)
+    return not _scalar_is_high(split.s1) and not _scalar_is_high(split.s2)
+
+
 def pure_test_ecdsa_reference_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
     var sig = _parse_ecdsa_der(der)
     var q = _parse_pubkey(pubkey)
@@ -1700,12 +1970,34 @@ def pure_test_ecdsa_wnaf_product_x(ref pubkey: List[UInt8], ref der: List[UInt8]
     return _to_be32(point.x)
 
 
+def pure_test_ecdsa_glv_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var q = _parse_pubkey(pubkey)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _jacobian_to_affine(_double_base_mul_wnaf_glv(u1, u2, q))
+    if point.infinity:
+        raise Error("ECDSA GLV product is infinity")
+    return _to_be32(point.x)
+
+
 def pure_test_ecdsa_reference_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
-    return _pure_verify_ecdsa_der_bytes_with_mode(pubkey, der, digest, False)
+    return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_REFERENCE)
 
 
 def pure_test_ecdsa_wnaf_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
-    return _pure_verify_ecdsa_der_bytes_with_mode(pubkey, der, digest, True)
+    return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_WNAF)
+
+
+def pure_test_ecdsa_glv_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
+    return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_GLV)
 
 
 def _point_lists_equal(ref a: List[Point], ref b: List[Point]) -> Bool:

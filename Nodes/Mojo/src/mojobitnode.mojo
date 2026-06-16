@@ -11,6 +11,8 @@ from pure_secp import (
     pure_test_ecdsa_normalized_s,
     pure_test_ecdsa_parse_der,
     pure_test_ecdsa_parse_pubkey_x,
+    pure_test_ecdsa_glv_product_x,
+    pure_test_ecdsa_glv_result,
     pure_test_ecdsa_reference_product_x,
     pure_test_ecdsa_reference_result,
     pure_test_ecdsa_u_scalars,
@@ -510,6 +512,14 @@ def pure_crypto_profile_json(shim_path: String, surface: String) raises -> Strin
     var affine_and_result_ms = clock.now_ms() - started
 
     started = clock.now_ms()
+    var glv_x = pure_test_ecdsa_glv_product_x(pubkey, sig, msg)
+    var glv_double_base_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
+    var glv_result = pure_test_ecdsa_glv_result(pubkey, sig, msg)
+    var glv_affine_and_result_ms = clock.now_ms() - started
+
+    started = clock.now_ms()
     var reference_result = pure_test_ecdsa_reference_result(pubkey, sig, msg)
     var reference_result_ms = clock.now_ms() - started
 
@@ -518,9 +528,10 @@ def pure_crypto_profile_json(shim_path: String, surface: String) raises -> Strin
     var native_compare_ms = clock.now_ms() - started
 
     var wnaf_matches_reference = bytes_equal(wnaf_x, reference_x) and wnaf_result == reference_result
-    var matches_native = wnaf_result == native_result
+    var glv_matches_wnaf = bytes_equal(glv_x, wnaf_x) and glv_result == wnaf_result
+    var matches_native = glv_result == native_result
     var result = String("diagnostic")
-    if not wnaf_matches_reference or not matches_native:
+    if not wnaf_matches_reference or not glv_matches_wnaf or not matches_native:
         result = String("failed")
 
     var total_ms = clock.now_ms() - total_started
@@ -547,6 +558,10 @@ def pure_crypto_profile_json(shim_path: String, surface: String) raises -> Strin
         + String(wnaf_double_base_ms)
         + String(',"wnaf_affine_result":')
         + String(affine_and_result_ms)
+        + String(',"glv_double_base_plus_affine":')
+        + String(glv_double_base_ms)
+        + String(',"glv_affine_result":')
+        + String(glv_affine_and_result_ms)
         + String(',"reference_result":')
         + String(reference_result_ms)
         + String(',"native_result_compare":')
@@ -565,11 +580,15 @@ def pure_crypto_profile_json(shim_path: String, surface: String) raises -> Strin
         + String(reference_result)
         + String(',"wnaf_result_code":')
         + String(wnaf_result)
+        + String(',"glv_result_code":')
+        + String(glv_result)
         + String(',"native_result_code":')
         + String(native_result)
         + String(',"wnaf_matches_reference":')
         + bool_json(wnaf_matches_reference)
-        + String(',"wnaf_matches_native":')
+        + String(',"glv_matches_wnaf":')
+        + bool_json(glv_matches_wnaf)
+        + String(',"glv_matches_native":')
         + bool_json(matches_native)
         + String(',"total_ms":')
         + String(total_ms)
