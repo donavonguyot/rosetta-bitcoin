@@ -56,7 +56,14 @@ The implementation follows formulas and structure from Bitcoin Core's
   reference. The diagnostic path now also has a libsecp-guided wNAF verifier:
   scalar recoding follows the `secp256k1_ecmult_wnaf` shape, generator odd
   multiples are precomputed for small windows, and arbitrary public-key odd
-  multiples are built per verification call.
+  multiples are built per verification call. The per-call public-key table is
+  now built in Jacobian form and converted with one Montgomery-style batched
+  field inversion, mirroring `ge_set_all_gej`, instead of paying one affine
+  inversion per odd multiple.
+- Field inverse and square-root now use the secp256k1 addition-chain block
+  structure rather than generic Fermat exponentiation. `_pow_mod_field` remains
+  as a reference/test helper, but live `_fe_inv` and `_fe_sqrt` route through
+  the addition-chain tails.
 - `pure-crypto-profile` records stage timings for DER parse, pubkey parse/lift,
   high-S normalization, scalar inverse, scalar multiplication, reference
   double-base, wNAF double-base, affine conversion, and native-result
@@ -89,8 +96,8 @@ shadow path for differential testing and language-specific learning.
 
 ## Deferred Libsecp Shapes
 
-The current pure path still uses the existing inversion algorithms, the current
-Schnorr/Taproot multiplication routing, and exact 4x64 normalization after each
-operation. Inversion addition chains, safegcd, GLV decomposition, broader fixed
-generator tables, tagged-hash midstates, and any 5x52 lazy field representation
-are intentionally deferred to later measured slices.
+The current pure path still uses the existing scalar inverse algorithm, the
+current Schnorr/Taproot multiplication routing, and exact 4x64 normalization
+after each operation. Safegcd, GLV decomposition, broader fixed generator
+tables, tagged-hash midstates, and any 5x52 lazy field representation are
+intentionally deferred to later measured slices.

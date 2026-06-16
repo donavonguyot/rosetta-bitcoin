@@ -76,15 +76,22 @@ from pure_secp import (
     pure_test_ecdsa_reference_result,
     pure_test_ecdsa_wnaf_product_x,
     pure_test_ecdsa_wnaf_result,
+    pure_test_odd_multiples_match_generator,
+    pure_test_odd_multiples_match_pubkey,
+    pure_test_odd_multiples_match_xonly,
     pure_test_scalar_mul_g_is_infinity,
     pure_test_scalar_mul_g_x,
     pure_test_scalar_mul_g_y,
     pure_test_schnorr_challenge,
     pure_test_u256_add_mod,
+    pure_test_u256_inv_field_fast,
+    pure_test_u256_inv_field_reference,
     pure_test_u256_inv_mod,
     pure_test_u256_mul_field_fast,
     pure_test_u256_mul_mod,
     pure_test_u256_mul_scalar_fast,
+    pure_test_u256_sqrt_field_fast,
+    pure_test_u256_sqrt_field_reference,
     pure_test_u256_square_field,
     pure_test_u256_sub_mod,
 )
@@ -362,6 +369,27 @@ def _hex_bytes(text: String) raises -> List[UInt8]:
     return hex_text_to_bytes(ascii_string_to_bytes(text))
 
 
+def assert_field_inverse_matches_reference(ref candidate: List[UInt8], ref one: List[UInt8]) raises:
+    assert_equal(
+        bytes_to_hex(pure_test_u256_inv_field_fast(candidate)),
+        bytes_to_hex(pure_test_u256_inv_field_reference(candidate)),
+    )
+    var inv_candidate = pure_test_u256_inv_field_fast(candidate)
+    assert_equal(
+        bytes_to_hex(pure_test_u256_mul_field_fast(candidate, inv_candidate)),
+        bytes_to_hex(one),
+    )
+
+
+def assert_field_sqrt_matches_reference(ref residue: List[UInt8]) raises:
+    assert_equal(
+        bytes_to_hex(pure_test_u256_sqrt_field_fast(residue)),
+        bytes_to_hex(pure_test_u256_sqrt_field_reference(residue)),
+    )
+    var root = pure_test_u256_sqrt_field_fast(residue)
+    assert_equal(bytes_to_hex(pure_test_u256_square_field(root)), bytes_to_hex(residue))
+
+
 def test_pure_secp_arithmetic_known_vectors() raises:
     var field_p = _hex_bytes(String("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"))
     var two = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000000002"))
@@ -387,6 +415,12 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     assert_equal(bytes_to_hex(pure_test_u256_mul_mod(field_p, one, field_p.copy())), bytes_to_hex(zero))
     assert_equal(bytes_to_hex(pure_test_u256_mul_mod(p_plus_one, one, field_p)), bytes_to_hex(one))
     assert_equal(bytes_to_hex(pure_test_u256_inv_mod(two, field_p)), bytes_to_hex(inv_two))
+    assert_field_inverse_matches_reference(one, one.copy())
+    assert_field_inverse_matches_reference(two, one)
+    assert_field_inverse_matches_reference(p_minus_one, one)
+    assert_field_inverse_matches_reference(p_plus_one, one)
+    assert_field_inverse_matches_reference(p_minus_two, one)
+    assert_field_inverse_matches_reference(high_a, one)
     assert_equal(bytes_to_hex(pure_test_u256_mul_field_fast(p_minus_one, carry_field_b)), bytes_to_hex(carry_field_expected))
     assert_equal(bytes_to_hex(pure_test_u256_mul_field_fast(p_minus_two, p_minus_two.copy())), bytes_to_hex(four))
     assert_equal(
@@ -402,6 +436,8 @@ def test_pure_secp_arithmetic_known_vectors() raises:
         String("422effa10d0f872f33c4ad3ee7134e1b01485ff67d9fd681aa8caeb057552e0c"),
     )
     assert_equal(bytes_to_hex(pure_test_u256_square_field(high_a)), bytes_to_hex(high_a_square))
+    assert_field_sqrt_matches_reference(four)
+    assert_field_sqrt_matches_reference(high_a_square)
     assert_equal(bytes_to_hex(pure_test_u256_square_field(p_minus_one)), bytes_to_hex(one))
     assert_equal(bytes_to_hex(pure_test_u256_square_field(p_minus_two)), bytes_to_hex(four))
     assert_equal(
@@ -503,6 +539,10 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, msg), CRYPTO_RESULT_VALID)
     assert_equal(pure_test_ecdsa_reference_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
     assert_equal(pure_test_ecdsa_wnaf_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
+    assert_true(pure_test_odd_multiples_match_generator(8))
+    assert_true(pure_test_odd_multiples_match_pubkey(pubkey, 8))
+    var taproot_xonly = _hex_bytes(String("85a7b790fc9d962493788317e4874a4ab07f1e9c78c773c47f2f6c96df756f05"))
+    assert_true(pure_test_odd_multiples_match_xonly(taproot_xonly, 8))
     assert_equal(
         bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, sig, msg)),
         bytes_to_hex(pure_test_ecdsa_reference_product_x(pubkey, sig, msg)),

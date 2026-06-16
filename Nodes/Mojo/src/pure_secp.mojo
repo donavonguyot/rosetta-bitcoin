@@ -47,6 +47,17 @@ struct EcdsaSignature(Copyable):
         self.s = U256()
 
 
+struct FieldPowBlocks(Copyable):
+    var x2: U256
+    var x22: U256
+    var x223: U256
+
+    def __init__(out self):
+        self.x2 = U256()
+        self.x22 = U256()
+        self.x223 = U256()
+
+
 def pure_backend_label() -> String:
     return String("mojo-pure-secp256k1")
 
@@ -511,6 +522,30 @@ def _pow_mod_field(ref base: U256, ref exponent: U256) -> U256:
     return result^
 
 
+def _fe_sqr_n(ref a: U256, count: Int) -> U256:
+    var out = a.copy()
+    for _ in range(count):
+        out = _fe_sqr(out)
+    return out^
+
+
+def _fe_pow_blocks(ref a: U256) -> FieldPowBlocks:
+    var out = FieldPowBlocks()
+    var x2 = _fe_mul(_fe_sqr(a), a)
+    var x3 = _fe_mul(_fe_sqr(x2), a)
+    var x6 = _fe_mul(_fe_sqr_n(x3, 3), x3)
+    var x9 = _fe_mul(_fe_sqr_n(x6, 3), x3)
+    var x11 = _fe_mul(_fe_sqr_n(x9, 2), x2)
+    out.x2 = x2.copy()
+    out.x22 = _fe_mul(_fe_sqr_n(x11, 11), x11)
+    var x44 = _fe_mul(_fe_sqr_n(out.x22, 22), out.x22)
+    var x88 = _fe_mul(_fe_sqr_n(x44, 44), x44)
+    var x176 = _fe_mul(_fe_sqr_n(x88, 88), x88)
+    var x220 = _fe_mul(_fe_sqr_n(x176, 44), x44)
+    out.x223 = _fe_mul(_fe_sqr_n(x220, 3), x3)
+    return out^
+
+
 def _mul_mod_field_fast(ref a: U256, ref b: U256) -> U256:
     var product = _schoolbook_product_4x64(a, b)
     return _reduce_field_product(product)
@@ -641,13 +676,27 @@ def _fe_sqr(ref a: U256) -> U256:
 
 
 def _fe_inv(ref a: U256) -> U256:
-    var exp = _field_p_minus_2()
-    return _pow_mod_field(a, exp)
+    var blocks = _fe_pow_blocks(a)
+    var out = _fe_sqr_n(blocks.x223, 23)
+    out = _fe_mul(out, blocks.x22)
+    out = _fe_sqr_n(out, 5)
+    out = _fe_mul(out, a)
+    out = _fe_sqr_n(out, 3)
+    out = _fe_mul(out, blocks.x2)
+    out = _fe_sqr_n(out, 2)
+    out = _fe_mul(out, a)
+    return out^
 
 
 def _fe_sqrt(ref a: U256) -> U256:
-    var exp = _field_sqrt_exp()
-    return _pow_mod_field(a, exp)
+    var blocks = _fe_pow_blocks(a)
+    var out = _fe_sqr_n(blocks.x223, 23)
+    out = _fe_mul(out, blocks.x22)
+    out = _fe_sqr_n(out, 6)
+    out = _fe_mul(out, blocks.x2)
+    out = _fe_sqr(out)
+    out = _fe_sqr(out)
+    return out^
 
 
 def _scalar_add(ref a: U256, ref b: U256) -> U256:
@@ -789,6 +838,46 @@ def _jacobian_add_affine(ref point: JacobianPoint, ref affine: Point) -> Jacobia
     return out^
 
 
+def _jacobian_add(ref a: JacobianPoint, ref b: JacobianPoint) -> JacobianPoint:
+    if a.infinity:
+        return b.copy()
+    if b.infinity:
+        return a.copy()
+
+    var z22 = _fe_sqr(b.z)
+    var z12 = _fe_sqr(a.z)
+    var u1 = _fe_mul(a.x, z22)
+    var u2 = _fe_mul(b.x, z12)
+    var s1 = _fe_mul(_fe_mul(a.y, z22), b.z)
+    var s2 = _fe_mul(_fe_mul(b.y, z12), a.z)
+    var h = _fe_sub(u2, u1)
+    var i = _fe_sub(s1, s2)
+    if _is_zero(h):
+        if _is_zero(i):
+            return _jacobian_double(a)
+        return JacobianPoint()
+
+    var t = _fe_mul(h, b.z)
+    var h2 = _fe_sub(_zero(), _fe_sqr(h))
+    var h3 = _fe_mul(h2, h)
+    var tt = _fe_mul(u1, h2)
+    var x3 = _fe_sqr(i)
+    x3 = _fe_add(x3, h3)
+    x3 = _fe_add(x3, tt)
+    x3 = _fe_add(x3, tt)
+    var ty = _fe_add(tt, x3)
+    var y3 = _fe_mul(ty, i)
+    h3 = _fe_mul(h3, s1)
+    y3 = _fe_add(y3, h3)
+
+    var out = JacobianPoint()
+    out.x = x3^
+    out.y = y3^
+    out.z = _fe_mul(a.z, t)
+    out.infinity = False
+    return out^
+
+
 def _scalar_mul_jacobian(ref scalar: U256, ref point: Point) -> JacobianPoint:
     var result = JacobianPoint()
     if _is_zero(scalar) or point.infinity:
@@ -838,7 +927,7 @@ def _wnaf_recode(ref scalar: U256, width: Int) -> List[Int]:
     return digits^
 
 
-def _odd_multiples(ref point: Point, count: Int) -> List[Point]:
+def _odd_multiples_affine_reference(ref point: Point, count: Int) -> List[Point]:
     var table = List[Point]()
     if count <= 0:
         return table^
@@ -849,6 +938,58 @@ def _odd_multiples(ref point: Point, count: Int) -> List[Point]:
     for i in range(1, count):
         table.append(_point_add(table[i - 1], two_point))
     return table^
+
+
+def _ge_set_gej_zinv(ref point: JacobianPoint, ref z_inv: U256) -> Point:
+    var out = Point()
+    if point.infinity:
+        return out^
+    var z_inv2 = _fe_sqr(z_inv)
+    var z_inv3 = _fe_mul(z_inv2, z_inv)
+    out.x = _fe_mul(point.x, z_inv2)
+    out.y = _fe_mul(point.y, z_inv3)
+    out.infinity = False
+    return out^
+
+
+def _set_all_gej_to_affine(ref points: List[JacobianPoint]) raises -> List[Point]:
+    var out = List[Point]()
+    var count = len(points)
+    if count == 0:
+        return out^
+    var prefixes = List[U256]()
+    for i in range(count):
+        if points[i].infinity:
+            raise Error("unexpected infinity in Jacobian odd-multiple table")
+        if i == 0:
+            prefixes.append(points[i].z.copy())
+        else:
+            prefixes.append(_fe_mul(prefixes[i - 1], points[i].z))
+        out.append(Point())
+
+    var inv = _fe_inv(prefixes[count - 1])
+    var i = count - 1
+    while i > 0:
+        var z_inv = _fe_mul(prefixes[i - 1], inv)
+        inv = _fe_mul(inv, points[i].z)
+        out[i] = _ge_set_gej_zinv(points[i], z_inv)
+        i -= 1
+    out[0] = _ge_set_gej_zinv(points[0], inv)
+    return out^
+
+
+def _odd_multiples(ref point: Point, count: Int) raises -> List[Point]:
+    var table = List[JacobianPoint]()
+    if count <= 0:
+        return List[Point]()
+    var point_j = _jacobian_from_affine(point)
+    table.append(point_j.copy())
+    if count == 1:
+        return _set_all_gej_to_affine(table)
+    var two_point = _jacobian_double(point_j)
+    for i in range(1, count):
+        table.append(_jacobian_add(table[i - 1], two_point))
+    return _set_all_gej_to_affine(table)
 
 
 def _wnaf_table_add(mut result: JacobianPoint, ref table: List[Point], digit: Int) raises -> JacobianPoint:
@@ -1415,6 +1556,32 @@ def pure_test_u256_square_field(ref a: List[UInt8]) raises -> List[UInt8]:
     return _to_be32(_fe_sqr(_reduce_once(av, p)))
 
 
+def pure_test_u256_inv_field_fast(ref a: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var p = _field_p()
+    return _to_be32(_fe_inv(_reduce_once(av, p)))
+
+
+def pure_test_u256_inv_field_reference(ref a: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var p = _field_p()
+    var exp = _field_p_minus_2()
+    return _to_be32(_pow_mod_field(_reduce_once(av, p), exp))
+
+
+def pure_test_u256_sqrt_field_fast(ref a: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var p = _field_p()
+    return _to_be32(_fe_sqrt(_reduce_once(av, p)))
+
+
+def pure_test_u256_sqrt_field_reference(ref a: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var p = _field_p()
+    var exp = _field_sqrt_exp()
+    return _to_be32(_pow_mod_field(_reduce_once(av, p), exp))
+
+
 def pure_test_u256_inv_mod(ref a: List[UInt8], ref modulus: List[UInt8]) raises -> List[UInt8]:
     var av = _from_be32(a)
     var mv = _from_be32(modulus)
@@ -1539,3 +1706,37 @@ def pure_test_ecdsa_reference_result(ref pubkey: List[UInt8], ref der: List[UInt
 
 def pure_test_ecdsa_wnaf_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
     return _pure_verify_ecdsa_der_bytes_with_mode(pubkey, der, digest, True)
+
+
+def _point_lists_equal(ref a: List[Point], ref b: List[Point]) -> Bool:
+    if len(a) != len(b):
+        return False
+    for i in range(len(a)):
+        if a[i].infinity != b[i].infinity:
+            return False
+        if not a[i].infinity:
+            if not _eq(a[i].x, b[i].x) or not _eq(a[i].y, b[i].y):
+                return False
+    return True
+
+
+def pure_test_odd_multiples_match_generator(count: Int) raises -> Bool:
+    var generator = _generator()
+    var reference = _odd_multiples_affine_reference(generator, count)
+    var batched = _odd_multiples(generator, count)
+    return _point_lists_equal(reference, batched)
+
+
+def pure_test_odd_multiples_match_pubkey(ref pubkey: List[UInt8], count: Int) raises -> Bool:
+    var point = _parse_pubkey(pubkey)
+    var reference = _odd_multiples_affine_reference(point, count)
+    var batched = _odd_multiples(point, count)
+    return _point_lists_equal(reference, batched)
+
+
+def pure_test_odd_multiples_match_xonly(ref xonly: List[UInt8], count: Int) raises -> Bool:
+    var x = _from_be32(xonly)
+    var point = _lift_x(x)
+    var reference = _odd_multiples_affine_reference(point, count)
+    var batched = _odd_multiples(point, count)
+    return _point_lists_equal(reference, batched)
