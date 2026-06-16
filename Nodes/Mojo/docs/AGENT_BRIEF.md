@@ -85,6 +85,8 @@ families beside the native path and reports any future unsupported rows or
 disagreements explicitly. These artifacts must report
 an explicit diagnostic non-comparable marker and pass
 `validate_shadow_crypto_proof.py`; they are not Project-imported benchmark truth.
+The current Docker 5k diagnostic replay is clean: zero unsupported pure-shadow
+script inputs and zero disagreements at height 5000.
 
 ## Native Boundary
 

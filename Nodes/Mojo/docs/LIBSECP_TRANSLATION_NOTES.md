@@ -80,7 +80,9 @@ The live `local-reference-proof --shadow-crypto` path follows the same boundary:
 native validation remains the block-acceptance oracle, while pure Mojo crypto
 only produces diagnostic replay counts and disagreement context. Its proof JSON
 is explicitly `diagnostic_non_comparable` and must not be imported as Project
-benchmark truth.
+benchmark truth. The current Docker 5k diagnostic replay has zero unsupported
+pure-shadow script inputs and zero disagreements; it is a live-chain diagnostic,
+not a replacement for native `libsecp256k1` proof evidence.
 
 This implementation does not claim constant-time hardening. It is a verifier
 shadow path for differential testing and language-specific learning.

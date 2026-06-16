@@ -488,6 +488,10 @@ struct ShadowCryptoStats(Copyable):
     var taproot_schnorr_ms: Int64
     var taproot_tweak_ms: Int64
     var p2pkh_ecdsa_inputs: Int64
+    var p2sh_inputs: Int64
+    var segwit_v0_inputs: Int64
+    var legacy_other_inputs: Int64
+    var other_inputs: Int64
     var taproot_inputs: Int64
     var taproot_script_path_inputs: Int64
     var first_disagreement_set: Bool
@@ -514,6 +518,10 @@ struct ShadowCryptoStats(Copyable):
         self.taproot_schnorr_ms = 0
         self.taproot_tweak_ms = 0
         self.p2pkh_ecdsa_inputs = 0
+        self.p2sh_inputs = 0
+        self.segwit_v0_inputs = 0
+        self.legacy_other_inputs = 0
+        self.other_inputs = 0
         self.taproot_inputs = 0
         self.taproot_script_path_inputs = 0
         self.first_disagreement_set = False
@@ -659,9 +667,15 @@ def bool_json(value: Bool) -> String:
 def shadow_crypto_supported_family(ref job: ScriptVerifyJob) -> String:
     if is_p2pkh_script_pubkey(job.prevout.script_pubkey):
         return String("p2pkh_ecdsa")
+    if is_p2sh_script_pubkey(job.prevout.script_pubkey):
+        return String("p2sh")
+    if len(job.prevout.script_pubkey) >= 2 and job.prevout.script_pubkey[0] == UInt8(0):
+        return String("segwit_v0")
     if is_p2tr_script_pubkey(job.prevout.script_pubkey):
         return String("taproot")
-    return String("")
+    if len(job.prevout.script_pubkey) > 0:
+        return String("legacy_other")
+    return String("other")
 
 
 def shadow_crypto_unsupported_reason(ref job: ScriptVerifyJob) -> String:
@@ -759,6 +773,14 @@ def shadow_crypto_json(ref stats: ShadowCryptoStats) -> String:
         + String(stats.taproot_tweak_ms)
         + String('},"counts_by_supported_family":{"p2pkh_ecdsa":')
         + String(stats.p2pkh_ecdsa_inputs)
+        + String(',"p2sh":')
+        + String(stats.p2sh_inputs)
+        + String(',"segwit_v0":')
+        + String(stats.segwit_v0_inputs)
+        + String(',"legacy_other":')
+        + String(stats.legacy_other_inputs)
+        + String(',"other":')
+        + String(stats.other_inputs)
         + String(',"taproot":')
         + String(stats.taproot_inputs)
         + String(',"taproot_script_path":')
@@ -1856,6 +1878,14 @@ def verify_script_jobs_shadow_crypto_diagnostic(
         if family == "p2pkh_ecdsa":
             shadow_stats.p2pkh_ecdsa_ms += elapsed
             shadow_stats.p2pkh_ecdsa_inputs += 1
+        elif family == "p2sh":
+            shadow_stats.p2sh_inputs += 1
+        elif family == "segwit_v0":
+            shadow_stats.segwit_v0_inputs += 1
+        elif family == "legacy_other":
+            shadow_stats.legacy_other_inputs += 1
+        elif family == "other":
+            shadow_stats.other_inputs += 1
         elif family == "taproot":
             shadow_stats.taproot_schnorr_ms += elapsed
             shadow_stats.taproot_inputs += 1

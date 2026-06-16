@@ -28,6 +28,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gate", required=True, choices=sorted(GATES))
     parser.add_argument("--artifact", required=True, help="Diagnostic shadow proof JSON")
+    parser.add_argument(
+        "--require-zero-unsupported",
+        action="store_true",
+        help="Require full pure-shadow live coverage with unsupported_script_inputs=0",
+    )
     parser.add_argument("--json", action="store_true", help="Emit machine-readable validation output")
     return parser.parse_args()
 
@@ -36,7 +41,7 @@ def nonnegative_int(value: Any) -> bool:
     return isinstance(value, int) and value >= 0 and not isinstance(value, bool)
 
 
-def validate(path: Path, gate: str) -> dict[str, Any]:
+def validate(path: Path, gate: str, *, require_zero_unsupported: bool = False) -> dict[str, Any]:
     errors: list[str] = []
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -105,6 +110,8 @@ def validate(path: Path, gate: str) -> dict[str, Any]:
             errors.append("attempted must equal supported + unsupported")
         if attempted <= 0:
             errors.append("shadow attempted_script_inputs must be greater than zero")
+        if require_zero_unsupported and unsupported != 0:
+            errors.append("unsupported_script_inputs must be zero")
     if nonnegative_int(supported) and nonnegative_int(agreed) and nonnegative_int(disagreed):
         if supported != agreed + disagreed:
             errors.append("supported must equal agreed + disagreed")
@@ -152,7 +159,7 @@ def validate(path: Path, gate: str) -> dict[str, Any]:
 
 def main() -> int:
     args = parse_args()
-    result = validate(Path(args.artifact), args.gate)
+    result = validate(Path(args.artifact), args.gate, require_zero_unsupported=args.require_zero_unsupported)
     if args.json:
         print(json.dumps(result, indent=2, sort_keys=True))
     else:
