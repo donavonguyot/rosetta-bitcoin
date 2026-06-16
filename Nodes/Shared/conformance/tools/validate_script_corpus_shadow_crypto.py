@@ -28,6 +28,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Reject artifacts with any attempted pure-shadow row above this duration",
     )
+    parser.add_argument(
+        "--require-shadow-large-fixture-metrics",
+        action="store_true",
+        help="Require size metrics for attempted pure-shadow rows",
+    )
     return parser.parse_args()
 
 
@@ -44,6 +49,7 @@ def validate(
     *,
     require_shadow_timing: bool = False,
     max_shadow_row_ms: int | None = None,
+    require_shadow_large_fixture_metrics: bool = False,
 ) -> dict[str, Any]:
     errors: list[str] = []
     try:
@@ -81,6 +87,9 @@ def validate(
     disagreements = 0
     supported_timing_total = 0
     max_row_ms = 0
+    max_row_fixture = ""
+    max_tapscript_bytes = 0
+    max_tapscript_fixture = ""
     attempted_timing_total = 0
     for index, row in enumerate(rows):
         if not isinstance(row, dict):
@@ -116,9 +125,20 @@ def validate(
                 attempted_timing_total += duration
                 if row.get("shadow_supported") is True:
                     supported_timing_total += duration
-                max_row_ms = max(max_row_ms, duration)
+                if duration > max_row_ms:
+                    max_row_ms = duration
+                    max_row_fixture = text(row.get("fixture_id"))
                 if max_shadow_row_ms is not None and duration > max_shadow_row_ms:
                     errors.append(f"results[{index}] shadow_duration_ms exceeds {max_shadow_row_ms}")
+                if require_shadow_large_fixture_metrics:
+                    for field in ("shadow_tapscript_hex_bytes", "shadow_witness_items", "shadow_witness_hex_bytes"):
+                        if not nonnegative_int(row.get(field)):
+                            errors.append(f"results[{index}] {field} missing or invalid")
+                    if nonnegative_int(row.get("shadow_tapscript_hex_bytes")):
+                        tapscript_bytes = int(row["shadow_tapscript_hex_bytes"])
+                        if tapscript_bytes > max_tapscript_bytes:
+                            max_tapscript_bytes = tapscript_bytes
+                            max_tapscript_fixture = text(row.get("fixture_id"))
 
     if payload.get("shadow_supported") != supported:
         errors.append("shadow_supported count mismatch")
@@ -146,6 +166,19 @@ def validate(
             errors.append("shadow_supported_eval_ms does not match supported row durations")
         if nonnegative_int(payload.get("shadow_max_row_ms")) and payload.get("shadow_max_row_ms") != max_row_ms:
             errors.append("shadow_max_row_ms does not match row maximum")
+        if payload.get("shadow_largest_duration_fixture") != max_row_fixture:
+            errors.append("shadow_largest_duration_fixture does not match row maximum")
+
+    if require_shadow_large_fixture_metrics:
+        if payload.get("shadow_largest_tapscript_fixture") != max_tapscript_fixture:
+            errors.append("shadow_largest_tapscript_fixture does not match row maximum")
+        if (
+            nonnegative_int(payload.get("shadow_largest_tapscript_hex_bytes"))
+            and payload.get("shadow_largest_tapscript_hex_bytes") != max_tapscript_bytes
+        ):
+            errors.append("shadow_largest_tapscript_hex_bytes does not match row maximum")
+        elif not nonnegative_int(payload.get("shadow_largest_tapscript_hex_bytes")):
+            errors.append("shadow_largest_tapscript_hex_bytes missing or invalid")
 
     return {
         "path": str(path),
@@ -167,6 +200,7 @@ def main() -> int:
             Path(path),
             require_shadow_timing=args.require_shadow_timing,
             max_shadow_row_ms=args.max_shadow_row_ms,
+            require_shadow_large_fixture_metrics=args.require_shadow_large_fixture_metrics,
         )
         for path in args.artifacts
     ]

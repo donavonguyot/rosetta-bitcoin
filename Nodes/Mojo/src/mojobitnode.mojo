@@ -2,6 +2,7 @@ from std.collections import List
 from std.ffi import OwnedDLHandle
 from std.memory.unsafe_pointer import alloc
 from std.os import getenv
+from std.pathlib import Path
 from std.sys import argv
 
 from block_core import Native, local_reference_proof
@@ -86,14 +87,124 @@ def pure_shadow_fixture_enabled(fixture_id: String) -> Bool:
         or fixture_id == "scripts.p2tr_tapscript_size_52497"
         or fixture_id == "scripts.p2tr_tapscript_hash256_67562"
         or fixture_id == "scripts.p2tr_tapscript_70924"
+        or fixture_id == "scripts.p2tr_tapscript_71267"
         or fixture_id == "scripts.p2tr_tapscript_78841"
         or fixture_id == "scripts.p2tr_tapscript_82856"
         or fixture_id == "scripts.p2tr_tapscript_87214"
         or fixture_id == "scripts.p2tr_tapscript_89632"
         or fixture_id == "scripts.p2tr_tapscript_100372"
         or fixture_id == "scripts.p2tr_tapscript_108508"
+        or fixture_id == "scripts.p2tr_tapscript_121035"
+        or fixture_id == "scripts.p2tr_tapscript_126975"
         or fixture_id == "scripts.p2tr_tapscript_133634"
     )
+
+
+def scripts_fixture_root(manifest_path: String) -> String:
+    if manifest_path == "../Shared/conformance/fixtures/scripts/manifest.json":
+        return String("../Shared/conformance/fixtures/scripts/")
+    if manifest_path == "/workspace/Shared/conformance/fixtures/scripts/manifest.json":
+        return String("/workspace/Shared/conformance/fixtures/scripts/")
+    if manifest_path == "/workspace/Nodes/Shared/conformance/fixtures/scripts/manifest.json":
+        return String("/workspace/Nodes/Shared/conformance/fixtures/scripts/")
+    return String("../Shared/conformance/fixtures/scripts/")
+
+
+def taproot_shadow_stem(fixture_id: String) raises -> String:
+    if fixture_id == "scripts.p2tr_scriptpath_44295":
+        return String("tx_p2tr_scriptpath_44295")
+    if fixture_id == "scripts.p2tr_scriptpath_46599":
+        return String("tx_p2tr_scriptpath_46599")
+    if fixture_id == "scripts.p2tr_tapscript_100372":
+        return String("tx_p2tr_tapscript_100372")
+    if fixture_id == "scripts.p2tr_tapscript_108508":
+        return String("tx_p2tr_tapscript_108508")
+    if fixture_id == "scripts.p2tr_tapscript_121035":
+        return String("tx_p2tr_tapscript_121035")
+    if fixture_id == "scripts.p2tr_tapscript_126975":
+        return String("tx_p2tr_tapscript_126975")
+    if fixture_id == "scripts.p2tr_tapscript_133634":
+        return String("tx_p2tr_tapscript_133634")
+    if fixture_id == "scripts.p2tr_tapscript_70924":
+        return String("tx_p2tr_tapscript_70924")
+    if fixture_id == "scripts.p2tr_tapscript_71267":
+        return String("tx_p2tr_tapscript_71267")
+    if fixture_id == "scripts.p2tr_tapscript_78841":
+        return String("tx_p2tr_tapscript_78841")
+    if fixture_id == "scripts.p2tr_tapscript_82856":
+        return String("tx_p2tr_tapscript_82856")
+    if fixture_id == "scripts.p2tr_tapscript_87214":
+        return String("tx_p2tr_tapscript_87214")
+    if fixture_id == "scripts.p2tr_tapscript_89632":
+        return String("tx_p2tr_tapscript_89632")
+    if fixture_id == "scripts.p2tr_tapscript_hash256_67562":
+        return String("tx_p2tr_tapscript_hash256_67562")
+    if fixture_id == "scripts.p2tr_tapscript_numequal_32712":
+        return String("tx_p2tr_tapscript_numequal_32712")
+    if fixture_id == "scripts.p2tr_tapscript_sha256_52024":
+        return String("tx_p2tr_tapscript_sha256_52024")
+    if fixture_id == "scripts.p2tr_tapscript_size_52497":
+        return String("tx_p2tr_tapscript_size_52497")
+    raise Error("unsupported Taproot shadow metrics fixture")
+
+
+def taproot_shadow_witness_count(fixture_id: String) raises -> Int:
+    if fixture_id == "scripts.p2tr_scriptpath_44295":
+        return 3
+    if fixture_id == "scripts.p2tr_scriptpath_46599":
+        return 3
+    if fixture_id == "scripts.p2tr_tapscript_100372":
+        return 9
+    if fixture_id == "scripts.p2tr_tapscript_108508":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_121035":
+        return 552
+    if fixture_id == "scripts.p2tr_tapscript_126975":
+        return 538
+    if fixture_id == "scripts.p2tr_tapscript_133634":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_70924":
+        return 137
+    if fixture_id == "scripts.p2tr_tapscript_71267":
+        return 98
+    if fixture_id == "scripts.p2tr_tapscript_78841":
+        return 44
+    if fixture_id == "scripts.p2tr_tapscript_82856":
+        return 1
+    if fixture_id == "scripts.p2tr_tapscript_87214":
+        return 3
+    if fixture_id == "scripts.p2tr_tapscript_89632":
+        return 6
+    if fixture_id == "scripts.p2tr_tapscript_hash256_67562":
+        return 4
+    if fixture_id == "scripts.p2tr_tapscript_numequal_32712":
+        return 5
+    if fixture_id == "scripts.p2tr_tapscript_sha256_52024":
+        return 2
+    if fixture_id == "scripts.p2tr_tapscript_size_52497":
+        return 4
+    raise Error("unsupported Taproot shadow witness fixture")
+
+
+def file_byte_count(path: String) raises -> Int64:
+    return Int64(len(Path(path).read_bytes()))
+
+
+def taproot_shadow_tapscript_hex_bytes(manifest_path: String, fixture_id: String) raises -> Int64:
+    var root = scripts_fixture_root(manifest_path)
+    var stem = taproot_shadow_stem(fixture_id)
+    return file_byte_count(root + fixture_id + String("/") + stem + String("_tapscript.hex"))
+
+
+def taproot_shadow_witness_hex_bytes(manifest_path: String, fixture_id: String) raises -> Int64:
+    var root = scripts_fixture_root(manifest_path)
+    var stem = taproot_shadow_stem(fixture_id)
+    var total = Int64(0)
+    for i in range(taproot_shadow_witness_count(fixture_id)):
+        total += file_byte_count(
+            root + fixture_id + String("/") + stem + String("_witness_") + String(i) + String(".hex")
+        )
+    return total
 
 
 def actual_json(code: Int32) -> String:
@@ -448,6 +559,9 @@ def main() raises:
         var shadow_eval_ms = Int64(0)
         var shadow_supported_eval_ms = Int64(0)
         var shadow_max_row_ms = Int64(0)
+        var shadow_largest_duration_fixture = String("")
+        var shadow_largest_tapscript_fixture = String("")
+        var shadow_largest_tapscript_hex_bytes = Int64(0)
         var results = String("")
         var shadow_clock = Native(shim_path)
         for i in range(script_fixture_count()):
@@ -516,6 +630,9 @@ def main() raises:
                 var support_status = String("pure_backend_crypto_unsupported")
                 var shadow_attempted = False
                 var shadow_duration_ms = Int64(0)
+                var shadow_tapscript_hex_bytes = Int64(0)
+                var shadow_witness_items = 0
+                var shadow_witness_hex_bytes = Int64(0)
                 if is_taproot_diagnostic_fixture(eval_id):
                     if not pure_shadow_fixture_enabled(eval_id):
                         support_status = String("pure_backend_diagnostic_slice_not_enabled")
@@ -523,6 +640,9 @@ def main() raises:
                         shadow_attempted = True
                         var shadow_started = shadow_clock.now_ms()
                         try:
+                            shadow_tapscript_hex_bytes = taproot_shadow_tapscript_hex_bytes(manifest_path, eval_id)
+                            shadow_witness_items = taproot_shadow_witness_count(eval_id)
+                            shadow_witness_hex_bytes = taproot_shadow_witness_hex_bytes(manifest_path, eval_id)
                             var pure_crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_PURE)
                             var pure_result = evaluate_taproot_fixture_diagnostic_with_crypto(
                                 manifest_path, eval_id, shim_path, pure_crypto
@@ -553,6 +673,10 @@ def main() raises:
                             shadow_supported_eval_ms += shadow_duration_ms
                         if shadow_duration_ms > shadow_max_row_ms:
                             shadow_max_row_ms = shadow_duration_ms
+                            shadow_largest_duration_fixture = eval_id
+                        if shadow_tapscript_hex_bytes > shadow_largest_tapscript_hex_bytes:
+                            shadow_largest_tapscript_hex_bytes = shadow_tapscript_hex_bytes
+                            shadow_largest_tapscript_fixture = eval_id
                 if shadow_supported:
                     shadow_supported_count += 1
                 if shadow_agreed:
@@ -583,6 +707,12 @@ def main() raises:
                     results += (
                         String(',"shadow_duration_ms":')
                         + String(shadow_duration_ms)
+                        + String(',"shadow_tapscript_hex_bytes":')
+                        + String(shadow_tapscript_hex_bytes)
+                        + String(',"shadow_witness_items":')
+                        + String(shadow_witness_items)
+                        + String(',"shadow_witness_hex_bytes":')
+                        + String(shadow_witness_hex_bytes)
                     )
                 if not current_passed:
                     results += (
@@ -654,6 +784,12 @@ def main() raises:
                 + String(shadow_supported_eval_ms)
                 + String(',"shadow_max_row_ms":')
                 + String(shadow_max_row_ms)
+                + String(',"shadow_largest_duration_fixture":"')
+                + shadow_largest_duration_fixture
+                + String('","shadow_largest_tapscript_fixture":"')
+                + shadow_largest_tapscript_fixture
+                + String('","shadow_largest_tapscript_hex_bytes":')
+                + String(shadow_largest_tapscript_hex_bytes)
                 + String(',"result":"diagnostic","results":[')
                 + results
                 + String("]}")
