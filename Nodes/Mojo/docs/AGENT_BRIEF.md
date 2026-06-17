@@ -105,7 +105,12 @@ must report `runner_mode`, `runner_actual_mode`, `script_jobs`,
 evidence.
 The current Docker 5k and 50k diagnostic replays are clean: zero unsupported
 pure-shadow script inputs, zero disagreements, no native fallback, and positive
-shadow parallel batch evidence at heights 5000 and 50000.
+shadow parallel batch evidence at heights 5000 and 50000. The latest Docker 50k
+shadow replay reached the expected hash with `1385632` supported script inputs
+and `28012` shadow parallel batches. Its family timing buckets are
+`p2pkh_ecdsa=52738ms`, `segwit_v0=115019ms`, `p2sh=2852ms`,
+`taproot_schnorr=13294ms`, and `taproot_tweak=9012ms`, so ECDSA-family work is
+now the next measured pure-crypto bottleneck.
 
 `script-corpus-reject` is a Mojo-local must-reject diagnostic surface. It uses
 repo-owned mutation metadata in `fixtures/script_corpus_reject_cases.json` and

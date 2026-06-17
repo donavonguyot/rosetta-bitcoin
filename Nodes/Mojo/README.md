@@ -88,8 +88,12 @@ native prerequisites a future port would need?
   then reduced sequentially into runner, support, timing, and disagreement
   fields. The Docker 5k and 50k diagnostic replays currently reach their target
   heights with zero unsupported pure-shadow script inputs, zero disagreements,
-  no native fallback, and positive shadow parallel batch evidence; this does not
-  change Project benchmark evidence.
+  no native fallback, and positive shadow parallel batch evidence. The latest
+  Docker 50k replay reached height `50000` in diagnostic shadow mode with
+  `1385632` supported script inputs, `28012` shadow parallel batches, and timing
+  buckets that now leave ECDSA-family work dominant: `p2pkh_ecdsa=52738ms`,
+  `segwit_v0=115019ms`, `taproot_schnorr=13294ms`, and
+  `taproot_tweak=9012ms`. This does not change Project benchmark evidence.
 - `script-corpus-reject` is a Mojo-local diagnostic must-reject surface derived
   from existing positive Shared fixtures. It mutates representative P2PKH,
   bare multisig, P2SH, SegWit v0/P2WSH, Taproot tweak, and Taproot Schnorr

@@ -97,18 +97,18 @@ The implementation follows formulas and structure from Bitcoin Core's
   final affine conversion, and converts back only for the final x-vs-r
   comparison. The 1000-iteration host ECDSA microbench reported zero Fe52
   mismatches and reduced routed WNAF result timing from the old 4x64 GLV
-  `741ms` to `77ms`.
+  `788ms` to `80ms`.
 - Fe52 GLV remains microbench-only. It is parity-clean, but the same run showed
-  `127ms` for Fe52 GLV result versus `77ms` for plain Fe52 WNAF, so GLV is not
+  `133ms` for Fe52 GLV result versus `80ms` for plain Fe52 WNAF, so GLV is not
   routed until it demonstrates a material win.
 - Pure diagnostic Schnorr now routes `s*G + (-e)*P` through the Fe52 WNAF
   double-base path. The preserved 4x64 reference helper still feeds focused
   parity checks, and the 1000-iteration host microbench reported zero Fe52
-  mismatches while reducing Schnorr verification from `968ms` to `75ms`.
+  mismatches while reducing Schnorr verification from `998ms` to `80ms`.
 - Pure Taproot tweak checks now route `tweak*G + P` through the Fe52 scalar
   path. The 4x64 reference helper remains available for parity checks, and the
   1000-iteration host microbench reported zero Fe52 mismatches while reducing
-  tweak verification from `753ms` to `63ms`. Fixed-base Taproot WNAF remains
+  tweak verification from `780ms` to `66ms`. Fixed-base Taproot WNAF remains
   deferred.
 
 ## Evidence Boundary
@@ -128,9 +128,14 @@ The live `local-reference-proof --shadow-crypto` path follows the same boundary:
 native validation remains the block-acceptance oracle, while pure Mojo crypto
 only produces diagnostic replay counts and disagreement context. Its proof JSON
 is explicitly `diagnostic_non_comparable` and must not be imported as Project
-benchmark truth. The current Docker 5k diagnostic replay has zero unsupported
-pure-shadow script inputs and zero disagreements; it is a live-chain diagnostic,
-not a replacement for native `libsecp256k1` proof evidence.
+benchmark truth. The current Docker 5k and 50k diagnostic replays have zero
+unsupported pure-shadow script inputs and zero disagreements; they are
+live-chain diagnostics, not replacements for native `libsecp256k1` proof
+evidence. The latest Docker 50k shadow replay supports all `1385632` script
+inputs with `28012` shadow parallel batches. Its post-Fe52 routing timing
+buckets are dominated by ECDSA-family work: `segwit_v0=115019ms`,
+`p2pkh_ecdsa=52738ms`, `taproot_schnorr=13294ms`, and
+`taproot_tweak=9012ms`.
 
 This implementation does not claim constant-time hardening. It is a verifier
 shadow path for differential testing and language-specific learning.
