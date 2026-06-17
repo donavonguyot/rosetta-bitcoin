@@ -5,7 +5,7 @@ from std.os import getenv
 from std.pathlib import Path
 from std.sys import argv
 
-from block_core import Native, local_reference_proof
+from block_core import Native, json_escape, local_reference_proof
 from pure_secp import (
     pure_test_ecdsa_inverse_s,
     pure_test_ecdsa_normalized_s,
@@ -49,6 +49,7 @@ from script_corpus_foundation import (
     evaluate_taproot_fixture,
     evaluate_taproot_fixture_diagnostic,
     evaluate_taproot_fixture_diagnostic_with_crypto,
+    evaluate_script_reject_case,
     evaluate_p2pkh_fixture_with_crypto_timed,
     evaluate_witness_v0_fixture,
     evaluate_witness_v0_fixture_with_crypto,
@@ -59,6 +60,9 @@ from script_corpus_foundation import (
     is_taproot_diagnostic_fixture,
     is_witness_v0_diagnostic_fixture,
     load_bare_multisig_fixture,
+    script_reject_case_count,
+    script_reject_case_fixture_id,
+    script_reject_case_id,
     taproot_tweak_hash,
 )
 from script_corpus_table import fixture_id_at, fixture_in_set, fixture_meta, script_fixture_count
@@ -1121,7 +1125,7 @@ def pure_crypto_microbench_json(
 def main() raises:
     var args = argv()
     if len(args) < 2:
-        print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|pure-crypto-microbench|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")
+        print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|pure-crypto-microbench|storage-proof|script-corpus|script-corpus-dev|script-corpus-reject|local-reference-proof> [options]")
         return
 
     var command = String(args[1])
@@ -1134,6 +1138,7 @@ def main() raises:
     var fixture_id = String("")
     var fixture_set = String("all")
     var shadow_crypto = False
+    var crypto_backend = String("native")
     var microbench_iterations = 1000
     var microbench_case = String("all")
     var native_compare = False
@@ -1155,6 +1160,8 @@ def main() raises:
             fixture_set = String(args[i + 1])
         if args[i] == "--shadow-crypto":
             shadow_crypto = True
+        if args[i] == "--crypto-backend" and i + 1 < len(args):
+            crypto_backend = String(args[i + 1])
         if args[i] == "--native-compare":
             native_compare = True
         if args[i] == "--iterations" and i + 1 < len(args):
@@ -1225,6 +1232,98 @@ def main() raises:
             + String(case_total)
             + String(',"case_passed":')
             + String(passed_count)
+            + String(',"result":"')
+            + result_json(passed)
+            + String('","results":[')
+            + results
+            + String("]}")
+        )
+        print(json)
+        if result_path != "":
+            var writer = OwnedDLHandle(shim_path)
+            _ = writer.call["mojobitnode_write_text_len", Int32](
+                result_path.unsafe_ptr(),
+                Int32(result_path.byte_length()),
+                json.unsafe_ptr(),
+                Int32(json.byte_length()),
+            )
+        return
+
+    if command == "script-corpus-reject":
+        var crypto_kind = CRYPTO_BACKEND_NATIVE
+        var backend_label = String("libsecp256k1")
+        var native_crypto_backend = String("libsecp256k1")
+        if crypto_backend == "pure":
+            crypto_kind = CRYPTO_BACKEND_PURE
+            backend_label = String("mojo-pure-secp256k1")
+            native_crypto_backend = String("none")
+        elif crypto_backend != "native":
+            raise Error("script-corpus-reject --crypto-backend must be native or pure")
+
+        var crypto = CryptoBackend(shim_path, crypto_kind)
+        var fixture_count = 0
+        var rejected_count = 0
+        var accepted_count = 0
+        var results = String("")
+        for i in range(script_reject_case_count()):
+            var case_id = script_reject_case_id(i)
+            var source_fixture = script_reject_case_fixture_id(i)
+            if fixture_id != "" and fixture_id != case_id and fixture_id != source_fixture:
+                continue
+            var row = evaluate_script_reject_case(manifest_path, i, shim_path, crypto)
+            if fixture_count != 0:
+                results += String(",")
+            fixture_count += 1
+            if row.rejected:
+                rejected_count += 1
+            if row.accepted:
+                accepted_count += 1
+            results += (
+                String('{"case_id":"')
+                + row.case_id
+                + String('","source_fixture":"')
+                + row.fixture_id
+                + String('","family":"')
+                + row.family
+                + String('","mutation":"')
+                + row.mutation
+                + String('","expected":"reject","actual":"')
+                + (String("accepted") if row.accepted else String("rejected"))
+                + String('","rejected":')
+                + bool_json(row.rejected)
+                + String(',"accepted":')
+                + bool_json(row.accepted)
+                + String(',"failure_stage":"')
+                + json_escape(row.failure_stage)
+                + String('","failure":"')
+                + json_escape(row.failure)
+                + String('"}')
+            )
+
+        var passed = accepted_count == 0 and fixture_count > 0
+        var json = (
+            String('{"schema":"port.script_corpus_reject_result.v1","category":"script_corpus_reject",')
+            + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
+            + surface
+            + String('","entrypoint_language":"mojo","diagnostic_only":true,')
+            + String('"fixture_manifest":"')
+            + manifest_path
+            + String('","mutation_manifest":"fixtures/script_corpus_reject_cases.json",')
+            + String('"crypto_backend":"')
+            + backend_label
+            + String('","native_crypto_backend":"')
+            + native_crypto_backend
+            + String('","native_fallback_used":false,')
+            + String('"faults_enabled":')
+            + bool_json(getenv("MOJOBITNODE_ENABLE_REJECT_FAULTS", "0") == "1")
+            + String(',"fault_mode":"')
+            + json_escape(getenv("MOJOBITNODE_PURE_CRYPTO_FAULT", ""))
+            + String('","fixture_count":')
+            + String(fixture_count)
+            + String(',"rejected":')
+            + String(rejected_count)
+            + String(',"accepted":')
+            + String(accepted_count)
             + String(',"result":"')
             + result_json(passed)
             + String('","results":[')
@@ -1682,6 +1781,13 @@ def main() raises:
         return
 
     if command == "local-reference-proof":
+        var proof_crypto_kind = CRYPTO_BACKEND_NATIVE
+        if crypto_backend == "pure":
+            if target != 5000:
+                raise Error("pure crypto local-reference-proof is diagnostic 5k-only in this slice")
+            proof_crypto_kind = CRYPTO_BACKEND_PURE
+        elif crypto_backend != "native":
+            raise Error("local-reference-proof --crypto-backend must be native or pure")
         var proof = local_reference_proof(
             shim_path,
             surface,
@@ -1691,8 +1797,9 @@ def main() raises:
             result_path,
             progress,
             shadow_crypto,
+            proof_crypto_kind,
         )
         print(proof.json)
         return
 
-    print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|pure-crypto-microbench|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")
+    print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|pure-crypto-microbench|storage-proof|script-corpus|script-corpus-dev|script-corpus-reject|local-reference-proof> [options]")

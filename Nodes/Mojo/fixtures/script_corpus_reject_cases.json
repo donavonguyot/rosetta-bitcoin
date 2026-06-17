@@ -1,0 +1,43 @@
+{
+  "schema": "mojo.script_corpus_reject_cases.v1",
+  "description": "Mojo-local diagnostic must-reject mutations derived from existing Shared positive script fixtures.",
+  "diagnostic_only": true,
+  "cases": [
+    {
+      "case_id": "reject.p2pkh_wrong_signature",
+      "source_fixture": "scripts.p2pkh_sighash_single_38010",
+      "family": "p2pkh",
+      "mutation": "mutate_ecdsa_signature_der_byte"
+    },
+    {
+      "case_id": "reject.bare_multisig_wrong_signature",
+      "source_fixture": "scripts.bare_multisig_27840",
+      "family": "bare_multisig",
+      "mutation": "mutate_multisig_ecdsa_signature_der_byte"
+    },
+    {
+      "case_id": "reject.p2sh_redeem_hash_mismatch",
+      "source_fixture": "scripts.p2sh_add_51340",
+      "family": "p2sh",
+      "mutation": "mutate_redeem_script_hash_preimage"
+    },
+    {
+      "case_id": "reject.segwit_v0_witness_script_hash_mismatch",
+      "source_fixture": "scripts.p2wsh_op1_only_31842",
+      "family": "segwit_v0",
+      "mutation": "mutate_witness_script_hash_preimage"
+    },
+    {
+      "case_id": "reject.taproot_wrong_tweak_output",
+      "source_fixture": "scripts.p2tr_scriptpath_44295",
+      "family": "taproot_tweak",
+      "mutation": "mutate_taproot_expected_output_key"
+    },
+    {
+      "case_id": "reject.taproot_wrong_schnorr_signature",
+      "source_fixture": "scripts.p2tr_tapscript_numequal_32712",
+      "family": "taproot_schnorr",
+      "mutation": "mutate_tapscript_schnorr_signature_byte"
+    }
+  ]
+}

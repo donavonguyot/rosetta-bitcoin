@@ -489,7 +489,12 @@ struct ShadowCryptoStats(Copyable):
     var unsupported_segwit_v0: Int64
     var unsupported_legacy_other: Int64
     var unsupported_other: Int64
+    var total_shadow_ms: Int64
     var p2pkh_ecdsa_ms: Int64
+    var p2sh_ms: Int64
+    var segwit_v0_ms: Int64
+    var legacy_other_ms: Int64
+    var other_ms: Int64
     var taproot_schnorr_ms: Int64
     var taproot_tweak_ms: Int64
     var p2pkh_ecdsa_inputs: Int64
@@ -524,7 +529,12 @@ struct ShadowCryptoStats(Copyable):
         self.unsupported_segwit_v0 = 0
         self.unsupported_legacy_other = 0
         self.unsupported_other = 0
+        self.total_shadow_ms = 0
         self.p2pkh_ecdsa_ms = 0
+        self.p2sh_ms = 0
+        self.segwit_v0_ms = 0
+        self.legacy_other_ms = 0
+        self.other_ms = 0
         self.taproot_schnorr_ms = 0
         self.taproot_tweak_ms = 0
         self.p2pkh_ecdsa_inputs = 0
@@ -786,16 +796,21 @@ def shadow_crypto_reduce_row(
             + String(job.job_index)
         )
     stats.supported += 1
+    stats.total_shadow_ms += row.elapsed_ms
     if row.family == "p2pkh_ecdsa":
         stats.p2pkh_ecdsa_ms += row.elapsed_ms
         stats.p2pkh_ecdsa_inputs += 1
     elif row.family == "p2sh":
+        stats.p2sh_ms += row.elapsed_ms
         stats.p2sh_inputs += 1
     elif row.family == "segwit_v0":
+        stats.segwit_v0_ms += row.elapsed_ms
         stats.segwit_v0_inputs += 1
     elif row.family == "legacy_other":
+        stats.legacy_other_ms += row.elapsed_ms
         stats.legacy_other_inputs += 1
     elif row.family == "other":
+        stats.other_ms += row.elapsed_ms
         stats.other_inputs += 1
     elif row.family == "taproot":
         stats.taproot_schnorr_ms += row.elapsed_ms
@@ -891,6 +906,7 @@ def shadow_crypto_reduction_smoke() raises -> Bool:
         and stats.disagreed == 2
         and stats.p2pkh_ecdsa_inputs == 3
         and stats.p2pkh_ecdsa_ms == 31
+        and stats.total_shadow_ms == 31
         and stats.first_disagreement_set
         and stats.first_disagreement_height == 5000
         and stats.first_disagreement_input_index == 2
@@ -951,8 +967,18 @@ def shadow_crypto_json(ref stats: ShadowCryptoStats) -> String:
         + String(stats.unsupported_legacy_other)
         + String(',"other":')
         + String(stats.unsupported_other)
-        + String('},"timing_ms":{"p2pkh_ecdsa":')
+        + String('},"timing_ms":{"total":')
+        + String(stats.total_shadow_ms)
+        + String(',"p2pkh_ecdsa":')
         + String(stats.p2pkh_ecdsa_ms)
+        + String(',"p2sh":')
+        + String(stats.p2sh_ms)
+        + String(',"segwit_v0":')
+        + String(stats.segwit_v0_ms)
+        + String(',"legacy_other":')
+        + String(stats.legacy_other_ms)
+        + String(',"other":')
+        + String(stats.other_ms)
         + String(',"taproot_schnorr":')
         + String(stats.taproot_schnorr_ms)
         + String(',"taproot_tweak":')
@@ -1992,6 +2018,7 @@ def verify_script_jobs_sequential(
     height: Int,
     ref contexts: List[ScriptVerifyContext],
     ref jobs: List[ScriptVerifyJob],
+    crypto_kind: Int,
 ) raises -> ScriptVerifyStats:
     var stats = ScriptVerifyStats()
     stats.jobs = Int64(len(jobs))
@@ -2002,7 +2029,7 @@ def verify_script_jobs_sequential(
     stats.threads = 1
     var started = native.now_ms()
     var results = List[ScriptVerifyResult]()
-    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
+    var crypto = CryptoBackend(shim_path, crypto_kind)
     for i in range(len(jobs)):
         var job_started = native.now_ms()
         var result = verify_script_job(
@@ -2127,6 +2154,7 @@ def verify_script_jobs_parallel_diagnostic(
     ref contexts: List[ScriptVerifyContext],
     ref jobs: List[ScriptVerifyJob],
     config: ScriptRunnerConfig,
+    crypto_kind: Int,
 ) raises -> ScriptVerifyStats:
     var stats = ScriptVerifyStats()
     stats.jobs = Int64(len(jobs))
@@ -2135,14 +2163,14 @@ def verify_script_jobs_parallel_diagnostic(
     if len(jobs) == 0:
         return stats^
     if config.threads == 1:
-        return verify_script_jobs_sequential(native, shim_path, height, contexts, jobs)
+        return verify_script_jobs_sequential(native, shim_path, height, contexts, jobs, crypto_kind)
 
     var results = List[ScriptVerifyResult]()
     for i in range(len(jobs)):
         var result = script_verify_result_for_job(jobs[i])
         results.append(result^)
 
-    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_NATIVE)
+    var crypto = CryptoBackend(shim_path, crypto_kind)
 
     @parameter
     def verify_one(index: Int) capturing:
@@ -2204,6 +2232,7 @@ def connect_block(
     mut timing: ConnectTiming,
     shadow_crypto_enabled: Bool,
     mut shadow_stats: ShadowCryptoStats,
+    proof_crypto_kind: Int,
 ) raises -> Int:
     if len(block.txs) == 0:
         raise Error("block has no transactions")
@@ -2437,6 +2466,7 @@ def connect_block(
             verify_contexts,
             script_jobs,
             runner_config,
+            proof_crypto_kind,
         )
     else:
         verify_stats = verify_script_jobs_sequential(
@@ -2445,6 +2475,7 @@ def connect_block(
             height,
             verify_contexts,
             script_jobs,
+            proof_crypto_kind,
         )
     timing.script_verify += verify_stats.wall_ms
     timing.script_wall_ms += verify_stats.wall_ms
@@ -2479,7 +2510,16 @@ def connect_block(
     append_delta_metadata(delta, String("header_hash"), display_hash(block.hash))
     append_delta_metadata(delta, String("chainstate_utxo_count"), String(new_utxos))
     append_delta_metadata(delta, String("chainstate_backend"), String("rocksdb"))
-    append_delta_metadata(delta, String("native_crypto_backend"), String("libsecp256k1"))
+    append_delta_metadata(
+        delta,
+        String("native_crypto_backend"),
+        (String("none") if proof_crypto_kind == CRYPTO_BACKEND_PURE else String("libsecp256k1")),
+    )
+    append_delta_metadata(
+        delta,
+        String("crypto_backend"),
+        (String("mojo-pure-secp256k1") if proof_crypto_kind == CRYPTO_BACKEND_PURE else String("libsecp256k1")),
+    )
     append_delta_metadata(delta, String("sync_status"), String("blocks_syncing"))
     apply_block_delta(native, db, timing, delta)
     var apply_delta = native.now_ms() - apply_started
@@ -2952,6 +2992,7 @@ def local_reference_proof(
     result_path: String,
     progress_interval: Int,
     shadow_crypto_enabled: Bool,
+    proof_crypto_kind: Int,
 ) raises -> ProofResult:
     var benchmark_gate = benchmark_gate_for_target(target)
     var benchmark_kind = benchmark_gate + String("_p2p")
@@ -2968,6 +3009,9 @@ def local_reference_proof(
     timing.hotpath = hotpath_profile_from_env()
     var shadow_stats = ShadowCryptoStats()
     shadow_stats.enabled = shadow_crypto_enabled
+    var pure_proof = proof_crypto_kind == CRYPTO_BACKEND_PURE
+    var crypto_backend = String("mojo-pure-secp256k1") if pure_proof else String("libsecp256k1")
+    var native_crypto_backend = String("none") if pure_proof else String("libsecp256k1")
     var current_utxos = 0
     var blocks_fetched = 0
     var blocks_connected = 0
@@ -2975,7 +3019,8 @@ def local_reference_proof(
         emit_telemetry(benchmark_gate, String("run_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
         emit_telemetry(benchmark_gate, String("container_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
         db_put_string(native, db, String("chainstate_backend"), String("rocksdb"))
-        db_put_string(native, db, String("native_crypto_backend"), String("libsecp256k1"))
+        db_put_string(native, db, String("native_crypto_backend"), native_crypto_backend)
+        db_put_string(native, db, String("crypto_backend"), crypto_backend)
         db_put_string(native, db, String("sync_status"), String("headers_syncing"))
         emit_telemetry(benchmark_gate, String("node_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
         handshake(native, fd)
@@ -3013,6 +3058,7 @@ def local_reference_proof(
                     timing,
                     shadow_crypto_enabled,
                     shadow_stats,
+                    proof_crypto_kind,
                 )
                 refresh_crypto_metrics(native, timing)
                 timing.block_connect_store_commit += native.now_ms() - block_started
@@ -3061,7 +3107,7 @@ def local_reference_proof(
             + benchmark_kind
             + String('",')
             + String('"benchmark_comparability":"')
-            + (String("diagnostic_non_comparable") if shadow_crypto_enabled else String("comparable"))
+            + (String("diagnostic_non_comparable") if shadow_crypto_enabled or pure_proof else String("comparable"))
             + String('","implementation":"Mojo","port":"mojo","node_id":"mojobitnode","chain":"testnet4",')
             + String('"runtime_surface":"')
             + surface
@@ -3082,7 +3128,13 @@ def local_reference_proof(
             + String('"rocksdb_wal_disabled":false,"fresh_state":true,"resume_supported":true,"datadir":"')
             + datadir
             + String('","chainstate_backend":"rocksdb","chainstate_status":"usable","native_storage":true,')
-            + String('"native_crypto_available":true,"native_crypto_backend":"libsecp256k1","validated_height":')
+            + String('"native_crypto_available":')
+            + bool_json(not pure_proof)
+            + String(',"native_crypto_backend":"')
+            + native_crypto_backend
+            + String('","crypto_backend":"')
+            + crypto_backend
+            + String('","native_fallback_used":false,"validated_height":')
             + String(target)
             + String(',"validated_hash":"')
             + finish_hash

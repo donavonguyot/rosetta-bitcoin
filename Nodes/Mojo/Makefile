@@ -28,6 +28,10 @@ HOST_STORAGE_RESULT ?= /tmp/mojo_rocksdb_storage_proof_host_$(RESULT_DATE).json
 HOST_SCRIPT_CORPUS_DEV_RESULT ?= /tmp/mojo_script_corpus_dev_$(RESULT_DATE).json
 HOST_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_host_script_corpus_shadow_$(RESULT_DATE).json
 DOCKER_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_docker_script_corpus_shadow_$(RESULT_DATE).json
+HOST_SCRIPT_CORPUS_REJECT_NATIVE_RESULT ?= .benchmark-results/mojo_host_script_corpus_reject_native_$(RESULT_DATE).json
+HOST_SCRIPT_CORPUS_REJECT_PURE_RESULT ?= .benchmark-results/mojo_host_script_corpus_reject_pure_$(RESULT_DATE).json
+DOCKER_SCRIPT_CORPUS_REJECT_NATIVE_RESULT ?= .benchmark-results/mojo_docker_script_corpus_reject_native_$(RESULT_DATE).json
+DOCKER_SCRIPT_CORPUS_REJECT_PURE_RESULT ?= .benchmark-results/mojo_docker_script_corpus_reject_pure_$(RESULT_DATE).json
 HOST_PURE_CRYPTO_PROFILE_RESULT ?= .benchmark-results/mojo_host_pure_crypto_profile_$(RESULT_DATE).json
 DOCKER_PURE_CRYPTO_PROFILE_RESULT ?= .benchmark-results/mojo_docker_pure_crypto_profile_$(RESULT_DATE).json
 HOST_PURE_CRYPTO_MICROBENCH_RESULT ?= .benchmark-results/mojo_host_pure_crypto_microbench_$(RESULT_DATE).json
@@ -38,6 +42,8 @@ HOST_SHADOW_5K_PROOF_RESULT ?= .benchmark-results/mojo_host_shadow_baseline_5k_b
 DOCKER_SHADOW_5K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shadow_baseline_5k_benchmark_$(RESULT_DATE).json
 HOST_SHADOW_50K_PROOF_RESULT ?= .benchmark-results/mojo_host_shadow_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_SHADOW_50K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shadow_shakedown_50k_benchmark_$(RESULT_DATE).json
+HOST_PURE_5K_PROOF_RESULT ?= .benchmark-results/mojo_host_pure_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_PURE_5K_PROOF_RESULT ?= .benchmark-results/mojo_docker_pure_baseline_5k_benchmark_$(RESULT_DATE).json
 SCRIPT_CORPUS_RESULT ?= ../Shared/conformance/results/mojo_script_corpus_$(RESULT_DATE).json
 HOST_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_host_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_docker_baseline_5k_benchmark_$(RESULT_DATE).json
@@ -45,6 +51,7 @@ HOST_50K_PROOF_RESULT ?= .benchmark-results/mojo_host_shakedown_50k_benchmark_$(
 DOCKER_50K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 HOST_SHADOW_5K_DATA_DIR ?= ./data-mojo-shadow-5k-proof
 HOST_SHADOW_50K_DATA_DIR ?= ./data-mojo-shadow-50k-proof
+HOST_PURE_5K_DATA_DIR ?= ./data-mojo-pure-5k-proof
 FIXTURE_ID ?= scripts.bare_multisig_27840
 FIXTURE_SET ?= all
 DATA_VOLUME ?= mojobitnode_data
@@ -52,6 +59,7 @@ PROOF_VOLUME ?= mojobitnode_proof_data
 PROOF_50K_VOLUME ?= mojobitnode_50k_proof_data
 SHADOW_5K_PROOF_VOLUME ?= mojobitnode_shadow_5k_proof_data
 SHADOW_50K_PROOF_VOLUME ?= mojobitnode_shadow_50k_proof_data
+PURE_5K_PROOF_VOLUME ?= mojobitnode_pure_5k_proof_data
 DOCKER_SYNC_TARGET ?= 5000
 PROGRESS ?= 500
 PROOF_EXTRA_ARGS ?=
@@ -62,8 +70,8 @@ MOJOBITNODE_PROFILE_HOTPATH ?= 0
 HOST_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-pure-crypto-profile host-pure-crypto-microbench host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-local-reference-proof host-shakedown-50k-proof host-shadow-5k-proof host-shadow-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-pure-crypto-profile docker-pure-crypto-microbench docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-proof-local docker-proof-50k docker-shadow-5k-proof docker-shadow-50k-proof docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-pure-crypto-profile host-pure-crypto-microbench host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-script-corpus-reject host-script-corpus-reject-red host-local-reference-proof host-shakedown-50k-proof host-shadow-5k-proof host-shadow-50k-proof host-pure-5k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-pure-crypto-profile docker-pure-crypto-microbench docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-script-corpus-reject docker-script-corpus-reject-red docker-proof-local docker-proof-50k docker-shadow-5k-proof docker-shadow-50k-proof docker-pure-5k-proof docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -186,6 +194,35 @@ host-script-corpus-shadow: host-build
 	  grep -q '"shadow_used_native_fallback":false' <<< "$$out"; \
 	  python3 ../Shared/conformance/tools/validate_script_corpus_shadow_crypto.py --require-shadow-timing --max-shadow-row-ms 5000 --require-shadow-large-fixture-metrics $(HOST_SCRIPT_CORPUS_SHADOW_RESULT)
 
+host-script-corpus-reject: host-build
+	@mkdir -p .benchmark-results
+	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus-reject \
+	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --crypto-backend native \
+	  --result-path $(HOST_SCRIPT_CORPUS_REJECT_NATIVE_RESULT)); \
+	  echo "$$out"; \
+	  python3 ../Shared/conformance/tools/validate_script_corpus_reject_result.py $(HOST_SCRIPT_CORPUS_REJECT_NATIVE_RESULT)
+	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus-reject \
+	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --crypto-backend pure \
+	  --result-path $(HOST_SCRIPT_CORPUS_REJECT_PURE_RESULT)); \
+	  echo "$$out"; \
+	  python3 ../Shared/conformance/tools/validate_script_corpus_reject_result.py $(HOST_SCRIPT_CORPUS_REJECT_PURE_RESULT)
+
+host-script-corpus-reject-red: host-build
+	@mkdir -p .benchmark-results
+	@for fault in accept_ecdsa accept_schnorr accept_taptweak; do \
+	  result=.benchmark-results/mojo_host_script_corpus_reject_red_$${fault}_$(RESULT_DATE).json; \
+	  out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) \
+	    MOJOBITNODE_ENABLE_REJECT_FAULTS=1 MOJOBITNODE_PURE_CRYPTO_FAULT=$$fault \
+	    $(MOJO_BIN) script-corpus-reject \
+	      --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	      --crypto-backend pure \
+	      --result-path $$result); \
+	  echo "$$out"; \
+	  python3 ../Shared/conformance/tools/validate_script_corpus_reject_result.py --expect-red $$result; \
+	done
+
 host-local-reference-proof: host-build
 	@mkdir -p .benchmark-results
 	@MOJOBITNODE_RUNTIME_SURFACE=host \
@@ -213,7 +250,12 @@ host-shadow-5k-proof:
 host-shadow-50k-proof:
 	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then rm -rf $(HOST_SHADOW_50K_DATA_DIR); fi
 	$(MAKE) host-local-reference-proof DOCKER_SYNC_TARGET=50000 PROOF_DATA_DIR=$(HOST_SHADOW_50K_DATA_DIR) HOST_LOCAL_PROOF_RESULT=$(HOST_SHADOW_50K_PROOF_RESULT) PROOF_EXTRA_ARGS=--shadow-crypto PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
-	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate shakedown_50k --artifact $(HOST_SHADOW_50K_PROOF_RESULT)
+	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate shakedown_50k --require-zero-unsupported --artifact $(HOST_SHADOW_50K_PROOF_RESULT)
+
+host-pure-5k-proof:
+	@if [ "$(PRESERVE_PROOF_VOLUME)" != "1" ]; then rm -rf $(HOST_PURE_5K_DATA_DIR); fi
+	$(MAKE) host-local-reference-proof DOCKER_SYNC_TARGET=5000 PROOF_DATA_DIR=$(HOST_PURE_5K_DATA_DIR) HOST_LOCAL_PROOF_RESULT=$(HOST_PURE_5K_PROOF_RESULT) PROOF_EXTRA_ARGS="--crypto-backend pure" PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_pure_crypto_proof.py --gate baseline_5k --artifact $(HOST_PURE_5K_PROOF_RESULT)
 
 host-smoke-once: host-build
 	@MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) status --datadir $(DATA_DIR) --json >/tmp/mojo_status.json; \
@@ -336,6 +378,36 @@ docker-script-corpus-shadow:
 	  grep -q '"shadow_used_native_fallback":false' <<< "$$out"; \
 	  python3 ../Shared/conformance/tools/validate_script_corpus_shadow_crypto.py --require-shadow-timing --max-shadow-row-ms 5000 --require-shadow-large-fixture-metrics $(DOCKER_SCRIPT_CORPUS_SHADOW_RESULT)
 
+docker-script-corpus-reject:
+	@mkdir -p .benchmark-results
+	@out=$$($(DOCKER_COMPOSE) run --rm --no-deps mojobitnode script-corpus-reject \
+	  --manifest /workspace/Shared/conformance/fixtures/scripts/manifest.json \
+	  --crypto-backend native); \
+	  echo "$$out"; \
+	  printf "%s\n" "$$out" > $(DOCKER_SCRIPT_CORPUS_REJECT_NATIVE_RESULT); \
+	  python3 ../Shared/conformance/tools/validate_script_corpus_reject_result.py $(DOCKER_SCRIPT_CORPUS_REJECT_NATIVE_RESULT)
+	@out=$$($(DOCKER_COMPOSE) run --rm --no-deps mojobitnode script-corpus-reject \
+	  --manifest /workspace/Shared/conformance/fixtures/scripts/manifest.json \
+	  --crypto-backend pure); \
+	  echo "$$out"; \
+	  printf "%s\n" "$$out" > $(DOCKER_SCRIPT_CORPUS_REJECT_PURE_RESULT); \
+	  python3 ../Shared/conformance/tools/validate_script_corpus_reject_result.py $(DOCKER_SCRIPT_CORPUS_REJECT_PURE_RESULT)
+
+docker-script-corpus-reject-red:
+	@mkdir -p .benchmark-results
+	@for fault in accept_ecdsa accept_schnorr accept_taptweak; do \
+	  result=.benchmark-results/mojo_docker_script_corpus_reject_red_$${fault}_$(RESULT_DATE).json; \
+	  out=$$($(DOCKER_COMPOSE) run --rm --no-deps \
+	    -e MOJOBITNODE_ENABLE_REJECT_FAULTS=1 \
+	    -e MOJOBITNODE_PURE_CRYPTO_FAULT=$$fault \
+	    mojobitnode script-corpus-reject \
+	      --manifest /workspace/Shared/conformance/fixtures/scripts/manifest.json \
+	      --crypto-backend pure); \
+	  echo "$$out"; \
+	  printf "%s\n" "$$out" > $$result; \
+	  python3 ../Shared/conformance/tools/validate_script_corpus_reject_result.py --expect-red $$result; \
+	done
+
 docker-proof-local:
 	$(REFERENCE_P2P_CHECK)
 	@mkdir -p .benchmark-results
@@ -363,7 +435,11 @@ docker-shadow-5k-proof:
 
 docker-shadow-50k-proof:
 	$(MAKE) docker-proof-local PROOF_VOLUME=$(SHADOW_50K_PROOF_VOLUME) DOCKER_SYNC_TARGET=50000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_SHADOW_50K_PROOF_RESULT) PROOF_EXTRA_ARGS=--shadow-crypto PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
-	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate shakedown_50k --artifact $(DOCKER_SHADOW_50K_PROOF_RESULT)
+	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate shakedown_50k --require-zero-unsupported --artifact $(DOCKER_SHADOW_50K_PROOF_RESULT)
+
+docker-pure-5k-proof:
+	$(MAKE) docker-proof-local PROOF_VOLUME=$(PURE_5K_PROOF_VOLUME) DOCKER_SYNC_TARGET=5000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_PURE_5K_PROOF_RESULT) PROOF_EXTRA_ARGS="--crypto-backend pure" PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_pure_crypto_proof.py --gate baseline_5k --artifact $(DOCKER_PURE_5K_PROOF_RESULT)
 
 docker-smoke-once:
 	@out=$$(DOCKER_DATA_VOLUME=$(DATA_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps --entrypoint /bin/sh mojobitnode -lc 'mojobitnode status --datadir /data --json >/tmp/status.json && printf "%s %s\n" "AGENT_LOOP_TICK_chatreport" "$$(cat /tmp/status.json)"'); \

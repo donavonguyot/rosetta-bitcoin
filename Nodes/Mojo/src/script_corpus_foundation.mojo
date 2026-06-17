@@ -20,6 +20,13 @@ comptime CRYPTO_RESULT_MALFORMED = 2
 comptime CRYPTO_RESULT_UNSUPPORTED = 3
 
 
+def pure_crypto_fault_enabled(fault_name: String) -> Bool:
+    return (
+        getenv("MOJOBITNODE_ENABLE_REJECT_FAULTS", "0") == "1"
+        and getenv("MOJOBITNODE_PURE_CRYPTO_FAULT", "") == fault_name
+    )
+
+
 struct ScriptFixture(Movable):
     var fixture_id: String
     var height: Int
@@ -279,6 +286,8 @@ struct CryptoBackend(Movable):
         ref digest: List[UInt8],
     ) raises -> Int32:
         if self.kind == CRYPTO_BACKEND_PURE:
+            if pure_crypto_fault_enabled(String("accept_ecdsa")):
+                return CRYPTO_RESULT_VALID
             return pure_verify_ecdsa_der_bytes(pubkey, der, digest)
         return self.native.verify_ecdsa_der_bytes(pubkey, der, digest)
 
@@ -289,6 +298,8 @@ struct CryptoBackend(Movable):
         ref digest: List[UInt8],
     ) raises -> Int32:
         if self.kind == CRYPTO_BACKEND_PURE:
+            if pure_crypto_fault_enabled(String("accept_schnorr")):
+                return CRYPTO_RESULT_VALID
             return pure_verify_schnorr_bytes(xonly_pubkey, signature, digest)
         return self.native.verify_schnorr_bytes(xonly_pubkey, signature, digest)
 
@@ -300,6 +311,8 @@ struct CryptoBackend(Movable):
         expected_parity: Int,
     ) raises -> Int32:
         if self.kind == CRYPTO_BACKEND_PURE:
+            if pure_crypto_fault_enabled(String("accept_taptweak")):
+                return CRYPTO_RESULT_VALID
             return pure_verify_taproot_tweak_precomputed(internal_xonly, tweak, expected_xonly, expected_parity)
         return self.native.verify_taproot_tweak_precomputed(internal_xonly, tweak, expected_xonly, expected_parity)
 
@@ -331,6 +344,27 @@ struct DiagnosticEvalResult(Copyable):
 
     def __init__(out self):
         self.passed = False
+        self.failure_stage = String("")
+        self.failure = String("")
+
+
+struct ScriptRejectEvalResult(Copyable):
+    var case_id: String
+    var fixture_id: String
+    var family: String
+    var mutation: String
+    var rejected: Bool
+    var accepted: Bool
+    var failure_stage: String
+    var failure: String
+
+    def __init__(out self):
+        self.case_id = String("")
+        self.fixture_id = String("")
+        self.family = String("")
+        self.mutation = String("")
+        self.rejected = False
+        self.accepted = False
         self.failure_stage = String("")
         self.failure = String("")
 
@@ -929,7 +963,7 @@ def decode_script_num_with_max(ref item: List[UInt8], max_len: Int) raises -> In
         result |= value << (8 * i)
     if negative:
         return -result
-    return result
+    return result.copy()
 
 
 def decode_script_num(ref item: List[UInt8]) raises -> Int:
@@ -2352,6 +2386,291 @@ def is_taproot_diagnostic_fixture(fixture_id: String) -> Bool:
         or fixture_id == "scripts.p2tr_tapscript_sha256_52024"
         or fixture_id == "scripts.p2tr_tapscript_size_52497"
     )
+
+
+def script_reject_case_count() -> Int:
+    return 6
+
+
+def script_reject_case_id(index: Int) raises -> String:
+    if index == 0:
+        return String("reject.p2pkh_wrong_signature")
+    if index == 1:
+        return String("reject.bare_multisig_wrong_signature")
+    if index == 2:
+        return String("reject.p2sh_redeem_hash_mismatch")
+    if index == 3:
+        return String("reject.segwit_v0_witness_script_hash_mismatch")
+    if index == 4:
+        return String("reject.taproot_wrong_tweak_output")
+    if index == 5:
+        return String("reject.taproot_wrong_schnorr_signature")
+    raise Error("reject case index out of range")
+
+
+def script_reject_case_fixture_id(index: Int) raises -> String:
+    if index == 0:
+        return String("scripts.p2pkh_sighash_single_38010")
+    if index == 1:
+        return String("scripts.bare_multisig_27840")
+    if index == 2:
+        return String("scripts.p2sh_add_51340")
+    if index == 3:
+        return String("scripts.p2wsh_op1_only_31842")
+    if index == 4:
+        return String("scripts.p2tr_scriptpath_44295")
+    if index == 5:
+        return String("scripts.p2tr_tapscript_numequal_32712")
+    raise Error("reject case index out of range")
+
+
+def script_reject_case_family(index: Int) raises -> String:
+    if index == 0:
+        return String("p2pkh")
+    if index == 1:
+        return String("bare_multisig")
+    if index == 2:
+        return String("p2sh")
+    if index == 3:
+        return String("segwit_v0")
+    if index == 4:
+        return String("taproot_tweak")
+    if index == 5:
+        return String("taproot_schnorr")
+    raise Error("reject case index out of range")
+
+
+def script_reject_case_mutation(index: Int) raises -> String:
+    if index == 0:
+        return String("mutate_ecdsa_signature_der_byte")
+    if index == 1:
+        return String("mutate_multisig_ecdsa_signature_der_byte")
+    if index == 2:
+        return String("mutate_redeem_script_hash_preimage")
+    if index == 3:
+        return String("mutate_witness_script_hash_preimage")
+    if index == 4:
+        return String("mutate_taproot_expected_output_key")
+    if index == 5:
+        return String("mutate_tapscript_schnorr_signature_byte")
+    raise Error("reject case index out of range")
+
+
+def _reject_result(index: Int) raises -> ScriptRejectEvalResult:
+    var result = ScriptRejectEvalResult()
+    result.case_id = script_reject_case_id(index)
+    result.fixture_id = script_reject_case_fixture_id(index)
+    result.family = script_reject_case_family(index)
+    result.mutation = script_reject_case_mutation(index)
+    return result^
+
+
+def _mutate_consensus_byte(ref data: List[UInt8]) -> List[UInt8]:
+    var out = clone_bytes(data)
+    if len(out) == 0:
+        out.append(UInt8(1))
+        return out^
+    if len(out) > 1:
+        out[len(out) - 2] = out[len(out) - 2] ^ UInt8(1)
+    else:
+        out[0] = out[0] ^ UInt8(1)
+    return out^
+
+
+def _reject_finish(mut result: ScriptRejectEvalResult, accepted: Bool, failure_stage: String, failure: String) -> ScriptRejectEvalResult:
+    result.accepted = accepted
+    result.rejected = not accepted
+    result.failure_stage = failure_stage
+    result.failure = failure
+    return result.copy()
+
+
+def _reject_p2pkh_wrong_signature(manifest_path: String, shim_path: String, ref crypto: CryptoBackend) raises -> ScriptRejectEvalResult:
+    var result = _reject_result(0)
+    try:
+        var fixture_id = result.fixture_id
+        var stem = _fixture_stem(fixture_id)
+        var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
+        var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+        var input_index = _fixture_input_index(fixture_id)
+        var stack = parse_push_only_stack(tx.inputs[input_index].script_sig)
+        if len(stack) < 2:
+            return _reject_finish(result, False, String("fixture_load"), String("P2PKH stack missing signature/pubkey"))
+        var signature = _mutate_consensus_byte(stack[len(stack) - 2].data)
+        var pubkey = stack[len(stack) - 1].data.copy()
+        var accepted = verify_ecdsa_signature_for_mode_with_crypto(
+            crypto, signature, pubkey, tx, input_index, script_pubkey, False, Int64(0)
+        )
+        return _reject_finish(result, accepted, String("ecdsa_verify"), String("mutated ECDSA signature accepted"))
+    except e:
+        return _reject_finish(result, False, diagnostic_failure_stage(String(e)), String(e))
+
+
+def _reject_bare_multisig_wrong_signature(manifest_path: String, shim_path: String, ref crypto: CryptoBackend) raises -> ScriptRejectEvalResult:
+    var result = _reject_result(1)
+    try:
+        var fixture = load_bare_multisig_fixture(manifest_path)
+        var stack = parse_push_only_stack(fixture.tx.inputs[fixture.input_index].script_sig)
+        var parsed = parse_bare_multisig_script(fixture.spent_script_pubkey)
+        if len(stack) < parsed.required_signatures + 1:
+            return _reject_finish(result, False, String("fixture_load"), String("CHECKMULTISIG stack underflow"))
+        if len(stack) > 1:
+            stack[len(stack) - 1].data = _mutate_consensus_byte(stack[len(stack) - 1].data)
+        var sig_offset = 0
+        var key_offset = 0
+        var remaining_sigs = parsed.required_signatures
+        var remaining_keys = parsed.pubkey_count
+        var accepted = True
+        while remaining_sigs > 0:
+            if remaining_sigs > remaining_keys:
+                accepted = False
+                break
+            var sig_index = len(stack) - 1 - sig_offset
+            var key_index = parsed.pubkey_count - 1 - key_offset
+            if sig_index <= 0 or key_index < 0:
+                accepted = False
+                break
+            var ok = verify_ecdsa_signature_for_mode_with_crypto(
+                crypto,
+                stack[sig_index].data,
+                parsed.pubkeys[key_index].data,
+                fixture.tx,
+                fixture.input_index,
+                fixture.spent_script_pubkey,
+                False,
+                Int64(0),
+            )
+            if ok:
+                sig_offset += 1
+                remaining_sigs -= 1
+            key_offset += 1
+            remaining_keys -= 1
+        if remaining_sigs != 0:
+            accepted = False
+        return _reject_finish(result, accepted, String("ecdsa_verify"), String("mutated multisig signature accepted"))
+    except e:
+        return _reject_finish(result, False, diagnostic_failure_stage(String(e)), String(e))
+
+
+def _reject_p2sh_redeem_hash_mismatch(manifest_path: String) raises -> ScriptRejectEvalResult:
+    var result = _reject_result(2)
+    try:
+        var fixture_id = result.fixture_id
+        var stem = _fixture_stem(fixture_id)
+        var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+        var redeem_script = _load_fixture_redeem_script(manifest_path, fixture_id, stem)
+        var mutated = _mutate_consensus_byte(redeem_script)
+        var redeem_hash = hash160(mutated)
+        var expected_hash = slice_bytes(script_pubkey, 2, 22)
+        return _reject_finish(
+            result,
+            bytes_equal(redeem_hash, expected_hash),
+            String("p2sh_template"),
+            String("mutated redeem script hash matched P2SH output"),
+        )
+    except e:
+        return _reject_finish(result, False, diagnostic_failure_stage(String(e)), String(e))
+
+
+def _reject_segwit_witness_script_hash_mismatch(manifest_path: String) raises -> ScriptRejectEvalResult:
+    var result = _reject_result(3)
+    try:
+        var fixture_id = result.fixture_id
+        var stem = _fixture_stem(fixture_id)
+        var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+        var witness_script = _load_fixture_witness_script(manifest_path, fixture_id, stem)
+        var mutated = _mutate_consensus_byte(witness_script)
+        var witness_hash = sha256_digest(mutated)
+        var expected_hash = slice_bytes(script_pubkey, 2, 34)
+        return _reject_finish(
+            result,
+            bytes_equal(witness_hash, expected_hash),
+            String("segwit_v0_template"),
+            String("mutated witness script hash matched P2WSH output"),
+        )
+    except e:
+        return _reject_finish(result, False, diagnostic_failure_stage(String(e)), String(e))
+
+
+def _reject_taproot_wrong_tweak_output(manifest_path: String, ref crypto: CryptoBackend) raises -> ScriptRejectEvalResult:
+    var result = _reject_result(4)
+    try:
+        var fixture_id = result.fixture_id
+        var stem = _fixture_stem(fixture_id)
+        var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+        var tapscript = _load_fixture_tapscript(manifest_path, fixture_id, stem)
+        var control = _load_fixture_control_block(manifest_path, fixture_id, stem)
+        var leaf_version = control[0] & UInt8(0xFE)
+        var leaf_digest = tapleaf_hash(leaf_version, tapscript)
+        var merkle_root = taproot_merkle_root_from_control(control, leaf_digest)
+        var internal_xonly = slice_bytes(control, 1, 33)
+        var expected_xonly = _mutate_consensus_byte(slice_bytes(script_pubkey, 2, 34))
+        var parity = Int(control[0] & UInt8(1))
+        var accepted = verify_taproot_tweak_with_crypto(crypto, internal_xonly, merkle_root, expected_xonly, parity)
+        return _reject_finish(result, accepted, String("taproot_tweak"), String("mutated Taproot output key accepted"))
+    except e:
+        return _reject_finish(result, False, diagnostic_failure_stage(String(e)), String(e))
+
+
+def _reject_taproot_wrong_schnorr_signature(manifest_path: String, shim_path: String, ref crypto: CryptoBackend) raises -> ScriptRejectEvalResult:
+    var result = _reject_result(5)
+    try:
+        var fixture_id = result.fixture_id
+        var stem = _fixture_stem(fixture_id)
+        var tx = _load_fixture_tx(manifest_path, fixture_id, stem)
+        var script_pubkey = _load_fixture_prev_spk(manifest_path, fixture_id, stem)
+        var tapscript = _load_fixture_tapscript(manifest_path, fixture_id, stem)
+        var control = _load_fixture_control_block(manifest_path, fixture_id, stem)
+        var input_index = _fixture_input_index(fixture_id)
+        var leaf_version = control[0] & UInt8(0xFE)
+        var leaf_digest = tapleaf_hash(leaf_version, tapscript)
+        var merkle_root = taproot_merkle_root_from_control(control, leaf_digest)
+        var internal_xonly = slice_bytes(control, 1, 33)
+        var expected_xonly = slice_bytes(script_pubkey, 2, 34)
+        var parity = Int(control[0] & UInt8(1))
+        if not verify_taproot_tweak_with_crypto(crypto, internal_xonly, merkle_root, expected_xonly, parity):
+            return _reject_finish(result, False, String("taproot_tweak"), String("positive Taproot tweak failed before mutation"))
+        var spent_prevouts = List[TaprootPrevout]()
+        for i in range(_fixture_prevout_count(fixture_id)):
+            var prevout = TaprootPrevout()
+            prevout.amount = _fixture_prevout_amount(fixture_id, i)
+            prevout.script_pubkey = _fixture_prevout_spk(fixture_id, i)
+            spent_prevouts.append(prevout^)
+        var witness_count = tx_witness_count(tx, input_index)
+        var stack = List[ScriptStackItem]()
+        var mutated = False
+        for i in range(witness_count - 2):
+            var item = tx_witness_item(tx, input_index, i)
+            if not mutated and (len(item.data) == 64 or len(item.data) == 65):
+                item.data = _mutate_consensus_byte(item.data)
+                mutated = True
+            stack.append(item^)
+        if not mutated:
+            return _reject_finish(result, False, String("fixture_load"), String("Taproot fixture had no Schnorr signature witness"))
+        var accepted = evaluate_tapscript_with_crypto(
+            tapscript, stack^, tx, input_index, spent_prevouts, leaf_digest, shim_path, crypto
+        )
+        return _reject_finish(result, accepted, String("schnorr_verify"), String("mutated Schnorr signature accepted"))
+    except e:
+        return _reject_finish(result, False, diagnostic_failure_stage(String(e)), String(e))
+
+
+def evaluate_script_reject_case(
+    manifest_path: String, case_index: Int, shim_path: String, ref crypto: CryptoBackend
+) raises -> ScriptRejectEvalResult:
+    if case_index == 0:
+        return _reject_p2pkh_wrong_signature(manifest_path, shim_path, crypto)
+    if case_index == 1:
+        return _reject_bare_multisig_wrong_signature(manifest_path, shim_path, crypto)
+    if case_index == 2:
+        return _reject_p2sh_redeem_hash_mismatch(manifest_path)
+    if case_index == 3:
+        return _reject_segwit_witness_script_hash_mismatch(manifest_path)
+    if case_index == 4:
+        return _reject_taproot_wrong_tweak_output(manifest_path, crypto)
+    if case_index == 5:
+        return _reject_taproot_wrong_schnorr_signature(manifest_path, shim_path, crypto)
+    raise Error("reject case index out of range")
 
 
 def parse_transaction(var payload: List[UInt8]) raises -> Transaction:

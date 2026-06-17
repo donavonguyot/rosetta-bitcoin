@@ -85,9 +85,26 @@ native prerequisites a future port would need?
   jobs, the shadow replay uses the same deterministic job/result shape as
   native validation: per-job result slots are filled through Mojo `parallelize`,
   then reduced sequentially into runner, support, timing, and disagreement
-  fields. The Docker 5k diagnostic replay currently reaches height 5000 with
-  zero unsupported pure-shadow script inputs and zero disagreements; this does
-  not change Project benchmark evidence.
+  fields. The Docker 5k and 50k diagnostic replays currently reach their target
+  heights with zero unsupported pure-shadow script inputs, zero disagreements,
+  no native fallback, and positive shadow parallel batch evidence; this does not
+  change Project benchmark evidence.
+- `script-corpus-reject` is a Mojo-local diagnostic must-reject surface derived
+  from existing positive Shared fixtures. It mutates representative P2PKH,
+  bare multisig, P2SH, SegWit v0/P2WSH, Taproot tweak, and Taproot Schnorr
+  paths and emits `port.script_corpus_reject_result.v1` under
+  `.benchmark-results/`. Both native and pure backends reject the current set,
+  and dedicated pure-only fault modes (`accept_ecdsa`, `accept_schnorr`,
+  `accept_taptweak`) intentionally turn the reject corpus red. These artifacts
+  are diagnostic and Mojo-local; they are not canonical Shared corpus evidence.
+- `local-reference-proof --crypto-backend pure` is a diagnostic 5k-only
+  sole-backend replay. In this mode pure Mojo crypto determines block
+  acceptance while storage, P2P, and UTXO accounting stay on the same proof
+  path. The Docker diagnostic reaches height 5000 with the expected hash and
+  UTXO count, reports `crypto_backend: "mojo-pure-secp256k1"`,
+  `native_crypto_backend: "none"`, no native fallback, and an explicit
+  diagnostic non-comparable marker. It is not a Project benchmark artifact and
+  does not replace the native comparable lane.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,
@@ -127,10 +144,13 @@ make host-storage-proof
 make host-script-corpus-dev
 make host-script-corpus
 make host-script-corpus-shadow
+make host-script-corpus-reject
+make host-script-corpus-reject-red
 make host-local-reference-proof
 make host-shakedown-50k-proof
 make host-shadow-5k-proof
 make host-shadow-50k-proof
+make host-pure-5k-proof
 make host-smoke-once
 make host-toolchain-smoke
 make host-parallel-runner-smoke
@@ -157,10 +177,13 @@ make docker-native-boundary-audit
 make docker-storage-proof
 make docker-script-corpus
 make docker-script-corpus-shadow
+make docker-script-corpus-reject
+make docker-script-corpus-reject-red
 make docker-proof-local
 make docker-proof-50k
 make docker-shadow-5k-proof
 make docker-shadow-50k-proof
+make docker-pure-5k-proof
 make docker-smoke-once
 make docker-toolchain-smoke
 make docker-parallel-runner-smoke

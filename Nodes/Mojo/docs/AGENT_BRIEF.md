@@ -31,8 +31,10 @@ pure-crypto-profile --result-path <path>
 storage-proof --datadir <path> --result-path <path>
 script-corpus --manifest <path> --result-path <path>
 script-corpus --manifest <path> --shadow-crypto --result-path <path>
+script-corpus-reject --manifest <path> --result-path <path> --crypto-backend native|pure
 local-reference-proof --datadir <path> --target 5000 --peer <host:port> --result-path <path>
 local-reference-proof --datadir <path> --target 50000 --peer <host:port> --result-path <path>
+local-reference-proof --crypto-backend pure --datadir <path> --target 5000 --peer <host:port> --result-path <path>
 ```
 
 The CLI is Mojo-owned and must continue to report
@@ -100,8 +102,28 @@ other than `1`, shadow replay fills per-job result slots through Mojo
 must report `runner_mode`, `runner_actual_mode`, `script_jobs`,
 `parallel_batches`, and `thread_count`; a parallel claim needs positive batch
 evidence.
-The current Docker 5k diagnostic replay is clean: zero unsupported pure-shadow
-script inputs and zero disagreements at height 5000.
+The current Docker 5k and 50k diagnostic replays are clean: zero unsupported
+pure-shadow script inputs, zero disagreements, no native fallback, and positive
+shadow parallel batch evidence at heights 5000 and 50000.
+
+`script-corpus-reject` is a Mojo-local must-reject diagnostic surface. It uses
+repo-owned mutation metadata in `fixtures/script_corpus_reject_cases.json` and
+derives reject rows from existing positive Shared fixtures rather than changing
+the Shared corpus. Current rows cover P2PKH, bare multisig, P2SH, SegWit
+v0/P2WSH, Taproot tweak, and Taproot Schnorr paths. Native and pure backends
+must reject every row. The red targets deliberately enable pure-only fault
+modes with `MOJOBITNODE_ENABLE_REJECT_FAULTS=1` and
+`MOJOBITNODE_PURE_CRYPTO_FAULT=accept_ecdsa|accept_schnorr|accept_taptweak`;
+those modes must stay confined to reject-corpus red checks.
+
+`local-reference-proof --crypto-backend pure` is diagnostic 5k-only in this
+slice. Pure Mojo crypto determines block acceptance, the artifact reports
+`native_crypto_backend: "none"` and `crypto_backend:
+"mojo-pure-secp256k1"`, and the run remains
+`diagnostic_non_comparable`. The current Docker diagnostic reaches height 5000
+with the expected hash and UTXO count, no native fallback, clean telemetry, and
+positive parallel batch evidence. Do not treat it as Project evidence or a
+replacement for the native comparable 5k/50k lane.
 
 ## Native Boundary
 
@@ -202,6 +224,8 @@ make host-script-corpus-foundation-smoke
 make host-block-core-smoke
 make host-script-corpus
 make host-script-corpus-shadow
+make host-script-corpus-reject
+make host-script-corpus-reject-red
 make host-pure-crypto-profile
 make host-pure-crypto-microbench
 make host-native-boundary-audit
@@ -209,8 +233,11 @@ make host-local-reference-proof
 make host-shakedown-50k-proof
 make host-shadow-5k-proof
 make host-shadow-50k-proof
+make host-pure-5k-proof
 make docker-script-corpus
 make docker-script-corpus-shadow
+make docker-script-corpus-reject
+make docker-script-corpus-reject-red
 make docker-pure-crypto-profile
 make docker-pure-crypto-microbench
 make docker-native-boundary-audit
@@ -218,6 +245,7 @@ make docker-proof-local
 make docker-proof-50k
 make docker-shadow-5k-proof
 make docker-shadow-50k-proof
+make docker-pure-5k-proof
 ```
 
 ## Current Gate Order

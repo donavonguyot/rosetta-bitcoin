@@ -166,7 +166,16 @@ def validate(path: Path, gate: str, *, require_zero_unsupported: bool = False) -
     if not isinstance(timing, dict):
         errors.append("shadow timing_ms object missing")
         timing = {}
-    for field in ("p2pkh_ecdsa", "taproot_schnorr", "taproot_tweak"):
+    for field in (
+        "total",
+        "p2pkh_ecdsa",
+        "p2sh",
+        "segwit_v0",
+        "legacy_other",
+        "other",
+        "taproot_schnorr",
+        "taproot_tweak",
+    ):
         if not nonnegative_int(timing.get(field)):
             errors.append(f"timing_ms.{field} must be nonnegative integer")
 
