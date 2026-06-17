@@ -2,7 +2,8 @@
 
 This directory is a bounded Mojo contender, not a tip-capable RosettaBitcoin
 port. Current work should preserve the active gate boundary unless a later plan
-explicitly adds external peers, supervisor loops, long-run lanes, or tip work.
+explicitly adds external peers, supervisor loops, tip-once, or tip-maintenance
+work.
 
 ## Current Toolchain
 
@@ -258,6 +259,9 @@ make docker-pure-crypto-microbench
 make docker-native-boundary-audit
 make docker-proof-local
 make docker-proof-50k
+make docker-proof-100k
+make docker-status-100k
+make docker-proof-post-100k-to-tip
 make docker-shadow-5k-proof
 make docker-shadow-50k-proof
 make docker-pure-5k-proof
@@ -271,7 +275,10 @@ The current port order is:
 2. Keep Project-accepted baseline 5k evidence clean.
 3. Keep Project-accepted 50k shakedown evidence quarantined to the prior
    accepted artifact while the diagnostic parallel runner is validated.
-4. Treat 100k as the next missing gate; do not start it without a separate plan.
+4. Treat `performance_100k` as the next missing canonical evidence gate; run it
+   only through Project's campaign runner and native comparable proof lane.
+5. Treat `post_100k_to_tip` as blocked until the durable 100k proof volume is
+   ready and `docker-status-100k` reports source-state truth.
 
 Strict 5k/50k proof requires RocksDB runtime truth, native crypto, WAL, fixed
 benchmark knobs, `core_spendable_v1` UTXO accounting, and canonical importable

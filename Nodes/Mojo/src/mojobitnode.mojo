@@ -5,7 +5,7 @@ from std.os import getenv
 from std.pathlib import Path
 from std.sys import argv
 
-from block_core import Native, json_escape, local_reference_proof
+from block_core import Native, chainstate_status_json, json_escape, local_reference_proof
 from pure_secp import (
     pure_test_ecdsa_inverse_s,
     pure_test_ecdsa_normalized_s,
@@ -1482,6 +1482,7 @@ def main() raises:
     var microbench_iterations = 1000
     var microbench_case = String("all")
     var native_compare = False
+    var resume_from_state = False
     var peer = getenv("REFERENCE_P2P_PEER", "127.0.0.1:48333")
     var target = 5000
     var progress = 500
@@ -1504,6 +1505,8 @@ def main() raises:
             crypto_backend = String(args[i + 1])
         if args[i] == "--native-compare":
             native_compare = True
+        if args[i] == "--resume-from-state":
+            resume_from_state = True
         if args[i] == "--iterations" and i + 1 < len(args):
             microbench_iterations = Int(String(args[i + 1]))
         if args[i] == "--case" and i + 1 < len(args):
@@ -1516,23 +1519,7 @@ def main() raises:
             progress = Int(String(args[i + 1]))
 
     if command == "status":
-        var native = OwnedDLHandle(shim_path)
-        var crypto_available = native.call["mojobitnode_native_crypto_available", Int32]() == 1
-        var json = (
-            String('{"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","chain":"testnet4",')
-            + String('"runtime_surface":"')
-            + surface
-            + String('","entrypoint_language":"mojo","native_shim":"owned_c",')
-            + String('"sync_status":"spike_not_started","binary_gate_status":"not_attempted",')
-            + String('"header_height":0,"stored_block_height":0,"validated_height":0,"validated_hash":"",')
-            + String('"chainstate_backend":"rocksdb","runtime_truth_backend":"rocksdb","rocksdb_runtime_truth":true,')
-            + String('"chainstate_status":"spike_not_initialized","datadir":"')
-            + datadir
-            + String('","native_crypto_backend":"libsecp256k1","native_crypto_available":')
-            + bool_json(crypto_available)
-            + String(',"current_blocker":null,"last_error":""}')
-        )
-        print(json)
+        print(chainstate_status_json(shim_path, surface, datadir))
         return
 
     if command == "native-crypto-vectors":
@@ -2138,6 +2125,7 @@ def main() raises:
             progress,
             shadow_crypto,
             proof_crypto_kind,
+            resume_from_state,
         )
         print(proof.json)
         return

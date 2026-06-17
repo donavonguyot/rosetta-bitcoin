@@ -4747,13 +4747,55 @@ def verify_ecdsa_signature_for_mode_with_crypto(
     var der = slice_bytes(signature, 0, len(signature) - 1)
     var digest = signature_digest_for_mode(tx, input_index, script_code, signature, witness_v0, witness_amount_sats)
     var result = crypto.verify_ecdsa_der_bytes(pubkey, der, digest)
+    return _ecdsa_crypto_result_to_bool(result, der, witness_v0)
+
+
+def _is_strict_der_signature(ref der: List[UInt8]) -> Bool:
+    if len(der) < 8 or len(der) > 72:
+        return False
+    if der[0] != UInt8(0x30):
+        return False
+    if Int(der[1]) != len(der) - 2:
+        return False
+    if der[2] != UInt8(0x02):
+        return False
+    var r_len = Int(der[3])
+    if r_len == 0:
+        return False
+    var s_marker = 4 + r_len
+    if s_marker + 2 > len(der):
+        return False
+    if der[s_marker] != UInt8(0x02):
+        return False
+    var s_len = Int(der[s_marker + 1])
+    if s_len == 0:
+        return False
+    if s_marker + 2 + s_len != len(der):
+        return False
+    if (der[4] & UInt8(0x80)) != UInt8(0):
+        return False
+    if r_len > 1 and der[4] == UInt8(0) and (der[5] & UInt8(0x80)) == UInt8(0):
+        return False
+    var s_offset = s_marker + 2
+    if (der[s_offset] & UInt8(0x80)) != UInt8(0):
+        return False
+    if s_len > 1 and der[s_offset] == UInt8(0) and (der[s_offset + 1] & UInt8(0x80)) == UInt8(0):
+        return False
+    return True
+
+
+def _ecdsa_crypto_result_to_bool(result: Int32, ref der: List[UInt8], witness_v0: Bool) raises -> Bool:
     if result == 0:
         return True
     if result == 1:
         return False
     if result == CRYPTO_RESULT_UNSUPPORTED:
         raise Error("unsupported crypto backend for ECDSA")
-    raise Error("malformed ECDSA signature or pubkey")
+    if not _is_strict_der_signature(der):
+        raise Error("malformed ECDSA signature")
+    if witness_v0:
+        raise Error("malformed ECDSA pubkey")
+    return False
 
 
 def verify_ecdsa_signature_for_mode_with_crypto_timed(
@@ -4784,15 +4826,8 @@ def verify_ecdsa_signature_for_mode_with_crypto_timed(
     result.verify_ms = timer.call["mojobitnode_now_ms", Int64]() - verify_started
     result.signature_count = 1
     result.total_ms = timer.call["mojobitnode_now_ms", Int64]() - total_started
-    if crypto_result == 0:
-        result.passed = True
-        return result^
-    if crypto_result == 1:
-        result.passed = False
-        return result^
-    if crypto_result == CRYPTO_RESULT_UNSUPPORTED:
-        raise Error("unsupported crypto backend for ECDSA")
-    raise Error("malformed ECDSA signature or pubkey")
+    result.passed = _ecdsa_crypto_result_to_bool(crypto_result, der, witness_v0)
+    return result^
 
 
 def verify_ecdsa_signature_for_mode_cached(
@@ -4841,13 +4876,7 @@ def verify_ecdsa_signature_for_mode_cached_with_crypto(
         tx, input_index, script_code, signature, witness_v0, witness_amount_sats, precompute
     )
     var result = crypto.verify_ecdsa_der_bytes(pubkey, der, digest)
-    if result == 0:
-        return True
-    if result == 1:
-        return False
-    if result == CRYPTO_RESULT_UNSUPPORTED:
-        raise Error("unsupported crypto backend for ECDSA")
-    raise Error("malformed ECDSA signature or pubkey")
+    return _ecdsa_crypto_result_to_bool(result, der, witness_v0)
 
 
 def verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
@@ -4873,13 +4902,7 @@ def verify_ecdsa_signature_for_mode_cached_with_crypto_profiled(
     )
     hotpath_record_native_ecdsa(profile, len(pubkey), len(der), len(digest))
     var result = crypto.verify_ecdsa_der_bytes(pubkey, der, digest)
-    if result == 0:
-        return True
-    if result == 1:
-        return False
-    if result == CRYPTO_RESULT_UNSUPPORTED:
-        raise Error("unsupported crypto backend for ECDSA")
-    raise Error("malformed ECDSA signature or pubkey")
+    return _ecdsa_crypto_result_to_bool(result, der, witness_v0)
 
 
 def verify_schnorr_signature(

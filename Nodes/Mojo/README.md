@@ -121,9 +121,10 @@ native prerequisites a future port would need?
   diagnostic non-comparable marker. It is not a Project benchmark artifact and
   does not replace the native comparable lane.
 
-The proof binary is intentionally bounded. It implements the offline corpus and
-local Reference 5k/50k proof paths, but it does not implement external peers,
-supervisor loops, 100k/tip benchmark lanes, or tip maintenance.
+The proof binary is intentionally bounded. It implements the offline corpus,
+local Reference 5k/50k proof paths, and the official native 100k /
+post-100k-to-tip command surfaces. External peers, supervisor loops, tip-once,
+and tip maintenance remain out of scope until a later plan adds them.
 
 The supported `mojobitnode` command is Mojo-owned and reports
 `entrypoint_language: "mojo"`.
@@ -185,6 +186,7 @@ make docker-build
 make docker-mojo-version
 make docker-warm
 make docker-status
+make docker-status-100k
 make docker-native-crypto-vectors
 make docker-pure-crypto-profile
 make docker-pure-crypto-microbench
@@ -196,6 +198,8 @@ make docker-script-corpus-reject
 make docker-script-corpus-reject-red
 make docker-proof-local
 make docker-proof-50k
+make docker-proof-100k
+make docker-proof-post-100k-to-tip
 make docker-shadow-5k-proof
 make docker-shadow-50k-proof
 make docker-pure-5k-proof

@@ -23,6 +23,7 @@
 
 typedef struct {
   rocksdb_t *db;
+  rocksdb_options_t *options;
   rocksdb_cache_t *block_cache;
   rocksdb_block_based_table_options_t *block_options;
   rocksdb_filterpolicy_t *filter_policy;
@@ -512,32 +513,29 @@ int64_t mojobitnode_rocksdb_open_len(const char *datadir, int32_t datadir_len) {
   rocksdb_options_set_block_based_table_factory(options, block_options);
 
   rocksdb_t *db = rocksdb_open(options, dbpath, &err);
-  rocksdb_options_destroy(options);
   if (err) {
+    fprintf(stderr, "mojobitnode_rocksdb_open_len: rocksdb_open failed for %s: %s\n", dbpath, err);
     rocksdb_free(err);
     if (db) {
       rocksdb_close(db);
     }
-    rocksdb_filterpolicy_destroy(filter_policy);
-    rocksdb_block_based_options_destroy(block_options);
-    rocksdb_cache_destroy(block_cache);
+    /*
+     * Keep the configured option graph alive for process lifetime. Some C API
+     * builds hand table-factory/filter internals to RocksDB shared ownership,
+     * and destroying the graph here can double-free those internals.
+     */
     return 0;
   }
   if (!db) {
-    rocksdb_filterpolicy_destroy(filter_policy);
-    rocksdb_block_based_options_destroy(block_options);
-    rocksdb_cache_destroy(block_cache);
     return 0;
   }
   mojo_rocksdb_handle *wrapped = (mojo_rocksdb_handle *)calloc(1, sizeof(mojo_rocksdb_handle));
   if (!wrapped) {
     rocksdb_close(db);
-    rocksdb_filterpolicy_destroy(filter_policy);
-    rocksdb_block_based_options_destroy(block_options);
-    rocksdb_cache_destroy(block_cache);
     return 0;
   }
   wrapped->db = db;
+  wrapped->options = options;
   wrapped->block_cache = block_cache;
   wrapped->block_options = block_options;
   wrapped->filter_policy = filter_policy;

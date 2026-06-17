@@ -490,6 +490,22 @@
       "path": "Nodes/Shared/conformance/results/mojo_control_shakedown_50k_benchmark_20260615T230521Z.json",
       "status": "current",
       "notes": "Current comparable mojo shakedown_50k proof accepted by campaign shakedown_50k_20260615_160338; parallel runner evidence is under audit before any newer 50k promotion."
+    },
+    {
+      "port": "mojo",
+      "claim": "performance_100k",
+      "gate_id": "performance_100k",
+      "path": "Nodes/Shared/conformance/results/mojo_control_performance_100k_benchmark_20260617T071156Z.json",
+      "status": "current",
+      "notes": "Current comparable mojo performance_100k proof accepted by campaign performance_100k_20260616_233213."
+    },
+    {
+      "port": "mojo",
+      "claim": "post_100k_to_tip",
+      "gate_id": "post_100k_to_tip",
+      "path": "Nodes/Shared/conformance/results/mojo_control_post_100k_to_tip_benchmark_20260617T071750Z.json",
+      "status": "current",
+      "notes": "Current comparable mojo post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260617_001224."
     }
   ]
 }

@@ -82,6 +82,7 @@ comptime MSG_WITNESS_BLOCK = UInt32(0x40000002)
 comptime GENESIS_HASH_DISPLAY = "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043"
 comptime BASELINE_5K_HASH_DISPLAY = "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2"
 comptime SHAKEDOWN_50K_HASH_DISPLAY = "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb"
+comptime PERFORMANCE_100K_HASH_DISPLAY = "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1"
 
 
 struct Native(Movable):
@@ -626,7 +627,9 @@ def benchmark_gate_for_target(target: Int) raises -> String:
         return String("baseline_5k")
     if target == 50000:
         return String("shakedown_50k")
-    raise Error("Mojo local-reference-proof supports targets 5000 and 50000 only")
+    if target == 100000:
+        return String("performance_100k")
+    raise Error("Mojo fresh local-reference-proof supports targets 5000, 50000, and 100000 only")
 
 
 def target_label_for_target(target: Int) raises -> String:
@@ -634,7 +637,9 @@ def target_label_for_target(target: Int) raises -> String:
         return String("5k")
     if target == 50000:
         return String("50k")
-    raise Error("Mojo local-reference-proof supports targets 5000 and 50000 only")
+    if target == 100000:
+        return String("100k")
+    raise Error("Mojo fresh local-reference-proof supports targets 5000, 50000, and 100000 only")
 
 
 def expected_hash_for_target(target: Int) raises -> String:
@@ -642,7 +647,9 @@ def expected_hash_for_target(target: Int) raises -> String:
         return String(BASELINE_5K_HASH_DISPLAY)
     if target == 50000:
         return String(SHAKEDOWN_50K_HASH_DISPLAY)
-    raise Error("Mojo local-reference-proof supports targets 5000 and 50000 only")
+    if target == 100000:
+        return String(PERFORMANCE_100K_HASH_DISPLAY)
+    raise Error("Mojo fresh local-reference-proof supports targets 5000, 50000, and 100000 only")
 
 
 def expected_utxos_for_target(target: Int) raises -> Int:
@@ -650,7 +657,9 @@ def expected_utxos_for_target(target: Int) raises -> Int:
         return 4574
     if target == 50000:
         return 568855
-    raise Error("Mojo local-reference-proof supports targets 5000 and 50000 only")
+    if target == 100000:
+        return 13154991
+    raise Error("Mojo fresh local-reference-proof supports targets 5000, 50000, and 100000 only")
 
 
 def _parse_non_negative_int(value: String, default_value: Int) -> Int:
@@ -1576,6 +1585,68 @@ def db_get_string(mut native: Native, db: Int64, name: String) raises -> String:
     for i in range(len(bytes)):
         out += chr(Int(bytes[i]))
     return out
+
+
+def db_get_string_default(mut native: Native, db: Int64, name: String, default_value: String) -> String:
+    try:
+        var value = db_get_string(native, db, name)
+        if value.byte_length() == 0:
+            return default_value
+        return value^
+    except e:
+        return default_value
+
+
+def chainstate_status_json(shim_path: String, surface: String, datadir: String) raises -> String:
+    var native = Native(shim_path)
+    var crypto_available = native.handle.call["mojobitnode_native_crypto_available", Int32]() == 1
+    var db = Int64(0)
+    var sync_status = String("spike_not_started")
+    var validated_height = String("0")
+    var validated_hash = String("")
+    var utxo_count = String("0")
+    var native_crypto_backend = String("libsecp256k1")
+    var chainstate_status = String("spike_not_initialized")
+    try:
+        db = native.rocksdb_open(datadir)
+        sync_status = db_get_string_default(native, db, String("sync_status"), sync_status)
+        validated_height = db_get_string_default(native, db, String("validated_height"), validated_height)
+        validated_hash = db_get_string_default(native, db, String("validated_hash"), validated_hash)
+        utxo_count = db_get_string_default(native, db, String("chainstate_utxo_count"), utxo_count)
+        native_crypto_backend = db_get_string_default(native, db, String("native_crypto_backend"), native_crypto_backend)
+        if validated_hash.byte_length() > 0 or validated_height != String("0"):
+            chainstate_status = String("usable")
+    except e:
+        chainstate_status = String("unavailable")
+    if db != 0:
+        native.rocksdb_close(db)
+    return (
+        String('{"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","chain":"testnet4",')
+        + String('"runtime_surface":"')
+        + json_escape(surface)
+        + String('","entrypoint_language":"mojo","native_shim":"owned_c","sync_status":"')
+        + json_escape(sync_status)
+        + String('","binary_gate_status":"not_attempted","header_height":')
+        + validated_height
+        + String(',"stored_block_height":')
+        + validated_height
+        + String(',"validated_height":')
+        + validated_height
+        + String(',"validated_hash":"')
+        + json_escape(validated_hash)
+        + String('","chainstate_backend":"rocksdb","runtime_truth_backend":"rocksdb","rocksdb_runtime_truth":true,')
+        + String('"chainstate_status":"')
+        + chainstate_status
+        + String('","datadir":"')
+        + json_escape(datadir)
+        + String('","native_crypto_backend":"')
+        + json_escape(native_crypto_backend)
+        + String('","native_crypto_available":')
+        + bool_json(crypto_available)
+        + String(',"chainstate_utxo_count":')
+        + utxo_count
+        + String(',"utxo_accounting_policy":"core_spendable_v1","current_blocker":null,"last_error":""}')
+    )
 
 
 def serialize_transaction_no_witness(ref tx: Transaction) raises -> List[UInt8]:
@@ -2993,12 +3064,13 @@ def local_reference_proof(
     progress_interval: Int,
     shadow_crypto_enabled: Bool,
     proof_crypto_kind: Int,
+    resume_from_state: Bool,
 ) raises -> ProofResult:
-    var benchmark_gate = benchmark_gate_for_target(target)
+    var benchmark_gate = String("post_100k_to_tip") if resume_from_state else benchmark_gate_for_target(target)
     var benchmark_kind = benchmark_gate + String("_p2p")
-    var target_label = target_label_for_target(target)
-    var expected_hash = expected_hash_for_target(target)
-    var expected_utxos = expected_utxos_for_target(target)
+    var target_label = String("100k to tip") if resume_from_state else target_label_for_target(target)
+    var expected_hash = getenv("REFERENCE_FINISH_HASH", "") if resume_from_state else expected_hash_for_target(target)
+    var expected_utxos = -1 if resume_from_state else expected_utxos_for_target(target)
     var native = Native(shim_path)
     native.crypto_metrics_reset()
     var started = native.now_ms()
@@ -3012,21 +3084,46 @@ def local_reference_proof(
     var pure_proof = proof_crypto_kind == CRYPTO_BACKEND_PURE
     var crypto_backend = String("mojo-pure-secp256k1") if pure_proof else String("libsecp256k1")
     var native_crypto_backend = String("none") if pure_proof else String("libsecp256k1")
+    var source_state_height = 0
+    var source_state_hash = String(GENESIS_HASH_DISPLAY)
+    var source_state_utxos = 0
     var current_utxos = 0
     var blocks_fetched = 0
     var blocks_connected = 0
     try:
-        emit_telemetry(benchmark_gate, String("run_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
-        emit_telemetry(benchmark_gate, String("container_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
+        if resume_from_state:
+            source_state_height = _parse_non_negative_int(db_get_string(native, db, String("validated_height")), -1)
+            source_state_hash = db_get_string(native, db, String("validated_hash"))
+            source_state_utxos = _parse_non_negative_int(db_get_string(native, db, String("chainstate_utxo_count")), -1)
+            if source_state_height < 100000:
+                raise Error("post_100k_to_tip source state is below 100k")
+            if source_state_hash.byte_length() == 0:
+                raise Error("post_100k_to_tip source state hash is missing")
+            if source_state_utxos <= 0:
+                raise Error("post_100k_to_tip source state UTXO count is missing")
+            if source_state_height == 100000:
+                if source_state_hash != String(PERFORMANCE_100K_HASH_DISPLAY):
+                    raise Error("post_100k_to_tip source 100k hash mismatch")
+                if source_state_utxos != 13154991:
+                    raise Error("post_100k_to_tip source 100k UTXO count mismatch")
+            if target <= source_state_height:
+                raise Error("post_100k_to_tip target must be above source state")
+            current_utxos = source_state_utxos
+        emit_telemetry(benchmark_gate, String("run_started"), String("startup"), source_state_height, target, source_state_hash, peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
+        emit_telemetry(benchmark_gate, String("container_started"), String("startup"), source_state_height, target, source_state_hash, peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
         db_put_string(native, db, String("chainstate_backend"), String("rocksdb"))
         db_put_string(native, db, String("native_crypto_backend"), native_crypto_backend)
         db_put_string(native, db, String("crypto_backend"), crypto_backend)
         db_put_string(native, db, String("sync_status"), String("headers_syncing"))
-        emit_telemetry(benchmark_gate, String("node_started"), String("startup"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
+        emit_telemetry(benchmark_gate, String("node_started"), String("startup"), source_state_height, target, source_state_hash, peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
         handshake(native, fd)
-        emit_telemetry(benchmark_gate, String("first_peer_byte"), String("peer_connect"), 0, target, String(GENESIS_HASH_DISPLAY), peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
+        emit_telemetry(benchmark_gate, String("first_peer_byte"), String("peer_connect"), source_state_height, target, source_state_hash, peer, current_utxos, native.now_ms() - started, 0, timing, 0, 0, 0)
         var headers = headers_through(native, fd, target)
-        var cursor = 0
+        if resume_from_state:
+            expected_hash = getenv("REFERENCE_FINISH_HASH", "")
+            if expected_hash.byte_length() == 0:
+                expected_hash = display_hash(headers[target])
+        var cursor = source_state_height + 1 if resume_from_state else 0
         while cursor <= target:
             var end = cursor + 16
             if end > target + 1:
@@ -3066,7 +3163,7 @@ def local_reference_proof(
                 blocks_connected += 1
                 var h = display_hash(blocks[i].hash)
                 var last_block_ms = native.now_ms() - block_started
-                if height == 1:
+                if blocks_connected == 1:
                     emit_telemetry(benchmark_gate, String("first_block_connected"), String("block_connect"), height, target, h, peer, current_utxos, native.now_ms() - started, last_block_ms, timing, current_block_tx_count, current_block_vin_count, current_block_script_input_count)
                 if progress_interval > 0 and (height == 0 or height == target or height % progress_interval == 0):
                     emit_progress(height, target, h, peer, current_utxos, last_block_ms, timing)
@@ -3091,12 +3188,22 @@ def local_reference_proof(
         var finish_hash = db_get_string(native, db, String("validated_hash"))
         if finish_hash != expected_hash:
             raise Error(benchmark_gate + String(" target hash mismatch"))
-        if current_utxos != expected_utxos:
+        if expected_utxos >= 0 and current_utxos != expected_utxos:
             raise Error(benchmark_gate + String(" UTXO count mismatch: ") + String(current_utxos))
         var total_ms = native.now_ms() - started
         refresh_crypto_metrics(native, timing)
         emit_telemetry(benchmark_gate, String("run_finished"), String("complete"), target, target, finish_hash, peer, current_utxos, total_ms, 0, timing, 0, 0, 0)
         var telemetry_tick_count = telemetry_tick_count_for_target(target, progress_interval)
+        var source_state_json = String("")
+        if resume_from_state:
+            source_state_json = (
+                String(',"source_state_gate":"performance_100k","source_state_origin":"port_durable_state","source_state_height":')
+                + String(source_state_height)
+                + String(',"source_state_hash":"')
+                + source_state_hash
+                + String('","source_state_utxo_count":')
+                + String(source_state_utxos)
+            )
         var json = (
             String('{"schema":"port.local_reference_proof.v1","category":"local_reference_sync",')
             + String('"benchmark_contract_version":1,"benchmark_gate":"')
@@ -3125,7 +3232,9 @@ def local_reference_proof(
             + String('","script_runner_actual_mode":"')
             + script_runner_mode(timing)
             + String('",')
-            + String('"rocksdb_wal_disabled":false,"fresh_state":true,"resume_supported":true,"datadir":"')
+            + String('"rocksdb_wal_disabled":false,"fresh_state":')
+            + (String("false") if resume_from_state else String("true"))
+            + String(',"resume_supported":true,"datadir":"')
             + datadir
             + String('","chainstate_backend":"rocksdb","chainstate_status":"usable","native_storage":true,')
             + String('"native_crypto_available":')
@@ -3152,13 +3261,17 @@ def local_reference_proof(
             + String('"current_blocker":null,"binary_gate_status":"not_attempted","failures":[],')
             + shadow_crypto_json(shadow_stats)
             + String(",")
-            + String('"reference_start_height":0,"reference_start_hash":"')
-            + String(GENESIS_HASH_DISPLAY)
+            + String('"reference_start_height":')
+            + String(source_state_height)
+            + String(',"reference_start_hash":"')
+            + source_state_hash
             + String('","reference_finish_height":')
             + String(target)
             + String(',"reference_finish_hash":"')
             + expected_hash
-            + String('","captured_at":"unix_ms:')
+            + String('"')
+            + source_state_json
+            + String(',"captured_at":"unix_ms:')
             + String(started)
             + String('","telemetry_schema":"benchmark.telemetry_tick.v1","telemetry_summary":{"telemetry_quality":"clean","tick_count":')
             + String(telemetry_tick_count)
