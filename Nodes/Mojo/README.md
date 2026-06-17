@@ -112,19 +112,23 @@ native prerequisites a future port would need?
   and dedicated pure-only fault modes (`accept_ecdsa`, `accept_schnorr`,
   `accept_taptweak`) intentionally turn the reject corpus red. These artifacts
   are diagnostic and Mojo-local; they are not canonical Shared corpus evidence.
-- `local-reference-proof --crypto-backend pure` is a diagnostic 5k-only
-  sole-backend replay. In this mode pure Mojo crypto determines block
-  acceptance while storage, P2P, and UTXO accounting stay on the same proof
-  path. The Docker diagnostic reaches height 5000 with the expected hash and
-  UTXO count, reports `crypto_backend: "mojo-pure-secp256k1"`,
-  `native_crypto_backend: "none"`, no native fallback, and an explicit
-  diagnostic non-comparable marker. It is not a Project benchmark artifact and
-  does not replace the native comparable lane.
+- `local-reference-proof --crypto-backend pure` is a diagnostic sole-backend
+  replay for the bounded 5k, 100k, and post-100k-to-tip surfaces. In this mode
+  pure Mojo crypto determines block acceptance while storage, P2P, and UTXO
+  accounting stay on the same proof path. Pure artifacts report
+  `crypto_backend: "mojo-pure-secp256k1"`, `native_crypto_backend: "none"`, no
+  native fallback, and an explicit diagnostic non-comparable marker.
+  `local-reference-proof --shadow-crypto` has matching diagnostic 100k/post
+  targets where native `libsecp256k1` remains the block-acceptance oracle. The
+  Docker 100k/post diagnostic targets use separate shadow and pure durable
+  100k volumes. They are not Project benchmark artifacts and do not replace the
+  native comparable lane.
 
 The proof binary is intentionally bounded. It implements the offline corpus,
-local Reference 5k/50k proof paths, and the official native 100k /
-post-100k-to-tip command surfaces. External peers, supervisor loops, tip-once,
-and tip maintenance remain out of scope until a later plan adds them.
+local Reference 5k/50k proof paths, the official native 100k /
+post-100k-to-tip command surfaces, and Mojo-local diagnostic pure/shadow
+100k/post surfaces. External peers, supervisor loops, tip-once, and tip
+maintenance remain out of scope until a later plan adds them.
 
 The supported `mojobitnode` command is Mojo-owned and reports
 `entrypoint_language: "mojo"`.
@@ -202,7 +206,13 @@ make docker-proof-100k
 make docker-proof-post-100k-to-tip
 make docker-shadow-5k-proof
 make docker-shadow-50k-proof
+make docker-shadow-100k-proof
+make docker-shadow-post-100k-to-tip
 make docker-pure-5k-proof
+make docker-pure-100k-proof
+make docker-pure-post-100k-to-tip
+make docker-status-shadow-100k
+make docker-status-pure-100k
 make docker-smoke-once
 make docker-toolchain-smoke
 make docker-parallel-runner-smoke

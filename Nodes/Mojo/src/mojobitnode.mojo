@@ -2110,8 +2110,8 @@ def main() raises:
     if command == "local-reference-proof":
         var proof_crypto_kind = CRYPTO_BACKEND_NATIVE
         if crypto_backend == "pure":
-            if target != 5000:
-                raise Error("pure crypto local-reference-proof is diagnostic 5k-only in this slice")
+            if not (target == 5000 or target == 100000 or resume_from_state):
+                raise Error("pure crypto local-reference-proof supports only diagnostic 5k, 100k, and post-100k-to-tip in this slice")
             proof_crypto_kind = CRYPTO_BACKEND_PURE
         elif crypto_backend != "native":
             raise Error("local-reference-proof --crypto-backend must be native or pure")

@@ -132,14 +132,15 @@ modes with `MOJOBITNODE_ENABLE_REJECT_FAULTS=1` and
 `MOJOBITNODE_PURE_CRYPTO_FAULT=accept_ecdsa|accept_schnorr|accept_taptweak`;
 those modes must stay confined to reject-corpus red checks.
 
-`local-reference-proof --crypto-backend pure` is diagnostic 5k-only in this
-slice. Pure Mojo crypto determines block acceptance, the artifact reports
-`native_crypto_backend: "none"` and `crypto_backend:
-"mojo-pure-secp256k1"`, and the run remains
-`diagnostic_non_comparable`. The current Docker diagnostic reaches height 5000
-with the expected hash and UTXO count, no native fallback, clean telemetry, and
-positive parallel batch evidence. Do not treat it as Project evidence or a
-replacement for the native comparable 5k/50k lane.
+`local-reference-proof --crypto-backend pure` is diagnostic-only for the
+bounded 5k, 100k, and post-100k-to-tip surfaces. Pure Mojo crypto determines
+block acceptance, the artifact reports `native_crypto_backend: "none"` and
+`crypto_backend: "mojo-pure-secp256k1"`, and the run remains
+`diagnostic_non_comparable`. The Docker diagnostic 100k/post targets use a
+separate pure durable 100k volume. Shadow diagnostic 100k/post targets use
+their own durable shadow 100k volume while native `libsecp256k1` remains the
+block-acceptance oracle. Do not treat these artifacts as Project evidence or a
+replacement for the native comparable lane.
 
 ## Native Boundary
 
@@ -264,7 +265,13 @@ make docker-status-100k
 make docker-proof-post-100k-to-tip
 make docker-shadow-5k-proof
 make docker-shadow-50k-proof
+make docker-shadow-100k-proof
+make docker-shadow-post-100k-to-tip
 make docker-pure-5k-proof
+make docker-pure-100k-proof
+make docker-pure-post-100k-to-tip
+make docker-status-shadow-100k
+make docker-status-pure-100k
 ```
 
 ## Current Gate Order
@@ -275,10 +282,11 @@ The current port order is:
 2. Keep Project-accepted baseline 5k evidence clean.
 3. Keep Project-accepted 50k shakedown evidence quarantined to the prior
    accepted artifact while the diagnostic parallel runner is validated.
-4. Treat `performance_100k` as the next missing canonical evidence gate; run it
-   only through Project's campaign runner and native comparable proof lane.
-5. Treat `post_100k_to_tip` as blocked until the durable 100k proof volume is
-   ready and `docker-status-100k` reports source-state truth.
+4. Keep Project-accepted native `performance_100k` and `post_100k_to_tip`
+   evidence as the comparable lane.
+5. Use the Mojo-local shadow/pure 100k and post-100k targets only for
+   diagnostic crypto follow-up; never import those artifacts as canonical
+   Project evidence.
 
 Strict 5k/50k proof requires RocksDB runtime truth, native crypto, WAL, fixed
 benchmark knobs, `core_spendable_v1` UTXO accounting, and canonical importable

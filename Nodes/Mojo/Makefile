@@ -42,8 +42,12 @@ HOST_SHADOW_5K_PROOF_RESULT ?= .benchmark-results/mojo_host_shadow_baseline_5k_b
 DOCKER_SHADOW_5K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shadow_baseline_5k_benchmark_$(RESULT_DATE).json
 HOST_SHADOW_50K_PROOF_RESULT ?= .benchmark-results/mojo_host_shadow_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_SHADOW_50K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shadow_shakedown_50k_benchmark_$(RESULT_DATE).json
+DOCKER_SHADOW_100K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shadow_performance_100k_benchmark_$(RESULT_DATE).json
+DOCKER_SHADOW_POST_100K_TO_TIP_RESULT ?= .benchmark-results/mojo_docker_shadow_post_100k_to_tip_benchmark_$(RESULT_DATE).json
 HOST_PURE_5K_PROOF_RESULT ?= .benchmark-results/mojo_host_pure_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_PURE_5K_PROOF_RESULT ?= .benchmark-results/mojo_docker_pure_baseline_5k_benchmark_$(RESULT_DATE).json
+DOCKER_PURE_100K_PROOF_RESULT ?= .benchmark-results/mojo_docker_pure_performance_100k_benchmark_$(RESULT_DATE).json
+DOCKER_PURE_POST_100K_TO_TIP_RESULT ?= .benchmark-results/mojo_docker_pure_post_100k_to_tip_benchmark_$(RESULT_DATE).json
 SCRIPT_CORPUS_RESULT ?= ../Shared/conformance/results/mojo_script_corpus_$(RESULT_DATE).json
 HOST_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_host_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_LOCAL_PROOF_RESULT ?= .benchmark-results/mojo_docker_baseline_5k_benchmark_$(RESULT_DATE).json
@@ -63,7 +67,9 @@ PROOF_100K_VOLUME ?= mojobitnode_100k_proof_data
 POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 SHADOW_5K_PROOF_VOLUME ?= mojobitnode_shadow_5k_proof_data
 SHADOW_50K_PROOF_VOLUME ?= mojobitnode_shadow_50k_proof_data
+SHADOW_100K_PROOF_VOLUME ?= mojobitnode_shadow_100k_proof_data
 PURE_5K_PROOF_VOLUME ?= mojobitnode_pure_5k_proof_data
+PURE_100K_PROOF_VOLUME ?= mojobitnode_pure_100k_proof_data
 DOCKER_SYNC_TARGET ?= 5000
 PROGRESS ?= 500
 PROOF_EXTRA_ARGS ?=
@@ -75,7 +81,7 @@ HOST_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
 .PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-pure-crypto-profile host-pure-crypto-microbench host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-script-corpus-reject host-script-corpus-reject-red host-local-reference-proof host-shakedown-50k-proof host-shadow-5k-proof host-shadow-50k-proof host-pure-5k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-status-100k docker-native-crypto-vectors docker-pure-crypto-profile docker-pure-crypto-microbench docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-script-corpus-reject docker-script-corpus-reject-red docker-proof-local docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-shadow-5k-proof docker-shadow-50k-proof docker-pure-5k-proof docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-status-100k docker-status-shadow-100k docker-status-pure-100k docker-native-crypto-vectors docker-pure-crypto-profile docker-pure-crypto-microbench docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-script-corpus-reject docker-script-corpus-reject-red docker-proof-local docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-shadow-5k-proof docker-shadow-50k-proof docker-shadow-100k-proof docker-shadow-post-100k-to-tip docker-pure-5k-proof docker-pure-100k-proof docker-pure-post-100k-to-tip docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -441,6 +447,16 @@ docker-status-100k:
 	  echo "$$out"; \
 	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"
 
+docker-status-shadow-100k:
+	@out=$$(DOCKER_DATA_VOLUME=$(SHADOW_100K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps mojobitnode status --datadir /data --json); \
+	  echo "$$out"; \
+	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"
+
+docker-status-pure-100k:
+	@out=$$(DOCKER_DATA_VOLUME=$(PURE_100K_PROOF_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps mojobitnode status --datadir /data --json); \
+	  echo "$$out"; \
+	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"
+
 docker-proof-post-100k-to-tip:
 	$(MAKE) docker-proof-local PROOF_VOLUME=$(PROOF_100K_VOLUME) DOCKER_SYNC_TARGET=$(POST_100K_TIP_TARGET) DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_POST_100K_TO_TIP_RESULT) PROOF_EXTRA_ARGS=--resume-from-state PRESERVE_PROOF_VOLUME=1 PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=1 MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
 
@@ -452,9 +468,25 @@ docker-shadow-50k-proof:
 	$(MAKE) docker-proof-local PROOF_VOLUME=$(SHADOW_50K_PROOF_VOLUME) DOCKER_SYNC_TARGET=50000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_SHADOW_50K_PROOF_RESULT) PROOF_EXTRA_ARGS=--shadow-crypto PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
 	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate shakedown_50k --require-zero-unsupported --artifact $(DOCKER_SHADOW_50K_PROOF_RESULT)
 
+docker-shadow-100k-proof:
+	$(MAKE) docker-proof-local PROOF_VOLUME=$(SHADOW_100K_PROOF_VOLUME) DOCKER_SYNC_TARGET=100000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_SHADOW_100K_PROOF_RESULT) PROOF_EXTRA_ARGS=--shadow-crypto PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=1 MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate performance_100k --require-zero-unsupported --artifact $(DOCKER_SHADOW_100K_PROOF_RESULT)
+
+docker-shadow-post-100k-to-tip:
+	$(MAKE) docker-proof-local PROOF_VOLUME=$(SHADOW_100K_PROOF_VOLUME) DOCKER_SYNC_TARGET=$(POST_100K_TIP_TARGET) DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_SHADOW_POST_100K_TO_TIP_RESULT) PROOF_EXTRA_ARGS="--shadow-crypto --resume-from-state" PRESERVE_PROOF_VOLUME=1 PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=1 MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_shadow_crypto_proof.py --gate post_100k_to_tip --require-zero-unsupported --artifact $(DOCKER_SHADOW_POST_100K_TO_TIP_RESULT)
+
 docker-pure-5k-proof:
 	$(MAKE) docker-proof-local PROOF_VOLUME=$(PURE_5K_PROOF_VOLUME) DOCKER_SYNC_TARGET=5000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_PURE_5K_PROOF_RESULT) PROOF_EXTRA_ARGS="--crypto-backend pure" PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=$(MOJOBITNODE_PAR_SCRIPT_VERIFY) MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
 	python3 ../Shared/conformance/tools/validate_pure_crypto_proof.py --gate baseline_5k --artifact $(DOCKER_PURE_5K_PROOF_RESULT)
+
+docker-pure-100k-proof:
+	$(MAKE) docker-proof-local PROOF_VOLUME=$(PURE_100K_PROOF_VOLUME) DOCKER_SYNC_TARGET=100000 DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_PURE_100K_PROOF_RESULT) PROOF_EXTRA_ARGS="--crypto-backend pure" PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=1 MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_pure_crypto_proof.py --gate performance_100k --artifact $(DOCKER_PURE_100K_PROOF_RESULT)
+
+docker-pure-post-100k-to-tip:
+	$(MAKE) docker-proof-local PROOF_VOLUME=$(PURE_100K_PROOF_VOLUME) DOCKER_SYNC_TARGET=$(POST_100K_TIP_TARGET) DOCKER_LOCAL_PROOF_RESULT=$(DOCKER_PURE_POST_100K_TO_TIP_RESULT) PROOF_EXTRA_ARGS="--crypto-backend pure --resume-from-state" PRESERVE_PROOF_VOLUME=1 PROGRESS=$(PROGRESS) MOJOBITNODE_PAR_SCRIPT_VERIFY=1 MOJOBITNODE_SCRIPT_THREADS=$(MOJOBITNODE_SCRIPT_THREADS) MOJOBITNODE_SCRIPT_MIN_INPUTS=$(MOJOBITNODE_SCRIPT_MIN_INPUTS) MOJOBITNODE_PROFILE_HOTPATH=$(MOJOBITNODE_PROFILE_HOTPATH)
+	python3 ../Shared/conformance/tools/validate_pure_crypto_proof.py --gate post_100k_to_tip --artifact $(DOCKER_PURE_POST_100K_TO_TIP_RESULT)
 
 docker-smoke-once:
 	@out=$$(DOCKER_DATA_VOLUME=$(DATA_VOLUME) $(DOCKER_COMPOSE) run --rm --no-deps --entrypoint /bin/sh mojobitnode -lc 'mojobitnode status --datadir /data --json >/tmp/status.json && printf "%s %s\n" "AGENT_LOOP_TICK_chatreport" "$$(cat /tmp/status.json)"'); \
