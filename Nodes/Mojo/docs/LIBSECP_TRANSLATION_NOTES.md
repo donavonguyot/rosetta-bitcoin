@@ -74,6 +74,10 @@ The implementation follows formulas and structure from Bitcoin Core's
   double-base, old wNAF double-base, GLV double-base, affine conversion, and
   native-result comparison. Profile JSON is Mojo-local diagnostic output under
   `.benchmark-results/`.
+- `pure-crypto-microbench` is the tuning instrument. It runs fixed pure-only
+  ECDSA, Schnorr, and Taproot vectors in fast loops, keeps native comparison off
+  by default, and reports per-stage totals plus per-iteration timing so math
+  changes can be compared without live-proof or shadow-corpus overhead.
 
 ## Evidence Boundary
 

@@ -58,7 +58,10 @@ handling, and consensus-invalid signatures. The diagnostic
 `pure-crypto-profile` command records ECDSA stage timings for DER parse, pubkey
 parse/lift, high-S normalization, scalar inverse, scalar multiplication,
 reference double-base, wNAF double-base, affine conversion, and native-result
-comparison. The measured shadow set enables all 17 Taproot corpus rows,
+comparison. Use `pure-crypto-microbench` for tuning decisions: it loops fixed
+pure ECDSA/Schnorr/Taproot vectors without native calls or shadow-agreement
+accounting by default, then reports per-stage totals and per-iteration timing.
+The measured shadow set enables all 17 Taproot corpus rows,
 including the large
 `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and
 `scripts.p2tr_tapscript_126975` stress rows, plus all three timing-gated
@@ -188,6 +191,7 @@ make host-block-core-smoke
 make host-script-corpus
 make host-script-corpus-shadow
 make host-pure-crypto-profile
+make host-pure-crypto-microbench
 make host-native-boundary-audit
 make host-local-reference-proof
 make host-shakedown-50k-proof
@@ -196,6 +200,7 @@ make host-shadow-50k-proof
 make docker-script-corpus
 make docker-script-corpus-shadow
 make docker-pure-crypto-profile
+make docker-pure-crypto-microbench
 make docker-native-boundary-audit
 make docker-proof-local
 make docker-proof-50k

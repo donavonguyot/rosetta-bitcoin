@@ -18,6 +18,8 @@ from pure_secp import (
     pure_test_ecdsa_u_scalars,
     pure_test_ecdsa_wnaf_product_x,
     pure_test_ecdsa_wnaf_result,
+    pure_verify_schnorr_bytes,
+    pure_verify_taproot_tweak_precomputed,
 )
 from script_corpus_foundation import (
     CRYPTO_BACKEND_NATIVE,
@@ -598,10 +600,285 @@ def pure_crypto_profile_json(shim_path: String, surface: String) raises -> Strin
     )
 
 
+def per_iteration_us(total_ms: Int64, iterations: Int) -> Int64:
+    return (total_ms * Int64(1000)) // Int64(iterations)
+
+
+def pure_crypto_microbench_json(
+    shim_path: String,
+    surface: String,
+    iterations: Int,
+    bench_case: String,
+    native_compare: Bool,
+) raises -> String:
+    var clock = Native(shim_path)
+    var total_started = clock.now_ms()
+    var run_ecdsa = bench_case == "all" or bench_case == "ecdsa"
+    var run_schnorr = bench_case == "all" or bench_case == "schnorr"
+    var run_taproot = bench_case == "all" or bench_case == "taproot"
+    var result = String("diagnostic")
+    var loop_iterations = iterations
+    if loop_iterations <= 0:
+        loop_iterations = 1000
+
+    var ecdsa_pubkey = hex_string_to_bytes(vector_pubkey_hex(0))
+    var ecdsa_sig = hex_string_to_bytes(vector_signature_hex(0))
+    var ecdsa_msg = hex_string_to_bytes(vector_msg_hash_hex(0))
+    var schnorr_pubkey = hex_string_to_bytes(vector_xonly_hex(3))
+    var schnorr_sig = hex_string_to_bytes(vector_signature_hex(3))
+    var schnorr_msg = hex_string_to_bytes(vector_msg_hash_hex(3))
+    var taproot_internal = hex_string_to_bytes(vector_xonly_hex(6))
+    var taproot_merkle_root = hex_string_to_bytes(vector_merkle_root_hex(6))
+    var taproot_tweak = taproot_tweak_hash(taproot_internal, taproot_merkle_root)
+    var taproot_expected = hex_string_to_bytes(vector_expected_xonly_hex(6))
+    var taproot_parity = vector_expected_parity(6)
+
+    var ecdsa_der_parse_ms = Int64(0)
+    var ecdsa_pubkey_parse_lift_ms = Int64(0)
+    var ecdsa_high_s_ms = Int64(0)
+    var ecdsa_scalar_inverse_ms = Int64(0)
+    var ecdsa_u_scalar_ms = Int64(0)
+    var ecdsa_wnaf_product_ms = Int64(0)
+    var ecdsa_glv_product_ms = Int64(0)
+    var ecdsa_glv_result_ms = Int64(0)
+    var ecdsa_wnaf_valid = 0
+    var ecdsa_glv_valid = 0
+    var ecdsa_glv_wnaf_mismatches = 0
+    var ecdsa_native_compare_ms = Int64(0)
+    var ecdsa_native_result = Int32(-1)
+
+    var schnorr_verify_ms = Int64(0)
+    var schnorr_valid = 0
+    var schnorr_invalid = 0
+    var schnorr_malformed = 0
+    var schnorr_native_compare_ms = Int64(0)
+    var schnorr_native_result = Int32(-1)
+
+    var taproot_verify_ms = Int64(0)
+    var taproot_valid = 0
+    var taproot_invalid = 0
+    var taproot_malformed = 0
+    var taproot_native_compare_ms = Int64(0)
+    var taproot_native_result = Int32(-1)
+
+    if run_ecdsa:
+        var expected_wnaf_x = pure_test_ecdsa_wnaf_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        var expected_wnaf_result = pure_test_ecdsa_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+
+        var started = clock.now_ms()
+        for _ in range(loop_iterations):
+            _ = pure_test_ecdsa_parse_der(ecdsa_sig)
+        ecdsa_der_parse_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            _ = pure_test_ecdsa_parse_pubkey_x(ecdsa_pubkey)
+        ecdsa_pubkey_parse_lift_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            _ = pure_test_ecdsa_normalized_s(ecdsa_sig)
+        ecdsa_high_s_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            _ = pure_test_ecdsa_inverse_s(ecdsa_sig)
+        ecdsa_scalar_inverse_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            _ = pure_test_ecdsa_u_scalars(ecdsa_sig, ecdsa_msg)
+        ecdsa_u_scalar_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var wnaf_x = pure_test_ecdsa_wnaf_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if bytes_equal(wnaf_x, expected_wnaf_x):
+                ecdsa_wnaf_valid += 1
+        ecdsa_wnaf_product_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var glv_x = pure_test_ecdsa_glv_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if not bytes_equal(glv_x, expected_wnaf_x):
+                ecdsa_glv_wnaf_mismatches += 1
+        ecdsa_glv_product_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var glv_result = pure_test_ecdsa_glv_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if glv_result == expected_wnaf_result:
+                ecdsa_glv_valid += 1
+            else:
+                ecdsa_glv_wnaf_mismatches += 1
+        ecdsa_glv_result_ms = clock.now_ms() - started
+
+        if native_compare:
+            started = clock.now_ms()
+            ecdsa_native_result = native_vector_actual(shim_path, 0)
+            ecdsa_native_compare_ms = clock.now_ms() - started
+            if ecdsa_native_result != expected_wnaf_result:
+                result = String("failed")
+
+    if run_schnorr:
+        var started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var schnorr_result = pure_verify_schnorr_bytes(schnorr_pubkey, schnorr_sig, schnorr_msg)
+            if schnorr_result == Int32(0):
+                schnorr_valid += 1
+            elif schnorr_result == Int32(1):
+                schnorr_invalid += 1
+            elif schnorr_result == Int32(2):
+                schnorr_malformed += 1
+        schnorr_verify_ms = clock.now_ms() - started
+
+        if native_compare:
+            started = clock.now_ms()
+            schnorr_native_result = native_vector_actual(shim_path, 3)
+            schnorr_native_compare_ms = clock.now_ms() - started
+            if schnorr_native_result != Int32(0):
+                result = String("failed")
+
+    if run_taproot:
+        var started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var taproot_result = pure_verify_taproot_tweak_precomputed(
+                taproot_internal,
+                taproot_tweak,
+                taproot_expected,
+                taproot_parity,
+            )
+            if taproot_result == Int32(0):
+                taproot_valid += 1
+            elif taproot_result == Int32(1):
+                taproot_invalid += 1
+            elif taproot_result == Int32(2):
+                taproot_malformed += 1
+        taproot_verify_ms = clock.now_ms() - started
+
+        if native_compare:
+            started = clock.now_ms()
+            taproot_native_result = native_vector_actual(shim_path, 6)
+            taproot_native_compare_ms = clock.now_ms() - started
+            if taproot_native_result != Int32(0):
+                result = String("failed")
+
+    if ecdsa_glv_wnaf_mismatches != 0:
+        result = String("failed")
+    if run_ecdsa and (ecdsa_wnaf_valid != loop_iterations or ecdsa_glv_valid != loop_iterations):
+        result = String("failed")
+    if run_schnorr and schnorr_valid != loop_iterations:
+        result = String("failed")
+    if run_taproot and taproot_valid != loop_iterations:
+        result = String("failed")
+
+    var total_ms = clock.now_ms() - total_started
+    return (
+        String('{"schema":"port.pure_crypto_microbench.v1","category":"pure_crypto_microbench",')
+        + String('"implementation":"Mojo","port":"mojo","node_id":"mojobitnode","runtime_surface":"')
+        + surface
+        + String('","entrypoint_language":"mojo","native_crypto_backend":"libsecp256k1",')
+        + String('"shadow_crypto_backend":"mojo-pure-secp256k1","native_shim":"owned_c",')
+        + String('"diagnostic_only":true,"selected_case":"')
+        + bench_case
+        + String('","iterations":')
+        + String(loop_iterations)
+        + String(',"native_compare_enabled":')
+        + bool_json(native_compare)
+        + String(',"total_ms":')
+        + String(total_ms)
+        + String(',"ecdsa":{"enabled":')
+        + bool_json(run_ecdsa)
+        + String(',"iterations":')
+        + String(loop_iterations)
+        + String(',"stage_ms":{"der_parse":')
+        + String(ecdsa_der_parse_ms)
+        + String(',"pubkey_parse_lift":')
+        + String(ecdsa_pubkey_parse_lift_ms)
+        + String(',"high_s_normalization":')
+        + String(ecdsa_high_s_ms)
+        + String(',"scalar_inverse":')
+        + String(ecdsa_scalar_inverse_ms)
+        + String(',"scalar_multiplications":')
+        + String(ecdsa_u_scalar_ms)
+        + String(',"wnaf_product":')
+        + String(ecdsa_wnaf_product_ms)
+        + String(',"glv_product":')
+        + String(ecdsa_glv_product_ms)
+        + String(',"glv_result":')
+        + String(ecdsa_glv_result_ms)
+        + String(',"native_compare":')
+        + String(ecdsa_native_compare_ms)
+        + String('},"per_iteration_us":{"der_parse":')
+        + String(per_iteration_us(ecdsa_der_parse_ms, loop_iterations))
+        + String(',"pubkey_parse_lift":')
+        + String(per_iteration_us(ecdsa_pubkey_parse_lift_ms, loop_iterations))
+        + String(',"high_s_normalization":')
+        + String(per_iteration_us(ecdsa_high_s_ms, loop_iterations))
+        + String(',"scalar_inverse":')
+        + String(per_iteration_us(ecdsa_scalar_inverse_ms, loop_iterations))
+        + String(',"scalar_multiplications":')
+        + String(per_iteration_us(ecdsa_u_scalar_ms, loop_iterations))
+        + String(',"wnaf_product":')
+        + String(per_iteration_us(ecdsa_wnaf_product_ms, loop_iterations))
+        + String(',"glv_product":')
+        + String(per_iteration_us(ecdsa_glv_product_ms, loop_iterations))
+        + String(',"glv_result":')
+        + String(per_iteration_us(ecdsa_glv_result_ms, loop_iterations))
+        + String('},"wnaf_valid_count":')
+        + String(ecdsa_wnaf_valid)
+        + String(',"glv_valid_count":')
+        + String(ecdsa_glv_valid)
+        + String(',"glv_wnaf_mismatches":')
+        + String(ecdsa_glv_wnaf_mismatches)
+        + String(',"native_result_code":')
+        + String(ecdsa_native_result)
+        + String('},"schnorr":{"enabled":')
+        + bool_json(run_schnorr)
+        + String(',"iterations":')
+        + String(loop_iterations)
+        + String(',"verify_ms":')
+        + String(schnorr_verify_ms)
+        + String(',"verify_per_iteration_us":')
+        + String(per_iteration_us(schnorr_verify_ms, loop_iterations))
+        + String(',"valid_count":')
+        + String(schnorr_valid)
+        + String(',"invalid_count":')
+        + String(schnorr_invalid)
+        + String(',"malformed_count":')
+        + String(schnorr_malformed)
+        + String(',"native_compare_ms":')
+        + String(schnorr_native_compare_ms)
+        + String(',"native_result_code":')
+        + String(schnorr_native_result)
+        + String('},"taproot":{"enabled":')
+        + bool_json(run_taproot)
+        + String(',"iterations":')
+        + String(loop_iterations)
+        + String(',"verify_ms":')
+        + String(taproot_verify_ms)
+        + String(',"verify_per_iteration_us":')
+        + String(per_iteration_us(taproot_verify_ms, loop_iterations))
+        + String(',"valid_count":')
+        + String(taproot_valid)
+        + String(',"invalid_count":')
+        + String(taproot_invalid)
+        + String(',"malformed_count":')
+        + String(taproot_malformed)
+        + String(',"native_compare_ms":')
+        + String(taproot_native_compare_ms)
+        + String(',"native_result_code":')
+        + String(taproot_native_result)
+        + String('},"result":"')
+        + result
+        + String('"}')
+    )
+
+
 def main() raises:
     var args = argv()
     if len(args) < 2:
-        print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")
+        print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|pure-crypto-microbench|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")
         return
 
     var command = String(args[1])
@@ -614,6 +891,9 @@ def main() raises:
     var fixture_id = String("")
     var fixture_set = String("all")
     var shadow_crypto = False
+    var microbench_iterations = 1000
+    var microbench_case = String("all")
+    var native_compare = False
     var peer = getenv("REFERENCE_P2P_PEER", "127.0.0.1:48333")
     var target = 5000
     var progress = 500
@@ -632,6 +912,12 @@ def main() raises:
             fixture_set = String(args[i + 1])
         if args[i] == "--shadow-crypto":
             shadow_crypto = True
+        if args[i] == "--native-compare":
+            native_compare = True
+        if args[i] == "--iterations" and i + 1 < len(args):
+            microbench_iterations = Int(String(args[i + 1]))
+        if args[i] == "--case" and i + 1 < len(args):
+            microbench_case = String(args[i + 1])
         if args[i] == "--peer" and i + 1 < len(args):
             peer = String(args[i + 1])
         if args[i] == "--target" and i + 1 < len(args):
@@ -1079,6 +1365,19 @@ def main() raises:
             )
         return
 
+    if command == "pure-crypto-microbench":
+        var json = pure_crypto_microbench_json(shim_path, surface, microbench_iterations, microbench_case, native_compare)
+        print(json)
+        if result_path != "":
+            var native = OwnedDLHandle(shim_path)
+            _ = native.call["mojobitnode_write_text_len", Int32](
+                result_path.unsafe_ptr(),
+                Int32(result_path.byte_length()),
+                json.unsafe_ptr(),
+                Int32(json.byte_length()),
+            )
+        return
+
     if command == "storage-proof":
         var native = Native(shim_path)
         var db = Int64(0)
@@ -1153,4 +1452,4 @@ def main() raises:
         print(proof.json)
         return
 
-    print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")
+    print("usage: mojobitnode <status|native-crypto-vectors|pure-crypto-profile|pure-crypto-microbench|storage-proof|script-corpus|script-corpus-dev|local-reference-proof> [options]")

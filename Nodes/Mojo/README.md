@@ -50,10 +50,11 @@ native prerequisites a future port would need?
   libsecp-guided fixed-limb field multiplication and Jacobian group operations.
   It also has a pure Mojo ECDSA/DER verifier that matches the native vector
   result classes, including high-S normalization, malformed DER/pubkey handling,
-  and consensus-invalid signatures. A diagnostic `pure-crypto-profile` command
-  records DER parse, pubkey parse/lift, high-S normalization, scalar inverse,
-  scalar multiplication, reference double-base, wNAF double-base, affine
-  conversion, and native-result comparison timings for the focused ECDSA vector.
+  and consensus-invalid signatures. The diagnostic `pure-crypto-profile`
+  command is a single-vector sanity check; `pure-crypto-microbench` is the fast
+  pure-only tuning loop. It records fixed-vector ECDSA, Schnorr, and Taproot
+  timing without native calls or shadow-agreement accounting unless explicitly
+  requested.
   `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
   support/unsupported rows, per-attempt `shadow_duration_ms`, aggregate shadow
@@ -111,6 +112,7 @@ make host-build
 make host-status
 make host-native-crypto-vectors
 make host-pure-crypto-profile
+make host-pure-crypto-microbench
 make host-native-boundary-audit
 make host-storage-proof
 make host-script-corpus-dev
@@ -141,6 +143,7 @@ make docker-warm
 make docker-status
 make docker-native-crypto-vectors
 make docker-pure-crypto-profile
+make docker-pure-crypto-microbench
 make docker-native-boundary-audit
 make docker-storage-proof
 make docker-script-corpus

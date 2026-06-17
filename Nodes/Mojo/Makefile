@@ -30,6 +30,10 @@ HOST_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_host_script_corpus_s
 DOCKER_SCRIPT_CORPUS_SHADOW_RESULT ?= .benchmark-results/mojo_docker_script_corpus_shadow_$(RESULT_DATE).json
 HOST_PURE_CRYPTO_PROFILE_RESULT ?= .benchmark-results/mojo_host_pure_crypto_profile_$(RESULT_DATE).json
 DOCKER_PURE_CRYPTO_PROFILE_RESULT ?= .benchmark-results/mojo_docker_pure_crypto_profile_$(RESULT_DATE).json
+HOST_PURE_CRYPTO_MICROBENCH_RESULT ?= .benchmark-results/mojo_host_pure_crypto_microbench_$(RESULT_DATE).json
+DOCKER_PURE_CRYPTO_MICROBENCH_RESULT ?= .benchmark-results/mojo_docker_pure_crypto_microbench_$(RESULT_DATE).json
+PURE_CRYPTO_MICROBENCH_ITERS ?= 1000
+PURE_CRYPTO_MICROBENCH_CASE ?= all
 HOST_SHADOW_5K_PROOF_RESULT ?= .benchmark-results/mojo_host_shadow_baseline_5k_benchmark_$(RESULT_DATE).json
 DOCKER_SHADOW_5K_PROOF_RESULT ?= .benchmark-results/mojo_docker_shadow_baseline_5k_benchmark_$(RESULT_DATE).json
 HOST_SHADOW_50K_PROOF_RESULT ?= .benchmark-results/mojo_host_shadow_shakedown_50k_benchmark_$(RESULT_DATE).json
@@ -58,8 +62,8 @@ MOJOBITNODE_PROFILE_HOTPATH ?= 0
 HOST_P2P_PEER ?= 127.0.0.1:48333
 DOCKER_COMPOSE := docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
 
-.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-pure-crypto-profile host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-local-reference-proof host-shakedown-50k-proof host-shadow-5k-proof host-shadow-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
-.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-pure-crypto-profile docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-proof-local docker-proof-50k docker-shadow-5k-proof docker-shadow-50k-proof docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
+.PHONY: host-deps-check host-deps-install host-setup host-mojo-version host-build host-warm host-status host-native-crypto-vectors host-pure-crypto-profile host-pure-crypto-microbench host-storage-proof host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-local-reference-proof host-shakedown-50k-proof host-shadow-5k-proof host-shadow-50k-proof host-smoke-once host-toolchain-smoke host-parallel-runner-smoke host-script-corpus-foundation-smoke host-block-core-smoke host-native-boundary-audit
+.PHONY: docker-config docker-build docker-mojo-version docker-warm docker-status docker-native-crypto-vectors docker-pure-crypto-profile docker-pure-crypto-microbench docker-storage-proof docker-script-corpus docker-script-corpus-shadow docker-proof-local docker-proof-50k docker-shadow-5k-proof docker-shadow-50k-proof docker-smoke-once docker-toolchain-smoke docker-parallel-runner-smoke docker-native-boundary-audit
 .PHONY: mojo-docs-cache mojo-docs-status clean
 
 host-deps-check:
@@ -122,9 +126,22 @@ host-pure-crypto-profile: host-build
 	  --result-path $(HOST_PURE_CRYPTO_PROFILE_RESULT)); \
 	  echo "$$out"; \
 	  grep -q '"schema":"port.pure_crypto_profile.v1"' <<< "$$out"; \
-	  grep -q '"wnaf_matches_native":true' <<< "$$out"; \
+	  grep -q '"glv_matches_native":true' <<< "$$out"; \
 	  grep -q '"result":"diagnostic"' <<< "$$out"; \
 	  test -s "$(HOST_PURE_CRYPTO_PROFILE_RESULT)"
+
+host-pure-crypto-microbench: host-build
+	@mkdir -p .benchmark-results
+	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) pure-crypto-microbench \
+	  --iterations $(PURE_CRYPTO_MICROBENCH_ITERS) \
+	  --case $(PURE_CRYPTO_MICROBENCH_CASE) \
+	  --result-path $(HOST_PURE_CRYPTO_MICROBENCH_RESULT)); \
+	  echo "$$out"; \
+	  grep -q '"schema":"port.pure_crypto_microbench.v1"' <<< "$$out"; \
+	  grep -q '"native_compare_enabled":false' <<< "$$out"; \
+	  grep -q '"glv_wnaf_mismatches":0' <<< "$$out"; \
+	  grep -q '"result":"diagnostic"' <<< "$$out"; \
+	  test -s "$(HOST_PURE_CRYPTO_MICROBENCH_RESULT)"
 
 host-storage-proof: host-build
 	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) storage-proof \
@@ -265,7 +282,21 @@ docker-pure-crypto-profile:
 	  printf "%s\n" "$$out" > $(DOCKER_PURE_CRYPTO_PROFILE_RESULT); \
 	  grep -q '"schema":"port.pure_crypto_profile.v1"' <<< "$$out"; \
 	  grep -q '"runtime_surface":"docker"' <<< "$$out"; \
-	  grep -q '"wnaf_matches_native":true' <<< "$$out"; \
+	  grep -q '"glv_matches_native":true' <<< "$$out"; \
+	  grep -q '"result":"diagnostic"' <<< "$$out"
+
+docker-pure-crypto-microbench:
+	@mkdir -p .benchmark-results
+	@out=$$($(DOCKER_COMPOSE) run --rm --no-deps mojobitnode pure-crypto-microbench \
+	  --iterations $(PURE_CRYPTO_MICROBENCH_ITERS) \
+	  --case $(PURE_CRYPTO_MICROBENCH_CASE) \
+	  --result-path /tmp/mojo_pure_crypto_microbench.json); \
+	  echo "$$out"; \
+	  printf "%s\n" "$$out" > $(DOCKER_PURE_CRYPTO_MICROBENCH_RESULT); \
+	  grep -q '"schema":"port.pure_crypto_microbench.v1"' <<< "$$out"; \
+	  grep -q '"runtime_surface":"docker"' <<< "$$out"; \
+	  grep -q '"native_compare_enabled":false' <<< "$$out"; \
+	  grep -q '"glv_wnaf_mismatches":0' <<< "$$out"; \
 	  grep -q '"result":"diagnostic"' <<< "$$out"
 
 docker-storage-proof:
