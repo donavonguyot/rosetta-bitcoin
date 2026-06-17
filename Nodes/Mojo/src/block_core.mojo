@@ -475,6 +475,11 @@ struct ScriptVerifyStats(Copyable):
 
 struct ShadowCryptoStats(Copyable):
     var enabled: Bool
+    var runner_mode: String
+    var runner_actual_mode: String
+    var script_jobs: Int64
+    var parallel_batches: Int64
+    var thread_count: Int64
     var attempted: Int64
     var supported: Int64
     var unsupported: Int64
@@ -505,6 +510,11 @@ struct ShadowCryptoStats(Copyable):
 
     def __init__(out self):
         self.enabled = False
+        self.runner_mode = String("sequential")
+        self.runner_actual_mode = String("sequential")
+        self.script_jobs = 0
+        self.parallel_batches = 0
+        self.thread_count = 1
         self.attempted = 0
         self.supported = 0
         self.unsupported = 0
@@ -532,6 +542,25 @@ struct ShadowCryptoStats(Copyable):
         self.first_disagreement_native_result = String("")
         self.first_disagreement_shadow_result = String("")
         self.first_disagreement_failure_stage = String("")
+
+
+struct ShadowCryptoResult(Copyable):
+    var completed: Bool
+    var attempted: Bool
+    var supported: Bool
+    var family: String
+    var unsupported_reason: String
+    var elapsed_ms: Int64
+    var verifier_result: ScriptVerifyResult
+
+    def __init__(out self):
+        self.completed = False
+        self.attempted = False
+        self.supported = False
+        self.family = String("")
+        self.unsupported_reason = String("")
+        self.elapsed_ms = 0
+        self.verifier_result = ScriptVerifyResult()
 
 
 struct BlockUtxoDelta(Copyable):
@@ -723,6 +752,153 @@ def shadow_crypto_record_first_disagreement(
     stats.first_disagreement_failure_stage = result.failure_stage
 
 
+def shadow_crypto_row_for_job(ref job: ScriptVerifyJob) -> ShadowCryptoResult:
+    var row = ShadowCryptoResult()
+    row.attempted = True
+    row.family = shadow_crypto_supported_family(job)
+    if row.family == "":
+        row.supported = False
+        row.unsupported_reason = shadow_crypto_unsupported_reason(job)
+        row.completed = True
+    else:
+        row.supported = True
+    return row^
+
+
+def shadow_crypto_reduce_row(
+    mut stats: ShadowCryptoStats,
+    height: Int,
+    ref contexts: List[ScriptVerifyContext],
+    ref job: ScriptVerifyJob,
+    ref row: ShadowCryptoResult,
+) raises:
+    if not row.attempted:
+        return
+    stats.attempted += 1
+    if not row.supported:
+        shadow_crypto_record_unsupported(stats, row.unsupported_reason)
+        return
+    if not row.completed:
+        raise Error(
+            String("shadow crypto job did not complete at height ")
+            + String(height)
+            + String(" job_index=")
+            + String(job.job_index)
+        )
+    stats.supported += 1
+    if row.family == "p2pkh_ecdsa":
+        stats.p2pkh_ecdsa_ms += row.elapsed_ms
+        stats.p2pkh_ecdsa_inputs += 1
+    elif row.family == "p2sh":
+        stats.p2sh_inputs += 1
+    elif row.family == "segwit_v0":
+        stats.segwit_v0_inputs += 1
+    elif row.family == "legacy_other":
+        stats.legacy_other_inputs += 1
+    elif row.family == "other":
+        stats.other_inputs += 1
+    elif row.family == "taproot":
+        stats.taproot_schnorr_ms += row.elapsed_ms
+        stats.taproot_inputs += 1
+        if job.context_index >= 0 and job.context_index < len(contexts):
+            if tx_witness_count(contexts[job.context_index].tx, job.input_index) > 1:
+                stats.taproot_tweak_ms += row.elapsed_ms
+                stats.taproot_script_path_inputs += 1
+    if row.verifier_result.ok:
+        stats.agreed += 1
+    else:
+        stats.disagreed += 1
+        shadow_crypto_record_first_disagreement(stats, height, job, row.verifier_result)
+
+
+def _shadow_test_p2pkh_script_pubkey() -> List[UInt8]:
+    var out = List[UInt8]()
+    out.append(UInt8(0x76))
+    out.append(UInt8(0xA9))
+    out.append(UInt8(0x14))
+    for _ in range(20):
+        out.append(UInt8(0x11))
+    out.append(UInt8(0x88))
+    out.append(UInt8(0xAC))
+    return out^
+
+
+def _shadow_test_job(job_index: Int, input_index: Int, ref script_pubkey: List[UInt8]) -> ScriptVerifyJob:
+    var job = ScriptVerifyJob()
+    job.job_index = job_index
+    job.tx_index = job_index
+    job.input_index = input_index
+    job.prev_vout = UInt32(input_index)
+    for _ in range(32):
+        job.txid.append(UInt8(job_index + 1))
+        job.prev_hash.append(UInt8(job_index + 2))
+    job.prevout.script_pubkey = script_pubkey.copy()
+    return job^
+
+
+def _shadow_test_row(ref job: ScriptVerifyJob, ok: Bool, stage: String, elapsed_ms: Int64) -> ShadowCryptoResult:
+    var row = shadow_crypto_row_for_job(job)
+    row.elapsed_ms = elapsed_ms
+    var result = script_verify_result_for_job(job)
+    result.completed = True
+    result.ok = ok
+    result.failure_stage = stage
+    if ok:
+        result.failure = String("")
+    else:
+        result.failure = String("synthetic shadow failure")
+    row.verifier_result = result^
+    row.completed = True
+    return row^
+
+
+def shadow_crypto_reduction_smoke() raises -> Bool:
+    var contexts = List[ScriptVerifyContext]()
+    var p2pkh = _shadow_test_p2pkh_script_pubkey()
+    var empty = List[UInt8]()
+
+    var jobs = List[ScriptVerifyJob]()
+    var unsupported_job = _shadow_test_job(0, 0, empty)
+    var pass_job = _shadow_test_job(1, 1, p2pkh)
+    var error_job = _shadow_test_job(2, 2, p2pkh)
+    var late_fail_job = _shadow_test_job(3, 3, p2pkh)
+    jobs.append(unsupported_job^)
+    jobs.append(pass_job^)
+    jobs.append(error_job^)
+    jobs.append(late_fail_job^)
+
+    var rows = List[ShadowCryptoResult]()
+    var unsupported_row = ShadowCryptoResult()
+    unsupported_row.attempted = True
+    unsupported_row.supported = False
+    unsupported_row.unsupported_reason = String("other")
+    unsupported_row.completed = True
+    rows.append(unsupported_row^)
+    rows.append(_shadow_test_row(jobs[1], True, String(""), 7))
+    rows.append(_shadow_test_row(jobs[2], False, String("error"), 11))
+    rows.append(_shadow_test_row(jobs[3], False, String("failed"), 13))
+
+    var stats = ShadowCryptoStats()
+    for i in range(len(rows)):
+        shadow_crypto_reduce_row(stats, 5000, contexts, jobs[i], rows[i])
+
+    return (
+        stats.attempted == 4
+        and stats.supported == 3
+        and stats.unsupported == 1
+        and stats.unsupported_other == 1
+        and stats.agreed == 1
+        and stats.disagreed == 2
+        and stats.p2pkh_ecdsa_inputs == 3
+        and stats.p2pkh_ecdsa_ms == 31
+        and stats.first_disagreement_set
+        and stats.first_disagreement_height == 5000
+        and stats.first_disagreement_input_index == 2
+        and stats.first_disagreement_shadow_result == "error"
+        and stats.first_disagreement_failure_stage == "error"
+    )
+
+
 def shadow_crypto_json(ref stats: ShadowCryptoStats) -> String:
     var first = String("null")
     if stats.first_disagreement_set:
@@ -747,7 +923,17 @@ def shadow_crypto_json(ref stats: ShadowCryptoStats) -> String:
         String('"shadow_crypto":{"enabled":')
         + bool_json(stats.enabled)
         + String(',"backend":"mojo-pure-secp256k1","diagnostic_only":true,')
-        + String('"native_fallback_used":false,"attempted_script_inputs":')
+        + String('"native_fallback_used":false,"runner_mode":"')
+        + stats.runner_mode
+        + String('","runner_actual_mode":"')
+        + stats.runner_actual_mode
+        + String('","script_jobs":')
+        + String(stats.script_jobs)
+        + String(',"parallel_batches":')
+        + String(stats.parallel_batches)
+        + String(',"thread_count":')
+        + String(stats.thread_count)
+        + String(',"attempted_script_inputs":')
         + String(stats.attempted)
         + String(',"supported_script_inputs":')
         + String(stats.supported)
@@ -1854,50 +2040,84 @@ def verify_script_jobs_shadow_crypto_diagnostic(
     height: Int,
     ref contexts: List[ScriptVerifyContext],
     ref jobs: List[ScriptVerifyJob],
+    config: ScriptRunnerConfig,
     mut shadow_stats: ShadowCryptoStats,
 ) raises:
+    shadow_stats.script_jobs += Int64(len(jobs))
+    if shadow_stats.parallel_batches == 0:
+        shadow_stats.runner_mode = String("sequential")
+        shadow_stats.runner_actual_mode = String("sequential")
+        shadow_stats.thread_count = 1
     if len(jobs) == 0:
         return
-    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_PURE)
+
+    var rows = List[ShadowCryptoResult]()
     for i in range(len(jobs)):
-        shadow_stats.attempted += 1
-        var family = shadow_crypto_supported_family(jobs[i])
-        if family == "":
-            shadow_crypto_record_unsupported(shadow_stats, shadow_crypto_unsupported_reason(jobs[i]))
-            continue
-        shadow_stats.supported += 1
-        var started = native.now_ms()
-        var result = verify_script_job(
-            shim_path,
-            crypto,
-            jobs[i],
-            contexts,
-            False,
-        )
-        var elapsed = native.now_ms() - started
-        if family == "p2pkh_ecdsa":
-            shadow_stats.p2pkh_ecdsa_ms += elapsed
-            shadow_stats.p2pkh_ecdsa_inputs += 1
-        elif family == "p2sh":
-            shadow_stats.p2sh_inputs += 1
-        elif family == "segwit_v0":
-            shadow_stats.segwit_v0_inputs += 1
-        elif family == "legacy_other":
-            shadow_stats.legacy_other_inputs += 1
-        elif family == "other":
-            shadow_stats.other_inputs += 1
-        elif family == "taproot":
-            shadow_stats.taproot_schnorr_ms += elapsed
-            shadow_stats.taproot_inputs += 1
-            if jobs[i].context_index >= 0 and jobs[i].context_index < len(contexts):
-                if tx_witness_count(contexts[jobs[i].context_index].tx, jobs[i].input_index) > 1:
-                    shadow_stats.taproot_tweak_ms += elapsed
-                    shadow_stats.taproot_script_path_inputs += 1
-        if result.ok:
-            shadow_stats.agreed += 1
+        rows.append(shadow_crypto_row_for_job(jobs[i]))
+
+    var use_parallel = (
+        config.enabled and len(jobs) >= config.min_inputs and len(jobs) > 1 and config.threads != 1
+    )
+    var crypto = CryptoBackend(shim_path, CRYPTO_BACKEND_PURE)
+
+    if use_parallel:
+        shadow_stats.runner_mode = String("parallel")
+        shadow_stats.runner_actual_mode = String("parallel")
+        shadow_stats.parallel_batches += 1
+        shadow_stats.thread_count = Int64(config.threads)
+
+        @parameter
+        def verify_one(index: Int) capturing:
+            if not rows[index].supported:
+                return
+            try:
+                var worker_clock = Native(shim_path)
+                var started = worker_clock.now_ms()
+                var result = verify_script_job(
+                    shim_path,
+                    crypto,
+                    jobs[index],
+                    contexts,
+                    False,
+                )
+                rows[index].elapsed_ms = worker_clock.now_ms() - started
+                rows[index].verifier_result = result^
+                rows[index].completed = True
+            except e:
+                var result = script_verify_result_for_job(jobs[index])
+                result.completed = True
+                result.ok = False
+                result.failure_stage = String("error")
+                result.failure = String(e)
+                rows[index].verifier_result = result^
+                rows[index].completed = True
+
+        if config.threads > 1:
+            parallelize[verify_one](len(jobs), config.threads)
         else:
-            shadow_stats.disagreed += 1
-            shadow_crypto_record_first_disagreement(shadow_stats, height, jobs[i], result)
+            parallelize[verify_one](len(jobs))
+    else:
+        if shadow_stats.parallel_batches == 0:
+            shadow_stats.runner_mode = String("sequential")
+            shadow_stats.runner_actual_mode = String("sequential")
+            shadow_stats.thread_count = 1
+        for i in range(len(jobs)):
+            if not rows[i].supported:
+                continue
+            var started = native.now_ms()
+            var result = verify_script_job(
+                shim_path,
+                crypto,
+                jobs[i],
+                contexts,
+                False,
+            )
+            rows[i].elapsed_ms = native.now_ms() - started
+            rows[i].verifier_result = result^
+            rows[i].completed = True
+
+    for i in range(len(rows)):
+        shadow_crypto_reduce_row(shadow_stats, height, contexts, jobs[i], rows[i])
 
 
 def verify_script_jobs_parallel_diagnostic(
@@ -2241,6 +2461,7 @@ def connect_block(
             height,
             verify_contexts,
             script_jobs,
+            runner_config,
             shadow_stats,
         )
 

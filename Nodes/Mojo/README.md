@@ -80,10 +80,14 @@ native prerequisites a future port would need?
   replay. Native validation still determines 5k/50k proof success, while pure
   Mojo shadow crypto records supported, unsupported, agreed, and disagreed
   script-input counts in a `shadow_crypto` object. Shadow proof artifacts carry
-  an explicit diagnostic non-comparable marker and stay Mojo-local. The Docker
-  5k diagnostic replay currently reaches height 5000 with zero unsupported
-  pure-shadow script inputs and zero disagreements; this does not change Project
-  benchmark evidence.
+  an explicit diagnostic non-comparable marker and stay Mojo-local. When
+  `MOJOBITNODE_PAR_SCRIPT_VERIFY=1` is enabled and a block has enough script
+  jobs, the shadow replay uses the same deterministic job/result shape as
+  native validation: per-job result slots are filled through Mojo `parallelize`,
+  then reduced sequentially into runner, support, timing, and disagreement
+  fields. The Docker 5k diagnostic replay currently reaches height 5000 with
+  zero unsupported pure-shadow script inputs and zero disagreements; this does
+  not change Project benchmark evidence.
 
 The proof binary is intentionally bounded. It implements the offline corpus and
 local Reference 5k/50k proof paths, but it does not implement external peers,

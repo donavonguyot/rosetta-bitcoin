@@ -28,6 +28,7 @@ from block_core import (
     outpoint_index_key,
     parse_block,
     rocksdb_multi_get_rows,
+    shadow_crypto_reduction_smoke,
 )
 from script_corpus_foundation import (
     CRYPTO_BACKEND_NATIVE,
@@ -316,6 +317,10 @@ def test_block_job_failure_reduction_uses_lowest_tx_input_order() raises:
     results.append(low^)
 
     assert_equal(first_failed_script_result_index(results), 2)
+
+
+def test_shadow_crypto_reduction_is_deterministic() raises:
+    assert_true(shadow_crypto_reduction_smoke())
 
 
 def test_hotpath_profile_counters_are_passive_and_nonzero() raises:

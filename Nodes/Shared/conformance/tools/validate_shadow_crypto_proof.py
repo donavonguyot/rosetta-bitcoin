@@ -90,6 +90,32 @@ def validate(path: Path, gate: str, *, require_zero_unsupported: bool = False) -
     if shadow.get("native_fallback_used") is not False:
         errors.append("native fallback must be false")
 
+    runner_mode = shadow.get("runner_mode")
+    runner_actual_mode = shadow.get("runner_actual_mode")
+    script_jobs = shadow.get("script_jobs")
+    parallel_batches = shadow.get("parallel_batches")
+    thread_count = shadow.get("thread_count")
+    if runner_mode not in {"sequential", "parallel"}:
+        errors.append("shadow runner_mode must be sequential or parallel")
+    if runner_actual_mode not in {"sequential", "parallel"}:
+        errors.append("shadow runner_actual_mode must be sequential or parallel")
+    for field, value in (
+        ("script_jobs", script_jobs),
+        ("parallel_batches", parallel_batches),
+        ("thread_count", thread_count),
+    ):
+        if not nonnegative_int(value):
+            errors.append(f"shadow {field} must be a nonnegative integer")
+    if runner_mode == "parallel" or runner_actual_mode == "parallel":
+        if runner_actual_mode != "parallel":
+            errors.append("shadow parallel claim requires runner_actual_mode=parallel")
+        if not nonnegative_int(script_jobs) or script_jobs <= 0:
+            errors.append("shadow parallel claim requires positive script_jobs")
+        if not nonnegative_int(parallel_batches) or parallel_batches <= 0:
+            errors.append("shadow parallel claim requires positive parallel_batches")
+        if not nonnegative_int(thread_count):
+            errors.append("shadow parallel claim requires thread_count")
+
     attempted = shadow.get("attempted_script_inputs")
     supported = shadow.get("supported_script_inputs")
     unsupported = shadow.get("unsupported_script_inputs")

@@ -94,6 +94,12 @@ families beside the native path and reports any future unsupported rows or
 disagreements explicitly. These artifacts must report
 an explicit diagnostic non-comparable marker and pass
 `validate_shadow_crypto_proof.py`; they are not Project-imported benchmark truth.
+With `MOJOBITNODE_PAR_SCRIPT_VERIFY=1`, enough script jobs, and a thread count
+other than `1`, shadow replay fills per-job result slots through Mojo
+`parallelize` and then reduces the rows sequentially. The `shadow_crypto` object
+must report `runner_mode`, `runner_actual_mode`, `script_jobs`,
+`parallel_batches`, and `thread_count`; a parallel claim needs positive batch
+evidence.
 The current Docker 5k diagnostic replay is clean: zero unsupported pure-shadow
 script inputs and zero disagreements at height 5000.
 
