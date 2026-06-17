@@ -102,9 +102,11 @@ The implementation follows formulas and structure from Bitcoin Core's
   both the fixed-base and variable-point scalars, derives `betaG` and `betaP`
   tables from the single existing odd-multiple tables, and proves the loop
   length drops from the old full-width `256` to `126` on the ECDSA microbench
-  vector. The same 1000-iteration host run stayed parity-clean but measured
-  `88ms` for Fe52 GLV result versus `78ms` for plain Fe52 WNAF, so GLV remains
-  unrouted until it demonstrates a material win.
+  vector. The GLV hot path now applies endomorphism signs during table lookup,
+  so copied/negated table materialization is zero in the microbench setup
+  counters. The same 1000-iteration host run stayed parity-clean but still
+  measured `88ms` for Fe52 GLV result versus `78ms` for plain Fe52 WNAF, so GLV
+  remains unrouted until it demonstrates a material win.
 - Pure diagnostic Schnorr now routes `s*G + (-e)*P` through the Fe52 WNAF
   double-base path. The preserved 4x64 reference helper still feeds focused
   parity checks, and the 1000-iteration host microbench reported zero Fe52

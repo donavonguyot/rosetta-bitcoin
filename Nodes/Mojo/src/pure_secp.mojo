@@ -160,6 +160,21 @@ struct Fe52GlvLoopStats(Copyable):
         self.p_split_2_nonzero_digits = 0
 
 
+struct Fe52GlvSetupStats(Copyable):
+    var generator_table_builds: Int
+    var beta_table_builds: Int
+    var copied_tables: Int
+    var negated_tables: Int
+    var variable_point_table_builds: Int
+
+    def __init__(out self):
+        self.generator_table_builds = 0
+        self.beta_table_builds = 0
+        self.copied_tables = 0
+        self.negated_tables = 0
+        self.variable_point_table_builds = 0
+
+
 def pure_backend_label() -> String:
     return String("mojo-pure-secp256k1")
 
@@ -1536,6 +1551,15 @@ def _fe52_wnaf_table_add(mut result: Fe52Jacobian, ref table: List[Fe52Point], d
     return _fe52_gej_add_ge_var(result, point)
 
 
+def _fe52_wnaf_table_add_signed(mut result: Fe52Jacobian, ref table: List[Fe52Point], digit: Int, table_negated: Bool) raises -> Fe52Jacobian:
+    if digit == 0:
+        return result.copy()
+    var effective_digit = digit
+    if table_negated:
+        effective_digit = 0 - effective_digit
+    return _fe52_wnaf_table_add(result, table, effective_digit)
+
+
 def _fe52_wnaf_generator_add(mut result: Fe52Jacobian, digit: Int) raises -> Fe52Jacobian:
     if digit == 0:
         return result.copy()
@@ -1628,21 +1652,9 @@ def _fe52_double_base_mul_wnaf_glv(ref g_scalar: U256, ref p_scalar: U256, ref p
     var p2_wnaf = _wnaf_recode(p_split.s2, width)
 
     var g_table = _fe52_generator_odd_table(8)
-    var g1_table = _fe52_point_table_copy(g_table)
-    if g_split.s1_negated:
-        g1_table = _fe52_point_table_neg(g_table)
     var beta_g_table = _fe52_point_table_beta(g_table)
-    var g2_table = _fe52_point_table_copy(beta_g_table)
-    if g_split.s2_negated:
-        g2_table = _fe52_point_table_neg(beta_g_table)
     var q_table = _fe52_odd_multiples(pubkey, 8)
-    var p1_table = _fe52_point_table_copy(q_table)
-    if p_split.s1_negated:
-        p1_table = _fe52_point_table_neg(q_table)
     var beta_p_table = _fe52_point_table_beta(q_table)
-    var p2_table = _fe52_point_table_copy(beta_p_table)
-    if p_split.s2_negated:
-        p2_table = _fe52_point_table_neg(beta_p_table)
 
     var max_len = len(g1_wnaf)
     if len(g2_wnaf) > max_len:
@@ -1658,13 +1670,13 @@ def _fe52_double_base_mul_wnaf_glv(ref g_scalar: U256, ref p_scalar: U256, ref p
         if not result.infinity:
             result = _fe52_gej_double(result)
         if i < len(g1_wnaf):
-            result = _fe52_wnaf_table_add(result, g1_table, g1_wnaf[i])
+            result = _fe52_wnaf_table_add_signed(result, g_table, g1_wnaf[i], g_split.s1_negated)
         if i < len(g2_wnaf):
-            result = _fe52_wnaf_table_add(result, g2_table, g2_wnaf[i])
+            result = _fe52_wnaf_table_add_signed(result, beta_g_table, g2_wnaf[i], g_split.s2_negated)
         if i < len(p1_wnaf):
-            result = _fe52_wnaf_table_add(result, p1_table, p1_wnaf[i])
+            result = _fe52_wnaf_table_add_signed(result, q_table, p1_wnaf[i], p_split.s1_negated)
         if i < len(p2_wnaf):
-            result = _fe52_wnaf_table_add(result, p2_table, p2_wnaf[i])
+            result = _fe52_wnaf_table_add_signed(result, beta_p_table, p2_wnaf[i], p_split.s2_negated)
     return result^
 
 
@@ -2027,6 +2039,16 @@ def _fe52_glv_loop_stats(ref g_scalar: U256, ref p_scalar: U256) -> Fe52GlvLoopS
     stats.g_split_2_nonzero_digits = _wnaf_nonzero_count(g2_wnaf)
     stats.p_split_1_nonzero_digits = _wnaf_nonzero_count(p1_wnaf)
     stats.p_split_2_nonzero_digits = _wnaf_nonzero_count(p2_wnaf)
+    return stats^
+
+
+def _fe52_glv_setup_stats() -> Fe52GlvSetupStats:
+    var stats = Fe52GlvSetupStats()
+    stats.generator_table_builds = 1
+    stats.beta_table_builds = 2
+    stats.copied_tables = 0
+    stats.negated_tables = 0
+    stats.variable_point_table_builds = 1
     return stats^
 
 
@@ -3354,6 +3376,23 @@ def pure_test_ecdsa_fe52_glv_loop_stats_json(ref pubkey: List[UInt8], ref der: L
         + String(stats.p_split_1_nonzero_digits)
         + String(',"p_split_2_nonzero_digits":')
         + String(stats.p_split_2_nonzero_digits)
+        + String("}")
+    )
+
+
+def pure_test_ecdsa_fe52_glv_setup_stats_json() -> String:
+    var stats = _fe52_glv_setup_stats()
+    return (
+        String('{"generator_table_builds":')
+        + String(stats.generator_table_builds)
+        + String(',"beta_table_builds":')
+        + String(stats.beta_table_builds)
+        + String(',"copied_tables":')
+        + String(stats.copied_tables)
+        + String(',"negated_tables":')
+        + String(stats.negated_tables)
+        + String(',"variable_point_table_builds":')
+        + String(stats.variable_point_table_builds)
         + String("}")
     )
 
