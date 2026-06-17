@@ -16,9 +16,15 @@ from pure_secp import (
     pure_test_ecdsa_fe52_glv_result,
     pure_test_ecdsa_fe52_glv_loop_stats_json,
     pure_test_ecdsa_fe52_glv_setup_stats_json,
+    pure_test_ecdsa_fe52_simd2_wnaf_mismatches,
+    pure_test_ecdsa_fe52_simd2_wnaf_result,
     pure_test_ecdsa_fe52_simd4_wnaf_mismatches,
     pure_test_ecdsa_fe52_simd4_wnaf_product_x,
     pure_test_ecdsa_fe52_simd4_wnaf_result,
+    pure_test_ecdsa_fe52_simd8_wnaf_mismatches,
+    pure_test_ecdsa_fe52_simd8_wnaf_result,
+    pure_test_ecdsa_fe52_simd16_wnaf_mismatches,
+    pure_test_ecdsa_fe52_simd16_wnaf_result,
     pure_test_ecdsa_fe52_wnaf_product_x,
     pure_test_ecdsa_fe52_wnaf_result,
     pure_test_ecdsa_glv_product_x,
@@ -689,12 +695,24 @@ def pure_crypto_microbench_json(
     var ecdsa_fe52_glv_loop_stats = String("{}")
     var ecdsa_fe52_glv_setup_stats = String("{}")
     var ecdsa_batch_scalar_fe52_wnaf_ms = Int64(0)
+    var ecdsa_batch_simd2_result_ms = Int64(0)
     var ecdsa_batch_simd4_fe52_wnaf_ms = Int64(0)
     var ecdsa_batch_simd4_result_ms = Int64(0)
+    var ecdsa_batch_simd8_result_ms = Int64(0)
+    var ecdsa_batch_simd16_result_ms = Int64(0)
     var ecdsa_batch_scalar_valid = 0
+    var ecdsa_batch_simd2_valid = 0
     var ecdsa_batch_simd4_valid = 0
+    var ecdsa_batch_simd8_valid = 0
+    var ecdsa_batch_simd16_valid = 0
+    var ecdsa_batch_simd2_mismatches = 0
+    var ecdsa_batch_simd4_mismatches = 0
+    var ecdsa_batch_simd8_mismatches = 0
+    var ecdsa_batch_simd16_mismatches = 0
     var ecdsa_batch_mismatches = 0
     var ecdsa_batch_lane_count = 4
+    var ecdsa_batch_mixed_lane_supported = False
+    var ecdsa_batch_mixed_lane_blocker = String("mojo_simd_compare_returns_scalar_bool_no_lane_select")
 
     var schnorr_verify_ms = Int64(0)
     var schnorr_reference_verify_ms = Int64(0)
@@ -913,7 +931,14 @@ def pure_crypto_microbench_json(
     if run_ecdsa_batch:
         var expected_fe52_result = pure_test_ecdsa_fe52_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
         var expected_fe52_product = pure_test_ecdsa_fe52_wnaf_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
-        ecdsa_batch_mismatches += pure_test_ecdsa_fe52_simd4_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        ecdsa_batch_simd2_mismatches = pure_test_ecdsa_fe52_simd2_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        ecdsa_batch_simd4_mismatches = pure_test_ecdsa_fe52_simd4_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        ecdsa_batch_simd8_mismatches = pure_test_ecdsa_fe52_simd8_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        ecdsa_batch_simd16_mismatches = pure_test_ecdsa_fe52_simd16_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        ecdsa_batch_mismatches += ecdsa_batch_simd2_mismatches
+        ecdsa_batch_mismatches += ecdsa_batch_simd4_mismatches
+        ecdsa_batch_mismatches += ecdsa_batch_simd8_mismatches
+        ecdsa_batch_mismatches += ecdsa_batch_simd16_mismatches
         var started = clock.now_ms()
         for _ in range(loop_iterations):
             var scalar_result = pure_test_ecdsa_fe52_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
@@ -922,6 +947,15 @@ def pure_crypto_microbench_json(
             else:
                 ecdsa_batch_mismatches += 1
         ecdsa_batch_scalar_fe52_wnaf_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var simd2_result = pure_test_ecdsa_fe52_simd2_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if simd2_result == expected_fe52_result:
+                ecdsa_batch_simd2_valid += 1
+            else:
+                ecdsa_batch_mismatches += 1
+        ecdsa_batch_simd2_result_ms = clock.now_ms() - started
 
         started = clock.now_ms()
         for _ in range(loop_iterations):
@@ -938,6 +972,24 @@ def pure_crypto_microbench_json(
             else:
                 ecdsa_batch_mismatches += 1
         ecdsa_batch_simd4_result_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var simd8_result = pure_test_ecdsa_fe52_simd8_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if simd8_result == expected_fe52_result:
+                ecdsa_batch_simd8_valid += 1
+            else:
+                ecdsa_batch_mismatches += 1
+        ecdsa_batch_simd8_result_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var simd16_result = pure_test_ecdsa_fe52_simd16_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if simd16_result == expected_fe52_result:
+                ecdsa_batch_simd16_valid += 1
+            else:
+                ecdsa_batch_mismatches += 1
+        ecdsa_batch_simd16_result_ms = clock.now_ms() - started
 
     if run_schnorr:
         var expected_schnorr_result = pure_test_schnorr_reference_result(schnorr_pubkey, schnorr_sig, schnorr_msg)
@@ -1051,7 +1103,14 @@ def pure_crypto_microbench_json(
         result = String("failed")
     if run_point and (point_iterations != loop_iterations or point_mismatches != 0):
         result = String("failed")
-    if run_ecdsa_batch and (ecdsa_batch_scalar_valid != loop_iterations or ecdsa_batch_simd4_valid != loop_iterations or ecdsa_batch_mismatches != 0):
+    if run_ecdsa_batch and (
+        ecdsa_batch_scalar_valid != loop_iterations
+        or ecdsa_batch_simd2_valid != loop_iterations
+        or ecdsa_batch_simd4_valid != loop_iterations
+        or ecdsa_batch_simd8_valid != loop_iterations
+        or ecdsa_batch_simd16_valid != loop_iterations
+        or ecdsa_batch_mismatches != 0
+    ):
         result = String("failed")
 
     var total_ms = clock.now_ms() - total_started
@@ -1149,23 +1208,78 @@ def pure_crypto_microbench_json(
         + String(ecdsa_batch_lane_count)
         + String(',"batch_count":')
         + String(loop_iterations)
-        + String(',"lane_shape":"homogeneous_fixed_vector","mixed_lane_supported":false')
+        + String(',"lane_shape":"homogeneous_fixed_vector","mixed_lane_supported":')
+        + bool_json(ecdsa_batch_mixed_lane_supported)
+        + String(',"mixed_lane_blocker":"')
+        + ecdsa_batch_mixed_lane_blocker
+        + String('"')
         + String(',"stage_ms":{"scalar_fe52_wnaf_result":')
         + String(ecdsa_batch_scalar_fe52_wnaf_ms)
+        + String(',"simd2_fe52_wnaf_result":')
+        + String(ecdsa_batch_simd2_result_ms)
         + String(',"simd4_fe52_wnaf_product":')
         + String(ecdsa_batch_simd4_fe52_wnaf_ms)
         + String(',"simd4_fe52_wnaf_result":')
         + String(ecdsa_batch_simd4_result_ms)
+        + String(',"simd8_fe52_wnaf_result":')
+        + String(ecdsa_batch_simd8_result_ms)
+        + String(',"simd16_fe52_wnaf_result":')
+        + String(ecdsa_batch_simd16_result_ms)
         + String('},"per_signature_us":{"scalar_fe52_wnaf_result":')
         + String(per_iteration_us(ecdsa_batch_scalar_fe52_wnaf_ms, loop_iterations))
+        + String(',"simd2_fe52_wnaf_result":')
+        + String(per_iteration_us(ecdsa_batch_simd2_result_ms, loop_iterations * 2))
         + String(',"simd4_fe52_wnaf_product":')
         + String(per_iteration_us(ecdsa_batch_simd4_fe52_wnaf_ms, loop_iterations * ecdsa_batch_lane_count))
         + String(',"simd4_fe52_wnaf_result":')
         + String(per_iteration_us(ecdsa_batch_simd4_result_ms, loop_iterations * ecdsa_batch_lane_count))
+        + String(',"simd8_fe52_wnaf_result":')
+        + String(per_iteration_us(ecdsa_batch_simd8_result_ms, loop_iterations * 8))
+        + String(',"simd16_fe52_wnaf_result":')
+        + String(per_iteration_us(ecdsa_batch_simd16_result_ms, loop_iterations * 16))
+        + String('},"k_sweep":{"k2":{"enabled":true,"lane_count":2,"stage_ms":')
+        + String(ecdsa_batch_simd2_result_ms)
+        + String(',"per_signature_us":')
+        + String(per_iteration_us(ecdsa_batch_simd2_result_ms, loop_iterations * 2))
+        + String(',"valid_count":')
+        + String(ecdsa_batch_simd2_valid)
+        + String(',"mismatches":')
+        + String(ecdsa_batch_simd2_mismatches)
+        + String('},"k4":{"enabled":true,"lane_count":4,"stage_ms":')
+        + String(ecdsa_batch_simd4_result_ms)
+        + String(',"per_signature_us":')
+        + String(per_iteration_us(ecdsa_batch_simd4_result_ms, loop_iterations * 4))
+        + String(',"valid_count":')
+        + String(ecdsa_batch_simd4_valid)
+        + String(',"mismatches":')
+        + String(ecdsa_batch_simd4_mismatches)
+        + String('},"k8":{"enabled":true,"lane_count":8,"stage_ms":')
+        + String(ecdsa_batch_simd8_result_ms)
+        + String(',"per_signature_us":')
+        + String(per_iteration_us(ecdsa_batch_simd8_result_ms, loop_iterations * 8))
+        + String(',"valid_count":')
+        + String(ecdsa_batch_simd8_valid)
+        + String(',"mismatches":')
+        + String(ecdsa_batch_simd8_mismatches)
+        + String('},"k16":{"enabled":true,"lane_count":16,"stage_ms":')
+        + String(ecdsa_batch_simd16_result_ms)
+        + String(',"per_signature_us":')
+        + String(per_iteration_us(ecdsa_batch_simd16_result_ms, loop_iterations * 16))
+        + String(',"valid_count":')
+        + String(ecdsa_batch_simd16_valid)
+        + String(',"mismatches":')
+        + String(ecdsa_batch_simd16_mismatches)
+        + String('}}')
         + String('},"scalar_valid_count":')
         + String(ecdsa_batch_scalar_valid)
+        + String(',"simd2_valid_count":')
+        + String(ecdsa_batch_simd2_valid)
         + String(',"simd4_valid_count":')
         + String(ecdsa_batch_simd4_valid)
+        + String(',"simd8_valid_count":')
+        + String(ecdsa_batch_simd8_valid)
+        + String(',"simd16_valid_count":')
+        + String(ecdsa_batch_simd16_valid)
         + String(',"mismatches":')
         + String(ecdsa_batch_mismatches)
         + String('},"field":{"enabled":')

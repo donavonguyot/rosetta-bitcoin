@@ -107,14 +107,16 @@ The implementation follows formulas and structure from Bitcoin Core's
   counters. The same 1000-iteration host run stayed parity-clean but still
   measured `88ms` for Fe52 GLV result versus `78ms` for plain Fe52 WNAF, so GLV
   remains unrouted until it demonstrates a material win.
-- Fe52 SIMD lane-batch is diagnostic microbench-only. The first lane core uses
-  `SIMD[DType.uint64, 4]` limbs plus `SIMD[DType.uint128, 4]` accumulators for
-  homogeneous K=4 ECDSA WNAF batches, with scalar Fe52 as the correctness
-  oracle. It deliberately does not route into live verification and does not
-  claim mixed-lane support yet, because divergent WNAF digits need masked table
-  selection. The 1000-iteration host `ecdsa-batch` microbench reported zero
-  mismatches and measured scalar Fe52 WNAF result at `91us` per signature versus
-  homogeneous SIMD4 Fe52 WNAF result at `46us` per signature.
+- Fe52 SIMD lane-batch is diagnostic microbench-only. The lane-parametric core
+  uses `SIMD[DType.uint64, K]` limbs plus `SIMD[DType.uint128, K]`
+  accumulators for homogeneous ECDSA WNAF batches at K=2/4/8/16, with scalar
+  Fe52 as the correctness oracle. It deliberately does not route into live
+  verification. The 1000-iteration host `ecdsa-batch` microbench reported zero
+  mismatches and measured scalar Fe52 WNAF result at `82us` per signature,
+  homogeneous K=2 at `58us`, K=4 at `45us`, K=8 at `34us`, and K=16 at `45us`.
+  Mixed-lane WNAF remains unsupported: the Mojo 1.0.0b1 SIMD probe showed
+  comparisons returning scalar `Bool` and no lane-mask `select`, so divergent
+  table gather/sign/zero masking cannot be expressed safely yet.
 - Pure diagnostic Schnorr now routes `s*G + (-e)*P` through the Fe52 WNAF
   double-base path. The preserved 4x64 reference helper still feeds focused
   parity checks, and the 1000-iteration host microbench reported zero Fe52
@@ -157,6 +159,7 @@ shadow path for differential testing and language-specific learning.
 ## Deferred Libsecp Shapes
 
 The live pure verifier path still uses the existing scalar inverse algorithm.
-Safegcd, Fe52 GLV routing, mixed-lane SIMD WNAF masking, Taproot fixed-G
+Safegcd, Fe52 GLV routing, mixed-lane SIMD WNAF masking or a 10x26/u32 SIMD
+lane prototype, Taproot fixed-G
 precompute, broader fixed generator tables, tagged-hash midstates, and replay
 proofs are intentionally deferred to later measured slices.

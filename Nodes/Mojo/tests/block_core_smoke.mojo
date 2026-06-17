@@ -79,9 +79,15 @@ from pure_secp import (
     pure_test_ecdsa_fe52_glv_result,
     pure_test_ecdsa_fe52_glv_max_len,
     pure_test_ecdsa_fe52_glv_old_max_len,
+    pure_test_ecdsa_fe52_simd2_wnaf_mismatches,
+    pure_test_ecdsa_fe52_simd2_wnaf_result,
     pure_test_ecdsa_fe52_simd4_wnaf_mismatches,
     pure_test_ecdsa_fe52_simd4_wnaf_product_x,
     pure_test_ecdsa_fe52_simd4_wnaf_result,
+    pure_test_ecdsa_fe52_simd8_wnaf_mismatches,
+    pure_test_ecdsa_fe52_simd8_wnaf_result,
+    pure_test_ecdsa_fe52_simd16_wnaf_mismatches,
+    pure_test_ecdsa_fe52_simd16_wnaf_result,
     pure_test_ecdsa_fe52_wnaf_result,
     pure_test_ecdsa_reference_product_x,
     pure_test_ecdsa_reference_result,
@@ -93,6 +99,9 @@ from pure_secp import (
     pure_test_fe52_equal,
     pure_test_fe52_is_zero,
     pure_test_fe52_mul,
+    pure_test_fe52x2_add_lane,
+    pure_test_fe52x2_mul_lane,
+    pure_test_fe52x2_sqr_lane,
     pure_test_fe52x4_add_lane,
     pure_test_fe52x4_mul_lane,
     pure_test_fe52x4_sqr_lane,
@@ -489,12 +498,16 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     assert_equal(bytes_to_hex(pure_test_fe52_roundtrip(field_p)), bytes_to_hex(zero))
     assert_equal(bytes_to_hex(pure_test_fe52_roundtrip(p_plus_one)), bytes_to_hex(one))
     assert_equal(bytes_to_hex(pure_test_fe52_add(two, three)), bytes_to_hex(five))
+    assert_equal(bytes_to_hex(pure_test_fe52x2_add_lane(two, three, 0)), bytes_to_hex(five))
+    assert_equal(bytes_to_hex(pure_test_fe52x2_add_lane(two, three, 1)), bytes_to_hex(five))
     assert_equal(bytes_to_hex(pure_test_fe52x4_add_lane(two, three, 0)), bytes_to_hex(five))
     assert_equal(bytes_to_hex(pure_test_fe52x4_add_lane(two, three, 3)), bytes_to_hex(five))
     assert_equal(bytes_to_hex(pure_test_fe52_add(p_minus_one, two)), bytes_to_hex(one))
     assert_equal(bytes_to_hex(pure_test_fe52_sub_via_negate(three, five)), bytes_to_hex(p_minus_two))
     assert_equal(bytes_to_hex(pure_test_fe52_sub_via_negate(two, two.copy())), bytes_to_hex(zero))
     assert_equal(bytes_to_hex(pure_test_fe52_mul(two, three)), bytes_to_hex(six))
+    assert_equal(bytes_to_hex(pure_test_fe52x2_mul_lane(two, three, 0)), bytes_to_hex(six))
+    assert_equal(bytes_to_hex(pure_test_fe52x2_mul_lane(two, three, 1)), bytes_to_hex(six))
     assert_equal(bytes_to_hex(pure_test_fe52x4_mul_lane(two, three, 0)), bytes_to_hex(six))
     assert_equal(bytes_to_hex(pure_test_fe52x4_mul_lane(two, three, 3)), bytes_to_hex(six))
     assert_equal(bytes_to_hex(pure_test_fe52_mul(p_minus_one, carry_field_b)), bytes_to_hex(carry_field_expected))
@@ -502,6 +515,8 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     assert_equal(bytes_to_hex(pure_test_fe52x4_mul_lane(p_minus_one, carry_field_b, 3)), bytes_to_hex(carry_field_expected))
     assert_equal(bytes_to_hex(pure_test_fe52_mul(high_a, high_b)), String("422effa10d0f872f33c4ad3ee7134e1b01485ff67d9fd681aa8caeb057552e0c"))
     assert_equal(bytes_to_hex(pure_test_fe52_sqr(high_a)), bytes_to_hex(high_a_square))
+    assert_equal(bytes_to_hex(pure_test_fe52x2_sqr_lane(high_a, 0)), bytes_to_hex(high_a_square))
+    assert_equal(bytes_to_hex(pure_test_fe52x2_sqr_lane(high_a, 1)), bytes_to_hex(high_a_square))
     assert_equal(bytes_to_hex(pure_test_fe52x4_sqr_lane(high_a, 0)), bytes_to_hex(high_a_square))
     assert_equal(bytes_to_hex(pure_test_fe52x4_sqr_lane(high_a, 3)), bytes_to_hex(high_a_square))
     assert_equal(bytes_to_hex(pure_test_fe52_sqr(p_minus_one)), bytes_to_hex(one))
@@ -711,8 +726,14 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
         bytes_to_hex(pure_test_ecdsa_fe52_simd4_wnaf_product_x(pubkey, sig, msg, 3)),
         bytes_to_hex(pure_test_ecdsa_fe52_wnaf_product_x(pubkey, sig, msg)),
     )
+    assert_equal(pure_test_ecdsa_fe52_simd2_wnaf_result(pubkey, sig, msg), pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, msg))
+    assert_equal(pure_test_ecdsa_fe52_simd2_wnaf_mismatches(pubkey, sig, msg), 0)
     assert_equal(pure_test_ecdsa_fe52_simd4_wnaf_result(pubkey, sig, msg), pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, msg))
     assert_equal(pure_test_ecdsa_fe52_simd4_wnaf_mismatches(pubkey, sig, msg), 0)
+    assert_equal(pure_test_ecdsa_fe52_simd8_wnaf_result(pubkey, sig, msg), pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, msg))
+    assert_equal(pure_test_ecdsa_fe52_simd8_wnaf_mismatches(pubkey, sig, msg), 0)
+    assert_equal(pure_test_ecdsa_fe52_simd16_wnaf_result(pubkey, sig, msg), pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, msg))
+    assert_equal(pure_test_ecdsa_fe52_simd16_wnaf_mismatches(pubkey, sig, msg), 0)
     assert_equal(pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, msg), pure_test_ecdsa_wnaf_result(pubkey, sig, msg))
     assert_equal(
         bytes_to_hex(pure_test_ecdsa_fe52_glv_product_x(pubkey, sig, msg)),
@@ -726,6 +747,8 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg), CRYPTO_RESULT_CONSENSUS_INVALID)
     assert_equal(pure_test_ecdsa_wnaf_result(pubkey, sig, wrong_msg), pure_test_ecdsa_reference_result(pubkey, sig, wrong_msg))
     assert_equal(pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, wrong_msg), pure_test_ecdsa_wnaf_result(pubkey, sig, wrong_msg))
+    assert_equal(pure_test_ecdsa_fe52_simd2_wnaf_result(pubkey, sig, wrong_msg), pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, wrong_msg))
+    assert_equal(pure_test_ecdsa_fe52_simd2_wnaf_mismatches(pubkey, sig, wrong_msg), 0)
     assert_equal(pure_test_ecdsa_fe52_simd4_wnaf_result(pubkey, sig, wrong_msg), pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, wrong_msg))
     assert_equal(pure_test_ecdsa_fe52_simd4_wnaf_mismatches(pubkey, sig, wrong_msg), 0)
     assert_equal(pure_test_ecdsa_glv_result(pubkey, sig, wrong_msg), pure_test_ecdsa_wnaf_result(pubkey, sig, wrong_msg))
@@ -751,6 +774,8 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
         bytes_to_hex(pure_test_ecdsa_fe52_wnaf_product_x(pubkey, high_s_sig, msg)),
         bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, high_s_sig, msg)),
     )
+    assert_equal(pure_test_ecdsa_fe52_simd2_wnaf_result(pubkey, high_s_sig, msg), pure_test_ecdsa_fe52_wnaf_result(pubkey, high_s_sig, msg))
+    assert_equal(pure_test_ecdsa_fe52_simd2_wnaf_mismatches(pubkey, high_s_sig, msg), 0)
     assert_equal(pure_test_ecdsa_fe52_simd4_wnaf_result(pubkey, high_s_sig, msg), pure_test_ecdsa_fe52_wnaf_result(pubkey, high_s_sig, msg))
     assert_equal(pure_test_ecdsa_fe52_simd4_wnaf_mismatches(pubkey, high_s_sig, msg), 0)
     assert_equal(pure_test_ecdsa_fe52_wnaf_result(pubkey, high_s_sig, msg), pure_test_ecdsa_wnaf_result(pubkey, high_s_sig, msg))

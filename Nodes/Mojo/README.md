@@ -60,10 +60,14 @@ native prerequisites a future port would need?
   parity. Pure diagnostic ECDSA and Schnorr now route through Fe52 plain WNAF,
   and pure Taproot tweak checks route through the Fe52 scalar path. Fe52 GLV is
   kept as a parity-clean microbench path because it does not currently beat
-  plain Fe52 WNAF. A diagnostic `ecdsa-batch` microbench now exercises a
-  homogeneous K=4 Fe52 SIMD WNAF lane using `SIMD[DType.uint64, 4]` limbs and
-  scalar Fe52 as oracle. It is not routed into live pure verification and does
-  not claim mixed-lane WNAF support yet.
+  plain Fe52 WNAF. A diagnostic `ecdsa-batch` microbench now sweeps homogeneous
+  Fe52 SIMD WNAF lanes at K=2/4/8/16 using `SIMD[DType.uint64, K]` limbs and
+  scalar Fe52 as oracle. The latest host readout stayed parity-clean and found
+  K=8 fastest for the fixed-vector homogeneous case (`34us` per signature),
+  while K=16 regressed to K=4-class timing. It is not routed into live pure
+  verification and does not claim mixed-lane WNAF support: Mojo 1.0.0b1 SIMD
+  comparisons currently produce scalar `Bool` values rather than lane masks
+  with selectable Fe52xK fields.
   `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
   support/unsupported rows, per-attempt `shadow_duration_ms`, aggregate shadow
