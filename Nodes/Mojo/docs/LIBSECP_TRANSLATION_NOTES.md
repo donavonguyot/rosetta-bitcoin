@@ -92,13 +92,15 @@ The implementation follows formulas and structure from Bitcoin Core's
   timing only. The host point microbench at 1000 iterations reported zero
   mismatches and showed the Fe52 binary double-base path beating the 4x64
   binary reference (`200ms` vs `1074ms` in the latest fast run).
-- Fe52 WNAF/GLV is now available as a verifier-shaped microbench-only path.
-  It builds Fe52 odd-multiple tables in Jacobian form, derives the GLV beta
-  table from the same variable-point table, and compares product/result parity
-  against the existing 4x64 WNAF/GLV oracle. The 1000-iteration host ECDSA
-  microbench reported zero Fe52 mismatches and reduced GLV result timing from
-  `758ms` to `227ms`. Live pure verifier routing still uses the existing 4x64
-  implementation.
+- Pure diagnostic ECDSA now routes through Fe52 plain WNAF. The path parses
+  pubkeys into Fe52, uses Fe52 sqrt/inversion for lift, table conversion, and
+  final affine conversion, and converts back only for the final x-vs-r
+  comparison. The 1000-iteration host ECDSA microbench reported zero Fe52
+  mismatches and reduced routed WNAF result timing from the old 4x64 GLV
+  `741ms` to `77ms`.
+- Fe52 GLV remains microbench-only. It is parity-clean, but the same run showed
+  `127ms` for Fe52 GLV result versus `77ms` for plain Fe52 WNAF, so GLV is not
+  routed until it demonstrates a material win.
 
 ## Evidence Boundary
 
@@ -126,9 +128,8 @@ shadow path for differential testing and language-specific learning.
 
 ## Deferred Libsecp Shapes
 
-The live pure verifier path still uses the existing scalar inverse algorithm,
-the current Schnorr/Taproot multiplication routing, and exact 4x64
-normalization after each operation. Safegcd, live Fe52 verifier routing,
-Taproot fixed-G precompute, broader fixed generator tables, tagged-hash
-midstates, SIMD batching, and replay proofs are intentionally deferred to later
-measured slices.
+The live pure verifier path still uses the existing scalar inverse algorithm
+and the current Schnorr/Taproot multiplication routing. Safegcd, Fe52 GLV
+routing, Fe52 Schnorr/Taproot paths, Taproot fixed-G precompute, broader fixed
+generator tables, tagged-hash midstates, SIMD batching, and replay proofs are
+intentionally deferred to later measured slices.

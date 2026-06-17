@@ -56,9 +56,10 @@ native prerequisites a future port would need?
   timing without native calls or shadow-agreement accounting unless explicitly
   requested. The microbench also has `field` and `point` cases that compare
   the current exact 4x64 field/point paths against the new 5x52 lazy-field and
-  Jacobian group core, plus ECDSA counters for diagnostic Fe52 WNAF/GLV product
-  and result parity. The Fe52 verifier-shaped path is microbench-only for now;
-  live pure ECDSA, corpus, and proof paths still use the current 4x64 route.
+  Jacobian group core, plus ECDSA counters for Fe52 WNAF/GLV product and result
+  parity. Pure diagnostic ECDSA now routes through Fe52 plain WNAF; Fe52 GLV is
+  kept as a parity-clean microbench path because it does not currently beat
+  plain Fe52 WNAF.
   `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
   support/unsupported rows, per-attempt `shadow_duration_ms`, aggregate shadow

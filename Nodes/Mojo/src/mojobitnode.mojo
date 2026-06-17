@@ -15,6 +15,7 @@ from pure_secp import (
     pure_test_ecdsa_fe52_glv_product_x,
     pure_test_ecdsa_fe52_glv_result,
     pure_test_ecdsa_fe52_wnaf_product_x,
+    pure_test_ecdsa_fe52_wnaf_result,
     pure_test_ecdsa_glv_product_x,
     pure_test_ecdsa_glv_result,
     pure_test_ecdsa_reference_product_x,
@@ -659,11 +660,13 @@ def pure_crypto_microbench_json(
     var ecdsa_glv_product_ms = Int64(0)
     var ecdsa_glv_result_ms = Int64(0)
     var ecdsa_fe52_wnaf_product_ms = Int64(0)
+    var ecdsa_fe52_wnaf_result_ms = Int64(0)
     var ecdsa_fe52_glv_product_ms = Int64(0)
     var ecdsa_fe52_glv_result_ms = Int64(0)
     var ecdsa_wnaf_valid = 0
     var ecdsa_glv_valid = 0
     var ecdsa_fe52_wnaf_valid = 0
+    var ecdsa_fe52_wnaf_result_valid = 0
     var ecdsa_fe52_glv_valid = 0
     var ecdsa_glv_wnaf_mismatches = 0
     var ecdsa_fe52_mismatches = 0
@@ -842,6 +845,15 @@ def pure_crypto_microbench_json(
 
         started = clock.now_ms()
         for _ in range(loop_iterations):
+            var fe52_wnaf_result = pure_test_ecdsa_fe52_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if fe52_wnaf_result == expected_wnaf_result:
+                ecdsa_fe52_wnaf_result_valid += 1
+            else:
+                ecdsa_fe52_mismatches += 1
+        ecdsa_fe52_wnaf_result_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
             var fe52_glv_x = pure_test_ecdsa_fe52_glv_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
             if not bytes_equal(fe52_glv_x, expected_wnaf_x):
                 ecdsa_fe52_mismatches += 1
@@ -912,7 +924,7 @@ def pure_crypto_microbench_json(
         result = String("failed")
     if run_ecdsa and (ecdsa_wnaf_valid != loop_iterations or ecdsa_glv_valid != loop_iterations):
         result = String("failed")
-    if run_ecdsa and (ecdsa_fe52_wnaf_valid != loop_iterations or ecdsa_fe52_glv_valid != loop_iterations):
+    if run_ecdsa and (ecdsa_fe52_wnaf_valid != loop_iterations or ecdsa_fe52_wnaf_result_valid != loop_iterations or ecdsa_fe52_glv_valid != loop_iterations):
         result = String("failed")
     if run_schnorr and schnorr_valid != loop_iterations:
         result = String("failed")
@@ -960,6 +972,8 @@ def pure_crypto_microbench_json(
         + String(ecdsa_glv_result_ms)
         + String(',"fe52_wnaf_product":')
         + String(ecdsa_fe52_wnaf_product_ms)
+        + String(',"fe52_wnaf_result":')
+        + String(ecdsa_fe52_wnaf_result_ms)
         + String(',"fe52_glv_product":')
         + String(ecdsa_fe52_glv_product_ms)
         + String(',"fe52_glv_result":')
@@ -984,6 +998,8 @@ def pure_crypto_microbench_json(
         + String(per_iteration_us(ecdsa_glv_result_ms, loop_iterations))
         + String(',"fe52_wnaf_product":')
         + String(per_iteration_us(ecdsa_fe52_wnaf_product_ms, loop_iterations))
+        + String(',"fe52_wnaf_result":')
+        + String(per_iteration_us(ecdsa_fe52_wnaf_result_ms, loop_iterations))
         + String(',"fe52_glv_product":')
         + String(per_iteration_us(ecdsa_fe52_glv_product_ms, loop_iterations))
         + String(',"fe52_glv_result":')
@@ -994,6 +1010,8 @@ def pure_crypto_microbench_json(
         + String(ecdsa_glv_valid)
         + String(',"fe52_wnaf_valid_count":')
         + String(ecdsa_fe52_wnaf_valid)
+        + String(',"fe52_wnaf_result_valid_count":')
+        + String(ecdsa_fe52_wnaf_result_valid)
         + String(',"fe52_glv_valid_count":')
         + String(ecdsa_fe52_glv_valid)
         + String(',"glv_wnaf_mismatches":')

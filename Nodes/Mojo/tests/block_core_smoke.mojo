@@ -76,6 +76,7 @@ from pure_secp import (
     pure_test_ecdsa_glv_result,
     pure_test_ecdsa_fe52_glv_product_x,
     pure_test_ecdsa_fe52_glv_result,
+    pure_test_ecdsa_fe52_wnaf_result,
     pure_test_ecdsa_reference_product_x,
     pure_test_ecdsa_reference_result,
     pure_test_ecdsa_fe52_wnaf_product_x,
@@ -593,6 +594,7 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     var msg = _hex_bytes(String("281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5"))
     var wrong_msg = _hex_bytes(String("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
     var sig = _hex_bytes(String("3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4"))
+    var uncompressed_pubkey = _hex_bytes(String("0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8"))
 
     assert_equal(
         bytes_to_hex(pure_test_ecdsa_parse_der(sig)),
@@ -603,6 +605,9 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     assert_equal(pure_test_ecdsa_reference_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
     assert_equal(pure_test_ecdsa_wnaf_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
     assert_equal(pure_test_ecdsa_glv_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
+    assert_equal(pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, msg), CRYPTO_RESULT_VALID)
+    assert_equal(pure.verify_ecdsa_der_bytes(uncompressed_pubkey, sig, msg), native.verify_ecdsa_der_bytes(uncompressed_pubkey, sig, msg))
+    assert_equal(pure.verify_ecdsa_der_bytes(uncompressed_pubkey, sig, msg), CRYPTO_RESULT_VALID)
     assert_true(pure_test_odd_multiples_match_generator(8))
     assert_true(pure_test_odd_multiples_match_pubkey(pubkey, 8))
     var scalar_half_n = _hex_bytes(String("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0"))
@@ -627,6 +632,7 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
         bytes_to_hex(pure_test_ecdsa_fe52_wnaf_product_x(pubkey, sig, msg)),
         bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, sig, msg)),
     )
+    assert_equal(pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, msg), pure_test_ecdsa_wnaf_result(pubkey, sig, msg))
     assert_equal(
         bytes_to_hex(pure_test_ecdsa_fe52_glv_product_x(pubkey, sig, msg)),
         bytes_to_hex(pure_test_ecdsa_glv_product_x(pubkey, sig, msg)),
@@ -638,6 +644,7 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     )
     assert_equal(pure.verify_ecdsa_der_bytes(pubkey, sig, wrong_msg), CRYPTO_RESULT_CONSENSUS_INVALID)
     assert_equal(pure_test_ecdsa_wnaf_result(pubkey, sig, wrong_msg), pure_test_ecdsa_reference_result(pubkey, sig, wrong_msg))
+    assert_equal(pure_test_ecdsa_fe52_wnaf_result(pubkey, sig, wrong_msg), pure_test_ecdsa_wnaf_result(pubkey, sig, wrong_msg))
     assert_equal(pure_test_ecdsa_glv_result(pubkey, sig, wrong_msg), pure_test_ecdsa_wnaf_result(pubkey, sig, wrong_msg))
     assert_equal(pure_test_ecdsa_fe52_glv_result(pubkey, sig, wrong_msg), pure_test_ecdsa_glv_result(pubkey, sig, wrong_msg))
 
@@ -661,6 +668,7 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
         bytes_to_hex(pure_test_ecdsa_fe52_wnaf_product_x(pubkey, high_s_sig, msg)),
         bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, high_s_sig, msg)),
     )
+    assert_equal(pure_test_ecdsa_fe52_wnaf_result(pubkey, high_s_sig, msg), pure_test_ecdsa_wnaf_result(pubkey, high_s_sig, msg))
     assert_equal(
         bytes_to_hex(pure_test_ecdsa_fe52_glv_product_x(pubkey, high_s_sig, msg)),
         bytes_to_hex(pure_test_ecdsa_glv_product_x(pubkey, high_s_sig, msg)),

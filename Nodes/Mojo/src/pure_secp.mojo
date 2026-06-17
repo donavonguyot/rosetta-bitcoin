@@ -8,6 +8,7 @@ comptime UNSUPPORTED = Int32(3)
 comptime ECDSA_PRODUCT_REFERENCE = Int(0)
 comptime ECDSA_PRODUCT_WNAF = Int(1)
 comptime ECDSA_PRODUCT_GLV = Int(2)
+comptime ECDSA_PRODUCT_FE52_WNAF = Int(3)
 
 
 struct U256(Copyable):
@@ -94,6 +95,17 @@ struct FieldPowBlocks(Copyable):
         self.x2 = U256()
         self.x22 = U256()
         self.x223 = U256()
+
+
+struct Fe52PowBlocks(Copyable):
+    var x2: Fe52
+    var x22: Fe52
+    var x223: Fe52
+
+    def __init__(out self):
+        self.x2 = Fe52()
+        self.x22 = Fe52()
+        self.x223 = Fe52()
 
 
 struct EndoSplit(Copyable):
@@ -1144,6 +1156,51 @@ def _fe52_normalizes_to_zero_var(ref a: Fe52) -> Bool:
     return z0 == UInt64(0) or z1 == m
 
 
+def _fe52_sqr_n(ref a: Fe52, count: Int) -> Fe52:
+    var out = a.copy()
+    for _ in range(count):
+        out = _fe52_sqr(out)
+    return out^
+
+
+def _fe52_pow_blocks(ref a: Fe52) -> Fe52PowBlocks:
+    var out = Fe52PowBlocks()
+    var x2 = _fe52_mul(_fe52_sqr(a), a)
+    var x3 = _fe52_mul(_fe52_sqr(x2), a)
+    var x6 = _fe52_mul(_fe52_sqr_n(x3, 3), x3)
+    var x9 = _fe52_mul(_fe52_sqr_n(x6, 3), x3)
+    var x11 = _fe52_mul(_fe52_sqr_n(x9, 2), x2)
+    out.x2 = x2.copy()
+    out.x22 = _fe52_mul(_fe52_sqr_n(x11, 11), x11)
+    var x44 = _fe52_mul(_fe52_sqr_n(out.x22, 22), out.x22)
+    var x88 = _fe52_mul(_fe52_sqr_n(x44, 44), x44)
+    var x176 = _fe52_mul(_fe52_sqr_n(x88, 88), x88)
+    var x220 = _fe52_mul(_fe52_sqr_n(x176, 44), x44)
+    out.x223 = _fe52_mul(_fe52_sqr_n(x220, 3), x3)
+    return out^
+
+
+def _fe52_inv(ref a: Fe52) -> Fe52:
+    var blocks = _fe52_pow_blocks(a)
+    var out = _fe52_sqr_n(blocks.x223, 23)
+    out = _fe52_mul(out, blocks.x22)
+    out = _fe52_sqr_n(out, 5)
+    out = _fe52_mul(out, a)
+    out = _fe52_sqr_n(out, 3)
+    out = _fe52_mul(out, blocks.x2)
+    out = _fe52_sqr_n(out, 2)
+    return _fe52_mul(out, a)
+
+
+def _fe52_sqrt(ref a: Fe52) -> Fe52:
+    var blocks = _fe52_pow_blocks(a)
+    var out = _fe52_sqr_n(blocks.x223, 23)
+    out = _fe52_mul(out, blocks.x22)
+    out = _fe52_sqr_n(out, 6)
+    out = _fe52_mul(out, blocks.x2)
+    return _fe52_sqr_n(out, 2)
+
+
 def _fe52_point_from_point(ref point: Point) -> Fe52Point:
     var out = Fe52Point()
     if point.infinity:
@@ -1164,6 +1221,61 @@ def _point_from_fe52_point(ref point: Fe52Point) -> Point:
     return out^
 
 
+def _fe52_lift_x(ref x: U256) raises -> Fe52Point:
+    var p = _field_p()
+    if _cmp(x, p) >= 0:
+        raise Error("x coordinate is not a field element")
+    var x_fe = _fe52_from_u256(x)
+    var x2 = _fe52_sqr(x_fe)
+    var x3 = _fe52_mul(x2, x_fe)
+    var y2 = _fe52_add(x3, _fe52_from_u256(_u256_from_u32(UInt32(7))))
+    var y = _fe52_sqrt(y2)
+    if not _fe52_equal(_fe52_sqr(y), y2):
+        raise Error("x coordinate is not liftable")
+    if _is_odd(_fe52_to_u256(y)):
+        y = _fe52_negate(y)
+    var out = Fe52Point()
+    out.x = x_fe.copy()
+    out.y = y^
+    out.infinity = False
+    return out^
+
+
+def _fe52_parse_pubkey(ref pubkey: List[UInt8]) raises -> Fe52Point:
+    var p = _field_p()
+    if len(pubkey) == 33 and (pubkey[0] == UInt8(0x02) or pubkey[0] == UInt8(0x03)):
+        var x_bytes = List[UInt8]()
+        for i in range(32):
+            x_bytes.append(pubkey[i + 1])
+        var point = _fe52_lift_x(_from_be32(x_bytes))
+        if pubkey[0] == UInt8(0x03):
+            point.y = _fe52_negate(point.y)
+        return point^
+    if len(pubkey) == 65 and pubkey[0] == UInt8(0x04):
+        var x_bytes = List[UInt8]()
+        var y_bytes = List[UInt8]()
+        for i in range(32):
+            x_bytes.append(pubkey[i + 1])
+            y_bytes.append(pubkey[i + 33])
+        var x = _from_be32(x_bytes)
+        var y = _from_be32(y_bytes)
+        if _cmp(x, p) >= 0 or _cmp(y, p) >= 0:
+            raise Error("pubkey coordinate out of range")
+        var x_fe = _fe52_from_u256(x)
+        var y_fe = _fe52_from_u256(y)
+        var x2 = _fe52_sqr(x_fe)
+        var x3 = _fe52_mul(x2, x_fe)
+        var expected_y2 = _fe52_add(x3, _fe52_from_u256(_u256_from_u32(UInt32(7))))
+        if not _fe52_equal(_fe52_sqr(y_fe), expected_y2):
+            raise Error("pubkey is not on secp256k1")
+        var point = Fe52Point()
+        point.x = x_fe^
+        point.y = y_fe^
+        point.infinity = False
+        return point^
+    raise Error("invalid pubkey length")
+
+
 def _fe52_jacobian_from_affine(ref point: Fe52Point) -> Fe52Jacobian:
     var out = Fe52Jacobian()
     if point.infinity:
@@ -1179,8 +1291,7 @@ def _fe52_jacobian_to_affine(ref point: Fe52Jacobian) -> Fe52Point:
     var out = Fe52Point()
     if point.infinity:
         return out^
-    var z = _fe52_to_u256(point.z)
-    var z_inv = _fe52_from_u256(_fe_inv(z))
+    var z_inv = _fe52_inv(point.z)
     var z_inv2 = _fe52_sqr(z_inv)
     var z_inv3 = _fe52_mul(z_inv2, z_inv)
     out.x = _fe52_mul(point.x, z_inv2)
@@ -1348,7 +1459,7 @@ def _fe52_set_all_gej_to_affine(ref points: List[Fe52Jacobian]) raises -> List[F
             prefixes.append(_fe52_mul(prefixes[i - 1], points[i].z))
         out.append(Fe52Point())
 
-    var inv = _fe52_from_u256(_fe_inv(_fe52_to_u256(prefixes[count - 1])))
+    var inv = _fe52_inv(prefixes[count - 1])
     var i = count - 1
     while i > 0:
         var z_inv = _fe52_mul(prefixes[i - 1], inv)
@@ -1360,10 +1471,14 @@ def _fe52_set_all_gej_to_affine(ref points: List[Fe52Jacobian]) raises -> List[F
 
 
 def _fe52_odd_multiples(ref point: Point, count: Int) raises -> List[Fe52Point]:
+    return _fe52_odd_multiples_from_fe52(_fe52_point_from_point(point), count)
+
+
+def _fe52_odd_multiples_from_fe52(ref point: Fe52Point, count: Int) raises -> List[Fe52Point]:
     var table = List[Fe52Jacobian]()
     if count <= 0:
         return List[Fe52Point]()
-    var point_j = _fe52_jacobian_from_affine(_fe52_point_from_point(point))
+    var point_j = _fe52_jacobian_from_affine(point)
     table.append(point_j.copy())
     if count == 1:
         return _fe52_set_all_gej_to_affine(table)
@@ -1436,10 +1551,14 @@ def _fe52_double_base_mul(ref s: U256, ref generator: Point, ref e: U256, ref pu
 
 
 def _fe52_double_base_mul_wnaf(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Point) raises -> Fe52Jacobian:
+    return _fe52_double_base_mul_wnaf_fe52(g_scalar, p_scalar, _fe52_point_from_point(pubkey))
+
+
+def _fe52_double_base_mul_wnaf_fe52(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Fe52Point) raises -> Fe52Jacobian:
     var width = 5
     var g_wnaf = _wnaf_recode(g_scalar, width)
     var p_wnaf = _wnaf_recode(p_scalar, width)
-    var p_table = _fe52_odd_multiples(pubkey, 8)
+    var p_table = _fe52_odd_multiples_from_fe52(pubkey, 8)
     var max_len = len(g_wnaf)
     if len(p_wnaf) > max_len:
         max_len = len(p_wnaf)
@@ -2377,7 +2496,7 @@ def pure_verify_ecdsa_der_bytes(
     ref der: List[UInt8],
     ref digest: List[UInt8],
 ) raises -> Int32:
-    return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_GLV)
+    return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_FE52_WNAF)
 
 
 def _pure_verify_ecdsa_der_bytes_with_mode(
@@ -2387,8 +2506,42 @@ def _pure_verify_ecdsa_der_bytes_with_mode(
     use_wnaf: Bool,
 ) raises -> Int32:
     if use_wnaf:
-        return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_GLV)
+        return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_FE52_WNAF)
     return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_REFERENCE)
+
+
+def _pure_verify_ecdsa_der_bytes_fe52_wnaf(
+    ref pubkey: List[UInt8],
+    ref der: List[UInt8],
+    ref digest: List[UInt8],
+) raises -> Int32:
+    var n = _scalar_n()
+    var sig = EcdsaSignature()
+    var q = Fe52Point()
+    try:
+        sig = _parse_ecdsa_der(der)
+        q = _fe52_parse_pubkey(pubkey)
+    except:
+        return MALFORMED
+    if _is_zero(sig.r) or _is_zero(sig.s) or _cmp(sig.r, n) >= 0 or _cmp(sig.s, n) >= 0:
+        return CONSENSUS_INVALID
+
+    var half_n = _scalar_half_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _fe52_jacobian_to_affine(_fe52_double_base_mul_wnaf_fe52(u1, u2, q))
+    if point.infinity:
+        return CONSENSUS_INVALID
+    var x_mod_n = _reduce_once(_fe52_to_u256(point.x), n)
+    if _eq(x_mod_n, sig.r):
+        return VALID
+    return CONSENSUS_INVALID
 
 
 def _pure_verify_ecdsa_der_bytes_with_product_mode(
@@ -2399,6 +2552,8 @@ def _pure_verify_ecdsa_der_bytes_with_product_mode(
 ) raises -> Int32:
     if (len(pubkey) != 33 and len(pubkey) != 65) or len(der) == 0 or len(der) > 72 or len(digest) != 32:
         return MALFORMED
+    if product_mode == ECDSA_PRODUCT_FE52_WNAF:
+        return _pure_verify_ecdsa_der_bytes_fe52_wnaf(pubkey, der, digest)
     var n = _scalar_n()
     var sig = EcdsaSignature()
     var q = Point()
@@ -2688,7 +2843,7 @@ def pure_test_ecdsa_fe52_reference_product_x(ref pubkey: List[UInt8], ref der: L
 
 def pure_test_ecdsa_fe52_wnaf_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
     var sig = _parse_ecdsa_der(der)
-    var q = _parse_pubkey(pubkey)
+    var q = _fe52_parse_pubkey(pubkey)
     var half_n = _scalar_half_n()
     var n = _scalar_n()
     if _cmp(sig.s, half_n) > 0:
@@ -2698,10 +2853,14 @@ def pure_test_ecdsa_fe52_wnaf_product_x(ref pubkey: List[UInt8], ref der: List[U
     var w = _scalar_inv(sig.s)
     var u1 = _scalar_mul_mod(z, w)
     var u2 = _scalar_mul_mod(sig.r, w)
-    var point = _fe52_jacobian_to_affine(_fe52_double_base_mul_wnaf(u1, u2, q))
+    var point = _fe52_jacobian_to_affine(_fe52_double_base_mul_wnaf_fe52(u1, u2, q))
     if point.infinity:
         raise Error("Fe52 ECDSA wNAF product is infinity")
     return _to_be32(_fe52_to_u256(point.x))
+
+
+def pure_test_ecdsa_fe52_wnaf_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
+    return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_FE52_WNAF)
 
 
 def pure_test_ecdsa_fe52_glv_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
