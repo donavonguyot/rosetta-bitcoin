@@ -40,6 +40,7 @@ from pure_secp import (
     pure_test_fe52_sqr,
     pure_test_schnorr_fe52_wnaf_result,
     pure_test_schnorr_reference_result,
+    pure_test_simd_mask_probe_json,
     pure_test_taproot_tweak_fe52_result,
     pure_test_taproot_tweak_reference_result,
     pure_test_u256_add_mod,
@@ -712,7 +713,10 @@ def pure_crypto_microbench_json(
     var ecdsa_batch_mismatches = 0
     var ecdsa_batch_lane_count = 4
     var ecdsa_batch_mixed_lane_supported = False
-    var ecdsa_batch_mixed_lane_blocker = String("mojo_simd_compare_returns_scalar_bool_no_lane_select")
+    var ecdsa_batch_mixed_lane_blocker = String("raw_uint64_simd_compare_returns_scalar_bool")
+    var ecdsa_batch_simd_mask_probe = String(
+        '{"lane_mask_supported":false,"comparison_result_shape":"not_run","scalar_bool_comparison_confirmed":false,"xor_select_supported":false,"masked_zero_supported":false,"fixed_window_batch_supported":false,"blocker":"not_run"}'
+    )
 
     var schnorr_verify_ms = Int64(0)
     var schnorr_reference_verify_ms = Int64(0)
@@ -931,6 +935,7 @@ def pure_crypto_microbench_json(
     if run_ecdsa_batch:
         var expected_fe52_result = pure_test_ecdsa_fe52_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
         var expected_fe52_product = pure_test_ecdsa_fe52_wnaf_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        ecdsa_batch_simd_mask_probe = pure_test_simd_mask_probe_json()
         ecdsa_batch_simd2_mismatches = pure_test_ecdsa_fe52_simd2_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
         ecdsa_batch_simd4_mismatches = pure_test_ecdsa_fe52_simd4_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
         ecdsa_batch_simd8_mismatches = pure_test_ecdsa_fe52_simd8_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
@@ -1213,6 +1218,9 @@ def pure_crypto_microbench_json(
         + String(',"mixed_lane_blocker":"')
         + ecdsa_batch_mixed_lane_blocker
         + String('"')
+        + String(',"simd_mask_probe":')
+        + ecdsa_batch_simd_mask_probe
+        + String(',"mixed_fixed_window":{"enabled":false,"reason":"lane_mask_unavailable"}')
         + String(',"stage_ms":{"scalar_fe52_wnaf_result":')
         + String(ecdsa_batch_scalar_fe52_wnaf_ms)
         + String(',"simd2_fe52_wnaf_result":')

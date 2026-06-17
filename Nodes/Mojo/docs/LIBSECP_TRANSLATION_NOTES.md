@@ -112,11 +112,14 @@ The implementation follows formulas and structure from Bitcoin Core's
   accumulators for homogeneous ECDSA WNAF batches at K=2/4/8/16, with scalar
   Fe52 as the correctness oracle. It deliberately does not route into live
   verification. The 1000-iteration host `ecdsa-batch` microbench reported zero
-  mismatches and measured scalar Fe52 WNAF result at `82us` per signature,
-  homogeneous K=2 at `58us`, K=4 at `45us`, K=8 at `34us`, and K=16 at `45us`.
-  Mixed-lane WNAF remains unsupported: the Mojo 1.0.0b1 SIMD probe showed
-  comparisons returning scalar `Bool` and no lane-mask `select`, so divergent
-  table gather/sign/zero masking cannot be expressed safely yet.
+  mismatches and measured scalar Fe52 WNAF result at `81us` per signature,
+  homogeneous K=2 at `57us`, K=4 at `45us`, K=8 at `34us`, and K=16 at `43us`.
+  Mixed-lane WNAF remains unsupported, and the next routeable batch shape would
+  need a fixed-window ladder rather than divergent WNAF. The Mojo 1.0.0b1 SIMD
+  probe showed explicit `uint64` lane masks can drive bitwise zero/select, but
+  raw SIMD comparisons return scalar aggregate `Bool` rather than per-lane
+  masks. Without compare-to-mask, fixed-window table gather/sign/zero masking
+  cannot be expressed safely yet.
 - Pure diagnostic Schnorr now routes `s*G + (-e)*P` through the Fe52 WNAF
   double-base path. The preserved 4x64 reference helper still feeds focused
   parity checks, and the 1000-iteration host microbench reported zero Fe52
@@ -159,7 +162,7 @@ shadow path for differential testing and language-specific learning.
 ## Deferred Libsecp Shapes
 
 The live pure verifier path still uses the existing scalar inverse algorithm.
-Safegcd, Fe52 GLV routing, mixed-lane SIMD WNAF masking or a 10x26/u32 SIMD
-lane prototype, Taproot fixed-G
+Safegcd, Fe52 GLV routing, fixed-window mixed-lane SIMD once Mojo exposes a
+usable compare-to-mask primitive, a 10x26/u32 SIMD lane prototype, Taproot fixed-G
 precompute, broader fixed generator tables, tagged-hash midstates, and replay
 proofs are intentionally deferred to later measured slices.

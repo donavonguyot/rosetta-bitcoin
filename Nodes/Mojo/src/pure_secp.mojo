@@ -3940,6 +3940,60 @@ def pure_test_fe52x2_sqr_lane(ref a: List[UInt8], lane: Int) raises -> List[UInt
     return _pure_test_fe52xk_sqr_lane[2](a, lane)
 
 
+def pure_test_simd_uint64_compare_is_scalar_bool() -> Bool:
+    var a = SIMD[DType.uint64, 4](UInt64(1), UInt64(2), UInt64(3), UInt64(4))
+    var b = SIMD[DType.uint64, 4](UInt64(1), UInt64(0), UInt64(3), UInt64(9))
+    var eq_same = a == a
+    var eq_mixed = a == b
+    return eq_same and not eq_mixed
+
+
+def pure_test_simd_uint64_manual_mask_ops() -> Bool:
+    var a = SIMD[DType.uint64, 4](UInt64(1), UInt64(2), UInt64(3), UInt64(4))
+    var b = SIMD[DType.uint64, 4](UInt64(9), UInt64(8), UInt64(7), UInt64(6))
+    var mask = SIMD[DType.uint64, 4](
+        UInt64(0xFFFFFFFFFFFFFFFF),
+        UInt64(0),
+        UInt64(0xFFFFFFFFFFFFFFFF),
+        UInt64(0),
+    )
+    var zeroed = a & mask
+    var selected = a ^ ((a ^ b) & mask)
+    return (
+        zeroed[0] == UInt64(1)
+        and zeroed[1] == UInt64(0)
+        and zeroed[2] == UInt64(3)
+        and zeroed[3] == UInt64(0)
+        and selected[0] == UInt64(9)
+        and selected[1] == UInt64(2)
+        and selected[2] == UInt64(7)
+        and selected[3] == UInt64(4)
+    )
+
+
+def _pure_bool_json(value: Bool) -> String:
+    if value:
+        return String("true")
+    return String("false")
+
+
+def pure_test_simd_mask_probe_json() -> String:
+    var scalar_compare = pure_test_simd_uint64_compare_is_scalar_bool()
+    var manual_mask_ops = pure_test_simd_uint64_manual_mask_ops()
+    return (
+        String('{"lane_mask_supported":false,')
+        + String('"comparison_result_shape":"scalar_bool",')
+        + String('"scalar_bool_comparison_confirmed":')
+        + _pure_bool_json(scalar_compare)
+        + String(',"xor_select_supported":')
+        + _pure_bool_json(manual_mask_ops)
+        + String(',"masked_zero_supported":')
+        + _pure_bool_json(manual_mask_ops)
+        + String(',"fixed_window_batch_supported":false,')
+        + String('"blocker":"raw_uint64_simd_compare_returns_scalar_bool"}')
+    )
+
+
 def pure_test_fe52_mul_int(ref a: List[UInt8], scalar: UInt32) raises -> List[UInt8]:
     var av = _from_be32(a)
     var p = _field_p()

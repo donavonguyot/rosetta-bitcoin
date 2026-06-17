@@ -71,11 +71,13 @@ WNAF, and pure Taproot tweak checks route through the Fe52 scalar path. Fe52
 GLV stays microbench-only because it is parity-clean but not faster than plain
 Fe52 WNAF. The `ecdsa-batch` microbench is also diagnostic-only: it sweeps
 homogeneous Fe52 SIMD WNAF lanes at K=2/4/8/16 with scalar Fe52 as oracle. The
-latest host K sweep stayed parity-clean and measured scalar Fe52 at `82us` per
-signature, K=2 at `58us`, K=4 at `45us`, K=8 at `34us`, and K=16 at `45us`.
+latest host K sweep stayed parity-clean and measured scalar Fe52 at `81us` per
+signature, K=2 at `57us`, K=4 at `45us`, K=8 at `34us`, and K=16 at `43us`.
 It is not a live verifier route and does not support divergent mixed-lane WNAF
-digits; the current Mojo SIMD surface produced scalar `Bool` from lane
-comparisons and no lane-mask `select` for Fe52xK fields.
+digits. The current Mojo SIMD surface can apply explicit `uint64` lane masks
+with bitwise operations, but raw SIMD comparisons produce scalar aggregate
+`Bool`, not per-lane masks, so fixed-window table gather cannot be expressed
+safely yet.
 The measured shadow set enables all 17 Taproot corpus rows,
 including the large
 `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and

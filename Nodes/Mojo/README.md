@@ -65,9 +65,11 @@ native prerequisites a future port would need?
   scalar Fe52 as oracle. The latest host readout stayed parity-clean and found
   K=8 fastest for the fixed-vector homogeneous case (`34us` per signature),
   while K=16 regressed to K=4-class timing. It is not routed into live pure
-  verification and does not claim mixed-lane WNAF support: Mojo 1.0.0b1 SIMD
-  comparisons currently produce scalar `Bool` values rather than lane masks
-  with selectable Fe52xK fields.
+  verification and does not claim mixed-lane WNAF support: explicit
+  `SIMD[DType.uint64, K]` bitwise masks can zero/select limbs, but Mojo 1.0.0b1
+  SIMD comparisons currently produce scalar `Bool` values instead of per-lane
+  masks. Without compare-to-mask, fixed-window mixed-lane table gather remains
+  blocked.
   `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
   support/unsupported rows, per-attempt `shadow_duration_ms`, aggregate shadow
