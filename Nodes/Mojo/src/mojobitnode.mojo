@@ -14,6 +14,7 @@ from pure_secp import (
     pure_test_ecdsa_fe52_reference_product_x,
     pure_test_ecdsa_fe52_glv_product_x,
     pure_test_ecdsa_fe52_glv_result,
+    pure_test_ecdsa_fe52_glv_loop_stats_json,
     pure_test_ecdsa_fe52_wnaf_product_x,
     pure_test_ecdsa_fe52_wnaf_result,
     pure_test_ecdsa_glv_product_x,
@@ -680,6 +681,7 @@ def pure_crypto_microbench_json(
     var ecdsa_fe52_mismatches = 0
     var ecdsa_native_compare_ms = Int64(0)
     var ecdsa_native_result = Int32(-1)
+    var ecdsa_fe52_glv_loop_stats = String("{}")
 
     var schnorr_verify_ms = Int64(0)
     var schnorr_reference_verify_ms = Int64(0)
@@ -803,6 +805,7 @@ def pure_crypto_microbench_json(
     if run_ecdsa:
         var expected_wnaf_x = pure_test_ecdsa_wnaf_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
         var expected_wnaf_result = pure_test_ecdsa_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        ecdsa_fe52_glv_loop_stats = pure_test_ecdsa_fe52_glv_loop_stats_json(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
 
         var started = clock.now_ms()
         for _ in range(loop_iterations):
@@ -1075,7 +1078,9 @@ def pure_crypto_microbench_json(
         + String(per_iteration_us(ecdsa_fe52_glv_product_ms, loop_iterations))
         + String(',"fe52_glv_result":')
         + String(per_iteration_us(ecdsa_fe52_glv_result_ms, loop_iterations))
-        + String('},"wnaf_valid_count":')
+        + String('},"glv_loop_stats":')
+        + ecdsa_fe52_glv_loop_stats
+        + String(',"wnaf_valid_count":')
         + String(ecdsa_wnaf_valid)
         + String(',"glv_valid_count":')
         + String(ecdsa_glv_valid)

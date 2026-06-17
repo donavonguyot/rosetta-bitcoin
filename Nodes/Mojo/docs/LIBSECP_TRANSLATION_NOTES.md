@@ -98,9 +98,13 @@ The implementation follows formulas and structure from Bitcoin Core's
   comparison. The 1000-iteration host ECDSA microbench reported zero Fe52
   mismatches and reduced routed WNAF result timing from the old 4x64 GLV
   `788ms` to `80ms`.
-- Fe52 GLV remains microbench-only. It is parity-clean, but the same run showed
-  `133ms` for Fe52 GLV result versus `80ms` for plain Fe52 WNAF, so GLV is not
-  routed until it demonstrates a material win.
+- Fe52 GLV remains microbench-only. The generator-split diagnostic now splits
+  both the fixed-base and variable-point scalars, derives `betaG` and `betaP`
+  tables from the single existing odd-multiple tables, and proves the loop
+  length drops from the old full-width `256` to `126` on the ECDSA microbench
+  vector. The same 1000-iteration host run stayed parity-clean but measured
+  `88ms` for Fe52 GLV result versus `78ms` for plain Fe52 WNAF, so GLV remains
+  unrouted until it demonstrates a material win.
 - Pure diagnostic Schnorr now routes `s*G + (-e)*P` through the Fe52 WNAF
   double-base path. The preserved 4x64 reference helper still feeds focused
   parity checks, and the 1000-iteration host microbench reported zero Fe52

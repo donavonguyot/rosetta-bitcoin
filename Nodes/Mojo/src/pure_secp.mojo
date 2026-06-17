@@ -125,6 +125,41 @@ struct EndoSplit(Copyable):
         self.s2_negated = False
 
 
+struct Fe52GlvLoopStats(Copyable):
+    var g_wnaf_len: Int
+    var p_wnaf_len: Int
+    var g_split_1_wnaf_len: Int
+    var g_split_2_wnaf_len: Int
+    var p_split_1_wnaf_len: Int
+    var p_split_2_wnaf_len: Int
+    var plain_max_len: Int
+    var old_glv_max_len: Int
+    var glv_max_len: Int
+    var g_nonzero_digits: Int
+    var p_nonzero_digits: Int
+    var g_split_1_nonzero_digits: Int
+    var g_split_2_nonzero_digits: Int
+    var p_split_1_nonzero_digits: Int
+    var p_split_2_nonzero_digits: Int
+
+    def __init__(out self):
+        self.g_wnaf_len = 0
+        self.p_wnaf_len = 0
+        self.g_split_1_wnaf_len = 0
+        self.g_split_2_wnaf_len = 0
+        self.p_split_1_wnaf_len = 0
+        self.p_split_2_wnaf_len = 0
+        self.plain_max_len = 0
+        self.old_glv_max_len = 0
+        self.glv_max_len = 0
+        self.g_nonzero_digits = 0
+        self.p_nonzero_digits = 0
+        self.g_split_1_nonzero_digits = 0
+        self.g_split_2_nonzero_digits = 0
+        self.p_split_1_nonzero_digits = 0
+        self.p_split_2_nonzero_digits = 0
+
+
 def pure_backend_label() -> String:
     return String("mojo-pure-secp256k1")
 
@@ -1514,6 +1549,13 @@ def _fe52_wnaf_generator_add(mut result: Fe52Jacobian, digit: Int) raises -> Fe5
     return _fe52_gej_add_ge_var(result, point)
 
 
+def _fe52_generator_odd_table(count: Int) raises -> List[Fe52Point]:
+    var table = List[Fe52Point]()
+    for i in range(count):
+        table.append(_fe52_point_from_point(_generator_odd_multiple(i)))
+    return table^
+
+
 def _fe52_point_table_copy(ref table: List[Fe52Point]) -> List[Fe52Point]:
     var out = List[Fe52Point]()
     for i in range(len(table)):
@@ -1577,37 +1619,52 @@ def _fe52_double_base_mul_wnaf_fe52(ref g_scalar: U256, ref p_scalar: U256, ref 
 
 def _fe52_double_base_mul_wnaf_glv(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Point) raises -> Fe52Jacobian:
     var width = 5
-    var g_wnaf = _wnaf_recode(g_scalar, width)
-    var split = _endo_split(p_scalar, pubkey)
-    var s1_wnaf = _wnaf_recode(split.s1, width)
-    var s2_wnaf = _wnaf_recode(split.s2, width)
+    var generator = _generator()
+    var g_split = _endo_split(g_scalar, generator)
+    var p_split = _endo_split(p_scalar, pubkey)
+    var g1_wnaf = _wnaf_recode(g_split.s1, width)
+    var g2_wnaf = _wnaf_recode(g_split.s2, width)
+    var p1_wnaf = _wnaf_recode(p_split.s1, width)
+    var p2_wnaf = _wnaf_recode(p_split.s2, width)
 
+    var g_table = _fe52_generator_odd_table(8)
+    var g1_table = _fe52_point_table_copy(g_table)
+    if g_split.s1_negated:
+        g1_table = _fe52_point_table_neg(g_table)
+    var beta_g_table = _fe52_point_table_beta(g_table)
+    var g2_table = _fe52_point_table_copy(beta_g_table)
+    if g_split.s2_negated:
+        g2_table = _fe52_point_table_neg(beta_g_table)
     var q_table = _fe52_odd_multiples(pubkey, 8)
-    var s1_table = _fe52_point_table_copy(q_table)
-    if split.s1_negated:
-        s1_table = _fe52_point_table_neg(q_table)
-    var beta_table = _fe52_point_table_beta(q_table)
-    var s2_table = _fe52_point_table_copy(beta_table)
-    if split.s2_negated:
-        s2_table = _fe52_point_table_neg(beta_table)
+    var p1_table = _fe52_point_table_copy(q_table)
+    if p_split.s1_negated:
+        p1_table = _fe52_point_table_neg(q_table)
+    var beta_p_table = _fe52_point_table_beta(q_table)
+    var p2_table = _fe52_point_table_copy(beta_p_table)
+    if p_split.s2_negated:
+        p2_table = _fe52_point_table_neg(beta_p_table)
 
-    var max_len = len(g_wnaf)
-    if len(s1_wnaf) > max_len:
-        max_len = len(s1_wnaf)
-    if len(s2_wnaf) > max_len:
-        max_len = len(s2_wnaf)
+    var max_len = len(g1_wnaf)
+    if len(g2_wnaf) > max_len:
+        max_len = len(g2_wnaf)
+    if len(p1_wnaf) > max_len:
+        max_len = len(p1_wnaf)
+    if len(p2_wnaf) > max_len:
+        max_len = len(p2_wnaf)
 
     var result = Fe52Jacobian()
     for j in range(max_len):
         var i = max_len - 1 - j
         if not result.infinity:
             result = _fe52_gej_double(result)
-        if i < len(g_wnaf):
-            result = _fe52_wnaf_generator_add(result, g_wnaf[i])
-        if i < len(s1_wnaf):
-            result = _fe52_wnaf_table_add(result, s1_table, s1_wnaf[i])
-        if i < len(s2_wnaf):
-            result = _fe52_wnaf_table_add(result, s2_table, s2_wnaf[i])
+        if i < len(g1_wnaf):
+            result = _fe52_wnaf_table_add(result, g1_table, g1_wnaf[i])
+        if i < len(g2_wnaf):
+            result = _fe52_wnaf_table_add(result, g2_table, g2_wnaf[i])
+        if i < len(p1_wnaf):
+            result = _fe52_wnaf_table_add(result, p1_table, p1_wnaf[i])
+        if i < len(p2_wnaf):
+            result = _fe52_wnaf_table_add(result, p2_table, p2_wnaf[i])
     return result^
 
 
@@ -1913,6 +1970,64 @@ def _wnaf_recode(ref scalar: U256, width: Int) -> List[Int]:
         digits.append(digit)
         k = _shr1(k)
     return digits^
+
+
+def _wnaf_nonzero_count(ref digits: List[Int]) -> Int:
+    var count = 0
+    for i in range(len(digits)):
+        if digits[i] != 0:
+            count += 1
+    return count
+
+
+def _fe52_glv_loop_stats(ref g_scalar: U256, ref p_scalar: U256) -> Fe52GlvLoopStats:
+    var width = 5
+    var stats = Fe52GlvLoopStats()
+    var g_wnaf = _wnaf_recode(g_scalar, width)
+    var p_wnaf = _wnaf_recode(p_scalar, width)
+    var generator = _generator()
+    var g_split = _endo_split(g_scalar, generator)
+    var p_split = _scalar_split_lambda(p_scalar)
+    var p_split_s1 = p_split.s1.copy()
+    var p_split_s2 = p_split.s2.copy()
+    var n = _scalar_n()
+    if _scalar_is_high(p_split_s1):
+        p_split_s1 = _sub_mod(_zero(), p_split_s1, n)
+    if _scalar_is_high(p_split_s2):
+        p_split_s2 = _sub_mod(_zero(), p_split_s2, n)
+    var g1_wnaf = _wnaf_recode(g_split.s1, width)
+    var g2_wnaf = _wnaf_recode(g_split.s2, width)
+    var p1_wnaf = _wnaf_recode(p_split_s1, width)
+    var p2_wnaf = _wnaf_recode(p_split_s2, width)
+
+    stats.g_wnaf_len = len(g_wnaf)
+    stats.p_wnaf_len = len(p_wnaf)
+    stats.g_split_1_wnaf_len = len(g1_wnaf)
+    stats.g_split_2_wnaf_len = len(g2_wnaf)
+    stats.p_split_1_wnaf_len = len(p1_wnaf)
+    stats.p_split_2_wnaf_len = len(p2_wnaf)
+    stats.plain_max_len = stats.g_wnaf_len
+    if stats.p_wnaf_len > stats.plain_max_len:
+        stats.plain_max_len = stats.p_wnaf_len
+    stats.old_glv_max_len = stats.g_wnaf_len
+    if stats.p_split_1_wnaf_len > stats.old_glv_max_len:
+        stats.old_glv_max_len = stats.p_split_1_wnaf_len
+    if stats.p_split_2_wnaf_len > stats.old_glv_max_len:
+        stats.old_glv_max_len = stats.p_split_2_wnaf_len
+    stats.glv_max_len = stats.g_split_1_wnaf_len
+    if stats.g_split_2_wnaf_len > stats.glv_max_len:
+        stats.glv_max_len = stats.g_split_2_wnaf_len
+    if stats.p_split_1_wnaf_len > stats.glv_max_len:
+        stats.glv_max_len = stats.p_split_1_wnaf_len
+    if stats.p_split_2_wnaf_len > stats.glv_max_len:
+        stats.glv_max_len = stats.p_split_2_wnaf_len
+    stats.g_nonzero_digits = _wnaf_nonzero_count(g_wnaf)
+    stats.p_nonzero_digits = _wnaf_nonzero_count(p_wnaf)
+    stats.g_split_1_nonzero_digits = _wnaf_nonzero_count(g1_wnaf)
+    stats.g_split_2_nonzero_digits = _wnaf_nonzero_count(g2_wnaf)
+    stats.p_split_1_nonzero_digits = _wnaf_nonzero_count(p1_wnaf)
+    stats.p_split_2_nonzero_digits = _wnaf_nonzero_count(p2_wnaf)
+    return stats^
 
 
 def _odd_multiples_affine_reference(ref point: Point, count: Int) -> List[Point]:
@@ -3144,6 +3259,103 @@ def pure_test_endo_split_not_high(ref scalar: List[UInt8], ref pubkey: List[UInt
     var q = _parse_pubkey(pubkey)
     var split = _endo_split(k, q)
     return not _scalar_is_high(split.s1) and not _scalar_is_high(split.s2)
+
+
+def pure_test_generator_endo_split_not_high(ref scalar: List[UInt8]) raises -> Bool:
+    var n = _scalar_n()
+    var k = _reduce_once(_from_be32(scalar), n)
+    var generator = _generator()
+    var split = _endo_split(k, generator)
+    return not _scalar_is_high(split.s1) and not _scalar_is_high(split.s2)
+
+
+def pure_test_fe52_generator_beta_table_matches(count: Int) raises -> Bool:
+    var table = _fe52_generator_odd_table(count)
+    var beta_table = _fe52_point_table_beta(table)
+    var beta = _fe52_from_u256(_beta())
+    for i in range(count):
+        var expected_x = _fe52_mul(table[i].x, beta)
+        if not _fe52_equal(expected_x, beta_table[i].x):
+            return False
+        if not _fe52_equal(table[i].y, beta_table[i].y):
+            return False
+    return True
+
+
+def pure_test_fe52_pubkey_beta_table_matches(ref pubkey: List[UInt8], count: Int) raises -> Bool:
+    var q = _parse_pubkey(pubkey)
+    var table = _fe52_odd_multiples(q, count)
+    var beta_table = _fe52_point_table_beta(table)
+    var beta = _fe52_from_u256(_beta())
+    for i in range(count):
+        var expected_x = _fe52_mul(table[i].x, beta)
+        if not _fe52_equal(expected_x, beta_table[i].x):
+            return False
+        if not _fe52_equal(table[i].y, beta_table[i].y):
+            return False
+    return True
+
+
+def _ecdsa_fe52_glv_loop_stats_for_vectors(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Fe52GlvLoopStats:
+    var sig = _parse_ecdsa_der(der)
+    _ = _parse_pubkey(pubkey)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    return _fe52_glv_loop_stats(u1, u2)
+
+
+def pure_test_ecdsa_fe52_glv_old_max_len(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int:
+    return _ecdsa_fe52_glv_loop_stats_for_vectors(pubkey, der, digest).old_glv_max_len
+
+
+def pure_test_ecdsa_fe52_glv_max_len(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int:
+    return _ecdsa_fe52_glv_loop_stats_for_vectors(pubkey, der, digest).glv_max_len
+
+
+def pure_test_ecdsa_fe52_glv_loop_stats_json(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> String:
+    var stats = _ecdsa_fe52_glv_loop_stats_for_vectors(pubkey, der, digest)
+    return (
+        String('{"g_wnaf_len":')
+        + String(stats.g_wnaf_len)
+        + String(',"p_wnaf_len":')
+        + String(stats.p_wnaf_len)
+        + String(',"g_split_1_wnaf_len":')
+        + String(stats.g_split_1_wnaf_len)
+        + String(',"g_split_2_wnaf_len":')
+        + String(stats.g_split_2_wnaf_len)
+        + String(',"p_split_1_wnaf_len":')
+        + String(stats.p_split_1_wnaf_len)
+        + String(',"p_split_2_wnaf_len":')
+        + String(stats.p_split_2_wnaf_len)
+        + String(',"plain_max_len":')
+        + String(stats.plain_max_len)
+        + String(',"old_glv_max_len":')
+        + String(stats.old_glv_max_len)
+        + String(',"fe52_glv_max_len":')
+        + String(stats.glv_max_len)
+        + String(',"max_len":')
+        + String(stats.glv_max_len)
+        + String(',"g_nonzero_digits":')
+        + String(stats.g_nonzero_digits)
+        + String(',"p_nonzero_digits":')
+        + String(stats.p_nonzero_digits)
+        + String(',"g_split_1_nonzero_digits":')
+        + String(stats.g_split_1_nonzero_digits)
+        + String(',"g_split_2_nonzero_digits":')
+        + String(stats.g_split_2_nonzero_digits)
+        + String(',"p_split_1_nonzero_digits":')
+        + String(stats.p_split_1_nonzero_digits)
+        + String(',"p_split_2_nonzero_digits":')
+        + String(stats.p_split_2_nonzero_digits)
+        + String("}")
+    )
 
 
 def pure_test_ecdsa_reference_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:

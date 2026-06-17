@@ -77,6 +77,8 @@ from pure_secp import (
     pure_test_ecdsa_glv_result,
     pure_test_ecdsa_fe52_glv_product_x,
     pure_test_ecdsa_fe52_glv_result,
+    pure_test_ecdsa_fe52_glv_max_len,
+    pure_test_ecdsa_fe52_glv_old_max_len,
     pure_test_ecdsa_fe52_wnaf_result,
     pure_test_ecdsa_reference_product_x,
     pure_test_ecdsa_reference_result,
@@ -89,6 +91,8 @@ from pure_secp import (
     pure_test_fe52_is_zero,
     pure_test_fe52_mul,
     pure_test_fe52_mul_int,
+    pure_test_fe52_generator_beta_table_matches,
+    pure_test_fe52_pubkey_beta_table_matches,
     pure_test_fe52_roundtrip,
     pure_test_fe52_scalar_mul_g_x,
     pure_test_fe52_scalar_mul_g_y,
@@ -96,6 +100,7 @@ from pure_secp import (
     pure_test_fe52_sub_via_negate,
     pure_test_ecdsa_fe52_reference_product_x,
     pure_test_glv_constants,
+    pure_test_generator_endo_split_not_high,
     pure_test_odd_multiples_match_generator,
     pure_test_odd_multiples_match_pubkey,
     pure_test_odd_multiples_match_xonly,
@@ -657,8 +662,17 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     var scalar_high = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"))
     assert_true(pure_test_endo_split_not_high(scalar_half_n, pubkey))
     assert_true(pure_test_endo_split_not_high(scalar_high, pubkey))
+    assert_true(pure_test_generator_endo_split_not_high(scalar_half_n))
+    assert_true(pure_test_generator_endo_split_not_high(scalar_high))
+    assert_true(pure_test_fe52_generator_beta_table_matches(8))
+    assert_true(pure_test_fe52_pubkey_beta_table_matches(pubkey, 8))
     var taproot_xonly = _hex_bytes(String("85a7b790fc9d962493788317e4874a4ab07f1e9c78c773c47f2f6c96df756f05"))
     assert_true(pure_test_odd_multiples_match_xonly(taproot_xonly, 8))
+    var old_glv_max_len = pure_test_ecdsa_fe52_glv_old_max_len(pubkey, sig, msg)
+    var new_glv_max_len = pure_test_ecdsa_fe52_glv_max_len(pubkey, sig, msg)
+    assert_true(old_glv_max_len > 200)
+    assert_true(new_glv_max_len < old_glv_max_len)
+    assert_true(new_glv_max_len <= 170)
     assert_equal(
         bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, sig, msg)),
         bytes_to_hex(pure_test_ecdsa_reference_product_x(pubkey, sig, msg)),
