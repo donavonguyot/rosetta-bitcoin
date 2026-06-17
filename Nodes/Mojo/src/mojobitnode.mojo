@@ -16,6 +16,9 @@ from pure_secp import (
     pure_test_ecdsa_fe52_glv_result,
     pure_test_ecdsa_fe52_glv_loop_stats_json,
     pure_test_ecdsa_fe52_glv_setup_stats_json,
+    pure_test_ecdsa_fe52_simd4_wnaf_mismatches,
+    pure_test_ecdsa_fe52_simd4_wnaf_product_x,
+    pure_test_ecdsa_fe52_simd4_wnaf_result,
     pure_test_ecdsa_fe52_wnaf_product_x,
     pure_test_ecdsa_fe52_wnaf_result,
     pure_test_ecdsa_glv_product_x,
@@ -640,6 +643,7 @@ def pure_crypto_microbench_json(
     var run_taproot = bench_case == "all" or bench_case == "taproot"
     var run_field = bench_case == "all" or bench_case == "field"
     var run_point = bench_case == "all" or bench_case == "point"
+    var run_ecdsa_batch = bench_case == "all" or bench_case == "ecdsa-batch"
     var result = String("diagnostic")
     var loop_iterations = iterations
     if loop_iterations <= 0:
@@ -684,6 +688,13 @@ def pure_crypto_microbench_json(
     var ecdsa_native_result = Int32(-1)
     var ecdsa_fe52_glv_loop_stats = String("{}")
     var ecdsa_fe52_glv_setup_stats = String("{}")
+    var ecdsa_batch_scalar_fe52_wnaf_ms = Int64(0)
+    var ecdsa_batch_simd4_fe52_wnaf_ms = Int64(0)
+    var ecdsa_batch_simd4_result_ms = Int64(0)
+    var ecdsa_batch_scalar_valid = 0
+    var ecdsa_batch_simd4_valid = 0
+    var ecdsa_batch_mismatches = 0
+    var ecdsa_batch_lane_count = 4
 
     var schnorr_verify_ms = Int64(0)
     var schnorr_reference_verify_ms = Int64(0)
@@ -899,6 +910,35 @@ def pure_crypto_microbench_json(
             if ecdsa_native_result != expected_wnaf_result:
                 result = String("failed")
 
+    if run_ecdsa_batch:
+        var expected_fe52_result = pure_test_ecdsa_fe52_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        var expected_fe52_product = pure_test_ecdsa_fe52_wnaf_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        ecdsa_batch_mismatches += pure_test_ecdsa_fe52_simd4_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        var started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var scalar_result = pure_test_ecdsa_fe52_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if scalar_result == expected_fe52_result:
+                ecdsa_batch_scalar_valid += 1
+            else:
+                ecdsa_batch_mismatches += 1
+        ecdsa_batch_scalar_fe52_wnaf_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var simd4_product = pure_test_ecdsa_fe52_simd4_wnaf_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg, 0)
+            if not bytes_equal(simd4_product, expected_fe52_product):
+                ecdsa_batch_mismatches += 1
+        ecdsa_batch_simd4_fe52_wnaf_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var simd4_result = pure_test_ecdsa_fe52_simd4_wnaf_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if simd4_result == expected_fe52_result:
+                ecdsa_batch_simd4_valid += 1
+            else:
+                ecdsa_batch_mismatches += 1
+        ecdsa_batch_simd4_result_ms = clock.now_ms() - started
+
     if run_schnorr:
         var expected_schnorr_result = pure_test_schnorr_reference_result(schnorr_pubkey, schnorr_sig, schnorr_msg)
         var started = clock.now_ms()
@@ -1011,6 +1051,8 @@ def pure_crypto_microbench_json(
         result = String("failed")
     if run_point and (point_iterations != loop_iterations or point_mismatches != 0):
         result = String("failed")
+    if run_ecdsa_batch and (ecdsa_batch_scalar_valid != loop_iterations or ecdsa_batch_simd4_valid != loop_iterations or ecdsa_batch_mismatches != 0):
+        result = String("failed")
 
     var total_ms = clock.now_ms() - total_started
     return (
@@ -1101,6 +1143,31 @@ def pure_crypto_microbench_json(
         + String(ecdsa_fe52_mismatches)
         + String(',"native_result_code":')
         + String(ecdsa_native_result)
+        + String('},"ecdsa_batch":{"enabled":')
+        + bool_json(run_ecdsa_batch)
+        + String(',"simd_enabled":true,"simd_lane_count":')
+        + String(ecdsa_batch_lane_count)
+        + String(',"batch_count":')
+        + String(loop_iterations)
+        + String(',"lane_shape":"homogeneous_fixed_vector","mixed_lane_supported":false')
+        + String(',"stage_ms":{"scalar_fe52_wnaf_result":')
+        + String(ecdsa_batch_scalar_fe52_wnaf_ms)
+        + String(',"simd4_fe52_wnaf_product":')
+        + String(ecdsa_batch_simd4_fe52_wnaf_ms)
+        + String(',"simd4_fe52_wnaf_result":')
+        + String(ecdsa_batch_simd4_result_ms)
+        + String('},"per_signature_us":{"scalar_fe52_wnaf_result":')
+        + String(per_iteration_us(ecdsa_batch_scalar_fe52_wnaf_ms, loop_iterations))
+        + String(',"simd4_fe52_wnaf_product":')
+        + String(per_iteration_us(ecdsa_batch_simd4_fe52_wnaf_ms, loop_iterations * ecdsa_batch_lane_count))
+        + String(',"simd4_fe52_wnaf_result":')
+        + String(per_iteration_us(ecdsa_batch_simd4_result_ms, loop_iterations * ecdsa_batch_lane_count))
+        + String('},"scalar_valid_count":')
+        + String(ecdsa_batch_scalar_valid)
+        + String(',"simd4_valid_count":')
+        + String(ecdsa_batch_simd4_valid)
+        + String(',"mismatches":')
+        + String(ecdsa_batch_mismatches)
         + String('},"field":{"enabled":')
         + bool_json(run_field)
         + String(',"iterations":')

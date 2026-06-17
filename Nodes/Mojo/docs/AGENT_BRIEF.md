@@ -69,7 +69,9 @@ ECDSA microbench output also reports diagnostic Fe52 WNAF/GLV product and
 result timings. Pure diagnostic ECDSA and Schnorr now route through Fe52 plain
 WNAF, and pure Taproot tweak checks route through the Fe52 scalar path. Fe52
 GLV stays microbench-only because it is parity-clean but not faster than plain
-Fe52 WNAF.
+Fe52 WNAF. The `ecdsa-batch` microbench is also diagnostic-only: it exercises a
+homogeneous K=4 Fe52 SIMD WNAF lane with scalar Fe52 as oracle, but it is not a
+live verifier route and does not yet support divergent mixed-lane WNAF digits.
 The measured shadow set enables all 17 Taproot corpus rows,
 including the large
 `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and

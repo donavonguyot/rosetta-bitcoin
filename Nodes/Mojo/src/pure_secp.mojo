@@ -9,6 +9,7 @@ comptime ECDSA_PRODUCT_REFERENCE = Int(0)
 comptime ECDSA_PRODUCT_WNAF = Int(1)
 comptime ECDSA_PRODUCT_GLV = Int(2)
 comptime ECDSA_PRODUCT_FE52_WNAF = Int(3)
+comptime FE52_SIMD_LANES = Int(4)
 
 
 struct U256(Copyable):
@@ -51,6 +52,52 @@ struct Fe52Jacobian(Copyable):
         self.y = Fe52()
         self.z = Fe52()
         self.infinity = True
+
+
+struct Fe52x4(Copyable):
+    var limbs: InlineArray[SIMD[DType.uint64, 4], 5]
+    var magnitude: Int
+    var normalized: Bool
+
+    def __init__(out self):
+        self.limbs = InlineArray[SIMD[DType.uint64, 4], 5](fill=SIMD[DType.uint64, 4](UInt64(0)))
+        self.magnitude = 0
+        self.normalized = True
+
+
+struct Fe52x4Point(Copyable):
+    var x: Fe52x4
+    var y: Fe52x4
+    var infinity: Bool
+
+    def __init__(out self):
+        self.x = Fe52x4()
+        self.y = Fe52x4()
+        self.infinity = True
+
+
+struct Fe52x4Jacobian(Copyable):
+    var x: Fe52x4
+    var y: Fe52x4
+    var z: Fe52x4
+    var infinity: Bool
+
+    def __init__(out self):
+        self.x = Fe52x4()
+        self.y = Fe52x4()
+        self.z = Fe52x4()
+        self.infinity = True
+
+
+struct Fe52x4PowBlocks(Copyable):
+    var x2: Fe52x4
+    var x22: Fe52x4
+    var x223: Fe52x4
+
+    def __init__(out self):
+        self.x2 = Fe52x4()
+        self.x22 = Fe52x4()
+        self.x223 = Fe52x4()
 
 
 struct Point(Copyable):
@@ -1249,6 +1296,383 @@ def _fe52_sqrt(ref a: Fe52) -> Fe52:
     out = _fe52_sqr_n(out, 6)
     out = _fe52_mul(out, blocks.x2)
     return _fe52_sqr_n(out, 2)
+
+
+def _u128x4(value: UInt128) -> SIMD[DType.uint128, 4]:
+    return SIMD[DType.uint128, 4](value)
+
+
+def _u64x4(value: UInt64) -> SIMD[DType.uint64, 4]:
+    return SIMD[DType.uint64, 4](value)
+
+
+def _fe52x4_from_fe52(ref value: Fe52) -> Fe52x4:
+    var out = Fe52x4()
+    for i in range(5):
+        out.limbs[i] = _u64x4(value.limbs[i])
+    out.magnitude = value.magnitude
+    out.normalized = value.normalized
+    return out^
+
+
+def _fe52x4_lane_to_fe52(ref value: Fe52x4, lane: Int) -> Fe52:
+    var out = Fe52()
+    for i in range(5):
+        out.limbs[i] = value.limbs[i][lane]
+    out.magnitude = value.magnitude
+    out.normalized = value.normalized
+    return out^
+
+
+def _fe52x4_one() -> Fe52x4:
+    return _fe52x4_from_fe52(_fe52_one())
+
+
+def _fe52x4_add(ref a: Fe52x4, ref b: Fe52x4) -> Fe52x4:
+    var out = Fe52x4()
+    for i in range(5):
+        out.limbs[i] = a.limbs[i] + b.limbs[i]
+    out.magnitude = a.magnitude + b.magnitude
+    if out.magnitude < 1:
+        out.magnitude = 1
+    out.normalized = False
+    return out^
+
+
+def _fe52x4_negate(ref a: Fe52x4) -> Fe52x4:
+    # K=4 diagnostic batches intentionally keep homogeneous lane control flow.
+    # Mojo 1.0b1 exposes scalar Bool for this UInt128 SIMD comparison, so use
+    # the already-proven scalar negate on lane 0 and splat the result.
+    return _fe52x4_from_fe52(_fe52_negate(_fe52x4_lane_to_fe52(a, 0)))
+
+
+def _fe52x4_mul_int(ref a: Fe52x4, scalar: UInt32) -> Fe52x4:
+    var out = Fe52x4()
+    var scalar_w = _u128x4(UInt128(scalar))
+    for i in range(5):
+        out.limbs[i] = (a.limbs[i].cast[DType.uint128]() * scalar_w).cast[DType.uint64]()
+    out.magnitude = a.magnitude * Int(scalar)
+    if out.magnitude < 1:
+        out.magnitude = 1
+    out.normalized = False
+    return out^
+
+
+def _fe52x4_mul(ref a: Fe52x4, ref b: Fe52x4) -> Fe52x4:
+    var m = _u128x4(UInt128(0xFFFFFFFFFFFFF))
+    var r = _u128x4(UInt128(0x1000003D10))
+    var a0 = a.limbs[0].cast[DType.uint128]()
+    var a1 = a.limbs[1].cast[DType.uint128]()
+    var a2 = a.limbs[2].cast[DType.uint128]()
+    var a3 = a.limbs[3].cast[DType.uint128]()
+    var a4 = a.limbs[4].cast[DType.uint128]()
+    var b0 = b.limbs[0].cast[DType.uint128]()
+    var b1 = b.limbs[1].cast[DType.uint128]()
+    var b2 = b.limbs[2].cast[DType.uint128]()
+    var b3 = b.limbs[3].cast[DType.uint128]()
+    var b4 = b.limbs[4].cast[DType.uint128]()
+
+    var d = a0 * b3 + a1 * b2 + a2 * b1 + a3 * b0
+    var c = a4 * b4
+    d += r * (c & _u128x4(UInt128(0xFFFFFFFFFFFFFFFF)))
+    c = c >> _u128x4(UInt128(64))
+    var t3 = d & m
+    d = d >> _u128x4(UInt128(52))
+
+    d += a0 * b4 + a1 * b3 + a2 * b2 + a3 * b1 + a4 * b0
+    d += (r << _u128x4(UInt128(12))) * (c & _u128x4(UInt128(0xFFFFFFFFFFFFFFFF)))
+    var t4 = d & m
+    d = d >> _u128x4(UInt128(52))
+    var tx = t4 >> _u128x4(UInt128(48))
+    t4 = t4 & (m >> _u128x4(UInt128(4)))
+
+    c = a0 * b0
+    d += a1 * b4 + a2 * b3 + a3 * b2 + a4 * b1
+    var u0 = d & m
+    d = d >> _u128x4(UInt128(52))
+    u0 = (u0 << _u128x4(UInt128(4))) | tx
+    c += u0 * (r >> _u128x4(UInt128(4)))
+    var r0 = c & m
+    c = c >> _u128x4(UInt128(52))
+
+    c += a0 * b1 + a1 * b0
+    d += a2 * b4 + a3 * b3 + a4 * b2
+    c += (d & m) * r
+    d = d >> _u128x4(UInt128(52))
+    var r1 = c & m
+    c = c >> _u128x4(UInt128(52))
+
+    c += a0 * b2 + a1 * b1 + a2 * b0
+    d += a3 * b4 + a4 * b3
+    c += r * (d & _u128x4(UInt128(0xFFFFFFFFFFFFFFFF)))
+    d = d >> _u128x4(UInt128(64))
+    var r2 = c & m
+    c = c >> _u128x4(UInt128(52))
+
+    c += (r << _u128x4(UInt128(12))) * (d & _u128x4(UInt128(0xFFFFFFFFFFFFFFFF))) + t3
+    var r3 = c & m
+    c = c >> _u128x4(UInt128(52))
+    var r4 = c + t4
+
+    var out = Fe52x4()
+    out.limbs[0] = r0.cast[DType.uint64]()
+    out.limbs[1] = r1.cast[DType.uint64]()
+    out.limbs[2] = r2.cast[DType.uint64]()
+    out.limbs[3] = r3.cast[DType.uint64]()
+    out.limbs[4] = r4.cast[DType.uint64]()
+    out.magnitude = 1
+    out.normalized = False
+    return out^
+
+
+def _fe52x4_sqr(ref a: Fe52x4) -> Fe52x4:
+    var m = _u128x4(UInt128(0xFFFFFFFFFFFFF))
+    var r = _u128x4(UInt128(0x1000003D10))
+    var a0 = a.limbs[0].cast[DType.uint128]()
+    var a1 = a.limbs[1].cast[DType.uint128]()
+    var a2 = a.limbs[2].cast[DType.uint128]()
+    var a3 = a.limbs[3].cast[DType.uint128]()
+    var a4 = a.limbs[4].cast[DType.uint128]()
+
+    var d = (a0 * _u128x4(UInt128(2))) * a3 + (a1 * _u128x4(UInt128(2))) * a2
+    var c = a4 * a4
+    d += r * (c & _u128x4(UInt128(0xFFFFFFFFFFFFFFFF)))
+    c = c >> _u128x4(UInt128(64))
+    var t3 = d & m
+    d = d >> _u128x4(UInt128(52))
+
+    a4 = a4 * _u128x4(UInt128(2))
+    d += a0 * a4 + (a1 * _u128x4(UInt128(2))) * a3 + a2 * a2
+    d += (r << _u128x4(UInt128(12))) * (c & _u128x4(UInt128(0xFFFFFFFFFFFFFFFF)))
+    var t4 = d & m
+    d = d >> _u128x4(UInt128(52))
+    var tx = t4 >> _u128x4(UInt128(48))
+    t4 = t4 & (m >> _u128x4(UInt128(4)))
+
+    c = a0 * a0
+    d += a1 * a4 + (a2 * _u128x4(UInt128(2))) * a3
+    var u0 = d & m
+    d = d >> _u128x4(UInt128(52))
+    u0 = (u0 << _u128x4(UInt128(4))) | tx
+    c += u0 * (r >> _u128x4(UInt128(4)))
+    var r0 = c & m
+    c = c >> _u128x4(UInt128(52))
+
+    a0 = a0 * _u128x4(UInt128(2))
+    c += a0 * a1
+    d += a2 * a4 + a3 * a3
+    c += (d & m) * r
+    d = d >> _u128x4(UInt128(52))
+    var r1 = c & m
+    c = c >> _u128x4(UInt128(52))
+
+    c += a0 * a2 + a1 * a1
+    d += a3 * a4
+    c += r * (d & _u128x4(UInt128(0xFFFFFFFFFFFFFFFF)))
+    d = d >> _u128x4(UInt128(64))
+    var r2 = c & m
+    c = c >> _u128x4(UInt128(52))
+
+    c += (r << _u128x4(UInt128(12))) * (d & _u128x4(UInt128(0xFFFFFFFFFFFFFFFF))) + t3
+    var r3 = c & m
+    c = c >> _u128x4(UInt128(52))
+    var r4 = c + t4
+
+    var out = Fe52x4()
+    out.limbs[0] = r0.cast[DType.uint64]()
+    out.limbs[1] = r1.cast[DType.uint64]()
+    out.limbs[2] = r2.cast[DType.uint64]()
+    out.limbs[3] = r3.cast[DType.uint64]()
+    out.limbs[4] = r4.cast[DType.uint64]()
+    out.magnitude = 1
+    out.normalized = False
+    return out^
+
+
+def _fe52x4_sqr_n(ref a: Fe52x4, count: Int) -> Fe52x4:
+    var out = a.copy()
+    for _ in range(count):
+        out = _fe52x4_sqr(out)
+    return out^
+
+
+def _fe52x4_pow_blocks(ref a: Fe52x4) -> Fe52x4PowBlocks:
+    var out = Fe52x4PowBlocks()
+    var x2 = _fe52x4_mul(_fe52x4_sqr(a), a)
+    var x3 = _fe52x4_mul(_fe52x4_sqr(x2), a)
+    var x6 = _fe52x4_mul(_fe52x4_sqr_n(x3, 3), x3)
+    var x9 = _fe52x4_mul(_fe52x4_sqr_n(x6, 3), x3)
+    var x11 = _fe52x4_mul(_fe52x4_sqr_n(x9, 2), x2)
+    out.x2 = x2.copy()
+    out.x22 = _fe52x4_mul(_fe52x4_sqr_n(x11, 11), x11)
+    var x44 = _fe52x4_mul(_fe52x4_sqr_n(out.x22, 22), out.x22)
+    var x88 = _fe52x4_mul(_fe52x4_sqr_n(x44, 44), x44)
+    var x176 = _fe52x4_mul(_fe52x4_sqr_n(x88, 88), x88)
+    var x220 = _fe52x4_mul(_fe52x4_sqr_n(x176, 44), x44)
+    out.x223 = _fe52x4_mul(_fe52x4_sqr_n(x220, 3), x3)
+    return out^
+
+
+def _fe52x4_inv(ref a: Fe52x4) -> Fe52x4:
+    var blocks = _fe52x4_pow_blocks(a)
+    var out = _fe52x4_sqr_n(blocks.x223, 23)
+    out = _fe52x4_mul(out, blocks.x22)
+    out = _fe52x4_sqr_n(out, 5)
+    out = _fe52x4_mul(out, a)
+    out = _fe52x4_sqr_n(out, 3)
+    out = _fe52x4_mul(out, blocks.x2)
+    out = _fe52x4_sqr_n(out, 2)
+    return _fe52x4_mul(out, a)
+
+
+def _fe52x4_normalizes_to_zero_var(ref a: Fe52x4) -> Bool:
+    return _fe52_normalizes_to_zero_var(_fe52x4_lane_to_fe52(a, 0))
+
+
+def _fe52x4_jacobian_from_affine(ref point: Fe52Point) -> Fe52x4Jacobian:
+    var out = Fe52x4Jacobian()
+    if point.infinity:
+        return out^
+    out.x = _fe52x4_from_fe52(point.x)
+    out.y = _fe52x4_from_fe52(point.y)
+    out.z = _fe52x4_one()
+    out.infinity = False
+    return out^
+
+
+def _fe52x4_jacobian_to_affine(ref point: Fe52x4Jacobian) -> Fe52x4Point:
+    var out = Fe52x4Point()
+    if point.infinity:
+        return out^
+    var z_inv = _fe52x4_inv(point.z)
+    var z_inv2 = _fe52x4_sqr(z_inv)
+    var z_inv3 = _fe52x4_mul(z_inv2, z_inv)
+    out.x = _fe52x4_mul(point.x, z_inv2)
+    out.y = _fe52x4_mul(point.y, z_inv3)
+    out.infinity = False
+    return out^
+
+
+def _fe52x4_point_lane_to_fe52(ref point: Fe52x4Point, lane: Int) -> Fe52Point:
+    var out = Fe52Point()
+    if point.infinity:
+        return out^
+    out.x = _fe52x4_lane_to_fe52(point.x, lane)
+    out.y = _fe52x4_lane_to_fe52(point.y, lane)
+    out.infinity = False
+    return out^
+
+
+def _fe52x4_gej_double(ref a: Fe52x4Jacobian) -> Fe52x4Jacobian:
+    var out = Fe52x4Jacobian()
+    out.infinity = a.infinity
+    if a.infinity:
+        return out^
+    if _fe52x4_normalizes_to_zero_var(a.y):
+        return Fe52x4Jacobian()
+    out.z = _fe52x4_mul(a.z, a.y)
+    var s = _fe52x4_sqr(a.y)
+    var l = _fe52x4_sqr(a.x)
+    l = _fe52x4_mul_int(l, UInt32(3))
+    var l_lane = _fe52_half(_fe52x4_lane_to_fe52(l, 0))
+    l = _fe52x4_from_fe52(l_lane)
+    var t = _fe52x4_negate(s)
+    t = _fe52x4_mul(t, a.x)
+    out.x = _fe52x4_sqr(l)
+    out.x = _fe52x4_add(out.x, t)
+    out.x = _fe52x4_add(out.x, t)
+    s = _fe52x4_sqr(s)
+    t = _fe52x4_add(t, out.x)
+    out.y = _fe52x4_mul(t, l)
+    out.y = _fe52x4_add(out.y, s)
+    out.y = _fe52x4_negate(out.y)
+    out.infinity = False
+    return out^
+
+
+def _fe52x4_gej_add_ge_var(ref a: Fe52x4Jacobian, ref b: Fe52Point) -> Fe52x4Jacobian:
+    if a.infinity:
+        return _fe52x4_jacobian_from_affine(b)
+    if b.infinity:
+        return a.copy()
+
+    var bx = _fe52x4_from_fe52(b.x)
+    var by = _fe52x4_from_fe52(b.y)
+    var z12 = _fe52x4_sqr(a.z)
+    var u1 = a.x.copy()
+    var u2 = _fe52x4_mul(bx, z12)
+    var s1 = a.y.copy()
+    var s2 = _fe52x4_mul(by, z12)
+    s2 = _fe52x4_mul(s2, a.z)
+    var h = _fe52x4_add(_fe52x4_negate(u1), u2)
+    var i = _fe52x4_add(_fe52x4_negate(s2), s1)
+    if _fe52x4_normalizes_to_zero_var(h):
+        if _fe52x4_normalizes_to_zero_var(i):
+            return _fe52x4_gej_double(a)
+        return Fe52x4Jacobian()
+
+    var out = Fe52x4Jacobian()
+    out.infinity = False
+    out.z = _fe52x4_mul(a.z, h)
+    var h2 = _fe52x4_negate(_fe52x4_sqr(h))
+    var h3 = _fe52x4_mul(h2, h)
+    var t = _fe52x4_mul(u1, h2)
+    out.x = _fe52x4_sqr(i)
+    out.x = _fe52x4_add(out.x, h3)
+    out.x = _fe52x4_add(out.x, t)
+    out.x = _fe52x4_add(out.x, t)
+    t = _fe52x4_add(t, out.x)
+    out.y = _fe52x4_mul(t, i)
+    h3 = _fe52x4_mul(h3, s1)
+    out.y = _fe52x4_add(out.y, h3)
+    return out^
+
+
+def _fe52x4_wnaf_table_add(mut result: Fe52x4Jacobian, ref table: List[Fe52Point], digit: Int) raises -> Fe52x4Jacobian:
+    if digit == 0:
+        return result.copy()
+    var abs_digit = digit
+    if abs_digit < 0:
+        abs_digit = 0 - abs_digit
+    var table_index = (abs_digit - 1) // 2
+    var point = table[table_index].copy()
+    if digit < 0:
+        point = _fe52_point_neg(point)
+    return _fe52x4_gej_add_ge_var(result, point)
+
+
+def _fe52x4_wnaf_generator_add(mut result: Fe52x4Jacobian, digit: Int) raises -> Fe52x4Jacobian:
+    if digit == 0:
+        return result.copy()
+    var abs_digit = digit
+    if abs_digit < 0:
+        abs_digit = 0 - abs_digit
+    var table_index = (abs_digit - 1) // 2
+    var point = _fe52_point_from_point(_generator_odd_multiple(table_index))
+    if digit < 0:
+        point = _fe52_point_neg(point)
+    return _fe52x4_gej_add_ge_var(result, point)
+
+
+def _fe52x4_double_base_mul_wnaf_identical(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Fe52Point) raises -> Fe52x4Jacobian:
+    var width = 5
+    var g_wnaf = _wnaf_recode(g_scalar, width)
+    var p_wnaf = _wnaf_recode(p_scalar, width)
+    var p_table = _fe52_odd_multiples_from_fe52(pubkey, 8)
+    var max_len = len(g_wnaf)
+    if len(p_wnaf) > max_len:
+        max_len = len(p_wnaf)
+
+    var result = Fe52x4Jacobian()
+    for j in range(max_len):
+        var i = max_len - 1 - j
+        if not result.infinity:
+            result = _fe52x4_gej_double(result)
+        if i < len(g_wnaf):
+            result = _fe52x4_wnaf_generator_add(result, g_wnaf[i])
+        if i < len(p_wnaf):
+            result = _fe52x4_wnaf_table_add(result, p_table, p_wnaf[i])
+    return result^
 
 
 def _fe52_point_from_point(ref point: Point) -> Fe52Point:
@@ -3024,6 +3448,34 @@ def pure_test_fe52_sqr(ref a: List[UInt8]) raises -> List[UInt8]:
     return _to_be32(_fe52_to_u256(_fe52_sqr(af)))
 
 
+def pure_test_fe52x4_add_lane(ref a: List[UInt8], ref b: List[UInt8], lane: Int) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var bv = _from_be32(b)
+    var p = _field_p()
+    var af = _fe52_from_u256(_reduce_once(av, p))
+    var bf = _fe52_from_u256(_reduce_once(bv, p))
+    var out = _fe52x4_add(_fe52x4_from_fe52(af), _fe52x4_from_fe52(bf))
+    return _to_be32(_fe52_to_u256(_fe52x4_lane_to_fe52(out, lane)))
+
+
+def pure_test_fe52x4_mul_lane(ref a: List[UInt8], ref b: List[UInt8], lane: Int) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var bv = _from_be32(b)
+    var p = _field_p()
+    var af = _fe52_from_u256(_reduce_once(av, p))
+    var bf = _fe52_from_u256(_reduce_once(bv, p))
+    var out = _fe52x4_mul(_fe52x4_from_fe52(af), _fe52x4_from_fe52(bf))
+    return _to_be32(_fe52_to_u256(_fe52x4_lane_to_fe52(out, lane)))
+
+
+def pure_test_fe52x4_sqr_lane(ref a: List[UInt8], lane: Int) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var p = _field_p()
+    var af = _fe52_from_u256(_reduce_once(av, p))
+    var out = _fe52x4_sqr(_fe52x4_from_fe52(af))
+    return _to_be32(_fe52_to_u256(_fe52x4_lane_to_fe52(out, lane)))
+
+
 def pure_test_fe52_mul_int(ref a: List[UInt8], scalar: UInt32) raises -> List[UInt8]:
     var av = _from_be32(a)
     var p = _field_p()
@@ -3100,6 +3552,67 @@ def pure_test_ecdsa_fe52_wnaf_product_x(ref pubkey: List[UInt8], ref der: List[U
 
 def pure_test_ecdsa_fe52_wnaf_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
     return _pure_verify_ecdsa_der_bytes_with_product_mode(pubkey, der, digest, ECDSA_PRODUCT_FE52_WNAF)
+
+
+def pure_test_ecdsa_fe52_simd4_wnaf_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8], lane: Int) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var q = _fe52_parse_pubkey(pubkey)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _fe52x4_jacobian_to_affine(_fe52x4_double_base_mul_wnaf_identical(u1, u2, q))
+    if point.infinity:
+        raise Error("Fe52x4 ECDSA wNAF product is infinity")
+    var lane_point = _fe52x4_point_lane_to_fe52(point, lane)
+    return _to_be32(_fe52_to_u256(lane_point.x))
+
+
+def _pure_bytes_equal(ref a: List[UInt8], ref b: List[UInt8]) -> Bool:
+    if len(a) != len(b):
+        return False
+    for i in range(len(a)):
+        if a[i] != b[i]:
+            return False
+    return True
+
+
+def pure_test_ecdsa_fe52_simd4_wnaf_mismatches(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int:
+    var expected = pure_test_ecdsa_fe52_wnaf_product_x(pubkey, der, digest)
+    var mismatches = 0
+    for lane in range(FE52_SIMD_LANES):
+        var actual = pure_test_ecdsa_fe52_simd4_wnaf_product_x(pubkey, der, digest, lane)
+        if not _pure_bytes_equal(actual, expected):
+            mismatches += 1
+    return mismatches
+
+
+def pure_test_ecdsa_fe52_simd4_wnaf_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
+    if (len(pubkey) != 33 and len(pubkey) != 65) or len(der) == 0 or len(der) > 72 or len(digest) != 32:
+        return MALFORMED
+    var n = _scalar_n()
+    var sig = EcdsaSignature()
+    try:
+        sig = _parse_ecdsa_der(der)
+    except:
+        return MALFORMED
+    if _is_zero(sig.r) or _is_zero(sig.s) or _cmp(sig.r, n) >= 0 or _cmp(sig.s, n) >= 0:
+        return CONSENSUS_INVALID
+
+    var x = U256()
+    try:
+        x = _from_be32(pure_test_ecdsa_fe52_simd4_wnaf_product_x(pubkey, der, digest, 0))
+    except:
+        return MALFORMED
+    var x_mod_n = _reduce_once(x, n)
+    if _eq(x_mod_n, sig.r):
+        return VALID
+    return CONSENSUS_INVALID
 
 
 def pure_test_ecdsa_fe52_glv_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
