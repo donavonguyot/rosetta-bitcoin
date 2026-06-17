@@ -79,6 +79,17 @@ from pure_secp import (
     pure_test_ecdsa_wnaf_product_x,
     pure_test_ecdsa_wnaf_result,
     pure_test_endo_split_not_high,
+    pure_test_fe52_add,
+    pure_test_fe52_equal,
+    pure_test_fe52_is_zero,
+    pure_test_fe52_mul,
+    pure_test_fe52_mul_int,
+    pure_test_fe52_roundtrip,
+    pure_test_fe52_scalar_mul_g_x,
+    pure_test_fe52_scalar_mul_g_y,
+    pure_test_fe52_sqr,
+    pure_test_fe52_sub_via_negate,
+    pure_test_ecdsa_fe52_reference_product_x,
     pure_test_glv_constants,
     pure_test_odd_multiples_match_generator,
     pure_test_odd_multiples_match_pubkey,
@@ -449,6 +460,26 @@ def test_pure_secp_arithmetic_known_vectors() raises:
         bytes_to_hex(pure_test_u256_square_field(two)),
         bytes_to_hex(pure_test_u256_mul_mod(two, two.copy(), field_p)),
     )
+    assert_equal(bytes_to_hex(pure_test_fe52_roundtrip(zero)), bytes_to_hex(zero))
+    assert_equal(bytes_to_hex(pure_test_fe52_roundtrip(one)), bytes_to_hex(one))
+    assert_equal(bytes_to_hex(pure_test_fe52_roundtrip(field_p)), bytes_to_hex(zero))
+    assert_equal(bytes_to_hex(pure_test_fe52_roundtrip(p_plus_one)), bytes_to_hex(one))
+    assert_equal(bytes_to_hex(pure_test_fe52_add(two, three)), bytes_to_hex(five))
+    assert_equal(bytes_to_hex(pure_test_fe52_add(p_minus_one, two)), bytes_to_hex(one))
+    assert_equal(bytes_to_hex(pure_test_fe52_sub_via_negate(three, five)), bytes_to_hex(p_minus_two))
+    assert_equal(bytes_to_hex(pure_test_fe52_sub_via_negate(two, two.copy())), bytes_to_hex(zero))
+    assert_equal(bytes_to_hex(pure_test_fe52_mul(two, three)), bytes_to_hex(six))
+    assert_equal(bytes_to_hex(pure_test_fe52_mul(p_minus_one, carry_field_b)), bytes_to_hex(carry_field_expected))
+    assert_equal(bytes_to_hex(pure_test_fe52_mul(high_a, high_b)), String("422effa10d0f872f33c4ad3ee7134e1b01485ff67d9fd681aa8caeb057552e0c"))
+    assert_equal(bytes_to_hex(pure_test_fe52_sqr(high_a)), bytes_to_hex(high_a_square))
+    assert_equal(bytes_to_hex(pure_test_fe52_sqr(p_minus_one)), bytes_to_hex(one))
+    assert_equal(bytes_to_hex(pure_test_fe52_sqr(p_minus_two)), bytes_to_hex(four))
+    assert_equal(bytes_to_hex(pure_test_fe52_mul_int(two, UInt32(3))), bytes_to_hex(six))
+    assert_true(pure_test_fe52_equal(field_p, zero))
+    assert_true(pure_test_fe52_equal(p_plus_one, one))
+    assert_true(not pure_test_fe52_equal(two, three))
+    assert_true(pure_test_fe52_is_zero(field_p))
+    assert_true(not pure_test_fe52_is_zero(one))
 
     var scalar_two = two.copy()
     assert_equal(
@@ -456,8 +487,16 @@ def test_pure_secp_arithmetic_known_vectors() raises:
         String("c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"),
     )
     assert_equal(
+        bytes_to_hex(pure_test_fe52_scalar_mul_g_x(scalar_two)),
+        bytes_to_hex(pure_test_scalar_mul_g_x(scalar_two)),
+    )
+    assert_equal(
         bytes_to_hex(pure_test_scalar_mul_g_y(scalar_two)),
         String("1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a"),
+    )
+    assert_equal(
+        bytes_to_hex(pure_test_fe52_scalar_mul_g_y(scalar_two)),
+        bytes_to_hex(pure_test_scalar_mul_g_y(scalar_two)),
     )
     var scalar_12345 = _hex_bytes(String("0000000000000000000000000000000000000000000000000000000000003039"))
     assert_equal(
@@ -465,8 +504,16 @@ def test_pure_secp_arithmetic_known_vectors() raises:
         String("f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f"),
     )
     assert_equal(
+        bytes_to_hex(pure_test_fe52_scalar_mul_g_x(scalar_12345)),
+        bytes_to_hex(pure_test_scalar_mul_g_x(scalar_12345)),
+    )
+    assert_equal(
         bytes_to_hex(pure_test_scalar_mul_g_y(scalar_12345)),
         String("0eba29d0f0c5408ed681984dc525982abefccd9f7ff01dd26da4999cf3f6a295"),
+    )
+    assert_equal(
+        bytes_to_hex(pure_test_fe52_scalar_mul_g_y(scalar_12345)),
+        bytes_to_hex(pure_test_scalar_mul_g_y(scalar_12345)),
     )
     var scalar_n = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"))
     var scalar_n_minus_one = _hex_bytes(String("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140"))
@@ -566,6 +613,10 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
         bytes_to_hex(pure_test_ecdsa_reference_product_x(pubkey, sig, msg)),
     )
     assert_equal(
+        bytes_to_hex(pure_test_ecdsa_fe52_reference_product_x(pubkey, sig, msg)),
+        bytes_to_hex(pure_test_ecdsa_reference_product_x(pubkey, sig, msg)),
+    )
+    assert_equal(
         bytes_to_hex(pure_test_ecdsa_glv_product_x(pubkey, sig, msg)),
         bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, sig, msg)),
     )
@@ -588,6 +639,10 @@ def test_pure_ecdsa_der_vectors_match_native() raises:
     assert_equal(
         bytes_to_hex(pure_test_ecdsa_glv_product_x(pubkey, high_s_sig, msg)),
         bytes_to_hex(pure_test_ecdsa_wnaf_product_x(pubkey, high_s_sig, msg)),
+    )
+    assert_equal(
+        bytes_to_hex(pure_test_ecdsa_fe52_reference_product_x(pubkey, high_s_sig, msg)),
+        bytes_to_hex(pure_test_ecdsa_reference_product_x(pubkey, high_s_sig, msg)),
     )
 
     var empty_pubkey = List[UInt8]()

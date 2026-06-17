@@ -61,6 +61,10 @@ reference double-base, wNAF double-base, affine conversion, and native-result
 comparison. Use `pure-crypto-microbench` for tuning decisions: it loops fixed
 pure ECDSA/Schnorr/Taproot vectors without native calls or shadow-agreement
 accounting by default, then reports per-stage totals and per-iteration timing.
+It also supports `field` and `point` cases that compare the current exact 4x64
+field/point operations with the new 5x52 lazy-field and Jacobian group core.
+The 5x52 core is not routed into ECDSA, Schnorr, Taproot, corpus, or proof
+paths yet.
 The measured shadow set enables all 17 Taproot corpus rows,
 including the large
 `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and

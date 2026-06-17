@@ -11,6 +11,7 @@ from pure_secp import (
     pure_test_ecdsa_normalized_s,
     pure_test_ecdsa_parse_der,
     pure_test_ecdsa_parse_pubkey_x,
+    pure_test_ecdsa_fe52_reference_product_x,
     pure_test_ecdsa_glv_product_x,
     pure_test_ecdsa_glv_result,
     pure_test_ecdsa_reference_product_x,
@@ -18,6 +19,13 @@ from pure_secp import (
     pure_test_ecdsa_u_scalars,
     pure_test_ecdsa_wnaf_product_x,
     pure_test_ecdsa_wnaf_result,
+    pure_test_fe52_add,
+    pure_test_fe52_mul,
+    pure_test_fe52_roundtrip,
+    pure_test_fe52_sqr,
+    pure_test_u256_add_mod,
+    pure_test_u256_mul_field_fast,
+    pure_test_u256_square_field,
     pure_verify_schnorr_bytes,
     pure_verify_taproot_tweak_precomputed,
 )
@@ -616,6 +624,8 @@ def pure_crypto_microbench_json(
     var run_ecdsa = bench_case == "all" or bench_case == "ecdsa"
     var run_schnorr = bench_case == "all" or bench_case == "schnorr"
     var run_taproot = bench_case == "all" or bench_case == "taproot"
+    var run_field = bench_case == "all" or bench_case == "field"
+    var run_point = bench_case == "all" or bench_case == "point"
     var result = String("diagnostic")
     var loop_iterations = iterations
     if loop_iterations <= 0:
@@ -632,6 +642,10 @@ def pure_crypto_microbench_json(
     var taproot_tweak = taproot_tweak_hash(taproot_internal, taproot_merkle_root)
     var taproot_expected = hex_string_to_bytes(vector_expected_xonly_hex(6))
     var taproot_parity = vector_expected_parity(6)
+    var field_p = hex_string_to_bytes(String("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"))
+    var field_a = hex_string_to_bytes(String("f73dafc19d228263cb4ed5db0500e47f603b61fa65eeae217ccb74acc1d36143"))
+    var field_b = hex_string_to_bytes(String("6114c8de454c9b5272e1284cd8f2974118b8b15da4f2439136e5d08b7eb03b7b"))
+    var field_one = hex_string_to_bytes(String("0000000000000000000000000000000000000000000000000000000000000001"))
 
     var ecdsa_der_parse_ms = Int64(0)
     var ecdsa_pubkey_parse_lift_ms = Int64(0)
@@ -660,6 +674,101 @@ def pure_crypto_microbench_json(
     var taproot_malformed = 0
     var taproot_native_compare_ms = Int64(0)
     var taproot_native_result = Int32(-1)
+
+    var field_4x64_add_ms = Int64(0)
+    var field_4x64_mul_ms = Int64(0)
+    var field_4x64_sqr_ms = Int64(0)
+    var field_4x64_normalize_ms = Int64(0)
+    var field_fe52_add_ms = Int64(0)
+    var field_fe52_mul_ms = Int64(0)
+    var field_fe52_sqr_ms = Int64(0)
+    var field_fe52_normalize_ms = Int64(0)
+    var field_iterations = 0
+    var field_mismatches = 0
+    var point_4x64_double_base_ms = Int64(0)
+    var point_fe52_double_base_ms = Int64(0)
+    var point_iterations = 0
+    var point_mismatches = 0
+
+    if run_field:
+        var expected_add = pure_test_u256_add_mod(field_a, field_b, field_p)
+        var expected_mul = pure_test_u256_mul_field_fast(field_a, field_b)
+        var expected_sqr = pure_test_u256_square_field(field_a)
+        var expected_norm = pure_test_u256_mul_field_fast(field_a, field_one)
+
+        var started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_u256_add_mod(field_a, field_b, field_p)
+            if bytes_equal(actual, expected_add):
+                field_iterations += 1
+        field_4x64_add_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_u256_mul_field_fast(field_a, field_b)
+            if not bytes_equal(actual, expected_mul):
+                field_mismatches += 1
+        field_4x64_mul_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_u256_square_field(field_a)
+            if not bytes_equal(actual, expected_sqr):
+                field_mismatches += 1
+        field_4x64_sqr_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_u256_mul_field_fast(field_a, field_one)
+            if not bytes_equal(actual, expected_norm):
+                field_mismatches += 1
+        field_4x64_normalize_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_fe52_add(field_a, field_b)
+            if not bytes_equal(actual, expected_add):
+                field_mismatches += 1
+        field_fe52_add_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_fe52_mul(field_a, field_b)
+            if not bytes_equal(actual, expected_mul):
+                field_mismatches += 1
+        field_fe52_mul_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_fe52_sqr(field_a)
+            if not bytes_equal(actual, expected_sqr):
+                field_mismatches += 1
+        field_fe52_sqr_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_fe52_roundtrip(field_a)
+            if not bytes_equal(actual, expected_norm):
+                field_mismatches += 1
+        field_fe52_normalize_ms = clock.now_ms() - started
+
+    if run_point:
+        var expected_reference_x = pure_test_ecdsa_reference_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        var started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_ecdsa_reference_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if bytes_equal(actual, expected_reference_x):
+                point_iterations += 1
+            else:
+                point_mismatches += 1
+        point_4x64_double_base_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var actual = pure_test_ecdsa_fe52_reference_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if not bytes_equal(actual, expected_reference_x):
+                point_mismatches += 1
+        point_fe52_double_base_ms = clock.now_ms() - started
 
     if run_ecdsa:
         var expected_wnaf_x = pure_test_ecdsa_wnaf_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
@@ -771,6 +880,10 @@ def pure_crypto_microbench_json(
         result = String("failed")
     if run_taproot and taproot_valid != loop_iterations:
         result = String("failed")
+    if run_field and (field_iterations != loop_iterations or field_mismatches != 0):
+        result = String("failed")
+    if run_point and (point_iterations != loop_iterations or point_mismatches != 0):
+        result = String("failed")
 
     var total_ms = clock.now_ms() - total_started
     return (
@@ -833,6 +946,62 @@ def pure_crypto_microbench_json(
         + String(ecdsa_glv_wnaf_mismatches)
         + String(',"native_result_code":')
         + String(ecdsa_native_result)
+        + String('},"field":{"enabled":')
+        + bool_json(run_field)
+        + String(',"iterations":')
+        + String(loop_iterations)
+        + String(',"reference_4x64":{"stage_ms":{"add":')
+        + String(field_4x64_add_ms)
+        + String(',"mul":')
+        + String(field_4x64_mul_ms)
+        + String(',"sqr":')
+        + String(field_4x64_sqr_ms)
+        + String(',"normalize":')
+        + String(field_4x64_normalize_ms)
+        + String('},"per_iteration_us":{"add":')
+        + String(per_iteration_us(field_4x64_add_ms, loop_iterations))
+        + String(',"mul":')
+        + String(per_iteration_us(field_4x64_mul_ms, loop_iterations))
+        + String(',"sqr":')
+        + String(per_iteration_us(field_4x64_sqr_ms, loop_iterations))
+        + String(',"normalize":')
+        + String(per_iteration_us(field_4x64_normalize_ms, loop_iterations))
+        + String('}},"fe52":{"stage_ms":{"add":')
+        + String(field_fe52_add_ms)
+        + String(',"mul":')
+        + String(field_fe52_mul_ms)
+        + String(',"sqr":')
+        + String(field_fe52_sqr_ms)
+        + String(',"normalize":')
+        + String(field_fe52_normalize_ms)
+        + String('},"per_iteration_us":{"add":')
+        + String(per_iteration_us(field_fe52_add_ms, loop_iterations))
+        + String(',"mul":')
+        + String(per_iteration_us(field_fe52_mul_ms, loop_iterations))
+        + String(',"sqr":')
+        + String(per_iteration_us(field_fe52_sqr_ms, loop_iterations))
+        + String(',"normalize":')
+        + String(per_iteration_us(field_fe52_normalize_ms, loop_iterations))
+        + String('}},"parity_iterations":')
+        + String(field_iterations)
+        + String(',"mismatches":')
+        + String(field_mismatches)
+        + String('},"point":{"enabled":')
+        + bool_json(run_point)
+        + String(',"iterations":')
+        + String(loop_iterations)
+        + String(',"reference_4x64":{"double_base_ms":')
+        + String(point_4x64_double_base_ms)
+        + String(',"double_base_per_iteration_us":')
+        + String(per_iteration_us(point_4x64_double_base_ms, loop_iterations))
+        + String('},"fe52":{"double_base_ms":')
+        + String(point_fe52_double_base_ms)
+        + String(',"double_base_per_iteration_us":')
+        + String(per_iteration_us(point_fe52_double_base_ms, loop_iterations))
+        + String('},"parity_iterations":')
+        + String(point_iterations)
+        + String(',"mismatches":')
+        + String(point_mismatches)
         + String('},"schnorr":{"enabled":')
         + bool_json(run_schnorr)
         + String(',"iterations":')

@@ -17,6 +17,41 @@ struct U256(Copyable):
         self.limbs = InlineArray[UInt64, 4](fill=UInt64(0))
 
 
+struct Fe52(Copyable):
+    var limbs: InlineArray[UInt64, 5]
+    var magnitude: Int
+    var normalized: Bool
+
+    def __init__(out self):
+        self.limbs = InlineArray[UInt64, 5](fill=UInt64(0))
+        self.magnitude = 0
+        self.normalized = True
+
+
+struct Fe52Point(Copyable):
+    var x: Fe52
+    var y: Fe52
+    var infinity: Bool
+
+    def __init__(out self):
+        self.x = Fe52()
+        self.y = Fe52()
+        self.infinity = True
+
+
+struct Fe52Jacobian(Copyable):
+    var x: Fe52
+    var y: Fe52
+    var z: Fe52
+    var infinity: Bool
+
+    def __init__(out self):
+        self.x = Fe52()
+        self.y = Fe52()
+        self.z = Fe52()
+        self.infinity = True
+
+
 struct Point(Copyable):
     var x: U256
     var y: U256
@@ -102,6 +137,42 @@ def _u256(
 
 def _low64(value: UInt128) -> UInt64:
     return UInt64(value & UInt128(0xFFFFFFFFFFFFFFFF))
+
+
+def _fe52_mask() -> UInt64:
+    return UInt64(0xFFFFFFFFFFFFF)
+
+
+def _fe52_r() -> UInt64:
+    return UInt64(0x1000003D10)
+
+
+def _fe52_zero() -> Fe52:
+    return Fe52()
+
+
+def _fe52_one() -> Fe52:
+    return _fe52_from_u256(_one())
+
+
+def _fe52_p_limb(index: Int) -> UInt64:
+    if index == 0:
+        return UInt64(0xFFFFEFFFFFC2F)
+    if index == 4:
+        return UInt64(0xFFFFFFFFFFFF)
+    return UInt64(0xFFFFFFFFFFFFF)
+
+
+def _fe52_from_u256(ref value: U256) -> Fe52:
+    var out = Fe52()
+    out.limbs[0] = value.limbs[0] & _fe52_mask()
+    out.limbs[1] = ((value.limbs[0] >> UInt64(52)) | (value.limbs[1] << UInt64(12))) & _fe52_mask()
+    out.limbs[2] = ((value.limbs[1] >> UInt64(40)) | (value.limbs[2] << UInt64(24))) & _fe52_mask()
+    out.limbs[3] = ((value.limbs[2] >> UInt64(28)) | (value.limbs[3] << UInt64(36))) & _fe52_mask()
+    out.limbs[4] = (value.limbs[3] >> UInt64(16)) & _fe52_mask()
+    out.magnitude = 1
+    out.normalized = True
+    return out^
 
 
 def _zero() -> U256:
@@ -719,6 +790,494 @@ def _reduce_once(ref value: U256, ref modulus: U256) -> U256:
     if _cmp(value, modulus) >= 0:
         return _sub_raw(value, modulus)
     return value.copy()
+
+
+def _fe52_normalize_limbs(mut limbs: InlineArray[UInt128, 12]):
+    var mask = UInt128(0xFFFFFFFFFFFFF)
+    for _ in range(8):
+        for i in range(11):
+            var carry = limbs[i] >> UInt128(52)
+            limbs[i] = limbs[i] & mask
+            limbs[i + 1] += carry
+        var top = limbs[4] >> UInt128(48)
+        if top != UInt128(0):
+            limbs[4] = limbs[4] & UInt128(0xFFFFFFFFFFFF)
+            limbs[0] += top * UInt128(0x1000003D1)
+        var has_high = False
+        for i in range(5, 12):
+            if limbs[i] != UInt128(0):
+                has_high = True
+        if not has_high:
+            break
+        for i in range(5, 12):
+            var high = limbs[i]
+            limbs[i] = UInt128(0)
+            var offset = i - 5
+            while high != UInt128(0) and offset < 12:
+                var chunk = high & mask
+                limbs[offset] += chunk * UInt128(0x1000003D10)
+                high = high >> UInt128(52)
+                offset += 1
+    for i in range(11):
+        var carry = limbs[i] >> UInt128(52)
+        limbs[i] = limbs[i] & mask
+        limbs[i + 1] += carry
+    var top = limbs[4] >> UInt128(48)
+    if top != UInt128(0):
+        limbs[4] = limbs[4] & UInt128(0xFFFFFFFFFFFF)
+        limbs[0] += top * UInt128(0x1000003D1)
+        for i in range(11):
+            var carry = limbs[i] >> UInt128(52)
+            limbs[i] = limbs[i] & mask
+            limbs[i + 1] += carry
+
+
+def _fe52_limbs_ge_p(ref limbs: InlineArray[UInt64, 5]) -> Bool:
+    for j in range(5):
+        var i = 4 - j
+        var p_limb = _fe52_p_limb(i)
+        if limbs[i] > p_limb:
+            return True
+        if limbs[i] < p_limb:
+            return False
+    return True
+
+
+def _fe52_sub_p_once(mut limbs: InlineArray[UInt64, 5]) -> Bool:
+    if not _fe52_limbs_ge_p(limbs):
+        return False
+    var borrow = UInt128(0)
+    var base = UInt128(1) << UInt128(52)
+    for i in range(5):
+        var av = UInt128(limbs[i])
+        var bv = UInt128(_fe52_p_limb(i)) + borrow
+        if av >= bv:
+            limbs[i] = UInt64(av - bv)
+            borrow = UInt128(0)
+        else:
+            limbs[i] = UInt64(base + av - bv)
+            borrow = UInt128(1)
+    return True
+
+
+def _fe52_normalize(ref value: Fe52) -> Fe52:
+    var work = InlineArray[UInt128, 12](fill=UInt128(0))
+    for i in range(5):
+        work[i] = UInt128(value.limbs[i])
+    _fe52_normalize_limbs(work)
+
+    var canonical = U256()
+    canonical.limbs[0] = UInt64(work[0]) | (UInt64(work[1]) << UInt64(52))
+    canonical.limbs[1] = (UInt64(work[1]) >> UInt64(12)) | (UInt64(work[2]) << UInt64(40))
+    canonical.limbs[2] = (UInt64(work[2]) >> UInt64(24)) | (UInt64(work[3]) << UInt64(28))
+    canonical.limbs[3] = (UInt64(work[3]) >> UInt64(36)) | (UInt64(work[4]) << UInt64(16))
+    var p = _field_p()
+    for _ in range(4):
+        if _cmp(canonical, p) < 0:
+            break
+        canonical = _sub_raw(canonical, p)
+    return _fe52_from_u256(canonical)
+
+
+def _fe52_normalize_var(ref value: Fe52) -> Fe52:
+    return _fe52_normalize(value)
+
+
+def _fe52_to_u256(ref value: Fe52) -> U256:
+    var normalized = _fe52_normalize(value)
+    var out = U256()
+    out.limbs[0] = normalized.limbs[0] | (normalized.limbs[1] << UInt64(52))
+    out.limbs[1] = (normalized.limbs[1] >> UInt64(12)) | (normalized.limbs[2] << UInt64(40))
+    out.limbs[2] = (normalized.limbs[2] >> UInt64(24)) | (normalized.limbs[3] << UInt64(28))
+    out.limbs[3] = (normalized.limbs[3] >> UInt64(36)) | (normalized.limbs[4] << UInt64(16))
+    return out^
+
+
+def _fe52_add(ref a: Fe52, ref b: Fe52) -> Fe52:
+    var out = Fe52()
+    for i in range(5):
+        out.limbs[i] = a.limbs[i] + b.limbs[i]
+    out.magnitude = a.magnitude + b.magnitude
+    if out.magnitude < 1:
+        out.magnitude = 1
+    out.normalized = False
+    return out^
+
+
+def _fe52_negate(ref a: Fe52) -> Fe52:
+    var m = a.magnitude
+    if m < 1:
+        m = 1
+    var factor = UInt64(2 * (m + 1))
+    var out = Fe52()
+    var borrow = UInt128(0)
+    var base = UInt128(1) << UInt128(52)
+    for i in range(5):
+        var av = UInt128(_fe52_p_limb(i)) * UInt128(factor)
+        var bv = UInt128(a.limbs[i]) + borrow
+        if av >= bv:
+            out.limbs[i] = UInt64(av - bv)
+            borrow = UInt128(0)
+        else:
+            out.limbs[i] = UInt64(base + av - bv)
+            borrow = UInt128(1)
+    out.magnitude = m + 1
+    out.normalized = False
+    return out^
+
+
+def _fe52_mul_int(ref a: Fe52, scalar: UInt32) -> Fe52:
+    var out = Fe52()
+    for i in range(5):
+        out.limbs[i] = UInt64(UInt128(a.limbs[i]) * UInt128(scalar))
+    out.magnitude = a.magnitude * Int(scalar)
+    if out.magnitude < 1:
+        out.magnitude = 1
+    out.normalized = False
+    return out^
+
+
+def _fe52_mul(ref a: Fe52, ref b: Fe52) -> Fe52:
+    var m = UInt128(0xFFFFFFFFFFFFF)
+    var r = UInt128(0x1000003D10)
+    var a0 = UInt128(a.limbs[0])
+    var a1 = UInt128(a.limbs[1])
+    var a2 = UInt128(a.limbs[2])
+    var a3 = UInt128(a.limbs[3])
+    var a4 = UInt128(a.limbs[4])
+    var b0 = UInt128(b.limbs[0])
+    var b1 = UInt128(b.limbs[1])
+    var b2 = UInt128(b.limbs[2])
+    var b3 = UInt128(b.limbs[3])
+    var b4 = UInt128(b.limbs[4])
+
+    var d = a0 * b3 + a1 * b2 + a2 * b1 + a3 * b0
+    var c = a4 * b4
+    d += r * (c & UInt128(0xFFFFFFFFFFFFFFFF))
+    c = c >> UInt128(64)
+    var t3 = d & m
+    d = d >> UInt128(52)
+
+    d += a0 * b4 + a1 * b3 + a2 * b2 + a3 * b1 + a4 * b0
+    d += (r << UInt128(12)) * (c & UInt128(0xFFFFFFFFFFFFFFFF))
+    var t4 = d & m
+    d = d >> UInt128(52)
+    var tx = t4 >> UInt128(48)
+    t4 = t4 & (m >> UInt128(4))
+
+    c = a0 * b0
+    d += a1 * b4 + a2 * b3 + a3 * b2 + a4 * b1
+    var u0 = d & m
+    d = d >> UInt128(52)
+    u0 = (u0 << UInt128(4)) | tx
+    c += u0 * (r >> UInt128(4))
+    var r0 = c & m
+    c = c >> UInt128(52)
+
+    c += a0 * b1 + a1 * b0
+    d += a2 * b4 + a3 * b3 + a4 * b2
+    c += (d & m) * r
+    d = d >> UInt128(52)
+    var r1 = c & m
+    c = c >> UInt128(52)
+
+    c += a0 * b2 + a1 * b1 + a2 * b0
+    d += a3 * b4 + a4 * b3
+    c += r * (d & UInt128(0xFFFFFFFFFFFFFFFF))
+    d = d >> UInt128(64)
+    var r2 = c & m
+    c = c >> UInt128(52)
+
+    c += (r << UInt128(12)) * (d & UInt128(0xFFFFFFFFFFFFFFFF)) + t3
+    var r3 = c & m
+    c = c >> UInt128(52)
+    var r4 = c + t4
+
+    var out = Fe52()
+    out.limbs[0] = UInt64(r0)
+    out.limbs[1] = UInt64(r1)
+    out.limbs[2] = UInt64(r2)
+    out.limbs[3] = UInt64(r3)
+    out.limbs[4] = UInt64(r4)
+    out.magnitude = 1
+    out.normalized = False
+    return out^
+
+
+def _fe52_sqr(ref a: Fe52) -> Fe52:
+    var m = UInt128(0xFFFFFFFFFFFFF)
+    var r = UInt128(0x1000003D10)
+    var a0 = UInt128(a.limbs[0])
+    var a1 = UInt128(a.limbs[1])
+    var a2 = UInt128(a.limbs[2])
+    var a3 = UInt128(a.limbs[3])
+    var a4 = UInt128(a.limbs[4])
+
+    var d = (a0 * UInt128(2)) * a3 + (a1 * UInt128(2)) * a2
+    var c = a4 * a4
+    d += r * (c & UInt128(0xFFFFFFFFFFFFFFFF))
+    c = c >> UInt128(64)
+    var t3 = d & m
+    d = d >> UInt128(52)
+
+    a4 = a4 * UInt128(2)
+    d += a0 * a4 + (a1 * UInt128(2)) * a3 + a2 * a2
+    d += (r << UInt128(12)) * (c & UInt128(0xFFFFFFFFFFFFFFFF))
+    var t4 = d & m
+    d = d >> UInt128(52)
+    var tx = t4 >> UInt128(48)
+    t4 = t4 & (m >> UInt128(4))
+
+    c = a0 * a0
+    d += a1 * a4 + (a2 * UInt128(2)) * a3
+    var u0 = d & m
+    d = d >> UInt128(52)
+    u0 = (u0 << UInt128(4)) | tx
+    c += u0 * (r >> UInt128(4))
+    var r0 = c & m
+    c = c >> UInt128(52)
+
+    a0 = a0 * UInt128(2)
+    c += a0 * a1
+    d += a2 * a4 + a3 * a3
+    c += (d & m) * r
+    d = d >> UInt128(52)
+    var r1 = c & m
+    c = c >> UInt128(52)
+
+    c += a0 * a2 + a1 * a1
+    d += a3 * a4
+    c += r * (d & UInt128(0xFFFFFFFFFFFFFFFF))
+    d = d >> UInt128(64)
+    var r2 = c & m
+    c = c >> UInt128(52)
+
+    c += (r << UInt128(12)) * (d & UInt128(0xFFFFFFFFFFFFFFFF)) + t3
+    var r3 = c & m
+    c = c >> UInt128(52)
+    var r4 = c + t4
+
+    var out = Fe52()
+    out.limbs[0] = UInt64(r0)
+    out.limbs[1] = UInt64(r1)
+    out.limbs[2] = UInt64(r2)
+    out.limbs[3] = UInt64(r3)
+    out.limbs[4] = UInt64(r4)
+    out.magnitude = 1
+    out.normalized = False
+    return out^
+
+
+def _fe52_equal(ref a: Fe52, ref b: Fe52) -> Bool:
+    var an = _fe52_normalize(a)
+    var bn = _fe52_normalize(b)
+    for i in range(5):
+        if an.limbs[i] != bn.limbs[i]:
+            return False
+    return True
+
+
+def _fe52_is_zero(ref a: Fe52) -> Bool:
+    var normalized = _fe52_normalize(a)
+    for i in range(5):
+        if normalized.limbs[i] != UInt64(0):
+            return False
+    return True
+
+
+def _fe52_half(ref a: Fe52) -> Fe52:
+    var t0 = a.limbs[0]
+    var t1 = a.limbs[1]
+    var t2 = a.limbs[2]
+    var t3 = a.limbs[3]
+    var t4 = a.limbs[4]
+    var mask = UInt64(0)
+    if (t0 & UInt64(1)) == UInt64(1):
+        mask = UInt64(0xFFFFFFFFFFFFF)
+    t0 += UInt64(0xFFFFEFFFFFC2F) & mask
+    t1 += mask
+    t2 += mask
+    t3 += mask
+    t4 += mask >> UInt64(4)
+
+    var out = Fe52()
+    out.limbs[0] = (t0 >> UInt64(1)) + ((t1 & UInt64(1)) << UInt64(51))
+    out.limbs[1] = (t1 >> UInt64(1)) + ((t2 & UInt64(1)) << UInt64(51))
+    out.limbs[2] = (t2 >> UInt64(1)) + ((t3 & UInt64(1)) << UInt64(51))
+    out.limbs[3] = (t3 >> UInt64(1)) + ((t4 & UInt64(1)) << UInt64(51))
+    out.limbs[4] = t4 >> UInt64(1)
+    out.magnitude = (a.magnitude >> 1) + 1
+    out.normalized = False
+    return out^
+
+
+def _fe52_normalizes_to_zero_var(ref a: Fe52) -> Bool:
+    var m = UInt64(0xFFFFFFFFFFFFF)
+    var t0 = a.limbs[0]
+    var t4 = a.limbs[4]
+    var x = t4 >> UInt64(48)
+    t0 += x * UInt64(0x1000003D1)
+    var z0 = t0 & m
+    var z1 = z0 ^ UInt64(0x1000003D0)
+    if z0 != UInt64(0) and z1 != m:
+        return False
+
+    var t1 = a.limbs[1]
+    var t2 = a.limbs[2]
+    var t3 = a.limbs[3]
+    t4 = t4 & UInt64(0x0FFFFFFFFFFFF)
+    t1 += t0 >> UInt64(52)
+    t2 += t1 >> UInt64(52)
+    t1 = t1 & m
+    z0 = z0 | t1
+    z1 = z1 & t1
+    t3 += t2 >> UInt64(52)
+    t2 = t2 & m
+    z0 = z0 | t2
+    z1 = z1 & t2
+    t4 += t3 >> UInt64(52)
+    t3 = t3 & m
+    z0 = z0 | t3
+    z1 = z1 & t3
+    z0 = z0 | t4
+    z1 = z1 & (t4 ^ UInt64(0xF000000000000))
+    return z0 == UInt64(0) or z1 == m
+
+
+def _fe52_point_from_point(ref point: Point) -> Fe52Point:
+    var out = Fe52Point()
+    if point.infinity:
+        return out^
+    out.x = _fe52_from_u256(point.x)
+    out.y = _fe52_from_u256(point.y)
+    out.infinity = False
+    return out^
+
+
+def _point_from_fe52_point(ref point: Fe52Point) -> Point:
+    var out = Point()
+    if point.infinity:
+        return out^
+    out.x = _fe52_to_u256(point.x)
+    out.y = _fe52_to_u256(point.y)
+    out.infinity = False
+    return out^
+
+
+def _fe52_jacobian_from_affine(ref point: Fe52Point) -> Fe52Jacobian:
+    var out = Fe52Jacobian()
+    if point.infinity:
+        return out^
+    out.x = point.x.copy()
+    out.y = point.y.copy()
+    out.z = _fe52_one()
+    out.infinity = False
+    return out^
+
+
+def _fe52_jacobian_to_affine(ref point: Fe52Jacobian) -> Fe52Point:
+    var out = Fe52Point()
+    if point.infinity:
+        return out^
+    var z = _fe52_to_u256(point.z)
+    var z_inv = _fe52_from_u256(_fe_inv(z))
+    var z_inv2 = _fe52_sqr(z_inv)
+    var z_inv3 = _fe52_mul(z_inv2, z_inv)
+    out.x = _fe52_mul(point.x, z_inv2)
+    out.y = _fe52_mul(point.y, z_inv3)
+    out.infinity = False
+    return out^
+
+
+def _fe52_gej_double(ref a: Fe52Jacobian) -> Fe52Jacobian:
+    var out = Fe52Jacobian()
+    out.infinity = a.infinity
+    if a.infinity:
+        return out^
+    if _fe52_normalizes_to_zero_var(a.y):
+        return Fe52Jacobian()
+    out.z = _fe52_mul(a.z, a.y)
+    var s = _fe52_sqr(a.y)
+    var l = _fe52_sqr(a.x)
+    l = _fe52_mul_int(l, UInt32(3))
+    l = _fe52_half(l)
+    var t = _fe52_negate(s)
+    t = _fe52_mul(t, a.x)
+    out.x = _fe52_sqr(l)
+    out.x = _fe52_add(out.x, t)
+    out.x = _fe52_add(out.x, t)
+    s = _fe52_sqr(s)
+    t = _fe52_add(t, out.x)
+    out.y = _fe52_mul(t, l)
+    out.y = _fe52_add(out.y, s)
+    out.y = _fe52_negate(out.y)
+    out.infinity = False
+    return out^
+
+
+def _fe52_gej_add_ge_var(ref a: Fe52Jacobian, ref b: Fe52Point) -> Fe52Jacobian:
+    if a.infinity:
+        return _fe52_jacobian_from_affine(b)
+    if b.infinity:
+        return a.copy()
+
+    var z12 = _fe52_sqr(a.z)
+    var u1 = a.x.copy()
+    var u2 = _fe52_mul(b.x, z12)
+    var s1 = a.y.copy()
+    var s2 = _fe52_mul(b.y, z12)
+    s2 = _fe52_mul(s2, a.z)
+    var h = _fe52_add(_fe52_negate(u1), u2)
+    var i = _fe52_add(_fe52_negate(s2), s1)
+    if _fe52_normalizes_to_zero_var(h):
+        if _fe52_normalizes_to_zero_var(i):
+            return _fe52_gej_double(a)
+        return Fe52Jacobian()
+
+    var out = Fe52Jacobian()
+    out.infinity = False
+    out.z = _fe52_mul(a.z, h)
+    var h2 = _fe52_negate(_fe52_sqr(h))
+    var h3 = _fe52_mul(h2, h)
+    var t = _fe52_mul(u1, h2)
+    out.x = _fe52_sqr(i)
+    out.x = _fe52_add(out.x, h3)
+    out.x = _fe52_add(out.x, t)
+    out.x = _fe52_add(out.x, t)
+    t = _fe52_add(t, out.x)
+    out.y = _fe52_mul(t, i)
+    h3 = _fe52_mul(h3, s1)
+    out.y = _fe52_add(out.y, h3)
+    return out^
+
+
+def _fe52_scalar_mul_jacobian(ref scalar: U256, ref point: Point) -> Fe52Jacobian:
+    var result = Fe52Jacobian()
+    if _is_zero(scalar) or point.infinity:
+        return result^
+    var fe_point = _fe52_point_from_point(point)
+    for j in range(256):
+        var bit_index = 255 - j
+        if not result.infinity:
+            result = _fe52_gej_double(result)
+        if _bit(scalar, bit_index):
+            result = _fe52_gej_add_ge_var(result, fe_point)
+    return result^
+
+
+def _fe52_double_base_mul(ref s: U256, ref generator: Point, ref e: U256, ref pubkey: Point) -> Fe52Jacobian:
+    var result = Fe52Jacobian()
+    var fe_generator = _fe52_point_from_point(generator)
+    var fe_pubkey = _fe52_point_from_point(pubkey)
+    for j in range(256):
+        var bit_index = 255 - j
+        if not result.infinity:
+            result = _fe52_gej_double(result)
+        if _bit(s, bit_index):
+            result = _fe52_gej_add_ge_var(result, fe_generator)
+        if _bit(e, bit_index):
+            result = _fe52_gej_add_ge_var(result, fe_pubkey)
+    return result^
 
 
 def _from_be32(ref bytes: List[UInt8]) raises -> U256:
@@ -1817,6 +2376,102 @@ def pure_test_u256_inv_mod(ref a: List[UInt8], ref modulus: List[UInt8]) raises 
     var mv = _from_be32(modulus)
     var exp = _sub_raw(mv, _u256_from_u32(UInt32(2)))
     return _to_be32(_pow_mod(_reduce_once(av, mv), exp, mv))
+
+
+def pure_test_fe52_roundtrip(ref a: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var p = _field_p()
+    return _to_be32(_fe52_to_u256(_fe52_from_u256(_reduce_once(av, p))))
+
+
+def pure_test_fe52_add(ref a: List[UInt8], ref b: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var bv = _from_be32(b)
+    var p = _field_p()
+    var af = _fe52_from_u256(_reduce_once(av, p))
+    var bf = _fe52_from_u256(_reduce_once(bv, p))
+    return _to_be32(_fe52_to_u256(_fe52_add(af, bf)))
+
+
+def pure_test_fe52_sub_via_negate(ref a: List[UInt8], ref b: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var bv = _from_be32(b)
+    var p = _field_p()
+    var af = _fe52_from_u256(_reduce_once(av, p))
+    var bf = _fe52_from_u256(_reduce_once(bv, p))
+    return _to_be32(_fe52_to_u256(_fe52_add(af, _fe52_negate(bf))))
+
+
+def pure_test_fe52_mul(ref a: List[UInt8], ref b: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var bv = _from_be32(b)
+    var p = _field_p()
+    var af = _fe52_from_u256(_reduce_once(av, p))
+    var bf = _fe52_from_u256(_reduce_once(bv, p))
+    return _to_be32(_fe52_to_u256(_fe52_mul(af, bf)))
+
+
+def pure_test_fe52_sqr(ref a: List[UInt8]) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var p = _field_p()
+    var af = _fe52_from_u256(_reduce_once(av, p))
+    return _to_be32(_fe52_to_u256(_fe52_sqr(af)))
+
+
+def pure_test_fe52_mul_int(ref a: List[UInt8], scalar: UInt32) raises -> List[UInt8]:
+    var av = _from_be32(a)
+    var p = _field_p()
+    var af = _fe52_from_u256(_reduce_once(av, p))
+    return _to_be32(_fe52_to_u256(_fe52_mul_int(af, scalar)))
+
+
+def pure_test_fe52_equal(ref a: List[UInt8], ref b: List[UInt8]) raises -> Bool:
+    var av = _from_be32(a)
+    var bv = _from_be32(b)
+    var p = _field_p()
+    var af = _fe52_from_u256(_reduce_once(av, p))
+    var bf = _fe52_from_u256(_reduce_once(bv, p))
+    return _fe52_equal(af, bf)
+
+
+def pure_test_fe52_is_zero(ref a: List[UInt8]) raises -> Bool:
+    var av = _from_be32(a)
+    var p = _field_p()
+    return _fe52_is_zero(_fe52_from_u256(_reduce_once(av, p)))
+
+
+def pure_test_fe52_scalar_mul_g_x(ref scalar: List[UInt8]) raises -> List[UInt8]:
+    var sv = _from_be32(scalar)
+    var point = _fe52_jacobian_to_affine(_fe52_scalar_mul_jacobian(sv, _generator()))
+    if point.infinity:
+        raise Error("Fe52 scalar multiply returned infinity")
+    return _to_be32(_fe52_to_u256(point.x))
+
+
+def pure_test_fe52_scalar_mul_g_y(ref scalar: List[UInt8]) raises -> List[UInt8]:
+    var sv = _from_be32(scalar)
+    var point = _fe52_jacobian_to_affine(_fe52_scalar_mul_jacobian(sv, _generator()))
+    if point.infinity:
+        raise Error("Fe52 scalar multiply returned infinity")
+    return _to_be32(_fe52_to_u256(point.y))
+
+
+def pure_test_ecdsa_fe52_reference_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var q = _parse_pubkey(pubkey)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _fe52_jacobian_to_affine(_fe52_double_base_mul(u1, _generator(), u2, q))
+    if point.infinity:
+        raise Error("Fe52 ECDSA reference product is infinity")
+    return _to_be32(_fe52_to_u256(point.x))
 
 
 def pure_test_scalar_mul_g_x(ref scalar: List[UInt8]) raises -> List[UInt8]:

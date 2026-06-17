@@ -75,9 +75,24 @@ The implementation follows formulas and structure from Bitcoin Core's
   native-result comparison. Profile JSON is Mojo-local diagnostic output under
   `.benchmark-results/`.
 - `pure-crypto-microbench` is the tuning instrument. It runs fixed pure-only
-  ECDSA, Schnorr, and Taproot vectors in fast loops, keeps native comparison off
-  by default, and reports per-stage totals plus per-iteration timing so math
-  changes can be compared without live-proof or shadow-corpus overhead.
+  ECDSA, Schnorr, Taproot, field-operation, and point-operation loops, keeps
+  native comparison off by default, and reports per-stage totals plus
+  per-iteration timing so math changes can be compared without live-proof or
+  shadow-corpus overhead.
+- A diagnostic 5x52 field core now exists beside the live 4x64 `U256` path.
+  `Fe52` uses five 52-bit limbs in `UInt64`, tracks magnitude/normalization
+  metadata, keeps add/negate lazy, and normalizes only for conversion,
+  equality/zero checks, and tests. The fused `fe52_mul` / `fe52_sqr` routines
+  follow libsecp's fixed accumulator schedule rather than the earlier
+  product-array normalize loop. The host field microbench at 100k iterations
+  reported zero mismatches and showed Fe52 beating 4x64 on the isolated field
+- A diagnostic 5x52 group core now exists beside the live 4x64 point path.
+  It includes affine/Jacobian Fe52 points, libsecp-style `gej_double`,
+  mixed `gej_add_ge_var`, and binary scalar/double-base ladders for parity and
+  timing only. The host point microbench at 1000 iterations reported zero
+  mismatches and showed the Fe52 binary double-base path beating the 4x64
+  binary reference (`192ms` vs `1026ms`). Verifier routing still uses the
+  existing 4x64 implementation.
 
 ## Evidence Boundary
 
@@ -105,9 +120,9 @@ shadow path for differential testing and language-specific learning.
 
 ## Deferred Libsecp Shapes
 
-The current pure path still uses the existing scalar inverse algorithm, the
-current Schnorr/Taproot multiplication routing, and exact 4x64 normalization
-after each operation. Safegcd, Schnorr wNAF/GLV routing, Taproot fixed-G
-precompute, broader fixed generator tables, tagged-hash midstates, and any
-5x52 lazy field representation are intentionally deferred to later measured
-slices.
+The live pure verifier path still uses the existing scalar inverse algorithm,
+the current Schnorr/Taproot multiplication routing, and exact 4x64
+normalization after each operation. Safegcd, Fe52 wNAF/GLV routing, Taproot
+fixed-G precompute, broader fixed generator tables, tagged-hash midstates,
+SIMD batching, and verifier routing through the 5x52 field/group core are
+intentionally deferred to later measured slices.

@@ -54,7 +54,9 @@ native prerequisites a future port would need?
   command is a single-vector sanity check; `pure-crypto-microbench` is the fast
   pure-only tuning loop. It records fixed-vector ECDSA, Schnorr, and Taproot
   timing without native calls or shadow-agreement accounting unless explicitly
-  requested.
+  requested. The microbench also has `field` and `point` cases that compare
+  the current exact 4x64 field/point paths against the new unrouted 5x52
+  lazy-field and Jacobian group core.
   `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
   support/unsupported rows, per-attempt `shadow_duration_ms`, aggregate shadow
