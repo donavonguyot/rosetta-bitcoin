@@ -179,6 +179,17 @@ struct EcdsaSignature(Copyable):
         self.s = U256()
 
 
+struct EcdsaPreparedScalars(Copyable):
+    var r: U256
+    var u1: U256
+    var u2: U256
+
+    def __init__(out self):
+        self.r = U256()
+        self.u1 = U256()
+        self.u2 = U256()
+
+
 struct FieldPowBlocks(Copyable):
     var x2: U256
     var x22: U256
@@ -1729,6 +1740,30 @@ def _u64xk[K: Int](value: UInt64) -> SIMD[DType.uint64, K]:
     return SIMD[DType.uint64, K](value)
 
 
+def _u64xk_all_ones[K: Int]() -> SIMD[DType.uint64, K]:
+    return _u64xk[K](UInt64(0xFFFFFFFFFFFFFFFF))
+
+
+def _u64xk_nonzero_mask[K: Int](value: SIMD[DType.uint64, K]) -> SIMD[DType.uint64, K]:
+    var zero = _u64xk[K](UInt64(0))
+    var one = _u64xk[K](UInt64(1))
+    var neg = zero - value
+    var nz = (value | neg) >> _u64xk[K](UInt64(63))
+    return zero - (nz & one)
+
+
+def _u64xk_eq_mask[K: Int](value: SIMD[DType.uint64, K], expected: UInt64) -> SIMD[DType.uint64, K]:
+    return _u64xk_all_ones[K]() ^ _u64xk_nonzero_mask[K](value ^ _u64xk[K](expected))
+
+
+def _u64xk_xor_select[K: Int](
+    a: SIMD[DType.uint64, K],
+    b: SIMD[DType.uint64, K],
+    mask: SIMD[DType.uint64, K],
+) -> SIMD[DType.uint64, K]:
+    return a ^ ((a ^ b) & mask)
+
+
 def _fe52xk_from_fe52[K: Int](ref value: Fe52) -> Fe52xK[K]:
     var out = Fe52xK[K]()
     for i in range(5):
@@ -1763,10 +1798,62 @@ def _fe52xk_add[K: Int](ref a: Fe52xK[K], ref b: Fe52xK[K]) -> Fe52xK[K]:
 
 
 def _fe52xk_negate[K: Int](ref a: Fe52xK[K]) -> Fe52xK[K]:
-    # Diagnostic batches intentionally keep homogeneous lane control flow.
-    # Mojo 1.0b1 exposes scalar Bool for this UInt128 SIMD comparison, so use
-    # the already-proven scalar negate on lane 0 and splat the result.
-    return _fe52xk_from_fe52[K](_fe52_negate(_fe52xk_lane_to_fe52[K](a, 0)))
+    var m = a.magnitude
+    if m < 1:
+        m = 1
+    var factor = UInt64(2 * (m + 1))
+    var out = Fe52xK[K]()
+    for i in range(5):
+        out.limbs[i] = _u64xk[K](_fe52_p_limb(i) * factor) - a.limbs[i]
+    out.magnitude = m + 1
+    out.normalized = False
+    return out^
+
+
+def _fe52xk_masked_zero[K: Int](ref a: Fe52xK[K], mask: SIMD[DType.uint64, K]) -> Fe52xK[K]:
+    var out = Fe52xK[K]()
+    for i in range(5):
+        out.limbs[i] = a.limbs[i] & mask
+    out.magnitude = a.magnitude
+    out.normalized = a.normalized
+    return out^
+
+
+def _fe52xk_select[K: Int](ref a: Fe52xK[K], ref b: Fe52xK[K], mask: SIMD[DType.uint64, K]) -> Fe52xK[K]:
+    var out = Fe52xK[K]()
+    for i in range(5):
+        out.limbs[i] = _u64xk_xor_select[K](a.limbs[i], b.limbs[i], mask)
+    out.magnitude = a.magnitude
+    if b.magnitude > out.magnitude:
+        out.magnitude = b.magnitude
+    out.normalized = a.normalized and b.normalized
+    return out^
+
+
+def _fe52xk_point_select[K: Int](ref a: Fe52xKPoint[K], ref b: Fe52xKPoint[K], mask: SIMD[DType.uint64, K]) -> Fe52xKPoint[K]:
+    var out = Fe52xKPoint[K]()
+    out.x = _fe52xk_select[K](a.x, b.x, mask)
+    out.y = _fe52xk_select[K](a.y, b.y, mask)
+    out.infinity = False
+    return out^
+
+
+def _fe52xk_jacobian_select[K: Int](ref a: Fe52xKJacobian[K], ref b: Fe52xKJacobian[K], mask: SIMD[DType.uint64, K]) -> Fe52xKJacobian[K]:
+    var out = Fe52xKJacobian[K]()
+    out.x = _fe52xk_select[K](a.x, b.x, mask)
+    out.y = _fe52xk_select[K](a.y, b.y, mask)
+    out.z = _fe52xk_select[K](a.z, b.z, mask)
+    out.infinity = False
+    return out^
+
+
+def _fe52xk_jacobian_from_point[K: Int](ref point: Fe52xKPoint[K]) -> Fe52xKJacobian[K]:
+    var out = Fe52xKJacobian[K]()
+    out.x = point.x.copy()
+    out.y = point.y.copy()
+    out.z = _fe52xk_one[K]()
+    out.infinity = False
+    return out^
 
 
 def _fe52xk_mul_int[K: Int](ref a: Fe52xK[K], scalar: UInt32) -> Fe52xK[K]:
@@ -1777,6 +1864,31 @@ def _fe52xk_mul_int[K: Int](ref a: Fe52xK[K], scalar: UInt32) -> Fe52xK[K]:
     out.magnitude = a.magnitude * Int(scalar)
     if out.magnitude < 1:
         out.magnitude = 1
+    out.normalized = False
+    return out^
+
+
+def _fe52xk_half[K: Int](ref a: Fe52xK[K]) -> Fe52xK[K]:
+    var t0 = a.limbs[0]
+    var t1 = a.limbs[1]
+    var t2 = a.limbs[2]
+    var t3 = a.limbs[3]
+    var t4 = a.limbs[4]
+    var odd_mask = _u64xk[K](UInt64(0)) - (t0 & _u64xk[K](UInt64(1)))
+    var mask = odd_mask & _u64xk[K](UInt64(0xFFFFFFFFFFFFF))
+    t0 += _u64xk[K](UInt64(0xFFFFEFFFFFC2F)) & mask
+    t1 += mask
+    t2 += mask
+    t3 += mask
+    t4 += mask >> _u64xk[K](UInt64(4))
+
+    var out = Fe52xK[K]()
+    out.limbs[0] = (t0 >> _u64xk[K](UInt64(1))) + ((t1 & _u64xk[K](UInt64(1))) << _u64xk[K](UInt64(51)))
+    out.limbs[1] = (t1 >> _u64xk[K](UInt64(1))) + ((t2 & _u64xk[K](UInt64(1))) << _u64xk[K](UInt64(51)))
+    out.limbs[2] = (t2 >> _u64xk[K](UInt64(1))) + ((t3 & _u64xk[K](UInt64(1))) << _u64xk[K](UInt64(51)))
+    out.limbs[3] = (t3 >> _u64xk[K](UInt64(1))) + ((t4 & _u64xk[K](UInt64(1))) << _u64xk[K](UInt64(51)))
+    out.limbs[4] = t4 >> _u64xk[K](UInt64(1))
+    out.magnitude = (a.magnitude >> 1) + 1
     out.normalized = False
     return out^
 
@@ -1986,6 +2098,38 @@ def _fe52xk_point_lane_to_fe52[K: Int](ref point: Fe52xKPoint[K], lane: Int) -> 
     return out^
 
 
+def _fe52x4_from_lanes(ref a: Fe52, ref b: Fe52, ref c: Fe52, ref d: Fe52) -> Fe52xK[4]:
+    var out = Fe52xK[4]()
+    for i in range(5):
+        out.limbs[i] = SIMD[DType.uint64, 4](a.limbs[i], b.limbs[i], c.limbs[i], d.limbs[i])
+    out.magnitude = a.magnitude
+    if b.magnitude > out.magnitude:
+        out.magnitude = b.magnitude
+    if c.magnitude > out.magnitude:
+        out.magnitude = c.magnitude
+    if d.magnitude > out.magnitude:
+        out.magnitude = d.magnitude
+    out.normalized = a.normalized and b.normalized and c.normalized and d.normalized
+    return out^
+
+
+def _fe52x4_point_from_lanes(ref a: Fe52Point, ref b: Fe52Point, ref c: Fe52Point, ref d: Fe52Point) -> Fe52xKPoint[4]:
+    var out = Fe52xKPoint[4]()
+    out.x = _fe52x4_from_lanes(a.x, b.x, c.x, d.x)
+    out.y = _fe52x4_from_lanes(a.y, b.y, c.y, d.y)
+    out.infinity = False
+    return out^
+
+
+def _fe52x4_jacobian_from_lanes(ref a: Fe52Jacobian, ref b: Fe52Jacobian, ref c: Fe52Jacobian, ref d: Fe52Jacobian) -> Fe52xKJacobian[4]:
+    var out = Fe52xKJacobian[4]()
+    out.x = _fe52x4_from_lanes(a.x, b.x, c.x, d.x)
+    out.y = _fe52x4_from_lanes(a.y, b.y, c.y, d.y)
+    out.z = _fe52x4_from_lanes(a.z, b.z, c.z, d.z)
+    out.infinity = False
+    return out^
+
+
 def _fe52xk_gej_double[K: Int](ref a: Fe52xKJacobian[K]) -> Fe52xKJacobian[K]:
     var out = Fe52xKJacobian[K]()
     out.infinity = a.infinity
@@ -1997,8 +2141,7 @@ def _fe52xk_gej_double[K: Int](ref a: Fe52xKJacobian[K]) -> Fe52xKJacobian[K]:
     var s = _fe52xk_sqr[K](a.y)
     var l = _fe52xk_sqr[K](a.x)
     l = _fe52xk_mul_int[K](l, UInt32(3))
-    var l_lane = _fe52_half(_fe52xk_lane_to_fe52[K](l, 0))
-    l = _fe52xk_from_fe52[K](l_lane)
+    l = _fe52xk_half[K](l)
     var t = _fe52xk_negate[K](s)
     t = _fe52xk_mul[K](t, a.x)
     out.x = _fe52xk_sqr[K](l)
@@ -2010,6 +2153,41 @@ def _fe52xk_gej_double[K: Int](ref a: Fe52xKJacobian[K]) -> Fe52xKJacobian[K]:
     out.y = _fe52xk_add[K](out.y, s)
     out.y = _fe52xk_negate[K](out.y)
     out.infinity = False
+    return out^
+
+
+def _fe52xk_gej_add_ge_xk_var[K: Int](ref a: Fe52xKJacobian[K], ref b: Fe52xKPoint[K]) -> Fe52xKJacobian[K]:
+    if a.infinity:
+        var out = Fe52xKJacobian[K]()
+        out.x = b.x.copy()
+        out.y = b.y.copy()
+        out.z = _fe52xk_one[K]()
+        out.infinity = False
+        return out^
+
+    var z12 = _fe52xk_sqr[K](a.z)
+    var u1 = a.x.copy()
+    var u2 = _fe52xk_mul[K](b.x, z12)
+    var s1 = a.y.copy()
+    var s2 = _fe52xk_mul[K](b.y, z12)
+    s2 = _fe52xk_mul[K](s2, a.z)
+    var h = _fe52xk_add[K](_fe52xk_negate[K](u1), u2)
+    var i = _fe52xk_add[K](_fe52xk_negate[K](s2), s1)
+
+    var out = Fe52xKJacobian[K]()
+    out.infinity = False
+    out.z = _fe52xk_mul[K](a.z, h)
+    var h2 = _fe52xk_negate[K](_fe52xk_sqr[K](h))
+    var h3 = _fe52xk_mul[K](h2, h)
+    var t = _fe52xk_mul[K](u1, h2)
+    out.x = _fe52xk_sqr[K](i)
+    out.x = _fe52xk_add[K](out.x, h3)
+    out.x = _fe52xk_add[K](out.x, t)
+    out.x = _fe52xk_add[K](out.x, t)
+    t = _fe52xk_add[K](t, out.x)
+    out.y = _fe52xk_mul[K](t, i)
+    h3 = _fe52xk_mul[K](h3, s1)
+    out.y = _fe52xk_add[K](out.y, h3)
     return out^
 
 
@@ -2095,6 +2273,157 @@ def _fe52xk_double_base_mul_wnaf_identical[K: Int](ref g_scalar: U256, ref p_sca
             result = _fe52xk_wnaf_generator_add[K](result, g_wnaf[i])
         if i < len(p_wnaf):
             result = _fe52xk_wnaf_table_add[K](result, p_table, p_wnaf[i])
+    return result^
+
+
+def _scalar_window4(ref scalar: U256, window: Int) -> UInt64:
+    var bit = window * 4
+    var limb = bit // 64
+    var shift = bit - limb * 64
+    return (scalar.limbs[limb] >> UInt64(shift)) & UInt64(0xF)
+
+
+def _fe52_small_multiple(ref point: Fe52Point, slot: UInt64) raises -> Fe52Point:
+    var scalar = _u256_from_u32(UInt32(slot))
+    var jac = _fe52_scalar_mul_jacobian(scalar, _point_from_fe52_point(point))
+    var out = _fe52_jacobian_to_affine(jac)
+    if out.infinity:
+        raise Error("unexpected infinity in Fe52 fixed-window table")
+    return out^
+
+
+def _fe52_generator_small_multiple(slot: UInt64) raises -> Fe52Point:
+    var scalar = _u256_from_u32(UInt32(slot))
+    var jac = _fe52_scalar_mul_jacobian(scalar, _generator())
+    var out = _fe52_jacobian_to_affine(jac)
+    if out.infinity:
+        raise Error("unexpected infinity in Fe52 generator fixed-window table")
+    return out^
+
+
+def _fe52x4_generator_window_table() raises -> List[Fe52xKPoint[4]]:
+    var out = List[Fe52xKPoint[4]]()
+    for slot in range(1, 16):
+        var point = _fe52_generator_small_multiple(UInt64(slot))
+        var p0 = point.copy()
+        var p1 = point.copy()
+        var p2 = point.copy()
+        var p3 = point.copy()
+        out.append(_fe52x4_point_from_lanes(p0, p1, p2, p3))
+    return out^
+
+
+def _fe52x4_pubkey_window_table(
+    ref q0: Fe52Point,
+    ref q1: Fe52Point,
+    ref q2: Fe52Point,
+    ref q3: Fe52Point,
+) raises -> List[Fe52xKPoint[4]]:
+    var out = List[Fe52xKPoint[4]]()
+    for slot in range(1, 16):
+        var s = UInt64(slot)
+        out.append(_fe52x4_point_from_lanes(
+            _fe52_small_multiple(q0, s),
+            _fe52_small_multiple(q1, s),
+            _fe52_small_multiple(q2, s),
+            _fe52_small_multiple(q3, s),
+        ))
+    return out^
+
+
+def _fe52x4_gather_window(ref table: List[Fe52xKPoint[4]], windows: SIMD[DType.uint64, 4]) raises -> Fe52xKPoint[4]:
+    if len(table) < 15:
+        raise Error("fixed-window table is too small")
+    var selected = table[0].copy()
+    for slot in range(2, 16):
+        var mask = _u64xk_eq_mask[4](windows, UInt64(slot))
+        selected = _fe52xk_point_select[4](selected, table[slot - 1], mask)
+    return selected^
+
+
+def _fe52_init_lane_window(ref g_table: List[Fe52Point], ref q_table: List[Fe52Point], g_window: UInt64, q_window: UInt64) raises -> Fe52Jacobian:
+    var out = Fe52Jacobian()
+    if g_window != UInt64(0):
+        out = _fe52_gej_add_ge_var(out, g_table[Int(g_window) - 1])
+    if q_window != UInt64(0):
+        out = _fe52_gej_add_ge_var(out, q_table[Int(q_window) - 1])
+    if out.infinity:
+        raise Error("fixed-window diagnostic lane has zero top window")
+    return out^
+
+
+def _fe52_affine_table(ref point: Fe52Point) raises -> List[Fe52Point]:
+    var out = List[Fe52Point]()
+    for slot in range(1, 16):
+        out.append(_fe52_small_multiple(point, UInt64(slot)))
+    return out^
+
+
+def _fe52_generator_affine_table() raises -> List[Fe52Point]:
+    var out = List[Fe52Point]()
+    for slot in range(1, 16):
+        out.append(_fe52_generator_small_multiple(UInt64(slot)))
+    return out^
+
+
+def _fe52x4_fixed_window_double_base_mixed(
+    ref g0: U256,
+    ref p0: U256,
+    ref q0: Fe52Point,
+    ref g1: U256,
+    ref p1: U256,
+    ref q1: Fe52Point,
+    ref g2: U256,
+    ref p2: U256,
+    ref q2: Fe52Point,
+    ref g3: U256,
+    ref p3: U256,
+    ref q3: Fe52Point,
+) raises -> Fe52xKJacobian[4]:
+    var generator_x4_table = _fe52x4_generator_window_table()
+    var pubkey_x4_table = _fe52x4_pubkey_window_table(q0, q1, q2, q3)
+
+    var dummy = _fe52_point_from_point(_generator())
+    var result = _fe52xk_jacobian_from_affine[4](dummy)
+    var active_mask = _u64xk[4](UInt64(0))
+
+    var window = 63
+    while window >= 0:
+        if window != 63:
+            for _ in range(4):
+                var doubled = _fe52xk_gej_double[4](result)
+                result = _fe52xk_jacobian_select[4](result, doubled, active_mask)
+        var g_windows = SIMD[DType.uint64, 4](
+            _scalar_window4(g0, window),
+            _scalar_window4(g1, window),
+            _scalar_window4(g2, window),
+            _scalar_window4(g3, window),
+        )
+        var p_windows = SIMD[DType.uint64, 4](
+            _scalar_window4(p0, window),
+            _scalar_window4(p1, window),
+            _scalar_window4(p2, window),
+            _scalar_window4(p3, window),
+        )
+        var g_mask = _u64xk_nonzero_mask[4](g_windows)
+        var g_point = _fe52x4_gather_window(generator_x4_table, g_windows)
+        var p_mask = _u64xk_nonzero_mask[4](p_windows)
+        var p_point = _fe52x4_gather_window(pubkey_x4_table, p_windows)
+        var contribution_mask = g_mask | p_mask
+        var g_contribution = _fe52xk_jacobian_from_point[4](g_point)
+        var gp_contribution = _fe52xk_gej_add_ge_xk_var[4](g_contribution, p_point)
+        var p_contribution = _fe52xk_jacobian_from_point[4](p_point)
+        var not_g_mask = _u64xk_all_ones[4]() ^ g_mask
+        var p_only_mask = p_mask & not_g_mask
+        var contribution = _fe52xk_jacobian_select[4](g_contribution, gp_contribution, p_mask)
+        contribution = _fe52xk_jacobian_select[4](contribution, p_contribution, p_only_mask)
+
+        var added = _fe52xk_gej_add_ge_xk_var[4](result, _fe52xk_jacobian_to_affine[4](contribution))
+        var active_result = _fe52xk_jacobian_select[4](result, added, contribution_mask)
+        var inactive_result = _fe52xk_jacobian_select[4](result, contribution, contribution_mask)
+        result = _fe52xk_jacobian_select[4](inactive_result, active_result, active_mask)
+        active_mask = active_mask | contribution_mask
+        window -= 1
     return result^
 
 
@@ -3971,6 +4300,39 @@ def pure_test_simd_uint64_manual_mask_ops() -> Bool:
     )
 
 
+def pure_test_simd_uint64_synthesized_eq_mask() -> Bool:
+    var values = SIMD[DType.uint64, 4](UInt64(7), UInt64(0), UInt64(7), UInt64(12))
+    var mask = _u64xk_eq_mask[4](values, UInt64(7))
+    var selected = _u64xk_xor_select[4](
+        SIMD[DType.uint64, 4](UInt64(1), UInt64(2), UInt64(3), UInt64(4)),
+        SIMD[DType.uint64, 4](UInt64(9), UInt64(8), UInt64(7), UInt64(6)),
+        mask,
+    )
+    return (
+        mask[0] == UInt64(0xFFFFFFFFFFFFFFFF)
+        and mask[1] == UInt64(0)
+        and mask[2] == UInt64(0xFFFFFFFFFFFFFFFF)
+        and mask[3] == UInt64(0)
+        and selected[0] == UInt64(9)
+        and selected[1] == UInt64(2)
+        and selected[2] == UInt64(7)
+        and selected[3] == UInt64(4)
+    )
+
+
+def pure_test_simd_fe52_synthesized_select() -> Bool:
+    var a = _fe52xk_from_fe52[4](_fe52_from_u256(_u256_from_u32(UInt32(5))))
+    var b = _fe52xk_from_fe52[4](_fe52_from_u256(_u256_from_u32(UInt32(11))))
+    var mask = _u64xk_eq_mask[4](SIMD[DType.uint64, 4](UInt64(1), UInt64(0), UInt64(1), UInt64(0)), UInt64(1))
+    var selected = _fe52xk_select[4](a, b, mask)
+    return (
+        _fe52_to_u256(_fe52xk_lane_to_fe52[4](selected, 0)).limbs[0] == UInt64(11)
+        and _fe52_to_u256(_fe52xk_lane_to_fe52[4](selected, 1)).limbs[0] == UInt64(5)
+        and _fe52_to_u256(_fe52xk_lane_to_fe52[4](selected, 2)).limbs[0] == UInt64(11)
+        and _fe52_to_u256(_fe52xk_lane_to_fe52[4](selected, 3)).limbs[0] == UInt64(5)
+    )
+
+
 def _pure_bool_json(value: Bool) -> String:
     if value:
         return String("true")
@@ -3980,17 +4342,30 @@ def _pure_bool_json(value: Bool) -> String:
 def pure_test_simd_mask_probe_json() -> String:
     var scalar_compare = pure_test_simd_uint64_compare_is_scalar_bool()
     var manual_mask_ops = pure_test_simd_uint64_manual_mask_ops()
+    var synthesized_mask = pure_test_simd_uint64_synthesized_eq_mask() and pure_test_simd_fe52_synthesized_select()
+    var blocker = String("")
+    var lane_mask_source = String("synthesized_arithmetic")
+    if not synthesized_mask:
+        blocker = String("synthesized_uint64_mask_arithmetic_failed")
+        lane_mask_source = String("unavailable")
     return (
-        String('{"lane_mask_supported":false,')
-        + String('"comparison_result_shape":"scalar_bool",')
+        String('{"lane_mask_supported":')
+        + _pure_bool_json(synthesized_mask)
+        + String(',"comparison_result_shape":"scalar_bool",')
+        + String('"lane_mask_source":"')
+        + lane_mask_source
+        + String('",')
         + String('"scalar_bool_comparison_confirmed":')
         + _pure_bool_json(scalar_compare)
         + String(',"xor_select_supported":')
         + _pure_bool_json(manual_mask_ops)
         + String(',"masked_zero_supported":')
         + _pure_bool_json(manual_mask_ops)
-        + String(',"fixed_window_batch_supported":false,')
-        + String('"blocker":"raw_uint64_simd_compare_returns_scalar_bool"}')
+        + String(',"fixed_window_batch_supported":')
+        + _pure_bool_json(synthesized_mask)
+        + String(',"blocker":"')
+        + blocker
+        + String('"}')
     )
 
 
@@ -4143,6 +4518,108 @@ def _pure_test_ecdsa_fe52_simdk_wnaf_result[K: Int](ref pubkey: List[UInt8], ref
 
 def pure_test_ecdsa_fe52_simd4_wnaf_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
     return _pure_test_ecdsa_fe52_simdk_wnaf_result[4](pubkey, der, digest)
+
+
+def _prepare_ecdsa_scalars(ref der: List[UInt8], ref digest: List[UInt8]) raises -> EcdsaPreparedScalars:
+    var sig = _parse_ecdsa_der(der)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var out = EcdsaPreparedScalars()
+    out.r = sig.r.copy()
+    out.u1 = _scalar_mul_mod(z, w)
+    out.u2 = _scalar_mul_mod(sig.r, w)
+    return out^
+
+
+def _ecdsa_result_from_product_x(ref x: Fe52, ref r: U256) -> Int32:
+    var n = _scalar_n()
+    var x_mod_n = _reduce_once(_fe52_to_u256(x), n)
+    if _eq(x_mod_n, r):
+        return VALID
+    return CONSENSUS_INVALID
+
+
+def pure_test_ecdsa_fe52_simd4_fixed_window_mixed_mismatches(
+    ref pubkey: List[UInt8],
+    ref der: List[UInt8],
+    ref digest: List[UInt8],
+    ref wrong_digest: List[UInt8],
+    ref high_s_der: List[UInt8],
+    ref other_pubkey: List[UInt8],
+) raises -> Int:
+    var q0 = _fe52_parse_pubkey(pubkey)
+    var q1 = _fe52_parse_pubkey(pubkey)
+    var q2 = _fe52_parse_pubkey(pubkey)
+    var q3 = _fe52_parse_pubkey(other_pubkey)
+    var s0 = _prepare_ecdsa_scalars(der, digest)
+    var s1 = _prepare_ecdsa_scalars(der, wrong_digest)
+    var s2 = _prepare_ecdsa_scalars(high_s_der, digest)
+    var s3 = _prepare_ecdsa_scalars(der, digest)
+    var product = _fe52x4_fixed_window_double_base_mixed(
+        s0.u1,
+        s0.u2,
+        q0,
+        s1.u1,
+        s1.u2,
+        q1,
+        s2.u1,
+        s2.u2,
+        q2,
+        s3.u1,
+        s3.u2,
+        q3,
+    )
+    var affine = _fe52xk_jacobian_to_affine[4](product)
+    if affine.infinity:
+        raise Error("mixed fixed-window product is infinity")
+    var mismatches = 0
+    var p0 = _fe52xk_point_lane_to_fe52[4](affine, 0)
+    var p1 = _fe52xk_point_lane_to_fe52[4](affine, 1)
+    var p2 = _fe52xk_point_lane_to_fe52[4](affine, 2)
+    var p3 = _fe52xk_point_lane_to_fe52[4](affine, 3)
+    if _ecdsa_result_from_product_x(p0.x, s0.r) != pure_test_ecdsa_fe52_wnaf_result(pubkey, der, digest):
+        mismatches += 1
+    if _ecdsa_result_from_product_x(p1.x, s1.r) != pure_test_ecdsa_fe52_wnaf_result(pubkey, der, wrong_digest):
+        mismatches += 1
+    if _ecdsa_result_from_product_x(p2.x, s2.r) != pure_test_ecdsa_fe52_wnaf_result(pubkey, high_s_der, digest):
+        mismatches += 1
+    if _ecdsa_result_from_product_x(p3.x, s3.r) != pure_test_ecdsa_fe52_wnaf_result(other_pubkey, der, digest):
+        mismatches += 1
+    return mismatches
+
+
+def pure_test_ecdsa_fe52_simd4_fixed_window_mixed_result_json(
+    ref pubkey: List[UInt8],
+    ref der: List[UInt8],
+    ref digest: List[UInt8],
+    ref wrong_digest: List[UInt8],
+    ref high_s_der: List[UInt8],
+    ref other_pubkey: List[UInt8],
+) raises -> String:
+    var mismatches = pure_test_ecdsa_fe52_simd4_fixed_window_mixed_mismatches(
+        pubkey,
+        der,
+        digest,
+        wrong_digest,
+        high_s_der,
+        other_pubkey,
+    )
+    if mismatches != 0:
+        return (
+            String('{"enabled":false,"lane_shape":"mixed_fixed_window","window_width":4,"lane_count":4,"mismatches":')
+            + String(mismatches)
+            + String(',"reason":"fixed_window_parity_mismatch"}')
+        )
+    return (
+        String('{"enabled":true,"lane_shape":"mixed_fixed_window","window_width":4,"lane_count":4,"mismatches":')
+        + String(mismatches)
+        + String(',"expected_result_classes":["valid","consensus_invalid","valid","consensus_invalid"]}')
+    )
 
 
 def pure_test_ecdsa_fe52_simd2_wnaf_mismatches(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int:

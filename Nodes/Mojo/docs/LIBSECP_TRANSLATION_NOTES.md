@@ -112,14 +112,17 @@ The implementation follows formulas and structure from Bitcoin Core's
   accumulators for homogeneous ECDSA WNAF batches at K=2/4/8/16, with scalar
   Fe52 as the correctness oracle. It deliberately does not route into live
   verification. The 1000-iteration host `ecdsa-batch` microbench reported zero
-  mismatches and measured scalar Fe52 WNAF result at `81us` per signature,
-  homogeneous K=2 at `57us`, K=4 at `45us`, K=8 at `34us`, and K=16 at `43us`.
+  homogeneous mismatches and measured scalar Fe52 WNAF result at `83us` per
+  signature, homogeneous K=2 at `50us`, K=4 at `40us`, K=8 at `32us`, and K=16
+  at `43us`.
   Mixed-lane WNAF remains unsupported, and the next routeable batch shape would
   need a fixed-window ladder rather than divergent WNAF. The Mojo 1.0.0b1 SIMD
-  probe showed explicit `uint64` lane masks can drive bitwise zero/select, but
-  raw SIMD comparisons return scalar aggregate `Bool` rather than per-lane
-  masks. Without compare-to-mask, fixed-window table gather/sign/zero masking
-  cannot be expressed safely yet.
+  probe showed raw SIMD comparisons return scalar aggregate `Bool`, but per-lane
+  masks can be synthesized arithmetically from `uint64` SIMD values and can
+  drive bitwise zero/select. The first K=4 fixed-window mixed-lane prototype now
+  runs but remains disabled: it reports two lane-result mismatches against the
+  scalar Fe52 oracle and is much slower (`327us` per signature) than the
+  homogeneous K=8 diagnostic.
 - Pure diagnostic Schnorr now routes `s*G + (-e)*P` through the Fe52 WNAF
   double-base path. The preserved 4x64 reference helper still feeds focused
   parity checks, and the 1000-iteration host microbench reported zero Fe52

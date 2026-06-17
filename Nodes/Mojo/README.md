@@ -63,13 +63,14 @@ native prerequisites a future port would need?
   plain Fe52 WNAF. A diagnostic `ecdsa-batch` microbench now sweeps homogeneous
   Fe52 SIMD WNAF lanes at K=2/4/8/16 using `SIMD[DType.uint64, K]` limbs and
   scalar Fe52 as oracle. The latest host readout stayed parity-clean and found
-  K=8 fastest for the fixed-vector homogeneous case (`34us` per signature),
+  K=8 fastest for the fixed-vector homogeneous case (`32us` per signature),
   while K=16 regressed to K=4-class timing. It is not routed into live pure
-  verification and does not claim mixed-lane WNAF support: explicit
-  `SIMD[DType.uint64, K]` bitwise masks can zero/select limbs, but Mojo 1.0.0b1
-  SIMD comparisons currently produce scalar `Bool` values instead of per-lane
-  masks. Without compare-to-mask, fixed-window mixed-lane table gather remains
-  blocked.
+  verification and does not claim mixed-lane support. Mojo 1.0.0b1 SIMD
+  comparisons still produce scalar `Bool` values, but the diagnostic probe now
+  synthesizes per-lane masks arithmetically from raw `uint64` SIMD ops and
+  proves mask-driven zero/select works. The first K=4 fixed-window mixed-lane
+  prototype is therefore unblocked at the mask layer, but remains disabled
+  because it reports two lane-result mismatches against scalar Fe52.
   `--shadow-crypto` emits a separate
   `port.script_corpus_shadow_crypto.v1` artifact with explicit pure backend
   support/unsupported rows, per-attempt `shadow_duration_ms`, aggregate shadow

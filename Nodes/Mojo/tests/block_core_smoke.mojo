@@ -127,6 +127,8 @@ from pure_secp import (
     pure_test_schnorr_fe52_wnaf_result,
     pure_test_schnorr_reference_result,
     pure_test_simd_mask_probe_json,
+    pure_test_simd_fe52_synthesized_select,
+    pure_test_simd_uint64_synthesized_eq_mask,
     pure_test_simd_uint64_compare_is_scalar_bool,
     pure_test_simd_uint64_manual_mask_ops,
     pure_test_taproot_tweak_fe52_result,
@@ -532,6 +534,8 @@ def test_pure_secp_arithmetic_known_vectors() raises:
     assert_true(not pure_test_fe52_is_zero(one))
     assert_true(pure_test_simd_uint64_compare_is_scalar_bool())
     assert_true(pure_test_simd_uint64_manual_mask_ops())
+    assert_true(pure_test_simd_uint64_synthesized_eq_mask())
+    assert_true(pure_test_simd_fe52_synthesized_select())
     assert_true(pure_test_simd_mask_probe_json().byte_length() > 0)
 
     var scalar_two = two.copy()

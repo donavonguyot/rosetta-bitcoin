@@ -25,6 +25,8 @@ from pure_secp import (
     pure_test_ecdsa_fe52_simd8_wnaf_result,
     pure_test_ecdsa_fe52_simd16_wnaf_mismatches,
     pure_test_ecdsa_fe52_simd16_wnaf_result,
+    pure_test_ecdsa_fe52_simd4_fixed_window_mixed_mismatches,
+    pure_test_ecdsa_fe52_simd4_fixed_window_mixed_result_json,
     pure_test_ecdsa_fe52_wnaf_product_x,
     pure_test_ecdsa_fe52_wnaf_result,
     pure_test_ecdsa_glv_product_x,
@@ -659,6 +661,9 @@ def pure_crypto_microbench_json(
     var ecdsa_pubkey = hex_string_to_bytes(vector_pubkey_hex(0))
     var ecdsa_sig = hex_string_to_bytes(vector_signature_hex(0))
     var ecdsa_msg = hex_string_to_bytes(vector_msg_hash_hex(0))
+    var ecdsa_wrong_msg = hex_string_to_bytes(vector_msg_hash_hex(1))
+    var ecdsa_high_s_sig = hex_string_to_bytes(String("3045022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798022100a1dc3b8e6933781adc2049d3a49bb2435842447fa73e783dda3dd8a7c6a90d5d"))
+    var ecdsa_2g_pubkey = hex_string_to_bytes(String("03c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"))
     var schnorr_pubkey = hex_string_to_bytes(vector_xonly_hex(3))
     var schnorr_sig = hex_string_to_bytes(vector_signature_hex(3))
     var schnorr_msg = hex_string_to_bytes(vector_msg_hash_hex(3))
@@ -701,6 +706,7 @@ def pure_crypto_microbench_json(
     var ecdsa_batch_simd4_result_ms = Int64(0)
     var ecdsa_batch_simd8_result_ms = Int64(0)
     var ecdsa_batch_simd16_result_ms = Int64(0)
+    var ecdsa_batch_mixed_fixed_window_ms = Int64(0)
     var ecdsa_batch_scalar_valid = 0
     var ecdsa_batch_simd2_valid = 0
     var ecdsa_batch_simd4_valid = 0
@@ -711,9 +717,11 @@ def pure_crypto_microbench_json(
     var ecdsa_batch_simd8_mismatches = 0
     var ecdsa_batch_simd16_mismatches = 0
     var ecdsa_batch_mismatches = 0
+    var ecdsa_batch_mixed_fixed_window_mismatches = 0
     var ecdsa_batch_lane_count = 4
     var ecdsa_batch_mixed_lane_supported = False
     var ecdsa_batch_mixed_lane_blocker = String("raw_uint64_simd_compare_returns_scalar_bool")
+    var ecdsa_batch_mixed_fixed_window_json = String('{"enabled":false,"reason":"not_run"}')
     var ecdsa_batch_simd_mask_probe = String(
         '{"lane_mask_supported":false,"comparison_result_shape":"not_run","scalar_bool_comparison_confirmed":false,"xor_select_supported":false,"masked_zero_supported":false,"fixed_window_batch_supported":false,"blocker":"not_run"}'
     )
@@ -940,6 +948,27 @@ def pure_crypto_microbench_json(
         ecdsa_batch_simd4_mismatches = pure_test_ecdsa_fe52_simd4_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
         ecdsa_batch_simd8_mismatches = pure_test_ecdsa_fe52_simd8_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
         ecdsa_batch_simd16_mismatches = pure_test_ecdsa_fe52_simd16_wnaf_mismatches(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+        ecdsa_batch_mixed_lane_supported = True
+        ecdsa_batch_mixed_lane_blocker = String("")
+        ecdsa_batch_mixed_fixed_window_json = pure_test_ecdsa_fe52_simd4_fixed_window_mixed_result_json(
+            ecdsa_pubkey,
+            ecdsa_sig,
+            ecdsa_msg,
+            ecdsa_wrong_msg,
+            ecdsa_high_s_sig,
+            ecdsa_2g_pubkey,
+        )
+        ecdsa_batch_mixed_fixed_window_mismatches = pure_test_ecdsa_fe52_simd4_fixed_window_mixed_mismatches(
+            ecdsa_pubkey,
+            ecdsa_sig,
+            ecdsa_msg,
+            ecdsa_wrong_msg,
+            ecdsa_high_s_sig,
+            ecdsa_2g_pubkey,
+        )
+        if ecdsa_batch_mixed_fixed_window_mismatches != 0:
+            ecdsa_batch_mixed_lane_supported = False
+            ecdsa_batch_mixed_lane_blocker = String("fixed_window_parity_mismatch")
         ecdsa_batch_mismatches += ecdsa_batch_simd2_mismatches
         ecdsa_batch_mismatches += ecdsa_batch_simd4_mismatches
         ecdsa_batch_mismatches += ecdsa_batch_simd8_mismatches
@@ -995,6 +1024,18 @@ def pure_crypto_microbench_json(
             else:
                 ecdsa_batch_mismatches += 1
         ecdsa_batch_simd16_result_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            _ = pure_test_ecdsa_fe52_simd4_fixed_window_mixed_mismatches(
+                ecdsa_pubkey,
+                ecdsa_sig,
+                ecdsa_msg,
+                ecdsa_wrong_msg,
+                ecdsa_high_s_sig,
+                ecdsa_2g_pubkey,
+            )
+        ecdsa_batch_mixed_fixed_window_ms = clock.now_ms() - started
 
     if run_schnorr:
         var expected_schnorr_result = pure_test_schnorr_reference_result(schnorr_pubkey, schnorr_sig, schnorr_msg)
@@ -1220,7 +1261,8 @@ def pure_crypto_microbench_json(
         + String('"')
         + String(',"simd_mask_probe":')
         + ecdsa_batch_simd_mask_probe
-        + String(',"mixed_fixed_window":{"enabled":false,"reason":"lane_mask_unavailable"}')
+        + String(',"mixed_fixed_window":')
+        + ecdsa_batch_mixed_fixed_window_json
         + String(',"stage_ms":{"scalar_fe52_wnaf_result":')
         + String(ecdsa_batch_scalar_fe52_wnaf_ms)
         + String(',"simd2_fe52_wnaf_result":')
@@ -1233,6 +1275,8 @@ def pure_crypto_microbench_json(
         + String(ecdsa_batch_simd8_result_ms)
         + String(',"simd16_fe52_wnaf_result":')
         + String(ecdsa_batch_simd16_result_ms)
+        + String(',"simd4_mixed_fixed_window_result":')
+        + String(ecdsa_batch_mixed_fixed_window_ms)
         + String('},"per_signature_us":{"scalar_fe52_wnaf_result":')
         + String(per_iteration_us(ecdsa_batch_scalar_fe52_wnaf_ms, loop_iterations))
         + String(',"simd2_fe52_wnaf_result":')
@@ -1245,6 +1289,8 @@ def pure_crypto_microbench_json(
         + String(per_iteration_us(ecdsa_batch_simd8_result_ms, loop_iterations * 8))
         + String(',"simd16_fe52_wnaf_result":')
         + String(per_iteration_us(ecdsa_batch_simd16_result_ms, loop_iterations * 16))
+        + String(',"simd4_mixed_fixed_window_result":')
+        + String(per_iteration_us(ecdsa_batch_mixed_fixed_window_ms, loop_iterations * 4))
         + String('},"k_sweep":{"k2":{"enabled":true,"lane_count":2,"stage_ms":')
         + String(ecdsa_batch_simd2_result_ms)
         + String(',"per_signature_us":')
