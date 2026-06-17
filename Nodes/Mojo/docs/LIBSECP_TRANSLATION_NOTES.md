@@ -91,8 +91,14 @@ The implementation follows formulas and structure from Bitcoin Core's
   mixed `gej_add_ge_var`, and binary scalar/double-base ladders for parity and
   timing only. The host point microbench at 1000 iterations reported zero
   mismatches and showed the Fe52 binary double-base path beating the 4x64
-  binary reference (`192ms` vs `1026ms`). Verifier routing still uses the
-  existing 4x64 implementation.
+  binary reference (`200ms` vs `1074ms` in the latest fast run).
+- Fe52 WNAF/GLV is now available as a verifier-shaped microbench-only path.
+  It builds Fe52 odd-multiple tables in Jacobian form, derives the GLV beta
+  table from the same variable-point table, and compares product/result parity
+  against the existing 4x64 WNAF/GLV oracle. The 1000-iteration host ECDSA
+  microbench reported zero Fe52 mismatches and reduced GLV result timing from
+  `758ms` to `227ms`. Live pure verifier routing still uses the existing 4x64
+  implementation.
 
 ## Evidence Boundary
 
@@ -122,7 +128,7 @@ shadow path for differential testing and language-specific learning.
 
 The live pure verifier path still uses the existing scalar inverse algorithm,
 the current Schnorr/Taproot multiplication routing, and exact 4x64
-normalization after each operation. Safegcd, Fe52 wNAF/GLV routing, Taproot
-fixed-G precompute, broader fixed generator tables, tagged-hash midstates,
-SIMD batching, and verifier routing through the 5x52 field/group core are
-intentionally deferred to later measured slices.
+normalization after each operation. Safegcd, live Fe52 verifier routing,
+Taproot fixed-G precompute, broader fixed generator tables, tagged-hash
+midstates, SIMD batching, and replay proofs are intentionally deferred to later
+measured slices.

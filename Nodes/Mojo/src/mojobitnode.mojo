@@ -12,6 +12,9 @@ from pure_secp import (
     pure_test_ecdsa_parse_der,
     pure_test_ecdsa_parse_pubkey_x,
     pure_test_ecdsa_fe52_reference_product_x,
+    pure_test_ecdsa_fe52_glv_product_x,
+    pure_test_ecdsa_fe52_glv_result,
+    pure_test_ecdsa_fe52_wnaf_product_x,
     pure_test_ecdsa_glv_product_x,
     pure_test_ecdsa_glv_result,
     pure_test_ecdsa_reference_product_x,
@@ -655,9 +658,15 @@ def pure_crypto_microbench_json(
     var ecdsa_wnaf_product_ms = Int64(0)
     var ecdsa_glv_product_ms = Int64(0)
     var ecdsa_glv_result_ms = Int64(0)
+    var ecdsa_fe52_wnaf_product_ms = Int64(0)
+    var ecdsa_fe52_glv_product_ms = Int64(0)
+    var ecdsa_fe52_glv_result_ms = Int64(0)
     var ecdsa_wnaf_valid = 0
     var ecdsa_glv_valid = 0
+    var ecdsa_fe52_wnaf_valid = 0
+    var ecdsa_fe52_glv_valid = 0
     var ecdsa_glv_wnaf_mismatches = 0
+    var ecdsa_fe52_mismatches = 0
     var ecdsa_native_compare_ms = Int64(0)
     var ecdsa_native_result = Int32(-1)
 
@@ -822,6 +831,31 @@ def pure_crypto_microbench_json(
                 ecdsa_glv_wnaf_mismatches += 1
         ecdsa_glv_result_ms = clock.now_ms() - started
 
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var fe52_wnaf_x = pure_test_ecdsa_fe52_wnaf_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if bytes_equal(fe52_wnaf_x, expected_wnaf_x):
+                ecdsa_fe52_wnaf_valid += 1
+            else:
+                ecdsa_fe52_mismatches += 1
+        ecdsa_fe52_wnaf_product_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var fe52_glv_x = pure_test_ecdsa_fe52_glv_product_x(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if not bytes_equal(fe52_glv_x, expected_wnaf_x):
+                ecdsa_fe52_mismatches += 1
+        ecdsa_fe52_glv_product_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var fe52_glv_result = pure_test_ecdsa_fe52_glv_result(ecdsa_pubkey, ecdsa_sig, ecdsa_msg)
+            if fe52_glv_result == expected_wnaf_result:
+                ecdsa_fe52_glv_valid += 1
+            else:
+                ecdsa_fe52_mismatches += 1
+        ecdsa_fe52_glv_result_ms = clock.now_ms() - started
+
         if native_compare:
             started = clock.now_ms()
             ecdsa_native_result = native_vector_actual(shim_path, 0)
@@ -874,7 +908,11 @@ def pure_crypto_microbench_json(
 
     if ecdsa_glv_wnaf_mismatches != 0:
         result = String("failed")
+    if ecdsa_fe52_mismatches != 0:
+        result = String("failed")
     if run_ecdsa and (ecdsa_wnaf_valid != loop_iterations or ecdsa_glv_valid != loop_iterations):
+        result = String("failed")
+    if run_ecdsa and (ecdsa_fe52_wnaf_valid != loop_iterations or ecdsa_fe52_glv_valid != loop_iterations):
         result = String("failed")
     if run_schnorr and schnorr_valid != loop_iterations:
         result = String("failed")
@@ -920,6 +958,12 @@ def pure_crypto_microbench_json(
         + String(ecdsa_glv_product_ms)
         + String(',"glv_result":')
         + String(ecdsa_glv_result_ms)
+        + String(',"fe52_wnaf_product":')
+        + String(ecdsa_fe52_wnaf_product_ms)
+        + String(',"fe52_glv_product":')
+        + String(ecdsa_fe52_glv_product_ms)
+        + String(',"fe52_glv_result":')
+        + String(ecdsa_fe52_glv_result_ms)
         + String(',"native_compare":')
         + String(ecdsa_native_compare_ms)
         + String('},"per_iteration_us":{"der_parse":')
@@ -938,12 +982,24 @@ def pure_crypto_microbench_json(
         + String(per_iteration_us(ecdsa_glv_product_ms, loop_iterations))
         + String(',"glv_result":')
         + String(per_iteration_us(ecdsa_glv_result_ms, loop_iterations))
+        + String(',"fe52_wnaf_product":')
+        + String(per_iteration_us(ecdsa_fe52_wnaf_product_ms, loop_iterations))
+        + String(',"fe52_glv_product":')
+        + String(per_iteration_us(ecdsa_fe52_glv_product_ms, loop_iterations))
+        + String(',"fe52_glv_result":')
+        + String(per_iteration_us(ecdsa_fe52_glv_result_ms, loop_iterations))
         + String('},"wnaf_valid_count":')
         + String(ecdsa_wnaf_valid)
         + String(',"glv_valid_count":')
         + String(ecdsa_glv_valid)
+        + String(',"fe52_wnaf_valid_count":')
+        + String(ecdsa_fe52_wnaf_valid)
+        + String(',"fe52_glv_valid_count":')
+        + String(ecdsa_fe52_glv_valid)
         + String(',"glv_wnaf_mismatches":')
         + String(ecdsa_glv_wnaf_mismatches)
+        + String(',"fe52_mismatches":')
+        + String(ecdsa_fe52_mismatches)
         + String(',"native_result_code":')
         + String(ecdsa_native_result)
         + String('},"field":{"enabled":')

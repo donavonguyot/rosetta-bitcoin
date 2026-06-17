@@ -140,6 +140,7 @@ host-pure-crypto-microbench: host-build
 	  grep -q '"schema":"port.pure_crypto_microbench.v1"' <<< "$$out"; \
 	  grep -q '"native_compare_enabled":false' <<< "$$out"; \
 	  grep -q '"glv_wnaf_mismatches":0' <<< "$$out"; \
+	  grep -q '"fe52_mismatches":0' <<< "$$out"; \
 	  grep -q '"mismatches":0' <<< "$$out"; \
 	  grep -q '"result":"diagnostic"' <<< "$$out"; \
 	  test -s "$(HOST_PURE_CRYPTO_MICROBENCH_RESULT)"
@@ -298,6 +299,7 @@ docker-pure-crypto-microbench:
 	  grep -q '"runtime_surface":"docker"' <<< "$$out"; \
 	  grep -q '"native_compare_enabled":false' <<< "$$out"; \
 	  grep -q '"glv_wnaf_mismatches":0' <<< "$$out"; \
+	  grep -q '"fe52_mismatches":0' <<< "$$out"; \
 	  grep -q '"mismatches":0' <<< "$$out"; \
 	  grep -q '"result":"diagnostic"' <<< "$$out"
 

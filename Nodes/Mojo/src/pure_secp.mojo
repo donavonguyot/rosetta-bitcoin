@@ -1251,6 +1251,46 @@ def _fe52_gej_add_ge_var(ref a: Fe52Jacobian, ref b: Fe52Point) -> Fe52Jacobian:
     return out^
 
 
+def _fe52_gej_add_var(ref a: Fe52Jacobian, ref b: Fe52Jacobian) -> Fe52Jacobian:
+    if a.infinity:
+        return b.copy()
+    if b.infinity:
+        return a.copy()
+
+    var z22 = _fe52_sqr(b.z)
+    var z12 = _fe52_sqr(a.z)
+    var u1 = _fe52_mul(a.x, z22)
+    var u2 = _fe52_mul(b.x, z12)
+    var s1 = _fe52_mul(_fe52_mul(a.y, z22), b.z)
+    var s2 = _fe52_mul(_fe52_mul(b.y, z12), a.z)
+    var h = _fe52_add(_fe52_negate(u1), u2)
+    var i = _fe52_add(_fe52_negate(s2), s1)
+    if _fe52_normalizes_to_zero_var(h):
+        if _fe52_normalizes_to_zero_var(i):
+            return _fe52_gej_double(a)
+        return Fe52Jacobian()
+
+    var t = _fe52_mul(h, b.z)
+    var h2 = _fe52_negate(_fe52_sqr(h))
+    var h3 = _fe52_mul(h2, h)
+    var tt = _fe52_mul(u1, h2)
+    var x3 = _fe52_sqr(i)
+    x3 = _fe52_add(x3, h3)
+    x3 = _fe52_add(x3, tt)
+    x3 = _fe52_add(x3, tt)
+    var ty = _fe52_add(tt, x3)
+    var y3 = _fe52_mul(ty, i)
+    h3 = _fe52_mul(h3, s1)
+    y3 = _fe52_add(y3, h3)
+
+    var out = Fe52Jacobian()
+    out.x = x3^
+    out.y = y3^
+    out.z = _fe52_mul(a.z, t)
+    out.infinity = False
+    return out^
+
+
 def _fe52_scalar_mul_jacobian(ref scalar: U256, ref point: Point) -> Fe52Jacobian:
     var result = Fe52Jacobian()
     if _is_zero(scalar) or point.infinity:
@@ -1265,6 +1305,121 @@ def _fe52_scalar_mul_jacobian(ref scalar: U256, ref point: Point) -> Fe52Jacobia
     return result^
 
 
+def _fe52_point_neg(ref point: Fe52Point) -> Fe52Point:
+    if point.infinity:
+        return point.copy()
+    var out = point.copy()
+    out.y = _fe52_negate(out.y)
+    return out^
+
+
+def _fe52_ge_mul_beta(ref point: Fe52Point) -> Fe52Point:
+    if point.infinity:
+        return point.copy()
+    var out = point.copy()
+    out.x = _fe52_mul(out.x, _fe52_from_u256(_beta()))
+    return out^
+
+
+def _fe52_ge_set_gej_zinv(ref point: Fe52Jacobian, ref z_inv: Fe52) -> Fe52Point:
+    var out = Fe52Point()
+    if point.infinity:
+        return out^
+    var z_inv2 = _fe52_sqr(z_inv)
+    var z_inv3 = _fe52_mul(z_inv2, z_inv)
+    out.x = _fe52_mul(point.x, z_inv2)
+    out.y = _fe52_mul(point.y, z_inv3)
+    out.infinity = False
+    return out^
+
+
+def _fe52_set_all_gej_to_affine(ref points: List[Fe52Jacobian]) raises -> List[Fe52Point]:
+    var out = List[Fe52Point]()
+    var count = len(points)
+    if count == 0:
+        return out^
+    var prefixes = List[Fe52]()
+    for i in range(count):
+        if points[i].infinity:
+            raise Error("unexpected infinity in Fe52 Jacobian odd-multiple table")
+        if i == 0:
+            prefixes.append(points[i].z.copy())
+        else:
+            prefixes.append(_fe52_mul(prefixes[i - 1], points[i].z))
+        out.append(Fe52Point())
+
+    var inv = _fe52_from_u256(_fe_inv(_fe52_to_u256(prefixes[count - 1])))
+    var i = count - 1
+    while i > 0:
+        var z_inv = _fe52_mul(prefixes[i - 1], inv)
+        inv = _fe52_mul(inv, points[i].z)
+        out[i] = _fe52_ge_set_gej_zinv(points[i], z_inv)
+        i -= 1
+    out[0] = _fe52_ge_set_gej_zinv(points[0], inv)
+    return out^
+
+
+def _fe52_odd_multiples(ref point: Point, count: Int) raises -> List[Fe52Point]:
+    var table = List[Fe52Jacobian]()
+    if count <= 0:
+        return List[Fe52Point]()
+    var point_j = _fe52_jacobian_from_affine(_fe52_point_from_point(point))
+    table.append(point_j.copy())
+    if count == 1:
+        return _fe52_set_all_gej_to_affine(table)
+    var two_point = _fe52_gej_double(point_j)
+    for i in range(1, count):
+        table.append(_fe52_gej_add_var(table[i - 1], two_point))
+    return _fe52_set_all_gej_to_affine(table)
+
+
+def _fe52_wnaf_table_add(mut result: Fe52Jacobian, ref table: List[Fe52Point], digit: Int) raises -> Fe52Jacobian:
+    if digit == 0:
+        return result.copy()
+    var abs_digit = digit
+    if abs_digit < 0:
+        abs_digit = 0 - abs_digit
+    var table_index = (abs_digit - 1) // 2
+    var point = table[table_index].copy()
+    if digit < 0:
+        point = _fe52_point_neg(point)
+    return _fe52_gej_add_ge_var(result, point)
+
+
+def _fe52_wnaf_generator_add(mut result: Fe52Jacobian, digit: Int) raises -> Fe52Jacobian:
+    if digit == 0:
+        return result.copy()
+    var abs_digit = digit
+    if abs_digit < 0:
+        abs_digit = 0 - abs_digit
+    var table_index = (abs_digit - 1) // 2
+    var point = _fe52_point_from_point(_generator_odd_multiple(table_index))
+    if digit < 0:
+        point = _fe52_point_neg(point)
+    return _fe52_gej_add_ge_var(result, point)
+
+
+def _fe52_point_table_copy(ref table: List[Fe52Point]) -> List[Fe52Point]:
+    var out = List[Fe52Point]()
+    for i in range(len(table)):
+        out.append(table[i].copy())
+    return out^
+
+
+def _fe52_point_table_neg(ref table: List[Fe52Point]) -> List[Fe52Point]:
+    var out = List[Fe52Point]()
+    for i in range(len(table)):
+        out.append(_fe52_point_neg(table[i]))
+    return out^
+
+
+def _fe52_point_table_beta(ref table: List[Fe52Point]) -> List[Fe52Point]:
+    var out = List[Fe52Point]()
+    for i in range(len(table)):
+        out.append(_fe52_ge_mul_beta(table[i]))
+    return out^
+
+
 def _fe52_double_base_mul(ref s: U256, ref generator: Point, ref e: U256, ref pubkey: Point) -> Fe52Jacobian:
     var result = Fe52Jacobian()
     var fe_generator = _fe52_point_from_point(generator)
@@ -1277,6 +1432,63 @@ def _fe52_double_base_mul(ref s: U256, ref generator: Point, ref e: U256, ref pu
             result = _fe52_gej_add_ge_var(result, fe_generator)
         if _bit(e, bit_index):
             result = _fe52_gej_add_ge_var(result, fe_pubkey)
+    return result^
+
+
+def _fe52_double_base_mul_wnaf(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Point) raises -> Fe52Jacobian:
+    var width = 5
+    var g_wnaf = _wnaf_recode(g_scalar, width)
+    var p_wnaf = _wnaf_recode(p_scalar, width)
+    var p_table = _fe52_odd_multiples(pubkey, 8)
+    var max_len = len(g_wnaf)
+    if len(p_wnaf) > max_len:
+        max_len = len(p_wnaf)
+
+    var result = Fe52Jacobian()
+    for j in range(max_len):
+        var i = max_len - 1 - j
+        if not result.infinity:
+            result = _fe52_gej_double(result)
+        if i < len(g_wnaf):
+            result = _fe52_wnaf_generator_add(result, g_wnaf[i])
+        if i < len(p_wnaf):
+            result = _fe52_wnaf_table_add(result, p_table, p_wnaf[i])
+    return result^
+
+
+def _fe52_double_base_mul_wnaf_glv(ref g_scalar: U256, ref p_scalar: U256, ref pubkey: Point) raises -> Fe52Jacobian:
+    var width = 5
+    var g_wnaf = _wnaf_recode(g_scalar, width)
+    var split = _endo_split(p_scalar, pubkey)
+    var s1_wnaf = _wnaf_recode(split.s1, width)
+    var s2_wnaf = _wnaf_recode(split.s2, width)
+
+    var q_table = _fe52_odd_multiples(pubkey, 8)
+    var s1_table = _fe52_point_table_copy(q_table)
+    if split.s1_negated:
+        s1_table = _fe52_point_table_neg(q_table)
+    var beta_table = _fe52_point_table_beta(q_table)
+    var s2_table = _fe52_point_table_copy(beta_table)
+    if split.s2_negated:
+        s2_table = _fe52_point_table_neg(beta_table)
+
+    var max_len = len(g_wnaf)
+    if len(s1_wnaf) > max_len:
+        max_len = len(s1_wnaf)
+    if len(s2_wnaf) > max_len:
+        max_len = len(s2_wnaf)
+
+    var result = Fe52Jacobian()
+    for j in range(max_len):
+        var i = max_len - 1 - j
+        if not result.infinity:
+            result = _fe52_gej_double(result)
+        if i < len(g_wnaf):
+            result = _fe52_wnaf_generator_add(result, g_wnaf[i])
+        if i < len(s1_wnaf):
+            result = _fe52_wnaf_table_add(result, s1_table, s1_wnaf[i])
+        if i < len(s2_wnaf):
+            result = _fe52_wnaf_table_add(result, s2_table, s2_wnaf[i])
     return result^
 
 
@@ -2472,6 +2684,74 @@ def pure_test_ecdsa_fe52_reference_product_x(ref pubkey: List[UInt8], ref der: L
     if point.infinity:
         raise Error("Fe52 ECDSA reference product is infinity")
     return _to_be32(_fe52_to_u256(point.x))
+
+
+def pure_test_ecdsa_fe52_wnaf_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var q = _parse_pubkey(pubkey)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _fe52_jacobian_to_affine(_fe52_double_base_mul_wnaf(u1, u2, q))
+    if point.infinity:
+        raise Error("Fe52 ECDSA wNAF product is infinity")
+    return _to_be32(_fe52_to_u256(point.x))
+
+
+def pure_test_ecdsa_fe52_glv_product_x(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
+    var sig = _parse_ecdsa_der(der)
+    var q = _parse_pubkey(pubkey)
+    var half_n = _scalar_half_n()
+    var n = _scalar_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _fe52_jacobian_to_affine(_fe52_double_base_mul_wnaf_glv(u1, u2, q))
+    if point.infinity:
+        raise Error("Fe52 ECDSA GLV product is infinity")
+    return _to_be32(_fe52_to_u256(point.x))
+
+
+def pure_test_ecdsa_fe52_glv_result(ref pubkey: List[UInt8], ref der: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
+    if (len(pubkey) != 33 and len(pubkey) != 65) or len(der) == 0 or len(der) > 72 or len(digest) != 32:
+        return MALFORMED
+    var n = _scalar_n()
+    var sig = EcdsaSignature()
+    var q = Point()
+    try:
+        sig = _parse_ecdsa_der(der)
+        q = _parse_pubkey(pubkey)
+    except:
+        return MALFORMED
+    if _is_zero(sig.r) or _is_zero(sig.s) or _cmp(sig.r, n) >= 0 or _cmp(sig.s, n) >= 0:
+        return CONSENSUS_INVALID
+
+    var half_n = _scalar_half_n()
+    if _cmp(sig.s, half_n) > 0:
+        sig.s = _sub_mod(_zero(), sig.s, n)
+
+    var z = _from_be32(digest)
+    z = _reduce_once(z, n)
+    var w = _scalar_inv(sig.s)
+    var u1 = _scalar_mul_mod(z, w)
+    var u2 = _scalar_mul_mod(sig.r, w)
+    var point = _fe52_jacobian_to_affine(_fe52_double_base_mul_wnaf_glv(u1, u2, q))
+    if point.infinity:
+        return CONSENSUS_INVALID
+    var x_mod_n = _reduce_once(_fe52_to_u256(point.x), n)
+    if _eq(x_mod_n, sig.r):
+        return VALID
+    return CONSENSUS_INVALID
 
 
 def pure_test_scalar_mul_g_x(ref scalar: List[UInt8]) raises -> List[UInt8]:
