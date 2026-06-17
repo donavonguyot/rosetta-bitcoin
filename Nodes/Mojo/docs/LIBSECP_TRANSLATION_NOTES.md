@@ -101,6 +101,15 @@ The implementation follows formulas and structure from Bitcoin Core's
 - Fe52 GLV remains microbench-only. It is parity-clean, but the same run showed
   `127ms` for Fe52 GLV result versus `77ms` for plain Fe52 WNAF, so GLV is not
   routed until it demonstrates a material win.
+- Pure diagnostic Schnorr now routes `s*G + (-e)*P` through the Fe52 WNAF
+  double-base path. The preserved 4x64 reference helper still feeds focused
+  parity checks, and the 1000-iteration host microbench reported zero Fe52
+  mismatches while reducing Schnorr verification from `968ms` to `75ms`.
+- Pure Taproot tweak checks now route `tweak*G + P` through the Fe52 scalar
+  path. The 4x64 reference helper remains available for parity checks, and the
+  1000-iteration host microbench reported zero Fe52 mismatches while reducing
+  tweak verification from `753ms` to `63ms`. Fixed-base Taproot WNAF remains
+  deferred.
 
 ## Evidence Boundary
 
@@ -128,8 +137,7 @@ shadow path for differential testing and language-specific learning.
 
 ## Deferred Libsecp Shapes
 
-The live pure verifier path still uses the existing scalar inverse algorithm
-and the current Schnorr/Taproot multiplication routing. Safegcd, Fe52 GLV
-routing, Fe52 Schnorr/Taproot paths, Taproot fixed-G precompute, broader fixed
-generator tables, tagged-hash midstates, SIMD batching, and replay proofs are
+The live pure verifier path still uses the existing scalar inverse algorithm.
+Safegcd, Fe52 GLV routing, Taproot fixed-G precompute, broader fixed generator
+tables, tagged-hash midstates, SIMD batching, and replay proofs are
 intentionally deferred to later measured slices.

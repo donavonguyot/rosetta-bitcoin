@@ -66,9 +66,10 @@ accounting by default, then reports per-stage totals and per-iteration timing.
 It also supports `field` and `point` cases that compare the current exact 4x64
 field/point operations with the new 5x52 lazy-field and Jacobian group core.
 ECDSA microbench output also reports diagnostic Fe52 WNAF/GLV product and
-result timings. Pure diagnostic ECDSA now routes through Fe52 plain WNAF;
-Fe52 GLV stays microbench-only because it is parity-clean but not faster than
-plain Fe52 WNAF. Schnorr, Taproot, and proof paths are not routed through Fe52.
+result timings. Pure diagnostic ECDSA and Schnorr now route through Fe52 plain
+WNAF, and pure Taproot tweak checks route through the Fe52 scalar path. Fe52
+GLV stays microbench-only because it is parity-clean but not faster than plain
+Fe52 WNAF.
 The measured shadow set enables all 17 Taproot corpus rows,
 including the large
 `scripts.p2tr_tapscript_71267`, `scripts.p2tr_tapscript_121035`, and

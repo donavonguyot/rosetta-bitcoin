@@ -104,6 +104,10 @@ from pure_secp import (
     pure_test_scalar_mul_g_x,
     pure_test_scalar_mul_g_y,
     pure_test_schnorr_challenge,
+    pure_test_schnorr_fe52_wnaf_result,
+    pure_test_schnorr_reference_result,
+    pure_test_taproot_tweak_fe52_result,
+    pure_test_taproot_tweak_reference_result,
     pure_test_u256_add_mod,
     pure_test_u256_inv_field_fast,
     pure_test_u256_inv_field_reference,
@@ -563,14 +567,28 @@ def test_pure_schnorr_and_taproot_vectors() raises:
         String("f18b17f0caabbdce27f649e8f9b33d3c753c40dd023cea53a3722359ca6db388"),
     )
     assert_equal(pure.verify_schnorr_bytes(schnorr_pubkey, schnorr_sig, schnorr_msg), CRYPTO_RESULT_VALID)
+    assert_equal(pure_test_schnorr_reference_result(schnorr_pubkey, schnorr_sig, schnorr_msg), CRYPTO_RESULT_VALID)
+    assert_equal(pure_test_schnorr_fe52_wnaf_result(schnorr_pubkey, schnorr_sig, schnorr_msg), CRYPTO_RESULT_VALID)
+    assert_equal(
+        pure_test_schnorr_fe52_wnaf_result(schnorr_pubkey, schnorr_sig, schnorr_msg),
+        pure_test_schnorr_reference_result(schnorr_pubkey, schnorr_sig, schnorr_msg),
+    )
 
     var mutated_sig = schnorr_sig.copy()
     mutated_sig[63] = mutated_sig[63] ^ UInt8(1)
     assert_equal(pure.verify_schnorr_bytes(schnorr_pubkey, mutated_sig, schnorr_msg), CRYPTO_RESULT_CONSENSUS_INVALID)
+    assert_equal(
+        pure_test_schnorr_fe52_wnaf_result(schnorr_pubkey, mutated_sig, schnorr_msg),
+        pure_test_schnorr_reference_result(schnorr_pubkey, mutated_sig, schnorr_msg),
+    )
 
     var short_sig = List[UInt8]()
     short_sig.append(UInt8(1))
     assert_equal(pure.verify_schnorr_bytes(schnorr_pubkey, short_sig, schnorr_msg), CRYPTO_RESULT_MALFORMED)
+    assert_equal(
+        pure_test_schnorr_fe52_wnaf_result(schnorr_pubkey, short_sig, schnorr_msg),
+        pure_test_schnorr_reference_result(schnorr_pubkey, short_sig, schnorr_msg),
+    )
 
     var taproot_internal = _hex_bytes(String("85a7b790fc9d962493788317e4874a4ab07f1e9c78c773c47f2f6c96df756f05"))
     var taproot_merkle_root = _hex_bytes(String("446ba384864eb34196e08044029fb463d97748e4549dfd0e2612f60d74c4f165"))
@@ -581,12 +599,32 @@ def test_pure_schnorr_and_taproot_vectors() raises:
         CRYPTO_RESULT_VALID,
     )
     assert_equal(
+        pure_test_taproot_tweak_reference_result(taproot_internal, taproot_tweak, taproot_expected, 1),
+        CRYPTO_RESULT_VALID,
+    )
+    assert_equal(
+        pure_test_taproot_tweak_fe52_result(taproot_internal, taproot_tweak, taproot_expected, 1),
+        CRYPTO_RESULT_VALID,
+    )
+    assert_equal(
+        pure_test_taproot_tweak_fe52_result(taproot_internal, taproot_tweak, taproot_expected, 1),
+        pure_test_taproot_tweak_reference_result(taproot_internal, taproot_tweak, taproot_expected, 1),
+    )
+    assert_equal(
         pure.verify_taproot_tweak_precomputed(taproot_internal, taproot_tweak, taproot_expected, 0),
         CRYPTO_RESULT_CONSENSUS_INVALID,
     )
     assert_equal(
+        pure_test_taproot_tweak_fe52_result(taproot_internal, taproot_tweak, taproot_expected, 0),
+        pure_test_taproot_tweak_reference_result(taproot_internal, taproot_tweak, taproot_expected, 0),
+    )
+    assert_equal(
         pure.verify_taproot_tweak_precomputed(short_sig, taproot_tweak, taproot_expected, 1),
         CRYPTO_RESULT_MALFORMED,
+    )
+    assert_equal(
+        pure_test_taproot_tweak_fe52_result(short_sig, taproot_tweak, taproot_expected, 1),
+        pure_test_taproot_tweak_reference_result(short_sig, taproot_tweak, taproot_expected, 1),
     )
 
 

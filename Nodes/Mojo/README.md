@@ -57,7 +57,8 @@ native prerequisites a future port would need?
   requested. The microbench also has `field` and `point` cases that compare
   the current exact 4x64 field/point paths against the new 5x52 lazy-field and
   Jacobian group core, plus ECDSA counters for Fe52 WNAF/GLV product and result
-  parity. Pure diagnostic ECDSA now routes through Fe52 plain WNAF; Fe52 GLV is
+  parity. Pure diagnostic ECDSA and Schnorr now route through Fe52 plain WNAF,
+  and pure Taproot tweak checks route through the Fe52 scalar path. Fe52 GLV is
   kept as a parity-clean microbench path because it does not currently beat
   plain Fe52 WNAF.
   `--shadow-crypto` emits a separate

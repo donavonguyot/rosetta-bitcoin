@@ -2590,7 +2590,7 @@ def _pure_verify_ecdsa_der_bytes_with_product_mode(
     return CONSENSUS_INVALID
 
 
-def pure_verify_schnorr_bytes(
+def _pure_verify_schnorr_bytes_reference_4x64(
     ref xonly_pubkey: List[UInt8],
     ref signature: List[UInt8],
     ref digest: List[UInt8],
@@ -2632,7 +2632,56 @@ def pure_verify_schnorr_bytes(
     return VALID
 
 
-def pure_verify_taproot_tweak_precomputed(
+def _pure_verify_schnorr_bytes_fe52_wnaf(
+    ref xonly_pubkey: List[UInt8],
+    ref signature: List[UInt8],
+    ref digest: List[UInt8],
+) raises -> Int32:
+    if len(xonly_pubkey) != 32 or len(signature) != 64:
+        return MALFORMED
+    var p = _field_p()
+    var n = _scalar_n()
+    var px = _from_be32(xonly_pubkey)
+    if _cmp(px, p) >= 0:
+        return MALFORMED
+    var pubkey = Fe52Point()
+    try:
+        pubkey = _fe52_lift_x(px)
+    except:
+        return MALFORMED
+    var rx_bytes = List[UInt8]()
+    for i in range(32):
+        rx_bytes.append(signature[i])
+    var sx_bytes = List[UInt8]()
+    for i in range(32):
+        sx_bytes.append(signature[32 + i])
+    var rx = _from_be32(rx_bytes)
+    if _cmp(rx, p) >= 0:
+        return CONSENSUS_INVALID
+    var s = _from_be32(sx_bytes)
+    if _is_zero(s) or _cmp(s, n) >= 0:
+        return CONSENSUS_INVALID
+    var e = _schnorr_challenge(rx_bytes, xonly_pubkey, digest)
+    var neg_e = _sub_mod(_zero(), e, n)
+    var r = _fe52_jacobian_to_affine(_fe52_double_base_mul_wnaf_fe52(s, neg_e, pubkey))
+    if r.infinity:
+        return CONSENSUS_INVALID
+    if _is_odd(_fe52_to_u256(r.y)):
+        return CONSENSUS_INVALID
+    if not _eq(_fe52_to_u256(r.x), rx):
+        return CONSENSUS_INVALID
+    return VALID
+
+
+def pure_verify_schnorr_bytes(
+    ref xonly_pubkey: List[UInt8],
+    ref signature: List[UInt8],
+    ref digest: List[UInt8],
+) raises -> Int32:
+    return _pure_verify_schnorr_bytes_fe52_wnaf(xonly_pubkey, signature, digest)
+
+
+def _pure_verify_taproot_tweak_precomputed_reference_4x64(
     ref internal_xonly: List[UInt8],
     ref tweak: List[UInt8],
     ref expected_xonly: List[UInt8],
@@ -2669,6 +2718,59 @@ def pure_verify_taproot_tweak_precomputed(
     if _eq(output.x, expected) and output_parity == expected_parity:
         return VALID
     return CONSENSUS_INVALID
+
+
+def _pure_verify_taproot_tweak_precomputed_fe52(
+    ref internal_xonly: List[UInt8],
+    ref tweak: List[UInt8],
+    ref expected_xonly: List[UInt8],
+    expected_parity: Int,
+) raises -> Int32:
+    if len(internal_xonly) != 32 or len(tweak) != 32 or len(expected_xonly) != 32:
+        return MALFORMED
+    if expected_parity != 0 and expected_parity != 1:
+        return MALFORMED
+    var p = _field_p()
+    var n = _scalar_n()
+    var ix = _from_be32(internal_xonly)
+    if _cmp(ix, p) >= 0:
+        return MALFORMED
+    var internal = Fe52Point()
+    try:
+        internal = _fe52_lift_x(ix)
+    except:
+        return MALFORMED
+    var tweak_scalar = _from_be32(tweak)
+    if _cmp(tweak_scalar, n) >= 0:
+        return MALFORMED
+    var output = internal.copy()
+    if not _is_zero(tweak_scalar):
+        var tweaked = _fe52_scalar_mul_jacobian(tweak_scalar, _generator())
+        tweaked = _fe52_gej_add_ge_var(tweaked, internal)
+        output = _fe52_jacobian_to_affine(tweaked)
+    if output.infinity:
+        return MALFORMED
+    var expected = _from_be32(expected_xonly)
+    var output_parity = 0
+    if _is_odd(_fe52_to_u256(output.y)):
+        output_parity = 1
+    if _eq(_fe52_to_u256(output.x), expected) and output_parity == expected_parity:
+        return VALID
+    return CONSENSUS_INVALID
+
+
+def pure_verify_taproot_tweak_precomputed(
+    ref internal_xonly: List[UInt8],
+    ref tweak: List[UInt8],
+    ref expected_xonly: List[UInt8],
+    expected_parity: Int,
+) raises -> Int32:
+    return _pure_verify_taproot_tweak_precomputed_fe52(
+        internal_xonly,
+        tweak,
+        expected_xonly,
+        expected_parity,
+    )
 
 
 def pure_test_u256_add_mod(ref a: List[UInt8], ref b: List[UInt8], ref modulus: List[UInt8]) raises -> List[UInt8]:
@@ -2936,6 +3038,22 @@ def pure_test_scalar_mul_g_is_infinity(ref scalar: List[UInt8]) raises -> Bool:
 
 def pure_test_schnorr_challenge(ref rx: List[UInt8], ref pubkey: List[UInt8], ref digest: List[UInt8]) raises -> List[UInt8]:
     return _to_be32(_schnorr_challenge(rx, pubkey, digest))
+
+
+def pure_test_schnorr_reference_result(ref xonly_pubkey: List[UInt8], ref signature: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
+    return _pure_verify_schnorr_bytes_reference_4x64(xonly_pubkey, signature, digest)
+
+
+def pure_test_schnorr_fe52_wnaf_result(ref xonly_pubkey: List[UInt8], ref signature: List[UInt8], ref digest: List[UInt8]) raises -> Int32:
+    return _pure_verify_schnorr_bytes_fe52_wnaf(xonly_pubkey, signature, digest)
+
+
+def pure_test_taproot_tweak_reference_result(ref internal_xonly: List[UInt8], ref tweak: List[UInt8], ref expected_xonly: List[UInt8], expected_parity: Int) raises -> Int32:
+    return _pure_verify_taproot_tweak_precomputed_reference_4x64(internal_xonly, tweak, expected_xonly, expected_parity)
+
+
+def pure_test_taproot_tweak_fe52_result(ref internal_xonly: List[UInt8], ref tweak: List[UInt8], ref expected_xonly: List[UInt8], expected_parity: Int) raises -> Int32:
+    return _pure_verify_taproot_tweak_precomputed_fe52(internal_xonly, tweak, expected_xonly, expected_parity)
 
 
 def pure_test_ecdsa_parse_der(ref der: List[UInt8]) raises -> List[UInt8]:

@@ -27,6 +27,10 @@ from pure_secp import (
     pure_test_fe52_mul,
     pure_test_fe52_roundtrip,
     pure_test_fe52_sqr,
+    pure_test_schnorr_fe52_wnaf_result,
+    pure_test_schnorr_reference_result,
+    pure_test_taproot_tweak_fe52_result,
+    pure_test_taproot_tweak_reference_result,
     pure_test_u256_add_mod,
     pure_test_u256_mul_field_fast,
     pure_test_u256_square_field,
@@ -678,16 +682,26 @@ def pure_crypto_microbench_json(
     var ecdsa_native_result = Int32(-1)
 
     var schnorr_verify_ms = Int64(0)
+    var schnorr_reference_verify_ms = Int64(0)
+    var schnorr_fe52_wnaf_verify_ms = Int64(0)
     var schnorr_valid = 0
+    var schnorr_reference_valid = 0
+    var schnorr_fe52_wnaf_valid = 0
     var schnorr_invalid = 0
     var schnorr_malformed = 0
+    var schnorr_fe52_mismatches = 0
     var schnorr_native_compare_ms = Int64(0)
     var schnorr_native_result = Int32(-1)
 
     var taproot_verify_ms = Int64(0)
+    var taproot_reference_verify_ms = Int64(0)
+    var taproot_fe52_verify_ms = Int64(0)
     var taproot_valid = 0
+    var taproot_reference_valid = 0
+    var taproot_fe52_valid = 0
     var taproot_invalid = 0
     var taproot_malformed = 0
+    var taproot_fe52_mismatches = 0
     var taproot_native_compare_ms = Int64(0)
     var taproot_native_result = Int32(-1)
 
@@ -880,7 +894,24 @@ def pure_crypto_microbench_json(
                 result = String("failed")
 
     if run_schnorr:
+        var expected_schnorr_result = pure_test_schnorr_reference_result(schnorr_pubkey, schnorr_sig, schnorr_msg)
         var started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var reference_result = pure_test_schnorr_reference_result(schnorr_pubkey, schnorr_sig, schnorr_msg)
+            if reference_result == Int32(0):
+                schnorr_reference_valid += 1
+        schnorr_reference_verify_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var fe52_result = pure_test_schnorr_fe52_wnaf_result(schnorr_pubkey, schnorr_sig, schnorr_msg)
+            if fe52_result == Int32(0):
+                schnorr_fe52_wnaf_valid += 1
+            if fe52_result != expected_schnorr_result:
+                schnorr_fe52_mismatches += 1
+        schnorr_fe52_wnaf_verify_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
         for _ in range(loop_iterations):
             var schnorr_result = pure_verify_schnorr_bytes(schnorr_pubkey, schnorr_sig, schnorr_msg)
             if schnorr_result == Int32(0):
@@ -899,7 +930,39 @@ def pure_crypto_microbench_json(
                 result = String("failed")
 
     if run_taproot:
+        var expected_taproot_result = pure_test_taproot_tweak_reference_result(
+            taproot_internal,
+            taproot_tweak,
+            taproot_expected,
+            taproot_parity,
+        )
         var started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var reference_result = pure_test_taproot_tweak_reference_result(
+                taproot_internal,
+                taproot_tweak,
+                taproot_expected,
+                taproot_parity,
+            )
+            if reference_result == Int32(0):
+                taproot_reference_valid += 1
+        taproot_reference_verify_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
+        for _ in range(loop_iterations):
+            var fe52_result = pure_test_taproot_tweak_fe52_result(
+                taproot_internal,
+                taproot_tweak,
+                taproot_expected,
+                taproot_parity,
+            )
+            if fe52_result == Int32(0):
+                taproot_fe52_valid += 1
+            if fe52_result != expected_taproot_result:
+                taproot_fe52_mismatches += 1
+        taproot_fe52_verify_ms = clock.now_ms() - started
+
+        started = clock.now_ms()
         for _ in range(loop_iterations):
             var taproot_result = pure_verify_taproot_tweak_precomputed(
                 taproot_internal,
@@ -932,7 +995,11 @@ def pure_crypto_microbench_json(
         result = String("failed")
     if run_schnorr and schnorr_valid != loop_iterations:
         result = String("failed")
+    if run_schnorr and (schnorr_reference_valid != loop_iterations or schnorr_fe52_wnaf_valid != loop_iterations or schnorr_fe52_mismatches != 0):
+        result = String("failed")
     if run_taproot and taproot_valid != loop_iterations:
+        result = String("failed")
+    if run_taproot and (taproot_reference_valid != loop_iterations or taproot_fe52_valid != loop_iterations or taproot_fe52_mismatches != 0):
         result = String("failed")
     if run_field and (field_iterations != loop_iterations or field_mismatches != 0):
         result = String("failed")
@@ -1088,8 +1155,22 @@ def pure_crypto_microbench_json(
         + String(schnorr_verify_ms)
         + String(',"verify_per_iteration_us":')
         + String(per_iteration_us(schnorr_verify_ms, loop_iterations))
+        + String(',"reference_4x64_verify_ms":')
+        + String(schnorr_reference_verify_ms)
+        + String(',"reference_4x64_verify_per_iteration_us":')
+        + String(per_iteration_us(schnorr_reference_verify_ms, loop_iterations))
+        + String(',"fe52_wnaf_verify_ms":')
+        + String(schnorr_fe52_wnaf_verify_ms)
+        + String(',"fe52_wnaf_verify_per_iteration_us":')
+        + String(per_iteration_us(schnorr_fe52_wnaf_verify_ms, loop_iterations))
         + String(',"valid_count":')
         + String(schnorr_valid)
+        + String(',"reference_valid_count":')
+        + String(schnorr_reference_valid)
+        + String(',"fe52_wnaf_valid_count":')
+        + String(schnorr_fe52_wnaf_valid)
+        + String(',"fe52_mismatches":')
+        + String(schnorr_fe52_mismatches)
         + String(',"invalid_count":')
         + String(schnorr_invalid)
         + String(',"malformed_count":')
@@ -1106,8 +1187,22 @@ def pure_crypto_microbench_json(
         + String(taproot_verify_ms)
         + String(',"verify_per_iteration_us":')
         + String(per_iteration_us(taproot_verify_ms, loop_iterations))
+        + String(',"reference_4x64_verify_ms":')
+        + String(taproot_reference_verify_ms)
+        + String(',"reference_4x64_verify_per_iteration_us":')
+        + String(per_iteration_us(taproot_reference_verify_ms, loop_iterations))
+        + String(',"fe52_verify_ms":')
+        + String(taproot_fe52_verify_ms)
+        + String(',"fe52_verify_per_iteration_us":')
+        + String(per_iteration_us(taproot_fe52_verify_ms, loop_iterations))
         + String(',"valid_count":')
         + String(taproot_valid)
+        + String(',"reference_valid_count":')
+        + String(taproot_reference_valid)
+        + String(',"fe52_valid_count":')
+        + String(taproot_fe52_valid)
+        + String(',"fe52_mismatches":')
+        + String(taproot_fe52_mismatches)
         + String(',"invalid_count":')
         + String(taproot_invalid)
         + String(',"malformed_count":')
