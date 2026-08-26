@@ -126,7 +126,7 @@ The visible pattern is that later ports appear after more shared fixtures, block
 
 ### 5.4 RQ4: Pure-Mojo diagnostic
 
-The companion archive uses schema `rosettabitcoin.paper_supplement.v1`. Every entry records the original path, SHA-256, backend, supported claim, and `does_not_prove` boundaries; the package is globally marked `diagnostic_non_comparable` and `project_current_evidence=false`.
+The companion archive (DOI [`10.5281/zenodo.22114337`](https://doi.org/10.5281/zenodo.22114337)) uses schema `rosettabitcoin.paper_supplement.v1`. Every entry records the original path, SHA-256, backend, supported claim, and `does_not_prove` boundaries; the package is globally marked `diagnostic_non_comparable` and `project_current_evidence=false`.
 
 | Diagnostic | Recorded result | Boundary |
 |---|---|---|
@@ -169,7 +169,7 @@ The outstanding node roadmap remains future work: empty-state-to-tip proof, mean
 
 ## 8. Artifact Availability and Reproduction
 
-The authoritative software snapshot is [`10.5281/zenodo.20738249`](https://doi.org/10.5281/zenodo.20738249). The repository contains the Markdown source, claim--evidence matrix, figure source, build script, and companion diagnostic package source. The supplement is supplied with this review artifact and prepared as a separate Zenodo deposit related to—not incorporated into—the original DOI. Before the public version is submitted, its bibliographic record will replace the archive-only citation below.
+The authoritative software snapshot is [`10.5281/zenodo.20738249`](https://doi.org/10.5281/zenodo.20738249). The repository contains the Markdown source, claim--evidence matrix, figure source, build script, and companion diagnostic package source. The diagnostic supplement is archived separately at DOI [`10.5281/zenodo.22114337`](https://doi.org/10.5281/zenodo.22114337) and is related to—not incorporated into—the original snapshot.
 
 Read-only snapshot checks:
 
@@ -230,4 +230,4 @@ At its immutable June 17 boundary, RosettaBitcoin had twelve port-owned corpus a
 
 [14] D. Guyot. *RosettaBitcoin v1.0.0*. Zenodo, 17 June 2026. [`10.5281/zenodo.20738249`](https://doi.org/10.5281/zenodo.20738249).
 
-[15] D. Guyot. *RosettaBitcoin Mojo Diagnostic Supplement: Pure-Backend Validation and Negative Tests*. Companion research artifact, version 1, 2026.
+[15] D. Guyot. *RosettaBitcoin Mojo Diagnostic Supplement: Pure-Backend Validation and Negative Tests*. Zenodo, version 1, 2026. [`10.5281/zenodo.22114337`](https://doi.org/10.5281/zenodo.22114337).

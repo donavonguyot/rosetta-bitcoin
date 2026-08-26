@@ -50,6 +50,8 @@ The delivery PDF is also copied to
 - `endorsement_response.md` is the concise PR response.
 - `supplement/` contains the upload-ready Mojo diagnostic companion source.
 
+The published companion supplement DOI is `10.5281/zenodo.22114337`.
+
 Verify and package the supplement with:
 
 ```bash

@@ -3,6 +3,8 @@
 Study boundary: Zenodo DOI `10.5281/zenodo.20738249`, published 2026-06-17,
 commit `4ade801b7ca0eb06f479e096bf285f621fd5e330`.
 
+Diagnostic supplement: Zenodo DOI `10.5281/zenodo.22114337`, version 1.
+
 This matrix governs numerical and status claims in the manuscript. “Reproducible”
 means a reader can re-run a read-only query or verify an archived file; it does
 not mean an ignored runtime experiment can be regenerated from the supplement.
@@ -27,9 +29,9 @@ not mean an ignored runtime experiment can be regenerated from the supplement.
 | H02 | Process span: 3--23 May, 20 calendar days | historical provenance | repository commit/history records | 2026-05-03--2026-05-23 | not effort | inspect endpoints |
 | H03 | Java product span: 23 May--8 Jun, 16 calendar days | historical provenance | product-pivot and Java evidence commits | 2026-05-23--2026-06-08 | not a controlled task duration | inspect endpoints |
 | H04 | Zig scaffold-to-50k span: 3:17:57 | historical provenance | commits `2a64b70a` and `c88dd6ce` | 2026-06-05 | commit span includes unknown work/inactivity | inspect commit timestamps |
-| D01 | Pure backend recorded to 5k | diagnostic supplement | artifact `pure_backend_5k` | 2026-06-17 | diagnostic, noncomparable | verify archived JSON/hash |
-| D02 | Pure backend fresh-state to 100000 | diagnostic supplement | artifact `pure_backend_fresh_100k` | 2026-06-17 | not full-node gate | verify archived JSON/hash |
-| D03 | Pure backend resumed 100000 to 140234 | diagnostic supplement | artifact `pure_backend_100k_to_140234` | 2026-06-17 | not empty-state-to-tip | verify archived JSON/hash |
+| D01 | Pure backend recorded to 5k | diagnostic supplement | DOI `10.5281/zenodo.22114337`, artifact `pure_backend_5k` | 2026-06-17 | diagnostic, noncomparable | verify archived JSON/hash |
+| D02 | Pure backend fresh-state to 100000 | diagnostic supplement | DOI `10.5281/zenodo.22114337`, artifact `pure_backend_fresh_100k` | 2026-06-17 | not full-node gate | verify archived JSON/hash |
+| D03 | Pure backend resumed 100000 to 140234 | diagnostic supplement | DOI `10.5281/zenodo.22114337`, artifact `pure_backend_100k_to_140234` | 2026-06-17 | not empty-state-to-tip | verify archived JSON/hash |
 | D04 | Backend declares no native crypto or fallback | diagnostic supplement | D01--D03 JSON backend fields | 2026-06-17 | self-reported artifact fields | verify archived JSON/hash |
 | D05 | 45-case shadow comparison | diagnostic supplement | artifact `pure_native_shadow_45` | 2026-06-17 | fixture-class bounded | verify archived JSON/hash |
 | D06 | Native and pure checks reject six invalid families | diagnostic supplement | artifacts `native_reject_6`, `pure_reject_6` | 2026-06-17 | six selected families only | verify archived JSON/hash |

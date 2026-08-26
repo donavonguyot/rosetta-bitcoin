@@ -12,12 +12,12 @@ post-100k lanes; one short Java maintenance artifact; and zero
 empty-state-to-tip proofs. It explicitly states that no port passed the binary
 full-node gate and reports the remaining Docker and capability gaps.
 
-The prior productivity and model-capability language, “100×” claim, and velocity
-chart have been removed. Repository intervals are retained only as
+The prior productivity and model-capability language, cost-ratio claim, and
+velocity chart have been removed. Repository intervals are retained only as
 non-equivalent commit/artifact spans from which effort and causality cannot be
 inferred. Pure-Mojo results are isolated in a hash-verified companion supplement
-marked noncanonical, noncomparable, and class-bounded; they are not imported
-into Project. The paper now uses four descriptive research questions, includes
+marked noncanonical, noncomparable, and class-bounded at DOI
+`10.5281/zenodo.22114337`; they are not imported into Project. The paper now uses four descriptive research questions, includes
 a claim--evidence matrix, expands related work and threats to validity, and
 places full-node completion, controlled ablation, negative-corpus expansion,
 and external replication in future work.
@@ -25,4 +25,3 @@ and external replication in future work.
 The resulting claim is deliberately modest: the case documents one auditable
 way to encode failures and admit evidence in an agent-assisted consensus project,
 and it offers a testable hypothesis for later controlled study.
-
