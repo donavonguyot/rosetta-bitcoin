@@ -84,6 +84,9 @@ venv/
 /Project/tmp/
 /Project/.campaigns/
 
+# Website source is owned by the private rosetta-bitcoin-portal repository.
+/Site/
+
 # Generated publication outputs; paper sources and manifests are tracked.
 /output/
 *.aux
