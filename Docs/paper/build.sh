@@ -45,7 +45,7 @@ echo "[4/6] Compiling PDF with XeLaTeX..."
 )
 
 echo "[5/6] Assembling arXiv bundle..."
-cp "$OUT/rosettabitcoin.pdf" "$FINAL/rosettabitcoin_experience_report.pdf"
+cp "$OUT/rosettabitcoin.pdf" "$FINAL/rosettabitcoin.pdf"
 cp "$DIR/claim_evidence_matrix.md" "$OUT/claim_evidence_matrix.md"
 {
   printf '%s\n' 'arXiv bundle for “RosettaBitcoin: An Artifact-Backed Experience Report”.'
@@ -66,6 +66,6 @@ echo "[6/6] Verifying and packaging the diagnostic supplement..."
 python3 "$DIR/supplement/verify.py"
 python3 "$DIR/supplement/build.py"
 
-echo "PDF: $FINAL/rosettabitcoin_experience_report.pdf"
+echo "PDF: $FINAL/rosettabitcoin.pdf"
 echo "arXiv bundle: $OUT/arxiv-rosettabitcoin.tar.gz"
 echo "Supplement: $OUT/rosettabitcoin-mojo-diagnostic-supplement.tar.gz"

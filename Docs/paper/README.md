@@ -25,8 +25,7 @@ Outputs land in `Docs/paper/out/`:
 | `substrate_pipeline.pdf` | Reproducible evidence-pipeline figure |
 | `arxiv-rosettabitcoin.tar.gz` | The arXiv submission bundle (.tex + figure + 00README) |
 
-The delivery PDF is also copied to
-`output/pdf/rosettabitcoin_experience_report.pdf`.
+The delivery PDF is also copied to `output/pdf/rosettabitcoin.pdf`.
 
 ## Requirements
 
