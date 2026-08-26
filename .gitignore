@@ -84,6 +84,13 @@ venv/
 /Project/tmp/
 /Project/.campaigns/
 
+# Generated publication outputs; paper sources and manifests are tracked.
+/output/
+*.aux
+*.fdb_latexmk
+*.fls
+*.xdv
+
 # C# Docker proof scratch; canonical proof JSON lives under Nodes/Shared.
 /Nodes/CSharp/.docker-csharp-proof-*
 

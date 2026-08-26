@@ -1,0 +1,28 @@
+{
+  "title": "RosettaBitcoin Mojo Diagnostic Supplement: Pure-Backend Validation and Negative Tests",
+  "upload_type": "dataset",
+  "description": "Companion diagnostic evidence for RosettaBitcoin: An Artifact-Backed Experience Report on Verification Infrastructure for Agent-Assisted Consensus Validators. Contains byte-preserved, noncanonical and noncomparable Mojo diagnostics plus a post-snapshot provenance recovery. This package does not amend the Project evidence epoch or prove the full-node binary gate.",
+  "creators": [
+    {
+      "name": "Guyot, Donavon"
+    }
+  ],
+  "license": "MIT",
+  "keywords": [
+    "software engineering",
+    "Bitcoin",
+    "consensus validation",
+    "Mojo",
+    "differential testing",
+    "research artifact"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.5281/zenodo.20738249",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    }
+  ],
+  "notes": "Every diagnostic artifact is declared diagnostic_non_comparable and project_current_evidence=false."
+}
+

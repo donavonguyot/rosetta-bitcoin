@@ -1,0 +1,220 @@
+{
+  "artifacts": [
+    {
+      "artifact_id": "pure_backend_5k",
+      "backend": "mojo-pure-secp256k1",
+      "comparability": "diagnostic_non_comparable",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "evidence/mojo_docker_pure_baseline_5k_benchmark_2026-06-17.json",
+      "original_path": "Nodes/Mojo/.benchmark-results/mojo_docker_pure_baseline_5k_benchmark_2026-06-17.json",
+      "project_current_evidence": false,
+      "reproducibility": "archived JSON verification only; command does not regenerate the diagnostic run",
+      "sha256": "20551ce2d88bf7f2141b0e4febddff1af8ecab2917d4484855a55bb830073626",
+      "supported_claim": "Recorded pure-backend validation to height 5,000.",
+      "timestamp": "2026-06-17"
+    },
+    {
+      "artifact_id": "pure_backend_fresh_100k",
+      "backend": "mojo-pure-secp256k1",
+      "comparability": "diagnostic_non_comparable",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "evidence/mojo_docker_pure_performance_100k_benchmark_2026-06-17.json",
+      "original_path": "Nodes/Mojo/.benchmark-results/mojo_docker_pure_performance_100k_benchmark_2026-06-17.json",
+      "project_current_evidence": false,
+      "reproducibility": "archived JSON verification only; command does not regenerate the diagnostic run",
+      "sha256": "99c5c2c4dade510307044e14346de02946cd39e0c9062288ce5b851bd4fc2c76",
+      "supported_claim": "Recorded fresh-state pure-backend validation to height 100,000.",
+      "timestamp": "2026-06-17"
+    },
+    {
+      "artifact_id": "pure_backend_100k_to_140234",
+      "backend": "mojo-pure-secp256k1",
+      "comparability": "diagnostic_non_comparable",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "evidence/mojo_docker_pure_post_100k_to_tip_benchmark_2026-06-17.json",
+      "original_path": "Nodes/Mojo/.benchmark-results/mojo_docker_pure_post_100k_to_tip_benchmark_2026-06-17.json",
+      "project_current_evidence": false,
+      "reproducibility": "archived JSON verification only; command does not regenerate the diagnostic run",
+      "sha256": "a3729cc6f5b680887abb36d3014a143b6096b86ba35935edcac81d4e4564dee6",
+      "supported_claim": "Recorded pure-backend resume from height 100,000 to 140,234.",
+      "timestamp": "2026-06-17"
+    },
+    {
+      "artifact_id": "native_reject_6",
+      "backend": "native libsecp256k1",
+      "comparability": "diagnostic_non_comparable",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "evidence/mojo_docker_script_corpus_reject_native_2026-06-17.json",
+      "original_path": "Nodes/Mojo/.benchmark-results/mojo_docker_script_corpus_reject_native_2026-06-17.json",
+      "project_current_evidence": false,
+      "reproducibility": "archived JSON verification only; command does not regenerate the diagnostic run",
+      "sha256": "ab8255cfecb68ea12018725d17aac5e06e4d38ddd3227df24ffe44668be8f7fb",
+      "supported_claim": "Recorded rejection of six crafted invalid cases by the native backend.",
+      "timestamp": "2026-06-17"
+    },
+    {
+      "artifact_id": "pure_reject_6",
+      "backend": "mojo-pure-secp256k1",
+      "comparability": "diagnostic_non_comparable",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "evidence/mojo_docker_script_corpus_reject_pure_2026-06-17.json",
+      "original_path": "Nodes/Mojo/.benchmark-results/mojo_docker_script_corpus_reject_pure_2026-06-17.json",
+      "project_current_evidence": false,
+      "reproducibility": "archived JSON verification only; command does not regenerate the diagnostic run",
+      "sha256": "578ecd72afdccdf00e71c0391e90416b3cc80383c7e0b29fecb81c84120b62f8",
+      "supported_claim": "Recorded rejection of six crafted invalid cases by the pure backend.",
+      "timestamp": "2026-06-17"
+    },
+    {
+      "artifact_id": "fault_accept_ecdsa",
+      "backend": "mojo-pure-secp256k1 fault mode",
+      "comparability": "diagnostic_non_comparable",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "evidence/mojo_docker_script_corpus_reject_red_accept_ecdsa_2026-06-17.json",
+      "original_path": "Nodes/Mojo/.benchmark-results/mojo_docker_script_corpus_reject_red_accept_ecdsa_2026-06-17.json",
+      "project_current_evidence": false,
+      "reproducibility": "archived JSON verification only; command does not regenerate the diagnostic run",
+      "sha256": "7e5760a6a995f8e7aaefa3c64c24fe4df7b766f3d5d015a6f45de38454b1d130",
+      "supported_claim": "The ECDSA-accepting mutation made the negative corpus fail.",
+      "timestamp": "2026-06-17"
+    },
+    {
+      "artifact_id": "fault_accept_schnorr",
+      "backend": "mojo-pure-secp256k1 fault mode",
+      "comparability": "diagnostic_non_comparable",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "evidence/mojo_docker_script_corpus_reject_red_accept_schnorr_2026-06-17.json",
+      "original_path": "Nodes/Mojo/.benchmark-results/mojo_docker_script_corpus_reject_red_accept_schnorr_2026-06-17.json",
+      "project_current_evidence": false,
+      "reproducibility": "archived JSON verification only; command does not regenerate the diagnostic run",
+      "sha256": "fbb955e33739d9ecd14d5531c0cd5c7d1d527b56b4a92c5fc47a78c2c702f0e0",
+      "supported_claim": "The Schnorr-accepting mutation made the negative corpus fail.",
+      "timestamp": "2026-06-17"
+    },
+    {
+      "artifact_id": "fault_accept_taptweak",
+      "backend": "mojo-pure-secp256k1 fault mode",
+      "comparability": "diagnostic_non_comparable",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "evidence/mojo_docker_script_corpus_reject_red_accept_taptweak_2026-06-17.json",
+      "original_path": "Nodes/Mojo/.benchmark-results/mojo_docker_script_corpus_reject_red_accept_taptweak_2026-06-17.json",
+      "project_current_evidence": false,
+      "reproducibility": "archived JSON verification only; command does not regenerate the diagnostic run",
+      "sha256": "5a8951809ec8c64ba17131f172ad78dec21d1d54e00066c3bdd5c5efaeb452f4",
+      "supported_claim": "The Taproot-tweak-accepting mutation made the negative corpus fail.",
+      "timestamp": "2026-06-17"
+    },
+    {
+      "artifact_id": "pure_native_shadow_45",
+      "backend": "pure and native comparison",
+      "comparability": "diagnostic_non_comparable",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "evidence/mojo_docker_script_corpus_shadow_2026-06-17.json",
+      "original_path": "Nodes/Mojo/.benchmark-results/mojo_docker_script_corpus_shadow_2026-06-17.json",
+      "project_current_evidence": false,
+      "reproducibility": "archived JSON verification only; command does not regenerate the diagnostic run",
+      "sha256": "483ae75a3ad7d2c1688bbb6ad5432136d577e8cf8ac99ab2816a074d0590ee96",
+      "supported_claim": "Recorded agreement on the 45-fixture script corpus.",
+      "timestamp": "2026-06-17"
+    }
+  ],
+  "original_snapshot": {
+    "archive_file": "donavonguyot/rosetta-bitcoin-v1.0.0.zip",
+    "archive_md5": "b58d61b337ceed22651e498e8a4235b0",
+    "commit": "4ade801b7ca0eb06f479e096bf285f621fd5e330",
+    "doi": "10.5281/zenodo.20738249",
+    "publication_date": "2026-06-17"
+  },
+  "package_does_not_prove": [
+    "full-node binary-gate completion",
+    "production cryptographic safety",
+    "benchmark comparability or performance ranking",
+    "independent experimental replication",
+    "causal productivity or model-capability effects",
+    "correctness outside the exercised chain and test classes"
+  ],
+  "package_status": "diagnostic_non_comparable",
+  "post_snapshot_evidence": [
+    {
+      "artifact_id": "blocker_56447_provenance",
+      "does_not_prove": [
+        "full-node binary-gate completion",
+        "production cryptographic safety",
+        "benchmark comparability or performance ranking",
+        "independent experimental replication",
+        "causal productivity or model-capability effects",
+        "correctness outside the exercised chain and test classes"
+      ],
+      "file": "blocker_56447_provenance.json",
+      "project_current_evidence": false,
+      "sha256": "aaea1f35c7203ba12f7d82ae3db03127189adbf1908cd336832185ac7b67c567",
+      "status": "post_snapshot_supplemental",
+      "supported_claim": "Exact provenance for the height-56,447 malformed-public-key blocker was recovered after the snapshot."
+    }
+  ],
+  "project_current_evidence": false,
+  "schema": "rosettabitcoin.paper_supplement.v1"
+}

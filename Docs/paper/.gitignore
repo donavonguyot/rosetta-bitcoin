@@ -1,0 +1,14 @@
+# LaTeX build intermediates
+out/
+out/*.aux
+out/*.log
+out/*.xdv
+out/*.fls
+out/*.fdb_latexmk
+out/*.out
+out/body.md
+out/prev*.png
+out/pg*.png
+figures/*.png
+figures/*.pdf
+out/*.xdv

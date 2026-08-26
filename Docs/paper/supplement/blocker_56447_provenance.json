@@ -1,0 +1,24 @@
+{
+  "schema": "rosettabitcoin.blocker_provenance.v1",
+  "evidence_status": "post_snapshot_supplemental",
+  "snapshot_doi": "10.5281/zenodo.20738249",
+  "snapshot_commit": "4ade801b7ca0eb06f479e096bf285f621fd5e330",
+  "recovered_at": "2026-08-26",
+  "reference": "Bitcoin Core testnet4 preserved block data",
+  "height": 56447,
+  "block_hash": "000000000ae11eebf9807d5ac0f9966282c59a1e613e229aa2bf7aea266d4535",
+  "txid": "cb5fe6b28e78371a6fd7f9439542ff6bf0082f070097c9a096220f2a786d521f",
+  "input_index": 0,
+  "prevout": "2085d9aa766e5fa91e91e65a2ee9fdbdb7733687ce2a93615a515e8eb904a8b0:0",
+  "spent_script_pubkey": "5121024db836286794689a8c19071bd34e14dba07f8cc9f2e5e6a04295744bec831ac4210297e673f0bc7bcc5caf227323704c50635c32f24d529d4ba95a40e3dfbeaf0db72102d3cf631e5256795e184d8e99147f0d3ecdf1731aeefaded215df811cbc55160053ae",
+  "script_class": "legacy bare 1-of-3 multisig",
+  "failure": "The generic evaluator encountered a malformed compressed public key while scanning CHECKMULTISIG candidates and treated it as fatal.",
+  "missing_rule": "Under legacy non-witness script, a malformed public key is a failed signature match; witness-v0 remains fail-closed and strict-DER failures remain fatal.",
+  "reproducibility": "The block, transaction, input, and prevout can be retrieved from a Bitcoin Core testnet4 node containing height 56447.",
+  "does_not_prove": [
+    "that the diagnostic artifact existed in the June 17 archive",
+    "that all malformed-key consensus cases are covered",
+    "that the Mojo implementation passed the full-node binary gate"
+  ]
+}
+
