@@ -1,0 +1,57 @@
+services:
+  receiver:
+    image: ${CORE_COMPARISON_IMAGE:?immutable image required}
+    container_name: ${CORE_COMPARISON_CONTAINER:?unique container required}
+    cpus: 4
+    mem_limit: 4g
+    restart: "no"
+    labels:
+      rb.core_comparison: ${CORE_COMPARISON_ID:?campaign required}
+    command:
+      - -chain=testnet4
+      - -server=1
+      - -disablewallet=1
+      - -assumevalid=0
+      - -dbcache=450
+      - -par=4
+      - -prune=0
+      - -txindex=0
+      - -blockfilterindex=0
+      - -coinstatsindex=0
+      - -listen=0
+      - -dnsseed=0
+      - -fixedseeds=0
+      - -discover=0
+      - -v2transport=0
+      - -connect=${CORE_COMPARISON_RELAY:?bounded relay required}:48333
+      - -stopatheight=5000
+      - -printtoconsole=1
+      - -logtimestamps=1
+      - -logtimemicros=1
+    volumes:
+      - proof:/home/bitcoin/.bitcoin
+    networks:
+      - reference
+  relay:
+    image: ${CORE_COMPARISON_RELAY_IMAGE:?immutable relay image required}
+    container_name: ${CORE_COMPARISON_RELAY:?relay container required}
+    restart: "no"
+    labels:
+      rb.core_comparison: ${CORE_COMPARISON_ID:?campaign required}
+    entrypoint: ["python3", "-u", "/relay.py"]
+    environment:
+      REFERENCE_P2P_PEER: ${REFERENCE_P2P_PEER:?reference peer required}
+      REFERENCE_GENESIS_HASH: ${REFERENCE_GENESIS_HASH:?genesis hash required}
+    volumes:
+      - ../scripts/core_5k_relay.py:/relay.py:ro
+    networks:
+      - reference
+
+volumes:
+  proof:
+    external: true
+    name: ${CORE_COMPARISON_VOLUME:?fresh volume required}
+networks:
+  reference:
+    external: true
+    name: ${REFERENCE_DOCKER_NETWORK:?reference network required}
