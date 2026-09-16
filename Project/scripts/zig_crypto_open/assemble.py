@@ -39,6 +39,7 @@ def main():
     report['documentation_check']={'result':'passed' if doc.returncode==0 else 'failed','output':doc.stdout+doc.stderr,'preexisting':read('documentation-before.json')}
     report['benchmark_driver_sha256']=hashlib.sha256((HERE/'bench.zig').read_bytes()).hexdigest()
     report['c_public_api_adapter_sha256']=hashlib.sha256((ROOT/'Project/scripts/zig_crypto_campaign/c_control.zig').read_bytes()).hexdigest()
+    report['tooling_source_digest']=source_digest(HERE)
     report['source_revision']=run(['git','rev-parse','HEAD']).strip()
     report['allocation_measurement']='No allocator parameters in the operation API; allocation counts not instrumented. Driver setup is outside timing.'
     assert report['validation']['source_digest']==source_digest(LIB)
