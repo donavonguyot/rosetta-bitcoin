@@ -1,0 +1,48 @@
+// With T=product(Z_i), scaling each point by T/Z_i produces affine
+// coordinates on y^2=x^3+7*T^6. Prefix/suffix products need no inversion.
+fn commonZTable(point: Point, comptime width: usize) struct { table: [1 << (width - 2)]Point, scale: u256 } {
+    const size = 1 << (width - 2);
+    var table: [size]Point = undefined;
+    table[0] = point;
+    const step = point.double();
+    for (1..size) |i| table[i] = table[i - 1].plus(step);
+    var prefixes: [size]u256 = undefined;
+    var scale: u256 = 1;
+    for (table, 0..) |entry, i| {
+        prefixes[i] = scale;
+        if (entry.z != 0) scale = mul(scale, entry.z);
+    }
+    var suffix: u256 = 1;
+    var i: usize = size;
+    while (i != 0) {
+        i -= 1;
+        if (table[i].z == 0) continue;
+        const factor = mul(prefixes[i], suffix);
+        suffix = mul(suffix, table[i].z);
+        const square = mul(factor, factor);
+        table[i] = .{ .x = mul(table[i].x, square), .y = mul(table[i].y, mul(square, factor)) };
+    }
+    return .{ .table = table, .scale = scale };
+}
+fn scaleAffine(point: Point, square: u256, cube: u256) Point {
+    if (point.z == 0) return point;
+    return .{ .x = mul(point.x, square), .y = mul(point.y, cube) };
+}
+
+test "common-Z table and isomorphic joint multiplication" {
+    const original = @import("test_original.zig");
+    var random = std.Random.DefaultPrng.init(0x5348415245445a);
+    for (0..1000) |_| {
+        const a = random.random().int(u256) % n;
+        const b = random.random().int(u256) % n;
+        const expected = original.g.multiply(a).plus(original.g.multiply(b));
+        try expectSamePoint(joint(a, g, b), expected);
+    }
+    const table = commonZTable(g, p_width);
+    for (table.table, 0..) |entry, i| {
+        const actual = Point{ .x=entry.x, .y=entry.y, .z=table.scale };
+        try expectSamePoint(actual, original.g.multiply(@intCast(2*i+1)));
+    }
+    try std.testing.expect(joint(0,g,0).z == 0);
+    try expectSamePoint(joint(1,g,n-1),original.Point.infinity());
+}

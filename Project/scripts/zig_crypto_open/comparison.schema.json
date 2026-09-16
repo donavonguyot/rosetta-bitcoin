@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rb.zig_crypto_open_comparison.v1",
+  "title": "Independent Zig open performance comparison",
+  "type": "object",
+  "required": ["schema", "report_label", "binary_gate_status", "curated_current", "variants", "runs", "warmups", "validation", "arithmetic", "profile", "a0", "control_selection", "decisions", "holdout", "elapsed_gate"],
+  "properties": {
+    "schema": {"const": "rb.zig_crypto_open_comparison.v1"},
+    "report_label": {"const": "campaign_comparable"},
+    "binary_gate_status": {"const": "not_attempted"},
+    "curated_current": {"const": false},
+    "node_claim": {"const": "regression_gate_only"},
+    "variants": {"type": "object", "required": ["baseline", "candidate", "c_control"], "minProperties": 3, "maxProperties": 3},
+    "runs": {"type": "array", "minItems": 27, "maxItems": 54},
+    "warmups": {"type": "array", "minItems": 3, "maxItems": 3},
+    "elapsed_gate": {"const": "passed"}
+  },
+  "$comment": "comparison.py additionally validates identities, exact rotation, cross-artifact digests, proof invariants, and campaign-local validation floors. This schema is never a crypto-lane result or curated baseline claim."
+}

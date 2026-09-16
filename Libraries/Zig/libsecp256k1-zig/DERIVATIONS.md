@@ -8,7 +8,7 @@ Mathematical references:
 
 - Hankerson, Menezes, Vanstone, *Guide to Elliptic Curve Cryptography*, chapter 3:
   [book resources](https://cacr.uwaterloo.ca/ecc/). Signed width-w representations
-  and simultaneous multiplication motivate the separate-base width-5 design.
+  and simultaneous multiplication motivate the separate-base signed-window design.
 - [EFD Jacobian coordinates with a=0](https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html):
   x=X/Z², y=Y/Z³. Mixed addition assumes the second point has Z=1;
   infinity and H=0 are handled before the ordinary addition equation.
@@ -78,13 +78,27 @@ checks these exact bounds are below 2^129; sampled splits are additional tests,
 not the bound proof. Signed intermediates fit i512 and residuals fit i256.
 
 Four separate streams represent G,phi(G),P,phi(P). The variable table is built
-and normalized once, then transformed by x -> beta*x. Compile-time generator
-tables are calculated from package arithmetic. Streams use 131 digit slots to
+on one common scale without inversion, then transformed by x -> beta*x.
+Packed generator tables are generated with package-owned arithmetic. Streams use 131 digit slots to
 cover the proven signed bound and carry. Every nonzero width-w digit is odd
 and lies between -(2^(w-1)-1) and +(2^(w-1)-1). Each simultaneous nonzero digit
-performs its own mixed addition; there is no joint matrix or shared-Z table.
+performs its own mixed addition; there is no joint matrix. Coordinate scales are handled as described below.
 
 Tweaks multiply the generator with its two GLV streams and mixed-add the affine
 key exactly once. Zero tweaks and infinity preserve their documented behavior.
 Old binary/Fermat and first-campaign routines live in test comparators, with no
 runtime dispatch or fallback. Runtime safety remains enabled throughout.
+
+## Common-Z variable tables and packed generator tables
+
+For Jacobian entries (X_i,Y_i,Z_i), form T as the product of nonzero Z_i.
+Prefix/suffix products compute T/Z_i without division. The coordinates
+(X_i*(T/Z_i)^2,Y_i*(T/Z_i)^3) lie on the common isomorphic curve with
+coefficient 7*T^6. Scale generator lookup coordinates by T^2,T^3, perform
+addition/doubling on that curve, and multiply the result's Z by T to return to
+the original curve. Infinity is excluded from the product and preserved.
+The a=0 formulas remain valid; this does not assume that raw coordinates on
+different scales are equal. The cube-root endomorphism commutes with scaling.
+
+
+Generator tables store canonical affine x/y coordinates as big-endian bytes. `tools/generate_tables.py` reproduces every entry by the package-owned affine recurrence; it verifies curve membership and independent scalar spot checks. `tools/tables.json` records the selected widths and byte identities. Ordinary builds require neither Python nor repository files. Signed width-16 recoding uses i16 digits and i32 residues to retain the carry without overflow.

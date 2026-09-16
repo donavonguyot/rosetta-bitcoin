@@ -73,3 +73,5 @@ Regenerate and verify optimization constants with `python3 tools/derive_constant
 This optional development tool uses only Python standard-library integer arithmetic;
 it is not a build or production dependency. All inversion and recoding operate
 on public inputs and remain variable-time.
+
+Generator table data is packaged with the source. Audit it with `python3 tools/generate_tables.py`; normal builds remain standalone. Variable tables use a common coordinate scale without field inversion. Inversion and scalar multiplication remain variable-time on public inputs. This remains an experimental verification-only package.

@@ -1,0 +1,73 @@
+// Each row describes 2^k times a divstep-transformed f or g. Row L1
+// norms are bounded by 2^k; thirty steps therefore fit signed i64.
+fn divstepBatch(delta0: i32, f0: i512, g0: i512) struct { delta:i32, matrix:[4]i64 } {
+    var delta=delta0;
+    var fl:i64=@intCast(@as(u32,@truncate(@as(u512,@bitCast(f0)))));
+    var gl:i64=@intCast(@as(u32,@truncate(@as(u512,@bitCast(g0)))));
+    var a:i64=1;var b:i64=0;var c0:i64=0;var d:i64=1;
+    for(0..30) |_| {
+        const odd=gl & 1;
+        if(delta>0 and odd!=0) {
+            delta=1-delta;
+            const old_f=fl;fl=gl;gl=(gl-old_f)>>1;
+            const old_a=a;const old_b=b;
+            a=2*c0;b=2*d;c0-=old_a;d-=old_b;
+        } else {
+            delta+=1;gl=(gl+odd*fl)>>1;
+            c0+=odd*a;d+=odd*b;a*=2;b*=2;
+        }
+    }
+    return .{.delta=delta,.matrix=.{a,b,c0,d}};
+}
+fn signedResidue(value:i512, modulus:u256) u256 {
+    const magnitude=@abs(value);
+    const residue=if(modulus==p) reduceField(magnitude) else reduceScalar(magnitude);
+    return if(value<0 and residue!=0) modulus-residue else residue;
+}
+fn inverseScales(comptime modulus:u256) [26]u256 {
+    var table:[26]u256=undefined;table[0]=1;
+    for(1..26) |i| {
+        var x=table[i-1];
+        for(0..30) |_| x=if(x&1==0) x>>1 else (x>>1)+(modulus>>1)+1;
+        table[i]=x;
+    }
+    return table;
+}
+const inverse_field_scales=inverseScales(p);
+const inverse_scalar_scales=inverseScales(n);
+fn inverse(input:u256, modulus:u256) Error!u256 {
+    if(input==0 or input>=modulus) return error.InvalidScalar;
+    std.debug.assert(modulus==p or modulus==n);
+    var delta:i32=1;var f0:i512=modulus;var g0:i512=input;
+    var v:u256=0;var r:u256=1;var batches:usize=0;
+    while(g0!=0 and batches<25) : (batches+=1) {
+        const batch=divstepBatch(delta,f0,g0);delta=batch.delta;
+        const a:i512=batch.matrix[0];const b:i512=batch.matrix[1];
+        const c0:i512=batch.matrix[2];const d:i512=batch.matrix[3];
+        const next_f=a*f0+b*g0;const next_g=c0*f0+d*g0;
+        std.debug.assert(@mod(next_f,1<<30)==0 and @mod(next_g,1<<30)==0);
+        f0=next_f>>30;g0=next_g>>30;
+        const next_v=signedResidue(a*@as(i512,v)+b*@as(i512,r),modulus);
+        r=signedResidue(c0*@as(i512,v)+d*@as(i512,r),modulus);v=next_v;
+    }
+    if(g0!=0 or (f0!=1 and f0 != -1)) return error.InvalidScalar;
+    const scale=if(modulus==p) inverse_field_scales[batches] else inverse_scalar_scales[batches];
+    const result=if(modulus==p) reduceField(@as(u512,v)*scale) else reduceScalar(@as(u512,v)*scale);
+    return if(f0<0 and result!=0) modulus-result else result;
+}
+test "batched divsteps versus binary GCD both moduli and adversarial families" {
+    var rng=std.Random.DefaultPrng.init(0x44495653544550);
+    for([_]u256{p,n}) |modulus| {
+        for(0..100_000) |_| {
+            const input=rng.random().int(u256)%(modulus-1)+1;
+            try std.testing.expectEqual(try binaryInverse(input,modulus),try inverse(input,modulus));
+        }
+        for([_]u256{1,3,5,7,modulus-1,modulus-2}) |input| try std.testing.expectEqual(try binaryInverse(input,modulus),try inverse(input,modulus));
+        for(1..256) |bit| {
+            const power=@as(u256,1)<<@as(u8,@intCast(bit));
+            for([_]u256{power-1,power,power+1}) |input| if(input<modulus) {
+                try std.testing.expectEqual(try binaryInverse(input,modulus),try inverse(input,modulus));
+            };
+        }
+    }
+}

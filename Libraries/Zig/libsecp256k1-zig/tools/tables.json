@@ -1,0 +1,11 @@
+{
+  "generator_width": 16,
+  "variable_width": 4,
+  "entries_per_table": 16384,
+  "packed_bytes": 2097152,
+  "generator_sha256": "e9f417e12abd0cc4d25f8f3fb8e2f4df653e3e4b04f9efb83bf177ad7ea37dd2",
+  "phi_sha256": "d93857a1fd23c129535a4991e8c4ed94a9022aefb294a9ea37a38f6b16a629b0",
+  "construction": "independent affine recurrence using package mathematical generator",
+  "curve_checks": 16384,
+  "independent_scalar_spots": 5
+}

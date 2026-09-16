@@ -167,13 +167,19 @@ fn oddTableWidth(point: Point, comptime width: usize) [1 << (width - 2)]Point {
     }
     return table;
 }
-const generator_table = blk: {
+const PackedPoint = struct { x: u256, y: u256 };
+fn unpackTable(comptime data: []const u8) [data.len / 64]PackedPoint {
     @setEvalBranchQuota(20_000_000);
-    break :blk oddTableWidth(g, g_width);
-};
-fn signedPoint(table: anytype, digit: i8) Point {
-    const magnitude: u8 = @intCast(if (digit < 0) -@as(i16, digit) else digit);
-    var point = table[(magnitude - 1) / 2];
+    var out: [data.len / 64]PackedPoint = undefined;
+    for (&out, 0..) |*entry, i| entry.* = .{ .x = std.mem.readInt(u256, data[i * 64 ..][0..32], .big), .y = std.mem.readInt(u256, data[i * 64 + 32 ..][0..32], .big) };
+    return out;
+}
+const generator_table = unpackTable(@embedFile("generator.bin"));
+
+fn signedPoint(table: anytype, digit: i16) Point {
+    const magnitude: u16 = @intCast(if (digit < 0) -@as(i16, digit) else digit);
+    const stored = table[(magnitude - 1) / 2];
+    var point = Point{ .x = stored.x, .y = stored.y, .z = if (@hasField(@TypeOf(stored), "z")) stored.z else 1 };
     if (digit < 0) point.y = sub(0, point.y);
     return point;
 }
@@ -195,13 +201,13 @@ fn splitScalar(k: u256) [2]i256 {
     std.debug.assert(@abs(first) < (@as(u512, 1) << 129) and @abs(second) < (@as(u512, 1) << 129));
     return .{ @intCast(first), @intCast(second) };
 }
-const ShortDigits = struct { values: [131]i8 = @splat(0), len: usize = 0 };
+const ShortDigits = struct { values: [131]i16 = @splat(0), len: usize = 0 };
 fn recodeSigned(k: i256, comptime width: usize) ShortDigits {
     var out: ShortDigits = .{};
     var remaining: u130 = @intCast(@abs(k));
     while (remaining != 0) {
         if (remaining & 1 != 0) {
-            const residue: i16 = @intCast(remaining & ((@as(u130, 1) << width) - 1));
+            const residue: i32 = @intCast(remaining & ((@as(u130, 1) << width) - 1));
             const digit = if (residue > (1 << (width - 1))) residue - (1 << width) else residue;
             out.values[out.len] = @intCast(if (k < 0) -digit else digit);
             if (digit < 0) remaining += @as(u130, @intCast(-digit)) else remaining -= @as(u130, @intCast(digit));
@@ -214,17 +220,16 @@ fn recodeSigned(k: i256, comptime width: usize) ShortDigits {
 fn endomorphism(q: Point) Point {
     return .{ .x = mul(beta, q.x), .y = q.y, .z = q.z };
 }
-const phi_generator_table = blk: {
-    @setEvalBranchQuota(20_000_000);
-    var table = generator_table;
-    for (&table) |*q| q.* = endomorphism(q.*);
-    break :blk table;
-};
+const phi_generator_table = unpackTable(@embedFile("phi-generator.bin"));
+
 fn joint(a: u256, point: Point, b: u256) Point {
     const left = splitScalar(a);
     const right = splitScalar(b);
     const streams = [_]ShortDigits{ recodeSigned(left[0], g_width), recodeSigned(left[1], g_width), recodeSigned(right[0], p_width), recodeSigned(right[1], p_width) };
-    const table = if (b == 0) [_]Point{Point.infinity()} ** (1 << (p_width - 2)) else oddTableWidth(point, p_width);
+    const common = commonZTable(if (b == 0) Point.infinity() else point, p_width);
+    const table = common.table;
+    const scale2 = mul(common.scale, common.scale);
+    const scale3 = mul(scale2, common.scale);
     var phi_table = table;
     for (&phi_table) |*q| q.* = endomorphism(q.*);
     var length: usize = 0;
@@ -233,11 +238,12 @@ fn joint(a: u256, point: Point, b: u256) Point {
     while (length != 0) {
         length -= 1;
         result = result.double();
-        if (streams[0].values[length] != 0) result = result.mixed(signedPoint(&generator_table, streams[0].values[length]));
-        if (streams[1].values[length] != 0) result = result.mixed(signedPoint(&phi_generator_table, streams[1].values[length]));
+        if (streams[0].values[length] != 0) result = result.mixed(scaleAffine(signedPoint(&generator_table, streams[0].values[length]), scale2, scale3));
+        if (streams[1].values[length] != 0) result = result.mixed(scaleAffine(signedPoint(&phi_generator_table, streams[1].values[length]), scale2, scale3));
         if (streams[2].values[length] != 0) result = result.mixed(signedPoint(&table, streams[2].values[length]));
         if (streams[3].values[length] != 0) result = result.mixed(signedPoint(&phi_table, streams[3].values[length]));
     }
+    result.z = mul(result.z, common.scale);
     return result;
 }
 
@@ -466,7 +472,7 @@ test "campaign inverse carries and private ECDSA coordinate comparison" {
 
 test "campaign tables, carries, cancellation and zero Schnorr challenge" {
     const old = @import("test_original.zig");
-    for (generator_table, 0..) |entry, i| try expectSamePoint(entry, old.g.multiply(2 * i + 1));
+    for (generator_table, 0..) |entry, i| try expectSamePoint(Point{ .x = entry.x, .y = entry.y }, old.g.multiply(2 * i + 1));
     for ([_]u256{ 0, 1, n - 1, std.math.maxInt(u256) }) |scalar| {
         const digits = @import("test_residual_baseline.zig").recode(scalar);
         var value: i512 = 0;
@@ -563,7 +569,7 @@ fn sqrtPower(a: u256) u256 {
     return r;
 }
 
-const g_width: usize = 8;
+const g_width: usize = 16;
 const p_width: usize = 4;
 
 fn generatorMultiply(k: u256) Point {
@@ -579,4 +585,53 @@ fn generatorMultiply(k: u256) Point {
         if (b.values[length] != 0) result = result.mixed(signedPoint(&phi_generator_table, b.values[length]));
     }
     return result;
+}
+
+// With T=product(Z_i), scaling each point by T/Z_i produces affine
+// coordinates on y^2=x^3+7*T^6. Prefix/suffix products need no inversion.
+fn commonZTable(point: Point, comptime width: usize) struct { table: [1 << (width - 2)]Point, scale: u256 } {
+    const size = 1 << (width - 2);
+    var table: [size]Point = undefined;
+    table[0] = point;
+    const step = point.double();
+    for (1..size) |i| table[i] = table[i - 1].plus(step);
+    var prefixes: [size]u256 = undefined;
+    var scale: u256 = 1;
+    for (table, 0..) |entry, i| {
+        prefixes[i] = scale;
+        if (entry.z != 0) scale = mul(scale, entry.z);
+    }
+    var suffix: u256 = 1;
+    var i: usize = size;
+    while (i != 0) {
+        i -= 1;
+        if (table[i].z == 0) continue;
+        const factor = mul(prefixes[i], suffix);
+        suffix = mul(suffix, table[i].z);
+        const square = mul(factor, factor);
+        table[i] = .{ .x = mul(table[i].x, square), .y = mul(table[i].y, mul(square, factor)) };
+    }
+    return .{ .table = table, .scale = scale };
+}
+fn scaleAffine(point: Point, square: u256, cube: u256) Point {
+    if (point.z == 0) return point;
+    return .{ .x = mul(point.x, square), .y = mul(point.y, cube) };
+}
+
+test "common-Z table and isomorphic joint multiplication" {
+    const original = @import("test_original.zig");
+    var random = std.Random.DefaultPrng.init(0x5348415245445a);
+    for (0..1000) |_| {
+        const a = random.random().int(u256) % n;
+        const b = random.random().int(u256) % n;
+        const expected = original.g.multiply(a).plus(original.g.multiply(b));
+        try expectSamePoint(joint(a, g, b), expected);
+    }
+    const table = commonZTable(g, p_width);
+    for (table.table, 0..) |entry, i| {
+        const actual = Point{ .x = entry.x, .y = entry.y, .z = table.scale };
+        try expectSamePoint(actual, original.g.multiply(@intCast(2 * i + 1)));
+    }
+    try std.testing.expect(joint(0, g, 0).z == 0);
+    try expectSamePoint(joint(1, g, n - 1), original.Point.infinity());
 }
