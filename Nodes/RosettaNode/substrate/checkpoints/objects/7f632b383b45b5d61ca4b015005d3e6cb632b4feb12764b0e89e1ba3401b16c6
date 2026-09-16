@@ -1,0 +1,361 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+)
+
+var (
+	errInvalid   = errors.New("invalid_request")
+	errMalformed = errors.New("malformed_encoding")
+	errLimit     = errors.New("resource_limit")
+)
+
+type response map[string]any
+
+type transactionJSON struct {
+	VersionBits string       `json:"version_bits"`
+	Inputs      []inputJSON  `json:"inputs"`
+	Outputs     []outputJSON `json:"outputs"`
+	Locktime    string       `json:"locktime"`
+}
+
+type inputJSON struct {
+	PreviousTxidDigestOrder string   `json:"previous_txid_digest_order"`
+	PreviousIndex           string   `json:"previous_index"`
+	Script                  string   `json:"script"`
+	Sequence                string   `json:"sequence"`
+	Witness                 []string `json:"witness"`
+}
+
+type outputJSON struct {
+	Amount string `json:"amount"`
+	Script string `json:"script"`
+}
+
+func object(raw json.RawMessage) (map[string]json.RawMessage, error) {
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &value); err != nil || value == nil {
+		return nil, errInvalid
+	}
+	return value, nil
+}
+
+func stringValue(raw json.RawMessage) (string, error) {
+	var value *string
+	if err := json.Unmarshal(raw, &value); err != nil || value == nil {
+		return "", errInvalid
+	}
+	return *value, nil
+}
+
+func unsigned(raw json.RawMessage, bits int) (uint64, error) {
+	s, err := stringValue(raw)
+	if err != nil || len(s) == 0 {
+		return 0, errInvalid
+	}
+	for i := range s {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, errInvalid
+		}
+	}
+	n, err := strconv.ParseUint(s, 10, bits)
+	if err != nil {
+		return 0, errInvalid
+	}
+	return n, nil
+}
+
+func hexValue(raw json.RawMessage) ([]byte, error) {
+	s, err := stringValue(raw)
+	if err != nil {
+		return nil, err
+	}
+	value, err := hex.DecodeString(s)
+	if err != nil {
+		return nil, errInvalid
+	}
+	return value, nil
+}
+
+func array(raw json.RawMessage, limit uint64) ([]json.RawMessage, error) {
+	var value []json.RawMessage
+	if err := json.Unmarshal(raw, &value); err != nil || value == nil {
+		return nil, errInvalid
+	}
+	if uint64(len(value)) > limit {
+		return nil, errLimit
+	}
+	return value, nil
+}
+
+func limitedHex(raw json.RawMessage, limit uint64) ([]byte, error) {
+	value, err := hexValue(raw)
+	if err != nil {
+		return nil, err
+	}
+	if uint64(len(value)) > limit {
+		return nil, errLimit
+	}
+	return value, nil
+}
+
+func parseTransaction(raw json.RawMessage, limit uint64) (*transaction, error) {
+	obj, err := object(raw)
+	if err != nil {
+		return nil, err
+	}
+	version, err := unsigned(obj["version_bits"], 32)
+	if err != nil {
+		return nil, err
+	}
+	locktime, err := unsigned(obj["locktime"], 32)
+	if err != nil {
+		return nil, err
+	}
+	inputs, err := array(obj["inputs"], limit)
+	if err != nil {
+		return nil, err
+	}
+	outputs, err := array(obj["outputs"], limit)
+	if err != nil {
+		return nil, err
+	}
+	tx := &transaction{
+		version: uint32(version), locktime: uint32(locktime),
+		inputs: make([]txInput, len(inputs)), outputs: make([]txOutput, len(outputs)),
+	}
+	for i, rawInput := range inputs {
+		in, err := object(rawInput)
+		if err != nil {
+			return nil, err
+		}
+		digest, err := hexValue(in["previous_txid_digest_order"])
+		if err != nil || len(digest) != 32 {
+			return nil, errInvalid
+		}
+		index, err := unsigned(in["previous_index"], 32)
+		if err != nil {
+			return nil, err
+		}
+		script, err := limitedHex(in["script"], limit)
+		if err != nil {
+			return nil, err
+		}
+		sequence, err := unsigned(in["sequence"], 32)
+		if err != nil {
+			return nil, err
+		}
+		witness, err := array(in["witness"], limit)
+		if err != nil {
+			return nil, err
+		}
+		input := &tx.inputs[i]
+		copy(input.previous[:], digest)
+		input.index, input.script, input.sequence = uint32(index), script, uint32(sequence)
+		input.witness = make([][]byte, len(witness))
+		for j, item := range witness {
+			input.witness[j], err = limitedHex(item, limit)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	for i, rawOutput := range outputs {
+		out, err := object(rawOutput)
+		if err != nil {
+			return nil, err
+		}
+		amount, err := unsigned(out["amount"], 64)
+		if err != nil {
+			return nil, err
+		}
+		script, err := limitedHex(out["script"], limit)
+		if err != nil {
+			return nil, err
+		}
+		tx.outputs[i] = txOutput{amount: amount, script: script}
+	}
+	return tx, nil
+}
+
+func (tx *transaction) jsonValue() transactionJSON {
+	result := transactionJSON{
+		VersionBits: strconv.FormatUint(uint64(tx.version), 10),
+		Inputs:      make([]inputJSON, len(tx.inputs)), Outputs: make([]outputJSON, len(tx.outputs)),
+		Locktime: strconv.FormatUint(uint64(tx.locktime), 10),
+	}
+	for i, in := range tx.inputs {
+		witness := make([]string, len(in.witness))
+		for j, item := range in.witness {
+			witness[j] = hex.EncodeToString(item)
+		}
+		result.Inputs[i] = inputJSON{
+			PreviousTxidDigestOrder: hex.EncodeToString(in.previous[:]),
+			PreviousIndex:           strconv.FormatUint(uint64(in.index), 10),
+			Script:                  hex.EncodeToString(in.script), Sequence: strconv.FormatUint(uint64(in.sequence), 10),
+			Witness: witness,
+		}
+	}
+	for i, out := range tx.outputs {
+		result.Outputs[i] = outputJSON{Amount: strconv.FormatUint(out.amount, 10), Script: hex.EncodeToString(out.script)}
+	}
+	return result
+}
+
+func digestOrders(data []byte) (string, string) {
+	first := sha256.Sum256(data)
+	digest := sha256.Sum256(first[:])
+	direct := hex.EncodeToString(digest[:])
+	for i, j := 0, len(digest)-1; i < j; i, j = i+1, j-1 {
+		digest[i], digest[j] = digest[j], digest[i]
+	}
+	return direct, hex.EncodeToString(digest[:])
+}
+
+func perform(line []byte) (response, error) {
+	request, err := object(line)
+	if err != nil {
+		return nil, err
+	}
+	op, err := stringValue(request["op"])
+	if err != nil {
+		return nil, err
+	}
+	limit := ^uint64(0)
+	if raw, present := request["limits"]; present {
+		limits, err := object(raw)
+		if err != nil {
+			return nil, err
+		}
+		if raw, present := limits["max_items"]; present {
+			limit, err = unsigned(raw, 64)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	switch op {
+	case "decode_prefix", "decode_exact":
+		data, err := hexValue(request["bytes"])
+		if err != nil {
+			return nil, err
+		}
+		mode, err := stringValue(request["mode"])
+		if err != nil || (mode != "legacy" && mode != "witness") {
+			return nil, errInvalid
+		}
+		var offset uint64
+		if op == "decode_prefix" {
+			offset, err = unsigned(request["offset"], 64)
+			if err != nil || offset > uint64(len(data)) {
+				return nil, errInvalid
+			}
+		}
+		tx, consumed, err := decode(data[int(offset):], mode == "witness", limit)
+		if err != nil {
+			return nil, err
+		}
+		if op == "decode_exact" && consumed != len(data) {
+			return nil, errMalformed
+		}
+		return response{"status": "ok", "transaction": tx.jsonValue(), "consumed": strconv.Itoa(consumed)}, nil
+	case "serialize", "identify":
+		var includeWitness bool
+		if op == "serialize" {
+			var value *bool
+			if err := json.Unmarshal(request["include_witness"], &value); err != nil || value == nil {
+				return nil, errInvalid
+			}
+			includeWitness = *value
+		}
+		tx, err := parseTransaction(request["transaction"], limit)
+		if err != nil {
+			return nil, err
+		}
+		if op == "serialize" {
+			data, err := serialize(tx, includeWitness)
+			if err != nil {
+				return nil, err
+			}
+			return response{"status": "ok", "bytes": hex.EncodeToString(data)}, nil
+		}
+		stripped, err := serialize(tx, false)
+		if err != nil {
+			return nil, err
+		}
+		full := stripped
+		if tx.hasWitness() {
+			full, err = serialize(tx, true)
+			if err != nil {
+				return nil, err
+			}
+		}
+		txid, txidDisplay := digestOrders(stripped)
+		wtxid, wtxidDisplay := digestOrders(full)
+		return response{
+			"status": "ok", "stripped": hex.EncodeToString(stripped), "full": hex.EncodeToString(full),
+			"stripped_size": strconv.Itoa(len(stripped)), "full_size": strconv.Itoa(len(full)),
+			"txid_digest_order": txid, "txid_display_order": txidDisplay,
+			"wtxid_digest_order": wtxid, "wtxid_display_order": wtxidDisplay,
+		}, nil
+	default:
+		return nil, errInvalid
+	}
+}
+
+func handleLine(line []byte) (result response) {
+	defer func() {
+		if recover() != nil {
+			result = response{"status": "execution_failure"}
+		}
+	}()
+	result, err := perform(line)
+	if err != nil {
+		status := "execution_failure"
+		if errors.Is(err, errInvalid) || errors.Is(err, errMalformed) || errors.Is(err, errLimit) {
+			status = err.Error()
+		}
+		return response{"status": status}
+	}
+	return result
+}
+
+func run(input io.Reader, output io.Writer) error {
+	reader := bufio.NewReader(input)
+	writer := bufio.NewWriter(output)
+	encoder := json.NewEncoder(writer)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if len(line) != 0 {
+			// ReadBytes also returns the final unterminated record at EOF.
+			if encodeErr := encoder.Encode(handleLine(bytes.TrimSpace(line))); encodeErr != nil {
+				return encodeErr
+			}
+			if flushErr := writer.Flush(); flushErr != nil {
+				return flushErr
+			}
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+func main() {
+	if err := run(os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

@@ -1,0 +1,15 @@
+{
+  "schema": "rosettanode.substrate.latency_analysis_freeze.v1",
+  "frozen_utc": "2026-09-16T22:11:12Z",
+  "candidate_measurements_started": false,
+  "analysis_sha256": "4f8d8e15864d0755fda77cb8100ef4c36d9fdbe837873670a393e9b5f115f582",
+  "control_summary": {
+    "count": 10000,
+    "median_ns": 14494960.0,
+    "p95_ns": 41089723,
+    "p99_ns": 68432344,
+    "max_ns": 139182405
+  },
+  "workload_changed": false,
+  "definition": "Durable admission native success to terminal native success; original admission RTT metrics remain separate."
+}

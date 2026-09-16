@@ -1,0 +1,148 @@
+/* Test-only external observer. The service exposes no barrier/scheduler hooks.
+ * Records C WriteBatch membership and successful libc sync calls; optional
+ * process-crash barriers surround the real terminal write. */
+#define _GNU_SOURCE
+#include <rocksdb/c.h>
+#include <adapter.h>
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <stdatomic.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+
+static void (*real_write)(rocksdb_t *, const rocksdb_writeoptions_t *, rocksdb_writebatch_t *, char **);
+static void (*real_close)(rocksdb_t *);
+static int (*real_fsync)(int), (*real_fdatasync)(int);
+static int (*real_verify)(rn_arena *, const rn_item_v2 *, uint64_t, rn_result *, uint64_t *);
+static atomic_uint native_entries;
+static int trace_fd = -1;
+static atomic_ulong write_calls, sync_calls, sync_success, wal_sync_success;
+static pthread_mutex_t trace_lock = PTHREAD_MUTEX_INITIALIZER;
+static const char *gate_dir, *gate_stage;
+static int gated;
+static uint64_t now_ns(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (uint64_t)t.tv_sec * 1000000000 + t.tv_nsec;
+}
+__attribute__((constructor)) static void init(void) {
+    real_write = dlsym(RTLD_NEXT, "rocksdb_write");
+    real_close = dlsym(RTLD_NEXT, "rocksdb_close");
+    real_fsync = dlsym(RTLD_NEXT, "fsync");
+    real_fdatasync = dlsym(RTLD_NEXT, "fdatasync");
+    real_verify = dlsym(RTLD_NEXT, "rn_verify_v2");
+    const char *path = getenv("RN_TEST_TRACE");
+    if (path) trace_fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+    gate_dir = getenv("RN_TEST_GATE_DIR");
+    gate_stage = getenv("RN_TEST_GATE_STAGE");
+}
+static void emit(const char *line) {
+    if (trace_fd < 0) return;
+    pthread_mutex_lock(&trace_lock);
+    size_t left = strlen(line);
+    while (left) {
+        ssize_t n = write(trace_fd, line, left);
+        if (n <= 0) _exit(98);
+        line += n;
+        left -= n;
+    }
+    pthread_mutex_unlock(&trace_lock);
+}
+static int sync_fd(int fd, int data) {
+    atomic_fetch_add(&sync_calls, 1);
+    int result = data ? real_fdatasync(fd) : real_fsync(fd);
+    if (!result) {
+        atomic_fetch_add(&sync_success, 1);
+        char link[64], path[4096];
+        snprintf(link, sizeof(link), "/proc/self/fd/%d", fd);
+        ssize_t n = readlink(link, path, sizeof(path) - 1);
+        if (n >= 4 && !memcmp(path + n - 4, ".log", 4)) atomic_fetch_add(&wal_sync_success, 1);
+    }
+    return result;
+}
+int fsync(int fd) { return sync_fd(fd, 0); }
+int fdatasync(int fd) { return sync_fd(fd, 1); }
+int rn_verify_v2(rn_arena *arena, const rn_item_v2 *items, uint64_t count, rn_result *out, uint64_t *bitmap) {
+    const char *dir = getenv("RN_TEST_NATIVE_GATE_DIR");
+    unsigned entry = atomic_fetch_add(&native_entries, 1);
+    if (dir && (entry == 0 || !getenv("RN_TEST_NATIVE_GATE_FIRST"))) {
+        char path[4096];
+        snprintf(path, sizeof(path), "%s/entered", dir);
+        int fd = open(path, O_WRONLY | O_CREAT, 0600);
+        if (fd < 0) _exit(95);
+        close(fd);
+        snprintf(path, sizeof(path), "%s/release", dir);
+        struct timespec nap = { .tv_nsec = 1000000 };
+        while (access(path, F_OK)) nanosleep(&nap, NULL);
+    }
+    return real_verify(arena, items, count, out, bitmap);
+}
+struct members { unsigned count, pending, cancel; uint64_t sequence[1024]; };
+static void put(void *ctx, const char *key, size_t len, const char *value, size_t size) {
+    (void)value; (void)size;
+    struct members *m = ctx;
+    if (len != 22 || key[1] != '/') return;
+    if (key[0] == 'p') ++m->pending;
+    if (key[0] == 'c') ++m->cancel;
+    if (key[0] == 'r') {
+        if (m->count == 1024) _exit(97);
+        uint64_t n = 0;
+        for (size_t i = 2; i < len; ++i) n = n * 10 + (key[i] - '0');
+        m->sequence[m->count++] = n;
+    }
+}
+static void del(void *ctx, const char *key, size_t len) { (void)ctx; (void)key; (void)len; }
+static void barrier(const char *stage) {
+    if (!gate_dir || !gate_stage || strcmp(stage, gate_stage) || gated) return;
+    gated = 1;
+    char path[4096];
+    snprintf(path, sizeof(path), "%s/entered", gate_dir);
+    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (fd < 0) _exit(96);
+    close(fd);
+    snprintf(path, sizeof(path), "%s/release", gate_dir);
+    struct timespec nap = { .tv_nsec = 1000000 };
+    while (access(path, F_OK)) nanosleep(&nap, NULL);
+}
+void rocksdb_write(rocksdb_t *db, const rocksdb_writeoptions_t *opts, rocksdb_writebatch_t *batch, char **err) {
+    uint64_t entry = now_ns();
+    unsigned long id = atomic_fetch_add(&write_calls, 1) + 1;
+    struct members m = {0};
+    rocksdb_writebatch_iterate(batch, &m, put, del);
+    char line[32768];
+    int used = snprintf(line, sizeof(line), "{\"event\":\"call_entry\",\"id\":%lu,\"ns\":%llu,\"pending\":%u,\"cancel\":%u,\"terminal\":[", id, (unsigned long long)entry, m.pending, m.cancel);
+    for (unsigned i = 0; i < m.count; ++i)
+        used += snprintf(line + used, sizeof(line) - used, "%s%llu", i ? "," : "", (unsigned long long)m.sequence[i]);
+    snprintf(line + used, sizeof(line) - used, "]}\n");
+    emit(line);
+    if (m.count) barrier("before");
+    if (m.count && getenv("RN_TEST_FAIL_TERMINAL")) *err = strdup("injected terminal write failure");
+    else real_write(db, opts, batch, err);
+    snprintf(line, sizeof(line), "{\"event\":\"call_return\",\"id\":%lu,\"ns\":%llu,\"ok\":%s}\n", id, (unsigned long long)now_ns(), *err ? "false" : "true");
+    emit(line);
+    if (m.count) barrier("after");
+}
+__attribute__((destructor)) static void finish(void) {
+    char line[512];
+    snprintf(line, sizeof(line), "{\"event\":\"summary\",\"write_calls\":%lu,\"sync_calls\":%lu,\"sync_successes\":%lu,\"wal_sync_successes\":%lu}\n", atomic_load(&write_calls), atomic_load(&sync_calls), atomic_load(&sync_success), atomic_load(&wal_sync_success));
+    emit(line);
+    if (trace_fd >= 0) close(trace_fd);
+}
+void rocksdb_close(rocksdb_t *db) {
+    const char *path = getenv("RN_TEST_STATS");
+    if (path) {
+        FILE *file = fopen(path, "a");
+        char *stats = rocksdb_property_value(db, "rocksdb.stats");
+        if (file) {
+            if (stats) fputs(stats, file);
+            fclose(file);
+        }
+        if (stats) rocksdb_free(stats);
+    }
+    real_close(db);
+}

@@ -1,0 +1,55 @@
+# Initial-round experiment and attempt record
+
+This is the baseline implementation round. No optimization lane was run; zero optimization hypotheses have been consumed. In particular, group commit was not implemented. No measurements here support a language-performance comparison.
+
+Baseline design hypothesis: serial ownership of durable state can give cancellation and terminal writes a legal ordering while four independent workers retain native concurrency. Socket/crash and Go race tests support the exercised histories; they do not prove all possible interleavings.
+
+## Attempts and outcomes
+
+| Attempt | Outcome and action |
+|---|---|
+| Reading: `go doc encoding/json.Decoder` through broker | Failed because the reading-phase workspace cache was read-only. Redirecting the cache to workspace tmp also failed then. Read pinned `/opt/go/src` documentation through `python3 run.py` instead. |
+| First build and supplied public smoke | Passed. Implementation-phase workspace writes were available. |
+| Initial `go test -v ./...` | Failed to execute its test binary under `/tmp`: permission denied. Set `GOTMPDIR=/workspace/tmp`; this is preserved in `test.sh`. |
+| First executable native-vector tests | A truncated fixture `01000000fd0110` returned malformed (`1`), not resource limit (`2`). The fixture lacked the declared inputs. Retained this finding and replaced the resource-limit fixture with a complete 4,097-input encoding; the complete fixture returned `2`. No service behavior was changed to satisfy the mistaken expectation. |
+| Corrected unit suite | Passed native digests/limits, wire validation, line framing, durable cancellation/recovery and rejection of inconsistent state. |
+| First normal socket/crash suite | Passed eight-client concurrency, 251 jobs, retries/conflicts, pipelining, lock, disconnect, restart and six SIGKILL cycles. Every crash left pending work; three cancellations had been acknowledged and survived. |
+| First Go race diagnostics | Unit tests and full race-service socket/crash suite passed without reported Go races. |
+| Transport boundary review | Found that a 48 MiB output budget could reject valid large correlation responses. Disabled HTML escaping, raised the bounded budget to 128 MiB, and released queued frames when a writer exits. A maximum-correlation expansion test passed. |
+| Strict cgo diagnostics | `GOEXPERIMENT=cgocheck2` native and durable-recovery tests passed. |
+| Recovery memory review | Replaced full-history buffering with streaming validation so retained receipts do not consume unbounded startup memory. Added missing-schema/index/receipt rejection cases. |
+| Final `./test.sh` | Passed all unit tests, public smoke and socket/crash suite; six pending crash snapshots and three durable cancellations. |
+| Final `./test.sh --race` | Passed all unit tests (including large correlation) and full race-service socket/crash suite; same six/three crash coverage. |
+| ELF identification with `file` | Utility absent in the broker; command stopped before subsequent inspections. Used Python's standard library to check ELF64/AArch64 and `readelf` for dynamic linking and symbols instead. |
+| Final executable inspection | Executable Linux AArch64 ELF; Go 1.27.1; supplied adapter/RocksDB dynamic links; `/adapter` RUNPATH; v1 native entrypoint only. Hashes recorded in HANDOFF.md. |
+
+All host Python invocations emitted macOS xcrun cache permission warnings; the request client still successfully submitted broker commands. No host toolchain was used to build or test the service. Broker requests/responses remain in `queue/`; tests retain failed integration artifacts if any test fails. Successful test databases are disposable and removed by the candidate test script. The supplied public smoke leaves its own temporary database directories.
+
+## Scope of evidence
+
+The independent inspector is candidate-owned Python using only the standard library and dynamic RocksDB C API; it does not use service status as its oracle. It opens only after the writer has exited. Crash tests check complete old/new logical state, retained acknowledged payloads, receipts, id bijection, contiguous checkpoint, pending accounting and cancellation persistence. No external evaluator, other workspace, repository, network, Bitcoin library or other agent was accessed.
+
+No native diagnostic instrumentation was supplied or constructed. Go race checks cover exercised Go paths, not native library races. The test suite does not deterministically hold C call-entry/write barriers, inject storage/allocation failures, prove admission-limit saturation, or simulate power loss. The native adapter and durability settings were unchanged.
+
+## Effort accounting
+
+Implementation start recorded at 2026-09-16 20:52:24 UTC. Final normal/race validation and ELF inspection completed by approximately 21:11:30 UTC. Deliverable verification completed at 21:13:31 UTC: approximately 21 minutes 7 seconds of implementation-phase wall time, plus this accounting update. Reading finished within its separate ten-minute ceiling. No repair or optimization phase was used.
+
+Exact model-token usage, monetary cost, and infrastructure preparation cost are unavailable in this session and are not estimated. Test/build times printed by Go are diagnostic execution times, not service performance results. No warm-up, seven-repetition benchmark, fairness/tail measurement, or substrate recommendation was attempted.
+
+## Separate repair reserve
+
+The user authorized the separate 15-minute repair after initial freeze. Repair began at 2026-09-16 21:14:27 UTC. The original 15-file submission, executable and feedback were retained in `repair/pre-repair-submission.tar.gz`; source was not rewritten.
+
+Feedback contains one family, `injected_failures`, with an otherwise unexplained JSONDecodeError. A candidate-owned test-only interposer reproduced the exact exception on the original executable by returning a RocksDB admission write error: the socket response was empty. The failure artifacts remain at `tmp/failure-admission-submit-c5dlrx6e`. This is a matching reproduction; the evaluator's precise injection sequence remains unknown.
+
+Production correction: `server.go` now sends a correlated `execution_failure` response on request-associated storage errors before the existing fatal stop. It does not return acceptance, a sequence, or a terminal receipt for the failed transition. No changes to storage policy, WAL/sync, schema, arena ownership, native ABI or scheduling were made.
+
+Six focused injection cases passed after the fix: admission before/after native write, arena failure during evaluate/accepted work, terminal write error and cancellation write error. The complete normal and race suites then passed, including all existing unit/public/socket/crash checks and all six new fault cases. Completion of validation and hashes was recorded at 21:18:37 UTC (4 minutes 10 seconds after repair start); handoff finalization followed. No second evaluator result is available.
+
+`tests/faults.c` is linked only into a test shared object; successful calls forward to the supplied adapter and designated RocksDB. It provides no barriers or scheduler hooks. The injected-after-write case checks that an error can leave complete new state without receiving an acceptance; restart remains authoritative. Independent database inspection follows writer exit in all cases. Test-only source and failure notes are retained, and `test.sh` includes the new regression in both normal and race modes.
+
+Original service SHA-256: `492a07b3eb9d276fd8eae6790fbd5914d317081785791295ae406e5c65e4e86e`.
+Repaired service SHA-256: `5f5b9227ede98cae9a120f8baa4c12c7ad4ca96fd2db31fdf8db6ec10d02e4f3`.
+Retained archive SHA-256: `f4ffe4f4ae651e597aa889652e5a044c41c9f3eb16f07b9034bdcde4878ce5d7`.
+The adapter hash is unchanged. Repair token/cost usage is unavailable. No optimization hypothesis was consumed.

@@ -1,0 +1,296 @@
+package main
+
+import (
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"strconv"
+	"unicode/utf8"
+)
+
+type jsonTransaction struct {
+	Version  string       `json:"version_bits"`
+	Inputs   []jsonInput  `json:"inputs"`
+	Outputs  []jsonOutput `json:"outputs"`
+	Locktime string       `json:"locktime"`
+}
+
+type jsonInput struct {
+	Digest   string   `json:"previous_txid_digest_order"`
+	Index    string   `json:"previous_index"`
+	Script   string   `json:"script"`
+	Sequence string   `json:"sequence"`
+	Witness  []string `json:"witness"`
+}
+
+type jsonOutput struct {
+	Amount string `json:"amount"`
+	Script string `json:"script"`
+}
+
+func (tx *transaction) jsonObject() *jsonTransaction {
+	out := &jsonTransaction{
+		Version: strconv.FormatUint(uint64(tx.version), 10), Locktime: strconv.FormatUint(uint64(tx.locktime), 10),
+		Inputs: make([]jsonInput, len(tx.inputs)), Outputs: make([]jsonOutput, len(tx.outputs)),
+	}
+	for i, in := range tx.inputs {
+		v := jsonInput{
+			Digest: hex.EncodeToString(in.digest), Index: strconv.FormatUint(uint64(in.index), 10),
+			Script: hex.EncodeToString(in.script), Sequence: strconv.FormatUint(uint64(in.sequence), 10),
+			Witness: make([]string, len(in.witness)),
+		}
+		for j, item := range in.witness {
+			v.Witness[j] = hex.EncodeToString(item)
+		}
+		out.Inputs[i] = v
+	}
+	for i, v := range tx.outputs {
+		out.Outputs[i] = jsonOutput{Amount: strconv.FormatInt(v.amount, 10), Script: hex.EncodeToString(v.script)}
+	}
+	return out
+}
+
+func object(raw json.RawMessage, fields ...string) map[string]json.RawMessage {
+	var result map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &result); err != nil || result == nil {
+		panic(invalidRequest)
+	}
+	if fields != nil {
+		if len(result) != len(fields) {
+			panic(invalidRequest)
+		}
+		for _, name := range fields {
+			if _, exists := result[name]; !exists {
+				panic(invalidRequest)
+			}
+		}
+	}
+	return result
+}
+
+func stringValue(raw json.RawMessage) string {
+	var s string
+	if len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &s) != nil {
+		panic(invalidRequest)
+	}
+	return s
+}
+
+func decimal(raw json.RawMessage, signed bool) string {
+	s := stringValue(raw)
+	digits := s
+	if signed && len(digits) > 0 && digits[0] == '-' {
+		digits = digits[1:]
+		if digits == "0" {
+			panic(invalidRequest)
+		}
+	}
+	if len(digits) == 0 || len(digits) > 1 && digits[0] == '0' {
+		panic(invalidRequest)
+	}
+	for i := range digits {
+		if digits[i] < '0' || digits[i] > '9' {
+			panic(invalidRequest)
+		}
+	}
+	return s
+}
+
+func unsigned(raw json.RawMessage, bits int) uint64 {
+	v, err := strconv.ParseUint(decimal(raw, false), 10, bits)
+	if err != nil {
+		panic(invalidRequest)
+	}
+	return v
+}
+
+func signedAmount(raw json.RawMessage) int64 {
+	v, err := strconv.ParseInt(decimal(raw, true), 10, 64)
+	if err != nil {
+		panic(invalidRequest)
+	}
+	return v
+}
+
+func boolValue(raw json.RawMessage) bool {
+	switch string(raw) {
+	case "true":
+		return true
+	case "false":
+		return false
+	default:
+		panic(invalidRequest)
+	}
+}
+
+func hexValue(raw json.RawMessage) string {
+	s := stringValue(raw)
+	if len(s)%2 != 0 {
+		panic(invalidRequest)
+	}
+	for i := range s {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			panic(invalidRequest)
+		}
+	}
+	return s
+}
+
+// Iterate validated JSON arrays without allocating a slice from their count.
+// This also lets validation continue after the item budget has been exceeded.
+func array(raw json.RawMessage, visit func(json.RawMessage)) {
+	if len(raw) == 0 || raw[0] != '[' {
+		panic(invalidRequest)
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	if token, err := d.Token(); err != nil || token != json.Delim('[') {
+		panic(invalidRequest)
+	}
+	for d.More() {
+		var item json.RawMessage
+		if d.Decode(&item) != nil {
+			panic(invalidRequest)
+		}
+		visit(item)
+	}
+	if token, err := d.Token(); err != nil || token != json.Delim(']') {
+		panic(invalidRequest)
+	}
+}
+
+type structureContext struct {
+	items uint64
+	pool  uint64
+	limit uint64
+}
+
+func (c *structureContext) keep() bool { return c.items <= c.limit && c.pool <= transportBytes }
+
+func (c *structureContext) blob(raw json.RawMessage, digest bool) []byte {
+	s := hexValue(raw)
+	if digest && len(s) != 64 {
+		panic(invalidRequest)
+	}
+	c.pool += uint64(len(s) / 2)
+	if !c.keep() {
+		return nil
+	}
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		panic(invalidRequest)
+	}
+	return b
+}
+
+func parseTransaction(raw json.RawMessage, limit uint64) transaction {
+	obj := object(raw, "version_bits", "inputs", "outputs", "locktime")
+	var tx transaction
+	tx.version = uint32(unsigned(obj["version_bits"], 32))
+	tx.locktime = uint32(unsigned(obj["locktime"], 32))
+	c := structureContext{limit: limit}
+	array(obj["inputs"], func(raw json.RawMessage) {
+		c.items++
+		o := object(raw, "previous_txid_digest_order", "previous_index", "script", "sequence", "witness")
+		var in txInput
+		in.digest = c.blob(o["previous_txid_digest_order"], true)
+		in.index = uint32(unsigned(o["previous_index"], 32))
+		in.script = c.blob(o["script"], false)
+		in.sequence = uint32(unsigned(o["sequence"], 32))
+		array(o["witness"], func(raw json.RawMessage) {
+			c.items++
+			item := c.blob(raw, false)
+			if c.keep() {
+				in.witness = append(in.witness, item)
+			}
+		})
+		if c.keep() {
+			tx.inputs = append(tx.inputs, in)
+		}
+	})
+	array(obj["outputs"], func(raw json.RawMessage) {
+		c.items++
+		o := object(raw, "amount", "script")
+		out := txOutput{amount: signedAmount(o["amount"]), script: c.blob(o["script"], false)}
+		if c.keep() {
+			tx.outputs = append(tx.outputs, out)
+		}
+	})
+	if c.pool > transportBytes {
+		panic(transportLimit)
+	}
+	if c.items > limit {
+		panic(resourceLimit)
+	}
+	return tx
+}
+
+func handleRequest(line []byte) (result response) {
+	defer func() {
+		if p := recover(); p != nil {
+			result = response{Status: "execution_failure"}
+			if status, ok := p.(rejection); ok {
+				result.Status = string(status)
+			}
+		}
+	}()
+	if len(line) > transportText {
+		panic(transportLimit)
+	}
+	if !utf8.Valid(line) {
+		panic(invalidRequest)
+	}
+	req := object(line)
+	op := stringValue(req["op"])
+	limit := uint64(defaultItems)
+	if raw, exists := req["limits"]; exists {
+		limits := object(raw)
+		if raw, exists := limits["max_items"]; exists {
+			limit = unsigned(raw, 64)
+			if limit > defaultItems {
+				panic(invalidRequest)
+			}
+		}
+	}
+	switch op {
+	case "decode_prefix", "decode_exact":
+		mode := stringValue(req["mode"])
+		if mode != "legacy" && mode != "witness" {
+			panic(invalidRequest)
+		}
+		s := hexValue(req["bytes"])
+		offset := uint64(0)
+		if op == "decode_prefix" {
+			if raw, exists := req["offset"]; exists {
+				offset = unsigned(raw, 64)
+			}
+		}
+		if offset > uint64(len(s)/2) {
+			panic(invalidRequest)
+		}
+		if len(s)/2 > transportBytes {
+			panic(transportLimit)
+		}
+		if uint64(len(s)/2)-offset > admissionBytes {
+			panic(admissionLimit)
+		}
+		data, err := hex.DecodeString(s)
+		if err != nil {
+			panic(invalidRequest)
+		}
+		tx, consumed := decode(data, int(offset), mode == "witness", op == "decode_exact", limit)
+		return response{Status: "ok", Transaction: tx.jsonObject(), Consumed: strconv.Itoa(consumed)}
+	case "serialize", "identify":
+		includeWitness := false
+		if op == "serialize" {
+			includeWitness = boolValue(req["include_witness"])
+		}
+		tx := parseTransaction(req["transaction"], limit)
+		if op == "identify" {
+			return identify(&tx)
+		}
+		return response{Status: "ok", Bytes: hex.EncodeToString(serialize(&tx, includeWitness))}
+	default:
+		panic(invalidRequest)
+	}
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "rosettanode.substrate.toolchains.v1",
+  "image_id": "sha256:cc9b0ebe055af2cf067e3ca206f6d236682c87c48debb5f205d0657dbcc0476e",
+  "base_image_id": "sha256:f83bba745d70d68b66f374b5a195100a3a4cdb9439eb2cf3085020ab582e9a0a",
+  "archives": {
+    "zig.tar.xz": "ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17",
+    "rust.tar.xz": "0b514a8cc1cbcd939bff0f151661fe58b6ea5c7a7f645a5098c69e32e8c1e0a2",
+    "go.tar.gz": "3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec"
+  },
+  "versions": {
+    "go": "1.27.1",
+    "rust": "1.98.1",
+    "zig": "0.16.0"
+  },
+  "candidate_launch_allowed": false
+}

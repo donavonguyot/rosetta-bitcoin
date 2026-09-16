@@ -1,0 +1,99 @@
+# Implementation and assumptions
+
+Implemented `decode_prefix`, `decode_exact`, `serialize`, and `identify` in
+Rust 1.98.1 using only the standard library. `main.rs` is the entry point;
+`codec.rs`, `json.rs`, and `sha256.rs` contain the helpers. `tests.rs` and an
+internal codec test module contain the local tests. `candidate` is the compiled
+submission executable.
+
+The initial supplied specifications were `language.md` and `interface.md`.
+They define the JSON interface but do not define the transaction wire grammar,
+hashing algorithm, resource-limit semantics, or detailed error classification.
+The separate repair phase supplied six bounded examples in `feedback.json`.
+The following documents current behavior; choices beyond those demonstrated by
+the supplied examples remain assumptions:
+
+- Wire encoding uses little-endian fixed-width integers, canonical CompactSize
+  lengths, and raw previous-transaction digest bytes without reversal.
+- `version_bits`, `previous_index`, `sequence`, and `locktime` are unsigned
+  32-bit quantities. `amount` is a signed 64-bit quantity encoded in eight
+  little-endian two's-complement bytes, as demonstrated by repair feedback.
+  No consensus,
+  script-validity, monetary-range, or transaction-policy checks are performed.
+- Witness mode also accepts legacy encodings. A zero input count activates
+  marker/flag interpretation. Flag 1 introduces per-input witness stacks;
+  unknown flag bits and a witness encoding with every stack empty are malformed.
+  A stack containing one empty item is nonempty. A zero flag is treated as the
+  zero output count of a legacy transaction with no inputs or outputs.
+- Serialization emits witness framing only when requested and at least one
+  witness stack has an item. A legacy serialization with no inputs and nonzero
+  outputs is allowed, although witness-mode decoding of those bytes is
+  ambiguous and may fail.
+- Transaction identifiers are double SHA-256: txid hashes stripped bytes,
+  wtxid hashes full bytes, and display order reverses the digest bytes.
+- `decode_prefix.consumed` counts bytes from the requested offset. An offset
+  beyond the input is `invalid_request`; an offset at EOF yields a truncated
+  encoding. `decode_exact` rejects any trailing bytes as `malformed_encoding`.
+- `max_items` limits each CompactSize-prefixed collection separately, including
+  script bytes and witness-item bytes. It is not an aggregate budget. Omission
+  means no additional numeric cap (`u64::MAX`). A zero limit permits empty
+  collections. Serialization checks only collections included in its output;
+  `identify` checks both encodings. The decoder checks whether the remaining
+  bytes can hold the declared count at its minimum item size before enforcing
+  the item limit. An impossible payload is `malformed_encoding`; otherwise an
+  excessive count is `resource_limit`. It does not fully parse an over-limit
+  collection to discover later errors. This precedence generalizes the supplied
+  truncated-input counterexample.
+- Missing required fields, wrong JSON types, out-of-range decimal strings, and
+  invalid hex yield `invalid_request`. Integer strings accept leading zeroes
+  and a leading minus sign for amounts, but not plus signs, whitespace,
+  fractions, or exponents. Hex is case-insensitive
+  on input and lowercase on output. Every input requires its `witness` array.
+- Unknown JSON fields are ignored; duplicate fields use the last value.
+  Absent or null `limits` uses defaults; an explicit null `max_items` is invalid.
+  Blank lines are invalid requests. Each line is processed independently,
+  including a final line without a newline.
+- JSON nesting beyond 256 is `admission_limit`. Failed explicit allocation
+  reservations are `resource_limit`; caught processing panics are
+  `execution_failure`. No arbitrary transport-byte cap is imposed, so there
+  is no configured trigger for `transport_limit`. The documents do not specify
+  precedence when a request has multiple independent errors.
+
+## Build and validation
+
+Build command from `language.md`:
+
+```sh
+/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/toolchain-wrappers/rustc --edition=2024 -C opt-level=2 -C linker=/Library/Developer/CommandLineTools/usr/bin/clang main.rs -o candidate
+```
+
+Local tests:
+
+```sh
+/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/toolchain-wrappers/rustc --edition=2024 --test -C opt-level=2 -C linker=/Library/Developer/CommandLineTools/usr/bin/clang main.rs -o tmp/candidate_tests
+./tmp/candidate_tests
+```
+
+All 25 tests passed after repair (17 initial tests and eight added tests).
+Coverage includes SHA-256 known answers, a known genesis
+transaction identifier, literal legacy/witness encodings, all truncations of
+two fixtures, prefix offsets, integer extremes, CompactSize boundaries,
+nonminimal lengths, witness edge cases, limits, JSON validation, 1,000 generated
+transaction round trips, 20,000 random malformed inputs, and 10,000 mutations of
+valid encodings. All six supplied feedback examples are exact-response
+regressions. Additional repair tests cover signed amount bounds, rejected
+out-of-range amounts, and malformed/resource precedence at each vector type.
+A separate initial executable smoke test exercised all four operations and
+recovery after invalid requests. No external dependencies, network access,
+reference execution, or evaluator access were used; repair feedback came only
+from the user-supplied `feedback.json`.
+
+## Repair outcome
+
+All six supplied cases were reproduced as failures before modifying the codec.
+Five shared the unsigned-amount assumption: negative values were either
+rejected in structured input or decoded as large positive values. Using `i64`
+for amounts fixes decoding, serialization, and both identifiers while retaining
+the original wire bits. The sixth case required checking that a declared
+payload can exist before returning an item-limit error. Both repairs are in
+`codec.rs`; all six examples now match their supplied expected responses.

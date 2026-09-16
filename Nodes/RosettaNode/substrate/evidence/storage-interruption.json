@@ -1,0 +1,17 @@
+{
+  "schema": "rosettanode.substrate.infrastructure_event.v1",
+  "event": "Docker overlay ENOSPC",
+  "affected_lineage": "zig-2",
+  "invalidated_evaluations": [
+    ".local/campaign-v2/zig-2/initial/v3-evaluation/result.json",
+    ".local/campaign-v2/zig-2/initial/corrected-repair-evaluation/result.json"
+  ],
+  "language_failure": false,
+  "empty_feedback_repair_seconds": 40.01553066699125,
+  "production_or_binary_changed": false,
+  "preserved_original_retested": true,
+  "resolution": "Archived and checksum-verified trial-owned stopped-container state before removing only their writable layers. No unrelated services, containers or volumes removed. Failed-run named volumes retained.",
+  "retention_manifest": "container-retention.json",
+  "remaining_overlay_available_after_cleanup": "27 GiB as reported by df",
+  "source_result": "lineage-v2-zig-2-initial.json"
+}

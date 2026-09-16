@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""Local contract tests: supplied fixtures, hand-derived cases, and round trips."""
+import copy
+import hashlib
+import json
+import random
+import subprocess
+
+p = subprocess.Popen(['./candidate'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+checks = 0
+
+def request(req):
+    p.stdin.write(json.dumps(req, separators=(',', ':')).encode() + b'\n')
+    p.stdin.flush()
+    line = p.stdout.readline()
+    assert line, ('candidate stopped', p.poll())
+    return json.loads(line)
+
+def check(req, expected):
+    global checks
+    result = request(req)
+    assert result == expected, (req if len(str(req)) < 2000 else '<large request>', result, expected)
+    checks += 1
+    return result
+
+def status(req, expected):
+    return check(req, {'status': expected})
+
+def decode(h, mode='witness', **extra):
+    return dict(op='decode_exact', bytes=h, mode=mode, **extra)
+
+def serialize(tx, witness=True, **extra):
+    return dict(op='serialize', transaction=tx, include_witness=witness, **extra)
+
+def identify(tx, **extra):
+    return dict(op='identify', transaction=tx, **extra)
+
+zero_tx = dict(version_bits='0', inputs=[], outputs=[], locktime='0')
+inp = dict(previous_txid_digest_order='00'*32, previous_index='0', script='', sequence='4294967295', witness=[])
+tx = dict(version_bits='1', inputs=[copy.deepcopy(inp)], outputs=[dict(amount='42', script='51')], locktime='0')
+fixture = '010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000'
+digest = '4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583'
+check(serialize(tx), dict(status='ok', bytes=fixture))
+check(identify(tx), dict(status='ok', stripped=fixture, full=fixture, stripped_size='61', full_size='61', txid_digest_order=digest, txid_display_order=bytes.fromhex(digest)[::-1].hex(), wtxid_digest_order=digest, wtxid_display_order=bytes.fromhex(digest)[::-1].hex()))
+for mode in ['legacy', 'witness']:
+    check(decode(fixture, mode), dict(status='ok', transaction=tx, consumed='61'))
+    check(decode(fixture.upper(), mode), dict(status='ok', transaction=tx, consumed='61'))
+check(dict(op='decode_prefix', bytes='05000000000044332211aa', mode='witness'), dict(status='ok', transaction=dict(version_bits='5', inputs=[], outputs=[], locktime='287454020'), consumed='10'))
+status(decode('05000000000044332211aa'), 'malformed_encoding')
+for mode in ['legacy', 'witness']:
+    check(decode('00'*10, mode), dict(status='ok', transaction=zero_tx, consumed='10'))
+check(serialize(zero_tx), dict(status='ok', bytes='00'*10))
+check(decode('00'*10, limits=dict(max_items='0')), dict(status='ok', transaction=zero_tx, consumed='10'))
+
+# Digest byte order and signed/raw field boundaries.
+boundary = dict(version_bits='4294967295', inputs=[dict(previous_txid_digest_order=bytes(range(32)).hex(), previous_index='4294967295', script='', sequence='0', witness=[''])], outputs=[dict(amount='-9223372036854775808', script=''), dict(amount='9223372036854775807', script='')], locktime='4294967295')
+stripped = 'ffffffff01' + bytes(range(32)).hex() + 'ffffffff0000000000' + '02' + '000000000000008000' + 'ffffffffffffff7f00' + 'ffffffff'
+full = stripped[:8] + '0001' + stripped[8:-8] + '0100' + stripped[-8:]
+check(serialize(boundary, False), dict(status='ok', bytes=stripped))
+check(serialize(boundary, True), dict(status='ok', bytes=full))
+check(decode(full), dict(status='ok', transaction=boundary, consumed=str(len(bytes.fromhex(full)))))
+boundary_stripped = copy.deepcopy(boundary)
+boundary_stripped['inputs'][0]['witness'] = []
+check(decode(stripped), dict(status='ok', transaction=boundary_stripped, consumed=str(len(bytes.fromhex(stripped)))))
+ids = request(identify(boundary))
+assert ids['txid_digest_order'] == hashlib.sha256(hashlib.sha256(bytes.fromhex(stripped)).digest()).hexdigest()
+assert ids['wtxid_digest_order'] == hashlib.sha256(hashlib.sha256(bytes.fromhex(full)).digest()).hexdigest()
+assert ids['txid_digest_order'] != ids['wtxid_digest_order']
+checks += 3
+
+# Witness transitions, missing/unknown flags, and one empty item versus no items.
+wtx = copy.deepcopy(tx)
+wtx['inputs'][0]['witness'] = ['']
+wfull = fixture[:8] + '0001' + fixture[8:-8] + '0100' + fixture[-8:]
+check(serialize(wtx), dict(status='ok', bytes=wfull))
+check(decode(wfull), dict(status='ok', transaction=wtx, consumed='65'))
+superfluous = fixture[:8] + '0001' + fixture[8:-8] + '00' + fixture[-8:]
+status(decode(superfluous), 'malformed_encoding')
+status(decode(wfull[:10] + '03' + wfull[12:]), 'malformed_encoding')
+status(decode(fixture[:8] + '0002' + fixture[8:]), 'malformed_encoding')
+status(decode('010000000001000000000000'), 'malformed_encoding')
+status(decode('0100000000'), 'malformed_encoding')
+for i in range(len(bytes.fromhex(wfull))):
+    status(decode(wfull[:2*i], limits=dict(max_items='0')), 'malformed_encoding')
+status(decode(wfull, limits=dict(max_items='2')), 'resource_limit')
+status(decode(wfull + '00', limits=dict(max_items='2')), 'malformed_encoding')
+check(dict(op='decode_prefix', mode='witness', bytes='abcd'+wfull+'ff', offset='2', limits=dict(max_items='3')), dict(status='ok', transaction=wtx, consumed='65'))
+status(dict(op='decode_prefix', mode='witness', bytes=wfull+'ff', limits=dict(max_items='2')), 'resource_limit')
+
+# Noncanonical CompactSizes in every vector/length location.
+status(decode('01000000fd0100' + fixture[10:]), 'malformed_encoding')
+status(decode(fixture[:82] + 'fd0000' + fixture[84:]), 'malformed_encoding')
+status(decode(fixture[:92] + 'fd0100' + fixture[94:]), 'malformed_encoding')
+status(decode(fixture[:110] + 'fd0100' + fixture[112:]), 'malformed_encoding')
+status(decode(wfull[:-12] + 'fd0100' + wfull[-10:]), 'malformed_encoding')
+status(decode(wfull[:-10] + 'fd0000' + wfull[-8:]), 'malformed_encoding')
+for prefix in ['fd', 'fd00', 'fe', 'fe0000', 'ff', 'ff00000000', 'fdfc00', 'feffff0000', 'ffffffffff00000000', 'ffffffffffffffffff']:
+    status(decode('01000000' + prefix, limits=dict(max_items='0')), 'malformed_encoding')
+
+# Offsets, request shapes, strict numeric grammar, and limits.
+for offset in ['-1', '01', '18446744073709551616', '62', '', 0, None]:
+    status(dict(op='decode_prefix', bytes=fixture, mode='witness', offset=offset), 'invalid_request')
+status(dict(op='decode_prefix', bytes=fixture, mode='witness', offset='61'), 'malformed_encoding')
+check(dict(op='decode_exact', bytes=fixture, mode='witness', offset='bad', ignored=123), dict(status='ok', transaction=tx, consumed='61'))
+for bad in [None, [], '', 1, {}, dict(op='bad'), dict(op='decode_exact', bytes=fixture), dict(op='decode_exact', mode='WITNESS', bytes=fixture), dict(op='decode_exact', mode='legacy', bytes='0'), dict(op='decode_exact', mode='legacy', bytes='zz'), dict(op='decode_exact', mode='legacy', bytes=42), dict(op='serialize', transaction=tx), dict(op='serialize', transaction=tx, include_witness='true')]:
+    status(bad, 'invalid_request')
+for lim in [None, [], '1', dict(max_items=1), dict(max_items='4097'), dict(max_items='-1'), dict(max_items='01')]:
+    status(decode(fixture, limits=lim), 'invalid_request')
+for bad_version in ['-1', '4294967296', '01', '+1', '', ' 1', '1 ', '1.0', 1, None, '١']:
+    bad = copy.deepcopy(tx); bad['version_bits'] = bad_version
+    status(serialize(bad), 'invalid_request')
+for bad_amount in ['-9223372036854775809', '9223372036854775808', '-00', '-0', '00', '+1']:
+    bad = copy.deepcopy(tx); bad['outputs'][0]['amount'] = bad_amount
+    status(serialize(bad), 'invalid_request')
+for where in [lambda t:t, lambda t:t['inputs'][0], lambda t:t['outputs'][0]]:
+    bad = copy.deepcopy(tx); where(bad)['extra'] = ''
+    status(serialize(bad), 'invalid_request')
+    bad = copy.deepcopy(tx); where(bad).pop(next(iter(where(bad))))
+    status(serialize(bad), 'invalid_request')
+for key, val in [('previous_txid_digest_order','00'*31), ('previous_txid_digest_order','00'*33), ('script','0g'), ('witness',[0]), ('witness',None), ('previous_index','-1'), ('sequence','4294967296')]:
+    bad = copy.deepcopy(tx); bad['inputs'][0][key] = val
+    status(serialize(bad), 'invalid_request')
+# A malformed later field wins over the already exceeded item budget.
+bad = copy.deepcopy(tx); bad['outputs'][0]['amount'] = 'invalid'
+status(serialize(bad, limits=dict(max_items='0')), 'invalid_request')
+status(serialize(wtx, False, limits=dict(max_items='2')), 'resource_limit')
+
+# Empty-input serialization intentionally is not a witness-mode inverse.
+no_inputs = dict(version_bits='1', inputs=[], outputs=[dict(amount='-1',script='')], locktime='0')
+empty_input_encoding = '010000000001ffffffffffffffff0000000000'
+check(serialize(no_inputs), dict(status='ok', bytes=empty_input_encoding))
+check(decode(empty_input_encoding, 'legacy'), dict(status='ok', transaction=no_inputs, consumed='19'))
+status(decode(empty_input_encoding, 'witness'), 'malformed_encoding')
+
+# Deterministic generated round trips (no external implementation).
+rng = random.Random(1337)
+def random_hex(n): return bytes(rng.randrange(256) for _ in range(n)).hex()
+for k in range(120):
+    ins = []
+    for i in range(rng.randrange(1, 5)):
+        ins.append(dict(previous_txid_digest_order=random_hex(32), previous_index=str(rng.randrange(2**32)), script=random_hex(rng.choice([0,1,2,252,253,254])), sequence=str(rng.randrange(2**32)), witness=[random_hex(rng.randrange(8)) for _ in range(rng.randrange(4))]))
+    outs = [dict(amount=str(rng.randrange(-2**63,2**63)), script=random_hex(rng.choice([0,1,252,253]))) for _ in range(rng.randrange(4))]
+    t = dict(version_bits=str(rng.randrange(2**32)), inputs=ins, outputs=outs, locktime=str(rng.randrange(2**32)))
+    ident = request(identify(t)); assert ident['status']=='ok'
+    for key, include in [('full',True), ('stripped',False)]:
+        raw = ident[key]
+        check(serialize(t,include), dict(status='ok',bytes=raw))
+        want = copy.deepcopy(t)
+        if not include:
+            for entry in want['inputs']: entry['witness']=[]
+        check(decode(raw),dict(status='ok',transaction=want,consumed=str(len(raw)//2)))
+        if not include:
+            check(decode(raw,'legacy'),dict(status='ok',transaction=want,consumed=str(len(raw)//2)))
+        name = 'wtxid' if include else 'txid'
+        direct = hashlib.sha256(hashlib.sha256(bytes.fromhex(raw)).digest()).digest()
+        assert ident[name+'_digest_order']==direct.hex()
+        assert ident[name+'_display_order']==direct[::-1].hex()
+        assert ident[key+'_size']==str(len(raw)//2)
+        checks += 3
+
+# Count boundaries and complete-over-budget versus malformed precedence.
+for count in [252,253,4095,4096,4097]:
+    t = dict(version_bits='0',inputs=[],outputs=[dict(amount='0',script='')]*count,locktime='0')
+    cs = bytes([count]) if count<253 else b'\xfd'+count.to_bytes(2,'little')
+    raw = (b'\x00'*4+b'\x00'+cs+b'\x00'*9*count+b'\x00'*4).hex()
+    if count<=4096:
+        check(serialize(t),dict(status='ok',bytes=raw))
+        check(decode(raw,'legacy'),dict(status='ok',transaction=t,consumed=str(len(raw)//2)))
+    else:
+        status(serialize(t),'resource_limit')
+        status(decode(raw,'legacy'),'resource_limit')
+        status(decode(raw[:-2],'legacy'),'malformed_encoding')
+        status(decode(raw+'00','legacy'),'malformed_encoding')
+    status(decode(raw[:-2],'legacy',limits=dict(max_items='0')),'malformed_encoding')
+for length in [252,253,65535,65536]:
+    t=copy.deepcopy(tx); t['inputs'][0]['script']='ab'*length
+    raw=request(serialize(t))['bytes']
+    expected = (bytes([length]) if length<253 else b'\xfd'+length.to_bytes(2,'little') if length<=65535 else b'\xfe'+length.to_bytes(4,'little')).hex()
+    assert raw[82:82+len(expected)]==expected
+    check(decode(raw),dict(status='ok',transaction=t,consumed=str(len(raw)//2)))
+    checks+=1
+
+# Exact 4 MiB output; decode admission applies to all bytes after the offset.
+M=1024*1024
+large=copy.deepcopy(tx)
+large['outputs'][0]['script']='51'*(4*M-64)
+# Baseline is 61 bytes, minus one old script byte, plus four length-prefix bytes.
+large_hex=request(serialize(large))
+assert large_hex['status']=='ok' and len(large_hex['bytes'])==8*M
+checks+=1
+check(decode(large_hex['bytes']),dict(status='ok',transaction=large,consumed=str(4*M)))
+status(decode(large_hex['bytes']+'00'),'admission_limit')
+check(dict(op='decode_prefix',bytes='ff'+large_hex['bytes'],offset='1',mode='witness'),dict(status='ok',transaction=large,consumed=str(4*M)))
+large['outputs'][0]['script']+='51'
+status(serialize(large),'resource_limit')
+status(identify(large),'resource_limit')
+status(dict(op='decode_prefix',bytes='00'*(8*M+1),offset=str(8*M),mode='witness'),'transport_limit')
+check(dict(op='decode_prefix',bytes='00'*(8*M),offset=str(8*M-10),mode='witness'),dict(status='ok',transaction=zero_tx,consumed='10'))
+large['outputs'][0]['script']='00'*(8*M-31)
+status(serialize(large),'transport_limit') # digest + script exceeds the aggregate pool.
+# An omitted witness affects the input pool/item budget, but not output size.
+large=copy.deepcopy(tx); large['inputs'][0]['witness']=['ab'*(4*M)]
+check(serialize(large,False),dict(status='ok',bytes=fixture))
+status(serialize(large,True),'resource_limit')
+
+# Line framing, recovery, and text transport boundaries.
+for raw, wanted in [(b'\n','invalid_request'), (b'{\n','invalid_request'), (b'{"op":"bad","op":"identify"}\n','invalid_request'), (b'x'*(20*M+1)+b'\n','transport_limit')]:
+    p.stdin.write(raw); p.stdin.flush()
+    assert json.loads(p.stdout.readline())==dict(status=wanted)
+    checks+=1
+    check(serialize(tx),dict(status='ok',bytes=fixture))
+# A valid JSON text exactly at the transport limit is admitted.
+line=json.dumps(serialize(zero_tx),separators=(',',':')).encode()
+p.stdin.write(line+b' '*(20*M-len(line))+b'\n');p.stdin.flush()
+assert json.loads(p.stdout.readline())==dict(status='ok',bytes='00'*10)
+checks+=1
+p.stdin.write(line+b'\r\n'+line);p.stdin.close()
+assert json.loads(p.stdout.readline())==dict(status='ok',bytes='00'*10)
+assert json.loads(p.stdout.readline())==dict(status='ok',bytes='00'*10)
+assert not p.stdout.readline()
+assert p.wait()==0
+checks+=2
+print(f'{checks} integration checks passed')

@@ -1,0 +1,150 @@
+{
+  "schema": "rosettanode.substrate.lineage_round.v2",
+  "lineage": "rust-1",
+  "language": "rust",
+  "round": "initial",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "high",
+  "freeze_sha256": "db1a5861aefe60095947af91dc23e0c6a97ed520a9d8709395379ccea0b57c5a",
+  "status": "qualified",
+  "attempts": [
+    {
+      "kind": "initial_submission",
+      "evaluation": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/v3-evaluation/result.json",
+      "status": "passed"
+    }
+  ],
+  "reading": {
+    "phase": "reading",
+    "returncode": 0,
+    "timed_out": false,
+    "elapsed_seconds": 126.62058037500537,
+    "limit_seconds": 600,
+    "thread_id": "01a0ac17-f3e4-7713-a5df-d863f45d11c0",
+    "usage": [
+      {
+        "input_tokens": 244784,
+        "cached_input_tokens": 212224,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3389,
+        "reasoning_output_tokens": 436
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "substrate",
+      "permissions.substrate.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/workspace": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/workspace/tmp": "write",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/workspace/queue": "write"
+      },
+      "permissions.substrate.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/workspace/tmp"
+      }
+    },
+    "transcript_sha256": "c37843106b9f7998ebb5d766fc633bb708c5acc8fa54347ff8c79055b67ff2bf"
+  },
+  "implementation": {
+    "phase": "implementation",
+    "returncode": 0,
+    "timed_out": false,
+    "elapsed_seconds": 1262.1603599579976,
+    "limit_seconds": 5400,
+    "thread_id": "01a0ac17-f3e4-7713-a5df-d863f45d11c0",
+    "usage": [
+      {
+        "input_tokens": 1857399,
+        "cached_input_tokens": 1794048,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 39676,
+        "reasoning_output_tokens": 12108
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "substrate",
+      "permissions.substrate.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/workspace": "write"
+      },
+      "permissions.substrate.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/workspace/tmp"
+      }
+    },
+    "transcript_sha256": "b29cdb9760c62e50906b82a4949a85091d5b49e73b9cbfd2920470698ef51687"
+  },
+  "source_sha256": {
+    "BUILDING.md": "214bab055b1c4e429b3db470de3286a6779ab64de688d243812930ff6aa97ab7",
+    "Cargo.lock": "e0a37f80b43efafe1f523407bb75920007983e3d55a69e080a76c9203991fe6b",
+    "Cargo.toml": "83547eecc4c01eb6b3bf551c54ac02c7fe5780db6b2281ba1d0107df24bebbf2",
+    "EXPERIMENTS.md": "fcd735de4345091b995e981a7a6c48d3f7ff54ab2e6b3a129672b59c983be81d",
+    "HANDOFF.md": "84ae93f8e9fa62672a6929a1dfa332706175326b93e371f813e62035affbf20d",
+    "README.md": "95d56ec5cf193f38534ec41cf5b8a1e74102364acb738bf35649b5bff0a764b4",
+    "build.sh": "26f65532204d62d58446a9032e6bb5b4aec6defbff92eec378ea28e2b7bb5917",
+    "contracts/DIAGNOSTICS.md": "fe3fa0ad3e24f706185540b14e0bc736eabbdb51f16ada93417ddb9ba2808e51",
+    "contracts/PREREGISTRATION.md": "ae1ebe8d51d00e08c0c5277fafac7dbe37ee4e9d5d81efc5d0ba7c3c3897081b",
+    "contracts/SERVICE.md": "43ec9b9bf495055a5e0042edbc1aa30fa69508034af62a475aa5035159b1c3db",
+    "contracts/WIRE_STORAGE.md": "e47bace965db306c98e33a5a3d6e9b25af5740920463f43e29393edb1023d975",
+    "public_check.py": "ae859db4f975307b21461b048a775a1fdd6ba39cc2d55e045b8bdd7206721d5f",
+    "reuse/Cargo.lock": "e0a37f80b43efafe1f523407bb75920007983e3d55a69e080a76c9203991fe6b",
+    "reuse/Cargo.toml": "e483632fa942a99b642c6c39712a022c518582360cebba2f2f2a1ea85a39cf03",
+    "reuse/storage.rs": "6bec558d54c343fcd7fa8c278a3f67d1c98aabf982cabde5caf7a09383fd97c5",
+    "run.py": "a01ad9831d16823631d268d82c4df42c14393ceab69d51251d3c12f2e0a83d9f",
+    "service": "27b4aacf7abd97a5277891a4c6461fe8ab18e29f8305ad0a15ddb64784d1e2c1",
+    "src/hash.rs": "f9ec86339075914271354aa119091ce4853c507ea6cc966eead6728e4e7a61b1",
+    "src/main.rs": "d32bb81998f731fe36f07f9a3ebd555d4494928b1ba767449e689e4721cc24e6",
+    "src/native.rs": "85d0d99083abef47da8792bb9dafff704963000dcf744715989604ab1d780b18",
+    "src/protocol.rs": "575818fe568c6227b5b371b15012084f89b7e5ef4ecf4830320738a17550fd3e",
+    "src/storage.rs": "156c63c755e9906f7f888326fa61b5cb55d4e5055116a1680b1745f4cd2b028d",
+    "src/transport.rs": "64ee4c8fca83987cd2d1a6fc04e49f589c1254e4d54c35f31565179d76c7fbe7",
+    "tests/run.sh": "e9dd67246a3c6d5072cdf8e39d84a65b152260817df58b8cdab25d72f0b9bad0",
+    "tests/test_service.py": "8f5bddcfe6b554a63828d2fc59ead12984914fc6656199a659fc96d895e95a92"
+  },
+  "original_freeze_sha256": "58b7ccca8af797853c804d56e3752c84b6b3ea6f155bde43d86e6f31e7c76797",
+  "controller_version": 1,
+  "continuation_controller_version": 3,
+  "corrected_evaluation": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/v3-evaluation/result.json",
+  "initial_submission_gate_v2": "passed",
+  "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/submission"
+}

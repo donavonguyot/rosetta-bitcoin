@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Separate instrumented runs: mechanism/activity evidence, not performance."""
+import collections
+import json
+import os
+from pathlib import Path
+
+from benchmark import prepare, trial
+from support import ROOT
+
+root = ROOT / 'tmp/write-observations'
+root.mkdir(exist_ok=False)
+results = {}
+for name, binary in [('baseline', ROOT / 'tmp/baseline/service'), ('optimized', ROOT / 'service')]:
+    directory = root / name
+    directory.mkdir()
+    trace = directory / 'writes.jsonl'
+    env = dict(os.environ, LD_PRELOAD=str(ROOT / 'tmp/write-observer.so'),
+               RN_TEST_TRACE=str(trace), RN_TEST_STATS=str(directory / 'rocksdb-stats.txt'))
+    run = trial(directory, binary, 'mixed', prepare('mixed'), env=env)
+    records = [json.loads(x) for x in trace.read_text().splitlines()]
+    entries = [r for r in records if r['event'] == 'call_entry']
+    successful = [r for r in records if r['event'] == 'call_return' and r['ok']]
+    groups = [r['terminal'] for r in entries if r['terminal']]
+    assert [s for group in groups for s in group] == list(range(1, 2049))
+    assert all(len(group) <= (1 if name == 'baseline' else 32) for group in groups)
+    assert sum(r['pending'] for r in entries) == 2048
+    results[name] = dict(summary=records[-1], successful_writes=len(successful),
+                         terminal_batch_histogram=dict(sorted(collections.Counter(map(len, groups)).items())),
+                         admission_writes=sum(r['pending'] > 0 for r in entries),
+                         service_diagnostics=run['metrics'],
+                         instrumented=True, timing_excluded_from_performance=True)
+(root / 'summary.json').write_text(json.dumps(results, indent=2))
+print(json.dumps(results, indent=2))

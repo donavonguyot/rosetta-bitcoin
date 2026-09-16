@@ -1,0 +1,482 @@
+use super::*;
+use codec::{Input, Output, hex, unhex};
+
+fn tx() -> Transaction {
+    Transaction {
+        version_bits: 2,
+        inputs: vec![Input {
+            previous_txid: [0x11; 32], previous_index: 1, script: vec![], sequence: 0xfffffffe,
+            witness: vec![vec![], vec![0xaa, 0xbb, 0xcc]],
+        }],
+        outputs: vec![Output { amount: 5000, script: vec![0x51] }],
+        locktime: 42,
+    }
+}
+fn empty_tx() -> Transaction {
+    Transaction { version_bits: 1, inputs: vec![], outputs: vec![], locktime: 0 }
+}
+fn decode_request(bytes: &[u8], mode: &str) -> Json {
+    object(vec![("op", string("decode_exact")), ("bytes", string(hex(bytes))), ("mode", string(mode))])
+}
+fn serialization_request(tx: &Transaction, witness: bool) -> Json {
+    object(vec![("op", string("serialize")), ("transaction", tx.to_json()), ("include_witness", Json::Bool(witness))])
+}
+fn identification_request(tx: &Transaction) -> Json { object(vec![("op", string("identify")), ("transaction", tx.to_json())]) }
+fn get_text<'a>(v: &'a Json, name: &str) -> &'a str { v.get(name).unwrap().string().unwrap() }
+fn run_line(s: &str) -> Json { process_line(s.as_bytes()) }
+
+#[test]
+fn sha256_known_answers() {
+    for (input, expected) in [
+        ("", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+        ("abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
+        ("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"),
+        ("The quick brown fox jumps over the lazy dog", "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"),
+    ] { assert_eq!(hex(&sha256::hash(input.as_bytes())), expected); }
+    assert_eq!(hex(&sha256::hash(&vec![b'a'; 1_000_000])), "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0");
+}
+
+fn genesis_bytes() -> Vec<u8> {
+    unhex(concat!(
+        "0100000001",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "ffffffff4d04ffff001d010445",
+        "5468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73",
+        "ffffffff0100f2052a010000004341",
+        "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f",
+        "ac00000000"
+    )).unwrap()
+}
+
+#[test]
+fn genesis_decode_serialize_and_identify() {
+    let bytes = genesis_bytes();
+    assert_eq!(bytes.len(), 204);
+    for mode in ["legacy", "witness"] {
+        let decoded = handle(&decode_request(&bytes, mode)).unwrap();
+        assert_eq!(get_text(&decoded, "consumed"), "204");
+        let tx = Transaction::from_json(decoded.get("transaction").unwrap()).unwrap();
+        assert_eq!(tx.version_bits, 1);
+        assert_eq!(tx.inputs.len(), 1);
+        assert_eq!(tx.inputs[0].previous_txid, [0; 32]);
+        assert_eq!(tx.inputs[0].previous_index, u32::MAX);
+        assert_eq!(tx.inputs[0].script.len(), 77);
+        assert_eq!(&tx.inputs[0].script[8..], b"The Times 03/Jan/2009 Chancellor on brink of second bailout for banks");
+        assert_eq!(tx.outputs[0].amount, 5_000_000_000);
+        assert_eq!(tx.outputs[0].script.len(), 67);
+        for include in [false, true] {
+            let serialized = handle(&serialization_request(&tx, include)).unwrap();
+            assert_eq!(get_text(&serialized, "bytes"), hex(&bytes));
+        }
+        let id = handle(&identification_request(&tx)).unwrap();
+        assert_eq!(get_text(&id, "txid_display_order"), "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b");
+        assert_eq!(get_text(&id, "txid_digest_order"), "3ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a");
+        assert_eq!(id.get("txid_digest_order"), id.get("wtxid_digest_order"));
+        assert_eq!(id.get("stripped"), id.get("full"));
+    }
+}
+
+#[test]
+fn witness_and_stripped_literal_encodings() {
+    let transaction = tx();
+    let full = concat!(
+        "02000000000101", "1111111111111111111111111111111111111111111111111111111111111111",
+        "0100000000feffffff0188130000000000000151020003aabbcc2a000000"
+    );
+    let stripped = concat!(
+        "0200000001", "1111111111111111111111111111111111111111111111111111111111111111",
+        "0100000000feffffff01881300000000000001512a000000"
+    );
+    assert_eq!(hex(&codec::serialize(&transaction, true, Limits::default()).unwrap()), full);
+    assert_eq!(hex(&codec::serialize(&transaction, false, Limits::default()).unwrap()), stripped);
+    let decoded = codec::decode(&unhex(full).unwrap(), 0, true, Limits::default()).unwrap();
+    assert_eq!(decoded, (transaction.clone(), 69));
+    let mut bare = transaction.clone();
+    bare.inputs[0].witness.clear();
+    assert_eq!(codec::decode(&unhex(stripped).unwrap(), 0, false, Limits::default()).unwrap(), (bare.clone(), 61));
+    assert_eq!(codec::decode(&unhex(stripped).unwrap(), 0, true, Limits::default()).unwrap(), (bare, 61));
+    let id = handle(&identification_request(&transaction)).unwrap();
+    assert_eq!(get_text(&id, "full"), full);
+    assert_eq!(get_text(&id, "stripped"), stripped);
+    assert_eq!(get_text(&id, "full_size"), "69");
+    assert_eq!(get_text(&id, "stripped_size"), "61");
+    assert_ne!(id.get("txid_digest_order"), id.get("wtxid_digest_order"));
+    for (digest, display) in [("txid_digest_order", "txid_display_order"), ("wtxid_digest_order", "wtxid_display_order")] {
+        let mut expected = unhex(get_text(&id, digest)).unwrap();
+        expected.reverse();
+        assert_eq!(hex(&expected), get_text(&id, display));
+    }
+}
+
+#[test]
+fn prefix_offsets_and_exact_trailing_bytes() {
+    let original = codec::serialize(&tx(), true, Limits::default()).unwrap();
+    let mut bytes = vec![0xee, 0xff, 0x12];
+    bytes.extend_from_slice(&original);
+    bytes.extend_from_slice(&[0xaa, 0xbb]);
+    let request = object(vec![
+        ("op", string("decode_prefix")), ("bytes", string(hex(&bytes))),
+        ("offset", string("3")), ("mode", string("witness")),
+    ]);
+    let response = handle(&request).unwrap();
+    assert_eq!(get_text(&response, "consumed"), "69");
+    assert_eq!(response.get("transaction"), Some(&tx().to_json()));
+    assert_eq!(handle(&decode_request(&bytes[3..], "witness")), Err(Error::MalformedEncoding));
+    assert_eq!(codec::decode(&bytes, bytes.len()+1, true, Limits::default()), Err(Error::InvalidRequest));
+    assert_eq!(codec::decode(&bytes, bytes.len(), true, Limits::default()), Err(Error::MalformedEncoding));
+}
+
+#[test]
+fn all_truncations_rejected() {
+    for bytes in [genesis_bytes(), codec::serialize(&tx(), true, Limits::default()).unwrap()] {
+        for n in 0..bytes.len() {
+            assert_eq!(codec::decode(&bytes[..n], 0, true, Limits::default()), Err(Error::MalformedEncoding), "length {n}");
+        }
+    }
+}
+
+#[test]
+fn empty_transaction_and_no_consensus_checks() {
+    let bytes = unhex("01000000000000000000").unwrap();
+    assert_eq!(codec::serialize(&empty_tx(), true, Limits::default()).unwrap(), bytes);
+    assert_eq!(codec::serialize(&empty_tx(), false, Limits::default()).unwrap(), bytes);
+    for mode in [false, true] {
+        assert_eq!(codec::decode(&bytes, 0, mode, Limits { max_items: 0 }).unwrap(), (empty_tx(), 10));
+    }
+    let mut unusual = tx();
+    unusual.version_bits = u32::MAX;
+    unusual.inputs[0].previous_index = u32::MAX;
+    unusual.inputs[0].sequence = u32::MAX;
+    unusual.outputs[0].amount = -1;
+    unusual.locktime = u32::MAX;
+    let encoded = codec::serialize(&unusual, true, Limits::default()).unwrap();
+    assert_eq!(&encoded[..4], &[255; 4]);
+    assert_eq!(codec::decode(&encoded, 0, true, Limits::default()).unwrap().0, unusual);
+    let encoded_json = unusual.to_json().encode();
+    assert_eq!(Transaction::from_json(&json::parse(&encoded_json).unwrap()).unwrap(), unusual);
+    let mut no_inputs = empty_tx();
+    no_inputs.outputs.push(Output { amount: -1, script: vec![0xff] });
+    let bytes = codec::serialize(&no_inputs, false, Limits::default()).unwrap();
+    assert_eq!(codec::decode(&bytes, 0, false, Limits::default()).unwrap().0, no_inputs);
+}
+
+#[test]
+fn witness_flags_empty_stacks_and_empty_items() {
+    let mut transaction = tx();
+    transaction.inputs[0].witness = vec![vec![]];
+    let valid = codec::serialize(&transaction, true, Limits::default()).unwrap();
+    assert_eq!(codec::decode(&valid, 0, true, Limits::default()).unwrap().0, transaction);
+    let mut superfluous = valid.clone();
+    let witness_start = superfluous.len() - 6;
+    superfluous[witness_start] = 0;
+    superfluous.remove(witness_start+1);
+    assert_eq!(codec::decode(&superfluous, 0, true, Limits::default()), Err(Error::MalformedEncoding));
+    for flag in [2, 3, 0x80, 0xff] {
+        let mut bad = valid.clone();
+        bad[5] = flag;
+        assert_eq!(codec::decode(&bad, 0, true, Limits::default()), Err(Error::MalformedEncoding));
+    }
+    transaction.inputs[0].witness.clear();
+    let no_witness = codec::serialize(&transaction, true, Limits::default()).unwrap();
+    assert_eq!(no_witness[4], 1);
+    let mut other = transaction.inputs[0].clone();
+    other.witness = vec![vec![0x42]];
+    transaction.inputs.push(other);
+    let mixed = codec::serialize(&transaction, true, Limits::default()).unwrap();
+    assert_eq!(codec::decode(&mixed, 0, true, Limits::default()).unwrap().0, transaction);
+}
+
+#[test]
+fn script_length_compactsize_thresholds() {
+    for n in [0, 1, 252, 253, 254, 65535, 65536] {
+        let mut transaction = tx();
+        transaction.inputs[0].script = vec![0x42; n];
+        transaction.outputs[0].script = vec![0x51; n];
+        transaction.inputs[0].witness = vec![vec![0x99; n]];
+        let encoded = codec::serialize(&transaction, true, Limits::default()).unwrap();
+        assert_eq!(codec::decode(&encoded, 0, true, Limits::default()).unwrap().0, transaction);
+        let header = &encoded[43..];
+        let expected = match n {
+            0..=252 => vec![n as u8],
+            253..=65535 => vec![253, n as u8, (n >> 8) as u8],
+            _ => vec![254, 0, 0, 1, 0],
+        };
+        assert!(header.starts_with(&expected));
+    }
+}
+
+#[test]
+fn compactsize_vector_count_thresholds() {
+    for n in [252, 253] {
+        let mut transaction = tx();
+        transaction.inputs = vec![transaction.inputs[0].clone(); n];
+        transaction.outputs = vec![transaction.outputs[0].clone(); n];
+        transaction.inputs[0].witness = vec![vec![]; n];
+        let bytes = codec::serialize(&transaction, true, Limits::default()).unwrap();
+        assert_eq!(codec::decode(&bytes, 0, true, Limits::default()).unwrap().0, transaction);
+    }
+}
+
+#[test]
+fn limits_apply_to_each_encoded_vector() {
+    let transaction = tx();
+    let bytes = codec::serialize(&transaction, true, Limits::default()).unwrap();
+    let three = Limits { max_items: 3 };
+    assert!(codec::serialize(&transaction, true, three).is_ok());
+    assert!(codec::decode(&bytes, 0, true, three).is_ok());
+    for max_items in [0, 1, 2] {
+        assert_eq!(codec::serialize(&transaction, true, Limits { max_items }), Err(Error::ResourceLimit));
+        assert_eq!(codec::decode(&bytes, 0, true, Limits { max_items }), Err(Error::ResourceLimit));
+    }
+    // Witness limits do not affect an encoding that omits witness data.
+    assert!(codec::serialize(&transaction, false, Limits { max_items: 1 }).is_ok());
+    let mut large_script = empty_tx();
+    large_script.outputs.push(Output { amount: 0, script: vec![0; 4] });
+    assert_eq!(codec::serialize(&large_script, false, three), Err(Error::ResourceLimit));
+    let bytes = codec::serialize(&large_script, false, Limits::default()).unwrap();
+    assert_eq!(codec::decode(&bytes, 0, false, three), Err(Error::ResourceLimit));
+    let truncated_huge = unhex("01000000ffffffffffffffffff").unwrap();
+    assert_eq!(codec::decode(&truncated_huge, 0, false, Limits { max_items: 100 }), Err(Error::MalformedEncoding));
+    assert_eq!(codec::decode(&truncated_huge, 0, false, Limits::default()), Err(Error::MalformedEncoding));
+}
+
+#[test]
+fn noncanonical_lengths_at_transaction_fields() {
+    let mut bare = tx();
+    bare.inputs[0].witness.clear();
+    let bytes = codec::serialize(&bare, false, Limits::default()).unwrap();
+    // Input count, input script length, output count, output script length.
+    for index in [4, 41, 46, 55] {
+        let mut altered = bytes.clone();
+        let n = altered[index];
+        altered.splice(index..index+1, [253, n, 0]);
+        assert_eq!(codec::decode(&altered, 0, false, Limits::default()), Err(Error::MalformedEncoding));
+    }
+    let full = codec::serialize(&tx(), true, Limits::default()).unwrap();
+    for index in [59, 60, 61] {
+        let mut altered = full.clone();
+        let n = altered[index];
+        altered.splice(index..index+1, [253, n, 0]);
+        assert_eq!(codec::decode(&altered, 0, true, Limits::default()), Err(Error::MalformedEncoding));
+    }
+}
+
+#[test]
+fn json_strings_numbers_and_errors() {
+    let parsed = json::parse(r#"{"x":"\"\\\/\b\f\n\r\t\u0000\u00e9\ud83d\ude00","n":-1.2e+3,"a":[true,false,null]}"#).unwrap();
+    assert_eq!(get_text(&parsed, "x"), "\"\\/\u{08}\u{0c}\n\r\t\0é😀");
+    assert_eq!(json::parse(&parsed.encode()).unwrap(), parsed);
+    for s in ["", " ", "[", "{", "[1,]", "{\"a\":1,}", "01", "-", "1.", "1e", "NaN", "true false", "\"\n\"", r#""\ud800""#, r#""\udc00""#, r#""\ud800\u0061""#, r#""\q""#] {
+        assert!(json::parse(s).is_err(), "{s:?}");
+    }
+    let deep = format!("{}0{}", "[".repeat(258), "]".repeat(258));
+    assert_eq!(json::parse(&deep), Err(json::ParseError::Depth));
+    assert_eq!(get_text(&run_line(&deep), "status"), "admission_limit");
+    assert_eq!(process_line(&[0xff]), Error::InvalidRequest.response());
+}
+
+#[test]
+fn invalid_request_shapes_and_ranges() {
+    for request in [
+        "null", "true", "[]", "{}", r#"{"op":"wat"}"#,
+        r#"{"op":"decode_exact","bytes":"","mode":"bad"}"#,
+        r#"{"op":"decode_exact","bytes":"0","mode":"legacy"}"#,
+        r#"{"op":"decode_exact","bytes":"gg","mode":"legacy"}"#,
+        r#"{"op":"decode_exact","bytes":"","mode":"legacy","limits":{"max_items":2}}"#,
+        r#"{"op":"decode_exact","bytes":"","mode":"legacy","limits":false}"#,
+        r#"{"op":"decode_prefix","bytes":"","mode":"legacy"}"#,
+        r#"{"op":"decode_prefix","bytes":"","mode":"legacy","offset":"-1"}"#,
+        r#"{"op":"decode_prefix","bytes":"","mode":"legacy","offset":"1"}"#,
+        r#"{"op":"decode_prefix","bytes":"","mode":"legacy","offset":0}"#,
+    ] {
+        assert_eq!(run_line(request), Error::InvalidRequest.response(), "{request}");
+    }
+    for n in ["", "-1", "+1", " 1", "1.0", "18446744073709551616", "١"] { assert_eq!(uint(&string(n)), Err(Error::InvalidRequest)); }
+    assert_eq!(uint(&string("000123")), Ok(123));
+    let mut transaction = tx().to_json();
+    if let Json::Object(fields) = &mut transaction { fields.push(("version_bits".into(), string("4294967296"))); }
+    assert_eq!(Transaction::from_json(&transaction), Err(Error::InvalidRequest));
+    let mut transaction = tx().to_json();
+    if let Json::Object(fields) = &mut transaction {
+        if let Json::Array(inputs) = &mut fields.iter_mut().find(|(k,_)| k == "inputs").unwrap().1 {
+            if let Json::Object(fields) = &mut inputs[0] { fields.push(("previous_txid_digest_order".into(), string("00"))); }
+        }
+    }
+    assert_eq!(Transaction::from_json(&transaction), Err(Error::InvalidRequest));
+}
+
+#[test]
+fn uppercase_hex_decimal_normalization_and_extra_fields() {
+    let original = serialization_request(&empty_tx(), false).encode();
+    let request = original.replace("\"1\"", "\"0001\"").replace("\"include_witness\":false", "\"include_witness\":false,\"extra\":123");
+    assert_eq!(get_text(&run_line(&request), "bytes"), "01000000000000000000");
+    let mut transaction = tx();
+    transaction.inputs[0].script = vec![0xab, 0xcd];
+    let mut request = serialization_request(&transaction, true).encode();
+    request = request.replace("abcd", "ABCD").replace("aabbcc", "AABBCC");
+    assert_eq!(run_line(&request), handle(&serialization_request(&transaction, true)).unwrap());
+}
+
+struct Random(u64);
+impl Random {
+    fn next(&mut self) -> u64 { self.0 ^= self.0 << 13; self.0 ^= self.0 >> 7; self.0 ^= self.0 << 17; self.0 }
+    fn count(&mut self, max: usize) -> usize { self.next() as usize % max }
+    fn blob(&mut self, max: usize) -> Vec<u8> { let n = self.count(max); (0..n).map(|_| self.next() as u8).collect() }
+}
+
+#[test]
+fn generated_transactions_roundtrip_and_stripping() {
+    let mut random = Random(0x1020304050607080);
+    for _ in 0..1000 {
+        let mut transaction = Transaction { version_bits: random.next() as u32, inputs: vec![], outputs: vec![], locktime: random.next() as u32 };
+        for _ in 0..1+random.count(4) {
+            let mut digest = [0;32];
+            for byte in &mut digest { *byte = random.next() as u8; }
+            let mut witness = Vec::new();
+            for _ in 0..random.count(4) { witness.push(random.blob(40)); }
+            transaction.inputs.push(Input {
+                previous_txid: digest, previous_index: random.next() as u32,
+                script: random.blob(60), sequence: random.next() as u32, witness,
+            });
+        }
+        for _ in 0..random.count(5) { transaction.outputs.push(Output { amount: random.next() as i64, script: random.blob(60) }); }
+        for witness in [false, true] {
+            let bytes = codec::serialize(&transaction, witness, Limits::default()).unwrap();
+            let mut expected = transaction.clone();
+            if !witness { for input in &mut expected.inputs { input.witness.clear(); } }
+            assert_eq!(codec::decode(&bytes, 0, witness, Limits::default()).unwrap(), (expected, bytes.len()));
+        }
+        assert_eq!(Transaction::from_json(&json::parse(&transaction.to_json().encode()).unwrap()).unwrap(), transaction);
+    }
+}
+
+#[test]
+fn malformed_input_smoke_fuzz() {
+    let mut random = Random(0xabcdef7654321);
+    for _ in 0..20_000 {
+        let bytes = random.blob(250);
+        for mode in [false, true] { let _ = codec::decode(&bytes, 0, mode, Limits { max_items: 1000 }); }
+        let _ = process_line(&bytes);
+    }
+    let bases = [genesis_bytes(), codec::serialize(&tx(), true, Limits::default()).unwrap()];
+    for _ in 0..10_000 {
+        let mut mutated = bases[random.count(2)].clone();
+        let index = random.count(mutated.len());
+        mutated[index] = random.next() as u8;
+        for mode in [false, true] {
+            if let Ok((decoded, consumed)) = codec::decode(&mutated, 0, mode, Limits { max_items: 1000 }) {
+                let bytes = codec::serialize(&decoded, mode, Limits { max_items: 1000 }).unwrap();
+                assert_eq!(&bytes, &mutated[..consumed]);
+            }
+        }
+    }
+}
+
+fn assert_json_equal(actual: &Json, expected: &Json, path: &str) {
+    match expected {
+        Json::Object(fields) => {
+            let Json::Object(actual_fields) = actual else { panic!("{path}: expected object, got {actual:?}"); };
+            assert_eq!(actual_fields.len(), fields.len(), "{path}: field count");
+            for (key, value) in fields {
+                let actual_value = actual.get(key).unwrap_or_else(|| panic!("{path}: missing {key}"));
+                assert_json_equal(actual_value, value, &format!("{path}.{key}"));
+            }
+        }
+        Json::Array(values) => {
+            let actual_values = actual.array().unwrap_or_else(|| panic!("{path}: expected array"));
+            assert_eq!(actual_values.len(), values.len(), "{path}: array length");
+            for (i, (actual, expected)) in actual_values.iter().zip(values).enumerate() {
+                assert_json_equal(actual, expected, &format!("{path}[{i}]"));
+            }
+        }
+        _ => assert_eq!(actual, expected, "{path}"),
+    }
+}
+
+fn check_feedback_case(family: &str) {
+    let feedback = json::parse(include_str!("feedback.json")).unwrap();
+    let case = feedback.get("counterexamples").unwrap().array().unwrap().iter()
+        .find(|case| get_text(case, "family") == family).unwrap();
+    let actual = process_line(case.get("request").unwrap().encode().as_bytes());
+    let expected = case.get("expected").unwrap();
+    assert_eq!(get_text(&actual, "status"), get_text(expected, "status"), "{family}");
+    assert_json_equal(&actual, expected, family);
+}
+
+#[test]
+fn feedback_field_layout() { check_feedback_case("field_layout"); }
+#[test]
+fn feedback_identifiers() { check_feedback_case("identifiers"); }
+#[test]
+fn feedback_structured_serialization() { check_feedback_case("structured_serialization"); }
+#[test]
+fn feedback_resource_precedence() { check_feedback_case("resource_precedence"); }
+#[test]
+fn feedback_prefix_cursor() { check_feedback_case("prefix_cursor"); }
+#[test]
+fn feedback_structured_modification() { check_feedback_case("structured_modification"); }
+
+#[test]
+fn signed_amount_bounds_and_wire_representation() {
+    for (amount, encoded_amount) in [
+        ("-9223372036854775808", "0000000000000080"),
+        ("-37", "dbffffffffffffff"),
+        ("-1", "ffffffffffffffff"),
+        ("0", "0000000000000000"),
+        ("9223372036854775807", "ffffffffffffff7f"),
+    ] {
+        let request = serialization_request(&tx(), true).encode().replace("\"5000\"", &format!("\"{amount}\""));
+        let response = run_line(&request);
+        assert_eq!(get_text(&response, "status"), "ok", "{amount}");
+        let bytes = unhex(get_text(&response, "bytes")).unwrap();
+        assert_eq!(hex(&bytes[49..57]), encoded_amount);
+        let decoded = handle(&decode_request(&bytes, "witness")).unwrap();
+        let transaction = Transaction::from_json(decoded.get("transaction").unwrap()).unwrap();
+        assert_eq!(transaction.outputs[0].amount.to_string(), amount);
+        let identified = handle(&identification_request(&transaction)).unwrap();
+        assert_eq!(get_text(&identified, "full"), hex(&bytes));
+    }
+    for invalid in ["9223372036854775808", "-9223372036854775809", "18446744073709551615", "-", "--1", "+1", " 1", "1.0", "1e2"] {
+        for request in [serialization_request(&tx(), true), identification_request(&tx())] {
+            let request = request.encode().replace("\"5000\"", &format!("\"{invalid}\""));
+            assert_eq!(run_line(&request), Error::InvalidRequest.response(), "{invalid}");
+        }
+    }
+    // Signed amounts do not change the unsigned semantics of other fields.
+    let request = serialization_request(&tx(), true).encode().replace("\"version_bits\":\"2\"", "\"version_bits\":\"-1\"");
+    assert_eq!(run_line(&request), Error::InvalidRequest.response());
+}
+
+#[test]
+fn impossible_payload_precedes_item_limit_at_each_vector() {
+    let mut base = tx();
+    base.inputs[0].witness = vec![vec![0xaa]];
+    let mut cases = Vec::new();
+    // Transaction input count.
+    cases.push((base.clone(), 7, 0));
+    // Input script length.
+    let mut transaction = base.clone();
+    transaction.inputs[0].script = vec![0xaa; 2];
+    cases.push((transaction, 44, 1));
+    // Transaction output count.
+    let mut transaction = base.clone();
+    transaction.outputs.push(transaction.outputs[0].clone());
+    cases.push((transaction, 49, 1));
+    // Output script length.
+    let mut transaction = base.clone();
+    transaction.outputs[0].script = vec![0x51; 2];
+    cases.push((transaction, 58, 1));
+    // Witness stack count.
+    let mut transaction = base.clone();
+    transaction.inputs[0].witness.push(vec![0xbb]);
+    cases.push((transaction, 60, 1));
+    // Witness item byte length.
+    base.inputs[0].witness[0].push(0xbb);
+    cases.push((base, 61, 1));
+    for (transaction, end, max_items) in cases {
+        let bytes = codec::serialize(&transaction, true, Limits::default()).unwrap();
+        let limits = Limits { max_items };
+        assert_eq!(codec::decode(&bytes[..end], 0, true, limits), Err(Error::MalformedEncoding), "truncated at {end}");
+        assert_eq!(codec::decode(&bytes, 0, true, limits), Err(Error::ResourceLimit), "complete at {end}");
+    }
+}

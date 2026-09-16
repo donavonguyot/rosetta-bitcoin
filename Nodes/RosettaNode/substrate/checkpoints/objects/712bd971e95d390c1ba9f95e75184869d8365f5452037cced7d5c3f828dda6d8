@@ -1,0 +1,313 @@
+# Optimization round: attempt record
+
+Implementation began 2026-09-16 22:43:20 UTC. Qualified maintenance predecessor
+preserved byte-for-byte in `tmp/optimization-baseline/` before edits. This is the
+initial optimization submission, before evaluator feedback.
+
+## Hypotheses (maximum three)
+
+1. **Bounded group commit:** coalesce already-ready admissions and contiguous
+   completed jobs into synchronous WAL-enabled batches of at most 32 jobs.
+   Zero intentional wait; no timer. Expect fewer sync requests under concurrency
+   without adding batching delay to quiet connections. Preserve one coordinator
+   across staging, native write entry, return, and publication. Record admission
+   and terminal batch-size histograms plus write-call/sync-request counts.
+2. **Storage wrapper allocation/crossing reduction:** pass pointer-free string
+   backing directly for the duration of length-delimited RocksDB Put/Delete/Get
+   calls. Remove transient CString malloc/free pairs while preserving native
+   WriteBatch copying, pointer lifetime and all storage options. Compare against
+   H1 alone; retain only with useful evidence. Native adapter arenas are unchanged.
+3. Unused. Two hypotheses consumed; no third experiment or rewrite.
+
+## Baseline and measurements
+
+- Preserved received binary/source/tests/handoff; no v1 archived executable was
+  supplied. Inherited `./test.sh` passed all Go tests, public smoke, socket suite,
+  six SIGKILL/restart cycles (six pending snapshots, three cancellations).
+- `benchmark.py` is a candidate-owned proxy, not the unavailable frozen workload
+  generator. Eight closed-loop clients; minimal valid fixture, 64-item evaluate,
+  durable submit, mixed high 64-item/normal single-item submit. Requests and client
+  threads are prepared outside timing; submit timing includes terminal events.
+  One warm-up on its own fresh DB, seven fresh measured DBs, serial execution and
+  rotated variant order. Failures remain in JSONL and directories. Fresh DB paths
+  share the broker's underlying filesystem; no dedicated block-volume capability
+  is supplied. Process I/O and RocksDB LOG activity retained. No language ranking.
+- Initial baseline proxy v1: `tmp/bench-baseline/`, all seven measured runs
+  passed per lane. Throughput median [range], jobs/s: evaluate1 44,708
+  [25,098–52,067], evaluate64 3,437 [3,361–3,512], durable 3,010
+  [2,980–3,059], mixed 2,187 [1,502–2,206]. Single-item runs were short;
+  subsequent evaluate1 measurements use ten times as many requests. Do not pool
+  these with the revised protocol v2.
+
+## Protocol v2 storage comparison and final choices
+
+Each entry is median [minimum–maximum] jobs/s from seven fresh measured DBs.
+All 42 measured and six warm-up runs passed. Raw JSONL, full per-run latency
+percentiles, process I/O, stderr metrics and RocksDB logs are retained under
+`tmp/bench-v2-storage/`. The eight clients each have one outstanding durable job;
+status recovers a notification timeout. There were 26 status fallback episodes
+across all variants/warm-ups; they are included in measured times, not discarded.
+
+| Proxy lane | Qualified v2 baseline | H1 group only | H1 + H2 (chosen) |
+|---|---:|---:|---:|
+| Durable single-item | 1,859 [1,513–2,042] | 4,094 [2,524–4,794] | 4,629 [4,533–4,812] |
+| Mixed high/normal | 1,610 [1,146–1,676] | 2,480 [1,197–2,623] | 2,660 [2,566–2,721] |
+
+H1+H2 is 2.49x/1.65x baseline throughput on these proxies. Relative to H1, H2
+improves the durable median 13.1%; mixed 7.2% is an operational tie under the
+contract. Retain H2 for the durable improvement and fewer temporary native
+allocations/cgo crossings. Wide baseline/H1 ranges limit causal attribution;
+these are not statistical significance claims or frozen-campaign results.
+
+Median of per-repetition p99 terminal latency [range], milliseconds:
+
+| Proxy / priority | Baseline | H1 only | H1 + H2 |
+|---|---:|---:|---:|
+| Durable normal | 6.814 [6.046–31.999] | 4.541 [3.247–13.879] | 3.701 [3.529–4.093] |
+| Mixed normal | 10.335 [9.246–39.271] | 8.529 [6.876–24.802] | 7.960 [7.045–8.496] |
+| Mixed high | 10.218 [9.453–38.444] | 8.912 [7.309–25.068] | 8.014 [7.363–8.607] |
+
+These observation latencies include client scheduling and status recovery.
+Mixed clients split evenly between high 64-item and normal single-item jobs;
+this is limited tail/fairness evidence, not the missing frozen workload 4.
+
+Chosen variant synchronous write requests per 3,200 jobs: durable median 2,505
+[2,442–2,520], mixed 2,822 [2,792–2,856], versus baseline's logical 6,401
+(one initialization plus 3,200 admissions and terminals). Chosen histograms in
+these measured runs contain group sizes 1–8; unit tests exercise 32. H1 protocol
+v1 also observed 32-member terminal batches under deeper queues. The service
+records separate write calls, requested syncs, successful writes, cancellation
+writes and admission/terminal histograms on stderr at orderly exit/error return.
+No extra disk keys or wire messages. Metrics are process-local and lost on kill.
+
+No flush/compaction/stall events matched in the timed-run RocksDB logs; these
+small databases do not establish behavior under sustained compaction pressure.
+Process I/O is retained per run. Service CPU includes startup/shutdown, while
+elapsed job timing excludes those phases. Dedicated block volumes, physical WAL
+sync tracing, and campaign workload definitions are unavailable.
+
+## Nonpersistent overhead
+
+Protocol v2 `tmp/bench-v2-evaluate/`: all 28 measured runs and four warm-ups passed.
+Single-item requests: baseline median 34,463 [34,262–38,640] jobs/s; chosen
+35,259 [33,508–38,239]. 64-item requests: baseline 3,393 [3,144–3,461]; chosen
+3,423 [3,219–3,605]. Both are operational ties (within 10%). No nonpersistent
+speedup is claimed. Payload/kernel correctness remains covered by tests, not
+inferred from these timings.
+
+## Diff footprint
+
+Compared with the preserved qualified predecessor, SequenceMatcher line counts:
+production five files +318/-153; tests three files +330/-6. New `benchmark.py`
+(candidate measurement utility) and documentation are separate. One changed
+Linux executable, 4,783,952 bytes; baseline 4,716,928 bytes. No generated source.
+`native.go`, `wire.go`, `scheduler.go`, `build.sh`, `test.sh` and `go.mod` are
+unchanged. Diff size measures invasiveness, not quality. Source attempts and
+executables are retained in `tmp/optimization-baseline`, `tmp/h1-group`, and
+`tmp/h2-storage`; full broker outputs remain in `queue/`.
+
+## Final validation and artifact
+
+- Full race suite passed without Go race reports: all Go tests, socket protocol,
+  six large-payload crashes (six pending snapshots, three cancellations), four
+  concurrent crashes (269 acknowledged jobs retained), and actual-v2 upgrade.
+- Strict cgocheck2 passed native vectors, v2 bitmap/offsets, priority recovery,
+  all group/byte-capacity cases, and the storage wrapper ownership test.
+- Final code review found a potential uint64 wrap in the new terminal cleanup
+  loop at the maximum sequence. Replaced sequence-increment cleanup with bounded
+  group-index iteration. Added a focused arithmetic test; it does not pretend to
+  construct an on-disk history of MaxUint64 receipts.
+- After that correction: full normal suite/public smoke/socket/crash/upgrade
+  passed again (four concurrent cycles retained 267 acknowledged jobs), plus
+  race and strict-cgo group/maximum-sequence checks. No build or semantic test
+  failure occurred. This edge correction belongs to H1, not a third hypothesis.
+- Final binary measurements are being recorded separately in `tmp/bench-final`;
+  earlier H1/H2 selection data remain above, without pooling.
+
+Final service SHA-256:
+`9d5b4d99314f09dffbb69a0ef7daae12ad3512490d81317b01d5c658c0900982`.
+Measured H1+H2 selection binary (before integer-boundary correction):
+`3d4ec63a197e81fadc3fd6a7fff7a3883cfd088f4f765c3bd5ab9fcbc798b8d2`.
+Qualified baseline:
+`97cf1ea4dc6811a046d804bf32c20f7a59a0976661add239d6c462be5716d677`.
+Adapter unchanged:
+`39f890a9687c36cd88b510a7c0845412c159ca13bd511e56319f9eb15951c353`.
+
+ELF inspection confirmed executable AArch64/Linux, Go 1.27.1, CGO_ENABLED=1,
+librosetta.so/librocksdb.so.7.8/libc dynamic dependencies, /adapter RUNPATH, and
+only rn_verify_v2. Build/test scripts remain executable and unchanged. All source
+formatting checks passed. No host toolchain, evaluator, other workspace, network,
+Bitcoin library or other agent was used.
+
+## Attempts and limitations
+
+- Measurement protocol v1 incorrectly awaited every best-effort terminal event.
+  `tmp/bench-h1` retains durable/mixed H1 warm-up failures (receive timeout and
+  EOF) and the combined broker-command timeout (exit 124 at 240 s). Mixed measured
+  repetitions were incomplete. These are not replaced or pooled into protocol v2.
+  The harness can overrun bounded output queues or wait for legally dropped
+  events; those failures do not establish a service semantic violation. The
+  original harness is retained as `tmp/benchmark-v1.py`.
+- Protocol v2 uses one outstanding durable job per client and status recovery for
+  lost events, with a 900-second measured-operation timeout. Split comparison
+  lanes across broker commands (broker caps commands at 300 s). Keep v1 results,
+  report missing/failed evidence, and make performance decisions from v2 only.
+
+- Read all supplied Markdown, source and reuse wrapper. `go doc` failed because
+  the reading-phase build cache was read-only; read pinned Go source documentation
+  through `python3 run.py` instead. Adapter header read from `/adapter` only.
+- Host request-client Python emits xcrun cache warnings; broker commands succeed.
+- H1 built and passed inherited normal tests plus grouped retry/conflict,
+  cancellation-after-native-completion, recovery, 32-member bounds and exact
+  1,024-job saturation tests. Added exact 64 MiB group accounting test, zero-byte
+  admission at that boundary, concurrent crash cases and actual-v2 upgrade.
+- H2 normal suite passed, including embedded-NUL/empty key/value wrapper ownership,
+  all group tests, six large-payload crash cycles (six pending snapshots, three
+  cancellations), four concurrent crash cycles (265 acknowledged jobs retained),
+  and actual-v2 predecessor recovery preserving an existing receipt byte-for-byte.
+- Independent inspection after the failed v1 warm-up writers stopped found
+  durable 3,200/3,200 and mixed 2,740/2,740 receipt checkpoints with zero pending,
+  and valid disk invariants. The durable timeout was waiting for notification
+  despite complete receipts. No failed repetitions were replaced.
+- No batching timer was introduced: zero intentional wait meets the 2 ms bound
+  without tuning a throughput/latency timer. No third hypothesis was attempted.
+- Metric `sync_requests` counts C WriteBatch calls with sync=true, separately from
+  successful writes. It is not an independent count of physical WAL syscalls.
+- Exact campaign freeze/generator and external diagnostic barriers unavailable.
+  Explicit implementation-phase instruction authorizes this round; no evaluator
+  or external source is accessed. Predecessor evidence is retained below.
+
+---
+
+# Maintenance-round experiment and attempt record
+
+This is the initial maintenance implementation, before evaluator feedback. No
+repair phase, optimization lane, group commit, or performance comparison was
+attempted. Zero optimization hypotheses were consumed. Initial-round records
+remain below; predecessor files and executable are archived in `tmp/predecessor`.
+
+Maintenance design hypothesis: retain the predecessor's single durable-state
+owner and four workers, replacing only native argument representation and FIFO
+dispatch policy. Separate priority dispatch from admission-ordered commitment so
+the existing durability and cancellation boundary remains intact. Tests support
+the exercised histories, not every possible interleaving.
+
+## Maintenance attempts and outcomes
+
+| Attempt | Outcome |
+|---|---|
+| Read contracts, all supplied Markdown, reuse wrapper, source and relevant tests | Completed during the separate reading phase, within ten minutes. |
+| Pinned documentation through `python3 run.py` | Read adapter header and Go source documentation for cgo pointer lifetime, WaitGroup, net.Conn, JSON decoding and binary encoding. No host toolchain used. |
+| Preserve predecessor | Copied the received binary/source/tests/docs inside this workspace before edits. Original binary hash matches the initial handoff. |
+| First v2 build and inherited Go tests | Passed. All existing native vectors and durability/recovery checks passed with the v2 wrapper. |
+| Add priority and bitmap tests | Explicit dispatch expectations cover repeated 3:1 cycles, FIFO, single-queue pauses, empty intervals, and resumption. Two 64-item alternating patterns cover each bitmap position as success and failure. Recovery tests cover high/normal queues, legacy missing priority, ordered terminalization, delayed accounting release, and completed-work cancellation. |
+| Full normal suite with `V1_SERVICE=/workspace/tmp/predecessor/service` | Passed all Go tests, supplied public smoke, mixed-priority socket/concurrency suite, six crash/restart cycles (six pending snapshots, three durable cancellations), and actual v1-to-v2 upgrade. |
+| Full race suite with the same archived v1 executable | Passed Go tests and race-instrumented socket/crash/upgrade suite without Go race reports. Again six pending snapshots and three acknowledged cancellations survived crash checks. |
+| Strict cgo diagnostics | `GOEXPERIMENT=cgocheck2` native vectors, byte limit, v2 bitmap/offset, and priority recovery/commit-order tests passed. |
+| Executable inspection | `readelf` confirmed executable ELF64/AArch64, `/adapter` RUNPATH, designated shared libraries, and only the v2 verification symbol. Go version is 1.27.1. Adapter digest matches predecessor. |
+| Documentation replacement attempt | `apply_patch` rejected deleting and adding HANDOFF.md in one patch. No file changed. Replaced this with a successful prepend that preserves the full original handoff as history. |
+
+There were no failed build or semantic test attempts in this maintenance round.
+Host Python emitted xcrun cache permission warnings while submitting broker
+requests; commands still ran successfully inside Linux. `rg` was unavailable
+during reading, so local file listing used `find`. Broker request/response files
+retain command outputs in `queue/`. Temporary diagnostic binaries and the
+predecessor snapshot are retained under `tmp/`.
+
+## Maintenance evidence and interpretations
+
+The actual-v1 test launches the received binary, commits one receipt, admits and
+durably cancels a large pending job, and kills that writer. Independent RocksDB
+inspection confirms pending state before starting v2. V2 recovers it, returns
+existing for a retry with different priority, accepts new high work, preserves
+the old receipt byte-for-byte, and drains. Both normal and race runs passed.
+
+The general crash tests now alternate high/normal priority and inspect priority
+metadata after each stopped writer. Pending count and byte sums, contiguous
+checkpoint/receipt/pending records, id indexes and cancellations remain checked
+independently of service status. The socket suite mixes priorities across eight
+clients and retries with the opposite priority while requiring existing identity.
+
+The success bitmap uses least-significant bit i for item i; the supplied header
+does not explain bit order, but both full-width patterns agree with per-item
+statuses. Arena backing remains native-owned until return. Missing legacy
+priority means normal; invalid explicit priority fails. Evaluate uses optional
+priority in the shared queues. Scheduling restarts high-first and does not add
+disk metadata. These choices and remaining specification ambiguities are recorded
+in HANDOFF.md; no clarification was requested.
+
+Go race checks cover exercised Go code, not C/C++ libraries. Strict cgo checks
+cover pointer rules, not a native memory-safety proof. No ASan, native-entry barrier
+trace, forced allocation/storage failure, exact admission-limit saturation, or
+power-loss simulation was added. Production queue tests establish the intended
+dispatch choices but do not prove an externally observed native call-entry order
+under arbitrary OS scheduling. No service test hooks or evaluator access was used.
+
+## Maintenance diff footprint
+
+Measured against the copied predecessor using line-based SequenceMatcher,
+excluding unchanged files, temporary snapshots, broker records, and build cache:
+
+| Category | Changed files | Added lines | Removed lines |
+|---|---:|---:|---:|
+| Production source | 5 | 83 | 28 |
+| Tests | 3 | 292 | 17 |
+| Generated executable | 1 | binary | binary |
+
+Production: native.go +13/-7, wire.go +5/-3, state.go +15/-4,
+server.go +8/-14, new scheduler.go +42. Tests: service_test.go +4/-4,
+new maintenance_test.go +227, integration_test.py +61/-13. `build.sh`, `test.sh`,
+go.mod, main.go and reuse/storage.go are unchanged. Documentation updates are
+separate from these source counts and retain predecessor text. No generated source
+was added. The final ELF is 4,716,928 bytes; predecessor ELF was 4,715,896 bytes.
+Diff size measures invasiveness, not correctness or quality.
+
+## Maintenance effort
+
+Implementation start: 2026-09-16 22:02:53 UTC. All builds, normal/race suites,
+strict cgo checks, executable inspection, and source footprint results were
+collected by 22:10:37 UTC (7 minutes 44 seconds). Final documentation and artifact
+checks completed by 22:12:13 UTC (9 minutes 20 seconds), plus this final accounting
+update. Final artifact verification confirmed required files, executable bits,
+gofmt formatting, service digest, and unchanged build/storage files. No repair
+phase was used. Exact model-token usage, monetary cost, and infrastructure preparation cost
+are unavailable and are not estimated. No timed workload benchmark was run.
+
+# Archived initial-round experiment and attempt record
+
+This is the baseline implementation round. No optimization lane was run; zero optimization hypotheses have been consumed. In particular, group commit was not implemented. No measurements here support a language-performance comparison.
+
+Baseline design hypothesis: serial ownership of durable state can give cancellation and terminal writes a legal ordering while four independent workers retain native concurrency. Socket/crash and Go race tests support the exercised histories; they do not prove all possible interleavings.
+
+## Attempts and outcomes
+
+| Attempt | Outcome and action |
+|---|---|
+| Reading: `go doc encoding/json.Decoder` through broker | Failed because the reading-phase workspace cache was read-only. Redirecting the cache to workspace tmp also failed then. Read pinned `/opt/go/src` documentation through `python3 run.py` instead. |
+| First build and supplied public smoke | Passed. Implementation-phase workspace writes were available. |
+| Initial `go test -v ./...` | Failed to execute its test binary under `/tmp`: permission denied. Set `GOTMPDIR=/workspace/tmp`; this is preserved in `test.sh`. |
+| First executable native-vector tests | A truncated fixture `01000000fd0110` returned malformed (`1`), not resource limit (`2`). The fixture lacked the declared inputs. Retained this finding and replaced the resource-limit fixture with a complete 4,097-input encoding; the complete fixture returned `2`. No service behavior was changed to satisfy the mistaken expectation. |
+| Corrected unit suite | Passed native digests/limits, wire validation, line framing, durable cancellation/recovery and rejection of inconsistent state. |
+| First normal socket/crash suite | Passed eight-client concurrency, 251 jobs, retries/conflicts, pipelining, lock, disconnect, restart and six SIGKILL cycles. Every crash left pending work; three cancellations had been acknowledged and survived. |
+| First Go race diagnostics | Unit tests and full race-service socket/crash suite passed without reported Go races. |
+| Transport boundary review | Found that a 48 MiB output budget could reject valid large correlation responses. Disabled HTML escaping, raised the bounded budget to 128 MiB, and released queued frames when a writer exits. A maximum-correlation expansion test passed. |
+| Strict cgo diagnostics | `GOEXPERIMENT=cgocheck2` native and durable-recovery tests passed. |
+| Recovery memory review | Replaced full-history buffering with streaming validation so retained receipts do not consume unbounded startup memory. Added missing-schema/index/receipt rejection cases. |
+| Final `./test.sh` | Passed all unit tests, public smoke and socket/crash suite; six pending crash snapshots and three durable cancellations. |
+| Final `./test.sh --race` | Passed all unit tests (including large correlation) and full race-service socket/crash suite; same six/three crash coverage. |
+| ELF identification with `file` | Utility absent in the broker; command stopped before subsequent inspections. Used Python's standard library to check ELF64/AArch64 and `readelf` for dynamic linking and symbols instead. |
+| Final executable inspection | Executable Linux AArch64 ELF; Go 1.27.1; supplied adapter/RocksDB dynamic links; `/adapter` RUNPATH; v1 native entrypoint only. Hashes recorded in HANDOFF.md. |
+
+All host Python invocations emitted macOS xcrun cache permission warnings; the request client still successfully submitted broker commands. No host toolchain was used to build or test the service. Broker requests/responses remain in `queue/`; tests retain failed integration artifacts if any test fails. Successful test databases are disposable and removed by the candidate test script. The supplied public smoke leaves its own temporary database directories.
+
+## Scope of evidence
+
+The independent inspector is candidate-owned Python using only the standard library and dynamic RocksDB C API; it does not use service status as its oracle. It opens only after the writer has exited. Crash tests check complete old/new logical state, retained acknowledged payloads, receipts, id bijection, contiguous checkpoint, pending accounting and cancellation persistence. No external evaluator, other workspace, repository, network, Bitcoin library or other agent was accessed.
+
+No native diagnostic instrumentation was supplied or constructed. Go race checks cover exercised Go paths, not native library races. The test suite does not deterministically hold C call-entry/write barriers, inject storage/allocation failures, prove admission-limit saturation, or simulate power loss. The native adapter and durability settings were unchanged.
+
+## Effort accounting
+
+Implementation start recorded at 2026-09-16 20:52:24 UTC. Final normal/race validation and ELF inspection completed by approximately 21:11:30 UTC. Deliverable verification completed at 21:13:31 UTC: approximately 21 minutes 7 seconds of implementation-phase wall time, plus this accounting update. Reading finished within its separate ten-minute ceiling. No repair or optimization phase was used.
+
+Exact model-token usage, monetary cost, and infrastructure preparation cost are unavailable in this session and are not estimated. Test/build times printed by Go are diagnostic execution times, not service performance results. No warm-up, seven-repetition benchmark, fairness/tail measurement, or substrate recommendation was attempted.

@@ -1,0 +1,38 @@
+# Initial-round repair reserve
+
+Repair started at 2026-09-16 21:14:27 UTC, with a separate 15-minute ceiling.
+Final deliverable verification completed at 21:19:55 UTC: 5 minutes 28 seconds, plus this accounting update.
+
+## Feedback and reproduction
+
+The supplied `feedback.json` reports one failed family, `injected_failures`, with `JSONDecodeError('Expecting value: line 1 column 1 (char 0)')`; no injection point or additional detail is supplied. No evaluator code was accessed.
+
+The original service returned from its coordinator on an admission WriteBatch error without replying to the submit request. Its fatal shutdown then closed the socket. A candidate-owned dynamic C-API fault injector reproduced the same JSON decode exception against the original executable: the submit response was `b''`. This is a reproduced matching failure path, not knowledge of the evaluator's undisclosed injection sequence.
+
+The original source, executable, tests, handoff, experiment notes and feedback are preserved in `repair/pre-repair-submission.tar.gz` (15 files). The failed reproduction and its database/log remain in `tmp/failure-admission-submit-c5dlrx6e`; the broker request/response also remains in `queue/`.
+
+## Correction
+
+Only production `server.go` changed: request-associated admission, cancellation and lookup errors enqueue a correlated JSON `execution_failure` response before the existing fatal shutdown. The response contains no acceptance, sequence promise, or terminal receipt. Fatal errors still stop the process with diagnostics; pending native calls retain their arenas through return. The existing socket writer flushes the error frame before closing.
+
+Durability, schema, native ABI, worker count, scheduling, and all WriteBatch settings are unchanged. In particular, a failed terminal write does not emit a terminal notification or remove the durable pending job. An error reported after a complete native write is treated as uncertain success, never acknowledged as accepted; restart validates and recovers the complete durable state.
+
+## Focused regression
+
+`tests/faults.c` is a test-only shared object compiled into `tmp/test-faults.so`. It interposes arena creation and RocksDB WriteBatch calls solely to inject failures. It has no barriers or scheduling hooks, is not linked into the service, and forwards successful calls to the designated native libraries. `failure_test.py` exercises the real executable over Unix sockets and uses the existing independent inspector only after writer exit.
+
+All six focused cases passed after the correction:
+
+1. Admission fails before the native write: receive JSON failure, nonzero exit, no job rows.
+2. Admission reports an error after a complete native write: receive JSON failure without sequence; complete pending state survives and finishes on restart.
+3. Arena allocation fails for evaluate: receive `execution_failure`; a following evaluation succeeds and shutdown exits zero.
+4. Arena allocation fails for accepted work: acceptance is delivered, process stops, no terminal event, durable pending survives and finishes on restart.
+5. Terminal write fails: accepted job remains pending, no terminal event, restart finishes it.
+6. Cancellation write fails: receive JSON failure, nonzero exit, no durable cancellation intent, pending job finishes normally after restart.
+
+`test.sh` now runs this regression with both the normal and race-instrumented executable. No change has been made to the common adapter or RocksDB library.
+
+Full `./test.sh` and `./test.sh --race` passed after repair, including all original unit, public smoke, eight-client, pipelining, crash/restart and independent database checks plus the six fault cases. Validation and artifact hashes were confirmed at 21:18:37 UTC, 4 minutes 10 seconds after repair start; documentation finalization followed. There is no post-repair evaluator result, and the exact undisclosed injection sequence remains unknown.
+
+Repaired executable SHA-256: `5f5b9227ede98cae9a120f8baa4c12c7ad4ca96fd2db31fdf8db6ec10d02e4f3`.
+Retained original archive SHA-256: `f4ffe4f4ae651e597aa889652e5a044c41c9f3eb16f07b9034bdcde4878ce5d7`.

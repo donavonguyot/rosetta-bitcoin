@@ -1,0 +1,127 @@
+# Initial implementation record
+
+Implementation began 2026-09-16 21:53 UTC. This is the v1 baseline, not the
+optimization round. No group commit, kernel changes, alternate storage, or
+performance-selection experiments have been attempted.
+
+## Design and checks
+
+- Hypothesis: a single owner of RocksDB and durable state can serialize admission,
+  cancellation and terminal commitment while four independent encoding workers
+  retain their native arenas. Native pointers never cross Rust threads.
+- Hypothesis: bounded request framing and independent socket writers keep slow
+  clients outside the durable-state critical path. Outbound queues have both a
+  message count and byte bound; terminal events are best effort.
+- Recovery validates the complete documented keyspace, counters, ID indexes,
+  receipt/pending partition, cancellation references and pending digests before
+  dispatching work. Independent test inspection opens RocksDB after writer exit.
+
+## Attempts retained
+
+1. First release build and three Rust unit tests passed. Nine initial integration
+   tests passed, including direct adapter parity, protocol limits, eight clients,
+   retries, notification order, lock exclusion, recovery and repeated crashes.
+2. Expanded integration run: 12 passed, one failed. Full admission budgets,
+   live cancellation, durable cancel recovery, SHA padding lengths and draining
+   passed. The file-size-limit test provoked RocksDB's
+   `AssertFalseAndGetStatusForPrevError` assertion. The request was not
+   acknowledged. Initial diagnosis was that cleanup aborted before the
+   service-level diagnostic. Added direct diagnostic/exit on a returned native
+   write error to avoid close/flush on an unusable writer.
+3. The focused file-size-limit retest still produced the native assertion before
+   Rust could report a returned write error; the initial cleanup-only diagnosis
+   was insufficient. The test now accepts either native assertion diagnostics
+   or the service's returned-error diagnostics and still requires nonzero exit,
+   no admission acknowledgment, an intact database, and successful restart.
+   No native code was modified. Returned write errors still exit immediately.
+4. The revised native-failure test passed including independent inspection and
+   restart. The supplied public smoke check passed. Expanded suite: all 17
+   integration tests and all three unit tests passed. Strict Clippy initially
+   rejected three constant-size `chunks_exact` uses under its new
+   `chunks_exact_to_as_chunks` lint; replaced them with typed `as_chunks` APIs.
+5. Review found that completing per-client processing when a response was merely
+   enqueued could fill an output queue under pipelining. Readers now advance only
+   after their response is written; events reserve room for responses. The byte
+   cap was raised from 64 to 80 MiB so a maximum correlation plus pending record
+   fits. Release rebuild, all three unit tests, strict Clippy and all 17
+   integration tests passed afterward (integration suite: 8.890 seconds).
+6. Final artifact inspection initially stopped because the broker lacks the
+   `file` utility. Replaced that inspection with Python's standard-library ELF
+   header decoding and the executable's own ELF interpreter `--list` operation.
+
+No optimization experiment was run. These are correctness/design checks, not
+campaign performance repetitions. Native call-entry barriers, native ASan,
+whole-service race diagnostics and forced arena failure remain unmeasured.
+
+Broker request/response records in `queue/` retain raw command output. Host
+`python3` emits sandbox-related xcrun cache warnings; broker commands still run
+successfully. All compilation and test execution use `python3 run.py`.
+
+# Maintenance implementation record
+
+Implementation began 2026-09-16 22:28:53 UTC. Explicit maintenance authorization
+supersedes the preparation-only gate language for this work; no campaign gate
+qualification is claimed. This round upgrades ABI/scheduling, not optimization.
+
+Design expectation: the existing input offsets and schema-1 priority field
+permit a small v2 binding change and two coordinator-owned FIFO queues without
+altering durable transitions. H,H,H,N advances only with both eligible queues
+nonempty. Cancelled/stale heads are discarded before choosing a turn. Evaluations
+share the queues/slots and honor optional priority; restart begins at H.
+
+Attempts retained:
+
+1. Captured a real stopped predecessor v1 datadir before replacing its executable:
+   one durable receipt, three pending jobs, and one cancellation intent. The
+   compressed physical fixture is 46,940 bytes; producer/archive/row hashes are
+   retained in tests/fixtures/v1-manifest.json. No storage rows were fabricated
+   for this migration fixture. Capture succeeded on the first attempt.
+2. Initial v2 release build succeeded. First full validation: 7 unit tests and
+   strict Clippy passed; 20 of 21 integration tests passed. The migration test
+   failed before starting v2 because pinned Python's TarFile.extractall does not
+   accept filter=. This was a test API compatibility failure, not a service or
+   migration failure. Replaced that argument with explicit local-fixture member
+   validation and the supported extractall API. No production fix was needed.
+   Public smoke did not run in this attempt because tests/run.sh stops on failure.
+3. The corrected real-v1 migration test passed on its focused rerun. Added a
+   recovered-state unit test to check mixed-priority FIFO dispatch, cancellation
+   skipping, completed-but-uncommitted accounting, and exact contiguous terminal
+   writes. The next release build succeeded, but cargo test auto-discovered the
+   internal module placed directly at tests/state.rs as a standalone integration
+   crate, producing unresolved-import errors. Moved it to tests/unit/state.rs
+   and retained its cfg(test) include. This was a test-layout error; integration,
+   Clippy and smoke did not run in that attempt.
+4. Final complete run after the test-layout fix passed: release build, all 8
+   Rust unit tests, strict Clippy, all 21 integration tests (9.108 seconds), and
+   public smoke. This includes migration from the actual predecessor datadir,
+   not only seeded schema snapshots. No production semantic test failed during
+   maintenance. Both earlier failures were corrected before initial submission;
+   no evaluator repair phase or evaluator feedback was used.
+5. Artifact inspection confirmed ELF64 little-endian AArch64, executable build/
+   test/service entrypoints, an rn_verify_v2 import and no rn_verify_v1 import,
+   /adapter/librosetta.so resolution, and dynamic librocksdb.so.7.8. Diff reporting
+   initially paired the new tests/unit/state.rs with predecessor src/state.rs
+   by basename; corrected that reporting-only error to treat it as a new file.
+   A documentation patch initially rejected replacing one file via delete/add
+   in the same patch; writing the final document directly completed delivery.
+
+No performance or group-commit hypothesis has been attempted in maintenance.
+
+Final diff footprint (line additions/removals, excluding documentation):
+
+- Production: +111 / -31 across main.rs, native.rs, state.rs, wire.rs and the
+  new scheduler.rs. Embedded cfg(test) sections are counted under tests.
+- Tests: +387 / -7 across unit/integration/capture code and test module wiring.
+- Generated delivery: service 990,392 bytes (predecessor 988,192); physical v1
+  fixture archive 46,940 bytes; fixture manifest 1,620 bytes. Dependencies,
+  build.sh, storage.rs, transport.rs and sha256.rs are unchanged. No Cargo
+  dependency was added or upgraded. Broker caches/logs are not production diff.
+- Per-file counts and hashes: tmp/maintenance-diff-footprint.json. Service SHA-256:
+  268362bce64911166f407e22761f0581c3752fce9bcf799aaadf883f843c7196.
+
+Implementation and validation finished in approximately 12 minutes, within the
+60-minute maintenance ceiling; the reading phase finished early separately.
+Token usage and monetary cost are not exposed in this workspace and remain
+unknown. This submission freezes on return, before evaluator feedback. Native
+ASan, whole-service race diagnostics, external call-entry/fairness instrumentation,
+forced arena-allocation failure and power-loss durability remain unmeasured.

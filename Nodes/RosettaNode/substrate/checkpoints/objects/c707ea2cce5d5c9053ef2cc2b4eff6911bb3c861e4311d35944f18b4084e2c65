@@ -1,0 +1,17 @@
+#!/bin/sh
+# Invoke through python3 run.py; host toolchains are not supported.
+set -eu
+cd "$(dirname "$0")"
+export CGO_ENABLED=1 GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local
+mkdir -p tmp
+export GOTMPDIR="$PWD/tmp"
+if [ "${1:-}" = "--race" ]; then
+    go test -race -count=1 ./...
+    go build -race -trimpath -o tmp/service-race .
+    python3 integration_test.py ./tmp/service-race
+else
+    ./build.sh
+    go test -count=1 -v ./...
+    python3 public_check.py ./service
+    python3 integration_test.py ./service
+fi

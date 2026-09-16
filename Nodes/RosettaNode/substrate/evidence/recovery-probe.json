@@ -1,0 +1,178 @@
+{
+  "schema": "rosettanode.substrate.recovery_probe.v1",
+  "status": "passed",
+  "results": [
+    {
+      "test": "cancel_started_after_terminal_entry",
+      "variant": "dummy",
+      "observed": "too_late",
+      "expected": "too_late",
+      "intended_mutant_failure": false,
+      "passed": true
+    },
+    {
+      "test": "cancel_started_after_terminal_entry",
+      "variant": "dummy_cancel",
+      "observed": "ok",
+      "expected": "ok",
+      "intended_mutant_failure": true,
+      "passed": true
+    },
+    {
+      "test": "v1_cancel_pending_to_v2_recovery",
+      "passed": true,
+      "before": {
+        "c/00000000000000000001": "1",
+        "id/job": "1",
+        "meta/bytes": "10",
+        "meta/jobs": "1",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "p/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"bytes\":\"10\",\"priority\":\"normal\",\"items\":[{\"hex\":\"01000000000000000000\",\"mode\":\"witness\",\"operation\":\"exact\"}]}"
+      },
+      "after": {
+        "id/job": "1",
+        "meta/bytes": "0",
+        "meta/checkpoint": "1",
+        "meta/jobs": "0",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "r/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"state\":\"cancelled\",\"results\":[]}"
+      }
+    },
+    {
+      "test": "process_crash",
+      "transition": "p",
+      "boundary": "write_enter",
+      "passed": true,
+      "before": {
+        "meta/version": "1"
+      },
+      "after": {
+        "meta/version": "1"
+      }
+    },
+    {
+      "test": "process_crash",
+      "transition": "p",
+      "boundary": "wal_sync_enter",
+      "passed": true,
+      "before": {
+        "id/job": "1",
+        "meta/bytes": "10",
+        "meta/jobs": "1",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "p/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"bytes\":\"10\",\"priority\":\"normal\",\"items\":[{\"hex\":\"01000000000000000000\",\"mode\":\"witness\",\"operation\":\"exact\"}]}"
+      },
+      "after": {
+        "id/job": "1",
+        "meta/bytes": "0",
+        "meta/checkpoint": "1",
+        "meta/jobs": "0",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "r/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"state\":\"complete\",\"results\":[{\"status\":\"0\",\"consumed\":\"10\",\"full_size\":\"10\",\"stripped_size\":\"10\",\"txid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\",\"wtxid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\"}]}"
+      }
+    },
+    {
+      "test": "process_crash",
+      "transition": "p",
+      "boundary": "native_success",
+      "passed": true,
+      "before": {
+        "id/job": "1",
+        "meta/bytes": "10",
+        "meta/jobs": "1",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "p/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"bytes\":\"10\",\"priority\":\"normal\",\"items\":[{\"hex\":\"01000000000000000000\",\"mode\":\"witness\",\"operation\":\"exact\"}]}"
+      },
+      "after": {
+        "id/job": "1",
+        "meta/bytes": "0",
+        "meta/checkpoint": "1",
+        "meta/jobs": "0",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "r/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"state\":\"complete\",\"results\":[{\"status\":\"0\",\"consumed\":\"10\",\"full_size\":\"10\",\"stripped_size\":\"10\",\"txid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\",\"wtxid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\"}]}"
+      }
+    },
+    {
+      "test": "process_crash",
+      "transition": "r",
+      "boundary": "write_enter",
+      "passed": true,
+      "before": {
+        "id/job": "1",
+        "meta/bytes": "10",
+        "meta/jobs": "1",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "p/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"bytes\":\"10\",\"priority\":\"normal\",\"items\":[{\"hex\":\"01000000000000000000\",\"mode\":\"witness\",\"operation\":\"exact\"}]}"
+      },
+      "after": {
+        "id/job": "1",
+        "meta/bytes": "0",
+        "meta/checkpoint": "1",
+        "meta/jobs": "0",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "r/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"state\":\"complete\",\"results\":[{\"status\":\"0\",\"consumed\":\"10\",\"full_size\":\"10\",\"stripped_size\":\"10\",\"txid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\",\"wtxid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\"}]}"
+      }
+    },
+    {
+      "test": "process_crash",
+      "transition": "r",
+      "boundary": "wal_sync_enter",
+      "passed": true,
+      "before": {
+        "id/job": "1",
+        "meta/bytes": "0",
+        "meta/checkpoint": "1",
+        "meta/jobs": "0",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "r/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"state\":\"complete\",\"results\":[{\"status\":\"0\",\"consumed\":\"10\",\"full_size\":\"10\",\"stripped_size\":\"10\",\"txid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\",\"wtxid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\"}]}"
+      },
+      "after": {
+        "id/job": "1",
+        "meta/bytes": "0",
+        "meta/checkpoint": "1",
+        "meta/jobs": "0",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "r/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"state\":\"complete\",\"results\":[{\"status\":\"0\",\"consumed\":\"10\",\"full_size\":\"10\",\"stripped_size\":\"10\",\"txid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\",\"wtxid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\"}]}"
+      }
+    },
+    {
+      "test": "process_crash",
+      "transition": "r",
+      "boundary": "native_success",
+      "passed": true,
+      "before": {
+        "id/job": "1",
+        "meta/bytes": "0",
+        "meta/checkpoint": "1",
+        "meta/jobs": "0",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "r/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"state\":\"complete\",\"results\":[{\"status\":\"0\",\"consumed\":\"10\",\"full_size\":\"10\",\"stripped_size\":\"10\",\"txid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\",\"wtxid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\"}]}"
+      },
+      "after": {
+        "id/job": "1",
+        "meta/bytes": "0",
+        "meta/checkpoint": "1",
+        "meta/jobs": "0",
+        "meta/sequence": "1",
+        "meta/version": "1",
+        "r/00000000000000000001": "{\"id\":\"job\",\"digest\":\"fcd7e9db3f653ba8d4b1d4998b8510fc69a6b748e9076b1f1bafb77bd8ebc917\",\"sequence\":\"1\",\"state\":\"complete\",\"results\":[{\"status\":\"0\",\"consumed\":\"10\",\"full_size\":\"10\",\"stripped_size\":\"10\",\"txid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\",\"wtxid_digest_order\":\"43ec7a579f5561a42a7e9637ad4156672735a658be2752181801f723ba3316d2\"}]}"
+      }
+    }
+  ],
+  "candidate_launch_allowed": false,
+  "limits": [
+    "not a complete Gate B",
+    "priority starvation and notification loss not yet qualified"
+  ]
+}

@@ -1,0 +1,110 @@
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+)
+
+const (
+	admissionBytes = 4 * 1024 * 1024
+	transportBytes = 8 * 1024 * 1024
+	transportText  = 20 * 1024 * 1024
+	defaultItems   = 4096
+)
+
+// Rejections unwind only request-local work. No partial result is published.
+type rejection string
+
+const (
+	invalidRequest    rejection = "invalid_request"
+	malformedEncoding rejection = "malformed_encoding"
+	resourceLimit     rejection = "resource_limit"
+	transportLimit    rejection = "transport_limit"
+	admissionLimit    rejection = "admission_limit"
+)
+
+type response struct {
+	Status       string           `json:"status"`
+	Transaction  *jsonTransaction `json:"transaction,omitempty"`
+	Consumed     string           `json:"consumed,omitempty"`
+	Bytes        string           `json:"bytes,omitempty"`
+	Stripped     string           `json:"stripped,omitempty"`
+	Full         string           `json:"full,omitempty"`
+	StrippedSize string           `json:"stripped_size,omitempty"`
+	FullSize     string           `json:"full_size,omitempty"`
+	TxIDDigest   string           `json:"txid_digest_order,omitempty"`
+	TxIDDisplay  string           `json:"txid_display_order,omitempty"`
+	WTxIDDigest  string           `json:"wtxid_digest_order,omitempty"`
+	WTxIDDisplay string           `json:"wtxid_display_order,omitempty"`
+}
+
+// Read and drain a whole line even when it exceeds the text envelope. The
+// optional CR and newline are framing, rather than JSON request text.
+func readLimitedLine(r *bufio.Reader) ([]byte, bool, error) {
+	var line []byte
+	tooLong, seen := false, false
+	for {
+		part, err := r.ReadSlice('\n')
+		if len(part) != 0 {
+			seen = true
+		}
+		if len(part) > 0 && part[len(part)-1] == '\n' {
+			part = part[:len(part)-1]
+		}
+		if !tooLong {
+			if len(part) > transportText+1-len(line) {
+				tooLong = true
+				line = nil
+			} else {
+				line = append(line, part...)
+			}
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		if err == io.EOF && seen {
+			err = nil
+		}
+		if len(line) > 0 && line[len(line)-1] == '\r' {
+			line = line[:len(line)-1]
+		}
+		return line, tooLong || len(line) > transportText, err
+	}
+}
+
+func run(in io.Reader, out io.Writer) error {
+	r := bufio.NewReaderSize(in, 64*1024)
+	w := bufio.NewWriter(out)
+	encoder := json.NewEncoder(w)
+	for {
+		line, tooLong, err := readLimitedLine(r)
+		if err == io.EOF {
+			return w.Flush()
+		}
+		if err != nil {
+			return err
+		}
+		var result response
+		if tooLong {
+			result.Status = string(transportLimit)
+		} else {
+			result = handleRequest(line)
+		}
+		if err := encoder.Encode(result); err != nil {
+			return err
+		}
+		if err := w.Flush(); err != nil {
+			return err
+		}
+	}
+}
+
+func main() {
+	if err := run(os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

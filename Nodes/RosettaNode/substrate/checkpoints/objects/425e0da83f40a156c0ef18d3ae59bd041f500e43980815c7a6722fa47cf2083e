@@ -1,0 +1,126 @@
+# Rust lineage 2 — initial v1 submission
+
+## Delivery and operation
+
+The workspace contains executable `build.sh`, the Linux AArch64 ELF `service`,
+Rust source in `src/`, pinned `Cargo.toml`/`Cargo.lock`, tests in `tests/`, and
+`EXPERIMENTS.md`. No ABI v2 or group commit is implemented.
+
+Build and test only inside the supplied Linux broker:
+
+```sh
+python3 run.py './build.sh' 300
+python3 run.py './tests/run.sh' 300
+```
+
+Launch: `service DATADIR SOCKET_PATH`. The socket path must be fresh. RocksDB
+holds its native exclusive writer lock. Shutdown drains all accepted persistent
+work and admitted evaluations, flushes queued socket responses where possible,
+joins workers, closes the database and exits zero.
+
+## Design and durable transitions
+
+- `main.rs`: single coordinator, four encoding worker threads, normal FIFO
+  dispatch. Workers can finish out of order; the coordinator commits at most the
+  next contiguous admission sequence in each loop. Evaluations use the same four
+  slots and have no persistent rows.
+- `state.rs`: exact schema-1 keys from the wire/storage contract. Admission writes
+  one pending job, its ID index, sequence and accounting in one synchronous
+  WriteBatch. Each terminal batch writes one receipt, deletes pending/cancel
+  keys, releases accounting and advances the checkpoint. ID indexes remain.
+  First cancellation writes its intent synchronously before response; repeated
+  pending cancellation is idempotent. Running cancellation waits for the native
+  call to return before terminalizing and releasing payload accounting.
+- `native.rs`: `repr(C)` ABI v1 only. A worker creates the native arena and derives
+  item pointers from `rn_arena_data`; it owns and destroys the arena after verify
+  returns. The Rust input is borrowed throughout. No raw native pointers cross
+  threads and no unsafe Send/Sync implementations were added.
+- `transport.rs`: up to eight clients, separate reader/writer threads, bounded
+  40 MiB framing. Each reader waits until its response is written before advancing
+  to the next request. A 32-message/80 MiB output queue reserves response space;
+  at most 30 terminal events are outstanding per connection. Events may be
+  dropped. Socket writes time out after two seconds; a disconnected or stalled
+  client never cancels its jobs. Admission response is enqueued before any
+  terminal event for that admission.
+- `wire.rs` and `sha256.rs`: strict IDs, lowercase even-length hex, mode/operation
+  enums, batch byte/count limits, decimal-string output, and generic SHA-256
+  identity hashing. Transaction parsing, resource checks and transaction hashes
+  are exclusively delegated to the supplied adapter.
+- `storage.rs`: supplied dynamic RocksDB wrapper extended with iterator support
+  and fatal write-error handling. Compression off, 128 MiB cache, 64 MiB write
+  buffer, two write buffers, two background jobs, sync=true, WAL enabled.
+
+Cancellation and terminal writes are serialized by the coordinator. No other
+operation completes between terminal disposition selection and C write entry.
+A cancellation already acknowledged must therefore be reflected in that receipt;
+a cancellation overlapping the write waits and observes too_late afterward.
+No service barrier or scheduling test hooks were added.
+
+Recovery checks the whole keyspace before opening the listener: schema version,
+required counters, contiguous pending/receipt partition, ID-index bijection,
+cancellation references, payload byte totals and recomputed pending digests.
+Recovered cancellations remain cancelled; other pending v1 jobs resume at normal
+priority. Existing terminal receipts are retained, not rebuilt.
+
+## Failure handling
+
+An arena allocation failure returns execution_failure for evaluate. For an
+acknowledged job it stops the service with diagnostics and leaves durable pending
+state for restart. A returned RocksDB write error prints a diagnostic and exits
+immediately without acknowledging the transition or attempting another write.
+
+The pinned RocksDB build may itself assert under a kernel file-size limit before
+returning an error to Rust. The test observed native assertion diagnostics and
+nonzero exit, no admission acknowledgment, intact recovered rows and successful
+restart. This is recorded separately from the service's returned-error path.
+
+## Validation evidence
+
+- Release build succeeds with the original pinned dependency lockfile.
+- Three Rust unit tests pass: ABI layout, JSON-line framing, and standard SHA-256
+  vectors including one million bytes and incremental chunking.
+- Seventeen independent integration tests pass. These cover native adapter
+  parity, exact/prefix and malformed inputs, 4 MiB and 4,096-item native
+  boundaries, request and batch limits, digest padding, retry conflicts,
+  concurrent identical admission, eight-client execution, client cap, response
+  and notification ordering, disconnects, slow readers, partial input, draining,
+  exclusive locking, schema rejection, full 1,024-job/64 MiB budgets, cancellation
+  intent recovery, live running cancellation, repeated kill/restart, and native
+  storage failure. Inspection uses the RocksDB C API only after the writer exits.
+- `cargo clippy --all-targets -- -D warnings` passes. The supplied public smoke
+  check passes; it is not durability qualification.
+
+Tests include externally seeded legal schema snapshots for deterministic full
+queues and cancellation recovery. No evaluator was inspected or invoked. No
+network, external source, Bitcoin library, other workspace or agent was used.
+
+Not demonstrated: native ASan, whole-service race/TSan coverage, power-loss
+durability, forced arena-allocation failure, or the campaign's external
+call-entry/barrier instrumentation. Do not infer those qualifications from these
+tests. The native-failure test can abort before exercising returned-error code.
+No performance conclusion is claimed.
+
+## Interpretation and next phase
+
+- Unknown wire fields are ignored as reserved; malformed known fields are
+  rejected. Explicit normal priority is tolerated; high/other priority is
+  rejected in v1. Do not treat this as v2 support.
+- Terminal cancellation, including an already-cancelled receipt, returns
+  too_late; repeated cancellation while pending returns ok.
+- Oversized/invalid adapter batch requests are invalid_request without writes.
+  Per-transaction byte/item resource limits remain adapter result statuses.
+- An identical existing submission can return existing during drain; new IDs
+  and evaluations return draining.
+- The supplied contracts refer to a campaign freeze that is not present in this
+  workspace. Implementation was explicitly authorized; campaign gate evidence
+  is not claimed. No predecessor handoff was present.
+
+Preserve v1 disk receipts, cancellations and inputs when doing later maintenance.
+ABI v2 offsets/bitmap and priority scheduling are intentionally absent. Group
+commit belongs only to the optimization round and must preserve the same native
+write-entry cancellation boundary and durability.
+
+Initial implementation took approximately 22 minutes, within the 90-minute cap;
+reading was completed early in the preceding phase. Token usage and monetary
+cost are not available from this workspace. See `EXPERIMENTS.md` for failed
+attempts and their disposition.

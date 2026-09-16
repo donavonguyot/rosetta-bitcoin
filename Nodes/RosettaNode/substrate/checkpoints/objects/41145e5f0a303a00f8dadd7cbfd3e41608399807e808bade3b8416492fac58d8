@@ -1,0 +1,154 @@
+//! State-owner tests: real storage and native results, controlled completion
+//! delivery through test-owned worker channels. No production scheduling hooks.
+use super::*;
+
+#[test]
+fn recovered_priority_dispatch_and_ordered_durable_commit() {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let path = format!("tmp/state-v2-{}-{nonce}", std::process::id());
+    std::fs::create_dir_all(&path).unwrap();
+    let db = DB::open(&path).unwrap();
+    let items = vec![Item {
+        hex: "01000000000000000000".into(),
+        mode: "witness".into(),
+        operation: "exact".into(),
+    }];
+    let data = payload(items.clone()).unwrap();
+    let results = native::evaluate(&items).unwrap();
+    // Keep deliberately noncanonical JSON whitespace in a v1 receipt; recovery
+    // must preserve the original bytes, not migrate/rewrite existing receipts.
+    let old_receipt = serde_json::to_vec_pretty(&Terminal {
+        id: "old-receipt".into(),
+        digest: data.digest.clone(),
+        sequence: "1".into(),
+        state: "complete".into(),
+        results: results.clone(),
+    })
+    .unwrap();
+    let mut b = Batch::new();
+    for (key, value) in [
+        ("meta/version", "1"),
+        ("meta/sequence", "10"),
+        ("meta/checkpoint", "1"),
+        ("meta/jobs", "9"),
+        ("meta/bytes", "90"),
+        ("id/old-receipt", "1"),
+    ] {
+        b.put(key.as_bytes(), value.as_bytes());
+    }
+    b.put(sequence_key("r", 1).as_bytes(), &old_receipt);
+    for seq in 2..=10 {
+        let mut record = json!({
+            "id": format!("job-{seq}"), "sequence": seq.to_string(),
+            "digest": data.digest, "bytes": "10", "items": items,
+            "priority": if seq == 3 || seq % 2 == 0 { "high" } else { "normal" },
+        });
+        if seq == 2 {
+            record.as_object_mut().unwrap().remove("priority");
+        }
+        b.put(
+            sequence_key("p", seq).as_bytes(),
+            &serde_json::to_vec(&record).unwrap(),
+        );
+        b.put(
+            format!("id/job-{seq}").as_bytes(),
+            seq.to_string().as_bytes(),
+        );
+    }
+    b.put(sequence_key("c", 3).as_bytes(), b"1");
+    db.write(&b).unwrap();
+    let mut state = State::recover(db).unwrap();
+    assert_eq!(state.pending[&2].record.priority, Priority::Normal);
+    assert!(state.pending[&3].cancelled);
+    assert_eq!(state.job_value(2).unwrap()["priority"], "normal");
+
+    let mut receivers = Vec::new();
+    let mut workers = Workers {
+        senders: Vec::new(),
+        threads: Vec::new(),
+        idle: (0..4).collect(),
+    };
+    for _ in 0..4 {
+        let (tx, rx) = mpsc::sync_channel(1);
+        workers.senders.push(tx);
+        receivers.push(rx);
+    }
+    state.dispatch(&mut workers).unwrap();
+    assert!(workers.idle.is_empty());
+    for (rx, expected) in receivers.iter().zip([4, 6, 8, 2]) {
+        let Task::Persistent(record) = rx.try_recv().unwrap() else {
+            panic!("wrong task")
+        };
+        assert_eq!(record.sequence, expected.to_string());
+    }
+    for seq in [4, 6, 8] {
+        state.pending.get_mut(&seq).unwrap().progress = Progress::Done(results.clone());
+    }
+    state.commit_ready().unwrap();
+    assert_eq!(
+        state.checkpoint, 1,
+        "completed high jobs cannot pass admission head"
+    );
+    assert_eq!(
+        state.bytes, 90,
+        "completed uncommitted work remains charged"
+    );
+    assert_eq!(state.pending.len(), 9);
+
+    let mut cancel = Batch::new();
+    cancel.put(sequence_key("c", 2).as_bytes(), b"1");
+    state.db.write(&cancel).unwrap();
+    state.pending.get_mut(&2).unwrap().cancelled = true;
+    state.commit_ready().unwrap();
+    assert_eq!(
+        state.checkpoint, 1,
+        "running cancellation must await worker return"
+    );
+    state.pending.get_mut(&2).unwrap().progress = Progress::Done(results.clone());
+    state.commit_ready().unwrap();
+    assert_eq!(state.checkpoint, 4);
+    assert_eq!(state.job_value(2).unwrap()["state"], "cancelled");
+    assert_eq!(state.job_value(3).unwrap()["state"], "cancelled");
+    assert_eq!(state.bytes, 60);
+
+    workers.idle.extend(0..4);
+    state.dispatch(&mut workers).unwrap();
+    for (rx, expected) in receivers.iter().zip([10, 5, 7, 9]) {
+        let Task::Persistent(record) = rx.try_recv().unwrap() else {
+            panic!("wrong task")
+        };
+        assert_eq!(record.sequence, expected.to_string());
+        state.pending.get_mut(&expected).unwrap().progress = Progress::Done(results.clone());
+    }
+    state.commit_ready().unwrap();
+    assert_eq!(state.checkpoint, 10);
+    assert_eq!(state.bytes, 0);
+    assert!(state.pending.is_empty());
+    assert!(state.queue.is_empty());
+    assert_eq!(
+        state.db.get(sequence_key("r", 1).as_bytes()).unwrap(),
+        Some(old_receipt.clone())
+    );
+    drop(state);
+
+    // Reopen only after the writer stops and independently check durable keys.
+    let db = DB::open(&path).unwrap();
+    let mut rows = BTreeMap::new();
+    db.scan(|k, v| {
+        rows.insert(k.to_vec(), v.to_vec());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(rows.len(), 25); // Five metadata keys, ten IDs, ten receipts.
+    assert_eq!(rows[b"meta/version".as_slice()], b"1");
+    assert_eq!(rows[b"meta/jobs".as_slice()], b"0");
+    assert_eq!(rows[b"meta/bytes".as_slice()], b"0");
+    assert_eq!(rows[b"meta/checkpoint".as_slice()], b"10");
+    assert_eq!(rows[sequence_key("r", 1).as_bytes()], old_receipt);
+    for seq in 1..=10 {
+        assert!(rows.contains_key(sequence_key("r", seq).as_bytes()));
+    }
+}

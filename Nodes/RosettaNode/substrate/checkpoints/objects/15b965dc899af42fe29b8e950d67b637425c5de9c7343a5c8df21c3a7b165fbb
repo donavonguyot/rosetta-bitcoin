@@ -1,0 +1,42 @@
+package main
+
+// Only the coordinator owns this queue. The contested cycle pauses whenever
+// either priority is empty, including when both queues drain completely.
+// Dispatch order is independent of the admission-ordered durable checkpoint.
+type taskQueue struct {
+	high   []*task
+	normal []*task
+	turn   uint8
+}
+
+func (q *taskQueue) push(t *task, priority string) {
+	if priority == "high" {
+		q.high = append(q.high, t)
+	} else {
+		q.normal = append(q.normal, t)
+	}
+}
+
+func (q *taskQueue) len() int { return len(q.high) + len(q.normal) }
+
+func (q *taskQueue) pop() *task {
+	if q.len() == 0 {
+		return nil
+	}
+	queue := &q.normal
+	if len(q.high) > 0 && len(q.normal) > 0 {
+		if q.turn < 3 {
+			queue = &q.high
+		}
+		q.turn = (q.turn + 1) % 4
+	} else if len(q.high) > 0 {
+		queue = &q.high
+	}
+	t := (*queue)[0]
+	(*queue)[0] = nil
+	*queue = (*queue)[1:]
+	if len(*queue) == 0 {
+		*queue = nil
+	}
+	return t
+}

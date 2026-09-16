@@ -1,0 +1,576 @@
+{
+  "schema": "rosettanode.substrate.analysis.v2",
+  "classification": "comparison",
+  "binary_gate_status": "not_attempted",
+  "rows": [
+    {
+      "lineage": "zig-1",
+      "language": "zig",
+      "round": "initial",
+      "controller_version": 1,
+      "status": "qualified",
+      "gate_before_repair": "passed",
+      "failed_semantic_families": [],
+      "reading_seconds": 83.1080716669967,
+      "implementation_seconds": 1575.1972701250052,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": 201.32601066699135,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 167926,
+          "cached_input_tokens": 135296,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2148,
+          "reasoning_output_tokens": 406
+        },
+        {
+          "phase": "implementation",
+          "excluded_from_language_cost": false,
+          "input_tokens": 2365719,
+          "cached_input_tokens": 2290944,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 49025,
+          "reasoning_output_tokens": 18350
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-1-initial.json",
+      "normalized_diff": null
+    },
+    {
+      "lineage": "zig-1",
+      "language": "zig",
+      "round": "maintenance",
+      "controller_version": 3,
+      "status": "qualified",
+      "gate_before_repair": "passed",
+      "failed_semantic_families": [],
+      "reading_seconds": 69.39253095899767,
+      "implementation_seconds": 617.0475557500031,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": null,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 258302,
+          "cached_input_tokens": 218496,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1480,
+          "reasoning_output_tokens": 94
+        },
+        {
+          "phase": "implementation",
+          "excluded_from_language_cost": false,
+          "input_tokens": 1295394,
+          "cached_input_tokens": 1250048,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 18418,
+          "reasoning_output_tokens": 3940
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-1-maintenance.json",
+      "normalized_diff": {
+        "production": {
+          "added": 147,
+          "removed": 24,
+          "files_changed": 2
+        },
+        "test": {
+          "added": 178,
+          "removed": 9,
+          "files_changed": 4
+        },
+        "generated": {
+          "added": 0,
+          "removed": 0,
+          "files_changed": 0
+        },
+        "documentation": {
+          "added": 209,
+          "removed": 113,
+          "files_changed": 2
+        }
+      }
+    },
+    {
+      "lineage": "zig-2",
+      "language": "zig",
+      "round": "initial",
+      "controller_version": 1,
+      "status": "qualified",
+      "gate_before_repair": "passed",
+      "failed_semantic_families": [],
+      "reading_seconds": 90.81784295800026,
+      "implementation_seconds": 1092.8499832919915,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": 40.01553066699125,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 246995,
+          "cached_input_tokens": 199808,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2252,
+          "reasoning_output_tokens": 240
+        },
+        {
+          "phase": "implementation",
+          "excluded_from_language_cost": false,
+          "input_tokens": 1705851,
+          "cached_input_tokens": 1645568,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 34238,
+          "reasoning_output_tokens": 9734
+        },
+        {
+          "phase": "repair",
+          "excluded_from_language_cost": true,
+          "input_tokens": 476755,
+          "cached_input_tokens": 438016,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 990,
+          "reasoning_output_tokens": 366
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-2-initial.json",
+      "normalized_diff": null
+    },
+    {
+      "lineage": "zig-2",
+      "language": "zig",
+      "round": "maintenance",
+      "controller_version": 3,
+      "status": "reading",
+      "gate_before_repair": null,
+      "failed_semantic_families": [],
+      "reading_seconds": 57.28453270799946,
+      "implementation_seconds": null,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": null,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 176988,
+          "cached_input_tokens": 135680,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1404,
+          "reasoning_output_tokens": 129
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-2-maintenance.json",
+      "normalized_diff": null
+    },
+    {
+      "lineage": "go-1",
+      "language": "go",
+      "round": "initial",
+      "controller_version": 1,
+      "status": "qualified",
+      "gate_before_repair": "passed",
+      "failed_semantic_families": [],
+      "reading_seconds": 110.54487254199921,
+      "implementation_seconds": 1291.1230935420026,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": 345.14457083398884,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 234726,
+          "cached_input_tokens": 208640,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2633,
+          "reasoning_output_tokens": 524
+        },
+        {
+          "phase": "implementation",
+          "excluded_from_language_cost": false,
+          "input_tokens": 1793743,
+          "cached_input_tokens": 1732864,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 39851,
+          "reasoning_output_tokens": 14401
+        },
+        {
+          "phase": "repair",
+          "excluded_from_language_cost": true,
+          "input_tokens": 1559088,
+          "cached_input_tokens": 1487872,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 9834,
+          "reasoning_output_tokens": 3084
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-go-1-initial.json",
+      "normalized_diff": null
+    },
+    {
+      "lineage": "go-1",
+      "language": "go",
+      "round": "maintenance",
+      "controller_version": 3,
+      "status": "qualified",
+      "gate_before_repair": "passed",
+      "failed_semantic_families": [],
+      "reading_seconds": 57.110031499993056,
+      "implementation_seconds": 582.7511817920022,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": null,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 195594,
+          "cached_input_tokens": 151680,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1185,
+          "reasoning_output_tokens": 57
+        },
+        {
+          "phase": "implementation",
+          "excluded_from_language_cost": false,
+          "input_tokens": 1163272,
+          "cached_input_tokens": 1126656,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 17224,
+          "reasoning_output_tokens": 3095
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-go-1-maintenance.json",
+      "normalized_diff": {
+        "production": {
+          "added": 80,
+          "removed": 29,
+          "files_changed": 5
+        },
+        "test": {
+          "added": 285,
+          "removed": 20,
+          "files_changed": 3
+        },
+        "generated": {
+          "added": 0,
+          "removed": 0,
+          "files_changed": 0
+        },
+        "documentation": {
+          "added": 187,
+          "removed": 2,
+          "files_changed": 2
+        }
+      }
+    },
+    {
+      "lineage": "go-2",
+      "language": "go",
+      "round": "initial",
+      "controller_version": 3,
+      "status": "qualified",
+      "gate_before_repair": "passed",
+      "failed_semantic_families": [],
+      "reading_seconds": 92.79896866700437,
+      "implementation_seconds": 1405.3494096659997,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": null,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 196786,
+          "cached_input_tokens": 153984,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2220,
+          "reasoning_output_tokens": 234
+        },
+        {
+          "phase": "implementation",
+          "excluded_from_language_cost": false,
+          "input_tokens": 1869313,
+          "cached_input_tokens": 1804032,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 43785,
+          "reasoning_output_tokens": 15329
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-go-2-initial.json",
+      "normalized_diff": null
+    },
+    {
+      "lineage": "rust-1",
+      "language": "rust",
+      "round": "initial",
+      "controller_version": 1,
+      "status": "qualified",
+      "gate_before_repair": "passed",
+      "failed_semantic_families": [],
+      "reading_seconds": 126.62058037500537,
+      "implementation_seconds": 1262.1603599579976,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": null,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 244784,
+          "cached_input_tokens": 212224,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3389,
+          "reasoning_output_tokens": 436
+        },
+        {
+          "phase": "implementation",
+          "excluded_from_language_cost": false,
+          "input_tokens": 1857399,
+          "cached_input_tokens": 1794048,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 39676,
+          "reasoning_output_tokens": 12108
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-1-initial.json",
+      "normalized_diff": null
+    },
+    {
+      "lineage": "rust-1",
+      "language": "rust",
+      "round": "maintenance",
+      "controller_version": 3,
+      "status": "reading",
+      "gate_before_repair": null,
+      "failed_semantic_families": [],
+      "reading_seconds": 90.84249991699471,
+      "implementation_seconds": null,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": null,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 160475,
+          "cached_input_tokens": 121472,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2376,
+          "reasoning_output_tokens": 223
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-1-maintenance.json",
+      "normalized_diff": null
+    },
+    {
+      "lineage": "rust-2",
+      "language": "rust",
+      "round": "initial",
+      "controller_version": 3,
+      "status": "qualified",
+      "gate_before_repair": "passed",
+      "failed_semantic_families": [],
+      "reading_seconds": 94.09602441699826,
+      "implementation_seconds": 1418.2392174590059,
+      "repair_seconds": null,
+      "invalidated_evaluator_repair_seconds": null,
+      "usage": [
+        {
+          "phase": "reading",
+          "excluded_from_language_cost": false,
+          "input_tokens": 179856,
+          "cached_input_tokens": 139264,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2268,
+          "reasoning_output_tokens": 273
+        },
+        {
+          "phase": "implementation",
+          "excluded_from_language_cost": false,
+          "input_tokens": 1893390,
+          "cached_input_tokens": 1826560,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 44928,
+          "reasoning_output_tokens": 15220
+        }
+      ],
+      "monetary_cost": null,
+      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-2-initial.json",
+      "normalized_diff": null
+    }
+  ],
+  "aggregates": [
+    {
+      "language": "zig",
+      "round": "initial",
+      "attempts": 2,
+      "qualified": 2,
+      "initial_gate_passes": 2,
+      "controller_versions": [
+        1
+      ],
+      "initial_time_ranking_allowed": false,
+      "median_implementation_seconds": 1334.0236267084983,
+      "min_implementation_seconds": 1092.8499832919915,
+      "max_implementation_seconds": 1575.1972701250052
+    },
+    {
+      "language": "zig",
+      "round": "maintenance",
+      "attempts": 2,
+      "qualified": 1,
+      "initial_gate_passes": 1,
+      "controller_versions": [
+        3
+      ],
+      "initial_time_ranking_allowed": true,
+      "median_implementation_seconds": 617.0475557500031,
+      "min_implementation_seconds": 617.0475557500031,
+      "max_implementation_seconds": 617.0475557500031
+    },
+    {
+      "language": "zig",
+      "round": "optimization",
+      "attempts": 0,
+      "qualified": 0,
+      "initial_gate_passes": 0,
+      "controller_versions": [],
+      "initial_time_ranking_allowed": true,
+      "median_implementation_seconds": null,
+      "min_implementation_seconds": null,
+      "max_implementation_seconds": null
+    },
+    {
+      "language": "go",
+      "round": "initial",
+      "attempts": 2,
+      "qualified": 2,
+      "initial_gate_passes": 2,
+      "controller_versions": [
+        1,
+        3
+      ],
+      "initial_time_ranking_allowed": false,
+      "median_implementation_seconds": 1348.2362516040012,
+      "min_implementation_seconds": 1291.1230935420026,
+      "max_implementation_seconds": 1405.3494096659997
+    },
+    {
+      "language": "go",
+      "round": "maintenance",
+      "attempts": 1,
+      "qualified": 1,
+      "initial_gate_passes": 1,
+      "controller_versions": [
+        3
+      ],
+      "initial_time_ranking_allowed": true,
+      "median_implementation_seconds": 582.7511817920022,
+      "min_implementation_seconds": 582.7511817920022,
+      "max_implementation_seconds": 582.7511817920022
+    },
+    {
+      "language": "go",
+      "round": "optimization",
+      "attempts": 0,
+      "qualified": 0,
+      "initial_gate_passes": 0,
+      "controller_versions": [],
+      "initial_time_ranking_allowed": true,
+      "median_implementation_seconds": null,
+      "min_implementation_seconds": null,
+      "max_implementation_seconds": null
+    },
+    {
+      "language": "rust",
+      "round": "initial",
+      "attempts": 2,
+      "qualified": 2,
+      "initial_gate_passes": 2,
+      "controller_versions": [
+        1,
+        3
+      ],
+      "initial_time_ranking_allowed": false,
+      "median_implementation_seconds": 1340.1997887085017,
+      "min_implementation_seconds": 1262.1603599579976,
+      "max_implementation_seconds": 1418.2392174590059
+    },
+    {
+      "language": "rust",
+      "round": "maintenance",
+      "attempts": 1,
+      "qualified": 0,
+      "initial_gate_passes": 0,
+      "controller_versions": [
+        3
+      ],
+      "initial_time_ranking_allowed": true,
+      "median_implementation_seconds": null,
+      "min_implementation_seconds": null,
+      "max_implementation_seconds": null
+    },
+    {
+      "language": "rust",
+      "round": "optimization",
+      "attempts": 0,
+      "qualified": 0,
+      "initial_gate_passes": 0,
+      "controller_versions": [],
+      "initial_time_ranking_allowed": true,
+      "median_implementation_seconds": null,
+      "min_implementation_seconds": null,
+      "max_implementation_seconds": null
+    }
+  ],
+  "unattempted_or_pending": [
+    {
+      "lineage": "zig-1",
+      "round": "optimization"
+    },
+    {
+      "lineage": "zig-2",
+      "round": "optimization"
+    },
+    {
+      "lineage": "go-1",
+      "round": "optimization"
+    },
+    {
+      "lineage": "go-2",
+      "round": "maintenance"
+    },
+    {
+      "lineage": "go-2",
+      "round": "optimization"
+    },
+    {
+      "lineage": "rust-1",
+      "round": "optimization"
+    },
+    {
+      "lineage": "rust-2",
+      "round": "maintenance"
+    },
+    {
+      "lineage": "rust-2",
+      "round": "optimization"
+    }
+  ],
+  "interpretation": "Small lineages; no significance claim or universal language ranking. Missing rounds require dependency/stop attribution before a complete report.",
+  "diagnostic_warning": "A Zig failure is not evidence that Zig is a bad language.",
+  "evaluator_version": "v2 only",
+  "cost_limitations": [
+    "Monetary cost unavailable",
+    "Model-active time unavailable; phase wall time includes tools and waits",
+    "Initial construction times under older controllers include duplicate request overhead; no initial timing ranking",
+    "Cached input tokens are included in provider usage fields; not converted into invented prices"
+  ]
+}

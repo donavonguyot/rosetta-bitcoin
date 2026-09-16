@@ -1,0 +1,320 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"strconv"
+)
+
+type transaction struct {
+	version  uint32
+	inputs   []txInput
+	outputs  []txOutput
+	locktime uint32
+}
+
+type txInput struct {
+	digest   []byte
+	index    uint32
+	script   []byte
+	sequence uint32
+	witness  [][]byte
+}
+
+type txOutput struct {
+	amount int64
+	script []byte
+}
+
+// This primitive has no allocation policy. Failure returns the original
+// position, and callers commit its value and cursor only on success.
+func readCompact(data []byte, pos int) (value uint64, next int, ok bool) {
+	if pos < 0 || pos >= len(data) {
+		return 0, pos, false
+	}
+	lead := data[pos]
+	if lead < 253 {
+		return uint64(lead), pos + 1, true
+	}
+	width := 2
+	if lead == 254 {
+		width = 4
+	} else if lead == 255 {
+		width = 8
+	}
+	if len(data)-pos-1 < width {
+		return 0, pos, false
+	}
+	payload := data[pos+1 : pos+1+width]
+	switch width {
+	case 2:
+		value = uint64(binary.LittleEndian.Uint16(payload))
+		ok = value >= 253
+	case 4:
+		value = uint64(binary.LittleEndian.Uint32(payload))
+		ok = value > 65535
+	case 8:
+		value = binary.LittleEndian.Uint64(payload)
+		ok = value > 4294967295
+	}
+	if !ok {
+		return 0, pos, false
+	}
+	return value, pos + 1 + width, true
+}
+
+func compactSize(n uint64) uint64 {
+	switch {
+	case n < 253:
+		return 1
+	case n <= 65535:
+		return 3
+	case n <= 4294967295:
+		return 5
+	default:
+		return 9
+	}
+}
+
+func appendCompact(dst []byte, n uint64) []byte {
+	switch compactSize(n) {
+	case 1:
+		return append(dst, byte(n))
+	case 3:
+		return binary.LittleEndian.AppendUint16(append(dst, 253), uint16(n))
+	case 5:
+		return binary.LittleEndian.AppendUint32(append(dst, 254), uint32(n))
+	default:
+		return binary.LittleEndian.AppendUint64(append(dst, 255), n)
+	}
+}
+
+type cursor struct {
+	data  []byte
+	pos   int
+	items uint64
+}
+
+func (c *cursor) take(n uint64) []byte {
+	if n > uint64(len(c.data)-c.pos) {
+		panic(malformedEncoding)
+	}
+	start := c.pos
+	c.pos += int(n)
+	return c.data[start:c.pos]
+}
+
+func (c *cursor) u32() uint32 { return binary.LittleEndian.Uint32(c.take(4)) }
+
+func (c *cursor) compact() uint64 {
+	v, next, ok := readCompact(c.data, c.pos)
+	if !ok {
+		panic(malformedEncoding)
+	}
+	c.pos = next
+	return v
+}
+
+func (c *cursor) blob() []byte { return c.take(c.compact()) }
+
+func (c *cursor) count(minimum uint64) uint64 {
+	n := c.compact()
+	if n > uint64(len(c.data)-c.pos)/minimum {
+		panic(malformedEncoding)
+	}
+	c.items += n
+	return n
+}
+
+func (c *cursor) inputs(materialize bool) ([]txInput, uint64) {
+	n := c.count(41)
+	var inputs []txInput
+	if materialize {
+		inputs = make([]txInput, int(n))
+	}
+	for i := uint64(0); i < n; i++ {
+		digest := c.take(32)
+		index := c.u32()
+		script := c.blob()
+		sequence := c.u32()
+		if materialize {
+			inputs[i] = txInput{digest: digest, index: index, script: script, sequence: sequence}
+		}
+	}
+	return inputs, n
+}
+
+func (c *cursor) outputs(materialize bool) []txOutput {
+	n := c.count(9)
+	var outputs []txOutput
+	if materialize {
+		outputs = make([]txOutput, int(n))
+	}
+	for i := uint64(0); i < n; i++ {
+		amount := int64(binary.LittleEndian.Uint64(c.take(8)))
+		script := c.blob()
+		if materialize {
+			outputs[i] = txOutput{amount: amount, script: script}
+		}
+	}
+	return outputs
+}
+
+// With materialize=false, this is a forward scan with constant scratch space.
+// It deliberately does not stop at the item budget. Both passes use exactly
+// the same state machine, including the empty-vector, zero-flags transition.
+func walkTransaction(data []byte, witness, materialize bool) (transaction, int, uint64) {
+	c := cursor{data: data}
+	var tx transaction
+	tx.version = c.u32()
+	inputs, n := c.inputs(materialize)
+	flags := byte(0)
+	if witness && n == 0 {
+		flags = c.take(1)[0]
+		if flags != 0 {
+			inputs, n = c.inputs(materialize)
+			tx.outputs = c.outputs(materialize)
+		}
+	} else {
+		tx.outputs = c.outputs(materialize)
+	}
+	if flags&1 != 0 {
+		hasItem := false
+		for i := uint64(0); i < n; i++ {
+			count := c.count(1)
+			if count > 0 {
+				hasItem = true
+			}
+			if materialize {
+				inputs[i].witness = make([][]byte, int(count))
+			}
+			for j := uint64(0); j < count; j++ {
+				item := c.blob()
+				if materialize {
+					inputs[i].witness[j] = item
+				}
+			}
+		}
+		if !hasItem {
+			panic(malformedEncoding)
+		}
+		flags &^= 1
+	}
+	if flags != 0 {
+		panic(malformedEncoding)
+	}
+	tx.locktime = c.u32()
+	tx.inputs = inputs
+	return tx, c.pos, c.items
+}
+
+func decode(data []byte, offset int, witness, exact bool, limit uint64) (transaction, int) {
+	if offset < 0 || offset > len(data) {
+		panic(invalidRequest)
+	}
+	data = data[offset:]
+	if len(data) > admissionBytes {
+		panic(admissionLimit)
+	}
+	_, consumed, items := walkTransaction(data, witness, false)
+	if exact && consumed != len(data) {
+		panic(malformedEncoding)
+	}
+	if items > limit {
+		panic(resourceLimit)
+	}
+	tx, _, _ := walkTransaction(data[:consumed], witness, true)
+	return tx, consumed
+}
+
+func serializationSizes(tx *transaction) (stripped, full uint64, hasWitness bool) {
+	stripped = 8 + compactSize(uint64(len(tx.inputs))) + compactSize(uint64(len(tx.outputs)))
+	for _, in := range tx.inputs {
+		stripped += 40 + compactSize(uint64(len(in.script))) + uint64(len(in.script))
+		if len(in.witness) > 0 {
+			hasWitness = true
+		}
+	}
+	for _, out := range tx.outputs {
+		stripped += 8 + compactSize(uint64(len(out.script))) + uint64(len(out.script))
+	}
+	full = stripped
+	if hasWitness {
+		full += 2
+		for _, in := range tx.inputs {
+			full += compactSize(uint64(len(in.witness)))
+			for _, item := range in.witness {
+				full += compactSize(uint64(len(item))) + uint64(len(item))
+			}
+		}
+	}
+	return
+}
+
+func appendBlob(dst, b []byte) []byte {
+	return append(appendCompact(dst, uint64(len(b))), b...)
+}
+
+func serialize(tx *transaction, includeWitness bool) []byte {
+	strippedSize, fullSize, hasWitness := serializationSizes(tx)
+	withWitness := includeWitness && hasWitness
+	size := strippedSize
+	if withWitness {
+		size = fullSize
+	}
+	if size > admissionBytes {
+		panic(resourceLimit)
+	}
+	dst := make([]byte, 0, int(size))
+	dst = binary.LittleEndian.AppendUint32(dst, tx.version)
+	if withWitness {
+		dst = append(dst, 0, 1)
+	}
+	dst = appendCompact(dst, uint64(len(tx.inputs)))
+	for _, in := range tx.inputs {
+		dst = append(dst, in.digest...)
+		dst = binary.LittleEndian.AppendUint32(dst, in.index)
+		dst = appendBlob(dst, in.script)
+		dst = binary.LittleEndian.AppendUint32(dst, in.sequence)
+	}
+	dst = appendCompact(dst, uint64(len(tx.outputs)))
+	for _, out := range tx.outputs {
+		dst = binary.LittleEndian.AppendUint64(dst, uint64(out.amount))
+		dst = appendBlob(dst, out.script)
+	}
+	if withWitness {
+		for _, in := range tx.inputs {
+			dst = appendCompact(dst, uint64(len(in.witness)))
+			for _, item := range in.witness {
+				dst = appendBlob(dst, item)
+			}
+		}
+	}
+	return binary.LittleEndian.AppendUint32(dst, tx.locktime)
+}
+
+func hashOrders(data []byte) (digest, display string) {
+	first := sha256.Sum256(data)
+	second := sha256.Sum256(first[:])
+	digest = hex.EncodeToString(second[:])
+	for i, j := 0, len(second)-1; i < j; i, j = i+1, j-1 {
+		second[i], second[j] = second[j], second[i]
+	}
+	return digest, hex.EncodeToString(second[:])
+}
+
+func identify(tx *transaction) response {
+	_, fullSize, _ := serializationSizes(tx)
+	if fullSize > admissionBytes {
+		panic(resourceLimit)
+	}
+	stripped, full := serialize(tx, false), serialize(tx, true)
+	txid, txidDisplay := hashOrders(stripped)
+	wtxid, wtxidDisplay := hashOrders(full)
+	return response{
+		Status: "ok", Stripped: hex.EncodeToString(stripped), Full: hex.EncodeToString(full),
+		StrippedSize: strconv.Itoa(len(stripped)), FullSize: strconv.Itoa(len(full)),
+		TxIDDigest: txid, TxIDDisplay: txidDisplay, WTxIDDigest: wtxid, WTxIDDisplay: wtxidDisplay,
+	}
+}

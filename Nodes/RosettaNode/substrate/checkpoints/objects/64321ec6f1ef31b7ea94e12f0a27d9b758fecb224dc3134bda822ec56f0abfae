@@ -1,0 +1,86 @@
+Implemented `decode_prefix`, `decode_exact`, `serialize`, and `identify` in
+Zig 0.16.0, using only the standard library. No external specifications,
+Bitcoin libraries, reference programs, evaluator access, or network access
+were used.
+
+The separate repair phase used only the existing materials and the supplied
+`feedback.json`. All six feedback responses now match completely. The repair
+changes amounts to signed 64-bit values throughout parsing, serialization,
+decoding, and identification, and checks impossible declared collection
+lengths before applying `max_items`.
+
+Build:
+
+```sh
+/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/toolchain-wrappers/zig build-exe main.zig -O ReleaseSafe -femit-bin=candidate
+```
+
+Tests:
+
+```sh
+/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/toolchain-wrappers/zig test tests.zig -O ReleaseSafe
+/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/toolchain-wrappers/zig test repair_tests.zig -O ReleaseSafe
+sh transport_tests.sh
+```
+
+The supplied interface initially left the following behavior unspecified.
+The repair feedback establishes negative amounts and precedence of impossible
+collection lengths over item limits. Other choices below remain assumptions
+where the supplied materials do not resolve them:
+
+- Binary fields follow conventional Bitcoin transaction serialization:
+  little-endian fixed-width integers and minimally encoded CompactSize
+  collection lengths. Version bits, previous indices, sequences, and locktime
+  are unsigned 32-bit values; amounts are signed 64-bit values with two's-
+  complement encoding. Scripts and
+  witnesses are opaque bytes; no consensus, script, or monetary checks apply.
+- Witness mode accepts legacy transactions and marker/flag `00 01`
+  transactions. Unknown flags and superfluous all-empty witness stacks are
+  malformed. A stack containing one empty item is nonempty. The `00 00`
+  input/output pair represents empty vectors. Zero-input legacy transactions
+  with nonempty outputs need legacy decoding because of marker ambiguity.
+- Serialization emits witness marker/flag and stacks only when
+  `include_witness` is true and at least one input has a nonempty stack.
+  Serialization and identification validate the complete supplied object,
+  including witness data when producing stripped encoding.
+- Identifiers are double SHA-256 of stripped/full serialization. Digest order
+  is the raw digest; display order reverses its bytes. Without witness data,
+  stripped/full encodings and txid/wtxid are identical.
+- Prefix offsets are byte offsets; `consumed` is the number of bytes read
+  starting at that offset. Offsets beyond the supplied buffer are invalid
+  requests. Insufficient bytes and exact decoding with trailing bytes are
+  malformed encodings.
+- `max_items` bounds each length-prefixed collection independently, including
+  scripts and witness item byte lengths. It is not a cumulative budget and
+  does not bound fixed-size fields or the complete transaction. Missing limits
+  or an empty limits object impose no additional bound. A zero limit permits
+  empty collections. Canonical length parsing and minimum byte feasibility
+  checks precede the limit check. Both bounds and limits are checked before
+  allocation from decoded counts. The feedback does not establish global
+  precedence between a resource error and a later, unrelated encoding error.
+- Required fields must have the stated JSON types; null does not substitute
+  for an array, string, or limits object. Integer strings contain ASCII digits
+  only, with an optional leading minus for amounts; leading zeros are accepted,
+  and plus signs and whitespace are rejected. Hex is
+  case-insensitive on input and lowercase on output, with no `0x` prefix.
+  Unknown object fields are ignored; the last duplicate field wins.
+- Invalid JSON, field types/ranges, or hex give `invalid_request`; invalid
+  binary encoding gives `malformed_encoding`; explicit collection bounds give
+  `resource_limit`; request allocation failure gives `execution_failure`.
+  No transport or admission thresholds are specified, so the implementation
+  invents none and does not emit those two statuses. Blank lines are invalid
+  requests. CRLF and final lines without a newline are accepted. Responses
+  are flushed individually, with request storage freed between lines.
+
+Tests cover hand-assembled byte layouts, identifier byte order, a known
+double-SHA256 digest, truncation at every byte, canonical length boundaries,
+integer boundaries, malformed requests, witness flags/stacks, explicit limits,
+250 deterministic randomized transactions, and executable transport behavior
+including a request with a 65,536-byte script.
+
+Repair tests compare all six feedback examples recursively, including every
+response field, and cover signed minimum/maximum amounts, negative amounts,
+out-of-range and malformed decimal strings, and impossible lengths for inputs,
+outputs, scripts, witness stacks, and witness items. The original randomized
+tests now generate amounts across the entire signed 64-bit range. All 17 Zig
+tests and the executable transport tests pass after the repair.

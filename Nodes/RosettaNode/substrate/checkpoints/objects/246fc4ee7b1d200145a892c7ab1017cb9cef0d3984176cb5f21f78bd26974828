@@ -1,0 +1,343 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+	"trial/reuse"
+)
+
+type Pending struct {
+	ID       string `json:"id"`
+	Digest   string `json:"digest"`
+	Sequence string `json:"sequence"`
+	Bytes    string `json:"bytes"`
+	Priority string `json:"priority"`
+	Items    []Item `json:"items"`
+}
+type PendingView struct {
+	Pending
+	State string `json:"state"`
+}
+type Receipt struct {
+	ID       string   `json:"id"`
+	Digest   string   `json:"digest"`
+	Sequence string   `json:"sequence"`
+	State    string   `json:"state"`
+	Results  []Result `json:"results"`
+}
+type Job struct {
+	Pending   Pending
+	Payload   *Payload
+	Cancelled bool
+	Done      bool
+	Results   []Result
+	Client    *client
+}
+type State struct {
+	db         *storage.DB
+	sequence   uint64
+	checkpoint uint64
+	jobs       uint64
+	bytes      uint64
+	pending    map[uint64]*Job
+}
+
+func seqKey(prefix string, seq uint64) string { return fmt.Sprintf("%s/%020d", prefix, seq) }
+func jsonText(v any) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	} // All callers use fixed, JSON-encodable types.
+	return string(data)
+}
+func (s *State) write(puts map[string]string, deletes ...string) error {
+	b := storage.NewBatch()
+	defer b.Close()
+	for k, v := range puts {
+		b.Put(k, v)
+	}
+	for _, k := range deletes {
+		b.Delete(k)
+	}
+	return s.db.Write(b)
+}
+func recoverState(db *storage.DB) (*State, error) {
+	s := &State{db: db, pending: make(map[uint64]*Job)}
+	version, found, err := db.Get("meta/version")
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		// No counters default to zero on an existing, partially populated DB.
+		if err := db.Scan(func(k, v string) error { return errors.New("recovery: missing schema on nonempty database") }); err != nil {
+			return nil, err
+		}
+		err := s.write(map[string]string{"meta/version": "1", "meta/sequence": "0", "meta/checkpoint": "0", "meta/jobs": "0", "meta/bytes": "0"})
+		return s, err
+	}
+	get := func(k string) (string, error) {
+		v, ok, err := db.Get(k)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			return "", fmt.Errorf("recovery: missing %s", k)
+		}
+		return v, nil
+	}
+	if version != "1" {
+		return nil, errors.New("recovery: incompatible or missing schema version")
+	}
+	for key, dst := range map[string]*uint64{"meta/sequence": &s.sequence, "meta/checkpoint": &s.checkpoint, "meta/jobs": &s.jobs, "meta/bytes": &s.bytes} {
+		value, e := get(key)
+		if e != nil {
+			return nil, e
+		}
+		*dst, e = parseDecimal(value)
+		if e != nil {
+			return nil, fmt.Errorf("recovery %s: %w", key, e)
+		}
+	}
+	if s.checkpoint > s.sequence || s.jobs != s.sequence-s.checkpoint || s.jobs > maxJobs || s.bytes > maxOutstandingBytes {
+		return nil, errors.New("recovery: inconsistent counters")
+	}
+	var totalBytes, pendingCount, receiptCount, indexCount uint64
+	// Stream receipts instead of retaining history in RAM. The only retained
+	// payloads belong to the bounded set of nonterminal jobs.
+	err = db.Scan(func(key, value string) error {
+		if strings.HasPrefix(key, "meta/") {
+			switch key {
+			case "meta/version", "meta/sequence", "meta/checkpoint", "meta/jobs", "meta/bytes":
+				return nil
+			default:
+				return fmt.Errorf("recovery: unknown key %s", key)
+			}
+		}
+		if strings.HasPrefix(key, "id/") {
+			id := strings.TrimPrefix(key, "id/")
+			seq, e := parseDecimal(value)
+			if e != nil || !validID(id) || seq == 0 || seq > s.sequence {
+				return errors.New("recovery: invalid id index")
+			}
+			prefix := "p"
+			if seq <= s.checkpoint {
+				prefix = "r"
+			}
+			job, e := get(seqKey(prefix, seq))
+			if e != nil {
+				return e
+			}
+			var identity struct {
+				ID string `json:"id"`
+			}
+			if e = json.Unmarshal([]byte(job), &identity); e != nil || identity.ID != id {
+				return errors.New("recovery: id index is not bijective")
+			}
+			indexCount++
+			return nil
+		}
+		if len(key) != 22 || key[1] != '/' {
+			return fmt.Errorf("recovery: unknown key %s", key)
+		}
+		seq, e := strconv.ParseUint(key[2:], 10, 64)
+		if e != nil || seq == 0 || seq > s.sequence || key != seqKey(key[:1], seq) {
+			return errors.New("recovery: invalid sequence key")
+		}
+		if key[0] == 'c' {
+			if seq <= s.checkpoint || value != "1" {
+				return errors.New("recovery: invalid cancellation")
+			}
+			_, e := get(seqKey("p", seq))
+			return e
+		}
+		var id, digest, sequence string
+		switch key[0] {
+		case 'r':
+			if seq > s.checkpoint {
+				return errors.New("recovery: receipt beyond checkpoint")
+			}
+			var r Receipt
+			if e = json.Unmarshal([]byte(value), &r); e != nil {
+				return fmt.Errorf("recovery receipt: %w", e)
+			}
+			if e = validateReceipt(r); e != nil {
+				return e
+			}
+			id, digest, sequence = r.ID, r.Digest, r.Sequence
+			receiptCount++
+		case 'p':
+			if seq <= s.checkpoint {
+				return errors.New("recovery: pending at or below checkpoint")
+			}
+			var p Pending
+			if e = json.Unmarshal([]byte(value), &p); e != nil {
+				return fmt.Errorf("recovery pending: %w", e)
+			}
+			if p.Priority != "normal" {
+				return errors.New("recovery: v1 priority must be normal")
+			}
+			payload, e := makePayload(p.Items)
+			if e != nil {
+				return fmt.Errorf("recovery payload: %w", e)
+			}
+			if p.Digest != payload.Digest || p.Bytes != decimal(uint64(len(payload.Raw))) {
+				return errors.New("recovery: payload metadata mismatch")
+			}
+			j := &Job{Pending: p, Payload: payload}
+			cancel, ok, e := db.Get(seqKey("c", seq))
+			if e != nil {
+				return e
+			}
+			if ok {
+				if cancel != "1" {
+					return errors.New("recovery: invalid cancellation")
+				}
+				j.Cancelled = true
+			}
+			s.pending[seq] = j
+			totalBytes += uint64(len(payload.Raw))
+			if totalBytes > maxOutstandingBytes {
+				return errors.New("recovery: excess outstanding bytes")
+			}
+			pendingCount++
+			id, digest, sequence = p.ID, p.Digest, p.Sequence
+		default:
+			return fmt.Errorf("recovery: unknown key %s", key)
+		}
+		if !validID(id) || len(digest) != 64 || !lowerHex(digest) || sequence != decimal(seq) {
+			return errors.New("recovery: invalid job identity")
+		}
+		index, e := get("id/" + id)
+		if e != nil || index != decimal(seq) {
+			return errors.New("recovery: invalid id index")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if totalBytes != s.bytes || pendingCount != s.jobs || receiptCount != s.checkpoint || indexCount != s.sequence {
+		return nil, errors.New("recovery: orphan rows or byte accounting mismatch")
+	}
+	return s, nil
+}
+
+func validateReceipt(r Receipt) error {
+	if r.Results == nil {
+		return errors.New("recovery: missing receipt results")
+	}
+	if r.State == "cancelled" {
+		if len(r.Results) != 0 {
+			return errors.New("recovery: cancelled results")
+		}
+		return nil
+	}
+	if r.State != "complete" || len(r.Results) == 0 || len(r.Results) > maxBatch {
+		return errors.New("recovery: invalid terminal state")
+	}
+	for _, result := range r.Results {
+		status, e := parseDecimal(result.Status)
+		if e != nil || status > 4 {
+			return errors.New("recovery: invalid result status")
+		}
+		for _, size := range []string{result.Consumed, result.FullSize, result.StrippedSize} {
+			n, e := parseDecimal(size)
+			if e != nil || (status != 0 && n != 0) {
+				return errors.New("recovery: invalid result size")
+			}
+		}
+		for _, digest := range []string{result.TxID, result.WTxID} {
+			if len(digest) != 64 || !lowerHex(digest) {
+				return errors.New("recovery: invalid result digest")
+			}
+			if status != 0 && digest != "0000000000000000000000000000000000000000000000000000000000000000" {
+				return errors.New("recovery: nonzero error digest")
+			}
+		}
+	}
+	return nil
+}
+
+func (s *State) lookup(id string) (uint64, *Job, *Receipt, error) {
+	index, found, err := s.db.Get("id/" + id)
+	if err != nil || !found {
+		return 0, nil, nil, err
+	}
+	seq, err := parseDecimal(index)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	if job := s.pending[seq]; job != nil {
+		return seq, job, nil, nil
+	}
+	value, found, err := s.db.Get(seqKey("r", seq))
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	if !found {
+		return 0, nil, nil, errors.New("missing indexed receipt")
+	}
+	var receipt Receipt
+	if err = json.Unmarshal([]byte(value), &receipt); err != nil {
+		return 0, nil, nil, err
+	}
+	return seq, nil, &receipt, nil
+}
+func (s *State) admit(id string, p *Payload, c *client) (*Job, error) {
+	if s.sequence == math.MaxUint64 {
+		return nil, errors.New("sequence exhausted")
+	}
+	seq := s.sequence + 1
+	size := uint64(len(p.Raw))
+	pending := Pending{ID: id, Digest: p.Digest, Sequence: decimal(seq), Bytes: decimal(size), Priority: "normal", Items: p.Items}
+	puts := map[string]string{
+		"id/" + id: decimal(seq), seqKey("p", seq): jsonText(pending),
+		"meta/sequence": decimal(seq), "meta/jobs": decimal(s.jobs + 1), "meta/bytes": decimal(s.bytes + size),
+	}
+	if err := s.write(puts); err != nil {
+		return nil, err
+	}
+	j := &Job{Pending: pending, Payload: p, Client: c}
+	s.sequence = seq
+	s.jobs++
+	s.bytes += size
+	s.pending[seq] = j
+	return j, nil
+}
+func (s *State) cancel(seq uint64, j *Job) error {
+	if j.Cancelled {
+		return nil
+	}
+	if err := s.write(map[string]string{seqKey("c", seq): "1"}); err != nil {
+		return err
+	}
+	j.Cancelled = true
+	return nil
+}
+func (s *State) commit(j *Job) (*Receipt, error) {
+	seq := s.checkpoint + 1
+	if s.pending[seq] != j || !j.Done {
+		return nil, errors.New("internal commit ordering")
+	}
+	r := &Receipt{ID: j.Pending.ID, Digest: j.Pending.Digest, Sequence: j.Pending.Sequence, State: "complete", Results: j.Results}
+	if j.Cancelled {
+		r.State = "cancelled"
+		r.Results = []Result{}
+	}
+	size := uint64(len(j.Payload.Raw))
+	puts := map[string]string{seqKey("r", seq): jsonText(r), "meta/checkpoint": decimal(seq), "meta/jobs": decimal(s.jobs - 1), "meta/bytes": decimal(s.bytes - size)}
+	// The coordinator cannot acknowledge a cancellation concurrently with this
+	// call. It holds ownership through native entry, sync, and return.
+	if err := s.write(puts, seqKey("p", seq), seqKey("c", seq)); err != nil {
+		return nil, err
+	}
+	delete(s.pending, seq)
+	s.checkpoint = seq
+	s.jobs--
+	s.bytes -= size
+	return r, nil
+}

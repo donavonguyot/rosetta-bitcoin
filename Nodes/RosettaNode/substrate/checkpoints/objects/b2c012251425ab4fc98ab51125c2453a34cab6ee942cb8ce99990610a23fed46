@@ -1,0 +1,247 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
+	"sync"
+	"time"
+)
+
+type outgoing struct {
+	bytes   []byte
+	written chan error
+}
+
+type client struct {
+	conn   net.Conn
+	out    chan outgoing
+	closed chan struct{}
+	once   sync.Once
+}
+
+func newClient(conn net.Conn) *client {
+	c := &client{conn: conn, out: make(chan outgoing, 32), closed: make(chan struct{})}
+	go c.writer()
+	return c
+}
+
+func (c *client) close() {
+	c.once.Do(func() { close(c.closed); c.conn.Close() })
+}
+
+func lineJSON(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return append(b, '\n')
+}
+
+func (c *client) reply(response Response) bool {
+	m := outgoing{bytes: lineJSON(response), written: make(chan error, 1)}
+	select {
+	case <-c.closed:
+		return false
+	case c.out <- m:
+	}
+	select {
+	case err := <-m.written:
+		return err == nil
+	case <-c.closed:
+		return false
+	}
+}
+
+// Notifications are expendable. A full notification queue never blocks the
+// durable writer; status and receipts remain the authoritative recovery path.
+func (c *client) event(event terminalEvent) {
+	select {
+	case <-c.closed:
+		return
+	default:
+	}
+	select {
+	case c.out <- outgoing{bytes: lineJSON(event)}:
+	default:
+	}
+}
+
+func (c *client) writer() {
+	defer c.close()
+	for {
+		select {
+		case <-c.closed:
+			return
+		case m := <-c.out:
+			err := c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if err == nil {
+				for len(m.bytes) != 0 {
+					var n int
+					n, err = c.conn.Write(m.bytes)
+					m.bytes = m.bytes[n:]
+					if err != nil {
+						break
+					}
+					if n == 0 {
+						err = io.ErrShortWrite
+						break
+					}
+				}
+			}
+			if m.written != nil {
+				m.written <- err
+			}
+			if err != nil {
+				return
+			}
+		}
+	}
+}
+
+var errLineTooLong = errors.New("request text exceeds 40 MiB")
+
+// A bounded reader, rather than Scanner's 64 KiB default or unbounded
+// ReadBytes, enforces the text limit independently of JSON decoding. An
+// overlong line closes its connection after an invalid_request response.
+func readLine(r *bufio.Reader) ([]byte, error) {
+	var line []byte
+	for {
+		part, err := r.ReadSlice('\n')
+		terminated := len(part) != 0 && part[len(part)-1] == '\n'
+		if terminated {
+			part = part[:len(part)-1]
+		}
+		if len(part) > maxRequest-len(line) {
+			return nil, errLineTooLong
+		}
+		line = append(line, part...)
+		if terminated {
+			return line, nil
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		} // An unterminated final object is not a request.
+	}
+}
+
+type socketServer struct {
+	s        *Service
+	listener *net.UnixListener
+	mu       sync.Mutex
+	clients  map[*client]bool
+	closing  bool
+	wg       sync.WaitGroup
+}
+
+func listenSocket(s *Service, path string) (*socketServer, error) {
+	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		return nil, err
+	}
+	l.SetUnlinkOnClose(true)
+	server := &socketServer{s: s, listener: l, clients: make(map[*client]bool)}
+	server.wg.Add(1)
+	go server.accept()
+	return server, nil
+}
+
+func (server *socketServer) accept() {
+	defer server.wg.Done()
+	for {
+		conn, err := server.listener.AcceptUnix()
+		if err != nil {
+			server.mu.Lock()
+			closing := server.closing
+			server.mu.Unlock()
+			if !closing {
+				server.s.mu.Lock()
+				server.s.failLocked(err)
+				server.s.mu.Unlock()
+			}
+			return
+		}
+		server.mu.Lock()
+		if server.closing || len(server.clients) >= 8 {
+			server.mu.Unlock()
+			conn.Close()
+			continue
+		}
+		c := newClient(conn)
+		server.clients[c] = true
+		server.wg.Add(1)
+		server.mu.Unlock()
+		go func() {
+			defer server.wg.Done()
+			defer func() { c.close(); server.mu.Lock(); delete(server.clients, c); server.mu.Unlock() }()
+			server.serve(c)
+		}()
+	}
+}
+
+func (server *socketServer) serve(c *client) {
+	r := bufio.NewReaderSize(c.conn, 64*1024)
+	for {
+		line, err := readLine(r)
+		if err != nil {
+			if errors.Is(err, errLineTooLong) {
+				c.reply(Response{Status: "invalid_request"})
+			}
+			return
+		}
+		q, err := parseRequest(bytes.TrimSpace(line))
+		if err != nil {
+			if !c.reply(Response{Request: q.Correlation, Status: "invalid_request"}) {
+				return
+			}
+			continue
+		}
+		if !server.s.beginRequest() {
+			return
+		}
+		var response Response
+		var admitted *job
+		var evaluated bool
+		switch q.Op {
+		case "submit":
+			response, admitted = server.s.submit(q.Prepared, q.ID, c)
+		case "status":
+			response = server.s.status(q.ID)
+		case "cancel":
+			response = server.s.cancel(q.ID)
+		case "evaluate":
+			response, evaluated = server.s.evaluate(q.Prepared)
+		case "shutdown":
+			response = server.s.beginDrain()
+		}
+		response.Request = q.Correlation
+		delivered := c.reply(response)
+		server.s.acknowledge(admitted, delivered)
+		if evaluated {
+			server.s.acknowledgeEvaluation()
+		}
+		if q.Op == "shutdown" {
+			server.s.acknowledgeDrain()
+		}
+		server.s.finishRequest()
+		if !delivered {
+			return
+		}
+	}
+}
+
+func (server *socketServer) close() {
+	server.mu.Lock()
+	server.closing = true
+	server.listener.Close()
+	for c := range server.clients {
+		c.close()
+	}
+	server.mu.Unlock()
+}

@@ -1,0 +1,164 @@
+# Zig lineage 1 — optimization submission
+
+The final service retains two of three preregistered hypotheses: opportunistic
+terminal group commit and omission of the unused retry digest on evaluate.
+Bounded transport-buffer reuse was measured separately and dropped as an
+operational tie. There is no rewrite, kernel replacement, admission batching,
+intentional group wait, or storage-setting change.
+
+## Build and validation
+
+Use the pinned Linux AArch64 broker for every build and test:
+
+```sh
+python3 run.py './build.sh' 120
+python3 run.py './tests/run.sh' 180
+python3 run.py './service DATADIR SOCKET_PATH'
+python3 run.py 'ZIG_OPTIMIZE=Debug SERVICE_OUTPUT=tmp/service-debug ./build.sh' 120
+python3 run.py 'ZIG_OPTIMIZE=Debug SERVICE_BINARY=tmp/service-debug ./tests/run.sh' 180
+```
+
+Default build is Zig 0.16.0 ReleaseSafe, dynamically linked to the designated
+/adapter/librosetta.so and RocksDB 7.8.3-2, with adapter rpath. build.sh accepts
+SERVICE_OUTPUT and now SERVICE_SOURCE for isolated experiment reproduction;
+default source remains src/main.zig and default output is service. DATADIR's
+parent must exist. SOCKET_PATH must be fresh. Exclusive RocksDB ownership and
+zero exit on a successful draining shutdown are preserved.
+
+Final ReleaseSafe and Debug each passed all three scheduler unit tests, public
+smoke and 29 service tests. One additional discovered test explicitly skips:
+the original v1 executable is absent from this workspace. A new test runs the
+actual supplied v2 predecessor, kills it after its first terminal write, then
+checks optimized recovery preserves receipt bytes, ID indexes and cancellation
+intent. The predecessor is retained at tmp/baseline/service with its sources,
+tests, build script, HANDOFF.md and EXPERIMENTS.md. Do not confuse it with v1.
+
+Build/test logs are tmp/combined-{build,tests}.log and
+tmp/combined-debug-{build,tests}.log. The suite builds tests/write_observer.c as
+a test-only LD_PRELOAD DSO. No observer or test hooks are linked into service.
+External holds replace inherited tests' assumptions that pending work remains
+slow enough to query or cancel. Test-client startup retries only transient
+ECONNREFUSED between bind and listen. Initial failed attempts are retained and
+explained in EXPERIMENTS.md.
+
+## Implementation and invariant preservation
+
+- src/main.zig collects up to 32 already-completed jobs beginning at checkpoint+1.
+  It stops at the first unfinished job or the bound. It does not wait to fill a
+  group. All receipt puts, pending/cancel deletions, checkpoint advance and final
+  accounting values are one synchronous WAL WriteBatch. Capacity and ownership
+  are released only after the write succeeds; notifications follow durability.
+- The event loop still owns every write and client operation. It cannot process
+  a cancellation between building a terminal group and entering rocksdb_write.
+  That C call_entry is the commitment boundary for every member. A previously
+  acknowledged cancellation is reflected in the receipt. Queued/running work
+  retains the predecessor's ownership and cancellation rules.
+- Evaluate retains validation, decoding and native v2 execution but skips the
+  SHA-256 digest used only by durable admission/recovery. Its internal unused
+  digest is initialized to zero. Submit and recovery compute the exact existing
+  digest; priority remains excluded and immutable on retries.
+- src/storage.zig retains all open/cache/buffer/compression/WAL/sync settings.
+  It adds counts of C write attempts and successful synchronous C writes.
+  src/dispatch.zig is unchanged: four workers, HHHN while both queues have work,
+  FIFO within priority, no cycle advance for a sole queue, and admission-ordered
+  terminal commitment. Input arenas remain owned until native return.
+- Schema 1, v1 missing-priority fallback, v2 priorities, corruption refusal,
+  unlimited receipts for the bounded trial, ID indexes, draining behavior,
+  decimal/hex wire encodings and all resource limits remain unchanged.
+
+Successful draining shutdown emits one JSON diagnostic line to stderr:
+write_calls, sync_write_successes, terminal_batch_histogram (index=jobs per
+terminal write; index 0 unused), and intentional_group_wait_ns=0. These counters
+are process-local and reset on restart. sync_write_successes counts successful
+sync=true C writes; it is not a physical syscall count. Crashed processes may
+have no final diagnostic, so it is not a recovery oracle.
+
+## Correctness and durability evidence
+
+Independent stopped-writer inspection checks every disk invariant. External
+write-barrier tests show a crash before a 32-job transition retains the complete
+old state, a crash after it retains the complete new state, and an injected
+terminal-write failure preserves all pending members. Sixty-five cancelled jobs
+commit in groups 32/32/1. Tests check accepted cancellation before the C boundary,
+one durable intent for repeated cancellation, and too_late for cancellation
+overlapping an already-entered terminal write after its barrier is released.
+Large evaluate results match the direct supplied v2 oracle, and the durable
+version stores the independently computed digest.
+
+ReleaseSafe/Debug and these process-crash tests do not establish native ASan,
+whole-service race freedom, power-loss safety, or exhaustive interleavings.
+Exact external native-entry fairness qualification was not repeated; unchanged
+production queue selection has its original three unit cases. No evaluator,
+other workspace, external source or Bitcoin library was accessed.
+
+## Performance and limitations
+
+Local measurements use one separate warmup plus seven fresh datadirs per case
+and variant, cyclic variant order, serial execution and no observer during
+timing. Requests and directories are prepared outside timing. Eight clients
+have window 32 each. Startup/shutdown and independent inspection are excluded;
+client/socket/JSON costs are included. All trials and warmups are retained.
+The supplied filesystem does not provide independently provisioned fresh block
+volumes, and the campaign-frozen workload generators were not supplied. These
+measurements are local evidence, not campaign qualification or a language ranking.
+
+Final short comparison medians (baseline -> optimized):
+
+| Local case | Seconds | Interpretation |
+|---|---|---|
+| 4,096 tiny evaluates | .06204 -> .06167 | Operational tie |
+| 64 padded 256 KiB prefix evaluates | .13320 -> .09702 | 27.2% lower median |
+| 2,048 durable jobs | 2.42270 -> 1.35369 | 44.1% lower median, wide ranges |
+| 2,048 mixed-priority jobs | 1.07838 -> 1.61496 | 49.8% higher median, wide ranges |
+
+Mixed median per-run p99 receipt latency was 423.15/422.81 ms normal/high for
+baseline and 368.00/371.28 ms optimized. This adverse mixed runtime result is
+retained alongside the earlier isolated H1 mixed improvement. It prevents a
+uniform speedup claim. Full ranges, raw repetitions, and the separately declared
+longer mixed follow-up are recorded in EXPERIMENTS.md and tmp/*/summary.json.
+
+The separately preregistered 16,384-job mixed follow-up completed all seven
+measured pairs. Median elapsed was 8.99713 s [5.59996, 13.97949] baseline versus
+5.64341 s [3.48723, 6.84049] optimized, 37.3% lower; the optimized run was faster
+in every measured pair. Median per-run normal/high p99 was 495.71/490.58 ms versus
+391.21/391.15 ms. This supports retaining group commit with its observed write
+reduction, while preserving the contrary short-run result and storage-variance
+limitation. Results are separate, not pooled; no universal speedup is claimed.
+
+A separate instrumented 2,048-job mixed run observed 4,097 baseline WAL syncs
+versus 2,542 optimized, matching C-write counts and RocksDB's own cumulative WAL
+statistics. Admissions stayed at 2,048. Terminal writes fell from 2,048 to 493,
+with group sizes 1..9. All-file libc sync successes were 4,108 versus 2,553.
+RocksDB reported zero flush/compaction bytes and zero stalls in these small
+instrumented runs; they do not exercise sustained compaction pressure. Timing
+from instrumented runs is excluded from performance comparisons. Full statistics
+and traces are under tmp/write-observations/.
+
+Reproduce local measurements into a new output path:
+
+```sh
+python3 run.py 'python3 tests/benchmark.py --output tmp/new-comparison --variants baseline:tmp/baseline/service optimized:service' 300
+python3 run.py 'python3 tests/benchmark.py --output tmp/new-long-mixed --variants baseline:tmp/baseline/service optimized:service --cases mixed --count-scale 8' 300
+```
+
+The user identified the supplied v2 predecessor as qualified. Gate artifacts
+were not supplied or inspected. Existing wire interpretations remain: unknown
+fields are reserved; known-ID retries preserve existing/conflict during drain;
+evaluate is normal-priority and rejects a priority field; invalid correlation
+uses an empty string; shutdown permits one second for final output flushing;
+terminal notifications are best effort and receipts are authoritative.
+
+## Frozen artifacts
+
+ReleaseSafe service: Linux AArch64 ELF, 4,162,496 bytes (784 above predecessor).
+SHA-256: a4cfe6eb6261942cc55b7fb4b85490a6a5397fe3884e5d954e179a61b57bcd72.
+Predecessor SHA-256: 369821b9afe85876d6f945ddac4775963ed60b485ca3a26a49ca14ad9d478956.
+Audit details are in tmp/optimization-audit.json; final deliverable hashes are
+in tmp/optimization-submission.sha256. This is the initial optimization submission
+before evaluator feedback; no repair round was used.
+
+Production footprint versus the supplied predecessor is +76/-38 lines;
+tests/observer/measurement scripts are +643/-15; generated source is zero.
+Implementation through final documentation took approximately 18 minutes
+(22:40:56 to about 22:58 UTC), including tool waits. Exact token usage, monetary
+cost and prior preparation effort are unknown. Reading was separate.

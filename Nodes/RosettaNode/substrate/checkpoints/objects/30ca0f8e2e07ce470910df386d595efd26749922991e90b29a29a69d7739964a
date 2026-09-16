@@ -1,0 +1,38 @@
+package main
+
+import (
+	"fmt"
+	"net"
+	"os"
+	"trial/reuse"
+)
+
+func runMain() error {
+	if len(os.Args) != 3 {
+		return fmt.Errorf("usage: service DATADIR SOCKET_PATH")
+	}
+	if err := os.MkdirAll(os.Args[1], 0700); err != nil {
+		return err
+	}
+	db, err := storage.Open(os.Args[1])
+	if err != nil {
+		return fmt.Errorf("open database (exclusive writer required): %w", err)
+	}
+	defer db.Close()
+	state, err := recoverState(db)
+	if err != nil {
+		return err
+	}
+	defer state.report(os.Stderr)
+	listener, err := net.Listen("unix", os.Args[2])
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	return serve(state, listener)
+}
+func main() {
+	if err := runMain(); err != nil {
+		fmt.Fprintln(os.Stderr, "service:", err)
+		os.Exit(1)
+	}
+}

@@ -1,0 +1,312 @@
+mod native;
+mod scheduler;
+mod sha256;
+mod state;
+mod storage;
+mod transport;
+mod wire;
+
+use serde_json::{Value, json};
+use state::{Phase, Ready, State};
+use std::{
+    os::unix::net::UnixListener,
+    sync::{
+        Arc,
+        mpsc::{self, Receiver, Sender},
+    },
+    thread::{self, JoinHandle},
+    time::Duration,
+};
+use transport::{Connection, Context, Peer};
+use wire::{Input, InputError, Request, ResultItem};
+
+enum Owner {
+    Job(u64),
+    Evaluate(Context),
+}
+struct Work {
+    input: Arc<Input>,
+    owner: Owner,
+}
+enum Message {
+    Request {
+        peer: Arc<Peer>,
+        bytes: Vec<u8>,
+        done: Sender<()>,
+    },
+    Completed {
+        slot: usize,
+        owner: Owner,
+        result: Result<Vec<ResultItem>, String>,
+    },
+}
+struct Worker {
+    tx: Sender<Work>,
+    join: JoinHandle<()>,
+    busy: bool,
+}
+fn workers(tx: &Sender<Message>) -> Result<Vec<Worker>, String> {
+    let mut out = Vec::new();
+    for slot in 0..4 {
+        let (send, rx): (Sender<Work>, Receiver<Work>) = mpsc::channel();
+        let tx = tx.clone();
+        let join = thread::Builder::new()
+            .name(format!("encoder-{slot}"))
+            .spawn(move || {
+                while let Ok(work) = rx.recv() {
+                    let result = native::evaluate(&work.input);
+                    // Drop worker input before reporting completion. Native arena is
+                    // already destroyed; cancellation can now release accounting.
+                    drop(work.input);
+                    if tx
+                        .send(Message::Completed {
+                            slot,
+                            owner: work.owner,
+                            result,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        out.push(Worker {
+            tx: send,
+            join,
+            busy: false,
+        });
+    }
+    Ok(out)
+}
+fn request(
+    state: &mut State,
+    peer: Arc<Peer>,
+    bytes: Vec<u8>,
+    done: Sender<()>,
+) -> Result<(), String> {
+    let r = match serde_json::from_slice::<Request>(&bytes) {
+        Ok(r) => r,
+        Err(_) => {
+            let correlation = serde_json::from_slice::<Value>(&bytes)
+                .ok()
+                .and_then(|v| v.get("request").and_then(Value::as_str).map(str::to_owned))
+                .unwrap_or_default();
+            Connection::context(peer, correlation, done).reply(json!({"status":"invalid_request"}));
+            return Ok(());
+        }
+    };
+    drop(bytes);
+    let ctx = Connection::context(peer, r.request, done);
+    match r.op.as_str() {
+        "shutdown" => {
+            state.draining = true;
+            ctx.reply(json!({"status":"draining"}));
+        }
+        "status" | "cancel" => {
+            let Some(id) = r.id.filter(|id| wire::valid_id(id)) else {
+                ctx.reply(json!({"status":"invalid_request"}));
+                return Ok(());
+            };
+            if r.op == "status" {
+                state.status(ctx, &id)?;
+            } else {
+                state.cancel(ctx, &id)?;
+            }
+        }
+        "submit" | "evaluate" => {
+            let id = if r.op == "submit" {
+                match r.id.filter(|id| wire::valid_id(id)) {
+                    Some(id) => Some(id),
+                    None => {
+                        ctx.reply(json!({"status":"invalid_request"}));
+                        return Ok(());
+                    }
+                }
+            } else {
+                None
+            };
+            let priority = r.priority.unwrap_or_default();
+            let Some(items) = r.items else {
+                ctx.reply(json!({"status":"invalid_request"}));
+                return Ok(());
+            };
+            let input = match wire::input(&items) {
+                Ok(input) => input,
+                Err(e) => {
+                    ctx.reply(json!({"status":match e {InputError::Invalid=>"invalid_request",InputError::Allocation=>"execution_failure"}}));
+                    return Ok(());
+                }
+            };
+            if let Some(id) = id {
+                state.submit(ctx, id, items, input, priority)?;
+            } else if state.draining {
+                ctx.reply(json!({"status":"draining"}));
+            } else {
+                state.ready.push(
+                    priority,
+                    Ready::Evaluate {
+                        input: Arc::new(input),
+                        context: ctx,
+                    },
+                );
+            }
+        }
+        _ => ctx.reply(json!({"status":"invalid_request"})),
+    }
+    Ok(())
+}
+fn dispatch(state: &mut State, workers: &mut [Worker]) -> Result<(), String> {
+    for worker in workers.iter_mut().filter(|w| !w.busy) {
+        loop {
+            let Some(ready) = state.ready.pop(|ready| match ready {
+                Ready::Job(seq) => state
+                    .pending
+                    .get(seq)
+                    .is_some_and(|p| matches!(p.phase, Phase::Waiting)),
+                Ready::Evaluate { .. } => true,
+            }) else {
+                return Ok(());
+            };
+            let work = match ready {
+                Ready::Job(seq) => {
+                    let Some(p) = state.pending.get_mut(&seq) else {
+                        continue;
+                    };
+                    if !matches!(p.phase, Phase::Waiting) {
+                        continue;
+                    }
+                    p.phase = Phase::Running;
+                    Work {
+                        input: p.input.clone(),
+                        owner: Owner::Job(seq),
+                    }
+                }
+                Ready::Evaluate { input, context } => Work {
+                    input,
+                    owner: Owner::Evaluate(context),
+                },
+            };
+            worker
+                .tx
+                .send(work)
+                .map_err(|_| "encoding worker disconnected")?;
+            worker.busy = true;
+            break;
+        }
+    }
+    Ok(())
+}
+fn run() -> Result<(), String> {
+    let args: Vec<_> = std::env::args().collect();
+    if args.len() != 3 {
+        return Err("usage: service DATADIR SOCKET_PATH".into());
+    }
+    let mut state = State::open(&args[1])?;
+    let listener = UnixListener::bind(&args[2]).map_err(|e| format!("socket bind: {e}"))?;
+    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
+    let (tx, rx) = mpsc::channel();
+    let mut workers = workers(&tx)?;
+    let mut connections: Vec<Connection> = Vec::new();
+    loop {
+        let mut i = 0;
+        while i < connections.len() {
+            if connections[i].finished() {
+                connections.swap_remove(i).finish();
+            } else {
+                i += 1;
+            }
+        }
+        loop {
+            match listener.accept() {
+                Ok((socket, _)) => {
+                    let active = connections
+                        .iter()
+                        .filter(|c| c.peer.alive.load(std::sync::atomic::Ordering::Acquire))
+                        .count();
+                    if active >= 8 {
+                        drop(socket);
+                        continue;
+                    }
+                    connections
+                        .push(Connection::start(socket, tx.clone()).map_err(|e| e.to_string())?);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(format!("socket accept: {e}")),
+            }
+        }
+        // One message then at most one terminal write prevents either command
+        // traffic or a backlog of completed jobs from starving the other.
+        let terminal_ready = state
+            .checkpoint
+            .checked_add(1)
+            .and_then(|s| state.pending.get(&s))
+            .is_some_and(|p| matches!(p.phase, Phase::Done(_)));
+        let timeout = if terminal_ready {
+            Duration::ZERO
+        } else {
+            Duration::from_millis(2)
+        };
+        match rx.recv_timeout(timeout) {
+            Ok(Message::Request { peer, bytes, done }) => request(&mut state, peer, bytes, done)?,
+            Ok(Message::Completed {
+                slot,
+                owner,
+                result,
+            }) => {
+                workers[slot].busy = false;
+                match owner {
+                    Owner::Job(seq) => {
+                        let results = result.map_err(|e| {
+                            format!("acknowledged job {seq}: {e}; preserving pending state")
+                        })?;
+                        state
+                            .pending
+                            .get_mut(&seq)
+                            .ok_or("completion for nonpending job")?
+                            .phase = Phase::Done(results);
+                    }
+                    Owner::Evaluate(ctx) => match result {
+                        Ok(results) => ctx.reply(json!({"status":"ok","results":results})),
+                        Err(e) => {
+                            eprintln!("evaluate: {e}");
+                            ctx.reply(json!({"status":"execution_failure"}));
+                        }
+                    },
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err("coordinator channel disconnected".into());
+            }
+        }
+        state.commit_one()?;
+        dispatch(&mut state, &mut workers)?;
+        if state.draining
+            && state.pending.is_empty()
+            && state.ready.is_empty()
+            && workers.iter().all(|w| !w.busy)
+        {
+            break;
+        }
+    }
+    drop(listener);
+    drop(rx);
+    for connection in connections {
+        connection.finish();
+    }
+    for worker in workers {
+        drop(worker.tx);
+        worker.join.join().map_err(|_| "worker panicked")?;
+    }
+    drop(state); // release RocksDB's native exclusive lock before successful exit
+    std::fs::remove_file(&args[2]).map_err(|e| format!("socket cleanup: {e}"))?;
+    Ok(())
+}
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("service fatal: {e}");
+        std::process::exit(1);
+    }
+}

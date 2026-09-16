@@ -1,0 +1,140 @@
+# Zig lineage 1 — maintenance ABI v2 submission
+
+The service now calls only `rn_verify_v2` and dispatches high/normal jobs using
+the specified 3:1 cycle. It preserves schema 1, v1 pending work, receipts,
+cancellation intents, admission-ordered terminal commits, and synchronous WAL
+durability. No group commit, kernel change, or storage-setting change was made.
+
+## Build, launch, and validation
+
+Run all compilation and tests through the supplied Linux broker:
+
+```sh
+python3 run.py './build.sh' 120
+python3 run.py './tests/run.sh' 180
+python3 run.py './service DATADIR SOCKET_PATH'
+python3 run.py 'ZIG_OPTIMIZE=Debug SERVICE_OUTPUT=tmp/service-debug ./build.sh' 120
+python3 run.py 'ZIG_OPTIMIZE=Debug SERVICE_BINARY=tmp/service-debug ./tests/run.sh' 180
+```
+
+`build.sh` is unchanged. It builds Linux AArch64 with Zig 0.16.0 in ReleaseSafe,
+links libc, the designated `/adapter/librosetta.so`, and RocksDB 7.8.3-2, and
+sets the adapter runtime path. DATADIR's parent must exist; the service creates
+DATADIR itself. SOCKET_PATH must be fresh. The native database lock rejects a
+second writer. Draining shutdown exits zero.
+
+Final ReleaseSafe and Debug each passed three scheduler unit tests, the public
+smoke, and all 23 service tests (no skips). Python suite durations were 9.858 s
+and 11.934 s respectively; these are test timings, not performance evidence.
+Logs are `tmp/maintenance-final-tests.log` and
+`tmp/maintenance-debug-tests.log`; corresponding build logs are retained.
+`tmp/maintenance-audit.json` records symbols, ELF headers, versions, hashes,
+and the production/test/generated diff footprint.
+
+The original executable, sources, tests, build script, and documents are retained
+under `tmp/predecessor/`. The actual-v1 migration test uses
+`tmp/predecessor/service`, overridable with `V1_SERVICE_BINARY`; it explicitly
+skips if that fixture is absent. The fixture was present and that test ran in
+every recorded suite. Its frozen hash remains
+`53be1f182871e4ad66ec133b35e1d2d04a66315102045c7fe1d71fc0a42facdc`.
+
+## Implementation and ownership
+
+- `src/main.zig`: v2 arena descriptors, success bitmap validation, admission
+  priority, worker integration, and recovery publication. All database writes,
+  counters, clients, and terminal transitions remain owned by the event loop.
+- `src/dispatch.zig`: intrusive high/normal FIFO queues, cycle state, withdrawal,
+  and three test-only unit cases. All runtime operations occur under the pool
+  mutex. There are no service scheduler or barrier test hooks.
+- `src/storage.zig`: unchanged fixed RocksDB C-API settings and ownership.
+- `tests/test_maintenance.py`: v1 migration, persisted priorities, crash recovery,
+  retry immutability, validation, and bitmap/offset boundary cases.
+- `tests/support.py`: independent stopped-writer RocksDB inspection and direct
+  v1/v2 adapter oracles. No Bitcoin parser or library is used.
+
+Each Work owns immutable concatenated bytes and descriptors. A worker creates
+the common native arena, passes byte offsets and lengths to v2, and destroys
+the arena after return. It checks that the 64-bit success mask exactly matches
+the per-item statuses, then preserves the existing zero representation for
+errors. The bitmap is internal; the wire result shape is unchanged. Native
+allocation/batch/bitmap failure yields execution_failure for evaluate; for an
+acknowledged durable job it stops without terminalizing the pending record.
+
+Four worker threads share a single priority cycle. While both queues are
+nonempty, mutex-serialized dequeue selects high, high, high, normal and repeats.
+Dispatch from a sole nonempty queue leaves the cycle untouched, including across
+idle time. FIFO order holds within each queue. Selection is deterministic for
+the queue state; OS scheduling may reorder subsequent native call entry or
+completion among the four workers. Terminal commitment always follows admission
+sequence, so completed high work can still wait behind earlier normal work.
+
+After its synchronous intent write succeeds, queued cancellation withdraws the
+work and marks it done without consuming a dispatch turn. Cancellation of
+already-dispatched work retains ownership until the worker returns. Recovery
+marks durably cancelled jobs done without encoding them. Capacity remains held
+until each job's admission-ordered terminal WriteBatch succeeds.
+
+## Disk compatibility and durability
+
+Submit accepts priority high/normal, default normal. Priority is persisted in
+the existing pending JSON but is excluded from the existing payload digest.
+Retries with a different valid priority return existing and never mutate the
+original priority. Invalid priorities are rejected before state changes.
+
+Recovery accepts schema 1 only. Old records without priority default to normal;
+explicit high and normal records retain their priority. All key, digest,
+sequence, accounting, receipt, and cancellation invariants are validated before
+the recovered backlog is published under one pool lock. Publication in sequence
+order preserves FIFO inside each priority queue. Pending status adds the default
+priority to its response if absent on disk, without rewriting the stored record.
+Existing receipt bytes and ID indexes remain intact. Corrupt records cause
+startup failure rather than rebuilding the database.
+
+Admission, cancellation intent, and terminal writes retain synchronous WAL
+WriteBatches. Each admission and terminal batch contains one job. The event
+loop still serializes cancellation against terminal `rocksdb_write` call_entry;
+it cannot acknowledge cancellation between constructing and entering that
+terminal write. Receipts, pending/cancel deletion, counters, and checkpoint
+advance remain one atomic transition. Completed-but-uncommitted work consumes
+capacity. Disconnect and lost notifications do not cancel durable work.
+
+## Evidence limits and ambiguities
+
+The service tests cover process crashes and independent stopped-writer database
+inspection. The migration test runs the actual predecessor, kills it with
+receipts, pending jobs, and cancellation intents present, then verifies v2
+preserves those receipts/indexes and completes the pending work. New priority
+admissions and mixed-priority recovery are also crashed and independently
+inspected. Direct v1/v2 comparisons cover offsets, error zeroing, and success
+bits through bit 63. Exact scheduling order is tested at the production queue
+selection function; external native-entry fairness qualification was not run.
+
+No native ASan, whole-service race detector, deterministic external cancellation
+barrier, injected allocation/write failure, power-loss test, or controlled
+performance measurement was run. Passing these tests is not campaign gate
+evidence, and no evaluator feedback was accessed.
+
+Interpretations retained for the next phase:
+
+- No campaign freeze manifest or Gate A/B results were supplied. Work proceeded
+  under the explicit maintenance implementation instruction; qualification is
+  not claimed.
+- Priority is submit admission metadata. Evaluate remains nonpersistent normal
+  work and rejects a priority field. It shares the same four worker slots.
+- Cancelled queued work is removed from dispatch eligibility without advancing
+  the cycle. The cycle starts at the first high turn after restart; the schema
+  does not specify persistent scheduler phase.
+- Success bitmap bit i represents item i; unused bits must be zero. Supplied
+  adapter observations agree. A mismatch is treated as native execution failure.
+- Existing wire/drain interpretations remain: unknown fields are reserved;
+  valid known-ID retries retain existing/conflict during drain; invalid
+  correlation uses an empty string; shutdown allows one second to flush output
+  after work drains. Events are best effort; receipts are authoritative.
+
+This is the initial maintenance submission before evaluator feedback. No repair
+round was used. See EXPERIMENTS.md for retained attempts, effort, and footprint.
+
+Delivered ReleaseSafe service SHA-256:
+`369821b9afe85876d6f945ddac4775963ed60b485ca3a26a49ca14ad9d478956`.
+The final deliverable file hashes are recorded in
+`tmp/maintenance-submission.sha256`.

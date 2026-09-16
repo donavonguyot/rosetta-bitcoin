@@ -1,0 +1,41 @@
+import difflib
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+root = Path('/workspace')
+baseline = root / 'tmp/predecessor'
+summary = {'production': {'added': 0, 'removed': 0}, 'tests': {'added': 0, 'removed': 0}, 'files': {}}
+for relative in ['build.sh', 'src/main.zig', 'src/storage.zig', 'src/dispatch.zig',
+                 'tests/run.sh', 'tests/support.py', 'tests/test_service.py', 'tests/test_maintenance.py']:
+    old = (baseline / relative).read_text().splitlines() if (baseline / relative).exists() else []
+    new = (root / relative).read_text().splitlines()
+    added = removed = 0
+    for op, i, j, k, l in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+        if op != 'equal':
+            removed += j - i
+            added += l - k
+    category = 'tests' if relative.startswith('tests/') else 'production'
+    summary[category]['added'] += added
+    summary[category]['removed'] += removed
+    summary['files'][relative] = {'added': added, 'removed': removed}
+    if relative == 'src/dispatch.zig':
+        test_lines = len(new) - next(i for i, line in enumerate(new) if line.startswith('const TestItem'))
+        summary['production']['added'] -= test_lines
+        summary['tests']['added'] += test_lines
+        summary['files'][relative]['test_only_added'] = test_lines
+summary['generated'] = {'source_files': 0, 'executables_changed': 1,
+                        'predecessor_bytes': (baseline / 'service').stat().st_size,
+                        'delivered_bytes': (root / 'service').stat().st_size}
+summary['sha256'] = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+                     for name in ('service', 'tmp/predecessor/service')}
+symbols = subprocess.check_output(['readelf', '-Ws', str(root / 'service')], text=True)
+assert 'rn_verify_v2' in symbols and 'rn_verify_v1' not in symbols
+summary['native_symbols'] = [line.strip() for line in symbols.splitlines()
+                             if any(name in line for name in ('rn_verify', 'rn_arena_', 'rocksdb_write'))]
+summary['elf'] = subprocess.check_output(['readelf', '-h', str(root / 'service')], text=True).strip()
+summary['dynamic'] = subprocess.check_output(['readelf', '-d', str(root / 'service')], text=True)
+summary['zig'] = subprocess.check_output(['/opt/zig/zig', 'version'], text=True).strip()
+summary['rocksdb'] = subprocess.check_output(['dpkg-query', '-W', 'librocksdb7.8', 'librocksdb-dev'], text=True).strip()
+print(json.dumps(summary, indent=2))

@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+./build.sh
+export RUSTFLAGS="-L native=/adapter -C link-arg=-Wl,-rpath,/adapter${RUSTFLAGS:+ $RUSTFLAGS}"
+cargo test --offline --locked
+cargo clippy --offline --locked --all-targets -- -D warnings
+python3 tests/integration.py
+python3 public_check.py ./service

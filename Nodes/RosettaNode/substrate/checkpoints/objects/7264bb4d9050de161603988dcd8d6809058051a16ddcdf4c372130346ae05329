@@ -1,0 +1,430 @@
+use super::*;
+use transaction::{Input, Output, Reader, Transaction};
+
+const WORKED: &str = "010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000";
+const WORKED_TX: &str = r#"{"version_bits":"1","inputs":[{"previous_txid_digest_order":"0000000000000000000000000000000000000000000000000000000000000000","previous_index":"0","script":"","sequence":"4294967295","witness":[]}],"outputs":[{"amount":"42","script":"51"}],"locktime":"0"}"#;
+const EMPTY_TX: &str = r#"{"version_bits":"1","inputs":[],"outputs":[],"locktime":"0"}"#;
+
+fn hex(bytes: &[u8]) -> String { let mut out = String::new(); append_hex(&mut out, bytes); out }
+fn status(request: &str, error: Error) { assert_eq!(process(request), Err(error), "request: {}", &request[..request.len().min(200)]); }
+fn decode_request(op: &str, bytes: &[u8], mode: &str, extras: &str) -> String {
+    format!(r#"{{"op":"{op}","bytes":"{}","mode":"{mode}"{extras}}}"#, hex(bytes))
+}
+fn serialization(tx: &str, include: bool, extras: &str) -> String {
+    format!(r#"{{"op":"serialize","transaction":{tx},"include_witness":{include}{extras}}}"#)
+}
+fn input() -> Input { Input { digest: [0;32], index: 0, script: vec![], sequence: u32::MAX, witness: vec![] } }
+fn base() -> Transaction {
+    Transaction { version: 1, inputs: vec![input()], outputs: vec![Output { amount: 42, script: vec![0x51] }], locktime: 0 }
+}
+fn json_transaction(tx: &Transaction) -> String {
+    let mut out = String::new(); append_transaction(&mut out, tx); out
+}
+
+#[test]
+fn supplied_worked_example() {
+    let tx = base();
+    let bytes = unhex(WORKED).unwrap();
+    assert_eq!(bytes.len(), 61);
+    assert_eq!(tx.serialize(false).unwrap(), bytes);
+    assert_eq!(tx.serialize(true).unwrap(), bytes);
+    for witness in [false, true] {
+        assert_eq!(transaction::decode(&bytes, 0, witness, true, 4096).unwrap(), (base(), 61));
+    }
+    let request = format!(r#"{{"op":"identify","transaction":{WORKED_TX}}}"#);
+    let response = process(&request).unwrap();
+    let j = json::parse(&response).unwrap();
+    let expected = [
+        ("status", "ok"), ("stripped", WORKED), ("full", WORKED),
+        ("stripped_size", "61"), ("full_size", "61"),
+        ("txid_digest_order", "4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583"),
+        ("txid_display_order", "8305c52ea6df05b120fb9aa774eb7ff9565dc6d0e291c07140da29ca35d45342"),
+        ("wtxid_digest_order", "4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583"),
+        ("wtxid_display_order", "8305c52ea6df05b120fb9aa774eb7ff9565dc6d0e291c07140da29ca35d45342"),
+    ];
+    assert_eq!(j.object(j.root).unwrap().len(), expected.len());
+    for (key, value) in expected { assert_eq!(j.string(j.field(j.root, key).unwrap()).unwrap(), value); }
+}
+
+#[test]
+fn sha_known_vectors_and_padding() {
+    for (bytes, digest) in [
+        (b"".as_slice(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+        (b"abc".as_slice(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
+        (b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".as_slice(), "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"),
+    ] { assert_eq!(hex(&sha256::hash(bytes)), digest); }
+    assert_eq!(hex(&sha256::hash(&vec![b'a'; 1_000_000])), "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0");
+}
+
+#[test]
+fn compactsize_boundaries_and_transactional_failure() {
+    for (n, encoded) in [
+        (0, "00"), (1, "01"), (252, "fc"), (253, "fdfd00"), (254, "fdfe00"),
+        (65535, "fdffff"), (65536, "fe00000100"), (4294967295, "feffffffff"),
+        (4294967296, "ff0000000001000000"), (u64::MAX, "ffffffffffffffffff"),
+    ] {
+        let mut out = Vec::new(); transaction::compact(&mut out, n);
+        assert_eq!(hex(&out), encoded);
+        assert_eq!(out.len(), transaction::compact_length(n));
+        for length in 0..out.len() {
+            let mut r = Reader { bytes: &out[..length], at: 0 };
+            assert_eq!(r.compact(), Err(Error::Malformed));
+            assert_eq!(r.at, 0);
+        }
+        let consumed = out.len(); out.push(0xaa);
+        let mut r = Reader { bytes: &out, at: 0 };
+        assert_eq!(r.compact().unwrap(), n);
+        assert_eq!(r.at, consumed);
+    }
+    for s in ["fd0000", "fdfc00", "fe00000000", "feffff0000", "ff0000000000000000", "ffffffffff00000000"] {
+        let mut b = vec![0x99]; b.extend(unhex(s).unwrap());
+        let mut r = Reader { bytes: &b, at: 1 };
+        assert_eq!(r.compact(), Err(Error::Malformed), "{s}");
+        assert_eq!(r.at, 1);
+    }
+}
+
+#[test]
+fn supplied_prefix_offsets_and_zero_flags() {
+    let b = unhex("05000000000044332211aa").unwrap();
+    let (tx, consumed) = transaction::decode(&b, 0, true, false, 0).unwrap();
+    assert_eq!(consumed, 10); assert_eq!(tx.version, 5); assert_eq!(tx.locktime, 287454020);
+    assert!(tx.inputs.is_empty() && tx.outputs.is_empty());
+    assert_eq!(transaction::decode(&b, 0, true, true, 0), Err(Error::Malformed));
+    let mut prefixed = vec![0xaa; 7]; prefixed.extend(&b);
+    assert_eq!(transaction::decode(&prefixed, 7, true, false, 0).unwrap(), (tx, 10));
+    assert_eq!(transaction::decode(&b, b.len(), true, false, 0), Err(Error::Malformed));
+    assert_eq!(transaction::decode(&b, b.len()+1, true, false, 0), Err(Error::Invalid));
+    let response = process(&decode_request("decode_prefix", &prefixed, "witness", r#", "offset":"7""#)).unwrap();
+    assert!(response.contains(r#""consumed":"10""#));
+}
+
+#[test]
+fn manual_signed_field_layout() {
+    let mut bytes = vec![0xff; 4]; bytes.push(1);
+    bytes.extend(0u8..32); bytes.extend([0, 0, 0, 0x80]);
+    bytes.extend([2, 0xde, 0xad, 0x78, 0x56, 0x34, 0x12]);
+    bytes.push(2);
+    bytes.extend([0xff; 8]); bytes.push(0);
+    bytes.extend([0, 0, 0, 0, 0, 0, 0, 0x80]); bytes.extend([1, 0xff]);
+    bytes.extend([0xff; 4]);
+    let (tx, used) = transaction::decode(&bytes, 0, false, true, 3).unwrap();
+    assert_eq!(used, bytes.len()); assert_eq!(tx.version, u32::MAX);
+    assert_eq!(tx.inputs[0].digest, std::array::from_fn(|i| i as u8));
+    assert_eq!(tx.inputs[0].index, 0x80000000); assert_eq!(tx.inputs[0].sequence, 0x12345678);
+    assert_eq!(tx.inputs[0].script, [0xde, 0xad]); assert_eq!(tx.locktime, u32::MAX);
+    assert_eq!(tx.outputs[0].amount, -1); assert_eq!(tx.outputs[1].amount, i64::MIN);
+    assert_eq!(tx.serialize(false).unwrap(), bytes);
+}
+
+fn manual_witness() -> Vec<u8> {
+    let mut b = vec![2, 0, 0, 0, 0, 1, 2];
+    b.extend([0; 36]); b.push(0); b.extend([0xff; 4]);
+    b.extend([0x11; 32]); b.extend([1, 0, 0, 0, 0]); b.extend([0xff; 4]);
+    b.extend([1, 42, 0, 0, 0, 0, 0, 0, 0, 0]);
+    b.extend([0, 1, 0]); // first stack empty, second contains one empty item
+    b.extend([0; 4]); b
+}
+
+#[test]
+fn manual_witness_and_empty_item() {
+    let bytes = manual_witness();
+    // The same bytes have a distinct, valid legacy prefix interpretation.
+    let (legacy, legacy_used) = transaction::decode(&bytes, 0, false, false, 1).unwrap();
+    assert_eq!(legacy_used, 19);
+    assert!(legacy.inputs.is_empty());
+    assert_eq!(legacy.outputs, vec![Output { amount: 2, script: vec![] }]);
+    assert_eq!(legacy.locktime, 0);
+    assert_eq!(transaction::decode(&bytes, 0, false, true, 1), Err(Error::Malformed));
+    let (tx, consumed) = transaction::decode(&bytes, 0, true, true, 4).unwrap();
+    assert_eq!(consumed, bytes.len()); assert_eq!(tx.inputs.len(), 2);
+    assert_eq!(tx.inputs[0].witness, Vec::<Vec<u8>>::new());
+    assert_eq!(tx.inputs[1].witness, vec![Vec::<u8>::new()]);
+    assert_eq!(tx.serialize(true).unwrap(), bytes);
+    let stripped = tx.serialize(false).unwrap();
+    assert_eq!(stripped.len()+5, bytes.len());
+    assert_ne!(sha256::double(&stripped), sha256::double(&bytes));
+    let structured = json_transaction(&tx);
+    let response = process(&serialization(&structured, true, "")).unwrap();
+    assert_eq!(response, serialize_response(&bytes).unwrap());
+    status(&serialization(&structured, false, r#", "limits":{"max_items":"3"}"#), Error::Resource);
+    let identify = process(&format!(r#"{{"op":"identify","transaction":{structured}}}"#)).unwrap();
+    let j = json::parse(&identify).unwrap();
+    for (key, expected) in [("full", hex(&bytes)), ("stripped", hex(&stripped)),
+        ("txid_digest_order", hex(&sha256::double(&stripped))), ("wtxid_digest_order", hex(&sha256::double(&bytes)))] {
+        assert_eq!(j.string(j.field(j.root, key).unwrap()).unwrap(), expected);
+    }
+}
+
+#[test]
+fn witness_superfluous_and_unknown_flags() {
+    let good = manual_witness();
+    let mut all_empty = good.clone();
+    all_empty.remove(all_empty.len()-5); // remove the single empty item's length
+    let n = all_empty.len(); all_empty[n-5] = 0; // make second stack empty
+    assert_eq!(transaction::decode(&all_empty, 0, true, true, 0), Err(Error::Malformed));
+    for flags in 2..=255 {
+        let mut b = good.clone(); b[5] = flags;
+        assert_eq!(transaction::decode(&b, 0, true, true, 0), Err(Error::Malformed), "flags {flags}");
+    }
+    let zero_inputs = unhex("010000000001000000000000").unwrap();
+    assert_eq!(transaction::decode(&zero_inputs, 0, true, true, 4096), Err(Error::Malformed));
+}
+
+#[test]
+fn malformed_beats_budget_and_exactness_beats_budget() {
+    let bytes = unhex(WORKED).unwrap();
+    for n in 0..bytes.len() {
+        assert_eq!(transaction::decode(&bytes[..n], 0, false, true, 0), Err(Error::Malformed), "length {n}");
+    }
+    assert_eq!(transaction::decode(&bytes, 0, false, true, 1), Err(Error::Resource));
+    let mut trailing = bytes.clone(); trailing.push(0);
+    assert_eq!(transaction::decode(&trailing, 0, false, true, 0), Err(Error::Malformed));
+    assert_eq!(transaction::decode(&trailing, 0, false, false, 0), Err(Error::Resource));
+    let w = manual_witness();
+    for n in 0..w.len() {
+        assert_eq!(transaction::decode(&w[..n], 0, true, true, 0), Err(Error::Malformed), "witness length {n}");
+    }
+    assert_eq!(transaction::decode(&w, 0, true, true, 3), Err(Error::Resource));
+}
+
+#[test]
+fn impossible_counts_and_lengths_are_malformed() {
+    for b in [
+        unhex("01000000ffffffffffffffffff0000000000").unwrap(),
+        unhex("0100000000ffffffffffffffffff00000000").unwrap(),
+        unhex("01000000fdfc000000000000").unwrap(),
+    ] { assert_eq!(transaction::decode(&b, 0, false, false, 0), Err(Error::Malformed)); }
+    let bytes = unhex(WORKED).unwrap();
+    // Input script length, output count, output script length, input count.
+    for pos in [41, 46, 55, 4] {
+        let mut b = bytes.clone(); b[pos] = 252;
+        assert_eq!(transaction::decode(&b, 0, false, false, 0), Err(Error::Malformed), "position {pos}");
+    }
+    let mut w = manual_witness(); let pos = w.len()-6; w[pos] = 252;
+    assert_eq!(transaction::decode(&w, 0, true, true, 0), Err(Error::Malformed));
+}
+
+#[test]
+fn empty_input_serialization_is_not_always_a_witness_inverse() {
+    let tx = Transaction { version: 1, inputs: vec![], outputs: vec![Output { amount: 0, script: vec![] }], locktime: 0 };
+    let b = tx.serialize(true).unwrap();
+    assert_eq!(tx.serialize(false).unwrap(), b);
+    assert_eq!(transaction::decode(&b, 0, false, true, 1).unwrap().0, tx);
+    assert_eq!(transaction::decode(&b, 0, true, true, 1), Err(Error::Malformed));
+}
+
+#[test]
+fn canonical_decimal_ranges_and_hex() {
+    for s in ["", "00", "01", "+1", " 1", "1 ", "-1", "1.0", "1e0", "18446744073709551616", "١"] {
+        assert_eq!(unsigned(s), Err(Error::Invalid), "{s}");
+    }
+    assert_eq!(unsigned("18446744073709551615"), Ok(u64::MAX));
+    assert_eq!(signed("-9223372036854775808"), Ok(i64::MIN));
+    assert_eq!(signed("9223372036854775807"), Ok(i64::MAX));
+    for s in ["-0", "-01", "--1", "+1", "9223372036854775808", "-9223372036854775809"] {
+        assert_eq!(signed(s), Err(Error::Invalid));
+    }
+    assert_eq!(unhex("aAbBcCdD0011FF").unwrap(), [0xaa, 0xbb, 0xcc, 0xdd, 0, 0x11, 0xff]);
+    for s in ["0", "0x00", "gg", " 00", "00 ", "００"] { assert_eq!(unhex(s), Err(Error::Invalid)); }
+}
+
+#[test]
+fn structured_shape_range_and_type_validation() {
+    let request = serialization(WORKED_TX, false, "");
+    assert!(process(&request).is_ok());
+    for (from, to) in [
+        (r#""version_bits":"1""#, r#""version_bits":"4294967296""#),
+        (r#""version_bits":"1""#, r#""version_bits":1"#),
+        (r#""locktime":"0""#, r#""locktime":"-1""#),
+        (r#""previous_index":"0""#, r#""previous_index":"4294967296""#),
+        (r#""sequence":"4294967295""#, r#""sequence":null"#),
+        (r#""amount":"42""#, r#""amount":"9223372036854775808""#),
+        (r#""script":"51""#, r#""script":"5""#),
+        (r#""witness":[]"#, r#""witness":null"#),
+        (r#""witness":[]"#, r#""witness":[0]"#),
+        (r#""witness":[]"#, r#""witness":[],"extra":0"#),
+        (r#""outputs":[{"amount":"42","script":"51"}]"#, r#""outputs":null"#),
+        (r#""locktime":"0""#, r#""locktime":"0","extra":true"#),
+        (r#""amount":"42""#, r#""amount":"42","extra":true"#),
+    ] {
+        assert!(request.contains(from), "fixture is missing replacement target {from}");
+        status(&request.replace(from, to), Error::Invalid);
+    }
+    let bad_digest = WORKED_TX.replace(&"0".repeat(64), &"0".repeat(62));
+    status(&serialization(&bad_digest, false, ""), Error::Invalid);
+    let missing = WORKED_TX.replace(r#""sequence":"4294967295","#, "");
+    status(&serialization(&missing, false, ""), Error::Invalid);
+}
+
+#[test]
+fn request_envelope_and_limits() {
+    for request in ["null", "[]", "{}", r#"{"op":"other"}"#, r#"{"op":"decode_exact","bytes":""}"#,
+        r#"{"op":"decode_prefix","bytes":"","mode":"other"}"#,
+        r#"{"op":"decode_prefix","bytes":"","mode":"legacy","offset":0}"#,
+        r#"{"op":"decode_prefix","bytes":"","mode":"legacy","offset":"-1"}"#,
+        r#"{"op":"decode_prefix","bytes":"","mode":"legacy","offset":"1"}"#] {
+        status(request, Error::Invalid);
+    }
+    for extra in [r#", "limits":null"#, r#", "limits":[]"#, r#", "limits":{"max_items":"4097"}"#,
+        r#", "limits":{"max_items":4096}"#, r#", "limits":{"max_items":"00"}"#] {
+        status(&serialization(EMPTY_TX, false, extra), Error::Invalid);
+    }
+    for extra in ["", r#", "limits":{}"#, r#", "limits":{"max_items":"0"}"#,
+        r#", "extra":{"irrelevant":[null,true,123,{}]},"limits":{"unused":true}"#] {
+        assert!(process(&serialization(EMPTY_TX, false, extra)).is_ok());
+    }
+    let uppercase = decode_request("decode_exact", &unhex(WORKED).unwrap(), "legacy", "").replace("ffffffff", "FFFFFFFF");
+    assert!(process(&uppercase).is_ok());
+    // Offset is not part of decode_exact, so an extra offset is ignored.
+    assert!(process(&decode_request("decode_exact", &unhex(WORKED).unwrap(), "legacy", r#", "offset":false"#)).is_ok());
+}
+
+#[test]
+fn invalid_structured_fields_beat_item_budget() {
+    let mut tx = base();
+    tx.inputs[0].witness = vec![vec![]; 4096];
+    let body = json_transaction(&tx);
+    status(&serialization(&body, true, ""), Error::Resource);
+    let bad = body.replace(r#""amount":"42""#, r#""amount":"invalid""#);
+    status(&serialization(&bad, true, ""), Error::Invalid);
+    let bad = body.replace(r#""locktime":"0""#, r#""locktime":"4294967296""#);
+    status(&serialization(&bad, true, ""), Error::Invalid);
+}
+
+#[test]
+fn exact_item_budget_and_many_empty_witness_items() {
+    let mut tx = base(); tx.inputs[0].witness = vec![vec![]; 4094];
+    let b = tx.serialize(true).unwrap();
+    assert!(transaction::decode(&b, 0, true, true, 4096).is_ok());
+    assert_eq!(transaction::decode(&b, 0, true, true, 4095), Err(Error::Resource));
+    tx.inputs[0].witness.push(vec![]);
+    let b = tx.serialize(true).unwrap();
+    assert_eq!(transaction::decode(&b, 0, true, true, 4096), Err(Error::Resource));
+    assert_eq!(transaction::decode(&b[..b.len()-1], 0, true, true, 4096), Err(Error::Malformed));
+    let mut trailing = b; trailing.push(0);
+    assert_eq!(transaction::decode(&trailing, 0, true, true, 4096), Err(Error::Malformed));
+}
+
+#[test]
+fn admission_and_serialized_size_boundaries() {
+    // Empty input vector, one output: 4 + 1 + 1 + 8 + 5 + script + 4.
+    let mut tx = Transaction { version: 1, inputs: vec![], outputs: vec![Output { amount: 0, script: vec![0; ENVELOPE-23] }], locktime: 0 };
+    let b = tx.serialize(false).unwrap(); assert_eq!(b.len(), ENVELOPE);
+    assert!(transaction::decode(&b, 0, false, true, 1).is_ok());
+    let mut larger = b.clone(); larger.push(0);
+    assert_eq!(transaction::decode(&larger, 0, false, false, 1), Err(Error::Admission));
+    let mut prefixed = vec![0xaa; 5]; prefixed.extend(&b);
+    assert!(transaction::decode(&prefixed, 5, false, false, 1).is_ok());
+    tx.outputs[0].script.push(0);
+    assert_eq!(tx.serialize(false), Err(Error::Resource));
+    status(&serialization(&json_transaction(&tx), false, ""), Error::Resource);
+}
+
+#[test]
+fn omitted_witness_does_not_count_toward_serialized_size() {
+    let mut tx = base(); tx.inputs[0].witness = vec![vec![0; ENVELOPE]];
+    let body = json_transaction(&tx);
+    assert!(process(&serialization(&body, false, "")).is_ok());
+    status(&serialization(&body, true, ""), Error::Resource);
+    status(&format!(r#"{{"op":"identify","transaction":{body}}}"#), Error::Resource);
+}
+
+#[test]
+fn transport_byte_pool_and_text_limits() {
+    let request = decode_request("decode_exact", &vec![0; TRANSPORT_BYTES], "legacy", "");
+    status(&request, Error::Admission);
+    let request = decode_request("decode_exact", &vec![0; TRANSPORT_BYTES+1], "legacy", "");
+    status(&request, Error::Transport);
+    let mut tx = base();
+    // The pool includes the 32-byte previous digest and one-byte output script.
+    tx.inputs[0].witness = vec![vec![0; TRANSPORT_BYTES-33]];
+    let body = json_transaction(&tx);
+    assert!(process(&serialization(&body, false, "")).is_ok());
+    tx.inputs[0].witness[0].push(0);
+    status(&serialization(&json_transaction(&tx), false, ""), Error::Transport);
+    let mut text = serialization(EMPTY_TX, false, ""); text.resize_for_test(TRANSPORT_TEXT);
+    assert!(process(&text).is_ok());
+    text.push(' '); status(&text, Error::Transport);
+}
+
+trait PadString { fn resize_for_test(&mut self, size: usize); }
+impl PadString for String { fn resize_for_test(&mut self, size: usize) { self.extend(std::iter::repeat_n(' ', size-self.len())); } }
+
+#[test]
+fn json_parser_escapes_numbers_duplicates_and_depth() {
+    let text = r#"{"str":"\"\\\/\b\f\n\r\t\u0041\ud83d\ude00","num":-1.2e+3,"x":1,"x":"last","a":[null,false,true,{"k":[]}]}"#;
+    let j = json::parse(text).unwrap();
+    assert_eq!(j.string(j.field(j.root,"str").unwrap()).unwrap(), "\"\\/\u{8}\u{c}\n\r\tA😀");
+    assert_eq!(j.string(j.field(j.root,"x").unwrap()).unwrap(), "last");
+    let mut deep = "[".repeat(20000); deep.push_str("null"); deep.push_str(&"]".repeat(20000));
+    assert!(json::parse(&deep).is_ok());
+    for bad in ["", "[", "{", "[1,]", "{\"x\":0,}", "[01]", "[+1]", "[.1]", "[-]", "[1.]", "[1e]", "[1e+]", "true false", "nul", "[truefalse]", r#""\x00""#, r#""\uD800""#, r#""\uDC00""#, r#""\uD800\u0041""#, r#""\uZZZZ""#, "\"a\nb\"", "{null:1}", "[1 2]", "{\"x\" 0}"] {
+        assert!(matches!(json::parse(bad), Err(Error::Invalid)), "{bad}");
+    }
+    let escaped = serialization(EMPTY_TX, false, "").replace("serialize", r#"seria\u006cize"#).replace("version_bits", r#"version\u005fbits"#);
+    assert!(process(&escaped).is_ok());
+}
+
+#[test]
+fn bounded_line_transport_recovers_after_failure() {
+    let mut stream = vec![b' '; TRANSPORT_TEXT+1];
+    stream.extend(b"\n{}\r\n\n{}");
+    let mut reader = io::BufReader::with_capacity(8192, stream.as_slice());
+    let mut line = Vec::new();
+    assert_eq!(read_request(&mut reader, &mut line).unwrap(), Some(Err(Error::Transport)));
+    assert!(line.is_empty());
+    assert_eq!(read_request(&mut reader, &mut line).unwrap(), Some(Ok(()))); assert_eq!(line, b"{}\r");
+    assert_eq!(read_request(&mut reader, &mut line).unwrap(), Some(Ok(()))); assert!(line.is_empty());
+    assert_eq!(read_request(&mut reader, &mut line).unwrap(), Some(Ok(()))); assert_eq!(line, b"{}");
+    assert_eq!(read_request(&mut reader, &mut line).unwrap(), None);
+}
+
+// Deterministic property checks use only this implementation and synthetic data.
+// They complement the manually encoded fixtures, rather than defining semantics.
+struct Random(u64);
+impl Random {
+    fn next(&mut self) -> u64 { self.0 ^= self.0 << 13; self.0 ^= self.0 >> 7; self.0 ^= self.0 << 17; self.0 }
+    fn bytes(&mut self, max: usize) -> Vec<u8> { let n = self.next() as usize % (max+1); (0..n).map(|_| self.next() as u8).collect() }
+}
+
+#[test]
+fn synthetic_roundtrips_and_history_independence() {
+    let mut rng = Random(0x613879e10f28cd45);
+    for _ in 0..300 {
+        let mut tx = Transaction { version: rng.next() as u32, locktime: rng.next() as u32, ..Transaction::default() };
+        for _ in 0..1+rng.next()%5 {
+            let mut i = input();
+            i.digest = std::array::from_fn(|_| rng.next() as u8);
+            i.index = rng.next() as u32; i.sequence = rng.next() as u32; i.script = rng.bytes(300);
+            for _ in 0..rng.next()%4 { i.witness.push(rng.bytes(260)); }
+            tx.inputs.push(i);
+        }
+        for _ in 0..rng.next()%5 { tx.outputs.push(Output { amount: rng.next() as i64, script: rng.bytes(300) }); }
+        for include in [false, true] {
+            let bytes = tx.serialize(include).unwrap();
+            let (decoded, used) = transaction::decode(&bytes, 0, true, true, 4096).unwrap();
+            assert_eq!(used, bytes.len());
+            assert_eq!(decoded.serialize(include).unwrap(), bytes);
+            if include { assert_eq!(decoded, tx); }
+            else { assert!(decoded.inputs.iter().all(|i| i.witness.is_empty())); }
+            let response = process(&serialization(&json_transaction(&decoded), include, "")).unwrap();
+            assert_eq!(response, serialize_response(&bytes).unwrap());
+        }
+    }
+}
+
+#[test]
+fn random_malformed_bytes_and_json_do_not_panic() {
+    let mut rng = Random(0x294ec63fab51087d);
+    for _ in 0..5000 {
+        let bytes = rng.bytes(500);
+        for mode in [false, true] {
+            if let Ok((tx, used)) = transaction::decode(&bytes, 0, mode, false, 4096) {
+                assert!(used <= bytes.len()); assert!(tx.serialize(false).is_ok());
+            }
+        }
+        let text: String = bytes.iter().map(|b| (b & 0x7f) as char).collect();
+        let _ = json::parse(&text);
+    }
+}

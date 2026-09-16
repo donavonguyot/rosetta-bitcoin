@@ -1,0 +1,751 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+)
+
+const (
+	maxText  = 20 * 1024 * 1024
+	maxPool  = 8 * 1024 * 1024
+	maxWire  = 4 * 1024 * 1024
+	maxItems = 4096
+)
+
+type transaction struct {
+	Version  string   `json:"version_bits"`
+	Inputs   []input  `json:"inputs"`
+	Outputs  []output `json:"outputs"`
+	Locktime string   `json:"locktime"`
+}
+
+type input struct {
+	Previous string   `json:"previous_txid_digest_order"`
+	Index    string   `json:"previous_index"`
+	Script   string   `json:"script"`
+	Sequence string   `json:"sequence"`
+	Witness  []string `json:"witness"`
+}
+
+type output struct {
+	Amount string `json:"amount"`
+	Script string `json:"script"`
+}
+
+type response map[string]any
+
+func failure(status string) response { return response{"status": status} }
+
+// JSON helpers reject null and implicit conversions. The enclosing unmarshal
+// already checks that the request contains exactly one valid JSON value.
+func object(raw json.RawMessage, keys ...string) (map[string]json.RawMessage, bool) {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil || m == nil {
+		return nil, false
+	}
+	if keys != nil {
+		if len(m) != len(keys) {
+			return nil, false
+		}
+		for _, k := range keys {
+			if _, ok := m[k]; !ok {
+				return nil, false
+			}
+		}
+	}
+	return m, true
+}
+
+func stringValue(raw json.RawMessage) (string, bool) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] != '"' {
+		return "", false
+	}
+	var s string
+	if json.Unmarshal(raw, &s) != nil {
+		return "", false
+	}
+	return s, true
+}
+
+func decimal(s string, signed bool) bool {
+	if s == "0" {
+		return true
+	}
+	if signed && len(s) > 0 && s[0] == '-' {
+		s = s[1:]
+	}
+	if len(s) == 0 || s[0] < '1' || s[0] > '9' {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func uintValue(raw json.RawMessage, bits int) (string, uint64, bool) {
+	s, ok := stringValue(raw)
+	if !ok || !decimal(s, false) {
+		return "", 0, false
+	}
+	v, err := strconv.ParseUint(s, 10, bits)
+	return s, v, err == nil
+}
+
+func amountValue(raw json.RawMessage) (string, bool) {
+	s, ok := stringValue(raw)
+	if !ok || !decimal(s, true) {
+		return "", false
+	}
+	_, err := strconv.ParseInt(s, 10, 64)
+	return s, err == nil
+}
+
+func hexValue(raw json.RawMessage) (string, bool) {
+	s, ok := stringValue(raw)
+	if !ok || len(s)%2 != 0 {
+		return "", false
+	}
+	for i := range s {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return "", false
+		}
+	}
+	return s, true
+}
+
+// Visit arrays one element at a time, including structures far over the item
+// budget: a later invalid field must still outrank the item-budget verdict.
+func visitArray(raw json.RawMessage, visit func(json.RawMessage) bool) bool {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] != '[' {
+		return false
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	if _, err := d.Token(); err != nil {
+		return false
+	}
+	for d.More() {
+		var item json.RawMessage
+		if d.Decode(&item) != nil || !visit(item) {
+			return false
+		}
+	}
+	t, err := d.Token()
+	return err == nil && t == json.Delim(']')
+}
+
+func requestLimit(raw json.RawMessage) (uint64, bool) {
+	if raw == nil {
+		return maxItems, true
+	}
+	m, ok := object(raw)
+	if !ok {
+		return 0, false
+	}
+	if value, present := m["max_items"]; present {
+		_, n, valid := uintValue(value, 64)
+		return n, valid && n <= maxItems
+	}
+	return maxItems, true
+}
+
+func structured(raw json.RawMessage, limit uint64) (*transaction, string) {
+	m, ok := object(raw, "version_bits", "inputs", "outputs", "locktime")
+	if !ok {
+		return nil, "invalid_request"
+	}
+	tx := &transaction{Inputs: []input{}, Outputs: []output{}}
+	tx.Version, _, ok = uintValue(m["version_bits"], 32)
+	if !ok {
+		return nil, "invalid_request"
+	}
+	tx.Locktime, _, ok = uintValue(m["locktime"], 32)
+	if !ok {
+		return nil, "invalid_request"
+	}
+	var items, pool uint64
+	ok = visitArray(m["inputs"], func(raw json.RawMessage) bool {
+		items++
+		fields, valid := object(raw, "previous_txid_digest_order", "previous_index", "script", "sequence", "witness")
+		if !valid {
+			return false
+		}
+		in := input{Witness: []string{}}
+		in.Previous, valid = hexValue(fields["previous_txid_digest_order"])
+		if !valid || len(in.Previous) != 64 {
+			return false
+		}
+		in.Index, _, valid = uintValue(fields["previous_index"], 32)
+		if !valid {
+			return false
+		}
+		in.Sequence, _, valid = uintValue(fields["sequence"], 32)
+		if !valid {
+			return false
+		}
+		in.Script, valid = hexValue(fields["script"])
+		if !valid {
+			return false
+		}
+		pool += 32 + uint64(len(in.Script)/2)
+		if !visitArray(fields["witness"], func(item json.RawMessage) bool {
+			items++
+			s, valid := hexValue(item)
+			if !valid {
+				return false
+			}
+			pool += uint64(len(s) / 2)
+			if items <= limit {
+				in.Witness = append(in.Witness, s)
+			}
+			return true
+		}) {
+			return false
+		}
+		if items <= limit {
+			tx.Inputs = append(tx.Inputs, in)
+		}
+		return true
+	})
+	if !ok {
+		return nil, "invalid_request"
+	}
+	ok = visitArray(m["outputs"], func(raw json.RawMessage) bool {
+		items++
+		fields, valid := object(raw, "amount", "script")
+		if !valid {
+			return false
+		}
+		var out output
+		out.Amount, valid = amountValue(fields["amount"])
+		if !valid {
+			return false
+		}
+		out.Script, valid = hexValue(fields["script"])
+		if !valid {
+			return false
+		}
+		pool += uint64(len(out.Script) / 2)
+		if items <= limit {
+			tx.Outputs = append(tx.Outputs, out)
+		}
+		return true
+	})
+	if !ok {
+		return nil, "invalid_request"
+	}
+	if pool > maxPool {
+		return nil, "transport_limit"
+	}
+	if items > limit {
+		return nil, "resource_limit"
+	}
+	return tx, ""
+}
+
+// CompactSize has no object-size policy. Failed reads report no consumption.
+func readCompact(data []byte) (uint64, int, bool) {
+	if len(data) == 0 {
+		return 0, 0, false
+	}
+	switch data[0] {
+	case 253:
+		if len(data) < 3 {
+			return 0, 0, false
+		}
+		n := uint64(binary.LittleEndian.Uint16(data[1:3]))
+		if n < 253 {
+			return 0, 0, false
+		}
+		return n, 3, true
+	case 254:
+		if len(data) < 5 {
+			return 0, 0, false
+		}
+		n := uint64(binary.LittleEndian.Uint32(data[1:5]))
+		if n <= 65535 {
+			return 0, 0, false
+		}
+		return n, 5, true
+	case 255:
+		if len(data) < 9 {
+			return 0, 0, false
+		}
+		n := binary.LittleEndian.Uint64(data[1:9])
+		if n <= 4294967295 {
+			return 0, 0, false
+		}
+		return n, 9, true
+	default:
+		return uint64(data[0]), 1, true
+	}
+}
+
+type cursor struct {
+	data  []byte
+	pos   int
+	items uint64
+}
+
+func (c *cursor) take(n uint64) ([]byte, bool) {
+	if n > uint64(len(c.data)-c.pos) {
+		return nil, false
+	}
+	p := c.pos
+	c.pos += int(n)
+	return c.data[p:c.pos], true
+}
+
+func (c *cursor) compact() (uint64, bool) {
+	n, used, ok := readCompact(c.data[c.pos:])
+	if ok {
+		c.pos += used
+	}
+	return n, ok
+}
+
+func (c *cursor) variable() ([]byte, bool) {
+	n, ok := c.compact()
+	if !ok {
+		return nil, false
+	}
+	return c.take(n)
+}
+
+func (c *cursor) count(minimum uint64) (uint64, bool) {
+	n, ok := c.compact()
+	if !ok || n > uint64(len(c.data)-c.pos)/minimum {
+		return 0, false
+	}
+	c.items += n
+	return n, true
+}
+
+func u32(data []byte) string { return strconv.FormatUint(uint64(binary.LittleEndian.Uint32(data)), 10) }
+
+func (c *cursor) inputs(tx *transaction) (uint64, bool) {
+	n, ok := c.count(41)
+	if !ok {
+		return 0, false
+	}
+	if tx != nil {
+		tx.Inputs = make([]input, int(n))
+	}
+	for i := uint64(0); i < n; i++ {
+		prev, ok := c.take(36)
+		if !ok {
+			return 0, false
+		}
+		script, ok := c.variable()
+		if !ok {
+			return 0, false
+		}
+		sequence, ok := c.take(4)
+		if !ok {
+			return 0, false
+		}
+		if tx != nil {
+			tx.Inputs[i] = input{Previous: hex.EncodeToString(prev[:32]), Index: u32(prev[32:]), Script: hex.EncodeToString(script), Sequence: u32(sequence), Witness: []string{}}
+		}
+	}
+	return n, true
+}
+
+func (c *cursor) outputs(tx *transaction) bool {
+	n, ok := c.count(9)
+	if !ok {
+		return false
+	}
+	if tx != nil {
+		tx.Outputs = make([]output, int(n))
+	}
+	for i := uint64(0); i < n; i++ {
+		amount, ok := c.take(8)
+		if !ok {
+			return false
+		}
+		script, ok := c.variable()
+		if !ok {
+			return false
+		}
+		if tx != nil {
+			tx.Outputs[i] = output{Amount: strconv.FormatInt(int64(binary.LittleEndian.Uint64(amount)), 10), Script: hex.EncodeToString(script)}
+		}
+	}
+	return true
+}
+
+// With tx == nil this is a forward, constant-scratch structural scan. Only a
+// successful scan, exactness check, and budget check permit a materializing pass.
+func (c *cursor) transaction(witness bool, tx *transaction) bool {
+	version, ok := c.take(4)
+	if !ok {
+		return false
+	}
+	if tx != nil {
+		tx.Version = u32(version)
+		tx.Outputs = []output{}
+	}
+	n, ok := c.inputs(tx)
+	if !ok {
+		return false
+	}
+	var flags byte
+	if witness && n == 0 {
+		b, ok := c.take(1)
+		if !ok {
+			return false
+		}
+		flags = b[0]
+		if flags != 0 {
+			n, ok = c.inputs(tx)
+			if !ok || !c.outputs(tx) {
+				return false
+			}
+		}
+	} else if !c.outputs(tx) {
+		return false
+	}
+	if flags&1 != 0 {
+		anyItems := false
+		for i := uint64(0); i < n; i++ {
+			count, ok := c.count(1)
+			if !ok {
+				return false
+			}
+			if count != 0 {
+				anyItems = true
+			}
+			if tx != nil {
+				tx.Inputs[i].Witness = make([]string, int(count))
+			}
+			for j := uint64(0); j < count; j++ {
+				item, ok := c.variable()
+				if !ok {
+					return false
+				}
+				if tx != nil {
+					tx.Inputs[i].Witness[j] = hex.EncodeToString(item)
+				}
+			}
+		}
+		if !anyItems {
+			return false
+		}
+		flags &^= 1
+	}
+	if flags != 0 {
+		return false
+	}
+	locktime, ok := c.take(4)
+	if !ok {
+		return false
+	}
+	if tx != nil {
+		tx.Locktime = u32(locktime)
+	}
+	return true
+}
+
+func decodeRequest(m map[string]json.RawMessage, exact bool, limit uint64) response {
+	mode, ok := stringValue(m["mode"])
+	if !ok || mode != "legacy" && mode != "witness" {
+		return failure("invalid_request")
+	}
+	s, ok := hexValue(m["bytes"])
+	if !ok {
+		return failure("invalid_request")
+	}
+	var offset uint64
+	if raw, present := m["offset"]; !exact && present {
+		_, offset, ok = uintValue(raw, 64)
+		if !ok {
+			return failure("invalid_request")
+		}
+	}
+	if offset > uint64(len(s)/2) {
+		return failure("invalid_request")
+	}
+	if len(s)/2 > maxPool {
+		return failure("transport_limit")
+	}
+	if uint64(len(s)/2)-offset > maxWire {
+		return failure("admission_limit")
+	}
+	// Bytes before the offset belong to the transport pool but need not be copied.
+	data, err := hex.DecodeString(s[int(offset)*2:])
+	if err != nil {
+		return failure("invalid_request")
+	}
+	c := cursor{data: data}
+	if !c.transaction(mode == "witness", nil) {
+		return failure("malformed_encoding")
+	}
+	if exact && c.pos != len(data) {
+		return failure("malformed_encoding")
+	}
+	if c.items > limit {
+		return failure("resource_limit")
+	}
+	used := c.pos
+	c = cursor{data: data}
+	var tx transaction
+	if !c.transaction(mode == "witness", &tx) {
+		return failure("execution_failure")
+	}
+	return response{"status": "ok", "transaction": tx, "consumed": strconv.Itoa(used)}
+}
+
+func compactSize(n uint64) uint64 {
+	switch {
+	case n < 253:
+		return 1
+	case n <= 65535:
+		return 3
+	case n <= 4294967295:
+		return 5
+	default:
+		return 9
+	}
+}
+
+func appendCompact(dst []byte, n uint64) []byte {
+	switch {
+	case n < 253:
+		return append(dst, byte(n))
+	case n <= 65535:
+		return binary.LittleEndian.AppendUint16(append(dst, 253), uint16(n))
+	case n <= 4294967295:
+		return binary.LittleEndian.AppendUint32(append(dst, 254), uint32(n))
+	default:
+		return binary.LittleEndian.AppendUint64(append(dst, 255), n)
+	}
+}
+
+func hasWitness(tx *transaction) bool {
+	for _, in := range tx.Inputs {
+		if len(in.Witness) != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func wireSize(tx *transaction, witness bool) uint64 {
+	n := uint64(8) + compactSize(uint64(len(tx.Inputs))) + compactSize(uint64(len(tx.Outputs)))
+	if witness {
+		n += 2
+	}
+	for _, in := range tx.Inputs {
+		l := uint64(len(in.Script) / 2)
+		n += 40 + compactSize(l) + l
+		if witness {
+			n += compactSize(uint64(len(in.Witness)))
+			for _, item := range in.Witness {
+				l := uint64(len(item) / 2)
+				n += compactSize(l) + l
+			}
+		}
+	}
+	for _, out := range tx.Outputs {
+		l := uint64(len(out.Script) / 2)
+		n += 8 + compactSize(l) + l
+	}
+	return n
+}
+
+func appendHex(dst []byte, s string) []byte {
+	start := len(dst)
+	dst = append(dst, make([]byte, len(s)/2)...)
+	_, _ = hex.Decode(dst[start:], []byte(s)) // Fields were validated before sizing.
+	return dst
+}
+
+func appendVariable(dst []byte, s string) []byte {
+	return appendHex(appendCompact(dst, uint64(len(s)/2)), s)
+}
+
+func appendU32(dst []byte, s string) []byte {
+	n, _ := strconv.ParseUint(s, 10, 32)
+	return binary.LittleEndian.AppendUint32(dst, uint32(n))
+}
+
+func serialize(tx *transaction, witness bool, size uint64) []byte {
+	dst := make([]byte, 0, int(size))
+	dst = appendU32(dst, tx.Version)
+	if witness {
+		dst = append(dst, 0, 1)
+	}
+	dst = appendCompact(dst, uint64(len(tx.Inputs)))
+	for _, in := range tx.Inputs {
+		dst = appendHex(dst, in.Previous)
+		dst = appendU32(dst, in.Index)
+		dst = appendVariable(dst, in.Script)
+		dst = appendU32(dst, in.Sequence)
+	}
+	dst = appendCompact(dst, uint64(len(tx.Outputs)))
+	for _, out := range tx.Outputs {
+		n, _ := strconv.ParseInt(out.Amount, 10, 64)
+		dst = binary.LittleEndian.AppendUint64(dst, uint64(n))
+		dst = appendVariable(dst, out.Script)
+	}
+	if witness {
+		for _, in := range tx.Inputs {
+			dst = appendCompact(dst, uint64(len(in.Witness)))
+			for _, item := range in.Witness {
+				dst = appendVariable(dst, item)
+			}
+		}
+	}
+	return appendU32(dst, tx.Locktime)
+}
+
+func identifiers(data []byte) (string, string) {
+	first := sha256.Sum256(data)
+	digest := sha256.Sum256(first[:])
+	direct := hex.EncodeToString(digest[:])
+	for i := 0; i < len(digest)/2; i++ {
+		digest[i], digest[len(digest)-1-i] = digest[len(digest)-1-i], digest[i]
+	}
+	return direct, hex.EncodeToString(digest[:])
+}
+
+func handle(line []byte) (result response) {
+	defer func() {
+		if recover() != nil {
+			result = failure("execution_failure")
+		}
+	}()
+	if len(line) > maxText {
+		return failure("transport_limit")
+	}
+	m, ok := object(line)
+	if !ok {
+		return failure("invalid_request")
+	}
+	op, ok := stringValue(m["op"])
+	if !ok {
+		return failure("invalid_request")
+	}
+	limit, ok := requestLimit(m["limits"])
+	if !ok {
+		return failure("invalid_request")
+	}
+	switch op {
+	case "decode_prefix", "decode_exact":
+		return decodeRequest(m, op == "decode_exact", limit)
+	case "serialize", "identify":
+		include := true
+		if op == "serialize" {
+			raw := bytes.TrimSpace(m["include_witness"])
+			if !bytes.Equal(raw, []byte("true")) && !bytes.Equal(raw, []byte("false")) {
+				return failure("invalid_request")
+			}
+			include = bytes.Equal(raw, []byte("true"))
+		}
+		tx, status := structured(m["transaction"], limit)
+		if status != "" {
+			return failure(status)
+		}
+		witness := include && hasWitness(tx)
+		fullSize := wireSize(tx, witness)
+		if fullSize > maxWire {
+			return failure("resource_limit")
+		}
+		full := serialize(tx, witness, fullSize)
+		if op == "serialize" {
+			return response{"status": "ok", "bytes": hex.EncodeToString(full)}
+		}
+		stripped := full
+		if witness {
+			stripped = serialize(tx, false, wireSize(tx, false))
+		}
+		txid, txdisplay := identifiers(stripped)
+		wtxid, wtxdisplay := identifiers(full)
+		return response{
+			"status": "ok", "stripped": hex.EncodeToString(stripped), "full": hex.EncodeToString(full),
+			"stripped_size": strconv.Itoa(len(stripped)), "full_size": strconv.Itoa(len(full)),
+			"txid_digest_order": txid, "txid_display_order": txdisplay,
+			"wtxid_digest_order": wtxid, "wtxid_display_order": wtxdisplay,
+		}
+	default:
+		return failure("invalid_request")
+	}
+}
+
+// Oversized lines are drained without retaining their contents, allowing the
+// following request to be handled normally. Newline delimiters are not JSON text.
+func serve(in io.Reader, out io.Writer) error {
+	r := bufio.NewReaderSize(in, 64*1024)
+	w := bufio.NewWriter(out)
+	enc := json.NewEncoder(w)
+	for {
+		var line []byte
+		over := false
+		got := false
+		var readErr error
+		for {
+			chunk, err := r.ReadSlice('\n')
+			if len(chunk) != 0 {
+				got = true
+			}
+			if len(chunk) != 0 && chunk[len(chunk)-1] == '\n' {
+				chunk = chunk[:len(chunk)-1]
+			}
+			if !over {
+				if len(chunk) > maxText-len(line) {
+					over = true
+					line = nil
+				} else {
+					line = append(line, chunk...)
+				}
+			}
+			if err == bufio.ErrBufferFull {
+				continue
+			}
+			readErr = err
+			break
+		}
+		if !got && readErr == io.EOF {
+			return nil
+		}
+		if readErr != nil && readErr != io.EOF {
+			return readErr
+		}
+		var result response
+		if over {
+			result = failure("transport_limit")
+		} else {
+			result = handle(line)
+		}
+		if err := enc.Encode(result); err != nil {
+			return err
+		}
+		if err := w.Flush(); err != nil {
+			return err
+		}
+		if readErr == io.EOF {
+			return nil
+		}
+	}
+}
+
+func main() {
+	if err := serve(os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

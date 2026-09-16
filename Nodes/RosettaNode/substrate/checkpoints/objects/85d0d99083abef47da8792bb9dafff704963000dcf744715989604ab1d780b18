@@ -1,0 +1,114 @@
+use crate::protocol::{Item, ResultItem, hex, nibble};
+use std::ffi::c_void;
+
+#[repr(C)]
+struct NativeItem {
+    data: *const u8,
+    size: u64,
+    witness: u32,
+    exact: u32,
+}
+#[repr(C)]
+#[derive(Clone, Default)]
+struct NativeResult {
+    status: u64,
+    consumed: u64,
+    full_size: u64,
+    stripped_size: u64,
+    txid: [u8; 32],
+    wtxid: [u8; 32],
+}
+#[link(name = "rosetta")]
+unsafe extern "C" {
+    fn rn_arena_create(bytes: *const u8, size: u64) -> *mut c_void;
+    fn rn_arena_data(arena: *const c_void) -> *const u8;
+    fn rn_arena_destroy(arena: *mut c_void);
+    fn rn_verify_v1(
+        arena: *mut c_void,
+        items: *const NativeItem,
+        count: u64,
+        out: *mut NativeResult,
+    ) -> i32;
+}
+struct Arena(*mut c_void);
+impl Drop for Arena {
+    fn drop(&mut self) {
+        unsafe { rn_arena_destroy(self.0) }
+    }
+}
+
+// Arena and all native pointers are created, used and destroyed on one worker.
+// Keep the source buffer alive as well; do not depend on arena copying semantics.
+pub fn evaluate(items: &[Item]) -> Result<Vec<ResultItem>, String> {
+    let size = items
+        .iter()
+        .try_fold(0usize, |n, x| n.checked_add(x.hex.len() / 2))
+        .ok_or("input size overflow")?;
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(size)
+        .map_err(|_| "input allocation failed")?;
+    for item in items {
+        for pair in item.hex.as_bytes().as_chunks::<2>().0 {
+            bytes.push((nibble(pair[0]) << 4) | nibble(pair[1]));
+        }
+    }
+    let arena = Arena(unsafe { rn_arena_create(bytes.as_ptr(), size as u64) });
+    if arena.0.is_null() {
+        std::mem::forget(arena);
+        return Err("native arena allocation failed".into());
+    }
+    let base = unsafe { rn_arena_data(arena.0) };
+    if base.is_null() && size != 0 {
+        return Err("native arena returned null data".into());
+    }
+    let mut offset = 0usize;
+    let mut input = Vec::new();
+    input
+        .try_reserve_exact(items.len())
+        .map_err(|_| "item allocation failed")?;
+    for item in items {
+        let n = item.hex.len() / 2;
+        // wrapping_add also supports the zero-sized arena case without forming references.
+        input.push(NativeItem {
+            data: base.wrapping_add(offset),
+            size: n as u64,
+            witness: u32::from(item.mode == "witness"),
+            exact: u32::from(item.operation == "exact"),
+        });
+        offset += n;
+    }
+    let mut output = vec![NativeResult::default(); items.len()];
+    let code = unsafe {
+        rn_verify_v1(
+            arena.0,
+            input.as_ptr(),
+            input.len() as u64,
+            output.as_mut_ptr(),
+        )
+    };
+    if code < 0 {
+        return Err(format!("adapter rejected validated batch: {code}"));
+    }
+    let mut results = Vec::with_capacity(output.len());
+    for mut r in output {
+        if r.status > 4 {
+            return Err(format!("unknown native status {}", r.status));
+        }
+        if r.status != 0 {
+            r = NativeResult {
+                status: r.status,
+                ..NativeResult::default()
+            };
+        }
+        results.push(ResultItem {
+            status: r.status.to_string(),
+            consumed: r.consumed.to_string(),
+            full_size: r.full_size.to_string(),
+            stripped_size: r.stripped_size.to_string(),
+            txid_digest_order: hex(&r.txid),
+            wtxid_digest_order: hex(&r.wtxid),
+        });
+    }
+    Ok(results)
+}

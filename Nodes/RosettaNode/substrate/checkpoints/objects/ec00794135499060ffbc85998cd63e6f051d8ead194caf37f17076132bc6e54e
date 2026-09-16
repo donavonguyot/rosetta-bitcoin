@@ -1,0 +1,106 @@
+//! The only transaction-processing path. All native pointers stay on one worker.
+use crate::wire::{Input, ResultItem, hex};
+use std::ffi::{c_int, c_void};
+
+#[repr(C)]
+struct NativeItem {
+    data: *const u8,
+    size: u64,
+    witness: u32,
+    exact: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct NativeResult {
+    status: u64,
+    consumed: u64,
+    full_size: u64,
+    stripped_size: u64,
+    txid: [u8; 32],
+    wtxid: [u8; 32],
+}
+#[link(name = "rosetta")]
+unsafe extern "C" {
+    fn rn_arena_create(bytes: *const u8, size: u64) -> *mut c_void;
+    fn rn_arena_data(arena: *const c_void) -> *const u8;
+    fn rn_arena_destroy(arena: *mut c_void);
+    fn rn_verify_v1(
+        arena: *mut c_void,
+        items: *const NativeItem,
+        count: u64,
+        out: *mut NativeResult,
+    ) -> c_int;
+}
+struct Arena(*mut c_void);
+impl Drop for Arena {
+    fn drop(&mut self) {
+        unsafe { rn_arena_destroy(self.0) }
+    }
+}
+pub fn evaluate(input: &Input) -> Result<Vec<ResultItem>, String> {
+    // Input remains borrowed through destruction of the arena, even if creation
+    // copies it today. V1 item pointers always come from rn_arena_data.
+    let raw = unsafe { rn_arena_create(input.bytes.as_ptr(), input.bytes.len() as u64) };
+    if raw.is_null() {
+        return Err("native arena allocation failed".into());
+    }
+    let arena = Arena(raw);
+    let base = unsafe { rn_arena_data(arena.0) };
+    if base.is_null() && !input.bytes.is_empty() {
+        return Err("native arena has null data".into());
+    }
+    let items: Vec<_> = input
+        .layout
+        .iter()
+        .map(|l| NativeItem {
+            data: base.wrapping_add(l.offset),
+            size: l.size as u64,
+            witness: l.witness,
+            exact: l.exact,
+        })
+        .collect();
+    let mut out = vec![NativeResult::default(); items.len()];
+    let rc = unsafe {
+        rn_verify_v1(
+            arena.0,
+            items.as_ptr(),
+            items.len() as u64,
+            out.as_mut_ptr(),
+        )
+    };
+    if rc != 0 {
+        return Err(format!("rn_verify_v1 returned {rc}"));
+    }
+    let mut results = Vec::with_capacity(out.len());
+    for mut r in out {
+        if r.status > 4 {
+            return Err(format!("unknown native status {}", r.status));
+        }
+        if r.status != 0 {
+            r = NativeResult {
+                status: r.status,
+                ..NativeResult::default()
+            };
+        }
+        results.push(ResultItem {
+            status: r.status.to_string(),
+            consumed: r.consumed.to_string(),
+            full_size: r.full_size.to_string(),
+            stripped_size: r.stripped_size.to_string(),
+            txid_digest_order: hex(&r.txid),
+            wtxid_digest_order: hex(&r.wtxid),
+        });
+    }
+    Ok(results)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn abi_layout() {
+        assert_eq!(std::mem::size_of::<NativeItem>(), 24);
+        assert_eq!(std::mem::size_of::<NativeResult>(), 96);
+        assert_eq!(std::mem::offset_of!(NativeResult, txid), 32);
+        assert_eq!(std::mem::offset_of!(NativeResult, wtxid), 64);
+    }
+}

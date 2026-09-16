@@ -1,0 +1,81 @@
+{
+  "schema": "rosettanode.substrate.isolation_probe.v1",
+  "status": "passed",
+  "checks": [
+    {
+      "probe": "deny_read /Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/tools/service_probe.py",
+      "passed": true,
+      "exit": 1
+    },
+    {
+      "probe": "deny_read /Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/spec/transactions.md",
+      "passed": true,
+      "exit": 1
+    },
+    {
+      "probe": "deny_read /Users/donavonguyot/RosettaBitcoin/Nodes/Zig/src/root.zig",
+      "passed": true,
+      "exit": 1
+    },
+    {
+      "probe": "deny_read /Users/donavonguyot/.codex/config.toml",
+      "passed": true,
+      "exit": 1
+    },
+    {
+      "probe": "deny_network https://1.1.1.1",
+      "passed": true,
+      "exit": 7
+    },
+    {
+      "probe": "deny_network https://example.com",
+      "passed": true,
+      "exit": 6
+    },
+    {
+      "probe": "deny_network http://127.0.0.1:48332",
+      "passed": true,
+      "exit": 7
+    },
+    {
+      "probe": "offline_linux_broker",
+      "passed": true,
+      "exit": 0,
+      "stdout": "go version go1.27.1 linux/arm64\nrustc 1.98.1 (48a229cea 2026-09-01)\n0.16.0\n",
+      "stderr": "python3: error: couldn't create cache file '/var/folders/_t/hlbq374x5r7bj5c8m0tnw35m0000gn/T/xcrun_db-wNrBXwaj' (errno=Operation not permitted)\n2026-09-16 12:52:59.702 xcodebuild[77145:3333542]  DVTFilePathFSEvents: Failed to start fs event stream.\npython3: error: couldn't create cache file '/var/folders/_t/hlbq374x5r7bj5c8m0tnw35m0000gn/T/xcrun_db-yRui7wuA' (errno=Operation not permitted)\n2026-09-16 12:53:00.483 xcodebuild[77152:3333587]  DVTFilePathFSEvents: Failed to start fs event stream.\n"
+    }
+  ],
+  "configuration": {
+    "default_permissions": "substrate",
+    "permissions.substrate.filesystem": {
+      ":minimal": "read",
+      "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/isolation-c4151acd": "write"
+    },
+    "permissions.substrate.network.enabled": false,
+    "project_doc_max_bytes": 0,
+    "agents.enabled": false,
+    "web_search": "disabled",
+    "features.apps": false,
+    "features.plugins": false,
+    "features.memories": false,
+    "features.browser_use": false,
+    "features.browser_use_external": false,
+    "features.computer_use": false,
+    "features.image_generation": false,
+    "features.hooks": false,
+    "features.workspace_dependencies": false,
+    "approval_policy": "never",
+    "allow_login_shell": false,
+    "model_reasoning_effort": "high",
+    "shell_environment_policy.inherit": "none",
+    "shell_environment_policy.set": {
+      "PATH": "/usr/bin:/bin",
+      "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/isolation-c4151acd/tmp"
+    }
+  },
+  "candidate_launch_allowed": false,
+  "limits": [
+    "repeat before each attempt",
+    "no candidate launched; full cohort runner pending"
+  ]
+}

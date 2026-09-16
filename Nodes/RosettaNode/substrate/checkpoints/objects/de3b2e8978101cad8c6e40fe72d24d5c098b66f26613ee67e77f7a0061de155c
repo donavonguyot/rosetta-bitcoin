@@ -1,0 +1,304 @@
+use crate::{Error, Result};
+use crate::json::{self, Json};
+
+#[derive(Clone, Copy, Debug)]
+pub struct Limits { pub max_items: u64 }
+impl Default for Limits {
+    fn default() -> Self { Self { max_items: u64::MAX } }
+}
+impl Limits {
+    pub fn check(&self, count: u64) -> Result<()> {
+        if count > self.max_items { Err(Error::ResourceLimit) } else { Ok(()) }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Input {
+    pub previous_txid: [u8; 32],
+    pub previous_index: u32,
+    pub script: Vec<u8>,
+    pub sequence: u32,
+    pub witness: Vec<Vec<u8>>,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct Output { pub amount: u64, pub script: Vec<u8> }
+#[derive(Clone, Debug, PartialEq)]
+pub struct Transaction {
+    pub version_bits: u32,
+    pub inputs: Vec<Input>,
+    pub outputs: Vec<Output>,
+    pub locktime: u32,
+}
+
+pub fn field<'a>(v: &'a Json, name: &str) -> Result<&'a Json> { v.get(name).ok_or(Error::InvalidRequest) }
+pub fn text(v: &Json) -> Result<&str> { v.string().ok_or(Error::InvalidRequest) }
+pub fn uint(v: &Json) -> Result<u64> {
+    let s = text(v)?;
+    if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) { return Err(Error::InvalidRequest); }
+    s.parse().map_err(|_| Error::InvalidRequest)
+}
+fn uint32(v: &Json) -> Result<u32> { u32::try_from(uint(v)?).map_err(|_| Error::InvalidRequest) }
+fn array(v: &Json) -> Result<&[Json]> { v.array().ok_or(Error::InvalidRequest) }
+
+pub fn unhex(s: &str) -> Result<Vec<u8>> {
+    if s.len() % 2 != 0 { return Err(Error::InvalidRequest); }
+    fn digit(b: u8) -> Result<u8> {
+        match b {
+            b'0'..=b'9' => Ok(b-b'0'), b'a'..=b'f' => Ok(b-b'a'+10), b'A'..=b'F' => Ok(b-b'A'+10),
+            _ => Err(Error::InvalidRequest),
+        }
+    }
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(s.len()/2).map_err(|_| Error::ResourceLimit)?;
+    for chunk in s.as_bytes().chunks_exact(2) { bytes.push((digit(chunk[0])? << 4) | digit(chunk[1])?); }
+    Ok(bytes)
+}
+pub fn hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len().saturating_mul(2));
+    for &b in bytes { out.push(DIGITS[(b >> 4) as usize] as char); out.push(DIGITS[(b & 15) as usize] as char); }
+    out
+}
+fn bytes(v: &Json) -> Result<Vec<u8>> { unhex(text(v)?) }
+
+impl Transaction {
+    pub fn from_json(v: &Json) -> Result<Self> {
+        let version_bits = uint32(field(v, "version_bits")?)?;
+        let locktime = uint32(field(v, "locktime")?)?;
+        let raw_inputs = array(field(v, "inputs")?)?;
+        let raw_outputs = array(field(v, "outputs")?)?;
+        let mut inputs = Vec::new();
+        inputs.try_reserve_exact(raw_inputs.len()).map_err(|_| Error::ResourceLimit)?;
+        for input in raw_inputs {
+            let digest = bytes(field(input, "previous_txid_digest_order")?)?;
+            let previous_txid = digest.try_into().map_err(|_| Error::InvalidRequest)?;
+            let previous_index = uint32(field(input, "previous_index")?)?;
+            let script = bytes(field(input, "script")?)?;
+            let sequence = uint32(field(input, "sequence")?)?;
+            let raw_witness = array(field(input, "witness")?)?;
+            let mut witness = Vec::new();
+            witness.try_reserve_exact(raw_witness.len()).map_err(|_| Error::ResourceLimit)?;
+            for item in raw_witness { witness.push(bytes(item)?); }
+            inputs.push(Input { previous_txid, previous_index, script, sequence, witness });
+        }
+        let mut outputs = Vec::new();
+        outputs.try_reserve_exact(raw_outputs.len()).map_err(|_| Error::ResourceLimit)?;
+        for output in raw_outputs {
+            outputs.push(Output { amount: uint(field(output, "amount")?)?, script: bytes(field(output, "script")?)? });
+        }
+        Ok(Self { version_bits, inputs, outputs, locktime })
+    }
+    pub fn to_json(&self) -> Json {
+        json::object(vec![
+            ("version_bits", json::decimal(self.version_bits)),
+            ("inputs", Json::Array(self.inputs.iter().map(|input| json::object(vec![
+                ("previous_txid_digest_order", json::string(hex(&input.previous_txid))),
+                ("previous_index", json::decimal(input.previous_index)),
+                ("script", json::string(hex(&input.script))),
+                ("sequence", json::decimal(input.sequence)),
+                ("witness", Json::Array(input.witness.iter().map(|w| json::string(hex(w))).collect())),
+            ])).collect())),
+            ("outputs", Json::Array(self.outputs.iter().map(|output| json::object(vec![
+                ("amount", json::decimal(output.amount)),
+                ("script", json::string(hex(&output.script))),
+            ])).collect())),
+            ("locktime", json::decimal(self.locktime)),
+        ])
+    }
+    pub fn has_witness(&self) -> bool { self.inputs.iter().any(|input| !input.witness.is_empty()) }
+}
+
+struct Reader<'a> { bytes: &'a [u8], pos: usize, limits: Limits }
+impl<'a> Reader<'a> {
+    fn remaining(&self) -> usize { self.bytes.len() - self.pos }
+    fn take(&mut self, n: usize) -> Result<&'a [u8]> {
+        if n > self.remaining() { return Err(Error::MalformedEncoding); }
+        let start = self.pos;
+        self.pos += n;
+        Ok(&self.bytes[start..self.pos])
+    }
+    fn byte(&mut self) -> Result<u8> { Ok(self.take(1)?[0]) }
+    fn u32(&mut self) -> Result<u32> { Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap())) }
+    fn u64(&mut self) -> Result<u64> { Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap())) }
+    fn compact(&mut self) -> Result<u64> {
+        let n = match self.byte()? {
+            253 => {
+                let n = u16::from_le_bytes(self.take(2)?.try_into().unwrap()) as u64;
+                if n < 253 { return Err(Error::MalformedEncoding); }
+                n
+            }
+            254 => {
+                let n = self.u32()? as u64;
+                if n <= u16::MAX as u64 { return Err(Error::MalformedEncoding); }
+                n
+            }
+            255 => {
+                let n = self.u64()?;
+                if n <= u32::MAX as u64 { return Err(Error::MalformedEncoding); }
+                n
+            }
+            n => n as u64,
+        };
+        self.limits.check(n)?;
+        Ok(n)
+    }
+    fn count(&mut self, minimum_item_bytes: usize) -> Result<usize> {
+        let count = self.compact()?;
+        // Validate against available bytes before allocating from an untrusted count.
+        if count > (self.remaining() / minimum_item_bytes) as u64 { return Err(Error::MalformedEncoding); }
+        usize::try_from(count).map_err(|_| Error::ResourceLimit)
+    }
+    fn blob(&mut self) -> Result<Vec<u8>> {
+        let n = self.count(1)?;
+        let data = self.take(n)?;
+        let mut result = Vec::new();
+        result.try_reserve_exact(n).map_err(|_| Error::ResourceLimit)?;
+        result.extend_from_slice(data);
+        Ok(result)
+    }
+    fn inputs(&mut self) -> Result<Vec<Input>> {
+        let count = self.count(41)?;
+        let mut inputs = Vec::new();
+        inputs.try_reserve_exact(count).map_err(|_| Error::ResourceLimit)?;
+        for _ in 0..count {
+            inputs.push(Input {
+                previous_txid: self.take(32)?.try_into().unwrap(),
+                previous_index: self.u32()?,
+                script: self.blob()?,
+                sequence: self.u32()?,
+                witness: Vec::new(),
+            });
+        }
+        Ok(inputs)
+    }
+    fn outputs(&mut self) -> Result<Vec<Output>> {
+        let count = self.count(9)?;
+        let mut outputs = Vec::new();
+        outputs.try_reserve_exact(count).map_err(|_| Error::ResourceLimit)?;
+        for _ in 0..count { outputs.push(Output { amount: self.u64()?, script: self.blob()? }); }
+        Ok(outputs)
+    }
+}
+
+pub fn decode(bytes: &[u8], offset: usize, witness_mode: bool, limits: Limits) -> Result<(Transaction, usize)> {
+    if offset > bytes.len() { return Err(Error::InvalidRequest); }
+    let mut reader = Reader { bytes, pos: offset, limits };
+    let version_bits = reader.u32()?;
+    let mut inputs = reader.inputs()?;
+    let mut flags = 0;
+    let outputs;
+    if inputs.is_empty() && witness_mode {
+        flags = reader.byte()?;
+        if flags != 0 {
+            inputs = reader.inputs()?;
+            outputs = reader.outputs()?;
+        } else {
+            // A zero flag is also the output count of a legacy empty transaction.
+            outputs = Vec::new();
+        }
+    } else {
+        outputs = reader.outputs()?;
+    }
+    if flags & 1 != 0 {
+        for input in &mut inputs {
+            let count = reader.count(1)?;
+            input.witness.try_reserve_exact(count).map_err(|_| Error::ResourceLimit)?;
+            for _ in 0..count { input.witness.push(reader.blob()?); }
+        }
+        if !inputs.iter().any(|input| !input.witness.is_empty()) { return Err(Error::MalformedEncoding); }
+        flags &= !1;
+    }
+    if flags != 0 { return Err(Error::MalformedEncoding); }
+    let locktime = reader.u32()?;
+    Ok((Transaction { version_bits, inputs, outputs, locktime }, reader.pos - offset))
+}
+
+fn compact_size(n: u64) -> usize {
+    match n { 0..=252 => 1, 253..=65535 => 3, 65536..=4294967295 => 5, _ => 9 }
+}
+fn put_compact(out: &mut Vec<u8>, n: u64) {
+    match n {
+        0..=252 => out.push(n as u8),
+        253..=65535 => { out.push(253); out.extend_from_slice(&(n as u16).to_le_bytes()); }
+        65536..=4294967295 => { out.push(254); out.extend_from_slice(&(n as u32).to_le_bytes()); }
+        _ => { out.push(255); out.extend_from_slice(&n.to_le_bytes()); }
+    }
+}
+fn put_blob(out: &mut Vec<u8>, bytes: &[u8]) { put_compact(out, bytes.len() as u64); out.extend_from_slice(bytes); }
+
+struct Size { size: usize, limits: Limits }
+impl Size {
+    fn add(&mut self, n: usize) -> Result<()> {
+        self.size = self.size.checked_add(n).ok_or(Error::ResourceLimit)?;
+        Ok(())
+    }
+    fn count(&mut self, n: usize) -> Result<()> {
+        self.limits.check(n as u64)?;
+        self.add(compact_size(n as u64))
+    }
+    fn blob(&mut self, n: usize) -> Result<()> { self.count(n)?; self.add(n) }
+}
+
+pub fn serialize(tx: &Transaction, include_witness: bool, limits: Limits) -> Result<Vec<u8>> {
+    let with_witness = include_witness && tx.has_witness();
+    let mut size = Size { size: if with_witness { 10 } else { 8 }, limits };
+    size.count(tx.inputs.len())?;
+    for input in &tx.inputs { size.add(40)?; size.blob(input.script.len())?; }
+    size.count(tx.outputs.len())?;
+    for output in &tx.outputs { size.add(8)?; size.blob(output.script.len())?; }
+    if with_witness {
+        for input in &tx.inputs {
+            size.count(input.witness.len())?;
+            for item in &input.witness { size.blob(item.len())?; }
+        }
+    }
+    let mut out = Vec::new();
+    out.try_reserve_exact(size.size).map_err(|_| Error::ResourceLimit)?;
+    out.extend_from_slice(&tx.version_bits.to_le_bytes());
+    if with_witness { out.extend_from_slice(&[0, 1]); }
+    put_compact(&mut out, tx.inputs.len() as u64);
+    for input in &tx.inputs {
+        out.extend_from_slice(&input.previous_txid);
+        out.extend_from_slice(&input.previous_index.to_le_bytes());
+        put_blob(&mut out, &input.script);
+        out.extend_from_slice(&input.sequence.to_le_bytes());
+    }
+    put_compact(&mut out, tx.outputs.len() as u64);
+    for output in &tx.outputs {
+        out.extend_from_slice(&output.amount.to_le_bytes());
+        put_blob(&mut out, &output.script);
+    }
+    if with_witness {
+        for input in &tx.inputs {
+            put_compact(&mut out, input.witness.len() as u64);
+            for item in &input.witness { put_blob(&mut out, item); }
+        }
+    }
+    out.extend_from_slice(&tx.locktime.to_le_bytes());
+    debug_assert_eq!(out.len(), size.size);
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn compact_boundaries_and_nonminimal_forms() {
+        for n in [0, 1, 252, 253, 65535, 65536, u32::MAX as u64, 1u64 << 32, u64::MAX] {
+            let mut bytes = Vec::new();
+            put_compact(&mut bytes, n);
+            assert_eq!(bytes.len(), compact_size(n));
+            let mut reader = Reader { bytes: &bytes, pos: 0, limits: Limits::default() };
+            assert_eq!(reader.compact(), Ok(n));
+            for len in 0..bytes.len() {
+                let mut truncated = Reader { bytes: &bytes[..len], pos: 0, limits: Limits::default() };
+                assert_eq!(truncated.compact(), Err(Error::MalformedEncoding));
+            }
+        }
+        for s in ["fdfc00", "fd0000", "feffff0000", "ff0100000000000000", "ffffffffff00000000"] {
+            let bytes = unhex(s).unwrap();
+            let mut reader = Reader { bytes: &bytes, pos: 0, limits: Limits::default() };
+            assert_eq!(reader.compact(), Err(Error::MalformedEncoding), "{s}");
+        }
+    }
+}

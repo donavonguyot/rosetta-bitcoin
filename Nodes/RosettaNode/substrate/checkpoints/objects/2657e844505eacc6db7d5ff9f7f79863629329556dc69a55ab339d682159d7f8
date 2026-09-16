@@ -1,0 +1,185 @@
+# Initial implementation record
+
+Reading began at 2026-09-16 20:50:33 UTC and finished before implementation was
+authorized at 20:51:55 UTC. The implementation clock began at 20:51:55 UTC.
+This is a fresh lineage with no predecessor handoff. All native compilation,
+execution, tests, and pinned documentation queries used `python3 run.py`.
+No external sources, evaluator, other workspace, agent, or Bitcoin library was
+used. Broker requests/responses and test artifacts are retained.
+
+## Initial design hypotheses
+
+1. A single event-loop owner of all writes can provide a legal cancellation/
+   terminal ordering at the native write boundary, while four worker threads
+   provide encoding concurrency. Implemented; protocol, concurrent-client,
+   crash, and recovery tests support this design. Deterministic interposed
+   barrier qualification remains external, unexecuted evidence.
+2. Nonblocking sockets and bounded queues can isolate slow/disconnected clients
+   from encoding ownership and durable transitions. Implemented; disconnect and
+   pipelining tests pass. Review found and fixed rescanning of growing input
+   lines and retention of already-sent output prefixes.
+
+These are initial correctness/design hypotheses. No optimization-round
+hypothesis, group commit, kernel replacement, or durability relaxation was
+attempted. No benchmark conclusions are drawn from test elapsed times.
+
+## Attempts, including failures
+
+| Attempt | Outcome and action |
+|---|---|
+| Initial ReleaseSafe build | Failed translating glibc fortified `fcntl` wrappers. Set `_FORTIFY_SOURCE=0` in the host C import and explicitly enabled GNU declarations. This affects imported libc header wrappers, not the unchanged kernel or storage durability. |
+| Next build | Failed because GNU `bind` uses a translated transparent socket-address union. Passed the union's Unix-address member explicitly; handled `accept4` likewise. |
+| Next build | Failed because Zig 0.16 JSON object-map `put` requires an allocator. Supplied the request arena allocator. |
+| First successful build | Public smoke passed. |
+| First eight-test run | Seven passed; crash-history test timed out while its client sent many small pipeline messages without reading responses. This was a test-client flow-control failure. Changed that crash burst to one buffered send; retained the failed run in broker responses. |
+| Second eight-test run | All eight passed, including process-crash restart and cancellation-intent preservation. |
+| Expanded 13-test run | Passed, including 40 MiB text, 16 MiB aggregate input, 64 MiB outstanding payload, fragmented transport, and malformed recovery records. |
+| Expanded 15-test run | Passed, adding 1,024-job backpressure and drain semantics. Known-ID retries were kept idempotent during drain. |
+| Fresh-counter correction | Added the explicit fresh-database exception for absent zero counters, retaining rejection for missing counters in a nonempty database. |
+| ReleaseSafe and Debug, 16 tests | Both passed, plus public smoke. Logs: `tmp/release-validation.log`, `tmp/debug-validation.log`. |
+| Native boundary fixture test | Passed for nonempty legacy/witness fixtures, relative prefix consumption, distinct witness digest, 4,096-item success, and 4,097-item resource failure. Log: `tmp/native-boundary-validation.log`. |
+| Final output-buffer review | Added sent-prefix compaction to bound memory during continuous event output. Final release/debug validation follows this change. |
+| Final ReleaseSafe and Debug validation | Public smoke plus all 17 tests passed in both builds. Suite times were 4.996 s and 8.543 s, respectively; these are test timings, not performance trial results. Logs: `tmp/final-release-validation.log`, `tmp/final-debug-validation.log`. |
+
+## Infrastructure and diagnostic observations
+
+The broker reports Zig 0.16.0 and RocksDB 7.8.3-2. `readelf` confirms an AArch64
+ELF, dynamic adapter/RocksDB linkage, and v1-only verification references.
+The supplied adapter directory contains `adapter.h` and `librosetta.so`; no
+instrumented native library was supplied. Valgrind was not available. Native
+ASan, whole-service race detection, and power-loss behavior are not claimed.
+
+The host-side `python3` launcher repeatedly printed denied temporary-cache and
+FSEvents diagnostics before successfully forwarding requests. These did not
+prevent broker builds/tests; their exact overhead is unknown. API token usage
+and monetary cost are not exposed by the tools and are recorded as unknown.
+No controlled performance trials were run. No failed measurement was discarded
+or replaced as though it had succeeded.
+
+Implementation and final validation completed at approximately 21:18 UTC on
+2026-09-16, about 26 minutes after the implementation clock started, within the
+90-minute ceiling. The earlier reading phase took less than two minutes.
+These wall-clock figures include broker/tool waits and documentation. Preparation
+cost before the supplied workspace and exact token/cost usage remain unknown.
+
+Frozen initial ReleaseSafe executable SHA-256:
+`53be1f182871e4ad66ec133b35e1d2d04a66315102045c7fe1d71fc0a42facdc`.
+
+# Maintenance round — ABI v2 and deterministic priority dispatch
+
+This section records the fresh maintenance session. The initial-round text above
+is retained verbatim; `tmp/predecessor/` also retains the supplied executable,
+sources, tests, build script, handoff, and experiment record. The maintenance
+submission is frozen on return before evaluator feedback.
+
+## Scope, timing, and documentation
+
+Implementation was explicitly authorized after the reading-only phase. The first
+implementation timestamp was 2026-09-16 22:03:03 UTC (the instruction arrived
+shortly beforehand). Reading finished by approximately 22:02:40 UTC, within the
+10-minute allowance. All contracts, README.md, BUILDING.md, reuse/storage.zig,
+and predecessor Markdown were read. Relevant supplied source/tests were inspected.
+
+Pinned Zig documentation was read only through `python3 run.py`: Thread.zig,
+json/static.zig, array_list.zig, and std.zig. The adapter header was read at its
+read-only broker location. An initial lookup of older Thread/Mutex.zig and
+Thread/Condition.zig paths failed because those files are absent in Zig 0.16;
+the current shipped sources were then used. The host lacks rg, so read-only
+searches used find/grep. No external source, network, repository outside this
+workspace, other workspace/agent, Bitcoin library, or evaluator was accessed.
+
+All compilation, native execution, tests, artifact inspection, and audit-script
+execution used the pinned Linux broker through `python3 run.py`. Host commands
+were restricted to workspace reading and file management/editing. The launcher
+again emitted denied xcrun cache and FSEvents messages but forwarded requests
+successfully. Their exact overhead and token/monetary usage remain unknown.
+
+## Maintenance design decisions
+
+1. Keep event-loop ownership and all journal writes; change only the native ABI,
+   admission metadata, recovery publication, and worker selection. V2 uses arena
+   offsets and validates the success bitmap against all per-item statuses.
+2. Serialize selection from two intrusive FIFO queues under the existing pool
+   mutex. A shared two-bit cycle implements HHHN only while both queues have
+   eligible work. Single-queue dispatch leaves the cycle unchanged. Cancelled
+   queued work is withdrawn without consuming a turn; running work retains its
+   inputs until return. Terminal commitment remains admission ordered.
+3. Validate the entire recovered database, then publish all uncancelled pending
+   work under one lock. Recover old missing priorities as normal and preserve
+   explicit v2 priorities, receipts, ID indexes, and durable cancellation intents.
+
+These are maintenance correctness decisions, not optimization hypotheses.
+No group commit, performance tuning, kernel change, rewrite, or durability
+relaxation was attempted. Storage and build settings remain byte-for-byte
+unchanged. Existing protocol interpretations and remaining ambiguities are
+listed in HANDOFF.md, including absent campaign freeze/gate evidence.
+
+## Attempts and outcomes
+
+| Attempt | Outcome |
+|---|---|
+| First v2 ReleaseSafe build | Passed without compiler errors. |
+| Review before first full suite | Added normal-priority status projection for old records that omit the field; disk payloads remain untouched. |
+| First full ReleaseSafe suite | Three scheduler tests, smoke, and 22 service tests passed; Python suite 7.308 s. Logs: maintenance-build-1.log and maintenance-tests-1.log in tmp/. |
+| Additional admission persistence coverage | Added a test that admits high/normal/default jobs, retries with opposite priorities, crashes, independently inspects disk, and restarts. |
+| Zig formatting and Debug build/suite | Formatting succeeded; three scheduler tests, smoke, and all 23 service tests passed, Python suite 11.934 s. Logs: maintenance-debug-build.log and maintenance-debug-tests.log. |
+| Final ReleaseSafe build/suite | Three scheduler tests, smoke, and all 23 service tests passed, Python suite 9.858 s. Logs: maintenance-final-build.log and maintenance-final-tests.log. |
+| Artifact audit, first attempt | Failed because the optional `file` executable is absent. No service/test failure. Broker response retains the traceback. |
+| Artifact audit, corrected | Used readelf -h instead. Verified AArch64 ELF, dynamic adapter/RocksDB linkage, pinned versions, v2-only verification symbol, checksums and diff counts. Results: tmp/maintenance-audit.json. |
+| Handoff replacement, first edit attempt | Patch utility rejected delete/add targeting the same path in one patch; no file was changed. Rewrote the document with a literal heredoc. |
+
+No implementation build or semantic test failed. No repair round was used.
+All attempts and broker responses remain in queue/; logs, databases, crash
+artifacts, predecessor snapshot, debug executable, and audit script remain in
+tmp/. Nothing was rerun to discard a failed measurement, and no performance
+measurements were taken.
+
+## Maintenance evidence and diff footprint
+
+The actual predecessor executable was run with a schema-1 database and killed
+with existing receipts, pending work, and acknowledged cancellation intents.
+V2 recovered it, preserved receipt bytes and indexes, and honored cancellations.
+Mixed-priority and newly admitted priority workloads were separately crashed,
+inspected after the writer stopped, and recovered. Tests validate priority
+immutability on retries, malformed priority refusal without mutation, normal
+fallback, offset handling, and bitmap positions through bit 63 against both
+adapter ABIs. The predecessor's other 17 service tests remain included.
+
+Three production-queue unit cases check exact HHHN/FIFO ordering, preservation of
+partial cycle state during sole-queue dispatch and idle time, and removal from
+head/middle/tail without consuming a dispatch turn. These are ordinary unit
+calls, with no scheduler/barrier hooks in the service. External native-entry
+fairness or cancellation-barrier qualification was not run. Checked builds and
+process-crash histories are not native ASan, whole-service race detection,
+injected failure coverage, or power-loss evidence.
+
+Diff counts use Python difflib against the retained predecessor, counting each
+changed line as a removal plus addition. Documentation, retained snapshots,
+broker traffic, caches, and diagnostic artifacts are excluded from code counts.
+The 54 test-only lines embedded in src/dispatch.zig are assigned to tests.
+
+| Category | Added lines | Removed lines |
+|---|---:|---:|
+| Production | 98 | 23 |
+| Tests | 242 | 9 |
+| Generated source | 0 | 0 |
+
+Production changes are src/main.zig (+44/-23) and the production portion of
+src/dispatch.zig (+54). build.sh and src/storage.zig are unchanged. The generated
+deliverable is one replacement service executable: 4,161,712 bytes, a 6,048-byte
+increase over the 4,155,664-byte predecessor. This footprint measures invasiveness,
+not quality. Detailed per-file counts are in tmp/maintenance-audit.json.
+
+Delivered ReleaseSafe service SHA-256:
+`369821b9afe85876d6f945ddac4775963ed60b485ca3a26a49ca14ad9d478956`.
+
+All semantic families exercised locally passed before repair (repair unused).
+Evaluator semantic-family results, gate status, controlled performance, exact
+API usage/cost, and preparation effort are unknown. No substrate recommendation
+is made from this maintenance result.
+
+Implementation, validation, and documentation finished at approximately
+2026-09-16 22:13 UTC, about 10 minutes after implementation authorization,
+including broker waits and audit/documentation work. This is within the
+60-minute ceiling; repair time is zero. Reading time was separate and under
+two minutes; exact token and monetary usage are unavailable.

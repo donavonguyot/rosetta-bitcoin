@@ -1,0 +1,28 @@
+# Private next-phase notes — Go initial round
+
+Reading only; no implementation, build, test, evaluator inspection, or external research. Read README.md, BUILDING.md, all four contracts, reuse/storage.go, and broker /adapter/adapter.h. No predecessor HANDOFF.md exists in this workspace. Finished within the ten-minute ceiling.
+
+## Implementation constraints
+
+- Initial scope is ABI v1 only: rn_verify_v1; no Bitcoin logic in Go. Deliver executable build.sh, Linux AArch64 service (DATADIR SOCKET_PATH), source/tests, HANDOFF.md and EXPERIMENTS.md when implementation is authorized. Baseline uses one job per admission/terminal WriteBatch; group commit belongs to optimization.
+- Four concurrent native job slots; eight clients. Adapter batch: 64 transactions/16 MiB; transaction: 4 MiB/4,096 combined items; JSON text: 40 MiB. Outstanding work: both 1,024 jobs and 64 MiB raw payload, including finished results awaiting commit.
+- Admission atomically persists complete payload, digest, sequence, metadata/accounting and id index before accepted. Digest is SHA-256 of ordered mode byte, operation byte, little-endian uint64 length, raw bytes. Retry identity ignores priority.
+- Terminal commits strictly follow admission sequence. Atomically write receipt, delete pending/cancel, release accounting, advance checkpoint; preserve id index. Cancellation intent is durable before ok. The terminal boundary is native WriteBatch call_entry, not socket arrival or an earlier Go state change. Storage failure must stop without acknowledging an uncommitted transition.
+- Version 1 schema and zero-padded 20-digit sequence keys are prescribed. Recovery must preserve cancellations, receipts, payload and accounting. Missing scalar counters mean zero only on a fresh database. Native RocksDB open supplies exclusive writer locking. WAL enabled and sync=true for all transitions; retain prescribed storage settings.
+- Per-client responses remain ordered; admission response precedes its event. Terminal events are best-effort after durability; disconnect never cancels. Drain accepted work before a zero-exit shutdown. Slow clients must not block workers or durable progress.
+- Arena inputs remain immutable and alive until every native worker returns, including cancelled jobs. V1 item pointers must point into rn_arena_data. Arena allocation failure during evaluate returns execution_failure; after acknowledgment, stop and preserve pending for restart.
+
+## Candidate design and validation focus
+
+A serialized state/storage coordinator with four workers is a plausible baseline. Retain results until their admission sequence can terminalize; serialize cancellation and terminal-write decisions. Keep socket writes outside storage coordination and gate events behind admission responses. Validate recovery invariants, retry/conflict, ordered completion, cancellation races, worker ownership, backpressure, disconnects and draining. No scheduler/barrier hooks in the service.
+
+reuse/storage.go already supplies native open/get/WriteBatch/sync settings and ownership cleanup; it supplies no scheduling, recovery or service policy. Link cgo with /adapter include/library/rpath plus -lrocksdb.
+
+## Offline documentation and ambiguities
+
+- Read pinned /opt/go/src documentation through python3 run.py: bufio Reader.ReadSlice, encoding/json Unmarshal, net.Conn, sync.Mutex, and cmd/cgo pointer rules. ReadSlice aliases its buffer; bound complete lines and copy fragments. JSON accepts case-insensitive struct keys, duplicate keys, some nulls, and invalid UTF-8 replacement: validate wire requirements explicitly. Go pointers passed to C are implicitly pinned only for the call; avoid retained Go pointers.
+- go doc failed because its /workspace/cache/go cache is read-only; redirecting to /workspace/tmp/go-cache also failed inside the broker. Source documentation works. Host python3 emitted cache permission warnings but broker reads succeeded. Implementation-phase writable mounts remain unverified.
+- Contracts retain preparation-only/no-start and hash-frozen campaign requirements; no freeze manifest is provided here. Reading is authorized; gate evidence remains unknown.
+- Ambiguous wire edges: unknown/reserved fields (ignore versus reject), duplicate keys, malformed-request response shape, whether the text limit includes newline, and v1 handling of a priority field.
+- The adapter header does not explicitly state whether arena creation copies its source bytes. Conservatively retain native backing memory through verification unless an authorized source establishes ownership.
+- Per-transaction combined-item limits concern kernel parsing; do not duplicate Bitcoin parsing in Go. Distinguish invalid envelope/batch limits from adapter per-item error statuses.

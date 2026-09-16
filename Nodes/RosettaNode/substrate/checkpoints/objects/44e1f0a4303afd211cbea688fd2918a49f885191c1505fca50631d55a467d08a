@@ -1,0 +1,120 @@
+# RosettaNode reconstruction interface v1
+
+Implement a Go JSON-lines program using the Go standard library only. Read one JSON object per line and write one response object per line. Do not use Bitcoin libraries, port sources, reference executables, evaluator dependencies, or network access.
+
+Operations are decode_prefix(bytes, offset, mode, limits), decode_exact(bytes, mode, limits), serialize(transaction, include_witness, limits), and identify(transaction, limits). The request property selecting the operation is op. Modes are legacy and witness. include_witness is a JSON boolean. Byte strings use hexadecimal; integers use decimal strings. limits is an optional object with an optional max_items decimal string.
+
+A transaction object has version_bits, inputs, outputs, and locktime. Each input has previous_txid_digest_order, previous_index, script, sequence, and witness. witness is an array of hexadecimal strings. Each output has amount and script.
+
+Successful decode responses have status, transaction, and consumed. Successful serialize responses have status and bytes. Successful identify responses have status, stripped, full, stripped_size, full_size, txid_digest_order, txid_display_order, wtxid_digest_order, and wtxid_display_order.
+
+The status enum is ok, invalid_request, malformed_encoding, resource_limit, execution_failure, transport_limit, or admission_limit. Error responses contain status only.
+
+Request shape example (values illustrate JSON shape, with no supplied expected encoding):
+
+```json
+{"op":"serialize","transaction":{"version_bits":"1","inputs":[],"outputs":[],"locktime":"0"},"include_witness":false}
+```
+
+Serialize response shape: {"status":"ok","bytes":"<hexadecimal string>"}. Decode response shape: {"status":"ok","transaction":<transaction object>,"consumed":"<decimal string>"}.
+
+Submit a directory containing main.go and any additional Go source files, with package main, buildable without external modules. Write diagnostics only to stderr. Initial submissions are frozen before evaluator feedback. You may finish before the deadline.
+
+# RosettaNode: CompactSize executable specification
+
+This is a bounded encoding experiment, not a Bitcoin node or a consensus proof.
+Rule CS-1: encode an unsigned 64-bit integer using its shortest CompactSize form.
+Values below 253 use one byte. Values up to 65535 use fd and two little-endian
+bytes. Values up to 4294967295 use fe and four bytes. Larger values use ff and
+eight bytes. No maximum object-size policy is imposed by this primitive.
+
+Rule CS-2: decoding requires the entire indicated payload and rejects a longer
+form when a shorter one could encode the same value. Extra trailing bytes are
+not consumed. On success, consumed is relative to the start of this primitive.
+On failure, caller-owned value and consumed outputs remain unchanged.
+
+The worked examples below are inserted from a separately maintained fixture
+file. Expectations use the width boundaries above, not reference execution.
+Provenance: Bitcoin Core v28.2 src/serialize.h ReadCompactSize and WriteCompactSize.
+No Core MAX_SIZE allocation policy is claimed by this primitive.
+
+0 -> 00
+1 -> 01
+252 -> fc
+253 -> fdfd00
+254 -> fdfe00
+65535 -> fdffff
+65536 -> fe00000100
+4294967295 -> feffffffff
+4294967296 -> ff0000000001000000
+18446744073709551615 -> ffffffffffffffffff
+
+
+# RosettaNode transaction encoding profile v1
+
+This is an experimental encoding specification, not consensus validation. The caller selects legacy or witness mode. Versions preserve 32 raw bits as unsigned `version_bits`; amounts preserve signed 64-bit values, including negative amounts. Neither interpretation makes a transaction valid.
+
+TX-1. Read version, then the first input vector. In witness mode only, an empty first vector is followed by one flags byte. If flags is zero, omit output-vector reading and read locktime next. If flags is nonzero, read another input vector and the output vector. Otherwise read the ordinary output vector. A nonempty first vector never introduces flags.
+
+TX-2. If bit 0 is set, read one witness stack per input and clear bit 0. At least one stack must contain an item; a single empty item counts. All stacks with zero items are a superfluous witness encoding. Reject remaining flag bits. Read locktime after optional-data checks. Unknown flags and superfluous witness are malformed encoding, not consensus verdicts.
+
+TX-3. Every CompactSize is canonical. Input records require at least 41 encoded bytes; outputs at least 9; witness items at least 1. Check advertised counts against remaining bytes divided by these minima before iteration. Scripts are opaque. All variable iterations consume bytes. Complete a constant-scratch forward structural scan before materializing objects. Never allocate according to an unchecked count.
+
+TX-4. Admission is at most 4 MiB of bytes beginning at the caller's offset. Offsets outside the supplied bytes are invalid requests. Consumption is relative to the offset. Exact decoding rejects trailing bytes before applying the combined input/output/witness-item budget, default 4096. Continue scanning beyond that budget: impossible counts or truncation remain malformed; a complete over-budget object is resource_limit. Failures leave the caller's cursor unchanged and expose no partial object. Allocation failure is execution_failure. Transport separately limits decoded bytes to 8 MiB and JSON request text to 20 MiB; these are harness limits, not Bitcoin rules.
+
+TX-5. Structured serialization takes field values, without requiring original bytes. Emit marker zero and flags one only when include_witness is true and some stack contains an item. Stripped serialization always omits witness. The same structure must produce the same bytes irrespective of decode history. Empty-input structures can serialize to bytes whose witness-mode interpretation differs; no unconditional decode/serialize inverse is promised. Witness encoding decoded in legacy mode also has different meaning.
+
+TX-6. Identify uses SHA-256 twice on each serialization. txid uses stripped bytes; wtxid uses full bytes. Return both direct digest byte order and reversed display byte order with explicitly different names. Report full and stripped byte sizes; weight is excluded.
+
+Provenance: Bitcoin Core v28.2 src/primitives/transaction.h serialization state machine; src/serialize.h CompactSize; BIP141 and BIP144. Resource/cursor/error precedence is this experimental profile and can differ from Core/btcd. Independently justified synthetic fixtures and valid-chain commitments constrain different parts of this contract.
+
+## Field layout and request interpretation
+
+A basic encoding consists of version (4 bytes), input count (CompactSize), input records, output count (CompactSize), output records, and locktime (4 bytes). All multi-byte integers are little endian. An input is 32 transaction digest bytes, a 4-byte previous output index, CompactSize script length, script bytes, and 4-byte sequence. An output is an 8-byte two's-complement amount, CompactSize script length, and script bytes. A witness stack is CompactSize item count, then CompactSize length and bytes for each item. CompactSize rules are defined in the preceding chapter.
+
+version_bits, previous_index, sequence, and locktime must be in 0 through 4294967295. Amounts range from -9223372036854775808 through 9223372036854775807. Previous transaction digests contain exactly 32 bytes in digest order. Decimal strings have no leading zeroes except zero itself and no plus sign. Uppercase or lowercase input hex is accepted; emitted hex is lowercase. Structured transaction field sets are exact; extra request-envelope fields are ignored. Invalid shapes/ranges and invalid offsets return invalid_request. Mode is required for decoding; prefix offset defaults to zero. The limit may be lowered from 4096 but not increased.
+
+For this experiment serialized output is also capped at 4 MiB; an otherwise correctly shaped over-envelope structure returns resource_limit. Structured-input marshaling validates its field types and ranges before the item-budget verdict. The transport budget applies to the aggregate structured byte pool as well as decoded request bytes. These are experiment envelope choices, not Bitcoin validity rules.
+
+Decode errors return status only, with neither a partial transaction nor a consumed field. No operation performs signature, value-conservation, script, transaction-version, or block validity checks. Size means encoded byte count. Hash digest order is the 32 bytes returned by double SHA-256; display order is that byte string reversed.
+
+
+## Worked structured example
+
+{
+  "transaction": {
+    "version_bits": "1",
+    "inputs": [
+      {
+        "previous_txid_digest_order": "0000000000000000000000000000000000000000000000000000000000000000",
+        "previous_index": "0",
+        "script": "",
+        "sequence": "4294967295",
+        "witness": []
+      }
+    ],
+    "outputs": [
+      {
+        "amount": "42",
+        "script": "51"
+      }
+    ],
+    "locktime": "0"
+  },
+  "identify": {
+    "status": "ok",
+    "full": "010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000",
+    "stripped": "010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000",
+    "full_size": "61",
+    "stripped_size": "61",
+    "txid_digest_order": "4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583",
+    "txid_display_order": "8305c52ea6df05b120fb9aa774eb7ff9565dc6d0e291c07140da29ca35d45342",
+    "wtxid_digest_order": "4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583",
+    "wtxid_display_order": "8305c52ea6df05b120fb9aa774eb7ff9565dc6d0e291c07140da29ca35d45342"
+  },
+  "justification": "Field-by-field manual encoding cross-checked with independent Python encoder; identifiers independently derived using hashlib double SHA-256. No chain-membership claim."
+}
+
+## Prefix example
+
+In witness mode, 05000000000044332211aa decodes a version of 5, empty input/output vectors, locktime 287454020, and consumes 10 bytes as a prefix. Exact decoding rejects its remaining byte. This expectation follows the zero-flags state transition and little-endian locktime independently of execution.

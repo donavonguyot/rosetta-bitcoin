@@ -1,0 +1,227 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+	"trial/reuse"
+)
+
+func TestPriorityWire(t *testing.T) {
+	for _, op := range []string{"submit", "evaluate"} {
+		for _, priority := range []string{"", `,"priority":"normal"`, `,"priority":"high"`} {
+			line := fmt.Sprintf(`{"request":"q","op":%q,"id":"job","items":[{"hex":%q,"mode":"witness","operation":"exact"}]%s}`, op, emptyTX, priority)
+			r, err := decodeRequest([]byte(line))
+			want := "normal"
+			if strings.Contains(priority, "high") {
+				want = "high"
+			}
+			if err != nil || r.Priority != want {
+				t.Fatalf("%s: %+v %v", line, r, err)
+			}
+			baseline := payloadFor(t, exact(emptyTX))
+			if r.Payload.Digest != baseline.Digest {
+				t.Fatal("priority changed payload digest")
+			}
+		}
+		for _, value := range []string{`null`, `1`, `true`, `""`, `"HIGH"`, `[]`, `{}`} {
+			line := fmt.Sprintf(`{"request":"q","op":%q,"id":"job","items":[{"hex":%q,"mode":"witness","operation":"exact"}],"priority":%s}`, op, emptyTX, value)
+			if _, err := decodeRequest([]byte(line)); err == nil {
+				t.Fatalf("accepted priority %s", value)
+			}
+		}
+	}
+}
+
+func TestPriorityDispatch(t *testing.T) {
+	var q taskQueue
+	push := func(priority string, ids ...string) {
+		for _, id := range ids {
+			q.push(&task{job: &Job{Pending: Pending{ID: id}}}, priority)
+		}
+	}
+	pop := func(ids ...string) {
+		t.Helper()
+		for _, id := range ids {
+			got := q.pop()
+			if got == nil || got.job.Pending.ID != id {
+				t.Fatalf("dispatch wanted %s, got %+v", id, got)
+			}
+		}
+	}
+	push("normal", "n0", "n1", "n2")
+	pop("n0") // Single-queue work must leave the initial high turn untouched.
+	push("high", "h0", "h1", "h2", "h3", "h4", "h5", "h6")
+	pop("h0", "h1", "h2", "n1", "h3", "h4", "h5", "n2", "h6")
+	if q.pop() != nil || q.len() != 0 {
+		t.Fatal("queue did not empty")
+	}
+	push("normal", "n3")
+	push("high", "h7", "h8")
+	pop("h7", "h8", "n3") // Pause after two contested high turns.
+	push("high", "h9", "h10")
+	pop("h9", "h10") // Neither empty nor high-only resets/advances the cycle.
+	push("normal", "n4", "n5")
+	push("high", "h11", "h12", "h13", "h14", "h15")
+	pop("h11", "n4", "h12", "h13", "h14", "n5", "h15")
+}
+
+func TestV2BitmapAndOffsets(t *testing.T) {
+	// Exercise every bitmap position, including bit 63, with mixed variable
+	// length inputs. Prefix consumption must be relative to its own offset.
+	for _, invert := range []bool{false, true} {
+		items := make([]Item, 64)
+		for i := range items {
+			if (i%2 == 0) != invert {
+				items[i] = Item{Hex: emptyTX + strings.Repeat("ab", i), Mode: "witness", Operation: "prefix"}
+			} else {
+				items[i] = exact(strings.Repeat("00", i%4))
+			}
+		}
+		results, err := verify(payloadFor(t, items...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, r := range results {
+			if (i%2 == 0) != invert {
+				if r.Status != "0" || r.Consumed != "10" || r.FullSize != "10" {
+					t.Fatalf("item %d: %+v", i, r)
+				}
+			} else if r.Status != "1" || r.Consumed != "0" || r.TxID != strings.Repeat("0", 64) {
+				t.Fatalf("error item %d: %+v", i, r)
+			}
+		}
+	}
+}
+
+func TestPriorityRecoveryAndCommitOrder(t *testing.T) {
+	path := t.TempDir() + "/db"
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { db.Close() }()
+	s, err := recoverState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := payloadFor(t, exact(emptyTX))
+	jobs := make([]*Job, 6)
+	for i, priority := range []string{"normal", "normal", "high", "high", "high", "high"} {
+		jobs[i], err = s.admit(fmt.Sprintf("j%d", i+1), p, priority, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Preserve a v1 receipt and cancellation, and simulate an older pending
+	// record which omitted normal priority. Recovery must not rewrite it.
+	jobs[0].Results, err = verify(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs[0].Done = true
+	if _, err = s.commit(jobs[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.cancel(2, jobs[1]); err != nil {
+		t.Fatal(err)
+	}
+	var legacy map[string]any
+	if err = json.Unmarshal([]byte(jsonText(jobs[1].Pending)), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	delete(legacy, "priority")
+	legacyText := jsonText(legacy)
+	if err = s.write(map[string]string{seqKey("p", 2): legacyText}); err != nil {
+		t.Fatal(err)
+	}
+	receiptBefore, _, _ := db.Get(seqKey("r", 1))
+	db.Close()
+	db, err = storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err = recoverState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.pending[2].Cancelled || s.pending[2].Pending.Priority != "normal" {
+		t.Fatal("lost legacy priority/cancellation")
+	}
+	if raw, _, _ := db.Get(seqKey("p", 2)); raw != legacyText {
+		t.Fatal("recovery rewrote legacy pending")
+	}
+	var q taskQueue
+	for seq := uint64(2); seq <= 6; seq++ {
+		j := s.pending[seq]
+		q.push(&task{job: j, payload: j.Payload}, j.Pending.Priority)
+	}
+	for _, seq := range []uint64{3, 4, 5, 2, 6} {
+		job := q.pop().job
+		if job.Pending.Sequence != decimal(seq) {
+			t.Fatalf("recovered dispatch wanted %d, got %s", seq, job.Pending.Sequence)
+		}
+		job.Results, err = verify(job.Payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		job.Done = true
+		if seq != 2 {
+			if _, err = s.commit(job); err == nil {
+				t.Fatal("out-of-order terminal committed")
+			}
+		}
+	}
+	if s.jobs != 5 || s.bytes != 50 || s.checkpoint != 1 {
+		t.Fatal("completed work released accounting before commitment")
+	}
+	// Cancellation remains legal after native completion while waiting behind
+	// an earlier sequence. It is durable before the terminal WriteBatch starts.
+	if err = s.cancel(4, s.pending[4]); err != nil {
+		t.Fatal(err)
+	}
+	for seq := uint64(2); seq <= 6; seq++ {
+		r, err := s.commit(s.pending[seq])
+		if err != nil || ((seq == 2 || seq == 4) && (r.State != "cancelled" || len(r.Results) != 0)) {
+			t.Fatalf("commit %d: %+v %v", seq, r, err)
+		}
+	}
+	if raw, _, _ := db.Get(seqKey("r", 1)); raw != receiptBefore {
+		t.Fatal("changed pre-upgrade receipt")
+	}
+	if _, err = recoverState(db); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRejectInvalidStoredPriority(t *testing.T) {
+	for _, priority := range []any{"", "urgent", nil, 1} {
+		t.Run(fmt.Sprint(priority), func(t *testing.T) {
+			db, err := storage.Open(t.TempDir() + "/db")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			s, err := recoverState(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			j, err := s.admit("job", payloadFor(t, exact(emptyTX)), "normal", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]any
+			if err = json.Unmarshal([]byte(jsonText(j.Pending)), &fields); err != nil {
+				t.Fatal(err)
+			}
+			fields["priority"] = priority
+			if err = s.write(map[string]string{seqKey("p", 1): jsonText(fields)}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = recoverState(db); err == nil {
+				t.Fatal("accepted invalid stored priority")
+			}
+		})
+	}
+}

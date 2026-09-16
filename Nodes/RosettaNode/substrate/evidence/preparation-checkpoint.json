@@ -1,0 +1,26 @@
+{
+  "schema": "rosettanode.substrate.preparation_checkpoint.v1",
+  "started_utc": "2026-09-16T19:31:32+00:00",
+  "recorded_utc": "2026-09-16T20:31:45.098696+00:00",
+  "elapsed_wall_seconds": 3613.098696,
+  "active_preparation_seconds": null,
+  "accounting_note": "Exact model-active time is not exposed. Elapsed time is an upper bound; asynchronous builds and tool waits overlap authoring and cannot honestly be subtracted as a disjoint total. Individual build/probe durations are retained. This is a conservative approximately-one-hour progress checkpoint, not a claim of exactly 60 active minutes.",
+  "checks": {
+    "c_host_adapter": true,
+    "loaded_rocksdb_identity": true,
+    "c_write_and_wal_sync": true,
+    "independent_persist_kill_recovery": true,
+    "early_ack_rejected": true
+  },
+  "gate_a": "not_frozen",
+  "gate_b": "not_frozen",
+  "lineages_started": 0,
+  "remaining": [
+    "isolated candidate evaluator control rerun",
+    "public/withheld workload freeze",
+    "cohort and measurement runner",
+    "clean-environment semantic reproduction"
+  ],
+  "model_usage": null,
+  "monetary_cost": null
+}

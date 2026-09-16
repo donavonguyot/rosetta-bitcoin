@@ -1,0 +1,155 @@
+package main
+
+import (
+	_ "embed"
+	"encoding/json"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+// The supplied repair-phase examples are test fixtures only. They are not
+// included in, or consulted by, the executable.
+//
+//go:embed feedback.json
+var repairFeedback []byte
+
+func TestFeedbackCounterexamples(t *testing.T) {
+	var feedback struct {
+		Counterexamples []struct {
+			Family   string          `json:"family"`
+			Request  json.RawMessage `json:"request"`
+			Expected map[string]any  `json:"expected"`
+		} `json:"counterexamples"`
+	}
+	if err := json.Unmarshal(repairFeedback, &feedback); err != nil {
+		t.Fatal(err)
+	}
+	if len(feedback.Counterexamples) == 0 {
+		t.Fatal("no supplied counterexamples")
+	}
+	for _, example := range feedback.Counterexamples {
+		t.Run(example.Family, func(t *testing.T) {
+			encoded, err := json.Marshal(handleLine(example.Request))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(encoded, &got); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, example.Expected) {
+				want, _ := json.Marshal(example.Expected)
+				t.Fatalf("got:  %s\nwant: %s", encoded, want)
+			}
+		})
+	}
+}
+
+func TestSignedAmountBoundaries(t *testing.T) {
+	cases := []struct {
+		amount string
+		wire   string
+	}{
+		{"0", "0000000000000000"},
+		{"1", "0100000000000000"},
+		{"-1", "ffffffffffffffff"},
+		{"-37", "dbffffffffffffff"},
+		{"9223372036854775807", "ffffffffffffff7f"},
+		{"-9223372036854775808", "0000000000000080"},
+	}
+	for _, example := range cases {
+		t.Run(example.amount, func(t *testing.T) {
+			tx := emptyFixture()
+			tx.Outputs = []outputJSON{{Amount: example.amount, Script: ""}}
+			// With no inputs, this is a legacy version, two counts, amount,
+			// empty script, and locktime. The amount bytes are literal fixtures.
+			wantBytes := "010000000001" + example.wire + "0000000000"
+			for _, includeWitness := range []bool{false, true} {
+				encoded := request(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": includeWitness})
+				expectStatus(t, encoded, "ok")
+				if encoded["bytes"] != wantBytes {
+					t.Fatalf("got %v, want %s", encoded, wantBytes)
+				}
+			}
+			for _, op := range []string{"decode_exact", "decode_prefix"} {
+				decoded := request(t, map[string]any{"op": op, "bytes": wantBytes, "offset": "0", "mode": "legacy"})
+				expectStatus(t, decoded, "ok")
+				if !reflect.DeepEqual(decoded["transaction"], tx) {
+					t.Fatalf("amount did not round trip: %v", decoded)
+				}
+			}
+			identified := request(t, map[string]any{"op": "identify", "transaction": tx})
+			expectStatus(t, identified, "ok")
+			if identified["full"] != wantBytes || identified["stripped"] != wantBytes {
+				t.Fatal(identified)
+			}
+		})
+	}
+	for _, amount := range []string{
+		"9223372036854775808", "-9223372036854775809", "18446744073709551615",
+		"", "-", "+37", "--37", "- 37", "-37 ", "-3.7", "1e3", "NaN",
+	} {
+		t.Run("invalid_"+amount, func(t *testing.T) {
+			tx := emptyFixture()
+			tx.Outputs = []outputJSON{{Amount: amount, Script: ""}}
+			for _, op := range []string{"serialize", "identify"} {
+				result := request(t, map[string]any{"op": op, "transaction": tx, "include_witness": false})
+				expectStatus(t, result, "invalid_request")
+			}
+		})
+	}
+	for _, amount := range []any{nil, -37, true} {
+		tx := map[string]any{"version_bits": "1", "locktime": "0", "inputs": []any{}, "outputs": []any{map[string]any{"amount": amount, "script": ""}}}
+		expectStatus(t, request(t, map[string]any{"op": "identify", "transaction": tx}), "invalid_request")
+	}
+}
+
+func TestTruncationBeforeCollectionLimits(t *testing.T) {
+	previous := strings.Repeat("00", 36)
+	input := previous + "00ffffffff"
+	witnessHeader := "01000000000101" + input + "00"
+	cases := []struct {
+		name, truncated, complete, mode, limit string
+	}{
+		{
+			"input_count", "0100000001", "0100000001" + input + "0000000000", "witness", "0",
+		},
+		{
+			"output_count", "010000000001", "01000000000100000000000000000000000000", "legacy", "0",
+		},
+		{
+			"input_script", "0100000001" + previous + "fa0000000000",
+			"0100000001" + previous + "020000ffffffff0000000000", "witness", "1",
+		},
+		{
+			"output_script", "01000000000100000000000000000200",
+			"010000000001000000000000000002000000000000", "legacy", "1",
+		},
+		{
+			"witness_stack", witnessHeader + "0200", witnessHeader + "02000000000000", "witness", "1",
+		},
+		{
+			"witness_item", witnessHeader + "010200", witnessHeader + "0102000000000000", "witness", "1",
+		},
+	}
+	for _, example := range cases {
+		t.Run(example.name, func(t *testing.T) {
+			for _, op := range []string{"decode_exact", "decode_prefix"} {
+				for _, complete := range []bool{false, true} {
+					wire, want := example.truncated, "malformed_encoding"
+					if complete {
+						wire, want = example.complete, "resource_limit"
+					}
+					r := map[string]any{"op": op, "bytes": wire, "offset": "0", "mode": example.mode, "limits": map[string]string{"max_items": example.limit}}
+					expectStatus(t, request(t, r), want)
+					if complete {
+						// Removing only the cap must make the complete case valid.
+						delete(r, "limits")
+						expectStatus(t, request(t, r), "ok")
+					}
+				}
+			}
+		})
+	}
+}

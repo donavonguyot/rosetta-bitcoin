@@ -1,0 +1,22 @@
+{
+  "schema": "rosettanode.substrate.submission_audit.v1",
+  "submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/initial/submission",
+  "language": "rust",
+  "fresh_build_exit": 0,
+  "fresh_build_seconds": 2.8015889590024017,
+  "input_binary_sha256": "b319cb9bb8c76ef09067d77f52bfd34df2b476636f94455f46ce0760bb927258",
+  "rebuilt_binary_sha256": "b319cb9bb8c76ef09067d77f52bfd34df2b476636f94455f46ce0760bb927258",
+  "dynamic_rocksdb": true,
+  "dynamic_common_adapter": true,
+  "c_write_symbol": true,
+  "forbidden_write_symbols": [],
+  "llvm_entrypoints": [
+    "rn_arena_create",
+    "rn_arena_data",
+    "rn_arena_destroy",
+    "rn_verify_v1"
+  ],
+  "source_review_required": true,
+  "logs": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/source-audits/188beefba48c403da4f888072ecb76f6",
+  "status": "passed"
+}

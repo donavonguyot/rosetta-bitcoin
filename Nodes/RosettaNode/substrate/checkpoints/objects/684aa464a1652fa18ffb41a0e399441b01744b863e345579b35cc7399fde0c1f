@@ -1,0 +1,42 @@
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func run() error {
+	if len(os.Args) != 3 {
+		return fmt.Errorf("usage: service DATADIR SOCKET_PATH")
+	}
+	s, err := openService(os.Args[1])
+	if err != nil {
+		return err
+	}
+	server, err := listenSocket(s, os.Args[2])
+	if err != nil {
+		s.db.Close()
+		return fmt.Errorf("listen: %w", err)
+	}
+	s.start()
+	select {
+	case <-s.fatal:
+		server.close()
+		// Do not wait on outstanding native work after a fatal failure. Returning
+		// exits the process; all acknowledged but unterminated jobs stay durable.
+		return s.failure
+	case <-s.drained:
+		server.close()
+		server.wg.Wait()
+		s.wg.Wait()
+		s.db.Close()
+		return nil
+	}
+}
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "service:", err)
+		os.Exit(1)
+	}
+}

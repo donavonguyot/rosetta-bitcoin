@@ -1,0 +1,167 @@
+"""ABI migration and persisted-priority checks; native oracles use the adapter."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+from support import BINARY, ROOT, ITEM, Native, NativeGate, Rocks, Service, inspect, pending, seed
+
+
+class MaintenanceTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix='maintenance-', dir=ROOT / 'tmp'))
+
+    def start(self, name='run', binary=BINARY, env=None):
+        service = Service(self.root, name, binary, env=env)
+        self.addCleanup(lambda: service.kill() if service.p.poll() is None else None)
+        return service
+
+    def test_v2_mixed_bitmap_and_offset_boundaries(self):
+        native = Native()
+        s = self.start()
+        batches = [[ITEM] * 64,
+                   [{**ITEM, 'hex': ''}] * 64,
+                   [ITEM if i in (0, 7, 31, 32, 63) else {**ITEM, 'hex': '00'} for i in range(64)],
+                   [{**ITEM, 'hex': ITEM['hex'] + 'aabb', 'operation': 'prefix'},
+                    {**ITEM, 'hex': ''}, ITEM,
+                    {**ITEM, 'hex': '00' * ((4 << 20) + 1)}]]
+        with s.connect() as cl:
+            for index, items in enumerate(batches):
+                expected = native.evaluate(items)
+                self.assertEqual(native.evaluate(items, version=2), expected)
+                self.assertEqual(cl.call('evaluate', items=items)['results'], expected)
+                self.assertEqual(cl.call('submit', id=f'bitmap_{index}', items=items,
+                                         priority='high')['status'], 'accepted')
+        s.stop()
+        _, jobs = inspect(s.db)
+        for index, items in enumerate(batches):
+            self.assertEqual(jobs[f'bitmap_{index}']['results'], native.evaluate(items))
+
+    def test_priority_validation_and_terminal_retries(self):
+        s = self.start()
+        with s.connect() as cl:
+            for invalid in ('', 'HIGH', 'low', None, 1, True, [], {}):
+                self.assertEqual(cl.call('submit', id='bad', items=[ITEM],
+                                         priority=invalid)['status'], 'invalid_request')
+            self.assertEqual(cl.call('evaluate', items=[ITEM], priority='high')['status'], 'invalid_request')
+            self.assertEqual(cl.call('submit', id='high', items=[ITEM], priority='high')['status'], 'accepted')
+            self.assertEqual(cl.call('submit', id='normal', items=[ITEM], priority='normal')['status'], 'accepted')
+            self.assertEqual(cl.call('submit', id='default', items=[ITEM])['status'], 'accepted')
+        s.stop()
+        rows, jobs = inspect(s.db)
+        self.assertEqual(rows['meta/sequence'], '3')
+        self.assertEqual(set(jobs), {'high', 'normal', 'default'})
+        s = self.start('restart')
+        with s.connect() as cl:
+            for ident in jobs:
+                for priority in ('normal', 'high'):
+                    self.assertEqual(cl.call('submit', id=ident, items=[ITEM], priority=priority)['status'], 'existing')
+                self.assertEqual(cl.call('submit', id=ident, items=[{**ITEM, 'hex': '00'}],
+                                         priority='high')['status'], 'conflict')
+        s.stop()
+
+    def test_mixed_priority_recovery_retry_and_crash(self):
+        original = seed(self.root / 'db', 1024, {1000, 1024})
+        changes = {}
+        for seq in range(1, 1025):
+            key = f'p/{seq:020d}'
+            job = json.loads(original[key])
+            if seq % 2 == 0:
+                job['priority'] = 'high'
+            elif seq % 3 == 0:
+                del job['priority']  # old records may rely on the normal default
+            changes[key] = json.dumps(job)
+        with Rocks(self.root / 'db') as db:
+            db.batch(changes)
+        s = self.start()
+        with s.connect() as cl:
+            for seq, expected, retry in ((1022, 'high', 'normal'), (1021, 'normal', 'high'), (1023, 'normal', 'high')):
+                self.assertEqual(cl.call('submit', id=f'seed_{seq}', items=[ITEM], priority=retry)['status'], 'existing')
+                self.assertEqual(cl.call('status', id=f'seed_{seq}')['job']['priority'], expected)
+            self.assertEqual(cl.call('cancel', id='seed_1022')['status'], 'ok')
+            self.assertEqual(cl.call('cancel', id='seed_1022')['status'], 'ok')
+            s.kill()
+        before, jobs = inspect(s.db)
+        self.assertIn('c/00000000000000001022', before)
+        for key, value in before.items():
+            if key.startswith('p/'):
+                self.assertEqual(value, changes[key])
+        s = self.start('restart')
+        s.stop()
+        after, jobs = inspect(s.db)
+        self.assertEqual(after['meta/checkpoint'], '1024')
+        for seq in (1000, 1022, 1024):
+            self.assertEqual(jobs[f'seed_{seq}']['state'], 'cancelled')
+        for key, value in before.items():
+            if key.startswith(('r/', 'id/')):
+                self.assertEqual(after[key], value)
+
+    def test_actual_v1_datadir_upgrade(self):
+        baseline = Path(os.environ.get('V1_SERVICE_BINARY', ROOT / 'tmp/predecessor/service')).resolve()
+        if not baseline.exists():
+            self.skipTest('set V1_SERVICE_BINARY to the retained predecessor executable')
+        seed(self.root / 'db', 1024, {1000, 1024})
+        old = self.start('v1', baseline)
+        with old.connect() as cl:
+            self.assertEqual(cl.call('cancel', id='seed_1023')['status'], 'ok')
+            old.kill()
+        before, _ = inspect(old.db)
+        self.assertGreater(int(before['meta/jobs']), 0)
+        self.assertGreater(int(before['meta/checkpoint']), 0)
+        self.assertIn('c/00000000000000001023', before)
+        s = self.start('v2')
+        s.stop()
+        after, jobs = inspect(s.db)
+        self.assertEqual(after['meta/checkpoint'], '1024')
+        self.assertEqual(after['meta/version'], '1')
+        for key, value in before.items():
+            if key.startswith(('r/', 'id/')):
+                self.assertEqual(after[key], value)
+        for seq in (1000, 1023, 1024):
+            self.assertEqual(jobs[f'seed_{seq}']['state'], 'cancelled')
+
+    def test_new_priority_admissions_are_durable_and_immutable(self):
+        seed(self.root / 'db', 512)
+        gate = NativeGate(self.root)
+        self.addCleanup(gate.release)
+        s = self.start(env=gate.env)
+        admitted = {}
+        with s.connect() as cl:
+            for ident, requested in (('new_high', 'high'), ('new_normal', 'normal'), ('new_default', None)):
+                fields = {} if requested is None else {'priority': requested}
+                ack = cl.call('submit', id=ident, items=[ITEM], **fields)
+                self.assertEqual(ack['status'], 'accepted')
+                admitted[ident] = ack['sequence']
+                self.assertEqual(cl.call('submit', id=ident, items=[ITEM],
+                                         priority='normal' if requested == 'high' else 'high')['status'], 'existing')
+                job = cl.call('status', id=ident)['job']
+                self.assertEqual(job['priority'], requested or 'normal')
+            self.assertEqual(cl.call('cancel', id='new_high')['status'], 'ok')
+            s.kill()
+        before, jobs = inspect(s.db)
+        for ident, sequence in admitted.items():
+            self.assertEqual(jobs[ident]['sequence'], sequence)
+            self.assertEqual(jobs[ident]['priority'], 'high' if ident == 'new_high' else 'normal')
+        s = self.start('restart')
+        s.stop()
+        _, jobs = inspect(s.db)
+        self.assertEqual(jobs['new_high']['state'], 'cancelled')
+        self.assertEqual(jobs['new_normal']['state'], 'complete')
+        self.assertEqual(jobs['new_default']['state'], 'complete')
+
+    def test_invalid_persisted_priority_never_rebuilds(self):
+        for index, invalid in enumerate(('urgent', '', None, 1)):
+            root = self.root / str(index)
+            root.mkdir()
+            seed(root / 'db', 2)
+            record = {**pending(2), 'priority': invalid}
+            with Rocks(root / 'db') as db:
+                db.batch({'p/00000000000000000002': json.dumps(record)})
+                before = db.rows()
+            proc = subprocess.run([str(BINARY), str(root / 'db'), str(root / 'sock')],
+                                  capture_output=True, timeout=10)
+            self.assertNotEqual(proc.returncode, 0)
+            with Rocks(root / 'db') as db:
+                self.assertEqual(db.rows(), before)

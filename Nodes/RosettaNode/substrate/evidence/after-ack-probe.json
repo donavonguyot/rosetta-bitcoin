@@ -1,0 +1,25 @@
+{
+  "schema": "rosettanode.substrate.after_ack_probe.v1",
+  "status": "passed",
+  "results": [
+    {
+      "cycle": 0,
+      "passed": true,
+      "checkpoint": "1",
+      "kill_after_observed_terminal_notification": true
+    },
+    {
+      "cycle": 1,
+      "passed": true,
+      "checkpoint": "2",
+      "kill_after_observed_terminal_notification": true
+    },
+    {
+      "cycle": 2,
+      "passed": true,
+      "checkpoint": "3",
+      "kill_after_observed_terminal_notification": true
+    }
+  ],
+  "candidate_launch_allowed": false
+}

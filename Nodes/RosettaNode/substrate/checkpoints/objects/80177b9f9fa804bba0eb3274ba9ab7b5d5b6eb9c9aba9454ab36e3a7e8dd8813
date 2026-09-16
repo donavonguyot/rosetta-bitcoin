@@ -1,0 +1,316 @@
+const std = @import("std");
+const app = @import("main.zig");
+const tx = @import("transaction.zig");
+const testing = std.testing;
+const Allocator = std.mem.Allocator;
+const Value = std.json.Value;
+
+const fixture =
+    \\{"version_bits":"2","inputs":[{"previous_txid_digest_order":"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f","previous_index":"1144201745","script":"00ff","sequence":"3721182122","witness":["","abcd"]}],"outputs":[{"amount":"578437695752307201","script":"51"}],"locktime":"1076895760"}
+;
+
+// Hand-assembled fields with distinct byte patterns expose endianness errors.
+const stripped_hex = "02000000" ++ "01" ++
+    "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f" ++
+    "11223344" ++ "02" ++ "00ff" ++ "aabbccdd" ++
+    "01" ++ "0102030405060708" ++ "01" ++ "51" ++ "10203040";
+const full_hex = "02000000" ++ "0001" ++ "01" ++
+    "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f" ++
+    "11223344" ++ "02" ++ "00ff" ++ "aabbccdd" ++
+    "01" ++ "0102030405060708" ++ "01" ++ "51" ++ "020002abcd" ++ "10203040";
+
+fn json(allocator: Allocator, text: []const u8) !Value {
+    return std.json.parseFromSliceLeaky(Value, allocator, text, .{});
+}
+
+fn response(allocator: Allocator, text: []const u8) !Value {
+    return json(allocator, app.handleLine(allocator, text));
+}
+
+fn status(value: Value, expected: []const u8) !void {
+    try testing.expectEqualStrings(expected, value.object.get("status").?.string);
+    if (!std.mem.eql(u8, expected, "ok")) try testing.expectEqual(@as(usize, 1), value.object.count());
+}
+
+fn bytes(allocator: Allocator, text: []const u8) ![]u8 {
+    const result = try allocator.alloc(u8, text.len / 2);
+    return std.fmt.hexToBytes(result, text);
+}
+
+fn decodeRequest(allocator: Allocator, data: []const u8, exact: bool, offset: u64, mode: []const u8, limit: u64) !Value {
+    const request = try std.json.Stringify.valueAlloc(allocator, .{
+        .op = if (exact) "decode_exact" else "decode_prefix",
+        .bytes = try std.fmt.allocPrint(allocator, "{x}", .{data}),
+        .offset = try std.fmt.allocPrint(allocator, "{d}", .{offset}),
+        .mode = mode,
+        .limits = .{ .max_items = try std.fmt.allocPrint(allocator, "{d}", .{limit}) },
+    }, .{});
+    return response(allocator, request);
+}
+
+test "serialize hand-assembled legacy and witness encodings" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const stripped = try response(allocator, "{\"op\":\"serialize\",\"include_witness\":false,\"transaction\":" ++ fixture ++ "}");
+    try status(stripped, "ok");
+    try testing.expectEqualStrings(stripped_hex, stripped.object.get("bytes").?.string);
+    const full = try response(allocator, "{\"op\":\"serialize\",\"include_witness\":true,\"transaction\":" ++ fixture ++ "}");
+    try status(full, "ok");
+    try testing.expectEqualStrings(full_hex, full.object.get("bytes").?.string);
+}
+
+test "decode field values, witness stacks, and both modes" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const full = try response(allocator, "{\"op\":\"decode_exact\",\"bytes\":\"" ++ full_hex ++ "\",\"mode\":\"witness\"}");
+    try status(full, "ok");
+    try testing.expectEqualStrings("70", full.object.get("consumed").?.string);
+    const actual = full.object.get("transaction").?;
+    const expected = try json(allocator, fixture);
+    try testing.expectEqualStrings(try std.json.Stringify.valueAlloc(allocator, expected, .{}), try std.json.Stringify.valueAlloc(allocator, actual, .{}));
+
+    inline for (.{ "legacy", "witness" }) |mode| {
+        const legacy = try response(allocator, "{\"op\":\"decode_exact\",\"bytes\":\"" ++ stripped_hex ++ "\",\"mode\":\"" ++ mode ++ "\"}");
+        try status(legacy, "ok");
+        try testing.expectEqualStrings("63", legacy.object.get("consumed").?.string);
+        const input = legacy.object.get("transaction").?.object.get("inputs").?.array.items[0];
+        try testing.expectEqual(@as(usize, 0), input.object.get("witness").?.array.items.len);
+    }
+}
+
+test "prefix offsets and exact trailing bytes" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const prefixed = try bytes(allocator, "aabbcc" ++ full_hex ++ "deadbeef");
+    const result = try decodeRequest(allocator, prefixed, false, 3, "witness", 1000);
+    try status(result, "ok");
+    try testing.expectEqualStrings("70", result.object.get("consumed").?.string);
+    try status(try decodeRequest(allocator, prefixed[3..], true, 0, "witness", 1000), "malformed_encoding");
+    try status(try decodeRequest(allocator, prefixed, false, prefixed.len + 1, "witness", 1000), "invalid_request");
+    try status(try decodeRequest(allocator, prefixed, false, prefixed.len, "witness", 1000), "malformed_encoding");
+}
+
+test "every truncated prefix fails without panicking" {
+    const cases = [_]struct { hex: []const u8, mode: tx.Mode }{
+        .{ .hex = stripped_hex, .mode = .legacy },
+        .{ .hex = stripped_hex, .mode = .witness },
+        .{ .hex = full_hex, .mode = .witness },
+    };
+    for (cases) |case| {
+        var arena = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        const encoded = try bytes(allocator, case.hex);
+        for (0..encoded.len) |len| {
+            try testing.expectError(error.MalformedEncoding, tx.decode(allocator, encoded[0..len], case.mode, .{}));
+        }
+    }
+}
+
+test "CompactSize canonical boundaries and byte-string limits" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const lengths = [_]usize{ 0, 1, 252, 253, 254, 65535, 65536 };
+    const prefixes = [_][]const u8{ "00", "01", "fc", "fdfd00", "fdfe00", "fdffff", "fe00000100" };
+    for (lengths, prefixes) |len, prefix_hex| {
+        const script = try allocator.alloc(u8, len);
+        @memset(script, 0x51);
+        var outputs = [_]tx.Output{.{ .amount = 1, .script = script }};
+        const transaction = tx.Transaction{ .version_bits = 1, .inputs = &.{}, .outputs = &outputs, .locktime = 0 };
+        const encoded = try tx.serialize(allocator, transaction, false, .{});
+        const prefix = try bytes(allocator, prefix_hex);
+        try testing.expectEqualSlices(u8, prefix, encoded[14..][0..prefix.len]);
+        const decoded = try tx.decode(allocator, encoded, .legacy, .{});
+        try testing.expectEqual(encoded.len, decoded.consumed);
+        try testing.expectEqualSlices(u8, script, decoded.transaction.outputs[0].script);
+        if (len != 0) {
+            try testing.expectError(error.ResourceLimit, tx.decode(allocator, encoded, .legacy, .{ .max_items = len - 1 }));
+            try testing.expectError(error.ResourceLimit, tx.serialize(allocator, transaction, false, .{ .max_items = len - 1 }));
+        }
+    }
+    const bad_lengths = [_][]const u8{ "fd0000", "fdfc00", "feffff0000", "ffffffffff00000000" };
+    for (bad_lengths) |length| {
+        const encoded = try bytes(allocator, try std.mem.concat(allocator, u8, &.{ "01000000", length, "0000000000" }));
+        try testing.expectError(error.MalformedEncoding, tx.decode(allocator, encoded, .legacy, .{}));
+    }
+}
+
+test "limits and huge declared counts are checked before allocation" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const encoded = try bytes(allocator, "01000000ffffffffffffffffff");
+    try testing.expectError(error.ResourceLimit, tx.decode(allocator, encoded, .legacy, .{ .max_items = 100 }));
+    try testing.expectError(error.MalformedEncoding, tx.decode(allocator, encoded, .legacy, .{}));
+    try status(try response(allocator, "{\"op\":\"serialize\",\"include_witness\":false,\"transaction\":" ++ fixture ++ ",\"limits\":{\"max_items\":\"1\"}}"), "resource_limit");
+    try status(try response(allocator, "{\"op\":\"identify\",\"transaction\":" ++ fixture ++ ",\"limits\":{\"max_items\":\"1\"}}"), "resource_limit");
+    try status(try response(allocator, "{\"op\":\"decode_exact\",\"bytes\":\"01000000000000000000\",\"mode\":\"witness\",\"limits\":{\"max_items\":\"0\"}}"), "ok");
+}
+
+test "unknown witness flags and superfluous witness records fail" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const encoded = try bytes(allocator, full_hex);
+    for ([_]u8{ 2, 3, 128, 255 }) |flag| {
+        const mutated = try allocator.dupe(u8, encoded);
+        mutated[5] = flag;
+        try testing.expectError(error.MalformedEncoding, tx.decode(allocator, mutated, .witness, .{}));
+    }
+    const superfluous = try std.mem.concat(allocator, u8, &.{ encoded[0..61], &.{0}, encoded[66..] });
+    try testing.expectError(error.MalformedEncoding, tx.decode(allocator, superfluous, .witness, .{}));
+    // A nonempty stack containing one empty byte string is a witness.
+    const empty_item = try std.mem.concat(allocator, u8, &.{ encoded[0..61], &.{ 1, 0 }, encoded[66..] });
+    const decoded = try tx.decode(allocator, empty_item, .witness, .{});
+    try testing.expect(decoded.transaction.hasWitness());
+    try testing.expectEqual(@as(usize, 1), decoded.transaction.inputs[0].witness.len);
+    try testing.expectEqual(@as(usize, 0), decoded.transaction.inputs[0].witness[0].len);
+}
+
+test "empty and mixed witness stacks serialize consistently" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const example = (try tx.decode(allocator, try bytes(allocator, full_hex), .witness, .{})).transaction;
+    var inputs = [_]tx.Input{ example.inputs[0], example.inputs[0] };
+    inputs[0].witness = &.{};
+    const transaction = tx.Transaction{ .version_bits = 2, .inputs = &inputs, .outputs = example.outputs, .locktime = 7 };
+    const encoded = try tx.serialize(allocator, transaction, true, .{});
+    const decoded = (try tx.decode(allocator, encoded, .witness, .{})).transaction;
+    try testing.expectEqual(@as(usize, 0), decoded.inputs[0].witness.len);
+    try testing.expectEqual(@as(usize, 2), decoded.inputs[1].witness.len);
+    inputs[1].witness = &.{};
+    try testing.expectEqualSlices(u8, try tx.serialize(allocator, transaction, false, .{}), try tx.serialize(allocator, transaction, true, .{}));
+}
+
+test "all unsigned integer bits survive serialization" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var inputs = [_]tx.Input{.{ .previous_txid_digest_order = @splat(255), .previous_index = std.math.maxInt(u32), .script = &.{}, .sequence = std.math.maxInt(u32), .witness = &.{} }};
+    var outputs = [_]tx.Output{.{ .amount = std.math.maxInt(u64), .script = &.{} }};
+    const original = tx.Transaction{ .version_bits = std.math.maxInt(u32), .inputs = &inputs, .outputs = &outputs, .locktime = std.math.maxInt(u32) };
+    const encoded = try tx.serialize(allocator, original, true, .{});
+    const value = (try tx.decode(allocator, encoded, .witness, .{})).transaction;
+    try testing.expectEqual(std.math.maxInt(u32), value.version_bits);
+    try testing.expectEqual(std.math.maxInt(u32), value.locktime);
+    try testing.expectEqual(std.math.maxInt(u32), value.inputs[0].previous_index);
+    try testing.expectEqual(std.math.maxInt(u32), value.inputs[0].sequence);
+    try testing.expectEqual(std.math.maxInt(u64), value.outputs[0].amount);
+    const result = try decodeRequest(allocator, encoded, true, 0, "witness", 1000);
+    try testing.expectEqualStrings("18446744073709551615", result.object.get("transaction").?.object.get("outputs").?.array.items[0].object.get("amount").?.string);
+}
+
+test "identify hashes the correct encodings and reverses display bytes" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const result = try response(allocator, "{\"op\":\"identify\",\"transaction\":" ++ fixture ++ "}");
+    try status(result, "ok");
+    try testing.expectEqualStrings(stripped_hex, result.object.get("stripped").?.string);
+    try testing.expectEqualStrings(full_hex, result.object.get("full").?.string);
+    try testing.expectEqualStrings("63", result.object.get("stripped_size").?.string);
+    try testing.expectEqualStrings("70", result.object.get("full_size").?.string);
+    const digest = try bytes(allocator, result.object.get("txid_digest_order").?.string);
+    const witness_digest = try bytes(allocator, result.object.get("wtxid_digest_order").?.string);
+    try testing.expect(!std.mem.eql(u8, digest, witness_digest));
+    const expected_digest = tx.hash256(try bytes(allocator, stripped_hex));
+    const expected_witness_digest = tx.hash256(try bytes(allocator, full_hex));
+    try testing.expectEqualSlices(u8, &expected_digest, digest);
+    try testing.expectEqualSlices(u8, &expected_witness_digest, witness_digest);
+    const display = try bytes(allocator, result.object.get("txid_display_order").?.string);
+    const witness_display = try bytes(allocator, result.object.get("wtxid_display_order").?.string);
+    for (digest, display, witness_digest, witness_display, 0..) |_, d, _, w, i| {
+        try testing.expectEqual(digest[31 - i], d);
+        try testing.expectEqual(witness_digest[31 - i], w);
+    }
+    const empty_digest = tx.hash256("");
+    try testing.expectEqualSlices(u8, try bytes(allocator, "5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456"), &empty_digest);
+}
+
+test "invalid JSON request shapes and decimal/hex syntax" {
+    const invalid = [_][]const u8{
+        "",                                                                                                                                                                    " ",                                                                                                                "null",                                                                            "[]",                                                                               "true",                                                                                              "{}",                                                                                     "{",                                                                                                                                                  "{} {}",
+        "{\"op\":42}",                                                                                                                                                         "{\"op\":\"bogus\"}",                                                                                               "{\"op\":\"decode_exact\",\"bytes\":\"\",\"mode\":\"other\"}",                     "{\"op\":\"decode_exact\",\"bytes\":\"0\",\"mode\":\"legacy\"}",                    "{\"op\":\"decode_exact\",\"bytes\":\"gg\",\"mode\":\"legacy\"}",                                    "{\"op\":\"decode_exact\",\"bytes\":\"0x00\",\"mode\":\"legacy\"}",                       "{\"op\":\"decode_exact\",\"bytes\":\"\",\"mode\":\"legacy\",\"limits\":null}",                                                                       "{\"op\":\"decode_exact\",\"bytes\":\"\",\"mode\":\"legacy\",\"limits\":{\"max_items\":0}}",
+        "{\"op\":\"decode_prefix\",\"bytes\":\"\",\"mode\":\"legacy\"}",                                                                                                       "{\"op\":\"decode_prefix\",\"bytes\":\"\",\"mode\":\"legacy\",\"offset\":\"-1\"}",                                  "{\"op\":\"decode_prefix\",\"bytes\":\"\",\"mode\":\"legacy\",\"offset\":\"+0\"}", "{\"op\":\"decode_prefix\",\"bytes\":\"\",\"mode\":\"legacy\",\"offset\":\"1_0\"}", "{\"op\":\"decode_prefix\",\"bytes\":\"\",\"mode\":\"legacy\",\"offset\":\"18446744073709551616\"}", "{\"op\":\"serialize\",\"include_witness\":\"false\",\"transaction\":" ++ fixture ++ "}", "{\"op\":\"serialize\",\"include_witness\":false,\"transaction\":{\"version_bits\":\"4294967296\",\"inputs\":[],\"outputs\":[],\"locktime\":\"0\"}}", "{\"op\":\"identify\",\"transaction\":{\"version_bits\":\"1\",\"inputs\":[],\"outputs\":[{\"amount\":\"-1\",\"script\":\"\"}],\"locktime\":\"0\"}}",
+        "{\"op\":\"identify\",\"transaction\":{\"version_bits\":\"1\",\"inputs\":[],\"outputs\":[{\"amount\":\"18446744073709551616\",\"script\":\"\"}],\"locktime\":\"0\"}}", "{\"op\":\"identify\",\"transaction\":{\"version_bits\":\"1\",\"inputs\":null,\"outputs\":[],\"locktime\":\"0\"}}",
+    };
+    for (invalid) |request| {
+        var arena = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+        try status(try response(arena.allocator(), request), "invalid_request");
+    }
+}
+
+test "empty transactions, leading zeros, extra fields, and no-witness identifiers" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const result = try response(allocator,
+        \\{"op":"identify","extra":1,"limits":{},"transaction":{"version_bits":"0001","inputs":[],"outputs":[],"locktime":"00"}}
+    );
+    try status(result, "ok");
+    try testing.expectEqualStrings("01000000000000000000", result.object.get("stripped").?.string);
+    try testing.expectEqualStrings(result.object.get("stripped").?.string, result.object.get("full").?.string);
+    try testing.expectEqualStrings(result.object.get("txid_digest_order").?.string, result.object.get("wtxid_digest_order").?.string);
+}
+
+test "deterministic random transactions round-trip in each applicable mode" {
+    var random = std.Random.DefaultPrng.init(0x4a534f4e);
+    const rng = random.random();
+    for (0..250) |_| {
+        var arena = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        const inputs = try allocator.alloc(tx.Input, rng.uintLessThan(usize, 6) + 1);
+        const outputs = try allocator.alloc(tx.Output, rng.uintLessThan(usize, 6));
+        for (inputs) |*input| {
+            rng.bytes(&input.previous_txid_digest_order);
+            input.previous_index = rng.int(u32);
+            input.sequence = rng.int(u32);
+            const script = try allocator.alloc(u8, rng.uintLessThan(usize, 300));
+            rng.bytes(script);
+            input.script = script;
+            const witness = try allocator.alloc([]const u8, rng.uintLessThan(usize, 4));
+            for (witness) |*item| {
+                const data = try allocator.alloc(u8, rng.uintLessThan(usize, 300));
+                rng.bytes(data);
+                item.* = data;
+            }
+            input.witness = witness;
+        }
+        for (outputs) |*output| {
+            output.amount = rng.int(u64);
+            const script = try allocator.alloc(u8, rng.uintLessThan(usize, 300));
+            rng.bytes(script);
+            output.script = script;
+        }
+        const original = tx.Transaction{ .version_bits = rng.int(u32), .inputs = inputs, .outputs = outputs, .locktime = rng.int(u32) };
+        inline for (.{ false, true }) |include_witness| {
+            const encoded = try tx.serialize(allocator, original, include_witness, .{});
+            const decoded = try tx.decode(allocator, encoded, if (include_witness) .witness else .legacy, .{});
+            try testing.expectEqual(encoded.len, decoded.consumed);
+            try testing.expectEqualSlices(u8, encoded, try tx.serialize(allocator, decoded.transaction, include_witness, .{}));
+            try testing.expectEqual(original.version_bits, decoded.transaction.version_bits);
+            try testing.expectEqual(original.locktime, decoded.transaction.locktime);
+            for (original.inputs, decoded.transaction.inputs) |a, b| {
+                try testing.expectEqualSlices(u8, &a.previous_txid_digest_order, &b.previous_txid_digest_order);
+                try testing.expectEqual(a.previous_index, b.previous_index);
+                try testing.expectEqual(a.sequence, b.sequence);
+                try testing.expectEqualSlices(u8, a.script, b.script);
+                if (include_witness) {
+                    try testing.expectEqual(a.witness.len, b.witness.len);
+                    for (a.witness, b.witness) |wa, wb| try testing.expectEqualSlices(u8, wa, wb);
+                } else try testing.expectEqual(@as(usize, 0), b.witness.len);
+            }
+            for (original.outputs, decoded.transaction.outputs) |a, b| {
+                try testing.expectEqual(a.amount, b.amount);
+                try testing.expectEqualSlices(u8, a.script, b.script);
+            }
+        }
+    }
+}

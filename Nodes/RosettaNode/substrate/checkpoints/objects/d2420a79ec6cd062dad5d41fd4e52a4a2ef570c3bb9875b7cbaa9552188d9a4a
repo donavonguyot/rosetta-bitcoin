@@ -1,0 +1,60 @@
+# RosettaNode encoding experiment
+
+This directory implements `decode_prefix`, `decode_exact`, `serialize`, and
+`identify` from the supplied `interface.md` and `packet.md`. It uses only the Go
+standard library and has no external module dependencies.
+
+Build and run:
+
+```sh
+go build -o rosettanode .
+./rosettanode
+```
+
+The program reads one JSON object per line from stdin, flushes one JSON response
+per line to stdout, and sends process diagnostics to stderr. A final line without
+a newline is accepted. Oversized lines are drained before reading the next
+request. Blank lines return `invalid_request`.
+
+Run the local tests:
+
+```sh
+go test ./...
+go vet ./...
+go test -run '^$' -fuzz '^FuzzDecode$' -fuzztime=10s -parallel=1 .
+```
+
+The tests include the supplied encoding/hash and prefix examples, hand-written
+witness encodings, CompactSize boundaries, signed amount bit patterns, error
+precedence, item and byte envelopes, line framing, constant-scratch scanning,
+and generated transaction round trips. The fuzz target checks that accepted
+prefixes reconstruct and malformed bytes do not cause execution failures.
+
+## Interpretations of unspecified details
+
+- Decimal strings use a canonical spelling: negative zero is rejected.
+- Optional fields may be absent; explicit `null` is rejected where a typed
+  value is required. Duplicate JSON keys use the last value, as in Go's JSON
+  decoder. Unknown fields in `limits` are ignored; transaction, input, and
+  output object field sets remain exact.
+- The structured byte pool includes all previous digests, scripts, and witness
+  payloads, even when witness serialization is disabled. Witness items also
+  count toward the structured item budget in that case. Ignored envelope
+  fields contribute only to the JSON text limit.
+- Admission applies to the entire byte suffix beginning at the prefix offset,
+  even when a shorter transaction could be decoded from that suffix. An
+  offset at the end of the byte string is allowed as a position, then decoding
+  returns `malformed_encoding` because no transaction remains.
+- JSON text transport limits are checked before parsing. After text parsing,
+  invalid typed fields and offsets precede byte-pool transport limits; byte
+  transport precedes admission and item limits. Structured field validation
+  completes before the byte-pool and item-budget verdicts. Decode scanning and
+  exact trailing-byte rejection precede the item-budget verdict, as required.
+- The serialized size cap applies to the requested serialization. Stripped
+  serialization can succeed when only the full encoding would exceed 4 MiB;
+  `identify` requires both encodings to fit.
+- Line-ending LF and optional CR are framing and do not count toward the
+  20 MiB JSON text limit.
+
+Only the supplied materials and local tests were used. No external sources,
+reference implementations, evaluator access, agents, or network tools were used.

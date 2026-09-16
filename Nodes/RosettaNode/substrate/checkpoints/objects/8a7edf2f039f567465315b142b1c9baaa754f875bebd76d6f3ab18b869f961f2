@@ -1,0 +1,503 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"math"
+	"math/rand"
+	"reflect"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+const fixtureBytes = "010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000"
+const fixtureDigest = "4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583"
+const fixtureDisplay = "8305c52ea6df05b120fb9aa774eb7ff9565dc6d0e291c07140da29ca35d45342"
+
+func unhex(t testing.TB, s string) []byte {
+	t.Helper()
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func call(t testing.TB, request any) response {
+	t.Helper()
+	b, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handleRequest(b)
+}
+
+func requireStatus(t testing.TB, got response, want string) {
+	t.Helper()
+	if got.Status != want {
+		t.Fatalf("status %q, want %q", got.Status, want)
+	}
+	if want != "ok" {
+		b, err := json.Marshal(got)
+		if err != nil || string(b) != `{"status":"`+want+`"}` {
+			t.Fatalf("error exposed extra fields: %s (%v)", b, err)
+		}
+	}
+}
+
+func decodeRequest(t testing.TB, encoded, mode string, exact bool, limit string) response {
+	t.Helper()
+	op := "decode_prefix"
+	if exact {
+		op = "decode_exact"
+	}
+	req := map[string]any{"op": op, "bytes": encoded, "mode": mode}
+	if limit != "" {
+		req["limits"] = map[string]any{"max_items": limit}
+	}
+	return call(t, req)
+}
+
+func basicJSON() *jsonTransaction {
+	return &jsonTransaction{
+		Version: "1", Locktime: "0",
+		Inputs:  []jsonInput{{Digest: strings.Repeat("00", 32), Index: "0", Script: "", Sequence: "4294967295", Witness: []string{}}},
+		Outputs: []jsonOutput{{Amount: "42", Script: "51"}},
+	}
+}
+
+func TestCompactSizeBoundaries(t *testing.T) {
+	cases := []struct {
+		value   uint64
+		encoded string
+	}{
+		{0, "00"}, {1, "01"}, {252, "fc"}, {253, "fdfd00"}, {254, "fdfe00"},
+		{65535, "fdffff"}, {65536, "fe00000100"}, {4294967295, "feffffffff"},
+		{4294967296, "ff0000000001000000"}, {math.MaxUint64, "ffffffffffffffffff"},
+	}
+	for _, tc := range cases {
+		t.Run(strconv.FormatUint(tc.value, 10), func(t *testing.T) {
+			encoded := unhex(t, tc.encoded)
+			if got := appendCompact(nil, tc.value); !bytes.Equal(got, encoded) {
+				t.Fatalf("encode %x, want %x", got, encoded)
+			}
+			data := append(append([]byte{7, 8}, encoded...), 9)
+			v, pos, ok := readCompact(data, 2)
+			if !ok || v != tc.value || pos != 2+len(encoded) {
+				t.Fatalf("decode: %d %d %v", v, pos, ok)
+			}
+			for n := 0; n < len(encoded); n++ {
+				_, pos, ok := readCompact(data[:2+n], 2)
+				if ok || pos != 2 {
+					t.Fatalf("truncation %d accepted or cursor changed", n)
+				}
+			}
+		})
+	}
+	for _, s := range []string{"fd0000", "fdfc00", "fe00000000", "fefd000000", "feffff0000", "ff0000010000000000", "ffffffffff00000000"} {
+		if _, next, ok := readCompact(unhex(t, s), 0); ok || next != 0 {
+			t.Fatalf("accepted noncanonical %s", s)
+		}
+	}
+}
+
+func TestSuppliedFixture(t *testing.T) {
+	tx := basicJSON()
+	for _, witness := range []bool{false, true} {
+		got := call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": witness})
+		requireStatus(t, got, "ok")
+		if got.Bytes != fixtureBytes {
+			t.Fatalf("serialization %s", got.Bytes)
+		}
+	}
+	for _, mode := range []string{"legacy", "witness"} {
+		got := decodeRequest(t, strings.ToUpper(fixtureBytes), mode, true, "")
+		requireStatus(t, got, "ok")
+		if got.Consumed != "61" || !reflect.DeepEqual(got.Transaction, tx) {
+			t.Fatalf("decode: %+v", got)
+		}
+	}
+	got := call(t, map[string]any{"op": "identify", "transaction": tx})
+	want := response{Status: "ok", Stripped: fixtureBytes, Full: fixtureBytes, StrippedSize: "61", FullSize: "61", TxIDDigest: fixtureDigest, TxIDDisplay: fixtureDisplay, WTxIDDigest: fixtureDigest, WTxIDDisplay: fixtureDisplay}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("identify: %+v", got)
+	}
+}
+
+func TestPrefixAndOffsets(t *testing.T) {
+	encoded := "05000000000044332211aa"
+	got := decodeRequest(t, encoded, "witness", false, "0")
+	requireStatus(t, got, "ok")
+	if got.Consumed != "10" || got.Transaction.Version != "5" || got.Transaction.Locktime != "287454020" || len(got.Transaction.Inputs) != 0 || len(got.Transaction.Outputs) != 0 {
+		t.Fatalf("prefix: %+v", got)
+	}
+	requireStatus(t, decodeRequest(t, encoded, "witness", true, "0"), "malformed_encoding")
+	got = call(t, map[string]any{"op": "decode_prefix", "bytes": "112233" + encoded, "offset": "3", "mode": "witness"})
+	requireStatus(t, got, "ok")
+	if got.Consumed != "10" {
+		t.Fatalf("consumption was not relative: %s", got.Consumed)
+	}
+	for _, offset := range []any{"-1", "12", "18446744073709551616", "01", "+0", 0, nil} {
+		got := call(t, map[string]any{"op": "decode_prefix", "bytes": encoded, "offset": offset, "mode": "witness"})
+		requireStatus(t, got, "invalid_request")
+	}
+	got = call(t, map[string]any{"op": "decode_prefix", "bytes": encoded, "offset": "11", "mode": "witness"})
+	requireStatus(t, got, "malformed_encoding")
+	got = call(t, map[string]any{"op": "decode_exact", "bytes": encoded[:20], "offset": false, "mode": "witness", "extra": []any{1, nil}})
+	requireStatus(t, got, "ok")
+}
+
+func TestWitnessStateMachine(t *testing.T) {
+	// Manually laid out: raw version bits, marker/flag, one minimum input,
+	// zero outputs, one witness stack containing a single empty item, locktime.
+	in := strings.Repeat("00", 36) + "00ffffffff"
+	base := "ffffffff000101" + in + "00"
+	valid := base + "0100" + "78563412"
+	got := decodeRequest(t, valid, "witness", true, "2")
+	requireStatus(t, got, "ok")
+	if got.Transaction.Version != "4294967295" || got.Transaction.Locktime != "305419896" || !reflect.DeepEqual(got.Transaction.Inputs[0].Witness, []string{""}) {
+		t.Fatalf("witness fields: %+v", got.Transaction)
+	}
+	full := call(t, map[string]any{"op": "serialize", "transaction": got.Transaction, "include_witness": true})
+	requireStatus(t, full, "ok")
+	if full.Bytes != valid {
+		t.Fatalf("full: %s", full.Bytes)
+	}
+	stripped := call(t, map[string]any{"op": "serialize", "transaction": got.Transaction, "include_witness": false})
+	if stripped.Bytes != "ffffffff01"+in+"0078563412" {
+		t.Fatalf("stripped: %s", stripped.Bytes)
+	}
+	ids := call(t, map[string]any{"op": "identify", "transaction": got.Transaction})
+	requireStatus(t, ids, "ok")
+	if ids.Full != valid || ids.Stripped != stripped.Bytes || ids.WTxIDDigest == ids.TxIDDigest || ids.FullSize != "55" || ids.StrippedSize != "51" {
+		t.Fatalf("witness identify: %+v", ids)
+	}
+	for _, bad := range []string{
+		base + "00" + "78563412",                 // All stacks have zero items.
+		"ffffffff0001000078563412",               // Witness flag with no inputs.
+		"ffffffff000201" + in + "0078563412",     // Unknown flag only.
+		"ffffffff000301" + in + "00010078563412", // Valid witness plus unknown flag.
+		base + "fd010000" + "78563412",           // Noncanonical stack count.
+		base + "01fd0000" + "78563412",           // Noncanonical item length.
+		base + "ffffffffffffffffff",              // Impossible item count.
+	} {
+		requireStatus(t, decodeRequest(t, bad, "witness", true, "0"), "malformed_encoding")
+	}
+	for n := 0; n < len(valid)/2; n++ {
+		requireStatus(t, decodeRequest(t, valid[:n*2], "witness", true, "0"), "malformed_encoding")
+	}
+	// In legacy mode, marker zero is an empty input count and flag one is
+	// an output count. Its prefix interpretation can succeed differently.
+	legacy := decodeRequest(t, valid, "legacy", false, "")
+	requireStatus(t, legacy, "ok")
+	if len(legacy.Transaction.Inputs) != 0 || len(legacy.Transaction.Outputs) != 1 || legacy.Consumed == got.Consumed {
+		t.Fatal("legacy mode treated marker as witness")
+	}
+}
+
+func TestIntegerBitsAndOpaqueScripts(t *testing.T) {
+	for _, amount := range []string{"-9223372036854775808", "9223372036854775807", "-1", "0"} {
+		tx := basicJSON()
+		tx.Version, tx.Locktime = "4294967295", "4294967295"
+		tx.Inputs[0].Index = "4294967295"
+		tx.Inputs[0].Script = "00ff80fe"
+		tx.Outputs[0] = jsonOutput{Amount: amount, Script: "ff0000aa"}
+		encoded := call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": false})
+		requireStatus(t, encoded, "ok")
+		decoded := decodeRequest(t, encoded.Bytes, "legacy", true, "")
+		requireStatus(t, decoded, "ok")
+		if !reflect.DeepEqual(decoded.Transaction, tx) {
+			t.Fatalf("integer/script roundtrip: %+v", decoded.Transaction)
+		}
+	}
+	// Explicit two's-complement amount bytes, independently written.
+	for _, tc := range []struct{ amount, encoded string }{
+		{"-9223372036854775808", "0000000000000080"},
+		{"9223372036854775807", "ffffffffffffff7f"},
+		{"-1", "ffffffffffffffff"},
+	} {
+		tx := &jsonTransaction{Version: "0", Inputs: []jsonInput{}, Outputs: []jsonOutput{{Amount: tc.amount, Script: ""}}, Locktime: "0"}
+		got := call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": false})
+		if got.Bytes != "000000000001"+tc.encoded+"0000000000" {
+			t.Fatalf("amount %s: %s", tc.amount, got.Bytes)
+		}
+	}
+}
+
+func TestDecodeBudgetAndMalformedPrecedence(t *testing.T) {
+	requireStatus(t, decodeRequest(t, fixtureBytes, "legacy", true, "1"), "resource_limit")
+	requireStatus(t, decodeRequest(t, fixtureBytes+"00", "legacy", true, "1"), "malformed_encoding")
+	requireStatus(t, decodeRequest(t, fixtureBytes+"00", "legacy", false, "1"), "resource_limit")
+	for n := 0; n < len(fixtureBytes)/2; n++ {
+		requireStatus(t, decodeRequest(t, fixtureBytes[:n*2], "legacy", true, "0"), "malformed_encoding")
+	}
+	for _, bad := range []string{
+		"00000000ffffffffffffffffff",                     // Impossible input count.
+		"0000000000ffffffffffffffffff",                   // Impossible output count.
+		"00000000fd0100" + fixtureBytes[10:],             // Noncanonical input count.
+		"0000000000010000000000000000ffffffffffffffffff", // Impossible script length.
+	} {
+		requireStatus(t, decodeRequest(t, bad, "legacy", true, "0"), "malformed_encoding")
+	}
+	for _, n := range []int{252, 253, 4096, 4097, 65535, 65536} {
+		// A zero-input legacy transaction of minimum-sized output records.
+		b := []byte{0, 0, 0, 0, 0}
+		b = appendCompact(b, uint64(n))
+		b = append(b, make([]byte, n*9+4)...)
+		want := "ok"
+		if n > defaultItems {
+			want = "resource_limit"
+		}
+		requireStatus(t, decodeRequest(t, hex.EncodeToString(b), "legacy", true, ""), want)
+		if n > defaultItems {
+			requireStatus(t, decodeRequest(t, hex.EncodeToString(b[:len(b)-1]), "legacy", true, ""), "malformed_encoding")
+		}
+	}
+}
+
+func TestInvalidRequestsAndExactFieldSets(t *testing.T) {
+	for _, raw := range []string{
+		``, `null`, `[]`, `{}`, `{"op":null}`, `{"op":"unknown"}`, `{} {}`,
+		`{"op":"decode_exact","bytes":""}`,
+		`{"op":"decode_exact","bytes":"","mode":"other"}`,
+		`{"op":"decode_exact","bytes":null,"mode":"legacy"}`,
+		`{"op":"decode_exact","bytes":"0","mode":"legacy"}`,
+		`{"op":"decode_exact","bytes":"gg","mode":"legacy"}`,
+		`{"op":"decode_exact","bytes":"00 00","mode":"legacy"}`,
+		`{"op":"decode_exact","bytes":"","mode":"legacy","limits":null}`,
+		`{"op":"decode_exact","bytes":"","mode":"legacy","limits":{"max_items":"4097"}}`,
+		`{"op":"decode_exact","bytes":"","mode":"legacy","limits":{"max_items":1}}`,
+		`{"op":"decode_exact","bytes":"","mode":"legacy","limits":{"max_items":"-1"}}`,
+		`{"op":"serialize","transaction":null,"include_witness":false}`,
+		`{"op":"serialize","transaction":{"version_bits":"1","inputs":[],"outputs":[],"locktime":"0"}}`,
+	} {
+		requireStatus(t, handleRequest([]byte(raw)), "invalid_request")
+	}
+	for _, field := range []string{"version_bits", "inputs", "outputs", "locktime"} {
+		b, _ := json.Marshal(basicJSON())
+		var tx map[string]any
+		if err := json.Unmarshal(b, &tx); err != nil {
+			t.Fatal(err)
+		}
+		delete(tx, field)
+		requireStatus(t, call(t, map[string]any{"op": "identify", "transaction": tx}), "invalid_request")
+	}
+	for _, mutate := range []func(map[string]any){
+		func(tx map[string]any) { tx["extra"] = 0 },
+		func(tx map[string]any) { tx["inputs"] = nil },
+		func(tx map[string]any) { tx["outputs"] = map[string]any{} },
+		func(tx map[string]any) { tx["version_bits"] = "4294967296" },
+		func(tx map[string]any) { tx["locktime"] = "-1" },
+		func(tx map[string]any) { tx["inputs"].([]any)[0].(map[string]any)["extra"] = "" },
+		func(tx map[string]any) { tx["inputs"].([]any)[0].(map[string]any)["witness"] = nil },
+		func(tx map[string]any) { tx["inputs"].([]any)[0].(map[string]any)["witness"] = []any{nil} },
+		func(tx map[string]any) { tx["inputs"].([]any)[0].(map[string]any)["previous_txid_digest_order"] = "00" },
+		func(tx map[string]any) { tx["inputs"].([]any)[0].(map[string]any)["previous_index"] = 0 },
+		func(tx map[string]any) { tx["inputs"].([]any)[0].(map[string]any)["sequence"] = "4294967296" },
+		func(tx map[string]any) { tx["outputs"].([]any)[0].(map[string]any)["extra"] = "" },
+		func(tx map[string]any) { tx["outputs"].([]any)[0].(map[string]any)["amount"] = "9223372036854775808" },
+		func(tx map[string]any) { tx["outputs"].([]any)[0].(map[string]any)["amount"] = "-9223372036854775809" },
+		func(tx map[string]any) { tx["outputs"].([]any)[0].(map[string]any)["script"] = false },
+	} {
+		b, _ := json.Marshal(basicJSON())
+		var tx map[string]any
+		if err := json.Unmarshal(b, &tx); err != nil {
+			t.Fatal(err)
+		}
+		mutate(tx)
+		// A lowered budget must not hide invalid structured fields.
+		requireStatus(t, call(t, map[string]any{"op": "identify", "transaction": tx, "limits": map[string]any{"max_items": "0"}}), "invalid_request")
+	}
+	for _, value := range []string{"", "00", "01", "+1", "-0", "-00", " 1", "1 ", "1.0", "1e0", "١"} {
+		tx := basicJSON()
+		tx.Outputs[0].Amount = value
+		requireStatus(t, call(t, map[string]any{"op": "identify", "transaction": tx}), "invalid_request")
+	}
+}
+
+func TestStructuredBudget(t *testing.T) {
+	tx := basicJSON()
+	tx.Inputs[0].Witness = []string{""}
+	for _, include := range []bool{false, true} {
+		requireStatus(t, call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": include, "limits": map[string]any{"max_items": "2"}}), "resource_limit")
+		requireStatus(t, call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": include, "limits": map[string]any{"max_items": "3"}}), "ok")
+	}
+	tx.Inputs[0].Witness = make([]string, defaultItems+1)
+	tx.Inputs[0].Witness[defaultItems] = "gg"
+	requireStatus(t, call(t, map[string]any{"op": "identify", "transaction": tx}), "invalid_request")
+	tx.Inputs[0].Witness[defaultItems] = ""
+	requireStatus(t, call(t, map[string]any{"op": "identify", "transaction": tx}), "resource_limit")
+	tx = &jsonTransaction{Version: "1", Locktime: "0", Inputs: []jsonInput{}, Outputs: []jsonOutput{}}
+	got := call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": true, "limits": map[string]any{"max_items": "0"}})
+	requireStatus(t, got, "ok")
+	if got.Bytes != "01000000000000000000" {
+		t.Fatal(got.Bytes)
+	}
+	// Empty inputs with an output are serializable, even though witness-mode
+	// decoding treats the output count as flags and can reject the result.
+	tx.Outputs = []jsonOutput{{Amount: "0", Script: ""}}
+	got = call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": true})
+	requireStatus(t, got, "ok")
+	requireStatus(t, decodeRequest(t, got.Bytes, "legacy", true, ""), "ok")
+	requireStatus(t, decodeRequest(t, got.Bytes, "witness", true, ""), "malformed_encoding")
+}
+
+func TestSizeEnvelopes(t *testing.T) {
+	tx := basicJSON()
+	tx.Outputs = []jsonOutput{}
+	tx.Inputs[0].Script = strings.Repeat("00", admissionBytes-55)
+	got := call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": false})
+	requireStatus(t, got, "ok")
+	if len(got.Bytes)/2 != admissionBytes {
+		t.Fatal("wrong boundary size")
+	}
+	requireStatus(t, decodeRequest(t, got.Bytes, "legacy", true, ""), "ok")
+	requireStatus(t, decodeRequest(t, got.Bytes+"00", "legacy", false, ""), "admission_limit")
+	tx.Inputs[0].Script += "00"
+	requireStatus(t, call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": false}), "resource_limit")
+	tx.Inputs[0].Script = ""
+	tx.Inputs[0].Witness = []string{strings.Repeat("00", admissionBytes-59)}
+	got = call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": true})
+	requireStatus(t, got, "ok")
+	if len(got.Bytes)/2 != admissionBytes {
+		t.Fatal("wrong witness boundary size")
+	}
+	requireStatus(t, decodeRequest(t, got.Bytes, "witness", true, ""), "ok")
+	tx.Inputs[0].Witness[0] += "00"
+	requireStatus(t, call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": true}), "resource_limit")
+	requireStatus(t, call(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": false}), "ok")
+	requireStatus(t, call(t, map[string]any{"op": "identify", "transaction": tx}), "resource_limit")
+	// Admission is measured over the suffix, transport over all request bytes.
+	large := strings.Repeat("00", transportBytes-61) + fixtureBytes
+	got = call(t, map[string]any{"op": "decode_prefix", "bytes": large, "offset": strconv.Itoa(transportBytes - 61), "mode": "legacy"})
+	requireStatus(t, got, "ok")
+	if got.Consumed != "61" {
+		t.Fatal(got.Consumed)
+	}
+	requireStatus(t, decodeRequest(t, large, "legacy", false, ""), "admission_limit")
+	requireStatus(t, decodeRequest(t, large+"00", "legacy", false, ""), "transport_limit")
+	tx.Inputs[0].Witness = []string{}
+	tx.Inputs[0].Script = strings.Repeat("00", transportBytes-32)
+	requireStatus(t, call(t, map[string]any{"op": "identify", "transaction": tx}), "resource_limit")
+	tx.Inputs[0].Script += "00"
+	requireStatus(t, call(t, map[string]any{"op": "identify", "transaction": tx}), "transport_limit")
+}
+
+func TestJSONLinesAndTextLimit(t *testing.T) {
+	valid := `{"op":"decode_exact","mode":"legacy","bytes":"` + fixtureBytes + `"}`
+	var output bytes.Buffer
+	input := "{}\n\n" + valid + "\r\n" + strings.Repeat(" ", transportText+1) + "\n" + valid
+	if err := run(strings.NewReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+	d := json.NewDecoder(&output)
+	for _, want := range []string{"invalid_request", "invalid_request", "ok", "transport_limit", "ok"} {
+		var got response
+		if err := d.Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		requireStatus(t, got, want)
+	}
+	var extra any
+	if err := d.Decode(&extra); err != io.EOF {
+		t.Fatalf("extra response: %v", err)
+	}
+	// Exactly 20 MiB is allowed, including when CRLF is used for framing.
+	padding := strings.Repeat(" ", transportText-len(valid))
+	for _, suffix := range []string{"\n", "\r\n", ""} {
+		r := bufio.NewReaderSize(io.MultiReader(strings.NewReader(valid), strings.NewReader(padding), strings.NewReader(suffix)), 97)
+		line, tooLong, err := readLimitedLine(r)
+		if err != nil || tooLong || len(line) != transportText {
+			t.Fatalf("text boundary: %d %v %v", len(line), tooLong, err)
+		}
+		requireStatus(t, handleRequest(line), "ok")
+		if _, _, err = readLimitedLine(r); err != io.EOF {
+			t.Fatalf("expected EOF: %v", err)
+		}
+	}
+}
+
+func TestScanConstantScratch(t *testing.T) {
+	small := unhex(t, fixtureBytes)
+	large := []byte{0, 0, 0, 0, 0}
+	large = appendCompact(large, 100000)
+	large = append(large, make([]byte, 100000*9+4)...)
+	first := testing.AllocsPerRun(10, func() { walkTransaction(small, false, false) })
+	second := testing.AllocsPerRun(10, func() { walkTransaction(large, false, false) })
+	if first != 0 || second != 0 {
+		t.Fatalf("scan allocations: small=%g large=%g", first, second)
+	}
+}
+
+func TestDeterministicRoundTrips(t *testing.T) {
+	rng := rand.New(rand.NewSource(20260916))
+	blob := func(n int) []byte { b := make([]byte, n); _, _ = rng.Read(b); return b }
+	for iteration := 0; iteration < 300; iteration++ {
+		tx := transaction{version: rng.Uint32(), locktime: rng.Uint32()}
+		for i, n := 0, 1+rng.Intn(4); i < n; i++ {
+			in := txInput{digest: blob(32), index: rng.Uint32(), script: blob(rng.Intn(300)), sequence: rng.Uint32()}
+			for j, n := 0, rng.Intn(4); j < n; j++ {
+				in.witness = append(in.witness, blob(rng.Intn(300)))
+			}
+			tx.inputs = append(tx.inputs, in)
+		}
+		for i, n := 0, rng.Intn(4); i < n; i++ {
+			tx.outputs = append(tx.outputs, txOutput{amount: int64(rng.Uint64()), script: blob(rng.Intn(300))})
+		}
+		for _, witness := range []bool{false, true} {
+			encoded := serialize(&tx, witness)
+			decoded, consumed := decode(encoded, 0, witness, true, defaultItems)
+			if consumed != len(encoded) || !bytes.Equal(serialize(&decoded, witness), encoded) {
+				t.Fatalf("wire roundtrip %d", iteration)
+			}
+			want := tx.jsonObject()
+			if !witness {
+				for i := range want.Inputs {
+					want.Inputs[i].Witness = []string{}
+				}
+			}
+			if !reflect.DeepEqual(want, decoded.jsonObject()) {
+				t.Fatalf("field roundtrip %d", iteration)
+			}
+			got := call(t, map[string]any{"op": "serialize", "transaction": tx.jsonObject(), "include_witness": witness})
+			requireStatus(t, got, "ok")
+			if got.Bytes != hex.EncodeToString(encoded) {
+				t.Fatalf("structured roundtrip %d", iteration)
+			}
+		}
+	}
+}
+
+func FuzzDecode(f *testing.F) {
+	f.Add(unhex(f, fixtureBytes), false)
+	f.Add(unhex(f, "05000000000044332211aa"), true)
+	f.Add([]byte{}, false)
+	f.Fuzz(func(t *testing.T, data []byte, witness bool) {
+		if len(data) > admissionBytes {
+			t.Skip()
+		}
+		mode := "legacy"
+		if witness {
+			mode = "witness"
+		}
+		got := decodeRequest(t, hex.EncodeToString(data), mode, false, "")
+		switch got.Status {
+		case "ok":
+			encoded := call(t, map[string]any{"op": "serialize", "transaction": got.Transaction, "include_witness": witness})
+			requireStatus(t, encoded, "ok")
+			n, err := strconv.Atoi(got.Consumed)
+			if err != nil || n > len(data) || encoded.Bytes != hex.EncodeToString(data[:n]) {
+				t.Fatalf("accepted prefix did not reconstruct: %+v", got)
+			}
+		case "malformed_encoding", "resource_limit":
+			requireStatus(t, got, got.Status)
+		default:
+			t.Fatal(fmt.Sprintf("unexpected decode status %q", got.Status))
+		}
+	})
+}

@@ -1,0 +1,96 @@
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+
+from support import ROOT, ITEM, Service, inspect, seed
+
+class InjectedFailures(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix='v1-fault-', dir=ROOT / 'tmp'))
+        self.services = []
+
+    def tearDown(self):
+        for s in self.services:
+            if s.p.poll() is None:
+                s.kill()
+
+    def start(self, fault=None, name='run'):
+        env = os.environ.copy()
+        if fault:
+            env['LD_PRELOAD'] = str(ROOT / 'tmp/inject_failures.so')
+            env['TRIAL_TEST_FAULT'] = fault
+        s = Service(self.root, name, env=env)
+        self.services.append(s)
+        return s
+
+    def failed(self, s):
+        self.assertNotEqual(s.p.wait(timeout=10), 0)
+        s.log.close()
+        self.assertIn('fatal', s.log_path.read_text())
+
+    def test_evaluate_arena_failure_is_json_and_service_survives(self):
+        s = self.start('arena')
+        with s.connect() as cl:
+            self.assertEqual(cl.call('evaluate', items=[ITEM])['status'], 'execution_failure')
+            self.assertEqual(cl.call('evaluate', items=[ITEM])['status'], 'ok')
+        s.stop()
+        rows, _ = inspect(s.db)
+        self.assertEqual(rows['meta/sequence'], '0')
+
+    def test_persistent_arena_failure_keeps_acknowledged_pending(self):
+        s = self.start('arena')
+        with s.connect() as cl:
+            self.assertEqual(cl.call('submit', id='arena', items=[ITEM])['status'], 'accepted')
+        self.failed(s)
+        rows, jobs = inspect(s.db)
+        self.assertEqual(rows['meta/checkpoint'], '0')
+        self.assertIn('items', jobs['arena'])
+        s = self.start(name='restart')
+        s.stop()
+        _, jobs = inspect(s.db)
+        self.assertEqual(jobs['arena']['state'], 'complete')
+
+    def test_admission_write_failure_returns_json_without_admission(self):
+        s = self.start('admission')
+        with s.connect() as cl:
+            self.assertEqual(cl.call('submit', id='write', items=[ITEM])['status'], 'execution_failure')
+        self.failed(s)
+        rows, jobs = inspect(s.db)
+        self.assertEqual(rows['meta/sequence'], '0')
+        self.assertEqual(jobs, {})
+
+    def test_terminal_write_failure_keeps_pending_and_no_receipt(self):
+        s = self.start('terminal')
+        with s.connect() as cl:
+            self.assertEqual(cl.call('submit', id='terminal', items=[ITEM])['status'], 'accepted')
+            self.assertEqual(cl.f.readline(), b'')
+        self.failed(s)
+        rows, jobs = inspect(s.db)
+        self.assertEqual(rows['meta/checkpoint'], '0')
+        self.assertIn('items', jobs['terminal'])
+        s = self.start(name='restart')
+        s.stop()
+        _, jobs = inspect(s.db)
+        self.assertEqual(jobs['terminal']['state'], 'complete')
+
+    def test_cancellation_write_failure_never_acknowledges_intent(self):
+        seed(self.root / 'db', 1024)
+        s = self.start('cancellation')
+        with s.connect() as cl:
+            cl.send({'request':'cancel', 'op':'cancel', 'id':'seed_1024'})
+            raw = cl.f.readline()
+            if raw:
+                response = json.loads(raw)
+                self.assertNotEqual(response.get('status'), 'ok')
+        self.failed(s)
+        rows, _ = inspect(s.db)
+        self.assertNotIn('c/00000000000000001024', rows)
+        s = self.start(name='restart')
+        s.stop()
+        _, jobs = inspect(s.db)
+        self.assertEqual(jobs['seed_1024']['state'], 'complete')
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

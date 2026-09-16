@@ -1,0 +1,22 @@
+{
+  "schema": "rosettanode.substrate.submission_audit.v1",
+  "submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/go-2/initial/submission",
+  "language": "go",
+  "fresh_build_exit": 0,
+  "fresh_build_seconds": 2.562200083004427,
+  "input_binary_sha256": "9457f32f062ad0b86dfbef30c90b1f0c4be1e4cfff2c7eb6c3a18fc8c35e8817",
+  "rebuilt_binary_sha256": "9457f32f062ad0b86dfbef30c90b1f0c4be1e4cfff2c7eb6c3a18fc8c35e8817",
+  "dynamic_rocksdb": true,
+  "dynamic_common_adapter": true,
+  "c_write_symbol": true,
+  "forbidden_write_symbols": [],
+  "llvm_entrypoints": [
+    "rn_arena_create",
+    "rn_arena_data",
+    "rn_arena_destroy",
+    "rn_verify_v1"
+  ],
+  "source_review_required": true,
+  "logs": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/source-audits/9515560531de42d2824974f1be490747",
+  "status": "passed"
+}

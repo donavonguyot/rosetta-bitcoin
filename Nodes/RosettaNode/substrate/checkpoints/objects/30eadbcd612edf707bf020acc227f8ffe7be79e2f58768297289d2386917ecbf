@@ -1,0 +1,103 @@
+# Independent RosettaNode implementation
+
+The program implements the four operations in `interface.md`, using only the Go
+standard library. Source files are `main.go` and `transaction.go`. Requests and
+responses are JSON lines on stdin/stdout; diagnostics use stderr.
+
+Build and run without a module:
+
+```sh
+GO111MODULE=off GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go build -o tmp/rosettanode .
+./tmp/rosettanode
+```
+
+Run the independent tests:
+
+```sh
+GO111MODULE=off GOPROXY=off GOSUMDB=off go test -count=1 -cover ./...
+GO111MODULE=off GOPROXY=off GOSUMDB=off go vet ./...
+GO111MODULE=off GOPROXY=off GOSUMDB=off go test -run='^$' -fuzz='^FuzzDecode$' -fuzztime=15s -parallel=2
+GO111MODULE=off GOPROXY=off GOSUMDB=off go test -run='^$' -fuzz='^FuzzRequests$' -fuzztime=15s -parallel=2
+```
+
+## Assumptions where the supplied interface is ambiguous
+
+These are implementation choices, not additional supplied specifications.
+
+- Wire integers are little-endian. `version_bits`, `previous_index`, `sequence`,
+  and `locktime` are unsigned 32-bit values. `amount` is signed 64-bit, represented
+  on the wire in two's complement. Amounts are not checked against Bitcoin's
+  monetary supply. No script execution, coinbase validation, or other transaction
+  validity rules are applied.
+- Counts and variable byte lengths use canonical CompactSize encoding. Nonminimal
+  forms, truncation, and trailing bytes for `decode_exact` are malformed encodings.
+- `offset` is a byte offset and is required for `decode_prefix`. `consumed` is a
+  byte count relative to that offset. An offset outside the input is an invalid
+  request; an in-range offset with insufficient remaining bytes is malformed.
+- Legacy mode reads the legacy layout literally. Witness mode also accepts legacy
+  transactions with nonzero input counts. An initial zero input count introduces
+  the witness flag byte: zero denotes empty input/output vectors; one introduces
+  the extended layout. Unknown flag bits and extended encodings with all-empty
+  witness stacks are rejected. Consequently, zero-input legacy transactions with
+  outputs are not guaranteed to decode in witness mode.
+- Witness serialization emits marker `00` and flag `01` only when requested and at
+  least one input has a nonempty witness stack. A stack containing an empty byte
+  string counts as nonempty. Every input has its own stack in the extended layout.
+  `include_witness:false` omits all witness data.
+- Identification hashes the stripped/full encodings with double SHA-256. Display
+  order reverses the digest bytes. Without witness, both encodings and IDs match.
+- `max_items` is an unsigned 64-bit per-container bound, inclusive: input count,
+  output count, each script's byte length, each witness stack's item count, and
+  each witness item's byte length. Fixed-width fields and the complete wire byte
+  string do not count as containers. There is no cumulative item limit. Omitted
+  limits impose no logical item bound; zero allows empty containers. Serialization
+  validates all transaction containers, including witness data when stripping it.
+- All named request/transaction fields are required except `limits` and its
+  `max_items` property. Unknown JSON members are ignored; duplicate members use
+  their final value, as in Go's JSON decoder. Null is not a substitute for an
+  object, array, string, or boolean. Integers must be strings of ASCII decimal
+  digits, with an optional minus sign only for amounts. Leading zeros are accepted;
+  plus signs, surrounding whitespace, exponents, and hexadecimal integers are not.
+- Hexadecimal strings accept either letter case, but no `0x` prefix or whitespace;
+  they must have even length. Responses use lowercase hex, normalized decimal
+  strings, and empty arrays rather than null.
+- Blank lines, invalid JSON, bad field types, invalid hex, and out-of-range JSON
+  integers produce `invalid_request`. Invalid wire data produces
+  `malformed_encoding`. Decoding validates the complete transaction encoding
+  before reporting `resource_limit` for a count exceeding `max_items`. This
+  includes exact-consumption checks for `decode_exact`; suffix bytes remain
+  irrelevant to `decode_prefix`. The validation pass does not allocate transaction
+  vectors, and the materialization pass runs only after structure and item limits
+  pass. For request-shape errors, validation order determines the returned status.
+- An input line exceeding 64 MiB, excluding its newline, produces `transport_limit`
+  and is drained before reading the next request. A 128 MiB estimated allocation
+  budget for transaction/vector metadata produces `admission_limit`; this budget
+  is independent of `max_items` and is not a total process-memory ceiling.
+  Unexpected recoverable execution panics produce `execution_failure`.
+- CRLF and a final nonempty line without a newline are accepted. Each request is
+  independent and its response is flushed immediately, including after errors.
+
+## Validation
+
+The tests include manually constructed legacy and witness wire fixtures; all
+truncations of both fixtures; CompactSize boundaries and noncanonical encodings;
+numeric boundaries; witness marker and stack rules; limits for every container;
+prefix offsets and exact consumption; hash/order and witness-mutation checks;
+500 deterministic randomized transaction round trips; scripts and counts crossing
+CompactSize boundaries; JSON-lines framing and recovery; and parser/request fuzz
+targets. The separate repair phase adds the supplied minimized counterexample
+and regressions for malformed-encoding precedence under restrictive limits.
+No external sources, reference implementations, or evaluator access were used.
+
+## Separate repair phase
+
+`feedback.json` supplies one counterexample: `decode_exact` of `ff02525101` in
+witness mode with `max_items: "0"` must return `malformed_encoding`. It declares
+one input but contains no input payload. The original implementation returned
+`resource_limit` upon reading the count. The repair defers item-limit errors until
+structural validation finishes, without allocating the declared vectors first.
+
+The example establishes precedence for this truncation. Applying the same order
+to other truncations, noncanonical fields, invalid witness framing, and exact
+decoding with trailing bytes is a consistent generalization; those additional
+cases are local regression tests, not additional supplied expected results.

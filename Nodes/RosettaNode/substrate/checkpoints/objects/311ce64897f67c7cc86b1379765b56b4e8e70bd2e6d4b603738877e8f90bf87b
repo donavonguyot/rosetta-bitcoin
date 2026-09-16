@@ -1,0 +1,137 @@
+use crate::protocol::Priority;
+use std::collections::VecDeque;
+
+// Only the state owner touches these queues. The cycle counts dispatches made
+// while both queues are nonempty; single-priority intervals preserve its phase.
+pub struct Scheduler<T> {
+    high: VecDeque<T>,
+    normal: VecDeque<T>,
+    phase: u8,
+}
+
+impl<T> Scheduler<T> {
+    pub fn new() -> Self {
+        Self {
+            high: VecDeque::new(),
+            normal: VecDeque::new(),
+            phase: 0,
+        }
+    }
+
+    pub fn push(&mut self, priority: Priority, item: T) {
+        match priority {
+            Priority::High => &mut self.high,
+            Priority::Normal => &mut self.normal,
+        }
+        .push_back(item);
+    }
+
+    pub fn pop(&mut self) -> Option<T> {
+        match (self.high.is_empty(), self.normal.is_empty()) {
+            (false, false) => {
+                let queue = if self.phase == 3 {
+                    &mut self.normal
+                } else {
+                    &mut self.high
+                };
+                self.phase = (self.phase + 1) % 4;
+                queue.pop_front()
+            }
+            (false, true) => self.high.pop_front(),
+            (_, _) => self.normal.pop_front(),
+        }
+    }
+
+    pub fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
+        self.high.retain(&mut keep);
+        self.normal.retain(keep);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.high.is_empty() && self.normal.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use Priority::{High, Normal};
+
+    #[test]
+    fn weighted_dispatch_is_fifo_and_work_conserving() {
+        let mut q = Scheduler::new();
+        for i in 0..12 {
+            q.push(Normal, (Normal, i));
+            q.push(High, (High, i));
+        }
+        let expected = [
+            (High, 0),
+            (High, 1),
+            (High, 2),
+            (Normal, 0),
+            (High, 3),
+            (High, 4),
+            (High, 5),
+            (Normal, 1),
+            (High, 6),
+            (High, 7),
+            (High, 8),
+            (Normal, 2),
+            (High, 9),
+            (High, 10),
+            (High, 11),
+        ];
+        for item in expected {
+            assert_eq!(q.pop(), Some(item));
+        }
+        for i in 3..12 {
+            assert_eq!(q.pop(), Some((Normal, i)));
+        }
+        assert!(q.is_empty());
+        assert_eq!(q.pop(), None);
+    }
+
+    #[test]
+    fn every_phase_survives_single_queue_and_empty_intervals() {
+        for phase in 0..4 {
+            for single in [High, Normal] {
+                let mut q = Scheduler::new();
+                q.push(Normal, Normal);
+                for _ in 0..phase {
+                    q.push(High, High);
+                    assert_eq!(q.pop(), Some(High));
+                }
+                q.retain(|_| false);
+                assert_eq!(q.pop(), None);
+                for _ in 0..7 {
+                    q.push(single, single);
+                    assert_eq!(q.pop(), Some(single));
+                }
+                for _ in 0..4 {
+                    q.push(High, High);
+                    q.push(Normal, Normal);
+                }
+                let turns = [High, High, High, Normal];
+                for turn in 0..4 {
+                    assert_eq!(q.pop(), Some(turns[(phase + turn) % 4]));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn removing_cancelled_jobs_preserves_fifo_and_turn() {
+        let mut q = Scheduler::new();
+        for i in 0..6 {
+            q.push(High, i);
+        }
+        q.push(Normal, 100);
+        q.push(Normal, 101);
+        assert_eq!(q.pop(), Some(0));
+        q.retain(|i| ![1, 3, 100].contains(i));
+        for i in [2, 4, 101, 5] {
+            assert_eq!(q.pop(), Some(i));
+        }
+        assert!(q.is_empty());
+    }
+}

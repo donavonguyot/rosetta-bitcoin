@@ -1,0 +1,245 @@
+use crate::{Message, wire::MAX_JSON};
+use serde_json::{Value, json};
+use std::{
+    io::{self, BufRead, BufReader, Write},
+    net::Shutdown,
+    os::unix::net::UnixStream,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc::{self, Sender, SyncSender, TrySendError},
+    },
+    thread::{self, JoinHandle},
+    time::Duration,
+};
+
+enum Output {
+    Line {
+        bytes: Vec<u8>,
+        event: bool,
+        done: Option<Sender<()>>,
+    },
+    Finish,
+}
+pub struct Peer {
+    output: SyncSender<Output>,
+    socket: UnixStream,
+    pub alive: AtomicBool,
+    queued_bytes: AtomicUsize,
+    queued_events: AtomicUsize,
+}
+pub struct Connection {
+    pub peer: Arc<Peer>,
+    reader: JoinHandle<()>,
+    writer: JoinHandle<()>,
+}
+pub struct Context {
+    pub peer: Arc<Peer>,
+    pub request: String,
+    done: Sender<()>,
+}
+impl Context {
+    pub fn reply(self, mut value: Value) {
+        value["request"] = Value::String(self.request);
+        self.peer.send_line(value, false, Some(self.done));
+    }
+}
+impl Peer {
+    pub fn close(&self) {
+        self.alive.store(false, Ordering::Release);
+        let _ = self.socket.shutdown(Shutdown::Both);
+    }
+    pub fn send(&self, value: Value, event: bool) {
+        self.send_line(value, event, None);
+    }
+    fn send_line(&self, value: Value, event: bool, done: Option<Sender<()>>) {
+        if !self.alive.load(Ordering::Acquire) {
+            return;
+        }
+        // Reserve room for the one outstanding response and a finish marker.
+        // A reader advances only after its response has actually been written.
+        if event && self.queued_events.fetch_add(1, Ordering::AcqRel) >= 30 {
+            self.queued_events.fetch_sub(1, Ordering::AcqRel);
+            return;
+        }
+        let mut line = serde_json::to_vec(&value).expect("JSON value serialization");
+        line.push(b'\n');
+        let n = line.len();
+        let before = self.queued_bytes.fetch_add(n, Ordering::AcqRel);
+        // A maximum-size correlation plus a maximum pending job fits alone.
+        if before + n > 2 * MAX_JSON {
+            self.queued_bytes.fetch_sub(n, Ordering::AcqRel);
+            if event {
+                self.queued_events.fetch_sub(1, Ordering::AcqRel);
+            }
+            if !event {
+                self.close();
+            }
+            return;
+        }
+        match self.output.try_send(Output::Line {
+            bytes: line,
+            event,
+            done,
+        }) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) if event => {
+                self.queued_bytes.fetch_sub(n, Ordering::AcqRel);
+                self.queued_events.fetch_sub(1, Ordering::AcqRel);
+            }
+            Err(_) => {
+                self.queued_bytes.fetch_sub(n, Ordering::AcqRel);
+                if event {
+                    self.queued_events.fetch_sub(1, Ordering::AcqRel);
+                }
+                self.close();
+            }
+        }
+    }
+}
+impl Connection {
+    pub fn start(socket: UnixStream, tx: Sender<Message>) -> io::Result<Self> {
+        socket.set_write_timeout(Some(Duration::from_secs(2)))?;
+        let reader_socket = socket.try_clone()?;
+        let mut writer_socket = socket.try_clone()?;
+        let (out, rx) = mpsc::sync_channel(32);
+        let peer = Arc::new(Peer {
+            output: out,
+            socket,
+            alive: AtomicBool::new(true),
+            queued_bytes: AtomicUsize::new(0),
+            queued_events: AtomicUsize::new(0),
+        });
+        let p = peer.clone();
+        let writer = thread::Builder::new()
+            .name("socket-writer".into())
+            .spawn(move || {
+                while let Ok(Output::Line { bytes, event, done }) = rx.recv() {
+                    let result = writer_socket.write_all(&bytes);
+                    p.queued_bytes.fetch_sub(bytes.len(), Ordering::AcqRel);
+                    if event {
+                        p.queued_events.fetch_sub(1, Ordering::AcqRel);
+                    }
+                    if result.is_err() {
+                        break;
+                    }
+                    if let Some(done) = done {
+                        let _ = done.send(());
+                    }
+                }
+                p.close();
+            })?;
+        let p = peer.clone();
+        let reader = match thread::Builder::new()
+            .name("socket-reader".into())
+            .spawn(move || {
+                let mut reader = BufReader::new(reader_socket);
+                loop {
+                    let bytes = match read_line(&mut reader) {
+                        Ok(Some(x)) => x,
+                        Ok(None) => break,
+                        Err(e) => {
+                            if e.kind() == io::ErrorKind::InvalidData {
+                                // This framing error has no reliable correlation. Send an
+                                // error then end input; the writer drains its own queue.
+                                p.send(json!({"request":"","status":"invalid_request"}), false);
+                                let _ = p.output.send(Output::Finish);
+                                return;
+                            }
+                            break;
+                        }
+                    };
+                    let (done, wait) = mpsc::channel();
+                    if tx
+                        .send(Message::Request {
+                            peer: p.clone(),
+                            bytes,
+                            done,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                    if wait.recv().is_err() {
+                        break;
+                    }
+                }
+                // EOF may be a half-close. Let previously enqueued replies drain.
+                let _ = p.output.send(Output::Finish);
+            }) {
+            Ok(t) => t,
+            Err(e) => {
+                peer.close();
+                let _ = peer.output.send(Output::Finish);
+                let _ = writer.join();
+                return Err(e);
+            }
+        };
+        Ok(Self {
+            peer,
+            reader,
+            writer,
+        })
+    }
+    pub fn context(peer: Arc<Peer>, request: String, done: Sender<()>) -> Context {
+        Context {
+            peer,
+            request,
+            done,
+        }
+    }
+    pub fn finish(self) {
+        // Wake a reader waiting for a newline without interrupting queued output.
+        let _ = self.peer.socket.shutdown(Shutdown::Read);
+        let _ = self.peer.output.send(Output::Finish);
+        let _ = self.writer.join();
+        let _ = self.reader.join();
+    }
+    pub fn finished(&self) -> bool {
+        self.reader.is_finished() && self.writer.is_finished()
+    }
+}
+
+fn read_line(reader: &mut impl BufRead) -> io::Result<Option<Vec<u8>>> {
+    let mut out = Vec::new();
+    loop {
+        let buf = reader.fill_buf()?;
+        if buf.is_empty() {
+            return if out.is_empty() {
+                Ok(None)
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "unterminated JSON line",
+                ))
+            };
+        }
+        let end = buf.iter().position(|&c| c == b'\n');
+        let n = end.unwrap_or(buf.len());
+        if out.len() + n > MAX_JSON {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "JSON line exceeds 40 MiB",
+            ));
+        }
+        out.try_reserve(n)
+            .map_err(|_| io::Error::other("request allocation failed"))?;
+        out.extend_from_slice(&buf[..n]);
+        reader.consume(n + usize::from(end.is_some()));
+        if end.is_some() {
+            return Ok(Some(out));
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn framing() {
+        let mut r = BufReader::with_capacity(3, &b"{}\n[]\n"[..]);
+        assert_eq!(read_line(&mut r).unwrap().unwrap(), b"{}");
+        assert_eq!(read_line(&mut r).unwrap().unwrap(), b"[]");
+        assert!(read_line(&mut r).unwrap().is_none());
+        assert!(read_line(&mut &b"{}"[..]).is_err());
+    }
+}

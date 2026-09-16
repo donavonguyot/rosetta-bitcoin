@@ -1,0 +1,36 @@
+Traceback (most recent call last):
+  File "/evaluator/tools/candidate_eval_v2.py", line 110, in test
+    try:detail=fn();passed=True;error=None
+               ^^^^
+  File "/evaluator/tools/candidate_eval_v2.py", line 119, in <lambda>
+    for boundary in ['write_enter','wal_sync_enter','native_success']:test('crash_'+kind+'_'+boundary,lambda kind=kind,boundary=boundary:crash(base,boundary,kind))
+                                                                                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/evaluator/tools/candidate_eval_v2.py", line 62, in crash
+    h=Host(base,boundary=boundary,transition=kind+'/00000000000000000001')
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/evaluator/tools/service_probe.py", line 34, in __init__
+    if self.process.poll() is not None:raise RuntimeError('host failed: '+(self.root/'stderr').read_text())
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: host failed: RocksDB: IO error: No space left on device: While renaming a file to /evaluator/.local/candidate-109024853960313/dummy-34ed72f6/db/IDENTITY: /evaluator/.local/candidate-109024853960313/dummy-34ed72f6/db/000000.dbtmp: No space left on device
+fatal: startup: RocksDB
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/evaluator/tools/candidate_eval_v2.py", line 131, in <module>
+    if __name__=='__main__':raise SystemExit(main())
+                                             ^^^^^^
+  File "/evaluator/tools/candidate_eval_v2.py", line 119, in main
+    for boundary in ['write_enter','wal_sync_enter','native_success']:test('crash_'+kind+'_'+boundary,lambda kind=kind,boundary=boundary:crash(base,boundary,kind))
+                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/evaluator/tools/candidate_eval_v2.py", line 111, in test
+    except Exception as e:detail=None;passed=False;error=repr(e);(base/(name+'.traceback')).write_text(traceback.format_exc())
+                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/pathlib.py", line 1079, in write_text
+    with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/pathlib.py", line 1045, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 28] No space left on device: '/evaluator/.local/candidate-109024853960313/crash_p_wal_sync_enter.traceback'

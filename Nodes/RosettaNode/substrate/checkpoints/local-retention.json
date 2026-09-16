@@ -1,0 +1,287 @@
+{
+  "archive": "Nodes/RosettaNode/substrate/.local/checkpoint-20260916/diagnostics.tar.gz",
+  "archive_sha256": "f544b32172a0884f279ea9eb9b6c5acb766541748e5f5670ccc7b3234d15239d",
+  "files": 10230,
+  "verified": true,
+  "inventory": "Nodes/RosettaNode/substrate/.local/checkpoint-20260916/file-inventory.json",
+  "cache_removal": [
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/ZC1/workspace/cache",
+      "files": 844,
+      "bytes": 67392027,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/D1/workspace/cache",
+      "files": 2376,
+      "bytes": 156039470,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/C1/workspace/cache",
+      "files": 2329,
+      "bytes": 158803486,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/ZD1/workspace/cache",
+      "files": 831,
+      "bytes": 54661359,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/RC1/workspace/cache",
+      "files": 0,
+      "bytes": 0,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/D3/workspace/cache",
+      "files": 2145,
+      "bytes": 151559438,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/D2/workspace/cache",
+      "files": 1877,
+      "bytes": 149949569,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/C3/workspace/cache",
+      "files": 1931,
+      "bytes": 154329899,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
+      "files": 2496,
+      "bytes": 158056516,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/.local/cohort/RD1/workspace/cache",
+      "files": 0,
+      "bytes": 0,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/source-audits/f555be20c3654de491454a7722010a4e/workspace/cache",
+      "files": 743,
+      "bytes": 13680415,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/source-audits/f555be20c3654de491454a7722010a4e/workspace/target",
+      "files": 176,
+      "bytes": 50649081,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/source-audits/5f4f813dd3bd4dcbbdfd5644cb8b2faf/workspace/cache",
+      "files": 1339,
+      "bytes": 108211841,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/source-audits/630a6615cd514bcda6c17af80e4138c1/workspace/cache",
+      "files": 912,
+      "bytes": 66612035,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/source-audits/188beefba48c403da4f888072ecb76f6/workspace/cache",
+      "files": 743,
+      "bytes": 13680415,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/source-audits/188beefba48c403da4f888072ecb76f6/workspace/target",
+      "files": 176,
+      "bytes": 50647105,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/source-audits/594ae8aa48d447b0b8ecfd459be3b8f4/workspace/cache",
+      "files": 897,
+      "bytes": 61006465,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/source-audits/9515560531de42d2824974f1be490747/workspace/cache",
+      "files": 842,
+      "bytes": 52533382,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-1/optimization/workspace/cache",
+      "files": 743,
+      "bytes": 13680415,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-1/optimization/workspace/target",
+      "files": 527,
+      "bytes": 194122604,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-1/optimization/workspace/tests/__pycache__",
+      "files": 1,
+      "bytes": 60354,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-1/maintenance/workspace/cache",
+      "files": 743,
+      "bytes": 13680415,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-1/maintenance/workspace/target",
+      "files": 964,
+      "bytes": 284981363,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-1/maintenance/workspace/tests/__pycache__",
+      "files": 1,
+      "bytes": 60354,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/optimization/workspace/cache",
+      "files": 897,
+      "bytes": 61006465,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/optimization/workspace/tests/__pycache__",
+      "files": 5,
+      "bytes": 131991,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/maintenance/workspace/cache",
+      "files": 897,
+      "bytes": 61006465,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/maintenance/workspace/tests/__pycache__",
+      "files": 3,
+      "bytes": 89121,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/go-2/initial/workspace/cache",
+      "files": 3186,
+      "bytes": 253274812,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/go-2/maintenance/workspace/cache",
+      "files": 3106,
+      "bytes": 250106027,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/initial/workspace/cache",
+      "files": 743,
+      "bytes": 13680415,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/initial/workspace/target",
+      "files": 536,
+      "bytes": 195576397,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/maintenance/workspace/cache",
+      "files": 743,
+      "bytes": 13680415,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/maintenance/workspace/target",
+      "files": 981,
+      "bytes": 286631930,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/maintenance/workspace/tests/__pycache__",
+      "files": 1,
+      "bytes": 74168,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/initial/workspace/cache",
+      "files": 914,
+      "bytes": 66612259,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/cache",
+      "files": 922,
+      "bytes": 79331044,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/go-1/optimization/workspace/cache",
+      "files": 4087,
+      "bytes": 327414482,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/go-1/optimization/workspace/__pycache__",
+      "files": 1,
+      "bytes": 34539,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign-v2/go-1/maintenance/workspace/cache",
+      "files": 3925,
+      "bytes": 318990255,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/workspace/cache",
+      "files": 743,
+      "bytes": 13680415,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/workspace/target",
+      "files": 587,
+      "bytes": 264757887,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/cache",
+      "files": 897,
+      "bytes": 61006465,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/tests/__pycache__",
+      "files": 3,
+      "bytes": 79436,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace/cache",
+      "files": 4100,
+      "bytes": 325112332,
+      "classification": "reproducible workspace compiler/build cache"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace/__pycache__",
+      "files": 1,
+      "bytes": 26656,
+      "classification": "reproducible workspace compiler/build cache"
+    }
+  ],
+  "runtime_datadirs_deleted": false,
+  "docker_state_changed": false
+}

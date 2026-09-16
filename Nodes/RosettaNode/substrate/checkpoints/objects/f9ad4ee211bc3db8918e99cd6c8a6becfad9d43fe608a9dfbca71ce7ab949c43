@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Local serial comparisons; no campaign generators or evaluator dependencies.
+
+One warmup plus seven retained trials per variant/case, fresh databases prepared
+outside timing, cyclic variant order. The broker supplies one filesystem; these
+are fresh datadirs, not independently provisioned block volumes. No observer is
+loaded during performance timing. Client/socket/JSON overhead is included.
+"""
+import argparse
+import collections
+import hashlib
+import json
+from pathlib import Path
+import selectors
+import statistics
+import time
+import traceback
+
+from support import ITEM, Service, inspect
+
+COUNTS = {'evaluate-small': 4096, 'evaluate-large': 64, 'durable': 2048, 'mixed': 2048}
+
+
+def quantiles(values):
+    s = sorted(values)
+    return {'p50_ms': s[len(s) // 2] * 1000,
+            'p99_ms': s[min(len(s) - 1, int(len(s) * .99))] * 1000,
+            'max_ms': s[-1] * 1000} if s else {}
+
+
+def prepare(case):
+    durable = case in ('durable', 'mixed')
+    count = COUNTS[case]
+    item = ITEM if case != 'evaluate-large' else {**ITEM, 'hex': ITEM['hex'] + '00' * (256 << 10), 'operation': 'prefix'}
+    clients = []
+    for c in range(8):
+        frames, identifiers, priorities = [], [], []
+        for i in range(count // 8):
+            ident = f'c{c}_{i}'
+            q = {'request': ident, 'op': 'submit' if durable else 'evaluate', 'items': [item]}
+            priority = 'high' if case == 'mixed' and (i + c) % 4 else 'normal'
+            if durable:
+                q.update(id=ident, priority=priority)
+            frames.append(json.dumps(q, separators=(',', ':')).encode() + b'\n')
+            identifiers.append(ident)
+            priorities.append(priority)
+        clients.append((frames, identifiers, priorities))
+    return clients
+
+
+def trial(root, binary, case, frames, env=None):
+    service = Service(root, binary=binary, env=env)
+    clients = []
+    selector = selectors.DefaultSelector()
+    persistent = case in ('durable', 'mixed')
+    count = COUNTS[case]
+    admissions, terminals = set(), set()
+    submitted, priority_by_id = {}, {}
+    latencies = collections.defaultdict(list)
+    try:
+        for frames_, ids, priorities in frames:
+            cl = service.connect()
+            cl.s.setblocking(False)
+            state = dict(cl=cl, frames=frames_, ids=ids, priorities=priorities,
+                         index=0, offset=0, done=0, received=bytearray(), reply_index=0)
+            clients.append(state)
+            selector.register(cl.s, selectors.EVENT_READ | selectors.EVENT_WRITE, state)
+        start = time.perf_counter()
+        deadline = start + 900
+        while len(terminals) < count:
+            if time.perf_counter() > deadline:
+                raise TimeoutError('15 minute repetition deadline')
+            for key, events in selector.select(timeout=.25):
+                state, sock = key.data, key.fileobj
+                i = state['index']
+                if events & selectors.EVENT_WRITE and i < len(state['frames']) and i - state['done'] < 32:
+                    frame = state['frames'][i]
+                    offset = state['offset']
+                    try:
+                        n = sock.send(memoryview(frame)[offset:offset + 65536])
+                    except BlockingIOError:
+                        n = 0
+                    if n:
+                        if offset == 0:
+                            ident = state['ids'][i]
+                            submitted[ident] = time.perf_counter()
+                            priority_by_id[ident] = state['priorities'][i]
+                        state['offset'] += n
+                        if state['offset'] == len(frame):
+                            state['offset'] = 0
+                            state['index'] += 1
+                if events & selectors.EVENT_READ:
+                    try:
+                        data = sock.recv(262144)
+                    except BlockingIOError:
+                        data = None
+                    if data == b'':
+                        raise EOFError('service disconnected')
+                    if data:
+                        state['received'].extend(data)
+                        while True:
+                            pos = state['received'].find(b'\n')
+                            if pos < 0:
+                                break
+                            value = json.loads(state['received'][:pos])
+                            del state['received'][:pos + 1]
+                            if 'event' in value:
+                                ident = value['id']
+                                assert persistent and ident in admissions
+                                assert value['job']['state'] == 'complete'
+                            else:
+                                ident = value['request']
+                                assert ident == state['ids'][state['reply_index']], value
+                                state['reply_index'] += 1
+                                assert value['status'] == ('accepted' if persistent else 'ok'), value
+                                if persistent:
+                                    admissions.add(ident)
+                                    continue
+                            assert ident not in terminals
+                            terminals.add(ident)
+                            state['done'] += 1
+                            elapsed = time.perf_counter() - submitted[ident]
+                            latencies['all'].append(elapsed)
+                            latencies[priority_by_id[ident]].append(elapsed)
+                flags = selectors.EVENT_READ
+                if state['index'] < len(state['frames']) and state['index'] - state['done'] < 32:
+                    flags |= selectors.EVENT_WRITE
+                selector.modify(sock, flags, state)
+        elapsed = time.perf_counter() - start
+        for state in clients:
+            state['cl'].close()
+        clients.clear()
+        service.stop()
+        # Stopped-writer inspection and logs are outside timing.
+        rows, jobs = inspect(service.db)
+        assert len(jobs) == (count if persistent else 0)
+        assert rows['meta/jobs'] == '0'
+        metrics = [json.loads(x) for x in service.log_path.read_text().splitlines() if x.startswith('{')]
+        log = (service.db / 'LOG').read_text(errors='replace')
+        # Keep complete LOG files as the authoritative activity observations.
+        activity = {word: sum(word in line.lower() for line in log.splitlines())
+                    for word in ('flush', 'compaction', 'stall')}
+        return dict(seconds=elapsed, throughput=count / elapsed,
+                    latency={k: quantiles(v) for k, v in latencies.items()},
+                    metrics=metrics, log_mentions=activity, count=count)
+    finally:
+        selector.close()
+        for state in clients:
+            state['cl'].close()
+        service.kill()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--output', required=True)
+    parser.add_argument('--variants', nargs='+', required=True)
+    parser.add_argument('--cases', nargs='+', default=list(COUNTS))
+    parser.add_argument('--count-scale', type=int, default=1)
+    args = parser.parse_args()
+    if args.count_scale < 1:
+        parser.error('--count-scale must be positive')
+    for case in args.cases:
+        COUNTS[case] *= args.count_scale
+    root = Path(args.output).resolve()
+    root.mkdir(parents=True, exist_ok=False)
+    variants = [(s.split(':', 1)[0], Path(s.split(':', 1)[1]).resolve()) for s in args.variants]
+    metadata = dict(variants={name: {'path': str(p), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()} for name, p in variants},
+                    counts=COUNTS, repetitions=7, warmups=1, window_per_client=32,
+                    filesystem='fresh datadirs on supplied broker filesystem', instrumentation='none during timing')
+    (root / 'protocol.json').write_text(json.dumps(metadata, indent=2))
+    results = []
+    with (root / 'results.jsonl').open('w') as output:
+        # Evaluate overhead first, then durable throughput, then mixed tails.
+        for case in args.cases:
+            frames = prepare(case)
+            for rep in range(-1, 7):
+                offset = max(rep, 0) % len(variants)
+                ordered = variants[offset:] + variants[:offset]
+                for name, binary in ordered:
+                    directory = root / f'{case}-{name}-{rep}'
+                    directory.mkdir()
+                    result = dict(case=case, variant=name, repetition=rep, directory=str(directory))
+                    try:
+                        result.update(trial(directory, binary, case, frames))
+                        result['status'] = 'ok'
+                    except Exception:
+                        result.update(status='failed', traceback=traceback.format_exc())
+                    results.append(result)
+                    output.write(json.dumps(result) + '\n')
+                    output.flush()
+                    print(json.dumps({k: result[k] for k in ('case', 'variant', 'repetition', 'status')} |
+                                     {k: result[k] for k in ('seconds',) if k in result}), flush=True)
+                    if result['status'] != 'ok':
+                        # Retain the failed repetition; never silently replace it.
+                        raise RuntimeError(result['traceback'])
+    summary = {}
+    for case in args.cases:
+        summary[case] = {}
+        for name, _ in variants:
+            selected = [r for r in results if r['case'] == case and r['variant'] == name and r['repetition'] >= 0]
+            times = [r['seconds'] for r in selected]
+            summary[case][name] = dict(median_seconds=statistics.median(times), range_seconds=[min(times), max(times)],
+                                      median_p99_ms={p: statistics.median(r['latency'][p]['p99_ms'] for r in selected)
+                                                     for p in selected[0]['latency']})
+    (root / 'summary.json').write_text(json.dumps(summary, indent=2))
+    print(json.dumps(summary, indent=2))
+
+
+if __name__ == '__main__':
+    main()

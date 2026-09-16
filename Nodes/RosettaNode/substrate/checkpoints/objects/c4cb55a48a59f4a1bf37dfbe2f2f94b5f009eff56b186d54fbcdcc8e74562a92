@@ -1,0 +1,274 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net"
+	"strings"
+	"testing"
+	"time"
+	"trial/reuse"
+)
+
+const emptyTX = "01000000000000000000"
+
+func payloadFor(t *testing.T, items ...Item) *Payload {
+	t.Helper()
+	p, err := makePayload(items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+func exact(hex string) Item { return Item{Hex: hex, Mode: "witness", Operation: "exact"} }
+func doubleHash(raw []byte) string {
+	first := sha256.Sum256(raw)
+	second := sha256.Sum256(first[:])
+	return hex.EncodeToString(second[:])
+}
+func TestNativeVectors(t *testing.T) {
+	// Fixed encoding fixtures only; all parsing remains in the supplied adapter.
+	input := "01" + strings.Repeat("00", 32) + "00000000" + "00" + "ffffffff"
+	output := "01" + "0000000000000000" + "00"
+	stripped := "01000000" + input + output + "00000000"
+	witness := "01000000" + "0001" + input + output + "010142" + "00000000"
+	prefix := exact(emptyTX + "aabb")
+	prefix.Operation = "prefix"
+	tooManyInputs := "01000000fd0110" + strings.Repeat(strings.Repeat("00", 36)+"00ffffffff", 4097) + "0000000000"
+	items := []Item{exact(emptyTX), prefix, exact(emptyTX + "aabb"), exact(""), exact(witness), exact(tooManyInputs)}
+	results, err := verify(payloadFor(t, items...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != len(items) {
+		t.Fatal("result count")
+	}
+	raw, _ := hex.DecodeString(emptyTX)
+	for _, i := range []int{0, 1} {
+		r := results[i]
+		if r.Status != "0" || r.Consumed != "10" || r.FullSize != "10" || r.StrippedSize != "10" || r.TxID != doubleHash(raw) || r.WTxID != r.TxID {
+			t.Fatalf("minimal/prefix %d: %+v", i, r)
+		}
+	}
+	for _, i := range []int{2, 3, 5} {
+		r := results[i]
+		if r.Status == "0" || r.Consumed != "0" || r.FullSize != "0" || r.StrippedSize != "0" || r.TxID != strings.Repeat("0", 64) || r.WTxID != r.TxID {
+			t.Fatalf("error %d: %+v", i, r)
+		}
+	}
+	full, _ := hex.DecodeString(witness)
+	base, _ := hex.DecodeString(stripped)
+	r := results[4]
+	if r.Status != "0" || r.FullSize != fmt.Sprint(len(full)) || r.StrippedSize != fmt.Sprint(len(base)) || r.TxID != doubleHash(base) || r.WTxID != doubleHash(full) {
+		t.Fatalf("witness: %+v", r)
+	}
+	if results[5].Status != "2" {
+		t.Fatalf("combined-item resource limit: %+v", results[5])
+	}
+	empty, err := verify(payloadFor(t, exact("")))
+	if err != nil || empty[0].Status != "1" {
+		t.Fatalf("all-empty arena: %+v, %v", empty, err)
+	}
+}
+func TestNativeByteLimit(t *testing.T) {
+	item := exact(strings.Repeat("00", (4<<20)+1))
+	results, err := verify(payloadFor(t, item))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if results[0].Status != "3" {
+		t.Fatalf("per-transaction byte admission: %+v", results[0])
+	}
+}
+func TestWireValidation(t *testing.T) {
+	valid := `{"request":"x","op":"submit","id":"job-1","items":[{"hex":"01000000000000000000","mode":"witness","operation":"exact"}]}`
+	if _, err := decodeRequest([]byte(valid)); err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range []string{
+		`null`, `[]`, valid + `{}`, strings.Replace(valid, `"request":"x"`, `"request":null`, 1),
+		strings.Replace(valid, `"op":"submit"`, `"op":"submit","op":"shutdown"`, 1),
+		strings.Replace(valid, `"id":"job-1"`, `"id":"../bad"`, 1),
+		strings.Replace(valid, `"hex":"01000000000000000000"`, `"hex":"AA"`, 1),
+		strings.Replace(valid, `"hex":"01000000000000000000"`, `"hex":"0"`, 1),
+		strings.Replace(valid, `"mode":"witness"`, `"mode":null`, 1),
+		strings.Replace(valid, `"mode":"witness"`, `"mode":"unknown"`, 1),
+		strings.Replace(valid, `"operation":"exact"`, `"operation":"EXACT"`, 1),
+		strings.Replace(valid, `"op":"submit"`, `"op":"submit","priority":"high"`, 1),
+		`{"request":"x","op":"evaluate","items":[]}`,
+		`{"request":"x","op":"evaluate","items":null}`,
+		"{\"request\":\"\xff\",\"op\":\"shutdown\"}",
+	} {
+		if _, err := decodeRequest([]byte(input)); err == nil {
+			t.Errorf("accepted invalid: %.200s", input)
+		}
+	}
+	// Limits are checked across the whole batch, not per hex field alone.
+	tooMany := make([]Item, maxBatch+1)
+	for i := range tooMany {
+		tooMany[i] = exact(emptyTX)
+	}
+	if _, err := makePayload(tooMany); err == nil {
+		t.Fatal("too many items")
+	}
+}
+func TestLineFraming(t *testing.T) {
+	reader := bufio.NewReaderSize(strings.NewReader("first\nsecond\npartial"), 16)
+	for _, want := range []string{"first", "second"} {
+		got, err := readLine(reader)
+		if err != nil || string(got) != want {
+			t.Fatalf("%q %v", got, err)
+		}
+	}
+	if _, err := readLine(reader); err == nil {
+		t.Fatal("unterminated line accepted")
+	}
+	big := bytes.Repeat([]byte{' '}, maxJSON)
+	if got, err := readLine(bufio.NewReader(bytes.NewReader(append(big, '\n')))); err != nil || len(got) != maxJSON {
+		t.Fatalf("boundary %d: %v", len(got), err)
+	}
+	if _, err := readLine(bufio.NewReader(bytes.NewReader(append(big, ' ', '\n')))); err == nil {
+		t.Fatal("oversize accepted")
+	}
+}
+
+func TestLargeCorrelationResponse(t *testing.T) {
+	serverSide, peer := net.Pipe()
+	defer peer.Close()
+	c := &client{conn: serverSide, out: make(chan []byte, 16), writerDone: make(chan struct{})}
+	go c.writeLoop()
+	defer func() { c.finish(); <-c.writerDone }()
+	// JSON's U+2028 escaping expands a valid request correlation twofold.
+	correlation := strings.Repeat("\u2028", maxJSON/3-128)
+	go c.enqueue(Response{Request: correlation, Status: "not_found"}, false)
+	peer.SetReadDeadline(time.Now().Add(20 * time.Second))
+	var response Response
+	if err := json.NewDecoder(peer).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Request != correlation || response.Status != "not_found" {
+		t.Fatal("large correlation was not preserved")
+	}
+}
+func TestDurableRecovery(t *testing.T) {
+	path := t.TempDir() + "/db"
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := recoverState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := payloadFor(t, exact(emptyTX))
+	first, err := s.admit("first", p, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.admit("second", p, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.cancel(2, second); err != nil {
+		t.Fatal(err)
+	}
+	first.Results, err = verify(first.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Done = true
+	if _, err = s.commit(first); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	db, err = storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s, err = recoverState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.checkpoint != 1 || s.sequence != 2 || s.jobs != 1 || s.bytes != 10 || !s.pending[2].Cancelled {
+		t.Fatalf("bad recovered state: %+v", s)
+	}
+	_, j, r, err := s.lookup("first")
+	if err != nil || j != nil || r == nil || r.State != "complete" {
+		t.Fatalf("receipt lookup: %v %+v %+v", err, j, r)
+	}
+	second = s.pending[2]
+	second.Results, err = verify(second.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.Done = true
+	receipt, err := s.commit(second)
+	if err != nil || receipt.State != "cancelled" || len(receipt.Results) != 0 {
+		t.Fatalf("cancelled receipt: %+v %v", receipt, err)
+	}
+	rows := map[string]string{}
+	if err = db.Scan(func(k, v string) error { rows[k] = v; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 9 || rows["meta/jobs"] != "0" || rows["meta/bytes"] != "0" || rows["meta/checkpoint"] != "2" || rows["id/second"] != "2" {
+		t.Fatalf("disk invariant: %v", rows)
+	}
+}
+func TestRejectCorruptRecovery(t *testing.T) {
+	for _, kind := range []string{"version", "missing-schema", "missing-counter", "orphan", "accounting", "missing-index", "wrong-index", "missing-receipt"} {
+		t.Run(kind, func(t *testing.T) {
+			db, err := storage.Open(t.TempDir() + "/db")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			s, err := recoverState(db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "version":
+				err = s.write(map[string]string{"meta/version": "2"})
+			case "missing-schema":
+				err = s.write(nil, "meta/version")
+			case "missing-counter":
+				err = s.write(nil, "meta/jobs")
+			case "orphan":
+				err = s.write(map[string]string{"c/00000000000000000001": "1"})
+			case "accounting":
+				err = s.write(map[string]string{"meta/bytes": "10"})
+			case "missing-index", "wrong-index", "missing-receipt":
+				job, e := s.admit("original", payloadFor(t, exact(emptyTX)), nil)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if kind == "missing-index" {
+					err = s.write(nil, "id/original")
+				} else if kind == "wrong-index" {
+					err = s.write(map[string]string{"id/other": "1"})
+				} else {
+					job.Results, e = verify(job.Payload)
+					if e != nil {
+						t.Fatal(e)
+					}
+					job.Done = true
+					if _, e = s.commit(job); e != nil {
+						t.Fatal(e)
+					}
+					err = s.write(nil, seqKey("r", 1))
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = recoverState(db); err == nil {
+				t.Fatal("corrupt database accepted")
+			}
+		})
+	}
+}

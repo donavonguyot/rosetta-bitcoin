@@ -1,0 +1,260 @@
+package main
+
+import (
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+)
+
+type structureStats struct {
+	items        uint64
+	pool         uint64
+	strippedSize uint64
+	witnessSize  uint64
+	hasWitness   bool
+}
+
+func (s structureStats) fullSize() uint64 {
+	if s.hasWitness {
+		return s.strippedSize + 2 + s.witnessSize
+	}
+	return s.strippedSize
+}
+
+type structureReader struct {
+	d     *json.Decoder
+	build bool
+	stats structureStats
+}
+
+func (r *structureReader) delimiter(want json.Delim) bool {
+	t, err := r.d.Token()
+	return err == nil && t == want
+}
+
+func (r *structureReader) text() (string, bool) {
+	t, err := r.d.Token()
+	s, good := t.(string)
+	return s, err == nil && good
+}
+
+// Transaction, input, and output objects have exact, unique field sets.
+func (r *structureReader) field(names []string, seen *uint32) (int, bool) {
+	name, good := r.text()
+	if !good {
+		return 0, false
+	}
+	for i, candidate := range names {
+		if name == candidate {
+			bit := uint32(1) << i
+			if *seen&bit != 0 {
+				return 0, false
+			}
+			*seen |= bit
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+func (r *structureReader) uint32() (uint32, bool) {
+	s, good := r.text()
+	if !good {
+		return 0, false
+	}
+	v, good := parseUnsigned(s, 32)
+	return uint32(v), good
+}
+
+func (r *structureReader) amount() (int64, bool) {
+	s, good := r.text()
+	if !good {
+		return 0, false
+	}
+	return parseSigned(s)
+}
+
+func (r *structureReader) blob(exactSize int) ([]byte, uint64, bool) {
+	s, good := r.text()
+	if !good || !validHex(s) || exactSize >= 0 && len(s)/2 != exactSize {
+		return nil, 0, false
+	}
+	n := uint64(len(s) / 2)
+	r.stats.pool += n
+	var data []byte
+	if r.build {
+		data, _ = hex.DecodeString(s) // The first pass and validHex checked it.
+	}
+	return data, n, true
+}
+
+func (r *structureReader) witness() ([][]byte, bool) {
+	if !r.delimiter('[') {
+		return nil, false
+	}
+	var stack [][]byte
+	var count uint64
+	for r.d.More() {
+		data, n, good := r.blob(-1)
+		if !good {
+			return nil, false
+		}
+		count++
+		r.stats.items++
+		r.stats.witnessSize += compactSize(n) + n
+		if r.build {
+			stack = append(stack, data)
+		}
+	}
+	if !r.delimiter(']') {
+		return nil, false
+	}
+	r.stats.witnessSize += compactSize(count)
+	r.stats.hasWitness = r.stats.hasWitness || count != 0
+	return stack, true
+}
+
+func (r *structureReader) input() (txInput, bool) {
+	var in txInput
+	if !r.delimiter('{') {
+		return in, false
+	}
+	var seen uint32
+	for r.d.More() {
+		field, good := r.field([]string{"previous_txid_digest_order", "previous_index", "script", "sequence", "witness"}, &seen)
+		if !good {
+			return in, false
+		}
+		switch field {
+		case 0:
+			var data []byte
+			data, _, good = r.blob(32)
+			if r.build {
+				copy(in.digest[:], data)
+			}
+		case 1:
+			in.index, good = r.uint32()
+		case 2:
+			var n uint64
+			in.script, n, good = r.blob(-1)
+			r.stats.strippedSize += compactSize(n) + n
+		case 3:
+			in.sequence, good = r.uint32()
+		case 4:
+			in.witness, good = r.witness()
+		}
+		if !good {
+			return in, false
+		}
+	}
+	if !r.delimiter('}') || seen != 31 {
+		return in, false
+	}
+	r.stats.strippedSize += 40
+	return in, true
+}
+
+func (r *structureReader) output() (txOutput, bool) {
+	var out txOutput
+	if !r.delimiter('{') {
+		return out, false
+	}
+	var seen uint32
+	for r.d.More() {
+		field, good := r.field([]string{"amount", "script"}, &seen)
+		if !good {
+			return out, false
+		}
+		switch field {
+		case 0:
+			out.amount, good = r.amount()
+		case 1:
+			var n uint64
+			out.script, n, good = r.blob(-1)
+			r.stats.strippedSize += compactSize(n) + n
+		}
+		if !good {
+			return out, false
+		}
+	}
+	if !r.delimiter('}') || seen != 3 {
+		return out, false
+	}
+	r.stats.strippedSize += 8
+	return out, true
+}
+
+// The first pass validates every field and measures both serializations without
+// constructing vectors or byte pools. Only admitted structures get a build pass.
+func parseStructured(raw []byte, build bool) (*transaction, structureStats, bool) {
+	r := structureReader{d: json.NewDecoder(bytes.NewReader(raw)), build: build}
+	r.d.UseNumber()
+	var tx transaction
+	if !r.delimiter('{') {
+		return nil, r.stats, false
+	}
+	var seen uint32
+	for r.d.More() {
+		field, good := r.field([]string{"version_bits", "inputs", "outputs", "locktime"}, &seen)
+		if !good {
+			return nil, r.stats, false
+		}
+		switch field {
+		case 0:
+			tx.version, good = r.uint32()
+		case 1:
+			if !r.delimiter('[') {
+				return nil, r.stats, false
+			}
+			var count uint64
+			for r.d.More() {
+				in, good := r.input()
+				if !good {
+					return nil, r.stats, false
+				}
+				count++
+				r.stats.items++
+				if build {
+					tx.inputs = append(tx.inputs, in)
+				}
+			}
+			good = r.delimiter(']')
+			r.stats.strippedSize += compactSize(count)
+		case 2:
+			if !r.delimiter('[') {
+				return nil, r.stats, false
+			}
+			var count uint64
+			for r.d.More() {
+				out, good := r.output()
+				if !good {
+					return nil, r.stats, false
+				}
+				count++
+				r.stats.items++
+				if build {
+					tx.outputs = append(tx.outputs, out)
+				}
+			}
+			good = r.delimiter(']')
+			r.stats.strippedSize += compactSize(count)
+		case 3:
+			tx.locktime, good = r.uint32()
+		}
+		if !good {
+			return nil, r.stats, false
+		}
+	}
+	if !r.delimiter('}') || seen != 15 {
+		return nil, r.stats, false
+	}
+	if _, err := r.d.Token(); err != io.EOF {
+		return nil, r.stats, false
+	}
+	r.stats.strippedSize += 8
+	if build {
+		return &tx, r.stats, true
+	}
+	return nil, r.stats, true
+}

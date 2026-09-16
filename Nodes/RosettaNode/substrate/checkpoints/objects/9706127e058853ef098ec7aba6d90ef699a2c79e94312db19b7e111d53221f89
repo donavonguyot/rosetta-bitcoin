@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+export CGO_ENABLED=1
+export GOPROXY=off
+export GOSUMDB=off
+export GOTOOLCHAIN=local
+go build -trimpath -o service .

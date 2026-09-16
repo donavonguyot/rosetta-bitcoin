@@ -1,0 +1,9 @@
+import sys
+sys.path.insert(0, '/workspace')
+from pathlib import Path
+from integration_test import read_database, inspect
+for lane in ['durable', 'mixed']:
+ path = Path('/workspace/tmp/bench-h1') / (lane + '--1-h1-group-service') / 'db'
+ rows = read_database(path)
+ jobs, pending = inspect(path)
+ print(lane, 'sequence', rows['meta/sequence'], 'checkpoint', rows['meta/checkpoint'], 'jobs', len(jobs), 'pending', pending)

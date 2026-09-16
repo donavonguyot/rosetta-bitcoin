@@ -1,0 +1,49 @@
+// Test-only dynamic interposition. Never linked into service, no scheduling or
+// barrier hooks, and no successful native behavior is replaced.
+#define _GNU_SOURCE
+#include <adapter.h>
+#include <rocksdb/c.h>
+#include <dlfcn.h>
+#include <stdatomic.h>
+#include <stdlib.h>
+#include <string.h>
+
+static atomic_int failed;
+static int once(void) { return atomic_exchange(&failed, 1) == 0; }
+static const char *mode(void) {
+    const char *p = getenv("TRIAL_TEST_FAILURE");
+    return p ? p : "";
+}
+rn_arena *rn_arena_create(const uint8_t *data, uint64_t size) {
+    if (!strcmp(mode(), "arena") && once()) return NULL;
+    rn_arena *(*real)(const uint8_t *, uint64_t) = dlsym(RTLD_NEXT, "rn_arena_create");
+    return real(data, size);
+}
+static void put(void *ctx, const char *key, size_t kn, const char *value, size_t vn) {
+    (void)value; (void)vn;
+    if (kn >= 2 && key[1] == '/') {
+        if (key[0] == 'p') *(int *)ctx |= 1;
+        if (key[0] == 'r') *(int *)ctx |= 2;
+        if (key[0] == 'c') *(int *)ctx |= 4;
+    }
+}
+static void del(void *ctx, const char *key, size_t kn) { (void)ctx; (void)key; (void)kn; }
+void rocksdb_write(rocksdb_t *db, const rocksdb_writeoptions_t *options,
+                   rocksdb_writebatch_t *batch, char **error) {
+    void (*real)(rocksdb_t *, const rocksdb_writeoptions_t *, rocksdb_writebatch_t *, char **) = dlsym(RTLD_NEXT, "rocksdb_write");
+    int members = 0;
+    rocksdb_writebatch_iterate(batch, &members, put, del);
+    const char *m = mode();
+    int match = ((members & 1) && (!strcmp(m,"admission") || !strcmp(m,"admission_after")))
+             || ((members & 2) && !strcmp(m,"terminal"))
+             || ((members & 4) && !strcmp(m,"cancel"));
+    if (match && once()) {
+        if (!strcmp(m,"admission_after")) {
+            real(db, options, batch, error);
+            if (*error) return;
+        }
+        *error = strdup("candidate test: injected write error");
+        return;
+    }
+    real(db, options, batch, error);
+}

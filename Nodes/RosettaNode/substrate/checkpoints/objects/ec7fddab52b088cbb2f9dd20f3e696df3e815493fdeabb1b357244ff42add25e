@@ -1,0 +1,139 @@
+# Go lineage 2 — maintenance ABI v2 handoff
+
+## Submission
+
+The predecessor is upgraded to ABI v2 and deterministic high/normal priority
+selection. Schema 1 datadirs, pending payloads, cancellations, receipts,
+accounting and admission-ordered terminal commits are preserved. No group commit,
+kernel replacement, third-party modules or evaluator access were used.
+
+Deliverables: executable build.sh, Linux AArch64 service, Go/C source, reuse/
+helpers, Go tests including priority_test.go, tests/integration.py, test.sh,
+HANDOFF.md and EXPERIMENTS.md.
+
+Build/test through the pinned Linux broker only:
+
+```sh
+python3 run.py './build.sh' 300
+python3 run.py './test.sh' 300
+```
+
+Launch `service DATADIR SOCKET_PATH`; wire shutdown drains and exits zero.
+The broker's /tmp is non-executable; test.sh sets GOTMPDIR=/workspace/tmp.
+Build uses local Go, cgo, /adapter/librosetta.so and dynamic RocksDB.
+
+Final service: 4,338,208 bytes, SHA-256:
+
+```text
+37fc702722c3aae37bdda91dfc72e693ec2a50eca159d1bd8dce57dd78cff1c6
+```
+
+Verified ELF64 little-endian AArch64, librosetta.so/librocksdb.so.7.8/libc
+linkage, /adapter RUNPATH, and only rn_verify_v2 among verify imports.
+The original v1 service/documents are preserved in tmp/predecessor/. Its service
+hash still matches the v1 handoff:
+`9457f32f062ad0b86dfbef30c90b1f0c4be1e4cfff2c7eb6c3a18fc8c35e8817`.
+
+## Source map and behavior
+
+- native.go uses cumulative arena offsets and rn_verify_v2. It checks the bitmap
+  against every status and rejects out-of-batch bits. Source and arena remain
+  C-owned and alive through return, including cancellation. Error results are
+  zeroed. Evaluate allocation/native-call failure returns execution_failure;
+  acknowledged-job failure stops with diagnostics and retains durable pending.
+- wire.go accepts high/normal, default normal. Priority is admission metadata,
+  excluded from the payload digest. Retries preserve the original priority.
+- service.go keeps FIFO normal/high queues. When both contain runnable work,
+  dispatch H,H,H,N; with one runnable queue, leave the cycle unchanged. Cancelled
+  queued entries are pruned first. Selection and reservation of one of four
+  shared native slots happen under the state mutex. Four workers call native
+  code outside it. Evaluate shares capacity and wakes workers on completion.
+- recovery.go validates schema 1 and preserves pending priority, cancellation,
+  receipts and indexes. Rebuild each queue in admission order. V1 normal jobs
+  recover at normal priority. Cancelled pending work becomes ready without
+  native dispatch. Incompatible/corrupt databases are rejected, never rebuilt.
+- main.go, transport.go, reuse/, build.sh and test.sh are unchanged.
+
+The state mutex still spans complete RocksDB writes, so cancellation cannot
+finish between the terminal decision and C call_entry. Cancellation intent is
+durable before acknowledgement. Running jobs retain payloads through native
+return; completed jobs behind the admission head remain cancellable. Terminal
+writes atomically add receipts, remove pending/cancel keys, release accounting
+and advance the contiguous checkpoint regardless of dispatch priority.
+
+Baseline durability remains one job per admission/terminal WriteBatch, WAL on,
+sync=true. Storage settings: compression off, 128 MiB cache, 64 MiB write buffer,
+two buffers/background jobs. Native RocksDB LOCK enforces exclusive ownership.
+The 1,024-job/64-MiB limits include completed-but-uncommitted work.
+
+Admission responses precede terminal events, which follow durable commitment.
+Events remain best-effort; status recovers notification loss. Disconnect does not
+cancel. Drain waits for accepted jobs, evaluations and active replies. Identical
+retries remain existing during draining and never alter priority or ownership.
+
+## Validation and evidence
+
+The first full ./test.sh passed all 17 Go test families, Go race tests, public
+smoke, ordinary socket/crash integration and race executable integration.
+No maintenance build/test failed and no repair round was used.
+
+New tests cover priority parsing/retries, FIFO/3:1 selection, single-queue and
+idle cycle preservation, cancelled entries, slot saturation, mixed v1/v2
+recovery, corrupt priority rejection and 1/63/64-item bitmap/offset boundaries.
+Existing admission limits, cancellation, wire framing, native results and
+shutdown/reply checks remain. The four-slot ownership test arranges in-flight
+jobs through the real dispatch function without production barriers or hooks.
+
+Final integration artifacts:
+
+- tmp/v2-e2e-0yk39pup: ordinary executable; 193 acknowledged cancellations,
+  three mixed-priority v2 crashes and one actual v1-to-v2 upgrade.
+- tmp/v2-e2e-0smr90u5: race executable; 153 acknowledged cancellations,
+  three mixed-priority v2 crashes and one actual v1-to-v2 upgrade, recovering
+  eight pending v1 jobs.
+
+Physical database checks run only after the writer stops. All eight crash runs
+preserved acknowledged admissions/cancellations, existing receipts and accounting,
+and drained after recovery. The ordinary upgrade crash had no pending jobs;
+the race upgrade and deterministic fixtures supply pending-v1 recovery evidence.
+The executable upgrade test runs when tmp/predecessor/service exists; the Go
+compatibility fixture always runs. See EXPERIMENTS.md for per-run counts.
+
+Go race diagnostics cover Go paths, not C/C++ races. No native ASan, allocation/
+writer-failure injection, external interposer barrier qualification, power-loss
+test, performance measurement or exhaustive concurrency proof is claimed.
+
+## Ambiguities and choices
+
+- No campaign-freeze manifest was supplied; the explicit phase-start instruction
+  authorizes maintenance. Candidate tests do not establish gate qualification.
+- Bitmap item i maps to bit i, confirmed by mixed/boundary tests; the header does
+  not explicitly specify bit order.
+- The dispatch cycle restarts at H after process restart. Cycle persistence is
+  unspecified; durable priority and cancellation are preserved. Cancelled queued
+  entries consume no dispatch turn.
+- Evaluate accepts valid high/normal metadata but remains outside persistent
+  priority queues and their cycle, sharing the four native slots.
+- FIFO and 3:1 apply at mutex-protected selection/slot reservation. Concurrent
+  native entries and completions may occur in a different order after dispatch.
+- Schema 1 pending records require the specified priority field. Valid predecessor
+  data includes normal. Unknown fields remain reserved/ignored; duplicate object
+  keys and invalid known fields are rejected.
+- Oversized request lines are rejected then disconnected; unterminated EOF
+  fragments are discarded. Receipts/indexes remain cached and retained without
+  expiry; startup scans all rows, as in the predecessor.
+
+## Effort and footprint
+
+Implementation began 2026-09-16 22:27:35 UTC and completed with documentation at
+approximately 22:39 UTC, about eleven minutes. Reading was separate, under ten
+minutes. Token usage and prior infrastructure preparation cost are unavailable.
+This is the initial maintenance submission before evaluator feedback or repair.
+
+Four production files changed; three existing test files changed and a new
+270-line priority_test.go was added. Generated production output is the rebuilt
+ELF; no generated source. Exact line-diff counts were not captured before edits;
+file counts are the recorded footprint. Handoff/log changes are separate.
+Original predecessor records remain in tmp/predecessor/ and the original
+experiment record remains appended to EXPERIMENTS.md. Broker responses and
+integration artifacts are retained.

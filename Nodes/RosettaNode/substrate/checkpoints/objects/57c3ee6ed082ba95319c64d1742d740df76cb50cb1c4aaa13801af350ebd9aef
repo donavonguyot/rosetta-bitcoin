@@ -1,0 +1,71 @@
+# Implementation notes
+
+The supplied specification is `interface.md`, supplemented in the separate repair
+phase by the counterexamples in `feedback.json`. This implementation uses the Go
+standard library and implements all four operations without external modules.
+
+Build with `go build -o rosetta-jsonl main.go`. Run `./rosetta-jsonl` with one
+request per stdin line. Test with `GO111MODULE=off go test .`.
+
+## Assumptions where the interface is silent
+
+- Transaction encoding uses little-endian fixed-width integers and canonical
+  CompactSize counts and byte-string lengths. Version bits, previous indices,
+  sequences, and locktime are unsigned 32-bit values. Repair feedback establishes
+  that amounts are signed; they use signed 64-bit decimal values and preserve the
+  corresponding two's-complement wire bits. No monetary, script, or transaction
+  consensus-validity checks apply.
+- Witness mode accepts ordinary legacy transactions and marker/flag witness
+  transactions. Only flag 1 is supported. Witness framing with every input's
+  witness stack empty is malformed. A stack containing an empty item is nonempty.
+  Serialization includes witness framing only when requested and a nonempty
+  witness stack exists; every input then receives its own witness stack encoding.
+- In witness decoding, an initial zero input count followed by zero denotes an
+  empty legacy transaction. A nonzero following byte is a witness flag. Thus
+  legacy transactions with zero inputs and nonzero outputs should use legacy
+  decoding mode; the same bytes are ambiguous in witness mode.
+- `identify` reports stripped and witness-inclusive serialization. Both identifiers
+  are double SHA-256 digests; display order reverses the 32 digest bytes. Without
+  witness data, full and stripped bytes and their identifiers are identical.
+- Prefix `consumed` is relative to the requested offset. Offsets beyond the byte
+  buffer are invalid requests. An offset at its end gives malformed encoding.
+  Exact decoding rejects any trailing bytes.
+- `max_items` independently bounds input and output counts, each witness stack's
+  item count, and each script or witness item's byte length. It does not bound
+  fixed-width hashes, the entire encoded transaction, or an aggregate item total.
+  It applies to all transaction data supplied to serialization or identification,
+  including witness data when stripped serialization is requested. If omitted,
+  there is no additional configured item limit. Wire counts are checked against
+  remaining bytes before allocation and before the configured limit. If even
+  the minimum encoded space required for a count cannot fit, the result is
+  `malformed_encoding`, including when that count also exceeds `max_items`.
+- Required fields must be present and of the documented JSON type; null does not
+  substitute for an object, array, string, or boolean. Decimal strings contain
+  only digits, except that amounts may have a leading minus sign, and must fit
+  their field's range. Leading zeros and negative zero amounts are accepted.
+  Hexadecimal is case-insensitive, must have even length, and has no `0x` prefix.
+  Output hex and decimal strings are normalized. Extra object fields are ignored;
+  duplicate object keys use the last value, as in Go's JSON decoder.
+- Missing fields, malformed JSON/hex/numeric strings, and unsupported operations
+  or modes give `invalid_request`. Invalid, truncated, noncanonical, or trailing
+  wire data gives `malformed_encoding`. Exceeding a configured field limit gives
+  `resource_limit` after the count's minimum encoded space has been checked.
+  Unexpected recovered panics give `execution_failure`.
+- No transport or admission thresholds were supplied, so the program invents
+  neither and does not ordinarily emit `transport_limit` or `admission_limit`.
+  JSON lines are not restricted to the default scanner's 64 KiB maximum. Blank
+  lines are invalid requests; a final nonempty line without a newline is handled.
+
+## Local verification
+
+Tests cover manually assembled legacy/witness bytes, all operation response
+shapes, digest and display ordering, exact/prefix boundaries, integer/count
+boundaries, malformed/truncated wire data, invalid JSON shapes, configured limits,
+large JSON lines, and 300 deterministic randomized round trips. A fuzz target
+checks that every accepted wire prefix reserializes identically.
+
+Repair regressions exercise every supplied counterexample through the JSON-lines
+entry point and compare the entire response. Additional cases cover signed
+64-bit amount boundaries, out-of-range amounts, and malformed-versus-resource
+precedence for input/output counts, scripts, witness counts, and witness items.
+Other assumptions above remain unconfirmed where the feedback is silent.

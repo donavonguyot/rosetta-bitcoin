@@ -1,0 +1,34 @@
+{
+  "schema": "rosettanode.substrate.diagnostic_capabilities.v1",
+  "native_asan": {
+    "status": "demonstrated",
+    "coverage": "adapter/IR/arena paths only",
+    "evidence": "mutation-matrix.json",
+    "candidate_style_dynamic_adapter_control": {
+      "status": "passed",
+      "coverage": "native adapter/IR/arena access only; leak checking disabled for foreign runtime",
+      "diagnostics": "/evaluator/.local/native-diagnostic-105588027045291/dummy-9736cb02"
+    }
+  },
+  "go_race_cgo": {
+    "status": "demonstrated",
+    "seeded_race_exit": 66,
+    "log_sha256": "9706fa57bc37bc1827a97b2fb047eae7287345d2bf70c3b2bb0a359d3e25a298",
+    "coverage": "Go paths with cgo enabled; excludes native races",
+    "clean_control_exit": 0
+  },
+  "rust": {
+    "status": "compiler checks available",
+    "unsupported": [
+      "Miri across FFI",
+      "whole-service TSan"
+    ]
+  },
+  "zig": {
+    "status": "checked-build infrastructure qualified",
+    "unsupported": [
+      "Go-equivalent race detection"
+    ]
+  },
+  "candidate_launch_allowed": false
+}

@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""V2 ABI, schema compatibility and real predecessor upgrade checks.
+
+Optional actual-v1 lane: V1_SERVICE_PATH=/workspace/tmp/predecessor/service
+python3 tests/test_v2.py. All database reads/edits occur with the writer stopped.
+"""
+import json
+import os
+import subprocess
+import time
+import unittest
+
+from test_service import BINARY, SMALL, Native, Rocks, Service, inspect, large_items, seed_pending
+
+
+class V2Tests(unittest.TestCase):
+    def setUp(self):
+        self.s = Service().start()
+
+    def tearDown(self):
+        self.s.kill()
+
+    def terminal(self, c, name):
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            job = c.call("status", id=name)["job"]
+            if job["state"] in ("complete", "cancelled"):
+                return job
+            time.sleep(.002)
+        self.fail("terminal timeout")
+
+    def test_v2_offsets_bitmap_and_v1_equivalence(self):
+        native = Native()
+        # Every batch size, bit 63, all-failure/zero-byte arenas, all-success,
+        # nonuniform offsets, prefix consumption and mixed per-item statuses.
+        patterns = [
+            lambda i: SMALL,
+            lambda i: {**SMALL, "hex": ""},
+            lambda i: {**SMALL, "hex": SMALL["hex"] + "ab" * i,
+                       "operation": "prefix" if i % 2 == 0 else "exact"},
+        ]
+        with self.s.connect() as c:
+            for count in range(1, 65):
+                for pattern in patterns:
+                    items = [pattern(i) for i in range(count)]
+                    expected = native.evaluate(items, version=1)
+                    self.assertEqual(native.evaluate(items, version=2), expected)
+                    actual = c.call("evaluate", items=items)
+                    self.assertEqual(actual["status"], "ok")
+                    self.assertEqual(actual["results"], expected)
+        self.s.stop()
+        self.assertEqual(inspect(self.s.db)["meta/sequence"], b"0")
+
+    def test_priority_retry_identity_and_receipt_retention(self):
+        with self.s.connect() as c:
+            for priority in ["normal", "high"]:
+                name = "identity-" + priority
+                other = "high" if priority == "normal" else "normal"
+                accepted = c.call("submit", id=name, items=[SMALL], priority=priority)
+                self.assertEqual(accepted["status"], "accepted")
+                retry = c.call("submit", id=name, items=[SMALL], priority=other)
+                self.assertEqual(retry["status"], "existing")
+                self.assertEqual(retry["sequence"], accepted["sequence"])
+                self.assertEqual(c.call("submit", id=name, items=[{**SMALL, "hex": ""}],
+                                        priority=other)["status"], "conflict")
+                self.terminal(c, name)
+        self.s.stop()
+        before = inspect(self.s.db)
+        self.s.start()
+        with self.s.connect() as c:
+            for priority in ["normal", "high"]:
+                self.assertEqual(c.call("submit", id="identity-" + priority,
+                                        items=[SMALL])["status"], "existing")
+        self.s.stop()
+        self.assertEqual(inspect(self.s.db), before)
+
+    def test_mixed_pending_schema_one_and_cancellations(self):
+        self.s.stop()
+        seed_pending(self.s.db, [(f"mixed-{i}", [SMALL], i in (0, 3, 6)) for i in range(12)])
+        with Rocks(self.s.db) as db:
+            changes = {}
+            for key, value in db.rows().items():
+                if key.startswith("p/"):
+                    record = json.loads(value)
+                    seq = int(record["sequence"])
+                    if seq % 3 == 0:
+                        del record["priority"]  # Legacy normal default.
+                    else:
+                        record["priority"] = "high" if seq % 2 == 0 else "normal"
+                    changes[key] = json.dumps(record).encode()
+            db.change(changes)
+        inspect(self.s.db)
+        self.s.start()
+        with self.s.connect() as c:
+            for i in range(12):
+                job = self.terminal(c, f"mixed-{i}")
+                self.assertEqual(job["state"], "cancelled" if i in (0, 3, 6) else "complete")
+                self.assertEqual(c.call("submit", id=f"mixed-{i}", items=[SMALL],
+                                        priority="high")["status"], "existing")
+        self.s.stop()
+        self.assertEqual(inspect(self.s.db)["meta/checkpoint"], b"12")
+
+    def test_invalid_stored_priority_rejected_without_changes(self):
+        self.s.stop()
+        seed_pending(self.s.db, [("bad-priority", [SMALL], False)])
+        with Rocks(self.s.db) as db:
+            key = "p/00000000000000000001"
+            job = json.loads(db.rows()[key])
+            job["priority"] = "urgent"
+            db.change({key: json.dumps(job).encode()})
+            before = db.rows()
+        failed = subprocess.run([str(BINARY), str(self.s.db), str(self.s.sock)],
+                                capture_output=True, timeout=10)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn(b"pending JSON", failed.stderr)
+        with Rocks(self.s.db) as db:
+            self.assertEqual(db.rows(), before)
+
+    @unittest.skipUnless(os.environ.get("V1_SERVICE_PATH"), "set V1_SERVICE_PATH for actual predecessor")
+    def test_actual_v1_datadir_upgrade(self):
+        self.s.stop()
+        self.s.binary = os.environ["V1_SERVICE_PATH"]
+        self.s.start()
+        acknowledged = {}
+        cancellations = set()
+        with self.s.connect() as c:
+            c.call("submit", id="old-receipt", items=[SMALL])
+            self.terminal(c, "old-receipt")
+            heavy = large_items()
+            for i in range(4):
+                name = f"old-pending-{i}"
+                r = c.call("submit", id=name, items=heavy)
+                self.assertEqual(r["status"], "accepted")
+                acknowledged[name] = r["sequence"]
+                if i in (0, 3) and c.call("cancel", id=name)["status"] == "ok":
+                    cancellations.add(name)
+            self.s.kill()
+        before = inspect(self.s.db)
+        self.assertGreater(int(before["meta/jobs"]), 0, "need actual v1 pending work")
+        self.assertTrue(cancellations, "need accepted v1 cancellation")
+        self.assertTrue(any(k.startswith("c/") for k in before), "need a durable v1 cancellation intent")
+        old_receipts = {k: v for k, v in before.items() if k.startswith("r/")}
+        self.s.binary = BINARY
+        self.s.start()
+        with self.s.connect() as c:
+            for name, sequence in acknowledged.items():
+                job = self.terminal(c, name)
+                self.assertEqual(job["sequence"], sequence)
+                self.assertEqual(job["state"], "cancelled" if name in cancellations else "complete")
+            self.assertEqual(c.call("submit", id="new-high", items=[SMALL], priority="high")["status"], "accepted")
+            self.terminal(c, "new-high")
+        self.s.stop()
+        after = inspect(self.s.db)
+        for key, value in old_receipts.items():
+            self.assertEqual(after[key], value)
+        for key, value in before.items():
+            if key.startswith("id/"):
+                self.assertEqual(after[key], value)
+        self.assertEqual(after["meta/version"], b"1")
+        self.assertEqual(after["meta/jobs"], b"0")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

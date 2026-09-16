@@ -1,0 +1,586 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"math"
+	"math/rand"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+var unlimited = limits{maxItems: ^uint64(0)}
+
+// These byte layouts are constructed by hand, independently of serialize.
+const legacyFixture = "0102030401000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f0506070803aabbcc090a0b0c01feffffffffffffff01510d0e0f10"
+const witnessFixture = "01020304000101000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f0506070803aabbcc090a0b0c01feffffffffffffff015102000201020d0e0f10"
+
+func fixtureTransaction() *transaction {
+	t := &transaction{
+		version: 0x04030201,
+		inputs: []txInput{{
+			index: 0x08070605, script: []byte{0xaa, 0xbb, 0xcc},
+			sequence: 0x0c0b0a09, witness: [][]byte{{}, {1, 2}},
+		}},
+		outputs:  []txOutput{{amount: -2, script: []byte{0x51}}},
+		locktime: 0x100f0e0d,
+	}
+	for i := range t.inputs[0].previous {
+		t.inputs[0].previous[i] = byte(i)
+	}
+	return t
+}
+
+func unhex(t *testing.T, s string) []byte {
+	t.Helper()
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func request(t *testing.T, v any) response {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handle(b)
+}
+
+func requireStatus(t *testing.T, r response, expected string) {
+	t.Helper()
+	if r["status"] != expected {
+		t.Fatalf("status = %v, want %s; response: %v", r["status"], expected, r)
+	}
+	if expected != "ok" && len(r) != 1 {
+		t.Fatalf("error has extra fields: %v", r)
+	}
+}
+
+func TestHandConstructedEncodings(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		witness bool
+		wire    string
+	}{{"legacy", false, legacyFixture}, {"witness", true, witnessFixture}} {
+		t.Run(tc.name, func(t *testing.T) {
+			tx := fixtureTransaction()
+			got := hex.EncodeToString(serialize(tx, tc.witness))
+			if got != tc.wire {
+				t.Fatalf("wire = %s, want %s", got, tc.wire)
+			}
+			want := tx.jsonValue()
+			if !tc.witness {
+				want.Inputs[0].Witness = []string{}
+			}
+			wire := unhex(t, tc.wire)
+			decoded, consumed, err := decode(wire, 0, tc.witness, true, unlimited)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if consumed != len(wire) || !reflect.DeepEqual(decoded.jsonValue(), want) {
+				t.Fatalf("decoded = %+v, consumed = %d; want %+v, %d", decoded.jsonValue(), consumed, want, len(wire))
+			}
+		})
+	}
+}
+
+func TestDecodePrefixAndExact(t *testing.T) {
+	wire := unhex(t, witnessFixture)
+	data := append([]byte{0xde, 0xad, 0xbe, 0xef}, wire...)
+	data = append(data, wire...)
+	tx, consumed, err := decode(data, 4, true, false, unlimited)
+	if err != nil || consumed != len(wire) || !reflect.DeepEqual(tx.jsonValue(), fixtureTransaction().jsonValue()) {
+		t.Fatalf("prefix decoding: tx=%v consumed=%d err=%v", tx, consumed, err)
+	}
+	if _, _, err = decode(data, 4, true, true, unlimited); err != malformedEncoding {
+		t.Fatalf("trailing data: %v", err)
+	}
+	r := request(t, map[string]any{"op": "decode_prefix", "mode": "witness", "offset": "4", "bytes": hex.EncodeToString(data)})
+	requireStatus(t, r, "ok")
+	if r["consumed"] != "71" {
+		t.Fatalf("consumed must be relative to byte offset: %v", r)
+	}
+	for _, offset := range []string{"-1", "18446744073709551616", "9999", "", "0x0"} {
+		requireStatus(t, request(t, map[string]any{"op": "decode_prefix", "mode": "legacy", "offset": offset, "bytes": ""}), "invalid_request")
+	}
+	requireStatus(t, request(t, map[string]any{"op": "decode_prefix", "mode": "legacy", "offset": "0", "bytes": ""}), "malformed_encoding")
+}
+
+func TestTruncations(t *testing.T) {
+	for _, encoded := range []string{legacyFixture, witnessFixture} {
+		wire := unhex(t, encoded)
+		for n := 0; n < len(wire); n++ {
+			if _, _, err := decode(wire[:n], 0, encoded == witnessFixture, true, unlimited); err != malformedEncoding {
+				t.Fatalf("prefix length %d of %d: %v", n, len(wire), err)
+			}
+		}
+	}
+}
+
+func TestResourcePrecedence(t *testing.T) {
+	// The minimized counterexample supplied for the separate repair phase:
+	// version ff025251, one declared input, and no bytes for that input.
+	requireStatus(t, handle([]byte(`{"op":"decode_exact","bytes":"ff02525101","mode":"witness","limits":{"max_items":"0"}}`)), "malformed_encoding")
+
+	for _, tc := range []struct {
+		name    string
+		wire    string
+		witness bool
+	}{{"legacy", legacyFixture, false}, {"witness", witnessFixture, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			wire := unhex(t, tc.wire)
+			// Also cover malformed data after a complete over-limit container,
+			// including truncation of outputs, witness items, and locktime.
+			for end := 0; end < len(wire); end++ {
+				for _, exact := range []bool{false, true} {
+					if _, _, err := decode(wire[:end], 0, tc.witness, exact, limits{0}); err != malformedEncoding {
+						t.Fatalf("truncation %d, exact=%v: got %v, want malformed_encoding", end, exact, err)
+					}
+				}
+			}
+			if _, _, err := decode(wire, 0, tc.witness, true, limits{0}); err != resourceLimit {
+				t.Fatalf("valid over-limit transaction: %v", err)
+			}
+			withSuffix := append(append([]byte{}, wire...), 0xff)
+			if _, _, err := decode(withSuffix, 0, tc.witness, true, limits{0}); err != malformedEncoding {
+				t.Fatalf("exact decode with trailing byte: %v", err)
+			}
+			if _, _, err := decode(withSuffix, 0, tc.witness, false, limits{0}); err != resourceLimit {
+				t.Fatalf("prefix decode must ignore trailing byte: %v", err)
+			}
+			withPrefix := append([]byte{0xaa, 0xbb}, wire[:len(wire)-1]...)
+			if _, _, err := decode(withPrefix, 2, tc.witness, false, limits{0}); err != malformedEncoding {
+				t.Fatalf("truncation with nonzero offset: %v", err)
+			}
+		})
+	}
+
+	// Corruption beyond the first input count must not be hidden by that
+	// count's limit violation, either.
+	for _, encoded := range []string{
+		legacyFixture[:82] + "fd0300" + legacyFixture[84:], // nonminimal input script length
+		witnessFixture[:10] + "03" + witnessFixture[12:],   // unknown flag bit
+		witnessFixture[:124] + "00" + witnessFixture[134:], // superfluous empty witness
+		"01000000ffffffffffffffffff",                       // unrepresentable/truncated input vector
+	} {
+		if _, _, err := decode(unhex(t, encoded), 0, true, true, limits{0}); err != malformedEncoding {
+			t.Fatalf("malformed over-limit data %s: %v", encoded, err)
+		}
+	}
+}
+
+func TestCompactSize(t *testing.T) {
+	for _, tc := range []struct {
+		n    uint64
+		wire string
+	}{
+		{0, "00"}, {252, "fc"}, {253, "fdfd00"}, {65535, "fdffff"},
+		{65536, "fe00000100"}, {math.MaxUint32, "feffffffff"},
+		{uint64(math.MaxUint32) + 1, "ff0000000001000000"}, {math.MaxUint64, "ffffffffffffffffff"},
+	} {
+		if got := hex.EncodeToString(appendCompact(nil, tc.n)); got != tc.wire {
+			t.Fatalf("encode %d = %s, want %s", tc.n, got, tc.wire)
+		}
+		wire := unhex(t, tc.wire)
+		d := decoder{data: wire, limits: unlimited}
+		got, err := d.compact()
+		if err != nil || got != tc.n || d.pos != len(wire) {
+			t.Fatalf("decode %s = %d, %v", tc.wire, got, err)
+		}
+		for n := 0; n < len(wire); n++ {
+			d := decoder{data: wire[:n], limits: unlimited}
+			if _, err := d.compact(); err != malformedEncoding {
+				t.Fatalf("truncated compact %s[:%d]: %v", tc.wire, n, err)
+			}
+		}
+	}
+	for _, s := range []string{"fdfc00", "fd0000", "feffff0000", "fe00000000", "ffffffffff00000000", "ff0000000000000000"} {
+		d := decoder{data: unhex(t, s), limits: unlimited}
+		if _, err := d.compact(); err != malformedEncoding {
+			t.Fatalf("nonminimal %s: %v", s, err)
+		}
+	}
+}
+
+func TestWitnessRules(t *testing.T) {
+	tx := fixtureTransaction()
+	tx.inputs[0].witness = nil
+	if got := hex.EncodeToString(serialize(tx, true)); got != legacyFixture {
+		t.Fatalf("empty witness changed encoding: %s", got)
+	}
+	if _, _, err := decode(unhex(t, legacyFixture), 0, true, true, unlimited); err != nil {
+		t.Fatalf("witness mode must accept normal legacy transaction: %v", err)
+	}
+	// A stack containing one empty item is present witness data.
+	tx.inputs[0].witness = [][]byte{{}}
+	wire := serialize(tx, true)
+	got, _, err := decode(wire, 0, true, true, unlimited)
+	if err != nil || len(got.inputs[0].witness) != 1 || len(got.inputs[0].witness[0]) != 0 {
+		t.Fatalf("empty witness item lost: %v, %v", got, err)
+	}
+	// Keep the marker/flag, replace the witness section with a zero-item stack.
+	full := unhex(t, witnessFixture)
+	superfluous := append([]byte{}, full[:len(full)-9]...)
+	superfluous = append(superfluous, 0)
+	superfluous = append(superfluous, full[len(full)-4:]...)
+	if _, _, err := decode(superfluous, 0, true, true, unlimited); err != malformedEncoding {
+		t.Fatalf("superfluous witness: %v", err)
+	}
+	for _, flag := range []byte{2, 3, 0x80, 0xff} {
+		bad := append([]byte{}, full...)
+		bad[5] = flag
+		if _, _, err := decode(bad, 0, true, true, unlimited); err != malformedEncoding {
+			t.Fatalf("unknown flag %d: %v", flag, err)
+		}
+	}
+	// Each input has its own stack, including the empty stacks.
+	tx.inputs = append(tx.inputs, txInput{sequence: math.MaxUint32}, txInput{witness: [][]byte{{9}}})
+	got, _, err = decode(serialize(tx, true), 0, true, true, unlimited)
+	if err != nil || !reflect.DeepEqual(got.jsonValue(), tx.jsonValue()) {
+		t.Fatalf("mixed witness stacks: %v, %v", got, err)
+	}
+}
+
+func TestEmptyTransactions(t *testing.T) {
+	for _, mode := range []bool{false, true} {
+		tx, consumed, err := decode(unhex(t, "01000000000000000000"), 0, mode, true, limits{0})
+		if err != nil || consumed != 10 || tx.version != 1 || len(tx.inputs) != 0 || len(tx.outputs) != 0 {
+			t.Fatalf("empty transaction mode=%v: %v %d %v", mode, tx, consumed, err)
+		}
+		b, _ := json.Marshal(tx.jsonValue())
+		if strings.Contains(string(b), "null") {
+			t.Fatalf("null in empty transaction: %s", b)
+		}
+	}
+	// Legacy zero-input transactions with outputs remain structurally encodable.
+	tx := &transaction{outputs: []txOutput{{amount: 0}}}
+	wire := serialize(tx, false)
+	if _, _, err := decode(wire, 0, false, true, unlimited); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := decode(wire, 0, true, true, unlimited); err != malformedEncoding {
+		t.Fatalf("witness marker ambiguity: %v", err)
+	}
+}
+
+func TestLimits(t *testing.T) {
+	tx := fixtureTransaction()
+	for _, op := range []string{"serialize", "identify"} {
+		for _, max := range []string{"0", "1", "2"} {
+			r := request(t, map[string]any{"op": op, "transaction": tx.jsonValue(), "include_witness": false, "limits": map[string]string{"max_items": max}})
+			requireStatus(t, r, "resource_limit")
+		}
+		requireStatus(t, request(t, map[string]any{"op": op, "transaction": tx.jsonValue(), "include_witness": true, "limits": map[string]string{"max_items": "3"}}), "ok")
+	}
+	for _, tc := range []struct {
+		wire string
+		max  uint64
+		err  error
+	}{
+		{witnessFixture, 3, nil}, {witnessFixture, 2, resourceLimit},
+		{"01000000ffffffffffffffffff", 10, malformedEncoding},
+		{"01000000ffffffffffffffffff", math.MaxUint64, malformedEncoding},
+		// A noncanonical count remains malformed even if its value exceeds max.
+		{"01000000fd0100", 0, malformedEncoding},
+	} {
+		_, _, err := decode(unhex(t, tc.wire), 0, true, true, limits{tc.max})
+		if err != tc.err {
+			t.Fatalf("limits decoding %s: got %v want %v", tc.wire, err, tc.err)
+		}
+	}
+	// Check input/output counts, stack counts, scripts, and stack item bytes.
+	for _, modify := range []func(*transaction){
+		func(tx *transaction) { tx.inputs = append(tx.inputs, tx.inputs[0], tx.inputs[0], tx.inputs[0]) },
+		func(tx *transaction) { tx.outputs = append(tx.outputs, tx.outputs[0], tx.outputs[0], tx.outputs[0]) },
+		func(tx *transaction) { tx.inputs[0].script = []byte{1, 2, 3, 4} },
+		func(tx *transaction) { tx.outputs[0].script = []byte{1, 2, 3, 4} },
+		func(tx *transaction) { tx.inputs[0].witness = [][]byte{{}, {}, {}, {}} },
+		func(tx *transaction) { tx.inputs[0].witness = [][]byte{{1, 2, 3, 4}} },
+	} {
+		tx := fixtureTransaction()
+		modify(tx)
+		_, _, err := decode(serialize(tx, true), 0, true, true, limits{3})
+		if err != resourceLimit {
+			t.Fatalf("container limit: %v", err)
+		}
+		requireStatus(t, request(t, map[string]any{"op": "serialize", "transaction": tx.jsonValue(), "include_witness": true, "limits": map[string]string{"max_items": "3"}}), "resource_limit")
+	}
+}
+
+func TestIdentify(t *testing.T) {
+	tx := fixtureTransaction()
+	r := request(t, map[string]any{"op": "identify", "transaction": tx.jsonValue()})
+	requireStatus(t, r, "ok")
+	if len(r) != 9 || r["stripped"] != legacyFixture || r["full"] != witnessFixture || r["stripped_size"] != "64" || r["full_size"] != "71" {
+		t.Fatalf("identity fields: %v", r)
+	}
+	// Independently exercise the streaming hash API and check both byte orders.
+	for _, pair := range []struct{ bytesKey, hashKey string }{{"stripped", "txid"}, {"full", "wtxid"}} {
+		h := sha256.New()
+		_, _ = io.Copy(h, bytes.NewReader(unhex(t, r[pair.bytesKey].(string))))
+		first := h.Sum(nil)
+		h.Reset()
+		_, _ = h.Write(first)
+		digest := h.Sum(nil)
+		if r[pair.hashKey+"_digest_order"] != hex.EncodeToString(digest) {
+			t.Fatal("double hash mismatch")
+		}
+		display := unhex(t, r[pair.hashKey+"_display_order"].(string))
+		for i := range digest {
+			if digest[i] != display[31-i] {
+				t.Fatal("display order mismatch")
+			}
+		}
+	}
+	tx.inputs[0].witness[1][0]++
+	r2 := request(t, map[string]any{"op": "identify", "transaction": tx.jsonValue()})
+	if r2["txid_digest_order"] != r["txid_digest_order"] || r2["wtxid_digest_order"] == r["wtxid_digest_order"] {
+		t.Fatalf("witness mutation changed wrong identity: %v", r2)
+	}
+	tx.inputs[0].witness = nil
+	r3 := request(t, map[string]any{"op": "identify", "transaction": tx.jsonValue()})
+	if r3["stripped"] != r3["full"] || r3["txid_digest_order"] != r3["wtxid_digest_order"] {
+		t.Fatal("legacy IDs differ")
+	}
+}
+
+func TestRequestValidation(t *testing.T) {
+	for _, raw := range []string{
+		``, `null`, `[]`, `{`, `{}`,
+		`{"op":"unknown"}`, `{"op":3}`, `{"op":null}`,
+		`{"op":"decode_exact","mode":"bad","bytes":""}`,
+		`{"op":"decode_exact","mode":"legacy","bytes":"0"}`,
+		`{"op":"decode_exact","mode":"legacy","bytes":"0g"}`,
+		`{"op":"decode_exact","mode":"legacy","bytes":null}`,
+		`{"op":"decode_exact","mode":"legacy","bytes":"00","limits":null}`,
+		`{"op":"decode_exact","mode":"legacy","bytes":"00","limits":{"max_items":1}}`,
+		`{"op":"decode_exact","mode":"legacy","bytes":"00","limits":{"max_items":"-1"}}`,
+		`{"op":"decode_prefix","mode":"legacy","bytes":"00"}`,
+		`{"op":"decode_exact","mode":"legacy","bytes":"00"} {}`,
+		`{"op":"serialize","include_witness":"false","transaction":{}}`,
+	} {
+		requireStatus(t, handle([]byte(raw)), "invalid_request")
+	}
+	base := fixtureTransaction().jsonValue()
+	for _, modify := range []func(map[string]any){
+		func(m map[string]any) { delete(m, "version_bits") },
+		func(m map[string]any) { m["version_bits"] = "4294967296" },
+		func(m map[string]any) { m["version_bits"] = "-1" },
+		func(m map[string]any) { m["version_bits"] = "+1" },
+		func(m map[string]any) { m["locktime"] = 0 },
+		func(m map[string]any) { m["inputs"] = nil },
+		func(m map[string]any) { m["outputs"] = nil },
+		func(m map[string]any) { m["inputs"].([]any)[0].(map[string]any)["previous_txid_digest_order"] = "00" },
+		func(m map[string]any) { m["inputs"].([]any)[0].(map[string]any)["previous_index"] = "4294967296" },
+		func(m map[string]any) { m["inputs"].([]any)[0].(map[string]any)["sequence"] = "-1" },
+		func(m map[string]any) { m["inputs"].([]any)[0].(map[string]any)["witness"] = nil },
+		func(m map[string]any) { delete(m["inputs"].([]any)[0].(map[string]any), "witness") },
+		func(m map[string]any) { m["inputs"].([]any)[0].(map[string]any)["script"] = "zz" },
+		func(m map[string]any) { m["outputs"].([]any)[0].(map[string]any)["amount"] = "9223372036854775808" },
+		func(m map[string]any) { m["outputs"].([]any)[0].(map[string]any)["amount"] = "-9223372036854775809" },
+	} {
+		b, _ := json.Marshal(base)
+		var m map[string]any
+		_ = json.Unmarshal(b, &m)
+		modify(m)
+		requireStatus(t, request(t, map[string]any{"op": "serialize", "include_witness": false, "transaction": m}), "invalid_request")
+	}
+	// Hex input is case insensitive; output is canonical lowercase.
+	r := request(t, map[string]any{"op": "decode_exact", "mode": "witness", "bytes": strings.ToUpper(witnessFixture)})
+	requireStatus(t, r, "ok")
+	r = request(t, map[string]any{"op": "serialize", "include_witness": true, "transaction": r["transaction"]})
+	if r["bytes"] != witnessFixture {
+		t.Fatalf("uppercase round trip: %v", r)
+	}
+}
+
+func TestIntegerBoundaries(t *testing.T) {
+	tx := fixtureTransaction()
+	tx.version, tx.locktime = math.MaxUint32, math.MaxUint32
+	tx.inputs[0].index, tx.inputs[0].sequence = math.MaxUint32, math.MaxUint32
+	tx.outputs = []txOutput{{amount: math.MinInt64}, {amount: math.MaxInt64}, {amount: -1}, {amount: 0}}
+	r := request(t, map[string]any{"op": "serialize", "include_witness": true, "transaction": tx.jsonValue()})
+	requireStatus(t, r, "ok")
+	got, _, err := decode(unhex(t, r["bytes"].(string)), 0, true, true, unlimited)
+	if err != nil || !reflect.DeepEqual(got.jsonValue(), tx.jsonValue()) {
+		t.Fatalf("integer roundtrip: %v, %v", got, err)
+	}
+}
+
+func TestRandomRoundTrips(t *testing.T) {
+	rng := rand.New(rand.NewSource(731992))
+	randomBytes := func() []byte {
+		b := make([]byte, rng.Intn(40))
+		_, _ = rng.Read(b)
+		return b
+	}
+	for iteration := 0; iteration < 500; iteration++ {
+		tx := &transaction{version: rng.Uint32(), locktime: rng.Uint32(), inputs: make([]txInput, 1+rng.Intn(4)), outputs: make([]txOutput, rng.Intn(4))}
+		for i := range tx.inputs {
+			in := &tx.inputs[i]
+			_, _ = rng.Read(in.previous[:])
+			in.index, in.sequence, in.script = rng.Uint32(), rng.Uint32(), randomBytes()
+			if iteration%2 == 0 {
+				in.witness = make([][]byte, rng.Intn(4))
+				for k := range in.witness {
+					in.witness[k] = randomBytes()
+				}
+			}
+		}
+		for i := range tx.outputs {
+			tx.outputs[i] = txOutput{amount: int64(rng.Uint64()), script: randomBytes()}
+		}
+		for _, include := range []bool{false, true} {
+			wire := serialize(tx, include)
+			got, n, err := decode(wire, 0, include, true, unlimited)
+			if err != nil || n != len(wire) {
+				t.Fatalf("iteration %d: n=%d err=%v", iteration, n, err)
+			}
+			want := tx.jsonValue()
+			if !include {
+				for i := range want.Inputs {
+					want.Inputs[i].Witness = []string{}
+				}
+			}
+			if !reflect.DeepEqual(got.jsonValue(), want) {
+				t.Fatalf("roundtrip iteration %d", iteration)
+			}
+			if !bytes.Equal(serialize(got, include), wire) {
+				t.Fatalf("nonstable re-encoding iteration %d", iteration)
+			}
+		}
+	}
+}
+
+func TestLargeScriptsAndCounts(t *testing.T) {
+	for _, length := range []int{252, 253, 65535, 65536} {
+		tx := fixtureTransaction()
+		tx.inputs[0].script = bytes.Repeat([]byte{0xa3}, length)
+		tx.outputs[0].script = bytes.Repeat([]byte{0xb4}, length)
+		tx.inputs[0].witness = [][]byte{bytes.Repeat([]byte{0xc5}, length)}
+		wire := serialize(tx, true)
+		got, _, err := decode(wire, 0, true, true, limits{uint64(length)})
+		if err != nil || !reflect.DeepEqual(got.jsonValue(), tx.jsonValue()) {
+			t.Fatalf("length %d: %v", length, err)
+		}
+		if _, _, err = decode(wire, 0, true, true, limits{uint64(length - 1)}); err != resourceLimit {
+			t.Fatalf("length %d limit: %v", length, err)
+		}
+	}
+	tx := &transaction{inputs: make([]txInput, 253), outputs: make([]txOutput, 253)}
+	tx.inputs[0].witness = make([][]byte, 253)
+	wire := serialize(tx, true)
+	got, _, err := decode(wire, 0, true, true, limits{253})
+	if err != nil || !reflect.DeepEqual(got.jsonValue(), tx.jsonValue()) {
+		t.Fatalf("large counts: %v", err)
+	}
+}
+
+func TestJSONLines(t *testing.T) {
+	valid := `{"op":"decode_exact","mode":"legacy","bytes":"01000000000000000000"}`
+	input := "\nnot json\n" + valid + "\r\n" + `{"op":"decode_exact","mode":"legacy","bytes":""}` + "\n" + valid
+	var out bytes.Buffer
+	if err := run(strings.NewReader(input), &out); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	want := []string{"invalid_request", "invalid_request", "ok", "malformed_encoding", "ok"}
+	if len(lines) != len(want) {
+		t.Fatalf("line count: %q", out.String())
+	}
+	for i, line := range lines {
+		var r response
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatal(err)
+		}
+		requireStatus(t, r, want[i])
+	}
+	// Exercise framing beyond bufio.Scanner's default 64 KiB maximum token.
+	tx := fixtureTransaction()
+	tx.inputs[0].script = make([]byte, 40000)
+	line, _ := json.Marshal(map[string]any{"op": "serialize", "include_witness": false, "transaction": tx.jsonValue()})
+	out.Reset()
+	if err := run(bytes.NewReader(append(line, '\n')), &out); err != nil {
+		t.Fatal(err)
+	}
+	var r response
+	if err := json.Unmarshal(out.Bytes(), &r); err != nil {
+		t.Fatal(err)
+	}
+	requireStatus(t, r, "ok")
+}
+
+func TestLineBoundariesAndDrain(t *testing.T) {
+	for _, input := range []string{"12345678901234567\nok\n", "12345678901234567\nok"} {
+		r := bufio.NewReaderSize(strings.NewReader(input), 16)
+		line, over, err := readLine(r, 16)
+		if !over || err != nil || len(line) != 0 {
+			t.Fatalf("oversize: %q %v %v", line, over, err)
+		}
+		line, over, err = readLine(r, 16)
+		if string(line) != "ok" || over || err != nil && err != io.EOF {
+			t.Fatalf("drain: %q %v %v", line, over, err)
+		}
+	}
+	r := bufio.NewReaderSize(strings.NewReader("1234567890123456\n"), 16)
+	line, over, err := readLine(r, 16)
+	if string(line) != "1234567890123456" || over || err != nil {
+		t.Fatalf("exact line limit: %q %v %v", line, over, err)
+	}
+	r = bufio.NewReaderSize(strings.NewReader("12345678901234567"), 16)
+	_, over, err = readLine(r, 16)
+	if !over || err != io.EOF {
+		t.Fatalf("oversize at EOF: %v %v", over, err)
+	}
+}
+
+func FuzzDecode(f *testing.F) {
+	for _, s := range []string{legacyFixture, witnessFixture, "01000000000000000000", "01000000ffffffffffffffffff", "01000000fd0100", "ff02525101"} {
+		b, _ := hex.DecodeString(s)
+		f.Add(b, true)
+		f.Add(b, false)
+	}
+	f.Fuzz(func(t *testing.T, data []byte, witness bool) {
+		tx, n, err := decode(data, 0, witness, false, limits{100000})
+		if err == malformedEncoding {
+			if _, _, limitedErr := decode(data, 0, witness, false, limits{0}); limitedErr != malformedEncoding {
+				t.Fatalf("restrictive limits masked malformed data: %x -> %v", data, limitedErr)
+			}
+		}
+		if err != nil {
+			return
+		}
+		if n <= 0 || n > len(data) {
+			t.Fatalf("invalid consumed: %d", n)
+		}
+		wire := serialize(tx, witness)
+		if !bytes.Equal(wire, data[:n]) {
+			t.Fatalf("noncanonical successful decode: %x -> %x", data[:n], wire)
+		}
+	})
+}
+
+func FuzzRequests(f *testing.F) {
+	f.Add([]byte(`{"op":"decode_exact","mode":"legacy","bytes":"01000000000000000000"}`))
+	f.Add([]byte(`{"op":"serialize","include_witness":true,"transaction":{"version_bits":"1","inputs":[],"outputs":[],"locktime":"0"}}`))
+	f.Fuzz(func(t *testing.T, line []byte) {
+		r := handle(line)
+		if r["status"] == "execution_failure" {
+			t.Fatalf("request caused an internal failure: %s", line)
+		}
+		if _, err := json.Marshal(r); err != nil {
+			t.Fatal(err)
+		}
+		if r["status"] != "ok" && len(r) != 1 {
+			t.Fatalf("extra error fields: %v", r)
+		}
+	})
+}

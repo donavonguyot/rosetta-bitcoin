@@ -1,0 +1,113 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+// The supplied repair feedback is the only source of these expected results.
+// Exercise the JSON-lines entry point to compare complete external responses.
+func TestRepairFeedback(t *testing.T) {
+	data, err := os.ReadFile("feedback.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var feedback struct {
+		Counterexamples []struct {
+			Family   string          `json:"family"`
+			Request  json.RawMessage `json:"request"`
+			Expected map[string]any  `json:"expected"`
+		} `json:"counterexamples"`
+	}
+	if err := json.Unmarshal(data, &feedback); err != nil {
+		t.Fatal(err)
+	}
+	if len(feedback.Counterexamples) == 0 {
+		t.Fatal("no feedback cases")
+	}
+	for _, example := range feedback.Counterexamples {
+		t.Run(example.Family, func(t *testing.T) {
+			var input, output bytes.Buffer
+			if err := json.Compact(&input, example.Request); err != nil {
+				t.Fatal(err)
+			}
+			input.WriteByte('\n')
+			if err := run(&input, &output); err != nil {
+				t.Fatal(err)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(output.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, example.Expected) {
+				t.Fatalf("response = %s\nwant = %#v", output.Bytes(), example.Expected)
+			}
+		})
+	}
+}
+
+func TestSignedAmountBoundaries(t *testing.T) {
+	for _, tc := range []struct{ amount, wire string }{
+		{"-9223372036854775808", "0000000000000080"},
+		{"-37", "dbffffffffffffff"},
+		{"-1", "ffffffffffffffff"},
+		{"0", "0000000000000000"},
+		{"1", "0100000000000000"},
+		{"9223372036854775807", "ffffffffffffff7f"},
+	} {
+		t.Run(tc.amount, func(t *testing.T) {
+			// Empty input list makes the amount's exact wire position explicit.
+			tx := transactionJSON{"1", []inputJSON{}, []outputJSON{{tc.amount, ""}}, "0"}
+			wire := "010000000001" + tc.wire + "0000000000"
+			got := request(t, map[string]any{"op": "serialize", "transaction": tx, "include_witness": false})
+			wantStatus(t, got, "ok")
+			if got["bytes"] != wire {
+				t.Fatalf("bytes = %v, want %s", got["bytes"], wire)
+			}
+			got = request(t, map[string]any{"op": "decode_exact", "bytes": wire, "mode": "legacy"})
+			wantStatus(t, got, "ok")
+			if !reflect.DeepEqual(got["transaction"], tx) {
+				t.Fatalf("transaction = %#v, want %#v", got["transaction"], tx)
+			}
+			got = request(t, map[string]any{"op": "identify", "transaction": tx})
+			wantStatus(t, got, "ok")
+			if got["full"] != wire || got["stripped"] != wire {
+				t.Fatal(got)
+			}
+		})
+	}
+	for _, amount := range []string{"-9223372036854775809", "9223372036854775808", "18446744073709551615", "-", "--1", "+1", "1.0", "1e2", " 1", "- 1"} {
+		for _, op := range []string{"serialize", "identify"} {
+			tx := sample(false)
+			tx.Outputs[0].Amount = amount
+			wantStatus(t, request(t, map[string]any{"op": op, "transaction": tx, "include_witness": false}), "invalid_request")
+		}
+	}
+}
+
+func TestUnavailableDataBeforeResourceLimit(t *testing.T) {
+	// Every case is malformed independently of its configured limit. The count
+	// itself is canonical, but even the minimum bytes required cannot fit.
+	for _, tc := range []struct{ name, wire, mode, limit string }{
+		{"feedback_input", "ff02525101", "witness", "0"},
+		{"input", "0100000001", "legacy", "0"},
+		{"extended_input", "01000000fd0001", "legacy", "255"},
+		{"huge_input", "01000000ffffffffffffffffff", "legacy", "1"},
+		{"output", "010000000001", "legacy", "0"},
+		{"input_script", "0100000001" + strings.Repeat("00", 36) + "64" + strings.Repeat("00", 4), "legacy", "1"},
+		{"output_script", "010000000001" + strings.Repeat("00", 8) + "64", "legacy", "1"},
+		{"witness_stack", "01000000000101" + strings.Repeat("00", 41) + "0002", "witness", "1"},
+		{"witness_item", "01000000000101" + strings.Repeat("00", 41) + "000164", "witness", "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, op := range []string{"decode_exact", "decode_prefix"} {
+				got := request(t, map[string]any{"op": op, "bytes": tc.wire, "mode": tc.mode, "offset": "0", "limits": map[string]string{"max_items": tc.limit}})
+				wantStatus(t, got, "malformed_encoding")
+			}
+		})
+	}
+}

@@ -1,0 +1,560 @@
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+const Value = std.json.Value;
+const MAX_ITEMS: u64 = 4096;
+const MAX_ENCODED: usize = 4 * 1024 * 1024;
+const MAX_POOL: usize = 8 * 1024 * 1024;
+const MAX_TEXT: usize = 20 * 1024 * 1024;
+const Error = error{ InvalidRequest, MalformedEncoding, ResourceLimit, AdmissionLimit, TransportLimit, OutOfMemory };
+
+const Input = struct {
+    previous_txid_digest_order: []const u8,
+    previous_index: u32,
+    script: []const u8,
+    sequence: u32,
+    witness: []const []const u8,
+};
+const Output = struct { amount: i64, script: []const u8 };
+const Transaction = struct { version_bits: u32, inputs: []Input, outputs: []Output, locktime: u32 };
+
+fn field(v: Value, name: []const u8) Error!Value {
+    if (v != .object) return error.InvalidRequest;
+    return v.object.get(name) orelse error.InvalidRequest;
+}
+fn exactObject(v: Value, count: usize) Error!void {
+    if (v != .object or v.object.count() != count) return error.InvalidRequest;
+}
+fn string(v: Value) Error![]const u8 {
+    if (v != .string) return error.InvalidRequest;
+    return v.string;
+}
+fn array(v: Value) Error![]Value {
+    if (v != .array) return error.InvalidRequest;
+    return v.array.items;
+}
+fn decimal(comptime T: type, v: Value) Error!T {
+    const s = try string(v);
+    if (s.len == 0) return error.InvalidRequest;
+    const signed = @typeInfo(T).int.signedness == .signed;
+    const start: usize = if (signed and s[0] == '-') 1 else 0;
+    if (start == s.len) return error.InvalidRequest;
+    if (s[start] == '0' and (s.len - start != 1 or start != 0)) return error.InvalidRequest;
+    for (s[start..]) |ch| if (ch < '0' or ch > '9') return error.InvalidRequest;
+    return std.fmt.parseInt(T, s, 10) catch error.InvalidRequest;
+}
+fn nibble(ch: u8) Error!u8 {
+    return switch (ch) {
+        '0'...'9' => ch - '0',
+        'a'...'f' => ch - 'a' + 10,
+        'A'...'F' => ch - 'A' + 10,
+        else => error.InvalidRequest,
+    };
+}
+fn hexLength(v: Value) Error!usize {
+    const s = try string(v);
+    if (s.len % 2 != 0) return error.InvalidRequest;
+    for (s) |ch| _ = try nibble(ch);
+    return s.len / 2;
+}
+fn unhex(a: Allocator, v: Value) Error![]const u8 {
+    const n = try hexLength(v);
+    const bytes = try a.alloc(u8, n);
+    for (bytes, 0..) |*b, i| b.* = (try nibble(v.string[2 * i])) * 16 + try nibble(v.string[2 * i + 1]);
+    return bytes;
+}
+fn itemLimit(req: Value) Error!u64 {
+    if (req.object.get("limits")) |limits| {
+        if (limits != .object) return error.InvalidRequest;
+        if (limits.object.get("max_items")) |v| {
+            const n = try decimal(u64, v);
+            if (n > MAX_ITEMS) return error.InvalidRequest;
+            return n;
+        }
+    }
+    return MAX_ITEMS;
+}
+
+// Validate every structured field before the item-budget verdict, without
+// allocating byte arrays or arrays sized by unvalidated item counts.
+fn structured(a: Allocator, v: Value, limit: u64) Error!Transaction {
+    try exactObject(v, 4);
+    const version = try decimal(u32, try field(v, "version_bits"));
+    const locktime = try decimal(u32, try field(v, "locktime"));
+    const ins = try array(try field(v, "inputs"));
+    const outs = try array(try field(v, "outputs"));
+    var items: u64 = ins.len + outs.len;
+    var pool: u64 = 0;
+    for (ins) |in| {
+        try exactObject(in, 5);
+        const digest_len = try hexLength(try field(in, "previous_txid_digest_order"));
+        if (digest_len != 32) return error.InvalidRequest;
+        pool += digest_len;
+        _ = try decimal(u32, try field(in, "previous_index"));
+        _ = try decimal(u32, try field(in, "sequence"));
+        pool += try hexLength(try field(in, "script"));
+        const witness = try array(try field(in, "witness"));
+        items += witness.len;
+        for (witness) |item| pool += try hexLength(item);
+    }
+    for (outs) |out| {
+        try exactObject(out, 2);
+        _ = try decimal(i64, try field(out, "amount"));
+        pool += try hexLength(try field(out, "script"));
+    }
+    if (pool > MAX_POOL) return error.TransportLimit;
+    if (items > limit) return error.ResourceLimit;
+    const inputs = try a.alloc(Input, ins.len);
+    const outputs = try a.alloc(Output, outs.len);
+    for (ins, inputs) |in, *dest| {
+        const witness = try array(try field(in, "witness"));
+        const stack = try a.alloc([]const u8, witness.len);
+        for (witness, stack) |item, *target| target.* = try unhex(a, item);
+        dest.* = .{
+            .previous_txid_digest_order = try unhex(a, try field(in, "previous_txid_digest_order")),
+            .previous_index = try decimal(u32, try field(in, "previous_index")),
+            .script = try unhex(a, try field(in, "script")),
+            .sequence = try decimal(u32, try field(in, "sequence")),
+            .witness = stack,
+        };
+    }
+    for (outs, outputs) |out, *dest| dest.* = .{
+        .amount = try decimal(i64, try field(out, "amount")),
+        .script = try unhex(a, try field(out, "script")),
+    };
+    return .{ .version_bits = version, .inputs = inputs, .outputs = outputs, .locktime = locktime };
+}
+
+const Cursor = struct {
+    bytes: []const u8,
+    pos: usize = 0,
+    fn remaining(c: Cursor) usize {
+        return c.bytes.len - c.pos;
+    }
+    fn take(c: *Cursor, n: u64) Error![]const u8 {
+        if (n > c.remaining()) return error.MalformedEncoding;
+        const end = c.pos + @as(usize, @intCast(n));
+        const result = c.bytes[c.pos..end];
+        c.pos = end;
+        return result;
+    }
+    fn integer(c: *Cursor, comptime T: type) Error!T {
+        const b = try c.take(@sizeOf(T));
+        return std.mem.readInt(T, b[0..@sizeOf(T)], .little);
+    }
+    fn compact(c: *Cursor) Error!u64 {
+        // Commit only after the whole canonical primitive has been accepted.
+        var next = c.*;
+        const tag = try next.integer(u8);
+        const value: u64 = switch (tag) {
+            0...252 => tag,
+            253 => try next.integer(u16),
+            254 => try next.integer(u32),
+            255 => try next.integer(u64),
+        };
+        if ((tag == 253 and value < 253) or (tag == 254 and value <= 65535) or (tag == 255 and value <= 4294967295)) return error.MalformedEncoding;
+        c.* = next;
+        return value;
+    }
+    fn vectorBytes(c: *Cursor) Error![]const u8 {
+        return c.take(try c.compact());
+    }
+    fn count(c: *Cursor, minimum: u64) Error!usize {
+        const n = try c.compact();
+        if (n > c.remaining() / minimum) return error.MalformedEncoding;
+        return @intCast(n);
+    }
+};
+const Decoded = struct { transaction: Transaction, consumed: usize, items: u64 };
+fn wireInputs(comptime materialize: bool, a: Allocator, c: *Cursor, count: usize) Error![]Input {
+    const inputs: []Input = if (materialize) try a.alloc(Input, count) else &.{};
+    for (0..count) |i| {
+        const digest = try c.take(32);
+        const index = try c.integer(u32);
+        const script = try c.vectorBytes();
+        const sequence = try c.integer(u32);
+        if (materialize) inputs[i] = .{ .previous_txid_digest_order = digest, .previous_index = index, .script = script, .sequence = sequence, .witness = &.{} };
+    }
+    return inputs;
+}
+fn parseWire(comptime materialize: bool, a: Allocator, bytes: []const u8, witness_mode: bool) Error!Decoded {
+    var c = Cursor{ .bytes = bytes };
+    const version = try c.integer(u32);
+    var ninputs = try c.count(41);
+    var inputs = try wireInputs(materialize, a, &c, ninputs);
+    var flags: u8 = 0;
+    var read_outputs = true;
+    if (ninputs == 0 and witness_mode) {
+        flags = try c.integer(u8);
+        if (flags == 0) {
+            read_outputs = false;
+        } else {
+            ninputs = try c.count(41);
+            inputs = try wireInputs(materialize, a, &c, ninputs);
+        }
+    }
+    var items: u64 = ninputs;
+    var outputs: []Output = &.{};
+    if (read_outputs) {
+        const count = try c.count(9);
+        items += count;
+        if (materialize) outputs = try a.alloc(Output, count);
+        for (0..count) |i| {
+            const amount = try c.integer(i64);
+            const script = try c.vectorBytes();
+            if (materialize) outputs[i] = .{ .amount = amount, .script = script };
+        }
+    }
+    if (flags & 1 != 0) {
+        var any_items = false;
+        for (0..ninputs) |i| {
+            const count = try c.count(1);
+            items += count;
+            any_items = any_items or count != 0;
+            const stack: [][]const u8 = if (materialize) try a.alloc([]const u8, count) else &.{};
+            for (0..count) |j| {
+                const item = try c.vectorBytes();
+                if (materialize) stack[j] = item;
+            }
+            if (materialize) inputs[i].witness = stack;
+        }
+        if (!any_items) return error.MalformedEncoding;
+        flags &= ~@as(u8, 1);
+    }
+    if (flags != 0) return error.MalformedEncoding;
+    const locktime = try c.integer(u32);
+    return .{ .transaction = .{ .version_bits = version, .inputs = inputs, .outputs = outputs, .locktime = locktime }, .consumed = c.pos, .items = items };
+}
+fn decode(a: Allocator, bytes: []const u8, offset: u64, witness_mode: bool, exact: bool, limit: u64) Error!Decoded {
+    if (offset > bytes.len) return error.InvalidRequest;
+    const suffix = bytes[@intCast(offset)..];
+    if (suffix.len > MAX_ENCODED) return error.AdmissionLimit;
+    const scan = try parseWire(false, a, suffix, witness_mode);
+    if (exact and scan.consumed != suffix.len) return error.MalformedEncoding;
+    if (scan.items > limit) return error.ResourceLimit;
+    return parseWire(true, a, suffix[0..scan.consumed], witness_mode);
+}
+
+fn compactSize(n: u64) usize {
+    return if (n < 253) 1 else if (n <= 65535) 3 else if (n <= 4294967295) 5 else 9;
+}
+fn hasWitness(tx: Transaction) bool {
+    for (tx.inputs) |in| if (in.witness.len != 0) return true;
+    return false;
+}
+fn encodedSize(tx: Transaction, witness: bool) usize {
+    var size: usize = 8 + compactSize(tx.inputs.len) + compactSize(tx.outputs.len);
+    if (witness) size += 2;
+    for (tx.inputs) |in| {
+        size += 40 + compactSize(in.script.len) + in.script.len;
+        if (witness) {
+            size += compactSize(in.witness.len);
+            for (in.witness) |item| size += compactSize(item.len) + item.len;
+        }
+    }
+    for (tx.outputs) |out| size += 8 + compactSize(out.script.len) + out.script.len;
+    return size;
+}
+const Encoder = struct {
+    bytes: []u8,
+    pos: usize = 0,
+    fn put(e: *Encoder, bytes: []const u8) void {
+        @memcpy(e.bytes[e.pos..][0..bytes.len], bytes);
+        e.pos += bytes.len;
+    }
+    fn integer(e: *Encoder, comptime T: type, n: T) void {
+        std.mem.writeInt(T, e.bytes[e.pos..][0..@sizeOf(T)], n, .little);
+        e.pos += @sizeOf(T);
+    }
+    fn compact(e: *Encoder, n: u64) void {
+        if (n < 253) {
+            e.integer(u8, @intCast(n));
+        } else if (n <= 65535) {
+            e.integer(u8, 253);
+            e.integer(u16, @intCast(n));
+        } else if (n <= 4294967295) {
+            e.integer(u8, 254);
+            e.integer(u32, @intCast(n));
+        } else {
+            e.integer(u8, 255);
+            e.integer(u64, n);
+        }
+    }
+    fn vectorBytes(e: *Encoder, bytes: []const u8) void {
+        e.compact(bytes.len);
+        e.put(bytes);
+    }
+};
+fn serialize(a: Allocator, tx: Transaction, include_witness: bool) Error![]const u8 {
+    const witness = include_witness and hasWitness(tx);
+    const size = encodedSize(tx, witness);
+    if (size > MAX_ENCODED) return error.ResourceLimit;
+    const bytes = try a.alloc(u8, size);
+    var e = Encoder{ .bytes = bytes };
+    e.integer(u32, tx.version_bits);
+    if (witness) e.put(&.{ 0, 1 });
+    e.compact(tx.inputs.len);
+    for (tx.inputs) |in| {
+        e.put(in.previous_txid_digest_order);
+        e.integer(u32, in.previous_index);
+        e.vectorBytes(in.script);
+        e.integer(u32, in.sequence);
+    }
+    e.compact(tx.outputs.len);
+    for (tx.outputs) |out| {
+        e.integer(i64, out.amount);
+        e.vectorBytes(out.script);
+    }
+    if (witness) for (tx.inputs) |in| {
+        e.compact(in.witness.len);
+        for (in.witness) |item| e.vectorBytes(item);
+    };
+    e.integer(u32, tx.locktime);
+    std.debug.assert(e.pos == bytes.len);
+    return bytes;
+}
+fn hash256(bytes: []const u8) [32]u8 {
+    var first: [32]u8 = undefined;
+    var second: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(bytes, &first, .{});
+    std.crypto.hash.sha2.Sha256.hash(&first, &second, .{});
+    return second;
+}
+
+// Response strings consist only of fixed keys, decimal numbers, and hex.
+const Json = struct {
+    a: Allocator,
+    list: std.ArrayList(u8) = .empty,
+    fn put(j: *Json, s: []const u8) Error!void {
+        try j.list.appendSlice(j.a, s);
+    }
+    fn number(j: *Json, n: anytype) Error!void {
+        var buffer: [32]u8 = undefined;
+        const s = std.fmt.bufPrint(&buffer, "\"{d}\"", .{n}) catch unreachable;
+        try j.put(s);
+    }
+    fn hex(j: *Json, bytes: []const u8) Error!void {
+        const alphabet = "0123456789abcdef";
+        const dest = try j.list.addManyAsSlice(j.a, 2 * bytes.len + 2);
+        dest[0] = '"';
+        for (bytes, 0..) |b, i| {
+            dest[2 * i + 1] = alphabet[b >> 4];
+            dest[2 * i + 2] = alphabet[b & 15];
+        }
+        dest[dest.len - 1] = '"';
+    }
+    fn transaction(j: *Json, tx: Transaction) Error!void {
+        try j.put("{\"version_bits\":");
+        try j.number(tx.version_bits);
+        try j.put(",\"inputs\":[");
+        for (tx.inputs, 0..) |in, i| {
+            if (i != 0) try j.put(",");
+            try j.put("{\"previous_txid_digest_order\":");
+            try j.hex(in.previous_txid_digest_order);
+            try j.put(",\"previous_index\":");
+            try j.number(in.previous_index);
+            try j.put(",\"script\":");
+            try j.hex(in.script);
+            try j.put(",\"sequence\":");
+            try j.number(in.sequence);
+            try j.put(",\"witness\":[");
+            for (in.witness, 0..) |item, k| {
+                if (k != 0) try j.put(",");
+                try j.hex(item);
+            }
+            try j.put("]}");
+        }
+        try j.put("],\"outputs\":[");
+        for (tx.outputs, 0..) |out, i| {
+            if (i != 0) try j.put(",");
+            try j.put("{\"amount\":");
+            try j.number(out.amount);
+            try j.put(",\"script\":");
+            try j.hex(out.script);
+            try j.put("}");
+        }
+        try j.put("],\"locktime\":");
+        try j.number(tx.locktime);
+        try j.put("}");
+    }
+};
+fn dispatch(a: Allocator, req: Value) Error![]const u8 {
+    if (req != .object) return error.InvalidRequest;
+    const op = try string(try field(req, "op"));
+    const limit = try itemLimit(req);
+    var j = Json{ .a = a };
+    if (std.mem.eql(u8, op, "decode_prefix") or std.mem.eql(u8, op, "decode_exact")) {
+        const exact = std.mem.eql(u8, op, "decode_exact");
+        const mode = try string(try field(req, "mode"));
+        const witness = std.mem.eql(u8, mode, "witness");
+        if (!witness and !std.mem.eql(u8, mode, "legacy")) return error.InvalidRequest;
+        const offset = if (!exact and req.object.get("offset") != null) try decimal(u64, req.object.get("offset").?) else 0;
+        const bytes_value = try field(req, "bytes");
+        const size = try hexLength(bytes_value);
+        if (size > MAX_POOL) return error.TransportLimit;
+        const bytes = try unhex(a, bytes_value);
+        const result = try decode(a, bytes, offset, witness, exact, limit);
+        try j.put("{\"status\":\"ok\",\"transaction\":");
+        try j.transaction(result.transaction);
+        try j.put(",\"consumed\":");
+        try j.number(result.consumed);
+        try j.put("}");
+    } else if (std.mem.eql(u8, op, "serialize") or std.mem.eql(u8, op, "identify")) {
+        const identify = std.mem.eql(u8, op, "identify");
+        var include_witness = true;
+        if (!identify) {
+            const include = try field(req, "include_witness");
+            if (include != .bool) return error.InvalidRequest;
+            include_witness = include.bool;
+        }
+        const tx = try structured(a, try field(req, "transaction"), limit);
+        if (!identify) {
+            const bytes = try serialize(a, tx, include_witness);
+            try j.put("{\"status\":\"ok\",\"bytes\":");
+            try j.hex(bytes);
+            try j.put("}");
+        } else {
+            const stripped = try serialize(a, tx, false);
+            const full = if (hasWitness(tx)) try serialize(a, tx, true) else stripped;
+            const txid = hash256(stripped);
+            const wtxid = hash256(full);
+            var txid_display = txid;
+            var wtxid_display = wtxid;
+            std.mem.reverse(u8, &txid_display);
+            std.mem.reverse(u8, &wtxid_display);
+            try j.put("{\"status\":\"ok\",\"stripped\":");
+            try j.hex(stripped);
+            try j.put(",\"full\":");
+            try j.hex(full);
+            try j.put(",\"stripped_size\":");
+            try j.number(stripped.len);
+            try j.put(",\"full_size\":");
+            try j.number(full.len);
+            try j.put(",\"txid_digest_order\":");
+            try j.hex(&txid);
+            try j.put(",\"txid_display_order\":");
+            try j.hex(&txid_display);
+            try j.put(",\"wtxid_digest_order\":");
+            try j.hex(&wtxid);
+            try j.put(",\"wtxid_display_order\":");
+            try j.hex(&wtxid_display);
+            try j.put("}");
+        }
+    } else return error.InvalidRequest;
+    return j.list.items;
+}
+fn statusResponse(err: Error) []const u8 {
+    return switch (err) {
+        error.InvalidRequest => "{\"status\":\"invalid_request\"}",
+        error.MalformedEncoding => "{\"status\":\"malformed_encoding\"}",
+        error.ResourceLimit => "{\"status\":\"resource_limit\"}",
+        error.AdmissionLimit => "{\"status\":\"admission_limit\"}",
+        error.TransportLimit => "{\"status\":\"transport_limit\"}",
+        error.OutOfMemory => "{\"status\":\"execution_failure\"}",
+    };
+}
+fn response(a: Allocator, line: []const u8) []const u8 {
+    const parsed = std.json.parseFromSlice(Value, a, line, .{ .max_value_len = MAX_TEXT }) catch |err| {
+        return statusResponse(if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidRequest);
+    };
+    defer parsed.deinit();
+    return dispatch(a, parsed.value) catch |err| statusResponse(err);
+}
+fn emitLine(a: Allocator, writer: *std.Io.Writer, line: []const u8, failure: ?Error) !void {
+    var arena = std.heap.ArenaAllocator.init(a);
+    defer arena.deinit();
+    const result = if (failure) |err| statusResponse(err) else response(arena.allocator(), line);
+    try writer.writeAll(result);
+    try writer.writeByte('\n');
+    try writer.flush();
+}
+pub fn main(init: std.process.Init) !void {
+    var read_buffer: [16384]u8 = undefined;
+    var write_buffer: [16384]u8 = undefined;
+    var input = std.Io.File.stdin().readerStreaming(init.io, &read_buffer);
+    var output = std.Io.File.stdout().writerStreaming(init.io, &write_buffer);
+    var line: std.ArrayList(u8) = .empty;
+    defer line.deinit(init.gpa);
+    var failure: ?Error = null;
+    var have_data = false;
+    while (true) {
+        const ch = input.interface.takeByte() catch |err| switch (err) {
+            error.EndOfStream => break,
+            else => return err,
+        };
+        if (ch == '\n') {
+            try emitLine(init.gpa, &output.interface, line.items, failure);
+            line.clearRetainingCapacity();
+            failure = null;
+            have_data = false;
+        } else {
+            have_data = true;
+            if (failure == null) {
+                if (line.items.len == MAX_TEXT) {
+                    failure = error.TransportLimit;
+                } else {
+                    line.append(init.gpa, ch) catch {
+                        failure = error.OutOfMemory;
+                    };
+                }
+            }
+        }
+    }
+    if (have_data) try emitLine(init.gpa, &output.interface, line.items, failure);
+}
+
+test "CompactSize boundary encodings and transactional decoding" {
+    const cases = .{
+        .{ @as(u64, 0), "00" },
+        .{ @as(u64, 1), "01" },
+        .{ @as(u64, 252), "fc" },
+        .{ @as(u64, 253), "fdfd00" },
+        .{ @as(u64, 254), "fdfe00" },
+        .{ @as(u64, 65535), "fdffff" },
+        .{ @as(u64, 65536), "fe00000100" },
+        .{ @as(u64, 4294967295), "feffffffff" },
+        .{ @as(u64, 4294967296), "ff0000000001000000" },
+        .{ @as(u64, 18446744073709551615), "ffffffffffffffffff" },
+    };
+    inline for (cases) |case| {
+        const expected = try unhex(std.testing.allocator, .{ .string = case[1] });
+        defer std.testing.allocator.free(expected);
+        var buf: [11]u8 = undefined;
+        var e = Encoder{ .bytes = &buf };
+        e.integer(u8, 0xaa);
+        e.compact(case[0]);
+        try std.testing.expectEqualSlices(u8, expected, buf[1..e.pos]);
+        const end = e.pos;
+        e.integer(u8, 0xbb);
+        var c = Cursor{ .bytes = buf[0..e.pos], .pos = 1 };
+        try std.testing.expectEqual(case[0], try c.compact());
+        try std.testing.expectEqual(end, c.pos);
+        try std.testing.expectEqual(@as(u8, 0xbb), try c.integer(u8));
+        for (1..end) |truncated_end| {
+            var truncated = Cursor{ .bytes = buf[0..truncated_end], .pos = 1 };
+            try std.testing.expectError(error.MalformedEncoding, truncated.compact());
+            try std.testing.expectEqual(@as(usize, 1), truncated.pos);
+        }
+    }
+    for ([_][]const u8{ "fdfc00", "fd0000", "feffff0000", "fe00000000", "ffffffffff00000000", "ff0000000000000000" }) |hex| {
+        const b = try unhex(std.testing.allocator, .{ .string = hex });
+        defer std.testing.allocator.free(b);
+        var c = Cursor{ .bytes = b };
+        try std.testing.expectError(error.MalformedEncoding, c.compact());
+        try std.testing.expectEqual(@as(usize, 0), c.pos);
+    }
+}
+
+test "structural scan allocates nothing and malformed precedes budget" {
+    const hex = "010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000";
+    const b = try unhex(std.testing.allocator, .{ .string = hex });
+    defer std.testing.allocator.free(b);
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
+    const a = failing.allocator();
+    const scan = try parseWire(false, a, b, true);
+    try std.testing.expectEqual(@as(usize, 61), scan.consumed);
+    try std.testing.expectEqual(@as(u64, 2), scan.items);
+    try std.testing.expectError(error.ResourceLimit, decode(a, b, 0, true, true, 0));
+    try std.testing.expectError(error.MalformedEncoding, decode(a, b[0..60], 0, true, true, 0));
+    try std.testing.expectError(error.OutOfMemory, decode(a, b, 0, true, true, 2));
+    try std.testing.expectEqualStrings("{\"status\":\"execution_failure\"}", statusResponse(error.OutOfMemory));
+}

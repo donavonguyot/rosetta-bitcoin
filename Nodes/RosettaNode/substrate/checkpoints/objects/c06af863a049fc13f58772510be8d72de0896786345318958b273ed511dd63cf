@@ -1,0 +1,115 @@
+//! Exercise recovered queue order against real schema-1 state and native results.
+use super::*;
+use Priority::{High, Normal};
+
+struct Directory(std::path::PathBuf);
+impl Drop for Directory {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn recovered_priority_dispatch_and_admission_ordered_commit() {
+    let dir = Directory(std::path::PathBuf::from(format!(
+        "tmp/state-priority-test-{}",
+        std::process::id()
+    )));
+    // A collision is a test failure; never remove an unrelated existing DB.
+    std::fs::create_dir(&dir.0).unwrap();
+    let path = dir.0.join("db");
+    let path = path.to_str().unwrap();
+    let priorities = [
+        Normal, High, Normal, High, High, Normal, High, High, Normal, High,
+    ];
+    let items = vec![Item {
+        hex: "ff".into(),
+        mode: Mode::Legacy,
+        operation: Operation::Exact,
+    }];
+    let state = State::open(path).unwrap();
+    let mut batch = Batch::new();
+    batch.put(b"meta/sequence", b"10");
+    batch.put(b"meta/jobs", b"10");
+    batch.put(b"meta/bytes", b"10");
+    for (i, &priority) in priorities.iter().enumerate() {
+        let seq = i as u64 + 1;
+        let record = PendingRecord {
+            id: format!("job{seq}"),
+            digest: digest(&input(&items).unwrap_or_else(|_| panic!("fixture input"))),
+            sequence: seq.to_string(),
+            bytes: "1".into(),
+            priority,
+            items: items.clone(),
+        };
+        batch.put(key("p", seq).as_bytes(), &json_bytes(&record).unwrap());
+        batch.put(
+            format!("id/job{seq}").as_bytes(),
+            seq.to_string().as_bytes(),
+        );
+    }
+    // Cancellation recovery must preserve the receipt position but consume no
+    // native slot or priority turn, even when it removes either queue's head.
+    batch.put(key("c", 3).as_bytes(), b"1");
+    batch.put(key("c", 4).as_bytes(), b"1");
+    state.db.write(&batch).unwrap();
+    drop(state);
+
+    let mut state = State::open(path).unwrap();
+    for (i, priority) in priorities.iter().enumerate() {
+        assert_eq!(state.pending[&(i as u64 + 1)].record.priority, *priority);
+    }
+    let mut order = Vec::new();
+    while let Some(ready) = state.ready.pop(|_| true) {
+        let Ready::Job(seq) = ready else {
+            panic!("persistent recovery queued an evaluation")
+        };
+        order.push(seq);
+        let p = state.pending.get_mut(&seq).unwrap();
+        assert!(!p.cancelled);
+        p.phase = Phase::Done(crate::native::evaluate(&p.input).unwrap());
+        if seq != 1 && order.len() <= 3 {
+            state.commit_one().unwrap();
+            assert_eq!(
+                state.checkpoint, 0,
+                "completed high work must wait for sequence 1"
+            );
+            assert_eq!(state.bytes, 10, "uncommitted completed jobs still count");
+            assert_eq!(state.pending.len(), 10);
+        }
+    }
+    assert_eq!(order, [2, 5, 7, 1, 8, 10, 6, 9]);
+    assert_eq!(state.checkpoint, 0);
+    for next in 1..=10 {
+        state.commit_one().unwrap();
+        assert_eq!(state.checkpoint, next);
+        assert_eq!(state.bytes, 10 - next);
+        let r: Receipt =
+            json_read(&state.db.get(key("r", next).as_bytes()).unwrap().unwrap()).unwrap();
+        assert_eq!(
+            r.state,
+            if [3, 4].contains(&next) {
+                "cancelled"
+            } else {
+                "complete"
+            }
+        );
+        assert!(state.db.get(key("p", next).as_bytes()).unwrap().is_none());
+        assert!(state.db.get(key("c", next).as_bytes()).unwrap().is_none());
+        assert_eq!(
+            state
+                .db
+                .get(format!("id/job{next}").as_bytes())
+                .unwrap()
+                .unwrap(),
+            next.to_string().as_bytes()
+        );
+    }
+    assert!(state.pending.is_empty());
+    drop(state);
+    let recovered = State::open(path).unwrap();
+    assert_eq!(recovered.checkpoint, 10);
+    assert_eq!(recovered.ids.len(), 10);
+    assert_eq!(recovered.bytes, 0);
+    assert!(recovered.ready.is_empty());
+}

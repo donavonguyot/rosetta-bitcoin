@@ -1,0 +1,7 @@
+{
+  "schema": "rosettanode.substrate.broker_regression.v1",
+  "status": "passed",
+  "completed_request_not_replayed": true,
+  "new_request_executed_once": true,
+  "work": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-regression-0a560c2d"
+}

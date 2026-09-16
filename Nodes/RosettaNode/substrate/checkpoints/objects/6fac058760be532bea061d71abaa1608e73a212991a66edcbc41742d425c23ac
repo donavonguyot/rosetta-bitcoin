@@ -1,0 +1,194 @@
+"""Group atomicity at an external C-write barrier, not a service test hook."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import time
+import unittest
+
+from support import BINARY, ROOT, Connection, ITEM, Native, NativeGate, Service, digest, inspect, seed
+
+
+class OptimizationTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix='opt-', dir=ROOT / 'tmp'))
+        self.observer = ROOT / 'tmp/write-observer.so'
+        if not self.observer.exists():
+            self.fail('build tests/write_observer.c before running optimization tests')
+        self.children = []
+
+    def tearDown(self):
+        for p, log in self.children:
+            if p.poll() is None:
+                p.kill()
+            p.wait(timeout=10)
+            log.close()
+
+    def start(self, *, stage=None, fail=False, binary=BINARY):
+        trace = self.root / 'trace.jsonl'
+        env = dict(os.environ, LD_PRELOAD=str(self.observer), RN_TEST_TRACE=str(trace))
+        if stage:
+            env.update(RN_TEST_GATE_DIR=str(self.root), RN_TEST_GATE_STAGE=stage)
+        if fail:
+            env['RN_TEST_FAIL_TERMINAL'] = '1'
+        log = (self.root / 'stderr').open('wb')
+        p = subprocess.Popen([str(binary), str(self.root / 'db'), str(self.root / 'run.sock')], env=env, stderr=log)
+        self.children.append((p, log))
+        return p
+
+    def wait_gate(self, p):
+        end = time.monotonic() + 15
+        while not (self.root / 'entered').exists():
+            self.assertIsNone(p.poll(), (self.root / 'stderr').read_text())
+            self.assertLess(time.monotonic(), end)
+            time.sleep(.002)
+        entries = [json.loads(line) for line in (self.root / 'trace.jsonl').read_text().splitlines()]
+        return next(e for e in entries if e['event'] == 'call_entry' and e['terminal'])
+
+    def recover(self):
+        service = Service(self.root, name='recovered')
+        try:
+            service.stop()
+        finally:
+            service.kill()
+        rows, jobs = inspect(service.db)
+        self.assertEqual(rows['meta/checkpoint'], '65')
+        self.assertEqual(rows['meta/jobs'], '0')
+        self.assertTrue(all(j['state'] == 'cancelled' for j in jobs.values()))
+        diagnostics = [json.loads(x) for x in service.log_path.read_text().splitlines() if x.startswith('{')]
+        histogram = diagnostics[-1]['terminal_batch_histogram']
+        self.assertEqual(len(histogram), 33)
+        self.assertEqual(histogram[0], 0)
+        return rows
+
+    def test_crash_before_group_keeps_all_pending_and_cancellation(self):
+        before = seed(self.root / 'db', 65, range(1, 66))
+        p = self.start(stage='before')
+        entry = self.wait_gate(p)
+        self.assertEqual(entry['terminal'], list(range(1, 33)))
+        p.kill()
+        p.wait(timeout=10)
+        rows, _ = inspect(self.root / 'db')
+        self.assertEqual(rows, before)
+        self.recover()
+
+    def test_crash_after_group_keeps_exact_whole_group(self):
+        seed(self.root / 'db', 65, range(1, 66))
+        p = self.start(stage='after')
+        entry = self.wait_gate(p)
+        self.assertEqual(entry['terminal'], list(range(1, 33)))
+        p.kill()
+        p.wait(timeout=10)
+        rows, jobs = inspect(self.root / 'db')
+        self.assertEqual(rows['meta/checkpoint'], '32')
+        self.assertEqual(rows['meta/jobs'], '33')
+        self.assertEqual(rows['meta/bytes'], '330')
+        self.assertTrue(all(jobs[f'seed_{i}']['state'] == 'cancelled' for i in range(1, 33)))
+        recovered = self.recover()
+        for key, value in rows.items():
+            if key.startswith(('r/', 'id/')):
+                self.assertEqual(recovered[key], value)
+
+    def test_failed_group_write_preserves_entire_pending_state(self):
+        before = seed(self.root / 'db', 65, range(1, 66))
+        p = self.start(fail=True)
+        self.assertNotEqual(p.wait(timeout=15), 0)
+        rows, _ = inspect(self.root / 'db')
+        self.assertEqual(rows, before)
+        self.assertIn('injected terminal write failure', (self.root / 'stderr').read_text())
+        self.recover()
+
+    def test_group_membership_histogram_and_physical_syncs(self):
+        seed(self.root / 'db', 65, range(1, 66))
+        p = self.start(stage='before')
+        self.wait_gate(p)
+        # The cancel overlaps the terminal C call; after release it must be too_late.
+        with Connection(self.root / 'run.sock') as cl:
+            cl.send({'request': 'c', 'op': 'cancel', 'id': 'seed_1'})
+            (self.root / 'release').touch()
+            self.assertEqual(cl.line(), {'request': 'c', 'status': 'too_late'})
+            self.assertEqual(cl.call('shutdown')['status'], 'draining')
+        self.assertEqual(p.wait(timeout=15), 0)
+        records = [json.loads(x) for x in (self.root / 'trace.jsonl').read_text().splitlines()]
+        entries = [x for x in records if x['event'] == 'call_entry']
+        self.assertEqual([len(x['terminal']) for x in entries], [32, 32, 1])
+        self.assertEqual([s for x in entries for s in x['terminal']], list(range(1, 66)))
+        summary = records[-1]
+        self.assertEqual(summary['write_calls'], 3)
+        self.assertGreaterEqual(summary['wal_sync_successes'], 3)
+        self.assertGreaterEqual(summary['sync_successes'], summary['wal_sync_successes'])
+        diagnostics = [json.loads(x) for x in (self.root / 'stderr').read_text().splitlines() if x.startswith('{')][-1]
+        self.assertEqual(diagnostics['terminal_batch_histogram'][32], 2)
+        self.assertEqual(diagnostics['terminal_batch_histogram'][1], 1)
+        self.assertEqual(diagnostics['write_calls'], 3)
+        self.assertEqual(diagnostics['sync_write_successes'], 3)
+        self.assertEqual(diagnostics['intentional_group_wait_ns'], 0)
+        inspect(self.root / 'db')
+
+    def test_acknowledged_cancel_precedes_group_boundary(self):
+        seed(self.root / 'db', 65)
+        gate = NativeGate(self.root)
+        self.addCleanup(gate.release)
+        trace = self.root / 'cancel-trace.jsonl'
+        service = Service(self.root, env=dict(gate.env, RN_TEST_TRACE=str(trace)))
+        try:
+            with service.connect() as cl:
+                self.assertEqual(cl.call('cancel', id='seed_40')['status'], 'ok')
+                acknowledged = time.monotonic_ns()
+                self.assertEqual(cl.call('cancel', id='seed_40')['status'], 'ok')
+            gate.release()
+            service.stop()
+        finally:
+            service.kill()
+        entries = [json.loads(x) for x in trace.read_text().splitlines()]
+        terminal = next(x for x in entries if x['event'] == 'call_entry' and 40 in x['terminal'])
+        self.assertGreater(terminal['ns'], acknowledged)
+        self.assertEqual(sum(x['cancel'] for x in entries if x['event'] == 'call_entry'), 1)
+        _, jobs = inspect(service.db)
+        self.assertEqual(jobs['seed_40']['state'], 'cancelled')
+        self.assertEqual(jobs['seed_40']['results'], [])
+
+    def test_large_evaluate_matches_native_and_durable_digest(self):
+        items = [{**ITEM, 'hex': ITEM['hex'] + '00' * (256 << 10), 'operation': 'prefix'},
+                 {**ITEM, 'mode': 'legacy'}, {**ITEM, 'hex': ''}]
+        expected = Native().evaluate(items, version=2)
+        service = Service(self.root)
+        try:
+            with service.connect() as cl:
+                self.assertEqual(cl.call('evaluate', items=items)['results'], expected)
+                self.assertEqual(cl.call('submit', id='digest', items=items)['status'], 'accepted')
+            service.stop()
+        finally:
+            service.kill()
+        _, jobs = inspect(service.db)
+        self.assertEqual(jobs['digest']['results'], expected)
+        self.assertEqual(jobs['digest']['digest'], digest(items))
+
+    def test_actual_v2_predecessor_pending_and_receipt_preservation(self):
+        baseline = ROOT / 'tmp/baseline/service'
+        self.assertTrue(baseline.exists(), 'retained qualified v2 baseline required')
+        seed(self.root / 'db', 65, (40,))
+        # Stop baseline at its first completed terminal write. This guarantees
+        # both receipts and pending records, independent of encoding speed.
+        p = self.start(stage='after', binary=baseline)
+        entry = self.wait_gate(p)
+        self.assertEqual(entry['terminal'], [1])
+        p.kill()
+        p.wait(timeout=10)
+        before, _ = inspect(self.root / 'db')
+        service = Service(self.root, name='upgrade')
+        try:
+            service.stop()
+        finally:
+            service.kill()
+        after, jobs = inspect(service.db)
+        self.assertEqual(after['meta/checkpoint'], '65')
+        self.assertEqual(jobs['seed_40']['state'], 'cancelled')
+        for key, value in before.items():
+            if key.startswith(('r/', 'id/')):
+                self.assertEqual(after[key], value)
+
+
+if __name__ == '__main__':
+    unittest.main()

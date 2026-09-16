@@ -1,0 +1,220 @@
+# Maintenance v2 experiment record
+
+## Scope and effort
+
+Implementation started 2026-09-16 22:27:35 UTC after a separate reading phase
+completed within ten minutes. The predecessor was upgraded in place to ABI v2
+and priority dispatch. No optimization hypotheses, group commit, kernel changes,
+third-party dependencies, evaluator access, or repair feedback were used.
+The predecessor executable and documents are retained in `tmp/predecessor/`;
+its executable hash matches the original handoff.
+
+All formatting, builds, tests and executable inspection used `python3 run.py`
+in the pinned broker. Offline Go synchronization, JSON, cgo, bit-operation and
+buffered-I/O documentation and `/adapter/adapter.h` were read in preparation.
+Host launcher cache/FSEvents warnings recur, but broker commands succeeded.
+One documentation patch was rejected because delete/add targeted the same file;
+no files changed in that attempt, and separate edits resolved it.
+
+## Correctness decisions
+
+1. Replace v1 item pointers with offsets into the same C-owned immutable arena.
+   Call only `rn_verify_v2`, initialize its bitmap, and check each bit against
+   its item status, rejecting bits outside the batch. Keep source and arena
+   alive through native return, including cancellation. Mixed and 1/63/64-item
+   tests confirm item-i/bit-i ordering, including bit 63 and variable offsets.
+2. Store high/normal priority as admission metadata, excluded from the payload
+   digest. Retries preserve the original priority. Rebuild FIFO queues in
+   sequence order at startup, retaining schema 1 and all durable job information.
+3. Advance the H,H,H,N cycle only when both runnable queues are nonempty.
+   Prune cancelled queued entries before selection. Single-queue dispatch and
+   idleness neither advance nor reset the cycle. Startup begins at H.
+4. Review identified that predecessor workers selected jobs before waiting for
+   shared native slots. That could preselect normal jobs while evaluations held
+   all four slots. Selection now reserves an available slot under the state
+   mutex. Evaluations wait on the same condition variable; native completion
+   broadcasts availability. Native calls remain concurrent, outside the mutex.
+5. Preserve one-job admission/terminal WriteBatches, sync/WAL, storage settings,
+   exclusive locking, admission-ordered terminal commitment and the mutex that
+   spans durable writes to protect cancellation ordering. No group commit.
+
+## Executed validation
+
+The first ordinary run passed all 17 top-level Go test families (2.056s).
+There were no failed maintenance builds/tests. The first full `./test.sh` passed
+without repair or a replaced repetition:
+
+| Lane | Result |
+|---|---|
+| Ordinary Go tests, 17 families | Passed, 1.537s |
+| Go race tests | Passed, 4.921s |
+| Public smoke | Passed |
+| Ordinary socket/crash integration | Passed, `tmp/v2-e2e-0yk39pup` |
+| Race executable socket/crash integration | Passed, `tmp/v2-e2e-0smr90u5` |
+
+Ordinary integration acknowledged 193 cancellations under eight-client mixed
+priority load. Its v2 crashes retained 22/23/30 acknowledged jobs and 3/1/1
+pending jobs. Its actual predecessor-v1 crash retained 31 acknowledged jobs and
+no pending jobs; that run establishes retained-receipt upgrade, not pending-v1
+recovery. This limitation is retained rather than replacing the repetition.
+
+Race integration acknowledged 153 cancellations. Its v2 crashes retained
+22/21/26 acknowledged jobs and 1/0/9 pending jobs. Its actual v1-to-v2 upgrade
+retained 33 acknowledged jobs and eight pending v1 jobs. Every run inspected
+physical keys with the writer stopped, preserved acknowledged admissions and
+cancellations and existing receipts, and drained after restart. Deterministic
+Go fixtures additionally cover v1 pending/cancelled/terminal records together,
+then mixed-priority v2 admission and a second recovery.
+
+Executable inspection confirmed Linux ELF64 little-endian AArch64, dynamic
+`librosetta.so`/`librocksdb.so.7.8`, `/adapter` RUNPATH, and only `rn_verify_v2`
+among native verify imports. Both build.sh and service are executable.
+Final service SHA-256:
+
+```text
+37fc702722c3aae37bdda91dfc72e693ec2a50eca159d1bd8dce57dd78cff1c6
+```
+
+## Ambiguities and limits
+
+- No campaign-freeze manifest was supplied. Explicit phase-start instructions
+  authorize this work; candidate testing is not gate qualification.
+- The header omits bitmap bit order; boundary tests confirm item-i/bit-i against
+  the supplied adapter.
+- Cycle persistence, cancelled-entry accounting and evaluate priority are not
+  specified. The cycle is transient; cancelled queued jobs consume no dispatch;
+  evaluate accepts high/normal but stays outside the persistent priority queues.
+- Dispatch is selection plus slot reservation under the mutex. Concurrent
+  native-entry timestamps/completion order can differ from selection order.
+  No external scheduler/barrier qualification was performed.
+- Go race diagnostics exclude C/C++ races. No native ASan, allocation/write fault
+  injection, power-loss evidence or performance comparison is claimed. The
+  four-slot ownership test arranges in-flight jobs through the real dispatch
+  function; it does not externally measure native overlap.
+
+Footprint: four production files changed (native.go, wire.go, service.go,
+recovery.go); four test files changed/added (wire_test.go, service_test.go,
+tests/integration.py, new 270-line priority_test.go). Generated deliverable:
+rebuilt 4,338,208-byte service. No generated source. Build/test scripts, transport,
+main and reuse helpers are unchanged. File counts are the recorded diff
+footprint; exact line-diff counts were not captured before editing. The handoff
+and experiment log changed separately. Broker outputs, race executable and
+integration artifacts are retained in queue/ and tmp/.
+
+Implementation and final documentation completed at approximately 22:39 UTC,
+about eleven minutes after the first implementation action. Reading was separate.
+Token usage and prior preparation cost are unavailable. Completion precedes
+evaluator feedback; no failed semantic families were observed in candidate
+tests, and no repair round was used.
+
+---
+
+# Initial v1 experiment record (retained)
+
+This is the baseline implementation phase. No optimization hypotheses or group
+commit experiments were attempted. Every admission and terminal WriteBatch has
+one job; cancellation intent has its own synchronous WAL-enabled write.
+
+## Preparation and environment
+
+- Read all supplied contracts, README.md, BUILDING.md, reuse/storage.go, run.py,
+  and the common adapter header. No predecessor HANDOFF.md was present.
+- Read pinned Go source documentation for encoding/json, bufio, net, sync, and
+  cgo through `python3 run.py`. Initial `go doc` attempts failed because the
+  reading-phase workspace/cache was read-only; a cache under workspace/tmp was
+  also read-only during that phase. Direct documentation reads succeeded.
+- Host `rg` was absent; used scoped `find`, `cat`, and `sed` instead. Host Python
+  launcher printed cache/FSEvents warnings, but broker requests completed.
+- First implementation build succeeded. First public smoke test passed.
+- First `go test -v -timeout 180s ./...` compiled, then failed to execute its test
+  binary: `/tmp/go-build.../trial.test: permission denied`. Setting
+  `GOTMPDIR=/workspace/tmp` fixed this broker noexec-mount issue. No production
+  source change was needed. Build/test commands remain broker-only.
+
+## Correctness characterization and design decisions
+
+1. Adapter limit probe (`tmp/probe_adapter.py`, retained): empty input yields
+   malformed status 1; 4 MiB + 1 byte yields byte-admission status 3; an arena
+   exceeding 16 MiB cannot be created; 65 adapter items return -1. Consequently,
+   reject invalid batch count/aggregate size at the wire boundary, while passing
+   per-item byte/resource limits to the adapter. This is a correctness probe,
+   not an optimization experiment.
+2. Serialize state and RocksDB writes with one mutex held through the native
+   write. It prevents a successful cancellation from slipping between the
+   terminal decision and interposed C call_entry. Native verification and
+   network I/O execute outside this mutex. Release it between terminal batches.
+3. Own C source bytes and the native arena through verify return. This avoids
+   relying on undocumented arena input-copy timing. Free neither on cancellation.
+4. Code review identified a shutdown response-delivery race before testing:
+   native evaluation could finish just before its response was written. Track
+   evaluations through response delivery, and track all active valid requests
+   so drain waits for in-flight replies, including admission acknowledgements.
+5. Requests validate UTF-8, exact known field names/types, lowercase hex, IDs,
+   batch limits, modes, operations and v1 normal priority. Reserved unknown fields
+   are ignored; duplicate top-level/item object keys are rejected. This resolves
+   unspecified parsing policies without treating them as v2 features.
+
+## Validation completed before final review
+
+- Ten Go test families passed in the first successful ordinary test run (3.490s)
+  and in the first race run (4.542s, including race runtime overhead).
+- Direct stopped-writer RocksDB checks cover pending and terminal partition,
+  cancellation keys, ID indexes, sequence/checkpoint, and byte/job accounting.
+- First black-box integration run retained at `tmp/v1-e2e-b79bx89y`: socket
+  validation, notification order, eight-client limit, exclusive ownership,
+  durable receipt restart, eight-client retry/cancel stress (208 acknowledged
+  cancellations), and three SIGKILL/recovery runs all passed.
+- That crash run observed 22/31/37 acknowledged jobs and 8/1/4 durable pending
+  jobs at the respective crashes. Every acknowledged admission and cancellation
+  survived; physical storage invariants held before and after recovery.
+- Added a direct shutdown/reply lifetime test and a native status-2 resource
+  fixture during final review. Final validation results are recorded below.
+- The first final-suite attempt stopped in the new resource fixture: a truncated
+  `01000000fd0110` input returned malformed status 1, not the assumed resource
+  status 2. This was a test-fixture error, not a host implementation failure.
+  Replaced it with a structurally complete 4,097-input, empty-script fixture;
+  the native kernel remains the sole parser/encoder.
+
+Broker requests/responses in `queue/` retain command outputs, including failed
+attempts. Integration artifact directories retain stderr, acknowledged histories,
+and physical database snapshots; no failed repetitions are replaced.
+
+## Evidence limits
+
+Go race detection covers Go service paths; it does not establish C/C++ library
+race freedom. No native ASan lane, allocation-failure injection, writer-error
+injection, external interposer barrier qualification, or power-loss test was
+performed. SIGKILL recovery is process-crash evidence. No performance comparison
+or evaluator qualification is claimed.
+
+## Final executed validation and artifact
+
+`python3 run.py './test.sh' 300` completed successfully after the resource-fixture
+correction. Final production code was rebuilt by that command.
+
+- Eleven Go test families passed: ordinary run 1.473s; race run 4.999s.
+- Public smoke passed.
+- Ordinary executable integration: `tmp/v1-e2e-h0znxot2`; 212 cancellation
+  acknowledgements in concurrent stress. Three crash rounds retained 21/25/39
+  acknowledged jobs and observed 3/7/4 durable pending jobs, respectively.
+- Race-instrumented executable integration: `tmp/v1-e2e-ao4odbsg`; 164 cancellation
+  acknowledgements in stress. Three crash rounds retained 20/20/22 acknowledged
+  jobs and observed 1/1/1 durable pending jobs, respectively. No Go race reports.
+- Every final crash round passed physical database checks before and after
+  recovery, and retained all acknowledged admissions/cancellations.
+- `file` is not installed in the broker; used `readelf -h` instead. Verified
+  ELF64 little-endian AArch64 executable, dynamic dependencies `librosetta.so`,
+  `librocksdb.so.7.8`, and libc, with `/adapter` RUNPATH. Dynamic symbols reference
+  `rn_verify_v1` and no `rn_verify_v2`.
+
+Final `service` SHA-256:
+
+```text
+9457f32f062ad0b86dfbef30c90b1f0c4be1e4cfff2c7eb6c3a18fc8c35e8817
+```
+
+Implementation, tests, and handoff took approximately 23 minutes, from the first
+implementation tool action at 2026-09-16 21:46:41 UTC through final artifact review
+at about 22:09 UTC. Reading was separate and finished within ten minutes. Token
+usage and infrastructure preparation cost are unavailable. This is the initial
+submission; no evaluator feedback or repair round was used.

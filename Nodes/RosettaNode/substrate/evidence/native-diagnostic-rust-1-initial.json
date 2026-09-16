@@ -1,0 +1,5 @@
+{
+  "status": "passed",
+  "coverage": "native adapter/IR/arena access only; leak checking disabled for foreign runtime",
+  "diagnostics": "/evaluator/.local/native-diagnostic-108943990255995/dummy-5c4383cf"
+}

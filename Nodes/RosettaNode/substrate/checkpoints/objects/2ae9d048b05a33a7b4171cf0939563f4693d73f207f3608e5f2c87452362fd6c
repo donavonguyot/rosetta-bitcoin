@@ -1,0 +1,141 @@
+# Zig lineage 2 — maintenance ABI v2 handoff
+
+## Delivered state
+
+Maintenance submission before evaluator feedback. `service` is a Linux AArch64
+ELF built with pinned Zig 0.16.0 in ReleaseSafe mode. It dynamically links the
+supplied `/adapter/librosetta.so`, designated `librocksdb.so.7.8`, and libc.
+The service imports only `rn_verify_v2`, not `rn_verify_v1`. No kernel changes,
+group commit, service test hooks, or durability relaxation were introduced.
+
+Files:
+
+- `build.sh`: unchanged executable build recipe and dynamic library paths.
+- `main.zig`: v2 arena offsets/bitmap, explicit work priority, recovery integration.
+- `scheduler.zig`: two intrusive FIFO queues and a shared H,H,H,N selection cycle;
+  also contains two standalone unit tests excluded from the service executable.
+- `storage.zig`: unchanged predecessor RocksDB wrapper and native diagnostics.
+- `reuse/storage.zig`: unchanged supplied infrastructure.
+- `tests/check.py`: 18 black-box cases, direct v1/v2 native comparison, independent
+  RocksDB inspection after the writer stops, crash/recovery and upgrade tests.
+- `EXPERIMENTS.md`: initial history plus maintenance attempts and evidence limits.
+- `SUBMISSION.txt`, `SHA256SUMS`: phase timing and delivered artifact hashes.
+
+The predecessor source, executable, tests, documents and manifest were preserved
+before editing under `tmp/maintenance-baseline/`. That directory is evidence,
+not a runtime dependency. No other lineage or evaluator was inspected.
+
+Build and verify exclusively through the broker:
+
+```sh
+python3 run.py './build.sh' 120
+python3 run.py '/opt/zig/zig test scheduler.zig -O ReleaseSafe' 120
+python3 run.py 'PREDECESSOR_SERVICE=/workspace/tmp/maintenance-baseline/service python3 tests/check.py ./service' 180
+python3 run.py 'python3 public_check.py ./service' 120
+```
+
+Without `PREDECESSOR_SERVICE`, the black-box suite explicitly skips the actual
+predecessor-executable upgrade case; seeded compatibility/recovery cases still
+run. Launch inside the broker as `./service DATADIR SOCKET_PATH`. DATADIR is
+created recursively. RocksDB owns the exclusive writer lock. SOCKET_PATH must
+be fresh; the launcher removes stale paths after crashes. Successful draining
+shutdown closes the database and exits zero.
+
+## Native execution and scheduling
+
+Four persistent worker threads share the pool mutex, condition and completion
+queue. Each `Work` owns its raw bytes, parsed item metadata, and allocation arena
+until its worker has returned. Workers create a native arena, construct v2 item
+offsets relative to that arena, call `rn_verify_v2`, and destroy the native arena
+only after return. A u64 bitmap is checked against all per-item success statuses,
+including bit 63. Inconsistent bitmap or a nonzero batch return is an execution
+failure. Per-item status and result wire fields retain v1 encodings.
+
+Priority defaults to normal; explicit high and normal are accepted for submit
+and evaluate. Admission persists the selected priority. Priority is excluded
+from the digest, so a retry cannot alter an existing job's priority.
+
+The scheduler's pop under the pool mutex is the dispatch decision. With both
+queues nonempty, selections repeat high, high, high, normal. A single nonempty
+queue drains without advancing the cycle. FIFO order within each priority is
+preserved. One cycle is shared by all four workers, starts with high, and resets
+on process restart. The complete recovered backlog is loaded in sequence order
+into these queues before any worker starts.
+
+Evaluate shares these queues and the four slots but is nonpersistent. Cancelled
+work remains owned and queued until selected; a selected already-cancelled job
+can skip native execution, and that selection consumes its normal scheduler turn.
+Cancellation never frees input still reachable by a worker. Native entry and
+completion may be reordered by concurrently running threads after selection;
+terminal database writes remain strictly admission ordered.
+
+## Durability and compatibility
+
+Schema stays 1. Recovery accepts v1 pending rows with normal priority and v2 rows
+with either valid priority. Existing receipts, ID indexes, cancellation intents,
+admission sequence, checkpoint and accounting are preserved. There is no rebuild
+or repair path. Unknown schema, malformed priority or inconsistent rows fail
+before socket exposure. All rows are validated before native execution starts.
+
+The coordinator remains the sole owner of admission, cancellation, terminal
+transitions, accounting, connections and pending slots. Each admission is one
+sync/WAL WriteBatch with the complete pending payload, ID index, sequence and
+accounting. Each terminal receipt is one sync/WAL WriteBatch removing pending
+and cancellation rows and advancing the contiguous checkpoint/accounting. Receipt
+retention and ID indexes are unlimited for this bounded trial.
+
+Cancellation intent is durable before `ok`. Repeated pending cancellation is
+idempotent. The coordinator serializes the intent snapshot and terminal C write
+entry; a completed cancellation before that boundary is honored. Requests
+processed after terminal commitment receive `too_late`. A native allocation or
+execution failure on acknowledged work stops diagnostically without terminalizing
+it. Evaluate returns `execution_failure`. Storage errors stop without acknowledging
+the failed transition. No further writes follow an uncertain write result.
+
+Admission response is queued before dispatch; terminal events follow durable
+receipt. Client tokens prevent descriptor reuse from redirecting replies.
+Disconnect does not cancel. Existing per-client request order, eight-client
+limit, output backpressure, 1,024-job/64-MiB admission bounds and shutdown behavior
+are unchanged. Nonterminal accounting includes completed-but-uncommitted work.
+
+## Validation and evidence limits
+
+First maintenance build passed. Both scheduler tests passed. All 18 black-box
+cases passed (4.378 seconds reported by unittest), including the actual preserved
+v1 executable's datadir. Public smoke and Zig formatting checks passed. `readelf`
+confirmed AArch64, dynamic adapter/RocksDB dependencies and only v2 verification
+imports. Full test artifacts: `/workspace/tmp/zig-v2-tests-7cse70mp`.
+
+New evidence includes success bit 63/all/none/mixed cases, offset equivalence to
+v1, high-priority evaluate, immutable retry priority, pending status priority,
+mixed-priority process crashes and durable cancellation, mixed-priority recovery,
+invalid disk-priority rejection without repair, and byte-for-byte old receipt
+retention. The real-v1 upgrade case crashed the old executable with outstanding
+normal-priority work and added a valid cancellation fixture while its writer was
+stopped, then recovered with v2. Other tests exercise acknowledged cancellation.
+
+The scheduler tests cover repeated HHHN turns and every cycle position across
+empty/single-queue intervals for both priorities. They do not establish an
+externally observed native-entry ordering under all thread interleavings. No
+native entry/write barrier interposer, service timing hook, ASan, whole-service
+race detector, allocator failure injection or storage-I/O failure injection was
+added. Four native worker slots exist by construction; exact externally held
+concurrency/cancellation-boundary qualification remains unclaimed. Process-crash
+tests do not prove power-loss durability. No performance comparison is claimed.
+
+## Ambiguities and decisions
+
+The supplied contracts do not explicitly specify evaluate participation in the
+priority cycle or cycle consumption by skipped cancelled jobs; the choices above
+make both deterministic at queue selection. The adapter header does not describe
+bitmap bit ordering; direct v1/v2 comparisons support bit i corresponding to item
+i and zero bits outside the batch. Wire output adds no bitmap field.
+
+Existing wire choices remain: unknown JSON fields reserved/ignored, known fields
+strictly typed, duplicate keys rejected; empty/overlarge batches invalid; retry
+returns existing plus sequence; both submit/evaluate return draining during drain;
+JSON cap excludes newline; unrecoverable correlations use the empty string.
+
+The freeze manifest/gate evidence is absent and preparation prose remains in the
+contracts. The user's explicit maintenance implementation instruction authorized
+this phase. No gate, evaluator qualification or external evidence is claimed.

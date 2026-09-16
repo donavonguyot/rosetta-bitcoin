@@ -1,0 +1,58 @@
+# Initial implementation record
+
+Implementation began 2026-09-16 21:53 UTC. This is the v1 baseline, not the
+optimization round. No group commit, kernel changes, alternate storage, or
+performance-selection experiments have been attempted.
+
+## Design and checks
+
+- Hypothesis: a single owner of RocksDB and durable state can serialize admission,
+  cancellation and terminal commitment while four independent encoding workers
+  retain their native arenas. Native pointers never cross Rust threads.
+- Hypothesis: bounded request framing and independent socket writers keep slow
+  clients outside the durable-state critical path. Outbound queues have both a
+  message count and byte bound; terminal events are best effort.
+- Recovery validates the complete documented keyspace, counters, ID indexes,
+  receipt/pending partition, cancellation references and pending digests before
+  dispatching work. Independent test inspection opens RocksDB after writer exit.
+
+## Attempts retained
+
+1. First release build and three Rust unit tests passed. Nine initial integration
+   tests passed, including direct adapter parity, protocol limits, eight clients,
+   retries, notification order, lock exclusion, recovery and repeated crashes.
+2. Expanded integration run: 12 passed, one failed. Full admission budgets,
+   live cancellation, durable cancel recovery, SHA padding lengths and draining
+   passed. The file-size-limit test provoked RocksDB's
+   `AssertFalseAndGetStatusForPrevError` assertion. The request was not
+   acknowledged. Initial diagnosis was that cleanup aborted before the
+   service-level diagnostic. Added direct diagnostic/exit on a returned native
+   write error to avoid close/flush on an unusable writer.
+3. The focused file-size-limit retest still produced the native assertion before
+   Rust could report a returned write error; the initial cleanup-only diagnosis
+   was insufficient. The test now accepts either native assertion diagnostics
+   or the service's returned-error diagnostics and still requires nonzero exit,
+   no admission acknowledgment, an intact database, and successful restart.
+   No native code was modified. Returned write errors still exit immediately.
+4. The revised native-failure test passed including independent inspection and
+   restart. The supplied public smoke check passed. Expanded suite: all 17
+   integration tests and all three unit tests passed. Strict Clippy initially
+   rejected three constant-size `chunks_exact` uses under its new
+   `chunks_exact_to_as_chunks` lint; replaced them with typed `as_chunks` APIs.
+5. Review found that completing per-client processing when a response was merely
+   enqueued could fill an output queue under pipelining. Readers now advance only
+   after their response is written; events reserve room for responses. The byte
+   cap was raised from 64 to 80 MiB so a maximum correlation plus pending record
+   fits. Release rebuild, all three unit tests, strict Clippy and all 17
+   integration tests passed afterward (integration suite: 8.890 seconds).
+6. Final artifact inspection initially stopped because the broker lacks the
+   `file` utility. Replaced that inspection with Python's standard-library ELF
+   header decoding and the executable's own ELF interpreter `--list` operation.
+
+No optimization experiment was run. These are correctness/design checks, not
+campaign performance repetitions. Native call-entry barriers, native ASan,
+whole-service race diagnostics and forced arena failure remain unmeasured.
+
+Broker request/response records in `queue/` retain raw command output. Host
+`python3` emits sandbox-related xcrun cache warnings; broker commands still run
+successfully. All compilation and test execution use `python3 run.py`.

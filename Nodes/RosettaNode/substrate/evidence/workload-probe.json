@@ -1,0 +1,56 @@
+{
+  "schema": "rosettanode.substrate.workload_probe.v1",
+  "status": "passed",
+  "results": [
+    {
+      "workload": 1,
+      "batch": 1,
+      "requests": 100,
+      "passed": true,
+      "median_ns": 71108.5,
+      "min_ns": 65546,
+      "max_ns": 668873,
+      "scope": "instrument smoke, not candidate benchmark"
+    },
+    {
+      "workload": 1,
+      "batch": 8,
+      "requests": 100,
+      "passed": true,
+      "median_ns": 121340.5,
+      "min_ns": 104298,
+      "max_ns": 674748,
+      "scope": "instrument smoke, not candidate benchmark"
+    },
+    {
+      "workload": 1,
+      "batch": 64,
+      "requests": 100,
+      "passed": true,
+      "median_ns": 411503.5,
+      "min_ns": 394565,
+      "max_ns": 1064313,
+      "scope": "instrument smoke, not candidate benchmark"
+    },
+    {
+      "workload": 3,
+      "jobs": 10000,
+      "transactions_per_job": 8,
+      "clients": 8,
+      "passed": true,
+      "elapsed_seconds": 13.381760478005162,
+      "admission_median_ns": 650021.0,
+      "admission_max_ns": 200491148,
+      "c_write_count": 20001,
+      "wal_sync_count": 20001,
+      "receipt_checks": 10000,
+      "scope": "single instrument qualification run, not language performance evidence"
+    }
+  ],
+  "candidate_launch_allowed": false,
+  "missing": [
+    "workload 4 full trace",
+    "allocation/write errors",
+    "full measurement runner"
+  ]
+}

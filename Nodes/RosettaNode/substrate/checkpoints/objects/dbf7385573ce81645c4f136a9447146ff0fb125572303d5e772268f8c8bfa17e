@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+exec /opt/zig/zig build-exe main.zig -O ReleaseSafe -lc -lrosetta -lrocksdb -I/adapter -I/usr/include -L/adapter -L/usr/lib/aarch64-linux-gnu -rpath /adapter -femit-bin=service

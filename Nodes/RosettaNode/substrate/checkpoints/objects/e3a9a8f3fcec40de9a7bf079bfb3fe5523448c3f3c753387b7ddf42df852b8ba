@@ -1,0 +1,369 @@
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"math"
+	"math/rand"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+const sampleStripped = "d4c3b2a101000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f04030201030051fffeffffff01080706050403020102516a0d0c0b0a"
+const sampleFull = "d4c3b2a1000101000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f04030201030051fffeffffff01080706050403020102516a020002aabb0d0c0b0a"
+
+func sample(witness bool) transactionJSON {
+	w := []string{}
+	if witness {
+		w = []string{"", "aabb"}
+	}
+	return transactionJSON{
+		Version: "2712847316", Locktime: "168496141",
+		Inputs:  []inputJSON{{Previous: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", Index: "16909060", Script: "0051ff", Sequence: "4294967294", Witness: w}},
+		Outputs: []outputJSON{{Amount: "72623859790382856", Script: "516a"}},
+	}
+}
+
+func request(t *testing.T, v any) map[string]any {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return handle(b)
+}
+
+func unhex(t testing.TB, s string) []byte {
+	t.Helper()
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func wantStatus(t *testing.T, got map[string]any, want string) {
+	t.Helper()
+	if got["status"] != want {
+		t.Fatalf("response = %#v, want status %s", got, want)
+	}
+	if want != "ok" && len(got) != 1 {
+		t.Fatalf("error contains extra fields: %#v", got)
+	}
+}
+
+func TestSerializeFixtures(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		witness, include bool
+		want             string
+	}{
+		{"legacy", false, false, sampleStripped},
+		{"absent_witness", false, true, sampleStripped},
+		{"strip_witness", true, false, sampleStripped},
+		{"with_witness", true, true, sampleFull},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := request(t, map[string]any{"op": "serialize", "transaction": sample(tc.witness), "include_witness": tc.include})
+			wantStatus(t, got, "ok")
+			if got["bytes"] != tc.want {
+				t.Fatalf("bytes = %s, want %s", got["bytes"], tc.want)
+			}
+		})
+	}
+	wantStatus(t, handle([]byte(`{"op":"serialize","transaction":{"version_bits":"1","inputs":[],"outputs":[],"locktime":"0"},"include_witness":false}`)), "ok")
+	got := handle([]byte(`{"op":"serialize","transaction":{"version_bits":"1","inputs":[],"outputs":[],"locktime":"0"},"include_witness":true}`))
+	if got["bytes"] != "01000000000000000000" {
+		t.Fatal(got)
+	}
+}
+
+func TestDecodeFixtures(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode, wire string
+		want             transactionJSON
+	}{
+		{"legacy", "legacy", sampleStripped, sample(false)},
+		{"legacy_in_witness_mode", "witness", sampleStripped, sample(false)},
+		{"witness", "witness", sampleFull, sample(true)},
+		{"empty_legacy", "legacy", "01000000000000000000", transactionJSON{"1", []inputJSON{}, []outputJSON{}, "0"}},
+		{"empty_witness_mode", "witness", "01000000000000000000", transactionJSON{"1", []inputJSON{}, []outputJSON{}, "0"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := request(t, map[string]any{"op": "decode_exact", "bytes": tc.wire, "mode": tc.mode})
+			wantStatus(t, got, "ok")
+			if !reflect.DeepEqual(got["transaction"], tc.want) {
+				t.Fatalf("transaction = %#v, want %#v", got["transaction"], tc.want)
+			}
+			if got["consumed"] != decimal(uint64(len(tc.wire)/2)) {
+				t.Fatal(got)
+			}
+		})
+	}
+}
+
+func TestPrefixAndExact(t *testing.T) {
+	got := request(t, map[string]any{"op": "decode_prefix", "bytes": "aabb" + sampleFull + "deadbeef", "offset": "2", "mode": "witness"})
+	wantStatus(t, got, "ok")
+	if got["consumed"] != "72" || !reflect.DeepEqual(got["transaction"], sample(true)) {
+		t.Fatal(got)
+	}
+	for _, tc := range []struct{ op, wire, offset, want string }{
+		{"decode_exact", sampleStripped + "00", "0", "malformed_encoding"},
+		{"decode_prefix", sampleStripped, "999", "invalid_request"},
+		{"decode_prefix", "", "0", "malformed_encoding"},
+		{"decode_prefix", "ff", "1", "malformed_encoding"},
+		{"decode_prefix", "", "18446744073709551615", "invalid_request"},
+	} {
+		got := request(t, map[string]any{"op": tc.op, "bytes": tc.wire, "offset": tc.offset, "mode": "legacy"})
+		wantStatus(t, got, tc.want)
+	}
+}
+
+func TestIdentify(t *testing.T) {
+	for _, witness := range []bool{false, true} {
+		got := request(t, map[string]any{"op": "identify", "transaction": sample(witness)})
+		wantStatus(t, got, "ok")
+		full := sampleStripped
+		if witness {
+			full = sampleFull
+		}
+		if len(got) != 9 || got["stripped"] != sampleStripped || got["full"] != full || got["stripped_size"] != "65" || got["full_size"] != decimal(uint64(len(full)/2)) {
+			t.Fatal(got)
+		}
+		for _, spec := range []struct{ wire, name string }{{sampleStripped, "txid"}, {full, "wtxid"}} {
+			first := sha256.Sum256(unhex(t, spec.wire))
+			second := sha256.Sum256(first[:])
+			digest := unhex(t, got[spec.name+"_digest_order"].(string))
+			display := unhex(t, got[spec.name+"_display_order"].(string))
+			if !bytes.Equal(digest, second[:]) {
+				t.Fatalf("wrong %s digest", spec.name)
+			}
+			for i := range digest {
+				if digest[i] != display[len(display)-1-i] {
+					t.Fatalf("wrong %s display order", spec.name)
+				}
+			}
+		}
+	}
+}
+
+func TestCompactSize(t *testing.T) {
+	for _, tc := range []struct {
+		n    uint64
+		wire string
+	}{
+		{0, "00"}, {252, "fc"}, {253, "fdfd00"}, {65535, "fdffff"}, {65536, "fe00000100"},
+		{math.MaxUint32, "feffffffff"}, {1 << 32, "ff0000000001000000"}, {math.MaxUint64, "ffffffffffffffffff"},
+	} {
+		if got := hex.EncodeToString(appendCompact(nil, tc.n)); got != tc.wire {
+			t.Fatalf("encode %d: %s != %s", tc.n, got, tc.wire)
+		}
+		r := wireReader{data: unhex(t, tc.wire), max: math.MaxUint64}
+		if got := r.compact(); got != tc.n || r.err != "" || r.pos != len(r.data) {
+			t.Fatalf("decode %s: %d, %#v", tc.wire, got, r)
+		}
+	}
+	for _, wire := range []string{"", "fd", "fd01", "fd0000", "fdfc00", "feffff0000", "ff0000000000000000", "ffffffffff00000000", "fe010203", "ff01020304050607"} {
+		r := wireReader{data: unhex(t, wire), max: math.MaxUint64}
+		r.compact()
+		if r.err != malformedEncoding {
+			t.Fatalf("accepted invalid CompactSize %s", wire)
+		}
+	}
+}
+
+func TestMalformedWire(t *testing.T) {
+	for _, wire := range []string{sampleStripped, sampleFull} {
+		for n := 0; n < len(wire); n += 2 {
+			got := request(t, map[string]any{"op": "decode_exact", "bytes": wire[:n], "mode": "witness"})
+			wantStatus(t, got, "malformed_encoding")
+		}
+	}
+	for _, wire := range []string{
+		"01000000ffffffffffffffffff",              // Huge count must fail without allocation.
+		"01000000fd0100",                          // Nonminimal input count.
+		"010000000002000000000000",                // Unknown witness flag.
+		"010000000001000000000000",                // No inputs with witness marker.
+		sampleFull[:8] + "0003" + sampleFull[12:], // Unsupported flag with a witness.
+		sampleFull[:len(sampleFull)-18] + "00" + sampleFull[len(sampleFull)-8:], // Superfluous empty witness stack.
+	} {
+		got := request(t, map[string]any{"op": "decode_exact", "bytes": wire, "mode": "witness"})
+		wantStatus(t, got, "malformed_encoding")
+	}
+	// One zero-length witness item is a nonempty stack and is valid.
+	v := sample(true)
+	v.Inputs[0].Witness = []string{""}
+	s := request(t, map[string]any{"op": "serialize", "transaction": v, "include_witness": true})
+	d := request(t, map[string]any{"op": "decode_exact", "bytes": s["bytes"], "mode": "witness"})
+	wantStatus(t, d, "ok")
+	if !reflect.DeepEqual(d["transaction"], v) {
+		t.Fatal(d)
+	}
+}
+
+func TestLimits(t *testing.T) {
+	for _, op := range []string{"serialize", "identify", "decode_exact"} {
+		for _, limit := range []string{"0", "1", "2", "3"} {
+			got := request(t, map[string]any{"op": op, "transaction": sample(true), "include_witness": true, "bytes": sampleFull, "mode": "witness", "limits": map[string]string{"max_items": limit}})
+			want := "resource_limit"
+			if limit == "3" {
+				want = "ok"
+			}
+			wantStatus(t, got, want)
+		}
+	}
+	// An impossible count is malformed even when it exceeds the resource limit.
+	got := request(t, map[string]any{"op": "decode_exact", "bytes": "01000000fd0001", "mode": "legacy", "limits": map[string]string{"max_items": "255"}})
+	wantStatus(t, got, "malformed_encoding")
+	got = request(t, map[string]any{"op": "decode_exact", "bytes": "01000000000000000000", "mode": "witness", "limits": map[string]string{"max_items": "0"}})
+	wantStatus(t, got, "ok")
+	// The fixed-width 32-byte outpoint is not subject to max_items.
+	v := sample(false)
+	v.Inputs[0].Script = ""
+	v.Outputs[0].Script = ""
+	got = request(t, map[string]any{"op": "serialize", "transaction": v, "include_witness": false, "limits": map[string]string{"max_items": "1"}})
+	wantStatus(t, got, "ok")
+}
+
+func TestInvalidRequests(t *testing.T) {
+	for _, raw := range []string{
+		``, ` `, `null`, `[]`, `1`, `{"op":`, `{} {}`, `{}`, `{"op":"bogus"}`,
+		`{"op":"decode_exact","bytes":"","mode":"bad"}`,
+		`{"op":"decode_exact","bytes":"0","mode":"legacy"}`,
+		`{"op":"decode_exact","bytes":"gg","mode":"legacy"}`,
+		`{"op":"decode_exact","bytes":null,"mode":"legacy"}`,
+		`{"op":"decode_exact","bytes":"","mode":null}`,
+		`{"op":"decode_prefix","bytes":"","mode":"legacy"}`,
+		`{"op":"decode_prefix","bytes":"","mode":"legacy","offset":0}`,
+		`{"op":"decode_prefix","bytes":"","mode":"legacy","offset":"-1"}`,
+		`{"op":"decode_prefix","bytes":"","mode":"legacy","offset":"+0"}`,
+		`{"op":"decode_prefix","bytes":"","mode":"legacy","offset":"18446744073709551616"}`,
+		`{"op":"identify","limits":null}`,
+		`{"op":"identify","limits":{"max_items":0}}`,
+		`{"op":"identify","limits":{"max_items":"-1"}}`,
+		`{"op":"serialize","transaction":{},"include_witness":null}`,
+	} {
+		wantStatus(t, handle([]byte(raw)), "invalid_request")
+	}
+	base := map[string]any{"op": "serialize", "transaction": sample(false), "include_witness": false}
+	for _, mutation := range []func(map[string]any){
+		func(m map[string]any) { delete(m, "include_witness") },
+		func(m map[string]any) { m["include_witness"] = "false" },
+		func(m map[string]any) { m["transaction"] = nil },
+		func(m map[string]any) { m["transaction"].(map[string]any)["version_bits"] = "4294967296" },
+		func(m map[string]any) { m["transaction"].(map[string]any)["locktime"] = "-1" },
+		func(m map[string]any) { m["transaction"].(map[string]any)["inputs"] = nil },
+		func(m map[string]any) { delete(m["transaction"].(map[string]any), "outputs") },
+		func(m map[string]any) {
+			m["transaction"].(map[string]any)["inputs"].([]any)[0].(map[string]any)["witness"] = nil
+		},
+		func(m map[string]any) {
+			m["transaction"].(map[string]any)["inputs"].([]any)[0].(map[string]any)["previous_txid_digest_order"] = "00"
+		},
+		func(m map[string]any) {
+			m["transaction"].(map[string]any)["outputs"].([]any)[0].(map[string]any)["amount"] = "18446744073709551616"
+		},
+	} {
+		b, _ := json.Marshal(base)
+		var m map[string]any
+		if err := json.Unmarshal(b, &m); err != nil {
+			t.Fatal(err)
+		}
+		mutation(m)
+		wantStatus(t, request(t, m), "invalid_request")
+	}
+}
+
+func TestJSONLines(t *testing.T) {
+	v := sample(true)
+	v.Inputs[0].Script = strings.Repeat("ab", 65536)
+	line, err := json.Marshal(map[string]any{"op": "serialize", "transaction": v, "include_witness": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := append([]byte("{}\n\n"), line...)
+	input = append(input, []byte("\r\n{\"op\":\"unknown\"}")...)
+	var output bytes.Buffer
+	if err := run(bytes.NewReader(input), &output); err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSuffix(output.Bytes(), []byte{'\n'}), []byte{'\n'})
+	if len(lines) != 4 {
+		t.Fatalf("got %d responses", len(lines))
+	}
+	for i, line := range lines {
+		var got map[string]any
+		if err := json.Unmarshal(line, &got); err != nil {
+			t.Fatal(err)
+		}
+		want := "invalid_request"
+		if i == 2 {
+			want = "ok"
+		}
+		wantStatus(t, got, want)
+		if i == 2 {
+			d := request(t, map[string]any{"op": "decode_exact", "bytes": got["bytes"], "mode": "witness"})
+			wantStatus(t, d, "ok")
+			if !reflect.DeepEqual(d["transaction"], v) {
+				t.Fatal("large script changed")
+			}
+		}
+	}
+}
+
+func TestRandomRoundTrips(t *testing.T) {
+	rng := rand.New(rand.NewSource(8341))
+	for iteration := 0; iteration < 300; iteration++ {
+		tx := &transaction{version: rng.Uint32(), locktime: rng.Uint32()}
+		blob := func() []byte { b := make([]byte, rng.Intn(300)); rng.Read(b); return b }
+		for i, n := 0, 1+rng.Intn(4); i < n; i++ {
+			in := txInput{index: rng.Uint32(), sequence: rng.Uint32(), script: blob()}
+			rng.Read(in.previous[:])
+			for j, n := 0, rng.Intn(4); j < n; j++ {
+				in.witness = append(in.witness, blob())
+			}
+			tx.inputs = append(tx.inputs, in)
+		}
+		for i, n := 0, rng.Intn(4); i < n; i++ {
+			tx.outputs = append(tx.outputs, txOutput{int64(rng.Uint64()), blob()})
+		}
+		full := tx.serialize(true)
+		decoded, n, err := decode(full, true, math.MaxUint64)
+		if err != "" || n != len(full) {
+			t.Fatalf("iteration %d: decode error %s", iteration, err)
+		}
+		if !reflect.DeepEqual(decoded.jsonValue(), tx.jsonValue()) {
+			t.Fatalf("iteration %d: fields changed", iteration)
+		}
+		stripped := tx.serialize(false)
+		decoded, n, err = decode(stripped, false, math.MaxUint64)
+		if err != "" || n != len(stripped) || decoded.hasWitness() || !bytes.Equal(decoded.serialize(true), stripped) {
+			t.Fatalf("iteration %d: stripping failed", iteration)
+		}
+	}
+}
+
+func FuzzDecode(f *testing.F) {
+	for _, wire := range []string{"", sampleStripped, sampleFull, "01000000000000000000", "01000000ffffffffffffffffff"} {
+		f.Add(unhex(f, wire), true, uint64(100000))
+	}
+	f.Fuzz(func(t *testing.T, data []byte, witness bool, max uint64) {
+		tx, n, err := decode(data, witness, max)
+		if err != "" {
+			if err != malformedEncoding && err != resourceLimit {
+				t.Fatalf("unexpected error %s", err)
+			}
+			return
+		}
+		if n < 10 || n > len(data) {
+			t.Fatalf("invalid consumed %d", n)
+		}
+		if !bytes.Equal(tx.serialize(witness), data[:n]) {
+			t.Fatal("accepted noncanonical representation")
+		}
+	})
+}

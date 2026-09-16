@@ -1,0 +1,62 @@
+# Implementation notes
+
+The implementation uses only the Go standard library and the supplied
+`interface.md` and `packet.md`. All four operations are served as JSON lines.
+
+Build without external modules:
+
+```sh
+GO111MODULE=off GOCACHE="$PWD/cache" GOTMPDIR="$PWD/tmp" go build -o tmp/rosettanode .
+```
+
+Run tests and static checks:
+
+```sh
+GO111MODULE=off GOCACHE="$PWD/cache" GOTMPDIR="$PWD/tmp" go test ./...
+GO111MODULE=off GOCACHE="$PWD/cache" GOTMPDIR="$PWD/tmp" go vet ./...
+```
+
+`main.go` implements request validation, response encoding, and bounded line
+framing. `wire.go` implements CompactSize, the transaction scan and materializing
+pass, serialization, and identification. `structured.go` validates and measures
+all structured fields before budget decisions and object construction.
+
+The wire structural scan allocates no objects and continues past the item budget.
+Truncation, impossible counts, noncanonical lengths, optional-data errors, and
+exact-mode trailing data are rejected before the item-budget verdict. Serialization
+validates every supplied field, including witness data omitted from the output.
+
+## Ambiguities resolved
+
+- Signed negative zero (`"-0"`) is rejected as noncanonical decimal syntax.
+- Explicit `null` is invalid for optional parameters; absence supplies defaults.
+- Structured transaction/input/output objects reject duplicate keys. Envelope
+  and limits objects use the standard JSON decoder's last-key-wins behavior.
+- Unknown fields in `limits` are ignored, as are unknown request-envelope fields.
+  An offset supplied to `decode_exact` is an ignored envelope field.
+- An offset equal to the byte-string length is a valid cursor, followed by a
+  malformed-encoding verdict because no transaction remains.
+- The combined structured item budget includes all supplied witness items even
+  for stripped serialization. The 8 MiB pool includes all supplied digest,
+  script, and witness bytes, including bytes omitted from serialization.
+- The 4 MiB serialization cap applies to the requested representation;
+  `identify` checks the full representation, which is at least as large as
+  the stripped representation.
+- The framing LF is excluded from the 20 MiB JSON text limit. Other whitespace,
+  including a CR before LF, counts. Blank lines return `invalid_request`; an
+  unterminated final nonempty line is processed. Oversized lines are discarded
+  through their delimiter and return one `transport_limit` response.
+- The program enforces transport limits itself. JSON text size is checked before
+  JSON parsing; field/offset validation precedes byte-pool checks; transport
+  precedes admission or structured resource checks. Admission measures all bytes
+  remaining at the offset, including a suffix beyond the first transaction.
+
+Recoverable runtime/allocation panics during request processing return
+`execution_failure`. Go runtime fatal out-of-memory termination is not recoverable;
+the bounded scans and materialization checks avoid unchecked count-based
+allocation.
+
+Tests include the supplied 61-byte serialization and digest fixture, manually
+constructed witness encodings, numeric and CompactSize boundaries, error
+precedence, exact byte envelopes, zero-allocation wire scanning, stream recovery,
+deterministic generated transactions, and wire/JSON fuzz targets.

@@ -1,0 +1,283 @@
+use crate::{Error, Result, reserve, copy_bytes, json::Json, hex_length, unhex, unsigned, signed, ENVELOPE, TRANSPORT_BYTES};
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Transaction {
+    pub version: u32,
+    pub inputs: Vec<Input>,
+    pub outputs: Vec<Output>,
+    pub locktime: u32,
+}
+#[derive(Debug, PartialEq, Eq)]
+pub struct Input {
+    pub digest: [u8; 32],
+    pub index: u32,
+    pub script: Vec<u8>,
+    pub sequence: u32,
+    pub witness: Vec<Vec<u8>>,
+}
+#[derive(Debug, PartialEq, Eq)]
+pub struct Output { pub amount: i64, pub script: Vec<u8> }
+
+pub struct Reader<'a> { pub bytes: &'a [u8], pub at: usize }
+impl<'a> Reader<'a> {
+    pub fn take(&mut self, length: usize) -> Result<&'a [u8]> {
+        if length > self.remaining() { return Err(Error::Malformed); }
+        let start = self.at;
+        self.at += length;
+        Ok(&self.bytes[start..self.at])
+    }
+    fn remaining(&self) -> usize { self.bytes.len() - self.at }
+    pub fn compact(&mut self) -> Result<u64> {
+        let mut cursor = Reader { bytes: self.bytes, at: self.at };
+        let value = cursor.compact_value()?;
+        self.at = cursor.at;
+        Ok(value)
+    }
+    fn compact_value(&mut self) -> Result<u64> {
+        let tag = self.take(1)?[0];
+        let n = match tag {
+            0..=252 => return Ok(tag as u64),
+            253 => u16::from_le_bytes(self.take(2)?.try_into().unwrap()) as u64,
+            254 => u32::from_le_bytes(self.take(4)?.try_into().unwrap()) as u64,
+            255 => u64::from_le_bytes(self.take(8)?.try_into().unwrap()),
+        };
+        let min = match tag { 253 => 253, 254 => 65536, _ => 4294967296 };
+        if n < min { Err(Error::Malformed) } else { Ok(n) }
+    }
+    fn count(&mut self, min_bytes: usize) -> Result<usize> {
+        let n = self.compact()?;
+        if n > (self.remaining() / min_bytes) as u64 { return Err(Error::Malformed); }
+        Ok(n as usize)
+    }
+    fn blob(&mut self) -> Result<&'a [u8]> {
+        let n = self.compact()?;
+        if n > self.remaining() as u64 { return Err(Error::Malformed); }
+        self.take(n as usize)
+    }
+    fn u32(&mut self) -> Result<u32> { Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap())) }
+    fn inputs(&mut self, count: usize, materialize: bool) -> Result<Vec<Input>> {
+        let mut inputs = Vec::new();
+        if materialize { reserve(&mut inputs, count)?; }
+        for _ in 0..count {
+            let digest = self.take(32)?;
+            let index = self.u32()?;
+            let script = self.blob()?;
+            let sequence = self.u32()?;
+            if materialize {
+                inputs.push(Input { digest: digest.try_into().unwrap(), index,
+                    script: copy_bytes(script)?, sequence, witness: Vec::new() });
+            }
+        }
+        Ok(inputs)
+    }
+    fn outputs(&mut self, count: usize, materialize: bool) -> Result<Vec<Output>> {
+        let mut outputs = Vec::new();
+        if materialize { reserve(&mut outputs, count)?; }
+        for _ in 0..count {
+            let amount = i64::from_le_bytes(self.take(8)?.try_into().unwrap());
+            let script = self.blob()?;
+            if materialize { outputs.push(Output { amount, script: copy_bytes(script)? }); }
+        }
+        Ok(outputs)
+    }
+}
+
+// The first pass calls this with materialize=false and uses only constant scratch.
+// Only after structural, exactness, and budget checks may the second pass allocate.
+pub fn parse(bytes: &[u8], witness_mode: bool, materialize: bool) -> Result<(Transaction, usize, usize)> {
+    let mut r = Reader { bytes, at: 0 };
+    let mut tx = Transaction { version: r.u32()?, ..Transaction::default() };
+    let mut input_count = r.count(41)?;
+    tx.inputs = r.inputs(input_count, materialize)?;
+    let mut flags = 0;
+    let output_count;
+    if witness_mode && input_count == 0 {
+        flags = r.take(1)?[0];
+        if flags != 0 {
+            input_count = r.count(41)?;
+            tx.inputs = r.inputs(input_count, materialize)?;
+            output_count = r.count(9)?;
+        } else { output_count = 0; }
+    } else { output_count = r.count(9)?; }
+    tx.outputs = r.outputs(output_count, materialize)?;
+    let mut items = input_count + output_count;
+    if flags & 1 != 0 {
+        let mut has_witness = false;
+        for i in 0..input_count {
+            let count = r.count(1)?;
+            items += count;
+            has_witness |= count != 0;
+            if materialize { reserve(&mut tx.inputs[i].witness, count)?; }
+            for _ in 0..count {
+                let item = r.blob()?;
+                if materialize { tx.inputs[i].witness.push(copy_bytes(item)?); }
+            }
+        }
+        if !has_witness { return Err(Error::Malformed); }
+        flags &= !1;
+    }
+    if flags != 0 { return Err(Error::Malformed); }
+    tx.locktime = r.u32()?;
+    Ok((tx, r.at, items))
+}
+
+pub fn decode(bytes: &[u8], offset: usize, witness_mode: bool, exact: bool, limit: usize) -> Result<(Transaction, usize)> {
+    let suffix = bytes.get(offset..).ok_or(Error::Invalid)?;
+    if suffix.len() > ENVELOPE { return Err(Error::Admission); }
+    let (_, consumed, items) = parse(suffix, witness_mode, false)?;
+    if exact && consumed != suffix.len() { return Err(Error::Malformed); }
+    if items > limit { return Err(Error::Resource); }
+    let (tx, again, _) = parse(suffix, witness_mode, true)?;
+    debug_assert_eq!(consumed, again);
+    Ok((tx, consumed))
+}
+
+pub fn compact_length(n: u64) -> usize {
+    match n { 0..=252 => 1, 253..=65535 => 3, 65536..=4294967295 => 5, _ => 9 }
+}
+pub fn compact(out: &mut Vec<u8>, n: u64) {
+    match n {
+        0..=252 => out.push(n as u8),
+        253..=65535 => { out.push(253); out.extend_from_slice(&(n as u16).to_le_bytes()); }
+        65536..=4294967295 => { out.push(254); out.extend_from_slice(&(n as u32).to_le_bytes()); }
+        _ => { out.push(255); out.extend_from_slice(&n.to_le_bytes()); }
+    }
+}
+fn put_blob(out: &mut Vec<u8>, bytes: &[u8]) {
+    compact(out, bytes.len() as u64);
+    out.extend_from_slice(bytes);
+}
+fn blob_size(n: usize) -> usize { compact_length(n as u64) + n }
+
+impl Transaction {
+    pub fn has_witness(&self) -> bool { self.inputs.iter().any(|i| !i.witness.is_empty()) }
+    pub fn size(&self, include_witness: bool) -> usize {
+        let mut size = 8 + compact_length(self.inputs.len() as u64) + compact_length(self.outputs.len() as u64);
+        for i in &self.inputs { size += 40 + blob_size(i.script.len()); }
+        for o in &self.outputs { size += 8 + blob_size(o.script.len()); }
+        if include_witness && self.has_witness() {
+            size += 2;
+            for i in &self.inputs {
+                size += compact_length(i.witness.len() as u64);
+                for item in &i.witness { size += blob_size(item.len()); }
+            }
+        }
+        size
+    }
+    pub fn serialize(&self, include_witness: bool) -> Result<Vec<u8>> {
+        let size = self.size(include_witness);
+        if size > ENVELOPE { return Err(Error::Resource); }
+        let mut bytes = Vec::new();
+        reserve(&mut bytes, size)?;
+        bytes.extend_from_slice(&self.version.to_le_bytes());
+        let witness = include_witness && self.has_witness();
+        if witness { bytes.extend_from_slice(&[0, 1]); }
+        compact(&mut bytes, self.inputs.len() as u64);
+        for i in &self.inputs {
+            bytes.extend_from_slice(&i.digest);
+            bytes.extend_from_slice(&i.index.to_le_bytes());
+            put_blob(&mut bytes, &i.script);
+            bytes.extend_from_slice(&i.sequence.to_le_bytes());
+        }
+        compact(&mut bytes, self.outputs.len() as u64);
+        for o in &self.outputs {
+            bytes.extend_from_slice(&o.amount.to_le_bytes());
+            put_blob(&mut bytes, &o.script);
+        }
+        if witness {
+            for i in &self.inputs {
+                compact(&mut bytes, i.witness.len() as u64);
+                for item in &i.witness { put_blob(&mut bytes, item); }
+            }
+        }
+        bytes.extend_from_slice(&self.locktime.to_le_bytes());
+        debug_assert_eq!(size, bytes.len());
+        Ok(bytes)
+    }
+}
+
+pub struct Shape { pub stripped: usize, pub full: usize, pub items: usize }
+fn str_field<'a>(j: &'a Json<'_>, id: usize, key: &str) -> Result<&'a str> { j.string(j.field(id, key)?) }
+fn u32_field(j: &Json<'_>, id: usize, key: &str) -> Result<u32> {
+    let n = unsigned(str_field(j, id, key)?)?;
+    u32::try_from(n).map_err(|_| Error::Invalid)
+}
+fn check_hex(j: &Json<'_>, id: usize, pool: &mut usize) -> Result<usize> {
+    let n = hex_length(j.string(id)?)?;
+    *pool += n;
+    if *pool > TRANSPORT_BYTES { return Err(Error::Transport); }
+    Ok(n)
+}
+
+// Validate every supplied field before returning any item-budget verdict.
+// This pass also avoids allocating byte vectors for over-budget structures.
+pub fn validate(j: &Json<'_>, id: usize) -> Result<Shape> {
+    j.exact(id, &["version_bits", "inputs", "outputs", "locktime"])?;
+    u32_field(j, id, "version_bits")?;
+    u32_field(j, id, "locktime")?;
+    let inputs = j.array(j.field(id, "inputs")?)?;
+    let outputs = j.array(j.field(id, "outputs")?)?;
+    let mut shape = Shape {
+        stripped: 8 + compact_length(inputs.len() as u64) + compact_length(outputs.len() as u64),
+        full: 0, items: inputs.len() + outputs.len(),
+    };
+    let mut pool = 0;
+    let mut witness_size = 0;
+    let mut witness_present = false;
+    for &input in inputs {
+        j.exact(input, &["previous_txid_digest_order", "previous_index", "script", "sequence", "witness"])?;
+        if check_hex(j, j.field(input, "previous_txid_digest_order")?, &mut pool)? != 32 {
+            return Err(Error::Invalid);
+        }
+        u32_field(j, input, "previous_index")?;
+        u32_field(j, input, "sequence")?;
+        let n = check_hex(j, j.field(input, "script")?, &mut pool)?;
+        shape.stripped += 40 + blob_size(n);
+        let witness = j.array(j.field(input, "witness")?)?;
+        shape.items += witness.len();
+        witness_present |= !witness.is_empty();
+        witness_size += compact_length(witness.len() as u64);
+        for &item in witness { witness_size += blob_size(check_hex(j, item, &mut pool)?); }
+    }
+    for &output in outputs {
+        j.exact(output, &["amount", "script"])?;
+        signed(str_field(j, output, "amount")?)?;
+        let n = check_hex(j, j.field(output, "script")?, &mut pool)?;
+        shape.stripped += 8 + blob_size(n);
+    }
+    shape.full = shape.stripped + if witness_present { 2 + witness_size } else { 0 };
+    Ok(shape)
+}
+
+pub fn structured(j: &Json<'_>, id: usize, limit: usize, include_witness: bool) -> Result<Transaction> {
+    let shape = validate(j, id)?;
+    if shape.items > limit || (if include_witness { shape.full } else { shape.stripped }) > ENVELOPE {
+        return Err(Error::Resource);
+    }
+    let mut tx = Transaction { version: u32_field(j, id, "version_bits")?, locktime: u32_field(j, id, "locktime")?, ..Transaction::default() };
+    let inputs = j.array(j.field(id, "inputs")?)?;
+    let outputs = j.array(j.field(id, "outputs")?)?;
+    reserve(&mut tx.inputs, inputs.len())?;
+    reserve(&mut tx.outputs, outputs.len())?;
+    for &input in inputs {
+        let digest = unhex(str_field(j, input, "previous_txid_digest_order")?)?;
+        let mut i = Input {
+            digest: digest.as_slice().try_into().unwrap(),
+            index: u32_field(j, input, "previous_index")?,
+            sequence: u32_field(j, input, "sequence")?,
+            script: unhex(str_field(j, input, "script")?)?,
+            witness: Vec::new(),
+        };
+        let witness = j.array(j.field(input, "witness")?)?;
+        reserve(&mut i.witness, witness.len())?;
+        for &item in witness { i.witness.push(unhex(j.string(item)?)?); }
+        tx.inputs.push(i);
+    }
+    for &output in outputs {
+        tx.outputs.push(Output {
+            amount: signed(str_field(j, output, "amount")?)?,
+            script: unhex(str_field(j, output, "script")?)?,
+        });
+    }
+    Ok(tx)
+}

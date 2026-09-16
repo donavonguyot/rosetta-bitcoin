@@ -1,0 +1,88 @@
+# Implementation notes
+
+The implementation uses only Go's standard library. `main.go` implements the
+JSON-lines interface, request validation, and identification. `wire.go` implements
+transaction encoding and decoding. `main_test.go` contains independently laid out
+wire examples, edge cases, randomized round trips, and fuzz targets.
+
+Build with `go build -o rosettanode .`; run with `./rosettanode`. Test with
+`go test ./...`. No dependency downloads are required. Building with
+`GO111MODULE=off` also works. Responses are flushed after each input line, and a
+final line without a newline is processed. Empty lines produce `invalid_request`.
+
+## Interpretations of unspecified behavior
+
+`interface.md` supplies the JSON shapes but does not specify a binary grammar,
+validation policy, default limits, or error precedence. The implementation makes
+these choices:
+
+- Transactions use conventional Bitcoin serialization: little-endian fixed-width
+  fields and canonical CompactSize lengths/counts. Decoding rejects nonminimal
+  CompactSize values. No script execution or transaction consensus checks occur.
+- Version bits, previous indices, sequences, and locktime are unsigned 32-bit
+  values. Amounts are signed 64-bit values, encoded as little-endian two's
+  complement. Offsets and `max_items` are unsigned 64-bit values. Decimal strings
+  contain digits, with an optional minus sign for amounts; leading zeros are accepted.
+  Hexadecimal accepts either case, requires whole bytes, and has no `0x` prefix.
+  Output numbers and hex strings are normalized.
+- Previous transaction digests are exactly 32 bytes and appear on the wire in
+  the supplied digest order. Identifiers use double SHA256; display order reverses
+  the resulting 32 digest bytes. The full identifier equals the stripped
+  identifier when there is no witness.
+- Witness mode also accepts legacy transactions. Zero initial inputs followed by
+  a nonzero byte indicate witness framing. Only flag `01` is supported. Marker
+  and flag `00 00` represent the legacy empty-input, empty-output form. Legacy
+  mode never interprets a witness marker specially.
+- Witness framing is emitted only when `include_witness` is true and at least one
+  input has a nonempty witness stack. A stack containing one empty item counts
+  as present. Framing with all empty stacks is rejected during decoding. Empty
+  witness stacks are emitted for other inputs when any input has witness data.
+- Prefix offsets count bytes, and `consumed` is the number of transaction bytes
+  read starting at that offset. Out-of-range offsets are `invalid_request`;
+  insufficient bytes at an in-range offset are `malformed_encoding`.
+  Exact decoding rejects trailing bytes as `malformed_encoding`.
+- Absent `max_items` means no explicit count cap. A supplied cap applies separately
+  to input/output counts, witness stack counts, and every script/witness byte
+  string length. It is not an aggregate budget and does not count fixed-width
+  digests. Transaction requests validate witness limits even when serializing
+  without witness. Limit excess is `resource_limit`; an unrepresentable encoded
+  size is also `resource_limit`.
+- Every listed transaction field is required, including witness arrays; null is
+  not a substitute for an empty array, string, or object. `include_witness` is
+  required for serialization, and `offset` is required for prefix decoding.
+  Unknown JSON properties are ignored. Duplicate keys follow Go's JSON decoder
+  behavior: the last value is used.
+- Invalid JSON, request shapes, hex, numeric values, modes, or operations produce
+  `invalid_request`. Binary truncation and invalid wire encodings produce
+  `malformed_encoding`. Canonicality and minimum available payload size are
+  checked before a decoded collection's limit; the limit is then checked before
+  consuming or allocating its payload. There is no global precedence guarantee
+  when multiple independent faults coexist.
+- No arbitrary transport or admission thresholds are introduced because none
+  were supplied. `transport_limit` and `admission_limit` are therefore not emitted.
+  Unexpected recoverable implementation panics produce `execution_failure`.
+
+## Validation
+
+Tests cover fixed legacy/witness bytes, identifiers and digest reversal, empty
+transactions, mixed witness stacks, numeric boundaries, malformed request shapes,
+all truncations of the fixed transactions, canonical CompactSize boundaries,
+oversized declared counts, per-collection limits, prefix offsets, exact trailing
+bytes, 252/253/65535/65536-byte payloads, 253-element collections, 300 deterministic
+randomized transaction round trips, and multiline transport including large and
+unterminated records. Fuzz targets check binary decoding and JSON request handling.
+
+## Repair phase
+
+The supplied `feedback.json` resolved amount signedness and exposed a case where
+a truncated input collection was incorrectly classified as `resource_limit`.
+Amounts now use the signed 64-bit range throughout parsing, encoding, decoding,
+and identification. Collection checks now test physical feasibility before the
+configured limit. Applying that precedence to all collection types is a
+generalization of the supplied input-count case; full error precedence remains
+unspecified.
+
+`feedback_test.go` embeds the six supplied examples for exact response regression
+checks, and adds signed boundary/range tests and paired truncated/complete
+collection tests. Feedback is included only in the test executable, never the
+JSON-lines program.

@@ -1,0 +1,509 @@
+#!/usr/bin/env python3
+"""Own contract tests. Native adapter is the encoding oracle; DB is read stopped."""
+import concurrent.futures
+import ctypes as C
+import hashlib
+import json
+import os
+from pathlib import Path
+import random
+import resource
+import signal
+import socket
+import struct
+import subprocess
+import tempfile
+import time
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+SERVICE = str(ROOT / "service")
+
+def item(data=b"\x01\0\0\0\0\0\0\0\0\0", mode="legacy", operation="exact"):
+    return {"hex": data.hex(), "mode": mode, "operation": operation}
+
+def identity(items):
+    h = hashlib.sha256()
+    for x in items:
+        data = bytes.fromhex(x["hex"])
+        h.update(bytes([int(x["mode"] == "witness"), int(x["operation"] == "exact")]))
+        h.update(struct.pack("<Q", len(data)))
+        h.update(data)
+    return h.hexdigest()
+
+def large_transaction():
+    """Fixed structural fixture with a large script; parsed only by the adapter."""
+    n = (4 << 20) - 64
+    data = (b"\x01\0\0\0\x01" + b"\0"*32 + b"\xff"*4 + b"\xfe" + struct.pack("<I", n)
+            + b"\0"*n + b"\xff"*4 + b"\x01" + b"\0"*8 + b"\0" + b"\0"*4)
+    assert len(data) == 4 << 20
+    return data
+
+class Native:
+    class Item(C.Structure):
+        _fields_ = [("data", C.c_void_p), ("size", C.c_uint64), ("witness", C.c_uint32), ("exact", C.c_uint32)]
+    class Result(C.Structure):
+        _fields_ = [(x, C.c_uint64) for x in ("status", "consumed", "full_size", "stripped_size")] + [("txid", C.c_ubyte * 32), ("wtxid", C.c_ubyte * 32)]
+    def __init__(self):
+        self.lib = C.CDLL("/adapter/librosetta.so")
+        self.lib.rn_arena_create.argtypes = [C.c_void_p, C.c_uint64]
+        self.lib.rn_arena_create.restype = C.c_void_p
+        self.lib.rn_arena_data.argtypes = [C.c_void_p]
+        self.lib.rn_arena_data.restype = C.c_void_p
+        self.lib.rn_arena_destroy.argtypes = [C.c_void_p]
+        self.lib.rn_verify_v1.argtypes = [C.c_void_p, C.POINTER(self.Item), C.c_uint64, C.POINTER(self.Result)]
+        self.lib.rn_verify_v1.restype = C.c_int
+    def evaluate(self, items):
+        chunks = [bytes.fromhex(x["hex"]) for x in items]
+        data = b"".join(chunks)
+        buf = C.create_string_buffer(data)
+        arena = self.lib.rn_arena_create(buf, len(data))
+        assert arena
+        try:
+            base = self.lib.rn_arena_data(arena) or 0
+            args = (self.Item * len(items))()
+            offset = 0
+            for a, x, b in zip(args, items, chunks):
+                a.data, a.size, a.witness, a.exact = base + offset, len(b), x["mode"] == "witness", x["operation"] == "exact"
+                offset += len(b)
+            out = (self.Result * len(items))()
+            assert self.lib.rn_verify_v1(arena, args, len(items), out) == 0
+            return [dict(status=str(x.status), consumed=str(x.consumed), full_size=str(x.full_size), stripped_size=str(x.stripped_size), txid_digest_order=bytes(x.txid).hex(), wtxid_digest_order=bytes(x.wtxid).hex()) for x in out]
+        finally:
+            self.lib.rn_arena_destroy(arena)
+
+class Database:
+    """Independent ctypes access, never opened while a service writer is alive."""
+    def __init__(self, path, write=False):
+        self.lib = C.CDLL("librocksdb.so")
+        def bind(name, restype, *args):
+            f = getattr(self.lib, name); f.restype = restype; f.argtypes = list(args); return f
+        P, Z, S, E = C.c_void_p, C.c_size_t, C.c_char_p, C.POINTER(C.c_void_p)
+        self.options = bind("rocksdb_options_create", P)()
+        bind("rocksdb_options_destroy", None, P)
+        bind("rocksdb_options_set_create_if_missing", None, P, C.c_ubyte)(self.options, int(write))
+        bind("rocksdb_options_set_compression", None, P, C.c_int)(self.options, 0)
+        bind("rocksdb_options_set_write_buffer_size", None, P, Z)(self.options, 64 << 20)
+        bind("rocksdb_options_set_max_write_buffer_number", None, P, C.c_int)(self.options, 2)
+        bind("rocksdb_options_set_max_background_jobs", None, P, C.c_int)(self.options, 2)
+        self.cache = bind("rocksdb_cache_create_lru", P, Z)(128 << 20)
+        self.table = bind("rocksdb_block_based_options_create", P)()
+        bind("rocksdb_block_based_options_set_block_cache", None, P, P)(self.table, self.cache)
+        bind("rocksdb_options_set_block_based_table_factory", None, P, P)(self.options, self.table)
+        bind("rocksdb_block_based_options_destroy", None, P)
+        bind("rocksdb_cache_destroy", None, P)
+        bind("rocksdb_open", P, P, S, E)
+        bind("rocksdb_open_for_read_only", P, P, S, C.c_ubyte, E)
+        bind("rocksdb_close", None, P)
+        bind("rocksdb_free", None, P)
+        self.error = C.c_void_p()
+        if write:
+            self.db = self.lib.rocksdb_open(self.options, os.fsencode(path), C.byref(self.error))
+        else:
+            self.db = self.lib.rocksdb_open_for_read_only(self.options, os.fsencode(path), 0, C.byref(self.error))
+        self.check()
+        self.read = bind("rocksdb_readoptions_create", P)()
+        bind("rocksdb_readoptions_destroy", None, P)
+        bind("rocksdb_create_iterator", P, P, P)
+        bind("rocksdb_iter_destroy", None, P)
+        bind("rocksdb_iter_seek_to_first", None, P)
+        bind("rocksdb_iter_valid", C.c_ubyte, P)
+        bind("rocksdb_iter_next", None, P)
+        bind("rocksdb_iter_key", P, P, C.POINTER(Z))
+        bind("rocksdb_iter_value", P, P, C.POINTER(Z))
+        bind("rocksdb_iter_get_error", None, P, E)
+        bind("rocksdb_writebatch_create", P)
+        bind("rocksdb_writebatch_destroy", None, P)
+        bind("rocksdb_writebatch_put", None, P, S, Z, S, Z)
+        bind("rocksdb_writebatch_delete", None, P, S, Z)
+        bind("rocksdb_writeoptions_create", P)
+        bind("rocksdb_writeoptions_set_sync", None, P, C.c_ubyte)
+        bind("rocksdb_writeoptions_disable_WAL", None, P, C.c_int)
+        bind("rocksdb_writeoptions_destroy", None, P)
+        bind("rocksdb_write", None, P, P, P, E)
+    def check(self):
+        if self.error.value:
+            text = C.string_at(self.error).decode(); self.lib.rocksdb_free(self.error)
+            self.error = C.c_void_p(); raise RuntimeError(text)
+    def rows(self):
+        out = {}; it = self.lib.rocksdb_create_iterator(self.db, self.read)
+        try:
+            self.lib.rocksdb_iter_seek_to_first(it)
+            while self.lib.rocksdb_iter_valid(it):
+                kn, vn = C.c_size_t(), C.c_size_t()
+                k = self.lib.rocksdb_iter_key(it, C.byref(kn))
+                v = self.lib.rocksdb_iter_value(it, C.byref(vn))
+                out[C.string_at(k, kn.value).decode()] = C.string_at(v, vn.value)
+                self.lib.rocksdb_iter_next(it)
+            self.lib.rocksdb_iter_get_error(it, C.byref(self.error)); self.check()
+        finally:
+            self.lib.rocksdb_iter_destroy(it)
+        return out
+    def update(self, changes):
+        batch = self.lib.rocksdb_writebatch_create(); w = self.lib.rocksdb_writeoptions_create()
+        self.lib.rocksdb_writeoptions_set_sync(w, 1); self.lib.rocksdb_writeoptions_disable_WAL(w, 0)
+        try:
+            for key, value in changes.items():
+                k = key.encode()
+                if value is None: self.lib.rocksdb_writebatch_delete(batch, k, len(k))
+                else: self.lib.rocksdb_writebatch_put(batch, k, len(k), value, len(value))
+            self.lib.rocksdb_write(self.db, w, batch, C.byref(self.error)); self.check()
+        finally:
+            self.lib.rocksdb_writebatch_destroy(batch); self.lib.rocksdb_writeoptions_destroy(w)
+    def close(self):
+        self.lib.rocksdb_readoptions_destroy(self.read); self.lib.rocksdb_close(self.db); self.lib.rocksdb_options_destroy(self.options)
+        self.lib.rocksdb_block_based_options_destroy(self.table); self.lib.rocksdb_cache_destroy(self.cache)
+    def __enter__(self): return self
+    def __exit__(self, *args): self.close()
+
+def inspect(path):
+    with Database(path) as db: rows = db.rows()
+    assert rows["meta/version"] == b"1"
+    sequence, checkpoint, jobs, size = [int(rows["meta/" + x]) for x in ("sequence", "checkpoint", "jobs", "bytes")]
+    assert 0 <= checkpoint <= sequence
+    assert jobs == sequence - checkpoint <= 1024
+    assert size <= 64 << 20
+    expected = {"meta/" + x for x in ("version", "sequence", "checkpoint", "jobs", "bytes")}
+    summed = 0; identities = set()
+    for n in range(1, sequence + 1):
+        p, r, c = [f"{x}/{n:020d}" for x in "prc"]
+        key = r if n <= checkpoint else p
+        expected.add(key); job = json.loads(rows[key])
+        assert job["sequence"] == str(n)
+        assert job["id"] not in identities; identities.add(job["id"])
+        index = "id/" + job["id"]; expected.add(index)
+        assert rows[index] == str(n).encode()
+        assert len(job["digest"]) == 64
+        if n <= checkpoint:
+            assert p not in rows and c not in rows
+            assert job["state"] in ("complete", "cancelled")
+            if job["state"] == "cancelled": assert job["results"] == []
+        else:
+            assert r not in rows and "state" not in job
+            assert job["priority"] == "normal"
+            assert job["digest"] == identity(job["items"])
+            length = sum(len(x["hex"]) // 2 for x in job["items"])
+            assert job["bytes"] == str(length); summed += length
+            if c in rows: assert rows[c] == b"1"; expected.add(c)
+    assert summed == size
+    assert set(rows) == expected, set(rows) ^ expected
+    return rows
+
+class Client:
+    def __init__(self, path):
+        self.sock = socket.socket(socket.AF_UNIX); self.sock.settimeout(30); self.sock.connect(str(path))
+        self.file = self.sock.makefile("rb"); self.serial = 0; self.events = []; self.lines = []
+    def send(self, request):
+        self.sock.sendall(json.dumps(request, separators=(",", ":")).encode() + b"\n")
+    def read(self):
+        line = self.file.readline()
+        if not line: raise EOFError("socket closed")
+        value = json.loads(line); self.lines.append(value); return value
+    def call(self, op, **kw):
+        self.serial += 1; request = str(self.serial); self.send(dict(request=request, op=op, **kw))
+        while True:
+            value = self.read()
+            if "event" in value: self.events.append(value); continue
+            assert value["request"] == request, value
+            return value
+    def close(self): self.file.close(); self.sock.close()
+    def __enter__(self): return self
+    def __exit__(self, *args): self.close()
+
+class Service:
+    def __init__(self, directory):
+        self.root = Path(directory); self.db = self.root / "db"; self.sock = self.root / "socket"; self.proc = None; self.log = None
+    def start(self):
+        self.sock.unlink(missing_ok=True)
+        self.log = open(self.root / "stderr", "ab")
+        self.proc = subprocess.Popen([SERVICE, str(self.db), str(self.sock)], stdout=subprocess.DEVNULL, stderr=self.log)
+        end = time.monotonic() + 20
+        while not self.sock.exists():
+            if self.proc.poll() is not None: raise AssertionError((self.proc.returncode, (self.root / "stderr").read_text()))
+            if time.monotonic() > end: raise TimeoutError("startup")
+            time.sleep(.005)
+        return self
+    def stop(self):
+        with Client(self.sock) as c: assert c.call("shutdown")["status"] == "draining"
+        assert self.proc.wait(30) == 0, (self.root / "stderr").read_text()
+        self.log.close()
+    def kill(self):
+        if self.proc and self.proc.poll() is None: self.proc.kill(); self.proc.wait(30)
+        if self.log: self.log.close()
+
+def terminal(c, id):
+    end = time.monotonic() + 30
+    while time.monotonic() < end:
+        r = c.call("status", id=id)
+        if r["status"] == "ok" and r["job"]["state"] in ("complete", "cancelled"): return r["job"]
+        time.sleep(.002)
+    raise TimeoutError(id)
+
+class ContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls): cls.native = Native()
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="t-", dir=ROOT / "tmp")
+        self.s = Service(self.tmp.name).start()
+    def tearDown(self): self.s.kill(); self.tmp.cleanup()
+    def test_evaluate_native_vectors_and_no_persistence(self):
+        raw = bytes.fromhex(item()["hex"])
+        legacy = bytes.fromhex("0100000001" + "00"*32 + "ffffffff00ffffffff0100000000000000000000000000")
+        witness = bytes.fromhex("01000000000101" + "00"*32 + "ffffffff00ffffffff0100000000000000000001010000000000")
+        cases = [item(raw), item(raw + raw, operation="prefix"), item(raw + b"x"), item(b""), item(b"\xff"), item(legacy), item(witness, mode="witness")]
+        rng = random.Random(7189)
+        cases += [item(rng.randbytes(i), mode="witness" if i % 2 else "legacy", operation="prefix" if i % 3 else "exact") for i in range(57)]
+        with Client(self.s.sock) as c:
+            r = c.call("evaluate", items=cases)
+            self.assertEqual(r["status"], "ok"); self.assertEqual(r["results"], self.native.evaluate(cases))
+            self.assertEqual(c.call("evaluate", items=[item(b"")])["results"], self.native.evaluate([item(b"")]))
+        self.s.stop(); rows = inspect(self.s.db); self.assertEqual(rows["meta/sequence"], b"0")
+    def test_lifecycle_digest_retries_notifications_and_restart(self):
+        cases = [item(), item(b"abc", "witness", "prefix")]
+        with Client(self.s.sock) as c:
+            self.assertEqual(c.call("status", id="missing")["status"], "not_found")
+            self.assertEqual(c.call("cancel", id="missing")["status"], "not_found")
+            accepted = c.call("submit", id="job_1-", items=cases); self.assertEqual(accepted["status"], "accepted")
+            self.assertEqual(accepted["sequence"], "1")
+            same = c.call("submit", id="job_1-", items=cases); self.assertEqual(same["status"], "existing"); self.assertEqual(same["sequence"], "1")
+            self.assertEqual(c.call("submit", id="job_1-", items=[item(b"other")])["status"], "conflict")
+            job = terminal(c, "job_1-"); self.assertEqual(job["digest"], identity(cases)); self.assertEqual(job["results"], self.native.evaluate(cases))
+            self.assertEqual(c.call("cancel", id="job_1-")["status"], "too_late")
+            self.assertTrue(c.events)
+            self.assertLess(next(i for i,x in enumerate(c.lines) if x.get("status") == "accepted"), next(i for i,x in enumerate(c.lines) if x.get("event") == "terminal"))
+        self.s.stop(); rows = inspect(self.s.db); self.assertEqual(rows["meta/checkpoint"], b"1")
+        self.s.start()
+        with Client(self.s.sock) as c:
+            self.assertEqual(c.call("status", id="job_1-")["job"], job)
+            self.assertEqual(c.call("submit", id="job_1-", items=cases)["status"], "existing")
+        self.s.stop(); self.assertEqual(inspect(self.s.db), rows)
+    def test_invalid_requests_and_limits(self):
+        with Client(self.s.sock) as c:
+            bad = [dict(id="",items=[item()]), dict(id="a/b",items=[item()]), dict(id="é",items=[item()]), dict(id="x"*65,items=[item()]),
+                   dict(id="x",items=[]), dict(id="x",items=[item()]*65), dict(id="x",items=[dict(hex="AA",mode="legacy",operation="exact")]),
+                   dict(id="x",items=[dict(hex="0",mode="legacy",operation="exact")]), dict(id="x",items=[dict(hex="zz",mode="legacy",operation="exact")]),
+                   dict(id="x",items=[dict(hex="00",mode="bad",operation="exact")]), dict(id="x",items=[item()],priority="high")]
+            for kw in bad: self.assertEqual(c.call("submit", **kw)["status"], "invalid_request", kw)
+            self.assertEqual(c.call("unknown")["status"], "invalid_request")
+            self.assertEqual(c.call("status")["status"], "invalid_request")
+            self.assertEqual(c.call("evaluate", items=[item(b"\0"*((16<<20)+1))])["status"], "invalid_request")
+            cases = [item(b"\0"*((4<<20)+1))]
+            self.assertEqual(c.call("evaluate", items=cases)["results"], self.native.evaluate(cases))
+            c.sock.sendall(b'{"request":"bad", "op":"evaluate", "items": [}\n')
+            self.assertEqual(c.read()["status"], "invalid_request")
+            c.sock.sendall(b'\xff\n')
+            self.assertEqual(c.read()["status"], "invalid_request")
+        self.s.stop(); self.assertEqual(inspect(self.s.db)["meta/sequence"], b"0")
+    def test_parallel_clients_order_and_disconnect(self):
+        def submitter(n):
+            with Client(self.s.sock) as c:
+                for j in range(24):
+                    r = c.call("submit", id=f"c{n}-{j}", items=[item(bytes([j])*j)])
+                    assert r["status"] == "accepted", r
+                # Losing notification must not lose any accepted work.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool: list(pool.map(submitter, range(8)))
+        # Allow EOF cleanup to release all eight client slots.
+        time.sleep(.05)
+        self.s.stop(); rows = inspect(self.s.db)
+        self.assertEqual(rows["meta/sequence"], b"192"); self.assertEqual(rows["meta/checkpoint"], b"192")
+        self.s.start()
+        with Client(self.s.sock) as c:
+            for n in range(8): self.assertEqual(c.call("status", id=f"c{n}-23")["job"]["state"], "complete")
+        self.s.stop()
+    def test_exclusive_lock_and_schema_rejection(self):
+        other = subprocess.run([SERVICE, str(self.s.db), str(self.s.root / "other")], capture_output=True, timeout=10)
+        self.assertNotEqual(other.returncode, 0); self.assertIn(b"lock", other.stderr.lower())
+        self.s.stop()
+        with Database(self.s.db, write=True) as db: db.update({"meta/version": b"2"})
+        other = subprocess.run([SERVICE, str(self.s.db), str(self.s.sock)], capture_output=True, timeout=10)
+        self.assertNotEqual(other.returncode, 0); self.assertIn(b"schema", other.stderr)
+        with Database(self.s.db) as db: self.assertEqual(db.rows()["meta/version"], b"2")
+    def test_pipeline_response_order_and_half_close(self):
+        with Client(self.s.sock) as c:
+            requests = [dict(request=f"p{i}",op="evaluate",items=[item(bytes([i])*i)]) for i in range(30)]
+            c.sock.sendall(b"".join(json.dumps(x).encode()+b"\n" for x in requests))
+            c.sock.shutdown(socket.SHUT_WR)
+            for req in requests:
+                r = c.read(); self.assertEqual(r["request"],req["request"]); self.assertEqual(r["status"],"ok")
+        self.s.stop(); inspect(self.s.db)
+    def test_request_text_limit(self):
+        with Client(self.s.sock) as c:
+            # Unknown fields remain reserved/ignored. Whitespace counts as text.
+            base = b'{"request":"edge","op":"status","id":"missing"}'
+            c.sock.sendall(base + b" "*((40<<20)-len(base)) + b"\n")
+            self.assertEqual(c.read(), {"request":"edge","status":"not_found"})
+            try: c.sock.sendall(base + b" "*((40<<20)+1-len(base)) + b"\n")
+            except BrokenPipeError: pass
+            self.assertEqual(c.read()["status"], "invalid_request")
+        self.s.stop(); inspect(self.s.db)
+    def test_recovery_of_pending_cancellation_and_invariant_rejection(self):
+        self.s.stop()
+        # Seed a legal v1 snapshot using only the documented schema. This makes
+        # queued cancellation recovery deterministic without service test hooks.
+        pending_items = [item(), item(b"pending", "witness", "prefix")]
+        changes = {"meta/sequence":b"3", "meta/checkpoint":b"0", "meta/jobs":b"3"}
+        size = sum(len(x["hex"])//2 for x in pending_items)
+        changes["meta/bytes"] = str(size*3).encode()
+        for n in range(1,4):
+            job = dict(id=f"recover{n}",digest=identity(pending_items),sequence=str(n),bytes=str(size),priority="normal",items=pending_items)
+            changes[f"p/{n:020d}"] = json.dumps(job).encode(); changes[f"id/recover{n}"] = str(n).encode()
+        changes[f"c/{2:020d}"] = b"1"
+        with Database(self.s.db,write=True) as db: db.update(changes)
+        inspect(self.s.db); self.s.start()
+        with Client(self.s.sock) as c:
+            self.assertEqual(terminal(c,"recover1")["state"],"complete")
+            self.assertEqual(terminal(c,"recover2")["state"],"cancelled")
+            self.assertEqual(terminal(c,"recover3")["state"],"complete")
+        self.s.stop(); rows = inspect(self.s.db); self.assertEqual(rows["meta/checkpoint"], b"3")
+        with Database(self.s.db,write=True) as db: db.update({"meta/jobs":None})
+        other = subprocess.run([SERVICE,str(self.s.db),str(self.s.sock)],capture_output=True,timeout=10)
+        self.assertNotEqual(other.returncode,0); self.assertIn(b"missing meta/jobs",other.stderr)
+    def test_crash_acknowledged_work_and_resume(self):
+        acknowledged = set()
+        for trial in range(4):
+            with Client(self.s.sock) as c:
+                for j in range(10):
+                    name = f"crash{trial}-{j}"
+                    self.assertEqual(c.call("submit",id=name,items=[item(bytes([j])*2048)])["status"],"accepted")
+                    acknowledged.add(name)
+                self.s.kill()
+            rows = inspect(self.s.db)
+            for name in acknowledged: self.assertIn("id/"+name, rows)
+            self.s.start()
+        self.s.stop(); rows = inspect(self.s.db)
+        self.assertEqual(int(rows["meta/checkpoint"]),len(acknowledged))
+    def test_digest_padding_lengths_and_batch_order(self):
+        with Client(self.s.sock) as c:
+            for n in [0,1,45,46,53,54,55,56,63,64,65,119,120,127,128,129,65535,65536]:
+                cases = [item(b"z"*n), item(bytes(range(64)),"witness","prefix")]
+                self.assertEqual(c.call("submit",id=f"digest{n}",items=cases)["status"],"accepted")
+                self.assertEqual(terminal(c,f"digest{n}")["digest"],identity(cases))
+                self.assertEqual(c.call("submit",id=f"digest{n}",items=list(reversed(cases)))["status"],"conflict")
+        self.s.stop(); inspect(self.s.db)
+    def test_full_budgets_cancel_intent_and_crash(self):
+        large = [item(large_transaction())] * 4
+        expected = self.native.evaluate(large)
+        self.assertTrue(all(x["status"] == "0" for x in expected), expected)
+        self.s.stop()
+        changes = {"meta/sequence":b"1024", "meta/checkpoint":b"0", "meta/jobs":b"1024", "meta/bytes":str(64<<20).encode()}
+        for n in range(1,1025):
+            cases = large if n <= 4 else [item(b"")]
+            size = 16 << 20 if n <= 4 else 0
+            job = dict(id=f"full{n}",digest=identity(cases),sequence=str(n),bytes=str(size),priority="normal",items=cases)
+            changes[f"p/{n:020d}"] = json.dumps(job,separators=(",",":")).encode()
+            changes[f"id/full{n}"] = str(n).encode()
+        with Database(self.s.db,write=True) as db: db.update(changes)
+        del changes
+        inspect(self.s.db)
+        self.s.start()
+        with Client(self.s.sock) as c:
+            a = c.call("submit",id="over-count",items=[item(b"")])
+            b = c.call("submit",id="over-bytes",items=[item(b"x")])
+            self.assertEqual(a["status"],"backpressure",a)
+            self.assertEqual(b["status"],"backpressure",b)
+            self.assertEqual(c.call("cancel",id="full1024")["status"],"ok")
+            self.assertEqual(c.call("cancel",id="full1024")["status"],"ok")
+            self.assertEqual(c.call("status",id="full1024")["job"]["state"],"cancel_pending")
+            self.s.kill()
+        rows = inspect(self.s.db)
+        self.assertEqual(rows[f"c/{1024:020d}"],b"1")
+        self.assertNotIn("id/over-count",rows); self.assertNotIn("id/over-bytes",rows)
+        self.s.start()
+        with Client(self.s.sock) as c:
+            self.assertEqual(terminal(c,"full1024")["state"],"cancelled")
+            self.assertEqual(c.call("status",id="full1")["job"]["results"],expected)
+            self.assertEqual(c.call("submit",id="released",items=[item()])["status"],"accepted")
+        self.s.stop(); rows = inspect(self.s.db)
+        self.assertEqual(rows["meta/checkpoint"],b"1025"); self.assertEqual(rows["meta/bytes"],b"0")
+    def test_live_running_cancellation_and_drain(self):
+        cases = [item(large_transaction())]*4
+        with Client(self.s.sock) as c:
+            self.assertEqual(c.call("submit",id="running",items=cases)["status"],"accepted")
+            cancelled = c.call("cancel",id="running")
+            self.assertEqual(cancelled["status"],"ok",cancelled)
+            self.assertEqual(c.call("cancel",id="running")["status"],"ok")
+            self.assertEqual(c.call("shutdown")["status"],"draining")
+            self.assertEqual(c.call("submit",id="after-drain",items=[item()])["status"],"draining")
+        self.assertEqual(self.s.proc.wait(30),0)
+        rows = inspect(self.s.db)
+        receipt = json.loads(rows[f"r/{1:020d}"])
+        self.assertEqual(receipt["state"],"cancelled"); self.assertEqual(receipt["results"],[])
+        self.assertNotIn("id/after-drain",rows)
+    def test_storage_write_error_never_acknowledged(self):
+        self.s.stop()
+        # A kernel-enforced file-size failure exercises the real RocksDB error
+        # path, without adding fault injection or barrier hooks to the service.
+        def ignore_file_limit_signal(): signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        p = subprocess.Popen([SERVICE,str(self.s.db),str(self.s.sock)],stderr=subprocess.PIPE,preexec_fn=ignore_file_limit_signal)
+        try:
+            end = time.monotonic()+10
+            while not self.s.sock.exists():
+                self.assertIsNone(p.poll())
+                self.assertLess(time.monotonic(),end); time.sleep(.002)
+            with Client(self.s.sock) as c:
+                resource.prlimit(p.pid,resource.RLIMIT_FSIZE,(0,0))
+                with self.assertRaises((EOFError,ConnectionResetError,BrokenPipeError)):
+                    c.call("submit",id="must-not-ack",items=[item()])
+            self.assertNotEqual(p.wait(10),0)
+            diagnostic = p.stderr.read()
+            self.assertTrue(b"service fatal" in diagnostic or b"Assertion" in diagnostic,diagnostic)
+            rows = inspect(self.s.db)
+            self.assertNotIn("id/must-not-ack",rows)
+            self.s.start(); self.s.stop(); inspect(self.s.db)
+        finally:
+            if p.poll() is None: p.kill(); p.wait(10)
+            p.stderr.close()
+    def test_native_transaction_resource_boundaries(self):
+        entry = b"\0"*32 + b"\xff"*4 + b"\0" + b"\xff"*4
+        cases = []
+        for inputs in (4095,4096):
+            tx = b"\x01\0\0\0\xfd" + struct.pack("<H",inputs) + entry*inputs + b"\x01" + b"\0"*8 + b"\0" + b"\0"*4
+            cases.append(item(tx))
+        cases.extend([item(large_transaction()),item(b"\0"*((4<<20)+1))])
+        expected = self.native.evaluate(cases)
+        self.assertEqual([x["status"] for x in expected],["0","2","0","3"])
+        with Client(self.s.sock) as c:
+            self.assertEqual(c.call("evaluate",items=cases)["results"],expected)
+        self.s.stop(); inspect(self.s.db)
+    def test_simultaneous_idempotent_admission(self):
+        import threading
+        barrier = threading.Barrier(8)
+        def send(_):
+            with Client(self.s.sock) as c:
+                barrier.wait(10)
+                return c.call("submit",id="shared-id",items=[item()])
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool: responses=list(pool.map(send,range(8)))
+        self.assertEqual(sum(x["status"]=="accepted" for x in responses),1)
+        self.assertEqual(sum(x["status"]=="existing" for x in responses),7)
+        self.assertEqual({x["sequence"] for x in responses},{"1"})
+        time.sleep(.05); self.s.stop()
+        self.assertEqual(inspect(self.s.db)["meta/sequence"],b"1")
+    def test_slow_output_and_partial_input_do_not_block_shutdown(self):
+        slow = Client(self.s.sock); idle = Client(self.s.sock)
+        try:
+            self.assertEqual(slow.call("submit",id="slow-output",items=[item(large_transaction())]*4)["status"],"accepted")
+            slow.send(dict(request="large-status",op="status",id="slow-output"))
+            # Leave the large pending response unread and another reader midway
+            # through its JSON text. A separate connection must remain useful.
+            idle.sock.sendall(b'{"request":"unfinished"')
+            with Client(self.s.sock) as fast:
+                self.assertEqual(fast.call("evaluate",items=[item()])["status"],"ok")
+                self.assertEqual(fast.call("status",id="missing")["status"],"not_found")
+                self.assertEqual(fast.call("shutdown")["status"],"draining")
+            self.assertEqual(self.s.proc.wait(10),0)
+            self.assertEqual(inspect(self.s.db)["meta/checkpoint"],b"1")
+        finally: slow.close(); idle.close()
+    def test_client_limit(self):
+        clients = [Client(self.s.sock) for _ in range(8)]
+        try:
+            for c in clients: self.assertEqual(c.call("status",id="missing")["status"],"not_found")
+            with Client(self.s.sock) as extra:
+                with self.assertRaises((EOFError,ConnectionResetError,BrokenPipeError)):
+                    extra.call("status",id="missing")
+            self.assertEqual(clients[0].call("shutdown")["status"],"draining")
+            self.assertEqual(self.s.proc.wait(10),0)
+        finally:
+            for c in clients: c.close()
+        inspect(self.s.db)
+
+if __name__ == "__main__": unittest.main(verbosity=2)

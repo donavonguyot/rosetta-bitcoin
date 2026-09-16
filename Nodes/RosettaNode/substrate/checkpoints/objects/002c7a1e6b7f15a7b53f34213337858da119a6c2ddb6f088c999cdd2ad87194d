@@ -1,0 +1,377 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"strconv"
+)
+
+type statusError string
+
+func (e statusError) Error() string { return string(e) }
+
+const (
+	invalidRequest    statusError = "invalid_request"
+	malformedEncoding statusError = "malformed_encoding"
+	resourceLimit     statusError = "resource_limit"
+	executionFailure  statusError = "execution_failure"
+	transportLimit    statusError = "transport_limit"
+	admissionLimit    statusError = "admission_limit"
+)
+
+// Limits are per vector, including byte vectors. An absent limit is unbounded.
+type limits struct{ maxItems uint64 }
+
+func (l limits) check(n uint64) error {
+	if n > l.maxItems {
+		return resourceLimit
+	}
+	return nil
+}
+
+type transaction struct {
+	version  uint32
+	inputs   []txInput
+	outputs  []txOutput
+	locktime uint32
+}
+
+type txInput struct {
+	previous [32]byte
+	index    uint32
+	script   []byte
+	sequence uint32
+	witness  [][]byte
+}
+
+type txOutput struct {
+	amount int64
+	script []byte
+}
+
+type jsonTransaction struct {
+	VersionBits string       `json:"version_bits"`
+	Inputs      []jsonInput  `json:"inputs"`
+	Outputs     []jsonOutput `json:"outputs"`
+	Locktime    string       `json:"locktime"`
+}
+
+type jsonInput struct {
+	Previous string   `json:"previous_txid_digest_order"`
+	Index    string   `json:"previous_index"`
+	Script   string   `json:"script"`
+	Sequence string   `json:"sequence"`
+	Witness  []string `json:"witness"`
+}
+
+type jsonOutput struct {
+	Amount string `json:"amount"`
+	Script string `json:"script"`
+}
+
+func decimal(n uint64) string { return strconv.FormatUint(n, 10) }
+
+func (t *transaction) jsonValue() jsonTransaction {
+	j := jsonTransaction{
+		VersionBits: decimal(uint64(t.version)),
+		Inputs:      make([]jsonInput, len(t.inputs)),
+		Outputs:     make([]jsonOutput, len(t.outputs)),
+		Locktime:    decimal(uint64(t.locktime)),
+	}
+	for i, in := range t.inputs {
+		witness := make([]string, len(in.witness))
+		for k, item := range in.witness {
+			witness[k] = hex.EncodeToString(item)
+		}
+		j.Inputs[i] = jsonInput{
+			Previous: hex.EncodeToString(in.previous[:]),
+			Index:    decimal(uint64(in.index)),
+			Script:   hex.EncodeToString(in.script),
+			Sequence: decimal(uint64(in.sequence)),
+			Witness:  witness,
+		}
+	}
+	for i, out := range t.outputs {
+		j.Outputs[i] = jsonOutput{strconv.FormatInt(out.amount, 10), hex.EncodeToString(out.script)}
+	}
+	return j
+}
+
+func (t *transaction) hasWitness() bool {
+	for _, in := range t.inputs {
+		if len(in.witness) != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// A separate admission budget bounds decoded metadata, whose size can greatly
+// exceed the wire bytes (for example, millions of empty witness items).
+const allocationBudget uint64 = 128 << 20
+
+type decoder struct {
+	data      []byte
+	pos       int
+	limits    limits
+	allocated uint64
+}
+
+func (d *decoder) take(n uint64) ([]byte, error) {
+	if n > uint64(len(d.data)-d.pos) {
+		return nil, malformedEncoding
+	}
+	start := d.pos
+	d.pos += int(n)
+	return d.data[start:d.pos], nil
+}
+
+func (d *decoder) u32() (uint32, error) {
+	b, err := d.take(4)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint32(b), nil
+}
+
+func (d *decoder) compact() (uint64, error) {
+	b, err := d.take(1)
+	if err != nil {
+		return 0, err
+	}
+	var n uint64
+	switch b[0] {
+	case 0xfd:
+		b, err = d.take(2)
+		if err != nil {
+			return 0, err
+		}
+		n = uint64(binary.LittleEndian.Uint16(b))
+		if n < 0xfd {
+			return 0, malformedEncoding
+		}
+	case 0xfe:
+		b, err = d.take(4)
+		if err != nil {
+			return 0, err
+		}
+		n = uint64(binary.LittleEndian.Uint32(b))
+		if n <= 0xffff {
+			return 0, malformedEncoding
+		}
+	case 0xff:
+		b, err = d.take(8)
+		if err != nil {
+			return 0, err
+		}
+		n = binary.LittleEndian.Uint64(b)
+		if n <= 0xffffffff {
+			return 0, malformedEncoding
+		}
+	default:
+		n = uint64(b[0])
+	}
+	return n, nil
+}
+
+func (d *decoder) count() (uint64, error) {
+	n, err := d.compact()
+	if err != nil {
+		return 0, err
+	}
+	if err = d.limits.check(n); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+func (d *decoder) vector() ([]byte, error) {
+	n, err := d.count()
+	if err != nil {
+		return nil, err
+	}
+	return d.take(n)
+}
+
+func (d *decoder) reserve(n, minWire, memory uint64) error {
+	if n > uint64(len(d.data)-d.pos)/minWire {
+		return malformedEncoding
+	}
+	if n > (allocationBudget-d.allocated)/memory {
+		return admissionLimit
+	}
+	d.allocated += n * memory
+	return nil
+}
+
+func (d *decoder) readInputs() ([]txInput, error) {
+	n, err := d.count()
+	if err != nil {
+		return nil, err
+	}
+	if err = d.reserve(n, 41, 96); err != nil {
+		return nil, err
+	}
+	ins := make([]txInput, int(n))
+	for i := range ins {
+		in := &ins[i]
+		prev, err := d.take(32)
+		if err != nil {
+			return nil, err
+		}
+		copy(in.previous[:], prev)
+		if in.index, err = d.u32(); err != nil {
+			return nil, err
+		}
+		if in.script, err = d.vector(); err != nil {
+			return nil, err
+		}
+		if in.sequence, err = d.u32(); err != nil {
+			return nil, err
+		}
+	}
+	return ins, nil
+}
+
+func (d *decoder) readOutputs() ([]txOutput, error) {
+	n, err := d.count()
+	if err != nil {
+		return nil, err
+	}
+	if err = d.reserve(n, 9, 32); err != nil {
+		return nil, err
+	}
+	outs := make([]txOutput, int(n))
+	for i := range outs {
+		b, err := d.take(8)
+		if err != nil {
+			return nil, err
+		}
+		outs[i].amount = int64(binary.LittleEndian.Uint64(b))
+		if outs[i].script, err = d.vector(); err != nil {
+			return nil, err
+		}
+	}
+	return outs, nil
+}
+
+func decode(data []byte, offset int, witnessMode, exact bool, lim limits) (*transaction, int, error) {
+	if offset < 0 || offset > len(data) {
+		return nil, 0, invalidRequest
+	}
+	d := decoder{data: data, pos: offset, limits: lim}
+	t := new(transaction)
+	var err error
+	if t.version, err = d.u32(); err != nil {
+		return nil, 0, err
+	}
+	if t.inputs, err = d.readInputs(); err != nil {
+		return nil, 0, err
+	}
+	var flags byte
+	if witnessMode && len(t.inputs) == 0 {
+		b, err := d.take(1)
+		if err != nil {
+			return nil, 0, err
+		}
+		flags = b[0]
+		if flags != 0 {
+			if t.inputs, err = d.readInputs(); err != nil {
+				return nil, 0, err
+			}
+			if t.outputs, err = d.readOutputs(); err != nil {
+				return nil, 0, err
+			}
+		}
+	} else if t.outputs, err = d.readOutputs(); err != nil {
+		return nil, 0, err
+	}
+	if flags&1 != 0 {
+		for i := range t.inputs {
+			n, err := d.count()
+			if err != nil {
+				return nil, 0, err
+			}
+			if err = d.reserve(n, 1, 24); err != nil {
+				return nil, 0, err
+			}
+			t.inputs[i].witness = make([][]byte, int(n))
+			for k := range t.inputs[i].witness {
+				if t.inputs[i].witness[k], err = d.vector(); err != nil {
+					return nil, 0, err
+				}
+			}
+		}
+		if !t.hasWitness() {
+			return nil, 0, malformedEncoding
+		}
+		flags &^= 1
+	}
+	if flags != 0 {
+		return nil, 0, malformedEncoding
+	}
+	if t.locktime, err = d.u32(); err != nil {
+		return nil, 0, err
+	}
+	if exact && d.pos != len(data) {
+		return nil, 0, malformedEncoding
+	}
+	return t, d.pos - offset, nil
+}
+
+func appendCompact(b []byte, n uint64) []byte {
+	switch {
+	case n < 0xfd:
+		return append(b, byte(n))
+	case n <= 0xffff:
+		return binary.LittleEndian.AppendUint16(append(b, 0xfd), uint16(n))
+	case n <= 0xffffffff:
+		return binary.LittleEndian.AppendUint32(append(b, 0xfe), uint32(n))
+	default:
+		return binary.LittleEndian.AppendUint64(append(b, 0xff), n)
+	}
+}
+
+func appendVector(b, data []byte) []byte {
+	return append(appendCompact(b, uint64(len(data))), data...)
+}
+
+func serialize(t *transaction, includeWitness bool) []byte {
+	witness := includeWitness && t.hasWitness()
+	b := binary.LittleEndian.AppendUint32(nil, t.version)
+	if witness {
+		b = append(b, 0, 1)
+	}
+	b = appendCompact(b, uint64(len(t.inputs)))
+	for _, in := range t.inputs {
+		b = append(b, in.previous[:]...)
+		b = binary.LittleEndian.AppendUint32(b, in.index)
+		b = appendVector(b, in.script)
+		b = binary.LittleEndian.AppendUint32(b, in.sequence)
+	}
+	b = appendCompact(b, uint64(len(t.outputs)))
+	for _, out := range t.outputs {
+		b = binary.LittleEndian.AppendUint64(b, uint64(out.amount))
+		b = appendVector(b, out.script)
+	}
+	if witness {
+		for _, in := range t.inputs {
+			b = appendCompact(b, uint64(len(in.witness)))
+			for _, item := range in.witness {
+				b = appendVector(b, item)
+			}
+		}
+	}
+	return binary.LittleEndian.AppendUint32(b, t.locktime)
+}
+
+func hashOrders(b []byte) (digestOrder, displayOrder string) {
+	first := sha256.Sum256(b)
+	digest := sha256.Sum256(first[:])
+	digestOrder = hex.EncodeToString(digest[:])
+	for i, j := 0, len(digest)-1; i < j; i, j = i+1, j-1 {
+		digest[i], digest[j] = digest[j], digest[i]
+	}
+	return digestOrder, hex.EncodeToString(digest[:])
+}

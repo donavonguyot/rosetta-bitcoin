@@ -1,0 +1,108 @@
+//! Intrusive FIFO queues. The caller serializes every operation.
+const std = @import("std");
+pub const Priority = enum(u1) { normal, high };
+
+pub fn Queue(comptime T: type) type {
+    return struct {
+        const Self = @This();
+        heads: [2]?*T = @splat(null),
+        tails: [2]?*T = @splat(null),
+        cycle: u2 = 0,
+
+        pub fn empty(q: *const Self) bool {
+            return q.heads[0] == null and q.heads[1] == null;
+        }
+        pub fn append(q: *Self, item: *T) void {
+            const index = @intFromEnum(item.priority);
+            item.next = null;
+            if (q.tails[index]) |tail| tail.next = item else q.heads[index] = item;
+            q.tails[index] = item;
+        }
+        pub fn pop(q: *Self) ?*T {
+            if (q.empty()) return null;
+            const both = q.heads[0] != null and q.heads[1] != null;
+            const index: usize = if (both)
+                (if (q.cycle == 3) 0 else 1)
+            else if (q.heads[1] != null) 1 else 0;
+            if (both) q.cycle +%= 1;
+            const item = q.heads[index].?;
+            q.heads[index] = item.next;
+            if (q.heads[index] == null) q.tails[index] = null;
+            item.next = null;
+            return item;
+        }
+        // Cancelled queued jobs are no longer dispatch candidates. Removing one
+        // does not consume a priority turn; running jobs are absent from here.
+        pub fn remove(q: *Self, item: *T) bool {
+            const index = @intFromEnum(item.priority);
+            var previous: ?*T = null;
+            var current = q.heads[index];
+            while (current) |node| {
+                if (node == item) {
+                    if (previous) |p| p.next = node.next else q.heads[index] = node.next;
+                    if (q.tails[index] == node) q.tails[index] = previous;
+                    node.next = null;
+                    return true;
+                }
+                previous = node;
+                current = node.next;
+            }
+            return false;
+        }
+    };
+}
+
+const TestItem = struct { priority: Priority = .normal, next: ?*@This() = null };
+
+test "contended dispatch is HHHN with FIFO within priorities" {
+    var items: [12]TestItem = @splat(.{});
+    var queue: Queue(TestItem) = .{};
+    for (&items, 0..) |*item, i| {
+        item.priority = if (i < 3) .normal else .high;
+        queue.append(item);
+    }
+    for ([_]usize{ 3, 4, 5, 0, 6, 7, 8, 1, 9, 10, 11, 2 }) |index|
+        try std.testing.expectEqual(&items[index], queue.pop().?);
+    try std.testing.expect(queue.pop() == null);
+}
+
+test "uncontended dispatch and idle time preserve the partial cycle" {
+    var items: [9]TestItem = @splat(.{});
+    var queue: Queue(TestItem) = .{};
+    items[1].priority = .high;
+    queue.append(&items[0]);
+    queue.append(&items[1]);
+    try std.testing.expectEqual(&items[1], queue.pop().?); // one contested high
+    try std.testing.expectEqual(&items[0], queue.pop().?); // normal alone
+    try std.testing.expect(queue.pop() == null);
+    items[2].priority = .high;
+    queue.append(&items[2]);
+    try std.testing.expectEqual(&items[2], queue.pop().?); // high alone
+    for (items[3..], 3..) |*item, i| {
+        item.priority = if (i < 5) .normal else .high;
+        queue.append(item);
+    }
+    for ([_]usize{ 5, 6, 3, 7, 8, 4 }) |index|
+        try std.testing.expectEqual(&items[index], queue.pop().?);
+}
+
+test "withdrawal preserves FIFO, tails and the next priority turn" {
+    var items: [7]TestItem = @splat(.{});
+    var queue: Queue(TestItem) = .{};
+    for (&items, 0..) |*item, i| {
+        item.priority = if (i == 0) .normal else .high;
+        queue.append(item);
+    }
+    try std.testing.expect(queue.remove(&items[1])); // head
+    try std.testing.expect(queue.remove(&items[3])); // middle
+    try std.testing.expect(queue.remove(&items[6])); // tail
+    try std.testing.expect(!queue.remove(&items[3]));
+    queue.append(&items[6]);
+    for ([_]usize{ 2, 4, 5, 0, 6 }) |index|
+        try std.testing.expectEqual(&items[index], queue.pop().?);
+    queue.append(&items[0]);
+    try std.testing.expect(queue.remove(&items[0])); // sole member
+    try std.testing.expect(queue.empty());
+    queue.append(&items[1]);
+    try std.testing.expectEqual(&items[1], queue.pop().?);
+}

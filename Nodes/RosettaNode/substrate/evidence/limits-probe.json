@@ -1,0 +1,21 @@
+{
+  "schema": "rosettanode.substrate.limits_probe.v1",
+  "status": "passed",
+  "results": [
+    {
+      "test": "job_saturation",
+      "admitted": 1024,
+      "bytes": "10240",
+      "competing_writer_rejected": true,
+      "passed": true
+    },
+    {
+      "test": "payload_saturation",
+      "admitted": 4,
+      "bytes": "67108864",
+      "competing_writer_rejected": true,
+      "passed": true
+    }
+  ],
+  "candidate_launch_allowed": false
+}

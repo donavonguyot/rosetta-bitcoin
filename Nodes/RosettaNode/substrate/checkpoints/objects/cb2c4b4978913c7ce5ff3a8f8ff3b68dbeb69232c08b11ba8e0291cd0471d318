@@ -1,0 +1,220 @@
+use std::fmt::Write;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Json {
+    Null,
+    Bool(bool),
+    Number(String),
+    String(String),
+    Array(Vec<Json>),
+    Object(Vec<(String, Json)>),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ParseError { Syntax, Depth, Memory }
+
+impl Json {
+    pub fn get(&self, name: &str) -> Option<&Json> {
+        match self {
+            Self::Object(fields) => fields.iter().rev().find(|(key, _)| key == name).map(|(_, value)| value),
+            _ => None,
+        }
+    }
+    pub fn string(&self) -> Option<&str> {
+        if let Self::String(s) = self { Some(s) } else { None }
+    }
+    pub fn array(&self) -> Option<&[Json]> {
+        if let Self::Array(a) = self { Some(a) } else { None }
+    }
+    pub fn is_object(&self) -> bool { matches!(self, Self::Object(_)) }
+    pub fn encode(&self) -> String {
+        let mut out = String::new();
+        self.write(&mut out);
+        out
+    }
+    fn write(&self, out: &mut String) {
+        match self {
+            Self::Null => out.push_str("null"),
+            Self::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+            Self::Number(n) => out.push_str(n),
+            Self::String(s) => quote(s, out),
+            Self::Array(a) => {
+                out.push('[');
+                for (i, v) in a.iter().enumerate() {
+                    if i != 0 { out.push(','); }
+                    v.write(out);
+                }
+                out.push(']');
+            }
+            Self::Object(fields) => {
+                out.push('{');
+                for (i, (k, v)) in fields.iter().enumerate() {
+                    if i != 0 { out.push(','); }
+                    quote(k, out);
+                    out.push(':');
+                    v.write(out);
+                }
+                out.push('}');
+            }
+        }
+    }
+}
+
+fn quote(s: &str, out: &mut String) {
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{08}' => out.push_str("\\b"),
+            '\u{0c}' => out.push_str("\\f"),
+            c if c < '\u{20}' => { let _ = write!(out, "\\u{:04x}", c as u32); }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+}
+
+pub fn object(fields: Vec<(&str, Json)>) -> Json {
+    Json::Object(fields.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())
+}
+pub fn string(s: impl Into<String>) -> Json { Json::String(s.into()) }
+pub fn decimal(n: impl ToString) -> Json { string(n.to_string()) }
+
+pub fn parse(input: &str) -> Result<Json, ParseError> {
+    let mut p = Parser { input: input.as_bytes(), pos: 0 };
+    let result = p.value(0)?;
+    p.space();
+    if p.pos != p.input.len() { return Err(ParseError::Syntax); }
+    Ok(result)
+}
+
+struct Parser<'a> { input: &'a [u8], pos: usize }
+impl Parser<'_> {
+    fn space(&mut self) {
+        while matches!(self.input.get(self.pos), Some(b' ' | b'\n' | b'\r' | b'\t')) { self.pos += 1; }
+    }
+    fn take(&mut self, c: u8) -> bool {
+        if self.input.get(self.pos) == Some(&c) { self.pos += 1; true } else { false }
+    }
+    fn value(&mut self, depth: usize) -> Result<Json, ParseError> {
+        if depth > 256 { return Err(ParseError::Depth); }
+        self.space();
+        match self.input.get(self.pos).copied() {
+            Some(b'n') => { self.literal(b"null")?; Ok(Json::Null) }
+            Some(b't') => { self.literal(b"true")?; Ok(Json::Bool(true)) }
+            Some(b'f') => { self.literal(b"false")?; Ok(Json::Bool(false)) }
+            Some(b'"') => Ok(Json::String(self.text()?)),
+            Some(b'[') => {
+                self.pos += 1;
+                let mut values = Vec::new();
+                self.space();
+                if self.take(b']') { return Ok(Json::Array(values)); }
+                loop {
+                    let value = self.value(depth + 1)?;
+                    values.try_reserve(1).map_err(|_| ParseError::Memory)?;
+                    values.push(value);
+                    self.space();
+                    if self.take(b']') { break; }
+                    if !self.take(b',') { return Err(ParseError::Syntax); }
+                }
+                Ok(Json::Array(values))
+            }
+            Some(b'{') => {
+                self.pos += 1;
+                let mut fields = Vec::new();
+                self.space();
+                if self.take(b'}') { return Ok(Json::Object(fields)); }
+                loop {
+                    self.space();
+                    let key = self.text()?;
+                    self.space();
+                    if !self.take(b':') { return Err(ParseError::Syntax); }
+                    let value = self.value(depth + 1)?;
+                    fields.try_reserve(1).map_err(|_| ParseError::Memory)?;
+                    fields.push((key, value));
+                    self.space();
+                    if self.take(b'}') { break; }
+                    if !self.take(b',') { return Err(ParseError::Syntax); }
+                }
+                Ok(Json::Object(fields))
+            }
+            Some(b'-' | b'0'..=b'9') => self.number(),
+            _ => Err(ParseError::Syntax),
+        }
+    }
+    fn literal(&mut self, s: &[u8]) -> Result<(), ParseError> {
+        if self.input.get(self.pos..self.pos + s.len()) != Some(s) { return Err(ParseError::Syntax); }
+        self.pos += s.len();
+        Ok(())
+    }
+    fn number(&mut self) -> Result<Json, ParseError> {
+        let start = self.pos;
+        self.take(b'-');
+        if !self.take(b'0') {
+            if !matches!(self.input.get(self.pos), Some(b'1'..=b'9')) { return Err(ParseError::Syntax); }
+            self.digits();
+        }
+        if self.take(b'.') && !self.digits() { return Err(ParseError::Syntax); }
+        if self.take(b'e') || self.take(b'E') {
+            if !self.take(b'+') { self.take(b'-'); }
+            if !self.digits() { return Err(ParseError::Syntax); }
+        }
+        Ok(Json::Number(std::str::from_utf8(&self.input[start..self.pos]).unwrap().to_owned()))
+    }
+    fn digits(&mut self) -> bool {
+        let start = self.pos;
+        while matches!(self.input.get(self.pos), Some(b'0'..=b'9')) { self.pos += 1; }
+        self.pos > start
+    }
+    fn hex4(&mut self) -> Result<u32, ParseError> {
+        let mut n = 0;
+        for _ in 0..4 {
+            let b = *self.input.get(self.pos).ok_or(ParseError::Syntax)?;
+            self.pos += 1;
+            let d = match b { b'0'..=b'9' => b - b'0', b'a'..=b'f' => b - b'a' + 10, b'A'..=b'F' => b - b'A' + 10, _ => return Err(ParseError::Syntax) };
+            n = (n << 4) | d as u32;
+        }
+        Ok(n)
+    }
+    fn text(&mut self) -> Result<String, ParseError> {
+        if !self.take(b'"') { return Err(ParseError::Syntax); }
+        let mut out = String::new();
+        let mut start = self.pos;
+        loop {
+            let b = *self.input.get(self.pos).ok_or(ParseError::Syntax)?;
+            if b == b'"' || b == b'\\' {
+                let segment = std::str::from_utf8(&self.input[start..self.pos]).map_err(|_| ParseError::Syntax)?;
+                out.try_reserve(segment.len() + 4).map_err(|_| ParseError::Memory)?;
+                out.push_str(segment);
+                self.pos += 1;
+                if b == b'"' { return Ok(out); }
+                let escape = *self.input.get(self.pos).ok_or(ParseError::Syntax)?;
+                self.pos += 1;
+                match escape {
+                    b'"' => out.push('"'), b'\\' => out.push('\\'), b'/' => out.push('/'),
+                    b'b' => out.push('\u{08}'), b'f' => out.push('\u{0c}'),
+                    b'n' => out.push('\n'), b'r' => out.push('\r'), b't' => out.push('\t'),
+                    b'u' => {
+                        let mut code = self.hex4()?;
+                        if (0xd800..=0xdbff).contains(&code) {
+                            if !self.take(b'\\') || !self.take(b'u') { return Err(ParseError::Syntax); }
+                            let low = self.hex4()?;
+                            if !(0xdc00..=0xdfff).contains(&low) { return Err(ParseError::Syntax); }
+                            code = 0x10000 + ((code - 0xd800) << 10) + (low - 0xdc00);
+                        }
+                        out.push(char::from_u32(code).ok_or(ParseError::Syntax)?);
+                    }
+                    _ => return Err(ParseError::Syntax),
+                }
+                start = self.pos;
+            } else {
+                if b < 0x20 { return Err(ParseError::Syntax); }
+                self.pos += 1;
+            }
+        }
+    }
+}

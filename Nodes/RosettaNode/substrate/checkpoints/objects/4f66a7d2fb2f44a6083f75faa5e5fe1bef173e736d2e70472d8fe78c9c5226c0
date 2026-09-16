@@ -1,0 +1,201 @@
+# Go maintenance-round handoff
+
+Upgraded the predecessor to ABI v2 and deterministic priority dispatch. Schema
+remains 1. No kernel, RocksDB configuration, durability policy, group commit,
+external dependency, or service test hook was introduced. This is the initial
+maintenance submission, before evaluator feedback. The initial-round handoff
+is preserved below as history; this section describes the current deliverable.
+
+## Current build, launch, and tests
+
+All commands run through the supplied Linux AArch64 broker:
+
+```sh
+python3 run.py './build.sh' 180
+python3 run.py './test.sh' 240
+python3 run.py './test.sh --race' 300
+python3 run.py 'GOEXPERIMENT=cgocheck2 GOTMPDIR=/workspace/tmp go test -count=1 -run "TestNative|TestV2|TestPriorityRecovery" -v ./...' 180
+```
+
+Launch `./service DATADIR SOCKET_PATH`. The native RocksDB lock enforces one
+writer. The socket path must be fresh. JSON shutdown drains accepted work and
+exits zero. Test executables use `/workspace/tmp`, since broker `/tmp` is not
+executable. `build.sh` and `test.sh` are unchanged from the predecessor.
+
+The original executable, source, tests, and handoff are retained under
+`tmp/predecessor/`. To additionally exercise an actual v1 executable writing a
+datadir which v2 then recovers:
+
+```sh
+python3 run.py 'V1_SERVICE=/workspace/tmp/predecessor/service ./test.sh' 240
+python3 run.py 'V1_SERVICE=/workspace/tmp/predecessor/service ./test.sh --race' 300
+```
+
+`V1_SERVICE` may point to another preserved predecessor executable; it must be
+ABI v1. Default tests independently cover schema-1 recovery without requiring
+this optional archived executable.
+
+## Maintenance changes and ownership
+
+- `native.go`: constructs arena offsets and calls `rn_verify_v2`. Checks the
+  success bitmap against every per-item status, including bit 63. A disagreement
+  is an execution failure. Wire results and error normalization are unchanged.
+- `wire.go`: accepts absent/normal/high priority, defaulting to normal. Priority
+  remains separate from the payload digest. Invalid priority has no state effect.
+- `state.go`: persists priority and accepts both priorities during recovery.
+  Missing legacy priority means normal; explicit empty, null, non-string, or
+  unknown priority is rejected. Recovery does not rewrite pending records or
+  receipts merely to upgrade them. Incompatible schemas still fail.
+- `scheduler.go`, `server.go`: coordinator-owned FIFO high and normal queues.
+  When both contain work, dispatch follows high/high/high/normal. With just one
+  nonempty queue, dispatch without advancing or resetting the cycle. Empty queues
+  also preserve the cycle. Restart begins a new high-first cycle. Recovery inserts
+  pending work in admission order within each priority.
+
+Four workers still share native execution slots with nonpersistent evaluate
+requests. Evaluate accepts the same optional priority and joins that queue;
+absent priority is normal. Worker completion may differ from dispatch order.
+Only the next admission sequence can commit terminally. Identical retries keep
+the original sequence and priority; changed payload digests return conflict.
+
+Worker-owned native backing and arena survive until native return, including
+cancellation. Admission, cancellation intent, and one-job terminal transitions
+retain synchronous WAL-enabled WriteBatches. Finished work retains count/byte
+charges until durable terminal commit. The coordinator owns cancellation through
+terminal C write entry and return. Native failure on acknowledged work stops
+with its pending record intact; evaluate failure returns execution_failure.
+Storage failures are not acknowledged. Existing transport ordering, bounds,
+disconnect behavior, receipt retention, writer lock, and drain are preserved.
+
+## Maintenance validation
+
+The normal full suite with actual-v1 upgrade passed:
+
+- Priority decoding, digest independence, FIFO, repeated 3:1 dispatch, single-queue
+  pauses, empty intervals, and resuming the cycle.
+- Both alternating 64-item bitmap patterns, variable offsets, prefix consumption,
+  original native vectors, empty arena, per-item byte/resource limits.
+- Recovered priorities, omitted legacy priority, old receipt/cancellation,
+  invalid stored priority, ordered commits, accounting of completed work, and
+  cancellation after native completion while waiting for an earlier sequence.
+- Supplied smoke and candidate socket suite: eight clients, 251 mixed-priority
+  jobs, opposite-priority retries, conflict, pipeline order, disconnect, lock,
+  restart, and draining shutdown.
+- Six SIGKILL/restart cycles: six pending snapshots and three acknowledged durable
+  cancellations. Independent RocksDB inspection follows writer exit and checks
+  priorities, receipts/pending records, id bijection, and accounting.
+- Actual v1-to-v2 upgrade retained pending payload and cancellation, preserved a
+  receipt byte-for-byte, accepted an opposite-priority retry, admitted new high
+  work, and drained to zero pending jobs.
+
+- The full race suite, including six more crash/restart cycles (six pending
+  snapshots, three durable cancellations) and the actual-v1 upgrade, passed with
+  no Go race report. Strict `GOEXPERIMENT=cgocheck2` native vectors, bitmap/offset,
+  and priority recovery/commit-order tests passed.
+
+These are candidate tests, not external gate evidence. Dispatch is tested
+in the production queue and recovery paths; exact native-entry order under
+external barriers has not been observed. No native ASan, native-library race
+proof, forced allocation/write failure, exact admission saturation, or power-loss
+evidence is claimed.
+
+## Current executable identity
+
+The root `service` is an executable Linux AArch64 ELF, built with Go 1.27.1.
+It dynamically needs `librosetta.so`, `librocksdb.so.7.8`, and libc. RUNPATH is
+`/adapter`. Symbol inspection found `rn_verify_v2` and no `rn_verify_v1` reference.
+
+SHA-256:
+
+```text
+97cf1ea4dc6811a046d804bf32c20f7a59a0976661add239d6c462be5716d677  service
+39f890a9687c36cd88b510a7c0845412c159ca13bd511e56319f9eb15951c353  /adapter/librosetta.so
+492a07b3eb9d276fd8eae6790fbd5914d317081785791295ae406e5c65e4e86e  tmp/predecessor/service
+```
+
+## Maintenance interpretations
+
+- Header bitmap numbering is undocumented. Bit i means item i success; the
+  supplied adapter agrees at all 64 positions in both mixed patterns.
+- Evaluate priority is not separately specified; it uses submit's scheduling
+  policy and optional priority without persistent admission.
+- The scheduling cursor is process-local and restarts high-first. No extra disk
+  key is introduced; priority itself is durable.
+- Missing legacy priority defaults to normal. Explicitly invalid metadata fails.
+- Earlier wire interpretations remain: unknown fields ignored, duplicate request
+  and item keys rejected, JSON text limit excludes LF, native transaction limits
+  retained, invalid batch envelopes return invalid_request.
+- Supplied preparation/freeze wording remains, but no freeze manifest or gate
+  evidence was provided. The explicit implementation-phase instruction authorized
+  this work. No evaluator or external source was accessed.
+
+See EXPERIMENTS.md for attempts, diagnostics, diff footprint, and effort.
+
+# Archived Go initial-round handoff
+
+Implemented ABI v1, normal priority, four native job slots, and baseline one-job admission/terminal WriteBatches. No ABI v2 implementation, group commit, external dependency, Bitcoin library, kernel replacement, or service test hook. No predecessor handoff was supplied. This submission has not received evaluator feedback.
+
+## Deliverables and use
+
+- `build.sh`, `go.mod`, `main.go`, `wire.go`, `native.go`, `state.go`, `server.go`.
+- `reuse/storage.go`: supplied RocksDB wrapper, formatted and extended with iterator scanning for recovery.
+- `service`: executable Linux AArch64 ELF, built with Go 1.27.1 and cgo.
+- `service_test.go`, `integration_test.py`, executable `test.sh`.
+- `EXPERIMENTS.md`: attempts, corrections, diagnostic coverage, effort accounting.
+
+All builds and tests must run through the broker:
+
+```sh
+python3 run.py './build.sh' 180
+python3 run.py './test.sh' 240
+python3 run.py './test.sh --race' 300
+python3 run.py 'GOEXPERIMENT=cgocheck2 GOTMPDIR=/workspace/tmp go test -run "TestNative|TestDurableRecovery" -v ./...' 180
+```
+
+Launch inside Linux as `./service DATADIR SOCKET_PATH`. DATADIR is created if necessary; RocksDB's native writer lock rejects a second owner. SOCKET_PATH must be fresh, including after a crash. Shutdown is the JSON `shutdown` operation. The test script places Go test executables under `/workspace/tmp` because the broker's `/tmp` is not executable.
+
+## State and ownership
+
+A single coordinator owns the database, counters, pending jobs, cancellation decisions, and terminal commitment. Four workers execute the unchanged native adapter. Evaluate requests share these four slots. Normal jobs dispatch in queue order; terminal commits follow admission order even when native calls finish out of order.
+
+Admission writes the complete payload, digest, id index, sequence and accounting in one synchronous WAL-enabled WriteBatch. It enqueues the acceptance response before dispatch. Cancellation writes a durable intent before returning `ok`; repeated pending cancellation is idempotent. The coordinator retains ownership through terminal WriteBatch entry and return, so cancellation cannot be acknowledged across that boundary with a contradictory outcome. A cancellation overlapping a terminal write may wait and return `too_late` afterward.
+
+Terminal batches contain one receipt, pending/cancel deletions, checkpoint and accounting. Finished but uncommitted jobs remain charged to both admission limits. Receipts and id indexes are retained. Recovery streams all records, validates schema, ranges, index bijection, contiguous receipts/pending records, cancellation references, payload digests and counters, and retains only pending work in memory. Invalid or incompatible state is rejected without rebuilding.
+
+Native input backing, arena and v1 item pointers belong to a worker through native return, even for cancelled jobs. The native helper retains a native source copy as well as the arena, avoiding an assumption about arena creation's copy/borrow behavior. No Go pointer is retained in C. Native allocation/call failure during evaluate returns `execution_failure`; the same failure for durable work stops the service with the pending record intact. Storage errors stop without acknowledging the failed transition. Other running workers finish their native calls before database close.
+
+Each connection has one reader and one writer. Responses preserve request order; the admission response precedes that connection's terminal event. Events are best-effort. Output is bounded by 16 queued frames and 128 MiB per connection, including the active write; the byte limit accommodates a maximum correlation plus pending payload. Stalled writes have a five-second deadline. Disconnected writers release unsent frames. Disconnect never cancels durable work.
+
+## Validation completed
+
+- Final `./test.sh`: all Go tests, supplied smoke test, and candidate socket/crash suite passed.
+- Final `./test.sh --race`: Go tests and the complete socket/crash suite using a race-instrumented service passed without race reports.
+- `GOEXPERIMENT=cgocheck2`: native vectors, byte limits and durable-recovery tests passed.
+- Native fixtures cover legacy-shaped encoding, witness stripped/full digests, prefix consumption, exact trailing-data rejection, empty input, 4 MiB byte admission, and 4,097-input resource rejection.
+- Wire tests cover malformed types, duplicate keys, invalid UTF-8, IDs, modes, operations, uppercase/odd hex, batch counts, line size/framing, and maximum-length correlation expansion.
+- Socket suite exercises eight simultaneous clients, 251 persistent jobs, retry/conflict, pipelined response/event order, lock ownership, disconnect survival and restart.
+- Each final normal/race crash suite performs six SIGKILL/restart cycles: six pending-state snapshots and three durably acknowledged cancellations. A separate Python/ctypes inspector opens RocksDB only after writer exit and checks disk invariants and acknowledged identities. Draining leaves zero pending jobs.
+
+These are candidate tests, not external gate evidence. Native ASan, C/C++ race freedom, explicit native call-entry barriers, forced allocation/write failures, exact saturation of both admission limits, and power-loss durability were not established. No performance measurements or optimization claims were made.
+
+## Recorded interpretations and remaining ambiguities
+
+- Unknown fields are reserved and ignored; known fields require exact names/types. Duplicate keys in requests and item objects are rejected.
+- The 40 MiB text limit excludes LF. Unterminated fragments cannot mutate state; oversized lines receive an invalid response and connection close.
+- V1 accepts absent or explicit `normal` priority and rejects `high`. All persisted pending records explicitly contain `normal`.
+- Per-transaction parsing/resource limits stay in the native adapter. A transaction above 4 MiB within a valid aggregate batch receives native result status `3`; an oversized aggregate or invalid batch envelope is `invalid_request`.
+- Schema-1 recovery requires all scalar counters on an initialized DB and explicit normal priority in pending records written by this implementation.
+- Preparation-only/freeze language remains in supplied contracts; no campaign freeze manifest or gate evidence was provided. Implementation proceeded under the explicit implementation-phase instruction.
+
+## Artifact identity
+
+The executable dynamically needs `librosetta.so`, `librocksdb.so.7.8`, and libc; RUNPATH is `/adapter`. Its symbols reference `rn_verify_v1` and do not reference `rn_verify_v2`.
+
+SHA-256:
+
+```text
+492a07b3eb9d276fd8eae6790fbd5914d317081785791295ae406e5c65e4e86e  service
+39f890a9687c36cd88b510a7c0845412c159ca13bd511e56319f9eb15951c353  /adapter/librosetta.so
+```
+
+Future maintenance must preserve schema-1 payloads, receipts and cancellations. Scheduling and terminal ordering are separate: any future priority scheduler must leave the contiguous terminal checkpoint intact. No v2 work has been started.

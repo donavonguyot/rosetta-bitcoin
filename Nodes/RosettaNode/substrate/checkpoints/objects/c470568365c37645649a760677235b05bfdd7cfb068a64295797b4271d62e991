@@ -1,0 +1,190 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+
+	storage "trial/reuse"
+)
+
+func parseDecimal(s string) (uint64, error) {
+	n, err := strconv.ParseUint(s, 10, 64)
+	if err != nil || decimal(n) != s {
+		return 0, fmt.Errorf("invalid decimal %q", s)
+	}
+	return n, nil
+}
+
+func parseSequenceKey(key string) (uint64, error) {
+	if len(key) != 22 || key[1] != '/' {
+		return 0, fmt.Errorf("invalid sequence key %q", key)
+	}
+	n, err := strconv.ParseUint(key[2:], 10, 64)
+	if err != nil || n == 0 || sequenceKey(key[:1], n) != key {
+		return 0, fmt.Errorf("invalid sequence key %q", key)
+	}
+	return n, nil
+}
+
+func (s *Service) recover() error {
+	rows := make(map[string]string)
+	if err := s.db.Scan(func(k, v string) error { rows[k] = v; return nil }); err != nil {
+		return err
+	}
+	if len(rows) == 0 || len(rows) == 1 && rows["meta/version"] == "1" {
+		b := storage.NewBatch()
+		defer b.Close()
+		b.Put("meta/version", "1")
+		for _, k := range []string{"sequence", "checkpoint", "jobs", "bytes"} {
+			b.Put("meta/"+k, "0")
+		}
+		return s.db.Write(b)
+	}
+	if rows["meta/version"] != "1" {
+		return errors.New("incompatible or absent database schema version")
+	}
+	var err error
+	if s.sequence, err = parseDecimal(rows["meta/sequence"]); err != nil {
+		return err
+	}
+	if s.checkpoint, err = parseDecimal(rows["meta/checkpoint"]); err != nil {
+		return err
+	}
+	if s.jobs, err = parseDecimal(rows["meta/jobs"]); err != nil {
+		return err
+	}
+	if s.bytes, err = parseDecimal(rows["meta/bytes"]); err != nil {
+		return err
+	}
+	if s.checkpoint > s.sequence || s.jobs != s.sequence-s.checkpoint || s.jobs > maxJobs || s.bytes > maxJobBytes {
+		return errors.New("inconsistent database counters")
+	}
+	// Bound subsequent sequence walks by the number of actual records, even for
+	// corrupt input counters. Every job requires at least an index and a record.
+	if s.sequence > uint64(len(rows))/2 {
+		return errors.New("sequence exceeds database records")
+	}
+	indexes := make(map[string]uint64)
+	cancellations := make(map[uint64]bool)
+	var pendingBytes uint64
+	for key, value := range rows {
+		switch {
+		case key == "meta/version" || key == "meta/sequence" || key == "meta/checkpoint" || key == "meta/jobs" || key == "meta/bytes":
+		case strings.HasPrefix(key, "id/"):
+			id := strings.TrimPrefix(key, "id/")
+			n, err := parseDecimal(value)
+			if err != nil || !validID(id) || n == 0 || n > s.sequence {
+				return fmt.Errorf("invalid id index %q", key)
+			}
+			indexes[id] = n
+		case strings.HasPrefix(key, "c/"):
+			n, err := parseSequenceKey(key)
+			if err != nil || value != "1" || n <= s.checkpoint || n > s.sequence {
+				return fmt.Errorf("invalid cancellation %q", key)
+			}
+			cancellations[n] = true
+		case strings.HasPrefix(key, "p/"):
+			n, err := parseSequenceKey(key)
+			if err != nil || n <= s.checkpoint || n > s.sequence {
+				return fmt.Errorf("invalid pending key %q", key)
+			}
+			var p Pending
+			if err := json.Unmarshal([]byte(value), &p); err != nil {
+				return fmt.Errorf("pending %s: %w", key, err)
+			}
+			prepared, err := prepare(p.Items)
+			if err != nil || !validID(p.ID) || p.Sequence != decimal(n) || p.Priority != "normal" {
+				return fmt.Errorf("invalid pending job %q", key)
+			}
+			if p.Digest != prepared.Digest || p.Bytes != decimal(uint64(len(prepared.Payload))) {
+				return fmt.Errorf("pending digest/accounting mismatch %q", key)
+			}
+			if _, exists := s.byID[p.ID]; exists {
+				return errors.New("duplicate job id")
+			}
+			j := &job{seq: n, pending: &p, prepared: prepared}
+			s.byID[p.ID], s.pending[n] = j, j
+			pendingBytes += uint64(len(prepared.Payload))
+		case strings.HasPrefix(key, "r/"):
+			n, err := parseSequenceKey(key)
+			if err != nil || n > s.checkpoint {
+				return fmt.Errorf("invalid receipt key %q", key)
+			}
+			var r Receipt
+			if err := json.Unmarshal([]byte(value), &r); err != nil {
+				return fmt.Errorf("receipt %s: %w", key, err)
+			}
+			if !validID(r.ID) || r.Sequence != decimal(n) || len(r.Digest) != 64 || !lowercaseHex(r.Digest) {
+				return fmt.Errorf("invalid receipt %q", key)
+			}
+			if err := validateReceipt(&r); err != nil {
+				return err
+			}
+			if _, exists := s.byID[r.ID]; exists {
+				return errors.New("duplicate job id")
+			}
+			s.byID[r.ID] = &job{seq: n, receipt: &r, done: true}
+		default:
+			return fmt.Errorf("unrecognized database key %q", key)
+		}
+	}
+	if uint64(len(s.byID)) != s.sequence || len(indexes) != len(s.byID) || uint64(len(s.pending)) != s.jobs || pendingBytes != s.bytes {
+		return errors.New("database accounting mismatch")
+	}
+	seen := make(map[uint64]bool)
+	for id, j := range s.byID {
+		if indexes[id] != j.seq || seen[j.seq] {
+			return errors.New("database index is not a bijection")
+		}
+		seen[j.seq] = true
+	}
+	for n := s.checkpoint + 1; n <= s.sequence && n != 0; n++ {
+		j := s.pending[n]
+		if j == nil {
+			return errors.New("missing pending sequence")
+		}
+		j.cancelled = cancellations[n]
+		if j.cancelled {
+			j.done = true
+		} else {
+			s.queue = append(s.queue, j)
+		}
+	}
+	return nil
+}
+
+func validateReceipt(r *Receipt) error {
+	if r.Results == nil {
+		return errors.New("null receipt results")
+	}
+	if r.State == "cancelled" {
+		if len(r.Results) != 0 {
+			return errors.New("cancelled receipt has results")
+		}
+		return nil
+	}
+	if r.State != "complete" || len(r.Results) == 0 || len(r.Results) > maxBatch {
+		return errors.New("invalid terminal state/results")
+	}
+	for _, result := range r.Results {
+		status, err := parseDecimal(result.Status)
+		if err != nil || status > 4 {
+			return errors.New("invalid result status")
+		}
+		for _, size := range []string{result.Consumed, result.FullSize, result.StrippedSize} {
+			if _, err := parseDecimal(size); err != nil {
+				return err
+			}
+		}
+		if len(result.TxID) != 64 || len(result.WtxID) != 64 || !lowercaseHex(result.TxID) || !lowercaseHex(result.WtxID) {
+			return errors.New("invalid result digest")
+		}
+		if status != 0 && (result.Consumed != "0" || result.FullSize != "0" || result.StrippedSize != "0" || result.TxID != zeroDigest || result.WtxID != zeroDigest) {
+			return errors.New("nonzero error result")
+		}
+	}
+	return nil
+}

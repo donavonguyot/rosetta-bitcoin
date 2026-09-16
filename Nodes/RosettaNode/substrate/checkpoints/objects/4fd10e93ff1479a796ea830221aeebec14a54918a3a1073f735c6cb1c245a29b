@@ -1,0 +1,303 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+)
+
+const (
+	maxJSONBytes = 20 * 1024 * 1024
+	maxPoolBytes = 8 * 1024 * 1024
+	maxWireBytes = 4 * 1024 * 1024
+	defaultItems = 4096
+
+	okStatus       = "ok"
+	invalidRequest = "invalid_request"
+	malformed      = "malformed_encoding"
+	resourceLimit  = "resource_limit"
+	executionFail  = "execution_failure"
+	transportLimit = "transport_limit"
+	admissionLimit = "admission_limit"
+)
+
+type response struct {
+	Status            string           `json:"status"`
+	Transaction       *jsonTransaction `json:"transaction,omitempty"`
+	Consumed          string           `json:"consumed,omitempty"`
+	Bytes             *string          `json:"bytes,omitempty"`
+	Stripped          *string          `json:"stripped,omitempty"`
+	Full              *string          `json:"full,omitempty"`
+	StrippedSize      string           `json:"stripped_size,omitempty"`
+	FullSize          string           `json:"full_size,omitempty"`
+	TxidDigestOrder   string           `json:"txid_digest_order,omitempty"`
+	TxidDisplayOrder  string           `json:"txid_display_order,omitempty"`
+	WtxidDigestOrder  string           `json:"wtxid_digest_order,omitempty"`
+	WtxidDisplayOrder string           `json:"wtxid_display_order,omitempty"`
+}
+
+func failure(status string) response { return response{Status: status} }
+
+func canonicalDecimal(s string, signed bool) bool {
+	if len(s) == 0 {
+		return false
+	}
+	start := 0
+	if s[0] == '-' {
+		if !signed || len(s) == 1 || s[1] == '0' {
+			return false
+		}
+		start = 1
+	}
+	if len(s)-start > 1 && s[start] == '0' {
+		return false
+	}
+	for i := start; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func parseUnsigned(s string, bits int) (uint64, bool) {
+	if !canonicalDecimal(s, false) {
+		return 0, false
+	}
+	v, err := strconv.ParseUint(s, 10, bits)
+	return v, err == nil
+}
+
+func parseSigned(s string) (int64, bool) {
+	if !canonicalDecimal(s, true) {
+		return 0, false
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	return v, err == nil
+}
+
+func validHex(s string) bool {
+	if len(s)%2 != 0 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+func rawString(raw json.RawMessage) (string, bool) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] != '"' {
+		return "", false
+	}
+	var s string
+	err := json.Unmarshal(raw, &s)
+	return s, err == nil
+}
+
+func rawObject(raw []byte) (map[string]json.RawMessage, bool) {
+	var m map[string]json.RawMessage
+	err := json.Unmarshal(raw, &m)
+	return m, err == nil && m != nil
+}
+
+func requestLimit(req map[string]json.RawMessage) (uint64, bool) {
+	raw, present := req["limits"]
+	if !present {
+		return defaultItems, true
+	}
+	m, good := rawObject(raw)
+	if !good {
+		return 0, false
+	}
+	raw, present = m["max_items"]
+	if !present {
+		return defaultItems, true
+	}
+	s, good := rawString(raw)
+	if !good {
+		return 0, false
+	}
+	n, good := parseUnsigned(s, 64)
+	return n, good && n <= defaultItems
+}
+
+func processRequest(line []byte) response {
+	if len(line) > maxJSONBytes {
+		return failure(transportLimit)
+	}
+	req, good := rawObject(line)
+	if !good {
+		return failure(invalidRequest)
+	}
+	op, good := rawString(req["op"])
+	if !good {
+		return failure(invalidRequest)
+	}
+	limit, good := requestLimit(req)
+	if !good {
+		return failure(invalidRequest)
+	}
+	switch op {
+	case "decode_prefix", "decode_exact":
+		mode, good := rawString(req["mode"])
+		if !good || mode != "legacy" && mode != "witness" {
+			return failure(invalidRequest)
+		}
+		s, good := rawString(req["bytes"])
+		if !good || !validHex(s) {
+			return failure(invalidRequest)
+		}
+		offset := uint64(0)
+		if raw, present := req["offset"]; present && op == "decode_prefix" {
+			v, good := rawString(raw)
+			if !good {
+				return failure(invalidRequest)
+			}
+			offset, good = parseUnsigned(v, 64)
+			if !good {
+				return failure(invalidRequest)
+			}
+		}
+		if offset > uint64(len(s)/2) {
+			return failure(invalidRequest)
+		}
+		if len(s)/2 > maxPoolBytes {
+			return failure(transportLimit)
+		}
+		if uint64(len(s)/2)-offset > maxWireBytes {
+			return failure(admissionLimit)
+		}
+		// Offset and both byte envelopes are checked before decoding the hex.
+		data, err := hex.DecodeString(s)
+		if err != nil {
+			return failure(invalidRequest)
+		}
+		tx, consumed, status := decodeTransaction(data[int(offset):], mode == "witness", op == "decode_exact", limit)
+		if status != okStatus {
+			return failure(status)
+		}
+		return response{Status: okStatus, Transaction: transactionJSON(tx), Consumed: strconv.Itoa(consumed)}
+	case "serialize", "identify":
+		includeWitness := true
+		if op == "serialize" {
+			switch string(bytes.TrimSpace(req["include_witness"])) {
+			case "true":
+				includeWitness = true
+			case "false":
+				includeWitness = false
+			default:
+				return failure(invalidRequest)
+			}
+		}
+		_, stats, good := parseStructured(req["transaction"], false)
+		if !good {
+			return failure(invalidRequest)
+		}
+		if stats.pool > maxPoolBytes {
+			return failure(transportLimit)
+		}
+		size := stats.strippedSize
+		if includeWitness {
+			size = stats.fullSize()
+		}
+		if stats.items > limit || size > maxWireBytes {
+			return failure(resourceLimit)
+		}
+		tx, _, good := parseStructured(req["transaction"], true)
+		if !good {
+			return failure(executionFail)
+		}
+		if op == "serialize" {
+			encoded := hex.EncodeToString(serializeTransaction(tx, includeWitness, int(size)))
+			return response{Status: okStatus, Bytes: &encoded}
+		}
+		return identifyTransaction(tx, stats)
+	default:
+		return failure(invalidRequest)
+	}
+}
+
+// Recoverable allocation/runtime failures never expose a partial response.
+func processLine(line []byte) (encoded []byte) {
+	defer func() {
+		if recover() != nil {
+			encoded = []byte(`{"status":"execution_failure"}`)
+		}
+	}()
+	encoded, err := json.Marshal(processRequest(line))
+	if err != nil {
+		return []byte(`{"status":"execution_failure"}`)
+	}
+	return encoded
+}
+
+// ReadSlice lets an oversized line be discarded without losing later requests.
+// LF is framing, not part of the request's 20 MiB text allowance.
+func serve(input io.Reader, output io.Writer) error {
+	r := bufio.NewReaderSize(input, 64*1024)
+	w := bufio.NewWriter(output)
+	var line []byte
+	oversized := false
+	for {
+		part, err := r.ReadSlice('\n')
+		terminated := len(part) > 0 && part[len(part)-1] == '\n'
+		if terminated {
+			part = part[:len(part)-1]
+		}
+		if !oversized {
+			if len(part) > maxJSONBytes-len(line) {
+				oversized = true
+				line = nil
+			} else {
+				line = append(line, part...)
+			}
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if !terminated && len(line) == 0 && !oversized && err == io.EOF {
+			return w.Flush()
+		}
+		var result []byte
+		if oversized {
+			result = []byte(`{"status":"transport_limit"}`)
+		} else {
+			result = processLine(line)
+		}
+		if _, writeErr := w.Write(result); writeErr != nil {
+			return writeErr
+		}
+		if writeErr := w.WriteByte('\n'); writeErr != nil {
+			return writeErr
+		}
+		// Flush each response so interactive JSON-lines callers need not close stdin.
+		if flushErr := w.Flush(); flushErr != nil {
+			return flushErr
+		}
+		line = nil
+		oversized = false
+		if err == io.EOF {
+			return nil
+		}
+	}
+}
+
+func main() {
+	if err := serve(os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

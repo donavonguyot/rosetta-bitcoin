@@ -1,0 +1,119 @@
+# Rust initial submission — ABI v1
+
+Implemented a normal-priority service with four encoding workers and baseline
+one-job admission/terminal WriteBatches. No ABI v2, group commit, alternate
+kernel, service test hooks, or durability substitution. Source, executable,
+build script, tests and experiment record are delivered in this workspace.
+
+## Build and run
+
+Only through the supplied Linux broker:
+
+```sh
+python3 run.py './build.sh' 300
+python3 run.py './tests/run.sh' 300
+python3 run.py './service DATADIR SOCKET_PATH'
+```
+
+`service` is a Linux AArch64 ELF executable. It dynamically imports
+`rn_verify_v1` from `/adapter/librosetta.so` and the designated RocksDB C API
+from `librocksdb.so.7.8`; runtime search path is `/adapter`. The root Cargo.lock
+matches reuse/Cargo.lock byte for byte. Dependency versions/checksums are unchanged.
+`tmp/final-artifacts.json` records the final executable and source hashes.
+
+## Source and ownership
+
+- `src/main.rs`: single state/storage owner; recovery, durable admissions and
+  cancellations, four workers, admission-ordered terminal commitment and drain.
+- `src/storage.rs`: supplied dynamic C wrapper, extended with a checked iterator
+  and null DB-handle check. DB and batches remain on their creating thread;
+  no unsafe Send/Sync implementations. Required cache/buffer/compression settings,
+  WAL and synchronous writes are preserved.
+- `src/native.rs`: ABI v1 layouts and arena RAII. Workers create and destroy their
+  own arenas; source bytes and native input/result arrays remain alive through
+  verification. Cancellation never interrupts/freezes/frees a worker's arena.
+- `src/protocol.rs`: strict JSON/hex/ID validation, wire/storage shapes and limits.
+- `src/hash.rs`: standalone general SHA-256 solely for job identity. Transaction
+  parsing and both transaction digests remain entirely in the common adapter.
+- `src/transport.rs`: eight live connections maximum, one reader and writer each.
+  Frames are bounded before buffering beyond 40 MiB. Each reader waits for its
+  response to finish writing. Thirty-two best-effort event slots plus one reserved
+  response slot bound output and preserve admission-response/event ordering.
+  Socket writes have a two-second timeout and never block the state owner.
+
+Admission persists the complete job/index/accounting before acknowledgment.
+Cancellation persists intent before acknowledgment. The same owner serializes
+terminal C write calls and cancellation decisions, so acknowledged cancellation
+before terminal call entry wins. Running cancellations wait for native return;
+cancelled queued work can terminalize without entering the kernel. Terminal
+commit removes pending/cancel records, writes the receipt, advances checkpoint
+and releases accounting atomically. The ID index and receipts remain forever.
+
+Startup validates schema, record/index bijection, contiguous checkpoint, pending
+payload digests, cancellation membership and accounting; inconsistent state fails
+explicitly rather than rebuilding. Absent-version initialization requires an empty
+database and durably writes version and all counters together. Exclusive ownership
+is RocksDB's native LOCK. Storage errors and acknowledged-job arena failures stop
+the process without acknowledging/terminalizing the failed transition.
+
+## Validation
+
+Final `tests/run.sh` passed: one Rust test covering four published SHA-256 vectors,
+the public smoke test, and all 12 black-box Python integration tests (7.382 seconds
+for the last integration run). `cargo clippy --offline --locked -- -D warnings`
+and pinned `cargo fmt` also passed. Artifact audit checks ELF architecture, execute
+permission, required dynamic imports/runpath, v1-only verifier and unchanged lock.
+
+Integration coverage includes:
+
+- Direct comparison with the supplied adapter: 64-item mixed batches, malformed
+  items, empty bytes, prefix/exact, both modes and per-item resource limits.
+- Invalid JSON/UTF-8/fields/IDs/hex, batch count, 40 MiB framing and partial EOF;
+  rejected inputs do not change durable state; pipelined response ordering.
+- Digest identity, conflict/retry, response-before-event, retained receipts and
+  restart, missing status/cancel without rows, native exclusive writer lock.
+- Eight clients admitting 160 jobs, live cancellation, disconnect, idle/slow
+  readers, and zero-exit draining shutdown.
+- Three crashes with 16 MiB jobs, confirmed acknowledged pending recovery and
+  accepted cancellations; five timed process crashes during request streams.
+- Independent stopped-writer RocksDB inspection of every checkpoint/pending/
+  receipt/index/cancel/accounting invariant after crashes and shutdown.
+- Valid recovery fixtures containing durable cancellation and a full 1,024-job,
+  64 MiB backlog; backpressure, idempotent retry and rejection of new work during
+  drain. Incompatible schema is rejected without replacing stored records.
+
+Tests use Python standard library, ctypes and supplied native interfaces only.
+They add no scheduling or barrier hooks to the service. All builds, linting,
+artifact inspection and test execution used `python3 run.py`.
+
+## Assumptions and remaining evidence
+
+Unknown request/item fields are rejected as reserved. Missing/non-string request
+correlation returns invalid_request with an empty request string. Overlong or
+unterminated frames receive invalid_request when possible and close the connection.
+The 40 MiB text bound excludes newline. Empty/over-64 batches and aggregate input
+over 16 MiB are invalid_request; item-level kernel resource errors remain results.
+V1 accepts omitted priority or explicit normal, rejects high. Existing/conflicting
+IDs retain their retry disposition during drain; new work receives draining.
+These choices resolve ambiguities in the supplied prose without user questions.
+
+No evaluator, external benchmark, gate/freeze artifact, native ASan variant,
+whole-service race detector or systematic write/arena failure injector was accessed.
+Tests establish sampled process-crash recovery, not power-loss or exhaustive
+interleaving correctness. Native allocation failure and storage-error branches
+were reviewed but not fault-injected. The test backlog demonstrates bounded
+admission and draining; it is not a comparative performance measurement.
+
+No predecessor handoff was present. The user explicitly authorized implementation
+after reading; the preregistration's preparation/freeze language remains external
+campaign context, not evidence of gate execution. Keep v1 and its durable schema
+intact for the next round; v2 has not been implemented in anticipation.
+
+## Effort and retained evidence
+
+Reading finished early within its separate ten-minute allowance. Implementation
+and validation took approximately 22 minutes on 2026-09-16, well below 90 minutes;
+the first recorded implementation clock was 21:23:18 UTC. Exact model-token usage,
+broker overhead and pre-clock effort are unavailable. No repair/evaluator feedback
+round occurred. `EXPERIMENTS.md` records failures and fixes; broker queue responses
+and test databases/logs in `tmp/` are retained. No optimization hypotheses used.

@@ -1,0 +1,25 @@
+package storage
+
+/*
+#cgo LDFLAGS: -lrocksdb
+#include <rocksdb/c.h>
+*/
+import "C"
+
+// Scan is used during startup, before any service goroutine can write. The
+// callback owns its copied key and value after the iterator advances.
+func (d *DB) Scan(visit func(key, value string) error) error {
+	it := C.rocksdb_create_iterator(d.p, d.read)
+	defer C.rocksdb_iter_destroy(it)
+	for C.rocksdb_iter_seek_to_first(it); C.rocksdb_iter_valid(it) != 0; C.rocksdb_iter_next(it) {
+		var kn, vn C.size_t
+		k := C.rocksdb_iter_key(it, &kn)
+		v := C.rocksdb_iter_value(it, &vn)
+		if err := visit(C.GoStringN(k, C.int(kn)), C.GoStringN(v, C.int(vn))); err != nil {
+			return err
+		}
+	}
+	var e *C.char
+	C.rocksdb_iter_get_error(it, &e)
+	return cerror(e)
+}

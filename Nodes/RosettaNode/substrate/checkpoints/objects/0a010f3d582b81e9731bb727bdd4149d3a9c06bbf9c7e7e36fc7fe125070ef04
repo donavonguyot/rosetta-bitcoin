@@ -1,0 +1,270 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+
+	storage "trial/reuse"
+)
+
+func priorityFixture(t *testing.T, priority string) *prepared {
+	t.Helper()
+	p := preparedFixture(t)
+	p.Priority = priority
+	return p
+}
+
+func TestPriorityWireAndIdentity(t *testing.T) {
+	s, _ := testService(t)
+	defer s.db.Close()
+	var digest string
+	for _, priority := range []string{"", "normal", "high"} {
+		field := ""
+		if priority != "" {
+			field = fmt.Sprintf(`,"priority":%q`, priority)
+		}
+		q, err := parseRequest([]byte(`{"request":"p","op":"submit","id":"same","items":[{"hex":"01000000000000000000","mode":"witness","operation":"exact"}]` + field + `}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantPriority := priority
+		if wantPriority == "" {
+			wantPriority = "normal"
+		}
+		if q.Prepared.Priority != wantPriority {
+			t.Fatal("priority not parsed", q.Prepared.Priority)
+		}
+		if digest == "" {
+			digest = q.Prepared.Digest
+		} else if digest != q.Prepared.Digest {
+			t.Fatal("priority changed payload identity")
+		}
+		r, _ := s.submit(q.Prepared, q.ID, nil)
+		wantStatus := "existing"
+		if priority == "" {
+			wantStatus = "accepted"
+		}
+		if r.Status != wantStatus || r.Sequence != "1" {
+			t.Fatal(r)
+		}
+		if s.status("same").Job.(PendingStatus).Priority != "normal" {
+			t.Fatal("retry changed admission priority")
+		}
+	}
+	if r, _ := s.submit(priorityFixture(t, "high"), "high", nil); r.Status != "accepted" {
+		t.Fatal(r)
+	}
+	if s.status("high").Job.(PendingStatus).Priority != "high" {
+		t.Fatal("high priority not admitted")
+	}
+	if r, _ := s.submit(priorityFixture(t, "normal"), "high", nil); r.Status != "existing" || s.status("high").Job.(PendingStatus).Priority != "high" {
+		t.Fatal("normal retry changed high priority", r)
+	}
+}
+
+// Exercise dispatch decisions with deterministic queue contents. Slot release
+// represents worker return; no timing assumptions, alternate scheduler, or
+// production test hook is used.
+func takeDispatch(t *testing.T, s *Service, id string) {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	j := s.dispatchLocked()
+	if j == nil || j.pending.ID != id {
+		got := "none"
+		if j != nil {
+			got = j.pending.ID
+		}
+		t.Fatalf("dispatch got %s want %s", got, id)
+	}
+	j.running = false
+	<-s.slots
+}
+
+func TestPriorityDispatchCycle(t *testing.T) {
+	s, _ := testService(t)
+	defer s.db.Close()
+	for i := 0; i < 6; i++ {
+		for _, priority := range []string{"normal", "high"} {
+			id := fmt.Sprintf("%s%d", priority, i)
+			if r, _ := s.submit(priorityFixture(t, priority), id, nil); r.Status != "accepted" {
+				t.Fatal(r)
+			}
+		}
+	}
+	for _, id := range []string{"high0", "high1", "high2", "normal0", "high3", "high4", "high5", "normal1", "normal2", "normal3", "normal4", "normal5"} {
+		takeDispatch(t, s, id)
+	}
+	// High became empty on the third high turn. Normal-only work must leave
+	// the contested cycle at its normal turn, even across complete idleness.
+	if s.priorityCycle != 3 {
+		t.Fatal("single queue advanced cycle", s.priorityCycle)
+	}
+	s.submit(priorityFixture(t, "high"), "new-high", nil)
+	s.submit(priorityFixture(t, "normal"), "new-normal", nil)
+	takeDispatch(t, s, "new-normal")
+	takeDispatch(t, s, "new-high")
+	if s.priorityCycle != 0 {
+		t.Fatal("normal contested turn did not complete cycle")
+	}
+}
+
+func TestPrioritySingleQueueAndCancellation(t *testing.T) {
+	s, _ := testService(t)
+	defer s.db.Close()
+	s.submit(priorityFixture(t, "high"), "alone", nil)
+	takeDispatch(t, s, "alone")
+	if s.priorityCycle != 0 {
+		t.Fatal("high-only dispatch advanced cycle")
+	}
+	s.submit(priorityFixture(t, "normal"), "cancel-normal", nil)
+	s.submit(priorityFixture(t, "high"), "cancel-high", nil)
+	s.submit(priorityFixture(t, "high"), "high", nil)
+	for _, id := range []string{"cancel-normal", "cancel-high"} {
+		if s.cancel(id).Status != "ok" {
+			t.Fatal("cancel", id)
+		}
+	}
+	takeDispatch(t, s, "high")
+	if s.priorityCycle != 0 {
+		t.Fatal("cancelled queue entries consumed a contested turn")
+	}
+	s.submit(priorityFixture(t, "normal"), "normal", nil)
+	s.submit(priorityFixture(t, "high"), "later-high", nil)
+	takeDispatch(t, s, "later-high")
+	takeDispatch(t, s, "normal")
+	if s.priorityCycle != 1 {
+		t.Fatal("single queue reset or advanced cycle")
+	}
+}
+
+func TestPriorityWaitsForAvailableSlot(t *testing.T) {
+	s, _ := testService(t)
+	defer s.db.Close()
+	for i := 0; i < 4; i++ {
+		s.slots <- struct{}{}
+	}
+	s.submit(priorityFixture(t, "normal"), "normal", nil)
+	s.mu.Lock()
+	if s.dispatchLocked() != nil || len(s.queue) != 1 {
+		t.Fatal("prefetched while native slots full")
+	}
+	s.mu.Unlock()
+	s.submit(priorityFixture(t, "high"), "high", nil)
+	<-s.slots
+	takeDispatch(t, s, "high")
+	takeDispatch(t, s, "normal")
+}
+
+func TestV1AndV2Recovery(t *testing.T) {
+	s, path := testService(t)
+	s.db.Close()
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Literal v1-compatible records, independent of the current admission path.
+	// Include a retained receipt and cancelled pending work before v2 admission.
+	b := storage.NewBatch()
+	b.Put("meta/sequence", "3")
+	b.Put("meta/checkpoint", "1")
+	b.Put("meta/jobs", "2")
+	b.Put("meta/bytes", "20")
+	// The digest is supplied by the separately tested canonical digest routine;
+	// v1 and v2 hash the same payload and do not include priority.
+	p := preparedFixture(t)
+	receipt := `{"id":"old-receipt","digest":"` + p.Digest + `","sequence":"1","state":"cancelled","results":[]}`
+	b.Put(sequenceKey("r", 1), receipt)
+	b.Put("id/old-receipt", "1")
+	for n, id := range map[uint64]string{2: "old-pending", 3: "old-cancelled"} {
+		pending := fmt.Sprintf(`{"id":%q,"digest":%q,"sequence":%q,"bytes":"10","priority":"normal","items":[{"hex":"01000000000000000000","mode":"witness","operation":"exact"}]}`, id, p.Digest, decimal(n))
+		b.Put(sequenceKey("p", n), pending)
+		b.Put("id/"+id, decimal(n))
+	}
+	b.Put(sequenceKey("c", 3), "1")
+	if err := db.Write(b); err != nil {
+		t.Fatal(err)
+	}
+	b.Close()
+	db.Close()
+	s, err = openService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.queue) != 1 || len(s.highQueue) != 0 || s.queue[0].pending.ID != "old-pending" || !s.pending[3].done || !s.pending[3].cancelled {
+		t.Fatal("v1 recovery priority/cancellation")
+	}
+	s.submit(priorityFixture(t, "high"), "new-high", nil)
+	s.submit(priorityFixture(t, "normal"), "new-normal", nil)
+	s.submit(priorityFixture(t, "high"), "cancel-high", nil)
+	s.cancel("cancel-high")
+	s.db.Close()
+	before := inspectStopped(t, path)
+	if before[sequenceKey("r", 1)] != receipt {
+		t.Fatal("v1 receipt rewritten")
+	}
+	s, err = openService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.queue) != 2 || len(s.highQueue) != 1 || s.highQueue[0].pending.ID != "new-high" || s.highQueue[0].prepared.Priority != "high" || s.queue[0].seq != 2 || s.queue[1].seq != 5 {
+		t.Fatal("v2 pending priority or FIFO recovery")
+	}
+	s.start()
+	drainTest(t, s)
+	after := inspectStopped(t, path)
+	if after[sequenceKey("r", 1)] != receipt || after["meta/checkpoint"] != "6" {
+		t.Fatal("retained receipt or contiguous completion")
+	}
+	for n := uint64(2); n <= 6; n++ {
+		var r Receipt
+		if err := json.Unmarshal([]byte(after[sequenceKey("r", n)]), &r); err != nil {
+			t.Fatal(err)
+		}
+		want := "complete"
+		if n == 3 || n == 6 {
+			want = "cancelled"
+		}
+		if r.State != want {
+			t.Fatal("lost recovered state", n, r.State)
+		}
+	}
+}
+
+func TestV2BitmapAndOffsets(t *testing.T) {
+	for _, count := range []int{1, 63, 64} {
+		for _, pattern := range []string{"all", "none", "edges", "alternating"} {
+			t.Run(fmt.Sprintf("%d-%s", count, pattern), func(t *testing.T) {
+				items := make([]Item, count)
+				ok := make([]bool, count)
+				for i := range items {
+					ok[i] = pattern == "all" || pattern == "edges" && (i == 0 || i == count-1) || pattern == "alternating" && i%2 == 1
+					items[i] = fixture
+					if ok[i] {
+						items[i].Operation = "prefix"
+						items[i].Hex += strings.Repeat("ab", i)
+					} else if i%2 == 0 {
+						items[i].Hex = ""
+					} else {
+						items[i].Hex = "00"
+					}
+				}
+				p, err := prepare(items)
+				if err != nil {
+					t.Fatal(err)
+				}
+				results, err := nativeEvaluate(p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for i, r := range results {
+					if (r.Status == "0") != ok[i] || ok[i] && r.Consumed != "10" {
+						t.Fatalf("offset/bitmap item %d: %+v", i, r)
+					}
+				}
+			})
+		}
+	}
+}

@@ -1,0 +1,30 @@
+# Initial implementation record
+
+This is the initial baseline, not an optimization round. Optimization hypotheses
+used: **0** (no group commit). No performance comparison or language claim is made.
+All commands ran through the pinned Linux broker; source edits stayed local.
+
+| Attempt/check | Observation | Action/result |
+|---|---|---|
+| Infrastructure/ABI reading | Arena creation succeeded for 0 and 16 MiB; 16 MiB + 1 returned null. Header exposes arena ownership and v1 layouts. | Validate aggregate batch size before admission; retain source buffer and arena throughout native calls. |
+| First release build | Built successfully with pinned offline crates. | Retained versions/checksums and dynamic adapter/RocksDB linkage. |
+| Public smoke | Passed. | Proceeded to independent protocol/storage/crash tests. |
+| Initial seven integration tests and SHA vectors | All passed, including three live cancellation/crash/restart cycles. | Added coverage for full recovery backlog, slow clients, framing, cancellation fixtures and request-stream crashes. |
+| Output-queue review | Frame-count-only bounding could retain multiple large status responses per client; best-effort events could fill all response slots. | Allow one response in flight until actually written; reserve a response slot and cap events separately. Connection leases cover both reader and writer lifetime. Correctness/resource-bound fix, not an optimization experiment. |
+| Expanded 12-test suite, first run | Eleven passed; request-stream crash test got ConnectionRefusedError during restart. Service diagnostic logs were empty. | Test harness had treated socket pathname existence as readiness; Unix bind creates the path before listen. Added an actual connection/EOF readiness probe and close-on-connect-failure cleanup. No service change for this failure. |
+| Expanded suite after readiness fix | All 12 passed, plus SHA vectors and public smoke. | Confirmed pending work was actually retained in crash snapshots; independently inspected all database invariants. |
+| Strict Clippy, first run | Five style diagnostics: fixed-size chunks, divisibility spelling, nested conditional. No compile/type/ownership error in service build. | Adopted pinned Rust array chunks/is_multiple_of and collapsed the conditional, then rebuilt/retested. |
+| Artifact identification | `file` utility was unavailable. | Used ELF header/readelf and dynamic symbol inspection; confirmed Linux AArch64, dynamic RocksDB/rosetta, /adapter runpath and v1-only import. |
+| Final validation | Strict Clippy passed. SHA vectors, public smoke and all 12 integration tests passed; integration runtime 7.382 seconds. | Final executable rebuilt from final source; artifact hashes saved in tmp/final-artifacts.json. |
+
+The full-backlog test creates a valid stopped-writer recovery fixture with 1,024
+jobs and 64 MiB pending payload. It exercises real native workers and actual sync
+WriteBatches, with no barriers or scheduler hooks. Crash tests use SIGKILL at
+selected live points; they do not simulate torn writes or hardware power loss.
+
+No storage/native arena allocation failure was injected. No native sanitizer,
+Miri-through-FFI, whole-service TSan, exhaustive race proof, or evaluator pass is
+claimed. Initial preparation material and exact cost beyond observed elapsed
+implementation time are unknown. Attempts and raw broker outputs remain in the
+queue and test artifact directories; no failed repetition was substituted into a
+performance result. The initial submission freezes on return.

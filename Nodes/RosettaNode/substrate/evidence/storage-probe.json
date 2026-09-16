@@ -1,0 +1,453 @@
+{
+  "schema": "rosettanode.substrate.storage_probe.v1",
+  "status": "passed",
+  "scope": "preliminary synchronous C write probe; not service Gate A/B",
+  "library": {
+    "path": "/usr/lib/aarch64-linux-gnu/librocksdb.so.7.8.3",
+    "sha256": "7f8b07b0229aaa46fc202967e51388c0c4b332bc6439420b4d8bc38eb785dbd1",
+    "elf_notes": "\nDisplaying notes found in: .note.gnu.build-id\n  Owner                Data size \tDescription\n  GNU                  0x00000014\tNT_GNU_BUILD_ID (unique build ID bitstring)\n    Build ID: 6e1614f5a7dee7f45e56353b553e346ba2bc0acc\n",
+    "packages": "librocksdb-dev\t7.8.3-2\nlibrocksdb7.8\t7.8.3-2\n",
+    "package_sha256": "1133bb5fbaa26c6e0e23d22d26d321223efea462db782969a942f38e0b9dc345  librocksdb-dev_7.8.3-2_arm64.deb\n143f18e1ae5a884f9ac061eac47b56a1170187c2608bf54eb77f80ecb9b9fcfb  librocksdb7.8_7.8.3-2_arm64.deb\n"
+  },
+  "trials": [
+    {
+      "variant": "probe",
+      "operation": "admit",
+      "boundary": "native_success",
+      "killed": false,
+      "ack_while_return_withheld": false,
+      "ack": "ACK 1",
+      "rows": {
+        "m/outstanding": "1",
+        "m/sequence": "1",
+        "m/version": "1",
+        "p/1": "payload"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "p/1",
+          "call": 1,
+          "tid": 26,
+          "ns": 105237079854512,
+          "path": "/work/.local/storage-probe-20260916T204411/probe-admit-native_success-928814/db/000004.log",
+          "inode": 128047,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": 0,
+      "trace_sha256": "2e5917476dbf94aa4f616a9dc57c0e37bf5b01ebf3653c9d9ad1807fb955c22b",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/probe-admit-native_success-928814",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    },
+    {
+      "variant": "probe",
+      "operation": "admit",
+      "boundary": "write_enter",
+      "killed": true,
+      "ack_while_return_withheld": false,
+      "ack": "",
+      "rows": {},
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [],
+      "returncode": -9,
+      "trace_sha256": "16396bf5107779c4a1df85969fad1f8c97139de8b1161d8a382b52d0fc257ace",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/probe-admit-write_enter-a5091e",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    },
+    {
+      "variant": "probe",
+      "operation": "admit",
+      "boundary": "wal_sync_enter",
+      "killed": true,
+      "ack_while_return_withheld": false,
+      "ack": "",
+      "rows": {
+        "m/outstanding": "1",
+        "m/sequence": "1",
+        "m/version": "1",
+        "p/1": "payload"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "p/1",
+          "call": 1,
+          "tid": 130,
+          "ns": 105237365996606,
+          "path": "/work/.local/storage-probe-20260916T204411/probe-admit-wal_sync_enter-ca5ef2/db/000004.log",
+          "inode": 128074,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": -9,
+      "trace_sha256": "ca5afa2997f49c8956a18450926dc1fe6c34e37379f77db60243c7c3a54f30a9",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/probe-admit-wal_sync_enter-ca5ef2",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    },
+    {
+      "variant": "probe",
+      "operation": "admit",
+      "boundary": "native_success",
+      "killed": true,
+      "ack_while_return_withheld": false,
+      "ack": "",
+      "rows": {
+        "m/outstanding": "1",
+        "m/sequence": "1",
+        "m/version": "1",
+        "p/1": "payload"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "p/1",
+          "call": 1,
+          "tid": 182,
+          "ns": 105237515952786,
+          "path": "/work/.local/storage-probe-20260916T204411/probe-admit-native_success-d78981/db/000004.log",
+          "inode": 128087,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": -9,
+      "trace_sha256": "189180d86539dc08b0867da7bb1aa74ff7cd83a7b79b5809e18de18ceeebb756",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/probe-admit-native_success-d78981",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    },
+    {
+      "variant": "probe",
+      "operation": "terminal",
+      "boundary": "native_success",
+      "killed": false,
+      "ack_while_return_withheld": false,
+      "ack": "ACK 1",
+      "rows": {
+        "m/checkpoint": "1",
+        "m/outstanding": "0",
+        "m/sequence": "1",
+        "m/version": "1",
+        "r/1": "ok"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "r/1",
+          "call": 1,
+          "tid": 253,
+          "ns": 105237707476157,
+          "path": "/work/.local/storage-probe-20260916T204411/probe-terminal-native_success-989063/db/000009.log",
+          "inode": 128106,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": 0,
+      "trace_sha256": "4940777219e1c79f03b7cb2d28a75e59b936f043a8e38f3d69d87af93b435106",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/probe-terminal-native_success-989063",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    },
+    {
+      "variant": "probe",
+      "operation": "terminal",
+      "boundary": "write_enter",
+      "killed": true,
+      "ack_while_return_withheld": false,
+      "ack": "",
+      "rows": {
+        "m/outstanding": "1",
+        "m/sequence": "1",
+        "m/version": "1",
+        "p/1": "payload"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [],
+      "returncode": -9,
+      "trace_sha256": "e76ef8423ed6f692024ba733fad0e44e2a6b9def0fe2f48a7929b67b127721a1",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/probe-terminal-write_enter-2d0ac3",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    },
+    {
+      "variant": "probe",
+      "operation": "terminal",
+      "boundary": "wal_sync_enter",
+      "killed": true,
+      "ack_while_return_withheld": false,
+      "ack": "",
+      "rows": {
+        "m/checkpoint": "1",
+        "m/outstanding": "0",
+        "m/sequence": "1",
+        "m/version": "1",
+        "r/1": "ok"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "r/1",
+          "call": 1,
+          "tid": 381,
+          "ns": 105238049855886,
+          "path": "/work/.local/storage-probe-20260916T204411/probe-terminal-wal_sync_enter-be6272/db/000009.log",
+          "inode": 128145,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": -9,
+      "trace_sha256": "4f9fb6c760e7f3f97e794433cfc31ecb511881d77c3779c14b6c29a489fb594f",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/probe-terminal-wal_sync_enter-be6272",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    },
+    {
+      "variant": "probe",
+      "operation": "terminal",
+      "boundary": "native_success",
+      "killed": true,
+      "ack_while_return_withheld": false,
+      "ack": "",
+      "rows": {
+        "m/checkpoint": "1",
+        "m/outstanding": "0",
+        "m/sequence": "1",
+        "m/version": "1",
+        "r/1": "ok"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "r/1",
+          "call": 1,
+          "tid": 452,
+          "ns": 105238223413119,
+          "path": "/work/.local/storage-probe-20260916T204411/probe-terminal-native_success-1eaefc/db/000009.log",
+          "inode": 128164,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": -9,
+      "trace_sha256": "2f928dec1f157c51e106077336a75bf4143436ea27a832dfaa684f521b816f42",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/probe-terminal-native_success-1eaefc",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    },
+    {
+      "variant": "early",
+      "operation": "admit",
+      "boundary": "native_success",
+      "killed": false,
+      "ack_while_return_withheld": true,
+      "ack": "ACK 1",
+      "rows": {
+        "m/outstanding": "1",
+        "m/sequence": "1",
+        "m/version": "1",
+        "p/1": "payload"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "p/1",
+          "call": 1,
+          "tid": 504,
+          "ns": 105238375913490,
+          "path": "/work/.local/storage-probe-20260916T204411/early-admit-native_success-0da535/db/000004.log",
+          "inode": 128177,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": 0,
+      "trace_sha256": "ffcff10375d6ae85b0aa5f6772a9857d24490e975e61befb9634a618123330de",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/early-admit-native_success-0da535",
+      "observed_failure": "early_durable_ack",
+      "expected_failure": "early_durable_ack",
+      "test_passed": true
+    },
+    {
+      "variant": "torn_admit",
+      "operation": "admit",
+      "boundary": "native_success",
+      "killed": true,
+      "ack_while_return_withheld": false,
+      "ack": "",
+      "rows": {
+        "p/1": "payload"
+      },
+      "invariant_failure": "pending_without_sequence",
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "p/1",
+          "call": 1,
+          "tid": 556,
+          "ns": 105238421636717,
+          "path": "/work/.local/storage-probe-20260916T204411/torn_admit-admit-native_success-42753b/db/000004.log",
+          "inode": 128191,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": -9,
+      "trace_sha256": "42be8aa0369e5cfb94ef035a8e7682e2ebab66aaf93c319ea41013eac68e3c56",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/torn_admit-admit-native_success-42753b",
+      "observed_failure": "pending_without_sequence",
+      "expected_failure": "pending_without_sequence",
+      "test_passed": true
+    },
+    {
+      "variant": "torn_terminal",
+      "operation": "terminal",
+      "boundary": "native_success",
+      "killed": true,
+      "ack_while_return_withheld": false,
+      "ack": "",
+      "rows": {
+        "m/outstanding": "1",
+        "m/sequence": "1",
+        "m/version": "1",
+        "p/1": "payload",
+        "r/1": "ok"
+      },
+      "invariant_failure": "receipt_with_pending",
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "r/1",
+          "call": 1,
+          "tid": 627,
+          "ns": 105238590264702,
+          "path": "/work/.local/storage-probe-20260916T204411/torn_terminal-terminal-native_success-3201ca/db/000009.log",
+          "inode": 128210,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": -9,
+      "trace_sha256": "2db05a674c754c9ebc4384a1816c3592b488de84c043ab1c93ac83c4cc8775b6",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/torn_terminal-terminal-native_success-3201ca",
+      "observed_failure": "receipt_with_pending",
+      "expected_failure": "receipt_with_pending",
+      "test_passed": true
+    },
+    {
+      "variant": "torn_admit",
+      "operation": "admit",
+      "boundary": "native_success",
+      "killed": false,
+      "ack_while_return_withheld": false,
+      "ack": "ACK 1",
+      "rows": {
+        "m/outstanding": "1",
+        "m/sequence": "1",
+        "m/version": "1",
+        "p/1": "payload"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "p/1",
+          "call": 1,
+          "tid": 679,
+          "ns": 105238745750873,
+          "path": "/work/.local/storage-probe-20260916T204411/torn_admit-admit-native_success-a4d346/db/000004.log",
+          "inode": 128223,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": 0,
+      "trace_sha256": "9b102d2b0910bb011c593620d9f59b7cff945d6f063afe0fa5c0e8e1ed4e34e3",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/torn_admit-admit-native_success-a4d346",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    },
+    {
+      "variant": "torn_terminal",
+      "operation": "terminal",
+      "boundary": "native_success",
+      "killed": false,
+      "ack_while_return_withheld": false,
+      "ack": "ACK 1",
+      "rows": {
+        "m/checkpoint": "1",
+        "m/outstanding": "0",
+        "m/sequence": "1",
+        "m/version": "1",
+        "r/1": "ok"
+      },
+      "invariant_failure": null,
+      "sync_options_valid": true,
+      "correlated_wal_syncs": [
+        {
+          "phase": "wal_sync_enter",
+          "transition": "r/1",
+          "call": 1,
+          "tid": 750,
+          "ns": 105238925696023,
+          "path": "/work/.local/storage-probe-20260916T204411/torn_terminal-terminal-native_success-265b7c/db/000009.log",
+          "inode": 128243,
+          "sync": 1,
+          "wal": 1
+        }
+      ],
+      "returncode": 0,
+      "trace_sha256": "17a745739d25806d9bc01d0b8fedd11a20e5cf88adbc99b4d8c1b0d2352297e8",
+      "local_diagnostics": ".local/storage-probe-20260916T204411/torn_terminal-terminal-native_success-265b7c",
+      "observed_failure": null,
+      "expected_failure": null,
+      "test_passed": true
+    }
+  ],
+  "unproven": [
+    "socket protocol",
+    "cancel boundary",
+    "conflicting digest",
+    "arena lifetime",
+    "after-ack kill",
+    "complete mutation matrix",
+    "Gate B",
+    "candidate isolation"
+  ],
+  "candidate_launch_allowed": false
+}

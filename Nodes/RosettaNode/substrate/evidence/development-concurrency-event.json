@@ -1,0 +1,10 @@
+{
+  "schema": "rosettanode.substrate.controller_event.v1",
+  "event": "Continuation scheduler initially counted only absolute controller paths, overlooking two already-running controllers launched by relative path.",
+  "observed": "Zig-1 and Go-1 maintenance reading phases overlapped Go-2 and Rust-2 initial implementation. Four development controllers briefly active rather than intended two.",
+  "correction": "Relative and absolute paths now count; no new launches until fewer than two remain. Existing sessions retained without interruption.",
+  "resource_limits_unchanged": true,
+  "candidate_contract_and_evaluator_unchanged": true,
+  "timing_interpretation": "Development wall times are descriptive under recorded concurrent workload, not isolated language speed measures. Serial performance repetitions remain unaffected and have not begun.",
+  "recorded_utc": "2026-09-16T22:02:39Z"
+}

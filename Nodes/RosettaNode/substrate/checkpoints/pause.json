@@ -1,0 +1,449 @@
+{
+  "schema": "rosettanode.pause_checkpoint.v1",
+  "reason": "User paused for cost review",
+  "campaigns_running": false,
+  "resumption_authorized": false,
+  "rows": [
+    {
+      "record": "lineage-v2-go-1-initial.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 234726,
+            "cached_input_tokens": 208640,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2633,
+            "reasoning_output_tokens": 524
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 1793743,
+            "cached_input_tokens": 1732864,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 39851,
+            "reasoning_output_tokens": 14401
+          }
+        ],
+        "repair": [
+          {
+            "input_tokens": 1559088,
+            "cached_input_tokens": 1487872,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 9834,
+            "reasoning_output_tokens": 3084
+          }
+        ]
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-go-1-maintenance.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/go-1/maintenance/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 195594,
+            "cached_input_tokens": 151680,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1185,
+            "reasoning_output_tokens": 57
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 1163272,
+            "cached_input_tokens": 1126656,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 17224,
+            "reasoning_output_tokens": 3095
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-go-1-optimization.json",
+      "recorded_status": "reading",
+      "checkpoint_status": "interrupted_by_user_cost_pause",
+      "qualified_submission": null,
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 183964,
+            "cached_input_tokens": 151040,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1632,
+            "reasoning_output_tokens": 317
+          }
+        ],
+        "implementation": null,
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-go-2-initial.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/go-2/initial/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 196786,
+            "cached_input_tokens": 153984,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2220,
+            "reasoning_output_tokens": 234
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 1869313,
+            "cached_input_tokens": 1804032,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 43785,
+            "reasoning_output_tokens": 15329
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-go-2-maintenance.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/go-2/maintenance/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 173282,
+            "cached_input_tokens": 134144,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1146,
+            "reasoning_output_tokens": 37
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 980016,
+            "cached_input_tokens": 937472,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 20953,
+            "reasoning_output_tokens": 4475
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-rust-1-initial.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 244784,
+            "cached_input_tokens": 212224,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 3389,
+            "reasoning_output_tokens": 436
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 1857399,
+            "cached_input_tokens": 1794048,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 39676,
+            "reasoning_output_tokens": 12108
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-rust-1-maintenance.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/rust-1/maintenance/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 160475,
+            "cached_input_tokens": 121472,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2376,
+            "reasoning_output_tokens": 223
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 1209414,
+            "cached_input_tokens": 1155200,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 17953,
+            "reasoning_output_tokens": 4363
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-rust-1-optimization.json",
+      "recorded_status": "reading",
+      "checkpoint_status": "interrupted_by_user_cost_pause",
+      "qualified_submission": null,
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 137212,
+            "cached_input_tokens": 108928,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1621,
+            "reasoning_output_tokens": 249
+          }
+        ],
+        "implementation": null,
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-rust-2-initial.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/initial/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 179856,
+            "cached_input_tokens": 139264,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2268,
+            "reasoning_output_tokens": 273
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 1893390,
+            "cached_input_tokens": 1826560,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 44928,
+            "reasoning_output_tokens": 15220
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-rust-2-maintenance.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/maintenance/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 172440,
+            "cached_input_tokens": 135936,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2161,
+            "reasoning_output_tokens": 217
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 1261728,
+            "cached_input_tokens": 1204480,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 22698,
+            "reasoning_output_tokens": 6332
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-zig-1-initial.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 167926,
+            "cached_input_tokens": 135296,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2148,
+            "reasoning_output_tokens": 406
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 2365719,
+            "cached_input_tokens": 2290944,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 49025,
+            "reasoning_output_tokens": 18350
+          }
+        ],
+        "repair": []
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-zig-1-maintenance.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/maintenance/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 258302,
+            "cached_input_tokens": 218496,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1480,
+            "reasoning_output_tokens": 94
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 1295394,
+            "cached_input_tokens": 1250048,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 18418,
+            "reasoning_output_tokens": 3940
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-zig-1-optimization.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/optimization/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 184211,
+            "cached_input_tokens": 143232,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1460,
+            "reasoning_output_tokens": 125
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 2357640,
+            "cached_input_tokens": 2284928,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 32147,
+            "reasoning_output_tokens": 9287
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-zig-2-initial.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/initial/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 246995,
+            "cached_input_tokens": 199808,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 2252,
+            "reasoning_output_tokens": 240
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 1705851,
+            "cached_input_tokens": 1645568,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 34238,
+            "reasoning_output_tokens": 9734
+          }
+        ],
+        "repair": [
+          {
+            "input_tokens": 476755,
+            "cached_input_tokens": 438016,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 990,
+            "reasoning_output_tokens": 366
+          }
+        ]
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-zig-2-maintenance.json",
+      "recorded_status": "qualified",
+      "checkpoint_status": "qualified",
+      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/submission",
+      "usage": {
+        "reading": [
+          {
+            "input_tokens": 176988,
+            "cached_input_tokens": 135680,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1404,
+            "reasoning_output_tokens": 129
+          }
+        ],
+        "implementation": [
+          {
+            "input_tokens": 838043,
+            "cached_input_tokens": 803456,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 15051,
+            "reasoning_output_tokens": 4023
+          }
+        ],
+        "repair": null
+      },
+      "monetary_cost": null
+    },
+    {
+      "record": "lineage-v2-zig-2-optimization.json",
+      "checkpoint_status": "not_started"
+    },
+    {
+      "record": "lineage-v2-go-2-optimization.json",
+      "checkpoint_status": "not_started"
+    },
+    {
+      "record": "lineage-v2-rust-2-optimization.json",
+      "checkpoint_status": "not_started"
+    }
+  ],
+  "measurements": "No final serial performance campaign run",
+  "corrections": [
+    "instrument-correction-v2.json",
+    "controller-correction-v3.json",
+    "storage-interruption.json",
+    "development-concurrency-event.json"
+  ],
+  "interpretation": "Frozen records are retained unchanged. Reading statuses in interrupted optimization records are stale controller phase labels, not completed outcomes.",
+  "monetary_cost": null
+}

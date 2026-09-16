@@ -1,0 +1,24 @@
+Maintenance ABI v2 submission, before evaluator feedback.
+Implementation began: 2026-09-16 22:18:26 UTC.
+Artifact freeze recorded: 2026-09-16 22:26:26 UTC.
+Elapsed implementation/documentation effort: 480 seconds (8.00 minutes).
+Maintenance ceiling: 60 minutes; no repair interval used.
+Prior reading: approximately two minutes, completed by 22:18:04 UTC; exact start not clocked.
+Token usage and broker preparation cost: unknown.
+
+First maintenance build: passed, Zig 0.16.0 ReleaseSafe.
+Scheduler unit tests: 2/2 passed.
+Candidate black-box suite: 18/18 passed, 4.378 seconds reported by unittest.
+Actual predecessor-executable datadir upgrade: passed, not skipped.
+Test artifacts: /workspace/tmp/zig-v2-tests-7cse70mp
+Public smoke: passed.
+Zig formatting check: passed.
+ELF: Linux AArch64; dynamic supplied adapter, designated RocksDB, libc.
+Service verification import: rn_verify_v2 only.
+Schema: 1, with existing v1 receipts and pending recovery preserved.
+Scheduling: shared HHHN cycle, FIFO within priorities, four native workers.
+Journal: unchanged one-job sync/WAL admission and terminal WriteBatches.
+Optimization hypotheses: zero.
+External barrier/race/power-loss qualification: unclaimed; see HANDOFF.md.
+No evaluator feedback was used. Initial submission freezes on return.
+SHA256SUMS identifies the delivered artifacts.

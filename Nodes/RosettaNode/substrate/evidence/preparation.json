@@ -1,0 +1,8 @@
+{
+  "started_utc": "2026-09-16T19:31:32Z",
+  "status": "in_progress",
+  "gate_a": "not_passed",
+  "gate_b": "not_passed",
+  "candidate_launch_allowed": false,
+  "active_time_method": "Recorded intervals; unattended waits separate; model usage unknown until supplied by runtime"
+}

@@ -1,0 +1,128 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
+	"testing"
+)
+
+var fixture = Item{Hex: "01000000000000000000", Mode: "witness", Operation: "exact"}
+
+func preparedFixture(t *testing.T) *prepared {
+	t.Helper()
+	p, err := prepare([]Item{fixture})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestRequestValidation(t *testing.T) {
+	valid := `{"request":"opaque","op":"submit","id":"job-1_","items":[{"hex":"01000000000000000000","mode":"witness","operation":"exact"}]}`
+	q, err := parseRequest([]byte(valid))
+	if err != nil || q.ID != "job-1_" || q.Correlation != "opaque" {
+		t.Fatalf("%+v %v", q, err)
+	}
+	// Fixed digest vector: witness, exact, ten-byte little-endian length, payload.
+	digestInput := []byte{1, 1, 10, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	hash := sha256.Sum256(digestInput)
+	if q.Prepared.Digest != hex.EncodeToString(hash[:]) {
+		t.Fatal("wrong ordered admission digest")
+	}
+	bad := []string{
+		`null`, `[]`, valid + ` {}`, strings.Replace(valid, `"op":"submit"`, `"op":"submit","op":"status"`, 1),
+		strings.Replace(valid, `"request":"opaque"`, `"request":null`, 1),
+		strings.Replace(valid, `"id":"job-1_"`, `"id":"../job"`, 1),
+		strings.Replace(valid, `"id":"job-1_"`, `"id":7`, 1),
+		strings.Replace(valid, `"mode":"witness"`, `"mode":"WITNESS"`, 1),
+		strings.Replace(valid, `"operation":"exact"`, `"operation":null`, 1),
+		strings.Replace(valid, `"hex":"01000000000000000000"`, `"hex":"aB"`, 1),
+		strings.Replace(valid, `"hex":"01000000000000000000"`, `"hex":"a"`, 1),
+		strings.Replace(valid, `"items":`, `"Items":`, 1),
+		`{"request":"x","op":"evaluate","items":[]}`,
+		`{"request":"x","op":"evaluate","items":null}`,
+		strings.Replace(valid, `"op":"submit"`, `"op":"submit","priority":"urgent"`, 1),
+		strings.Replace(valid, `"op":"submit"`, `"op":"submit","priority":null`, 1),
+		strings.Replace(valid, "opaque", string([]byte{0xff}), 1),
+	}
+	for _, input := range bad {
+		if _, err := parseRequest([]byte(input)); err == nil {
+			t.Errorf("accepted invalid request: %.150s", input)
+		}
+	}
+	if _, err := parseRequest([]byte(strings.Replace(valid, `"op":"submit"`, `"op":"submit","future":{"reserved":true}`, 1))); err != nil {
+		t.Fatal("reserved field", err)
+	}
+	if _, err := prepare(make([]Item, 65)); err == nil {
+		t.Fatal("accepted 65 items")
+	}
+	if _, err := prepare([]Item{{Hex: strings.Repeat("00", maxBatchBytes+1), Mode: "legacy", Operation: "exact"}}); err == nil {
+		t.Fatal("accepted oversized arena")
+	}
+}
+
+func TestBoundedLines(t *testing.T) {
+	for _, n := range []int{0, 65536, maxRequest} {
+		line, err := readLine(bufio.NewReader(strings.NewReader(strings.Repeat(" ", n) + "\n")))
+		if err != nil || len(line) != n {
+			t.Fatalf("size %d: len=%d err=%v", n, len(line), err)
+		}
+	}
+	if _, err := readLine(bufio.NewReader(strings.NewReader(strings.Repeat(" ", maxRequest+1) + "\n"))); err != errLineTooLong {
+		t.Fatal("missing request limit", err)
+	}
+	if _, err := readLine(bufio.NewReader(strings.NewReader(`{"op":"shutdown"}`))); err == nil {
+		t.Fatal("accepted unterminated line")
+	}
+	r := bufio.NewReader(bytes.NewBufferString("one\ntwo\n"))
+	a, _ := readLine(r)
+	b, _ := readLine(r)
+	if string(a) != "one" || string(b) != "two" {
+		t.Fatal("lost framing")
+	}
+}
+
+func TestNativeV2(t *testing.T) {
+	prefix := fixture
+	prefix.Operation, prefix.Hex = "prefix", fixture.Hex+"aabb"
+	exactTrailing := prefix
+	exactTrailing.Operation = "exact"
+	empty := fixture
+	empty.Hex = ""
+	legacy := fixture
+	legacy.Mode = "legacy"
+	large := fixture
+	large.Hex = strings.Repeat("00", (4<<20)+1)
+	resource := fixture
+	// Complete fixed-width empty-script inputs: resource validation follows
+	// structural decoding, so a count header alone would merely be malformed.
+	resource.Hex = "01000000fd0110" + strings.Repeat("00", 41*4097) + "0000000000"
+	items := []Item{prefix, fixture, exactTrailing, empty, legacy, large, resource}
+	p, err := prepare(items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results, err := nativeEvaluate(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"0", "0", "1", "1", "0", "3", "2"}
+	payload, _ := hex.DecodeString(fixture.Hex)
+	first := sha256.Sum256(payload)
+	digest := sha256.Sum256(first[:])
+	for i, result := range results {
+		if result.Status != want[i] {
+			t.Fatalf("item %d: %+v", i, result)
+		}
+		if result.Status == "0" {
+			if result.Consumed != "10" || result.FullSize != "10" || result.StrippedSize != "10" || result.TxID != hex.EncodeToString(digest[:]) || result.WtxID != result.TxID {
+				t.Fatalf("success item %d: %+v", i, result)
+			}
+		} else if result.Consumed != "0" || result.FullSize != "0" || result.StrippedSize != "0" || result.TxID != zeroDigest || result.WtxID != zeroDigest {
+			t.Fatalf("error item %d not zeroed", i)
+		}
+	}
+}

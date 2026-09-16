@@ -1,0 +1,27 @@
+{
+  "schema": "rosettanode.substrate.measurement_control.v1",
+  "status": "passed",
+  "workload": "3",
+  "units": 10000,
+  "c_write_count": 20001,
+  "wal_sync_count": 20001,
+  "batch_size_histogram": {
+    "1": 20000
+  },
+  "evidence": ".local/benchmark-control/result.json",
+  "performance_ranking": false,
+  "additional_workloads": [
+    {
+      "workload": "1-64",
+      "status": "passed",
+      "units": 640000,
+      "lost_acknowledgements": 0
+    },
+    {
+      "workload": "4",
+      "status": "passed",
+      "units": 10000,
+      "lost_acknowledgements": 912
+    }
+  ]
+}

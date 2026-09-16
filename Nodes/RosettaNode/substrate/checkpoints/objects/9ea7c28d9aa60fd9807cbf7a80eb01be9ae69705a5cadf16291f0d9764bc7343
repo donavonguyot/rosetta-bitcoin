@@ -1,0 +1,211 @@
+package main
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"trial/reuse"
+)
+
+func TestGroupedAdmissionRecoveryAndCancellation(t *testing.T) {
+	path := t.TempDir() + "/db"
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { db.Close() }()
+	s, err := recoverState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := payloadFor(t, exact(emptyTX))
+	other := payloadFor(t, exact("02000000000000000000"))
+	requests := []admission{
+		{ID: "a", Payload: p, Priority: "normal"},
+		{ID: "a", Payload: p, Priority: "high"},
+		{ID: "a", Payload: other, Priority: "high"},
+		{ID: "b", Payload: p, Priority: "high"},
+	}
+	decisions, err := s.admitMany(requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"accepted", "existing", "conflict", "accepted"} {
+		if decisions[i].Status != want {
+			t.Fatalf("decision %d: %+v", i, decisions[i])
+		}
+	}
+	if decisions[0].Sequence != "1" || decisions[1].Sequence != "1" || decisions[3].Sequence != "2" {
+		t.Fatal("staged retry changed identity")
+	}
+	if s.metrics.WriteCalls != 2 || s.metrics.AdmissionGroups[2] != 1 {
+		t.Fatalf("not one admission batch: %+v", s.metrics)
+	}
+	if err = s.cancel(2, s.pending[2]); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	db, err = storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err = recoverState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.jobs != 2 || s.bytes != 20 || s.pending[1].Pending.Priority != "normal" || !s.pending[2].Cancelled {
+		t.Fatal("group admission or cancellation lost on recovery")
+	}
+	results, err := verify(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.pending[2].Done, s.pending[2].Results = true, results
+	if _, err = s.commitMany([]*Job{s.pending[2]}); err == nil {
+		t.Fatal("committed a hole")
+	}
+	if _, err = s.commitMany([]*Job{s.pending[1], s.pending[2]}); err == nil {
+		t.Fatal("committed unfinished job")
+	}
+	if s.metrics.WriteCalls != 0 || s.jobs != 2 || s.bytes != 20 {
+		t.Fatal("failed group changed accounting")
+	}
+	s.pending[1].Done, s.pending[1].Results = true, results
+	// Native completion does not prevent a subsequent durable cancellation.
+	if err = s.cancel(1, s.pending[1]); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.cancel(1, s.pending[1]); err != nil {
+		t.Fatal(err)
+	}
+	receipts, err := s.commitMany([]*Job{s.pending[1], s.pending[2]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range receipts {
+		if r.State != "cancelled" || len(r.Results) != 0 {
+			t.Fatalf("ignored cancellation: %+v", r)
+		}
+	}
+	if s.metrics.WriteCalls != 2 || s.metrics.SyncRequests != 2 || s.metrics.Cancellation != 1 || s.metrics.TerminalGroups[2] != 1 {
+		t.Fatalf("wrong durable write counts: %+v", s.metrics)
+	}
+	db.Close()
+	db, err = storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err = recoverState(db)
+	if err != nil || s.jobs != 0 || s.bytes != 0 || s.checkpoint != 2 {
+		t.Fatalf("terminal group recovery: %+v %v", s, err)
+	}
+}
+
+func TestGroupByteCapacity(t *testing.T) {
+	db, err := storage.Open(t.TempDir() + "/db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s, err := recoverState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Four complete maximum-size payloads share immutable Go backing, but
+	// have distinct durable records. The fifth must not reserve a sequence.
+	item := exact(strings.Repeat("00", 4<<20))
+	p := payloadFor(t, item, item, item, item)
+	requests := make([]admission, 5)
+	for i := range requests {
+		requests[i] = admission{ID: fmt.Sprintf("large%d", i), Payload: p, Priority: "normal"}
+	}
+	decisions, err := s.admitMany(requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4; i++ {
+		if decisions[i].Status != "accepted" {
+			t.Fatalf("member %d rejected: %+v", i, decisions[i])
+		}
+	}
+	if decisions[4].Status != "backpressure" || s.sequence != 4 || s.bytes != maxOutstandingBytes || s.jobs != 4 {
+		t.Fatal("group exceeded byte capacity or reserved rejected sequence")
+	}
+	if _, err = recoverState(db); err != nil {
+		t.Fatal(err)
+	}
+	// Empty-input jobs consume a job slot even at the exact byte boundary.
+	empty := payloadFor(t, exact(""))
+	decision, err := s.admitMany([]admission{{ID: "zero", Payload: empty, Priority: "high"}})
+	if err != nil || decision[0].Status != "accepted" || s.bytes != maxOutstandingBytes || s.jobs != 5 {
+		t.Fatalf("zero-byte admission: %+v %v", decision, err)
+	}
+}
+
+func TestGroupCapacityAndSizeBounds(t *testing.T) {
+	db, err := storage.Open(t.TempDir() + "/db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s, err := recoverState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := payloadFor(t, exact(emptyTX))
+	for start := 0; start < maxJobs; start += maxCommitGroup {
+		requests := make([]admission, maxCommitGroup)
+		for i := range requests {
+			requests[i] = admission{ID: fmt.Sprintf("j%d", start+i), Payload: p, Priority: "normal"}
+		}
+		if _, err = s.admitMany(requests); err != nil {
+			t.Fatal(err)
+		}
+	}
+	decisions, err := s.admitMany([]admission{
+		{ID: "excess", Payload: p, Priority: "normal"},
+		{ID: "j0", Payload: p, Priority: "high"},
+	})
+	if err != nil || decisions[0].Status != "backpressure" || decisions[1].Status != "existing" {
+		t.Fatalf("capacity/retry: %+v %v", decisions, err)
+	}
+	results, err := verify(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, j := range s.pending {
+		j.Done, j.Results = true, results
+	}
+	if s.jobs != 1024 || s.bytes != 10240 {
+		t.Fatal("completed jobs released charges early")
+	}
+	jobs := make([]*Job, maxCommitGroup+1)
+	for i := range jobs {
+		jobs[i] = s.pending[uint64(i)+1]
+	}
+	writes := s.metrics.WriteCalls
+	if _, err = s.commitMany(jobs); err == nil {
+		t.Fatal("accepted 33 terminal members")
+	}
+	if _, err = s.admitMany(make([]admission, maxCommitGroup+1)); err == nil {
+		t.Fatal("accepted 33 admission members")
+	}
+	if _, err = s.commitMany(nil); err == nil {
+		t.Fatal("accepted empty group")
+	}
+	if s.metrics.WriteCalls != writes {
+		t.Fatal("invalid group wrote")
+	}
+	if _, err = s.commitMany(jobs[:maxCommitGroup]); err != nil {
+		t.Fatal(err)
+	}
+	if s.jobs != 992 || s.bytes != 9920 || s.checkpoint != 32 {
+		t.Fatal("incorrect group accounting release")
+	}
+	if _, err = recoverState(db); err != nil {
+		t.Fatal(err)
+	}
+	if s.metrics.AdmissionGroups[32] != 32 || s.metrics.TerminalGroups[32] != 1 {
+		t.Fatal("missing maximum-size group histogram")
+	}
+}

@@ -1,0 +1,214 @@
+# Initial implementation record
+
+## Scope and elapsed effort
+
+Independent Zig lineage 2, fresh initial round. Reading began at
+2026-09-16 21:27:39 UTC and ended approximately 21:28:41 UTC (about 62 seconds).
+Implementation began at 21:29:10 UTC. Final submission timing is recorded in
+`SUBMISSION.txt`. The implementation ceiling was 90 minutes; finishing early.
+No predecessor handoff was present. No evaluator feedback, other agents,
+external source/network, node repository, or Bitcoin library was used.
+All compilation, executable inspection, and tests ran through `python3 run.py`.
+Host use was restricted to workspace file reads/edits and broker requests.
+Model token usage and broker preparation cost are not independently available;
+record them as unknown, not zero. Queue request/response files retain command
+attempts. Test directories and stderr logs are retained under `tmp/`.
+
+## Baseline design and hypotheses
+
+Baseline design choice: a single journal/protocol coordinator, four native worker
+threads, FIFO dispatch, admission-ordered terminal commitment, and one job per
+admission or terminal sync/WAL WriteBatch. The design aims to make durable
+cancellation and input ownership auditable. It is not a measured performance
+hypothesis or an optimization lane.
+
+Optimization hypotheses used: **zero**. No group commit, durability relaxation,
+kernel substitution, or rewrite was attempted. Do not count future group commit
+outside the optimization phase's maximum of three hypotheses.
+
+## Attempts and outcomes
+
+1. Read the supplied Markdown contracts and reuse helper. Used pinned Zig 0.16
+   source comments for JSON, threading, process startup, synchronization, and
+   socket APIs; read only the supplied adapter header and RocksDB C header.
+2. First compile failed translating fortified glibc fcntl inline declarations.
+   Scoped `_FORTIFY_SOURCE=0` to the C import. The actual linked adapter/RocksDB
+   shared objects are unchanged. Attribution: pinned Zig/C header API fluency.
+3. Second compile failed because GNU socket APIs import transparent union
+   arguments rather than plain pointer parameters. Selected the appropriate
+   sockaddr union members for bind and accept4. Attribution: C import fluency.
+4. Third compile succeeded; the supplied public smoke check passed.
+5. Initial 10-case black-box suite passed (1.362 seconds reported by unittest).
+   It included native differential checks, 200 admissions across eight clients,
+   recovery, validation, and four SIGKILL histories with independent inspection.
+6. Artifact inspection found that the broker lacks the `file` utility. Switched
+   to `readelf`; this was a tooling availability issue, not a service failure.
+   Initial `zig fmt --check` reported unformatted sources; formatted both source
+   files, rebuilt, and verified formatting subsequently.
+7. Expanded to 12 tests: forced the 1,024-job count bound using 1,800 pipelined
+   submissions and tested four acknowledged-cancellation crash/restart histories.
+   All passed (2.107 seconds reported by unittest).
+8. Extended native equivalence to a standalone zero-byte arena and nonempty
+   witness serialization, independently checking both double-SHA256 digest
+   orders. All 12 tests passed (2.383 seconds reported by unittest).
+9. Added nonreading-peer progress and evaluate/submit/status pipeline ordering
+   coverage. All 13 tests passed (2.973 seconds reported by unittest).
+10. Final code review identified that a maximum-size correlation plus pending
+    payload could exceed the original 64 MiB client output bound. Added request
+    read-side backpressure at 16 MiB queued output and increased the hard bound
+    to 128 MiB. This is a valid-response resource correctness fix, not a timed
+    optimization hypothesis. Rebuilt and reran both suites; final outcome is
+    recorded in `SUBMISSION.txt`.
+
+No functional test failure occurred in these completed suites. Failed compilation
+and tooling attempts above remain part of the record. These timings are test
+execution timings, not campaign workload performance measurements.
+
+## Validation mechanisms
+
+`tests/check.py` drives the public socket protocol and uses only Python's standard
+library. Native equivalence calls the supplied ABI v1 directly via ctypes.
+Database inspection opens the designated dynamic RocksDB C API read-only after
+stopping the writer. It verifies exact key membership, contiguous receipt/pending
+partitions, ID bijection, cancellation references, digests, and byte/job counters.
+Seeded recovery/corruption fixtures are written only while the service is stopped.
+Crashes use SIGKILL without service hooks or native interposition. Tests retain
+acknowledged admissions and cancellation evidence across restarts.
+
+`readelf` confirms ELF64/AArch64, dynamic dependency on `/adapter/librosetta.so`
+and `librocksdb.so.7.8`, and the adapter runtime path. `ldd` resolves those pinned
+libraries. Final source, executable, and document hashes are in `SHA256SUMS`.
+
+## Evidence limits and interpretation
+
+- No externally interposed entrypoint/write barriers were supplied or added.
+  The contract's exact barrier/crash/concurrency qualification remains external.
+- ReleaseSafe bounds/overflow checks are enabled. No native ASan, whole-service
+  race detector, or allocator-failure injection was run. No equivalence to Go
+  race checking, exhaustive race proof, or power-loss guarantee is claimed.
+- Actual storage write errors and native allocation failures were not injected.
+  Both error paths stop before acknowledging/terminalizing failed transitions.
+- Count backpressure was observed. Byte-accounting invariants and aggregate
+  request rejection were tested, but simultaneous admitted-byte saturation was
+  not artificially held in place.
+- The contract freeze manifest was absent; preparation prose was treated as
+  context under the user's explicit implementation-phase authorization.
+- Ambiguous wire details and chosen behavior are documented in HANDOFF.md.
+- Host Python emits sandbox/xcrun cache warnings while launching the broker.
+  Broker commands completed despite those warnings; no host build was performed.
+
+# Maintenance ABI v2 record
+
+## Scope, authorization and baseline
+
+Implementation began at 2026-09-16 22:18:26 UTC after the user's explicit
+maintenance instruction. Reading completed before this phase, by 22:18:04 UTC,
+within the ten-minute allowance (roughly two minutes; exact start was not clocked).
+The maintenance ceiling is 60 minutes. Final completion time is in
+`SUBMISSION.txt`. Token usage and broker preparation cost remain unknown.
+
+The initial implementation history above is retained verbatim. Before editing,
+its executable, production sources, tests, build recipe and handoff/experiment/
+submission/hash records were copied to `tmp/maintenance-baseline/`. The new
+implementation preserves the existing coordinator/worker architecture and
+journal, rather than rewriting the service. No evaluator feedback or evidence
+from another workspace, repository, agent, network or Bitcoin library was used.
+Host commands only read/edit workspace artifacts and submit broker requests;
+builds, tests, offline library reads and ELF inspection used `python3 run.py`.
+
+## Maintenance design and hypotheses
+
+Required semantic changes, not optimization hypotheses:
+
+- Native v2 arena offsets with u64 bitmap/per-item-status consistency checking.
+- Explicit work priority used by parsing, pending serialization and recovery.
+- Two FIFO queues under the existing pool mutex, with one HHHN cycle. Single
+  nonempty queues do not advance it. Full recovery backlog precedes worker start.
+- Schema 1, digest definition, native input ownership, four worker slots,
+  admission-order terminal commitment and all sync/WAL transitions preserved.
+
+Optimization hypotheses used: **zero**. No group commit, kernel replacement,
+durability relaxation or performance tuning was attempted in maintenance.
+
+## Attempts and outcomes
+
+1. Read all supplied Markdown, predecessor handoff and reuse code. Read pinned
+   Zig JSON/arena/atomic/thread source comments and the adapter header through
+   the broker. An initial documentation command used the nonexistent lowercase
+   `heap/arena_allocator.zig` path and exited 2 after returning the other requested
+   files. Located and read `heap/ArenaAllocator.zig`; this was API/document-path
+   familiarity, not an implementation failure. Repeated host xcrun cache warnings
+   were nonfatal and are retained in broker-launch output.
+2. Added `scheduler.zig` and changed only priority/native/recovery integration in
+   `main.zig`. The first maintenance build succeeded in ReleaseSafe. Both new
+   scheduler unit tests passed. They exercise repeated HHHN dispatch/FIFO and all
+   four cycle positions across empty and single-queue dispatches for both queues.
+3. Expanded the black-box suite from 13 to 18 cases and updated existing
+   concurrent-client, process-crash and acknowledged-cancellation histories to
+   include both priorities. All 18 cases passed in 4.378 seconds reported by
+   unittest. Artifacts: `/workspace/tmp/zig-v2-tests-7cse70mp`.
+4. Native comparisons used only the supplied adapter. V2 matched v1 for all-
+   success, all-failure, mixed, variable-offset/empty items and highest-bit-63
+   batches. Service evaluate matched the independent v1 results with high
+   priority. Existing witness/digest/resource-limit tests remained in the suite.
+5. Actual v1 executable upgrade passed: create terminal history, accumulate and
+   crash with pending normal jobs, independently inspect, add a valid durable
+   cancellation fixture while stopped, restart as v2, and verify receipt bytes,
+   ID indexes, admission sequence, cancellation and immutable retries. Existing
+   tests separately exercised acknowledged cancellation across crashes.
+6. Mixed-priority seeded recovery and invalid persisted-priority rejection passed.
+   Inspector checks contiguous receipt/pending partitions, ID bijection, durable
+   intent references, payload digest and outstanding counters after writer stop.
+   Terminal receipts and the real v1 history were retained byte-for-byte.
+7. Public smoke passed. Zig formatting checks passed. `readelf` confirmed an
+   AArch64 ELF, the designated dynamic adapter/RocksDB dependencies and a v2-only
+   verification import. `build.sh` and `service` retained executable permissions.
+
+No maintenance compile, functional-test or scheduler-test failure occurred.
+No repair interval was used. There is no evaluator semantic-family score yet;
+passing candidate tests is not an assertion of external qualification. Tests
+were not repeated after their successful run because subsequent edits were
+handoff/experiment/submission documentation only.
+
+## Diff footprint
+
+Measured against `tmp/maintenance-baseline` using line-based SequenceMatcher
+with autojunk disabled; blank lines count, move detection is not attempted:
+
+| Area | Added lines | Removed lines |
+|---|---:|---:|
+| main.zig production | 31 | 23 |
+| scheduler.zig production | 54 | 0 |
+| scheduler.zig embedded tests | 52 | 0 |
+| tests/check.py | 141 | 13 |
+| storage.zig and build.sh | 0 | 0 |
+| Production total | 85 | 23 |
+| Test total | 193 | 13 |
+
+Documentation is excluded from these code totals. Generated `service` changed
+from 3,940,776 to 3,948,816 bytes (+8,040). Build cache, test datadirs, queue logs
+and preserved predecessor evidence are generated artifacts, not production code.
+The supplied reuse helper and contracts were unchanged. Footprint measures
+invasiveness only, not quality or performance.
+
+## Ambiguities and remaining evidence limits
+
+Evaluate participates in the shared priority cycle. Already-cancelled queued
+work consumes a selection turn even when it skips the native call. The shared
+cycle starts high on restart. These are explicit decisions where prose leaves
+behavior unspecified; no user clarification was requested. Bitmap mapping was
+checked empirically against the supplied v1/v2 adapter, without inspecting its
+implementation or substituting kernel behavior.
+
+Dispatch is linearized at mutex-protected queue selection. Native calls execute
+outside that lock and may enter/finish in another order under OS scheduling.
+No external entry/write barrier interposer or scheduler hook was supplied or
+added. Exact externally held concurrency and cancellation-boundary qualification
+remain unclaimed. Scheduler unit evidence is separate from native-entry evidence.
+The predecessor's limitations on whole-service race proof, native diagnostics,
+allocation/storage failure injection, simultaneous byte-bound saturation and
+power-loss guarantees still apply. Process crashes establish only the tested
+histories. Test elapsed times are not workload performance measurements.
+
+The preparation/gate manifest remains absent. The user explicitly authorized
+maintenance implementation; no gate/evaluator evidence was accessed or claimed.

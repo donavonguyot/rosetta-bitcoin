@@ -1,0 +1,29 @@
+import ctypes as c
+
+lib = c.CDLL('/adapter/librosetta.so')
+class Item(c.Structure):
+    _fields_ = [('data', c.c_void_p), ('size', c.c_uint64), ('witness', c.c_uint32), ('exact', c.c_uint32)]
+class Result(c.Structure):
+    _fields_ = [('status', c.c_uint64), ('consumed', c.c_uint64), ('full', c.c_uint64), ('stripped', c.c_uint64), ('txid', c.c_ubyte*32), ('wtxid', c.c_ubyte*32)]
+lib.rn_arena_create.argtypes = [c.c_void_p,c.c_uint64]
+lib.rn_arena_create.restype = c.c_void_p
+lib.rn_arena_data.argtypes = [c.c_void_p]
+lib.rn_arena_data.restype = c.c_void_p
+lib.rn_arena_destroy.argtypes = [c.c_void_p]
+lib.rn_verify_v1.argtypes = [c.c_void_p,c.POINTER(Item),c.c_uint64,c.POINTER(Result)]
+for sizes in ([10], [0], [4*1024*1024+1], [4*1024*1024]*4+[10], [10]*65):
+    data = c.create_string_buffer(sum(sizes) or 1)
+    arena = lib.rn_arena_create(data, sum(sizes))
+    if not arena:
+        print(sizes, 'arena null', flush=True)
+        continue
+    base=lib.rn_arena_data(arena)
+    items=(Item*len(sizes))()
+    offset=0
+    for i,n in enumerate(sizes):
+        items[i]=Item(base+offset,n,1,1)
+        offset+=n
+    out=(Result*len(sizes))()
+    ret=lib.rn_verify_v1(arena,items,len(sizes),out)
+    print(sizes, 'return',ret,'statuses',[r.status for r in out],flush=True)
+    lib.rn_arena_destroy(arena)

@@ -1,0 +1,126 @@
+# Rust lineage 2 — maintenance v2 initial submission
+
+## Delivery and operation
+
+Delivered `build.sh`, Linux AArch64 ELF `service`, Rust source, pinned Cargo
+dependencies, tests including an actual v1 datadir fixture, and `EXPERIMENTS.md`.
+Build/test only through the pinned Linux broker:
+
+```sh
+python3 run.py './build.sh' 300
+python3 run.py './tests/run.sh' 300
+```
+
+Launch: `service DATADIR SOCKET_PATH`, with a fresh socket path. Native RocksDB
+holds the exclusive writer lock. Shutdown drains persistent jobs and evaluations,
+flushes queued responses where possible, joins workers, closes DB and exits zero.
+The service dynamically imports `rn_verify_v2`, with no `rn_verify_v1` import,
+and resolves the supplied `/adapter/librosetta.so` and dynamic RocksDB 7.8.
+
+## Maintenance changes
+
+- `native.rs`: ABI v2 `repr(C)` item uses u64 offset/size and u32 witness/exact.
+  Input offsets already existed in the predecessor's contiguous input layout.
+  Each worker owns its arena through native return and borrows the Rust input
+  throughout. Result storage and a u64 success bitmap belong to that worker.
+  Each used bitmap bit is checked against the corresponding result's status;
+  item 63 is handled without shifting by 64. Per-item wire results are unchanged.
+  There are no raw pointers sent across threads or unsafe Send/Sync assertions.
+- `scheduler.rs`: two FIFO queues with a coordinator-owned H,H,H,N cycle.
+  Both queues having eligible work advances the cycle by one dispatch. A single
+  eligible queue or idle interval leaves it unchanged. Cancelled/stale heads
+  are discarded before determining queue availability and consume no turn.
+  Four encoding slots remain; workers may complete in any order.
+- `wire.rs`, `main.rs`, `state.rs`: typed high/normal priority, default normal,
+  stored at admission. Priority is excluded from content identity; retries
+  neither change priority nor move jobs within a queue. Recovery validates the
+  enum and restores each queue in admission order, skipping recovered cancels.
+
+## Durability and v1 compatibility
+
+Schema remains exactly version 1. Actual predecessor pending records already
+carry normal priority and are resumed through ABI v2. Existing high/normal v2
+pending priorities survive restart. Cancellation intents and terminal receipts
+are retained, not rebuilt; incompatible versions and invalid state fail startup.
+The coordinator still validates the entire documented keyspace and accounting
+before opening its listener. Initialization, admissions, cancellations and
+terminals retain the predecessor's write policy.
+
+Each admission is one atomic synchronous WAL-backed WriteBatch containing full
+payload, metadata, ID index, sequence and accounting. Cancellation intent is
+synchronous before acknowledgment. Terminal writes remain one job per batch,
+strictly checkpoint+1, atomically writing the receipt, removing pending/cancel
+keys, releasing accounting, and advancing the checkpoint. ID indexes remain.
+High-priority completion cannot bypass an earlier admission's terminal write.
+All queued, running and completed-but-uncommitted work retains admission budgets.
+
+Terminal commitment begins at C write `call_entry`, not the subsequent
+`write_enter` barrier. The single coordinator permits no intervening completed
+request between selecting disposition and entering that write. A cancellation
+acknowledged beforehand is honored; overlapping cancellation can observe the
+terminal receipt afterward. A cancelled running job keeps its arena/input and
+accounting until native return and durable terminalization.
+
+Storage and transport implementations are unchanged: sync=true, WAL enabled,
+compression off, 128 MiB cache, 64 MiB write buffer, two buffers/background jobs;
+eight clients, 40 MiB request framing, bounded independent socket writers,
+admission response before terminal event, best-effort notifications, status for
+recovery, disconnect never cancels. No group commit or native kernel changes.
+
+Allocation/native execution failure returns execution_failure for evaluate.
+For acknowledged work it stops with diagnostics while preserving pending state.
+Returned RocksDB write failure stops without acknowledgment or another write.
+The file-size-limit test can still hit a native RocksDB assertion before the
+service's returned-error handling; those paths must not be conflated.
+
+## Validation
+
+Final full broker run passed the release build, **8 Rust unit tests**, strict
+Clippy (`--all-targets -- -D warnings`), **21 integration tests**, and public
+smoke. The integration suite completed in 9.108 seconds. ELF header, native
+imports, dynamic library resolution, and executable entrypoints were checked.
+
+New evidence includes:
+
+- ABI v2 layout, direct v1/v2 adapter parity, all/none/first/last/alternating
+  success bitmaps for 1, 2, 63 and 64 items, varying offsets and prefix lengths,
+  and persistent execution with bit 63 set.
+- Weighted FIFO selection, single-queue and idle cycle preservation, cancelled
+  heads and stale entries. A recovered-state test checks expected mixed-priority
+  selection, high completions blocked behind sequence 1, unchanged outstanding
+  accounting until commit, and exact sequential terminal writes/cancel cleanup.
+- Live high/default/normal admission, priority-immutable retries, cancellation,
+  crash recovery, invalid-priority rejection without rebuilding storage.
+- Migration from the unchanged predecessor executable's actual RocksDB datadir:
+  one existing receipt, three pending jobs and one cancel intent. Hashes verify
+  the fixture; v2 preserves the old receipt bytes/ID indexes, resumes work,
+  honors cancellation, accepts new high work and survives another restart.
+
+Inherited coverage still passes: native/resource/input boundaries, digests,
+idempotency/conflicts, client caps/order/disconnects, full admission budgets,
+running cancellation/draining, schema/lock rejection, repeated crashes, and
+native storage failure. Independent DB inspection occurs only after writer exit.
+The fixture archive and capture provenance are documented in tests/fixtures/.
+
+## Interpretations and evidence limits
+
+- Optional evaluation priority uses the same queues and four slots as persistent
+  submissions. Evaluations remain nonpersistent. The scheduling cycle is process
+  state and starts at the first H turn after restart; no disk key was added.
+- The success bitmap is ABI metadata, not a new wire or receipt field. Used bits
+  are validated; unused bits have no effect. Native tests observed bit i mapping
+  to item i and clearing unused bits in the pinned adapter.
+- Dispatch order means coordinator selection/assignment. Concurrent native entry
+  and completion timestamps depend on worker scheduling. No service barriers or
+  scheduler instrumentation were added; external call-entry traces were not run.
+- No native ASan, whole-service TSan/race proof, forced arena-allocation failure,
+  power-loss durability, campaign gate qualification, or performance conclusion
+  is claimed. The supplied freeze/gate evidence is absent. Explicit user
+  authorization permitted implementation; it does not supply that evidence.
+
+All attempts, including two test-infrastructure failures before the successful
+run, are recorded in `EXPERIMENTS.md`; raw broker output is retained in `queue/`.
+No evaluator, external source, network, Bitcoin library, other workspace or agent
+was used. This is the initial maintenance submission before evaluator feedback;
+no evaluator repair phase has been used. Effort and diff footprint are recorded
+in `EXPERIMENTS.md`. Prior handoff/source snapshots remain in tmp/pre-maintenance.

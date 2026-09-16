@@ -1,0 +1,123 @@
+# Rust maintenance submission — ABI v2
+
+Upgraded the predecessor in place to ABI v2 and deterministic high/normal
+scheduling. Schema 1 and v1 datadirs are preserved. The delivered Linux AArch64
+`service` uses four encoding workers and baseline one-job admission/terminal
+WriteBatches. No group commit, replacement kernel, or runtime test hooks.
+
+## Build and run
+
+All toolchain and test execution uses the pinned Linux broker:
+
+```sh
+python3 run.py './build.sh' 300
+python3 run.py './tests/run.sh' 300
+python3 run.py 'V1_SERVICE_PATH=/workspace/tmp/predecessor/service ./tests/run.sh' 300
+python3 run.py './service DATADIR SOCKET_PATH'
+```
+
+The third command includes the actual predecessor upgrade lane. Its v1 executable
+is preserved at `tmp/predecessor/service`; without V1_SERVICE_PATH that one test
+is explicitly skipped. All other tests are self-contained within the supplied
+infrastructure. The original source, tests, handoff and experiment record are also
+preserved under `tmp/predecessor/`.
+
+`build.sh`, Cargo.toml, Cargo.lock, storage, transport and SHA-256 implementation
+are byte-identical to the predecessor. Cargo.lock also matches reuse/Cargo.lock.
+The executable dynamically imports rn_verify_v2, not rn_verify_v1, and links the
+supplied /adapter/librosetta.so and designated librocksdb.so.7.8 with /adapter
+runpath. No host compilation or external source/dependency fetch was used.
+
+## Implementation and ownership
+
+- `src/native.rs`: C-compatible v2 items use arena-relative uint64 offsets and
+  sizes. A worker retains source bytes, arena, item/result arrays and bitmap
+  until verification returns. Native bit i is checked against status == 0 for
+  item i; all 64 bits are supported without shifting by 64. Wire results remain
+  the specified per-item status/sizes/digests; there is no added bitmap field.
+- `src/protocol.rs`: typed high/normal priority, default normal on submit and
+  missing legacy pending fields. Invalid priorities are rejected. Priority is
+  not in the payload digest; retry never changes admission metadata.
+- `src/scheduler.rs`: two FIFO queues owned by the state thread. With both
+  nonempty, dispatch high/high/high/normal cyclically. A single nonempty queue
+  dispatches without advancing the cycle. Empty periods also preserve phase.
+- `src/main.rs`: recovered jobs enter their priority queues in sequence order;
+  durable queued cancellations do not enter the encoder. Newly accepted
+  cancellations remove queued entries after their intent write succeeds, without
+  consuming a dispatch turn. Four worker slots and admission-ordered terminal
+  commitment are retained.
+
+The state/storage owner remains the only database writer. Admission stores the
+complete payload/index/accounting before acknowledgment. Cancellation writes
+intent with sync/WAL before acknowledgment. Running cancellations await worker
+return, keeping arenas alive. Completed out-of-order work stays charged until
+its contiguous terminal commit. Receipts, pending/cancel removal, accounting and
+checkpoint advance atomically; ID indexes remain retained. C write call_entry
+is the terminal boundary, not the later barrier before the underlying write.
+
+Recovery validates existing schema, checkpoint, indexes, payload digest and
+accounting, without rebuilding or rewriting old receipts. V1 jobs are normal;
+v2 priorities are retained. Unsupported versions and invalid stored priorities
+fail explicitly. Storage and acknowledged-job arena failures retain the last
+complete durable state and do not produce false acknowledgments/receipts.
+
+## Validation and retained evidence
+
+Final full suite passed before any evaluator feedback:
+
+- Five Rust tests: published SHA vectors; FIFO 3:1 scheduling; every cycle phase
+  through single-queue/empty intervals; cancellation removal; state recovery and
+  four-slot dispatch with out-of-order completion, running cancellation, durable
+  ordered commits and independent stopped-writer key checks.
+- Twelve inherited integration tests, now using mixed priorities in concurrency
+  and crash streams. Coverage retains eight clients, admission bounds, framing,
+  slow readers, exclusive lock, cancellation/restart, independent durable-state
+  inspection, and draining shutdown. Final run: 7.160 seconds.
+- Five v2 integration tests: 192 batches spanning every count 1..64 compared with
+  both supplied native ABIs; zero-byte arenas/all failures/all successes/mixed
+  outcomes; retry identity; mixed schema-1 recovery; invalid priority rejection;
+  and actual predecessor-produced datadir upgrade. Final run: 1.363 seconds.
+- The actual v1 upgrade asserted retained pending work AND a durable cancellation
+  intent before v2 startup. It checked terminal outcomes, old receipt bytes and
+  ID indexes, schema retention and subsequent high-priority admission.
+- Public smoke, pinned cargo fmt --check, and cargo clippy --offline --locked
+  --all-targets -- -D warnings passed. ELF architecture, permissions, dynamic
+  imports/runpath, v2-only verifier and dependency preservation passed audit.
+
+`tmp/maintenance-diff.json` records source/test/generated diff footprint versus
+this workspace's predecessor: production +120/-34 lines; test code +435/-13
+(including cfg(test) sections); executable 989,216 -> 996,728 bytes. Documentation
+and retained evidence are separate from those code totals. Counts measure scope,
+not quality. `tmp/maintenance-artifacts.json` records final file hashes and timing.
+Broker requests/responses, crash databases/logs and previous attempts are retained.
+
+## Assumptions and evidence limits
+
+Cycle starts at the first high turn on process startup; the contract specifies
+no persistent scheduler-phase key. Cancelled waiting jobs are not dispatches and
+consume no turns. Nonpersistent evaluate work shares the normal queue. Missing
+legacy priority means normal; explicit null/unknown priority is invalid.
+These resolve prose ambiguities without changing the prescribed schema.
+
+The predecessor's reserved-field, framing, and retry-during-drain interpretations
+remain: reject unknown reserved fields, exclude newline from the 40 MiB text
+bound, retain existing/conflict responses for retries during drain. The bitmap
+convention was checked against the supplied native adapter, including bit 63.
+
+No evaluator, other workspace, repository source outside this workspace, network,
+Bitcoin library, native sanitizer variant, whole-service race detector or fault
+injection infrastructure was accessed. Tests demonstrate sampled process-crash
+recovery and deterministic owner dispatch, not exhaustive interleavings or
+power-loss behavior. Native allocation/storage-error paths were reviewed but
+not fault-injected. No gate/freeze execution or performance qualification is
+claimed. No optimization hypotheses or group commit were used.
+
+## Effort and freeze
+
+Reading finished early within its separate ten-minute allowance. Implementation
+started at 2026-09-16 22:15:54 UTC and finished in approximately ten minutes,
+within the 60-minute ceiling. The artifact manifest contains the final audit
+clock and elapsed time. Exact token usage and broker overhead are unavailable.
+One test-packaging compile failure was fixed during implementation; no repair or
+evaluator-feedback round occurred. EXPERIMENTS.md retains the attempt record.
+This initial maintenance submission freezes on return.

@@ -1,0 +1,239 @@
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"strconv"
+	"unicode/utf8"
+)
+
+const (
+	maxJSON             = 40 << 20
+	maxBatch            = 64
+	maxBatchBytes       = 16 << 20
+	maxJobs             = 1024
+	maxOutstandingBytes = 64 << 20
+	workerCount         = 4
+)
+
+type Item struct {
+	Hex       string `json:"hex"`
+	Mode      string `json:"mode"`
+	Operation string `json:"operation"`
+}
+type Payload struct {
+	Items  []Item
+	Raw    []byte
+	Digest string
+}
+type Request struct {
+	Correlation string
+	Op          string
+	ID          string
+	Priority    string
+	Payload     *Payload
+}
+type Response struct {
+	Request  string    `json:"request"`
+	Status   string    `json:"status"`
+	Sequence string    `json:"sequence,omitempty"`
+	Job      any       `json:"job,omitempty"`
+	Results  *[]Result `json:"results,omitempty"`
+}
+
+func decimal(n uint64) string { return strconv.FormatUint(n, 10) }
+func parseDecimal(s string) (uint64, error) {
+	n, err := strconv.ParseUint(s, 10, 64)
+	if err != nil || decimal(n) != s {
+		return 0, fmt.Errorf("invalid decimal %q", s)
+	}
+	return n, nil
+}
+func validID(s string) bool {
+	if len(s) < 1 || len(s) > 64 {
+		return false
+	}
+	for _, c := range []byte(s) {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+func lowerHex(s string) bool {
+	if len(s)%2 != 0 {
+		return false
+	}
+	for _, c := range []byte(s) {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// Unknown fields are reserved and ignored. Known fields must have exact names
+// and types. Duplicate object keys are rejected rather than silently merged.
+func object(raw []byte) (map[string]json.RawMessage, error) {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	tok, err := d.Token()
+	if err != nil || tok != json.Delim('{') {
+		return nil, errors.New("expected object")
+	}
+	fields := make(map[string]json.RawMessage)
+	for d.More() {
+		tok, err = d.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, ok := tok.(string)
+		if !ok {
+			return nil, errors.New("expected key")
+		}
+		if _, exists := fields[key]; exists {
+			return nil, errors.New("duplicate key")
+		}
+		var value json.RawMessage
+		if err = d.Decode(&value); err != nil {
+			return nil, err
+		}
+		fields[key] = value
+	}
+	if _, err = d.Token(); err != nil {
+		return nil, err
+	}
+	if _, err = d.Token(); err != io.EOF {
+		return nil, errors.New("trailing JSON")
+	}
+	return fields, nil
+}
+func stringField(m map[string]json.RawMessage, key string) (string, error) {
+	raw, ok := m[key]
+	if !ok || len(raw) < 2 || raw[0] != '"' {
+		return "", fmt.Errorf("missing or non-string %s", key)
+	}
+	var s string
+	err := json.Unmarshal(raw, &s)
+	return s, err
+}
+func makePayload(items []Item) (*Payload, error) {
+	if len(items) == 0 || len(items) > maxBatch {
+		return nil, errors.New("batch item count")
+	}
+	total := 0
+	for _, item := range items {
+		if item.Mode != "legacy" && item.Mode != "witness" {
+			return nil, errors.New("mode")
+		}
+		if item.Operation != "prefix" && item.Operation != "exact" {
+			return nil, errors.New("operation")
+		}
+		if !lowerHex(item.Hex) {
+			return nil, errors.New("hex")
+		}
+		total += len(item.Hex) / 2
+		if total > maxBatchBytes {
+			return nil, errors.New("batch bytes")
+		}
+	}
+	p := &Payload{Items: items, Raw: make([]byte, total)}
+	h := sha256.New()
+	offset := 0
+	for _, item := range items {
+		var header [10]byte
+		if item.Mode == "witness" {
+			header[0] = 1
+		}
+		if item.Operation == "exact" {
+			header[1] = 1
+		}
+		n := len(item.Hex) / 2
+		binary.LittleEndian.PutUint64(header[2:], uint64(n))
+		h.Write(header[:])
+		dst := p.Raw[offset : offset+n]
+		if _, err := hex.Decode(dst, []byte(item.Hex)); err != nil {
+			return nil, err
+		}
+		h.Write(dst)
+		offset += n
+	}
+	p.Digest = hex.EncodeToString(h.Sum(nil))
+	return p, nil
+}
+func decodeRequest(line []byte) (Request, error) {
+	var r Request
+	if len(line) > maxJSON || !utf8.Valid(line) {
+		return r, errors.New("request text")
+	}
+	fields, err := object(line)
+	if err != nil {
+		return r, err
+	}
+	r.Correlation, err = stringField(fields, "request")
+	if err != nil {
+		return r, err
+	}
+	r.Op, err = stringField(fields, "op")
+	if err != nil {
+		return r, err
+	}
+	switch r.Op {
+	case "submit", "status", "cancel":
+		r.ID, err = stringField(fields, "id")
+		if err != nil || !validID(r.ID) {
+			return r, errors.New("id")
+		}
+	case "evaluate", "shutdown":
+	default:
+		return r, errors.New("op")
+	}
+	if r.Op != "submit" && r.Op != "evaluate" {
+		return r, nil
+	}
+	r.Priority = "normal"
+	if _, ok := fields["priority"]; ok {
+		priority, e := stringField(fields, "priority")
+		if e != nil || (priority != "normal" && priority != "high") {
+			return r, errors.New("priority")
+		}
+		r.Priority = priority
+	}
+	raw := fields["items"]
+	if len(raw) == 0 || raw[0] != '[' {
+		return r, errors.New("items")
+	}
+	var values []json.RawMessage
+	if err = json.Unmarshal(raw, &values); err != nil {
+		return r, err
+	}
+	if len(values) == 0 || len(values) > maxBatch {
+		return r, errors.New("batch item count")
+	}
+	items := make([]Item, len(values))
+	for i, value := range values {
+		m, e := object(value)
+		if e != nil {
+			return r, e
+		}
+		items[i].Hex, e = stringField(m, "hex")
+		if e != nil {
+			return r, e
+		}
+		items[i].Mode, e = stringField(m, "mode")
+		if e != nil {
+			return r, e
+		}
+		items[i].Operation, e = stringField(m, "operation")
+		if e != nil {
+			return r, e
+		}
+	}
+	r.Payload, err = makePayload(items)
+	return r, err
+}

@@ -1,0 +1,115 @@
+{
+  "schema": "rosettanode.substrate.priority_probe.v1",
+  "status": "passed",
+  "results": [
+    {
+      "variant": "dummy_v2",
+      "mixed": false,
+      "observed": [
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "expected": [
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "intended_failure": false,
+      "passed": true,
+      "barriers_external": true
+    },
+    {
+      "variant": "dummy_v2",
+      "mixed": true,
+      "observed": [
+        10,
+        11,
+        12,
+        20,
+        13,
+        14,
+        15,
+        21
+      ],
+      "expected": [
+        10,
+        11,
+        12,
+        20,
+        13,
+        14,
+        15,
+        21
+      ],
+      "intended_failure": false,
+      "passed": true,
+      "barriers_external": true
+    },
+    {
+      "variant": "dummy_starve",
+      "mixed": false,
+      "observed": [
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "expected": [
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27
+      ],
+      "intended_failure": false,
+      "passed": true,
+      "barriers_external": true
+    },
+    {
+      "variant": "dummy_starve",
+      "mixed": true,
+      "observed": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        20,
+        21
+      ],
+      "expected": [
+        10,
+        11,
+        12,
+        20,
+        13,
+        14,
+        15,
+        21
+      ],
+      "intended_failure": true,
+      "passed": true,
+      "barriers_external": true
+    }
+  ],
+  "candidate_launch_allowed": false
+}

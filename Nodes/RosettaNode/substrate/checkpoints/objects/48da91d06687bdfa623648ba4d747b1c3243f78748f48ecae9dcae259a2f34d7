@@ -1,0 +1,98 @@
+# Initial implementation record
+
+## Scope and elapsed effort
+
+Independent Zig lineage 2, fresh initial round. Reading began at
+2026-09-16 21:27:39 UTC and ended approximately 21:28:41 UTC (about 62 seconds).
+Implementation began at 21:29:10 UTC. Final submission timing is recorded in
+`SUBMISSION.txt`. The implementation ceiling was 90 minutes; finishing early.
+No predecessor handoff was present. No evaluator feedback, other agents,
+external source/network, node repository, or Bitcoin library was used.
+All compilation, executable inspection, and tests ran through `python3 run.py`.
+Host use was restricted to workspace file reads/edits and broker requests.
+Model token usage and broker preparation cost are not independently available;
+record them as unknown, not zero. Queue request/response files retain command
+attempts. Test directories and stderr logs are retained under `tmp/`.
+
+## Baseline design and hypotheses
+
+Baseline design choice: a single journal/protocol coordinator, four native worker
+threads, FIFO dispatch, admission-ordered terminal commitment, and one job per
+admission or terminal sync/WAL WriteBatch. The design aims to make durable
+cancellation and input ownership auditable. It is not a measured performance
+hypothesis or an optimization lane.
+
+Optimization hypotheses used: **zero**. No group commit, durability relaxation,
+kernel substitution, or rewrite was attempted. Do not count future group commit
+outside the optimization phase's maximum of three hypotheses.
+
+## Attempts and outcomes
+
+1. Read the supplied Markdown contracts and reuse helper. Used pinned Zig 0.16
+   source comments for JSON, threading, process startup, synchronization, and
+   socket APIs; read only the supplied adapter header and RocksDB C header.
+2. First compile failed translating fortified glibc fcntl inline declarations.
+   Scoped `_FORTIFY_SOURCE=0` to the C import. The actual linked adapter/RocksDB
+   shared objects are unchanged. Attribution: pinned Zig/C header API fluency.
+3. Second compile failed because GNU socket APIs import transparent union
+   arguments rather than plain pointer parameters. Selected the appropriate
+   sockaddr union members for bind and accept4. Attribution: C import fluency.
+4. Third compile succeeded; the supplied public smoke check passed.
+5. Initial 10-case black-box suite passed (1.362 seconds reported by unittest).
+   It included native differential checks, 200 admissions across eight clients,
+   recovery, validation, and four SIGKILL histories with independent inspection.
+6. Artifact inspection found that the broker lacks the `file` utility. Switched
+   to `readelf`; this was a tooling availability issue, not a service failure.
+   Initial `zig fmt --check` reported unformatted sources; formatted both source
+   files, rebuilt, and verified formatting subsequently.
+7. Expanded to 12 tests: forced the 1,024-job count bound using 1,800 pipelined
+   submissions and tested four acknowledged-cancellation crash/restart histories.
+   All passed (2.107 seconds reported by unittest).
+8. Extended native equivalence to a standalone zero-byte arena and nonempty
+   witness serialization, independently checking both double-SHA256 digest
+   orders. All 12 tests passed (2.383 seconds reported by unittest).
+9. Added nonreading-peer progress and evaluate/submit/status pipeline ordering
+   coverage. All 13 tests passed (2.973 seconds reported by unittest).
+10. Final code review identified that a maximum-size correlation plus pending
+    payload could exceed the original 64 MiB client output bound. Added request
+    read-side backpressure at 16 MiB queued output and increased the hard bound
+    to 128 MiB. This is a valid-response resource correctness fix, not a timed
+    optimization hypothesis. Rebuilt and reran both suites; final outcome is
+    recorded in `SUBMISSION.txt`.
+
+No functional test failure occurred in these completed suites. Failed compilation
+and tooling attempts above remain part of the record. These timings are test
+execution timings, not campaign workload performance measurements.
+
+## Validation mechanisms
+
+`tests/check.py` drives the public socket protocol and uses only Python's standard
+library. Native equivalence calls the supplied ABI v1 directly via ctypes.
+Database inspection opens the designated dynamic RocksDB C API read-only after
+stopping the writer. It verifies exact key membership, contiguous receipt/pending
+partitions, ID bijection, cancellation references, digests, and byte/job counters.
+Seeded recovery/corruption fixtures are written only while the service is stopped.
+Crashes use SIGKILL without service hooks or native interposition. Tests retain
+acknowledged admissions and cancellation evidence across restarts.
+
+`readelf` confirms ELF64/AArch64, dynamic dependency on `/adapter/librosetta.so`
+and `librocksdb.so.7.8`, and the adapter runtime path. `ldd` resolves those pinned
+libraries. Final source, executable, and document hashes are in `SHA256SUMS`.
+
+## Evidence limits and interpretation
+
+- No externally interposed entrypoint/write barriers were supplied or added.
+  The contract's exact barrier/crash/concurrency qualification remains external.
+- ReleaseSafe bounds/overflow checks are enabled. No native ASan, whole-service
+  race detector, or allocator-failure injection was run. No equivalence to Go
+  race checking, exhaustive race proof, or power-loss guarantee is claimed.
+- Actual storage write errors and native allocation failures were not injected.
+  Both error paths stop before acknowledging/terminalizing failed transitions.
+- Count backpressure was observed. Byte-accounting invariants and aggregate
+  request rejection were tested, but simultaneous admitted-byte saturation was
+  not artificially held in place.
+- The contract freeze manifest was absent; preparation prose was treated as
+  context under the user's explicit implementation-phase authorization.
+- Ambiguous wire details and chosen behavior are documented in HANDOFF.md.
+- Host Python emits sandbox/xcrun cache warnings while launching the broker.
+  Broker commands completed despite those warnings; no host build was performed.

@@ -1,0 +1,144 @@
+# Zig lineage 2 — initial ABI v1 handoff
+
+## Delivered state
+
+Initial implementation, with no evaluator feedback. `service` is a Linux
+AArch64 ELF built with Zig 0.16.0 in ReleaseSafe mode. It dynamically links the
+supplied `/adapter/librosetta.so`, the designated `librocksdb.so.7.8`, and libc.
+Only `rn_verify_v1` is called. Normal priority only; no ABI v2 implementation,
+priority scheduler, group commit, custom encoding kernel, or service test hooks.
+
+Files:
+
+- `build.sh`: executable, pinned Zig build and dynamic library search paths.
+- `main.zig`: protocol, ownership, worker pool, journal, recovery, lifecycle.
+- `storage.zig`: supplied storage infrastructure copied locally, formatted,
+  with native RocksDB error text retained in diagnostics.
+- `reuse/storage.zig`: original infrastructure, unchanged.
+- `tests/check.py`: candidate-owned black-box tests and independent RocksDB C
+  API inspection. Generated test databases/logs remain under `tmp/`.
+- `EXPERIMENTS.md`: attempts, outcomes, timing, ambiguities and evidence limits.
+
+Run exclusively through the broker:
+
+```sh
+python3 run.py './build.sh' 120
+python3 run.py 'python3 public_check.py ./service' 120
+python3 run.py 'python3 tests/check.py ./service' 180
+```
+
+Launch inside the broker with `./service DATADIR SOCKET_PATH`. DATADIR is created
+recursively. The native RocksDB open owns the exclusive writer lock. Socket paths
+must be fresh; stale socket cleanup after crashes belongs to the launcher. A
+successful draining shutdown closes the database and exits zero.
+
+## Ownership and concurrency
+
+A single coordinator owns connections, admission sequences, accounting, pending
+job slots, cancellation decisions, and every database write. Eight nonblocking
+Unix stream connections are supported. Four kernel threads consume a FIFO work
+queue shared by persistent jobs and evaluate requests. Mutex/condition operations
+use libc pthread primitives. A nonblocking pipe wakes the coordinator when
+workers publish completed results under the pool mutex.
+
+Every Work object owns an allocation arena containing raw decoded bytes, item
+metadata, and needed strings. Native `rn_arena_create` inputs remain alive;
+item pointers are formed from `rn_arena_data`. A worker destroys its native arena
+only after `rn_verify_v1` returns. The coordinator frees Work only after worker
+completion. Queued cancellation can skip native execution; running cancellation
+never frees or mutates worker input.
+
+The pending ring has 1,024 slots addressed by admission sequence modulo 1,024.
+Counters include queued, running, and completed-but-uncommitted work. Receipts
+and ID indexes remain on disk indefinitely; terminal history is not all retained
+in memory. Evaluate is nonpersistent and keeps its connection busy until its
+response is queued; subsequent requests on that connection remain ordered.
+
+## Journal transitions and cancellation
+
+Every admission is its own sync/WAL WriteBatch containing the full pending JSON,
+ID index, new sequence, and outstanding counters. Every terminal transition is
+its own sync/WAL WriteBatch containing receipt, pending and cancellation removal,
+checkpoint, and outstanding counters. Terminal commits advance by exactly one
+admission sequence. Cancellation writes one sync/WAL intent batch before replying
+`ok`; repeated pending cancellation is idempotent without another write.
+
+The coordinator cannot finish a cancellation between terminal intent snapshot
+and native write entry because both operations execute on the same thread.
+Requests overlapping a blocked terminal write are processed after that write
+returns and receive `too_late`. A cancellation completed before terminal C entry
+is visible in the resulting cancelled receipt. Native barrier holds can block
+coordinator progress, but worker threads are independent; hold time is excluded
+by the supplied contract.
+
+The accepted response is queued before dispatch; terminal events are queued only
+after durable terminal commit. The same output stream preserves their order.
+Disconnect never cancels work. Connections are identified by a monotonically
+assigned token so descriptor reuse cannot redirect old events or evaluate replies.
+A nonreading peer cannot block a database transition. Request reading pauses at
+16 MiB of queued output; a 128 MiB hard bound leaves room for a maximum-size
+correlation plus pending payload and outstanding events. Exceeding that hard
+bound disconnects the peer. After all work drains,
+remaining output gets up to one second to flush before process exit.
+
+## Recovery and failures
+
+Before exposing the socket, startup validates schema 1, all metadata, key shapes,
+sequence partitions, ID bijection, pending digests/payload lengths/priorities,
+cancellation references, receipt shapes, and outstanding counts/bytes. Missing
+metadata in an existing database, unknown schema, unknown keys, or inconsistent
+rows fail explicitly. A completely empty database initializes all five metadata
+keys in one durable batch. No repair/rebuild path exists.
+
+Recovered pending work dispatches in admission order, with durable cancellation
+intent preserved. Already terminal jobs retain exact stored receipts. Native
+arena/all-batch execution failure during evaluate replies `execution_failure`.
+The same failure for an admitted job terminates diagnostically while leaving its
+durable pending record. Storage errors print native RocksDB text and terminate
+without acknowledging the failed transition. No further transitions occur after
+an uncertain write result.
+
+## Wire decisions and remaining ambiguities
+
+All documented integers are emitted as decimal strings; digest hex is lowercase
+in digest byte order. Retry identity is SHA-256 of ordered mode byte, operation
+byte, little-endian u64 raw length, and raw bytes. Priority is excluded.
+
+The supplied prose leaves some details open; implementation decisions are:
+
+- Unknown JSON fields are ignored as reserved. Known fields have strict types;
+  duplicate JSON keys are rejected by the pinned parser.
+- V1 accepts absent priority or explicit `normal`; `high` is invalid.
+- Empty item arrays, more than 64 items, or aggregate input above 16 MiB return
+  `invalid_request`. Per-transaction native resource limits remain adapter
+  results; host code never parses transaction structure.
+- An identical retry returns `existing` and `sequence`; status retrieves state.
+- Both submit and evaluate return `draining` for valid new requests during drain.
+- JSON text cap excludes the newline. Oversized/undecodable requests without a
+  recoverable correlation use the empty request string; oversized lines close
+  after the invalid response is flushed.
+
+The freeze manifest/gate evidence was not supplied in this workspace. The user's
+explicit implementation-phase instruction authorized this phase; no external gate
+or evaluator evidence was inspected or claimed.
+
+## Evidence and next phase
+
+Public smoke passed. The candidate suite covers native equivalence (including
+witness stripping/digest order, empty input, malformed input, and native byte
+limits), validation, pipelining, cancellation/event order, eight concurrent
+clients, disconnects, writer lock, schema rejection, seeded recovery, process
+crashes, durable cancellation, count backpressure, large/fragmented lines, and a
+nonreading peer. Independent inspection happens only after the writer stops.
+
+ReleaseSafe checks and external process-crash tests do not establish exhaustive
+race freedom or power-loss durability. Native allocation and actual storage I/O
+failures were reviewed in code but not fault-injected. Four native worker slots
+exist by construction; externally held native-entry concurrency qualification
+remains unclaimed. Byte-accounting invariants are checked, but simultaneous
+64 MiB admission saturation was not forced by a timing hook. No performance
+comparison or optimization conclusion is claimed.
+
+For maintenance, preserve schema 1 and receipt identity. The relevant native call
+is in `Pool.worker`; scheduling and journal policy remain in the coordinator.
+Do not activate ABI v2 until the next phase explicitly requires it.

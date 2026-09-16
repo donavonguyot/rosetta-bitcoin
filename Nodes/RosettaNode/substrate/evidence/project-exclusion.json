@@ -1,0 +1,10 @@
+{
+  "schema": "rosettanode.substrate.project_exclusion.v1",
+  "current_evidence_index_sha256": "003fbd8200127ecefc749a3f37dfbb67231fd8456b0372d009b5e9e955e000a5",
+  "trial_paths_in_current_index": false,
+  "trial_directory": "Nodes/RosettaNode/substrate",
+  "port_registration_added": false,
+  "project_files_modified_by_trial": false,
+  "binary_gate_status": "not_attempted",
+  "classification": "comparison"
+}

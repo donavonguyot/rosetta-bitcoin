@@ -1,0 +1,100 @@
+package main
+
+/*
+#cgo CFLAGS: -I/adapter
+#cgo LDFLAGS: -L/adapter -lrosetta -Wl,-rpath,/adapter -lrocksdb
+#include <adapter.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Keep even the source of arena_create in native memory until verification
+// returns, without relying on undocumented copy/borrow behavior.
+static int run_v2(const unsigned char *src, uint64_t size,
+                  const uint64_t *sizes, const uint32_t *flags,
+                  uint64_t count, rn_result *results, uint64_t *ok_bitmap) {
+    if (!count || count > RN_MAX_BATCH || size > RN_MAX_INPUT) return -1;
+    unsigned char *backing = malloc(size ? size : 1);
+    if (!backing) return -2;
+    if (size) memcpy(backing, src, size);
+    rn_arena *arena = rn_arena_create(backing, size);
+    if (!arena) { free(backing); return -2; }
+    rn_item_v2 items[RN_MAX_BATCH];
+    uint64_t offset = 0;
+    for (uint64_t i = 0; i < count; ++i) {
+        items[i].offset = offset;
+        items[i].size = sizes[i];
+        items[i].witness = flags[i*2];
+        items[i].exact = flags[i*2+1];
+        offset += sizes[i];
+    }
+    int rc = rn_verify_v2(arena, items, count, results, ok_bitmap);
+    rn_arena_destroy(arena);
+    free(backing);
+    return rc;
+}
+*/
+import "C"
+
+import (
+	"encoding/hex"
+	"fmt"
+	"unsafe"
+)
+
+type Result struct {
+	Status       string `json:"status"`
+	Consumed     string `json:"consumed"`
+	FullSize     string `json:"full_size"`
+	StrippedSize string `json:"stripped_size"`
+	TxID         string `json:"txid_digest_order"`
+	WTxID        string `json:"wtxid_digest_order"`
+}
+
+func verify(p *Payload) ([]Result, error) {
+	if p == nil || len(p.Items) == 0 || len(p.Items) > maxBatch || len(p.Raw) > maxBatchBytes {
+		return nil, fmt.Errorf("invalid native batch")
+	}
+	sizes := make([]C.uint64_t, len(p.Items))
+	flags := make([]C.uint32_t, 2*len(p.Items))
+	native := make([]C.rn_result, len(p.Items))
+	for i, item := range p.Items {
+		sizes[i] = C.uint64_t(len(item.Hex) / 2)
+		if item.Mode == "witness" {
+			flags[2*i] = 1
+		}
+		if item.Operation == "exact" {
+			flags[2*i+1] = 1
+		}
+	}
+	var src *C.uchar
+	if len(p.Raw) > 0 {
+		src = (*C.uchar)(unsafe.Pointer(&p.Raw[0]))
+	}
+	var bitmap C.uint64_t
+	rc := C.run_v2(src, C.uint64_t(len(p.Raw)), &sizes[0], &flags[0], C.uint64_t(len(sizes)), &native[0], &bitmap)
+	if rc != 0 {
+		return nil, fmt.Errorf("native verification failed: %d", int(rc))
+	}
+	results := make([]Result, len(native))
+	for i := range native {
+		r := &native[i]
+		status := uint64(r.status)
+		if status > 4 {
+			return nil, fmt.Errorf("unknown native result status: %d", status)
+		}
+		if (uint64(bitmap)&(uint64(1)<<uint(i)) != 0) != (status == 0) {
+			return nil, fmt.Errorf("native success bitmap disagrees with item %d", i)
+		}
+		// Normalize every error result, regardless of native scratch contents.
+		if status != 0 {
+			*r = C.rn_result{status: C.uint64_t(status)}
+		}
+		results[i] = Result{
+			Status: decimal(status), Consumed: decimal(uint64(r.consumed)),
+			FullSize: decimal(uint64(r.full_size)), StrippedSize: decimal(uint64(r.stripped_size)),
+			TxID:  hex.EncodeToString(unsafe.Slice((*byte)(unsafe.Pointer(&r.txid[0])), 32)),
+			WTxID: hex.EncodeToString(unsafe.Slice((*byte)(unsafe.Pointer(&r.wtxid[0])), 32)),
+		}
+	}
+	return results, nil
+}

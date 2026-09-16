@@ -1,0 +1,143 @@
+# Go lineage 2 — initial ABI v1 handoff
+
+## Submission
+
+Initial service implementation, normal priority only, with four encoding slots
+and baseline one-job admission/terminal WriteBatches. No ABI v2 implementation,
+group commit, kernel replacement, Bitcoin library, external source, or evaluator
+access. The supplied public smoke check is the only provided check used.
+
+Deliverables: `build.sh`, Linux AArch64 `service`, Go/C source at workspace root,
+the supplied storage helper plus `reuse/iterator.go`, Go tests,
+`tests/integration.py`, `test.sh`, and `EXPERIMENTS.md`.
+
+Build and test only through the pinned Linux broker:
+
+```sh
+python3 run.py './build.sh' 300
+python3 run.py './test.sh' 300
+```
+
+Launch: `service DATADIR SOCKET_PATH`. The socket must be fresh. Send the wire
+`shutdown` operation for a draining, zero-exit shutdown. A fresh invocation with
+the same datadir recovers pending jobs and receipts. Build uses Go 1.27.1, cgo,
+the supplied `/adapter/librosetta.so`, and dynamic `-lrocksdb`, with adapter rpath.
+No downloads or third-party Go modules are needed.
+
+Final executable SHA-256:
+`9457f32f062ad0b86dfbef30c90b1f0c4be1e4cfff2c7eb6c3a18fc8c35e8817`.
+ELF architecture, dynamic libraries, adapter RUNPATH, and v1-only verify symbol
+were checked after the final build.
+
+The broker's `/tmp` is non-executable. `test.sh` sets
+`GOTMPDIR=/workspace/tmp`; running bare `go test` without this override fails at
+test-binary execution. The implementation-phase workspace/cache is writable.
+
+## Source map and behavior
+
+- `wire.go`: strict known-field parsing, batch admission validation, decimal
+  strings, canonical payload digest, wire/storage structs.
+- `native.go`: one synchronous C wrapper per batch, calling only
+  `rn_verify_v1`. C-owned source allocation and arena live through verify return;
+  v1 item pointers refer to `rn_arena_data`. Go input/results have no retained
+  native pointers. Native error-result sizes and digests are zeroed.
+- `service.go`: four workers; FIFO pending queue; four native slots shared with
+  evaluate calls; sequence-ordered committer; cancellation and drain state.
+- `recovery.go`: schema/counter/index/digest/receipt validation and recovery of
+  pending payloads and cancellation intents. Refuses incompatible or inconsistent
+  databases without rebuilding them.
+- `transport.go`: bounded newline framing, eight live clients, sequential
+  handling per client, one output writer per socket, best-effort terminal events.
+- `reuse/storage.go`: supplied open/get/WriteBatch wrapper, unchanged.
+  `reuse/iterator.go` adds startup scanning through the same RocksDB C API.
+
+One mutex serializes state and every RocksDB write, including the complete C
+write call. This deliberately prevents cancellation acknowledgement in the gap
+between a terminal decision and native `call_entry`. It also means status and
+other transitions wait during synchronous writes and external write barriers.
+Native encoding and socket writes do not hold this mutex. The committer releases
+it between individual terminal writes.
+
+Admissions persist full items, digest, index, sequence, and outstanding totals
+before acknowledgement. Cancellation acknowledgement follows its synchronous
+intent write. Queued cancellations can become ready immediately; running jobs
+retain input and await native return. Completed jobs remain cancellable while
+waiting behind an earlier sequence. Terminal batches atomically write the
+receipt, remove pending/cancellation keys, release accounting, and advance the
+checkpoint. ID indexes and receipts are retained.
+
+Receipt notifications are armed only after the admission response has actually
+been written, and sent only after durable terminal commitment. A full event
+queue drops notifications. Socket writes have a five-second deadline; a stalled
+client is disconnected without cancelling its jobs. Status remains the recovery
+path. Draining waits for accepted jobs, evaluations, and active request replies.
+
+Storage settings remain compression off, 128 MiB block cache, 64 MiB write buffer,
+two write buffers, two background jobs, WAL enabled, sync enabled. All multi-key
+transitions use WriteBatch. Native RocksDB LOCK enforces exclusive ownership.
+Fresh initialization writes version and all scalar counters durably. A database
+containing only schema version 1 is treated as fresh; otherwise missing counters
+are an error.
+
+Storage/acknowledged-job arena failures stop the process with diagnostics and
+leave durable pending work for restart. A nonpersistent evaluate allocation/call
+failure returns `execution_failure`. Per-item adapter statuses 0–4 are returned
+as results; transaction parsing is entirely inside the supplied kernel.
+
+## Validation and evidence
+
+Tests cover exact/prefix native results and digest order, malformed and resource
+statuses, request framing and validation, digest identity/conflicts, both
+outstanding admission limits, durable cancellation recovery, completed work
+waiting behind the head, four-worker dispatch/payload lifetime, concurrent
+retries/cancellations, corrupt recovery rejection, and drain/reply ordering.
+
+Integration tests exercise actual Unix sockets, notification order, eight-client
+concurrency, exclusive datadir ownership, receipt restarts, concurrent retries and
+cancellation, and three SIGKILL/recovery cycles per run. They read RocksDB only
+after its writer stops and independently verify physical keys/accounting against
+acknowledged histories. The suite runs against ordinary and race-instrumented
+executables. Test artifacts and stderr are retained under `tmp/v1-e2e-*`.
+
+See `EXPERIMENTS.md` for executed results, environment failures, the corrected
+resource fixture, and evidence limits. Go race checks do not cover C/C++ races.
+No native ASan, allocation/storage-failure injection, external barrier
+qualification, power-loss evidence, or performance comparison is claimed.
+
+Final `./test.sh` passed all eleven Go test families, Go race tests, the public
+smoke check, and both ordinary/race integration suites (six final SIGKILL recovery
+cycles total). Final integration artifacts are `tmp/v1-e2e-h0znxot2` and
+`tmp/v1-e2e-ao4odbsg`.
+
+## Ambiguities and choices retained for maintenance
+
+- Supplied preparation prose still mentions unfrozen gates; no campaign-freeze
+  manifest was supplied here. Implementation followed the explicit phase-start
+  instruction. Candidate testing does not establish gate qualification.
+- Reserved unknown fields are ignored. Duplicate object keys at request/item
+  level are rejected; required known fields use exact names and string types.
+- V1 accepts omitted or explicit `normal` priority and rejects other priorities.
+- Invalid batch count or aggregate bytes return `invalid_request`. Per-item
+  limits are passed to the native adapter, preserving status 2/3 distinctions.
+- Existing identical retries remain `existing` during draining; new IDs and
+  evaluations return `draining`. Retrying does not alter priority or ownership.
+- Oversized request lines get `invalid_request` with an empty correlation, then
+  the connection closes. Unterminated EOF fragments are discarded.
+- Arena source-copy timing is undocumented; keeping the C source allocation
+  alive until arena destruction avoids depending on it.
+- Receipts/indexes are cached in memory and retained on disk without expiry for
+  this bounded trial. Startup scans the full database. No unbounded-deployment
+  memory or startup-time claim is made.
+
+No production test hooks, barriers, alternate kernels, or injected schedulers are
+present. Unit tests directly arrange internal states for deterministic policy
+checks; integration tests use only the public socket protocol and process kills.
+
+## Effort
+
+Reading finished within its ten-minute allowance; the exact reading start was
+not captured. Implementation's first tool action was approximately
+2026-09-16 21:46:41 UTC. Final elapsed effort is recorded in EXPERIMENTS.md.
+Model token usage and prior infrastructure preparation cost were not exposed by
+the provided tools and remain unknown. No repair/evaluator-feedback round has
+occurred before this submission freezes.

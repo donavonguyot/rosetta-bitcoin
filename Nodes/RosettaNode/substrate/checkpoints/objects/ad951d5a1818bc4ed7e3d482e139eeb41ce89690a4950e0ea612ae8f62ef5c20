@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Candidate-owned failure regression, run only through run.py in Linux."""
+import json
+import os
+from pathlib import Path
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+
+import integration_test as support
+
+BINARY = str(Path(sys.argv[1] if len(sys.argv) > 1 else './service').resolve())
+MODE = sys.argv[2] if len(sys.argv) > 2 else 'all'
+FAULTS = str(Path('tmp/test-faults.so').resolve())
+
+
+def launch(root, mode):
+    env = dict(os.environ, LD_PRELOAD=FAULTS, TRIAL_TEST_FAILURE=mode)
+    log = open(root / 'failure.log', 'wb')
+    process = subprocess.Popen([BINARY, str(root / 'db'), str(root / 'socket')], env=env, stderr=log)
+    deadline = time.monotonic() + 20
+    while not (root / 'socket').exists():
+        assert process.poll() is None, 'startup failed'
+        assert time.monotonic() < deadline, 'startup timeout'
+        time.sleep(.005)
+    return process, log, support.Peer(root / 'socket')
+
+
+def check(mode, op, expected_pending):
+    root = Path(tempfile.mkdtemp(prefix='failure-%s-%s-' % (mode, op), dir='tmp')).resolve()
+    process = log = peer = None
+    try:
+        process, log, peer = launch(root, mode)
+        items = [support.ITEM]
+        if mode == 'cancel':
+            n = (4 << 20) - 100
+            raw = ('01000000' + '01' + '00' * 36 + '00ffffffff' + '01'
+                   + '00' * 8 + 'fe' + struct.pack('<I', n).hex() + '51' * n + '00000000')
+            items = [dict(support.ITEM, hex=raw)] * 4
+        if op == 'evaluate':
+            reply = peer.call('evaluate', items=items)
+            assert reply['status'] == 'execution_failure', reply
+            # An ephemeral allocation failure must not kill the service.
+            assert peer.call('evaluate', items=items)['status'] == 'ok'
+            assert peer.call('shutdown')['status'] == 'draining'
+            assert process.wait(timeout=20) == 0
+        else:
+            # Read the raw response explicitly to retain the original empty-line
+            # JSONDecodeError as the regression signature, rather than hiding EOF.
+            peer.sock.sendall(json.dumps(dict(request='submit', op='submit', id='job', items=items)).encode() + b'\n')
+            line = peer.file.readline()
+            print(mode, 'submit response:', repr(line), flush=True)
+            reply = json.loads(line)
+            if mode in ('admission', 'admission_after'):
+                assert reply == dict(request='submit', status='execution_failure'), reply
+            else:
+                assert reply['status'] == 'accepted', reply
+            if mode == 'cancel':
+                reply = peer.call('cancel', id='job')
+                assert reply['status'] == 'execution_failure', reply
+            assert process.wait(timeout=20) != 0
+            assert peer.file.readline() == b'', 'terminal notification after failed transition'
+            assert (root / 'failure.log').read_text(), 'missing diagnostic'
+        peer.close(); peer = None
+        log.close(); log = None
+        jobs, pending = support.inspect(root / 'db')
+        assert pending == expected_pending, (mode, pending)
+        assert len(jobs) == expected_pending, jobs
+        if mode == 'cancel':
+            rows = support.read_database(root / 'db')
+            assert not any(key.startswith('c/') for key in rows), rows.keys()
+        if pending:
+            # Restart without the injector; the full durable payload must finish.
+            service = support.Service(root, 1)
+            try:
+                service.shutdown()
+            finally:
+                service.kill()
+            jobs, pending = support.inspect(root / 'db')
+            assert pending == 0 and jobs['job']['state'] == 'complete'
+        print(mode, op, 'passed; stopped-writer invariants and restart checked', flush=True)
+    except BaseException:
+        print('failure artifacts retained:', root, flush=True)
+        raise
+    else:
+        shutil.rmtree(root)
+    finally:
+        if process and process.poll() is None:
+            process.kill(); process.wait()
+        if peer:
+            peer.close()
+        if log:
+            log.close()
+
+
+cases = [('admission', 'submit', 0), ('admission_after', 'submit', 1),
+         ('arena', 'evaluate', 0), ('arena', 'submit', 1),
+         ('terminal', 'submit', 1), ('cancel', 'submit', 1)]
+for mode, op, pending in cases:
+    if MODE == 'all' or MODE == mode:
+        check(mode, op, pending)

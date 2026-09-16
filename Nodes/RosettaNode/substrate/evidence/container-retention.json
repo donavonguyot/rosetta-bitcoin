@@ -1,0 +1,322 @@
+[
+  {
+    "container": "rn-substrate-measurement-resource-control",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-measurement-resource-control/evaluator-state.tar.gz",
+    "sha256": "2dfced9f98d18a37b8919b4a61575054fcf9c9bfaab85ee4dc3be350428d7769",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-60524c32d514",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-60524c32d514/evaluator-state.tar.gz",
+    "sha256": "c34f3660a797576d747267fa6103e5da172cee56a038488aadee0a840041ca18",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-eval-a637a8ba38fb",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-a637a8ba38fb/evaluator-state.tar.gz",
+    "sha256": "85824f9d64bc19b21984aec377136585a4fb5a8a1dd4e38a60ca556c9baecccc",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-native-diagnostic-rust-1",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-native-diagnostic-rust-1/evaluator-state.tar.gz",
+    "sha256": "b4c778acac2f0ed12ff1df9596cf6728d0f867c7410b628f7706d3f36ef7e77c",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-cac36a72628c",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-cac36a72628c/evaluator-state.tar.gz",
+    "sha256": "cb34b4df0a66e4cca36b763b2c28b35502357c074f7bb120c368a9e9231d831c",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-go-1-race-evaluation",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-go-1-race-evaluation/evaluator-state.tar.gz",
+    "sha256": "79e4a995199d6bf85742a0c4ca094c1c697886e59cf835adf3790190d34b3597",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-native-diagnostic-zig-1",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-native-diagnostic-zig-1/evaluator-state.tar.gz",
+    "sha256": "cd3dc77e2a8faf87854ce5b15f1d83fe667f80b29dc0b75fd9014f25a01148aa",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-native-diagnostic-go-1",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-native-diagnostic-go-1/evaluator-state.tar.gz",
+    "sha256": "d6cc9f143a979c3d4073e49cea00e4a14ebce22e653a2801e54699263ea4d154",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-correction-v2-early-mutant",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-correction-v2-early-mutant/evaluator-state.tar.gz",
+    "sha256": "54115c7e710b7bf3e96f0806082c6c86cc627c5505c5c09039622aea72aae536",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-correction-v2-final-zig-1",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-correction-v2-final-zig-1/evaluator-state.tar.gz",
+    "sha256": "c50948d72c1af8ebac4e98f3dfbeb47cc20600cb1a0060387218f1a8c683a86e",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-correction-v2-final-go-1",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-correction-v2-final-go-1/evaluator-state.tar.gz",
+    "sha256": "fe8caa6d6d27673468d8fcfae12fe3086c2599c0bee2d094a46c6fbb0cbaaf49",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-correction-v2-final-control",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-correction-v2-final-control/evaluator-state.tar.gz",
+    "sha256": "88feef40675e2c5dfac395799240613c2ff72f7788a0807e275063779c2faf67",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-correction-v2-eof-recheck",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-correction-v2-eof-recheck/evaluator-state.tar.gz",
+    "sha256": "93c49fa6275e0442b9813844143736ce1c0b79653885372bb1a6a6866e4a7742",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-correction-v2-eof-control",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-correction-v2-eof-control/evaluator-state.tar.gz",
+    "sha256": "3654af31e2d4c95f4b17f4925a402e635e36fd9fe02aa6d1e9e417c2d9d31f9b",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-correction-v2-control",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-correction-v2-control/evaluator-state.tar.gz",
+    "sha256": "81ff0b1aeab499957ffde1b32541b1dd2a59236bb782d2a5c012fc27470ee5cd",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-eval-3275b15e2592",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-3275b15e2592/evaluator-state.tar.gz",
+    "sha256": "70d0d3fefe4b5470505918e482b380cfa2e135aaa195ea6cbdd45cc7e3c8b736",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-eval-eefb55f0cc6d",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-eefb55f0cc6d/evaluator-state.tar.gz",
+    "sha256": "d40da64c4dc647fcd455c4d5345b3612a349955e0fb96ce3d62f62cd3743979c",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-bdf4d7d73879",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-bdf4d7d73879/evaluator-state.tar.gz",
+    "sha256": "9e6eaa85489b6ca04100fea6d0a313e380e259908e0a74bb0296b179bfc10e32",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-eval-aa64d0ba8eeb",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-aa64d0ba8eeb/evaluator-state.tar.gz",
+    "sha256": "d58a37dcff90deeca41d57e3ac897fd0da2c0f7ae29d6148b442058747d8a170",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-native-diagnostic-control",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-native-diagnostic-control/evaluator-state.tar.gz",
+    "sha256": "736851b8666c3c7aa069176073e16d321c749b2e0f271c80c42cb77aa46a58b5",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-benchmark-control-4",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-benchmark-control-4/evaluator-state.tar.gz",
+    "sha256": "05944645cd571744e4a41bd8a3de7dbadde5f4fc31dff57451ae0beff2da67aa",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-benchmark-control-1-64",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-benchmark-control-1-64/evaluator-state.tar.gz",
+    "sha256": "05944645cd571744e4a41bd8a3de7dbadde5f4fc31dff57451ae0beff2da67aa",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-control-reproduction",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-control-reproduction/evaluator-state.tar.gz",
+    "sha256": "9998f6ae53fc75bdd7aae66fd10fb9a5ad6cba8e76851d6cfc98756e77b1c516",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-control-final",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-control-final/evaluator-state.tar.gz",
+    "sha256": "14b0248ae17b31c6c62ff91c0ec47d3db9359dc0afa025cc5fb341dfdd308575",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-benchmark-control",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-benchmark-control/evaluator-state.tar.gz",
+    "sha256": "bed14735eda3ff1dc616cf941865169d71e553215e7ccac411af41089e19acec",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-control-maintenance",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-control-maintenance/evaluator-state.tar.gz",
+    "sha256": "76cd097898bd3a2d9f3c717c9f6efc46bef69feecf681116bc109551a820539b",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-control-initial-2",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-control-initial-2/evaluator-state.tar.gz",
+    "sha256": "49b25cc0f8691e6e678bacb5835c0eb686c4b8e4a9e98fea17867b2166c55650",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-control-initial",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-control-initial/evaluator-state.tar.gz",
+    "sha256": "988bc81cf719f310394fea3e77989a0737a00783f7f1cd1f0d1ac13cb6c1e776",
+    "named_volumes_removed": false,
+    "original_exit_code": 1
+  },
+  {
+    "container": "rn-substrate-eval-a4a3d9031630",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-a4a3d9031630/evaluator-state.tar.gz",
+    "sha256": "6b6d32a833c9e3b5a97937ee32a3d53dbba4333c27ae86fe74c4dcfff0803fc7",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-8e29f76323e0",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-8e29f76323e0/evaluator-state.tar.gz",
+    "sha256": "371ec3d5b6cb2bc6978da9e8498ee7f350e24950e034ee4399424609f134e940",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-ee7da82744b9",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-ee7da82744b9/evaluator-state.tar.gz",
+    "sha256": "8c3db24f084f2614de824c0b21104663bd15d9256f307143c0e663e8cbe4ae17",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-native-diagnostic-go-2",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-native-diagnostic-go-2/evaluator-state.tar.gz",
+    "sha256": "35d9f7b0f9d67d42a00c0a2b9ba037c18f8e39f45b9c81f2467107cbd2be8912",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-e9ccb0ad689c",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-e9ccb0ad689c/evaluator-state.tar.gz",
+    "sha256": "73ef25063e04188acaeb20cb7f8cca7526b5226f104c816415e54b3ef4105ef4",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-f686bdf54aef",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-f686bdf54aef/evaluator-state.tar.gz",
+    "sha256": "807c6e2bd884c2ca8e05b4a76a170fa0f870cb1a4fe4b951003a5b9251e08ef3",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-native-diagnostic-rust-2",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-native-diagnostic-rust-2/evaluator-state.tar.gz",
+    "sha256": "df66879c630a893540e79194bc8e846a201aeb9b59a40c2834fb92e26b2c81e0",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-27a251cd586e",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-27a251cd586e/evaluator-state.tar.gz",
+    "sha256": "1830e93593523ab7b26c3b9914c7e6a23ef69a4ee2e94dc35145fcedf42afa20",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-5905b4836244",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-5905b4836244/evaluator-state.tar.gz",
+    "sha256": "a160292e4104540bad1b09a20410da47d85a34ec3168b842666fe33da16d274f",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-1a3df37bf603",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-1a3df37bf603/evaluator-state.tar.gz",
+    "sha256": "8dec67d5ee1ace0bfad2b8b617d7934c6e0a541277c28d025dfedfaf44893b6d",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-8a55b7ca3dfd",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-8a55b7ca3dfd/evaluator-state.tar.gz",
+    "sha256": "020dc3bb267c857a4da4023c5996882ba133b287dde6f23f7402fd3f108f40fc",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  },
+  {
+    "container": "rn-substrate-eval-b54e507b2ad0",
+    "removed": true,
+    "state_archive": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/retained-docker/rn-substrate-eval-b54e507b2ad0/evaluator-state.tar.gz",
+    "sha256": "a9e8e909837136860f74943216bfadb3bbea259567c86c5510b75f2d480377ad",
+    "named_volumes_removed": false,
+    "original_exit_code": 0
+  }
+]

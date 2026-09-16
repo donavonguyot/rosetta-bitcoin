@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+./build.sh
+export RUSTFLAGS="-L native=/adapter -C link-arg=-Wl,-rpath,/adapter"
+cargo test --offline --locked
+python3 public_check.py ./service
+python3 tests/test_service.py
+python3 tests/test_v2.py

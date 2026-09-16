@@ -1,0 +1,59 @@
+{"status": "passed", "faults": 3}
+{"schema": "rosettanode.substrate.after_ack_probe.v1", "status": "passed", "results": [{"cycle": 0, "passed": true, "checkpoint": "1", "kill_after_observed_terminal_notification": true}, {"cycle": 1, "passed": true, "checkpoint": "2", "kill_after_observed_terminal_notification": true}, {"cycle": 2, "passed": true, "checkpoint": "3", "kill_after_observed_terminal_notification": true}], "candidate_launch_allowed": false}
+{
+  "schema": "rosettanode.substrate.workload_probe.v1",
+  "status": "passed",
+  "results": [
+    {
+      "workload": 1,
+      "batch": 1,
+      "requests": 100,
+      "passed": true,
+      "median_ns": 40021.5,
+      "min_ns": 22250,
+      "max_ns": 2995667,
+      "scope": "instrument smoke, not candidate benchmark"
+    },
+    {
+      "workload": 1,
+      "batch": 8,
+      "requests": 100,
+      "passed": true,
+      "median_ns": 83438.0,
+      "min_ns": 48292,
+      "max_ns": 5264907,
+      "scope": "instrument smoke, not candidate benchmark"
+    },
+    {
+      "workload": 1,
+      "batch": 64,
+      "requests": 100,
+      "passed": true,
+      "median_ns": 279295.5,
+      "min_ns": 236795,
+      "max_ns": 2701121,
+      "scope": "instrument smoke, not candidate benchmark"
+    },
+    {
+      "workload": 3,
+      "jobs": 10000,
+      "transactions_per_job": 8,
+      "clients": 8,
+      "passed": true,
+      "elapsed_seconds": 16.598703789000865,
+      "admission_median_ns": 6630175.5,
+      "admission_max_ns": 269100205,
+      "c_write_count": 20001,
+      "wal_sync_count": 20001,
+      "receipt_checks": 10000,
+      "scope": "single instrument qualification run, not language performance evidence"
+    }
+  ],
+  "candidate_launch_allowed": false,
+  "missing": [
+    "workload 4 full trace",
+    "allocation/write errors",
+    "full measurement runner"
+  ]
+}
+{"status": "passed", "failed": []}

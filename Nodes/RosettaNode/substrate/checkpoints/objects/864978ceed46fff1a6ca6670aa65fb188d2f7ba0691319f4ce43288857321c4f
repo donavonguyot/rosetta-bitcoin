@@ -1,0 +1,389 @@
+import concurrent.futures
+import json
+import os
+from pathlib import Path
+import random
+import signal
+import socket
+import subprocess
+import tempfile
+import threading
+import time
+import unittest
+
+from support import BINARY, ROOT, Connection, ITEM, Native, NativeGate, Rocks, Service, digest, inspect, pending, seed
+
+class ServiceTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix='v2-test-', dir=ROOT / 'tmp'))
+        self.services = []
+
+    def tearDown(self):
+        for service in self.services:
+            if service.p.poll() is None:
+                service.kill()
+
+    def start(self, name='run', env=None):
+        s = Service(self.root, name, env=env)
+        self.services.append(s)
+        return s
+
+    def test_evaluate_native_equivalence(self):
+        s = self.start()
+        native = Native()
+        fixtures = [ITEM, {**ITEM, 'hex': ''}, {**ITEM, 'hex': '00'},
+                    {**ITEM, 'mode': 'legacy'}, {**ITEM, 'hex': ITEM['hex'] + '1234', 'operation': 'prefix'},
+                    {**ITEM, 'hex': ITEM['hex'] + '1234'}, {**ITEM, 'hex': '01000000ff'}]
+        rng = random.Random(42)
+        fixtures += [{**ITEM, 'hex': rng.randbytes(n).hex(), 'mode': mode, 'operation': op}
+                     for n in [0, 1, 9, 10, 31, 100, 1000]
+                     for mode in ['legacy', 'witness'] for op in ['prefix', 'exact']]
+        with s.connect() as cl:
+            for items in [fixtures, [ITEM] * 64, [{**ITEM, 'hex': ''}]]:
+                r = cl.call('evaluate', items=items)
+                self.assertEqual(r['status'], 'ok')
+                self.assertEqual(r['results'], native.evaluate(items))
+        s.stop()
+        rows, _ = inspect(s.db)
+        self.assertEqual(rows['meta/sequence'], '0')
+
+    def test_protocol_retry_events_and_reopen(self):
+        s = self.start()
+        with s.connect() as cl:
+            self.assertEqual(cl.call('status', id='missing')['status'], 'not_found')
+            self.assertEqual(cl.call('cancel', id='missing')['status'], 'not_found')
+            cl.send({'request': 'one', 'op': 'submit', 'id': 'A_-9', 'items': [ITEM]})
+            ack = cl.line()
+            self.assertEqual(ack, {'request': 'one', 'status': 'accepted', 'sequence': '1'})
+            event = cl.line()
+            self.assertEqual(event['event'], 'terminal')
+            self.assertEqual(event['job']['digest'], digest([ITEM]))
+            self.assertEqual(event['job']['results'], Native().evaluate([ITEM]))
+            self.assertEqual(cl.call('submit', id='A_-9', items=[ITEM])['status'], 'existing')
+            self.assertEqual(cl.call('submit', id='A_-9', items=[{**ITEM, 'mode': 'legacy'}])['status'], 'conflict')
+            self.assertEqual(cl.call('cancel', id='A_-9')['status'], 'too_late')
+            receipt = cl.call('status', id='A_-9')['job']
+            self.assertEqual(receipt, event['job'])
+        s.stop()
+        rows, jobs = inspect(s.db)
+        self.assertEqual(rows['meta/checkpoint'], '1')
+        self.assertEqual(jobs['A_-9'], receipt)
+        s = self.start('reopen')
+        with s.connect() as cl:
+            self.assertEqual(cl.call('status', id='A_-9')['job'], receipt)
+            self.assertEqual(cl.call('submit', id='A_-9', items=[ITEM])['sequence'], '1')
+        s.stop()
+
+    def test_invalid_requests_leave_no_rows(self):
+        s = self.start()
+        with s.connect() as cl:
+            bad = [dict(op='submit', id='', items=[ITEM]), dict(op='submit', id='a/b', items=[ITEM]),
+                   dict(op='submit', id='a' * 65, items=[ITEM]), dict(op='evaluate', items=[]),
+                   dict(op='evaluate', items=[ITEM] * 65), dict(op='submit', id='bad', items=[{**ITEM, 'hex':'AA'}]),
+                   dict(op='evaluate', items=[{**ITEM, 'hex':'0'}]), dict(op='evaluate', items=[{**ITEM, 'mode':'bad'}]),
+                   dict(op='evaluate', items=[{**ITEM, 'operation':'bad'}]), dict(op='evaluate', items=[None]),
+                   dict(op='submit', id='bad', items=[ITEM], priority='urgent'), dict(op='bogus'),
+                   dict(op='status', id=12), dict(op='evaluate', items=[{**ITEM, 'extra':1}])]
+            for q in bad:
+                self.assertEqual(cl.call(**q)['status'], 'invalid_request', q)
+            for raw in [b'{}\n', b'[]\n', b'{"request":"a","request":"b","op":"shutdown"}\n',
+                        b'{"request":"a","op":"shutdown"} trailing\n', b'\xff\n']:
+                cl.s.sendall(raw)
+                self.assertEqual(cl.line()['status'], 'invalid_request')
+        s.stop()
+        rows, jobs = inspect(s.db)
+        self.assertEqual(len(rows), 5)
+        self.assertEqual(jobs, {})
+
+    def test_eight_clients_and_disconnect(self):
+        s = self.start()
+        barrier = threading.Barrier(8)
+        def client(n):
+            with s.connect() as cl:
+                barrier.wait(timeout=10)
+                accepted = []
+                for i in range(30):
+                    ident = f'c{n}_{i}'
+                    r = cl.call('submit', id=ident, items=[ITEM])
+                    self.assertEqual(r['status'], 'accepted')
+                    accepted.append((ident, r['sequence']))
+                    if i % 7 == 0:
+                        self.assertEqual(cl.call('submit', id=ident, items=[ITEM])['status'], 'existing')
+                return accepted
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            admitted = sum(list(ex.map(client, range(8))), [])
+        # All submitters disappear; their work must remain durable and finish.
+        s.stop()
+        rows, jobs = inspect(s.db)
+        self.assertEqual(rows['meta/checkpoint'], '240')
+        self.assertEqual(set(jobs), {x[0] for x in admitted})
+        for ident, seq in admitted:
+            self.assertEqual(jobs[ident]['sequence'], seq)
+
+    def test_pending_recovery_cancellation_and_order(self):
+        cancelled = set(range(3, 1025, 3))
+        seed(self.root / 'db', 1024, cancelled)
+        s = self.start()
+        with s.connect() as cl:
+            r = cl.call('cancel', id='seed_1024')
+            self.assertEqual(r['status'], 'ok')
+            self.assertEqual(cl.call('cancel', id='seed_1024')['status'], 'ok')
+            self.assertEqual(cl.call('status', id='seed_1024')['job']['state'], 'cancel_pending')
+            self.assertEqual(cl.call('submit', id='seed_1024', items=[ITEM])['status'], 'existing')
+        cancelled.add(1024)
+        s.stop()
+        rows, jobs = inspect(s.db)
+        self.assertEqual(rows['meta/checkpoint'], '1024')
+        for n in range(1, 1025):
+            self.assertEqual(jobs[f'seed_{n}']['state'], 'cancelled' if n in cancelled else 'complete')
+
+    def test_exclusive_writer_and_bad_schema(self):
+        s = self.start()
+        other = subprocess.run([str(BINARY), str(s.db), str(self.root / 'second.sock')], capture_output=True, timeout=10)
+        self.assertNotEqual(other.returncode, 0)
+        self.assertIn(b'lock', other.stderr.lower())
+        with s.connect() as cl:
+            self.assertEqual(cl.call('submit', id='kept', items=[ITEM])['status'], 'accepted')
+        s.stop()
+        with Rocks(s.db) as db:
+            db.batch({'meta/version':'2'})
+            before = db.rows()
+        bad = subprocess.run([str(BINARY), str(s.db), str(self.root / 'bad.sock')], capture_output=True, timeout=10)
+        self.assertNotEqual(bad.returncode, 0)
+        with Rocks(s.db) as db:
+            self.assertEqual(db.rows(), before)
+
+    def test_crash_histories_and_restart(self):
+        for trial in range(4):
+            if trial:
+                self.root = Path(tempfile.mkdtemp(prefix='v1-crash-', dir=ROOT / 'tmp'))
+            s = self.start()
+            acknowledged = {}
+            cancelled = set()
+            with s.connect() as cl:
+                for n in range(24):
+                    ident = f'crash_{n}'
+                    r = cl.call('submit', id=ident, items=[ITEM])
+                    self.assertEqual(r['status'], 'accepted')
+                    acknowledged[ident] = r['sequence']
+                    if n % 3 == 0 and cl.call('cancel', id=ident)['status'] == 'ok':
+                        cancelled.add(ident)
+                # Send additional work without waiting for responses; crash timing
+                # may leave any complete prefix of these admissions on disk.
+                burst = b''.join(json.dumps({'request': f'flight{n}', 'op':'submit', 'id':f'flight{n}', 'items':[ITEM]}).encode() + b'\n' for n in range(100))
+                cl.s.sendall(burst)
+                time.sleep([0, .001, .005, .02][trial])
+                s.kill()
+            _, jobs = inspect(s.db)
+            for ident, seq in acknowledged.items():
+                self.assertEqual(jobs[ident]['sequence'], seq)
+            s = self.start('restart')
+            s.stop()
+            rows, final = inspect(s.db)
+            self.assertEqual(rows['meta/checkpoint'], rows['meta/sequence'])
+            self.assertEqual(set(final), set(jobs))
+            for ident in cancelled:
+                self.assertEqual(final[ident]['state'], 'cancelled')
+
+    def test_cancel_intents_survive_process_crash(self):
+        seed(self.root / 'db', 1024, {1000, 1024})
+        s = self.start()
+        with s.connect() as cl:
+            self.assertEqual(cl.call('cancel', id='seed_1023')['status'], 'ok')
+            s.kill()
+        rows, _ = inspect(s.db)
+        self.assertIn('c/00000000000000001023', rows)
+        s = self.start('restart')
+        s.stop()
+        _, jobs = inspect(s.db)
+        for n in [1000, 1023, 1024]:
+            self.assertEqual(jobs[f'seed_{n}']['state'], 'cancelled')
+
+    def test_fragmented_pipelined_and_opaque_correlation(self):
+        s = self.start()
+        with s.connect() as cl:
+            correlation = 'quotes"\\\n snowman \u2603 , : {} []'
+            requests = [{'request': correlation, 'op': 'submit', 'id':'fragmented', 'items':[ITEM]},
+                        {'request': '', 'op': 'status', 'id':'fragmented'},
+                        {'request': 'last', 'op': 'evaluate', 'items':[ITEM]}]
+            data = b''.join(json.dumps(q).encode() + b'\n' for q in requests)
+            for start in range(0, len(data), 17):
+                cl.s.sendall(data[start:start+17])
+            responses = []
+            while len(responses) < 3:
+                r = cl.line()
+                if 'event' not in r:
+                    responses.append(r)
+                else:
+                    self.assertTrue(responses, 'terminal event preceded admission acknowledgment')
+            self.assertEqual([r['request'] for r in responses], [correlation, '', 'last'])
+            self.assertEqual([r['status'] for r in responses], ['accepted', 'ok', 'ok'])
+        s.stop()
+
+    def test_large_requests_and_adapter_byte_limits(self):
+        s = self.start()
+        native = Native()
+        with s.connect() as cl:
+            # Kernel resource/admission limits are returned as item results.
+            for size in [(4 << 20), (4 << 20) + 1, (16 << 20)]:
+                items = [{**ITEM, 'hex': '00' * size}]
+                r = cl.call('evaluate', items=items)
+                self.assertEqual(r['status'], 'ok')
+                self.assertEqual(r['results'], native.evaluate(items))
+            self.assertEqual(cl.call('evaluate', items=[{**ITEM, 'hex':'00' * ((16 << 20) + 1)}])['status'], 'invalid_request')
+            self.assertEqual(cl.call('submit', id='large', items=[{**ITEM, 'hex':'00' * (4 << 20)}])['status'], 'accepted')
+        s.stop()
+        _, jobs = inspect(s.db)
+        self.assertEqual(jobs['large']['digest'], digest([{**ITEM, 'hex':'00' * (4 << 20)}]))
+
+    def test_request_text_boundary_and_deep_invalid_json(self):
+        s = self.start()
+        with s.connect() as cl:
+            base = b'{"request":"limit","op":"status","id":"missing"}'
+            cl.s.sendall(base + b' ' * ((40 << 20) - len(base)) + b'\n')
+            self.assertEqual(cl.line(), {'request':'limit','status':'not_found'})
+            cl.s.sendall(b'{"request":"deep","op":"evaluate","items":' + b'[' * 10000 + b']' * 10000 + b'}\n')
+            self.assertEqual(cl.line()['status'], 'invalid_request')
+        with s.connect() as cl:
+            # Oversized line is rejected and the connection is then closed.
+            try:
+                cl.s.sendall(b' ' * ((40 << 20) + 1) + b'\n')
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            self.assertEqual(cl.line()['status'], 'invalid_request')
+        s.stop()
+        rows, _ = inspect(s.db)
+        self.assertEqual(rows['meta/sequence'], '0')
+
+    def test_payload_backpressure_counts_uncommitted_work(self):
+        # An externally held early native call keeps the admission-ordered
+        # prefix open while later work retains exactly the 64 MiB budget.
+        rows = {'meta/version':'1', 'meta/sequence':'132', 'meta/checkpoint':'0',
+                'meta/jobs':'132', 'meta/bytes':str(64 << 20)}
+        for n in range(1, 133):
+            items = [{**ITEM, 'hex':''}] if n <= 128 else [{**ITEM, 'hex':'00' * (4 << 20)}] * 4
+            job = pending(n, items)
+            rows[f'p/{n:020d}'] = json.dumps(job, separators=(',', ':'))
+            rows['id/' + job['id']] = str(n)
+        with Rocks(self.root / 'db', create=True) as db:
+            db.batch(rows)
+        del rows, items, job
+        gate = NativeGate(self.root)
+        self.addCleanup(gate.release)
+        s = self.start(env=gate.env)
+        with s.connect() as cl:
+            self.assertEqual(cl.call('submit', id='full', items=[ITEM])['status'], 'backpressure')
+            self.assertEqual(cl.call('submit', id='seed_128', items=[{**ITEM, 'hex':''}])['status'], 'existing')
+            self.assertEqual(cl.call('cancel', id='seed_132')['status'], 'ok')
+        gate.release()
+        s.stop()
+        rows, jobs = inspect(s.db)
+        self.assertNotIn('full', jobs)
+        self.assertEqual(jobs['seed_132']['state'], 'cancelled')
+        self.assertEqual(rows['meta/bytes'], '0')
+        s = self.start('restart')
+        with s.connect() as cl:
+            self.assertEqual(cl.call('submit', id='full', items=[ITEM])['status'], 'accepted')
+        s.stop()
+
+    def test_recovery_refuses_corruption_without_rebuilding(self):
+        changes = [ {'meta/jobs':'1'}, {'meta/checkpoint':'1'}, {'id/seed_2':None},
+                    {'c/00000000000000000003':'1'}, {'meta/bytes':None},
+                    {'p/00000000000000000001':json.dumps({**pending(1), 'digest':'0' * 64})} ]
+        for i, change in enumerate(changes):
+            root = self.root / str(i)
+            root.mkdir()
+            seed(root / 'db', 2)
+            with Rocks(root / 'db') as db:
+                db.batch(change)
+                before = db.rows()
+            proc = subprocess.run([str(BINARY), str(root / 'db'), str(root / 'sock')], capture_output=True, timeout=10)
+            self.assertNotEqual(proc.returncode, 0, change)
+            with Rocks(root / 'db') as db:
+                self.assertEqual(db.rows(), before)
+
+    def test_draining_rejects_new_work_but_preserves_retries(self):
+        seed(self.root / 'db', 1024)
+        gate = NativeGate(self.root)
+        self.addCleanup(gate.release)
+        s = self.start(env=gate.env)
+        with s.connect() as cl:
+            self.assertEqual(cl.call('shutdown')['status'], 'draining')
+            self.assertEqual(cl.call('submit', id='new', items=[ITEM])['status'], 'draining')
+            self.assertEqual(cl.call('evaluate', items=[ITEM])['status'], 'draining')
+            self.assertEqual(cl.call('submit', id='seed_1024', items=[ITEM])['status'], 'existing')
+            self.assertEqual(cl.call('submit', id='seed_1024', items=[{**ITEM, 'mode':'legacy'}])['status'], 'conflict')
+            self.assertEqual(cl.call('cancel', id='seed_1024')['status'], 'ok')
+            self.assertEqual(cl.call('status', id='seed_1024')['job']['state'], 'cancel_pending')
+        gate.release()
+        self.assertEqual(s.p.wait(timeout=30), 0)
+        s.log.close()
+        rows, jobs = inspect(s.db)
+        self.assertEqual(rows['meta/checkpoint'], '1024')
+        self.assertNotIn('new', jobs)
+        self.assertEqual(jobs['seed_1024']['state'], 'cancelled')
+
+    def test_job_count_backpressure_under_eight_clients(self):
+        gate = NativeGate(self.root)
+        self.addCleanup(gate.release)
+        s = self.start(env=gate.env)
+        barrier = threading.Barrier(8)
+        def client(n):
+            with s.connect() as cl:
+                barrier.wait(timeout=10)
+                replies = []
+                for i in range(350):
+                    ident = f'pressure_{n}_{i}'
+                    r = cl.call('submit', id=ident, items=[ITEM])
+                    self.assertIn(r['status'], ('accepted', 'backpressure'))
+                    replies.append((ident, r))
+                return replies
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            replies = sum(list(ex.map(client, range(8))), [])
+        accepted = {ident: r for ident, r in replies if r['status'] == 'accepted'}
+        denied = {ident for ident, r in replies if r['status'] == 'backpressure'}
+        self.assertTrue(denied, 'workload did not reach the admission bound')
+        gate.release()
+        s.stop()
+        rows, jobs = inspect(s.db)
+        self.assertEqual(set(jobs), set(accepted))
+        self.assertTrue(set(jobs).isdisjoint(denied))
+        self.assertEqual(int(rows['meta/sequence']), len(accepted))
+
+    def test_fresh_version_only_database_has_zero_counters(self):
+        with Rocks(self.root / 'db', create=True) as db:
+            db.batch({'meta/version':'1'})
+        s = self.start()
+        with s.connect() as cl:
+            self.assertEqual(cl.call('submit', id='first', items=[ITEM])['sequence'], '1')
+        s.stop()
+        rows, jobs = inspect(s.db)
+        self.assertEqual(rows['meta/checkpoint'], '1')
+        self.assertEqual(set(jobs), {'first'})
+
+    def test_nonempty_witness_and_item_resource_boundary(self):
+        # Byte fixtures only. All parsing/encoding remains in the supplied kernel.
+        vin = '01' + '00' * 32 + 'ffffffff' + '0151' + 'ffffffff'
+        vout = '01' + '0100000000000000' + '0151'
+        legacy = '01000000' + vin + vout + '00000000'
+        witness = '01000000' + '0001' + vin + vout + '010100' + '00000000'
+        limited = '01000000' + vin + 'fd0010' + '000000000000000000' * 4096 + '00000000'
+        within = '01000000' + vin + 'fdff0f' + '000000000000000000' * 4095 + '00000000'
+        items = [{**ITEM, 'hex':legacy, 'mode':'legacy'}, {**ITEM, 'hex':witness},
+                 {**ITEM, 'hex':witness + 'deadbeef', 'operation':'prefix'},
+                 {**ITEM, 'hex':limited, 'mode':'legacy'}, {**ITEM, 'hex':within, 'mode':'legacy'}]
+        expected = Native().evaluate(items)
+        self.assertEqual([r['status'] for r in expected], ['0', '0', '0', '2', '0'])
+        self.assertEqual(expected[0]['txid_digest_order'], expected[1]['txid_digest_order'])
+        self.assertNotEqual(expected[1]['txid_digest_order'], expected[1]['wtxid_digest_order'])
+        self.assertEqual(expected[2]['consumed'], str(len(witness) // 2))
+        s = self.start()
+        with s.connect() as cl:
+            self.assertEqual(cl.call('evaluate', items=items)['results'], expected)
+            self.assertEqual(cl.call('submit', id='mixed', items=items)['status'], 'accepted')
+        s.stop()
+        _, jobs = inspect(s.db)
+        self.assertEqual(jobs['mixed']['results'], expected)
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

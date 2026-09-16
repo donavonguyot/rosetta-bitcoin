@@ -1,0 +1,76 @@
+# Private maintenance reading notes
+
+Reading completed early within the ten-minute allowance. No implementation,
+builds, or tests performed. Read README.md, BUILDING.md, every contracts/*.md,
+reuse/{Cargo.toml,Cargo.lock,storage.rs}, HANDOFF.md, and EXPERIMENTS.md.
+Read /adapter/adapter.h and pinned Rust 1.98.1 standard-library documentation
+through python3 run.py. No external repository, evaluator, network, other
+workspace, or Bitcoin library inspected.
+
+## Baseline and likely maintenance scope
+
+- Predecessor reports a completed ABI v1 service: one state/storage owner, four
+  encoding workers, worker-owned native arenas, ordered durable terminal commits,
+  bounded transport, strict recovery validation. This is handoff evidence, not
+  independently rerun validation.
+- Likely change sites from handoff: src/native.rs (ABI), src/protocol.rs
+  (priority/defaults), src/main.rs (dispatch/recovery), existing integration tests.
+  Implementation source has not yet been inspected in this reading phase.
+- V2 header: rn_item_v2 contains uint64_t offset,size and uint32_t witness,exact.
+  rn_verify_v2 takes arena, items, count, result array, uint64_t *ok_bitmap.
+  Results retain per-item status/sizes/digests. Arena must outlive every call.
+- Dispatch FIFO within each priority; with both queues nonempty choose high,
+  high, high, normal. Single-queue dispatch does not advance the cycle. Completion
+  can be out of order; terminal commitment must remain admission ordered.
+- Recover v1 pending work as normal; retain receipts, cancellation intent, ID
+  indexes and schema 1. Priority is metadata excluded from the digest; retries
+  never change it. Reject incompatible schema; never rebuild the database.
+
+## Invariants to preserve
+
+- Sync/WAL WriteBatch for each admission, cancellation intent, and terminal job;
+  group commit belongs only to optimization. Keep designated dynamic adapter and
+  RocksDB settings plus pinned dependencies/checksums.
+- Durable complete payload before admission acknowledgment; durable cancellation
+  intent before its acknowledgment. Terminal boundary is C write call_entry,
+  not the later write_enter barrier. Do not release running arenas on cancellation.
+- Count queued/running/completed-uncommitted work until durable terminal receipt:
+  maximum 1,024 jobs AND 64 MiB. Four encoding slots, eight clients, 64 items /
+  16 MiB per batch, 40 MiB request text; preserve per-transaction limits.
+- Terminal receipt/removals/accounting/checkpoint are atomic; retain ID index.
+  Storage failure stops without false acknowledgment. Arena failure on accepted
+  work stops with pending durable; evaluate returns execution_failure.
+- Predecessor reports SHA vectors, smoke, 12 integrations, Clippy and formatting
+  passed. Native allocation/storage failure injection and exhaustive concurrency
+  evidence remain absent. Preserve existing coverage and add v2/migration/fairness
+  coverage in the implementation phase.
+
+## Rust documentation findings
+
+- VecDeque push_back/pop_front supplies FIFO; its storage need not be contiguous.
+- sync_channel is bounded and send blocks when full; only one Receiver exists.
+  recv_timeout drains buffered messages even after sender disconnection.
+- Send governs transfer across threads; retain existing owner-local FFI handles.
+- from_raw_parts requires valid aligned non-null pointers even at length zero,
+  a single allocation, and a lifetime tied to its owner. CString::as_ptr does not
+  extend ownership and must not be written through.
+
+## Recorded ambiguities (no user questions)
+
+- Header/prose do not define bitmap bit ordering, unused bits, or a wire bitmap
+  field. Preserve specified wire results; verify native bitmap interpretation
+  against the allowed adapter during implementation, without adding wire fields.
+- Scheduler cycle initialization, restart persistence, and whether skipped queued
+  cancellations consume a dispatch turn are not explicit. Provisional reading:
+  start at high, advance only for actual dispatch with both eligible queues
+  nonempty; no persistent cycle field is specified.
+- Preregistration still says preparation/not frozen and service contracts require
+  an external freeze. User authorized this reading round; no gate execution or
+  freeze verification is claimed and no implementation is authorized yet.
+- Predecessor's reserved-field rejection, framing, and retry-during-drain choices
+  are documented assumptions; preserve unless later maintenance instructions
+  resolve them differently.
+
+Operational: host rg is unavailable; find/cat worked. Broker requests succeeded
+despite host Python launcher cache/FSEvents warnings. Use python3 run.py for all
+subsequent builds/tests/offline documentation; /adapter remains read-only.

@@ -1,0 +1,118 @@
+const std = @import("std");
+const app = @import("main.zig");
+const tx = @import("transaction.zig");
+const testing = std.testing;
+const Value = std.json.Value;
+
+fn expectJsonEqual(expected: Value, actual: Value) !void {
+    try testing.expectEqual(std.meta.activeTag(expected), std.meta.activeTag(actual));
+    switch (expected) {
+        .string => |text| try testing.expectEqualStrings(text, actual.string),
+        .array => |array| {
+            try testing.expectEqual(array.items.len, actual.array.items.len);
+            for (array.items, actual.array.items) |a, b| try expectJsonEqual(a, b);
+        },
+        .object => |object| {
+            try testing.expectEqual(object.count(), actual.object.count());
+            var iterator = object.iterator();
+            while (iterator.next()) |entry| {
+                const actual_field = actual.object.get(entry.key_ptr.*) orelse return error.MissingField;
+                try expectJsonEqual(entry.value_ptr.*, actual_field);
+            }
+        },
+        else => return error.UnexpectedJsonType,
+    }
+}
+
+test "all six supplied feedback counterexamples match completely" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const feedback = try std.json.parseFromSliceLeaky(Value, allocator, @embedFile("feedback.json"), .{});
+    const examples = feedback.object.get("counterexamples").?.array.items;
+    try testing.expectEqual(@as(usize, 6), examples.len);
+    for (examples) |example| {
+        const request = try std.json.Stringify.valueAlloc(allocator, example.object.get("request").?, .{});
+        const result = try std.json.parseFromSliceLeaky(Value, allocator, app.handleLine(allocator, request), .{});
+        expectJsonEqual(example.object.get("expected").?, result) catch |err| {
+            std.debug.print("Feedback family failed: {s}\nActual response: {s}\n", .{
+                example.object.get("family").?.string,
+                app.handleLine(allocator, request),
+            });
+            return err;
+        };
+    }
+}
+
+test "signed amount endpoints and negative values use two's-complement bytes" {
+    const cases = [_]struct { decimal: []const u8, hex: []const u8 }{
+        .{ .decimal = "-9223372036854775808", .hex = "0000000000000080" },
+        .{ .decimal = "-37", .hex = "dbffffffffffffff" },
+        .{ .decimal = "-1", .hex = "ffffffffffffffff" },
+        .{ .decimal = "0", .hex = "0000000000000000" },
+        .{ .decimal = "1", .hex = "0100000000000000" },
+        .{ .decimal = "9223372036854775807", .hex = "ffffffffffffff7f" },
+    };
+    for (cases) |case| {
+        var arena = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        const transaction = try std.fmt.allocPrint(
+            allocator,
+            "{{\"version_bits\":\"1\",\"inputs\":[],\"outputs\":[{{\"amount\":\"{s}\",\"script\":\"\"}}],\"locktime\":\"0\"}}",
+            .{case.decimal},
+        );
+        const request = try std.fmt.allocPrint(allocator, "{{\"op\":\"serialize\",\"include_witness\":false,\"transaction\":{s}}}", .{transaction});
+        const expected_hex = try std.mem.concat(allocator, u8, &.{ "010000000001", case.hex, "0000000000" });
+        const expected = try std.fmt.allocPrint(allocator, "{{\"status\":\"ok\",\"bytes\":\"{s}\"}}", .{expected_hex});
+        try testing.expectEqualStrings(expected, app.handleLine(allocator, request));
+
+        const decode_request = try std.fmt.allocPrint(allocator, "{{\"op\":\"decode_exact\",\"bytes\":\"{s}\",\"mode\":\"legacy\"}}", .{expected_hex});
+        const decoded = try std.json.parseFromSliceLeaky(Value, allocator, app.handleLine(allocator, decode_request), .{});
+        try testing.expectEqualStrings("ok", decoded.object.get("status").?.string);
+        try testing.expectEqualStrings(case.decimal, decoded.object.get("transaction").?.object.get("outputs").?.array.items[0].object.get("amount").?.string);
+    }
+}
+
+test "amount overflow and malformed signed decimal strings are invalid requests" {
+    const invalid = [_][]const u8{
+        "9223372036854775808", "-9223372036854775809", "18446744073709551615",
+        "-",                   "--1",                  "-+1",
+        "1-",                  "- 1",                  " 1",
+        "1 ",                  "-1_0",                 "-0x1",
+    };
+    for (invalid) |amount| {
+        var arena = std.heap.ArenaAllocator.init(testing.allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        const request = try std.fmt.allocPrint(allocator, "{{\"op\":\"identify\",\"transaction\":{{\"version_bits\":\"1\",\"inputs\":[],\"outputs\":[{{\"amount\":\"{s}\",\"script\":\"\"}}],\"locktime\":\"0\"}}}}", .{amount});
+        try testing.expectEqualStrings("{\"status\":\"invalid_request\"}", app.handleLine(allocator, request));
+    }
+}
+
+test "impossible vector lengths precede item limits for every collection kind" {
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const cases = [_]struct { hex: []const u8, mode: tx.Mode, max_items: u64 }{
+        .{ .hex = "ff02525101", .mode = .witness, .max_items = 0 },
+        .{ .hex = "0100000001", .mode = .legacy, .max_items = 0 },
+        .{ .hex = "01000000000101", .mode = .witness, .max_items = 0 },
+        .{ .hex = "010000000001", .mode = .legacy, .max_items = 0 },
+        // The input itself fits the minimum bound, but its script does not.
+        .{ .hex = "0100000001" ++ "00" ** 36 ++ "0500000000", .mode = .legacy, .max_items = 1 },
+        .{ .hex = "010000000001" ++ "00" ** 8 ++ "02", .mode = .legacy, .max_items = 1 },
+        .{ .hex = "01000000000101" ++ "00" ** 41 ++ "0002", .mode = .witness, .max_items = 1 },
+        .{ .hex = "01000000000101" ++ "00" ** 41 ++ "000102", .mode = .witness, .max_items = 1 },
+    };
+    for (cases) |case| {
+        const encoded = try allocator.alloc(u8, case.hex.len / 2);
+        _ = try std.fmt.hexToBytes(encoded, case.hex);
+        try testing.expectError(error.MalformedEncoding, tx.decode(allocator, encoded, case.mode, .{ .max_items = case.max_items }));
+    }
+    // A complete collection above the bound remains a resource error.
+    const valid_hex = "010000000001000000000000000002abcd00000000";
+    const valid = try allocator.alloc(u8, valid_hex.len / 2);
+    _ = try std.fmt.hexToBytes(valid, valid_hex);
+    try testing.expectError(error.ResourceLimit, tx.decode(allocator, valid, .legacy, .{ .max_items = 1 }));
+}

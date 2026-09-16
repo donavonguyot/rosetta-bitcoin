@@ -1,0 +1,246 @@
+//! Dynamic C API infrastructure; no service or journal policy.
+use std::ffi::{CStr, CString, c_char, c_int, c_void};
+use std::cell::RefCell;
+type Ptr = *mut c_void;
+#[link(name = "rocksdb")]
+unsafe extern "C" {
+    fn rocksdb_options_create() -> Ptr;
+    fn rocksdb_options_destroy(p: Ptr);
+    fn rocksdb_options_enable_statistics(p: Ptr);
+    fn rocksdb_options_statistics_get_string(p: Ptr) -> *mut c_char;
+    fn rocksdb_property_value(d: Ptr, name: *const c_char) -> *mut c_char;
+    fn rocksdb_options_set_create_if_missing(p: Ptr, v: u8);
+    fn rocksdb_options_set_compression(p: Ptr, v: c_int);
+    fn rocksdb_options_set_write_buffer_size(p: Ptr, v: usize);
+    fn rocksdb_options_set_max_write_buffer_number(p: Ptr, v: c_int);
+    fn rocksdb_options_set_max_background_jobs(p: Ptr, v: c_int);
+    fn rocksdb_cache_create_lru(n: usize) -> Ptr;
+    fn rocksdb_cache_destroy(p: Ptr);
+    fn rocksdb_block_based_options_create() -> Ptr;
+    fn rocksdb_block_based_options_destroy(p: Ptr);
+    fn rocksdb_block_based_options_set_block_cache(p: Ptr, c: Ptr);
+    fn rocksdb_options_set_block_based_table_factory(p: Ptr, t: Ptr);
+    fn rocksdb_open(o: Ptr, path: *const c_char, e: *mut *mut c_char) -> Ptr;
+    fn rocksdb_close(d: Ptr);
+    fn rocksdb_writeoptions_create() -> Ptr;
+    fn rocksdb_writeoptions_destroy(p: Ptr);
+    fn rocksdb_writeoptions_set_sync(p: Ptr, v: u8);
+    fn rocksdb_writeoptions_disable_WAL(p: Ptr, v: c_int);
+    fn rocksdb_readoptions_create() -> Ptr;
+    fn rocksdb_readoptions_destroy(p: Ptr);
+    fn rocksdb_writebatch_create() -> Ptr;
+    fn rocksdb_writebatch_destroy(p: Ptr);
+    fn rocksdb_writebatch_put(b: Ptr, k: *const c_char, kn: usize, v: *const c_char, vn: usize);
+    fn rocksdb_writebatch_delete(b: Ptr, k: *const c_char, kn: usize);
+    fn rocksdb_write(d: Ptr, o: Ptr, b: Ptr, e: *mut *mut c_char);
+    fn rocksdb_get(
+        d: Ptr,
+        o: Ptr,
+        k: *const c_char,
+        n: usize,
+        len: *mut usize,
+        e: *mut *mut c_char,
+    ) -> *mut c_char;
+    fn rocksdb_free(p: Ptr);
+    fn rocksdb_create_iterator(d: Ptr, r: Ptr) -> Ptr;
+    fn rocksdb_iter_destroy(i: Ptr);
+    fn rocksdb_iter_seek_to_first(i: Ptr);
+    fn rocksdb_iter_valid(i: Ptr) -> u8;
+    fn rocksdb_iter_next(i: Ptr);
+    fn rocksdb_iter_key(i: Ptr, n: *mut usize) -> *const c_char;
+    fn rocksdb_iter_value(i: Ptr, n: *mut usize) -> *const c_char;
+    fn rocksdb_iter_get_error(i: Ptr, e: *mut *mut c_char);
+}
+unsafe fn error(p: *mut c_char) -> Result<(), String> {
+    if p.is_null() {
+        return Ok(());
+    }
+    let s = unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
+    unsafe { rocksdb_free(p.cast()) };
+    Err(s)
+}
+pub struct DB {
+    db: Ptr,
+    o: Ptr,
+    w: Ptr,
+    r: Ptr,
+    cache: Ptr,
+    table: Ptr,
+    metrics: RefCell<WriteMetrics>,
+}
+pub enum WriteKind {
+    Admission,
+    Terminal,
+    Cancellation,
+    Other,
+}
+#[derive(Default, serde::Serialize)]
+struct WriteMetrics {
+    write_calls: u64,
+    sync_requests: u64,
+    successful_sync_writes: u64,
+    admission_jobs_per_batch: [u64; 32],
+    terminal_jobs_per_batch: [u64; 32],
+    cancellation_batches: u64,
+    other_batches: u64,
+}
+pub struct Batch(Ptr);
+impl DB {
+    pub fn open(path: &str) -> Result<Self, String> {
+        let path = CString::new(path).map_err(|e| e.to_string())?;
+        unsafe {
+            let mut s = Self {
+                db: std::ptr::null_mut(),
+                o: rocksdb_options_create(),
+                w: rocksdb_writeoptions_create(),
+                r: rocksdb_readoptions_create(),
+                cache: rocksdb_cache_create_lru(128 << 20),
+                table: rocksdb_block_based_options_create(),
+                metrics: RefCell::new(WriteMetrics::default()),
+            };
+            rocksdb_options_enable_statistics(s.o);
+            rocksdb_options_set_create_if_missing(s.o, 1);
+            rocksdb_options_set_compression(s.o, 0);
+            rocksdb_options_set_write_buffer_size(s.o, 64 << 20);
+            rocksdb_options_set_max_write_buffer_number(s.o, 2);
+            rocksdb_options_set_max_background_jobs(s.o, 2);
+            rocksdb_block_based_options_set_block_cache(s.table, s.cache);
+            rocksdb_options_set_block_based_table_factory(s.o, s.table);
+            rocksdb_writeoptions_set_sync(s.w, 1);
+            rocksdb_writeoptions_disable_WAL(s.w, 0);
+            let mut e = std::ptr::null_mut();
+            s.db = rocksdb_open(s.o, path.as_ptr(), &mut e);
+            error(e)?;
+            if s.db.is_null() {
+                return Err("null database handle".into());
+            }
+            Ok(s)
+        }
+    }
+    pub fn write(&self, b: &Batch) -> Result<(), String> {
+        self.write_group(b, WriteKind::Other, 1)
+    }
+    pub fn write_group(&self, b: &Batch, kind: WriteKind, jobs: usize) -> Result<(), String> {
+        assert!((1..=32).contains(&jobs));
+        let mut metrics = self.metrics.borrow_mut();
+        metrics.write_calls += 1;
+        metrics.sync_requests += 1;
+        unsafe {
+            let mut e = std::ptr::null_mut();
+            rocksdb_write(self.db, self.w, b.0, &mut e);
+            error(e)?;
+        }
+        metrics.successful_sync_writes += 1;
+        match kind {
+            WriteKind::Admission => metrics.admission_jobs_per_batch[jobs - 1] += 1,
+            WriteKind::Terminal => metrics.terminal_jobs_per_batch[jobs - 1] += 1,
+            WriteKind::Cancellation => metrics.cancellation_batches += 1,
+            WriteKind::Other => metrics.other_batches += 1,
+        }
+        Ok(())
+    }
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+        unsafe {
+            let mut e = std::ptr::null_mut();
+            let mut n = 0;
+            let p = rocksdb_get(
+                self.db,
+                self.r,
+                key.as_ptr().cast(),
+                key.len(),
+                &mut n,
+                &mut e,
+            );
+            error(e)?;
+            if p.is_null() {
+                return Ok(None);
+            }
+            let value = std::slice::from_raw_parts(p.cast::<u8>(), n).to_vec();
+            rocksdb_free(p.cast());
+            Ok(Some(value))
+        }
+    }
+    pub fn scan(
+        &self,
+        mut visit: impl FnMut(&[u8], &[u8]) -> Result<(), String>,
+    ) -> Result<(), String> {
+        struct Iter(Ptr);
+        impl Drop for Iter {
+            fn drop(&mut self) {
+                unsafe { rocksdb_iter_destroy(self.0) }
+            }
+        }
+        unsafe {
+            let it = Iter(rocksdb_create_iterator(self.db, self.r));
+            if it.0.is_null() {
+                return Err("null iterator".into());
+            }
+            rocksdb_iter_seek_to_first(it.0);
+            while rocksdb_iter_valid(it.0) != 0 {
+                let (mut kn, mut vn) = (0, 0);
+                let k = rocksdb_iter_key(it.0, &mut kn);
+                let v = rocksdb_iter_value(it.0, &mut vn);
+                visit(
+                    std::slice::from_raw_parts(k.cast(), kn),
+                    std::slice::from_raw_parts(v.cast(), vn),
+                )?;
+                rocksdb_iter_next(it.0);
+            }
+            let mut e = std::ptr::null_mut();
+            rocksdb_iter_get_error(it.0, &mut e);
+            error(e)
+        }
+    }
+}
+impl Drop for DB {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.db.is_null() {
+                // Diagnostic stderr only: no protocol fields or database keys.
+                // API sync requests are distinct from RocksDB's WAL sync ticker.
+                eprintln!("group_commit {}", serde_json::to_string(self.metrics.get_mut()).unwrap());
+                for (label, p) in [
+                    ("rocksdb_statistics", rocksdb_options_statistics_get_string(self.o)),
+                    ("rocksdb_activity", rocksdb_property_value(self.db, c"rocksdb.stats".as_ptr())),
+                ] {
+                    if !p.is_null() {
+                        eprintln!("{label}\n{}", CStr::from_ptr(p).to_string_lossy());
+                        rocksdb_free(p.cast());
+                    }
+                }
+                rocksdb_close(self.db)
+            }
+            rocksdb_writeoptions_destroy(self.w);
+            rocksdb_readoptions_destroy(self.r);
+            rocksdb_options_destroy(self.o);
+            rocksdb_block_based_options_destroy(self.table);
+            rocksdb_cache_destroy(self.cache)
+        }
+    }
+}
+impl Batch {
+    pub fn new() -> Self {
+        Self(unsafe { rocksdb_writebatch_create() })
+    }
+    pub fn put(&mut self, key: &[u8], value: &[u8]) {
+        unsafe {
+            rocksdb_writebatch_put(
+                self.0,
+                key.as_ptr().cast(),
+                key.len(),
+                value.as_ptr().cast(),
+                value.len(),
+            )
+        }
+    }
+    pub fn delete(&mut self, key: &[u8]) {
+        unsafe { rocksdb_writebatch_delete(self.0, key.as_ptr().cast(), key.len()) }
+    }
+}
+impl Drop for Batch {
+    fn drop(&mut self) {
+        unsafe { rocksdb_writebatch_destroy(self.0) }
+    }
+}
+// Raw pointers deliberately do not carry a Send/Sync assertion. Candidates must
+// choose and justify the ownership/concurrency discipline of their service.

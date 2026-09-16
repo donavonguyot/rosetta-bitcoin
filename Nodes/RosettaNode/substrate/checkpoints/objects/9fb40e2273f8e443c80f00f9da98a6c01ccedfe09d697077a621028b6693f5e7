@@ -1,0 +1,145 @@
+# Zig lineage 1 — initial ABI v1 submission
+
+This is the initial implementation, with normal-priority FIFO dispatch and
+one-job admission and terminal WriteBatches. ABI v2 and group commit are not
+implemented. The supplied kernel and adapter are unchanged.
+
+## Build, launch, and tests
+
+All compilation and test execution was performed through the supplied Linux
+broker. From this workspace:
+
+```sh
+python3 run.py './build.sh' 120
+python3 run.py './tests/run.sh' 180
+python3 run.py './service DATADIR SOCKET_PATH'
+```
+
+`build.sh` produces the workspace-root `service`, a Linux AArch64 ELF built with
+Zig 0.16.0 in ReleaseSafe mode. It dynamically links `/adapter/librosetta.so`,
+`librocksdb.so.7.8`, and libc, with an `/adapter` runtime search path. Installed
+RocksDB packages were verified as 7.8.3-2. Undefined native symbols include
+`rn_verify_v1` and `rocksdb_write`; there is no `rn_verify_v2` reference.
+
+For an additional checked build without replacing the delivered executable:
+
+```sh
+python3 run.py 'ZIG_OPTIMIZE=Debug SERVICE_OUTPUT=tmp/service-debug ./build.sh'
+python3 run.py 'SERVICE_BINARY=tmp/service-debug ./tests/run.sh' 180
+```
+
+The launch contract is exactly `service DATADIR SOCKET_PATH`. DATADIR's parent
+must exist; the service creates the directory itself if absent. The socket path
+must be fresh. A second writer fails explicitly with RocksDB's native lock error.
+Use the JSON `shutdown` operation to drain and exit with status zero.
+
+## Implementation map
+
+- `src/main.zig`: protocol validation, worker pool, input ownership, admission,
+  cancellation, terminal commitment, recovery, and nonblocking Unix socket loop.
+- `src/storage.zig`: adaptation of the supplied storage helper, with allocation
+  checks and retained RocksDB error diagnostics. Fixed storage settings are
+  unchanged: no compression, 128 MiB cache, 64 MiB write buffer, two buffers,
+  two background jobs, WAL enabled, synchronous writes.
+- `tests/support.py`: clients, direct v1 adapter oracle, and independent RocksDB
+  C-API seeding/inspection, used only while the service writer is stopped.
+- `tests/test_service.py`: protocol, native boundary, recovery, crash, capacity,
+  drain, and concurrent-client tests. `tests/run.sh` also runs the public smoke.
+
+## Ownership and ordering
+
+The main event loop owns all database access, job state, counters, and clients.
+Four OS threads take FIFO encoding work from a mutex/condition-protected queue.
+Persistent jobs and nonpersistent evaluations share those four slots. Workers
+call only the common v1 adapter; no host transaction parser is present.
+
+Each Work owns concatenated immutable bytes and descriptors. A worker creates a
+native arena, derives every item pointer from `rn_arena_data`, invokes the
+adapter, and destroys the arena only after return. A completion flag, protected
+by the pool mutex, publishes results. The main loop never destroys Work until
+that flag is observed. Cancellation of queued work can skip encoding; running
+work retains its inputs until return. A native arena/batch failure on an
+acknowledged job stops the process without terminalizing that job. Evaluation
+reports `execution_failure` for the same native failure.
+
+Admission synchronously stores the payload, digest, sequence, ID index, and
+accounting before queuing its acknowledgment. Terminalization writes exactly one
+receipt plus pending/cancellation deletion, contiguous checkpoint advancement,
+and accounting release in one synchronous WriteBatch. Completed work continues
+to consume capacity until this write succeeds. Terminal jobs are read from disk;
+receipts and ID indexes are never pruned.
+
+The event loop is also the serialization point for cancellation. A completed
+cancel response implies its intent write completed before any subsequent
+terminal call. The main thread cannot process or acknowledge a cancellation
+between constructing a terminal batch and entering `rocksdb_write`. Requests
+overlapping that write are processed afterward and can return `too_late`.
+This relies on operation intervals, not socket arrival order. There are no
+candidate barrier or scheduler hooks.
+
+Acknowledgments and terminal events use the same per-client output queue, so an
+admission response precedes its terminal event. Socket writes are nonblocking;
+events are dropped when the unsent queue already exceeds 1 MiB. Sent prefixes
+are compacted, and responses apply socket backpressure. Disconnect does not
+cancel a durable job. Connection generation numbers prevent notifications from
+being delivered to a later user of a recycled client slot.
+
+## Recovery and schema
+
+Schema version is `1`, using exactly the supplied key layout and 20-digit
+sequence keys. Startup validates key families, contiguous receipts/pending
+records, index bijection, counters, cancellation references, pending digests,
+payload lengths, and receipt structure. It does not repair or rebuild a
+nonempty inconsistent database. Only a fresh database containing version and
+optional zero counters may acquire missing zero counters. Recovery preserves
+receipts and durable cancellation intents and enqueues pending work in admission
+order. All pending priorities are normal.
+
+## Validation and limits of evidence
+
+The suite covers native result equivalence (including nonempty witness data,
+prefix consumption, zero/error results, mixed batches, byte limits, and the
+4,096-item boundary), request validation and fragmentation, retry/conflict,
+notification ordering, eight concurrent clients, job-count and payload
+backpressure, completed-but-uncommitted accounting, draining, exclusive writer
+locking, crash histories, cancellation-intent recovery, and refusal to rebuild
+corrupt or incompatible storage.
+
+Public smoke and all 17 tests passed in both final builds: ReleaseSafe suite
+4.996 seconds, Debug suite 8.543 seconds. Final results are recorded in
+`tmp/final-release-validation.log` and `tmp/final-debug-validation.log`.
+Earlier transcripts, test databases, and
+crash artifacts are retained in `queue/` and `tmp/`. These are correctness checks,
+not controlled performance measurements or campaign qualification.
+
+ReleaseSafe and Debug checks ran. This workspace supplies only the normal
+adapter library; no native ASan artifact or Valgrind executable was available.
+Whole-service race detection, power-loss durability, deterministic external
+call-entry barrier qualification, and injected native-allocation/storage-write
+failures were not demonstrated. The process-crash tests inspect the actual
+database after the writer stops, rather than treating status as the oracle.
+
+## Ambiguities and explicit interpretations
+
+- No campaign-freeze manifest or gate evidence was supplied. The implementation
+  proceeded under the explicit implementation-phase instruction; it makes no
+  claim that the campaign gates have been frozen or passed.
+- Unknown request/item fields are rejected as reserved. V1 rejects a `priority`
+  field, including `normal`; the v2 priority extension is deliberately absent.
+- Nonempty batches over 64 items or 16 MiB aggregate are invalid requests.
+  Per-transaction resource outcomes are delegated to the adapter. Evaluation
+  work is nonpersistent and does not consume durable job counters.
+- The 40 MiB text limit excludes the terminating newline. If no trustworthy
+  request string can be parsed, `invalid_request` uses an empty correlation.
+- Cancellation of any terminal receipt returns `too_late`. Repeated pending
+  cancellation returns `ok`. During drain, known-ID retries retain their
+  `existing`/`conflict` behavior; new submit/evaluate work returns `draining`.
+- Once durable work drains, shutdown allows up to one second to flush remaining
+  socket output, then closes connections. Receipts remain queryable on restart.
+
+The next phase should start from these sources and disk invariants. The worker
+queue and `encode` function are the localized ABI/scheduling integration points;
+the initial binary must remain a v1-only baseline.
+
+Delivered ReleaseSafe `service` SHA-256:
+`53be1f182871e4ad66ec133b35e1d2d04a66315102045c7fe1d71fc0a42facdc`.

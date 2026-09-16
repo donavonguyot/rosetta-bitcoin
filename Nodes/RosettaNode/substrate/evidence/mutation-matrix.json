@@ -1,0 +1,519 @@
+{
+  "schema": "rosettanode.substrate.mutation_matrix.v1",
+  "status": "passed",
+  "matrix": [
+    {
+      "variant": "dummy",
+      "family": "unknown",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy-e2777753"
+    },
+    {
+      "variant": "dummy",
+      "family": "early_ack",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "ack_while_admission_return_held": null
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy-a76570c2"
+    },
+    {
+      "variant": "dummy",
+      "family": "admission_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy-c4090097"
+    },
+    {
+      "variant": "dummy",
+      "family": "terminal_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy-0344ef54"
+    },
+    {
+      "variant": "dummy",
+      "family": "conflicting_id",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "conflict",
+        "sequence": "1"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy-d8de2e7d"
+    },
+    {
+      "variant": "dummy",
+      "family": "late_cancel",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "too_late"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy-345533f9"
+    },
+    {
+      "variant": "dummy",
+      "family": "arena_lifetime",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy-72e963e0"
+    },
+    {
+      "variant": "dummy_early",
+      "family": "unknown",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_early-52f8dd3a"
+    },
+    {
+      "variant": "dummy_early",
+      "family": "early_ack",
+      "observed": "failure",
+      "expected": "failure",
+      "qualified": true,
+      "detail": {
+        "ack_while_admission_return_held": {
+          "request": "r",
+          "status": "accepted",
+          "sequence": "1"
+        }
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_early-4467837b"
+    },
+    {
+      "variant": "dummy_early",
+      "family": "admission_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_early-e9acc7cf"
+    },
+    {
+      "variant": "dummy_early",
+      "family": "terminal_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_early-695dd247"
+    },
+    {
+      "variant": "dummy_early",
+      "family": "conflicting_id",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "conflict",
+        "sequence": "1"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_early-690a6f19"
+    },
+    {
+      "variant": "dummy_early",
+      "family": "late_cancel",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "too_late"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_early-83c18984"
+    },
+    {
+      "variant": "dummy_early",
+      "family": "arena_lifetime",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_early-b10650a0"
+    },
+    {
+      "variant": "dummy_torn",
+      "family": "unknown",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_torn-b92c82fb"
+    },
+    {
+      "variant": "dummy_torn",
+      "family": "early_ack",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "ack_while_admission_return_held": null
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_torn-71077dff"
+    },
+    {
+      "variant": "dummy_torn",
+      "family": "admission_atomic",
+      "observed": "failure",
+      "expected": "failure",
+      "qualified": true,
+      "detail": "pending_sequence_mismatch",
+      "diagnostics": ".local/matrix-20260916T204418/dummy_torn-e66998f9"
+    },
+    {
+      "variant": "dummy_torn",
+      "family": "terminal_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_torn-7ecd1657"
+    },
+    {
+      "variant": "dummy_torn",
+      "family": "conflicting_id",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "conflict",
+        "sequence": "1"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_torn-853e50a9"
+    },
+    {
+      "variant": "dummy_torn",
+      "family": "late_cancel",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "too_late"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_torn-1b9aa96d"
+    },
+    {
+      "variant": "dummy_torn",
+      "family": "arena_lifetime",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_torn-ccd21a45"
+    },
+    {
+      "variant": "dummy_terminal",
+      "family": "unknown",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_terminal-28a897de"
+    },
+    {
+      "variant": "dummy_terminal",
+      "family": "early_ack",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "ack_while_admission_return_held": null
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_terminal-717a9f51"
+    },
+    {
+      "variant": "dummy_terminal",
+      "family": "admission_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_terminal-567c47b5"
+    },
+    {
+      "variant": "dummy_terminal",
+      "family": "terminal_atomic",
+      "observed": "failure",
+      "expected": "failure",
+      "qualified": true,
+      "detail": "receipt_checkpoint_mismatch",
+      "diagnostics": ".local/matrix-20260916T204418/dummy_terminal-4e538d5f"
+    },
+    {
+      "variant": "dummy_terminal",
+      "family": "conflicting_id",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "conflict",
+        "sequence": "1"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_terminal-2baf224f"
+    },
+    {
+      "variant": "dummy_terminal",
+      "family": "late_cancel",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "too_late"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_terminal-6cde3f36"
+    },
+    {
+      "variant": "dummy_terminal",
+      "family": "arena_lifetime",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_terminal-7bd20404"
+    },
+    {
+      "variant": "dummy_conflict",
+      "family": "unknown",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_conflict-f21a7381"
+    },
+    {
+      "variant": "dummy_conflict",
+      "family": "early_ack",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "ack_while_admission_return_held": null
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_conflict-f410254a"
+    },
+    {
+      "variant": "dummy_conflict",
+      "family": "admission_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_conflict-186e0c8c"
+    },
+    {
+      "variant": "dummy_conflict",
+      "family": "terminal_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_conflict-31313ed4"
+    },
+    {
+      "variant": "dummy_conflict",
+      "family": "conflicting_id",
+      "observed": "failure",
+      "expected": "failure",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "existing",
+        "sequence": "1"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_conflict-90260026"
+    },
+    {
+      "variant": "dummy_conflict",
+      "family": "late_cancel",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "too_late"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_conflict-cd21906c"
+    },
+    {
+      "variant": "dummy_conflict",
+      "family": "arena_lifetime",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_conflict-e22b8021"
+    },
+    {
+      "variant": "dummy_cancel",
+      "family": "unknown",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_cancel-7aec8294"
+    },
+    {
+      "variant": "dummy_cancel",
+      "family": "early_ack",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "ack_while_admission_return_held": null
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_cancel-2ea6870d"
+    },
+    {
+      "variant": "dummy_cancel",
+      "family": "admission_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_cancel-c80dee29"
+    },
+    {
+      "variant": "dummy_cancel",
+      "family": "terminal_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_cancel-1919d764"
+    },
+    {
+      "variant": "dummy_cancel",
+      "family": "conflicting_id",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "conflict",
+        "sequence": "1"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_cancel-966896fd"
+    },
+    {
+      "variant": "dummy_cancel",
+      "family": "late_cancel",
+      "observed": "failure",
+      "expected": "failure",
+      "qualified": true,
+      "detail": {
+        "request": "probe",
+        "status": "ok"
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_cancel-2d3e10a5"
+    },
+    {
+      "variant": "dummy_cancel",
+      "family": "arena_lifetime",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_cancel-beb376b1"
+    },
+    {
+      "variant": "dummy_arena",
+      "family": "unknown",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_arena-5b3b4f06"
+    },
+    {
+      "variant": "dummy_arena",
+      "family": "early_ack",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": {
+        "ack_while_admission_return_held": null
+      },
+      "diagnostics": ".local/matrix-20260916T204418/dummy_arena-a4883bd9"
+    },
+    {
+      "variant": "dummy_arena",
+      "family": "admission_atomic",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_arena-6d9a43c5"
+    },
+    {
+      "variant": "dummy_arena",
+      "family": "terminal_atomic",
+      "observed": "blocked_by_lifetime_fault",
+      "expected": "pass",
+      "qualified": true,
+      "detail": "Worker arena fault prevents this kernel-dependent family; not counted as its intended kill.",
+      "diagnostics": ".local/matrix-20260916T204418/dummy_arena-19dc1a20"
+    },
+    {
+      "variant": "dummy_arena",
+      "family": "conflicting_id",
+      "observed": "blocked_by_lifetime_fault",
+      "expected": "pass",
+      "qualified": true,
+      "detail": "Worker arena fault prevents this kernel-dependent family; not counted as its intended kill.",
+      "diagnostics": ".local/matrix-20260916T204418/dummy_arena-0d7dc439"
+    },
+    {
+      "variant": "dummy_arena",
+      "family": "late_cancel",
+      "observed": "blocked_by_lifetime_fault",
+      "expected": "pass",
+      "qualified": true,
+      "detail": "Worker arena fault prevents this kernel-dependent family; not counted as its intended kill.",
+      "diagnostics": ".local/matrix-20260916T204418/dummy_arena-d58b2c4f"
+    },
+    {
+      "variant": "dummy_arena",
+      "family": "arena_lifetime",
+      "observed": "failure",
+      "expected": "failure",
+      "qualified": true,
+      "detail": "ASan heap-use-after-free in worker verification",
+      "diagnostics": ".local/matrix-20260916T204418/dummy_arena-bc8d1f34"
+    },
+    {
+      "variant": "dummy_asan",
+      "family": "arena_lifetime",
+      "observed": "pass",
+      "expected": "pass",
+      "qualified": true,
+      "detail": null,
+      "diagnostics": ".local/matrix-20260916T204418/dummy_asan-a256f725"
+    }
+  ],
+  "intended_kills": true,
+  "starvation_matrix": "priority-probe.json",
+  "candidate_launch_allowed": false
+}

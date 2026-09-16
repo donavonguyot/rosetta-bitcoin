@@ -1,0 +1,376 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+)
+
+type object map[string]json.RawMessage
+
+func readObject(raw []byte) (object, error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] != '{' {
+		return nil, invalidRequest
+	}
+	var v object
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, invalidRequest
+	}
+	return v, nil
+}
+
+func readArray(raw []byte, lim limits) ([]json.RawMessage, error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] != '[' {
+		return nil, invalidRequest
+	}
+	var v []json.RawMessage
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, invalidRequest
+	}
+	if err := lim.check(uint64(len(v))); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+func readString(raw []byte) (string, error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || raw[0] != '"' {
+		return "", invalidRequest
+	}
+	var v string
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return "", invalidRequest
+	}
+	return v, nil
+}
+
+func readBool(raw []byte) (bool, error) {
+	switch string(bytes.TrimSpace(raw)) {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, invalidRequest
+	}
+}
+
+func decimalSyntax(s string, signed bool) bool {
+	if signed && len(s) > 0 && s[0] == '-' {
+		s = s[1:]
+	}
+	if len(s) == 0 {
+		return false
+	}
+	for i := range s {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func readUint(raw []byte, bits int) (uint64, error) {
+	s, err := readString(raw)
+	if err != nil || !decimalSyntax(s, false) {
+		return 0, invalidRequest
+	}
+	v, err := strconv.ParseUint(s, 10, bits)
+	if err != nil {
+		return 0, invalidRequest
+	}
+	return v, nil
+}
+
+func readU32(raw []byte) (uint32, error) {
+	v, err := readUint(raw, 32)
+	return uint32(v), err
+}
+
+func readAmount(raw []byte) (int64, error) {
+	s, err := readString(raw)
+	if err != nil || !decimalSyntax(s, true) {
+		return 0, invalidRequest
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, invalidRequest
+	}
+	return v, nil
+}
+
+func readHex(raw []byte, max uint64) ([]byte, error) {
+	s, err := readString(raw)
+	if err != nil || len(s)%2 != 0 {
+		return nil, invalidRequest
+	}
+	for i := range s {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return nil, invalidRequest
+		}
+	}
+	if uint64(len(s)/2) > max {
+		return nil, resourceLimit
+	}
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return nil, invalidRequest
+	}
+	return b, nil
+}
+
+func readLimits(raw []byte) (limits, error) {
+	l := limits{maxItems: ^uint64(0)}
+	if raw == nil {
+		return l, nil
+	}
+	o, err := readObject(raw)
+	if err != nil {
+		return l, err
+	}
+	if r, exists := o["max_items"]; exists {
+		l.maxItems, err = readUint(r, 64)
+	}
+	return l, err
+}
+
+func readTransaction(raw []byte, lim limits) (*transaction, error) {
+	o, err := readObject(raw)
+	if err != nil {
+		return nil, err
+	}
+	t := new(transaction)
+	if t.version, err = readU32(o["version_bits"]); err != nil {
+		return nil, err
+	}
+	if t.locktime, err = readU32(o["locktime"]); err != nil {
+		return nil, err
+	}
+	ins, err := readArray(o["inputs"], lim)
+	if err != nil {
+		return nil, err
+	}
+	outs, err := readArray(o["outputs"], lim)
+	if err != nil {
+		return nil, err
+	}
+	budget := allocationBudget
+	reserve := func(n int, size uint64) error {
+		if uint64(n) > budget/size {
+			return admissionLimit
+		}
+		budget -= uint64(n) * size
+		return nil
+	}
+	if err = reserve(len(ins), 96); err != nil {
+		return nil, err
+	}
+	if err = reserve(len(outs), 32); err != nil {
+		return nil, err
+	}
+	t.inputs = make([]txInput, len(ins))
+	t.outputs = make([]txOutput, len(outs))
+	for i, rawIn := range ins {
+		inObject, err := readObject(rawIn)
+		if err != nil {
+			return nil, err
+		}
+		in := &t.inputs[i]
+		// A previous digest is a fixed-width field, not a limited vector.
+		prev, err := readHex(inObject["previous_txid_digest_order"], ^uint64(0))
+		if err != nil || len(prev) != 32 {
+			return nil, invalidRequest
+		}
+		copy(in.previous[:], prev)
+		if in.index, err = readU32(inObject["previous_index"]); err != nil {
+			return nil, err
+		}
+		if in.script, err = readHex(inObject["script"], lim.maxItems); err != nil {
+			return nil, err
+		}
+		if in.sequence, err = readU32(inObject["sequence"]); err != nil {
+			return nil, err
+		}
+		witness, err := readArray(inObject["witness"], lim)
+		if err != nil {
+			return nil, err
+		}
+		if err = reserve(len(witness), 24); err != nil {
+			return nil, err
+		}
+		in.witness = make([][]byte, len(witness))
+		for k, rawItem := range witness {
+			if in.witness[k], err = readHex(rawItem, lim.maxItems); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for i, rawOut := range outs {
+		outObject, err := readObject(rawOut)
+		if err != nil {
+			return nil, err
+		}
+		if t.outputs[i].amount, err = readAmount(outObject["amount"]); err != nil {
+			return nil, err
+		}
+		if t.outputs[i].script, err = readHex(outObject["script"], lim.maxItems); err != nil {
+			return nil, err
+		}
+	}
+	return t, nil
+}
+
+type response map[string]any
+
+func errorResponse(err error) response {
+	s, ok := err.(statusError)
+	if !ok {
+		s = executionFailure
+	}
+	return response{"status": string(s)}
+}
+
+func handle(line []byte) (result response) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintln(os.Stderr, "request execution failed:", r)
+			result = errorResponse(executionFailure)
+		}
+	}()
+	o, err := readObject(line)
+	if err != nil {
+		return errorResponse(err)
+	}
+	op, err := readString(o["op"])
+	if err != nil {
+		return errorResponse(err)
+	}
+	lim, err := readLimits(o["limits"])
+	if err != nil {
+		return errorResponse(err)
+	}
+	switch op {
+	case "decode_prefix", "decode_exact":
+		mode, err := readString(o["mode"])
+		if err != nil || mode != "legacy" && mode != "witness" {
+			return errorResponse(invalidRequest)
+		}
+		data, err := readHex(o["bytes"], ^uint64(0))
+		if err != nil {
+			return errorResponse(err)
+		}
+		var offset uint64
+		if op == "decode_prefix" {
+			offset, err = readUint(o["offset"], 64)
+			if err != nil || offset > uint64(len(data)) {
+				return errorResponse(invalidRequest)
+			}
+		}
+		t, consumed, err := decode(data, int(offset), mode == "witness", op == "decode_exact", lim)
+		if err != nil {
+			return errorResponse(err)
+		}
+		return response{"status": "ok", "transaction": t.jsonValue(), "consumed": decimal(uint64(consumed))}
+	case "serialize", "identify":
+		var includeWitness bool
+		if op == "serialize" {
+			includeWitness, err = readBool(o["include_witness"])
+			if err != nil {
+				return errorResponse(err)
+			}
+		}
+		t, err := readTransaction(o["transaction"], lim)
+		if err != nil {
+			return errorResponse(err)
+		}
+		if op == "serialize" {
+			return response{"status": "ok", "bytes": hex.EncodeToString(serialize(t, includeWitness))}
+		}
+		stripped := serialize(t, false)
+		full := stripped
+		if t.hasWitness() {
+			full = serialize(t, true)
+		}
+		txidDigest, txidDisplay := hashOrders(stripped)
+		wtxidDigest, wtxidDisplay := hashOrders(full)
+		return response{
+			"status": "ok", "stripped": hex.EncodeToString(stripped), "full": hex.EncodeToString(full),
+			"stripped_size": decimal(uint64(len(stripped))), "full_size": decimal(uint64(len(full))),
+			"txid_digest_order": txidDigest, "txid_display_order": txidDisplay,
+			"wtxid_digest_order": wtxidDigest, "wtxid_display_order": wtxidDisplay,
+		}
+	default:
+		return errorResponse(invalidRequest)
+	}
+}
+
+const maxLineBytes = 64 << 20
+
+// readLine drains an oversized record without retaining it, so the next line
+// can still be processed. The limit excludes the newline terminator.
+func readLine(r *bufio.Reader, max int) (line []byte, oversized bool, err error) {
+	for {
+		part, readErr := r.ReadSlice('\n')
+		if len(part) > 0 && part[len(part)-1] == '\n' {
+			part = part[:len(part)-1]
+		}
+		if !oversized {
+			if len(part) > max-len(line) {
+				oversized = true
+				line = nil
+			} else {
+				line = append(line, part...)
+			}
+		}
+		if readErr == bufio.ErrBufferFull {
+			continue
+		}
+		return line, oversized, readErr
+	}
+}
+
+func run(input io.Reader, output io.Writer) error {
+	r := bufio.NewReaderSize(input, 64<<10)
+	w := bufio.NewWriter(output)
+	enc := json.NewEncoder(w)
+	for {
+		line, oversized, err := readLine(r, maxLineBytes)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if err == io.EOF && len(line) == 0 && !oversized {
+			return nil
+		}
+		var res response
+		if oversized {
+			res = errorResponse(transportLimit)
+		} else {
+			res = handle(line)
+		}
+		if writeErr := enc.Encode(res); writeErr != nil {
+			return writeErr
+		}
+		if writeErr := w.Flush(); writeErr != nil {
+			return writeErr
+		}
+		if err == io.EOF {
+			return nil
+		}
+	}
+}
+
+func main() {
+	if err := run(os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

@@ -1,0 +1,926 @@
+const std = @import("std");
+const storage = @import("storage.zig");
+const c = @cImport({
+    @cUndef("_FORTIFY_SOURCE");
+    @cDefine("_FORTIFY_SOURCE", "0");
+    @cDefine("_GNU_SOURCE", "1");
+    @cInclude("adapter.h");
+    @cInclude("sys/socket.h");
+    @cInclude("sys/un.h");
+    @cInclude("sys/stat.h");
+    @cInclude("unistd.h");
+    @cInclude("fcntl.h");
+    @cInclude("poll.h");
+    @cInclude("pthread.h");
+    @cInclude("errno.h");
+    @cInclude("time.h");
+});
+const gpa = std.heap.c_allocator;
+const max_jobs = 1024;
+const max_payload = 64 << 20;
+const max_request = 40 << 20;
+const Value = std.json.Value;
+const WireItem = struct { hex: []const u8, mode: []const u8, operation: []const u8 };
+const WireResult = struct {
+    status: []const u8,
+    consumed: []const u8,
+    full_size: []const u8,
+    stripped_size: []const u8,
+    txid_digest_order: []const u8,
+    wtxid_digest_order: []const u8,
+};
+const PendingRecord = struct {
+    id: []const u8,
+    digest: []const u8,
+    sequence: []const u8,
+    bytes: []const u8,
+    priority: []const u8 = "normal",
+    items: []const WireItem,
+};
+const Receipt = struct {
+    id: []const u8,
+    digest: []const u8,
+    sequence: []const u8,
+    state: []const u8,
+    results: []const WireResult,
+};
+const Item = struct { offset: usize, size: usize, witness: u32, exact: u32 };
+const Input = struct {
+    bytes: []u8,
+    items: []Item,
+    digest: [64]u8,
+    fn deinit(self: *Input) void {
+        gpa.free(self.bytes);
+        gpa.free(self.items);
+    }
+};
+const Work = struct {
+    input: Input,
+    results: [64]c.rn_result = undefined,
+    next: ?*Work = null,
+    done: bool = false,
+    cancelled: bool = false,
+    failure: bool = false,
+    fn destroy(w: *Work) void {
+        w.input.deinit();
+        gpa.destroy(w);
+    }
+};
+const Pool = struct {
+    mutex: c.pthread_mutex_t = undefined,
+    condition: c.pthread_cond_t = undefined,
+    head: ?*Work = null,
+    tail: ?*Work = null,
+    stop: bool = false,
+    wake: c_int,
+    threads: [4]std.Thread = undefined,
+    spawned: usize = 0,
+    fn init(p: *Pool) !void {
+        if (c.pthread_mutex_init(&p.mutex, null) != 0) return error.ThreadInit;
+        errdefer _ = c.pthread_mutex_destroy(&p.mutex);
+        if (c.pthread_cond_init(&p.condition, null) != 0) return error.ThreadInit;
+        errdefer _ = c.pthread_cond_destroy(&p.condition);
+        errdefer p.join();
+        for (&p.threads) |*thread| {
+            thread.* = try std.Thread.spawn(.{}, worker, .{p});
+            p.spawned += 1;
+        }
+    }
+    fn lock(p: *Pool) void {
+        std.debug.assert(c.pthread_mutex_lock(&p.mutex) == 0);
+    }
+    fn unlock(p: *Pool) void {
+        std.debug.assert(c.pthread_mutex_unlock(&p.mutex) == 0);
+    }
+    fn enqueue(p: *Pool, w: *Work) void {
+        p.lock();
+        defer p.unlock();
+        if (p.tail) |t| t.next = w else p.head = w;
+        p.tail = w;
+        std.debug.assert(c.pthread_cond_signal(&p.condition) == 0);
+    }
+    fn isDone(p: *Pool, w: *Work) bool {
+        p.lock();
+        defer p.unlock();
+        return w.done;
+    }
+    fn cancel(p: *Pool, w: *Work) void {
+        p.lock();
+        defer p.unlock();
+        w.cancelled = true;
+    }
+    fn join(p: *Pool) void {
+        p.lock();
+        p.stop = true;
+        std.debug.assert(c.pthread_cond_broadcast(&p.condition) == 0);
+        p.unlock();
+        for (p.threads[0..p.spawned]) |t| t.join();
+        p.spawned = 0;
+    }
+    fn deinit(p: *Pool) void {
+        p.join();
+        _ = c.pthread_cond_destroy(&p.condition);
+        _ = c.pthread_mutex_destroy(&p.mutex);
+    }
+    fn worker(p: *Pool) void {
+        while (true) {
+            p.lock();
+            while (p.head == null and !p.stop) std.debug.assert(c.pthread_cond_wait(&p.condition, &p.mutex) == 0);
+            if (p.stop) {
+                p.unlock();
+                return;
+            }
+            const w = p.head.?;
+            p.head = w.next;
+            if (p.head == null) p.tail = null;
+            const cancelled = w.cancelled;
+            p.unlock();
+            if (!cancelled) encode(w);
+            p.lock();
+            w.done = true;
+            p.unlock();
+            // Nonblocking pipe: a full pipe already guarantees a pending wakeup.
+            _ = c.write(p.wake, "x", 1);
+        }
+    }
+};
+fn encode(w: *Work) void {
+    const arena = c.rn_arena_create(w.input.bytes.ptr, w.input.bytes.len) orelse {
+        w.failure = true;
+        return;
+    };
+    defer c.rn_arena_destroy(arena);
+    const base = c.rn_arena_data(arena);
+    if (base == null) {
+        w.failure = true;
+        return;
+    }
+    var items: [64]c.rn_item_v1 = undefined;
+    for (w.input.items, 0..) |it, i| items[i] = .{
+        .data = base + it.offset,
+        .size = it.size,
+        .witness = it.witness,
+        .exact = it.exact,
+    };
+    if (c.rn_verify_v1(arena, &items, w.input.items.len, &w.results) != 0) {
+        w.failure = true;
+        return;
+    }
+    // Enforce the wire's zero representation for every non-success result.
+    for (w.results[0..w.input.items.len]) |*r| {
+        if (r.status != 0) {
+            const status = r.status;
+            r.* = std.mem.zeroes(c.rn_result);
+            r.status = status;
+        }
+    }
+}
+const Job = struct {
+    id: []u8,
+    sequence: u64,
+    pending: []u8,
+    work: *Work,
+    cancelled: bool = false,
+    connection: u64 = 0,
+    fn destroy(j: *Job) void {
+        gpa.free(j.id);
+        gpa.free(j.pending);
+        j.work.destroy();
+        gpa.destroy(j);
+    }
+};
+const Client = struct {
+    fd: c_int = -1,
+    token: u64 = 0,
+    input: std.ArrayList(u8) = .empty,
+    scanned: usize = 0,
+    output: std.ArrayList(u8) = .empty,
+    sent: usize = 0,
+    evaluation: ?*Work = null,
+    eval_request: ?[]u8 = null,
+    close_after_output: bool = false,
+    fn disconnect(cl: *Client) void {
+        if (cl.fd >= 0) _ = c.close(cl.fd);
+        cl.fd = -1;
+        cl.input.clearAndFree(gpa);
+        cl.scanned = 0;
+        cl.output.clearAndFree(gpa);
+        cl.sent = 0;
+    }
+    fn deinit(cl: *Client) void {
+        cl.disconnect();
+        if (cl.evaluation) |w| w.destroy();
+        if (cl.eval_request) |r| gpa.free(r);
+    }
+    fn send(cl: *Client, value: anytype) !void {
+        const data = try std.json.Stringify.valueAlloc(gpa, value, .{});
+        defer gpa.free(data);
+        // Reclaim a sent prefix even if a continuous event stream prevents the
+        // queue from becoming completely empty.
+        if (cl.sent >= (64 << 10)) {
+            const remaining = cl.output.items.len - cl.sent;
+            std.mem.copyForwards(u8, cl.output.items[0..remaining], cl.output.items[cl.sent..]);
+            cl.output.items.len = remaining;
+            cl.sent = 0;
+        }
+        try cl.output.appendSlice(gpa, data);
+        try cl.output.append(gpa, '\n');
+    }
+    fn response(cl: *Client, request: []const u8, status: []const u8) !void {
+        try cl.send(.{ .request = request, .status = status });
+    }
+};
+const Server = struct {
+    db: storage.DB,
+    pool: *Pool,
+    jobs: [max_jobs]?*Job = @splat(null),
+    last: u64 = 0,
+    checkpoint: u64 = 0,
+    outstanding_bytes: u64 = 0,
+    clients: [8]Client = @splat(.{}),
+    next_connection: u64 = 1,
+    draining: bool = false,
+    fn job(s: *Server, seq: u64) !*Job {
+        if (seq <= s.checkpoint or seq > s.last) return error.CorruptDatabase;
+        const j = s.jobs[@intCast(seq % max_jobs)] orelse return error.CorruptDatabase;
+        if (j.sequence != seq) return error.CorruptDatabase;
+        return j;
+    }
+    fn deinit(s: *Server) void {
+        for (&s.clients) |*cl| cl.deinit();
+        for (s.jobs) |j| if (j) |p| p.destroy();
+        s.db.close();
+    }
+};
+fn equal(a: []const u8, b: []const u8) bool {
+    return std.mem.eql(u8, a, b);
+}
+fn decimal(a: std.mem.Allocator, n: anytype) ![]const u8 {
+    return try std.fmt.allocPrint(a, "{d}", .{n});
+}
+fn seqKey(a: std.mem.Allocator, prefix: []const u8, seq: u64) ![]const u8 {
+    return try std.fmt.allocPrint(a, "{s}/{d:0>20}", .{ prefix, seq });
+}
+fn idKey(a: std.mem.Allocator, id: []const u8) ![]const u8 {
+    return try std.fmt.allocPrint(a, "id/{s}", .{id});
+}
+fn number(s: []const u8) !u64 {
+    if (s.len == 0) return error.InvalidRequest;
+    for (s) |ch| if (ch < '0' or ch > '9') return error.InvalidRequest;
+    return std.fmt.parseInt(u64, s, 10) catch error.InvalidRequest;
+}
+fn validId(id: []const u8) bool {
+    if (id.len == 0 or id.len > 64) return false;
+    for (id) |ch| if (!std.ascii.isAlphanumeric(ch) and ch != '_' and ch != '-') return false;
+    return true;
+}
+fn validHex(hex: []const u8) bool {
+    if (hex.len % 2 != 0) return false;
+    for (hex) |ch| if (!(ch >= '0' and ch <= '9') and !(ch >= 'a' and ch <= 'f')) return false;
+    return true;
+}
+fn hexAlloc(a: std.mem.Allocator, bytes: []const u8) ![]u8 {
+    const out = try a.alloc(u8, bytes.len * 2);
+    const alphabet = "0123456789abcdef";
+    for (bytes, 0..) |b, i| {
+        out[2 * i] = alphabet[b >> 4];
+        out[2 * i + 1] = alphabet[b & 15];
+    }
+    return out;
+}
+fn string(v: Value) ![]const u8 {
+    return if (v == .string) v.string else error.InvalidRequest;
+}
+fn field(v: Value, key: []const u8) !Value {
+    if (v != .object) return error.InvalidRequest;
+    return v.object.get(key) orelse error.InvalidRequest;
+}
+fn strField(v: Value, key: []const u8) ![]const u8 {
+    return string(try field(v, key));
+}
+fn onlyFields(v: Value, names: []const []const u8) !void {
+    if (v != .object) return error.InvalidRequest;
+    for (v.object.keys()) |key| {
+        var found = false;
+        for (names) |name| if (equal(key, name)) {
+            found = true;
+            break;
+        };
+        if (!found) return error.InvalidRequest;
+    }
+}
+fn inputFromItems(items: []const WireItem) !Input {
+    if (items.len == 0 or items.len > 64) return error.InvalidRequest;
+    var total: usize = 0;
+    for (items) |it| {
+        if (!validHex(it.hex)) return error.InvalidRequest;
+        if (!equal(it.mode, "legacy") and !equal(it.mode, "witness")) return error.InvalidRequest;
+        if (!equal(it.operation, "prefix") and !equal(it.operation, "exact")) return error.InvalidRequest;
+        if (it.hex.len / 2 > (16 << 20) - total) return error.InvalidRequest;
+        total += it.hex.len / 2;
+    }
+    const bytes = try gpa.alloc(u8, total);
+    errdefer gpa.free(bytes);
+    const descriptors = try gpa.alloc(Item, items.len);
+    errdefer gpa.free(descriptors);
+    var offset: usize = 0;
+    var hash = std.crypto.hash.sha2.Sha256.init(.{});
+    for (items, descriptors) |it, *desc| {
+        const len = it.hex.len / 2;
+        _ = try std.fmt.hexToBytes(bytes[offset..][0..len], it.hex);
+        const witness: u8 = if (equal(it.mode, "witness")) 1 else 0;
+        const exact: u8 = if (equal(it.operation, "exact")) 1 else 0;
+        hash.update(&.{ witness, exact });
+        var length: [8]u8 = undefined;
+        std.mem.writeInt(u64, &length, @intCast(len), .little);
+        hash.update(&length);
+        hash.update(bytes[offset..][0..len]);
+        desc.* = .{ .offset = offset, .size = len, .witness = witness, .exact = exact };
+        offset += len;
+    }
+    var digest: [32]u8 = undefined;
+    hash.final(&digest);
+    return .{ .bytes = bytes, .items = descriptors, .digest = std.fmt.bytesToHex(digest, .lower) };
+}
+fn requestItems(a: std.mem.Allocator, v: Value) ![]WireItem {
+    const values = try field(v, "items");
+    if (values != .array or values.array.items.len == 0 or values.array.items.len > 64) return error.InvalidRequest;
+    const items = try a.alloc(WireItem, values.array.items.len);
+    for (values.array.items, items) |it, *dest| {
+        try onlyFields(it, &.{ "hex", "mode", "operation" });
+        dest.* = .{ .hex = try strField(it, "hex"), .mode = try strField(it, "mode"), .operation = try strField(it, "operation") };
+    }
+    return items;
+}
+fn results(a: std.mem.Allocator, w: *Work) ![]WireResult {
+    const out = try a.alloc(WireResult, w.input.items.len);
+    for (out, w.results[0..out.len]) |*dest, r| dest.* = .{
+        .status = try decimal(a, r.status),
+        .consumed = try decimal(a, r.consumed),
+        .full_size = try decimal(a, r.full_size),
+        .stripped_size = try decimal(a, r.stripped_size),
+        .txid_digest_order = try hexAlloc(a, &r.txid),
+        .wtxid_digest_order = try hexAlloc(a, &r.wtxid),
+    };
+    return out;
+}
+
+fn handle(s: *Server, cl: *Client, a: std.mem.Allocator, v: Value, request: []const u8) !void {
+    const op = try strField(v, "op");
+    if (equal(op, "submit") or equal(op, "evaluate")) {
+        const persistent = equal(op, "submit");
+        try onlyFields(v, if (persistent) &.{ "request", "op", "id", "items" } else &.{ "request", "op", "items" });
+        const id = if (persistent) try strField(v, "id") else "";
+        if (persistent and !validId(id)) return error.InvalidRequest;
+        const items = try requestItems(a, v);
+        var input = try inputFromItems(items);
+        var owned = true;
+        defer if (owned) input.deinit();
+        if (!persistent) {
+            if (s.draining) {
+                try cl.response(request, "draining");
+                return;
+            }
+            const w = try gpa.create(Work);
+            errdefer gpa.destroy(w);
+            const req = try gpa.dupe(u8, request);
+            w.* = .{ .input = input };
+            owned = false;
+            cl.evaluation = w;
+            cl.eval_request = req;
+            s.pool.enqueue(w);
+            return;
+        }
+        const index_key = try idKey(a, id);
+        if (try s.db.get(a, index_key)) |assigned| {
+            const seq = try number(assigned);
+            const existing_digest = if (seq > s.checkpoint)
+                &(try s.job(seq)).work.input.digest
+            else blk: {
+                const receipt = try s.db.get(a, try seqKey(a, "r", seq)) orelse return error.CorruptDatabase;
+                const parsed = try std.json.parseFromSliceLeaky(Receipt, a, receipt, .{});
+                break :blk parsed.digest;
+            };
+            if (equal(existing_digest, &input.digest)) {
+                try cl.send(.{ .request = request, .status = "existing", .sequence = assigned });
+            } else try cl.response(request, "conflict");
+            return;
+        }
+        if (s.draining) {
+            try cl.response(request, "draining");
+            return;
+        }
+        if (s.last - s.checkpoint >= max_jobs or input.bytes.len > max_payload - s.outstanding_bytes) {
+            try cl.response(request, "backpressure");
+            return;
+        }
+        if (s.last == std.math.maxInt(u64)) {
+            try cl.response(request, "backpressure");
+            return;
+        }
+        const seq = s.last + 1;
+        const seq_text = try decimal(a, seq);
+        const pending = try std.json.Stringify.valueAlloc(gpa, PendingRecord{
+            .id = id,
+            .digest = &input.digest,
+            .sequence = seq_text,
+            .bytes = try decimal(a, input.bytes.len),
+            .items = items,
+        }, .{});
+        errdefer gpa.free(pending);
+        const id_owned = try gpa.dupe(u8, id);
+        errdefer gpa.free(id_owned);
+        const w = try gpa.create(Work);
+        errdefer gpa.destroy(w);
+        const j = try gpa.create(Job);
+        errdefer gpa.destroy(j);
+        var batch = try storage.Batch.init();
+        defer batch.deinit();
+        batch.put(index_key, seq_text);
+        batch.put(try seqKey(a, "p", seq), pending);
+        batch.put("meta/sequence", seq_text);
+        batch.put("meta/jobs", try decimal(a, s.last - s.checkpoint + 1));
+        batch.put("meta/bytes", try decimal(a, s.outstanding_bytes + input.bytes.len));
+        try s.db.commit(&batch);
+        w.* = .{ .input = input };
+        j.* = .{ .id = id_owned, .sequence = seq, .pending = pending, .work = w, .connection = cl.token };
+        s.jobs[@intCast(seq % max_jobs)] = j;
+        s.last = seq;
+        s.outstanding_bytes += input.bytes.len;
+        owned = false;
+        s.pool.enqueue(w);
+        // Ownership has transferred to s; an output failure must not unwind it twice.
+        cl.send(.{ .request = request, .status = "accepted", .sequence = seq_text }) catch |err| fatal(err);
+    } else if (equal(op, "status") or equal(op, "cancel")) {
+        try onlyFields(v, &.{ "request", "op", "id" });
+        const id = try strField(v, "id");
+        if (!validId(id)) return error.InvalidRequest;
+        const assigned = try s.db.get(a, try idKey(a, id)) orelse {
+            try cl.response(request, "not_found");
+            return;
+        };
+        const seq = try number(assigned);
+        if (equal(op, "status")) {
+            const raw = if (seq > s.checkpoint) (try s.job(seq)).pending else (try s.db.get(a, try seqKey(a, "r", seq)) orelse return error.CorruptDatabase);
+            var record = try std.json.parseFromSliceLeaky(Value, a, raw, .{});
+            if (seq > s.checkpoint) try record.object.put(a, "state", .{ .string = if ((try s.job(seq)).cancelled) "cancel_pending" else "pending" });
+            try cl.send(.{ .request = request, .status = "ok", .job = record });
+        } else {
+            if (seq <= s.checkpoint) {
+                try cl.response(request, "too_late");
+                return;
+            }
+            const j = try s.job(seq);
+            if (!j.cancelled) {
+                var batch = try storage.Batch.init();
+                defer batch.deinit();
+                batch.put(try seqKey(a, "c", seq), "1");
+                try s.db.commit(&batch);
+                j.cancelled = true;
+                s.pool.cancel(j.work);
+            }
+            try cl.response(request, "ok");
+        }
+    } else if (equal(op, "shutdown")) {
+        try onlyFields(v, &.{ "request", "op" });
+        s.draining = true;
+        try cl.response(request, "draining");
+    } else return error.InvalidRequest;
+}
+
+fn processLine(s: *Server, cl: *Client, line: []const u8) !void {
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    if (line.len > max_request or !std.unicode.utf8ValidateSlice(line) or !boundedStructure(line)) {
+        try cl.response("", "invalid_request");
+        return;
+    }
+    const v = std.json.parseFromSliceLeaky(Value, a, line, .{}) catch |err| {
+        if (err == error.OutOfMemory) return err;
+        try cl.response("", "invalid_request");
+        return;
+    };
+    const request = strField(v, "request") catch {
+        try cl.response("", "invalid_request");
+        return;
+    };
+    handle(s, cl, a, v, request) catch |err| switch (err) {
+        error.InvalidRequest => try cl.response(request, "invalid_request"),
+        else => return err,
+    };
+}
+
+// The v1 schema has only a root object, an items array, and item objects.
+// Bound structural work before the general JSON parser allocates a tree for an
+// invalid deeply nested value or millions of unknown fields. String length is
+// still governed solely by the 40 MiB request limit.
+fn boundedStructure(line: []const u8) bool {
+    var quoted = false;
+    var escaped = false;
+    var depth: usize = 0;
+    var separators: usize = 0;
+    for (line) |ch| {
+        if (quoted) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch == '\\') escaped = true else if (ch == '"') quoted = false;
+            continue;
+        }
+        switch (ch) {
+            '"' => quoted = true,
+            '{', '[' => {
+                depth += 1;
+                if (depth > 3) return false;
+            },
+            '}', ']' => {
+                if (depth == 0) return false;
+                depth -= 1;
+            },
+            ',', ':' => {
+                separators += 1;
+                if (separators > 512) return false;
+            },
+            else => {},
+        }
+    }
+    return true; // Full syntax, escaping, and UTF-8 checks remain the parser's job.
+}
+
+fn complete(s: *Server) !void {
+    for (&s.clients) |*cl| {
+        if (cl.evaluation) |w| {
+            if (!s.pool.isDone(w)) continue;
+            defer {
+                w.destroy();
+                cl.evaluation = null;
+                gpa.free(cl.eval_request.?);
+                cl.eval_request = null;
+            }
+            if (cl.fd < 0) continue;
+            if (w.failure) {
+                try cl.response(cl.eval_request.?, "execution_failure");
+            } else {
+                var arena = std.heap.ArenaAllocator.init(gpa);
+                defer arena.deinit();
+                try cl.send(.{ .request = cl.eval_request.?, .status = "ok", .results = try results(arena.allocator(), w) });
+            }
+        }
+    }
+    if (s.checkpoint == s.last) return;
+    const j = try s.job(s.checkpoint + 1);
+    if (!s.pool.isDone(j.work)) return;
+    if (j.work.failure) return error.AcknowledgedJobExecutionFailure;
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const receipt = Receipt{
+        .id = j.id,
+        .digest = &j.work.input.digest,
+        .sequence = try decimal(a, j.sequence),
+        .state = if (j.cancelled) "cancelled" else "complete",
+        .results = if (j.cancelled) &.{} else try results(a, j.work),
+    };
+    const raw = try std.json.Stringify.valueAlloc(a, receipt, .{});
+    var batch = try storage.Batch.init();
+    defer batch.deinit();
+    batch.put(try seqKey(a, "r", j.sequence), raw);
+    batch.delete(try seqKey(a, "p", j.sequence));
+    batch.delete(try seqKey(a, "c", j.sequence));
+    batch.put("meta/checkpoint", receipt.sequence);
+    batch.put("meta/jobs", try decimal(a, s.last - j.sequence));
+    batch.put("meta/bytes", try decimal(a, s.outstanding_bytes - j.work.input.bytes.len));
+    // This is the sole terminal write site. The event loop cannot acknowledge
+    // cancellation between deciding the receipt and C rocksdb_write call_entry.
+    try s.db.commit(&batch);
+    s.checkpoint = j.sequence;
+    s.outstanding_bytes -= j.work.input.bytes.len;
+    s.jobs[@intCast(j.sequence % max_jobs)] = null;
+    defer j.destroy();
+    for (&s.clients) |*cl| {
+        if (cl.fd >= 0 and cl.token == j.connection and cl.output.items.len - cl.sent < (1 << 20)) {
+            // Best effort notification; receipt is already durable and queryable.
+            cl.send(.{ .event = "terminal", .id = j.id, .job = receipt }) catch cl.disconnect();
+            break;
+        }
+    }
+}
+
+fn required(db: *storage.DB, a: std.mem.Allocator, key: []const u8) ![]u8 {
+    return try db.get(a, key) orelse error.CorruptDatabase;
+}
+fn recoveredReceipt(a: std.mem.Allocator, raw: []const u8, seq: u64) !Receipt {
+    const r = try std.json.parseFromSliceLeaky(Receipt, a, raw, .{});
+    if (!validId(r.id) or r.digest.len != 64 or !validHex(r.digest) or try number(r.sequence) != seq) return error.CorruptDatabase;
+    if (equal(r.state, "cancelled")) {
+        if (r.results.len != 0) return error.CorruptDatabase;
+    } else if (equal(r.state, "complete")) {
+        if (r.results.len == 0 or r.results.len > 64) return error.CorruptDatabase;
+        for (r.results) |res| {
+            const status = try number(res.status);
+            const consumed = try number(res.consumed);
+            const full = try number(res.full_size);
+            const stripped = try number(res.stripped_size);
+            if (status > 4 or res.txid_digest_order.len != 64 or !validHex(res.txid_digest_order) or
+                res.wtxid_digest_order.len != 64 or !validHex(res.wtxid_digest_order)) return error.CorruptDatabase;
+            if (status != 0 and (consumed != 0 or full != 0 or stripped != 0 or
+                !equal(res.txid_digest_order, "0" ** 64) or !equal(res.wtxid_digest_order, "0" ** 64))) return error.CorruptDatabase;
+        }
+    } else return error.CorruptDatabase;
+    return r;
+}
+
+fn recover(s: *Server) !void {
+    const rc = storage.c;
+    const iter = rc.rocksdb_create_iterator(s.db.db, s.db.read) orelse return error.OutOfMemory;
+    defer rc.rocksdb_iter_destroy(iter);
+    rc.rocksdb_iter_seek_to_first(iter);
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    defer arena.deinit();
+    const a = arena.allocator();
+    const version = try s.db.get(a, "meta/version");
+    if (version == null) {
+        var err: [*c]u8 = null;
+        rc.rocksdb_iter_get_error(iter, &err);
+        try storage.checked(err);
+        if (rc.rocksdb_iter_valid(iter) != 0) return error.CorruptDatabase;
+        var batch = try storage.Batch.init();
+        defer batch.deinit();
+        batch.put("meta/version", "1");
+        batch.put("meta/sequence", "0");
+        batch.put("meta/checkpoint", "0");
+        batch.put("meta/jobs", "0");
+        batch.put("meta/bytes", "0");
+        try s.db.commit(&batch);
+        return;
+    }
+    if (!equal(version.?, "1")) return error.IncompatibleSchema;
+    const sequence_raw = try s.db.get(a, "meta/sequence");
+    const checkpoint_raw = try s.db.get(a, "meta/checkpoint");
+    const count_raw = try s.db.get(a, "meta/jobs");
+    const bytes_raw = try s.db.get(a, "meta/bytes");
+    if (sequence_raw == null or checkpoint_raw == null or count_raw == null or bytes_raw == null) {
+        // Absent scalar counters mean zero only on a fresh database: no job,
+        // index, cancellation, unknown key, or nonzero counter may be present.
+        while (rc.rocksdb_iter_valid(iter) != 0) : (rc.rocksdb_iter_next(iter)) {
+            var len: usize = 0;
+            const key_ptr = rc.rocksdb_iter_key(iter, &len);
+            const key = key_ptr[0..len];
+            if (equal(key, "meta/version")) continue;
+            if (!equal(key, "meta/sequence") and !equal(key, "meta/checkpoint") and
+                !equal(key, "meta/jobs") and !equal(key, "meta/bytes")) return error.CorruptDatabase;
+            const value_ptr = rc.rocksdb_iter_value(iter, &len);
+            if (try number(value_ptr[0..len]) != 0) return error.CorruptDatabase;
+        }
+        var err: [*c]u8 = null;
+        rc.rocksdb_iter_get_error(iter, &err);
+        try storage.checked(err);
+        var batch = try storage.Batch.init();
+        defer batch.deinit();
+        batch.put("meta/sequence", "0");
+        batch.put("meta/checkpoint", "0");
+        batch.put("meta/jobs", "0");
+        batch.put("meta/bytes", "0");
+        try s.db.commit(&batch);
+        return;
+    }
+    s.last = try number(sequence_raw.?);
+    s.checkpoint = try number(checkpoint_raw.?);
+    const count = try number(count_raw.?);
+    s.outstanding_bytes = try number(bytes_raw.?);
+    if (s.checkpoint > s.last or count != s.last - s.checkpoint or count > max_jobs or s.outstanding_bytes > max_payload) return error.CorruptDatabase;
+    var ids: u64 = 0;
+    var receipts: u64 = 0;
+    var pendings: u64 = 0;
+    var metadata: usize = 0;
+    while (rc.rocksdb_iter_valid(iter) != 0) : (rc.rocksdb_iter_next(iter)) {
+        var len: usize = 0;
+        const ptr = rc.rocksdb_iter_key(iter, &len);
+        const key = ptr[0..len];
+        if (std.mem.startsWith(u8, key, "meta/")) {
+            if (!equal(key, "meta/version") and !equal(key, "meta/sequence") and !equal(key, "meta/checkpoint") and !equal(key, "meta/jobs") and !equal(key, "meta/bytes")) return error.IncompatibleSchema;
+            metadata += 1;
+        } else if (std.mem.startsWith(u8, key, "id/")) {
+            if (!validId(key[3..])) return error.CorruptDatabase;
+            ids += 1;
+        } else {
+            if (key.len != 22 or key[1] != '/') return error.CorruptDatabase;
+            const seq = try number(key[2..]);
+            if (seq == 0 or seq > s.last) return error.CorruptDatabase;
+            switch (key[0]) {
+                'r' => {
+                    if (seq > s.checkpoint) return error.CorruptDatabase;
+                    receipts += 1;
+                },
+                'p' => {
+                    if (seq <= s.checkpoint) return error.CorruptDatabase;
+                    pendings += 1;
+                },
+                'c' => {
+                    if (seq <= s.checkpoint) return error.CorruptDatabase;
+                    var value_len: usize = 0;
+                    const value_ptr = rc.rocksdb_iter_value(iter, &value_len);
+                    if (!equal(value_ptr[0..value_len], "1")) return error.CorruptDatabase;
+                },
+                else => return error.IncompatibleSchema,
+            }
+        }
+    }
+    var iter_err: [*c]u8 = null;
+    rc.rocksdb_iter_get_error(iter, &iter_err);
+    try storage.checked(iter_err);
+    if (metadata != 5 or ids != s.last or receipts != s.checkpoint or pendings != count) return error.CorruptDatabase;
+    var bytes: u64 = 0;
+    var seq: u64 = 0;
+    while (seq < s.last) {
+        seq += 1;
+        var local = std.heap.ArenaAllocator.init(gpa);
+        defer local.deinit();
+        const la = local.allocator();
+        if (seq <= s.checkpoint) {
+            const r = try recoveredReceipt(la, try required(&s.db, la, try seqKey(la, "r", seq)), seq);
+            if (try number(try required(&s.db, la, try idKey(la, r.id))) != seq) return error.CorruptDatabase;
+        } else {
+            const raw = try required(&s.db, la, try seqKey(la, "p", seq));
+            const record = try std.json.parseFromSliceLeaky(PendingRecord, la, raw, .{});
+            if (!validId(record.id) or !equal(record.priority, "normal") or try number(record.sequence) != seq) return error.CorruptDatabase;
+            if (try number(try required(&s.db, la, try idKey(la, record.id))) != seq) return error.CorruptDatabase;
+            var input = try inputFromItems(record.items);
+            errdefer input.deinit();
+            if (!equal(record.digest, &input.digest) or try number(record.bytes) != input.bytes.len) return error.CorruptDatabase;
+            if (input.bytes.len > s.outstanding_bytes - bytes) return error.CorruptDatabase;
+            bytes += input.bytes.len;
+            const cancelled = (try s.db.get(la, try seqKey(la, "c", seq))) != null;
+            const w = try gpa.create(Work);
+            errdefer gpa.destroy(w);
+            const j = try gpa.create(Job);
+            errdefer gpa.destroy(j);
+            const id = try gpa.dupe(u8, record.id);
+            errdefer gpa.free(id);
+            const pending = try gpa.dupe(u8, raw);
+            w.* = .{ .input = input, .cancelled = cancelled };
+            j.* = .{ .id = id, .sequence = seq, .pending = pending, .work = w, .cancelled = cancelled };
+            s.jobs[@intCast(seq % max_jobs)] = j;
+        }
+    }
+    if (bytes != s.outstanding_bytes) return error.CorruptDatabase;
+    seq = s.checkpoint;
+    while (seq < s.last) {
+        seq += 1;
+        s.pool.enqueue((try s.job(seq)).work);
+    }
+}
+
+fn errno() c_int {
+    return c.__errno_location().*;
+}
+fn transient() bool {
+    return errno() == c.EAGAIN or errno() == c.EWOULDBLOCK or errno() == c.EINTR;
+}
+fn monotonicMs() i64 {
+    var ts: c.timespec = undefined;
+    std.debug.assert(c.clock_gettime(c.CLOCK_MONOTONIC, &ts) == 0);
+    return ts.tv_sec * 1000 + @divTrunc(ts.tv_nsec, 1_000_000);
+}
+fn listener(path: [:0]const u8) !c_int {
+    var address: c.sockaddr_un = std.mem.zeroes(c.sockaddr_un);
+    if (path.len == 0 or path.len >= address.sun_path.len) return error.SocketPathTooLong;
+    address.sun_family = c.AF_UNIX;
+    @memcpy(@as([*]u8, @ptrCast(&address.sun_path))[0..path.len], path);
+    const fd = c.socket(c.AF_UNIX, c.SOCK_STREAM | c.SOCK_NONBLOCK | c.SOCK_CLOEXEC, 0);
+    if (fd < 0) return error.Socket;
+    errdefer _ = c.close(fd);
+    if (c.bind(fd, .{ .__sockaddr_un__ = &address }, @sizeOf(c.sockaddr_un)) != 0) return error.Bind;
+    errdefer _ = c.unlink(path);
+    if (c.listen(fd, 16) != 0) return error.Listen;
+    return fd;
+}
+fn eventLoop(s: *Server, listen_fd: c_int, wake_fd: c_int) !void {
+    var drained_since: ?i64 = null;
+    while (true) {
+        try complete(s);
+        for (&s.clients) |*cl| {
+            if (cl.fd < 0 or cl.evaluation != null or cl.close_after_output or cl.output.items.len != 0) continue;
+            if (std.mem.findScalar(u8, cl.input.items[cl.scanned..], '\n')) |relative_end| {
+                const end = cl.scanned + relative_end;
+                try processLine(s, cl, cl.input.items[0..end]);
+                const remaining = cl.input.items.len - end - 1;
+                std.mem.copyForwards(u8, cl.input.items[0..remaining], cl.input.items[end + 1 ..]);
+                cl.input.items.len = remaining;
+                cl.scanned = 0;
+                if (remaining == 0) cl.input.clearAndFree(gpa);
+            } else if (cl.input.items.len > max_request) {
+                try cl.response("", "invalid_request");
+                cl.close_after_output = true;
+                cl.input.clearAndFree(gpa);
+                cl.scanned = 0;
+            } else cl.scanned = cl.input.items.len;
+        }
+        var evaluations = false;
+        var output = false;
+        for (&s.clients) |*cl| {
+            if (cl.evaluation != null) evaluations = true;
+            if (cl.fd >= 0 and cl.output.items.len != 0) output = true;
+        }
+        if (s.draining and s.checkpoint == s.last and !evaluations) {
+            if (drained_since == null) drained_since = monotonicMs();
+            if (!output or monotonicMs() - drained_since.? > 1000) return;
+        }
+        var polls: [10]c.pollfd = undefined;
+        polls[0] = .{ .fd = listen_fd, .events = c.POLLIN, .revents = 0 };
+        polls[1] = .{ .fd = wake_fd, .events = c.POLLIN, .revents = 0 };
+        for (&s.clients, polls[2..]) |*cl, *p| p.* = .{
+            .fd = cl.fd,
+            .events = @as(c_short, if (cl.output.items.len != 0) c.POLLOUT else if (cl.evaluation == null and !cl.close_after_output) c.POLLIN else 0),
+            .revents = 0,
+        };
+        var immediate = false;
+        if (s.checkpoint < s.last and s.pool.isDone((try s.job(s.checkpoint + 1)).work)) immediate = true;
+        for (&s.clients) |*cl| if (cl.fd >= 0 and cl.evaluation == null and cl.output.items.len == 0 and cl.scanned < cl.input.items.len) {
+            immediate = true;
+        };
+        const n = c.poll(&polls, polls.len, if (immediate) 0 else 100);
+        if (n < 0) {
+            if (errno() == c.EINTR) continue;
+            return error.Poll;
+        }
+        if (polls[1].revents & c.POLLIN != 0) {
+            var buf: [1024]u8 = undefined;
+            while (c.read(wake_fd, &buf, buf.len) > 0) {}
+        }
+        for (&s.clients, polls[2..]) |*cl, p| {
+            if (cl.fd < 0) continue;
+            if (p.revents & c.POLLOUT != 0 and cl.output.items.len > cl.sent) {
+                const remaining = cl.output.items[cl.sent..];
+                const written = c.send(cl.fd, remaining.ptr, remaining.len, c.MSG_NOSIGNAL | c.MSG_DONTWAIT);
+                if (written > 0) {
+                    cl.sent += @intCast(written);
+                    if (cl.sent == cl.output.items.len) {
+                        cl.output.clearAndFree(gpa);
+                        cl.sent = 0;
+                        if (cl.close_after_output) cl.disconnect();
+                    }
+                } else if (written == 0 or !transient()) cl.disconnect();
+            }
+            if (cl.fd >= 0 and p.revents & c.POLLIN != 0) {
+                var buf: [16384]u8 = undefined;
+                const got = c.recv(cl.fd, &buf, buf.len, c.MSG_DONTWAIT);
+                if (got > 0) try cl.input.appendSlice(gpa, buf[0..@intCast(got)]) else if (got == 0 or !transient()) cl.disconnect();
+            }
+            if (cl.fd >= 0 and p.revents & (c.POLLERR | c.POLLNVAL) != 0) cl.disconnect();
+            // On HUP, read any final bytes first; EOF will close on the next read.
+            if (cl.fd >= 0 and p.revents & c.POLLHUP != 0 and p.revents & c.POLLIN == 0) cl.disconnect();
+        }
+        if (polls[0].revents & c.POLLIN != 0) {
+            const fd = c.accept4(listen_fd, .{ .__sockaddr__ = null }, null, c.SOCK_NONBLOCK | c.SOCK_CLOEXEC);
+            if (fd >= 0) {
+                var attached = false;
+                for (&s.clients) |*cl| {
+                    if (cl.fd < 0 and cl.evaluation == null) {
+                        cl.* = .{ .fd = fd, .token = s.next_connection };
+                        s.next_connection += 1;
+                        attached = true;
+                        break;
+                    }
+                }
+                if (!attached) _ = c.close(fd);
+            } else if (!transient()) return error.Accept;
+        }
+    }
+}
+fn fatal(err: anyerror) noreturn {
+    std.debug.print("service fatal: {s}; uncommitted jobs remain pending\n", .{@errorName(err)});
+    // Exit the entire process immediately: no arena can be freed under a worker.
+    c._exit(1);
+}
+fn run(args: std.process.Args) !void {
+    var it = std.process.Args.Iterator.init(args);
+    _ = it.next();
+    const directory = it.next() orelse return error.Usage;
+    const socket_path = it.next() orelse return error.Usage;
+    if (it.next() != null) return error.Usage;
+    if (c.mkdir(directory.ptr, 0o700) != 0 and errno() != c.EEXIST) return error.CreateDirectory;
+    var wake: [2]c_int = undefined;
+    if (c.pipe2(&wake, c.O_NONBLOCK | c.O_CLOEXEC) != 0) return error.Pipe;
+    defer {
+        _ = c.close(wake[0]);
+        _ = c.close(wake[1]);
+    }
+    var pool = Pool{ .wake = wake[1] };
+    var s = Server{ .db = try storage.DB.open(directory), .pool = &pool };
+    defer s.deinit();
+    try pool.init();
+    defer pool.deinit();
+    try recover(&s);
+    const fd = try listener(socket_path);
+    defer {
+        _ = c.close(fd);
+        _ = c.unlink(socket_path.ptr);
+    }
+    eventLoop(&s, fd, wake[0]) catch |err| fatal(err);
+}
+pub fn main(init: std.process.Init.Minimal) void {
+    run(init.args) catch |err| fatal(err);
+}

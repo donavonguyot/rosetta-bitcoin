@@ -1,0 +1,135 @@
+// Package storage exposes infrastructure only; policy belongs to the candidate.
+package storage
+
+/*
+#cgo LDFLAGS: -lrocksdb
+#include <rocksdb/c.h>
+#include <stdlib.h>
+*/
+import "C"
+import "unsafe"
+
+type DB struct {
+	p       *C.rocksdb_t
+	options *C.rocksdb_options_t
+	write   *C.rocksdb_writeoptions_t
+	read    *C.rocksdb_readoptions_t
+	cache   *C.rocksdb_cache_t
+	table   *C.rocksdb_block_based_table_options_t
+}
+type Batch struct{ p *C.rocksdb_writebatch_t }
+
+func cerror(p *C.char) error {
+	if p == nil {
+		return nil
+	}
+	s := C.GoString(p)
+	C.rocksdb_free(unsafe.Pointer(p))
+	return nativeError(s)
+}
+
+type nativeError string
+
+func (e nativeError) Error() string { return string(e) }
+func Open(path string) (*DB, error) {
+	d := &DB{}
+	d.options = C.rocksdb_options_create()
+	C.rocksdb_options_set_create_if_missing(d.options, 1)
+	C.rocksdb_options_set_compression(d.options, 0)
+	C.rocksdb_options_set_write_buffer_size(d.options, 64<<20)
+	C.rocksdb_options_set_max_write_buffer_number(d.options, 2)
+	C.rocksdb_options_set_max_background_jobs(d.options, 2)
+	d.cache = C.rocksdb_cache_create_lru(128 << 20)
+	d.table = C.rocksdb_block_based_options_create()
+	C.rocksdb_block_based_options_set_block_cache(d.table, d.cache)
+	C.rocksdb_options_set_block_based_table_factory(d.options, d.table)
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	var e *C.char
+	d.p = C.rocksdb_open(d.options, p, &e)
+	if err := cerror(e); err != nil {
+		d.Close()
+		return nil, err
+	}
+	d.write = C.rocksdb_writeoptions_create()
+	C.rocksdb_writeoptions_set_sync(d.write, 1)
+	C.rocksdb_writeoptions_disable_WAL(d.write, 0)
+	d.read = C.rocksdb_readoptions_create()
+	return d, nil
+}
+func (d *DB) Close() {
+	if d.p != nil {
+		C.rocksdb_close(d.p)
+		d.p = nil
+	}
+	if d.write != nil {
+		C.rocksdb_writeoptions_destroy(d.write)
+	}
+	if d.read != nil {
+		C.rocksdb_readoptions_destroy(d.read)
+	}
+	if d.options != nil {
+		C.rocksdb_options_destroy(d.options)
+	}
+	if d.table != nil {
+		C.rocksdb_block_based_options_destroy(d.table)
+	}
+	if d.cache != nil {
+		C.rocksdb_cache_destroy(d.cache)
+	}
+	*d = DB{}
+}
+func NewBatch() *Batch  { return &Batch{C.rocksdb_writebatch_create()} }
+func (b *Batch) Close() { C.rocksdb_writebatch_destroy(b.p); b.p = nil }
+func (b *Batch) Put(key, value string) {
+	k := C.CString(key)
+	v := C.CString(value)
+	defer C.free(unsafe.Pointer(k))
+	defer C.free(unsafe.Pointer(v))
+	C.rocksdb_writebatch_put(b.p, k, C.size_t(len(key)), v, C.size_t(len(value)))
+}
+func (b *Batch) Delete(key string) {
+	k := C.CString(key)
+	defer C.free(unsafe.Pointer(k))
+	C.rocksdb_writebatch_delete(b.p, k, C.size_t(len(key)))
+}
+func (d *DB) Write(b *Batch) error {
+	var e *C.char
+	C.rocksdb_write(d.p, d.write, b.p, &e)
+	return cerror(e)
+}
+func (d *DB) Get(key string) (string, bool, error) {
+	k := C.CString(key)
+	defer C.free(unsafe.Pointer(k))
+	var n C.size_t
+	var e *C.char
+	v := C.rocksdb_get(d.p, d.read, k, C.size_t(len(key)), &n, &e)
+	if err := cerror(e); err != nil {
+		return "", false, err
+	}
+	if v == nil {
+		return "", false, nil
+	}
+	defer C.rocksdb_free(unsafe.Pointer(v))
+	return C.GoStringN(v, C.int(n)), true, nil
+}
+
+// Scan copies each native iterator key/value before advancing. Only the service
+// coordinator uses a DB, so recovery sees a stable database with no writer.
+func (d *DB) Scan(visit func(string, string) error) error {
+	it := C.rocksdb_create_iterator(d.p, d.read)
+	defer C.rocksdb_iter_destroy(it)
+	C.rocksdb_iter_seek_to_first(it)
+	for C.rocksdb_iter_valid(it) != 0 {
+		var kn, vn C.size_t
+		k := C.rocksdb_iter_key(it, &kn)
+		v := C.rocksdb_iter_value(it, &vn)
+		if err := visit(C.GoStringN(k, C.int(kn)), C.GoStringN(v, C.int(vn))); err != nil {
+			return err
+		}
+		C.rocksdb_iter_next(it)
+	}
+	var e *C.char
+	C.rocksdb_iter_get_error(it, &e)
+	return cerror(e)
+}

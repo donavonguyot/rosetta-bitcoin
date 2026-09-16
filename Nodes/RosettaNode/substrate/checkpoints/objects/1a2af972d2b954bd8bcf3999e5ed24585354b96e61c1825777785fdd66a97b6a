@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Deterministic mutations; exercise framing and decode/encode consistency."""
+import json
+import random
+import subprocess
+
+p = subprocess.Popen(['./candidate'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+checks = 0
+rng = random.Random(196608)
+
+def call(req):
+    global checks
+    p.stdin.write(json.dumps(req, separators=(',', ':')).encode() + b'\n')
+    p.stdin.flush()
+    raw = p.stdout.readline()
+    assert raw, ('candidate stopped', p.poll())
+    checks += 1
+    return json.loads(raw)
+
+fixture = bytes.fromhex('010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000')
+corpus = [fixture, fixture[:4]+b'\x00\x01'+fixture[4:-4]+b'\x01\x00'+fixture[-4:], bytes(10), bytes.fromhex('010000000001ffffffffffffffff0000000000')]
+for i in range(3000):
+    if i < 2000:
+        b = bytearray(rng.choice(corpus))
+        for _ in range(rng.randrange(1, 5)):
+            kind = rng.randrange(4)
+            pos = rng.randrange(len(b)+1)
+            if kind == 0 and pos < len(b): b[pos] ^= 1 << rng.randrange(8)
+            elif kind == 1: b[pos:pos] = bytes([rng.randrange(256)])
+            elif kind == 2: del b[pos:pos+rng.randrange(1, 6)]
+            else: del b[pos:]
+    else:
+        b = bytes(rng.randrange(256) for _ in range(rng.randrange(128)))
+    for mode in ['legacy','witness']:
+        decoded = call(dict(op='decode_exact',mode=mode,bytes=b.hex()))
+        assert decoded['status'] in ['ok','malformed_encoding'], decoded
+        if decoded['status'] != 'ok':
+            assert set(decoded)=={'status'}
+            continue
+        assert int(decoded['consumed']) == len(b)
+        encoded = call(dict(op='serialize',transaction=decoded['transaction'],include_witness=(mode=='witness')))
+        assert encoded == dict(status='ok',bytes=b.hex()), (b.hex(),mode,decoded,encoded)
+        prefixed = call(dict(op='decode_prefix',mode=mode,bytes='aabb'+b.hex()+'ccdd',offset='2'))
+        assert prefixed == decoded
+p.stdin.close()
+assert not p.stdout.readline()
+assert p.wait()==0
+print(f'{checks} mutation checks passed')

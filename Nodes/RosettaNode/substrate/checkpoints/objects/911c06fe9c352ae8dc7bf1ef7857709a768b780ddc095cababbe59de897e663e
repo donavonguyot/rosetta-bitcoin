@@ -1,0 +1,106 @@
+const std = @import("std");
+
+pub const Priority = enum { normal, high };
+
+/// Intrusive FIFO queues. The caller serializes push/pop and owns every node.
+/// T supplies `next: ?*T` and `priority: Priority`.
+pub fn Scheduler(comptime T: type) type {
+    return struct {
+        const Self = @This();
+        const Queue = struct {
+            head: ?*T = null,
+            tail: ?*T = null,
+
+            fn push(q: *Queue, node: *T) void {
+                node.next = null;
+                if (q.tail) |tail| tail.next = node else q.head = node;
+                q.tail = node;
+            }
+
+            fn pop(q: *Queue) ?*T {
+                const node = q.head orelse return null;
+                q.head = node.next;
+                if (q.head == null) q.tail = null;
+                node.next = null;
+                return node;
+            }
+        };
+
+        high: Queue = .{},
+        normal: Queue = .{},
+        // Only selections made while both queues are nonempty advance this cycle.
+        turn: u2 = 0,
+
+        pub fn empty(s: *const Self) bool {
+            return s.high.head == null and s.normal.head == null;
+        }
+
+        pub fn push(s: *Self, node: *T) void {
+            switch (node.priority) {
+                .high => s.high.push(node),
+                .normal => s.normal.push(node),
+            }
+        }
+
+        pub fn pop(s: *Self) ?*T {
+            if (s.high.head == null) return s.normal.pop();
+            if (s.normal.head == null) return s.high.pop();
+            const q = if (s.turn == 3) &s.normal else &s.high;
+            s.turn +%= 1;
+            return q.pop();
+        }
+    };
+}
+
+const TestNode = struct { next: ?*@This() = null, priority: Priority, id: usize };
+
+test "backlogged queues dispatch HHHN repeatedly with FIFO within each priority" {
+    var s: Scheduler(TestNode) = .{};
+    var high: [12]TestNode = undefined;
+    var normal: [6]TestNode = undefined;
+    // Insert normal first: admission order does not override priority selection.
+    for (&normal, 0..) |*node, i| {
+        node.* = .{ .priority = .normal, .id = i };
+        s.push(node);
+    }
+    for (&high, 0..) |*node, i| {
+        node.* = .{ .priority = .high, .id = i };
+        s.push(node);
+    }
+    for (0..4) |cycle| {
+        for (0..3) |slot| try std.testing.expectEqual(&high[cycle * 3 + slot], s.pop().?);
+        try std.testing.expectEqual(&normal[cycle], s.pop().?);
+    }
+    try std.testing.expectEqual(&normal[4], s.pop().?);
+    try std.testing.expectEqual(&normal[5], s.pop().?);
+    try std.testing.expect(s.empty());
+    try std.testing.expectEqual(null, s.pop());
+}
+
+test "empty and single-queue dispatch preserve every possible mixed cycle position" {
+    // Exhaustively cover a queue disappearing and returning at each cycle position.
+    for (0..4) |position| {
+        inline for (.{ Priority.high, Priority.normal }) |solo| {
+            var s: Scheduler(TestNode) = .{};
+            var h = TestNode{ .priority = .high, .id = 1 };
+            var n = TestNode{ .priority = .normal, .id = 2 };
+            for (0..position) |_| {
+                s.push(&h);
+                s.push(&n);
+                try std.testing.expectEqual(&h, s.pop().?);
+                try std.testing.expectEqual(&n, s.pop().?);
+            }
+            try std.testing.expectEqual(null, s.pop());
+            var one = TestNode{ .priority = solo, .id = 3 };
+            for (0..7) |_| {
+                s.push(&one);
+                try std.testing.expectEqual(&one, s.pop().?);
+            }
+            s.push(&h);
+            s.push(&n);
+            try std.testing.expectEqual(if (position == 3) &n else &h, s.pop().?);
+            try std.testing.expectEqual(if (position == 3) &h else &n, s.pop().?);
+            try std.testing.expect(s.empty());
+        }
+    }
+}

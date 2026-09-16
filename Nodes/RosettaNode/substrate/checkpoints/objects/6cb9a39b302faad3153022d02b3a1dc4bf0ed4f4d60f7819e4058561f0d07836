@@ -1,0 +1,23 @@
+# Actual v1 migration fixture
+
+`v1-datadir.tar.gz` is a physical RocksDB datadir produced by the unchanged
+predecessor Rust lineage 2 executable in this maintenance workspace. It contains
+one terminal receipt, three durably admitted pending jobs, and a cancellation
+intent on sequence 3. The process was killed only after admission/cancellation
+acknowledgments. No rows were manufactured for this fixture.
+
+`v1-manifest.json` records SHA-256 hashes of the producing executable, archive,
+and every logical row. The capture script opens its independent inspector only
+after the writer has exited. Fixture extraction and migration use a fresh copy;
+the archive is never opened as a live database.
+
+The normal test suite consumes this saved archive. To reproduce a capture with
+the preserved predecessor executable, use the broker:
+
+```sh
+python3 run.py 'python3 tests/make_v1_fixture.py /workspace/tmp/pre-maintenance/service-v1' 120
+```
+
+Do not regenerate with the upgraded executable: the purpose is to prove actual
+v1-to-v2 recovery. The script requires receipt/pending/cancel preconditions and
+fails if work terminalizes before capture; it does not silently retry.

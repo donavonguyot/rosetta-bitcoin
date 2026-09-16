@@ -1,0 +1,347 @@
+package main
+
+import "encoding/binary"
+
+type transaction struct {
+	version  uint32
+	inputs   []txInput
+	outputs  []txOutput
+	locktime uint32
+}
+
+type txInput struct {
+	previous [32]byte
+	index    uint32
+	script   []byte
+	sequence uint32
+	witness  [][]byte
+}
+
+type txOutput struct {
+	amount int64
+	script []byte
+}
+
+func (tx *transaction) hasWitness() bool {
+	for _, input := range tx.inputs {
+		if len(input.witness) != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+type decoder struct {
+	data  []byte
+	pos   int
+	limit uint64
+}
+
+func (d *decoder) take(n uint64) ([]byte, error) {
+	if n > uint64(len(d.data)-d.pos) {
+		return nil, errMalformed
+	}
+	start := d.pos
+	d.pos += int(n)
+	return d.data[start:d.pos], nil
+}
+
+func (d *decoder) u32() (uint32, error) {
+	b, err := d.take(4)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint32(b), nil
+}
+
+func (d *decoder) u64() (uint64, error) {
+	b, err := d.take(8)
+	if err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint64(b), nil
+}
+
+func (d *decoder) compactSize() (uint64, error) {
+	prefix, err := d.take(1)
+	if err != nil {
+		return 0, err
+	}
+	n := uint64(prefix[0])
+	switch prefix[0] {
+	case 253:
+		b, err := d.take(2)
+		if err != nil {
+			return 0, err
+		}
+		n = uint64(binary.LittleEndian.Uint16(b))
+		if n < 253 {
+			return 0, errMalformed
+		}
+	case 254:
+		v, err := d.u32()
+		if err != nil {
+			return 0, err
+		}
+		n = uint64(v)
+		if n <= 65535 {
+			return 0, errMalformed
+		}
+	case 255:
+		n, err = d.u64()
+		if err != nil {
+			return 0, err
+		}
+		if n <= 4294967295 {
+			return 0, errMalformed
+		}
+	}
+	return n, nil
+}
+
+// Check wire feasibility before the configured resource policy. This prevents
+// a truncated collection from being classified as a resource-limit failure.
+// Division avoids overflowing on an untrusted count. Every item has at least
+// one encoded byte, so success also makes conversion of the count to int safe.
+func (d *decoder) checkCollection(n uint64, minimumItemSize int) error {
+	if n > uint64((len(d.data)-d.pos)/minimumItemSize) {
+		return errMalformed
+	}
+	if n > d.limit {
+		return errLimit
+	}
+	return nil
+}
+
+func (d *decoder) byteString() ([]byte, error) {
+	n, err := d.compactSize()
+	if err != nil {
+		return nil, err
+	}
+	if err := d.checkCollection(n, 1); err != nil {
+		return nil, err
+	}
+	return d.take(n)
+}
+
+func (d *decoder) inputs(n uint64) ([]txInput, error) {
+	// Each input needs at least 32 + 4 + 1 + 4 wire bytes. Verify the
+	// available payload before converting or allocating an untrusted count.
+	if err := d.checkCollection(n, 41); err != nil {
+		return nil, err
+	}
+	inputs := make([]txInput, int(n))
+	for i := range inputs {
+		input := &inputs[i]
+		digest, err := d.take(32)
+		if err != nil {
+			return nil, err
+		}
+		copy(input.previous[:], digest)
+		input.index, err = d.u32()
+		if err != nil {
+			return nil, err
+		}
+		input.script, err = d.byteString()
+		if err != nil {
+			return nil, err
+		}
+		input.sequence, err = d.u32()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return inputs, nil
+}
+
+func (d *decoder) outputs() ([]txOutput, error) {
+	n, err := d.compactSize()
+	if err != nil {
+		return nil, err
+	}
+	if err := d.checkCollection(n, 9); err != nil {
+		return nil, err
+	}
+	outputs := make([]txOutput, int(n))
+	for i := range outputs {
+		amount, err := d.u64()
+		if err != nil {
+			return nil, err
+		}
+		outputs[i].amount = int64(amount)
+		outputs[i].script, err = d.byteString()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return outputs, nil
+}
+
+func decode(data []byte, witnessMode bool, limit uint64) (*transaction, int, error) {
+	d := decoder{data: data, limit: limit}
+	version, err := d.u32()
+	if err != nil {
+		return nil, 0, err
+	}
+	count, err := d.compactSize()
+	if err != nil {
+		return nil, 0, err
+	}
+	var flags byte
+	// In witness mode a zero initial input count doubles as the marker.
+	// A zero following byte still denotes the legacy empty-input/output form.
+	emptyLegacy := false
+	if witnessMode && count == 0 {
+		flagBytes, err := d.take(1)
+		if err != nil {
+			return nil, 0, err
+		}
+		flags = flagBytes[0]
+		if flags & ^byte(1) != 0 {
+			return nil, 0, errMalformed
+		}
+		if flags != 0 {
+			count, err = d.compactSize()
+			if err != nil {
+				return nil, 0, err
+			}
+		} else {
+			emptyLegacy = true
+		}
+	}
+	inputs, err := d.inputs(count)
+	if err != nil {
+		return nil, 0, err
+	}
+	outputs := make([]txOutput, 0)
+	if !emptyLegacy {
+		outputs, err = d.outputs()
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	tx := &transaction{version: version, inputs: inputs, outputs: outputs}
+	if flags&1 != 0 {
+		for i := range tx.inputs {
+			n, err := d.compactSize()
+			if err != nil {
+				return nil, 0, err
+			}
+			if err := d.checkCollection(n, 1); err != nil {
+				return nil, 0, err
+			}
+			tx.inputs[i].witness = make([][]byte, int(n))
+			for j := range tx.inputs[i].witness {
+				tx.inputs[i].witness[j], err = d.byteString()
+				if err != nil {
+					return nil, 0, err
+				}
+			}
+		}
+		if !tx.hasWitness() {
+			return nil, 0, errMalformed
+		}
+	}
+	tx.locktime, err = d.u32()
+	if err != nil {
+		return nil, 0, err
+	}
+	return tx, d.pos, nil
+}
+
+func appendCompactSize(dst []byte, n uint64) []byte {
+	switch {
+	case n < 253:
+		return append(dst, byte(n))
+	case n <= 65535:
+		return binary.LittleEndian.AppendUint16(append(dst, 253), uint16(n))
+	case n <= 4294967295:
+		return binary.LittleEndian.AppendUint32(append(dst, 254), uint32(n))
+	default:
+		return binary.LittleEndian.AppendUint64(append(dst, 255), n)
+	}
+}
+
+func compactSizeLen(n uint64) uint64 {
+	switch {
+	case n < 253:
+		return 1
+	case n <= 65535:
+		return 3
+	case n <= 4294967295:
+		return 5
+	default:
+		return 9
+	}
+}
+
+func appendByteString(dst, value []byte) []byte {
+	dst = appendCompactSize(dst, uint64(len(value)))
+	return append(dst, value...)
+}
+
+func serialize(tx *transaction, includeWitness bool) ([]byte, error) {
+	withWitness := includeWitness && tx.hasWitness()
+	size := uint64(8) + compactSizeLen(uint64(len(tx.inputs))) + compactSizeLen(uint64(len(tx.outputs)))
+	maxInt := uint64(^uint(0) >> 1)
+	addSize := func(n uint64) bool {
+		if n > maxInt-size {
+			return false
+		}
+		size += n
+		return true
+	}
+	if withWitness && !addSize(2) {
+		return nil, errLimit
+	}
+	for _, input := range tx.inputs {
+		n := uint64(len(input.script))
+		if !addSize(40 + compactSizeLen(n) + n) {
+			return nil, errLimit
+		}
+		if withWitness {
+			if !addSize(compactSizeLen(uint64(len(input.witness)))) {
+				return nil, errLimit
+			}
+			for _, item := range input.witness {
+				n := uint64(len(item))
+				if !addSize(compactSizeLen(n) + n) {
+					return nil, errLimit
+				}
+			}
+		}
+	}
+	for _, output := range tx.outputs {
+		n := uint64(len(output.script))
+		if !addSize(8 + compactSizeLen(n) + n) {
+			return nil, errLimit
+		}
+	}
+	data := make([]byte, 0, int(size))
+	data = binary.LittleEndian.AppendUint32(data, tx.version)
+	if withWitness {
+		data = append(data, 0, 1)
+	}
+	data = appendCompactSize(data, uint64(len(tx.inputs)))
+	for _, input := range tx.inputs {
+		data = append(data, input.previous[:]...)
+		data = binary.LittleEndian.AppendUint32(data, input.index)
+		data = appendByteString(data, input.script)
+		data = binary.LittleEndian.AppendUint32(data, input.sequence)
+	}
+	data = appendCompactSize(data, uint64(len(tx.outputs)))
+	for _, output := range tx.outputs {
+		data = binary.LittleEndian.AppendUint64(data, uint64(output.amount))
+		data = appendByteString(data, output.script)
+	}
+	if withWitness {
+		for _, input := range tx.inputs {
+			data = appendCompactSize(data, uint64(len(input.witness)))
+			for _, item := range input.witness {
+				data = appendByteString(data, item)
+			}
+		}
+	}
+	data = binary.LittleEndian.AppendUint32(data, tx.locktime)
+	return data, nil
+}

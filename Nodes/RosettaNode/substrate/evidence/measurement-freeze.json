@@ -1,0 +1,28 @@
+{
+  "schema": "rosettanode.substrate.measurement_freeze.v1",
+  "frozen_utc": "2026-09-16T21:57:08Z",
+  "campaign_freeze_sha256": "db1a5861aefe60095947af91dc23e0c6a97ed520a9d8709395379ccea0b57c5a",
+  "evaluator_version": 2,
+  "candidate_measurements_started": false,
+  "image_id": "sha256:5442850a127f7c981f9704c7f21ecf0cbb65acdf27dcfdf6f141aa47b9d0e572",
+  "files": {
+    "tools/benchmark_resources.py": "755f873d78b7fb23f5ca9fc19593d086c70d63c0ae673aeae9357e6af7647440",
+    "tools/measure_resources.py": "cab0af1b93c97adba4db595bb47c6e47e658a9f488f25cb2627fcc08d8b5c215",
+    "tools/measurement_retention.py": "8dcf42f4ee4e2995f03092e17c8db6b9e05dc1a762dba168eebc554faeef29f2"
+  },
+  "workload_semantics": "Same frozen workload generators and timing boundaries; added main-service process resource samples and successful-state archival. Group histograms count distinct job sequences across admission, receipt and cancellation keys.",
+  "resource_settings": {
+    "cpus": 4,
+    "memory_bytes": 4294967296,
+    "scope": "service and common evaluator share the container quota; this is a cap, not an exclusive host reservation"
+  },
+  "resource_reporting": "Compare service-process samples. Docker totals include evaluator and inspection and are separately labeled. All maxima are observed samples, not continuous peaks.",
+  "successful_state_retention": "checksum-verified archive after independent inspection and result writing; remove only successful owned container/volume",
+  "failed_state_retention": "retain failed owned volumes unchanged",
+  "control_result_sha256": "7d395205d5c71ff02ea1f05fb82ff06bed46807eb67026231c008084dede1ec1",
+  "retention_proof_sha256": "37832955b8dc4c6d5d1eeabb9ba26be9fbd5c2ee4716dadb462128c53417dba5",
+  "repetitions": 7,
+  "warmups": 1,
+  "order": "rotating, serial",
+  "timeout_seconds": 900
+}

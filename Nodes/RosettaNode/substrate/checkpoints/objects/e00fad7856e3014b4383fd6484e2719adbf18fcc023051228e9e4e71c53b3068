@@ -1,0 +1,87 @@
+# Private notes: Rust initial reading
+
+Reading only; no implementation, builds, or tests. Read README.md, BUILDING.md,
+all four contracts, and all three reuse files. No predecessor HANDOFF.md exists
+in this workspace. Through `python3 run.py`, read `/adapter/adapter.h`, relevant
+pinned Rust standard-library docs (reporting 1.98.1), and RocksDB C declarations.
+No evaluator, other workspace, repository, network, or Bitcoin library inspected.
+
+## Next phase constraints
+
+- Initial is v1 only: `rn_verify_v1`, normal priority, four concurrent encoding
+  job slots. No v2 or group commit. Initial implementation ceiling is 90 minutes;
+  one 15-minute repair is allowed. Record actual effort and failed experiments.
+- Build/test exclusively through `python3 run.py 'COMMAND' [seconds<=300]`.
+  Deliver root `build.sh`, Linux AArch64 ELF `service`, source, tests,
+  HANDOFF.md, and EXPERIMENTS.md. Launch: `service DATADIR SOCKET_PATH`.
+- Preserve offline dependency pins/checksums: serde 1.0.228, serde_json 1.0.145,
+  libc 0.2.177. Reuse Cargo.toml points to absent empty.rs; it is scaffolding,
+  not a buildable service. Link dynamic rosetta and RocksDB, rpath `/adapter`.
+
+## Essential behavior
+
+- Unix stream JSON lines; preserve response order and correlation per client.
+  Terminal events are best effort, after durable receipt and admission response.
+  Disconnect never cancels. Shutdown drains accepted work and exits zero.
+- Limits: 8 clients, 40 MiB request text, 64 items/16 MiB per adapter batch,
+  4 MiB and 4,096 combined items per transaction; admission 1,024 outstanding
+  jobs AND 64 MiB raw payload. Running and completed-but-uncommitted work counts.
+- Validate framing/fields/IDs/lowercase even hex before changing state. Delegate
+  Bitcoin parsing/encoding entirely to the adapter. Integer wire fields are
+  decimal strings; digests are hex in the specified byte order.
+- Retry identity is SHA-256 of ordered mode byte, operation byte, u64 LE input
+  length, raw bytes, repeated for every item. Same ID/digest returns existing;
+  different digest conflicts. Keep the ID index forever.
+- Admission persists complete payload, sequence, digest and accounting atomically
+  before accepted. Cancellation persists intent before ok. Terminal transitions
+  commit strictly by admission sequence, atomically writing receipt, deleting
+  pending/cancel keys, advancing checkpoint and releasing accounting.
+- Cancellation boundary is entry into the interposed C terminal write call,
+  not completion of computation, socket arrival, or the later write barrier.
+  A completed cancellation before that boundary must win.
+- Schema 1: meta/version, sequence, checkpoint, jobs, bytes; id/ID; p/SEQ,
+  c/SEQ, r/SEQ with exactly 20-digit SEQ. Initialize version durably; missing
+  counters mean zero only for a fresh DB. Recover pending payloads/cancellations;
+  reject incompatible schema. Every sequence through checkpoint has a receipt;
+  every subsequent admitted sequence has a pending record.
+- All transitions use dynamic RocksDB C WriteBatch, WAL enabled and sync=true.
+  Required settings: no compression, 128 MiB cache, 64 MiB write buffer, two
+  buffers/two background jobs. Native open supplies exclusive writer locking.
+  Storage failure stops with diagnostics, never acknowledges uncommitted state.
+
+## Ownership and implementation direction (unimplemented)
+
+- Prefer one state/storage owner and four workers; create DB on its owner thread
+  to avoid unsupported Send/Sync assertions on reuse raw pointers. Serialize
+  cancellation/terminal decisions with writes. Keep slow socket output separate.
+- Use repr(C) adapter structures. V1 item pointers must point into arena data;
+  keep input immutable and arena alive until all native calls return, including
+  cancellation. Caller owns results. Null arena: evaluate execution_failure;
+  acknowledged job: stop and retain pending state for restart.
+- Docs confirm UnixStream clones share socket/options, sync_channel can block,
+  try_send does not block, and read_line/read_until need explicit size bounds.
+  Vec::try_reserve_exact and thread::Builder::spawn expose allocation/spawn
+  failures. CString pointer lifetime must outlast native calls.
+- Reuse provides open/get/write/batches, not iteration, recovery, scheduling or
+  service policy. Add any needed C iterator declarations from the allowed header.
+- Tests next phase should target recovery and DB invariants, cancellation races,
+  four-slot concurrency with ordered commits, retries/admission limits, slow
+  clients, exclusive locking, and draining. Public smoke test is insufficient.
+
+## Ambiguities carried forward
+
+- Preregistration says preparation/not frozen; contracts require matching
+  campaign-freeze.json and passed gates. No freeze manifest is present at the
+  workspace root. Reading is authorized; gate evidence is not established here.
+- Unknown fields are reserved without explicit reject-versus-ignore semantics.
+  Malformed/missing request correlation and oversized-line response/connection
+  handling are not fully specified. Exact batch rejection versus per-item
+  resource/admission statuses needs care.
+- No SHA-256 helper is declared by the adapter or included in the pinned crate
+  list. Plan a dependency-compatible general digest implementation; never host
+  transaction logic.
+- Header does not specify whether arena creation copies the source buffer;
+  conservatively retain source storage through arena lifetime.
+
+Broker reads succeeded despite host Python launcher cache/FSEvents warnings.
+Finished reading early, within the ten-minute allowance.

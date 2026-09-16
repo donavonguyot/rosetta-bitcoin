@@ -1,0 +1,76 @@
+package main
+
+/*
+#cgo CFLAGS: -I/adapter
+#cgo LDFLAGS: -L/adapter -lrosetta -Wl,-rpath,/adapter -lrocksdb
+#include <adapter.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Keep both the source allocation and arena alive for the entire call. No Go
+// pointer is stored in native memory or retained after this wrapper returns.
+static int verify_job(const unsigned char *input, uint64_t size,
+                      const uint64_t *lengths, const uint32_t *witness,
+                      const uint32_t *exact, uint64_t count, rn_result *out) {
+    if (count == 0 || count > RN_MAX_BATCH || size > RN_MAX_INPUT) return -1;
+    unsigned char *owned = (unsigned char *)malloc(size ? (size_t)size : 1);
+    if (!owned) return -2;
+    if (size) memcpy(owned, input, (size_t)size);
+    rn_arena *arena = rn_arena_create(owned, size);
+    if (!arena) { free(owned); return -2; }
+    const uint8_t *base = rn_arena_data(arena);
+    if (!base && size) { rn_arena_destroy(arena); free(owned); return -2; }
+    rn_item_v1 items[RN_MAX_BATCH];
+    uint64_t offset = 0;
+    for (uint64_t i = 0; i < count; i++) {
+        items[i].data = base ? base + offset : NULL;
+        items[i].size = lengths[i];
+        items[i].witness = witness[i];
+        items[i].exact = exact[i];
+        offset += lengths[i];
+    }
+    int result = rn_verify_v1(arena, items, count, out);
+    rn_arena_destroy(arena);
+    free(owned);
+    return result;
+}
+*/
+import "C"
+
+import (
+	"encoding/hex"
+	"fmt"
+	"unsafe"
+)
+
+func nativeEvaluate(p *prepared) ([]Result, error) {
+	n := len(p.Items)
+	out := make([]C.rn_result, n)
+	var data *C.uchar
+	if len(p.Payload) != 0 {
+		data = (*C.uchar)(unsafe.Pointer(&p.Payload[0]))
+	}
+	rc := C.verify_job(data, C.uint64_t(len(p.Payload)),
+		(*C.uint64_t)(unsafe.Pointer(&p.Lengths[0])),
+		(*C.uint32_t)(unsafe.Pointer(&p.Witness[0])),
+		(*C.uint32_t)(unsafe.Pointer(&p.Exact[0])), C.uint64_t(n), &out[0])
+	if rc != 0 {
+		return nil, fmt.Errorf("native v1 call failed (%d; -2 means allocation failure)", int(rc))
+	}
+	results := make([]Result, n)
+	for i := range out {
+		r := &out[i]
+		if r.status > 4 {
+			return nil, fmt.Errorf("native returned unknown status %d", uint64(r.status))
+		}
+		results[i] = Result{Status: decimal(uint64(r.status)), Consumed: "0", FullSize: "0", StrippedSize: "0", TxID: zeroDigest, WtxID: zeroDigest}
+		if r.status == 0 {
+			results[i].Consumed = decimal(uint64(r.consumed))
+			results[i].FullSize = decimal(uint64(r.full_size))
+			results[i].StrippedSize = decimal(uint64(r.stripped_size))
+			results[i].TxID = hex.EncodeToString(unsafe.Slice((*byte)(unsafe.Pointer(&r.txid[0])), 32))
+			results[i].WtxID = hex.EncodeToString(unsafe.Slice((*byte)(unsafe.Pointer(&r.wtxid[0])), 32))
+		}
+	}
+	return results, nil
+}

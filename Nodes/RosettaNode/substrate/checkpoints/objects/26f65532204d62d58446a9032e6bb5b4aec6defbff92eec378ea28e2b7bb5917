@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+export CARGO_NET_OFFLINE=true
+export RUSTFLAGS="-L native=/adapter -C link-arg=-Wl,-rpath,/adapter"
+cargo build --offline --locked --release
+cp target/release/service service
+chmod 755 service

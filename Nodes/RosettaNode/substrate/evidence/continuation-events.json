@@ -1,0 +1,65 @@
+[
+  {
+    "lineage": "zig-1",
+    "round": "maintenance",
+    "controller_pid": 86652,
+    "available_docker_bytes_before": 30295023616,
+    "started_utc": "2026-09-16T22:01:44Z"
+  },
+  {
+    "lineage": "go-1",
+    "round": "maintenance",
+    "controller_pid": 86774,
+    "available_docker_bytes_before": 30295105536,
+    "started_utc": "2026-09-16T22:01:48Z"
+  },
+  {
+    "lineage": "rust-1",
+    "round": "maintenance",
+    "controller_pid": 88529,
+    "available_docker_bytes_before": 21857038336,
+    "started_utc": "2026-09-16T22:14:12Z"
+  },
+  {
+    "lineage": "zig-2",
+    "round": "maintenance",
+    "controller_pid": 89003,
+    "available_docker_bytes_before": 24140292096,
+    "started_utc": "2026-09-16T22:17:21Z"
+  },
+  {
+    "lineage": "go-2",
+    "round": "maintenance",
+    "controller_pid": 89938,
+    "available_docker_bytes_before": 21450555392,
+    "started_utc": "2026-09-16T22:26:33Z"
+  },
+  {
+    "lineage": "rust-2",
+    "round": "maintenance",
+    "controller_pid": 90140,
+    "available_docker_bytes_before": 19115577344,
+    "started_utc": "2026-09-16T22:27:21Z"
+  },
+  {
+    "lineage": "zig-1",
+    "round": "optimization",
+    "controller_pid": 91378,
+    "available_docker_bytes_before": 19570606080,
+    "started_utc": "2026-09-16T22:39:42Z"
+  },
+  {
+    "lineage": "go-1",
+    "round": "optimization",
+    "controller_pid": 91822,
+    "available_docker_bytes_before": 20913266688,
+    "started_utc": "2026-09-16T22:41:53Z"
+  },
+  {
+    "lineage": "rust-1",
+    "round": "optimization",
+    "controller_pid": 94166,
+    "available_docker_bytes_before": 9652150272,
+    "started_utc": "2026-09-16T22:59:45Z"
+  }
+]

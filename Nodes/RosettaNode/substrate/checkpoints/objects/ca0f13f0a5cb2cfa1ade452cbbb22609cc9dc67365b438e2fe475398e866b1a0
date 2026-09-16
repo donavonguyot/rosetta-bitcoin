@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+/opt/zig/zig test src/dispatch.zig -O "${ZIG_OPTIMIZE:-ReleaseSafe}" \
+  --cache-dir tmp/zig-cache --global-cache-dir tmp/zig-global-cache
+python3 public_check.py "${SERVICE_BINARY:-./service}"
+python3 -m unittest discover -s tests -p 'test_*.py' -v

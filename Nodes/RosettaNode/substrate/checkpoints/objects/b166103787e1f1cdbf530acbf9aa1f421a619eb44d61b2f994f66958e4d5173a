@@ -1,0 +1,411 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"os"
+	"sync"
+
+	storage "trial/reuse"
+)
+
+type job struct {
+	seq          uint64
+	pending      *Pending
+	prepared     *prepared
+	receipt      *Receipt
+	results      []Result
+	running      bool
+	done         bool
+	cancelled    bool
+	owner        *client
+	acknowledged bool
+}
+
+// mu serializes state and all durable transitions, including the complete
+// rocksdb_write call. Thus cancellation cannot complete in the gap between a
+// host commit decision and C call_entry. Native verification and socket I/O
+// never hold mu. There is exactly one job per admission/terminal WriteBatch.
+type Service struct {
+	mu                sync.Mutex
+	changed           *sync.Cond
+	db                *storage.DB
+	byID              map[string]*job
+	pending           map[uint64]*job
+	queue             []*job // Normal priority, FIFO by admission sequence.
+	highQueue         []*job
+	priorityCycle     uint8 // Next contested dispatch: high, high, high, normal.
+	sequence          uint64
+	checkpoint        uint64
+	jobs              uint64
+	bytes             uint64
+	slots             chan struct{}
+	evaluations       int
+	requests          int
+	draining          bool
+	drainAcknowledged bool
+	stopped           bool
+	failure           error
+	fatal             chan struct{}
+	drained           chan struct{}
+	wg                sync.WaitGroup
+}
+
+func openService(path string) (*Service, error) {
+	if err := os.MkdirAll(path, 0700); err != nil {
+		return nil, err
+	}
+	db, err := storage.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open database (exclusive ownership required): %w", err)
+	}
+	s := &Service{db: db, byID: make(map[string]*job), pending: make(map[uint64]*job), slots: make(chan struct{}, 4), fatal: make(chan struct{}), drained: make(chan struct{})}
+	s.changed = sync.NewCond(&s.mu)
+	if err := s.recover(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("recover: %w", err)
+	}
+	return s, nil
+}
+
+func (s *Service) start() {
+	s.wg.Add(5)
+	for i := 0; i < 4; i++ {
+		go s.worker()
+	}
+	go s.committer()
+}
+
+func (s *Service) failLocked(err error) {
+	if s.failure == nil {
+		s.failure = err
+		close(s.fatal)
+		s.changed.Broadcast()
+	}
+}
+
+func marshal(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	} // Only fixed structs of strings/slices are used.
+	return string(b)
+}
+
+func (s *Service) submit(p *prepared, id string, owner *client) (Response, *job) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failure != nil {
+		return Response{Status: "execution_failure"}, nil
+	}
+	if j := s.byID[id]; j != nil {
+		digest := ""
+		if j.receipt != nil {
+			digest = j.receipt.Digest
+		} else {
+			digest = j.pending.Digest
+		}
+		if digest != p.Digest {
+			return Response{Status: "conflict"}, nil
+		}
+		return Response{Status: "existing", Sequence: decimal(j.seq)}, nil
+	}
+	if s.draining {
+		return Response{Status: "draining"}, nil
+	}
+	if s.jobs >= maxJobs || uint64(len(p.Payload)) > maxJobBytes-s.bytes {
+		return Response{Status: "backpressure"}, nil
+	}
+	if s.sequence == math.MaxUint64 {
+		s.failLocked(errors.New("admission sequence exhausted"))
+		return Response{Status: "execution_failure"}, nil
+	}
+	n := s.sequence + 1
+	pending := &Pending{ID: id, Digest: p.Digest, Sequence: decimal(n), Bytes: decimal(uint64(len(p.Payload))), Priority: p.Priority, Items: p.Items}
+	b := storage.NewBatch()
+	defer b.Close()
+	b.Put(sequenceKey("p", n), marshal(pending))
+	b.Put("id/"+id, decimal(n))
+	b.Put("meta/sequence", decimal(n))
+	b.Put("meta/jobs", decimal(s.jobs+1))
+	b.Put("meta/bytes", decimal(s.bytes+uint64(len(p.Payload))))
+	if err := s.db.Write(b); err != nil {
+		s.failLocked(fmt.Errorf("admission %d: %w", n, err))
+		return Response{Status: "execution_failure"}, nil
+	}
+	j := &job{seq: n, pending: pending, prepared: p, owner: owner}
+	s.sequence, s.jobs, s.bytes = n, s.jobs+1, s.bytes+uint64(len(p.Payload))
+	s.byID[id], s.pending[n] = j, j
+	s.enqueueLocked(j)
+	s.changed.Broadcast()
+	return Response{Status: "accepted", Sequence: decimal(n)}, j
+}
+
+func (s *Service) status(id string) Response {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	j := s.byID[id]
+	if j == nil {
+		return Response{Status: "not_found"}
+	}
+	if j.receipt != nil {
+		return Response{Status: "ok", Job: j.receipt}
+	}
+	state := "pending"
+	if j.cancelled {
+		state = "cancel_pending"
+	}
+	return Response{Status: "ok", Job: PendingStatus{Pending: *j.pending, State: state}}
+}
+
+func (s *Service) cancel(id string) Response {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failure != nil {
+		return Response{Status: "execution_failure"}
+	}
+	j := s.byID[id]
+	if j == nil {
+		return Response{Status: "not_found"}
+	}
+	if j.receipt != nil {
+		return Response{Status: "too_late"}
+	}
+	if j.cancelled {
+		return Response{Status: "ok"}
+	}
+	b := storage.NewBatch()
+	defer b.Close()
+	b.Put(sequenceKey("c", j.seq), "1")
+	if err := s.db.Write(b); err != nil {
+		s.failLocked(fmt.Errorf("cancellation %d: %w", j.seq, err))
+		return Response{Status: "execution_failure"}
+	}
+	j.cancelled = true
+	if !j.running {
+		j.done = true
+	}
+	s.changed.Broadcast()
+	return Response{Status: "ok"}
+}
+
+func (s *Service) acknowledge(j *job, delivered bool) {
+	if j == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	j.acknowledged = delivered
+	if !delivered {
+		j.owner = nil
+	}
+	if j.receipt != nil {
+		s.notifyLocked(j)
+	}
+}
+
+func (s *Service) notifyLocked(j *job) {
+	if j.acknowledged && j.owner != nil {
+		j.owner.event(terminalEvent{Event: "terminal", ID: j.receipt.ID, Job: j.receipt})
+		j.owner = nil
+	}
+}
+
+func (s *Service) evaluate(p *prepared) (Response, bool) {
+	s.mu.Lock()
+	if s.failure != nil {
+		s.mu.Unlock()
+		return Response{Status: "execution_failure"}, false
+	}
+	if s.draining {
+		s.mu.Unlock()
+		return Response{Status: "draining"}, false
+	}
+	s.evaluations++
+	for len(s.slots) == cap(s.slots) && s.failure == nil {
+		s.changed.Wait()
+	}
+	if s.failure != nil {
+		s.mu.Unlock()
+		return Response{Status: "execution_failure"}, true
+	}
+	s.slots <- struct{}{}
+	s.mu.Unlock()
+	results, err := nativeEvaluate(p)
+	s.mu.Lock()
+	<-s.slots
+	s.changed.Broadcast()
+	s.mu.Unlock()
+	if err != nil {
+		return Response{Status: "execution_failure"}, true
+	}
+	return Response{Status: "ok", Results: results}, true
+}
+
+// Keep an accepted evaluation alive through delivery of its response so that
+// a concurrent shutdown cannot close its socket between native return and reply.
+func (s *Service) acknowledgeEvaluation() {
+	s.mu.Lock()
+	s.evaluations--
+	s.changed.Broadcast()
+	s.mu.Unlock()
+}
+
+func (s *Service) beginRequest() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.stopped || s.failure != nil {
+		return false
+	}
+	s.requests++
+	return true
+}
+
+func (s *Service) finishRequest() {
+	s.mu.Lock()
+	s.requests--
+	s.changed.Broadcast()
+	s.mu.Unlock()
+}
+
+func (s *Service) beginDrain() Response {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.draining = true
+	s.changed.Broadcast()
+	return Response{Status: "draining"}
+}
+
+func (s *Service) acknowledgeDrain() {
+	s.mu.Lock()
+	s.drainAcknowledged = true
+	s.changed.Broadcast()
+	s.mu.Unlock()
+}
+
+func (s *Service) enqueueLocked(j *job) {
+	if j.pending.Priority == "high" {
+		s.highQueue = append(s.highQueue, j)
+	} else {
+		s.queue = append(s.queue, j)
+	}
+}
+
+// Cancelled queued jobs do not consume a dispatch or a turn in the cycle.
+// Remove them before deciding whether both queues contain runnable work.
+func pruneQueue(q []*job) []*job {
+	for len(q) != 0 && (q[0].cancelled || q[0].receipt != nil) {
+		q[0] = nil
+		q = q[1:]
+	}
+	return q
+}
+
+// Called under mu with an available native slot. Selection and slot reservation
+// are one dispatch: workers cannot prefetch jobs while evaluate holds the slots.
+func (s *Service) dispatchLocked() *job {
+	s.queue = pruneQueue(s.queue)
+	s.highQueue = pruneQueue(s.highQueue)
+	if len(s.slots) == cap(s.slots) || len(s.queue)+len(s.highQueue) == 0 {
+		return nil
+	}
+	q := &s.queue
+	if len(s.highQueue) != 0 {
+		if len(s.queue) == 0 || s.priorityCycle < 3 {
+			q = &s.highQueue
+		}
+		if len(s.queue) != 0 {
+			s.priorityCycle = (s.priorityCycle + 1) % 4
+		}
+	}
+	j := (*q)[0]
+	(*q)[0] = nil
+	*q = (*q)[1:]
+	s.slots <- struct{}{}
+	j.running = true
+	return j
+}
+
+func (s *Service) worker() {
+	defer s.wg.Done()
+	for {
+		s.mu.Lock()
+		var j *job
+		for {
+			if s.stopped || s.failure != nil {
+				s.mu.Unlock()
+				return
+			}
+			j = s.dispatchLocked()
+			if j != nil {
+				break
+			}
+			s.changed.Wait()
+		}
+		p := j.prepared
+		s.mu.Unlock()
+		results, err := nativeEvaluate(p)
+		s.mu.Lock()
+		<-s.slots
+		j.running = false
+		if err != nil {
+			s.failLocked(fmt.Errorf("acknowledged job %d retained pending: %w", j.seq, err))
+		} else {
+			j.results, j.done = results, true
+		}
+		s.changed.Broadcast()
+		s.mu.Unlock()
+	}
+}
+
+func (s *Service) committer() {
+	defer s.wg.Done()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for {
+		if s.failure != nil {
+			return
+		}
+		if s.draining && s.drainAcknowledged && s.jobs == 0 && s.evaluations == 0 && s.requests == 0 {
+			s.stopped = true
+			close(s.drained)
+			s.changed.Broadcast()
+			return
+		}
+		j := s.pending[s.checkpoint+1]
+		if j == nil || !j.done {
+			s.changed.Wait()
+			continue
+		}
+		p := j.pending
+		r := &Receipt{ID: p.ID, Digest: p.Digest, Sequence: p.Sequence, State: "complete", Results: j.results}
+		if j.cancelled {
+			r.State, r.Results = "cancelled", []Result{}
+		}
+		b := storage.NewBatch()
+		b.Put(sequenceKey("r", j.seq), marshal(r))
+		b.Delete(sequenceKey("p", j.seq))
+		b.Delete(sequenceKey("c", j.seq))
+		b.Put("meta/checkpoint", decimal(j.seq))
+		b.Put("meta/jobs", decimal(s.jobs-1))
+		released := uint64(len(j.prepared.Payload))
+		b.Put("meta/bytes", decimal(s.bytes-released))
+		err := s.db.Write(b)
+		b.Close()
+		if err != nil {
+			s.failLocked(fmt.Errorf("terminal %d: %w", j.seq, err))
+			return
+		}
+		s.checkpoint, s.jobs, s.bytes = j.seq, s.jobs-1, s.bytes-released
+		delete(s.pending, j.seq)
+		j.receipt = r
+		j.pending, j.prepared, j.results = nil, nil, nil
+		s.notifyLocked(j)
+		// Give admissions, status queries and cancellations an opportunity between
+		// individual terminal writes, even when many results are already ready.
+		s.mu.Unlock()
+		s.mu.Lock()
+	}
+}

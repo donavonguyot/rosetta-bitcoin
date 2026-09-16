@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""Capture the actual predecessor's stopped datadir, without native/test hooks.
+
+Broker invocation before replacing v1:
+python3 tests/make_v1_fixture.py /workspace/tmp/pre-maintenance/service-v1
+"""
+import hashlib
+import json
+from pathlib import Path
+import sys
+import tarfile
+import tempfile
+
+import integration as t
+
+
+def main():
+    t.SERVICE = str(Path(sys.argv[1]).resolve())
+    fixture = t.ROOT / "tests" / "fixtures"
+    with tempfile.TemporaryDirectory(prefix="v1-capture-", dir=t.ROOT / "tmp") as directory:
+        s = t.Service(directory).start()
+        try:
+            with t.Client(s.sock) as c:
+                assert c.call("submit", id="old-receipt", items=[t.item()])["status"] == "accepted"
+                old = t.terminal(c, "old-receipt")
+                assert c.call("submit", id="old-running", items=[t.item(t.large_transaction())] * 4)["status"] == "accepted"
+                assert c.call("submit", id="old-cancel", items=[t.item(b"cancel me")])["status"] == "accepted"
+                assert c.call("cancel", id="old-cancel")["status"] == "ok"
+                assert c.call("submit", id="old-pending", items=[t.item(b"resume me")])["status"] == "accepted"
+                s.kill()
+            rows = t.inspect(s.db)
+            assert rows["meta/checkpoint"] == b"1", rows["meta/checkpoint"]
+            assert rows["meta/sequence"] == b"4"
+            assert rows[f"c/{3:020d}"] == b"1"
+            assert json.loads(rows[f"r/{1:020d}"]) == old
+            # The read-only inspector is closed and the writer has exited.
+            with tarfile.open(fixture / "v1-datadir.tar.gz", "w:gz") as archive:
+                archive.add(s.db, arcname="db")
+            manifest = {
+                "producer": "predecessor Rust lineage 2 ABI v1 executable",
+                "service_sha256": hashlib.sha256(Path(t.SERVICE).read_bytes()).hexdigest(),
+                "archive_sha256": hashlib.sha256((fixture / "v1-datadir.tar.gz").read_bytes()).hexdigest(),
+                "checkpoint": "1", "sequence": "4", "cancelled_sequence": "3",
+                "row_sha256": {k: hashlib.sha256(v).hexdigest() for k, v in rows.items()},
+            }
+            (fixture / "v1-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+            print("Captured actual v1 datadir: one receipt, three pending, one cancellation")
+            print("archive bytes:", (fixture / "v1-datadir.tar.gz").stat().st_size)
+        finally:
+            s.kill()
+
+
+if __name__ == "__main__":
+    main()

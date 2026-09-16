@@ -1,0 +1,155 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"math"
+)
+
+const maxCommitGroup = 32
+
+// No timer or sleep: groups contain only commands/completions already ready.
+// The coordinator owns staging and the whole synchronous C write interval.
+type admission struct {
+	ID       string
+	Payload  *Payload
+	Priority string
+	Client   *client
+}
+
+type admissionDecision struct {
+	Status   string
+	Sequence string
+	Job      *Job
+}
+
+type writeMetrics struct {
+	WriteCalls       uint64                     `json:"write_calls"`
+	SyncRequests     uint64                     `json:"sync_requests"`
+	SuccessfulWrites uint64                     `json:"successful_writes"`
+	AdmissionGroups  [maxCommitGroup + 1]uint64 `json:"admission_group_histogram"`
+	TerminalGroups   [maxCommitGroup + 1]uint64 `json:"terminal_group_histogram"`
+	Cancellation     uint64                     `json:"cancellation_writes"`
+}
+
+func (s *State) report(w io.Writer) {
+	// Diagnostic output only, never wire data or additional persistent keys.
+	// Sync requests count sync=true calls, not independently observed syscalls.
+	_ = json.NewEncoder(w).Encode(struct {
+		Kind string `json:"kind"`
+		writeMetrics
+	}{"storage_metrics", s.metrics})
+}
+
+func (s *State) admitMany(requests []admission) ([]admissionDecision, error) {
+	if len(requests) == 0 || len(requests) > maxCommitGroup {
+		return nil, errors.New("invalid admission group size")
+	}
+	decisions := make([]admissionDecision, len(requests))
+	staged := make(map[string]*Job, len(requests))
+	newJobs := make([]*Job, 0, len(requests))
+	puts := make(map[string]string, 2*len(requests)+3)
+	sequence, count, bytes := s.sequence, s.jobs, s.bytes
+	for i, r := range requests {
+		if r.Payload == nil || (r.Priority != "normal" && r.Priority != "high") {
+			return nil, errors.New("invalid admission")
+		}
+		j := staged[r.ID]
+		var receipt *Receipt
+		var seq uint64
+		if j == nil {
+			var err error
+			seq, j, receipt, err = s.lookup(r.ID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if j != nil || seq != 0 {
+			digest, assigned := "", ""
+			if j != nil {
+				digest, assigned = j.Pending.Digest, j.Pending.Sequence
+			} else {
+				digest, assigned = receipt.Digest, receipt.Sequence
+			}
+			if digest == r.Payload.Digest {
+				decisions[i] = admissionDecision{Status: "existing", Sequence: assigned}
+			} else {
+				decisions[i].Status = "conflict"
+			}
+			continue
+		}
+		size := uint64(len(r.Payload.Raw))
+		if count >= maxJobs || size > maxOutstandingBytes-bytes {
+			decisions[i].Status = "backpressure"
+			continue
+		}
+		if sequence == math.MaxUint64 {
+			return nil, errors.New("sequence exhausted")
+		}
+		sequence++
+		count++
+		bytes += size
+		pending := Pending{ID: r.ID, Digest: r.Payload.Digest, Sequence: decimal(sequence), Bytes: decimal(size), Priority: r.Priority, Items: r.Payload.Items}
+		j = &Job{Pending: pending, Payload: r.Payload, Client: r.Client}
+		staged[r.ID] = j
+		newJobs = append(newJobs, j)
+		puts["id/"+r.ID] = pending.Sequence
+		puts[seqKey("p", sequence)] = jsonText(pending)
+		decisions[i] = admissionDecision{Status: "accepted", Sequence: pending.Sequence, Job: j}
+	}
+	if len(newJobs) == 0 {
+		return decisions, nil
+	}
+	puts["meta/sequence"], puts["meta/jobs"], puts["meta/bytes"] = decimal(sequence), decimal(count), decimal(bytes)
+	if err := s.write(puts); err != nil {
+		return nil, err
+	}
+	for i, j := range newJobs {
+		s.pending[s.sequence+uint64(i)+1] = j
+	}
+	s.sequence, s.jobs, s.bytes = sequence, count, bytes
+	s.metrics.AdmissionGroups[len(newJobs)]++
+	return decisions, nil
+}
+
+func (s *State) commitMany(jobs []*Job) ([]*Receipt, error) {
+	if len(jobs) == 0 || len(jobs) > maxCommitGroup {
+		return nil, errors.New("invalid terminal group size")
+	}
+	receipts := make([]*Receipt, len(jobs))
+	puts := make(map[string]string, len(jobs)+3)
+	deletes := make([]string, 0, 2*len(jobs))
+	var released uint64
+	for i, j := range jobs {
+		seq := s.checkpoint + uint64(i) + 1
+		if j == nil || s.pending[seq] != j || !j.Done {
+			return nil, errors.New("internal commit ordering")
+		}
+		r := &Receipt{ID: j.Pending.ID, Digest: j.Pending.Digest, Sequence: j.Pending.Sequence, State: "complete", Results: j.Results}
+		if j.Cancelled {
+			r.State, r.Results = "cancelled", []Result{}
+		}
+		receipts[i] = r
+		puts[seqKey("r", seq)] = jsonText(r)
+		deletes = append(deletes, seqKey("p", seq), seqKey("c", seq))
+		released += uint64(len(j.Payload.Raw))
+	}
+	checkpoint := s.checkpoint + uint64(len(jobs))
+	puts["meta/checkpoint"] = decimal(checkpoint)
+	puts["meta/jobs"] = decimal(s.jobs - uint64(len(jobs)))
+	puts["meta/bytes"] = decimal(s.bytes - released)
+	// No other coordinator action can acknowledge cancellation between receipt
+	// construction and C write entry/return. All members share that boundary.
+	if err := s.write(puts, deletes...); err != nil {
+		return nil, err
+	}
+	for seq := s.checkpoint + 1; seq <= checkpoint; seq++ {
+		delete(s.pending, seq)
+	}
+	s.checkpoint = checkpoint
+	s.jobs -= uint64(len(jobs))
+	s.bytes -= released
+	s.metrics.TerminalGroups[len(jobs)]++
+	return receipts, nil
+}

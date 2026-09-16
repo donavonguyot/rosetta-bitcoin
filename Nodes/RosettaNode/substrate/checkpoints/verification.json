@@ -1,0 +1,13 @@
+{
+  "schema": "rosettanode.checkpoint_verification.v1",
+  "parent_unchanged": true,
+  "json_and_python_syntax": "passed",
+  "source_object_hashes": "passed",
+  "credentials": "No private-key or long OpenAI API-key patterns found; source review performed",
+  "logical_cache_bytes_removed": 4566701984,
+  "raw_diagnostics_and_datadirs_preserved": true,
+  "tests_or_benchmarks_run": false,
+  "model_sessions_started": false,
+  "remaining_runtime_is_local_only": true,
+  "staged_whitespace_exception": "One archived source object has an original blank line at EOF; preserved byte-for-byte to retain its SHA-256 identity."
+}

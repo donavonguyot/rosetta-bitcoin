@@ -1,0 +1,47 @@
+/* Test-only fault interposition. No scheduler/barrier hooks or encoding logic.
+ * The production service never loads this library by itself. */
+#define _GNU_SOURCE
+#include <adapter.h>
+#include <rocksdb/c.h>
+#include <dlfcn.h>
+#include <stdatomic.h>
+#include <stdlib.h>
+#include <string.h>
+
+static _Atomic unsigned arena_calls;
+rn_arena *rn_arena_create(const uint8_t *bytes, uint64_t size) {
+    const char *mode = getenv("TRIAL_TEST_FAULT");
+    if (mode && !strcmp(mode, "arena") && atomic_fetch_add(&arena_calls, 1) == 0)
+        return NULL;
+    rn_arena *(*real_create)(const uint8_t *, uint64_t) = dlsym(RTLD_NEXT, "rn_arena_create");
+    return real_create(bytes, size);
+}
+
+struct members { int admission, terminal, cancellation; };
+static void put(void *state, const char *key, size_t n, const char *value, size_t len) {
+    (void)value; (void)len;
+    struct members *m = state;
+    if (n >= 2 && key[1] == '/') {
+        if (key[0] == 'p') m->admission = 1;
+        if (key[0] == 'r') m->terminal = 1;
+        if (key[0] == 'c') m->cancellation = 1;
+    }
+}
+static void deleted(void *state, const char *key, size_t n) {
+    (void)state; (void)key; (void)n;
+}
+void rocksdb_write(rocksdb_t *db, const rocksdb_writeoptions_t *options,
+                   rocksdb_writebatch_t *batch, char **error) {
+    const char *mode = getenv("TRIAL_TEST_FAULT");
+    struct members m = {0};
+    rocksdb_writebatch_iterate(batch, &m, put, deleted);
+    if (mode && ((!strcmp(mode, "admission") && m.admission) ||
+                 (!strcmp(mode, "terminal") && m.terminal) ||
+                 (!strcmp(mode, "cancellation") && m.cancellation))) {
+        *error = strdup("test-injected write failure (no native write performed)");
+        return;
+    }
+    void (*real_write)(rocksdb_t *, const rocksdb_writeoptions_t *, rocksdb_writebatch_t *, char **) =
+        dlsym(RTLD_NEXT, "rocksdb_write");
+    real_write(db, options, batch, error);
+}

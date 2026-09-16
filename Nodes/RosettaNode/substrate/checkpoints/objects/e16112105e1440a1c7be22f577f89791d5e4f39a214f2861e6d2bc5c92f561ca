@@ -1,0 +1,38 @@
+# Initial-round experiment and attempt record
+
+This is the baseline implementation round. No optimization lane was run; zero optimization hypotheses have been consumed. In particular, group commit was not implemented. No measurements here support a language-performance comparison.
+
+Baseline design hypothesis: serial ownership of durable state can give cancellation and terminal writes a legal ordering while four independent workers retain native concurrency. Socket/crash and Go race tests support the exercised histories; they do not prove all possible interleavings.
+
+## Attempts and outcomes
+
+| Attempt | Outcome and action |
+|---|---|
+| Reading: `go doc encoding/json.Decoder` through broker | Failed because the reading-phase workspace cache was read-only. Redirecting the cache to workspace tmp also failed then. Read pinned `/opt/go/src` documentation through `python3 run.py` instead. |
+| First build and supplied public smoke | Passed. Implementation-phase workspace writes were available. |
+| Initial `go test -v ./...` | Failed to execute its test binary under `/tmp`: permission denied. Set `GOTMPDIR=/workspace/tmp`; this is preserved in `test.sh`. |
+| First executable native-vector tests | A truncated fixture `01000000fd0110` returned malformed (`1`), not resource limit (`2`). The fixture lacked the declared inputs. Retained this finding and replaced the resource-limit fixture with a complete 4,097-input encoding; the complete fixture returned `2`. No service behavior was changed to satisfy the mistaken expectation. |
+| Corrected unit suite | Passed native digests/limits, wire validation, line framing, durable cancellation/recovery and rejection of inconsistent state. |
+| First normal socket/crash suite | Passed eight-client concurrency, 251 jobs, retries/conflicts, pipelining, lock, disconnect, restart and six SIGKILL cycles. Every crash left pending work; three cancellations had been acknowledged and survived. |
+| First Go race diagnostics | Unit tests and full race-service socket/crash suite passed without reported Go races. |
+| Transport boundary review | Found that a 48 MiB output budget could reject valid large correlation responses. Disabled HTML escaping, raised the bounded budget to 128 MiB, and released queued frames when a writer exits. A maximum-correlation expansion test passed. |
+| Strict cgo diagnostics | `GOEXPERIMENT=cgocheck2` native and durable-recovery tests passed. |
+| Recovery memory review | Replaced full-history buffering with streaming validation so retained receipts do not consume unbounded startup memory. Added missing-schema/index/receipt rejection cases. |
+| Final `./test.sh` | Passed all unit tests, public smoke and socket/crash suite; six pending crash snapshots and three durable cancellations. |
+| Final `./test.sh --race` | Passed all unit tests (including large correlation) and full race-service socket/crash suite; same six/three crash coverage. |
+| ELF identification with `file` | Utility absent in the broker; command stopped before subsequent inspections. Used Python's standard library to check ELF64/AArch64 and `readelf` for dynamic linking and symbols instead. |
+| Final executable inspection | Executable Linux AArch64 ELF; Go 1.27.1; supplied adapter/RocksDB dynamic links; `/adapter` RUNPATH; v1 native entrypoint only. Hashes recorded in HANDOFF.md. |
+
+All host Python invocations emitted macOS xcrun cache permission warnings; the request client still successfully submitted broker commands. No host toolchain was used to build or test the service. Broker requests/responses remain in `queue/`; tests retain failed integration artifacts if any test fails. Successful test databases are disposable and removed by the candidate test script. The supplied public smoke leaves its own temporary database directories.
+
+## Scope of evidence
+
+The independent inspector is candidate-owned Python using only the standard library and dynamic RocksDB C API; it does not use service status as its oracle. It opens only after the writer has exited. Crash tests check complete old/new logical state, retained acknowledged payloads, receipts, id bijection, contiguous checkpoint, pending accounting and cancellation persistence. No external evaluator, other workspace, repository, network, Bitcoin library or other agent was accessed.
+
+No native diagnostic instrumentation was supplied or constructed. Go race checks cover exercised Go paths, not native library races. The test suite does not deterministically hold C call-entry/write barriers, inject storage/allocation failures, prove admission-limit saturation, or simulate power loss. The native adapter and durability settings were unchanged.
+
+## Effort accounting
+
+Implementation start recorded at 2026-09-16 20:52:24 UTC. Final normal/race validation and ELF inspection completed by approximately 21:11:30 UTC. Deliverable verification completed at 21:13:31 UTC: approximately 21 minutes 7 seconds of implementation-phase wall time, plus this accounting update. Reading finished within its separate ten-minute ceiling. No repair or optimization phase was used.
+
+Exact model-token usage, monetary cost, and infrastructure preparation cost are unavailable in this session and are not estimated. Test/build times printed by Go are diagnostic execution times, not service performance results. No warm-up, seven-repetition benchmark, fairness/tail measurement, or substrate recommendation was attempted.

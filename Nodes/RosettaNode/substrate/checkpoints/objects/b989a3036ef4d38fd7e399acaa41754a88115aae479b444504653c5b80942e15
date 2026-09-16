@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Candidate proxy measurements, not frozen campaign workloads. Broker only.
+
+One warm-up and seven fresh databases per variant/lane, serial rotated order.
+All requests, connections, databases and client threads are prepared before timing.
+Retain every result, failed run, service log and RocksDB LOG.
+"""
+import concurrent.futures
+import json
+import os
+from pathlib import Path
+import resource
+import socket
+import statistics
+import subprocess
+import sys
+import threading
+import time
+
+ITEM = dict(hex='01000000000000000000', mode='witness', operation='exact')
+
+
+def percentile(values, fraction):
+    return sorted(values)[min(len(values) - 1, int((len(values) - 1) * fraction))]
+
+
+def measure(binary, root, lane, count):
+    root.mkdir(parents=True)
+    sockpath = root / 's'
+    log = open(root / 'stderr.log', 'wb')
+    proc = subprocess.Popen([str(binary), str(root / 'db'), str(sockpath)], stderr=log)
+    peers = []
+    try:
+        until = time.monotonic() + 30
+        while not sockpath.exists():
+            if proc.poll() is not None or time.monotonic() >= until:
+                raise RuntimeError('startup failed')
+            time.sleep(.002)
+        gate = threading.Barrier(9)
+        requests = []
+        for client in range(8):
+            priority = 'high' if lane == 'mixed' and client % 2 else 'normal'
+            batch = 64 if lane == 'evaluate64' or (lane == 'mixed' and priority == 'high') else 1
+            op = 'evaluate' if lane.startswith('evaluate') else 'submit'
+            requests.append([json.dumps(dict(request=str(n), op=op, id='c%d_%d' % (client, n),
+                                            priority=priority, items=[ITEM] * batch), separators=(',', ':')).encode() + b'\n'
+                             for n in range(count)])
+            peer = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            peer.settimeout(60)
+            peer.connect(str(sockpath))
+            peers.append((peer, peer.makefile('rb'), priority))
+
+        def worker(index):
+            peer, reader, priority = peers[index]
+            starts, acks, terminals = {}, [], []
+            def receive():
+                message = json.loads(reader.readline())
+                now = time.monotonic_ns()
+                if 'event' in message:
+                    terminals.append((now - starts[message['id']]) / 1e6)
+                    assert message['job']['state'] == 'complete'
+                return message, now
+            gate.wait()
+            for n, request in enumerate(requests[index]):
+                start = time.monotonic_ns()
+                starts['c%d_%d' % (index, n)] = start
+                peer.sendall(request)
+                while True:
+                    response, now = receive()
+                    if 'event' not in response:
+                        break
+                assert response['request'] == str(n), response
+                assert response['status'] == ('ok' if lane.startswith('evaluate') else 'accepted'), response
+                acks.append((now - start) / 1e6)
+            if not lane.startswith('evaluate'):
+                while len(terminals) < count:
+                    message, _ = receive()
+                    assert 'event' in message
+            return priority, acks, terminals
+
+        before = resource.getrusage(resource.RUSAGE_CHILDREN)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            futures = [pool.submit(worker, i) for i in range(8)]
+            started = time.monotonic()
+            gate.wait()
+            values = [f.result(timeout=180) for f in futures]
+            elapsed = time.monotonic() - started
+        io = Path('/proc/%d/io' % proc.pid).read_text()
+        peer, reader, _ = peers[0]
+        peer.sendall(b'{"request":"end","op":"shutdown"}\n')
+        response = json.loads(reader.readline())
+        assert response['status'] == 'draining', response
+        assert proc.wait(timeout=30) == 0
+        after = resource.getrusage(resource.RUSAGE_CHILDREN)
+        result = dict(seconds=elapsed, jobs=8*count, jobs_per_second=8*count/elapsed,
+                      service_cpu_seconds=after.ru_utime + after.ru_stime - before.ru_utime - before.ru_stime,
+                      process_io=io)
+        for priority in sorted({v[0] for v in values}):
+            for field, pos in [('ack', 1), ('terminal', 2)]:
+                samples = [n for v in values if v[0] == priority for n in v[pos]]
+                if samples:
+                    result[priority + '_' + field + '_ms'] = dict(p50=percentile(samples, .5),
+                        p95=percentile(samples, .95), p99=percentile(samples, .99), maximum=max(samples))
+        log.flush()
+        result['service_metrics'] = (root / 'stderr.log').read_text()
+        db_log = root / 'db' / 'LOG'
+        lines = db_log.read_text(errors='replace').splitlines() if db_log.exists() else []
+        result['rocks_activity'] = [line for line in lines if any(word in line.lower() for word in
+                                  ['flush_started', 'flush_finished', 'compaction_started', 'compaction_finished', 'stalling', 'stopping writes'])]
+        return result
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait(timeout=30)
+        for peer, reader, _ in peers:
+            reader.close()
+            peer.close()
+        log.close()
+
+
+def main():
+    root = Path(sys.argv[1]).resolve()
+    root.mkdir(parents=True, exist_ok=False)
+    variants = [(Path(p).parent.name + '-' + Path(p).name, Path(p).resolve()) for p in sys.argv[2:]]
+    lanes = os.environ.get('BENCH_LANES', 'evaluate1,evaluate64,durable,mixed').split(',')
+    count = int(os.environ.get('BENCH_COUNT', '400'))
+    repeats = int(os.environ.get('BENCH_REPEATS', '7'))
+    outcomes = []
+    with (root / 'results.jsonl').open('w') as output:
+        for lane in lanes:
+            for repetition in range(-1, repeats):
+                order = variants[repetition % len(variants):] + variants[:repetition % len(variants)]
+                for name, binary in order:
+                    record = dict(lane=lane, variant=name, repetition=repetition, warmup=repetition == -1)
+                    try:
+                        record.update(measure(binary, root / ('%s-%d-%s' % (lane, repetition, name)), lane, count * (10 if lane == "evaluate1" else 1)))
+                        record['ok'] = True
+                    except Exception as error:
+                        record.update(ok=False, error=repr(error))
+                    output.write(json.dumps(record) + '\n')
+                    output.flush()
+                    outcomes.append(record)
+                    print(lane, repetition, name, round(record.get('jobs_per_second', 0)), record['ok'], flush=True)
+    summary = []
+    for lane in lanes:
+        for name, _ in variants:
+            rows = [r for r in outcomes if r['lane'] == lane and r['variant'] == name and not r['warmup']]
+            rates = [r['jobs_per_second'] for r in rows if r['ok']]
+            entry = dict(lane=lane, variant=name, passed=len(rates), attempted=len(rows))
+            if rates:
+                entry.update(median=statistics.median(rates), minimum=min(rates), maximum=max(rates))
+            summary.append(entry)
+    (root / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+    print(json.dumps(summary, indent=2))
+    if any(not r['ok'] for r in outcomes):
+        raise SystemExit(1)
+
+
+if __name__ == '__main__':
+    main()

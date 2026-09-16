@@ -1,0 +1,38 @@
+package storage
+
+import (
+	"runtime"
+	"strings"
+	"testing"
+)
+
+func TestBatchOwnsLengthDelimitedBytes(t *testing.T) {
+	db, err := Open(t.TempDir() + "/db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	b := NewBatch()
+	defer b.Close()
+	// Embedded NUL, empty keys/values and short-lived backing must survive
+	// after all source strings become unreachable and before Write occurs.
+	func() {
+		b.Put(string([]byte{'k', 0, 'y'}), strings.Repeat("v\x00", 4096))
+		b.Put("", "")
+		b.Put("gone", "temporary")
+		b.Delete(string([]byte{'g', 'o', 'n', 'e'}))
+	}()
+	runtime.GC()
+	if err = db.Write(b); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{"k\x00y": strings.Repeat("v\x00", 4096), "": ""} {
+		got, found, err := db.Get(key)
+		if err != nil || !found || got != want {
+			t.Fatalf("key %q: found=%v value length=%d err=%v", key, found, len(got), err)
+		}
+	}
+	if _, found, err := db.Get("gone"); err != nil || found {
+		t.Fatalf("deleted key: %v %v", found, err)
+	}
+}

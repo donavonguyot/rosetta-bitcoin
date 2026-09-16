@@ -1,0 +1,418 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	storage "trial/reuse"
+)
+
+func testService(t *testing.T) (*Service, string) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "db")
+	s, err := openService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, path
+}
+
+func drainTest(t *testing.T, s *Service) {
+	t.Helper()
+	s.beginDrain()
+	s.acknowledgeDrain()
+	select {
+	case <-s.drained:
+	case <-s.fatal:
+		t.Fatal(s.failure)
+	case <-time.After(30 * time.Second):
+		t.Fatal("drain timeout")
+	}
+	s.wg.Wait()
+	s.db.Close()
+}
+
+// Independent of Service.recover/status: read physical rows only after the
+// writer stops and check the cross-key invariants from the storage contract.
+func inspectStopped(t *testing.T, path string) map[string]string {
+	t.Helper()
+	db, err := storage.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows := map[string]string{}
+	if err := db.Scan(func(k, v string) error { rows[k] = v; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if rows["meta/version"] != "1" {
+		t.Fatal("schema")
+	}
+	seq, err := parseDecimal(rows["meta/sequence"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	cp, err := parseDecimal(rows["meta/checkpoint"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cp > seq {
+		t.Fatal("checkpoint")
+	}
+	var count, bytes uint64
+	seen := map[string]bool{}
+	for n := uint64(1); n <= seq; n++ {
+		pv, pok := rows[sequenceKey("p", n)]
+		rv, rok := rows[sequenceKey("r", n)]
+		_, cancel := rows[sequenceKey("c", n)]
+		if n <= cp {
+			if !rok || pok || cancel {
+				t.Fatalf("bad terminal sequence %d", n)
+			}
+			var r Receipt
+			if json.Unmarshal([]byte(rv), &r) != nil {
+				t.Fatal("receipt json")
+			}
+			if r.Sequence != decimal(n) || seen[r.ID] || rows["id/"+r.ID] != decimal(n) {
+				t.Fatal("receipt index")
+			}
+			seen[r.ID] = true
+		} else {
+			if !pok || rok {
+				t.Fatalf("bad pending sequence %d", n)
+			}
+			var p Pending
+			if json.Unmarshal([]byte(pv), &p) != nil {
+				t.Fatal("pending json")
+			}
+			if p.Sequence != decimal(n) || seen[p.ID] || rows["id/"+p.ID] != decimal(n) {
+				t.Fatal("pending index")
+			}
+			seen[p.ID] = true
+			var size uint64
+			for _, item := range p.Items {
+				size += uint64(len(item.Hex) / 2)
+			}
+			if p.Bytes != decimal(size) {
+				t.Fatal("payload accounting")
+			}
+			count++
+			bytes += size
+		}
+	}
+	for key := range rows {
+		if strings.HasPrefix(key, "id/") && !seen[key[3:]] {
+			t.Fatal("orphan id index")
+		}
+	}
+	if rows["meta/jobs"] != decimal(count) || rows["meta/bytes"] != decimal(bytes) {
+		t.Fatal("outstanding accounting")
+	}
+	return rows
+}
+
+func TestPendingCancellationRecovery(t *testing.T) {
+	s, path := testService(t)
+	p := preparedFixture(t)
+	for _, id := range []string{"first", "second"} {
+		if r, _ := s.submit(p, id, nil); r.Status != "accepted" {
+			t.Fatal(r)
+		}
+	}
+	if r, _ := s.submit(p, "first", nil); r.Status != "existing" || r.Sequence != "1" {
+		t.Fatal(r)
+	}
+	other := fixture
+	other.Hex = "02000000000000000000"
+	p2, _ := prepare([]Item{other})
+	if r, _ := s.submit(p2, "first", nil); r.Status != "conflict" {
+		t.Fatal(r)
+	}
+	for i := 0; i < 2; i++ {
+		if r := s.cancel("second"); r.Status != "ok" {
+			t.Fatal(r)
+		}
+	}
+	if r := s.status("second"); r.Job.(PendingStatus).State != "cancel_pending" {
+		t.Fatal(r)
+	}
+	if s.cancel("missing").Status != "not_found" || s.status("missing").Status != "not_found" {
+		t.Fatal("missing id")
+	}
+	s.db.Close()
+	rows := inspectStopped(t, path)
+	if rows["meta/checkpoint"] != "0" || rows[sequenceKey("c", 2)] != "1" {
+		t.Fatal("intent was not durable")
+	}
+	s, err := openService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.start()
+	drainTest(t, s)
+	rows = inspectStopped(t, path)
+	for n, state := range map[uint64]string{1: "complete", 2: "cancelled"} {
+		var r Receipt
+		json.Unmarshal([]byte(rows[sequenceKey("r", n)]), &r)
+		if r.State != state {
+			t.Fatalf("%+v", r)
+		}
+	}
+	s, err = openService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := s.submit(p, "second", nil); r.Status != "existing" || r.Sequence != "2" {
+		t.Fatal(r)
+	}
+	if s.cancel("second").Status != "too_late" {
+		t.Fatal("terminal cancel")
+	}
+	s.db.Close()
+}
+
+func TestCompletedBehindHeadCanBeCancelled(t *testing.T) {
+	s, path := testService(t)
+	p := preparedFixture(t)
+	_, head := s.submit(p, "head", nil)
+	_, later := s.submit(p, "later", nil)
+	results, err := nativeEvaluate(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Model an out-of-order worker completion, with the head still in flight.
+	later.results, later.done = results, true
+	s.queue = nil
+	s.wg.Add(1)
+	go s.committer()
+	if r := s.cancel("later"); r.Status != "ok" {
+		t.Fatal(r)
+	}
+	s.mu.Lock()
+	if s.checkpoint != 0 || s.jobs != 2 || s.bytes != 20 {
+		t.Fatal("released accounting before terminal commit")
+	}
+	head.results, head.done = results, true
+	s.changed.Broadcast()
+	s.mu.Unlock()
+	drainTest(t, s)
+	rows := inspectStopped(t, path)
+	var r Receipt
+	json.Unmarshal([]byte(rows[sequenceKey("r", 2)]), &r)
+	if r.State != "cancelled" || len(r.Results) != 0 {
+		t.Fatal(r)
+	}
+}
+
+func TestOutstandingJobCapacityAndDrain(t *testing.T) {
+	s, path := testService(t)
+	p := preparedFixture(t)
+	for i := 0; i < maxJobs; i++ {
+		if r, _ := s.submit(p, fmt.Sprint(i), nil); r.Status != "accepted" {
+			t.Fatal(i, r)
+		}
+	}
+	if s.cancel("0").Status != "ok" {
+		t.Fatal("cancel")
+	}
+	if r, _ := s.submit(p, "overflow", nil); r.Status != "backpressure" {
+		t.Fatal(r)
+	}
+	if r, _ := s.submit(p, "1", nil); r.Status != "existing" {
+		t.Fatal(r)
+	}
+	s.beginDrain()
+	if r, _ := s.submit(p, "new", nil); r.Status != "draining" {
+		t.Fatal(r)
+	}
+	if r, active := s.evaluate(p); r.Status != "draining" || active {
+		t.Fatal(r)
+	}
+	s.start()
+	drainTest(t, s)
+	rows := inspectStopped(t, path)
+	if rows["meta/checkpoint"] != decimal(maxJobs) {
+		t.Fatal("drain lost jobs")
+	}
+}
+
+func TestOutstandingByteCapacity(t *testing.T) {
+	s, path := testService(t)
+	item := fixture
+	item.Hex = strings.Repeat("00", maxBatchBytes)
+	p, err := prepare([]Item{item})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4; i++ {
+		if r, _ := s.submit(p, fmt.Sprint(i), nil); r.Status != "accepted" {
+			t.Fatal(r)
+		}
+	}
+	if r, _ := s.submit(preparedFixture(t), "overflow", nil); r.Status != "backpressure" {
+		t.Fatal(r)
+	}
+	if s.cancel("0").Status != "ok" {
+		t.Fatal("cancel")
+	}
+	if r, _ := s.submit(preparedFixture(t), "still-full", nil); r.Status != "backpressure" {
+		t.Fatal("cancel released bytes early", r)
+	}
+	s.start()
+	drainTest(t, s)
+	inspectStopped(t, path)
+}
+
+func TestConcurrentRetriesAndCancellations(t *testing.T) {
+	s, path := testService(t)
+	s.start()
+	p := preparedFixture(t)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	accepted := 0
+	cancelled := map[string]bool{}
+	for c := 0; c < 8; c++ {
+		wg.Add(1)
+		go func(c int) {
+			defer wg.Done()
+			if r, _ := s.submit(p, "shared", nil); r.Status == "accepted" {
+				mu.Lock()
+				accepted++
+				mu.Unlock()
+			} else if r.Status != "existing" {
+				t.Error(r)
+			}
+			for i := 0; i < 24; i++ {
+				id := fmt.Sprintf("%d-%d", c, i)
+				if r, _ := s.submit(p, id, nil); r.Status != "accepted" {
+					t.Error(r)
+				}
+				if s.cancel(id).Status == "ok" {
+					mu.Lock()
+					cancelled[id] = true
+					mu.Unlock()
+				}
+			}
+		}(c)
+	}
+	wg.Wait()
+	if accepted != 1 {
+		t.Fatal("duplicate admissions", accepted)
+	}
+	drainTest(t, s)
+	rows := inspectStopped(t, path)
+	for id := range cancelled {
+		n, _ := parseDecimal(rows["id/"+id])
+		var r Receipt
+		json.Unmarshal([]byte(rows[sequenceKey("r", n)]), &r)
+		if r.State != "cancelled" {
+			t.Fatal("acknowledged cancellation lost", id)
+		}
+	}
+}
+
+func TestFourWorkersAndArenaLifetime(t *testing.T) {
+	s, path := testService(t)
+	for i := 0; i < 4; i++ {
+		s.slots <- struct{}{}
+	}
+	p := preparedFixture(t)
+	for i := 0; i < 5; i++ {
+		s.submit(p, fmt.Sprint(i), nil)
+	}
+	s.start()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.mu.Lock()
+		running := 0
+		for _, j := range s.pending {
+			if j.running {
+				running++
+			}
+		}
+		s.mu.Unlock()
+		if running == 4 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("four workers did not dispatch")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if s.cancel("0").Status != "ok" {
+		t.Fatal("running cancellation")
+	}
+	s.mu.Lock()
+	if s.pending[1].prepared == nil || s.checkpoint != 0 {
+		t.Fatal("freed running arena/payload")
+	}
+	s.mu.Unlock()
+	for i := 0; i < 4; i++ {
+		<-s.slots
+	}
+	drainTest(t, s)
+	inspectStopped(t, path)
+}
+
+func TestRejectCorruptRecovery(t *testing.T) {
+	for _, kind := range []string{"schema", "counter", "index", "digest", "missing"} {
+		t.Run(kind, func(t *testing.T) {
+			s, path := testService(t)
+			s.submit(preparedFixture(t), "a", nil)
+			b := storage.NewBatch()
+			switch kind {
+			case "schema":
+				b.Put("meta/version", "2")
+			case "counter":
+				b.Put("meta/bytes", "11")
+			case "index":
+				b.Put("id/a", "2")
+			case "digest":
+				p := *s.pending[1].pending
+				p.Digest = zeroDigest
+				b.Put(sequenceKey("p", 1), marshal(&p))
+			case "missing":
+				b.Delete("meta/jobs")
+			}
+			if err := s.db.Write(b); err != nil {
+				t.Fatal(err)
+			}
+			b.Close()
+			s.db.Close()
+			if reopened, err := openService(path); err == nil {
+				reopened.db.Close()
+				t.Fatal("accepted corrupt database")
+			}
+		})
+	}
+}
+
+func TestDrainWaitsForResponseDelivery(t *testing.T) {
+	s, path := testService(t)
+	if !s.beginRequest() || !s.beginRequest() {
+		t.Fatal("request start")
+	}
+	s.start()
+	s.beginDrain()
+	s.acknowledgeDrain()
+	s.finishRequest()
+	select {
+	case <-s.drained:
+		t.Fatal("closed before last outstanding response")
+	case <-time.After(10 * time.Millisecond):
+	}
+	s.finishRequest()
+	select {
+	case <-s.drained:
+	case <-time.After(5 * time.Second):
+		t.Fatal("drain did not complete")
+	}
+	s.wg.Wait()
+	s.db.Close()
+	inspectStopped(t, path)
+}

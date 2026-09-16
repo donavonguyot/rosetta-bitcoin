@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+export CGO_ENABLED=1 GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off
+export GOCACHE=/workspace/cache/go GOTMPDIR=/workspace/tmp
+mkdir -p "$GOTMPDIR"
+go test -v -timeout 180s ./...
+go test -race -timeout 180s ./...
+./build.sh
+python3 public_check.py ./service
+python3 tests/integration.py ./service
+go build -race -trimpath -o tmp/service-race .
+python3 tests/integration.py ./tmp/service-race

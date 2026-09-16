@@ -1,0 +1,245 @@
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+
+pub const Error = error{ MalformedEncoding, ResourceLimit, OutOfMemory };
+
+pub const Limits = struct {
+    max_items: u64 = std.math.maxInt(u64),
+
+    // A bound on each length-prefixed collection, including byte strings.
+    pub fn check(self: Limits, count: u64) error{ResourceLimit}!void {
+        if (count > self.max_items) return error.ResourceLimit;
+    }
+};
+
+pub const Mode = enum { legacy, witness };
+
+pub const Input = struct {
+    previous_txid_digest_order: [32]u8,
+    previous_index: u32,
+    script: []const u8,
+    sequence: u32,
+    witness: []const []const u8,
+};
+
+pub const Output = struct {
+    amount: u64,
+    script: []const u8,
+};
+
+pub const Transaction = struct {
+    version_bits: u32,
+    inputs: []Input,
+    outputs: []Output,
+    locktime: u32,
+
+    pub fn hasWitness(self: Transaction) bool {
+        for (self.inputs) |input| {
+            if (input.witness.len != 0) return true;
+        }
+        return false;
+    }
+};
+
+pub const Decoded = struct { transaction: Transaction, consumed: usize };
+
+const Cursor = struct {
+    bytes: []const u8,
+    pos: usize = 0,
+    limits: Limits,
+
+    fn remaining(self: Cursor) usize {
+        return self.bytes.len - self.pos;
+    }
+
+    fn take(self: *Cursor, n: usize) Error![]const u8 {
+        if (n > self.remaining()) return error.MalformedEncoding;
+        const result = self.bytes[self.pos..][0..n];
+        self.pos += n;
+        return result;
+    }
+
+    fn int(self: *Cursor, comptime T: type) Error!T {
+        const bytes = try self.take(@sizeOf(T));
+        return std.mem.readInt(T, bytes[0..@sizeOf(T)], .little);
+    }
+
+    fn compact(self: *Cursor) Error!u64 {
+        const prefix = try self.int(u8);
+        return switch (prefix) {
+            0...252 => prefix,
+            253 => blk: {
+                const value = try self.int(u16);
+                if (value < 253) return error.MalformedEncoding;
+                break :blk value;
+            },
+            254 => blk: {
+                const value = try self.int(u32);
+                if (value <= std.math.maxInt(u16)) return error.MalformedEncoding;
+                break :blk value;
+            },
+            255 => blk: {
+                const value = try self.int(u64);
+                if (value <= std.math.maxInt(u32)) return error.MalformedEncoding;
+                break :blk value;
+            },
+        };
+    }
+
+    fn count(self: *Cursor, minimum_item_bytes: usize) Error!usize {
+        const n = try self.compact();
+        try self.limits.check(n);
+        // Check available bytes before allocating from an untrusted count.
+        if (n > self.remaining() / minimum_item_bytes) return error.MalformedEncoding;
+        return @intCast(n);
+    }
+
+    fn byteString(self: *Cursor) Error![]const u8 {
+        return self.take(try self.count(1));
+    }
+};
+
+// The returned byte strings borrow the input; the arrays belong to allocator.
+// A request-scoped arena keeps both alive for the entire response.
+pub fn decode(allocator: Allocator, bytes: []const u8, mode: Mode, limits: Limits) Error!Decoded {
+    var cursor = Cursor{ .bytes = bytes, .limits = limits };
+    const version = try cursor.int(u32);
+    var input_count = try cursor.count(41);
+    var extended = false;
+    var empty_witness_legacy = false;
+    if (mode == .witness and input_count == 0) {
+        const flag = try cursor.int(u8);
+        switch (flag) {
+            0 => empty_witness_legacy = true,
+            1 => {
+                extended = true;
+                input_count = try cursor.count(41);
+            },
+            else => return error.MalformedEncoding,
+        }
+    }
+
+    const inputs = try allocator.alloc(Input, input_count);
+    for (inputs) |*input| {
+        input.previous_txid_digest_order = (try cursor.take(32))[0..32].*;
+        input.previous_index = try cursor.int(u32);
+        input.script = try cursor.byteString();
+        input.sequence = try cursor.int(u32);
+        input.witness = &.{};
+    }
+
+    const output_count = if (empty_witness_legacy) 0 else try cursor.count(9);
+    const outputs = try allocator.alloc(Output, output_count);
+    for (outputs) |*output| {
+        output.amount = try cursor.int(u64);
+        output.script = try cursor.byteString();
+    }
+
+    var any_witness = false;
+    if (extended) {
+        for (inputs) |*input| {
+            const witness_count = try cursor.count(1);
+            const witness = try allocator.alloc([]const u8, witness_count);
+            for (witness) |*item| item.* = try cursor.byteString();
+            input.witness = witness;
+            any_witness = any_witness or witness_count != 0;
+        }
+        if (!any_witness) return error.MalformedEncoding;
+    }
+
+    const locktime = try cursor.int(u32);
+    return .{
+        .transaction = .{ .version_bits = version, .inputs = inputs, .outputs = outputs, .locktime = locktime },
+        .consumed = cursor.pos,
+    };
+}
+
+const Encoder = struct {
+    allocator: Allocator,
+    bytes: std.ArrayList(u8) = .empty,
+
+    fn append(self: *Encoder, bytes: []const u8) Error!void {
+        try self.bytes.appendSlice(self.allocator, bytes);
+    }
+
+    fn int(self: *Encoder, comptime T: type, value: T) Error!void {
+        var bytes: [@sizeOf(T)]u8 = undefined;
+        std.mem.writeInt(T, &bytes, value, .little);
+        try self.append(&bytes);
+    }
+
+    fn compact(self: *Encoder, value: u64) Error!void {
+        if (value < 253) {
+            try self.int(u8, @intCast(value));
+        } else if (value <= std.math.maxInt(u16)) {
+            try self.int(u8, 253);
+            try self.int(u16, @intCast(value));
+        } else if (value <= std.math.maxInt(u32)) {
+            try self.int(u8, 254);
+            try self.int(u32, @intCast(value));
+        } else {
+            try self.int(u8, 255);
+            try self.int(u64, value);
+        }
+    }
+
+    fn byteString(self: *Encoder, bytes: []const u8) Error!void {
+        try self.compact(bytes.len);
+        try self.append(bytes);
+    }
+};
+
+pub fn validateLimits(transaction: Transaction, limits: Limits) error{ResourceLimit}!void {
+    try limits.check(transaction.inputs.len);
+    try limits.check(transaction.outputs.len);
+    for (transaction.inputs) |input| {
+        try limits.check(input.script.len);
+        try limits.check(input.witness.len);
+        for (input.witness) |item| try limits.check(item.len);
+    }
+    for (transaction.outputs) |output| try limits.check(output.script.len);
+}
+
+pub fn serialize(allocator: Allocator, transaction: Transaction, include_witness: bool, limits: Limits) Error![]u8 {
+    try validateLimits(transaction, limits);
+    var encoder = Encoder{ .allocator = allocator };
+    errdefer encoder.bytes.deinit(allocator);
+    const extended = include_witness and transaction.hasWitness();
+    try encoder.int(u32, transaction.version_bits);
+    if (extended) try encoder.append(&.{ 0, 1 });
+    try encoder.compact(transaction.inputs.len);
+    for (transaction.inputs) |input| {
+        try encoder.append(&input.previous_txid_digest_order);
+        try encoder.int(u32, input.previous_index);
+        try encoder.byteString(input.script);
+        try encoder.int(u32, input.sequence);
+    }
+    try encoder.compact(transaction.outputs.len);
+    for (transaction.outputs) |output| {
+        try encoder.int(u64, output.amount);
+        try encoder.byteString(output.script);
+    }
+    if (extended) {
+        for (transaction.inputs) |input| {
+            try encoder.compact(input.witness.len);
+            for (input.witness) |item| try encoder.byteString(item);
+        }
+    }
+    try encoder.int(u32, transaction.locktime);
+    return encoder.bytes.toOwnedSlice(allocator);
+}
+
+pub fn hash256(bytes: []const u8) [32]u8 {
+    const Sha256 = std.crypto.hash.sha2.Sha256;
+    var first: [32]u8 = undefined;
+    var digest: [32]u8 = undefined;
+    Sha256.hash(bytes, &first, .{});
+    Sha256.hash(&first, &digest, .{});
+    return digest;
+}
+
+pub fn reversed(digest: [32]u8) [32]u8 {
+    var result: [32]u8 = undefined;
+    for (digest, 0..) |byte, i| result[31 - i] = byte;
+    return result;
+}

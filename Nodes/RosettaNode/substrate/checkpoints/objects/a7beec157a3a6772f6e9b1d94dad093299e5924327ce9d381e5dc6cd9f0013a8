@@ -1,0 +1,399 @@
+#!/usr/bin/env python3
+"""Candidate-owned socket/crash tests; stdlib + the designated RocksDB C API.
+
+Run only via the Linux broker. Database inspection occurs after the writer exits.
+No service scheduler hooks or evaluator dependencies.
+"""
+import concurrent.futures
+import ctypes as C
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+
+BINARY = str(Path(sys.argv[1] if len(sys.argv) > 1 else './service').resolve())
+ITEM = {'hex': '01000000000000000000', 'mode': 'witness', 'operation': 'exact'}
+
+
+class Peer:
+    def __init__(self, path):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(30)
+        self.sock.connect(str(path))
+        self.file = self.sock.makefile('rb')
+        self.events = []
+        self.counter = 0
+
+    def call(self, op, **fields):
+        self.counter += 1
+        request = str(self.counter)
+        self.sock.sendall(json.dumps(dict(request=request, op=op, **fields), separators=(',', ':')).encode() + b'\n')
+        while True:
+            line = self.file.readline()
+            if not line:
+                raise EOFError('service disconnected before response')
+            reply = json.loads(line)
+            if 'event' in reply:
+                self.events.append(reply)
+                continue
+            assert reply['request'] == request, reply
+            return reply
+
+    def close(self):
+        self.file.close()
+        self.sock.close()
+
+
+class Service:
+    def __init__(self, root, generation=0, binary=BINARY):
+        self.root = root
+        self.db = root / 'db'
+        self.socket = root / ('s%d' % generation)
+        self.log = open(root / ('stderr%d.log' % generation), 'wb')
+        self.proc = subprocess.Popen([binary, str(self.db), str(self.socket)], stderr=self.log)
+        deadline = time.monotonic() + 30
+        while not self.socket.exists():
+            if self.proc.poll() is not None:
+                self.log.close()
+                raise RuntimeError('startup failed: ' + (root / ('stderr%d.log' % generation)).read_text())
+            if time.monotonic() > deadline:
+                self.kill()
+                raise TimeoutError('startup')
+            time.sleep(.005)
+
+    def peer(self):
+        return Peer(self.socket)
+
+    def kill(self):
+        if self.proc.poll() is None:
+            self.proc.kill()
+        self.proc.wait(timeout=30)
+        self.log.close()
+
+    def shutdown(self):
+        peer = self.peer()
+        try:
+            assert peer.call('shutdown')['status'] == 'draining'
+            assert self.proc.wait(timeout=30) == 0
+        finally:
+            peer.close()
+            self.log.close()
+
+
+def read_database(path):
+    """Independent iterator access, after the service process has stopped."""
+    lib = C.CDLL('librocksdb.so')
+    void = C.c_void_p
+    signatures = {
+        'options_create': (void, []),
+        'options_destroy': (None, [void]),
+        'open_for_read_only': (void, [void, C.c_char_p, C.c_ubyte, C.POINTER(void)]),
+        'close': (None, [void]),
+        'readoptions_create': (void, []),
+        'readoptions_destroy': (None, [void]),
+        'create_iterator': (void, [void, void]),
+        'iter_destroy': (None, [void]),
+        'iter_seek_to_first': (None, [void]),
+        'iter_valid': (C.c_ubyte, [void]),
+        'iter_next': (None, [void]),
+        'iter_key': (void, [void, C.POINTER(C.c_size_t)]),
+        'iter_value': (void, [void, C.POINTER(C.c_size_t)]),
+        'iter_get_error': (None, [void, C.POINTER(void)]),
+        'free': (None, [void]),
+    }
+    funcs = {}
+    for name, (restype, argtypes) in signatures.items():
+        f = getattr(lib, 'rocksdb_' + name)
+        f.restype, f.argtypes = restype, argtypes
+        funcs[name] = f
+    def check(err):
+        if err.value:
+            msg = C.string_at(err.value).decode()
+            funcs['free'](err)
+            raise RuntimeError(msg)
+    opts = funcs['options_create']()
+    err = void()
+    db = funcs['open_for_read_only'](opts, os.fsencode(path), 0, C.byref(err))
+    check(err)
+    ro = funcs['readoptions_create']()
+    iterator = funcs['create_iterator'](db, ro)
+    rows = {}
+    try:
+        funcs['iter_seek_to_first'](iterator)
+        while funcs['iter_valid'](iterator):
+            size = C.c_size_t()
+            ptr = funcs['iter_key'](iterator, C.byref(size))
+            key = C.string_at(ptr, size.value).decode()
+            ptr = funcs['iter_value'](iterator, C.byref(size))
+            rows[key] = C.string_at(ptr, size.value).decode()
+            funcs['iter_next'](iterator)
+        funcs['iter_get_error'](iterator, C.byref(err))
+        check(err)
+    finally:
+        funcs['iter_destroy'](iterator)
+        funcs['readoptions_destroy'](ro)
+        funcs['close'](db)
+        funcs['options_destroy'](opts)
+    return rows
+
+
+def payload_digest(items):
+    h = hashlib.sha256()
+    total = 0
+    for item in items:
+        raw = bytes.fromhex(item['hex'])
+        h.update(bytes([int(item['mode'] == 'witness'), int(item['operation'] == 'exact')]))
+        h.update(struct.pack('<Q', len(raw)))
+        h.update(raw)
+        total += len(raw)
+    return h.hexdigest(), total
+
+
+def inspect(path, acknowledged=None, cancelled=(), priorities=None):
+    rows = read_database(path)
+    assert rows['meta/version'] == '1'
+    last, checkpoint, count, size = (int(rows['meta/' + k]) for k in ['sequence', 'checkpoint', 'jobs', 'bytes'])
+    assert 0 <= checkpoint <= last
+    assert count == last - checkpoint <= 1024 and 0 <= size <= 64 << 20
+    expected = {'meta/' + k for k in ['version', 'sequence', 'checkpoint', 'jobs', 'bytes']}
+    jobs = {}
+    pending_bytes = 0
+    for seq in range(1, last + 1):
+        suffix = '%020d' % seq
+        terminal = seq <= checkpoint
+        key = ('r/' if terminal else 'p/') + suffix
+        expected.add(key)
+        job = json.loads(rows[key])
+        assert job['sequence'] == str(seq)
+        assert job['id'] not in jobs
+        jobs[job['id']] = job
+        expected.add('id/' + job['id'])
+        assert rows['id/' + job['id']] == str(seq)
+        if terminal:
+            assert job['state'] in ['complete', 'cancelled']
+            assert isinstance(job['results'], list)
+            if job['state'] == 'cancelled':
+                assert job['results'] == []
+            else:
+                assert 1 <= len(job['results']) <= 64
+                for result in job['results']:
+                    assert result['status'] in ['0', '1', '2', '3', '4']
+                    for field in ['status', 'consumed', 'full_size', 'stripped_size']:
+                        assert isinstance(result[field], str) and str(int(result[field])) == result[field]
+                    for field in ['txid_digest_order', 'wtxid_digest_order']:
+                        assert len(result[field]) == 64
+                    if result['status'] != '0':
+                        assert all(result[f] == '0' for f in ['consumed', 'full_size', 'stripped_size'])
+                        assert result['txid_digest_order'] == result['wtxid_digest_order'] == '0' * 64
+        else:
+            assert 'state' not in job and job['priority'] in ['normal', 'high']
+            if priorities and job['id'] in priorities:
+                assert job['priority'] == priorities[job['id']]
+            digest, nbytes = payload_digest(job['items'])
+            assert job['digest'] == digest and job['bytes'] == str(nbytes)
+            pending_bytes += nbytes
+            if 'c/' + suffix in rows:
+                expected.add('c/' + suffix)
+                assert rows['c/' + suffix] == '1'
+        if job['id'] in cancelled:
+            assert job['state'] == 'cancelled' if terminal else rows['c/' + suffix] == '1'
+    assert pending_bytes == size
+    assert set(rows) == expected, set(rows) ^ expected
+    for job_id, (seq, digest) in (acknowledged or {}).items():
+        assert jobs[job_id]['sequence'] == seq and jobs[job_id]['digest'] == digest
+    return jobs, count
+
+
+def wait_terminal(peer, job_id):
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        reply = peer.call('status', id=job_id)
+        assert reply['status'] == 'ok'
+        if reply['job']['state'] in ['complete', 'cancelled']:
+            return reply['job']
+        time.sleep(.005)
+    raise TimeoutError('terminal ' + job_id)
+
+
+def protocol_and_concurrency(root):
+    service = Service(root)
+    acknowledgements = {}
+    digest, _ = payload_digest([ITEM])
+    try:
+        p = service.peer()
+        assert p.call('status', id='missing')['status'] == 'not_found'
+        assert p.call('cancel', id='missing')['status'] == 'not_found'
+        assert p.call('submit', id='bad', items=[ITEM], priority='urgent')['status'] == 'invalid_request'
+        assert p.call('evaluate', items=[dict(ITEM, hex='AA')])['status'] == 'invalid_request'
+        lock = subprocess.run([BINARY, str(service.db), str(root / 'other')], capture_output=True, timeout=10)
+        assert lock.returncode != 0 and b'open database' in lock.stderr
+        response = p.call('submit', id='disconnected', items=[ITEM])
+        assert response['status'] == 'accepted'
+        acknowledgements['disconnected'] = (response['sequence'], digest)
+        p.close()
+
+        def client_work(index):
+            p = service.peer()
+            accepted = {}
+            try:
+                for n in range(25):
+                    job_id = 'c%d_%d' % (index, n)
+                    priority = 'high' if (index + n) % 2 else 'normal'
+                    r = p.call('submit', id=job_id, items=[ITEM], priority=priority)
+                    assert r['status'] == 'accepted', r
+                    accepted[job_id] = (r['sequence'], digest)
+                    retry = p.call('submit', id=job_id, items=[ITEM], priority='normal' if priority == 'high' else 'high')
+                    assert retry['status'] == 'existing' and retry['sequence'] == r['sequence']
+                    assert p.call('submit', id=job_id, items=[dict(ITEM, hex='02000000000000000000')])['status'] == 'conflict'
+                    assert p.call('evaluate', items=[ITEM])['results'][0]['status'] == '0'
+                return accepted
+            finally:
+                p.close()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            for accepted in executor.map(client_work, range(8)):
+                acknowledgements.update(accepted)
+        p = service.peer()
+        assert wait_terminal(p, 'disconnected')['state'] == 'complete'
+        assert p.call('cancel', id='disconnected')['status'] == 'too_late'
+        # Pipeline one client's requests and check responses/events in wire order.
+        requests = [dict(request='pipeline%d' % n, op='submit', id='pipeline%d' % n, items=[ITEM]) for n in range(50)]
+        p.sock.sendall(b''.join(json.dumps(q).encode() + b'\n' for q in requests))
+        seen = set()
+        for n in range(50):
+            while True:
+                r = json.loads(p.file.readline())
+                if 'event' in r:
+                    assert r['id'] in seen, 'event preceded admission response'
+                    continue
+                job_id = 'pipeline%d' % n
+                assert r['request'] == job_id and r['status'] == 'accepted', r
+                seen.add(job_id)
+                acknowledgements[job_id] = (r['sequence'], digest)
+                break
+        p.close()
+        service.shutdown()
+        jobs, pending = inspect(service.db, acknowledgements)
+        assert pending == 0 and len(jobs) == 251
+        service = Service(root, 1)
+        p = service.peer()
+        assert p.call('submit', id='disconnected', items=[ITEM])['status'] == 'existing'
+        assert wait_terminal(p, 'disconnected')['state'] == 'complete'
+        p.close()
+        service.shutdown()
+        inspect(service.db, acknowledgements)
+        print('socket protocol, eight clients, pipelining, retry/conflict, lock, disconnect, restart: passed', flush=True)
+    finally:
+        service.kill()
+
+
+def large_items():
+    # A valid fixed layout containing one large output script gives native work
+    # time to overlap acknowledged cancellation and an immediate process kill.
+    script_size = (4 << 20) - 100
+    tx = ('01000000' + '01' + '00' * 32 + '00000000' + '00' + 'ffffffff'
+          + '01' + '0000000000000000' + 'fe' + struct.pack('<I', script_size).hex()
+          + '51' * script_size + '00000000')
+    return [dict(ITEM, hex=tx)] * 4
+
+
+def crash_recovery(root):
+    items = large_items()
+    digest, _ = payload_digest(items)
+    acknowledged = {}
+    priorities = {}
+    cancelled = set()
+    pending_snapshots = 0
+    service = None
+    try:
+        for generation in range(6):
+            service = Service(root, generation)
+            p = service.peer()
+            job_id = 'crash%d' % generation
+            priority = 'high' if generation % 2 else 'normal'
+            r = p.call('submit', id=job_id, items=items, priority=priority)
+            assert r['status'] == 'accepted', r
+            acknowledged[job_id] = (r['sequence'], digest)
+            priorities[job_id] = priority
+            if generation % 2:
+                cancel = p.call('cancel', id=job_id)
+                assert cancel['status'] in ['ok', 'too_late']
+                if cancel['status'] == 'ok':
+                    cancelled.add(job_id)
+            service.kill()
+            p.close()
+            _, pending = inspect(service.db, acknowledged, cancelled, priorities)
+            pending_snapshots += int(pending > 0)
+        service = Service(root, 6)
+        service.shutdown()
+        _, pending = inspect(service.db, acknowledged, cancelled, priorities)
+        assert pending == 0
+        assert pending_snapshots > 0, 'no pending crash snapshot exercised'
+        assert cancelled, 'no acknowledged cancellation exercised'
+        print('six SIGKILL/restart cycles: passed (%d pending snapshots, %d durable cancellations)' % (pending_snapshots, len(cancelled)), flush=True)
+    finally:
+        if service:
+            service.kill()
+
+
+def v1_upgrade(root):
+    old_binary = str(Path(os.environ['V1_SERVICE']).resolve())
+    service = Service(root, binary=old_binary)
+    try:
+        p = service.peer()
+        assert p.call('submit', id='legacy_done', items=[ITEM])['status'] == 'accepted'
+        assert wait_terminal(p, 'legacy_done')['state'] == 'complete'
+        items = large_items()
+        accepted = p.call('submit', id='legacy_pending', items=items)
+        assert accepted['status'] == 'accepted'
+        cancellation = p.call('cancel', id='legacy_pending')
+        assert cancellation['status'] == 'ok', 'legacy cancellation was not exercised'
+        service.kill()
+        p.close()
+        acknowledged = {'legacy_pending': (accepted['sequence'], payload_digest(items)[0])}
+        before = read_database(service.db)
+        _, pending = inspect(service.db, acknowledged, {'legacy_pending'})
+        assert pending > 0, 'legacy pending recovery was not exercised'
+        receipt_key = 'r/' + '%020d' % 1
+        service = Service(root, 1)
+        p = service.peer()
+        retry = p.call('submit', id='legacy_pending', items=items, priority='high')
+        assert retry['status'] == 'existing' and retry['sequence'] == accepted['sequence']
+        assert p.call('submit', id='new_high', items=[ITEM], priority='high')['status'] == 'accepted'
+        assert wait_terminal(p, 'legacy_pending')['state'] == 'cancelled'
+        p.close()
+        service.shutdown()
+        _, pending = inspect(service.db, acknowledged, {'legacy_pending'})
+        assert pending == 0
+        assert read_database(service.db)[receipt_key] == before[receipt_key]
+        print('actual v1 executable -> v2: pending payload, cancellation, receipt, retry, new high work passed', flush=True)
+    finally:
+        service.kill()
+
+
+def main():
+    root = Path(tempfile.mkdtemp(prefix='candidate-tests-', dir='tmp')).resolve()
+    try:
+        tests = [('protocol', protocol_and_concurrency), ('crash', crash_recovery)]
+        if os.environ.get('V1_SERVICE'):
+            tests.append(('upgrade', v1_upgrade))
+        for name, test in tests:
+            path = root / name
+            path.mkdir()
+            test(path)
+    except BaseException:
+        print('FAILED: artifacts retained at', root, flush=True)
+        raise
+    else:
+        shutil.rmtree(root)
+        print('independent database invariants passed after all stopped writers', flush=True)
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,14 @@
+{
+  "schema": "rosettanode.substrate.mixed_probe.v1",
+  "status": "passed",
+  "jobs": 10000,
+  "clients": 8,
+  "elapsed_seconds": 13.006010989003698,
+  "lost_acknowledgements": 912,
+  "accepted_cancellations": 1428,
+  "late_cancellations": 4,
+  "negative_amount_family": "one of three fixture families, reported separately",
+  "independent_receipts_checked": 10000,
+  "stats_path": ".local/mixed-20260916T204444/dummy_v2-486ec30e/rocksdb-stats.txt",
+  "candidate_launch_allowed": false
+}

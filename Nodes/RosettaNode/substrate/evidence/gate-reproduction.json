@@ -1,0 +1,131 @@
+{
+  "schema": "rosettanode.substrate.gate_reproduction.v1",
+  "status": "passed",
+  "semantic_manifest": [
+    [
+      "unknown",
+      true
+    ],
+    [
+      "early_ack",
+      true
+    ],
+    [
+      "admission_atomic",
+      true
+    ],
+    [
+      "terminal_atomic",
+      true
+    ],
+    [
+      "conflicting_id",
+      true
+    ],
+    [
+      "late_cancel",
+      true
+    ],
+    [
+      "arena_lifetime",
+      true
+    ],
+    [
+      "invalid_requests",
+      true
+    ],
+    [
+      "completed_accounting",
+      true
+    ],
+    [
+      "incompatible_version",
+      true
+    ],
+    [
+      "encoding_mixed_batches",
+      true
+    ],
+    [
+      "native_linkage_options_abi",
+      true
+    ],
+    [
+      "cancel_worker_lifetime",
+      true
+    ],
+    [
+      "crash_p_write_enter",
+      true
+    ],
+    [
+      "crash_p_wal_sync_enter",
+      true
+    ],
+    [
+      "crash_p_native_success",
+      true
+    ],
+    [
+      "crash_r_write_enter",
+      true
+    ],
+    [
+      "crash_r_wal_sync_enter",
+      true
+    ],
+    [
+      "crash_r_native_success",
+      true
+    ],
+    [
+      "job_saturation",
+      true
+    ],
+    [
+      "payload_saturation",
+      true
+    ],
+    [
+      "injected_failures",
+      true
+    ],
+    [
+      "after_ack_repeated_recovery",
+      true
+    ],
+    [
+      "workloads_1_3",
+      true
+    ],
+    [
+      "mixed_service_workload",
+      true
+    ],
+    [
+      "pending_v1_upgrade",
+      true
+    ],
+    [
+      "priority_False",
+      true
+    ],
+    [
+      "priority_True",
+      true
+    ]
+  ],
+  "semantic_manifest_sha256": "732d992ceaff7f7612b729285dd0ebc9d9f68fb8de9620172e5ba6ff244e69f9",
+  "runs": [
+    ".local/evaluation-final/result.json",
+    ".local/evaluation-reproduction/result.json"
+  ],
+  "excluded": [
+    "timings",
+    "temporary paths",
+    "PIDs",
+    "concurrent cancellation outcomes when both legal"
+  ],
+  "fresh_containers": true,
+  "pinned_image": "sha256:7cd52bbc69cbce63c21abb3bf39e4fb38e356d065b7f3e730ae3e5583f5a8cab"
+}

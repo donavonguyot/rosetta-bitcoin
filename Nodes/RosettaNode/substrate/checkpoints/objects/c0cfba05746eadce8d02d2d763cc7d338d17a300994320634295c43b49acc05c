@@ -1,0 +1,158 @@
+use crate::sha256::Sha256;
+use serde::{Deserialize, Serialize};
+
+pub const MAX_JSON: usize = 40 << 20;
+pub const MAX_BATCH: usize = 64;
+pub const MAX_BYTES: usize = 16 << 20;
+pub const MAX_OUTSTANDING_BYTES: u64 = 64 << 20;
+pub const MAX_JOBS: u64 = 1024;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    Legacy,
+    Witness,
+}
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Operation {
+    Prefix,
+    Exact,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Item {
+    pub hex: String,
+    pub mode: Mode,
+    pub operation: Operation,
+}
+#[derive(Deserialize)]
+pub struct Request {
+    pub request: String,
+    pub op: String,
+    pub id: Option<String>,
+    pub items: Option<Vec<Item>>,
+    pub priority: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResultItem {
+    pub status: String,
+    pub consumed: String,
+    pub full_size: String,
+    pub stripped_size: String,
+    pub txid_digest_order: String,
+    pub wtxid_digest_order: String,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PendingRecord {
+    pub id: String,
+    pub digest: String,
+    pub sequence: String,
+    pub bytes: String,
+    pub priority: String,
+    pub items: Vec<Item>,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Receipt {
+    pub id: String,
+    pub digest: String,
+    pub sequence: String,
+    pub state: String,
+    pub results: Vec<ResultItem>,
+}
+pub struct Layout {
+    pub offset: usize,
+    pub size: usize,
+    pub witness: u32,
+    pub exact: u32,
+}
+pub struct Input {
+    pub bytes: Vec<u8>,
+    pub layout: Vec<Layout>,
+}
+pub enum InputError {
+    Invalid,
+    Allocation,
+}
+
+pub fn valid_id(s: &str) -> bool {
+    (1..=64).contains(&s.len())
+        && s.bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
+}
+pub fn hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        out.push(DIGITS[(b >> 4) as usize] as char);
+        out.push(DIGITS[(b & 15) as usize] as char);
+    }
+    out
+}
+fn digit(c: u8) -> Result<u8, InputError> {
+    match c {
+        b'0'..=b'9' => Ok(c - b'0'),
+        b'a'..=b'f' => Ok(c - b'a' + 10),
+        _ => Err(InputError::Invalid),
+    }
+}
+pub fn input(items: &[Item]) -> Result<Input, InputError> {
+    if items.is_empty() || items.len() > MAX_BATCH {
+        return Err(InputError::Invalid);
+    }
+    let mut n = 0usize;
+    for item in items {
+        if item.hex.len() % 2 != 0 {
+            return Err(InputError::Invalid);
+        }
+        n = n
+            .checked_add(item.hex.len() / 2)
+            .ok_or(InputError::Invalid)?;
+        if n > MAX_BYTES {
+            return Err(InputError::Invalid);
+        }
+    }
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(n)
+        .map_err(|_| InputError::Allocation)?;
+    let mut layout = Vec::with_capacity(items.len());
+    for item in items {
+        let offset = bytes.len();
+        for pair in item.hex.as_bytes().as_chunks::<2>().0 {
+            bytes.push((digit(pair[0])? << 4) | digit(pair[1])?);
+        }
+        layout.push(Layout {
+            offset,
+            size: bytes.len() - offset,
+            witness: matches!(item.mode, Mode::Witness) as u32,
+            exact: matches!(item.operation, Operation::Exact) as u32,
+        });
+    }
+    Ok(Input { bytes, layout })
+}
+pub fn digest(input: &Input) -> String {
+    let mut hash = Sha256::new();
+    for item in &input.layout {
+        hash.update(&[item.witness as u8, item.exact as u8]);
+        hash.update(&(item.size as u64).to_le_bytes());
+        hash.update(&input.bytes[item.offset..item.offset + item.size]);
+    }
+    hex(&hash.finish())
+}
+pub fn decimal(s: &str) -> Result<u64, String> {
+    if s.is_empty() || !s.bytes().all(|c| c.is_ascii_digit()) || (s.len() > 1 && s.starts_with('0'))
+    {
+        return Err(format!("invalid stored decimal: {s:?}"));
+    }
+    s.parse().map_err(|_| format!("decimal overflow: {s:?}"))
+}
+pub fn key(prefix: &str, seq: u64) -> String {
+    format!("{prefix}/{seq:020}")
+}
+pub fn valid_digest(s: &str) -> bool {
+    s.len() == 64
+        && s.bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+}

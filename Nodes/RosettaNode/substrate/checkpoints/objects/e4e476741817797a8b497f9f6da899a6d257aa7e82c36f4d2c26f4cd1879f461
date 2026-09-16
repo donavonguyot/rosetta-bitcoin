@@ -1,0 +1,46 @@
+#!/bin/sh
+set -eu
+
+# Exercise the built executable, including buffering and line boundaries.
+candidate=${1:-./candidate}
+mkdir -p tmp
+actual=tmp/transport-actual.jsonl
+expected=tmp/transport-expected.jsonl
+trap 'rm -f "$actual" "$expected"' EXIT
+
+printf '%s\n' '' '{' '{"op":"decode_exact","bytes":"01000000000000000000","mode":"legacy"}' |
+    "$candidate" > "$actual"
+cat > "$expected" <<'EOF'
+{"status":"invalid_request"}
+{"status":"invalid_request"}
+{"status":"ok","transaction":{"version_bits":"1","inputs":[],"outputs":[],"locktime":"0"},"consumed":"10"}
+EOF
+diff -u "$expected" "$actual"
+
+printf '%s\r\n%s' \
+    '{"op":"serialize","transaction":{"version_bits":"1","inputs":[],"outputs":[],"locktime":"0"},"include_witness":true}' \
+    '{"op":"decode_exact","bytes":"01000000000000000000","mode":"witness"}' |
+    "$candidate" > "$actual"
+cat > "$expected" <<'EOF'
+{"status":"ok","bytes":"01000000000000000000"}
+{"status":"ok","transaction":{"version_bits":"1","inputs":[],"outputs":[],"locktime":"0"},"consumed":"10"}
+EOF
+diff -u "$expected" "$actual"
+
+# This request and its response each exceed the 8192-byte I/O buffers.
+awk 'BEGIN {
+    printf "{\"op\":\"serialize\",\"include_witness\":false,\"transaction\":{\"version_bits\":\"1\",\"inputs\":[],\"outputs\":[{\"amount\":\"1\",\"script\":\""
+    for (i=0; i<65536; i++) printf "51"
+    printf "\"}],\"locktime\":\"0\"}}\n"
+}' | "$candidate" > "$actual"
+awk 'BEGIN {
+    prefix="{\"status\":\"ok\",\"bytes\":\"0100000000010100000000000000fe00000100"
+    suffix="00000000\"}"
+} {
+    if (NR != 1 || length($0) != 131144 || substr($0,1,length(prefix)) != prefix ||
+        substr($0,length($0)-length(suffix)+1) != suffix) exit 1
+    script=substr($0,length(prefix)+1,131072)
+    for (i=1; i<=length(script); i+=2) if (substr(script,i,2) != "51") exit 1
+} END { if (NR != 1) exit 1 }' "$actual"
+
+printf 'Transport tests passed.\n'

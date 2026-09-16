@@ -1,0 +1,140 @@
+{
+  "schema": "rosettanode.substrate.lineage_round.v1",
+  "lineage": "zig-2",
+  "language": "zig",
+  "round": "maintenance",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "high",
+  "controller_version": 3,
+  "freeze_sha256": "db1a5861aefe60095947af91dc23e0c6a97ed520a9d8709395379ccea0b57c5a",
+  "status": "qualified",
+  "attempts": [
+    {
+      "kind": "initial_submission",
+      "evaluation": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/evaluation/result.json",
+      "status": "passed"
+    }
+  ],
+  "reading": {
+    "phase": "reading",
+    "returncode": 0,
+    "timed_out": false,
+    "elapsed_seconds": 57.28453270799946,
+    "limit_seconds": 600,
+    "thread_id": "01a0ac4b-cda1-7003-97c8-5c0e03e4fac3",
+    "usage": [
+      {
+        "input_tokens": 176988,
+        "cached_input_tokens": 135680,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1404,
+        "reasoning_output_tokens": 129
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "substrate",
+      "permissions.substrate.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/tmp": "write",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/queue": "write"
+      },
+      "permissions.substrate.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/tmp"
+      }
+    },
+    "transcript_sha256": "c0fb4cba5632fdee9dd68280c36dd95a25b25c15c1050929b1fce10b7adfc793"
+  },
+  "implementation": {
+    "phase": "implementation",
+    "returncode": 0,
+    "timed_out": false,
+    "elapsed_seconds": 490.9249100409943,
+    "limit_seconds": 3600,
+    "thread_id": "01a0ac4b-cda1-7003-97c8-5c0e03e4fac3",
+    "usage": [
+      {
+        "input_tokens": 838043,
+        "cached_input_tokens": 803456,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 15051,
+        "reasoning_output_tokens": 4023
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "substrate",
+      "permissions.substrate.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace": "write"
+      },
+      "permissions.substrate.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/tmp"
+      }
+    },
+    "transcript_sha256": "19b57c9579aae5d9e0075e8314a4e9c39378c87097078a63b751ff6bc6ac967c"
+  },
+  "source_sha256": {
+    "BUILDING.md": "214bab055b1c4e429b3db470de3286a6779ab64de688d243812930ff6aa97ab7",
+    "EXPERIMENTS.md": "8714619936223ee5b4cf44dc2c066f815c2da168acb1cbd54ea2e50f8cd42c68",
+    "HANDOFF.md": "2ae9d048b05a33a7b4171cf0939563f4693d73f207f3608e5f2c87452362fd6c",
+    "README.md": "95d56ec5cf193f38534ec41cf5b8a1e74102364acb738bf35649b5bff0a764b4",
+    "SHA256SUMS": "763b0f2b0480c9c31e30b8b1394b6614012996be7e03d78f1b4d8d5ff58a24c1",
+    "SUBMISSION.txt": "d458b2e5db6c9a46f2264f6a87088230a121363166713d089b1c869c0c91477e",
+    "build.sh": "dbf7385573ce81645c4f136a9447146ff0fb125572303d5e772268f8c8bfa17e",
+    "contracts/DIAGNOSTICS.md": "fe3fa0ad3e24f706185540b14e0bc736eabbdb51f16ada93417ddb9ba2808e51",
+    "contracts/PREREGISTRATION.md": "ae1ebe8d51d00e08c0c5277fafac7dbe37ee4e9d5d81efc5d0ba7c3c3897081b",
+    "contracts/SERVICE.md": "43ec9b9bf495055a5e0042edbc1aa30fa69508034af62a475aa5035159b1c3db",
+    "contracts/WIRE_STORAGE.md": "e47bace965db306c98e33a5a3d6e9b25af5740920463f43e29393edb1023d975",
+    "main.zig": "1cd931dc27adb4154dc2378be1a9e05a09c63d4716449a7cbf1be13394e1eb04",
+    "public_check.py": "ae859db4f975307b21461b048a775a1fdd6ba39cc2d55e045b8bdd7206721d5f",
+    "reuse/storage.zig": "434838bae3d6dbeb394f2ca07bb621a8b15329d89e1d06c3bc91d4166485ba4f",
+    "run.py": "a01ad9831d16823631d268d82c4df42c14393ceab69d51251d3c12f2e0a83d9f",
+    "scheduler.zig": "911c06fe9c352ae8dc7bf1ef7857709a768b780ddc095cababbe59de897e663e",
+    "service": "29522f9129e51db1aee3c960dcbae3fcd8bcfc8d3fe19cc7e6d9d0aeb4332c0d",
+    "storage.zig": "99fba9b26c6860bf2089051cbefd1705232f2ee2fa40faa0511d7b5863c2769d",
+    "tests/check.py": "a1ba2785b83beb03028577e84af69212f5ed252c110f5a0eebe7d98ed0b98d2d"
+  },
+  "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/submission"
+}

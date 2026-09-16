@@ -1,0 +1,114 @@
+//! The only transaction-processing path. All native pointers stay on one worker.
+use crate::wire::{Input, ResultItem, hex};
+use std::ffi::{c_int, c_void};
+
+#[repr(C)]
+struct NativeItem {
+    offset: u64,
+    size: u64,
+    witness: u32,
+    exact: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct NativeResult {
+    status: u64,
+    consumed: u64,
+    full_size: u64,
+    stripped_size: u64,
+    txid: [u8; 32],
+    wtxid: [u8; 32],
+}
+#[link(name = "rosetta")]
+unsafe extern "C" {
+    fn rn_arena_create(bytes: *const u8, size: u64) -> *mut c_void;
+    fn rn_arena_destroy(arena: *mut c_void);
+    fn rn_verify_v2(
+        arena: *mut c_void,
+        items: *const NativeItem,
+        count: u64,
+        out: *mut NativeResult,
+        ok_bitmap: *mut u64,
+    ) -> c_int;
+}
+struct Arena(*mut c_void);
+impl Drop for Arena {
+    fn drop(&mut self) {
+        unsafe { rn_arena_destroy(self.0) }
+    }
+}
+pub fn evaluate(input: &Input) -> Result<Vec<ResultItem>, String> {
+    // Input remains borrowed through destruction of the arena. V2 offsets are
+    // relative to its immutable bytes, and native pointers never cross threads.
+    let raw = unsafe { rn_arena_create(input.bytes.as_ptr(), input.bytes.len() as u64) };
+    if raw.is_null() {
+        return Err("native arena allocation failed".into());
+    }
+    let arena = Arena(raw);
+    let items: Vec<_> = input
+        .layout
+        .iter()
+        .map(|l| NativeItem {
+            offset: l.offset as u64,
+            size: l.size as u64,
+            witness: l.witness,
+            exact: l.exact,
+        })
+        .collect();
+    let mut out = vec![NativeResult::default(); items.len()];
+    let mut ok_bitmap = 0u64;
+    let rc = unsafe {
+        rn_verify_v2(
+            arena.0,
+            items.as_ptr(),
+            items.len() as u64,
+            out.as_mut_ptr(),
+            &mut ok_bitmap,
+        )
+    };
+    if rc != 0 {
+        return Err(format!("rn_verify_v2 returned {rc}"));
+    }
+    let mut results = Vec::with_capacity(out.len());
+    for (i, mut r) in out.into_iter().enumerate() {
+        if r.status > 4 {
+            return Err(format!("unknown native status {}", r.status));
+        }
+        // Batches contain at most 64 items, so the final shift is 63. The
+        // bitmap is native ABI metadata; the wire schema retains per-item results.
+        if ((ok_bitmap >> i) & 1 != 0) != (r.status == 0) {
+            return Err(format!("native success bitmap/status mismatch at item {i}"));
+        }
+        if r.status != 0 {
+            r = NativeResult {
+                status: r.status,
+                ..NativeResult::default()
+            };
+        }
+        results.push(ResultItem {
+            status: r.status.to_string(),
+            consumed: r.consumed.to_string(),
+            full_size: r.full_size.to_string(),
+            stripped_size: r.stripped_size.to_string(),
+            txid_digest_order: hex(&r.txid),
+            wtxid_digest_order: hex(&r.wtxid),
+        });
+    }
+    Ok(results)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn abi_layout() {
+        assert_eq!(std::mem::size_of::<NativeItem>(), 24);
+        assert_eq!(std::mem::align_of::<NativeItem>(), 8);
+        assert_eq!(std::mem::offset_of!(NativeItem, offset), 0);
+        assert_eq!(std::mem::offset_of!(NativeItem, size), 8);
+        assert_eq!(std::mem::offset_of!(NativeItem, witness), 16);
+        assert_eq!(std::mem::offset_of!(NativeItem, exact), 20);
+        assert_eq!(std::mem::size_of::<NativeResult>(), 96);
+        assert_eq!(std::mem::offset_of!(NativeResult, txid), 32);
+        assert_eq!(std::mem::offset_of!(NativeResult, wtxid), 64);
+    }
+}

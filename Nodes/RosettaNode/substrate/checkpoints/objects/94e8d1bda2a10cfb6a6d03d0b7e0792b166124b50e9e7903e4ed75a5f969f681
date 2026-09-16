@@ -1,0 +1,253 @@
+mod json;
+mod sha256;
+mod transaction;
+#[cfg(test)] mod tests;
+
+use std::fmt::Write as FmtWrite;
+use std::io::{self, BufRead, Write as IoWrite};
+use transaction::Transaction;
+
+const ENVELOPE: usize = 4 * 1024 * 1024;
+const TRANSPORT_BYTES: usize = 8 * 1024 * 1024;
+const TRANSPORT_TEXT: usize = 20 * 1024 * 1024;
+const DEFAULT_ITEMS: usize = 4096;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Error { Invalid, Malformed, Resource, Execution, Transport, Admission }
+pub type Result<T> = std::result::Result<T, Error>;
+impl Error {
+    fn response(self) -> &'static [u8] {
+        match self {
+            Self::Invalid => b"{\"status\":\"invalid_request\"}",
+            Self::Malformed => b"{\"status\":\"malformed_encoding\"}",
+            Self::Resource => b"{\"status\":\"resource_limit\"}",
+            Self::Execution => b"{\"status\":\"execution_failure\"}",
+            Self::Transport => b"{\"status\":\"transport_limit\"}",
+            Self::Admission => b"{\"status\":\"admission_limit\"}",
+        }
+    }
+}
+
+pub fn reserve<T>(v: &mut Vec<T>, count: usize) -> Result<()> {
+    v.try_reserve_exact(count).map_err(|_| Error::Execution)
+}
+pub fn push<T>(v: &mut Vec<T>, value: T) -> Result<()> {
+    v.try_reserve(1).map_err(|_| Error::Execution)?;
+    v.push(value);
+    Ok(())
+}
+pub fn copy_bytes(bytes: &[u8]) -> Result<Vec<u8>> {
+    let mut v = Vec::new();
+    reserve(&mut v, bytes.len())?;
+    v.extend_from_slice(bytes);
+    Ok(v)
+}
+fn string_buffer(capacity: usize) -> Result<String> {
+    let mut s = String::new();
+    s.try_reserve_exact(capacity).map_err(|_| Error::Execution)?;
+    Ok(s)
+}
+
+fn digit(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
+}
+pub fn hex_length(s: &str) -> Result<usize> {
+    if s.len() % 2 != 0 || s.bytes().any(|b| digit(b).is_none()) { return Err(Error::Invalid); }
+    Ok(s.len() / 2)
+}
+pub fn unhex(s: &str) -> Result<Vec<u8>> {
+    let length = hex_length(s)?;
+    if length > TRANSPORT_BYTES { return Err(Error::Transport); }
+    let mut bytes = Vec::new();
+    reserve(&mut bytes, length)?;
+    for pair in s.as_bytes().chunks_exact(2) {
+        bytes.push((digit(pair[0]).unwrap() << 4) | digit(pair[1]).unwrap());
+    }
+    Ok(bytes)
+}
+fn append_hex(out: &mut String, bytes: &[u8]) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for &b in bytes { out.push(HEX[(b >> 4) as usize] as char); out.push(HEX[(b & 15) as usize] as char); }
+}
+
+fn unsigned_spelling(s: &str) -> bool {
+    !s.is_empty() && (s == "0" || (matches!(s.as_bytes()[0], b'1'..=b'9') && s.bytes().all(|b| b.is_ascii_digit())))
+}
+pub fn unsigned(s: &str) -> Result<u64> {
+    if !unsigned_spelling(s) { return Err(Error::Invalid); }
+    s.parse().map_err(|_| Error::Invalid)
+}
+pub fn signed(s: &str) -> Result<i64> {
+    let digits = s.strip_prefix('-').unwrap_or(s);
+    if !unsigned_spelling(digits) || s == "-0" { return Err(Error::Invalid); }
+    s.parse().map_err(|_| Error::Invalid)
+}
+
+fn budget(j: &json::Json<'_>) -> Result<usize> {
+    let Some(limits) = j.optional(j.root, "limits")? else { return Ok(DEFAULT_ITEMS); };
+    let Some(max) = j.optional(limits, "max_items")? else { return Ok(DEFAULT_ITEMS); };
+    let n = unsigned(j.string(max)?)?;
+    if n > DEFAULT_ITEMS as u64 { return Err(Error::Invalid); }
+    Ok(n as usize)
+}
+
+fn append_transaction(out: &mut String, tx: &Transaction) {
+    write!(out, "{{\"version_bits\":\"{}\",\"inputs\":[", tx.version).unwrap();
+    for (n, input) in tx.inputs.iter().enumerate() {
+        if n != 0 { out.push(','); }
+        out.push_str("{\"previous_txid_digest_order\":\"");
+        append_hex(out, &input.digest);
+        write!(out, "\",\"previous_index\":\"{}\",\"script\":\"", input.index).unwrap();
+        append_hex(out, &input.script);
+        write!(out, "\",\"sequence\":\"{}\",\"witness\":[", input.sequence).unwrap();
+        for (k, item) in input.witness.iter().enumerate() {
+            if k != 0 { out.push(','); }
+            out.push('"'); append_hex(out, item); out.push('"');
+        }
+        out.push_str("]}");
+    }
+    out.push_str("],\"outputs\":[");
+    for (n, output) in tx.outputs.iter().enumerate() {
+        if n != 0 { out.push(','); }
+        write!(out, "{{\"amount\":\"{}\",\"script\":\"", output.amount).unwrap();
+        append_hex(out, &output.script);
+        out.push_str("\"}");
+    }
+    write!(out, "],\"locktime\":\"{}\"}}", tx.locktime).unwrap();
+}
+
+fn decode_response(tx: &Transaction, consumed: usize) -> Result<String> {
+    let witness_items: usize = tx.inputs.iter().map(|i| i.witness.len()).sum();
+    let capacity = 1024 + tx.size(true) * 2 + tx.inputs.len() * 256 + tx.outputs.len() * 128 + witness_items * 8;
+    let mut out = string_buffer(capacity)?;
+    out.push_str("{\"status\":\"ok\",\"transaction\":");
+    append_transaction(&mut out, tx);
+    write!(out, ",\"consumed\":\"{consumed}\"}}").unwrap();
+    debug_assert!(out.len() <= capacity);
+    Ok(out)
+}
+
+fn serialize_response(bytes: &[u8]) -> Result<String> {
+    let mut out = string_buffer(32 + bytes.len() * 2)?;
+    out.push_str("{\"status\":\"ok\",\"bytes\":\"");
+    append_hex(&mut out, bytes);
+    out.push_str("\"}");
+    Ok(out)
+}
+
+fn identify_response(tx: &Transaction) -> Result<String> {
+    let stripped = tx.serialize(false)?;
+    let full_storage;
+    let full = if tx.has_witness() {
+        full_storage = tx.serialize(true)?;
+        &full_storage
+    } else { &stripped };
+    let txid = sha256::double(&stripped);
+    let wtxid = if tx.has_witness() { sha256::double(full) } else { txid };
+    let mut out = string_buffer(1024 + 2 * (stripped.len() + full.len()))?;
+    out.push_str("{\"status\":\"ok\",\"stripped\":\"");
+    append_hex(&mut out, &stripped);
+    out.push_str("\",\"full\":\"");
+    append_hex(&mut out, full);
+    write!(out, "\",\"stripped_size\":\"{}\",\"full_size\":\"{}\",\"txid_digest_order\":\"", stripped.len(), full.len()).unwrap();
+    append_hex(&mut out, &txid);
+    out.push_str("\",\"txid_display_order\":\"");
+    let mut reversed = txid; reversed.reverse();
+    append_hex(&mut out, &reversed);
+    out.push_str("\",\"wtxid_digest_order\":\"");
+    append_hex(&mut out, &wtxid);
+    out.push_str("\",\"wtxid_display_order\":\"");
+    reversed = wtxid; reversed.reverse();
+    append_hex(&mut out, &reversed);
+    out.push_str("\"}");
+    Ok(out)
+}
+
+fn process(text: &str) -> Result<String> {
+    if text.len() > TRANSPORT_TEXT { return Err(Error::Transport); }
+    let j = json::parse(text)?;
+    let root = j.root;
+    let op = j.string(j.field(root, "op")?)?;
+    let limit = budget(&j)?;
+    match op {
+        "decode_prefix" | "decode_exact" => {
+            let mode = match j.string(j.field(root, "mode")?)? {
+                "legacy" => false, "witness" => true, _ => return Err(Error::Invalid),
+            };
+            let offset = if op == "decode_prefix" {
+                match j.optional(root, "offset")? {
+                    Some(value) => usize::try_from(unsigned(j.string(value)?)?).map_err(|_| Error::Invalid)?,
+                    None => 0,
+                }
+            } else { 0 };
+            let bytes = unhex(j.string(j.field(root, "bytes")?)?)?;
+            let (tx, consumed) = transaction::decode(&bytes, offset, mode, op == "decode_exact", limit)?;
+            decode_response(&tx, consumed)
+        }
+        "serialize" => {
+            let include = j.boolean(j.field(root, "include_witness")?)?;
+            let tx = transaction::structured(&j, j.field(root, "transaction")?, limit, include)?;
+            serialize_response(&tx.serialize(include)?)
+        }
+        "identify" => {
+            let tx = transaction::structured(&j, j.field(root, "transaction")?, limit, true)?;
+            identify_response(&tx)
+        }
+        _ => Err(Error::Invalid),
+    }
+}
+
+// Read and drain one request even when it exceeds the text envelope, preserving
+// line framing and ensuring a large request does not prevent later requests.
+fn read_request<R: BufRead>(reader: &mut R, line: &mut Vec<u8>) -> io::Result<Option<Result<()>>> {
+    line.clear();
+    let mut total = 0usize;
+    let mut failure = None;
+    loop {
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            return Ok(if total == 0 { None } else { Some(failure.map_or(Ok(()), Err)) });
+        }
+        let newline = available.iter().position(|&b| b == b'\n');
+        let count = newline.unwrap_or(available.len());
+        total = total.saturating_add(count);
+        if total > TRANSPORT_TEXT { failure = Some(Error::Transport); }
+        if failure.is_none() {
+            if line.try_reserve(count).is_err() { failure = Some(Error::Execution); }
+            else { line.extend_from_slice(&available[..count]); }
+        }
+        if failure.is_some() { line.clear(); }
+        reader.consume(count + usize::from(newline.is_some()));
+        if newline.is_some() { return Ok(Some(failure.map_or(Ok(()), Err))); }
+    }
+}
+
+fn run() -> io::Result<()> {
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut input = stdin.lock();
+    let mut output = stdout.lock();
+    let mut line = Vec::new();
+    while let Some(read) = read_request(&mut input, &mut line)? {
+        let response = read.and_then(|()| {
+            let text = std::str::from_utf8(&line).map_err(|_| Error::Invalid)?;
+            std::panic::catch_unwind(|| process(text)).unwrap_or(Err(Error::Execution))
+        });
+        match response {
+            Ok(text) => output.write_all(text.as_bytes())?,
+            Err(error) => output.write_all(error.response())?,
+        }
+        output.write_all(b"\n")?;
+        output.flush()?;
+    }
+    Ok(())
+}
+
+fn main() {
+    if let Err(error) = run() { eprintln!("JSON-lines I/O failure: {error}"); }
+}

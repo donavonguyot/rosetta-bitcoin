@@ -1,0 +1,431 @@
+//! Single-thread-owned durable state. No socket I/O or native encoding occurs here.
+use crate::{
+    storage::{Batch, DB},
+    transport::{Context, Peer},
+    wire::*,
+};
+use serde_json::{Value, json};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
+    sync::{Arc, Weak},
+};
+
+pub enum Phase {
+    Waiting,
+    Running,
+    Done(Vec<ResultItem>),
+}
+pub struct Pending {
+    pub record: PendingRecord,
+    pub input: Arc<Input>,
+    pub cancelled: bool,
+    pub phase: Phase,
+    pub subscriber: Option<Weak<Peer>>,
+}
+pub struct Identity {
+    pub sequence: u64,
+    pub digest: String,
+}
+pub enum Ready {
+    Job(u64),
+    Evaluate { input: Arc<Input>, context: Context },
+}
+pub struct State {
+    db: DB,
+    pub sequence: u64,
+    pub checkpoint: u64,
+    pub bytes: u64,
+    pub ids: HashMap<String, Identity>,
+    pub pending: BTreeMap<u64, Pending>,
+    pub ready: VecDeque<Ready>,
+    pub draining: bool,
+}
+fn json_bytes<T: serde::Serialize>(v: &T) -> Result<Vec<u8>, String> {
+    serde_json::to_vec(v).map_err(|e| e.to_string())
+}
+fn json_read<T: serde::de::DeserializeOwned>(v: &[u8]) -> Result<T, String> {
+    serde_json::from_slice(v).map_err(|e| e.to_string())
+}
+fn text(v: &[u8]) -> Result<&str, String> {
+    std::str::from_utf8(v).map_err(|e| e.to_string())
+}
+fn scalar(db: &DB, k: &str) -> Result<u64, String> {
+    let v = db
+        .get(k.as_bytes())?
+        .ok_or_else(|| format!("missing {k} on existing database"))?;
+    decimal(text(&v)?)
+}
+fn stored_sequence(k: &str) -> Result<u64, String> {
+    if k.len() != 22 {
+        return Err(format!("invalid sequence key {k}"));
+    }
+    let s = k[2..]
+        .parse::<u64>()
+        .map_err(|_| format!("invalid sequence key {k}"))?;
+    if s == 0 || key(&k[..1], s) != k {
+        return Err(format!("invalid sequence key {k}"));
+    }
+    Ok(s)
+}
+fn receipt_valid(r: &Receipt) -> Result<(), String> {
+    if !valid_id(&r.id) || !valid_digest(&r.digest) || decimal(&r.sequence)? == 0 {
+        return Err("invalid receipt identity".into());
+    }
+    match r.state.as_str() {
+        "cancelled" if r.results.is_empty() => {}
+        "complete" if !r.results.is_empty() && r.results.len() <= MAX_BATCH => {
+            for x in &r.results {
+                let status = decimal(&x.status)?;
+                let c = decimal(&x.consumed)?;
+                let f = decimal(&x.full_size)?;
+                let s = decimal(&x.stripped_size)?;
+                if status > 4
+                    || !valid_digest(&x.txid_digest_order)
+                    || !valid_digest(&x.wtxid_digest_order)
+                {
+                    return Err("invalid receipt result".into());
+                }
+                if status != 0
+                    && (c != 0
+                        || f != 0
+                        || s != 0
+                        || x.txid_digest_order != "0".repeat(64)
+                        || x.wtxid_digest_order != "0".repeat(64))
+                {
+                    return Err("nonzero error result in receipt".into());
+                }
+            }
+        }
+        _ => return Err("invalid terminal receipt state/results".into()),
+    }
+    Ok(())
+}
+impl State {
+    pub fn open(path: &str) -> Result<Self, String> {
+        std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
+        let db = DB::open(path)?;
+        match db.get(b"meta/version")? {
+            Some(v) if v == b"1" => {}
+            Some(_) => return Err("incompatible schema: only version 1 is supported".into()),
+            None => {
+                let mut empty = true;
+                db.visit(|_, _| {
+                    empty = false;
+                    Ok(())
+                })?;
+                if !empty {
+                    return Err("database has records but no schema version".into());
+                }
+                let mut b = Batch::new();
+                b.put(b"meta/version", b"1");
+                for k in [
+                    "meta/sequence",
+                    "meta/checkpoint",
+                    "meta/jobs",
+                    "meta/bytes",
+                ] {
+                    b.put(k.as_bytes(), b"0");
+                }
+                db.write(&b)?;
+            }
+        }
+        let sequence = scalar(&db, "meta/sequence")?;
+        let checkpoint = scalar(&db, "meta/checkpoint")?;
+        let jobs = scalar(&db, "meta/jobs")?;
+        let bytes = scalar(&db, "meta/bytes")?;
+        if checkpoint > sequence
+            || jobs != sequence - checkpoint
+            || jobs > MAX_JOBS
+            || bytes > MAX_OUTSTANDING_BYTES
+        {
+            return Err("invalid recovered counters".into());
+        }
+        let mut ids = HashMap::new();
+        let mut indexes = HashMap::new();
+        let mut pending = BTreeMap::new();
+        let mut receipts = BTreeSet::new();
+        let mut cancellations = BTreeSet::new();
+        let mut summed_bytes = 0u64;
+        db.visit(|k, v| {
+            let k = text(k)?;
+            if k.starts_with("meta/") {
+                if ![
+                    "meta/version",
+                    "meta/sequence",
+                    "meta/checkpoint",
+                    "meta/jobs",
+                    "meta/bytes",
+                ]
+                .contains(&k)
+                {
+                    return Err(format!("unknown metadata key {k}"));
+                }
+            } else if let Some(id) = k.strip_prefix("id/") {
+                if !valid_id(id) {
+                    return Err("invalid id index".into());
+                }
+                indexes.insert(id.to_owned(), decimal(text(v)?)?);
+            } else if k.starts_with("p/") {
+                let seq = stored_sequence(k)?;
+                let r: PendingRecord = json_read(v)?;
+                if seq <= checkpoint
+                    || seq > sequence
+                    || decimal(&r.sequence)? != seq
+                    || !valid_id(&r.id)
+                    || r.priority != "normal"
+                {
+                    return Err(format!("invalid pending identity at {k}"));
+                }
+                let input = input(&r.items)
+                    .map_err(|_| format!("invalid/unallocatable pending input {k}"))?;
+                if decimal(&r.bytes)? != input.bytes.len() as u64 || r.digest != digest(&input) {
+                    return Err(format!("pending digest/size mismatch {k}"));
+                }
+                summed_bytes = summed_bytes
+                    .checked_add(input.bytes.len() as u64)
+                    .ok_or("byte count overflow")?;
+                if ids
+                    .insert(
+                        r.id.clone(),
+                        Identity {
+                            sequence: seq,
+                            digest: r.digest.clone(),
+                        },
+                    )
+                    .is_some()
+                {
+                    return Err("duplicate job ID".into());
+                }
+                pending.insert(
+                    seq,
+                    Pending {
+                        record: r,
+                        input: Arc::new(input),
+                        cancelled: false,
+                        phase: Phase::Waiting,
+                        subscriber: None,
+                    },
+                );
+            } else if k.starts_with("r/") {
+                let seq = stored_sequence(k)?;
+                let r: Receipt = json_read(v)?;
+                receipt_valid(&r)?;
+                if seq > checkpoint || decimal(&r.sequence)? != seq {
+                    return Err("receipt outside checkpoint".into());
+                }
+                receipts.insert(seq);
+                if ids
+                    .insert(
+                        r.id,
+                        Identity {
+                            sequence: seq,
+                            digest: r.digest,
+                        },
+                    )
+                    .is_some()
+                {
+                    return Err("duplicate job ID".into());
+                }
+            } else if k.starts_with("c/") {
+                let seq = stored_sequence(k)?;
+                if v != b"1" {
+                    return Err("invalid cancellation intent".into());
+                }
+                cancellations.insert(seq);
+            } else {
+                return Err(format!("unknown schema key {k}"));
+            }
+            Ok(())
+        })?;
+        if receipts.len() as u64 != checkpoint
+            || pending.len() as u64 != jobs
+            || summed_bytes != bytes
+            || indexes.len() != ids.len()
+        {
+            return Err("recovered database invariants failed".into());
+        }
+        for (id, identity) in &ids {
+            if indexes.get(id) != Some(&identity.sequence) {
+                return Err(format!("id index mismatch for {id}"));
+            }
+        }
+        for seq in cancellations {
+            let p = pending
+                .get_mut(&seq)
+                .ok_or("cancellation references nonpending job")?;
+            p.cancelled = true;
+            p.phase = Phase::Done(Vec::new());
+        }
+        let ready = pending.keys().map(|&s| Ready::Job(s)).collect();
+        Ok(Self {
+            db,
+            sequence,
+            checkpoint,
+            bytes,
+            ids,
+            pending,
+            ready,
+            draining: false,
+        })
+    }
+    pub fn submit(
+        &mut self,
+        ctx: Context,
+        id: String,
+        items: Vec<Item>,
+        input: Input,
+    ) -> Result<(), String> {
+        let digest = digest(&input);
+        if let Some(existing) = self.ids.get(&id) {
+            if existing.digest == digest {
+                ctx.reply(json!({"status":"existing","sequence":existing.sequence.to_string()}));
+            } else {
+                ctx.reply(json!({"status":"conflict"}));
+            }
+            return Ok(());
+        }
+        if self.draining {
+            ctx.reply(json!({"status":"draining"}));
+            return Ok(());
+        }
+        let n = input.bytes.len() as u64;
+        if self.pending.len() as u64 >= MAX_JOBS || self.bytes + n > MAX_OUTSTANDING_BYTES {
+            ctx.reply(json!({"status":"backpressure"}));
+            return Ok(());
+        }
+        let seq = self
+            .sequence
+            .checked_add(1)
+            .ok_or("admission sequence exhausted")?;
+        let record = PendingRecord {
+            id: id.clone(),
+            digest: digest.clone(),
+            sequence: seq.to_string(),
+            bytes: n.to_string(),
+            priority: "normal".into(),
+            items,
+        };
+        let mut batch = Batch::new();
+        batch.put(key("p", seq).as_bytes(), &json_bytes(&record)?);
+        batch.put(format!("id/{id}").as_bytes(), seq.to_string().as_bytes());
+        batch.put(b"meta/sequence", seq.to_string().as_bytes());
+        batch.put(
+            b"meta/jobs",
+            (self.pending.len() + 1).to_string().as_bytes(),
+        );
+        batch.put(b"meta/bytes", (self.bytes + n).to_string().as_bytes());
+        self.db.write(&batch)?;
+        self.sequence = seq;
+        self.bytes += n;
+        self.ids.insert(
+            id,
+            Identity {
+                sequence: seq,
+                digest,
+            },
+        );
+        self.pending.insert(
+            seq,
+            Pending {
+                record,
+                input: Arc::new(input),
+                cancelled: false,
+                phase: Phase::Waiting,
+                subscriber: Some(Arc::downgrade(&ctx.peer)),
+            },
+        );
+        // Coordinator enqueues admission acknowledgment before any dispatch/commit.
+        ctx.reply(json!({"status":"accepted","sequence":seq.to_string()}));
+        self.ready.push_back(Ready::Job(seq));
+        Ok(())
+    }
+    pub fn status(&self, ctx: Context, id: &str) -> Result<(), String> {
+        let Some(identity) = self.ids.get(id) else {
+            ctx.reply(json!({"status":"not_found"}));
+            return Ok(());
+        };
+        let job = if let Some(p) = self.pending.get(&identity.sequence) {
+            let mut v = serde_json::to_value(&p.record).map_err(|e| e.to_string())?;
+            v["state"] = json!(if p.cancelled {
+                "cancel_pending"
+            } else {
+                "pending"
+            });
+            v
+        } else {
+            let bytes = self
+                .db
+                .get(key("r", identity.sequence).as_bytes())?
+                .ok_or("missing indexed receipt")?;
+            json_read::<Value>(&bytes)?
+        };
+        ctx.reply(json!({"status":"ok","job":job}));
+        Ok(())
+    }
+    pub fn cancel(&mut self, ctx: Context, id: &str) -> Result<(), String> {
+        let Some(identity) = self.ids.get(id) else {
+            ctx.reply(json!({"status":"not_found"}));
+            return Ok(());
+        };
+        let seq = identity.sequence;
+        let Some(p) = self.pending.get_mut(&seq) else {
+            ctx.reply(json!({"status":"too_late"}));
+            return Ok(());
+        };
+        if !p.cancelled {
+            let mut b = Batch::new();
+            b.put(key("c", seq).as_bytes(), b"1");
+            self.db.write(&b)?;
+            p.cancelled = true;
+            if matches!(p.phase, Phase::Waiting) {
+                p.phase = Phase::Done(Vec::new());
+            }
+        }
+        ctx.reply(json!({"status":"ok"}));
+        Ok(())
+    }
+    pub fn commit_one(&mut self) -> Result<(), String> {
+        let Some(seq) = self.checkpoint.checked_add(1) else {
+            return Ok(());
+        };
+        let Some(p) = self.pending.get(&seq) else {
+            return Ok(());
+        };
+        let Phase::Done(results) = &p.phase else {
+            return Ok(());
+        };
+        let r = Receipt {
+            id: p.record.id.clone(),
+            digest: p.record.digest.clone(),
+            sequence: seq.to_string(),
+            state: if p.cancelled { "cancelled" } else { "complete" }.into(),
+            results: if p.cancelled {
+                Vec::new()
+            } else {
+                results.clone()
+            },
+        };
+        let n = p.input.bytes.len() as u64;
+        let mut b = Batch::new();
+        b.put(key("r", seq).as_bytes(), &json_bytes(&r)?);
+        b.delete(key("p", seq).as_bytes());
+        b.delete(key("c", seq).as_bytes());
+        b.put(b"meta/checkpoint", seq.to_string().as_bytes());
+        b.put(
+            b"meta/jobs",
+            (self.pending.len() - 1).to_string().as_bytes(),
+        );
+        b.put(b"meta/bytes", (self.bytes - n).to_string().as_bytes());
+        // No other request is completed between selecting the disposition and
+        // entry into rocksdb_write. A racing cancellation remains overlapping
+        // until this returns, when it observes the durable terminal receipt.
+        self.db.write(&b)?;
+        self.checkpoint = seq;
+        self.bytes -= n;
+        let p = self.pending.remove(&seq).unwrap();
+        if let Some(peer) = p.subscriber.and_then(|s| s.upgrade()) {
+            peer.send(json!({"event":"terminal","id":r.id,"job":r}), true);
+        }
+        Ok(())
+    }
+}

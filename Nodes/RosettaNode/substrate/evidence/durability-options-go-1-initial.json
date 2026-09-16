@@ -1,0 +1,9 @@
+{
+  "schema": "rosettanode.substrate.durability_options_audit.v1",
+  "lineage": "go-1",
+  "round": "initial",
+  "status": "passed",
+  "observed_write_entries": 22120,
+  "incorrect_options": [],
+  "scope": "All retained v2 candidate evaluation write entries, including cancellation and recovery; same frozen sync/WAL contract. This does not prove unexecuted paths."
+}

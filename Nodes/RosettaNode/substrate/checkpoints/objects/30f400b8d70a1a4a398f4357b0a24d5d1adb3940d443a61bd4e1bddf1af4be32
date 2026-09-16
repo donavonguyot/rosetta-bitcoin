@@ -1,0 +1,67 @@
+# Initial implementation record
+
+This is the initial baseline, not an optimization round. Optimization hypotheses
+used: **0** (no group commit). No performance comparison or language claim is made.
+All commands ran through the pinned Linux broker; source edits stayed local.
+
+| Attempt/check | Observation | Action/result |
+|---|---|---|
+| Infrastructure/ABI reading | Arena creation succeeded for 0 and 16 MiB; 16 MiB + 1 returned null. Header exposes arena ownership and v1 layouts. | Validate aggregate batch size before admission; retain source buffer and arena throughout native calls. |
+| First release build | Built successfully with pinned offline crates. | Retained versions/checksums and dynamic adapter/RocksDB linkage. |
+| Public smoke | Passed. | Proceeded to independent protocol/storage/crash tests. |
+| Initial seven integration tests and SHA vectors | All passed, including three live cancellation/crash/restart cycles. | Added coverage for full recovery backlog, slow clients, framing, cancellation fixtures and request-stream crashes. |
+| Output-queue review | Frame-count-only bounding could retain multiple large status responses per client; best-effort events could fill all response slots. | Allow one response in flight until actually written; reserve a response slot and cap events separately. Connection leases cover both reader and writer lifetime. Correctness/resource-bound fix, not an optimization experiment. |
+| Expanded 12-test suite, first run | Eleven passed; request-stream crash test got ConnectionRefusedError during restart. Service diagnostic logs were empty. | Test harness had treated socket pathname existence as readiness; Unix bind creates the path before listen. Added an actual connection/EOF readiness probe and close-on-connect-failure cleanup. No service change for this failure. |
+| Expanded suite after readiness fix | All 12 passed, plus SHA vectors and public smoke. | Confirmed pending work was actually retained in crash snapshots; independently inspected all database invariants. |
+| Strict Clippy, first run | Five style diagnostics: fixed-size chunks, divisibility spelling, nested conditional. No compile/type/ownership error in service build. | Adopted pinned Rust array chunks/is_multiple_of and collapsed the conditional, then rebuilt/retested. |
+| Artifact identification | `file` utility was unavailable. | Used ELF header/readelf and dynamic symbol inspection; confirmed Linux AArch64, dynamic RocksDB/rosetta, /adapter runpath and v1-only import. |
+| Final validation | Strict Clippy passed. SHA vectors, public smoke and all 12 integration tests passed; integration runtime 7.382 seconds. | Final executable rebuilt from final source; artifact hashes saved in tmp/final-artifacts.json. |
+
+The full-backlog test creates a valid stopped-writer recovery fixture with 1,024
+jobs and 64 MiB pending payload. It exercises real native workers and actual sync
+WriteBatches, with no barriers or scheduler hooks. Crash tests use SIGKILL at
+selected live points; they do not simulate torn writes or hardware power loss.
+
+No storage/native arena allocation failure was injected. No native sanitizer,
+Miri-through-FFI, whole-service TSan, exhaustive race proof, or evaluator pass is
+claimed. Initial preparation material and exact cost beyond observed elapsed
+implementation time are unknown. Attempts and raw broker outputs remain in the
+queue and test artifact directories; no failed repetition was substituted into a
+performance result. The initial submission freezes on return.
+
+# Maintenance implementation record — ABI v2
+
+The initial record above is retained. This maintenance round adds ABI v2 and
+priority scheduling, with **0 optimization hypotheses** and no group commit.
+Implementation start clock: 2026-09-16 22:15:54 UTC. All builds, tests, formatting,
+linting, native probes and artifact audits used python3 run.py. Source/document
+edits and predecessor preservation stayed in this workspace.
+
+| Attempt/check | Observation | Action/result |
+|---|---|---|
+| Predecessor preservation | Existing v1 source, tests and executable available. | Copied to tmp/predecessor before changes; used the executable for a real datadir upgrade. |
+| Native v2 probe | Counts 1, 2, 5 and 64 showed bit i exactly matching item status 0; unused bits cleared, bit 63 supported. | Use arena offsets and validate bitmap against statuses; preserve the contracted wire results. |
+| First v2 build and inherited coverage | Release build, smoke, 12 integration tests and four Rust tests passed. | Extended priority/crash coverage and added schema/ABI/state-owner tests. |
+| Expanded test build, first attempt | Cargo automatically treated tests/state.rs as a separate integration crate, where super::* could not access the binary's internals. Release service built successfully; test compilation failed. | Moved the cfg(test)-included module to tests/unit/state.rs. This was test layout/toolchain integration, not service semantics. Retained failed broker response. |
+| Final full suite | Five Rust tests, smoke, all 12 inherited and five v2 integration tests passed. | Confirmed real v1 pending state AND durable cancellation intent survive upgrade; old receipt bytes and ID indexes preserved. Integration runtimes: 7.160s and 1.363s. |
+| ABI equivalence matrix | 192 batches, every count 1..64, compared service output against both native ABI versions; all-success, all-failure/empty arenas, nonuniform offsets and prefix/mixed results passed. | Confirms v2 conversion and full-width bitmap usage against supplied native behavior. |
+| State and scheduling coverage | Exact four-slot dispatch H/H/H/N from recovered mixed priorities; cancelled queued high skipped; high completions cannot pass normal admission head; running cancellation waits for completion. | Verified accounting remains charged until durable ordered receipt and independently reopened the stopped writer's database. |
+| Final static/artifact checks | Strict all-target Clippy and formatting passed. Executable is Linux AArch64 ELF with v2-only verifier import, dynamic supplied adapter/RocksDB and /adapter runpath. | Build/dependencies, storage/transport/hash files unchanged; lockfile equals reuse copy. Hashes and diff counts retained in tmp/maintenance-*.json. |
+
+The measured diff against the retained predecessor is production +120/-34 lines,
+tests +435/-13 lines (test-only Rust sections classified as tests), plus a rebuilt
+service of 996,728 bytes versus 989,216 bytes. Documentation and archived evidence
+are reported separately. No source rewrite or durability/storage-policy change.
+
+Ambiguities resolved: startup cycle begins high; single-priority/empty intervals
+preserve phase; cancelled waiting work consumes no dispatch turn; evaluate uses
+the normal queue; absent legacy priority defaults normal. Schema remains 1.
+No bitmap wire field was introduced. The native bitmap mapping was observed,
+not inferred from external code.
+
+No native allocation or storage failure injection, native ASan, whole-service
+race detector, external qualification/evaluator or comparative performance run
+was attempted. Process-crash tests retain their sampled-interleaving limitation.
+No failed performance repetitions exist; the sole failed maintenance check was
+test compilation and its original response remains retained. No repair round or
+evaluator feedback occurred before the initial submission freeze.

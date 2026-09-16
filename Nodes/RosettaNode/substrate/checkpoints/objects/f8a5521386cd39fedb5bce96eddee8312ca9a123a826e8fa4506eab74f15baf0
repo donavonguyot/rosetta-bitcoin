@@ -1,0 +1,220 @@
+use std::borrow::Cow;
+use crate::{Error, Result, push};
+
+// An arena avoids recursion both while parsing and while dropping deep JSON.
+pub enum Value<'a> {
+    Null,
+    Bool(bool),
+    Number,
+    String(Cow<'a, str>),
+    Array(Vec<usize>),
+    Object(Vec<(Cow<'a, str>, usize)>),
+}
+
+pub struct Json<'a> {
+    pub nodes: Vec<Value<'a>>,
+    pub root: usize,
+}
+
+impl<'a> Json<'a> {
+    pub fn string(&self, id: usize) -> Result<&str> {
+        match &self.nodes[id] {
+            Value::String(s) => Ok(s),
+            _ => Err(Error::Invalid),
+        }
+    }
+    pub fn boolean(&self, id: usize) -> Result<bool> {
+        match self.nodes[id] {
+            Value::Bool(b) => Ok(b),
+            _ => Err(Error::Invalid),
+        }
+    }
+    pub fn array(&self, id: usize) -> Result<&[usize]> {
+        match &self.nodes[id] {
+            Value::Array(a) => Ok(a),
+            _ => Err(Error::Invalid),
+        }
+    }
+    pub fn object(&self, id: usize) -> Result<&[(Cow<'a, str>, usize)]> {
+        match &self.nodes[id] {
+            Value::Object(o) => Ok(o),
+            _ => Err(Error::Invalid),
+        }
+    }
+    pub fn optional(&self, id: usize, key: &str) -> Result<Option<usize>> {
+        Ok(self.object(id)?.iter().rev().find(|(k, _)| k == key).map(|(_, v)| *v))
+    }
+    pub fn field(&self, id: usize, key: &str) -> Result<usize> {
+        self.optional(id, key)?.ok_or(Error::Invalid)
+    }
+    pub fn exact(&self, id: usize, keys: &[&str]) -> Result<()> {
+        let object = self.object(id)?;
+        if object.iter().any(|(k, _)| !keys.contains(&k.as_ref())) {
+            return Err(Error::Invalid);
+        }
+        for key in keys { self.field(id, key)?; }
+        Ok(())
+    }
+}
+
+struct Frame { id: usize, object: bool, state: u8 }
+struct Parser<'a> { text: &'a str, at: usize, nodes: Vec<Value<'a>> }
+
+pub fn parse(text: &str) -> Result<Json<'_>> {
+    let mut p = Parser { text, at: 0, nodes: Vec::new() };
+    let (root, container) = p.value()?;
+    let mut stack = Vec::new();
+    if let Some(object) = container { push(&mut stack, Frame { id: root, object, state: 0 })?; }
+    while let Some(frame) = stack.last() {
+        let (id, object, state) = (frame.id, frame.object, frame.state);
+        p.whitespace();
+        let closing = if object { b'}' } else { b']' };
+        let ch = p.peek().ok_or(Error::Invalid)?;
+        if (state == 0 || state == 2) && ch == closing {
+            p.at += 1;
+            stack.pop();
+            continue;
+        }
+        if state == 2 {
+            if ch != b',' { return Err(Error::Invalid); }
+            p.at += 1;
+            stack.last_mut().unwrap().state = 1;
+            continue;
+        }
+        let key = if object {
+            let key = p.string()?;
+            p.whitespace();
+            if p.peek() != Some(b':') { return Err(Error::Invalid); }
+            p.at += 1;
+            Some(key)
+        } else { None };
+        let (child, container) = p.value()?;
+        match &mut p.nodes[id] {
+            Value::Array(a) => push(a, child)?,
+            Value::Object(o) => push(o, (key.unwrap(), child))?,
+            _ => unreachable!(),
+        }
+        stack.last_mut().unwrap().state = 2;
+        if let Some(object) = container {
+            push(&mut stack, Frame { id: child, object, state: 0 })?;
+        }
+    }
+    p.whitespace();
+    if p.at != text.len() { return Err(Error::Invalid); }
+    Ok(Json { nodes: p.nodes, root })
+}
+
+impl<'a> Parser<'a> {
+    fn peek(&self) -> Option<u8> { self.text.as_bytes().get(self.at).copied() }
+    fn whitespace(&mut self) {
+        while matches!(self.peek(), Some(b' ' | b'\t' | b'\r' | b'\n')) { self.at += 1; }
+    }
+    fn value(&mut self) -> Result<(usize, Option<bool>)> {
+        self.whitespace();
+        let (value, container) = match self.peek().ok_or(Error::Invalid)? {
+            b'{' => { self.at += 1; (Value::Object(Vec::new()), Some(true)) }
+            b'[' => { self.at += 1; (Value::Array(Vec::new()), Some(false)) }
+            b'"' => (Value::String(self.string()?), None),
+            b't' => { self.literal("true")?; (Value::Bool(true), None) }
+            b'f' => { self.literal("false")?; (Value::Bool(false), None) }
+            b'n' => { self.literal("null")?; (Value::Null, None) }
+            b'-' | b'0'..=b'9' => { self.number()?; (Value::Number, None) }
+            _ => return Err(Error::Invalid),
+        };
+        let id = self.nodes.len();
+        push(&mut self.nodes, value)?;
+        Ok((id, container))
+    }
+    fn literal(&mut self, s: &str) -> Result<()> {
+        if !self.text[self.at..].starts_with(s) { return Err(Error::Invalid); }
+        self.at += s.len();
+        Ok(())
+    }
+    fn number(&mut self) -> Result<()> {
+        if self.peek() == Some(b'-') { self.at += 1; }
+        match self.peek() {
+            Some(b'0') => self.at += 1,
+            Some(b'1'..=b'9') => {
+                self.at += 1;
+                while matches!(self.peek(), Some(b'0'..=b'9')) { self.at += 1; }
+            }
+            _ => return Err(Error::Invalid),
+        }
+        if self.peek() == Some(b'.') {
+            self.at += 1;
+            self.digits()?;
+        }
+        if matches!(self.peek(), Some(b'e' | b'E')) {
+            self.at += 1;
+            if matches!(self.peek(), Some(b'+' | b'-')) { self.at += 1; }
+            self.digits()?;
+        }
+        Ok(())
+    }
+    fn digits(&mut self) -> Result<()> {
+        let start = self.at;
+        while matches!(self.peek(), Some(b'0'..=b'9')) { self.at += 1; }
+        if self.at == start { Err(Error::Invalid) } else { Ok(()) }
+    }
+    fn string(&mut self) -> Result<Cow<'a, str>> {
+        if self.peek() != Some(b'"') { return Err(Error::Invalid); }
+        self.at += 1;
+        let start = self.at;
+        let mut escaped = false;
+        loop {
+            match self.peek().ok_or(Error::Invalid)? {
+                b'"' => break,
+                b'\\' => {
+                    escaped = true;
+                    self.at += 1;
+                    if self.peek().is_none() { return Err(Error::Invalid); }
+                    self.at += 1;
+                }
+                0..=31 => return Err(Error::Invalid),
+                _ => self.at += 1,
+            }
+        }
+        let raw = &self.text[start..self.at];
+        self.at += 1;
+        if !escaped { return Ok(Cow::Borrowed(raw)); }
+        let mut out = String::new();
+        out.try_reserve_exact(raw.len()).map_err(|_| Error::Execution)?;
+        let mut chars = raw.chars();
+        while let Some(ch) = chars.next() {
+            if ch != '\\' {
+                if ch < ' ' { return Err(Error::Invalid); }
+                out.push(ch);
+                continue;
+            }
+            let ch = match chars.next().ok_or(Error::Invalid)? {
+                '"' => '"', '\\' => '\\', '/' => '/', 'b' => '\u{8}',
+                'f' => '\u{c}', 'n' => '\n', 'r' => '\r', 't' => '\t',
+                'u' => {
+                    let first = hex4(&mut chars)?;
+                    let code = if (0xd800..=0xdbff).contains(&first) {
+                        if chars.next() != Some('\\') || chars.next() != Some('u') {
+                            return Err(Error::Invalid);
+                        }
+                        let second = hex4(&mut chars)?;
+                        if !(0xdc00..=0xdfff).contains(&second) { return Err(Error::Invalid); }
+                        0x10000 + ((first - 0xd800) << 10) + second - 0xdc00
+                    } else { first };
+                    char::from_u32(code).ok_or(Error::Invalid)?
+                }
+                _ => return Err(Error::Invalid),
+            };
+            out.push(ch);
+        }
+        Ok(Cow::Owned(out))
+    }
+}
+
+fn hex4(chars: &mut std::str::Chars<'_>) -> Result<u32> {
+    let mut n = 0;
+    for _ in 0..4 {
+        let c = chars.next().ok_or(Error::Invalid)?;
+        if !c.is_ascii_hexdigit() { return Err(Error::Invalid); }
+        n = (n << 4) | c.to_digit(16).ok_or(Error::Invalid)?;
+    }
+    Ok(n)
+}

@@ -1,0 +1,208 @@
+use crate::hash::Sha256;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+
+pub const MAX_LINE: usize = 40 << 20;
+pub const MAX_BATCH_BYTES: usize = 16 << 20;
+pub const MAX_JOBS: usize = 1024;
+pub const MAX_BYTES: usize = 64 << 20;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Priority {
+    High,
+    #[default]
+    Normal,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Item {
+    pub hex: String,
+    pub mode: String,
+    pub operation: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Pending {
+    pub id: String,
+    pub digest: String,
+    pub sequence: String,
+    pub bytes: String,
+    #[serde(default)]
+    pub priority: Priority,
+    pub items: Vec<Item>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResultItem {
+    pub status: String,
+    pub consumed: String,
+    pub full_size: String,
+    pub stripped_size: String,
+    pub txid_digest_order: String,
+    pub wtxid_digest_order: String,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Terminal {
+    pub id: String,
+    pub digest: String,
+    pub sequence: String,
+    pub state: String,
+    pub results: Vec<ResultItem>,
+}
+pub struct Payload {
+    pub items: Vec<Item>,
+    pub bytes: usize,
+    pub digest: String,
+}
+pub enum Op {
+    Submit {
+        id: String,
+        payload: Payload,
+        priority: Priority,
+    },
+    Evaluate(Payload),
+    Status(String),
+    Cancel(String),
+    Shutdown,
+}
+pub struct Request {
+    pub correlation: String,
+    pub op: Op,
+}
+
+pub fn valid_id(id: &str) -> bool {
+    (1..=64).contains(&id.len())
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+pub fn nibble(b: u8) -> u8 {
+    if b <= b'9' { b - b'0' } else { b - b'a' + 10 }
+}
+pub fn valid_hex(s: &str) -> bool {
+    s.len().is_multiple_of(2)
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+pub fn hex(bytes: &[u8]) -> String {
+    const CHARS: &[u8; 16] = b"0123456789abcdef";
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push(CHARS[(b >> 4) as usize] as char);
+        s.push(CHARS[(b & 15) as usize] as char);
+    }
+    s
+}
+pub fn payload(items: Vec<Item>) -> Result<Payload, String> {
+    if items.is_empty() || items.len() > 64 {
+        return Err("batch count outside 1..64".into());
+    }
+    let mut total = 0usize;
+    let mut hash = Sha256::new();
+    let mut scratch = [0u8; 4096];
+    for item in &items {
+        let mode = match item.mode.as_str() {
+            "legacy" => 0,
+            "witness" => 1,
+            _ => return Err("invalid mode".into()),
+        };
+        let op = match item.operation.as_str() {
+            "prefix" => 0,
+            "exact" => 1,
+            _ => return Err("invalid operation".into()),
+        };
+        if !valid_hex(&item.hex) {
+            return Err("invalid hex".into());
+        }
+        let n = item.hex.len() / 2;
+        total = total.checked_add(n).ok_or("payload size overflow")?;
+        if total > MAX_BATCH_BYTES {
+            return Err("batch byte limit".into());
+        }
+        hash.update(&[mode, op]);
+        hash.update(&(n as u64).to_le_bytes());
+        for chunk in item.hex.as_bytes().chunks(8192) {
+            for (i, pair) in chunk.as_chunks::<2>().0.iter().enumerate() {
+                scratch[i] = (nibble(pair[0]) << 4) | nibble(pair[1]);
+            }
+            hash.update(&scratch[..chunk.len() / 2]);
+        }
+    }
+    Ok(Payload {
+        items,
+        bytes: total,
+        digest: hash.finish(),
+    })
+}
+
+pub fn parse(bytes: &[u8]) -> Result<Request, String> {
+    let value: Value = serde_json::from_slice(bytes).map_err(|_| String::new())?;
+    let correlation = value
+        .get("request")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let parse_inner = || -> Option<Op> {
+        let obj = value.as_object()?;
+        obj.get("request")?.as_str()?;
+        let op = obj.get("op")?.as_str()?;
+        let allowed: &[&str] = match op {
+            "submit" => &["request", "op", "id", "items", "priority"],
+            "evaluate" => &["request", "op", "items"],
+            "status" | "cancel" => &["request", "op", "id"],
+            "shutdown" => &["request", "op"],
+            _ => return None,
+        };
+        if obj.keys().any(|k| !allowed.contains(&k.as_str())) {
+            return None;
+        }
+        let id = || {
+            let id = obj.get("id")?.as_str()?;
+            valid_id(id).then(|| id.to_owned())
+        };
+        let data = || payload(serde_json::from_value(obj.get("items")?.clone()).ok()?).ok();
+        Some(match op {
+            "submit" => {
+                let priority = match obj.get("priority") {
+                    None => Priority::Normal,
+                    Some(p) => serde_json::from_value(p.clone()).ok()?,
+                };
+                Op::Submit {
+                    id: id()?,
+                    payload: data()?,
+                    priority,
+                }
+            }
+            "evaluate" => Op::Evaluate(data()?),
+            "status" => Op::Status(id()?),
+            "cancel" => Op::Cancel(id()?),
+            "shutdown" => Op::Shutdown,
+            _ => return None,
+        })
+    };
+    parse_inner()
+        .map(|op| Request {
+            correlation: correlation.clone(),
+            op,
+        })
+        .ok_or(correlation)
+}
+pub fn response(request: &str, status: &str) -> Value {
+    json!({"request":request,"status":status})
+}
+pub fn sequence_key(prefix: &str, seq: u64) -> String {
+    format!("{prefix}/{seq:020}")
+}
+pub fn decimal(s: &str) -> Result<u64, String> {
+    let n = s
+        .parse::<u64>()
+        .map_err(|_| "invalid decimal".to_string())?;
+    if n.to_string() != s {
+        return Err("noncanonical decimal".into());
+    }
+    Ok(n)
+}

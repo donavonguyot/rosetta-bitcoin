@@ -1,0 +1,314 @@
+use crate::{Event, protocol};
+use serde_json::Value;
+use std::io::{BufRead, BufReader, Write};
+use std::net::Shutdown;
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::sync::{
+    Arc, Mutex, Weak,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    mpsc::{self, Sender, SyncSender},
+};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+struct EventSlot(Arc<AtomicUsize>);
+impl Drop for EventSlot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+struct Outbound {
+    value: Value,
+    flushed: Option<Sender<()>>,
+    _event_slot: Option<EventSlot>,
+}
+struct ConnectionLease(Arc<AtomicUsize>);
+impl Drop for ConnectionLease {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+pub struct Client {
+    tx: SyncSender<Outbound>,
+    stream: Arc<UnixStream>,
+    event_count: Arc<AtomicUsize>,
+}
+impl Client {
+    pub fn send(&self, value: Value, best_effort: bool) {
+        self.enqueue(value, best_effort, None);
+    }
+    fn enqueue(&self, value: Value, best_effort: bool, flushed: Option<Sender<()>>) {
+        // Reserve the 33rd channel slot for the sole outstanding response.
+        // Best-effort events cannot crowd out an admission acknowledgment.
+        let slot = if best_effort {
+            if self
+                .event_count
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                    (n < 32).then_some(n + 1)
+                })
+                .is_err()
+            {
+                return;
+            }
+            Some(EventSlot(self.event_count.clone()))
+        } else {
+            None
+        };
+        match self.tx.try_send(Outbound {
+            value,
+            flushed,
+            _event_slot: slot,
+        }) {
+            Ok(()) => {}
+            Err(mpsc::TrySendError::Full(_)) if best_effort => {}
+            Err(_) => {
+                let _ = self.stream.shutdown(Shutdown::Both);
+            }
+        }
+    }
+}
+pub struct Reply {
+    pub client: Arc<Client>,
+    done: Sender<()>,
+}
+impl Reply {
+    // Each reader has at most one response in flight, even if that response
+    // contains a 32 MiB pending payload. Only the socket writer signals done.
+    pub fn send(self, value: Value) {
+        self.client.enqueue(value, false, Some(self.done));
+    }
+}
+
+pub struct Transport {
+    stop: Arc<AtomicBool>,
+    clients: Arc<Mutex<Vec<Weak<Client>>>>,
+    listener: Option<JoinHandle<()>>,
+}
+
+impl Transport {
+    pub fn start(path: &str, events: SyncSender<Event>) -> Result<Self, String> {
+        let listener = UnixListener::bind(path).map_err(|e| format!("bind socket: {e}"))?;
+        listener.set_nonblocking(true).map_err(|e| e.to_string())?;
+        let stop = Arc::new(AtomicBool::new(false));
+        let clients = Arc::new(Mutex::new(Vec::<Weak<Client>>::new()));
+        let (st, cs) = (stop.clone(), clients.clone());
+        let handle = thread::Builder::new()
+            .name("connections".into())
+            .spawn(move || {
+                let count = Arc::new(AtomicUsize::new(0));
+                let mut threads: Vec<JoinHandle<()>> = Vec::new();
+                while !st.load(Ordering::Acquire) {
+                    let mut i = 0;
+                    while i < threads.len() {
+                        if threads[i].is_finished() {
+                            let _ = threads.swap_remove(i).join();
+                        } else {
+                            i += 1;
+                        }
+                    }
+                    match listener.accept() {
+                        Ok((stream, _)) => {
+                            if count.load(Ordering::Acquire) >= 8 {
+                                let _ = stream.shutdown(Shutdown::Both);
+                                continue;
+                            }
+                            if let Err(e) = stream.set_write_timeout(Some(Duration::from_secs(2))) {
+                                eprintln!("socket write timeout: {e}");
+                                continue;
+                            }
+                            let stream = Arc::new(stream);
+                            let (out, rx) = mpsc::sync_channel::<Outbound>(33);
+                            let client = Arc::new(Client {
+                                tx: out,
+                                stream: stream.clone(),
+                                event_count: Arc::new(AtomicUsize::new(0)),
+                            });
+                            {
+                                let mut list = cs.lock().unwrap();
+                                list.retain(|x| x.strong_count() > 0);
+                                list.push(Arc::downgrade(&client));
+                            }
+                            count.fetch_add(1, Ordering::AcqRel);
+                            let lease = Arc::new(ConnectionLease(count.clone()));
+                            let ws = stream.clone();
+                            let wstop = st.clone();
+                            let wlease = lease.clone();
+                            let writer = thread::Builder::new().name("socket-writer".into()).spawn(
+                                move || {
+                                    let _lease = wlease;
+                                    loop {
+                                        let message =
+                                            match rx.recv_timeout(Duration::from_millis(20)) {
+                                                Ok(x) => x,
+                                                Err(mpsc::RecvTimeoutError::Timeout)
+                                                    if !wstop.load(Ordering::Acquire) =>
+                                                {
+                                                    continue;
+                                                }
+                                                Err(_) => break,
+                                            };
+                                        let mut frame = match serde_json::to_vec(&message.value) {
+                                            Ok(x) => x,
+                                            Err(_) => break,
+                                        };
+                                        frame.push(b'\n');
+                                        if (&*ws).write_all(&frame).is_err() {
+                                            break;
+                                        }
+                                        if let Some(done) = message.flushed {
+                                            let _ = done.send(());
+                                        }
+                                    }
+                                    let _ = ws.shutdown(Shutdown::Both);
+                                },
+                            );
+                            match writer {
+                                Ok(h) => threads.push(h),
+                                Err(e) => {
+                                    eprintln!("writer spawn: {e}");
+                                    continue;
+                                }
+                            }
+                            let ev = events.clone();
+                            let rstop = st.clone();
+                            let reader = thread::Builder::new().name("socket-reader".into()).spawn(
+                                move || {
+                                    let _lease = lease;
+                                    let mut reader = BufReader::new(&*stream);
+                                    while !rstop.load(Ordering::Acquire) {
+                                        let frame = match read_frame(&mut reader) {
+                                            Ok(Some(x)) => x,
+                                            Ok(None) => break,
+                                            Err(_) => {
+                                                client.send(
+                                                    protocol::response("", "invalid_request"),
+                                                    false,
+                                                );
+                                                break;
+                                            }
+                                        };
+                                        let parsed = protocol::parse(&frame);
+                                        let (done, wait) = mpsc::channel();
+                                        let mut event = Event::Request {
+                                            parsed,
+                                            reply: Reply {
+                                                client: client.clone(),
+                                                done,
+                                            },
+                                        };
+                                        loop {
+                                            match ev.try_send(event) {
+                                                Ok(()) => break,
+                                                Err(mpsc::TrySendError::Full(x)) => {
+                                                    event = x;
+                                                    if rstop.load(Ordering::Acquire) {
+                                                        return;
+                                                    }
+                                                    thread::sleep(Duration::from_millis(1));
+                                                }
+                                                Err(_) => return,
+                                            }
+                                        }
+                                        loop {
+                                            match wait.recv_timeout(Duration::from_millis(20)) {
+                                                Ok(()) => break,
+                                                Err(mpsc::RecvTimeoutError::Timeout)
+                                                    if !rstop.load(Ordering::Acquire) =>
+                                                {
+                                                    continue;
+                                                }
+                                                Err(_) => return,
+                                            }
+                                        }
+                                    }
+                                    // A read EOF may be a half-close. Dropping the client lets the writer
+                                    // flush its queue; retained job subscriptions may still emit events.
+                                },
+                            );
+                            match reader {
+                                Ok(h) => threads.push(h),
+                                Err(e) => {
+                                    eprintln!("reader spawn: {e}");
+                                }
+                            }
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            thread::sleep(Duration::from_millis(2))
+                        }
+                        Err(e) => {
+                            eprintln!("socket accept: {e}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                for client in cs.lock().unwrap().iter().filter_map(Weak::upgrade) {
+                    let _ = client.stream.shutdown(Shutdown::Read);
+                }
+                for h in threads {
+                    if h.join().is_err() {
+                        eprintln!("connection thread panicked");
+                    }
+                }
+            })
+            .map_err(|e| format!("listener spawn: {e}"))?;
+        Ok(Self {
+            stop,
+            clients,
+            listener: Some(handle),
+        })
+    }
+    pub fn finish(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        for c in self
+            .clients
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(Weak::upgrade)
+        {
+            let _ = c.stream.shutdown(Shutdown::Read);
+        }
+        if let Some(h) = self.listener.take() {
+            let _ = h.join();
+        }
+    }
+}
+impl Drop for Transport {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
+// Never grow an input buffer past the text limit, even without a newline.
+// The newline delimiter itself is not counted as JSON text.
+fn read_frame(reader: &mut impl BufRead) -> std::io::Result<Option<Vec<u8>>> {
+    let mut out = Vec::new();
+    loop {
+        let data = reader.fill_buf()?;
+        if data.is_empty() {
+            return if out.is_empty() {
+                Ok(None)
+            } else {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "missing newline",
+                ))
+            };
+        }
+        let newline = data.iter().position(|b| *b == b'\n');
+        let n = newline.unwrap_or(data.len());
+        if n > protocol::MAX_LINE - out.len() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "line limit",
+            ));
+        }
+        out.try_reserve(n)
+            .map_err(|_| std::io::Error::other("request allocation"))?;
+        out.extend_from_slice(&data[..n]);
+        reader.consume(n + usize::from(newline.is_some()));
+        if newline.is_some() {
+            return Ok(Some(out));
+        }
+    }
+}

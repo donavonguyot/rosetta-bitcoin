@@ -1,0 +1,54 @@
+# Private maintenance preparation notes
+
+Reading complete; no implementation, builds, or tests performed. Read all eight
+workspace Markdown documents, all reuse files, the broker adapter header, and
+targeted predecessor source/test integration points. No external repository,
+other workspace, evaluator, network, or Bitcoin library inspected.
+
+- Baseline: Rust lineage 2, ABI v1, schema 1, single durable-state coordinator,
+  four native workers, one FIFO shared by jobs and evaluations. Predecessor
+  reports 3 unit and 17 integration tests, strict Clippy and smoke checks passing;
+  these results were not independently rerun in this reading phase.
+- Expected maintenance delta from contracts: call `rn_verify_v2` with
+  `repr(C)` items `{offset:u64,size:u64,witness:u32,exact:u32}` and caller-owned
+  `u64` success bitmap. Preserve per-item results and arena ownership through
+  native return. `wire::Input` already supplies contiguous bytes and offsets.
+- Priority integration points: `main.rs` request validation/dispatch/drain;
+  `state.rs` admission, recovery and ready queue. Accept high/normal, default
+  normal, persist original priority, and exclude it from retry identity digest.
+  Two FIFOs should dispatch H,H,H,N only when both contain eligible work;
+  single-queue dispatch must preserve cycle position. Remove stale/cancelled
+  entries before deciding queue availability or consuming a dispatch turn.
+- Preserve schema 1, v1 pending payloads at normal priority, cancellation intents,
+  ID indexes and existing receipts. Recovery currently rejects high priority;
+  extend validation without rebuilding storage. Completion order remains
+  independent of dispatch order: terminalize only checkpoint+1.
+- Preserve synchronous WAL-backed atomic admission/cancel/terminal batches,
+  RocksDB settings and exclusive lock. Cancellation boundary is native C write
+  `call_entry`, not later `write_enter`. Running cancellation retains input and
+  outstanding accounting until native return and durable terminal receipt.
+  Group commit belongs only to optimization.
+- Later validation: ABI layout/offsets, mixed success bitmap including item 63
+  and 64-item batches, fairness with changing queue availability/cancellation,
+  FIFO per priority, retry priority immutability, real v1-to-v2 recovery,
+  priority recovery, and existing durability/concurrency regressions. Existing
+  integration tests use a v1 adapter oracle and reject high priority; update
+  maintenance expectations carefully. No service scheduler/barrier test hooks.
+- Broker-only commands: `python3 run.py './build.sh' 300` and
+  `python3 run.py './tests/run.sh' 300`. Keep dependency versions/checksums pinned.
+  Read Rust 1.98.1 offline docs via the broker: VecDeque FIFO operations,
+  thread spawn Send/static ownership, raw slices and pointer bounds/lifetimes.
+
+Ambiguities for next phase (no user questions):
+
+1. No matching campaign freeze or Gate A/B evidence was supplied; preregistration
+   still says preparation. Do not claim qualification or infer implementation
+   authorization from this reading-only request.
+2. Prose/header do not specify bitmap bit ordering, unused bits, or whether the
+   bitmap is wire-visible. Wire contract lists per-item results only; resolve
+   against next-phase instructions and permitted adapter observations.
+3. Priority treatment of nonpersistent evaluate and scheduler cycle persistence
+   across restart are not explicit. Baseline shares evaluate/job worker slots.
+4. Native ASan, whole-service race coverage, power-loss durability, forced arena
+   failure and external call-entry instrumentation remain unproven. The prior
+   storage-failure test can hit a RocksDB assertion before returned-error handling.

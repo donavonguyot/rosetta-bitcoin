@@ -1,0 +1,3 @@
+module rosettanode
+
+go 1.20

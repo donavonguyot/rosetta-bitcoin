@@ -1,0 +1,23 @@
+{
+  "schema": "rosettanode.substrate.evaluation_isolation.v1",
+  "status": "passed",
+  "checks": [
+    {
+      "path": "/evaluator/evaluator/state.py",
+      "denied": true
+    },
+    {
+      "path": "/evaluator/tools/candidate_eval.py",
+      "denied": true
+    },
+    {
+      "path": "/evaluator/.local/dummy",
+      "denied": true
+    },
+    {
+      "path": "/evaluator/native/dummy.c",
+      "denied": true
+    }
+  ],
+  "same_uid_tampering_note": "LD_PRELOAD is observational instrumentation, not a security boundary against deliberately malicious native code; source and linkage audit remain required."
+}

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
+mkdir -p tmp/zig-cache tmp/zig-global-cache
+exec /opt/zig/zig build-exe src/main.zig -O "${ZIG_OPTIMIZE:-ReleaseSafe}" -lc -lrosetta -lrocksdb \
+  -I/adapter -I/usr/include -L/adapter -L/usr/lib/aarch64-linux-gnu \
+  -rpath /adapter --cache-dir tmp/zig-cache --global-cache-dir tmp/zig-global-cache \
+  -femit-bin="${SERVICE_OUTPUT:-service}"

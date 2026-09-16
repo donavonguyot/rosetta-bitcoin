@@ -1,0 +1,225 @@
+{
+  "schema": "rosettanode.substrate.lineage_round.v1",
+  "lineage": "go-1",
+  "language": "go",
+  "round": "initial",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "high",
+  "freeze_sha256": "58b7ccca8af797853c804d56e3752c84b6b3ea6f155bde43d86e6f31e7c76797",
+  "status": "qualified",
+  "attempts": [
+    {
+      "kind": "initial_submission",
+      "evaluation": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/evaluation/result.json",
+      "status": "failed"
+    },
+    {
+      "kind": "repair",
+      "evaluation": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/repair-evaluation/result.json",
+      "status": "passed"
+    }
+  ],
+  "reading": {
+    "phase": "reading",
+    "returncode": 0,
+    "timed_out": false,
+    "elapsed_seconds": 110.54487254199921,
+    "limit_seconds": 600,
+    "thread_id": "01a0abfc-3174-7a80-b5f3-67f65c3d9ef1",
+    "usage": [
+      {
+        "input_tokens": 234726,
+        "cached_input_tokens": 208640,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 2633,
+        "reasoning_output_tokens": 524
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "substrate",
+      "permissions.substrate.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace/tmp": "write",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace/queue": "write"
+      },
+      "permissions.substrate.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace/tmp"
+      }
+    },
+    "transcript_sha256": "03b52dc032fa6a1749eb8c21e16db0b44b77b3ef046bb7f1e9b77fbc31058859"
+  },
+  "implementation": {
+    "phase": "implementation",
+    "returncode": 0,
+    "timed_out": false,
+    "elapsed_seconds": 1291.1230935420026,
+    "limit_seconds": 5400,
+    "thread_id": "01a0abfc-3174-7a80-b5f3-67f65c3d9ef1",
+    "usage": [
+      {
+        "input_tokens": 1793743,
+        "cached_input_tokens": 1732864,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 39851,
+        "reasoning_output_tokens": 14401
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "substrate",
+      "permissions.substrate.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace": "write"
+      },
+      "permissions.substrate.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace/tmp"
+      }
+    },
+    "transcript_sha256": "6a3ce6c51b703f09828bcd6ac26b7c43b2db6c56a367715cfa2a056785620579"
+  },
+  "source_sha256": {
+    "BUILDING.md": "214bab055b1c4e429b3db470de3286a6779ab64de688d243812930ff6aa97ab7",
+    "EXPERIMENTS.md": "e16112105e1440a1c7be22f577f89791d5e4f39a214f2861e6d2bc5c92f561ca",
+    "HANDOFF.md": "9cfe1a4bc4566da684ec2ba883ee494c3ffd88a6cbd287e60cc01e8d2224150c",
+    "README.md": "95d56ec5cf193f38534ec41cf5b8a1e74102364acb738bf35649b5bff0a764b4",
+    "build.sh": "9706127e058853ef098ec7aba6d90ef699a2c79e94312db19b7e111d53221f89",
+    "contracts/DIAGNOSTICS.md": "fe3fa0ad3e24f706185540b14e0bc736eabbdb51f16ada93417ddb9ba2808e51",
+    "contracts/PREREGISTRATION.md": "ae1ebe8d51d00e08c0c5277fafac7dbe37ee4e9d5d81efc5d0ba7c3c3897081b",
+    "contracts/SERVICE.md": "43ec9b9bf495055a5e0042edbc1aa30fa69508034af62a475aa5035159b1c3db",
+    "contracts/WIRE_STORAGE.md": "e47bace965db306c98e33a5a3d6e9b25af5740920463f43e29393edb1023d975",
+    "go.mod": "f18ee5aa8f83c96722caea993c787e2aa7bba2420795e76dd08f620e90ea6b1c",
+    "integration_test.py": "fdb78cf6a27143c67ae25b4d100b0a0a06d919545e068280b38e186da014e920",
+    "main.go": "3501864b11e04245a69dce9850de892ec883cd1261ad85a33d599dc8a3c9a62d",
+    "native.go": "686b6f2d9b1d73d0ffb7d8a28920e3274726b09b2606df711721bce7b93f684b",
+    "public_check.py": "ae859db4f975307b21461b048a775a1fdd6ba39cc2d55e045b8bdd7206721d5f",
+    "reuse/storage.go": "7475c84f9166295fd28995e9ca3ddaeaaebd03bb1ce5bce0f8cee33a556f30c0",
+    "run.py": "a01ad9831d16823631d268d82c4df42c14393ceab69d51251d3c12f2e0a83d9f",
+    "server.go": "c08810698b1436fa3622e97a15b5eb2bd6671fa3e0f99b08f1fef91599bccdd6",
+    "service": "492a07b3eb9d276fd8eae6790fbd5914d317081785791295ae406e5c65e4e86e",
+    "service_test.go": "c4cb55a48a59f4a1bf37dfbe2f2f94b5f009eff56b186d54fbcdcc8e74562a92",
+    "state.go": "246fc4ee7b1d200145a892c7ab1017cb9cef0d3984176cb5f21f78bd26974828",
+    "test.sh": "c707ea2cce5d5c9053ef2cc2b4eff6911bb3c861e4311d35944f18b4084e2c65",
+    "wire.go": "44f443bf24765be4d64b51e39fa8c37d570d7971f0117faa6dfc4cd18b895db8"
+  },
+  "repair": {
+    "phase": "repair",
+    "returncode": 0,
+    "timed_out": false,
+    "elapsed_seconds": 345.14457083398884,
+    "limit_seconds": 900,
+    "thread_id": "01a0abfc-3174-7a80-b5f3-67f65c3d9ef1",
+    "usage": [
+      {
+        "input_tokens": 1559088,
+        "cached_input_tokens": 1487872,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 9834,
+        "reasoning_output_tokens": 3084
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "substrate",
+      "permissions.substrate.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace": "write"
+      },
+      "permissions.substrate.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/workspace/tmp"
+      }
+    },
+    "transcript_sha256": "8127320946be0e3a2c62fe6487f91d9a259847939f36a47edc7822272d106d46"
+  },
+  "repair_source_sha256": {
+    "BUILDING.md": "214bab055b1c4e429b3db470de3286a6779ab64de688d243812930ff6aa97ab7",
+    "EXPERIMENTS.md": "a839b8955b2592504dc96df20b8a3d2e0283d01c7c664e476409cbb6db0ec44d",
+    "HANDOFF.md": "6113a805a8d5f7adaea6969a3ce06f0c2d0050123f38a390c057fe836f0b3762",
+    "README.md": "95d56ec5cf193f38534ec41cf5b8a1e74102364acb738bf35649b5bff0a764b4",
+    "REPAIR.md": "607301da75ffaf31ff7f4ba12de71edf49a13558f1347b378d6303f7f234330a",
+    "build.sh": "9706127e058853ef098ec7aba6d90ef699a2c79e94312db19b7e111d53221f89",
+    "contracts/DIAGNOSTICS.md": "fe3fa0ad3e24f706185540b14e0bc736eabbdb51f16ada93417ddb9ba2808e51",
+    "contracts/PREREGISTRATION.md": "ae1ebe8d51d00e08c0c5277fafac7dbe37ee4e9d5d81efc5d0ba7c3c3897081b",
+    "contracts/SERVICE.md": "43ec9b9bf495055a5e0042edbc1aa30fa69508034af62a475aa5035159b1c3db",
+    "contracts/WIRE_STORAGE.md": "e47bace965db306c98e33a5a3d6e9b25af5740920463f43e29393edb1023d975",
+    "failure_test.py": "ad951d5a1818bc4ed7e3d482e139eeb41ce89690a4950e0ea612ae8f62ef5c20",
+    "feedback.json": "547d9bfd5822e7c7467bf935198996f8f36b30f48d7b5a417464d1554b3fd76e",
+    "go.mod": "f18ee5aa8f83c96722caea993c787e2aa7bba2420795e76dd08f620e90ea6b1c",
+    "integration_test.py": "fdb78cf6a27143c67ae25b4d100b0a0a06d919545e068280b38e186da014e920",
+    "main.go": "3501864b11e04245a69dce9850de892ec883cd1261ad85a33d599dc8a3c9a62d",
+    "native.go": "686b6f2d9b1d73d0ffb7d8a28920e3274726b09b2606df711721bce7b93f684b",
+    "public_check.py": "ae859db4f975307b21461b048a775a1fdd6ba39cc2d55e045b8bdd7206721d5f",
+    "repair/pre-repair-submission.tar.gz": "f4ffe4f4ae651e597aa889652e5a044c41c9f3eb16f07b9034bdcde4878ce5d7",
+    "reuse/storage.go": "7475c84f9166295fd28995e9ca3ddaeaaebd03bb1ce5bce0f8cee33a556f30c0",
+    "run.py": "a01ad9831d16823631d268d82c4df42c14393ceab69d51251d3c12f2e0a83d9f",
+    "server.go": "620bdfe6cdec8c3e30b652cbdb011357eca1cde2d7e04bce467a0f3d70b5b1cb",
+    "service": "5f5b9227ede98cae9a120f8baa4c12c7ad4ca96fd2db31fdf8db6ec10d02e4f3",
+    "service_test.go": "c4cb55a48a59f4a1bf37dfbe2f2f94b5f009eff56b186d54fbcdcc8e74562a92",
+    "state.go": "246fc4ee7b1d200145a892c7ab1017cb9cef0d3984176cb5f21f78bd26974828",
+    "test.sh": "7c45acfaf433d8e91517d702da4e9feb83a246a1e36cb6c1d2db8b9e4e53f9a2",
+    "tests/faults.c": "e4540089b22ab67cc5b45e6fecf24da78d997085f1af858fa7e9e5adca129aa6",
+    "wire.go": "44f443bf24765be4d64b51e39fa8c37d570d7971f0117faa6dfc4cd18b895db8"
+  },
+  "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/repair-submission"
+}

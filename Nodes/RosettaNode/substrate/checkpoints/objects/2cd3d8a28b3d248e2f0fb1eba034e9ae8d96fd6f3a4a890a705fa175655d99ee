@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+"""Black-box v1 socket, process-crash, and stopped-writer storage checks.
+
+Uses only Python's standard library and the designated RocksDB C API. No
+production hooks or native barriers. All test directories/logs are retained.
+"""
+import concurrent.futures
+import ctypes as c
+import hashlib
+import json
+import os
+from pathlib import Path
+import socket
+import struct
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+
+BINARY = str(Path(sys.argv[1] if len(sys.argv) > 1 else './service').resolve())
+ITEM = {'hex': '01000000000000000000', 'mode': 'witness', 'operation': 'exact'}
+ROOT = Path(tempfile.mkdtemp(prefix='v1-e2e-', dir='tmp'))
+PROCESSES = []
+
+
+class Client:
+    def __init__(self, path):
+        self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.s.settimeout(15)
+        self.s.connect(str(path))
+        self.f = self.s.makefile('rb')
+        self.serial = 0
+        self.accepted = set()
+        self.events = []
+
+    def call(self, op, **fields):
+        self.serial += 1
+        request = f'opaque\n\u2603-{self.serial}'
+        self.s.sendall(json.dumps(dict(request=request, op=op, **fields)).encode()+b'\n')
+        while True:
+            line = self.f.readline()
+            if not line:
+                raise EOFError('service closed connection')
+            reply = json.loads(line)
+            if reply.get('event') == 'terminal':
+                assert reply['id'] in self.accepted, ('terminal before admission response', reply)
+                assert reply['job']['state'] in ('complete', 'cancelled')
+                self.events.append(reply)
+                continue
+            assert reply['request'] == request, ('correlation/order', reply)
+            if reply['status'] == 'accepted':
+                self.accepted.add(fields['id'])
+            return reply
+
+    def close(self):
+        self.f.close()
+        self.s.close()
+
+
+class Process:
+    def __init__(self, name, data=None):
+        self.sock = ROOT / (name+'.sock')
+        self.data = data or ROOT / (name+'.db')
+        self.log = open(ROOT / (name+'.stderr'), 'wb')
+        self.p = subprocess.Popen([BINARY, str(self.data), str(self.sock)], stderr=self.log)
+        PROCESSES.append(self)
+        until = time.monotonic()+15
+        while not self.sock.exists():
+            assert self.p.poll() is None, ('startup exit', self.p.returncode, name)
+            assert time.monotonic() < until, ('startup timeout', name)
+            time.sleep(.005)
+
+    def stop(self, crash=False):
+        if crash:
+            self.p.kill()
+        elif self.p.poll() is None:
+            cl = Client(self.sock)
+            assert cl.call('shutdown')['status'] == 'draining'
+            cl.close()
+        code = self.p.wait(timeout=20)
+        self.log.close()
+        assert code == (-9 if crash else 0), ('exit status', code)
+
+
+def disk_rows(path):
+    lib = c.CDLL('librocksdb.so')
+    signatures = {
+        'rocksdb_options_create': ([], c.c_void_p),
+        'rocksdb_options_destroy': ([c.c_void_p], None),
+        'rocksdb_open_for_read_only': ([c.c_void_p,c.c_char_p,c.c_ubyte,c.POINTER(c.c_void_p)],c.c_void_p),
+        'rocksdb_close': ([c.c_void_p],None),
+        'rocksdb_readoptions_create': ([],c.c_void_p),
+        'rocksdb_readoptions_destroy': ([c.c_void_p],None),
+        'rocksdb_create_iterator': ([c.c_void_p,c.c_void_p],c.c_void_p),
+        'rocksdb_iter_seek_to_first': ([c.c_void_p],None),
+        'rocksdb_iter_valid': ([c.c_void_p],c.c_ubyte),
+        'rocksdb_iter_next': ([c.c_void_p],None),
+        'rocksdb_iter_key': ([c.c_void_p,c.POINTER(c.c_size_t)],c.c_void_p),
+        'rocksdb_iter_value': ([c.c_void_p,c.POINTER(c.c_size_t)],c.c_void_p),
+        'rocksdb_iter_get_error': ([c.c_void_p,c.POINTER(c.c_void_p)],None),
+        'rocksdb_iter_destroy': ([c.c_void_p],None),
+        'rocksdb_free': ([c.c_void_p],None),
+    }
+    for name,(args,result) in signatures.items():
+        f=getattr(lib,name);f.argtypes=args;f.restype=result
+    options=lib.rocksdb_options_create()
+    error=c.c_void_p()
+    db=lib.rocksdb_open_for_read_only(options,os.fsencode(path),0,c.byref(error))
+    if error.value:
+        text=c.string_at(error).decode();lib.rocksdb_free(error);raise AssertionError(text)
+    assert db
+    ro=lib.rocksdb_readoptions_create()
+    it=lib.rocksdb_create_iterator(db,ro)
+    rows={}
+    try:
+        lib.rocksdb_iter_seek_to_first(it)
+        while lib.rocksdb_iter_valid(it):
+            kn=c.c_size_t();vn=c.c_size_t()
+            k=lib.rocksdb_iter_key(it,c.byref(kn))
+            v=lib.rocksdb_iter_value(it,c.byref(vn))
+            rows[c.string_at(k,kn.value).decode()]=c.string_at(v,vn.value).decode()
+            lib.rocksdb_iter_next(it)
+        lib.rocksdb_iter_get_error(it,c.byref(error))
+        assert not error.value
+    finally:
+        lib.rocksdb_iter_destroy(it);lib.rocksdb_readoptions_destroy(ro)
+        lib.rocksdb_close(db);lib.rocksdb_options_destroy(options)
+    return rows
+
+
+def inspect(path, label, accepted=None, cancelled=None):
+    rows=disk_rows(path)
+    (ROOT/(label+'.rows.json')).write_text(json.dumps(rows,indent=2))
+    assert rows['meta/version']=='1'
+    def number(s):
+        assert isinstance(s,str) and s.isdecimal() and str(int(s))==s
+        return int(s)
+    seq=number(rows['meta/sequence']);cp=number(rows['meta/checkpoint'])
+    assert cp<=seq
+    outstanding=total=0
+    jobs={}
+    allowed={'meta/version','meta/sequence','meta/checkpoint','meta/jobs','meta/bytes'}
+    for n in range(1,seq+1):
+        p,r,ck=(f'{prefix}/{n:020d}' for prefix in ('p','r','c'))
+        if n<=cp:
+            assert r in rows and p not in rows and ck not in rows
+            job=json.loads(rows[r]);allowed.add(r)
+            assert job['state'] in ('complete','cancelled')
+            assert isinstance(job['results'],list)
+            if job['state']=='cancelled':
+                assert job['results']==[]
+            else:
+                assert 1<=len(job['results'])<=64
+                for result in job['results']:
+                    status=number(result['status']);assert status<=4
+                    for key in ('consumed','full_size','stripped_size'):
+                        number(result[key])
+                        if status:assert result[key]=='0'
+                    for key in ('txid_digest_order','wtxid_digest_order'):
+                        assert len(result[key])==64 and bytes.fromhex(result[key]).hex()==result[key]
+                        if status:assert result[key]=='0'*64
+        else:
+            assert p in rows and r not in rows
+            job=json.loads(rows[p]);allowed.add(p)
+            assert 'state' not in job and job['priority']=='normal'
+            size=0;h=hashlib.sha256()
+            for item in job['items']:
+                raw=bytes.fromhex(item['hex']);size+=len(raw)
+                h.update(bytes([int(item['mode']=='witness'),int(item['operation']=='exact')]))
+                h.update(struct.pack('<Q',len(raw)));h.update(raw)
+            assert job['digest']==h.hexdigest() and number(job['bytes'])==size
+            if ck in rows:
+                assert rows[ck]=='1';allowed.add(ck)
+            outstanding+=1;total+=size
+        assert job['sequence']==str(n) and job['id'] not in jobs
+        index='id/'+job['id'];assert rows[index]==str(n);allowed.add(index)
+        jobs[job['id']]=job
+    assert set(rows)==allowed
+    assert number(rows['meta/jobs'])==outstanding and number(rows['meta/bytes'])==total
+    for id,sequence in (accepted or {}).items():
+        assert id in jobs and jobs[id]['sequence']==sequence, ('lost admission',id)
+    for id in cancelled or ():
+        job=jobs[id]
+        assert job.get('state')=='cancelled' or rows.get(f'c/{int(job["sequence"]):020d}')=='1', ('lost cancel',id)
+    return jobs
+
+
+def basic():
+    p=Process('basic')
+    cl=Client(p.sock)
+    assert cl.call('evaluate',items=[ITEM])['results'][0]['consumed']=='10'
+    assert cl.call('status',id='missing')['status']=='not_found'
+    assert cl.call('cancel',id='missing')['status']=='not_found'
+    assert cl.call('submit',id='bad',items=[{**ITEM,'hex':'AA'}])['status']=='invalid_request'
+    assert cl.call('submit',id='bad',items=[ITEM],priority='high')['status']=='invalid_request'
+    assert cl.call('status',id='bad')['status']=='not_found'
+    assert cl.call('submit',id='first',items=[ITEM])['status']=='accepted'
+    assert cl.call('submit',id='first',items=[ITEM])['status']=='existing'
+    assert cl.call('submit',id='first',items=[{**ITEM,'operation':'prefix'}])['status']=='conflict'
+    while cl.call('status',id='first')['job']['state']=='pending':
+        time.sleep(.001)
+    cl.call('status',id='first')
+    assert any(event['id']=='first' for event in cl.events), 'no terminal event'
+    # Eight live clients, ninth rejected; closing a client releases capacity.
+    clients=[cl]+[Client(p.sock) for _ in range(7)]
+    for client in clients:assert client.call('status',id='missing')['status']=='not_found'
+    ninth=Client(p.sock)
+    try:
+        try:ninth.call('status',id='missing');raise AssertionError('ninth client admitted')
+        except (EOFError,ConnectionResetError,BrokenPipeError):pass
+    finally:ninth.close()
+    # A second process must fail its RocksDB exclusive lock explicitly.
+    lock=subprocess.run([BINARY,str(p.data),str(ROOT/'lock.sock')],capture_output=True,timeout=10)
+    assert lock.returncode!=0 and b'open database' in lock.stderr
+    (ROOT/'lock.stderr').write_bytes(lock.stderr)
+    for client in clients:client.close()
+    time.sleep(.02)
+    p.stop()
+    jobs=inspect(p.data,'basic-stopped',{'first':'1'})
+    assert set(jobs)=={'first'}
+    p2=Process('basic-restart',p.data);cl=Client(p2.sock)
+    assert cl.call('submit',id='first',items=[ITEM])['status']=='existing'
+    assert cl.call('status',id='first')['job']==jobs['first']
+    cl.close();p2.stop()
+    print('socket validation, notification order, client limit, locking, restart: passed',flush=True)
+
+
+def concurrent_clients():
+    p=Process('concurrent')
+    gate=threading.Barrier(8)
+    def task(index):
+        cl=Client(p.sock);gate.wait()
+        result=cl.call('submit',id='shared',items=[ITEM])
+        accepted={};cancelled=[]
+        for i in range(30):
+            id=f'client-{index}-{i}'
+            r=cl.call('submit',id=id,items=[ITEM]*64)
+            assert r['status']=='accepted';accepted[id]=r['sequence']
+            if cl.call('cancel',id=id)['status']=='ok':cancelled.append(id)
+        cl.close();return result,accepted,cancelled
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        results=list(pool.map(task,range(8)))
+    assert sum(r[0]['status']=='accepted' for r in results)==1
+    assert all(r[0]['sequence']=='1' for r in results)
+    accepted={'shared':'1'};cancelled=[]
+    for _,a,cancels in results:accepted.update(a);cancelled+=cancels
+    time.sleep(.02);p.stop()
+    jobs=inspect(p.data,'concurrent-stopped',accepted,cancelled)
+    assert len(jobs)==241
+    print(f'eight-client retry/cancel stress: passed ({len(cancelled)} cancellation acknowledgements)',flush=True)
+
+
+def crash_round(round_index):
+    p=Process(f'crash-{round_index}')
+    accepted={};cancelled=[];guard=threading.Lock();progress=threading.Event()
+    killing=threading.Event()
+    errors=[]
+    def load(index):
+        cl=Client(p.sock)
+        try:
+            for i in range(1000):
+                id=f'job-{index}-{i}'
+                r=cl.call('submit',id=id,items=[ITEM]*64)
+                if r['status']=='accepted':
+                    with guard:
+                        accepted[id]=r['sequence']
+                        if len(accepted)>=20:progress.set()
+                if i%2==0:
+                    if cl.call('cancel',id=id)['status']=='ok':
+                        with guard:cancelled.append(id)
+        except (EOFError,ConnectionResetError,BrokenPipeError,OSError):pass
+        except json.JSONDecodeError as e:
+            # SIGKILL may interrupt a socket write, leaving an incomplete final
+            # line. Only complete response lines count as acknowledgements.
+            if not killing.is_set():errors.append(repr(e))
+        except BaseException as e:errors.append(repr(e))
+        finally:cl.close()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futures=[pool.submit(load,i) for i in range(4)]
+        assert progress.wait(15)
+        time.sleep(.003*(round_index+1))
+        killing.set()
+        p.stop(crash=True)
+        for future in futures:future.result(timeout=15)
+    assert not errors, errors
+    (ROOT/f'crash-{round_index}.history.json').write_text(json.dumps({'accepted':accepted,'cancelled':cancelled},indent=2))
+    jobs=inspect(p.data,f'crash-{round_index}-before-recovery',accepted,cancelled)
+    pending=sum('state' not in j for j in jobs.values())
+    recovered=Process(f'recovered-{round_index}',p.data)
+    cl=Client(recovered.sock)
+    for id,sequence in accepted.items():
+        r=cl.call('submit',id=id,items=[ITEM]*64)
+        assert r['status']=='existing' and r['sequence']==sequence
+    cl.close();recovered.stop()
+    jobs=inspect(p.data,f'crash-{round_index}-after-recovery',accepted,cancelled)
+    assert all(j['state'] in ('complete','cancelled') for j in jobs.values())
+    print(f'SIGKILL/recovery {round_index}: passed ({len(accepted)} acked, {pending} pending at crash)',flush=True)
+
+
+try:
+    basic()
+    concurrent_clients()
+    for i in range(3):crash_round(i)
+    print(f'integration passed; retained artifacts: {ROOT}',flush=True)
+except BaseException:
+    print(f'integration FAILED; retained artifacts: {ROOT}',file=sys.stderr,flush=True)
+    raise
+finally:
+    for process in PROCESSES:
+        if process.p.poll() is None:
+            process.p.kill()
+            process.p.wait(timeout=10)
+        process.log.close()

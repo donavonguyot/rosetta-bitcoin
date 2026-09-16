@@ -1,0 +1,589 @@
+#!/usr/bin/env python3
+"""Black-box v1 tests using only stdlib, the common adapter, and RocksDB C API.
+
+Run in the Linux broker: python3 tests/test_service.py
+No service hooks or alternate encoding kernel are used. Database inspection and
+fixture edits occur only while the service is stopped.
+"""
+import concurrent.futures
+import ctypes as C
+import hashlib
+import json
+import os
+from pathlib import Path
+import random
+import signal
+import socket
+import struct
+import subprocess
+import tempfile
+import threading
+import time
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+BINARY = ROOT / "service"
+SMALL = {"hex": "01000000000000000000", "mode": "witness", "operation": "exact"}
+
+
+def job_digest(items):
+    h = hashlib.sha256()
+    for item in items:
+        raw = bytes.fromhex(item["hex"])
+        h.update(bytes([int(item["mode"] == "witness"), int(item["operation"] == "exact")]))
+        h.update(struct.pack("<Q", len(raw)))
+        h.update(raw)
+    return h.hexdigest()
+
+
+def large_items(total=16 * 1024 * 1024, count=64):
+    # Structural transaction fixture: one input and output with a long script.
+    # All parsing/hashing expectations come from the supplied native adapter.
+    n = total // count
+    prefix = bytes.fromhex("0100000001") + bytes(32) + bytes.fromhex("ffffffff")
+    suffix = bytes.fromhex("ffffffff01") + bytes(8) + bytes.fromhex("0000000000")
+    script_len = n - len(prefix) - 5 - len(suffix)
+    raw = prefix + b"\xfe" + struct.pack("<I", script_len) + b"\x51" * script_len + suffix
+    assert len(raw) == n
+    return [{"hex": raw.hex(), "mode": "legacy", "operation": "exact"}] * count
+
+
+class Client:
+    def __init__(self, path):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(20)
+        try:
+            self.sock.connect(str(path))
+        except BaseException:
+            self.sock.close()
+            raise
+        self.file = self.sock.makefile("rb")
+        self.events = []
+        self.counter = 0
+
+    def send(self, request):
+        self.sock.sendall(json.dumps(request, separators=(",", ":")).encode() + b"\n")
+
+    def response(self):
+        while True:
+            line = self.file.readline()
+            if not line:
+                raise EOFError("service closed connection")
+            value = json.loads(line)
+            if "event" in value:
+                self.events.append(value)
+            else:
+                return value
+
+    def call(self, op, **fields):
+        self.counter += 1
+        request = str(self.counter)
+        self.send(dict(request=request, op=op, **fields))
+        value = self.response()
+        assert value["request"] == request, value
+        return value
+
+    def close(self):
+        self.file.close()
+        self.sock.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
+
+class Service:
+    def __init__(self):
+        (ROOT / "tmp").mkdir(exist_ok=True)
+        self.root = Path(tempfile.mkdtemp(prefix="test-v1-", dir=ROOT / "tmp"))
+        self.db = self.root / "db"
+        self.sock = self.root / "socket"
+        self.proc = None
+        self.log = None
+
+    def start(self):
+        if self.sock.exists():
+            self.sock.unlink()
+        self.log = (self.root / "stderr.log").open("ab")
+        self.proc = subprocess.Popen([str(BINARY), str(self.db), str(self.sock)], stderr=self.log)
+        deadline = time.monotonic() + 20
+        while True:
+            if self.proc.poll() is not None:
+                raise RuntimeError((self.root / "stderr.log").read_text())
+            if time.monotonic() >= deadline:
+                raise TimeoutError("service startup")
+            if self.sock.exists():
+                # bind creates the pathname before listen makes it connectable.
+                # Probe the socket, and wait for EOF so its connection slot is released.
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                    probe.settimeout(2)
+                    try:
+                        probe.connect(str(self.sock))
+                        probe.shutdown(socket.SHUT_WR)
+                        assert probe.recv(1) == b""
+                        break
+                    except (ConnectionRefusedError, FileNotFoundError):
+                        pass
+            time.sleep(.002)
+        return self
+
+    def connect(self):
+        return Client(self.sock)
+
+    def stop(self):
+        with self.connect() as c:
+            assert c.call("shutdown")["status"] == "draining"
+        assert self.proc.wait(timeout=30) == 0, (self.root / "stderr.log").read_text()
+        self.log.close()
+
+    def kill(self):
+        if self.proc is not None and self.proc.poll() is None:
+            self.proc.kill()
+            self.proc.wait(timeout=10)
+        if self.log:
+            self.log.close()
+
+
+class Rocks:
+    """Independent stopped-writer inspection, including atomic fixture writes."""
+    def __init__(self, path):
+        self.lib = C.CDLL("librocksdb.so")
+        p, z = C.c_void_p, C.c_size_t
+        signatures = {
+            "options_create": (p, []), "options_destroy": (None, [p]),
+            "options_set_create_if_missing": (None, [p, C.c_ubyte]),
+            "open": (p, [p, C.c_char_p, C.POINTER(p)]), "close": (None, [p]),
+            "readoptions_create": (p, []), "readoptions_destroy": (None, [p]),
+            "create_iterator": (p, [p, p]), "iter_seek_to_first": (None, [p]),
+            "iter_valid": (C.c_ubyte, [p]), "iter_next": (None, [p]),
+            "iter_key": (p, [p, C.POINTER(z)]), "iter_value": (p, [p, C.POINTER(z)]),
+            "iter_get_error": (None, [p, C.POINTER(p)]), "iter_destroy": (None, [p]),
+            "writeoptions_create": (p, []), "writeoptions_destroy": (None, [p]),
+            "writeoptions_set_sync": (None, [p, C.c_ubyte]),
+            "writeoptions_disable_WAL": (None, [p, C.c_int]),
+            "writebatch_create": (p, []), "writebatch_destroy": (None, [p]),
+            "writebatch_put": (None, [p, C.c_char_p, z, C.c_char_p, z]),
+            "writebatch_delete": (None, [p, C.c_char_p, z]),
+            "write": (None, [p, p, p, C.POINTER(p)]), "free": (None, [p]),
+        }
+        for name, (ret, args) in signatures.items():
+            f = getattr(self.lib, "rocksdb_" + name)
+            f.restype, f.argtypes = ret, args
+            setattr(self, name, f)
+        self.opt = self.options_create()
+        self.options_set_create_if_missing(self.opt, 1)
+        err = p()
+        self.handle = self.open(self.opt, os.fsencode(path), C.byref(err))
+        self.check(err)
+
+    def check(self, err):
+        if err.value:
+            message = C.string_at(err.value).decode()
+            self.free(err)
+            raise RuntimeError(message)
+
+    def rows(self):
+        ro = self.readoptions_create()
+        it = self.create_iterator(self.handle, ro)
+        result = {}
+        try:
+            self.iter_seek_to_first(it)
+            while self.iter_valid(it):
+                n = C.c_size_t()
+                key = self.iter_key(it, C.byref(n))
+                key = C.string_at(key, n.value).decode()
+                value = self.iter_value(it, C.byref(n))
+                result[key] = C.string_at(value, n.value)
+                self.iter_next(it)
+            err = C.c_void_p()
+            self.iter_get_error(it, C.byref(err))
+            self.check(err)
+            return result
+        finally:
+            self.iter_destroy(it)
+            self.readoptions_destroy(ro)
+
+    def change(self, values):
+        wo = self.writeoptions_create()
+        self.writeoptions_set_sync(wo, 1)
+        self.writeoptions_disable_WAL(wo, 0)
+        batch = self.writebatch_create()
+        try:
+            for key, value in values.items():
+                key = key.encode()
+                if value is None:
+                    self.writebatch_delete(batch, key, len(key))
+                else:
+                    if not isinstance(value, bytes):
+                        value = str(value).encode()
+                    self.writebatch_put(batch, key, len(key), value, len(value))
+            err = C.c_void_p()
+            self.write(self.handle, wo, batch, C.byref(err))
+            self.check(err)
+        finally:
+            self.writebatch_destroy(batch)
+            self.writeoptions_destroy(wo)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close(self.handle)
+        self.options_destroy(self.opt)
+
+
+def inspect(path):
+    with Rocks(path) as db:
+        rows = db.rows()
+    assert rows["meta/version"] == b"1"
+    last = int(rows["meta/sequence"])
+    checkpoint = int(rows["meta/checkpoint"])
+    assert 0 <= checkpoint <= last
+    count = size = 0
+    ids = set()
+    expected_keys = set(["meta/version", "meta/sequence", "meta/checkpoint", "meta/jobs", "meta/bytes"])
+    for seq in range(1, last + 1):
+        p, r, c = (f"{x}/{seq:020d}" for x in "prc")
+        if seq <= checkpoint:
+            assert r in rows and p not in rows and c not in rows
+            job = json.loads(rows[r])
+            assert job["state"] in ["complete", "cancelled"]
+            if job["state"] == "cancelled":
+                assert job["results"] == []
+            expected_keys.add(r)
+        else:
+            assert p in rows and r not in rows
+            job = json.loads(rows[p])
+            assert "state" not in job
+            assert job["priority"] == "normal"
+            assert job_digest(job["items"]) == job["digest"]
+            n = sum(len(bytes.fromhex(i["hex"])) for i in job["items"])
+            assert int(job["bytes"]) == n
+            count += 1
+            size += n
+            expected_keys.add(p)
+            if c in rows:
+                assert rows[c] == b"1"
+                expected_keys.add(c)
+        assert job["sequence"] == str(seq)
+        assert job["id"] not in ids
+        ids.add(job["id"])
+        key = "id/" + job["id"]
+        assert rows[key] == str(seq).encode()
+        expected_keys.add(key)
+    assert set(rows) == expected_keys
+    assert int(rows["meta/jobs"]) == count and int(rows["meta/bytes"]) == size
+    return rows
+
+
+def seed_pending(path, jobs):
+    """Construct a valid durable v1 recovery fixture, with the service stopped."""
+    changes = {"meta/version": "1", "meta/sequence": str(len(jobs)),
+               "meta/checkpoint": "0", "meta/jobs": str(len(jobs))}
+    total = 0
+    for seq, (job_id, items, cancel) in enumerate(jobs, 1):
+        size = sum(len(i["hex"]) // 2 for i in items)
+        total += size
+        record = dict(id=job_id, sequence=str(seq), digest=job_digest(items),
+                      bytes=str(size), priority="normal", items=items)
+        changes[f"p/{seq:020d}"] = json.dumps(record, separators=(",", ":")).encode()
+        changes["id/" + job_id] = str(seq)
+        if cancel:
+            changes[f"c/{seq:020d}"] = "1"
+    changes["meta/bytes"] = str(total)
+    with Rocks(path) as db:
+        assert int(db.rows()["meta/sequence"]) == 0
+        db.change(changes)
+
+
+class Native:
+    class Item(C.Structure):
+        _fields_ = [("data", C.c_void_p), ("size", C.c_uint64), ("witness", C.c_uint32), ("exact", C.c_uint32)]
+
+    class Result(C.Structure):
+        _fields_ = [(k, C.c_uint64) for k in ["status", "consumed", "full_size", "stripped_size"]] + [(k, C.c_ubyte * 32) for k in ["txid", "wtxid"]]
+
+    def __init__(self):
+        self.lib = C.CDLL("/adapter/librosetta.so")
+        self.lib.rn_arena_create.argtypes = [C.c_void_p, C.c_uint64]
+        self.lib.rn_arena_create.restype = C.c_void_p
+        self.lib.rn_arena_data.argtypes = [C.c_void_p]
+        self.lib.rn_arena_data.restype = C.c_void_p
+        self.lib.rn_arena_destroy.argtypes = [C.c_void_p]
+        self.lib.rn_verify_v1.argtypes = [C.c_void_p, C.POINTER(self.Item), C.c_uint64, C.POINTER(self.Result)]
+        self.lib.rn_verify_v1.restype = C.c_int
+
+    def evaluate(self, items):
+        raw = [bytes.fromhex(i["hex"]) for i in items]
+        buffer = C.create_string_buffer(b"".join(raw))
+        arena = self.lib.rn_arena_create(buffer, sum(map(len, raw)))
+        assert arena
+        try:
+            base = self.lib.rn_arena_data(arena)
+            native = (self.Item * len(items))()
+            out = (self.Result * len(items))()
+            offset = 0
+            for n, (item, data) in enumerate(zip(items, raw)):
+                native[n] = self.Item(base + offset, len(data), item["mode"] == "witness", item["operation"] == "exact")
+                offset += len(data)
+            assert self.lib.rn_verify_v1(arena, native, len(items), out) >= 0
+            return [dict(status=str(r.status), consumed=str(r.consumed), full_size=str(r.full_size),
+                         stripped_size=str(r.stripped_size), txid_digest_order=bytes(r.txid).hex(),
+                         wtxid_digest_order=bytes(r.wtxid).hex()) for r in out]
+        finally:
+            self.lib.rn_arena_destroy(arena)
+
+
+class ServiceTests(unittest.TestCase):
+    def setUp(self):
+        self.s = Service().start()
+
+    def tearDown(self):
+        self.s.kill()
+
+    def terminal(self, c, job):
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            value = c.call("status", id=job)["job"]
+            if value["state"] in ["complete", "cancelled"]:
+                return value
+            time.sleep(.002)
+        self.fail("terminal timeout")
+
+    def test_kernel_equivalence_and_batch_boundaries(self):
+        native = Native()
+        items = [SMALL, {**SMALL, "hex": ""}, {**SMALL, "hex": "ff"},
+                 {**SMALL, "hex": SMALL["hex"] + "deadbeef", "operation": "prefix"},
+                 {**SMALL, "hex": SMALL["hex"] + "deadbeef"}, {**SMALL, "mode": "legacy"}]
+        rng = random.Random(708)
+        items += [{"hex": rng.randbytes(n).hex(), "mode": "witness" if n % 2 else "legacy", "operation": "exact"} for n in range(1, 59)]
+        with self.s.connect() as c:
+            self.assertEqual(c.call("evaluate", items=items)["results"], native.evaluate(items))
+            resource = [{**SMALL, "hex": "00" * ((4 << 20) + 1)}]
+            self.assertEqual(c.call("evaluate", items=resource)["results"], native.evaluate(resource))
+            self.assertEqual(c.call("evaluate", items=items + [SMALL])["status"], "invalid_request")
+        self.s.stop()
+        self.assertEqual(inspect(self.s.db)["meta/sequence"], b"0")
+
+    def test_protocol_validation_and_pipelining(self):
+        with self.s.connect() as c:
+            malformed = [dict(op="submit", id="bad!", items=[SMALL]), dict(op="submit", id="a", items=[]),
+                         dict(op="submit", id="a", items=[{**SMALL, "hex": "AA"}]),
+                         dict(op="submit", id="a", items=[{**SMALL, "hex": "0"}]),
+                         dict(op="submit", id="a", items=[{**SMALL, "mode": "bad"}]),
+                         dict(op="submit", id="a", items=[{**SMALL, "operation": "bad"}]),
+                         dict(op="submit", id="a", items=[SMALL], priority="high"),
+                         dict(op="status", id="a", extra=True), dict(op="unknown")]
+            for request in malformed:
+                c.send(dict(request="invalid", **request))
+                self.assertEqual(c.response(), {"request": "invalid", "status": "invalid_request"})
+            for raw in [b"{\n", b"\xff\n", b"[]\n", b'{"request":null,"op":"shutdown"}\n']:
+                c.sock.sendall(raw)
+                self.assertEqual(c.response()["status"], "invalid_request")
+            c.sock.sendall(b'{"request":"one","op":"status","id":"absent"}\n{"request":"two","op":"evaluate","items":[' + json.dumps(SMALL).encode() + b']}\n{"request":"three","op":"cancel","id":"absent"}\n')
+            self.assertEqual([c.response()["request"] for _ in range(3)], ["one", "two", "three"])
+            self.assertEqual(c.call("submit", id="valid", items=[SMALL])["sequence"], "1")
+        self.s.stop()
+        self.assertEqual(inspect(self.s.db)["meta/sequence"], b"1")
+
+    def test_identity_events_receipts_and_restart(self):
+        with self.s.connect() as c:
+            self.assertEqual(c.call("status", id="unknown")["status"], "not_found")
+            self.assertEqual(c.call("cancel", id="unknown")["status"], "not_found")
+            accepted = c.call("submit", id="job_1-X", items=[SMALL], priority="normal")
+            self.assertEqual(accepted["status"], "accepted")
+            self.assertEqual(c.events, [], "terminal event preceded admission response")
+            self.assertEqual(c.call("submit", id="job_1-X", items=[SMALL]), {**accepted, "status": "existing", "request": str(c.counter)})
+            self.assertEqual(c.call("submit", id="job_1-X", items=[{**SMALL, "operation": "prefix"}])["status"], "conflict")
+            job = self.terminal(c, "job_1-X")
+            self.assertEqual(job["digest"], job_digest([SMALL]))
+            self.assertEqual(job["results"], Native().evaluate([SMALL]))
+            self.assertEqual(c.call("cancel", id="job_1-X")["status"], "too_late")
+            self.assertEqual(len(c.events), 1)
+            self.assertEqual(c.events[0]["job"], job)
+        self.s.stop()
+        rows = inspect(self.s.db)
+        self.assertEqual(rows["meta/jobs"], b"0")
+        self.s.start()
+        with self.s.connect() as c:
+            self.assertEqual(c.call("status", id="job_1-X")["job"], job)
+            self.assertEqual(c.call("submit", id="job_1-X", items=[SMALL])["status"], "existing")
+        self.s.stop()
+        self.assertEqual(inspect(self.s.db), rows)
+
+    def test_exclusive_writer_and_idle_shutdown(self):
+        second = subprocess.run([str(BINARY), str(self.s.db), str(self.s.root / "second")], capture_output=True, timeout=10)
+        self.assertNotEqual(second.returncode, 0)
+        self.assertIn(b"exclusive", second.stderr)
+        clients = [self.s.connect() for _ in range(7)]
+        try:
+            self.s.stop()
+        finally:
+            for c in clients:
+                c.close()
+        inspect(self.s.db)
+
+    def test_concurrent_clients_and_disconnect(self):
+        def work(worker):
+            with self.s.connect() as c:
+                admitted = []
+                for i in range(20):
+                    job = f"w{worker}-{i}"
+                    value = c.call("submit", id=job, items=[SMALL])
+                    self.assertEqual(value["status"], "accepted")
+                    admitted.append(int(value["sequence"]))
+                    if i % 3 == 0:
+                        c.call("cancel", id=job)
+                return admitted
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            seqs = sum(pool.map(work, range(8)), [])
+        self.assertEqual(sorted(seqs), list(range(1, 161)))
+        self.s.stop()
+        rows = inspect(self.s.db)
+        self.assertEqual(rows["meta/checkpoint"], b"160")
+
+    def test_live_cancellation_and_crash_recovery(self):
+        items = large_items()
+        acknowledged = {}
+        cancelled = set()
+        retained_pending = 0
+        for round_ in range(3):
+            with self.s.connect() as c:
+                for i in range(4):
+                    job = f"large-{round_}-{i}"
+                    r = c.call("submit", id=job, items=items)
+                    self.assertEqual(r["status"], "accepted")
+                    acknowledged[job] = r["sequence"]
+                    if i % 2 == 0:
+                        r = c.call("cancel", id=job)
+                        if r["status"] == "ok":
+                            cancelled.add(job)
+                            self.assertIn(c.call("cancel", id=job)["status"], ["ok", "too_late"])
+                self.s.kill()
+            rows = inspect(self.s.db)
+            retained_pending += int(rows["meta/jobs"])
+            for job, seq in acknowledged.items():
+                self.assertEqual(rows["id/" + job], seq.encode())
+            self.s.start()
+        self.assertTrue(cancelled, "live cancellation did not win any race")
+        self.assertGreater(retained_pending, 0, "crash did not retain any pending work")
+        with self.s.connect() as c:
+            for job in acknowledged:
+                result = self.terminal(c, job)
+                if job in cancelled:
+                    self.assertEqual(result["state"], "cancelled")
+        self.s.stop()
+        inspect(self.s.db)
+
+    def test_durable_cancellation_recovery_fixture(self):
+        self.s.stop()
+        seed_pending(self.s.db, [("cancelled-first", [SMALL], True),
+                                ("complete-second", [SMALL], False),
+                                ("cancelled-last", [SMALL], True)])
+        inspect(self.s.db)
+        self.s.start()
+        with self.s.connect() as c:
+            for name in ["cancelled-first", "cancelled-last"]:
+                self.assertEqual(self.terminal(c, name)["state"], "cancelled")
+                self.assertEqual(c.call("submit", id=name, items=[SMALL])["status"], "existing")
+            self.assertEqual(self.terminal(c, "complete-second")["state"], "complete")
+        self.s.stop()
+        rows = inspect(self.s.db)
+        self.assertEqual(rows["meta/checkpoint"], b"3")
+
+    def test_full_recovered_backlog_and_drain(self):
+        self.s.stop()
+        heavy = large_items()
+        empty = {**SMALL, "hex": ""}
+        jobs = [(f"seed-{i}", heavy if i < 4 else [empty], False) for i in range(1024)]
+        seed_pending(self.s.db, jobs)
+        del jobs
+        self.s.start()
+        with self.s.connect() as c:
+            # All 1,024 pending jobs and all 64 MiB are initially charged.
+            # Native work is real; no scheduling barriers or service hooks.
+            r = c.call("submit", id="over-limit", items=[SMALL])
+            self.assertEqual(r["status"], "backpressure")
+            self.assertEqual(c.call("submit", id="seed-1000", items=[empty])["status"], "existing")
+            c.send(dict(request="drain", op="shutdown"))
+            c.send(dict(request="new", op="submit", id="during-drain", items=[SMALL]))
+            self.assertEqual(c.response()["status"], "draining")
+            self.assertEqual(c.response()["status"], "draining")
+        self.assertEqual(self.s.proc.wait(timeout=30), 0)
+        self.s.log.close()
+        rows = inspect(self.s.db)
+        self.assertEqual(rows["meta/checkpoint"], b"1024")
+        self.assertNotIn("id/over-limit", rows)
+        self.assertNotIn("id/during-drain", rows)
+
+    def test_slow_reader_does_not_block_other_clients_or_shutdown(self):
+        slow = self.s.connect()
+        slow.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1024)
+        request = json.dumps(dict(request="slow", op="evaluate", items=[SMALL] * 64)).encode() + b"\n"
+        slow.sock.sendall(request * 32)
+        started = time.monotonic()
+        with self.s.connect() as c:
+            self.assertEqual(c.call("submit", id="fast", items=[SMALL])["status"], "accepted")
+            self.terminal(c, "fast")
+            self.assertEqual(c.call("shutdown")["status"], "draining")
+        self.assertEqual(self.s.proc.wait(timeout=10), 0)
+        self.s.log.close()
+        self.assertLess(time.monotonic() - started, 10)
+        slow.close()
+        inspect(self.s.db)
+
+    def test_oversized_and_unterminated_frames_do_not_mutate_database(self):
+        with self.s.connect() as c:
+            c.sock.sendall(b" " * ((40 << 20) + 1))
+            self.assertEqual(c.response()["status"], "invalid_request")
+        with self.s.connect() as c:
+            c.sock.sendall(b'{"request":"x","op":"submit","id":"bad","items":[' + json.dumps(SMALL).encode() + b']}')
+            c.sock.shutdown(socket.SHUT_WR)
+            self.assertEqual(c.response()["status"], "invalid_request")
+        self.s.stop()
+        self.assertEqual(inspect(self.s.db)["meta/sequence"], b"0")
+
+    def test_process_crash_during_request_stream(self):
+        rng = random.Random(707)
+        for round_ in range(5):
+            c = self.s.connect()
+            requests = [dict(request=str(i), op="submit", id=f"crash-{round_}-{i}", items=[SMALL]) for i in range(100)]
+            c.sock.sendall(b"".join(json.dumps(x).encode() + b"\n" for x in requests))
+            killer = threading.Timer(rng.uniform(.001, .018), self.s.proc.kill)
+            killer.start()
+            acknowledged = []
+            try:
+                while True:
+                    r = c.response()
+                    self.assertEqual(r["status"], "accepted")
+                    acknowledged.append((f"crash-{round_}-{r['request']}", r["sequence"]))
+            except (EOFError, ConnectionError):
+                pass
+            finally:
+                killer.join()
+                self.s.proc.wait(timeout=10)
+                self.s.log.close()
+                c.close()
+            rows = inspect(self.s.db)
+            for name, seq in acknowledged:
+                self.assertEqual(rows["id/" + name], seq.encode())
+            self.s.start()
+        self.s.stop()
+        inspect(self.s.db)
+
+    def test_corrupt_version_rejected_without_rebuild(self):
+        self.s.stop()
+        with Rocks(self.s.db) as db:
+            db.change({"meta/version": b"2"})
+            before = db.rows()
+        failed = subprocess.run([str(BINARY), str(self.s.db), str(self.s.sock)], capture_output=True, timeout=10)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn(b"version", failed.stderr)
+        with Rocks(self.s.db) as db:
+            self.assertEqual(db.rows(), before)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

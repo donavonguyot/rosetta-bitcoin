@@ -1,0 +1,416 @@
+# Initial implementation record
+
+Reading began at 2026-09-16 20:50:33 UTC and finished before implementation was
+authorized at 20:51:55 UTC. The implementation clock began at 20:51:55 UTC.
+This is a fresh lineage with no predecessor handoff. All native compilation,
+execution, tests, and pinned documentation queries used `python3 run.py`.
+No external sources, evaluator, other workspace, agent, or Bitcoin library was
+used. Broker requests/responses and test artifacts are retained.
+
+## Initial design hypotheses
+
+1. A single event-loop owner of all writes can provide a legal cancellation/
+   terminal ordering at the native write boundary, while four worker threads
+   provide encoding concurrency. Implemented; protocol, concurrent-client,
+   crash, and recovery tests support this design. Deterministic interposed
+   barrier qualification remains external, unexecuted evidence.
+2. Nonblocking sockets and bounded queues can isolate slow/disconnected clients
+   from encoding ownership and durable transitions. Implemented; disconnect and
+   pipelining tests pass. Review found and fixed rescanning of growing input
+   lines and retention of already-sent output prefixes.
+
+These are initial correctness/design hypotheses. No optimization-round
+hypothesis, group commit, kernel replacement, or durability relaxation was
+attempted. No benchmark conclusions are drawn from test elapsed times.
+
+## Attempts, including failures
+
+| Attempt | Outcome and action |
+|---|---|
+| Initial ReleaseSafe build | Failed translating glibc fortified `fcntl` wrappers. Set `_FORTIFY_SOURCE=0` in the host C import and explicitly enabled GNU declarations. This affects imported libc header wrappers, not the unchanged kernel or storage durability. |
+| Next build | Failed because GNU `bind` uses a translated transparent socket-address union. Passed the union's Unix-address member explicitly; handled `accept4` likewise. |
+| Next build | Failed because Zig 0.16 JSON object-map `put` requires an allocator. Supplied the request arena allocator. |
+| First successful build | Public smoke passed. |
+| First eight-test run | Seven passed; crash-history test timed out while its client sent many small pipeline messages without reading responses. This was a test-client flow-control failure. Changed that crash burst to one buffered send; retained the failed run in broker responses. |
+| Second eight-test run | All eight passed, including process-crash restart and cancellation-intent preservation. |
+| Expanded 13-test run | Passed, including 40 MiB text, 16 MiB aggregate input, 64 MiB outstanding payload, fragmented transport, and malformed recovery records. |
+| Expanded 15-test run | Passed, adding 1,024-job backpressure and drain semantics. Known-ID retries were kept idempotent during drain. |
+| Fresh-counter correction | Added the explicit fresh-database exception for absent zero counters, retaining rejection for missing counters in a nonempty database. |
+| ReleaseSafe and Debug, 16 tests | Both passed, plus public smoke. Logs: `tmp/release-validation.log`, `tmp/debug-validation.log`. |
+| Native boundary fixture test | Passed for nonempty legacy/witness fixtures, relative prefix consumption, distinct witness digest, 4,096-item success, and 4,097-item resource failure. Log: `tmp/native-boundary-validation.log`. |
+| Final output-buffer review | Added sent-prefix compaction to bound memory during continuous event output. Final release/debug validation follows this change. |
+| Final ReleaseSafe and Debug validation | Public smoke plus all 17 tests passed in both builds. Suite times were 4.996 s and 8.543 s, respectively; these are test timings, not performance trial results. Logs: `tmp/final-release-validation.log`, `tmp/final-debug-validation.log`. |
+
+## Infrastructure and diagnostic observations
+
+The broker reports Zig 0.16.0 and RocksDB 7.8.3-2. `readelf` confirms an AArch64
+ELF, dynamic adapter/RocksDB linkage, and v1-only verification references.
+The supplied adapter directory contains `adapter.h` and `librosetta.so`; no
+instrumented native library was supplied. Valgrind was not available. Native
+ASan, whole-service race detection, and power-loss behavior are not claimed.
+
+The host-side `python3` launcher repeatedly printed denied temporary-cache and
+FSEvents diagnostics before successfully forwarding requests. These did not
+prevent broker builds/tests; their exact overhead is unknown. API token usage
+and monetary cost are not exposed by the tools and are recorded as unknown.
+No controlled performance trials were run. No failed measurement was discarded
+or replaced as though it had succeeded.
+
+Implementation and final validation completed at approximately 21:18 UTC on
+2026-09-16, about 26 minutes after the implementation clock started, within the
+90-minute ceiling. The earlier reading phase took less than two minutes.
+These wall-clock figures include broker/tool waits and documentation. Preparation
+cost before the supplied workspace and exact token/cost usage remain unknown.
+
+Frozen initial ReleaseSafe executable SHA-256:
+`53be1f182871e4ad66ec133b35e1d2d04a66315102045c7fe1d71fc0a42facdc`.
+
+# Maintenance round — ABI v2 and deterministic priority dispatch
+
+This section records the fresh maintenance session. The initial-round text above
+is retained verbatim; `tmp/predecessor/` also retains the supplied executable,
+sources, tests, build script, handoff, and experiment record. The maintenance
+submission is frozen on return before evaluator feedback.
+
+## Scope, timing, and documentation
+
+Implementation was explicitly authorized after the reading-only phase. The first
+implementation timestamp was 2026-09-16 22:03:03 UTC (the instruction arrived
+shortly beforehand). Reading finished by approximately 22:02:40 UTC, within the
+10-minute allowance. All contracts, README.md, BUILDING.md, reuse/storage.zig,
+and predecessor Markdown were read. Relevant supplied source/tests were inspected.
+
+Pinned Zig documentation was read only through `python3 run.py`: Thread.zig,
+json/static.zig, array_list.zig, and std.zig. The adapter header was read at its
+read-only broker location. An initial lookup of older Thread/Mutex.zig and
+Thread/Condition.zig paths failed because those files are absent in Zig 0.16;
+the current shipped sources were then used. The host lacks rg, so read-only
+searches used find/grep. No external source, network, repository outside this
+workspace, other workspace/agent, Bitcoin library, or evaluator was accessed.
+
+All compilation, native execution, tests, artifact inspection, and audit-script
+execution used the pinned Linux broker through `python3 run.py`. Host commands
+were restricted to workspace reading and file management/editing. The launcher
+again emitted denied xcrun cache and FSEvents messages but forwarded requests
+successfully. Their exact overhead and token/monetary usage remain unknown.
+
+## Maintenance design decisions
+
+1. Keep event-loop ownership and all journal writes; change only the native ABI,
+   admission metadata, recovery publication, and worker selection. V2 uses arena
+   offsets and validates the success bitmap against all per-item statuses.
+2. Serialize selection from two intrusive FIFO queues under the existing pool
+   mutex. A shared two-bit cycle implements HHHN only while both queues have
+   eligible work. Single-queue dispatch leaves the cycle unchanged. Cancelled
+   queued work is withdrawn without consuming a turn; running work retains its
+   inputs until return. Terminal commitment remains admission ordered.
+3. Validate the entire recovered database, then publish all uncancelled pending
+   work under one lock. Recover old missing priorities as normal and preserve
+   explicit v2 priorities, receipts, ID indexes, and durable cancellation intents.
+
+These are maintenance correctness decisions, not optimization hypotheses.
+No group commit, performance tuning, kernel change, rewrite, or durability
+relaxation was attempted. Storage and build settings remain byte-for-byte
+unchanged. Existing protocol interpretations and remaining ambiguities are
+listed in HANDOFF.md, including absent campaign freeze/gate evidence.
+
+## Attempts and outcomes
+
+| Attempt | Outcome |
+|---|---|
+| First v2 ReleaseSafe build | Passed without compiler errors. |
+| Review before first full suite | Added normal-priority status projection for old records that omit the field; disk payloads remain untouched. |
+| First full ReleaseSafe suite | Three scheduler tests, smoke, and 22 service tests passed; Python suite 7.308 s. Logs: maintenance-build-1.log and maintenance-tests-1.log in tmp/. |
+| Additional admission persistence coverage | Added a test that admits high/normal/default jobs, retries with opposite priorities, crashes, independently inspects disk, and restarts. |
+| Zig formatting and Debug build/suite | Formatting succeeded; three scheduler tests, smoke, and all 23 service tests passed, Python suite 11.934 s. Logs: maintenance-debug-build.log and maintenance-debug-tests.log. |
+| Final ReleaseSafe build/suite | Three scheduler tests, smoke, and all 23 service tests passed, Python suite 9.858 s. Logs: maintenance-final-build.log and maintenance-final-tests.log. |
+| Artifact audit, first attempt | Failed because the optional `file` executable is absent. No service/test failure. Broker response retains the traceback. |
+| Artifact audit, corrected | Used readelf -h instead. Verified AArch64 ELF, dynamic adapter/RocksDB linkage, pinned versions, v2-only verification symbol, checksums and diff counts. Results: tmp/maintenance-audit.json. |
+| Handoff replacement, first edit attempt | Patch utility rejected delete/add targeting the same path in one patch; no file was changed. Rewrote the document with a literal heredoc. |
+
+No implementation build or semantic test failed. No repair round was used.
+All attempts and broker responses remain in queue/; logs, databases, crash
+artifacts, predecessor snapshot, debug executable, and audit script remain in
+tmp/. Nothing was rerun to discard a failed measurement, and no performance
+measurements were taken.
+
+## Maintenance evidence and diff footprint
+
+The actual predecessor executable was run with a schema-1 database and killed
+with existing receipts, pending work, and acknowledged cancellation intents.
+V2 recovered it, preserved receipt bytes and indexes, and honored cancellations.
+Mixed-priority and newly admitted priority workloads were separately crashed,
+inspected after the writer stopped, and recovered. Tests validate priority
+immutability on retries, malformed priority refusal without mutation, normal
+fallback, offset handling, and bitmap positions through bit 63 against both
+adapter ABIs. The predecessor's other 17 service tests remain included.
+
+Three production-queue unit cases check exact HHHN/FIFO ordering, preservation of
+partial cycle state during sole-queue dispatch and idle time, and removal from
+head/middle/tail without consuming a dispatch turn. These are ordinary unit
+calls, with no scheduler/barrier hooks in the service. External native-entry
+fairness or cancellation-barrier qualification was not run. Checked builds and
+process-crash histories are not native ASan, whole-service race detection,
+injected failure coverage, or power-loss evidence.
+
+Diff counts use Python difflib against the retained predecessor, counting each
+changed line as a removal plus addition. Documentation, retained snapshots,
+broker traffic, caches, and diagnostic artifacts are excluded from code counts.
+The 54 test-only lines embedded in src/dispatch.zig are assigned to tests.
+
+| Category | Added lines | Removed lines |
+|---|---:|---:|
+| Production | 98 | 23 |
+| Tests | 242 | 9 |
+| Generated source | 0 | 0 |
+
+Production changes are src/main.zig (+44/-23) and the production portion of
+src/dispatch.zig (+54). build.sh and src/storage.zig are unchanged. The generated
+deliverable is one replacement service executable: 4,161,712 bytes, a 6,048-byte
+increase over the 4,155,664-byte predecessor. This footprint measures invasiveness,
+not quality. Detailed per-file counts are in tmp/maintenance-audit.json.
+
+Delivered ReleaseSafe service SHA-256:
+`369821b9afe85876d6f945ddac4775963ed60b485ca3a26a49ca14ad9d478956`.
+
+All semantic families exercised locally passed before repair (repair unused).
+Evaluator semantic-family results, gate status, controlled performance, exact
+API usage/cost, and preparation effort are unknown. No substrate recommendation
+is made from this maintenance result.
+
+Implementation, validation, and documentation finished at approximately
+2026-09-16 22:13 UTC, about 10 minutes after implementation authorization,
+including broker waits and audit/documentation work. This is within the
+60-minute ceiling; repair time is zero. Reading time was separate and under
+two minutes; exact token and monetary usage are unavailable.
+
+# Optimization round — preregistered local experiments
+
+Implementation began 2026-09-16 22:40:56 UTC after explicit authorization.
+The user identifies the v2 predecessor as qualified; no evaluator or gate files
+are accessed. Reading was completed separately within its ten-minute ceiling.
+The supplied v2 executable, source, tests, build script and documents are frozen
+under tmp/baseline/. Its historical hash is
+369821b9afe85876d6f945ddac4775963ed60b485ca3a26a49ca14ad9d478956.
+Only this workspace, designated infrastructure and pinned offline documentation
+are used. All builds, tests and measurements run through python3 run.py.
+
+Exactly three optimization hypotheses, recorded before edits:
+
+1. Opportunistic terminal group commit amortizes synchronous writes when an
+   admission-ordered prefix has completed. Include at most 32 contiguous jobs;
+   introduce zero intentional waiting (therefore within the 2 ms bound). Keep
+   single-job admissions and synchronous cancellation intents. Preserve the
+   single event-loop owner and the C call_entry cancellation boundary. Report
+   terminal batch sizes and distinguish write counts from sync observations.
+2. Nonpersistent evaluate need not compute the SHA-256 retry digest, because
+   only durable submit and recovery use it. Preserve all validation and native
+   encoding and keep submit/recovery digest bytes identical.
+3. Reuse bounded client input/output allocation capacity between messages to
+   reduce allocator work, releasing large buffers and all buffers on disconnect.
+   Do not change framing, ordering, output backpressure or arena ownership.
+
+These are the only optimization hypotheses. Correctness tests and measurement
+instrumentation are evidence work, not additional optimizations. Each hypothesis
+will be isolated before combined comparison; unsupported benefits will be
+reported, and failed attempts retained. Local workloads are not substitutes for
+the unavailable campaign-frozen generators or external gate evidence.
+
+## Attempts through initial correctness validation
+
+- Baseline snapshot created before edits. Initial baseline suite: scheduler and
+  smoke passed; one of 23 service tests hit ConnectionRefusedError in the tiny
+  bind/listen window. The actual-v1 fixture test skipped because its binary is
+  absent. Failed log retained as tmp/baseline-tests.log. Added bounded test-client
+  retry for ECONNREFUSED only; baseline rerun passed (22 run, one skip), log
+  tmp/baseline-tests-readiness.log. No service startup behavior was changed.
+- H1, H2 and H3 isolated ReleaseSafe builds passed on the first attempt. Source
+  snapshots are tmp/h1/src, tmp/h2/src and tmp/h3/src; executables and build logs
+  are retained. build.sh now optionally accepts SERVICE_SOURCE for reproducible
+  isolated builds; default input/output and native link settings are unchanged.
+- H1 first inherited suite exposed three speed-dependent test assumptions:
+  priority status was already terminal; a cancellation was already too late;
+  and the producer could no longer fill the job limit. These were test-design
+  failures, not contract relaxations. Retained tmp/h1-tests.log. Replaced timing
+  assumptions with external holds at native entry so an early unfinished job
+  deterministically keeps capacity and pending metadata live. Applied the same
+  fix proactively to the draining test. No service scheduler hooks were added.
+- Four new external C-write tests passed: crash before a 32-member write retains
+  the complete old state, crash after it retains the complete new state, injected
+  write failure preserves every pending member, and 65 cancelled jobs commit as
+  32/32/1 with matching histogram and observed WAL sync counts. Cancellation
+  overlapping a held terminal call returns too_late after the hold is released.
+- H1 complete suite after test fixes: three scheduler cases, smoke and 26 service
+  cases passed; historical-v1 fixture case skipped. Log tmp/h1-tests-barriers.log.
+  Deliberate barrier holds are released before liveness assertions; crash tests
+  intentionally kill the held process. Native library and storage settings are
+  unchanged. The observer is a test-only LD_PRELOAD DSO, never production-linked.
+
+## Measurement protocol
+
+The local tests/benchmark.py script prepares requests and fresh database paths
+outside timing, runs one warmup on its own datadir and seven measured datadirs
+per case/variant, rotates variant order, and measures serially. Failed trials
+are recorded and halt that run rather than being silently replaced. Deadline
+is 15 minutes per repetition. Eight clients have at most 32 requests in flight
+apiece, avoiding admission saturation as a throughput confound. Timing includes
+client JSON/socket overhead and ends at durable terminal events (evaluate ends
+at its response). Startup, shutdown and stopped-writer inspection are excluded.
+No observer is loaded during timed trials. Complete RocksDB LOG files are kept;
+separate instrumented runs record C-write membership and actual libc fsync/
+fdatasync observations. Service sync_write_successes means successful sync=true
+C writes, not a physical syscall count.
+
+Overhead is measured first with 4,096 tiny evaluate requests and 64 evaluate
+requests containing a valid supplied transaction followed by 256 KiB padding in
+prefix mode. Durable and mixed-priority tests use 2,048 tiny jobs. The mixed case
+has 3/4 high and 1/4 normal requests, reporting per-priority p99 latency. These
+are local surrogates, not the campaign-frozen workloads. The broker supplies one
+filesystem: fresh datadirs are available, independent fresh block volumes are
+not provisioned here. Results cannot establish campaign performance qualification
+or a substrate recommendation. Differences within 10% are operational ties.
+
+## Isolated hypothesis results and choices
+
+Seven retained measured repetitions per variant/case, plus separate warmups:
+
+| Case | Baseline median [range], seconds | Hypothesis median [range], seconds | Choice |
+|---|---|---|---|
+| Tiny evaluate, H2 | .05975 [.05712, .06455] | .06074 [.05669, .06653] | Tie; no tiny-input speed claim |
+| 256 KiB prefix evaluate, H2 | .13090 [.13009, .13880] | .09868 [.09645, .10443] | Keep: 24.6% lower median elapsed |
+| Tiny evaluate, H3 | .05975 [.05712, .06455] | .06023 [.05762, .06184] | Drop: operational tie |
+| 256 KiB prefix evaluate, H3 | .13090 [.13009, .13880] | .13121 [.13095, .13341] | Drop: operational tie |
+| Durable jobs, H1 | 2.10969 [.81903, 3.29598] | .79767 [.44421, 1.99655] | Keep; substantial storage variability |
+| Mixed priorities, H1 | 1.37819 [1.22834, 2.68187] | .96539 [.77172, 1.22345] | Keep; no external fairness qualification |
+
+All isolated performance trials succeeded; no failed repetition was replaced.
+Raw trials, warmups, hashes, protocols, service stderr and RocksDB logs are in
+`tmp/isolated-overhead/` and `tmp/isolated-group/`. Ranges overlap materially in
+storage workloads; these short local samples are not a statistical significance
+claim. Median per-run mixed p99 was 487.75/487.29 ms normal/high for baseline,
+372.64/372.91 ms for H1. These are admission-ordered receipt latency measurements,
+not direct kernel-entry scheduling measurements. HHHN queue selection is unchanged.
+
+Final production selection is H1 + H2. H3 is retained only as an experiment under
+tmp/h3; transport buffers in final source retain predecessor behavior. No fourth
+hypothesis, rewrite, admission batching, timer wait or kernel change was attempted.
+
+## Combined validation
+
+Final H1+H2 ReleaseSafe build and suite passed on the first attempt: three
+scheduler tests, public smoke, and 29 service tests passed (30 discovered, one
+historical-v1 fixture skip); suite time 7.541 s. Debug also passed the same
+coverage, suite time 9.996 s. These suite times are not performance comparisons.
+Logs: tmp/combined-build.log, tmp/combined-tests.log,
+tmp/combined-debug-build.log, tmp/combined-debug-tests.log.
+
+Additional tests verify cancellation acknowledged before the grouped terminal
+C boundary is honored; repeated cancellation produces only one intent write;
+a 256 KiB prefix evaluate matches the supplied native v2 oracle and durable
+submit still stores the independently computed exact digest; and the actual
+supplied v2 predecessor is killed after one terminal write, then the optimized
+binary preserves receipts/indexes and recovers its remaining cancellations and
+pending jobs. The missing older v1 executable is not substituted with v2 and
+its test remains an explicit skip.
+
+Checked builds and the external tests do not establish whole-service race
+freedom, native ASan coverage, power-loss behavior, or exact native-entry fairness.
+No such claims are made. No evaluator access or feedback was used. There were no
+production build failures or unresolved service correctness failures; the failed
+baseline/test-timing attempts remain recorded above and retained on disk.
+
+## Final-size comparison and unresolved mixed-workload signal
+
+The combined executable passed every local performance repetition. Results in
+`tmp/final-comparison/summary.json`:
+
+| Case | Baseline median [range], seconds | Final median [range], seconds |
+|---|---|---|
+| Tiny evaluate | .06204 [.06029, .06842] | .06167 [.05638, .06636] |
+| 256 KiB prefix evaluate | .13320 [.13081, .13590] | .09702 [.09466, .09778] |
+| Durable jobs | 2.42270 [.67853, 3.00924] | 1.35369 [.87389, 1.81711] |
+| Mixed priorities | 1.07838 [.77640, 4.10679] | 1.61496 [.59729, 2.67461] |
+
+Tiny evaluate is an operational tie. Large evaluate median is 27.2% lower;
+durable median is 44.1% lower. Mixed median is 49.8% higher, opposing the isolated
+H1 result and preventing a uniform performance-win claim. Mixed median per-run
+p99 receipt latency improved from 423.15/422.81 ms normal/high to 368.00/371.28 ms.
+All ranges and the adverse mixed median remain part of the result.
+
+Separate instrumented mixed run (not included in performance timing) observed:
+4,097 baseline C writes and WAL syncs versus 2,542 optimized, with 2,048 admissions
+in both. Terminal writes fell from 2,048 to 493; optimized group sizes ranged
+1..9, exactly matching the service histogram. Total libc sync successes including
+non-WAL files were 4,108 and 2,553. This is a direct mechanism observation, not a
+claim that wall time must fall proportionally. Logs, membership traces, and
+RocksDB statistics are in tmp/write-observations/.
+
+Follow-up measurement preregistration, before running it: the conflicting mixed
+medians and very broad storage ranges justify increasing the mixed case from
+2,048 to 16,384 jobs, preserving eight clients, window 32, priority ratio,
+separate warmups, seven fresh datadirs, cyclic order, and no observer during
+timing. There is no production change and no additional optimization hypothesis.
+Report this longer experiment separately; do not replace or pool the earlier
+results. No failed/time-out repetition will be replaced.
+
+## Longer mixed follow-up and final decision
+
+All seven measured pairs and both separate warmups succeeded. Baseline median
+was 8.99713 s [5.59996, 13.97949]; optimized median 5.64341 s [3.48723, 6.84049],
+37.3% lower. Optimized elapsed was lower in each measured pair. Median per-run
+normal/high p99 was 495.71/490.58 ms baseline, 391.21/391.15 ms optimized. See
+`tmp/long-mixed/` for protocol, raw results, databases and complete RocksDB logs.
+The baseline warmup was faster than the optimized warmup; neither is included
+in measured medians. No run was dropped or replaced. These results are reported
+separately from the short comparisons rather than pooled.
+
+Final choice remains H1 + H2, supported by the direct reduction in write/sync
+count, durable local throughput, larger evaluate throughput, and the longer
+mixed comparison. H3 remains dropped. The contrary short mixed result and broad
+storage ranges prevent a blanket speedup or statistical-significance claim.
+There is no sole substrate recommendation and no campaign gate claim.
+
+RocksDB statistics from the separate instrumented runs independently agreed
+with the observer's 4,097 versus 2,542 WAL writes/syncs. They showed zero flush
+bytes, zero compaction bytes and zero stalls. Complete LOG files accompany every
+performance run; configuration mentions in those logs are not activity counts.
+Small runs do not establish behavior under sustained compaction pressure.
+
+## Final audit, footprint, effort and freeze
+
+The final broker audit at 2026-09-16 22:57:55 UTC verified Zig 0.16.0,
+RocksDB 7.8.3-2, an executable Linux AArch64 ELF, dynamic adapter/RocksDB linkage,
+and v2-only verification symbols. The retained predecessor hash matches the
+supplied handoff. Audit details, native adapter hash and per-file diff counts
+are in tmp/optimization-audit.json.
+
+| Category | Added lines | Removed lines |
+|---|---:|---:|
+| Production, including build script | 76 | 38 |
+| Tests, external observer, measurement scripts | 643 | 15 |
+| Generated source | 0 | 0 |
+
+Counts compare final text against tmp/baseline using difflib, with replacements
+counted as removal plus addition. Documents, caches, logs, datadirs, broker
+traffic and retained variants are excluded. The unchanged embedded scheduler
+unit tests add no diff. The generated service executable is 4,162,496 bytes,
+784 bytes above the predecessor. This is an invasiveness measure, not quality.
+
+Final ReleaseSafe SHA-256:
+`a4cfe6eb6261942cc55b7fb4b85490a6a5397fe3884e5d954e179a61b57bcd72`.
+Final deliverable hashes are in tmp/optimization-submission.sha256.
+
+Implementation, validation, measurements, audit and final documentation finished
+at approximately 22:58 UTC on 2026-09-16, about 18 minutes after the recorded
+22:40:56 UTC implementation start, within the 60-minute ceiling. Reading was
+separate and under ten minutes. This includes broker waits and documentation.
+Exact model token usage, monetary cost and prior preparation cost are unknown.
+Host launcher xcrun cache/FSEvents diagnostics again occurred but did not prevent
+broker execution; their exact overhead is unknown. All compilation, native
+execution, tests, performance measurement and artifact verification used run.py.
+
+This is the initial optimization submission, frozen on return before evaluator
+feedback. Repair time is zero. Every attempted experiment and failed validation
+is retained. Final production selection: H1 group commit + H2 evaluate digest
+elision; H3 buffer reuse rejected. No unresolved service failure remains in the
+local evidence, and its explicitly listed diagnostic/measurement gaps remain.

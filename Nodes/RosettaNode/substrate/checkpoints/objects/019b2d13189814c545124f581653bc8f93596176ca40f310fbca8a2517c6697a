@@ -1,0 +1,559 @@
+package main
+
+import (
+	"bufio"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"math"
+	"os"
+	"strconv"
+)
+
+type status string
+
+const (
+	invalidRequest    status = "invalid_request"
+	malformedEncoding status = "malformed_encoding"
+	resourceLimit     status = "resource_limit"
+)
+
+// Internal numeric types preserve the complete wire representation, including
+// version sign bits and amounts outside the range accepted by Bitcoin consensus.
+type transaction struct {
+	version  uint32
+	inputs   []txInput
+	outputs  []txOutput
+	locktime uint32
+}
+
+type txInput struct {
+	previous [32]byte
+	index    uint32
+	script   []byte
+	sequence uint32
+	witness  [][]byte
+}
+
+type txOutput struct {
+	amount uint64
+	script []byte
+}
+
+type transactionJSON struct {
+	Version  string       `json:"version_bits"`
+	Inputs   []inputJSON  `json:"inputs"`
+	Outputs  []outputJSON `json:"outputs"`
+	Locktime string       `json:"locktime"`
+}
+
+type inputJSON struct {
+	Previous string   `json:"previous_txid_digest_order"`
+	Index    string   `json:"previous_index"`
+	Script   string   `json:"script"`
+	Sequence string   `json:"sequence"`
+	Witness  []string `json:"witness"`
+}
+
+type outputJSON struct {
+	Amount string `json:"amount"`
+	Script string `json:"script"`
+}
+
+func decimal(n uint64) string { return strconv.FormatUint(n, 10) }
+
+func (tx *transaction) jsonValue() transactionJSON {
+	v := transactionJSON{
+		Version: decimal(uint64(tx.version)), Locktime: decimal(uint64(tx.locktime)),
+		Inputs: make([]inputJSON, len(tx.inputs)), Outputs: make([]outputJSON, len(tx.outputs)),
+	}
+	for i, in := range tx.inputs {
+		w := make([]string, len(in.witness))
+		for j, item := range in.witness {
+			w[j] = hex.EncodeToString(item)
+		}
+		v.Inputs[i] = inputJSON{hex.EncodeToString(in.previous[:]), decimal(uint64(in.index)), hex.EncodeToString(in.script), decimal(uint64(in.sequence)), w}
+	}
+	for i, out := range tx.outputs {
+		v.Outputs[i] = outputJSON{decimal(out.amount), hex.EncodeToString(out.script)}
+	}
+	return v
+}
+
+func object(raw json.RawMessage) (map[string]json.RawMessage, status) {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil || m == nil {
+		return nil, invalidRequest
+	}
+	return m, ""
+}
+
+func stringValue(raw json.RawMessage) (string, status) {
+	var s string
+	if len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &s) != nil {
+		return "", invalidRequest
+	}
+	return s, ""
+}
+
+func number(raw json.RawMessage, bits int) (uint64, status) {
+	s, err := stringValue(raw)
+	if err != "" || len(s) == 0 {
+		return 0, invalidRequest
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, invalidRequest
+		}
+	}
+	n, parseErr := strconv.ParseUint(s, 10, bits)
+	if parseErr != nil {
+		return 0, invalidRequest
+	}
+	return n, ""
+}
+
+func byteString(raw json.RawMessage, max uint64) ([]byte, status) {
+	s, err := stringValue(raw)
+	if err != "" || len(s)%2 != 0 {
+		return nil, invalidRequest
+	}
+	// Validate before classifying a well-formed byte string as over its limit.
+	for i := range s {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return nil, invalidRequest
+		}
+	}
+	if uint64(len(s)/2) > max {
+		return nil, resourceLimit
+	}
+	b, decodeErr := hex.DecodeString(s)
+	if decodeErr != nil {
+		return nil, invalidRequest
+	}
+	return b, ""
+}
+
+func array(raw json.RawMessage, max uint64) ([]json.RawMessage, status) {
+	var a []json.RawMessage
+	if json.Unmarshal(raw, &a) != nil || a == nil {
+		return nil, invalidRequest
+	}
+	if uint64(len(a)) > max {
+		return nil, resourceLimit
+	}
+	return a, ""
+}
+
+func parseTransaction(raw json.RawMessage, max uint64) (*transaction, status) {
+	m, err := object(raw)
+	if err != "" {
+		return nil, err
+	}
+	v, err := number(m["version_bits"], 32)
+	if err != "" {
+		return nil, err
+	}
+	l, err := number(m["locktime"], 32)
+	if err != "" {
+		return nil, err
+	}
+	ins, err := array(m["inputs"], max)
+	if err != "" {
+		return nil, err
+	}
+	outs, err := array(m["outputs"], max)
+	if err != "" {
+		return nil, err
+	}
+	tx := &transaction{version: uint32(v), locktime: uint32(l), inputs: make([]txInput, len(ins)), outputs: make([]txOutput, len(outs))}
+	for i, rawIn := range ins {
+		m, err := object(rawIn)
+		if err != "" {
+			return nil, err
+		}
+		hash, err := byteString(m["previous_txid_digest_order"], math.MaxUint64)
+		if err != "" || len(hash) != 32 {
+			return nil, invalidRequest
+		}
+		index, err := number(m["previous_index"], 32)
+		if err != "" {
+			return nil, err
+		}
+		sequence, err := number(m["sequence"], 32)
+		if err != "" {
+			return nil, err
+		}
+		script, err := byteString(m["script"], max)
+		if err != "" {
+			return nil, err
+		}
+		w, err := array(m["witness"], max)
+		if err != "" {
+			return nil, err
+		}
+		in := &tx.inputs[i]
+		copy(in.previous[:], hash)
+		in.index, in.sequence, in.script = uint32(index), uint32(sequence), script
+		in.witness = make([][]byte, len(w))
+		for j, item := range w {
+			in.witness[j], err = byteString(item, max)
+			if err != "" {
+				return nil, err
+			}
+		}
+	}
+	for i, rawOut := range outs {
+		m, err := object(rawOut)
+		if err != "" {
+			return nil, err
+		}
+		amount, err := number(m["amount"], 64)
+		if err != "" {
+			return nil, err
+		}
+		script, err := byteString(m["script"], max)
+		if err != "" {
+			return nil, err
+		}
+		tx.outputs[i] = txOutput{amount, script}
+	}
+	return tx, ""
+}
+
+type wireReader struct {
+	data []byte
+	pos  int
+	max  uint64
+	err  status
+}
+
+func (r *wireReader) take(n int) []byte {
+	if r.err != "" {
+		return nil
+	}
+	if n < 0 || n > len(r.data)-r.pos {
+		r.err = malformedEncoding
+		return nil
+	}
+	b := r.data[r.pos : r.pos+n]
+	r.pos += n
+	return b
+}
+
+func (r *wireReader) uintN(n int) uint64 {
+	b := r.take(n)
+	if b == nil {
+		return 0
+	}
+	var v uint64
+	for i, c := range b {
+		v |= uint64(c) << (8 * i)
+	}
+	return v
+}
+
+func (r *wireReader) compact() uint64 {
+	tag := r.uintN(1)
+	if r.err != "" {
+		return 0
+	}
+	var n uint64
+	switch tag {
+	case 253:
+		n = r.uintN(2)
+		if r.err == "" && n < 253 {
+			r.err = malformedEncoding
+		}
+	case 254:
+		n = r.uintN(4)
+		if r.err == "" && n <= math.MaxUint16 {
+			r.err = malformedEncoding
+		}
+	case 255:
+		n = r.uintN(8)
+		if r.err == "" && n <= math.MaxUint32 {
+			r.err = malformedEncoding
+		}
+	default:
+		n = tag
+	}
+	if r.err == "" && n > r.max {
+		r.err = resourceLimit
+	}
+	return n
+}
+
+// Bounds based on remaining encoded bytes prevent attacker-controlled counts
+// from causing allocations before truncation has been detected.
+func (r *wireReader) count(minBytes uint64) int {
+	n := r.compact()
+	if r.err != "" {
+		return 0
+	}
+	if n > uint64(len(r.data)-r.pos)/minBytes {
+		r.err = malformedEncoding
+		return 0
+	}
+	return int(n)
+}
+
+func (r *wireReader) blob() []byte {
+	n := r.count(1)
+	return r.take(n)
+}
+
+func (r *wireReader) inputs() []txInput {
+	n := r.count(41)
+	ins := make([]txInput, 0, min(n, 1024))
+	for i := 0; i < n && r.err == ""; i++ {
+		var in txInput
+		copy(in.previous[:], r.take(32))
+		in.index = uint32(r.uintN(4))
+		in.script = r.blob()
+		in.sequence = uint32(r.uintN(4))
+		ins = append(ins, in)
+	}
+	return ins
+}
+
+func (r *wireReader) outputs() []txOutput {
+	n := r.count(9)
+	outs := make([]txOutput, 0, min(n, 1024))
+	for i := 0; i < n && r.err == ""; i++ {
+		out := txOutput{amount: r.uintN(8)}
+		out.script = r.blob()
+		outs = append(outs, out)
+	}
+	return outs
+}
+
+func (tx *transaction) hasWitness() bool {
+	for _, in := range tx.inputs {
+		if len(in.witness) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func decode(data []byte, witness bool, max uint64) (*transaction, int, status) {
+	r := wireReader{data: data, max: max}
+	tx := &transaction{version: uint32(r.uintN(4))}
+	tx.inputs = r.inputs()
+	var flags uint64
+	if r.err == "" && witness && len(tx.inputs) == 0 {
+		flags = r.uintN(1)
+		if flags != 0 {
+			tx.inputs = r.inputs()
+			tx.outputs = r.outputs()
+		} else {
+			tx.outputs = []txOutput{}
+		}
+	} else {
+		tx.outputs = r.outputs()
+	}
+	if flags&1 != 0 && r.err == "" {
+		for i := range tx.inputs {
+			n := r.count(1)
+			w := make([][]byte, 0, min(n, 1024))
+			for j := 0; j < n && r.err == ""; j++ {
+				w = append(w, r.blob())
+			}
+			tx.inputs[i].witness = w
+			if r.err != "" {
+				break
+			}
+		}
+		if r.err == "" && !tx.hasWitness() {
+			r.err = malformedEncoding
+		}
+		flags &^= 1
+	}
+	if r.err == "" && flags != 0 {
+		r.err = malformedEncoding
+	}
+	tx.locktime = uint32(r.uintN(4))
+	if r.err != "" {
+		return nil, 0, r.err
+	}
+	return tx, r.pos, ""
+}
+
+func appendCompact(b []byte, n uint64) []byte {
+	switch {
+	case n < 253:
+		return append(b, byte(n))
+	case n <= math.MaxUint16:
+		return binary.LittleEndian.AppendUint16(append(b, 253), uint16(n))
+	case n <= math.MaxUint32:
+		return binary.LittleEndian.AppendUint32(append(b, 254), uint32(n))
+	default:
+		return binary.LittleEndian.AppendUint64(append(b, 255), n)
+	}
+}
+
+func appendBlob(b, blob []byte) []byte {
+	return append(appendCompact(b, uint64(len(blob))), blob...)
+}
+
+func (tx *transaction) serialize(includeWitness bool) []byte {
+	b := binary.LittleEndian.AppendUint32(nil, tx.version)
+	witness := includeWitness && tx.hasWitness()
+	if witness {
+		b = append(b, 0, 1)
+	}
+	b = appendCompact(b, uint64(len(tx.inputs)))
+	for _, in := range tx.inputs {
+		b = append(b, in.previous[:]...)
+		b = binary.LittleEndian.AppendUint32(b, in.index)
+		b = appendBlob(b, in.script)
+		b = binary.LittleEndian.AppendUint32(b, in.sequence)
+	}
+	b = appendCompact(b, uint64(len(tx.outputs)))
+	for _, out := range tx.outputs {
+		b = binary.LittleEndian.AppendUint64(b, out.amount)
+		b = appendBlob(b, out.script)
+	}
+	if witness {
+		for _, in := range tx.inputs {
+			b = appendCompact(b, uint64(len(in.witness)))
+			for _, item := range in.witness {
+				b = appendBlob(b, item)
+			}
+		}
+	}
+	return binary.LittleEndian.AppendUint32(b, tx.locktime)
+}
+
+func hashes(b []byte) (string, string) {
+	first := sha256.Sum256(b)
+	digest := sha256.Sum256(first[:])
+	direct := hex.EncodeToString(digest[:])
+	for i := 0; i < len(digest)/2; i++ {
+		digest[i], digest[len(digest)-1-i] = digest[len(digest)-1-i], digest[i]
+	}
+	return direct, hex.EncodeToString(digest[:])
+}
+
+func failure(s status) map[string]any { return map[string]any{"status": string(s)} }
+
+func handle(line []byte) (response map[string]any) {
+	defer func() {
+		if recover() != nil {
+			response = failure("execution_failure")
+		}
+	}()
+	m, err := object(line)
+	if err != "" {
+		return failure(err)
+	}
+	op, err := stringValue(m["op"])
+	if err != "" {
+		return failure(err)
+	}
+	max := uint64(math.MaxUint64)
+	if raw, present := m["limits"]; present {
+		limits, err := object(raw)
+		if err != "" {
+			return failure(err)
+		}
+		if raw, present := limits["max_items"]; present {
+			max, err = number(raw, 64)
+			if err != "" {
+				return failure(err)
+			}
+		}
+	}
+	switch op {
+	case "decode_prefix", "decode_exact":
+		data, err := byteString(m["bytes"], math.MaxUint64)
+		if err != "" {
+			return failure(err)
+		}
+		mode, err := stringValue(m["mode"])
+		if err != "" || mode != "legacy" && mode != "witness" {
+			return failure(invalidRequest)
+		}
+		var offset uint64
+		if op == "decode_prefix" {
+			offset, err = number(m["offset"], 64)
+			if err != "" || offset > uint64(len(data)) {
+				return failure(invalidRequest)
+			}
+		}
+		tx, consumed, err := decode(data[int(offset):], mode == "witness", max)
+		if err != "" {
+			return failure(err)
+		}
+		if op == "decode_exact" && consumed != len(data) {
+			return failure(malformedEncoding)
+		}
+		return map[string]any{"status": "ok", "transaction": tx.jsonValue(), "consumed": decimal(uint64(consumed))}
+	case "serialize", "identify":
+		var includeWitness bool
+		if op == "serialize" {
+			raw := m["include_witness"]
+			if string(raw) != "true" && string(raw) != "false" {
+				return failure(invalidRequest)
+			}
+			includeWitness = string(raw) == "true"
+		}
+		tx, err := parseTransaction(m["transaction"], max)
+		if err != "" {
+			return failure(err)
+		}
+		if op == "serialize" {
+			return map[string]any{"status": "ok", "bytes": hex.EncodeToString(tx.serialize(includeWitness))}
+		}
+		stripped := tx.serialize(false)
+		full := stripped
+		if tx.hasWitness() {
+			full = tx.serialize(true)
+		}
+		txid, displayTxid := hashes(stripped)
+		wtxid, displayWtxid := hashes(full)
+		return map[string]any{
+			"status": "ok", "stripped": hex.EncodeToString(stripped), "full": hex.EncodeToString(full),
+			"stripped_size": decimal(uint64(len(stripped))), "full_size": decimal(uint64(len(full))),
+			"txid_digest_order": txid, "txid_display_order": displayTxid,
+			"wtxid_digest_order": wtxid, "wtxid_display_order": displayWtxid,
+		}
+	default:
+		return failure(invalidRequest)
+	}
+}
+
+func run(in io.Reader, out io.Writer) error {
+	reader := bufio.NewReader(in)
+	writer := bufio.NewWriter(out)
+	encoder := json.NewEncoder(writer)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if len(line) > 0 {
+			if encodeErr := encoder.Encode(handle(line)); encodeErr != nil {
+				return encodeErr
+			}
+			if flushErr := writer.Flush(); flushErr != nil {
+				return flushErr
+			}
+		}
+		if err == io.EOF {
+			return nil
+		}
+	}
+}
+
+func main() {
+	if err := run(os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

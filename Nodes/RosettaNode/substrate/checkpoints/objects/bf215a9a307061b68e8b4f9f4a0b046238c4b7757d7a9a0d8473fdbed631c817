@@ -1,0 +1,736 @@
+mod hash;
+mod native;
+mod protocol;
+mod scheduler;
+mod storage;
+mod transport;
+
+#[cfg(test)]
+#[path = "../tests/unit/state.rs"]
+mod state_tests;
+
+use protocol::*;
+use scheduler::Scheduler;
+use serde_json::{Value, json};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::sync::{
+    Arc, Weak,
+    mpsc::{self, SyncSender},
+};
+use std::thread::{self, JoinHandle};
+use storage::{Batch, DB};
+use transport::{Client, Reply, Transport};
+
+const MAX_GROUP: usize = 32;
+
+struct Admission {
+    record: Arc<Pending>,
+    bytes: usize,
+    correlation: String,
+    reply: Reply,
+}
+
+#[derive(Default)]
+struct Admissions {
+    jobs: Vec<Admission>,
+    bytes: usize,
+}
+impl Admissions {
+    fn contains(&self, id: &str) -> bool {
+        self.jobs.iter().any(|job| job.record.id == id)
+    }
+
+    fn flush(&mut self, state: &mut State) -> Result<(), String> {
+        let Some(last) = self.jobs.last() else {
+            return Ok(());
+        };
+        let sequence = decimal(&last.record.sequence)?;
+        let mut batch = Batch::new();
+        for job in &self.jobs {
+            let seq = decimal(&job.record.sequence)?;
+            batch.put(
+                sequence_key("p", seq).as_bytes(),
+                &serde_json::to_vec(&*job.record).map_err(|e| e.to_string())?,
+            );
+            batch.put(
+                format!("id/{}", job.record.id).as_bytes(),
+                job.record.sequence.as_bytes(),
+            );
+        }
+        batch.put(b"meta/sequence", sequence.to_string().as_bytes());
+        batch.put(
+            b"meta/jobs",
+            (state.pending.len() + self.jobs.len()).to_string().as_bytes(),
+        );
+        batch.put(
+            b"meta/bytes",
+            (state.bytes + self.bytes).to_string().as_bytes(),
+        );
+        // No provisional job is visible to workers, status or acknowledgments.
+        state.db.write_group(&batch, storage::WriteKind::Admission, self.jobs.len())?;
+        state.sequence = sequence;
+        state.bytes += self.bytes;
+        self.bytes = 0;
+        for admission in self.jobs.drain(..) {
+            let seq = decimal(&admission.record.sequence)?;
+            state.ids.insert(admission.record.id.clone(), seq);
+            state.queue.push(admission.record.priority, Queued::Persistent(seq));
+            state.pending.insert(
+                seq,
+                Job {
+                    record: admission.record,
+                    bytes: admission.bytes,
+                    cancelled: false,
+                    progress: Progress::Waiting,
+                    subscriber: Arc::downgrade(&admission.reply.client),
+                },
+            );
+            let mut r = response(&admission.correlation, "accepted");
+            r["sequence"] = json!(seq.to_string());
+            admission.reply.send(r);
+        }
+        Ok(())
+    }
+}
+
+pub enum Event {
+    Request {
+        parsed: Result<Request, String>,
+        reply: Reply,
+    },
+    Finished {
+        worker: usize,
+        completion: Completion,
+    },
+}
+pub enum Completion {
+    Persistent {
+        seq: u64,
+        result: Result<Vec<ResultItem>, String>,
+    },
+    Evaluation {
+        request: String,
+        reply: Reply,
+        result: Result<Vec<ResultItem>, String>,
+    },
+}
+enum Task {
+    Persistent(Arc<Pending>),
+    Evaluation {
+        request: String,
+        reply: Reply,
+        items: Vec<Item>,
+    },
+}
+enum Queued {
+    Persistent(u64),
+    Evaluation {
+        request: String,
+        reply: Reply,
+        items: Vec<Item>,
+    },
+}
+enum Progress {
+    Waiting,
+    Running,
+    Done(Vec<ResultItem>),
+}
+struct Job {
+    record: Arc<Pending>,
+    bytes: usize,
+    cancelled: bool,
+    progress: Progress,
+    subscriber: Weak<Client>,
+}
+
+struct Workers {
+    senders: Vec<SyncSender<Task>>,
+    threads: Vec<JoinHandle<()>>,
+    idle: VecDeque<usize>,
+}
+impl Workers {
+    fn start(events: SyncSender<Event>) -> Result<Self, String> {
+        let mut pool = Self {
+            senders: Vec::new(),
+            threads: Vec::new(),
+            idle: VecDeque::new(),
+        };
+        for worker in 0..4 {
+            let (tx, rx) = mpsc::sync_channel::<Task>(1);
+            let ev = events.clone();
+            let handle = thread::Builder::new()
+                .name(format!("encoder-{worker}"))
+                .spawn(move || {
+                    while let Ok(task) = rx.recv() {
+                        let completion = match task {
+                            Task::Persistent(record) => Completion::Persistent {
+                                seq: record.sequence.parse().expect("validated sequence"),
+                                result: native::evaluate(&record.items),
+                            },
+                            Task::Evaluation {
+                                request,
+                                reply,
+                                items,
+                            } => Completion::Evaluation {
+                                request,
+                                reply,
+                                result: native::evaluate(&items),
+                            },
+                        };
+                        if ev.send(Event::Finished { worker, completion }).is_err() {
+                            break;
+                        }
+                    }
+                })
+                .map_err(|e| format!("encoder spawn: {e}"))?;
+            pool.senders.push(tx);
+            pool.threads.push(handle);
+            pool.idle.push_back(worker);
+        }
+        Ok(pool)
+    }
+    fn finish(&mut self) {
+        self.senders.clear();
+        for t in self.threads.drain(..) {
+            if t.join().is_err() {
+                eprintln!("encoder panicked");
+            }
+        }
+    }
+}
+
+struct State {
+    db: DB,
+    sequence: u64,
+    checkpoint: u64,
+    bytes: usize,
+    ids: HashMap<String, u64>,
+    pending: BTreeMap<u64, Job>,
+    queue: Scheduler<Queued>,
+    draining: bool,
+}
+fn read_seq_key(key: &str, prefix: &str) -> Result<u64, String> {
+    let suffix = key.strip_prefix(prefix).ok_or("key prefix")?;
+    if suffix.len() != 20 || !suffix.bytes().all(|b| b.is_ascii_digit()) {
+        return Err("invalid sequence key".into());
+    }
+    let n = suffix.parse::<u64>().map_err(|_| "sequence key overflow")?;
+    if n == 0 {
+        return Err("zero job sequence".into());
+    }
+    Ok(n)
+}
+fn validate_terminal(t: &Terminal, seq: u64) -> Result<(), String> {
+    if !valid_id(&t.id)
+        || decimal(&t.sequence)? != seq
+        || t.digest.len() != 64
+        || !valid_hex(&t.digest)
+    {
+        return Err("invalid receipt identity".into());
+    }
+    match t.state.as_str() {
+        "cancelled" if t.results.is_empty() => {}
+        "complete" if (1..=64).contains(&t.results.len()) => {}
+        _ => return Err("invalid receipt state/results".into()),
+    }
+    for r in &t.results {
+        let status = decimal(&r.status)?;
+        if status > 4 {
+            return Err("invalid result status".into());
+        }
+        let consumed = decimal(&r.consumed)?;
+        let full = decimal(&r.full_size)?;
+        let stripped = decimal(&r.stripped_size)?;
+        for digest in [&r.txid_digest_order, &r.wtxid_digest_order] {
+            if digest.len() != 64 || !valid_hex(digest) {
+                return Err("invalid result digest".into());
+            }
+        }
+        if status != 0
+            && (consumed != 0
+                || full != 0
+                || stripped != 0
+                || r.txid_digest_order.bytes().any(|b| b != b'0')
+                || r.wtxid_digest_order.bytes().any(|b| b != b'0'))
+        {
+            return Err("nonzero error result".into());
+        }
+    }
+    Ok(())
+}
+impl State {
+    fn recover(db: DB) -> Result<Self, String> {
+        let mut metadata = HashMap::<String, String>::new();
+        let mut ids = HashMap::new();
+        let mut pending = BTreeMap::new();
+        let mut receipts = BTreeMap::new();
+        let mut cancels = HashSet::new();
+        let mut entries = 0usize;
+        db.scan(|key, value| {
+            entries += 1;
+            let key = std::str::from_utf8(key).map_err(|_| "non-UTF8 database key")?;
+            if key.starts_with("meta/") {
+                if ![
+                    "meta/version",
+                    "meta/sequence",
+                    "meta/checkpoint",
+                    "meta/jobs",
+                    "meta/bytes",
+                ]
+                .contains(&key)
+                {
+                    return Err("unknown metadata key".into());
+                }
+                metadata.insert(
+                    key.to_owned(),
+                    std::str::from_utf8(value)
+                        .map_err(|_| "non-UTF8 metadata")?
+                        .to_owned(),
+                );
+            } else if let Some(id) = key.strip_prefix("id/") {
+                if !valid_id(id) {
+                    return Err("invalid ID index".into());
+                }
+                let seq =
+                    decimal(std::str::from_utf8(value).map_err(|_| "invalid ID index value")?)?;
+                if seq == 0 {
+                    return Err("zero ID sequence".into());
+                }
+                ids.insert(id.to_owned(), seq);
+            } else if key.starts_with("p/") {
+                let seq = read_seq_key(key, "p/")?;
+                let record: Pending =
+                    serde_json::from_slice(value).map_err(|e| format!("pending JSON: {e}"))?;
+                if !valid_id(&record.id) || decimal(&record.sequence)? != seq {
+                    return Err("invalid pending identity/priority".into());
+                }
+                let data = payload(record.items.clone())?;
+                if record.digest != data.digest || decimal(&record.bytes)? != data.bytes as u64 {
+                    return Err("pending digest/size mismatch".into());
+                }
+                pending.insert(
+                    seq,
+                    Job {
+                        record: Arc::new(record),
+                        bytes: data.bytes,
+                        cancelled: false,
+                        progress: Progress::Waiting,
+                        subscriber: Weak::new(),
+                    },
+                );
+            } else if key.starts_with("r/") {
+                let seq = read_seq_key(key, "r/")?;
+                let t: Terminal =
+                    serde_json::from_slice(value).map_err(|e| format!("receipt JSON: {e}"))?;
+                validate_terminal(&t, seq)?;
+                receipts.insert(seq, t.id);
+            } else if key.starts_with("c/") {
+                let seq = read_seq_key(key, "c/")?;
+                if value != b"1" {
+                    return Err("invalid cancellation intent".into());
+                }
+                cancels.insert(seq);
+            } else {
+                return Err("unknown database key".into());
+            }
+            Ok(())
+        })?;
+        if entries == 0 {
+            let mut b = Batch::new();
+            b.put(b"meta/version", b"1");
+            for k in [
+                "meta/sequence",
+                "meta/checkpoint",
+                "meta/jobs",
+                "meta/bytes",
+            ] {
+                b.put(k.as_bytes(), b"0");
+            }
+            db.write(&b)?;
+            return Ok(Self {
+                db,
+                sequence: 0,
+                checkpoint: 0,
+                bytes: 0,
+                ids,
+                pending,
+                queue: Scheduler::new(),
+                draining: false,
+            });
+        }
+        if metadata.get("meta/version").map(String::as_str) != Some("1") {
+            return Err("incompatible/missing database version".into());
+        }
+        let scalar = |k: &str| decimal(metadata.get(k).ok_or_else(|| format!("missing {k}"))?);
+        let sequence = scalar("meta/sequence")?;
+        let checkpoint = scalar("meta/checkpoint")?;
+        let count = scalar("meta/jobs")?;
+        let bytes = scalar("meta/bytes")?;
+        if checkpoint > sequence
+            || count != pending.len() as u64
+            || bytes > MAX_BYTES as u64
+            || count > MAX_JOBS as u64
+        {
+            return Err("invalid accounting counters".into());
+        }
+        if receipts.len() as u64 != checkpoint
+            || pending.len() as u64 != sequence - checkpoint
+            || ids.len() as u64 != sequence
+        {
+            return Err("noncontiguous job records/index".into());
+        }
+        let mut expected = 1u64;
+        for (seq, id) in &receipts {
+            if *seq != expected || ids.get(id) != Some(seq) {
+                return Err("receipt/index gap or mismatch".into());
+            }
+            expected += 1;
+        }
+        let mut total = 0usize;
+        let mut queue = Scheduler::new();
+        for (seq, job) in &mut pending {
+            if *seq != expected || ids.get(&job.record.id) != Some(seq) {
+                return Err("pending/index gap or mismatch".into());
+            }
+            expected = expected.checked_add(1).ok_or("sequence exhausted")?;
+            total = total
+                .checked_add(job.bytes)
+                .ok_or("pending byte sum overflow")?;
+            job.cancelled = cancels.remove(seq);
+            if !job.cancelled {
+                queue.push(job.record.priority, Queued::Persistent(*seq));
+            }
+        }
+        if !cancels.is_empty() || total as u64 != bytes {
+            return Err("cancellation/accounting mismatch".into());
+        }
+        Ok(Self {
+            db,
+            sequence,
+            checkpoint,
+            bytes: total,
+            ids,
+            pending,
+            queue,
+            draining: false,
+        })
+    }
+    fn job_value(&self, seq: u64) -> Result<Value, String> {
+        if let Some(job) = self.pending.get(&seq) {
+            let mut value = serde_json::to_value(&*job.record).map_err(|e| e.to_string())?;
+            value["state"] = json!(if job.cancelled {
+                "cancel_pending"
+            } else {
+                "pending"
+            });
+            Ok(value)
+        } else {
+            let data = self
+                .db
+                .get(sequence_key("r", seq).as_bytes())?
+                .ok_or("missing indexed receipt")?;
+            serde_json::from_slice(&data).map_err(|e| e.to_string())
+        }
+    }
+    fn handle(
+        &mut self,
+        parsed: Result<Request, String>,
+        reply: Reply,
+        admissions: &mut Admissions,
+    ) -> Result<(), String> {
+        // Retries, conflicts, cancellation, status and shutdown observe all
+        // preceding admissions durably. A duplicate within this group also
+        // crosses this fence before it may receive an `existing` response.
+        if !matches!(&parsed, Ok(Request { op: Op::Submit { id, .. }, .. })
+            if !self.ids.contains_key(id) && !admissions.contains(id))
+        {
+            admissions.flush(self)?;
+        }
+        let Request { correlation, op } = match parsed {
+            Ok(r) => r,
+            Err(request) => {
+                reply.send(response(&request, "invalid_request"));
+                return Ok(());
+            }
+        };
+        match op {
+            Op::Submit {
+                id,
+                payload,
+                priority,
+            } => {
+                if let Some(&seq) = self.ids.get(&id) {
+                    let job = self.job_value(seq)?;
+                    let mut r = response(
+                        &correlation,
+                        if job["digest"].as_str() == Some(&payload.digest) {
+                            "existing"
+                        } else {
+                            "conflict"
+                        },
+                    );
+                    if r["status"] == "existing" {
+                        r["sequence"] = json!(seq.to_string());
+                    }
+                    reply.send(r);
+                    return Ok(());
+                }
+                if self.draining {
+                    reply.send(response(&correlation, "draining"));
+                    return Ok(());
+                }
+                if self.pending.len() + admissions.jobs.len() >= MAX_JOBS
+                    || payload.bytes > MAX_BYTES - self.bytes - admissions.bytes
+                {
+                    admissions.flush(self)?;
+                    reply.send(response(&correlation, "backpressure"));
+                    return Ok(());
+                }
+                let seq = self
+                    .sequence
+                    .checked_add(admissions.jobs.len() as u64 + 1)
+                    .ok_or("admission sequence exhausted")?;
+                let record = Arc::new(Pending {
+                    id: id.clone(),
+                    digest: payload.digest,
+                    sequence: seq.to_string(),
+                    bytes: payload.bytes.to_string(),
+                    priority,
+                    items: payload.items,
+                });
+                admissions.bytes += payload.bytes;
+                admissions.jobs.push(Admission {
+                    record,
+                    bytes: payload.bytes,
+                    correlation,
+                    reply,
+                });
+                if admissions.jobs.len() == MAX_GROUP {
+                    admissions.flush(self)?;
+                }
+            }
+            Op::Status(id) => {
+                let r = if let Some(&seq) = self.ids.get(&id) {
+                    json!({"request":correlation,"status":"ok","job":self.job_value(seq)?})
+                } else {
+                    response(&correlation, "not_found")
+                };
+                reply.send(r);
+            }
+            Op::Cancel(id) => {
+                let status = if let Some(&seq) = self.ids.get(&id) {
+                    if let Some(job) = self.pending.get_mut(&seq) {
+                        if !job.cancelled {
+                            let mut b = Batch::new();
+                            b.put(sequence_key("c", seq).as_bytes(), b"1");
+                            self.db.write_group(&b, storage::WriteKind::Cancellation, 1)?;
+                            job.cancelled = true;
+                            // A cancelled waiting job does not enter the encoder
+                            // and must not consume a weighted dispatch turn.
+                            self.queue.retain(|queued| {
+                                !matches!(queued, Queued::Persistent(queued_seq) if *queued_seq == seq)
+                            });
+                        }
+                        "ok"
+                    } else {
+                        "too_late"
+                    }
+                } else {
+                    "not_found"
+                };
+                reply.send(response(&correlation, status));
+            }
+            Op::Evaluate(payload) => {
+                if self.draining {
+                    reply.send(response(&correlation, "draining"));
+                } else {
+                    self.queue.push(
+                        Priority::Normal,
+                        Queued::Evaluation {
+                            request: correlation,
+                            reply,
+                            items: payload.items,
+                        },
+                    );
+                }
+            }
+            Op::Shutdown => {
+                self.draining = true;
+                reply.send(response(&correlation, "draining"));
+            }
+        }
+        Ok(())
+    }
+    fn dispatch(&mut self, workers: &mut Workers) -> Result<(), String> {
+        while !workers.idle.is_empty() {
+            let Some(next) = self.queue.pop() else {
+                break;
+            };
+            let task = match next {
+                Queued::Persistent(seq) => {
+                    let Some(job) = self.pending.get_mut(&seq) else {
+                        continue;
+                    };
+                    if job.cancelled {
+                        continue;
+                    }
+                    if !matches!(job.progress, Progress::Waiting) {
+                        return Err("duplicate dispatch".into());
+                    }
+                    job.progress = Progress::Running;
+                    Task::Persistent(job.record.clone())
+                }
+                Queued::Evaluation {
+                    request,
+                    reply,
+                    items,
+                } => Task::Evaluation {
+                    request,
+                    reply,
+                    items,
+                },
+            };
+            let worker = workers.idle.pop_front().unwrap();
+            workers.senders[worker]
+                .send(task)
+                .map_err(|_| "encoder disconnected")?;
+        }
+        Ok(())
+    }
+    fn commit_ready(&mut self) -> Result<(), String> {
+        loop {
+            let Some(seq) = self.checkpoint.checked_add(1) else {
+                return Ok(());
+            };
+            let Some(job) = self.pending.get(&seq) else {
+                break;
+            };
+            let ready = matches!(job.progress, Progress::Done(_))
+                || (job.cancelled && matches!(job.progress, Progress::Waiting));
+            if !ready {
+                break;
+            }
+            let results = if job.cancelled {
+                Vec::new()
+            } else {
+                match &job.progress {
+                    Progress::Done(r) => r.clone(),
+                    _ => unreachable!(),
+                }
+            };
+            let terminal = Terminal {
+                id: job.record.id.clone(),
+                digest: job.record.digest.clone(),
+                sequence: seq.to_string(),
+                state: if job.cancelled {
+                    "cancelled"
+                } else {
+                    "complete"
+                }
+                .into(),
+                results,
+            };
+            let encoded = serde_json::to_vec(&terminal).map_err(|e| e.to_string())?;
+            let mut b = Batch::new();
+            b.put(sequence_key("r", seq).as_bytes(), &encoded);
+            b.delete(sequence_key("p", seq).as_bytes());
+            b.delete(sequence_key("c", seq).as_bytes());
+            b.put(b"meta/checkpoint", seq.to_string().as_bytes());
+            b.put(
+                b"meta/jobs",
+                (self.pending.len() - 1).to_string().as_bytes(),
+            );
+            b.put(
+                b"meta/bytes",
+                (self.bytes - job.bytes).to_string().as_bytes(),
+            );
+            // This single owner cannot acknowledge a cancellation concurrently with this
+            // call. A later cancellation overlaps or follows C call_entry and is too late.
+            self.db.write(&b)?;
+            self.checkpoint = seq;
+            self.bytes -= job.bytes;
+            if let Some(client) = job.subscriber.upgrade() {
+                client.send(
+                    json!({"event":"terminal","id":terminal.id,"job":terminal}),
+                    true,
+                );
+            }
+            self.pending.remove(&seq);
+        }
+        Ok(())
+    }
+}
+
+fn run() -> Result<(), String> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 3 {
+        return Err("usage: service DATADIR SOCKET_PATH".into());
+    }
+    std::fs::create_dir_all(&args[1]).map_err(|e| format!("create data directory: {e}"))?;
+    let db = DB::open(&args[1])
+        .map_err(|e| format!("open database (exclusive ownership required): {e}"))?;
+    let mut state = State::recover(db).map_err(|e| format!("recover database: {e}"))?;
+    let (tx, rx) = mpsc::sync_channel::<Event>(32);
+    let mut workers = Workers::start(tx.clone())?;
+    let mut transport = Transport::start(&args[2], tx)?;
+    loop {
+        state.commit_ready()?;
+        state.dispatch(&mut workers)?;
+        if state.draining
+            && state.pending.is_empty()
+            && state.queue.is_empty()
+            && workers.idle.len() == 4
+        {
+            break;
+        }
+        match rx.recv().map_err(|_| "event channel disconnected")? {
+            Event::Request { parsed, reply } => state.handle(parsed, reply)?,
+            Event::Finished { worker, completion } => {
+                workers.idle.push_back(worker);
+                match completion {
+                    Completion::Persistent { seq, result } => {
+                        let results = result.map_err(|e| {
+                            format!(
+                                "acknowledged job {seq} execution failed; pending retained: {e}"
+                            )
+                        })?;
+                        let job = state
+                            .pending
+                            .get_mut(&seq)
+                            .ok_or("completion for missing job")?;
+                        if !matches!(job.progress, Progress::Running) {
+                            return Err("unexpected completion state".into());
+                        }
+                        job.progress = Progress::Done(results);
+                    }
+                    Completion::Evaluation {
+                        request,
+                        reply,
+                        result,
+                    } => {
+                        let r = match result {
+                            Ok(results) => {
+                                json!({"request":request,"status":"ok","results":results})
+                            }
+                            Err(e) => {
+                                eprintln!("evaluate execution failure: {e}");
+                                response(&request, "execution_failure")
+                            }
+                        };
+                        reply.send(r);
+                    }
+                }
+            }
+        }
+    }
+    transport.finish();
+    workers.finish();
+    std::fs::remove_file(&args[2]).map_err(|e| format!("remove socket: {e}"))?;
+    Ok(())
+}
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("service fatal: {e}");
+        std::process::exit(1);
+    }
+}

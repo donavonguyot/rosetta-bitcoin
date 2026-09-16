@@ -1,0 +1,14 @@
+Initial ABI v1 submission, before evaluator feedback.
+Implementation began: 2026-09-16 21:29:10 UTC.
+Final build/tests completed by: 2026-09-16 21:47:00 UTC.
+Elapsed implementation effort: approximately 18 minutes, including documentation.
+Reading: approximately 62 seconds, recorded separately.
+Token usage and broker preparation cost: unknown.
+
+Final candidate suite: 13/13 passed, 1.971 seconds reported by unittest.
+Final candidate test artifacts: /workspace/tmp/zig-v1-tests-sbhmfvdy
+Final supplied public smoke: passed.
+Build mode: Zig 0.16.0 ReleaseSafe, Linux AArch64, dynamic adapter/RocksDB.
+Scope: ABI v1, normal priority, four workers, one-job baseline WriteBatches.
+No evaluator feedback or optimization experiments were used.
+SHA256SUMS identifies the delivered artifacts.

@@ -1,0 +1,226 @@
+const std = @import("std");
+const tx = @import("transaction.zig");
+const Allocator = std.mem.Allocator;
+const Value = std.json.Value;
+const RequestError = error{ InvalidRequest, MalformedEncoding, ResourceLimit, OutOfMemory };
+
+fn field(object: Value, name: []const u8) RequestError!Value {
+    if (object != .object) return error.InvalidRequest;
+    return object.object.get(name) orelse error.InvalidRequest;
+}
+
+fn string(value: Value) RequestError![]const u8 {
+    if (value != .string) return error.InvalidRequest;
+    return value.string;
+}
+
+fn array(value: Value) RequestError![]Value {
+    if (value != .array) return error.InvalidRequest;
+    return value.array.items;
+}
+
+fn decimal(comptime T: type, value: Value) RequestError!T {
+    const text = try string(value);
+    if (text.len == 0) return error.InvalidRequest;
+    const digits = if (@typeInfo(T).int.signedness == .signed and text[0] == '-') text[1..] else text;
+    if (digits.len == 0) return error.InvalidRequest;
+    for (digits) |byte| {
+        if (byte < '0' or byte > '9') return error.InvalidRequest;
+    }
+    return std.fmt.parseInt(T, text, 10) catch error.InvalidRequest;
+}
+
+fn nibble(byte: u8) RequestError!u8 {
+    return switch (byte) {
+        '0'...'9' => byte - '0',
+        'a'...'f' => byte - 'a' + 10,
+        'A'...'F' => byte - 'A' + 10,
+        else => error.InvalidRequest,
+    };
+}
+
+fn unhex(allocator: Allocator, value: Value) RequestError![]u8 {
+    const text = try string(value);
+    if (text.len % 2 != 0) return error.InvalidRequest;
+    const bytes = try allocator.alloc(u8, text.len / 2);
+    for (bytes, 0..) |*byte, i| byte.* = (try nibble(text[2 * i])) * 16 + try nibble(text[2 * i + 1]);
+    return bytes;
+}
+
+fn hex(allocator: Allocator, bytes: []const u8) Allocator.Error![]const u8 {
+    const alphabet = "0123456789abcdef";
+    const result = try allocator.alloc(u8, std.math.mul(usize, bytes.len, 2) catch return error.OutOfMemory);
+    for (bytes, 0..) |byte, i| {
+        result[i * 2] = alphabet[byte >> 4];
+        result[i * 2 + 1] = alphabet[byte & 15];
+    }
+    return result;
+}
+
+fn dec(allocator: Allocator, value: anytype) Allocator.Error![]const u8 {
+    return std.fmt.allocPrint(allocator, "{d}", .{value});
+}
+
+fn parseLimits(request: Value) RequestError!tx.Limits {
+    const object = request.object.get("limits") orelse return .{};
+    if (object != .object) return error.InvalidRequest;
+    const max = object.object.get("max_items") orelse return .{};
+    return .{ .max_items = try decimal(u64, max) };
+}
+
+fn parseTransaction(allocator: Allocator, value: Value) RequestError!tx.Transaction {
+    const version = try decimal(u32, try field(value, "version_bits"));
+    const locktime = try decimal(u32, try field(value, "locktime"));
+    const json_inputs = try array(try field(value, "inputs"));
+    const json_outputs = try array(try field(value, "outputs"));
+    const inputs = try allocator.alloc(tx.Input, json_inputs.len);
+    for (json_inputs, inputs) |source, *input| {
+        const digest = try unhex(allocator, try field(source, "previous_txid_digest_order"));
+        if (digest.len != 32) return error.InvalidRequest;
+        input.previous_txid_digest_order = digest[0..32].*;
+        input.previous_index = try decimal(u32, try field(source, "previous_index"));
+        input.script = try unhex(allocator, try field(source, "script"));
+        input.sequence = try decimal(u32, try field(source, "sequence"));
+        const json_witness = try array(try field(source, "witness"));
+        const witness = try allocator.alloc([]const u8, json_witness.len);
+        for (json_witness, witness) |item, *destination| destination.* = try unhex(allocator, item);
+        input.witness = witness;
+    }
+    const outputs = try allocator.alloc(tx.Output, json_outputs.len);
+    for (json_outputs, outputs) |source, *output| {
+        output.amount = try decimal(i64, try field(source, "amount"));
+        output.script = try unhex(allocator, try field(source, "script"));
+    }
+    return .{ .version_bits = version, .inputs = inputs, .outputs = outputs, .locktime = locktime };
+}
+
+const JsonInput = struct {
+    previous_txid_digest_order: []const u8,
+    previous_index: []const u8,
+    script: []const u8,
+    sequence: []const u8,
+    witness: []const []const u8,
+};
+const JsonOutput = struct { amount: []const u8, script: []const u8 };
+const JsonTransaction = struct {
+    version_bits: []const u8,
+    inputs: []const JsonInput,
+    outputs: []const JsonOutput,
+    locktime: []const u8,
+};
+
+fn jsonTransaction(allocator: Allocator, transaction: tx.Transaction) Allocator.Error!JsonTransaction {
+    const inputs = try allocator.alloc(JsonInput, transaction.inputs.len);
+    for (transaction.inputs, inputs) |input, *dest| {
+        const witness = try allocator.alloc([]const u8, input.witness.len);
+        for (input.witness, witness) |item, *out| out.* = try hex(allocator, item);
+        dest.* = .{
+            .previous_txid_digest_order = try hex(allocator, &input.previous_txid_digest_order),
+            .previous_index = try dec(allocator, input.previous_index),
+            .script = try hex(allocator, input.script),
+            .sequence = try dec(allocator, input.sequence),
+            .witness = witness,
+        };
+    }
+    const outputs = try allocator.alloc(JsonOutput, transaction.outputs.len);
+    for (transaction.outputs, outputs) |output, *dest| {
+        dest.* = .{ .amount = try dec(allocator, output.amount), .script = try hex(allocator, output.script) };
+    }
+    return .{
+        .version_bits = try dec(allocator, transaction.version_bits),
+        .inputs = inputs,
+        .outputs = outputs,
+        .locktime = try dec(allocator, transaction.locktime),
+    };
+}
+
+fn process(allocator: Allocator, line: []const u8) RequestError![]const u8 {
+    const request = std.json.parseFromSliceLeaky(Value, allocator, line, .{
+        .duplicate_field_behavior = .use_last,
+        .parse_numbers = false,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => return error.InvalidRequest,
+    };
+    const op = try string(try field(request, "op"));
+    const limits = try parseLimits(request);
+    if (std.mem.eql(u8, op, "decode_prefix") or std.mem.eql(u8, op, "decode_exact")) {
+        const exact = std.mem.eql(u8, op, "decode_exact");
+        const bytes = try unhex(allocator, try field(request, "bytes"));
+        const mode_text = try string(try field(request, "mode"));
+        const mode: tx.Mode = if (std.mem.eql(u8, mode_text, "legacy")) .legacy else if (std.mem.eql(u8, mode_text, "witness")) .witness else return error.InvalidRequest;
+        const offset: u64 = if (exact) 0 else try decimal(u64, try field(request, "offset"));
+        if (offset > bytes.len) return error.InvalidRequest;
+        const decoded = try tx.decode(allocator, bytes[@intCast(offset)..], mode, limits);
+        if (exact and decoded.consumed != bytes.len) return error.MalformedEncoding;
+        return std.json.Stringify.valueAlloc(allocator, .{
+            .status = "ok",
+            .transaction = try jsonTransaction(allocator, decoded.transaction),
+            .consumed = try dec(allocator, decoded.consumed),
+        }, .{});
+    }
+    if (std.mem.eql(u8, op, "serialize")) {
+        const include = try field(request, "include_witness");
+        if (include != .bool) return error.InvalidRequest;
+        const transaction = try parseTransaction(allocator, try field(request, "transaction"));
+        const bytes = try tx.serialize(allocator, transaction, include.bool, limits);
+        return std.json.Stringify.valueAlloc(allocator, .{ .status = "ok", .bytes = try hex(allocator, bytes) }, .{});
+    }
+    if (std.mem.eql(u8, op, "identify")) {
+        const transaction = try parseTransaction(allocator, try field(request, "transaction"));
+        const stripped = try tx.serialize(allocator, transaction, false, limits);
+        const full = if (transaction.hasWitness()) try tx.serialize(allocator, transaction, true, limits) else stripped;
+        const txid = tx.hash256(stripped);
+        const wtxid = if (transaction.hasWitness()) tx.hash256(full) else txid;
+        return std.json.Stringify.valueAlloc(allocator, .{
+            .status = "ok",
+            .stripped = try hex(allocator, stripped),
+            .full = try hex(allocator, full),
+            .stripped_size = try dec(allocator, stripped.len),
+            .full_size = try dec(allocator, full.len),
+            .txid_digest_order = try hex(allocator, &txid),
+            .txid_display_order = try hex(allocator, &tx.reversed(txid)),
+            .wtxid_digest_order = try hex(allocator, &wtxid),
+            .wtxid_display_order = try hex(allocator, &tx.reversed(wtxid)),
+        }, .{});
+    }
+    return error.InvalidRequest;
+}
+
+// All allocations have request lifetime. Error responses have no extra fields.
+pub fn handleLine(allocator: Allocator, line: []const u8) []const u8 {
+    return process(allocator, line) catch |err| switch (err) {
+        error.InvalidRequest => "{\"status\":\"invalid_request\"}",
+        error.MalformedEncoding => "{\"status\":\"malformed_encoding\"}",
+        error.ResourceLimit => "{\"status\":\"resource_limit\"}",
+        error.OutOfMemory => "{\"status\":\"execution_failure\"}",
+    };
+}
+
+pub fn main(init: std.process.Init) !void {
+    var input_buffer: [8192]u8 = undefined;
+    var output_buffer: [8192]u8 = undefined;
+    var input = std.Io.File.Reader.initStreaming(.stdin(), init.io, &input_buffer);
+    var output = std.Io.File.Writer.initStreaming(.stdout(), init.io, &output_buffer);
+    while (true) {
+        var arena = std.heap.ArenaAllocator.init(init.gpa);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+        var line = std.Io.Writer.Allocating.init(allocator);
+        _ = try input.interface.streamDelimiterEnding(&line.writer, '\n');
+        const at_eof = blk: {
+            _ = input.interface.peekByte() catch |err| switch (err) {
+                error.EndOfStream => break :blk true,
+                else => return err,
+            };
+            input.interface.toss(1);
+            break :blk false;
+        };
+        if (at_eof and line.written().len == 0) break;
+        const response = handleLine(allocator, line.written());
+        try output.interface.writeAll(response);
+        try output.interface.writeByte('\n');
+        try output.interface.flush();
+        if (at_eof) break;
+    }
+}

@@ -1,0 +1,402 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"strconv"
+)
+
+type transaction struct {
+	version  uint32
+	inputs   []txInput
+	outputs  []txOutput
+	locktime uint32
+}
+
+type txInput struct {
+	digest   [32]byte
+	index    uint32
+	script   []byte
+	sequence uint32
+	witness  [][]byte
+}
+
+type txOutput struct {
+	amount int64
+	script []byte
+}
+
+type jsonTransaction struct {
+	VersionBits string       `json:"version_bits"`
+	Inputs      []jsonInput  `json:"inputs"`
+	Outputs     []jsonOutput `json:"outputs"`
+	Locktime    string       `json:"locktime"`
+}
+
+type jsonInput struct {
+	PreviousTxidDigestOrder string   `json:"previous_txid_digest_order"`
+	PreviousIndex           string   `json:"previous_index"`
+	Script                  string   `json:"script"`
+	Sequence                string   `json:"sequence"`
+	Witness                 []string `json:"witness"`
+}
+
+type jsonOutput struct {
+	Amount string `json:"amount"`
+	Script string `json:"script"`
+}
+
+func transactionJSON(tx *transaction) *jsonTransaction {
+	result := &jsonTransaction{
+		VersionBits: strconv.FormatUint(uint64(tx.version), 10),
+		Inputs:      make([]jsonInput, len(tx.inputs)),
+		Outputs:     make([]jsonOutput, len(tx.outputs)),
+		Locktime:    strconv.FormatUint(uint64(tx.locktime), 10),
+	}
+	for i, in := range tx.inputs {
+		out := &result.Inputs[i]
+		out.PreviousTxidDigestOrder = hex.EncodeToString(in.digest[:])
+		out.PreviousIndex = strconv.FormatUint(uint64(in.index), 10)
+		out.Script = hex.EncodeToString(in.script)
+		out.Sequence = strconv.FormatUint(uint64(in.sequence), 10)
+		out.Witness = make([]string, len(in.witness))
+		for j, item := range in.witness {
+			out.Witness[j] = hex.EncodeToString(item)
+		}
+	}
+	for i, out := range tx.outputs {
+		result.Outputs[i] = jsonOutput{Amount: strconv.FormatInt(out.amount, 10), Script: hex.EncodeToString(out.script)}
+	}
+	return result
+}
+
+func compactSize(n uint64) uint64 {
+	switch {
+	case n < 253:
+		return 1
+	case n <= 65535:
+		return 3
+	case n <= 4294967295:
+		return 5
+	default:
+		return 9
+	}
+}
+
+func appendCompact(dst []byte, n uint64) []byte {
+	switch compactSize(n) {
+	case 1:
+		return append(dst, byte(n))
+	case 3:
+		return binary.LittleEndian.AppendUint16(append(dst, 0xfd), uint16(n))
+	case 5:
+		return binary.LittleEndian.AppendUint32(append(dst, 0xfe), uint32(n))
+	default:
+		return binary.LittleEndian.AppendUint64(append(dst, 0xff), n)
+	}
+}
+
+// Assign caller-owned outputs only after the entire canonical value is checked.
+func readCompact(data []byte, value *uint64, consumed *int) bool {
+	if len(data) == 0 {
+		return false
+	}
+	var v uint64
+	n := 1
+	switch data[0] {
+	case 0xfd:
+		n = 3
+		if len(data) < n {
+			return false
+		}
+		v = uint64(binary.LittleEndian.Uint16(data[1:3]))
+		if v < 253 {
+			return false
+		}
+	case 0xfe:
+		n = 5
+		if len(data) < n {
+			return false
+		}
+		v = uint64(binary.LittleEndian.Uint32(data[1:5]))
+		if v <= 65535 {
+			return false
+		}
+	case 0xff:
+		n = 9
+		if len(data) < n {
+			return false
+		}
+		v = binary.LittleEndian.Uint64(data[1:9])
+		if v <= 4294967295 {
+			return false
+		}
+	default:
+		v = uint64(data[0])
+	}
+	*value, *consumed = v, n
+	return true
+}
+
+type wireReader struct {
+	data []byte
+	pos  int
+}
+
+func (r *wireReader) remaining() int { return len(r.data) - r.pos }
+
+func (r *wireReader) take(n uint64) ([]byte, bool) {
+	if n > uint64(r.remaining()) {
+		return nil, false
+	}
+	start := r.pos
+	r.pos += int(n)
+	return r.data[start:r.pos], true
+}
+
+func (r *wireReader) compact() (uint64, bool) {
+	var v uint64
+	var n int
+	if !readCompact(r.data[r.pos:], &v, &n) {
+		return 0, false
+	}
+	r.pos += n
+	return v, true
+}
+
+func (r *wireReader) blob() ([]byte, bool) {
+	n, good := r.compact()
+	if !good {
+		return nil, false
+	}
+	return r.take(n)
+}
+
+func (r *wireReader) inputs(build bool) ([]txInput, uint64, bool) {
+	n, good := r.compact()
+	if !good || n > uint64(r.remaining()/41) {
+		return nil, 0, false
+	}
+	var result []txInput
+	if build {
+		result = make([]txInput, int(n))
+	}
+	for i := uint64(0); i < n; i++ {
+		prev, good := r.take(36)
+		if !good {
+			return nil, 0, false
+		}
+		script, good := r.blob()
+		if !good {
+			return nil, 0, false
+		}
+		sequence, good := r.take(4)
+		if !good {
+			return nil, 0, false
+		}
+		if build {
+			in := &result[int(i)]
+			copy(in.digest[:], prev[:32])
+			in.index = binary.LittleEndian.Uint32(prev[32:])
+			in.script = script
+			in.sequence = binary.LittleEndian.Uint32(sequence)
+		}
+	}
+	return result, n, true
+}
+
+func (r *wireReader) outputs(build bool) ([]txOutput, uint64, bool) {
+	n, good := r.compact()
+	if !good || n > uint64(r.remaining()/9) {
+		return nil, 0, false
+	}
+	var result []txOutput
+	if build {
+		result = make([]txOutput, int(n))
+	}
+	for i := uint64(0); i < n; i++ {
+		amount, good := r.take(8)
+		if !good {
+			return nil, 0, false
+		}
+		script, good := r.blob()
+		if !good {
+			return nil, 0, false
+		}
+		if build {
+			result[int(i)] = txOutput{amount: int64(binary.LittleEndian.Uint64(amount)), script: script}
+		}
+	}
+	return result, n, true
+}
+
+// With build=false this is a constant-scratch forward scan: no transaction,
+// record vector, script, or witness item is allocated from advertised counts.
+func scanTransaction(data []byte, witnessMode, build bool) (*transaction, int, uint64, bool) {
+	r := wireReader{data: data}
+	version, good := r.take(4)
+	if !good {
+		return nil, 0, 0, false
+	}
+	inputs, inputCount, good := r.inputs(build)
+	if !good {
+		return nil, 0, 0, false
+	}
+	var outputs []txOutput
+	var outputCount uint64
+	var flags byte
+	if witnessMode && inputCount == 0 {
+		flagBytes, good := r.take(1)
+		if !good {
+			return nil, 0, 0, false
+		}
+		flags = flagBytes[0]
+		if flags != 0 {
+			inputs, inputCount, good = r.inputs(build)
+			if !good {
+				return nil, 0, 0, false
+			}
+			outputs, outputCount, good = r.outputs(build)
+			if !good {
+				return nil, 0, 0, false
+			}
+		}
+	} else {
+		outputs, outputCount, good = r.outputs(build)
+		if !good {
+			return nil, 0, 0, false
+		}
+	}
+	items := inputCount + outputCount
+	if flags&1 != 0 {
+		hasWitness := false
+		for i := uint64(0); i < inputCount; i++ {
+			n, good := r.compact()
+			if !good || n > uint64(r.remaining()) {
+				return nil, 0, 0, false
+			}
+			items += n // All counts are bounded by distinct bytes in the input.
+			hasWitness = hasWitness || n != 0
+			if build {
+				inputs[int(i)].witness = make([][]byte, int(n))
+			}
+			for j := uint64(0); j < n; j++ {
+				item, good := r.blob()
+				if !good {
+					return nil, 0, 0, false
+				}
+				if build {
+					inputs[int(i)].witness[int(j)] = item
+				}
+			}
+		}
+		if !hasWitness {
+			return nil, 0, 0, false
+		}
+		flags &^= 1
+	}
+	if flags != 0 {
+		return nil, 0, 0, false
+	}
+	locktime, good := r.take(4)
+	if !good {
+		return nil, 0, 0, false
+	}
+	var tx *transaction
+	if build {
+		tx = &transaction{
+			version: binary.LittleEndian.Uint32(version), inputs: inputs,
+			outputs: outputs, locktime: binary.LittleEndian.Uint32(locktime),
+		}
+	}
+	return tx, r.pos, items, true
+}
+
+func decodeTransaction(data []byte, witnessMode, exact bool, maxItems uint64) (*transaction, int, string) {
+	if len(data) > maxWireBytes {
+		return nil, 0, admissionLimit
+	}
+	_, consumed, items, good := scanTransaction(data, witnessMode, false)
+	if !good || exact && consumed != len(data) {
+		return nil, 0, malformed
+	}
+	if items > maxItems {
+		return nil, 0, resourceLimit
+	}
+	tx, secondConsumed, _, good := scanTransaction(data, witnessMode, true)
+	if !good || secondConsumed != consumed {
+		return nil, 0, executionFail
+	}
+	return tx, consumed, okStatus
+}
+
+func appendBlob(dst, data []byte) []byte {
+	dst = appendCompact(dst, uint64(len(data)))
+	return append(dst, data...)
+}
+
+func serializeTransaction(tx *transaction, includeWitness bool, size int) []byte {
+	witness := false
+	if includeWitness {
+		for _, in := range tx.inputs {
+			if len(in.witness) != 0 {
+				witness = true
+				break
+			}
+		}
+	}
+	dst := make([]byte, 0, size)
+	dst = binary.LittleEndian.AppendUint32(dst, tx.version)
+	if witness {
+		dst = append(dst, 0, 1)
+	}
+	dst = appendCompact(dst, uint64(len(tx.inputs)))
+	for _, in := range tx.inputs {
+		dst = append(dst, in.digest[:]...)
+		dst = binary.LittleEndian.AppendUint32(dst, in.index)
+		dst = appendBlob(dst, in.script)
+		dst = binary.LittleEndian.AppendUint32(dst, in.sequence)
+	}
+	dst = appendCompact(dst, uint64(len(tx.outputs)))
+	for _, out := range tx.outputs {
+		dst = binary.LittleEndian.AppendUint64(dst, uint64(out.amount))
+		dst = appendBlob(dst, out.script)
+	}
+	if witness {
+		for _, in := range tx.inputs {
+			dst = appendCompact(dst, uint64(len(in.witness)))
+			for _, item := range in.witness {
+				dst = appendBlob(dst, item)
+			}
+		}
+	}
+	return binary.LittleEndian.AppendUint32(dst, tx.locktime)
+}
+
+func digestOrders(data []byte) (string, string) {
+	first := sha256.Sum256(data)
+	digest := sha256.Sum256(first[:])
+	direct := hex.EncodeToString(digest[:])
+	for i, j := 0, len(digest)-1; i < j; i, j = i+1, j-1 {
+		digest[i], digest[j] = digest[j], digest[i]
+	}
+	return direct, hex.EncodeToString(digest[:])
+}
+
+func identifyTransaction(tx *transaction, stats structureStats) response {
+	stripped := serializeTransaction(tx, false, int(stats.strippedSize))
+	full := stripped
+	if stats.hasWitness {
+		full = serializeTransaction(tx, true, int(stats.fullSize()))
+	}
+	s, f := hex.EncodeToString(stripped), hex.EncodeToString(full)
+	txid, txidDisplay := digestOrders(stripped)
+	wtxid, wtxidDisplay := digestOrders(full)
+	return response{
+		Status: okStatus, Stripped: &s, Full: &f,
+		StrippedSize: strconv.Itoa(len(stripped)), FullSize: strconv.Itoa(len(full)),
+		TxidDigestOrder: txid, TxidDisplayOrder: txidDisplay,
+		WtxidDigestOrder: wtxid, WtxidDisplayOrder: wtxidDisplay,
+	}
+}

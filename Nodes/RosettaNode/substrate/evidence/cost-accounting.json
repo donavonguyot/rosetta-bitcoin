@@ -1,0 +1,288 @@
+{
+  "schema": "rosettanode.substrate.cost_accounting.v1",
+  "status": "in_progress",
+  "records": [
+    {
+      "lineage": "go-1",
+      "round": "initial",
+      "phase": "reading",
+      "elapsed_wall_seconds": 110.54487254199921,
+      "ceiling_seconds": 600,
+      "usage": [
+        {
+          "input_tokens": 234726,
+          "cached_input_tokens": 208640,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2633,
+          "reasoning_output_tokens": 524
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "older-controller wall time is descriptive"
+    },
+    {
+      "lineage": "go-1",
+      "round": "initial",
+      "phase": "implementation",
+      "elapsed_wall_seconds": 1291.1230935420026,
+      "ceiling_seconds": 5400,
+      "usage": [
+        {
+          "input_tokens": 1793743,
+          "cached_input_tokens": 1732864,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 39851,
+          "reasoning_output_tokens": 14401
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "older-controller wall time is descriptive"
+    },
+    {
+      "lineage": "go-1",
+      "round": "initial",
+      "phase": "repair",
+      "elapsed_wall_seconds": 345.14457083398884,
+      "ceiling_seconds": 900,
+      "usage": [
+        {
+          "input_tokens": 1559088,
+          "cached_input_tokens": 1487872,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 9834,
+          "reasoning_output_tokens": 3084
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "invalidated: evaluator defect; excluded from maintenance cost and predecessor source"
+    },
+    {
+      "lineage": "go-1",
+      "round": "maintenance",
+      "phase": "reading",
+      "elapsed_wall_seconds": 57.110031499993056,
+      "ceiling_seconds": 600,
+      "usage": [
+        {
+          "input_tokens": 195594,
+          "cached_input_tokens": 151680,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1185,
+          "reasoning_output_tokens": 57
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "recorded concurrent development workload"
+    },
+    {
+      "lineage": "go-2",
+      "round": "initial",
+      "phase": "reading",
+      "elapsed_wall_seconds": 92.79896866700437,
+      "ceiling_seconds": 600,
+      "usage": [
+        {
+          "input_tokens": 196786,
+          "cached_input_tokens": 153984,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2220,
+          "reasoning_output_tokens": 234
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "recorded concurrent development workload"
+    },
+    {
+      "lineage": "rust-1",
+      "round": "initial",
+      "phase": "reading",
+      "elapsed_wall_seconds": 126.62058037500537,
+      "ceiling_seconds": 600,
+      "usage": [
+        {
+          "input_tokens": 244784,
+          "cached_input_tokens": 212224,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 3389,
+          "reasoning_output_tokens": 436
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "older-controller wall time is descriptive"
+    },
+    {
+      "lineage": "rust-1",
+      "round": "initial",
+      "phase": "implementation",
+      "elapsed_wall_seconds": 1262.1603599579976,
+      "ceiling_seconds": 5400,
+      "usage": [
+        {
+          "input_tokens": 1857399,
+          "cached_input_tokens": 1794048,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 39676,
+          "reasoning_output_tokens": 12108
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "older-controller wall time is descriptive"
+    },
+    {
+      "lineage": "rust-2",
+      "round": "initial",
+      "phase": "reading",
+      "elapsed_wall_seconds": 94.09602441699826,
+      "ceiling_seconds": 600,
+      "usage": [
+        {
+          "input_tokens": 179856,
+          "cached_input_tokens": 139264,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2268,
+          "reasoning_output_tokens": 273
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "recorded concurrent development workload"
+    },
+    {
+      "lineage": "zig-1",
+      "round": "initial",
+      "phase": "reading",
+      "elapsed_wall_seconds": 83.1080716669967,
+      "ceiling_seconds": 600,
+      "usage": [
+        {
+          "input_tokens": 167926,
+          "cached_input_tokens": 135296,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2148,
+          "reasoning_output_tokens": 406
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "older-controller wall time is descriptive"
+    },
+    {
+      "lineage": "zig-1",
+      "round": "initial",
+      "phase": "implementation",
+      "elapsed_wall_seconds": 1575.1972701250052,
+      "ceiling_seconds": 5400,
+      "usage": [
+        {
+          "input_tokens": 2365719,
+          "cached_input_tokens": 2290944,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 49025,
+          "reasoning_output_tokens": 18350
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "older-controller wall time is descriptive"
+    },
+    {
+      "lineage": "zig-1",
+      "round": "initial",
+      "phase": "repair",
+      "elapsed_wall_seconds": 201.32601066699135,
+      "ceiling_seconds": 900,
+      "usage": [],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "invalidated: evaluator defect; excluded from maintenance cost and predecessor source"
+    },
+    {
+      "lineage": "zig-1",
+      "round": "maintenance",
+      "phase": "reading",
+      "elapsed_wall_seconds": 69.39253095899767,
+      "ceiling_seconds": 600,
+      "usage": [
+        {
+          "input_tokens": 258302,
+          "cached_input_tokens": 218496,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 1480,
+          "reasoning_output_tokens": 94
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "recorded concurrent development workload"
+    },
+    {
+      "lineage": "zig-2",
+      "round": "initial",
+      "phase": "reading",
+      "elapsed_wall_seconds": 90.81784295800026,
+      "ceiling_seconds": 600,
+      "usage": [
+        {
+          "input_tokens": 246995,
+          "cached_input_tokens": 199808,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 2252,
+          "reasoning_output_tokens": 240
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "older-controller wall time is descriptive"
+    },
+    {
+      "lineage": "zig-2",
+      "round": "initial",
+      "phase": "implementation",
+      "elapsed_wall_seconds": 1092.8499832919915,
+      "ceiling_seconds": 5400,
+      "usage": [
+        {
+          "input_tokens": 1705851,
+          "cached_input_tokens": 1645568,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 34238,
+          "reasoning_output_tokens": 9734
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "older-controller wall time is descriptive"
+    },
+    {
+      "lineage": "zig-2",
+      "round": "initial",
+      "phase": "repair",
+      "elapsed_wall_seconds": 40.01553066699125,
+      "ceiling_seconds": 900,
+      "usage": [
+        {
+          "input_tokens": 476755,
+          "cached_input_tokens": 438016,
+          "cache_write_input_tokens": 0,
+          "output_tokens": 990,
+          "reasoning_output_tokens": 366
+        }
+      ],
+      "monetary_cost": null,
+      "active_model_seconds": null,
+      "attribution": "invalidated: Docker storage exhaustion produced no semantic result; code unchanged; empty-feedback review excluded"
+    }
+  ],
+  "root_preparation_active_model_time": null,
+  "root_preparation_usage": null,
+  "root_preparation_wall_start_utc": "2026-09-16T19:31:32Z",
+  "price_estimates_invented": false,
+  "usage_fields": "Raw provider fields retained; reasoning tokens are not added again to output-token totals."
+}

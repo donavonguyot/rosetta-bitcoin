@@ -1,0 +1,302 @@
+"""Offline test infrastructure; no service implementation or Bitcoin library."""
+import ctypes as C
+import hashlib
+import json
+import os
+from pathlib import Path
+import socket
+import struct
+import subprocess
+import time
+
+ROOT = Path(__file__).resolve().parents[1]
+BINARY = Path(os.environ.get('SERVICE_BINARY', ROOT / 'service')).resolve()
+ITEM = {'hex': '01000000000000000000', 'mode': 'witness', 'operation': 'exact'}
+
+def digest(items):
+    h = hashlib.sha256()
+    for item in items:
+        raw = bytes.fromhex(item['hex'])
+        h.update(bytes([item['mode'] == 'witness', item['operation'] == 'exact']))
+        h.update(struct.pack('<Q', len(raw)))
+        h.update(raw)
+    return h.hexdigest()
+
+def pending(seq, items=None):
+    items = [ITEM] if items is None else items
+    return {'id': f'seed_{seq}', 'digest': digest(items), 'sequence': str(seq),
+            'bytes': str(sum(len(i['hex']) // 2 for i in items)), 'priority': 'normal', 'items': items}
+
+class Connection:
+    def __init__(self, path, timeout=20):
+        self.s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.s.settimeout(timeout)
+        self.s.connect(str(path))
+        self.f = self.s.makefile('rb')
+        self.counter = 0
+        self.events = []
+
+    def send(self, q):
+        self.s.sendall(json.dumps(q, separators=(',', ':')).encode() + b'\n')
+
+    def line(self):
+        line = self.f.readline()
+        if not line:
+            raise EOFError('service disconnected')
+        return json.loads(line)
+
+    def call(self, op, **fields):
+        self.counter += 1
+        request = f'r{self.counter}'
+        self.send({'request': request, 'op': op, **fields})
+        while True:
+            r = self.line()
+            if 'event' in r:
+                self.events.append(r)
+                continue
+            assert r['request'] == request, r
+            return r
+
+    def close(self):
+        self.f.close()
+        self.s.close()
+
+    def __enter__(self): return self
+    def __exit__(self, *args): self.close()
+
+class Service:
+    def __init__(self, root, name='run', env=None):
+        self.root = Path(root)
+        self.db = self.root / 'db'
+        self.sock = self.root / f'{name}.sock'
+        self.log_path = self.root / f'{name}.stderr'
+        self.log = self.log_path.open('wb')
+        self.p = subprocess.Popen([str(BINARY), str(self.db), str(self.sock)], stderr=self.log, env=env)
+        end = time.monotonic() + 20
+        while not self.sock.exists():
+            if self.p.poll() is not None:
+                self.log.close()
+                raise RuntimeError(self.log_path.read_text())
+            if time.monotonic() > end:
+                self.kill()
+                raise TimeoutError('startup')
+            time.sleep(.002)
+
+    def connect(self): return Connection(self.sock)
+
+    def stop(self):
+        with self.connect() as cl:
+            assert cl.call('shutdown')['status'] == 'draining'
+        assert self.p.wait(timeout=30) == 0, self.log_path.read_text()
+        self.log.close()
+
+    def kill(self):
+        if self.p.poll() is None:
+            self.p.kill()
+        self.p.wait(timeout=10)
+        self.log.close()
+
+class Rocks:
+    """Independent C-API inspector/seeder. Open only after service writer stops."""
+    def __init__(self, path, create=False):
+        self.lib = C.CDLL('librocksdb.so')
+        P, S, N = C.c_void_p, C.c_char_p, C.c_size_t
+        def fn(name, result, *args):
+            f = getattr(self.lib, 'rocksdb_' + name)
+            f.restype, f.argtypes = result, list(args)
+            setattr(self, name, f)
+        fn('options_create', P)
+        fn('options_destroy', None, P)
+        fn('options_set_create_if_missing', None, P, C.c_ubyte)
+        fn('options_set_compression', None, P, C.c_int)
+        fn('options_set_write_buffer_size', None, P, N)
+        fn('options_set_max_write_buffer_number', None, P, C.c_int)
+        fn('options_set_max_background_jobs', None, P, C.c_int)
+        fn('cache_create_lru', P, N)
+        fn('cache_destroy', None, P)
+        fn('block_based_options_create', P)
+        fn('block_based_options_destroy', None, P)
+        fn('block_based_options_set_block_cache', None, P, P)
+        fn('options_set_block_based_table_factory', None, P, P)
+        fn('open', P, P, S, C.POINTER(P))
+        fn('close', None, P)
+        fn('free', None, P)
+        fn('readoptions_create', P)
+        fn('readoptions_destroy', None, P)
+        fn('create_iterator', P, P, P)
+        fn('iter_seek_to_first', None, P)
+        fn('iter_valid', C.c_ubyte, P)
+        fn('iter_next', None, P)
+        fn('iter_key', P, P, C.POINTER(N))
+        fn('iter_value', P, P, C.POINTER(N))
+        fn('iter_get_error', None, P, C.POINTER(P))
+        fn('iter_destroy', None, P)
+        fn('writeoptions_create', P)
+        fn('writeoptions_set_sync', None, P, C.c_ubyte)
+        fn('writeoptions_disable_WAL', None, P, C.c_int)
+        fn('writeoptions_destroy', None, P)
+        fn('writebatch_create', P)
+        fn('writebatch_put', None, P, S, N, S, N)
+        fn('writebatch_delete', None, P, S, N)
+        fn('writebatch_destroy', None, P)
+        fn('write', None, P, P, P, C.POINTER(P))
+        self.options = self.options_create()
+        self.options_set_create_if_missing(self.options, create)
+        self.options_set_compression(self.options, 0)
+        self.options_set_write_buffer_size(self.options, 64 << 20)
+        self.options_set_max_write_buffer_number(self.options, 2)
+        self.options_set_max_background_jobs(self.options, 2)
+        self.cache = self.cache_create_lru(128 << 20)
+        self.table = self.block_based_options_create()
+        self.block_based_options_set_block_cache(self.table, self.cache)
+        self.options_set_block_based_table_factory(self.options, self.table)
+        err = P()
+        self.db = self.open(self.options, os.fsencode(path), C.byref(err))
+        self.check(err)
+        assert self.db
+        self.read = self.readoptions_create()
+        self.write_options = self.writeoptions_create()
+        self.writeoptions_set_sync(self.write_options, 1)
+        self.writeoptions_disable_WAL(self.write_options, 0)
+
+    def check(self, err):
+        if err.value:
+            text = C.string_at(err).decode()
+            self.free(err)
+            raise RuntimeError(text)
+
+    def rows(self):
+        result = {}
+        it = self.create_iterator(self.db, self.read)
+        try:
+            self.iter_seek_to_first(it)
+            while self.iter_valid(it):
+                n = C.c_size_t()
+                ptr = self.iter_key(it, C.byref(n))
+                key = C.string_at(ptr, n.value).decode()
+                ptr = self.iter_value(it, C.byref(n))
+                result[key] = C.string_at(ptr, n.value).decode()
+                self.iter_next(it)
+            err = C.c_void_p()
+            self.iter_get_error(it, C.byref(err))
+            self.check(err)
+        finally:
+            self.iter_destroy(it)
+        return result
+
+    def batch(self, changes):
+        b = self.writebatch_create()
+        try:
+            for key, value in changes.items():
+                k = key.encode()
+                if value is None:
+                    self.writebatch_delete(b, k, len(k))
+                else:
+                    v = value.encode()
+                    self.writebatch_put(b, k, len(k), v, len(v))
+            err = C.c_void_p()
+            self.write(self.db, self.write_options, b, C.byref(err))
+            self.check(err)
+        finally:
+            self.writebatch_destroy(b)
+
+    def __enter__(self): return self
+    def __exit__(self, *args):
+        self.close(self.db)
+        self.readoptions_destroy(self.read)
+        self.writeoptions_destroy(self.write_options)
+        self.options_destroy(self.options)
+        self.block_based_options_destroy(self.table)
+        self.cache_destroy(self.cache)
+
+def inspect(path):
+    with Rocks(path) as db:
+        rows = db.rows()
+    assert rows['meta/version'] == '1'
+    seq = int(rows['meta/sequence'])
+    cp = int(rows['meta/checkpoint'])
+    assert 0 <= cp <= seq
+    expected = {'meta/version', 'meta/sequence', 'meta/checkpoint', 'meta/jobs', 'meta/bytes'}
+    jobs = {}
+    payload = 0
+    for n in range(1, seq + 1):
+        key = f'{"r" if n <= cp else "p"}/{n:020d}'
+        expected.add(key)
+        job = json.loads(rows[key])
+        assert int(job['sequence']) == n
+        assert job['id'] not in jobs
+        jobs[job['id']] = job
+        index = 'id/' + job['id']
+        expected.add(index)
+        assert int(rows[index]) == n
+        assert len(job['digest']) == 64
+        if n > cp:
+            assert job['digest'] == digest(job['items'])
+            size = sum(len(i['hex']) // 2 for i in job['items'])
+            assert int(job['bytes']) == size
+            assert job['priority'] == 'normal'
+            payload += size
+            cancel = f'c/{n:020d}'
+            if cancel in rows:
+                assert rows[cancel] == '1'
+                expected.add(cancel)
+        else:
+            assert job['state'] in ('complete', 'cancelled')
+            if job['state'] == 'cancelled':
+                assert job['results'] == []
+    assert set(rows) == expected, set(rows) ^ expected
+    assert int(rows['meta/jobs']) == seq - cp
+    assert int(rows['meta/bytes']) == payload
+    return rows, jobs
+
+def seed(path, count, cancelled=()):
+    rows = {'meta/version': '1', 'meta/sequence': str(count), 'meta/checkpoint': '0',
+            'meta/jobs': str(count), 'meta/bytes': str(count * 10)}
+    for seq in range(1, count + 1):
+        job = pending(seq)
+        rows[f'p/{seq:020d}'] = json.dumps(job)
+        rows['id/' + job['id']] = str(seq)
+        if seq in cancelled:
+            rows[f'c/{seq:020d}'] = '1'
+    with Rocks(path, create=True) as db:
+        db.batch(rows)
+    return rows
+
+class Native:
+    class Item(C.Structure):
+        _fields_ = [('data', C.c_void_p), ('size', C.c_uint64), ('witness', C.c_uint32), ('exact', C.c_uint32)]
+    class Result(C.Structure):
+        _fields_ = [('status', C.c_uint64), ('consumed', C.c_uint64), ('full_size', C.c_uint64),
+                    ('stripped_size', C.c_uint64), ('txid', C.c_ubyte * 32), ('wtxid', C.c_ubyte * 32)]
+    def __init__(self):
+        self.lib = C.CDLL('/adapter/librosetta.so')
+        self.lib.rn_arena_create.argtypes = [C.c_void_p, C.c_uint64]
+        self.lib.rn_arena_create.restype = C.c_void_p
+        self.lib.rn_arena_data.argtypes = [C.c_void_p]
+        self.lib.rn_arena_data.restype = C.c_void_p
+        self.lib.rn_arena_destroy.argtypes = [C.c_void_p]
+        self.lib.rn_verify_v1.argtypes = [C.c_void_p, C.POINTER(self.Item), C.c_uint64, C.POINTER(self.Result)]
+        self.lib.rn_verify_v1.restype = C.c_int
+
+    def evaluate(self, items):
+        raw = b''.join(bytes.fromhex(i['hex']) for i in items)
+        buf = C.create_string_buffer(raw)
+        arena = self.lib.rn_arena_create(buf, len(raw))
+        assert arena
+        try:
+            base = self.lib.rn_arena_data(arena)
+            desc = (self.Item * len(items))()
+            offset = 0
+            for d, item in zip(desc, items):
+                d.data = (base or 0) + offset
+                d.size = len(item['hex']) // 2
+                d.witness = item['mode'] == 'witness'
+                d.exact = item['operation'] == 'exact'
+                offset += d.size
+            out = (self.Result * len(items))()
+            assert self.lib.rn_verify_v1(arena, desc, len(items), out) == 0
+            return [dict(status=str(r.status), consumed=str(r.consumed), full_size=str(r.full_size),
+                         stripped_size=str(r.stripped_size), txid_digest_order=bytes(r.txid).hex(),
+                         wtxid_digest_order=bytes(r.wtxid).hex()) for r in out]
+        finally:
+            self.lib.rn_arena_destroy(arena)

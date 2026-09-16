@@ -1,0 +1,21 @@
+{
+  "schema": "rosettanode.substrate.diagnostic_attribution.v1",
+  "lineage": "zig-1",
+  "round": "initial",
+  "raw_result": "native-diagnostic-zig-1-initial.json",
+  "classification": "toolchain: ASan runtime shutdown incompatibility",
+  "candidate_memory_fault_established": false,
+  "diagnostic_lane_status": "unsupported on this pinned Zig/runtime combination",
+  "evidence": "A minimal four-thread Zig program with no adapter, RocksDB, service or candidate code reproduces the same ASan UnsetAlternateSignalStack/UnmapOrDie failure. It exits successfully without preloaded ASan.",
+  "reproducer_sha256": "da5207ca0885668f1ac0e638a9d1995e96f7437b92602960ba309de5a075ee71",
+  "log_sha256": "60b33f19616e5d020faca6d2cdcaa76b9b8317915bb6824234412ff51bd0f9c1",
+  "reproducer": "Nodes/RosettaNode/substrate/.local/asan-zig-runtime/thread.zig",
+  "toolchain_image": "sha256:cc9b0ebe055af2cf067e3ca206f6d236682c87c48debb5f205d0657dbcc0476e",
+  "not_equivalent_to_clean_go_asan": true,
+  "qualification_impact": "No candidate correctness failure attributed to the runtime crash; native memory coverage remains missing, not passed.",
+  "exploratory_followup": {
+    "minimal_reproducer_with_use_sigaltstack_0_exit": 0,
+    "candidate_rerun": false,
+    "scope": "Post-hoc toolchain investigation only; not a replacement for the preregistered diagnostic result. A bounded runtime-option mitigation appears available for future qualification."
+  }
+}

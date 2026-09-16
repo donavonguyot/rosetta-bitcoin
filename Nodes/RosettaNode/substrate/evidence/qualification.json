@@ -1,0 +1,100 @@
+{
+  "schema": "rosettanode.substrate.qualification.v1",
+  "status": "passed",
+  "runs": [
+    {
+      "probe": "storage_probe",
+      "passed": true,
+      "elapsed_seconds": 2.4023326669994276,
+      "returncode": 0,
+      "result_sha256": "52ea3b4e8dfe5359252428aaa4541a30d02865f7e74fd3bfd4d83b349f388d2f"
+    },
+    {
+      "probe": "service_probe",
+      "passed": true,
+      "elapsed_seconds": 1.476120916006039,
+      "returncode": 0,
+      "result_sha256": "9063acea1f435a66de4989ed625cc936fe7beb3add5bfbf5679b467bcbb6252d"
+    },
+    {
+      "probe": "adapter_probe",
+      "passed": true,
+      "elapsed_seconds": 0.6922509580035694,
+      "returncode": 0,
+      "result_sha256": "0b0548dbdee7828e696a2c350ad21564cffbbea3f6fa2549bc87cc7b30065184"
+    },
+    {
+      "probe": "linkage_probe",
+      "passed": true,
+      "elapsed_seconds": 0.23833379198913462,
+      "returncode": 0,
+      "result_sha256": "1373603848c2580768502b79942d9dc688547bd98138e047108e431c05387715"
+    },
+    {
+      "probe": "recovery_probe",
+      "passed": true,
+      "elapsed_seconds": 0.8418119580019265,
+      "returncode": 0,
+      "result_sha256": "56f72965cc50a6a2385e2cc5f4a0756af4dcebe43e4793e65ef01b01ae75e19e"
+    },
+    {
+      "probe": "priority_probe",
+      "passed": true,
+      "elapsed_seconds": 0.6764057910040719,
+      "returncode": 0,
+      "result_sha256": "c9a33a778d9b61680c247abe049e225fc167ef4424c7eee8aeab8967136ddfb4"
+    },
+    {
+      "probe": "mutation_matrix",
+      "passed": true,
+      "elapsed_seconds": 5.329678292007884,
+      "returncode": 0,
+      "result_sha256": "09d28449a9568e0e1a9b281df186c7a1830defe5bfe8b8929f81dcd8f411a575"
+    },
+    {
+      "probe": "limits_probe",
+      "passed": true,
+      "elapsed_seconds": 6.327793249991373,
+      "returncode": 0,
+      "result_sha256": "8a125e09234634d5a9e1350f6dccd292a7feb05715560a61197934d7bd4352a3"
+    },
+    {
+      "probe": "error_probe",
+      "passed": true,
+      "elapsed_seconds": 0.4791490000061458,
+      "returncode": 0,
+      "result_sha256": "9e26f204b897ebe6abe906b47cc08a7dafe9cb05284f022e359ce77d017a28c0"
+    },
+    {
+      "probe": "after_ack_probe",
+      "passed": true,
+      "elapsed_seconds": 0.3471870420034975,
+      "returncode": 0,
+      "result_sha256": "fd628288d769b65c862fbbe3d89946c204927e99468e6226b5dc17600617b1f3"
+    },
+    {
+      "probe": "workload_probe",
+      "passed": true,
+      "elapsed_seconds": 14.160367374992347,
+      "returncode": 0,
+      "result_sha256": "cfe1fb4f51592c2274e084a137f061be1c0e416946e0e37b202e676e36f17bb1"
+    },
+    {
+      "probe": "mixed_probe",
+      "passed": true,
+      "elapsed_seconds": 13.376607832993614,
+      "returncode": 0,
+      "result_sha256": "afc22cf1772d246b8606151a797e86ff8c7bc3cac1fb02b980a45e81a8b86c34"
+    }
+  ],
+  "elapsed_seconds": 50.46643899999617,
+  "parent_unchanged": true,
+  "candidate_launch_allowed": false,
+  "remaining_launch_requirements": [
+    "frozen public/withheld traces",
+    "candidate evaluator isolation",
+    "complete cohort/measurement tooling",
+    "clean-environment semantic reproduction",
+    "freeze hashes"
+  ]
+}

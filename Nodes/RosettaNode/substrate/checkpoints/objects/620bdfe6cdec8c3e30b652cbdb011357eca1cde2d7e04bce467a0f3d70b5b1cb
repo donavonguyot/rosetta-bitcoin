@@ -1,0 +1,378 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"sync"
+	"time"
+)
+
+type client struct {
+	conn       net.Conn
+	out        chan []byte
+	mu         sync.Mutex
+	queued     int
+	finishing  bool
+	writerDone chan struct{}
+}
+
+// A single writer preserves whole JSON lines. Neither a slow nor disconnected
+// subscriber can hold the state coordinator or retain unlimited output.
+func (c *client) enqueue(v any, event bool) {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(v); err != nil {
+		panic(err)
+	}
+	data := buffer.Bytes()
+	c.mu.Lock()
+	sent := false
+	// A 40 MiB correlation may expand to 80 MiB for U+2028/U+2029,
+	// and a pending status can additionally contain 32 MiB of payload hex.
+	if !c.finishing && c.queued+len(data) <= 128<<20 {
+		select {
+		case c.out <- data:
+			c.queued += len(data)
+			sent = true
+		default:
+		}
+	}
+	c.mu.Unlock()
+	if !sent && !event {
+		c.conn.Close()
+		c.finish()
+	}
+}
+func (c *client) finish() {
+	c.mu.Lock()
+	if !c.finishing {
+		c.finishing = true
+		close(c.out)
+	}
+	c.mu.Unlock()
+}
+func (c *client) writeLoop() {
+	defer func() {
+		c.conn.Close()
+		c.finish()
+		// Jobs can retain a disconnected subscriber until terminal commit.
+		// Release any unsent frames now instead of retaining their payloads.
+		for range c.out {
+		}
+		c.mu.Lock()
+		c.queued = 0
+		c.mu.Unlock()
+		close(c.writerDone)
+	}()
+	for data := range c.out {
+		c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		remaining := data
+		for len(remaining) > 0 {
+			n, err := c.conn.Write(remaining)
+			if err != nil || n == 0 {
+				return
+			}
+			remaining = remaining[n:]
+		}
+		c.mu.Lock()
+		c.queued -= len(data)
+		c.mu.Unlock()
+	}
+}
+
+type command struct {
+	req    Request
+	client *client
+	done   chan struct{}
+}
+
+func (c *command) reply(status string, sequence string, job any, results *[]Result) {
+	c.client.enqueue(Response{Request: c.req.Correlation, Status: status, Sequence: sequence, Job: job, Results: results}, false)
+	close(c.done)
+}
+
+type task struct {
+	payload *Payload
+	job     *Job
+	command *command
+}
+type outcome struct {
+	task    *task
+	results []Result
+	err     error
+}
+type server struct {
+	state     *State
+	listener  net.Listener
+	commands  chan *command
+	done      chan struct{}
+	mu        sync.Mutex
+	clients   map[*client]bool
+	slots     chan struct{}
+	clientsWG sync.WaitGroup
+}
+
+// readLine bounds allocation before JSON decoding, accepts the stated maximum
+// text length excluding LF, and never mistakes a final fragment for a request.
+func readLine(r *bufio.Reader) ([]byte, error) {
+	var line []byte
+	for {
+		part, err := r.ReadSlice('\n')
+		hasLF := len(part) > 0 && part[len(part)-1] == '\n'
+		if hasLF {
+			part = part[:len(part)-1]
+		}
+		if len(line)+len(part) > maxJSON {
+			return nil, errors.New("JSON line exceeds 40 MiB")
+		}
+		line = append(line, part...)
+		if hasLF {
+			return line, nil
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+}
+func (s *server) serveClient(c *client) {
+	defer s.clientsWG.Done()
+	defer func() {
+		c.finish()
+		<-c.writerDone
+		s.mu.Lock()
+		delete(s.clients, c)
+		s.mu.Unlock()
+		<-s.slots
+	}()
+	go c.writeLoop()
+	reader := bufio.NewReaderSize(c.conn, 64<<10)
+	for {
+		line, err := readLine(reader)
+		if err != nil {
+			if err != io.EOF {
+				c.enqueue(Response{Status: "invalid_request"}, false)
+			}
+			return
+		}
+		req, err := decodeRequest(line)
+		if err != nil {
+			c.enqueue(Response{Request: req.Correlation, Status: "invalid_request"}, false)
+			continue
+		}
+		cmd := &command{req: req, client: c, done: make(chan struct{})}
+		select {
+		case s.commands <- cmd:
+		case <-s.done:
+			return
+		}
+		select {
+		case <-cmd.done:
+		case <-s.done:
+			return
+		}
+	}
+}
+func (s *server) acceptLoop() {
+	for {
+		conn, err := s.listener.Accept()
+		if err != nil {
+			return
+		}
+		select {
+		case s.slots <- struct{}{}:
+		default:
+			conn.Close()
+			continue
+		}
+		c := &client{conn: conn, out: make(chan []byte, 16), writerDone: make(chan struct{})}
+		s.mu.Lock()
+		s.clients[c] = true
+		s.mu.Unlock()
+		s.clientsWG.Add(1)
+		go s.serveClient(c)
+	}
+}
+
+func (s *server) run() error {
+	work := make(chan *task, workerCount)
+	completed := make(chan outcome, workerCount)
+	var workers sync.WaitGroup
+	for i := 0; i < workerCount; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for t := range work {
+				results, err := verify(t.payload)
+				completed <- outcome{task: t, results: results, err: err}
+			}
+		}()
+	}
+	// At most four tasks exist outside the coordinator queue. On fatal error
+	// their native calls still return and free their own arenas before exit.
+	defer func() { close(work); workers.Wait() }()
+	var queue []*task
+	for seq := s.state.checkpoint + 1; seq <= s.state.sequence; seq++ {
+		j := s.state.pending[seq]
+		queue = append(queue, &task{payload: j.Payload, job: j})
+	}
+	active := 0
+	draining := false
+	for {
+		// Each transition is its own synchronous native WriteBatch.
+		for {
+			j := s.state.pending[s.state.checkpoint+1]
+			if j == nil || !j.Done {
+				break
+			}
+			receipt, err := s.state.commit(j)
+			if err != nil {
+				return fmt.Errorf("terminal write: %w", err)
+			}
+			if j.Client != nil {
+				j.Client.enqueue(struct {
+					Event string   `json:"event"`
+					ID    string   `json:"id"`
+					Job   *Receipt `json:"job"`
+				}{"terminal", receipt.ID, receipt}, true)
+			}
+		}
+		for active < workerCount && len(queue) > 0 {
+			t := queue[0]
+			queue[0] = nil
+			queue = queue[1:]
+			work <- t
+			active++
+		}
+		if len(queue) == 0 {
+			queue = nil
+		}
+		if draining && active == 0 && len(queue) == 0 && s.state.jobs == 0 {
+			return nil
+		}
+		select {
+		case result := <-completed:
+			active--
+			t := result.task
+			if t.job != nil {
+				if result.err != nil {
+					return fmt.Errorf("job %s remains pending: %w", t.job.Pending.ID, result.err)
+				}
+				t.job.Done = true
+				t.job.Results = result.results
+			} else {
+				if result.err != nil {
+					t.command.reply("execution_failure", "", nil, nil)
+				} else {
+					t.command.reply("ok", "", nil, &result.results)
+				}
+			}
+		case cmd := <-s.commands:
+			r := cmd.req
+			switch r.Op {
+			case "shutdown":
+				draining = true
+				cmd.reply("draining", "", nil, nil)
+			case "evaluate":
+				if draining {
+					cmd.reply("draining", "", nil, nil)
+					continue
+				}
+				queue = append(queue, &task{payload: r.Payload, command: cmd})
+			case "submit":
+				if draining {
+					cmd.reply("draining", "", nil, nil)
+					continue
+				}
+				seq, j, receipt, err := s.state.lookup(r.ID)
+				if err != nil {
+					cmd.reply("execution_failure", "", nil, nil)
+					return fmt.Errorf("lookup: %w", err)
+				}
+				if seq != 0 {
+					digest := ""
+					if j != nil {
+						digest = j.Pending.Digest
+					} else {
+						digest = receipt.Digest
+					}
+					if digest == r.Payload.Digest {
+						cmd.reply("existing", decimal(seq), nil, nil)
+					} else {
+						cmd.reply("conflict", "", nil, nil)
+					}
+					continue
+				}
+				if s.state.jobs >= maxJobs || s.state.bytes+uint64(len(r.Payload.Raw)) > maxOutstandingBytes {
+					cmd.reply("backpressure", "", nil, nil)
+					continue
+				}
+				j, err = s.state.admit(r.ID, r.Payload, cmd.client)
+				if err != nil {
+					// Report failure of this request before the fatal shutdown flushes
+					// its connection. This is never an acceptance or a sequence promise:
+					// a storage error may leave either complete old or complete new state.
+					cmd.reply("execution_failure", "", nil, nil)
+					return fmt.Errorf("admission write: %w", err)
+				}
+				// Enqueue the admission response before making the task runnable.
+				cmd.reply("accepted", j.Pending.Sequence, nil, nil)
+				queue = append(queue, &task{payload: j.Payload, job: j})
+			case "status", "cancel":
+				seq, j, receipt, err := s.state.lookup(r.ID)
+				if err != nil {
+					cmd.reply("execution_failure", "", nil, nil)
+					return fmt.Errorf("lookup: %w", err)
+				}
+				if seq == 0 {
+					cmd.reply("not_found", "", nil, nil)
+					continue
+				}
+				if r.Op == "status" {
+					if j != nil {
+						state := "pending"
+						if j.Cancelled {
+							state = "cancel_pending"
+						}
+						cmd.reply("ok", "", PendingView{Pending: j.Pending, State: state}, nil)
+					} else {
+						cmd.reply("ok", "", receipt, nil)
+					}
+				} else if j == nil {
+					cmd.reply("too_late", "", nil, nil)
+				} else {
+					if err = s.state.cancel(seq, j); err != nil {
+						cmd.reply("execution_failure", "", nil, nil)
+						return fmt.Errorf("cancellation write: %w", err)
+					}
+					cmd.reply("ok", "", nil, nil)
+				}
+			}
+		}
+	}
+}
+
+func serve(state *State, listener net.Listener) error {
+	s := &server{state: state, listener: listener, commands: make(chan *command), done: make(chan struct{}), clients: make(map[*client]bool), slots: make(chan struct{}, 8)}
+	acceptDone := make(chan struct{})
+	go func() { defer close(acceptDone); s.acceptLoop() }()
+	err := s.run()
+	close(s.done)
+	listener.Close()
+	<-acceptDone // No further Add calls before clientsWG.Wait.
+	s.mu.Lock()
+	for c := range s.clients {
+		c.finish()
+	}
+	s.mu.Unlock()
+	s.clientsWG.Wait()
+	return err
+}

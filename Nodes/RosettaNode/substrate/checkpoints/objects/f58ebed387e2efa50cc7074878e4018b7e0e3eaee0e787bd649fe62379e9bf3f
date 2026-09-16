@@ -1,0 +1,86 @@
+//! Fixed RocksDB settings and ownership. Journal policy is in main.zig.
+const std = @import("std");
+pub const c = @cImport({
+    @cInclude("rocksdb/c.h");
+});
+pub fn checked(err: [*c]u8) !void {
+    if (err != null) {
+        defer c.rocksdb_free(err);
+        std.debug.print("RocksDB: {s}\n", .{std.mem.span(err)});
+        return error.RocksDB;
+    }
+}
+pub const DB = struct {
+    db: ?*c.rocksdb_t = null,
+    options: ?*c.rocksdb_options_t = null,
+    write: ?*c.rocksdb_writeoptions_t = null,
+    read: ?*c.rocksdb_readoptions_t = null,
+    cache: ?*c.rocksdb_cache_t = null,
+    table: ?*c.rocksdb_block_based_table_options_t = null,
+    write_calls: u64 = 0,
+    sync_write_successes: u64 = 0,
+    pub fn open(path: [:0]const u8) !DB {
+        var d = DB{};
+        errdefer d.close();
+        d.options = c.rocksdb_options_create() orelse return error.OutOfMemory;
+        c.rocksdb_options_set_create_if_missing(d.options, 1);
+        c.rocksdb_options_set_compression(d.options, 0);
+        c.rocksdb_options_set_write_buffer_size(d.options, 64 << 20);
+        c.rocksdb_options_set_max_write_buffer_number(d.options, 2);
+        c.rocksdb_options_set_max_background_jobs(d.options, 2);
+        d.cache = c.rocksdb_cache_create_lru(128 << 20) orelse return error.OutOfMemory;
+        d.table = c.rocksdb_block_based_options_create() orelse return error.OutOfMemory;
+        c.rocksdb_block_based_options_set_block_cache(d.table, d.cache);
+        c.rocksdb_options_set_block_based_table_factory(d.options, d.table);
+        var err: [*c]u8 = null;
+        d.db = c.rocksdb_open(d.options, path.ptr, &err);
+        try checked(err);
+        if (d.db == null) return error.RocksDB;
+        d.write = c.rocksdb_writeoptions_create() orelse return error.OutOfMemory;
+        c.rocksdb_writeoptions_set_sync(d.write, 1);
+        c.rocksdb_writeoptions_disable_WAL(d.write, 0);
+        d.read = c.rocksdb_readoptions_create() orelse return error.OutOfMemory;
+        return d;
+    }
+    pub fn close(d: *DB) void {
+        if (d.db != null) c.rocksdb_close(d.db);
+        if (d.write != null) c.rocksdb_writeoptions_destroy(d.write);
+        if (d.read != null) c.rocksdb_readoptions_destroy(d.read);
+        if (d.options != null) c.rocksdb_options_destroy(d.options);
+        if (d.table != null) c.rocksdb_block_based_options_destroy(d.table);
+        if (d.cache != null) c.rocksdb_cache_destroy(d.cache);
+        d.* = .{};
+    }
+    pub fn commit(d: *DB, b: *Batch) !void {
+        var err: [*c]u8 = null;
+        d.write_calls += 1;
+        c.rocksdb_write(d.db, d.write, b.p, &err);
+        try checked(err);
+        // Successful synchronous C writes, not a count of physical WAL syncs.
+        d.sync_write_successes += 1;
+    }
+    pub fn get(d: *DB, allocator: std.mem.Allocator, key: []const u8) !?[]u8 {
+        var err: [*c]u8 = null;
+        var n: usize = 0;
+        const p = c.rocksdb_get(d.db, d.read, key.ptr, key.len, &n, &err);
+        try checked(err);
+        if (p == null) return null;
+        defer c.rocksdb_free(p);
+        return try allocator.dupe(u8, p[0..n]);
+    }
+};
+pub const Batch = struct {
+    p: ?*c.rocksdb_writebatch_t,
+    pub fn init() !Batch {
+        return .{ .p = c.rocksdb_writebatch_create() orelse return error.OutOfMemory };
+    }
+    pub fn deinit(b: *Batch) void {
+        c.rocksdb_writebatch_destroy(b.p);
+    }
+    pub fn put(b: *Batch, key: []const u8, value: []const u8) void {
+        c.rocksdb_writebatch_put(b.p, key.ptr, key.len, value.ptr, value.len);
+    }
+    pub fn delete(b: *Batch, key: []const u8) void {
+        c.rocksdb_writebatch_delete(b.p, key.ptr, key.len);
+    }
+};
