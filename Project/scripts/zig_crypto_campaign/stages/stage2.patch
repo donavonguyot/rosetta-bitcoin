@@ -1,0 +1,53 @@
+--- a/src/root.zig
++++ b/src/root.zig
+@@ -44,6 +44,32 @@
+         base = if (modulus == p) mul(base, base) else @intCast((@as(u512, base) * base) % modulus);
+     }
+     return result;
++}
++// u = input*x (mod modulus) is maintained by binary subtraction and halving.
++// Coefficients stay below the odd modulus; x+modulus fits u257, and its
++// half fits u256. Inputs are public and the iteration count is variable.
++fn inverse(input: u256, modulus: u256) Error!u256 {
++    if (input == 0 or input >= modulus) return error.InvalidScalar;
++    var u = input;
++    var v = modulus;
++    var x: u256 = 1;
++    var y: u256 = 0;
++    while (u != 1 and v != 1) {
++        if (u == 0 or v == 0) return error.InvalidScalar;
++        while (u & 1 == 0) { u >>= 1; x = halfCoefficient(x, modulus); }
++        while (v & 1 == 0) { v >>= 1; y = halfCoefficient(y, modulus); }
++        if (u >= v) {
++            u -= v;
++            x = if (x >= y) x - y else modulus - (y - x);
++        } else {
++            v -= u;
++            y = if (y >= x) y - x else modulus - (x - y);
++        }
++    }
++    return if (u == 1) x else y;
++}
++fn halfCoefficient(x: u256, modulus: u256) u256 {
++    return if (x & 1 == 0) x >> 1 else @intCast((@as(u257, x) + modulus) >> 1);
+ }
+ fn read(b: []const u8) u256 {
+     var r: u256 = 0;
+@@ -106,7 +132,7 @@
+     }
+     fn affine(self: Point) Error!Point {
+         if (self.z == 0) return error.Infinity;
+-        const zi = pow(self.z, p - 2, p);
++        const zi = try inverse(self.z, p);
+         const z2 = mul(zi, zi);
+         return .{ .x = mul(self.x, z2), .y = mul(self.y, mul(z2, zi)) };
+     }
+@@ -170,7 +196,7 @@
+     const pubkey = try parsePublicKey(key);
+     const sig = try parseDer(signature);
+     if (!sig.r.valid or !sig.s.valid) return false;
+-    const w = pow(sig.s.value, n - 2, n);
++    const w = try inverse(sig.s.value, n);
+     const u: u256 = @intCast((@as(u512, read(digest)) * w) % n);
+     const v: u256 = @intCast((@as(u512, sig.r.value) * w) % n);
+     const q = g.multiply(u).plus(pubkey.point.multiply(v)).affine() catch return false;

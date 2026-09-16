@@ -1,0 +1,134 @@
+--- a/src/root.zig
++++ b/src/root.zig
+@@ -120,15 +120,20 @@
+         const x = sub(sub(mul(r, r), j), times(v, 2));
+         return .{ .x = x, .y = sub(mul(r, sub(v, x)), times(mul(s1, j), 2)), .z = times(mul(mul(self.z, q.z), h), 2) };
+     }
+-    fn multiply(self: Point, k: u256) Point {
+-        var r = infinity();
+-        var bit: usize = 256;
+-        while (bit > 0) {
+-            bit -= 1;
+-            r = r.double();
+-            if ((k >> @as(u8, @intCast(bit))) & 1 != 0) r = r.plus(self);
+-        }
+-        return r;
++    // q is affine (Z=1) or infinity. Equality is compared after scaling
++    // q into this point's Jacobian coordinates, never by raw limbs.
++    fn mixed(self: Point, q: Point) Point {
++        if (self.z == 0) return q;
++        if (q.z == 0) return self;
++        const zz = mul(self.z, self.z);
++        const h = sub(mul(q.x, zz), self.x);
++        const d = sub(mul(q.y, mul(self.z, zz)), self.y);
++        if (h == 0) return if (d == 0) self.double() else infinity();
++        const hh = mul(h, h);
++        const hhh = mul(h, hh);
++        const v = mul(self.x, hh);
++        const x = sub(sub(mul(d, d), hhh), times(v, 2));
++        return .{ .x=x, .y=sub(mul(d, sub(v,x)), mul(self.y,hhh)), .z=mul(self.z,h) };
+     }
+     fn affine(self: Point) Error!Point {
+         if (self.z == 0) return error.Infinity;
+@@ -137,6 +142,73 @@
+         return .{ .x = mul(self.x, z2), .y = mul(self.y, mul(z2, zi)) };
+     }
+ };
++const Digits = struct { values: [257]i8 = @splat(0), len: usize = 0 };
++fn recode(scalar: u256) Digits {
++    var out: Digits = .{};
++    // A negative low digit can carry into bit 256; u257 holds that carry.
++    var remaining: u257 = scalar;
++    while (remaining != 0) {
++        if (remaining & 1 != 0) {
++            const residue: i16 = @intCast(remaining & 31);
++            const digit: i16 = if (residue > 16) residue - 32 else residue;
++            out.values[out.len] = @intCast(digit);
++            if (digit < 0) remaining += @as(u257, @intCast(-digit)) else remaining -= @as(u257, @intCast(digit));
++        }
++        remaining >>= 1;
++        out.len += 1;
++    }
++    return out;
++}
++fn oddTable(point: Point) [8]Point {
++    var table: [8]Point = undefined;
++    table[0] = point;
++    const step = point.double();
++    for (1..8) |i| table[i] = table[i-1].plus(step);
++    var prefix: [8]u256 = undefined;
++    var product: u256 = 1;
++    for (table, 0..) |entry, i| {
++        prefix[i] = product;
++        if (entry.z != 0) product = mul(product, entry.z);
++    }
++    var reciprocal = inverse(product, p) catch unreachable;
++    var i: usize = 8;
++    while (i != 0) {
++        i -= 1;
++        if (table[i].z == 0) continue;
++        const zi = mul(reciprocal, prefix[i]);
++        reciprocal = mul(reciprocal, table[i].z);
++        const zz = mul(zi,zi);
++        table[i] = .{ .x=mul(table[i].x,zz), .y=mul(table[i].y,mul(zz,zi)) };
++    }
++    return table;
++}
++const generator_table = blk: {
++    @setEvalBranchQuota(1_000_000);
++    break :blk oddTable(g);
++};
++fn signedPoint(table: *const [8]Point, digit: i8) Point {
++    const magnitude: u8 = @intCast(if (digit < 0) -@as(i16,digit) else digit);
++    var point = table[(magnitude-1)/2];
++    if (digit < 0) point.y = sub(0,point.y);
++    return point;
++}
++fn joint(a: u256, point: Point, b: u256) Point {
++    const left = recode(a);
++    const right = recode(b);
++    const table = if (b == 0) [_]Point{Point.infinity()} ** 8 else oddTable(point);
++    var result = Point.infinity();
++    var i = @max(left.len,right.len);
++    while (i != 0) {
++        i -= 1;
++        result = result.double();
++        if (left.values[i] != 0) result = result.mixed(signedPoint(&generator_table,left.values[i]));
++        if (right.values[i] != 0) result = result.mixed(signedPoint(&table,right.values[i]));
++    }
++    return result;
++}
++fn schnorrPoint(s: u256, point: Point, e: u256) Point {
++    return joint(s,point,if (e == 0) 0 else n-e);
++}
+ fn lift(x: u256, odd: bool) Error!Point {
+     if (x >= p) return error.MalformedInput;
+     const rhs = add(mul(mul(x, x), x), 7);
+@@ -199,7 +271,7 @@
+     const w = try inverse(sig.s.value, n);
+     const u: u256 = @intCast((@as(u512, read(digest)) * w) % n);
+     const v: u256 = @intCast((@as(u512, sig.r.value) * w) % n);
+-    const q = g.multiply(u).plus(pubkey.point.multiply(v));
++    const q = joint(u, pubkey.point, v);
+     return ecdsaXMatches(q, sig.r.value);
+ }
+ // Since 0 <= affine x < p < 2n, only r and r+n can reduce to r modulo n.
+@@ -260,8 +332,7 @@
+     var digest: [32]u8 = undefined;
+     h.final(&digest);
+     const e = read(&digest) % n;
+-    const neg = if (e == 0) 0 else n - e;
+-    const q = g.multiply(s).plus(pubkey.point.multiply(neg)).affine() catch return false;
++    const q = schnorrPoint(s, pubkey.point, e).affine() catch return false;
+     return q.y & 1 == 0 and q.x == r;
+ }
+ pub const TweakResult = struct { output_xonly: [32]u8, parity: u8 };
+@@ -271,7 +342,7 @@
+     const pubkey = try parseXOnly(key);
+     const t = read(tweak);
+     if (t >= n) return error.InvalidScalar;
+-    const q = try pubkey.point.plus(g.multiply(t)).affine();
++    const q = try joint(t, pubkey.point, 1).affine();
+     return .{ .output_xonly = write(q.x), .parity = @intCast(q.y & 1) };
+ }
+ /// Check both coordinate and parity of a tweaked public key.

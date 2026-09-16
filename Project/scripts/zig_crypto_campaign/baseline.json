@@ -1,0 +1,13 @@
+{
+  "tag": "codex/zig-crypto-optimization-baseline-20260916-v2",
+  "commit": "0e02b5d153e30af4faaeb1ba40da31f8e1fe2a70",
+  "parent": "f1ff69b591e4a32f2386efb0eebfbe07bed5ac9f",
+  "package_digest": "22ffd40266905b179a99d95dd5354731838f9e0b18e484f2d5019df8f70ea7c1",
+  "node_digest": "86d24f45477ebc3fd2a45c97255cc738f8ae7e2728df0f38a02cb446b7c87d2d",
+  "timing_coverage": "scheduler worker loop; excludes verifier creation/destruction",
+  "snapshot_paths": [
+    "Libraries/Zig",
+    "Nodes/Zig"
+  ],
+  "supersedes_snapshot": "cd0f7c56ce32da5e88a69883e2a10da4d72e361d"
+}

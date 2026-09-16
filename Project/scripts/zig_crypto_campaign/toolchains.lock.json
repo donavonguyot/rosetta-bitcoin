@@ -1,0 +1,7 @@
+{
+  "zig": {"version": "0.16.0", "aarch64_linux_sha256": "ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17", "x86_64_linux_sha256": "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00"},
+  "base": "debian:bookworm-slim@sha256:0104b334637a5f19aa9c983a91b54c89887c0984081f2068983107a6f6c21eeb",
+  "build_packages": {"gcc": "4:12.2.0-3", "gcc-12": "12.2.0-14+deb12u1", "g++": "4:12.2.0-3", "g++-12": "12.2.0-14+deb12u1", "binutils": "2.40-2", "cmake": "3.25.1-1", "build-essential": "12.9", "librocksdb-dev": "7.8.3-2"},
+  "reference_commit": "0cdc758a56360bf58a851fe91085a327ec97685a",
+  "reference_archive_sha256": "385c115a21ee1ff31d0b0320acc2b278c92f7bde971f510566ad481a38835be0"
+}

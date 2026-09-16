@@ -1,0 +1,39 @@
+--- a/src/root.zig
++++ b/src/root.zig
+@@ -25,8 +25,15 @@
+ fn mul(a: u256, b: u256) u256 {
+     return reduceField(@as(u512, a) * b);
+ }
+-fn times(a: u256, b: u256) u256 {
+-    return mul(a, b);
++fn times(a: u256, comptime b: u256) u256 {
++    const twice = add(a, a);
++    return switch (b) {
++        2 => twice,
++        3 => add(twice, a),
++        4 => add(twice, twice),
++        8 => blk: { const four = add(twice, twice); break :blk add(four, four); },
++        else => @compileError("unsupported small multiplier"),
++    };
+ }
+ fn pow(a: u256, exponent: u256, modulus: u256) u256 {
+     var result: u256 = 1;
+@@ -62,7 +69,8 @@
+         const a = mul(self.x, self.x);
+         const b = mul(self.y, self.y);
+         const c = mul(b, b);
+-        const d = times(sub(sub(mul(add(self.x, b), add(self.x, b)), a), c), 2);
++        const xb = add(self.x, b);
++        const d = times(sub(sub(mul(xb, xb), a), c), 2);
+         const e = times(a, 3);
+         const f = mul(e, e);
+         const x = sub(f, times(d, 2));
+@@ -84,7 +92,7 @@
+         const r = times(sub(s2, s1), 2);
+         const v = mul(ux1, i);
+         const x = sub(sub(mul(r, r), j), times(v, 2));
+-        return .{ .x = x, .y = sub(mul(r, sub(v, x)), times(mul(s1, j), 2)), .z = mul(sub(sub(mul(add(self.z, q.z), add(self.z, q.z)), z1), z2), h) };
++        return .{ .x = x, .y = sub(mul(r, sub(v, x)), times(mul(s1, j), 2)), .z = times(mul(mul(self.z, q.z), h), 2) };
+     }
+     fn multiply(self: Point, k: u256) Point {
+         var r = infinity();

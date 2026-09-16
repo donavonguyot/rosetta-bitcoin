@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Independent Zig crypto optimization comparison",
+  "type": "object",
+  "required": ["schema", "comparison_label", "binary_gate_status", "variants", "runs", "warmups", "components", "validation", "stages", "canonical_unchanged"],
+  "properties": {
+    "schema": {"const": "rb.crypto_optimization_comparison.v1"},
+    "comparison_label": {"const": "campaign_comparable"},
+    "binary_gate_status": {"const": "not_attempted"},
+    "variants": {"type": "object", "required": ["original", "optimized", "c_control"]},
+    "runs": {"type": "array", "minItems": 9, "maxItems": 9},
+    "warmups": {"type": "array", "minItems": 3, "maxItems": 3},
+    "components": {"type": "object", "required": ["original", "optimized", "c_control"]},
+    "validation": {"type": "object"},
+    "stages": {"type": "array", "minItems": 4, "maxItems": 4},
+    "canonical_unchanged": {"const": true}
+  },
+  "$comment": "Cross-field and campaign-only numeric gates are enforced by Project/scripts/zig_crypto_campaign/comparison.py. This is not a crypto_lane_result or canonical benchmark claim."
+}

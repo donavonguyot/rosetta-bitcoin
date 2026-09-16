@@ -1,0 +1,421 @@
+{
+  "schema": "rb.crypto_lane_result.v1",
+  "port": "zig",
+  "lane": "own_curve",
+  "implementation": "libsecp256k1-zig",
+  "source_digest": "cb491eda661d644ba87e88db7b7236a2d93cb7692785a7d74977aa1e4ec2fe44",
+  "captured_at": "2026-09-16T05:37:39.760036+00:00",
+  "binary_gate_status": "not_attempted",
+  "result": "passed",
+  "toolchain": {
+    "zig": "0.16.0",
+    "optimization": "ReleaseSafe",
+    "architecture": "arm64",
+    "docker_base": "debian:bookworm-slim@sha256:0104b334637a5f19aa9c983a91b54c89887c0984081f2068983107a6f6c21eeb",
+    "rocksdb": "7.8.3-2",
+    "reference_commit": "0cdc758a56360bf58a851fe91085a327ec97685a",
+    "c_build": "CMake Release; static; compiler identity and packages recorded per variant"
+  },
+  "build_settings": {
+    "optimization": "ReleaseSafe",
+    "candidate_only": true,
+    "comparison_report": "Nodes/Shared/conformance/crypto_comparisons/zig_optimization_20260916T053740Z.json"
+  },
+  "dependencies": {
+    "production": [],
+    "ffi": false,
+    "curve_provider": "package",
+    "arithmetic": "package u257/u512; variable-time binary inverse; separate-table width-5 Straus",
+    "hashing": "Zig std.crypto.hash.sha2.Sha256"
+  },
+  "checks": {
+    "arithmetic": {
+      "result": "passed",
+      "cases": 10000,
+      "release_safe": true,
+      "parallel": true,
+      "synthetic_x_branches": true,
+      "carry_boundaries": true
+    },
+    "node_regression": {
+      "result": "passed",
+      "backends": [
+        "own_curve",
+        "c_binding"
+      ]
+    },
+    "shared_vectors": {
+      "result": "passed",
+      "cases": 52,
+      "hashes": {
+        "native.json": "880b6bf5046161441a84ffce5c59b19add70e4b084467cb8645789eec2e901b6",
+        "bip340.csv": "01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb"
+      }
+    },
+    "isolated_build": {
+      "result": "passed",
+      "network": "none",
+      "contents": "package only",
+      "includes_external_consumer": true
+    },
+    "malformed_subprocesses": {
+      "result": "passed",
+      "cases": 600,
+      "claim": "no traps observed; not a proof of panic impossibility"
+    },
+    "external_consumer": {
+      "result": "passed",
+      "operations": [
+        "ecdsa",
+        "schnorr",
+        "tweak"
+      ],
+      "separate_project": true
+    },
+    "differential": {
+      "reference_commit": "0cdc758a56360bf58a851fe91085a327ec97685a",
+      "reference_archive_sha256": "385c115a21ee1ff31d0b0320acc2b278c92f7bde971f510566ad481a38835be0",
+      "reference_binary_sha256": "59ae44928e143f812a02c8c0b508c3b9645d5a45c0fdb8a01c02ab4b18b85e98",
+      "cases": 10005,
+      "operations": {
+        "ecdsa": 4002,
+        "schnorr": 4002,
+        "tweak": 2001
+      },
+      "failures": [],
+      "result": "passed",
+      "high_s": "normalized in reference",
+      "error_mapping": "shared vectors check structured errors; reference API compares acceptance"
+    },
+    "dependency_audit": {
+      "result": "passed",
+      "no_imported_curve": true,
+      "no_crypto_ffi": true,
+      "dynamic_libraries": [
+        "\tlinux-vdso.so.1 (0x0000ffffb93ec000)",
+        "\tlibrocksdb.so.7.8 => /lib/aarch64-linux-gnu/librocksdb.so.7.8 (0x0000ffffb8970000)",
+        "\tlibc.so.6 => /lib/aarch64-linux-gnu/libc.so.6 (0x0000ffffb87c0000)",
+        "\tlibgflags.so.2.2 => /lib/aarch64-linux-gnu/libgflags.so.2.2 (0x0000ffffb8780000)",
+        "\tlibsnappy.so.1 => /lib/aarch64-linux-gnu/libsnappy.so.1 (0x0000ffffb8750000)",
+        "\tlibz.so.1 => /lib/aarch64-linux-gnu/libz.so.1 (0x0000ffffb8710000)",
+        "\tlibbz2.so.1.0 => /lib/aarch64-linux-gnu/libbz2.so.1.0 (0x0000ffffb86e0000)",
+        "\tliblz4.so.1 => /lib/aarch64-linux-gnu/liblz4.so.1 (0x0000ffffb8690000)",
+        "\tlibzstd.so.1 => /lib/aarch64-linux-gnu/libzstd.so.1 (0x0000ffffb85d0000)",
+        "\tlibstdc++.so.6 => /lib/aarch64-linux-gnu/libstdc++.so.6 (0x0000ffffb83b0000)",
+        "\tlibm.so.6 => /lib/aarch64-linux-gnu/libm.so.6 (0x0000ffffb8300000)",
+        "\tlibgcc_s.so.1 => /lib/aarch64-linux-gnu/libgcc_s.so.1 (0x0000ffffb82c0000)",
+        "\t/lib/ld-linux-aarch64.so.1 (0x0000ffffb93b0000)",
+        "\tlibpthread.so.0 => /lib/aarch64-linux-gnu/libpthread.so.0 (0x0000ffffb8290000)"
+      ],
+      "runtime_packages": "adduser\t3.134\napt\t2.6.1\nbase-files\t12.4+deb12u14\nbase-passwd\t3.6.1\nbash\t5.2.15-2+b13\nbsdutils\t1:2.38.1-5+deb12u3\nca-certificates\t20250419~deb12u1\ncoreutils\t9.1-1\ndash\t0.5.12-2\ndebconf\t1.5.82\ndebian-archive-keyring\t2023.3+deb12u2\ndebianutils\t5.7-0.5~deb12u1\ndiffutils\t1:3.8-4\ndpkg\t1.21.23\ne2fsprogs\t1.47.0-2+b2\nfindutils\t4.9.0-4\ngcc-12-base:arm64\t12.2.0-14+deb12u1\ngpgv\t2.2.40-1.1+deb12u2\ngrep\t3.8-5\ngzip\t1.12-1\nhostname\t3.23+nmu1\ninit-system-helpers\t1.65.2+deb12u1\nlibacl1:arm64\t2.3.1-3\nlibapt-pkg6.0:arm64\t2.6.1\nlibattr1:arm64\t1:2.5.1-4\nlibaudit-common\t1:3.0.9-1\nlibaudit1:arm64\t1:3.0.9-1\nlibblkid1:arm64\t2.38.1-5+deb12u3\nlibbz2-1.0:arm64\t1.0.8-5+b1\nlibc-bin\t2.36-9+deb12u14\nlibc6:arm64\t2.36-9+deb12u14\nlibcap-ng0:arm64\t0.8.3-1+b3\nlibcap2:arm64\t1:2.66-4+deb12u3+b1\nlibcom-err2:arm64\t1.47.0-2+b2\nlibcrypt1:arm64\t1:4.4.33-2\nlibdb5.3:arm64\t5.3.28+dfsg2-1\nlibdebconfclient0:arm64\t0.270\nlibext2fs2:arm64\t1.47.0-2+b2\nlibffi8:arm64\t3.4.4-1\nlibgcc-s1:arm64\t12.2.0-14+deb12u1\nlibgcrypt20:arm64\t1.10.1-3\nlibgflags2.2\t2.2.2-2\nlibgmp10:arm64\t2:6.2.1+dfsg1-1.1\nlibgnutls30:arm64\t3.7.9-2+deb12u6\nlibgpg-error0:arm64\t1.46-1\nlibhogweed6:arm64\t3.8.1-2\nlibidn2-0:arm64\t2.3.3-1+b1\nliblz4-1:arm64\t1.9.4-1\nliblzma5:arm64\t5.4.1-1\nlibmd0:arm64\t1.0.4-2\nlibmount1:arm64\t2.38.1-5+deb12u3\nlibnettle8:arm64\t3.8.1-2\nlibp11-kit0:arm64\t0.24.1-2\nlibpam-modules:arm64\t1.5.2-6+deb12u2\nlibpam-modules-bin\t1.5.2-6+deb12u2\nlibpam-runtime\t1.5.2-6+deb12u2\nlibpam0g:arm64\t1.5.2-6+deb12u2\nlibpcre2-8-0:arm64\t10.42-1\nlibrocksdb7.8\t7.8.3-2\nlibseccomp2:arm64\t2.5.4-1+deb12u1\nlibselinux1:arm64\t3.4-1+b6\nlibsemanage-common\t3.4-1\nlibsemanage2:arm64\t3.4-1+b5\nlibsepol2:arm64\t3.4-2.1\nlibsmartcols1:arm64\t2.38.1-5+deb12u3\nlibsnappy1v5:arm64\t1.1.9-3\nlibss2:arm64\t1.47.0-2+b2\nlibssl3:arm64\t3.0.20-1~deb12u2\nlibstdc++6:arm64\t12.2.0-14+deb12u1\nlibsystemd0:arm64\t252.39-1~deb12u2\nlibtasn1-6:arm64\t4.19.0-2+deb12u1\nlibtinfo6:arm64\t6.4-4\nlibudev1:arm64\t252.39-1~deb12u2\nlibunistring2:arm64\t1.0-2\nlibuuid1:arm64\t2.38.1-5+deb12u3\nlibxxhash0:arm64\t0.8.1-1\nlibzstd1:arm64\t1.5.4+dfsg2-5\nlogin\t1:4.13+dfsg1-1+deb12u2\nlogsave\t1.47.0-2+b2\nmawk\t1.3.4.20200120-3.1\nmount\t2.38.1-5+deb12u3\nncurses-base\t6.4-4\nncurses-bin\t6.4-4\nopenssl\t3.0.20-1~deb12u2\npasswd\t1:4.13+dfsg1-1+deb12u2\nperl-base\t5.36.0-7+deb12u3\nsed\t4.9-1+deb12u1\nsysvinit-utils\t3.06-4\ntar\t1.34+dfsg-1.2+deb12u1\ntzdata\t2026b-0+deb12u1\nusr-is-merged\t37~deb12u1\nutil-linux\t2.38.1-5+deb12u3\nutil-linux-extra\t2.38.1-5+deb12u3\nzlib1g:arm64\t1:1.2.13.dfsg-1\n"
+    },
+    "script_corpus": {
+      "result": "passed",
+      "passed": 45,
+      "failed": 0
+    },
+    "backend_selection": {
+      "result": "passed",
+      "unavailable_backend_rejected": true,
+      "unknown_backend_rejected": true
+    },
+    "adapter_usage": {
+      "result": "passed",
+      "calls": {
+        "ecdsa": 42,
+        "schnorr": 19,
+        "tweak": 17
+      }
+    },
+    "fault_injection": {
+      "result": "passed",
+      "validated_height": 738,
+      "volume": "rosetta-zig-own-curve-opt-fault-1789536886863543000",
+      "returncode": 1,
+      "settled_status": {
+        "schema": "port.status.v1",
+        "port": "zig",
+        "node": "ZigNode",
+        "runtime_surface": "host",
+        "datadir": "/data",
+        "sync_status": "blocks_current",
+        "chainstate_backend": "rocksdb",
+        "chainstate_status": "usable",
+        "validated_height": 738,
+        "validated_hash": "00000000daf429d9e15a39ebacd6874891556cfe1af4267c403ed8eee90ec0b6",
+        "header_height": 738,
+        "header_hash": "00000000daf429d9e15a39ebacd6874891556cfe1af4267c403ed8eee90ec0b6",
+        "stored_block_height": 738,
+        "stored_block_hash": "00000000daf429d9e15a39ebacd6874891556cfe1af4267c403ed8eee90ec0b6",
+        "chainstate_utxo_count": 738,
+        "native_crypto_backend": "libsecp256k1-zig",
+        "native_crypto_available": false,
+        "taproot_tweak_backend": "libsecp256k1-zig",
+        "crypto_backend": "libsecp256k1-zig",
+        "crypto_source_digest": "cb491eda661d644ba87e88db7b7236a2d93cb7692785a7d74977aa1e4ec2fe44",
+        "current_blocker": null,
+        "binary_gate_status": "not_attempted"
+      },
+      "primitive": "ecdsa"
+    },
+    "trace_differential": {
+      "reference_commit": "0cdc758a56360bf58a851fe91085a327ec97685a",
+      "reference_archive_sha256": "385c115a21ee1ff31d0b0320acc2b278c92f7bde971f510566ad481a38835be0",
+      "reference_binary_sha256": "59ae44928e143f812a02c8c0b508c3b9645d5a45c0fdb8a01c02ab4b18b85e98",
+      "cases": 104146,
+      "operations": {
+        "ecdsa": 104110,
+        "tweak": 17,
+        "schnorr": 19
+      },
+      "failures": [],
+      "result": "passed",
+      "high_s": "normalized in reference",
+      "error_mapping": "shared vectors check structured errors; reference API compares acceptance"
+    }
+  },
+  "node_source_digest": "86d24f45477ebc3fd2a45c97255cc738f8ae7e2728df0f38a02cb446b7c87d2d",
+  "milestone": "component",
+  "benchmarks": [
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 0,
+      "iterations": 1024,
+      "total_ns": 49692755
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 0,
+      "iterations": 1024,
+      "total_ns": 42830440
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 0,
+      "iterations": 1024,
+      "total_ns": 45295990
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 0,
+      "iterations": 1024,
+      "total_ns": 45424990
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 0,
+      "iterations": 1024,
+      "total_ns": 5168976
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 0,
+      "iterations": 1024,
+      "total_ns": 750
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 0,
+      "iterations": 1024,
+      "total_ns": 38093632
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 0,
+      "iterations": 1024,
+      "total_ns": 958
+    },
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 1,
+      "iterations": 1024,
+      "total_ns": 47924999
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 1,
+      "iterations": 1024,
+      "total_ns": 41134393
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 1,
+      "iterations": 1024,
+      "total_ns": 44845447
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 1,
+      "iterations": 1024,
+      "total_ns": 44800863
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 1,
+      "iterations": 1024,
+      "total_ns": 5145351
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 1,
+      "iterations": 1024,
+      "total_ns": 792
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 1,
+      "iterations": 1024,
+      "total_ns": 37914173
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 1,
+      "iterations": 1024,
+      "total_ns": 1000
+    },
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 2,
+      "iterations": 1024,
+      "total_ns": 47847249
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 2,
+      "iterations": 1024,
+      "total_ns": 41107642
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 2,
+      "iterations": 1024,
+      "total_ns": 44687697
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 2,
+      "iterations": 1024,
+      "total_ns": 44970447
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 2,
+      "iterations": 1024,
+      "total_ns": 5141268
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 2,
+      "iterations": 1024,
+      "total_ns": 750
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 2,
+      "iterations": 1024,
+      "total_ns": 38092799
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 2,
+      "iterations": 1024,
+      "total_ns": 1000
+    },
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 3,
+      "iterations": 1024,
+      "total_ns": 47866582
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 3,
+      "iterations": 1024,
+      "total_ns": 41266976
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 3,
+      "iterations": 1024,
+      "total_ns": 44644487
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 3,
+      "iterations": 1024,
+      "total_ns": 44855072
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 3,
+      "iterations": 1024,
+      "total_ns": 5076893
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 3,
+      "iterations": 1024,
+      "total_ns": 750
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 3,
+      "iterations": 1024,
+      "total_ns": 38118257
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 3,
+      "iterations": 1024,
+      "total_ns": 1000
+    },
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 4,
+      "iterations": 1024,
+      "total_ns": 47769915
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 4,
+      "iterations": 1024,
+      "total_ns": 41288601
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 4,
+      "iterations": 1024,
+      "total_ns": 44827781
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 4,
+      "iterations": 1024,
+      "total_ns": 44785572
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 4,
+      "iterations": 1024,
+      "total_ns": 5171685
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 4,
+      "iterations": 1024,
+      "total_ns": 750
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 4,
+      "iterations": 1024,
+      "total_ns": 38006340
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 4,
+      "iterations": 1024,
+      "total_ns": 1000
+    }
+  ]
+}

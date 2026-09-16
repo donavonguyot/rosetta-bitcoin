@@ -1,0 +1,22 @@
+--- a/src/root.zig
++++ b/src/root.zig
+@@ -199,8 +199,17 @@
+     const w = try inverse(sig.s.value, n);
+     const u: u256 = @intCast((@as(u512, read(digest)) * w) % n);
+     const v: u256 = @intCast((@as(u512, sig.r.value) * w) % n);
+-    const q = g.multiply(u).plus(pubkey.point.multiply(v)).affine() catch return false;
+-    return q.x % n == sig.r.value;
++    const q = g.multiply(u).plus(pubkey.point.multiply(v));
++    return ecdsaXMatches(q, sig.r.value);
++}
++// Since 0 <= affine x < p < 2n, only r and r+n can reduce to r modulo n.
++// The widened addition must be checked before any field reduction.
++fn ecdsaXMatches(q: Point, r: u256) bool {
++    if (q.z == 0 or r >= n) return false;
++    const z2 = mul(q.z, q.z);
++    if (q.x == mul(r, z2)) return true;
++    const sum = @as(u257, r) + n;
++    return sum < p and q.x == mul(@intCast(sum), z2);
+ }
+ /// Caller-owned normalized DER, with no allocator requirement.
+ pub const DerSignature = struct {
