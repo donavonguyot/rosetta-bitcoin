@@ -1,0 +1,1280 @@
+{
+  "schema": "rb.zig_own_curve_shakedown.v1",
+  "benchmark_gate": "shakedown_50k",
+  "result": "passed",
+  "experimental": true,
+  "binary_gate_status": "not_attempted",
+  "captured_at": "20260916T143340Z",
+  "image": {
+    "variant": "candidate",
+    "image": "rosetta-zig-open-candidate:77914c01c967",
+    "image_id": "sha256:43e10c2c239e493172f5712ec86695d999364711c214e805e0b8a94ddd0b5a72",
+    "source_digest": "77914c01c96793f392cda56b07d8744836721b91ffe673659f0ce1dffed521e1",
+    "node_digest": "86d24f45477ebc3fd2a45c97255cc738f8ae7e2728df0f38a02cb446b7c87d2d",
+    "node_tree_digest": "7acbf29df364b96fb8bbf290cafeb334be6b925a032dddae0b4e084284b9920a",
+    "lane": "own_curve",
+    "command": [
+      "docker",
+      "build",
+      "--platform",
+      "linux/arm64",
+      "--build-arg",
+      "BACKEND=own_curve",
+      "--build-arg",
+      "SOURCE_DIGEST=77914c01c96793f392cda56b07d8744836721b91ffe673659f0ce1dffed521e1",
+      "--build-arg",
+      "PROBE=false",
+      "--build-arg",
+      "REJECT=",
+      "-t",
+      "rosetta-zig-open-candidate:77914c01c967",
+      "/Users/donavonguyot/RosettaBitcoin/Project/.campaigns/zig-open/context-candidate"
+    ],
+    "probe": false,
+    "reject": ""
+  },
+  "git_revision": "79712e9dbe62da0e546a08c7295754e36024a0a2",
+  "git_status": "?? Project/scripts/run_zig_50k.py\n",
+  "volume": "rosetta-zig-own-curve-50k-20260916t143340z",
+  "raw_directory": "Project/.campaigns/zig-50k-20260916T143340Z",
+  "measurements": 1,
+  "warmups": 0,
+  "preflight": [
+    {
+      "baseline_5k_status": "passed",
+      "baseline_source_artifact_id": "9726e57ee8d20bb2496e638d5fa24ff53fd9a8e2f65ab4fb209ff8ce6dc60622",
+      "benchmark_scope": "full_suite",
+      "errors": [],
+      "has_clean_script_corpus": 1,
+      "header_height": -1,
+      "lifecycle_status": "active_contender",
+      "max_validated_height": 138504,
+      "open_blocker_count": 0,
+      "open_blocker_heights": "",
+      "port": "zig",
+      "retired_at_gate": "",
+      "runway_status": "passed",
+      "script_failed": 0,
+      "script_native_crypto_backend": "libsecp256k1",
+      "script_passed": 45,
+      "script_runtime_surface": "docker",
+      "script_source_artifact_id": "36bd253c2bddaf4f8713ab6efdae95941a2185575e884d6fe190f530fa52baca",
+      "stage": "50k",
+      "stage_gate_comparability": "comparable",
+      "stage_gate_status": "passed",
+      "status_source_artifact_id": "1ef37646729e136d31a56c753197a43ea45aa9829c14438c3c43970281a6ba06",
+      "sync_status": "",
+      "target_height": 50000,
+      "warnings": []
+    }
+  ],
+  "environment": {
+    "docker": {
+      "ID": "e7d5456a-08c5-4562-9baa-520a4bc0ec4a",
+      "Containers": 53,
+      "ContainersRunning": 30,
+      "ContainersPaused": 0,
+      "ContainersStopped": 23,
+      "Images": 920,
+      "Driver": "overlay2",
+      "DriverStatus": [
+        [
+          "Backing Filesystem",
+          "btrfs"
+        ],
+        [
+          "Supports d_type",
+          "true"
+        ],
+        [
+          "Using metacopy",
+          "false"
+        ],
+        [
+          "Native Overlay Diff",
+          "true"
+        ],
+        [
+          "userxattr",
+          "false"
+        ]
+      ],
+      "Plugins": {
+        "Volume": [
+          "local"
+        ],
+        "Network": [
+          "bridge",
+          "host",
+          "ipvlan",
+          "macvlan",
+          "null",
+          "overlay"
+        ],
+        "Authorization": null,
+        "Log": [
+          "awslogs",
+          "fluentd",
+          "gcplogs",
+          "gelf",
+          "journald",
+          "json-file",
+          "local",
+          "splunk",
+          "syslog"
+        ]
+      },
+      "MemoryLimit": true,
+      "SwapLimit": true,
+      "CpuCfsPeriod": true,
+      "CpuCfsQuota": true,
+      "CPUShares": true,
+      "CPUSet": true,
+      "PidsLimit": true,
+      "IPv4Forwarding": true,
+      "Debug": false,
+      "NFd": 210,
+      "OomKillDisable": false,
+      "NGoroutines": 252,
+      "SystemTime": "2026-09-16T07:33:41.502661228-07:00",
+      "LoggingDriver": "json-file",
+      "CgroupDriver": "cgroupfs",
+      "CgroupVersion": "2",
+      "NEventsListener": 2,
+      "KernelVersion": "7.0.14-orbstack-00380-ga7e0a2dc9535",
+      "OperatingSystem": "OrbStack",
+      "OSVersion": "",
+      "OSType": "linux",
+      "Architecture": "aarch64",
+      "IndexServerAddress": "https://index.docker.io/v1/",
+      "RegistryConfig": {
+        "InsecureRegistryCIDRs": [
+          "::1/128",
+          "127.0.0.0/8"
+        ],
+        "IndexConfigs": {
+          "docker.io": {
+            "Name": "docker.io",
+            "Mirrors": [],
+            "Secure": true,
+            "Official": true
+          }
+        },
+        "Mirrors": []
+      },
+      "NCPU": 15,
+      "MemTotal": 12599369728,
+      "GenericResources": null,
+      "DockerRootDir": "/var/lib/docker",
+      "HttpProxy": "http://proxy.orb.internal:8305",
+      "HttpsProxy": "http://proxy.orb.internal:8305",
+      "NoProxy": "localhost,127.0.0.1,127.0.0.0/8,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,0.250.250.0/24,*.orb.internal,*.local,gateway.docker.internal,host.internal,host.docker.internal,host.lima.internal,docker.for.mac.localhost,docker.for.mac.host.internal",
+      "Name": "orbstack",
+      "Labels": [],
+      "ExperimentalBuild": true,
+      "ServerVersion": "29.4.0",
+      "Runtimes": {
+        "io.containerd.runc.v2": {
+          "path": "runc",
+          "status": {
+            "org.opencontainers.runtime-spec.features": "{\"ociVersionMin\":\"1.0.0\",\"ociVersionMax\":\"1.3.0\",\"hooks\":[\"prestart\",\"createRuntime\",\"createContainer\",\"startContainer\",\"poststart\",\"poststop\"],\"mountOptions\":[\"async\",\"atime\",\"bind\",\"defaults\",\"dev\",\"diratime\",\"dirsync\",\"exec\",\"iversion\",\"lazytime\",\"loud\",\"mand\",\"noatime\",\"nodev\",\"nodiratime\",\"noexec\",\"noiversion\",\"nolazytime\",\"nomand\",\"norelatime\",\"nostrictatime\",\"nosuid\",\"nosymfollow\",\"private\",\"ratime\",\"rbind\",\"rdev\",\"rdiratime\",\"relatime\",\"remount\",\"rexec\",\"rnoatime\",\"rnodev\",\"rnodiratime\",\"rnoexec\",\"rnorelatime\",\"rnostrictatime\",\"rnosuid\",\"rnosymfollow\",\"ro\",\"rprivate\",\"rrelatime\",\"rro\",\"rrw\",\"rshared\",\"rslave\",\"rstrictatime\",\"rsuid\",\"rsymfollow\",\"runbindable\",\"rw\",\"shared\",\"silent\",\"slave\",\"strictatime\",\"suid\",\"symfollow\",\"sync\",\"tmpcopyup\",\"unbindable\"],\"linux\":{\"namespaces\":[\"cgroup\",\"ipc\",\"mount\",\"network\",\"pid\",\"time\",\"user\",\"uts\"],\"capabilities\":[\"CAP_CHOWN\",\"CAP_DAC_OVERRIDE\",\"CAP_DAC_READ_SEARCH\",\"CAP_FOWNER\",\"CAP_FSETID\",\"CAP_KILL\",\"CAP_SETGID\",\"CAP_SETUID\",\"CAP_SETPCAP\",\"CAP_LINUX_IMMUTABLE\",\"CAP_NET_BIND_SERVICE\",\"CAP_NET_BROADCAST\",\"CAP_NET_ADMIN\",\"CAP_NET_RAW\",\"CAP_IPC_LOCK\",\"CAP_IPC_OWNER\",\"CAP_SYS_MODULE\",\"CAP_SYS_RAWIO\",\"CAP_SYS_CHROOT\",\"CAP_SYS_PTRACE\",\"CAP_SYS_PACCT\",\"CAP_SYS_ADMIN\",\"CAP_SYS_BOOT\",\"CAP_SYS_NICE\",\"CAP_SYS_RESOURCE\",\"CAP_SYS_TIME\",\"CAP_SYS_TTY_CONFIG\",\"CAP_MKNOD\",\"CAP_LEASE\",\"CAP_AUDIT_WRITE\",\"CAP_AUDIT_CONTROL\",\"CAP_SETFCAP\",\"CAP_MAC_OVERRIDE\",\"CAP_MAC_ADMIN\",\"CAP_SYSLOG\",\"CAP_WAKE_ALARM\",\"CAP_BLOCK_SUSPEND\",\"CAP_AUDIT_READ\",\"CAP_PERFMON\",\"CAP_BPF\",\"CAP_CHECKPOINT_RESTORE\"],\"cgroup\":{\"v1\":true,\"v2\":true,\"systemd\":true,\"systemdUser\":true,\"rdma\":true},\"seccomp\":{\"enabled\":true,\"actions\":[\"SCMP_ACT_ALLOW\",\"SCMP_ACT_ERRNO\",\"SCMP_ACT_KILL\",\"SCMP_ACT_KILL_PROCESS\",\"SCMP_ACT_KILL_THREAD\",\"SCMP_ACT_LOG\",\"SCMP_ACT_NOTIFY\",\"SCMP_ACT_TRACE\",\"SCMP_ACT_TRAP\"],\"operators\":[\"SCMP_CMP_EQ\",\"SCMP_CMP_GE\",\"SCMP_CMP_GT\",\"SCMP_CMP_LE\",\"SCMP_CMP_LT\",\"SCMP_CMP_MASKED_EQ\",\"SCMP_CMP_NE\"],\"archs\":[\"SCMP_ARCH_AARCH64\",\"SCMP_ARCH_ARM\",\"SCMP_ARCH_LOONGARCH64\",\"SCMP_ARCH_MIPS\",\"SCMP_ARCH_MIPS64\",\"SCMP_ARCH_MIPS64N32\",\"SCMP_ARCH_MIPSEL\",\"SCMP_ARCH_MIPSEL64\",\"SCMP_ARCH_MIPSEL64N32\",\"SCMP_ARCH_PPC\",\"SCMP_ARCH_PPC64\",\"SCMP_ARCH_PPC64LE\",\"SCMP_ARCH_RISCV64\",\"SCMP_ARCH_S390\",\"SCMP_ARCH_S390X\",\"SCMP_ARCH_X32\",\"SCMP_ARCH_X86\",\"SCMP_ARCH_X86_64\"],\"knownFlags\":[\"SECCOMP_FILTER_FLAG_TSYNC\",\"SECCOMP_FILTER_FLAG_SPEC_ALLOW\",\"SECCOMP_FILTER_FLAG_LOG\",\"SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV\"],\"supportedFlags\":[\"SECCOMP_FILTER_FLAG_TSYNC\",\"SECCOMP_FILTER_FLAG_SPEC_ALLOW\",\"SECCOMP_FILTER_FLAG_LOG\",\"SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV\"]},\"apparmor\":{\"enabled\":true},\"selinux\":{\"enabled\":true},\"intelRdt\":{\"enabled\":true,\"schemata\":true,\"monitoring\":true},\"memoryPolicy\":{\"modes\":[\"MPOL_BIND\",\"MPOL_DEFAULT\",\"MPOL_INTERLEAVE\",\"MPOL_LOCAL\",\"MPOL_PREFERRED\",\"MPOL_PREFERRED_MANY\",\"MPOL_WEIGHTED_INTERLEAVE\"],\"flags\":[\"MPOL_F_NUMA_BALANCING\",\"MPOL_F_RELATIVE_NODES\",\"MPOL_F_STATIC_NODES\"]},\"mountExtensions\":{\"idmap\":{\"enabled\":true}},\"netDevices\":{\"enabled\":true}},\"annotations\":{\"io.github.seccomp.libseccomp.version\":\"2.6.0\",\"org.opencontainers.runc.checkpoint.enabled\":\"true\",\"org.opencontainers.runc.commit\":\"bb14dabeb7185bb72c8c86735d090dcb20f36587\",\"org.opencontainers.runc.version\":\"1.5.1\"},\"potentiallyUnsafeConfigAnnotations\":[\"bundle\",\"org.systemd.property.\",\"org.criu.config\"]}"
+          }
+        },
+        "runc": {
+          "path": "runc",
+          "status": {
+            "org.opencontainers.runtime-spec.features": "{\"ociVersionMin\":\"1.0.0\",\"ociVersionMax\":\"1.3.0\",\"hooks\":[\"prestart\",\"createRuntime\",\"createContainer\",\"startContainer\",\"poststart\",\"poststop\"],\"mountOptions\":[\"async\",\"atime\",\"bind\",\"defaults\",\"dev\",\"diratime\",\"dirsync\",\"exec\",\"iversion\",\"lazytime\",\"loud\",\"mand\",\"noatime\",\"nodev\",\"nodiratime\",\"noexec\",\"noiversion\",\"nolazytime\",\"nomand\",\"norelatime\",\"nostrictatime\",\"nosuid\",\"nosymfollow\",\"private\",\"ratime\",\"rbind\",\"rdev\",\"rdiratime\",\"relatime\",\"remount\",\"rexec\",\"rnoatime\",\"rnodev\",\"rnodiratime\",\"rnoexec\",\"rnorelatime\",\"rnostrictatime\",\"rnosuid\",\"rnosymfollow\",\"ro\",\"rprivate\",\"rrelatime\",\"rro\",\"rrw\",\"rshared\",\"rslave\",\"rstrictatime\",\"rsuid\",\"rsymfollow\",\"runbindable\",\"rw\",\"shared\",\"silent\",\"slave\",\"strictatime\",\"suid\",\"symfollow\",\"sync\",\"tmpcopyup\",\"unbindable\"],\"linux\":{\"namespaces\":[\"cgroup\",\"ipc\",\"mount\",\"network\",\"pid\",\"time\",\"user\",\"uts\"],\"capabilities\":[\"CAP_CHOWN\",\"CAP_DAC_OVERRIDE\",\"CAP_DAC_READ_SEARCH\",\"CAP_FOWNER\",\"CAP_FSETID\",\"CAP_KILL\",\"CAP_SETGID\",\"CAP_SETUID\",\"CAP_SETPCAP\",\"CAP_LINUX_IMMUTABLE\",\"CAP_NET_BIND_SERVICE\",\"CAP_NET_BROADCAST\",\"CAP_NET_ADMIN\",\"CAP_NET_RAW\",\"CAP_IPC_LOCK\",\"CAP_IPC_OWNER\",\"CAP_SYS_MODULE\",\"CAP_SYS_RAWIO\",\"CAP_SYS_CHROOT\",\"CAP_SYS_PTRACE\",\"CAP_SYS_PACCT\",\"CAP_SYS_ADMIN\",\"CAP_SYS_BOOT\",\"CAP_SYS_NICE\",\"CAP_SYS_RESOURCE\",\"CAP_SYS_TIME\",\"CAP_SYS_TTY_CONFIG\",\"CAP_MKNOD\",\"CAP_LEASE\",\"CAP_AUDIT_WRITE\",\"CAP_AUDIT_CONTROL\",\"CAP_SETFCAP\",\"CAP_MAC_OVERRIDE\",\"CAP_MAC_ADMIN\",\"CAP_SYSLOG\",\"CAP_WAKE_ALARM\",\"CAP_BLOCK_SUSPEND\",\"CAP_AUDIT_READ\",\"CAP_PERFMON\",\"CAP_BPF\",\"CAP_CHECKPOINT_RESTORE\"],\"cgroup\":{\"v1\":true,\"v2\":true,\"systemd\":true,\"systemdUser\":true,\"rdma\":true},\"seccomp\":{\"enabled\":true,\"actions\":[\"SCMP_ACT_ALLOW\",\"SCMP_ACT_ERRNO\",\"SCMP_ACT_KILL\",\"SCMP_ACT_KILL_PROCESS\",\"SCMP_ACT_KILL_THREAD\",\"SCMP_ACT_LOG\",\"SCMP_ACT_NOTIFY\",\"SCMP_ACT_TRACE\",\"SCMP_ACT_TRAP\"],\"operators\":[\"SCMP_CMP_EQ\",\"SCMP_CMP_GE\",\"SCMP_CMP_GT\",\"SCMP_CMP_LE\",\"SCMP_CMP_LT\",\"SCMP_CMP_MASKED_EQ\",\"SCMP_CMP_NE\"],\"archs\":[\"SCMP_ARCH_AARCH64\",\"SCMP_ARCH_ARM\",\"SCMP_ARCH_LOONGARCH64\",\"SCMP_ARCH_MIPS\",\"SCMP_ARCH_MIPS64\",\"SCMP_ARCH_MIPS64N32\",\"SCMP_ARCH_MIPSEL\",\"SCMP_ARCH_MIPSEL64\",\"SCMP_ARCH_MIPSEL64N32\",\"SCMP_ARCH_PPC\",\"SCMP_ARCH_PPC64\",\"SCMP_ARCH_PPC64LE\",\"SCMP_ARCH_RISCV64\",\"SCMP_ARCH_S390\",\"SCMP_ARCH_S390X\",\"SCMP_ARCH_X32\",\"SCMP_ARCH_X86\",\"SCMP_ARCH_X86_64\"],\"knownFlags\":[\"SECCOMP_FILTER_FLAG_TSYNC\",\"SECCOMP_FILTER_FLAG_SPEC_ALLOW\",\"SECCOMP_FILTER_FLAG_LOG\",\"SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV\"],\"supportedFlags\":[\"SECCOMP_FILTER_FLAG_TSYNC\",\"SECCOMP_FILTER_FLAG_SPEC_ALLOW\",\"SECCOMP_FILTER_FLAG_LOG\",\"SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV\"]},\"apparmor\":{\"enabled\":true},\"selinux\":{\"enabled\":true},\"intelRdt\":{\"enabled\":true,\"schemata\":true,\"monitoring\":true},\"memoryPolicy\":{\"modes\":[\"MPOL_BIND\",\"MPOL_DEFAULT\",\"MPOL_INTERLEAVE\",\"MPOL_LOCAL\",\"MPOL_PREFERRED\",\"MPOL_PREFERRED_MANY\",\"MPOL_WEIGHTED_INTERLEAVE\"],\"flags\":[\"MPOL_F_NUMA_BALANCING\",\"MPOL_F_RELATIVE_NODES\",\"MPOL_F_STATIC_NODES\"]},\"mountExtensions\":{\"idmap\":{\"enabled\":true}},\"netDevices\":{\"enabled\":true}},\"annotations\":{\"io.github.seccomp.libseccomp.version\":\"2.6.0\",\"org.opencontainers.runc.checkpoint.enabled\":\"true\",\"org.opencontainers.runc.commit\":\"bb14dabeb7185bb72c8c86735d090dcb20f36587\",\"org.opencontainers.runc.version\":\"1.5.1\"},\"potentiallyUnsafeConfigAnnotations\":[\"bundle\",\"org.systemd.property.\",\"org.criu.config\"]}"
+          }
+        }
+      },
+      "DefaultRuntime": "runc",
+      "Swarm": {
+        "NodeID": "",
+        "NodeAddr": "",
+        "LocalNodeState": "inactive",
+        "ControlAvailable": false,
+        "Error": "",
+        "RemoteManagers": null
+      },
+      "LiveRestoreEnabled": false,
+      "Isolation": "",
+      "InitBinary": "docker-init",
+      "ContainerdCommit": {
+        "ID": "301b2dac98f15c27117da5c8af12118a041a31d9"
+      },
+      "RuncCommit": {
+        "ID": "bb14dabeb7185bb72c8c86735d090dcb20f36587"
+      },
+      "InitCommit": {
+        "ID": "de40ad0"
+      },
+      "SecurityOptions": [
+        "name=seccomp,profile=builtin",
+        "name=cgroupns"
+      ],
+      "ProductLicense": "Community Engine",
+      "DefaultAddressPools": [
+        {
+          "Base": "192.168.97.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.107.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.117.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.147.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.148.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.155.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.156.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.158.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.163.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.164.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.165.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.166.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.167.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.171.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.172.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.181.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.183.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.186.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.207.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.214.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.215.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.216.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.223.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.227.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.228.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.229.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.237.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.239.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.242.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "192.168.247.0/24",
+          "Size": 24
+        },
+        {
+          "Base": "fd07:b51a:cc66:d000::/56",
+          "Size": 64
+        }
+      ],
+      "FirewallBackend": {
+        "Driver": "iptables"
+      },
+      "CDISpecDirs": [
+        "/etc/cdi",
+        "/var/run/cdi"
+      ],
+      "Containerd": {
+        "Address": "/var/run/docker/containerd/containerd.sock",
+        "Namespaces": {
+          "Containers": "moby",
+          "Plugins": "plugins.moby"
+        }
+      },
+      "Warnings": [
+        "WARNING: DOCKER_INSECURE_NO_IPTABLES_RAW is set"
+      ],
+      "ClientInfo": {
+        "Debug": false,
+        "Version": "29.4.0",
+        "DefaultAPIVersion": "1.54",
+        "GitCommit": "9d7ad9f",
+        "GoVersion": "go1.26.4",
+        "Os": "darwin",
+        "Arch": "arm64",
+        "BuildTime": "Fri Aug  7 04:38:56 2026",
+        "Context": "orbstack",
+        "Plugins": [
+          {
+            "SchemaVersion": "0.1.0",
+            "Vendor": "Docker Inc.",
+            "Version": "v0.33.0",
+            "ShortDescription": "Docker Buildx",
+            "Name": "buildx",
+            "Path": "/Users/donavonguyot/.docker/cli-plugins/docker-buildx"
+          },
+          {
+            "SchemaVersion": "0.1.0",
+            "Vendor": "Docker Inc.",
+            "Version": "v5.1.2",
+            "ShortDescription": "Docker Compose",
+            "Name": "compose",
+            "Path": "/Users/donavonguyot/.docker/cli-plugins/docker-compose"
+          }
+        ],
+        "Warnings": null
+      }
+    },
+    "host_load": [
+      1.607421875,
+      1.73876953125,
+      1.80615234375
+    ],
+    "host": "Darwin Donavons-MacBook-Pro-2.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:19:08 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T6050 arm64"
+  },
+  "toolchain_pins": {
+    "zig": {
+      "version": "0.16.0",
+      "aarch64_linux_sha256": "ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17",
+      "x86_64_linux_sha256": "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00"
+    },
+    "base": "debian:bookworm-slim@sha256:0104b334637a5f19aa9c983a91b54c89887c0984081f2068983107a6f6c21eeb",
+    "build_packages": {
+      "gcc": "4:12.2.0-3",
+      "gcc-12": "12.2.0-14+deb12u1",
+      "g++": "4:12.2.0-3",
+      "g++-12": "12.2.0-14+deb12u1",
+      "binutils": "2.40-2",
+      "cmake": "3.25.1-1",
+      "build-essential": "12.9",
+      "librocksdb-dev": "7.8.3-2"
+    },
+    "reference_commit": "0cdc758a56360bf58a851fe91085a327ec97685a",
+    "reference_archive_sha256": "385c115a21ee1ff31d0b0320acc2b278c92f7bde971f510566ad481a38835be0",
+    "base_amd64": "debian@sha256:b29f74a267526ae6ea104eed6c46133b0ca70ce812525df8cd5817698f0a624a",
+    "base_amd64_provenance": "amd64 child of the pinned base OCI index"
+  },
+  "build_packages": "adduser\t3.134\napt\t2.6.1\nbase-files\t12.4+deb12u14\nbase-passwd\t3.6.1\nbash\t5.2.15-2+b13\nbinutils\t2.40-2\nbinutils-aarch64-linux-gnu\t2.40-2\nbinutils-common:arm64\t2.40-2\nbsdutils\t1:2.38.1-5+deb12u3\nbuild-essential\t12.9\nbzip2\t1.0.8-5+b1\nca-certificates\t20250419~deb12u1\ncmake\t3.25.1-1\ncmake-data\t3.25.1-1\ncoreutils\t9.1-1\ncpp\t4:12.2.0-3\ncpp-12\t12.2.0-14+deb12u1\ncurl\t7.88.1-10+deb12u15\ndash\t0.5.12-2\ndebconf\t1.5.82\ndebian-archive-keyring\t2023.3+deb12u2\ndebianutils\t5.7-0.5~deb12u1\ndiffutils\t1:3.8-4\ndpkg\t1.21.23\ndpkg-dev\t1.21.23\ne2fsprogs\t1.47.0-2+b2\nfindutils\t4.9.0-4\ng++\t4:12.2.0-3\ng++-12\t12.2.0-14+deb12u1\ngcc\t4:12.2.0-3\ngcc-12\t12.2.0-14+deb12u1\ngcc-12-base:arm64\t12.2.0-14+deb12u1\ngpgv\t2.2.40-1.1+deb12u2\ngrep\t3.8-5\ngzip\t1.12-1\nhostname\t3.23+nmu1\ninit-system-helpers\t1.65.2+deb12u1\nlibacl1:arm64\t2.3.1-3\nlibapt-pkg6.0:arm64\t2.6.1\nlibarchive13:arm64\t3.6.2-1+deb12u5\nlibasan8:arm64\t12.2.0-14+deb12u1\nlibatomic1:arm64\t12.2.0-14+deb12u1\nlibattr1:arm64\t1:2.5.1-4\nlibaudit-common\t1:3.0.9-1\nlibaudit1:arm64\t1:3.0.9-1\nlibbinutils:arm64\t2.40-2\nlibblkid1:arm64\t2.38.1-5+deb12u3\nlibbrotli1:arm64\t1.0.9-2+b6\nlibbz2-1.0:arm64\t1.0.8-5+b1\nlibbz2-dev:arm64\t1.0.8-5+b1\nlibc-bin\t2.36-9+deb12u14\nlibc-dev-bin\t2.36-9+deb12u14\nlibc6:arm64\t2.36-9+deb12u14\nlibc6-dev:arm64\t2.36-9+deb12u14\nlibcap-ng0:arm64\t0.8.3-1+b3\nlibcap2:arm64\t1:2.66-4+deb12u3+b1\nlibcc1-0:arm64\t12.2.0-14+deb12u1\nlibcom-err2:arm64\t1.47.0-2+b2\nlibcrypt-dev:arm64\t1:4.4.33-2\nlibcrypt1:arm64\t1:4.4.33-2\nlibctf-nobfd0:arm64\t2.40-2\nlibctf0:arm64\t2.40-2\nlibcurl4:arm64\t7.88.1-10+deb12u15\nlibdb5.3:arm64\t5.3.28+dfsg2-1\nlibdebconfclient0:arm64\t0.270\nlibdpkg-perl\t1.21.23\nlibexpat1:arm64\t2.5.0-1+deb12u3\nlibext2fs2:arm64\t1.47.0-2+b2\nlibffi8:arm64\t3.4.4-1\nlibgcc-12-dev:arm64\t12.2.0-14+deb12u1\nlibgcc-s1:arm64\t12.2.0-14+deb12u1\nlibgcrypt20:arm64\t1.10.1-3\nlibgdbm-compat4:arm64\t1.23-3\nlibgdbm6:arm64\t1.23-3\nlibgflags-dev\t2.2.2-2\nlibgflags2.2\t2.2.2-2\nlibgmp10:arm64\t2:6.2.1+dfsg1-1.1\nlibgnutls30:arm64\t3.7.9-2+deb12u6\nlibgomp1:arm64\t12.2.0-14+deb12u1\nlibgpg-error0:arm64\t1.46-1\nlibgprofng0:arm64\t2.40-2\nlibgssapi-krb5-2:arm64\t1.20.1-2+deb12u5\nlibhogweed6:arm64\t3.8.1-2\nlibhwasan0:arm64\t12.2.0-14+deb12u1\nlibicu72:arm64\t72.1-3+deb12u1\nlibidn2-0:arm64\t2.3.3-1+b1\nlibisl23:arm64\t0.25-1.1\nlibitm1:arm64\t12.2.0-14+deb12u1\nlibjansson4:arm64\t2.14-2\nlibjsoncpp25:arm64\t1.9.5-4\nlibk5crypto3:arm64\t1.20.1-2+deb12u5\nlibkeyutils1:arm64\t1.6.3-2\nlibkrb5-3:arm64\t1.20.1-2+deb12u5\nlibkrb5support0:arm64\t1.20.1-2+deb12u5\nlibldap-2.5-0:arm64\t2.5.13+dfsg-5\nliblsan0:arm64\t12.2.0-14+deb12u1\nliblz4-1:arm64\t1.9.4-1\nliblz4-dev:arm64\t1.9.4-1\nliblzma5:arm64\t5.4.1-1+deb12u1\nlibmd0:arm64\t1.0.4-2\nlibmount1:arm64\t2.38.1-5+deb12u3\nlibmpc3:arm64\t1.3.1-1\nlibmpfr6:arm64\t4.2.0-1\nlibncursesw6:arm64\t6.4-4\nlibnettle8:arm64\t3.8.1-2\nlibnghttp2-14:arm64\t1.52.0-1+deb12u3\nlibnsl-dev:arm64\t1.3.0-2\nlibnsl2:arm64\t1.3.0-2\nlibp11-kit0:arm64\t0.24.1-2\nlibpam-modules:arm64\t1.5.2-6+deb12u2\nlibpam-modules-bin\t1.5.2-6+deb12u2\nlibpam-runtime\t1.5.2-6+deb12u2\nlibpam0g:arm64\t1.5.2-6+deb12u2\nlibpcre2-8-0:arm64\t10.42-1\nlibperl5.36:arm64\t5.36.0-7+deb12u3\nlibpkgconf3:arm64\t1.8.1-1\nlibproc2-0:arm64\t2:4.0.2-3\nlibpsl5:arm64\t0.21.2-1\nlibrhash0:arm64\t1.4.3-3\nlibrocksdb-dev\t7.8.3-2\nlibrocksdb7.8\t7.8.3-2\nlibrtmp1:arm64\t2.4+20151223.gitfa8646d.1-2+b2\nlibsasl2-2:arm64\t2.1.28+dfsg-10\nlibsasl2-modules-db:arm64\t2.1.28+dfsg-10\nlibseccomp2:arm64\t2.5.4-1+deb12u1\nlibselinux1:arm64\t3.4-1+b6\nlibsemanage-common\t3.4-1\nlibsemanage2:arm64\t3.4-1+b5\nlibsepol2:arm64\t3.4-2.1\nlibsmartcols1:arm64\t2.38.1-5+deb12u3\nlibsnappy-dev:arm64\t1.1.9-3\nlibsnappy1v5:arm64\t1.1.9-3\nlibss2:arm64\t1.47.0-2+b2\nlibssh2-1:arm64\t1.10.0-3+deb12u1\nlibssl3:arm64\t3.0.20-1~deb12u2\nlibstdc++-12-dev:arm64\t12.2.0-14+deb12u1\nlibstdc++6:arm64\t12.2.0-14+deb12u1\nlibsystemd0:arm64\t252.39-1~deb12u2\nlibtasn1-6:arm64\t4.19.0-2+deb12u1\nlibtinfo6:arm64\t6.4-4\nlibtirpc-common\t1.3.3+ds-1\nlibtirpc-dev:arm64\t1.3.3+ds-1\nlibtirpc3:arm64\t1.3.3+ds-1\nlibtsan2:arm64\t12.2.0-14+deb12u1\nlibubsan1:arm64\t12.2.0-14+deb12u1\nlibudev1:arm64\t252.39-1~deb12u2\nlibunistring2:arm64\t1.0-2\nlibuuid1:arm64\t2.38.1-5+deb12u3\nlibuv1:arm64\t1.44.2-1+deb12u1\nlibxml2:arm64\t2.9.14+dfsg-1.3~deb12u6\nlibxxhash0:arm64\t0.8.1-1\nlibzstd-dev:arm64\t1.5.4+dfsg2-5\nlibzstd1:arm64\t1.5.4+dfsg2-5\nlinux-libc-dev:arm64\t6.1.187-1\nlogin\t1:4.13+dfsg1-1+deb12u2\nlogsave\t1.47.0-2+b2\nmake\t4.3-4.1\nmawk\t1.3.4.20200120-3.1\nmount\t2.38.1-5+deb12u3\nncurses-base\t6.4-4\nncurses-bin\t6.4-4\nopenssl\t3.0.20-1~deb12u2\npasswd\t1:4.13+dfsg1-1+deb12u2\npatch\t2.7.6-7\nperl\t5.36.0-7+deb12u3\nperl-base\t5.36.0-7+deb12u3\nperl-modules-5.36\t5.36.0-7+deb12u3\npkg-config:arm64\t1.8.1-1\npkgconf:arm64\t1.8.1-1\npkgconf-bin\t1.8.1-1\nprocps\t2:4.0.2-3\nrpcsvc-proto\t1.4.3-1\nsed\t4.9-1+deb12u1\nsysvinit-utils\t3.06-4\ntar\t1.34+dfsg-1.2+deb12u1\ntzdata\t2026b-0+deb12u1\nusr-is-merged\t37~deb12u1\nutil-linux\t2.38.1-5+deb12u3\nutil-linux-extra\t2.38.1-5+deb12u3\nxz-utils\t5.4.1-1+deb12u1\nzlib1g:arm64\t1:1.2.13.dfsg-1\nzlib1g-dev:arm64\t1:1.2.13.dfsg-1\n",
+  "linkage": "\tlinux-vdso.so.1 (0x0000ffff931fa000)\n\tlibrocksdb.so.7.8 => /lib/aarch64-linux-gnu/librocksdb.so.7.8 (0x0000ffff92770000)\n\tlibc.so.6 => /lib/aarch64-linux-gnu/libc.so.6 (0x0000ffff925c0000)\n\tlibgflags.so.2.2 => /lib/aarch64-linux-gnu/libgflags.so.2.2 (0x0000ffff92580000)\n\tlibsnappy.so.1 => /lib/aarch64-linux-gnu/libsnappy.so.1 (0x0000ffff92550000)\n\tlibz.so.1 => /lib/aarch64-linux-gnu/libz.so.1 (0x0000ffff92510000)\n\tlibbz2.so.1.0 => /lib/aarch64-linux-gnu/libbz2.so.1.0 (0x0000ffff924e0000)\n\tliblz4.so.1 => /lib/aarch64-linux-gnu/liblz4.so.1 (0x0000ffff92490000)\n\tlibzstd.so.1 => /lib/aarch64-linux-gnu/libzstd.so.1 (0x0000ffff923d0000)\n\tlibstdc++.so.6 => /lib/aarch64-linux-gnu/libstdc++.so.6 (0x0000ffff921b0000)\n\tlibm.so.6 => /lib/aarch64-linux-gnu/libm.so.6 (0x0000ffff92100000)\n\tlibgcc_s.so.1 => /lib/aarch64-linux-gnu/libgcc_s.so.1 (0x0000ffff920c0000)\n\t/lib/ld-linux-aarch64.so.1 (0x0000ffff931b0000)\n\tlibpthread.so.0 => /lib/aarch64-linux-gnu/libpthread.so.0 (0x0000ffff92090000)\n",
+  "binary_audit": {
+    "result": "passed",
+    "runtime_binary_sha256": "5b27b6b0c57a801a1da22fab5ff23e22eb690adb4741fc5a26ca9a03cb4635ee",
+    "builder_runtime_binary_identical": true,
+    "C_entrypoints_absent": true,
+    "ecosystem_curve_symbols_absent": true
+  },
+  "backend_selection": {
+    "result": "passed",
+    "unavailable_backend_rejected": true,
+    "unknown_backend_rejected": true
+  },
+  "reference_endpoint": {
+    "hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "height": 50000,
+    "size": 6069,
+    "weight": 15756,
+    "nTx": 12
+  },
+  "corpus": {
+    "schema": "port.script_corpus_result.v1",
+    "category": "script_corpus",
+    "implementation": "ZigNode",
+    "port": "zig",
+    "runtime_surface": "docker",
+    "native_crypto_backend": "libsecp256k1-zig",
+    "fixture_count": 45,
+    "passed": 45,
+    "failed": 0,
+    "result": "passed",
+    "verifier": {
+      "engine": "zig_native",
+      "delegated": false,
+      "crypto_backend": "libsecp256k1-zig",
+      "implemented": true,
+      "source": "Nodes/Zig/src/script.zig"
+    },
+    "results": [
+      {
+        "fixture_id": "scripts.bare_multisig_27840",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_op1_only_31842",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_numequal_32712",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_cltv_32868",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_p2wsh_op1_only_33500",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2pkh_sighash_single_38010",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_cltv_38191",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_scriptpath_44295",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_scriptpath_46599",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_size_lessthan_46779",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_add_51340",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_sha256_52024",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_size_52497",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_2drop_54287",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_ifdup_csv_54297",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_mul_58173",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2pkh_61174",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_rot_62754",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_3dup_63305",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_2dup_63603",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_altstack_66241",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_hash256_67562",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_70924",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_71267",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_78841",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_82112",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_82856",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_82921",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_sha1_82921",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_87214",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_89632",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_within_98025",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_98631",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_nip_98631",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_100372",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2pkh_107951",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_108508",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_108972",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_116040",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.bare_legacy_118555",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_121035",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_126975",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2sh_abs_132361",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2tr_tapscript_133634",
+        "result": "passed",
+        "failure": ""
+      },
+      {
+        "fixture_id": "scripts.p2wsh_booland_136369",
+        "result": "passed",
+        "failure": ""
+      }
+    ]
+  },
+  "command": [
+    "docker",
+    "run",
+    "--rm",
+    "--name",
+    "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+    "--user",
+    "0",
+    "--network",
+    "rosetta-reference-node_default",
+    "-v",
+    "rosetta-zig-own-curve-50k-20260916t143340z:/data",
+    "-v",
+    "/Users/donavonguyot/RosettaBitcoin/Project/.campaigns/zig-50k-20260916T143340Z:/results",
+    "-e",
+    "ZIGBITNODE_RUNTIME_SURFACE=docker",
+    "-e",
+    "ZIGBITNODE_SCRIPT_THREADS=4",
+    "-e",
+    "PREFETCH_DEPTH=4",
+    "sha256:43e10c2c239e493172f5712ec86695d999364711c214e805e0b8a94ddd0b5a72",
+    "zigbitnode",
+    "local-reference-proof",
+    "--datadir",
+    "/data",
+    "--target",
+    "50000",
+    "--peer",
+    "bitcoin-core-testnet4:48333",
+    "--output",
+    "/results/proof.json"
+  ],
+  "docker_elapsed_s": 40.4685552919982,
+  "returncode": 0,
+  "settled_status": {
+    "schema": "port.status.v1",
+    "port": "zig",
+    "node": "ZigNode",
+    "runtime_surface": "host",
+    "datadir": "/data",
+    "sync_status": "blocks_current",
+    "chainstate_backend": "rocksdb",
+    "chainstate_status": "usable",
+    "validated_height": 50000,
+    "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "header_height": 50000,
+    "header_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "stored_block_height": 50000,
+    "stored_block_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "chainstate_utxo_count": 568855,
+    "native_crypto_backend": "libsecp256k1-zig",
+    "native_crypto_available": false,
+    "taproot_tweak_backend": "libsecp256k1-zig",
+    "crypto_backend": "libsecp256k1-zig",
+    "crypto_source_digest": "77914c01c96793f392cda56b07d8744836721b91ffe673659f0ce1dffed521e1",
+    "current_blocker": null,
+    "binary_gate_status": "not_attempted"
+  },
+  "telemetry": {
+    "quality": "clean",
+    "errors": [],
+    "warnings": [],
+    "summary": {
+      "tick_count": 107,
+      "lifecycle_markers": {
+        "run_started": 145,
+        "container_started": 145,
+        "node_started": 145,
+        "first_peer_byte": 145,
+        "first_block_connected": 146,
+        "heartbeat": 146,
+        "target_reached": 40171,
+        "run_finished": 40171
+      },
+      "heartbeat_max_gap_ms": 1709,
+      "heartbeat_target_ms": 15000,
+      "heartbeat_grace_ms": 5000,
+      "heartbeat_warning_ms": 15000,
+      "heartbeat_failure_ms": 20000,
+      "heartbeat_hard_failure_ms": 30000,
+      "heartbeat_limit_ms": 20000,
+      "phase_counts": {
+        "block_connect": 1,
+        "complete": 2,
+        "heartbeat": 100,
+        "peer_connect": 1,
+        "startup": 3
+      },
+      "stall_class_counts": {
+        "none": 107
+      },
+      "slow_blocks": [],
+      "heartbeat_gaps_over_target": 0,
+      "heartbeat_gaps_over_failure": 0,
+      "telemetry_quality": "clean"
+    }
+  },
+  "writer_progress": {
+    "crypto_source_digest": "77914c01c96793f392cda56b07d8744836721b91ffe673659f0ce1dffed521e1",
+    "crypto_lane": "own_curve",
+    "chain": "testnet4",
+    "sync_status": "blocks_current",
+    "header_height": 50000,
+    "validated_height": 50000,
+    "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "stored_block_height": 50000,
+    "chainstate_utxo_count": 568855,
+    "current_blocker": null,
+    "peer": "bitcoin-core-testnet4:48333",
+    "current_block_height": 50000,
+    "current_block_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "current_block_tx_count": 857405,
+    "current_block_vin_count": 1385632,
+    "current_block_script_input_count": 1385632,
+    "last_block_ms": 0,
+    "native_crypto_backend": "libsecp256k1-zig",
+    "timing_buckets_ms": {
+      "p2p_fetch": 4321,
+      "block_parse_validate": 3326,
+      "utxo_load": 1959,
+      "script_verify": 18398,
+      "utxo_apply": 4999,
+      "commit": 4999,
+      "block_connect_store_commit": 31080
+    }
+  },
+  "timing": {
+    "telemetry_schema": "benchmark.telemetry_tick.v1",
+    "total_ms": 40171,
+    "stage_totals_ms": {
+      "p2p_fetch": 4321,
+      "block_parse_validate": 3326,
+      "block_store": 636,
+      "connect_total": 31409,
+      "utxo_load": 1959,
+      "prevout_batch_load": 1959,
+      "script_verify": 18398,
+      "script_wall_ms": 18393,
+      "script_worker_cpu_ms": 60798,
+      "script_worker_elapsed_ns": 61290162675,
+      "script_worker_thread_cpu_ns": 61218204753,
+      "utxo_apply": 4999,
+      "commit": 4999,
+      "utxo_delete_prepare": 211,
+      "utxo_put_prepare": 525,
+      "undo_put_prepare": 171,
+      "metadata_put_prepare": 126,
+      "rocksdb_write": 3920,
+      "block_connect_store_commit": 31080
+    },
+    "utxo_lookup_count": 1385632,
+    "utxo_key_bytes": 63739072,
+    "utxo_value_bytes": 45130271,
+    "created_utxos": 1698088,
+    "spent_external": 1129233,
+    "same_block_spends": 256399,
+    "runner_batches": 28648,
+    "tx_count": 857405,
+    "input_count": 1385632,
+    "script_jobs": 1385632,
+    "script_threads": 4,
+    "slow_blocks": [
+      {
+        "height": 20888,
+        "ms": 1429,
+        "tx_count": 2,
+        "input_count": 6760,
+        "created_utxos": 2,
+        "spent_external": 6760,
+        "same_block_spends": 0,
+        "script_jobs": 6760,
+        "utxo_value_bytes": 283920
+      },
+      {
+        "height": 21209,
+        "ms": 494,
+        "tx_count": 36,
+        "input_count": 3939,
+        "created_utxos": 69,
+        "spent_external": 3939,
+        "same_block_spends": 0,
+        "script_jobs": 3939,
+        "utxo_value_bytes": 165138
+      },
+      {
+        "height": 24553,
+        "ms": 270,
+        "tx_count": 191,
+        "input_count": 2963,
+        "created_utxos": 380,
+        "spent_external": 2963,
+        "same_block_spends": 0,
+        "script_jobs": 2963,
+        "utxo_value_bytes": 123876
+      },
+      {
+        "height": 21238,
+        "ms": 227,
+        "tx_count": 22,
+        "input_count": 2555,
+        "created_utxos": 41,
+        "spent_external": 2555,
+        "same_block_spends": 0,
+        "script_jobs": 2555,
+        "utxo_value_bytes": 107250
+      },
+      {
+        "height": 28102,
+        "ms": 160,
+        "tx_count": 119,
+        "input_count": 2147,
+        "created_utxos": 178,
+        "spent_external": 2110,
+        "same_block_spends": 37,
+        "script_jobs": 2147,
+        "utxo_value_bytes": 88446
+      },
+      {
+        "height": 33068,
+        "ms": 151,
+        "tx_count": 15,
+        "input_count": 1958,
+        "created_utxos": 33,
+        "spent_external": 1952,
+        "same_block_spends": 6,
+        "script_jobs": 1958,
+        "utxo_value_bytes": 81984
+      },
+      {
+        "height": 40825,
+        "ms": 67,
+        "tx_count": 3,
+        "input_count": 1284,
+        "created_utxos": 5,
+        "spent_external": 1284,
+        "same_block_spends": 0,
+        "script_jobs": 1284,
+        "utxo_value_bytes": 53924
+      },
+      {
+        "height": 26643,
+        "ms": 64,
+        "tx_count": 159,
+        "input_count": 4158,
+        "created_utxos": 314,
+        "spent_external": 4157,
+        "same_block_spends": 1,
+        "script_jobs": 4158,
+        "utxo_value_bytes": 162123
+      },
+      {
+        "height": 39637,
+        "ms": 52,
+        "tx_count": 26,
+        "input_count": 2780,
+        "created_utxos": 66,
+        "spent_external": 2780,
+        "same_block_spends": 0,
+        "script_jobs": 2780,
+        "utxo_value_bytes": 115432
+      },
+      {
+        "height": 42827,
+        "ms": 41,
+        "tx_count": 8,
+        "input_count": 939,
+        "created_utxos": 14,
+        "spent_external": 939,
+        "same_block_spends": 0,
+        "script_jobs": 939,
+        "utxo_value_bytes": 39442
+      }
+    ]
+  },
+  "worker_cpu_ns_per_job": 44180.70941851805,
+  "worker_elapsed_ns_per_job": 44232.64089960393,
+  "timing_coverage": "worker loops excluding verifier lifecycle; includes interpreter, hashing and scheduling",
+  "resource_samples": [
+    {
+      "elapsed_s": 3.0358307499991497,
+      "stats": {
+        "BlockIO": "90.1kB / 69.6kB",
+        "CPUPerc": "237.21%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "0.54%",
+        "MemUsage": "64.55MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "28.2MB / 524kB",
+        "PIDs": "11"
+      }
+    },
+    {
+      "elapsed_s": 6.09819662499649,
+      "stats": {
+        "BlockIO": "90.1kB / 32.3MB",
+        "CPUPerc": "250.71%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "0.43%",
+        "MemUsage": "51.46MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "59.8MB / 686kB",
+        "PIDs": "11"
+      }
+    },
+    {
+      "elapsed_s": 9.135309874996892,
+      "stats": {
+        "BlockIO": "90.1kB / 32.3MB",
+        "CPUPerc": "399.50%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "0.81%",
+        "MemUsage": "96.73MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "74.7MB / 1.97MB",
+        "PIDs": "11"
+      }
+    },
+    {
+      "elapsed_s": 12.172796999991988,
+      "stats": {
+        "BlockIO": "90.1kB / 62.1MB",
+        "CPUPerc": "204.23%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "0.81%",
+        "MemUsage": "97.84MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "89.1MB / 2.4MB",
+        "PIDs": "11"
+      }
+    },
+    {
+      "elapsed_s": 15.228035124993767,
+      "stats": {
+        "BlockIO": "90.1kB / 101MB",
+        "CPUPerc": "196.96%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "0.86%",
+        "MemUsage": "103.1MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "114MB / 2.58MB",
+        "PIDs": "7"
+      }
+    },
+    {
+      "elapsed_s": 18.26044699999329,
+      "stats": {
+        "BlockIO": "123kB / 278MB",
+        "CPUPerc": "228.48%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "0.95%",
+        "MemUsage": "114.4MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "139MB / 2.67MB",
+        "PIDs": "11"
+      }
+    },
+    {
+      "elapsed_s": 21.343578082989552,
+      "stats": {
+        "BlockIO": "123kB / 318MB",
+        "CPUPerc": "205.39%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "1.01%",
+        "MemUsage": "120.9MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "166MB / 2.78MB",
+        "PIDs": "7"
+      }
+    },
+    {
+      "elapsed_s": 24.381008582990034,
+      "stats": {
+        "BlockIO": "123kB / 359MB",
+        "CPUPerc": "201.15%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "1.03%",
+        "MemUsage": "123.3MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "191MB / 2.92MB",
+        "PIDs": "7"
+      }
+    },
+    {
+      "elapsed_s": 27.453440207988024,
+      "stats": {
+        "BlockIO": "123kB / 399MB",
+        "CPUPerc": "201.97%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "1.08%",
+        "MemUsage": "129.8MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "218MB / 3.04MB",
+        "PIDs": "11"
+      }
+    },
+    {
+      "elapsed_s": 30.489245666991337,
+      "stats": {
+        "BlockIO": "500kB / 726MB",
+        "CPUPerc": "298.97%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "1.24%",
+        "MemUsage": "148.7MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "241MB / 3.22MB",
+        "PIDs": "7"
+      }
+    },
+    {
+      "elapsed_s": 33.522618707997026,
+      "stats": {
+        "BlockIO": "500kB / 764MB",
+        "CPUPerc": "200.16%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "1.32%",
+        "MemUsage": "158.3MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "262MB / 3.72MB",
+        "PIDs": "9"
+      }
+    },
+    {
+      "elapsed_s": 36.60322449999512,
+      "stats": {
+        "BlockIO": "500kB / 764MB",
+        "CPUPerc": "202.72%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "1.35%",
+        "MemUsage": "161.9MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "282MB / 4.23MB",
+        "PIDs": "7"
+      }
+    },
+    {
+      "elapsed_s": 39.65076154199778,
+      "stats": {
+        "BlockIO": "8.26MB / 801MB",
+        "CPUPerc": "186.63%",
+        "Container": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "ID": "dde4762cebbe",
+        "MemPerc": "1.41%",
+        "MemUsage": "169.6MiB / 11.73GiB",
+        "Name": "rosetta-zig-own-curve-50k-20260916t143340z-runner",
+        "NetIO": "303MB / 4.7MB",
+        "PIDs": "7"
+      }
+    }
+  ],
+  "endpoint_checks": {
+    "validated_height": 50000,
+    "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+    "chainstate_utxo_count": 568855,
+    "chainstate_backend": "rocksdb",
+    "rocksdb_wal_disabled": false,
+    "fresh_state": true,
+    "prefetch_depth": 4,
+    "script_runner_mode": "parallel",
+    "script_threads": 4,
+    "utxo_accounting_policy": "core_spendable_v1",
+    "byte_source": "local_reference_p2p"
+  },
+  "raw_hashes": {
+    "corpus.json": "e443156edf4ab411199eb88f97c47cdb83aff972ceb22342ab3029f41391487b",
+    "run.log": "c7c52cfe8fa0c3cf2468689c8baf8ead877687439e881fa69f674da2a93d53bf",
+    "resource-samples.json": "5dc988cd091e25bb98dc7507d8734f0c60529acf16121274d7226b055ae3385f",
+    "manifest.json": "4c714bf9b7fc51d283d655672e1e4c15bfe02a89c825e942565842987802c2e0",
+    "corpus.log": "e443156edf4ab411199eb88f97c47cdb83aff972ceb22342ab3029f41391487b",
+    "status.json": "48f4b79789a1b5f722b48c22b54b0ea138286e1f582551a1a824363f4be18ca7",
+    "proof.json": "e6448ccc1f08b964fedd82db0c9b58bb8348b578191f6ddcef5e8da26bedc7b7"
+  },
+  "intervals": [
+    {
+      "start_height": 0,
+      "end_height": 5000,
+      "elapsed_ms": 2554,
+      "script_jobs": 104068,
+      "transactions": 23234,
+      "script_wall_ms": 1162,
+      "worker_cpu_us_per_job": 36.00739010070338,
+      "jobs_per_second": 40747.06342991386
+    },
+    {
+      "start_height": 5000,
+      "end_height": 10000,
+      "elapsed_ms": 4209,
+      "script_jobs": 223123,
+      "transactions": 40854,
+      "script_wall_ms": 2183,
+      "worker_cpu_us_per_job": 35.44889213124599,
+      "jobs_per_second": 53010.928961748636
+    },
+    {
+      "start_height": 10000,
+      "end_height": 15000,
+      "elapsed_ms": 333,
+      "script_jobs": 0,
+      "transactions": 5000,
+      "script_wall_ms": 0,
+      "worker_cpu_us_per_job": null,
+      "jobs_per_second": 0.0
+    },
+    {
+      "start_height": 15000,
+      "end_height": 20000,
+      "elapsed_ms": 418,
+      "script_jobs": 3405,
+      "transactions": 6738,
+      "script_wall_ms": 45,
+      "worker_cpu_us_per_job": 35.78436064610866,
+      "jobs_per_second": 8145.933014354067
+    },
+    {
+      "start_height": 20000,
+      "end_height": 25000,
+      "elapsed_ms": 4273,
+      "script_jobs": 68027,
+      "transactions": 46166,
+      "script_wall_ms": 3002,
+      "worker_cpu_us_per_job": 165.19118172196335,
+      "jobs_per_second": 15920.196583196817
+    },
+    {
+      "start_height": 25000,
+      "end_height": 30000,
+      "elapsed_ms": 11284,
+      "script_jobs": 419597,
+      "transactions": 383618,
+      "script_wall_ms": 4438,
+      "worker_cpu_us_per_job": 37.46548300154672,
+      "jobs_per_second": 37185.12938674229
+    },
+    {
+      "start_height": 30000,
+      "end_height": 35000,
+      "elapsed_ms": 8122,
+      "script_jobs": 296557,
+      "transactions": 211578,
+      "script_wall_ms": 3414,
+      "worker_cpu_us_per_job": 38.78003208826634,
+      "jobs_per_second": 36512.80472789953
+    },
+    {
+      "start_height": 35000,
+      "end_height": 40000,
+      "elapsed_ms": 3126,
+      "script_jobs": 97546,
+      "transactions": 45626,
+      "script_wall_ms": 1445,
+      "worker_cpu_us_per_job": 39.97401689459332,
+      "jobs_per_second": 31204.73448496481
+    },
+    {
+      "start_height": 40000,
+      "end_height": 45000,
+      "elapsed_ms": 3179,
+      "script_jobs": 95410,
+      "transactions": 53616,
+      "script_wall_ms": 1483,
+      "worker_cpu_us_per_job": 42.15719793522691,
+      "jobs_per_second": 30012.582573136206
+    },
+    {
+      "start_height": 45000,
+      "end_height": 50000,
+      "elapsed_ms": 2673,
+      "script_jobs": 77899,
+      "transactions": 40975,
+      "script_wall_ms": 1221,
+      "worker_cpu_us_per_job": 39.27907033466412,
+      "jobs_per_second": 29142.910587355032
+    }
+  ],
+  "measurement_notes": [
+    "One observation, without warmup or repeated measurement; no speedup claim.",
+    "Worker time includes interpreter, hashing and scheduling, not only cryptography.",
+    "Timing buckets overlap; utxo_apply and commit must not be added together.",
+    "Docker stats are sampled container memory usage, not process peak RSS.",
+    "Network bytes include protocol traffic; total serialized block bytes are not emitted.",
+    "Telemetry current_block_tx_count is cumulative here; interval analysis uses tx_count."
+  ],
+  "sampled_container_memory_max_bytes": 177838489.6
+}
