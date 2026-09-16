@@ -1,0 +1,14 @@
+{
+  "schema": "rosettanode.bounded_fuzz.v1",
+  "status": "passed",
+  "seed": 20260916,
+  "checks": 5000,
+  "structured_inputs": 500,
+  "byte_mutations": 1500,
+  "builds": [
+    "o0",
+    "o2"
+  ],
+  "elapsed_seconds": 0.07587243300804403,
+  "scope": "Reference implementation check only; excluded from frozen reconstruction scoring"
+}

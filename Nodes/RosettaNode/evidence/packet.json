@@ -1,0 +1,672 @@
+{
+  "schema": "rosettanode.packet.v1",
+  "packet_sha256": "44e1f0a4303afd211cbea688fd2918a49f885191c1505fca50631d55a467d08a",
+  "shared_sha256": "265877ff7cb9c50f09f97042b47aba03fc9b67d546e9e110b5033878b0978768",
+  "examples": {
+    "transaction": {
+      "version_bits": "1",
+      "inputs": [
+        {
+          "previous_txid_digest_order": "0000000000000000000000000000000000000000000000000000000000000000",
+          "previous_index": "0",
+          "script": "",
+          "sequence": "4294967295",
+          "witness": []
+        }
+      ],
+      "outputs": [
+        {
+          "amount": "42",
+          "script": "51"
+        }
+      ],
+      "locktime": "0"
+    },
+    "identify": {
+      "status": "ok",
+      "full": "010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000",
+      "stripped": "010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000",
+      "full_size": "61",
+      "stripped_size": "61",
+      "txid_digest_order": "4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583",
+      "txid_display_order": "8305c52ea6df05b120fb9aa774eb7ff9565dc6d0e291c07140da29ca35d45342",
+      "wtxid_digest_order": "4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583",
+      "wtxid_display_order": "8305c52ea6df05b120fb9aa774eb7ff9565dc6d0e291c07140da29ca35d45342"
+    },
+    "justification": "Field-by-field manual encoding cross-checked with independent Python encoder; identifiers independently derived using hashlib double SHA-256. No chain-membership claim."
+  },
+  "information_inventory": [
+    {
+      "id": "shared-001",
+      "visibility": "shared",
+      "text": "# RosettaNode reconstruction interface v1"
+    },
+    {
+      "id": "shared-002",
+      "visibility": "shared",
+      "text": "Implement a Go JSON-lines program using the Go standard library only."
+    },
+    {
+      "id": "shared-003",
+      "visibility": "shared",
+      "text": "Read one JSON object per line and write one response object per line."
+    },
+    {
+      "id": "shared-004",
+      "visibility": "shared",
+      "text": "Do not use Bitcoin libraries, port sources, reference executables, evaluator dependencies, or network access."
+    },
+    {
+      "id": "shared-005",
+      "visibility": "shared",
+      "text": "Operations are decode_prefix(bytes, offset, mode, limits), decode_exact(bytes, mode, limits), serialize(transaction, include_witness, limits), and identify(transaction, limits)."
+    },
+    {
+      "id": "shared-006",
+      "visibility": "shared",
+      "text": "The request property selecting the operation is op."
+    },
+    {
+      "id": "shared-007",
+      "visibility": "shared",
+      "text": "Modes are legacy and witness."
+    },
+    {
+      "id": "shared-008",
+      "visibility": "shared",
+      "text": "include_witness is a JSON boolean."
+    },
+    {
+      "id": "shared-009",
+      "visibility": "shared",
+      "text": "Byte strings use hexadecimal; integers use decimal strings."
+    },
+    {
+      "id": "shared-010",
+      "visibility": "shared",
+      "text": "limits is an optional object with an optional max_items decimal string."
+    },
+    {
+      "id": "shared-011",
+      "visibility": "shared",
+      "text": "A transaction object has version_bits, inputs, outputs, and locktime."
+    },
+    {
+      "id": "shared-012",
+      "visibility": "shared",
+      "text": "Each input has previous_txid_digest_order, previous_index, script, sequence, and witness."
+    },
+    {
+      "id": "shared-013",
+      "visibility": "shared",
+      "text": "witness is an array of hexadecimal strings."
+    },
+    {
+      "id": "shared-014",
+      "visibility": "shared",
+      "text": "Each output has amount and script."
+    },
+    {
+      "id": "shared-015",
+      "visibility": "shared",
+      "text": "Successful decode responses have status, transaction, and consumed."
+    },
+    {
+      "id": "shared-016",
+      "visibility": "shared",
+      "text": "Successful serialize responses have status and bytes."
+    },
+    {
+      "id": "shared-017",
+      "visibility": "shared",
+      "text": "Successful identify responses have status, stripped, full, stripped_size, full_size, txid_digest_order, txid_display_order, wtxid_digest_order, and wtxid_display_order."
+    },
+    {
+      "id": "shared-018",
+      "visibility": "shared",
+      "text": "The status enum is ok, invalid_request, malformed_encoding, resource_limit, execution_failure, transport_limit, or admission_limit."
+    },
+    {
+      "id": "shared-019",
+      "visibility": "shared",
+      "text": "Error responses contain status only."
+    },
+    {
+      "id": "shared-020",
+      "visibility": "shared",
+      "text": "Request shape example (values illustrate JSON shape, with no supplied expected encoding):"
+    },
+    {
+      "id": "shared-021",
+      "visibility": "shared",
+      "text": "```json\n{\"op\":\"serialize\",\"transaction\":{\"version_bits\":\"1\",\"inputs\":[],\"outputs\":[],\"locktime\":\"0\"},\"include_witness\":false}\n```"
+    },
+    {
+      "id": "shared-022",
+      "visibility": "shared",
+      "text": "Serialize response shape: {\"status\":\"ok\",\"bytes\":\"<hexadecimal string>\"}."
+    },
+    {
+      "id": "shared-023",
+      "visibility": "shared",
+      "text": "Decode response shape: {\"status\":\"ok\",\"transaction\":<transaction object>,\"consumed\":\"<decimal string>\"}."
+    },
+    {
+      "id": "shared-024",
+      "visibility": "shared",
+      "text": "Submit a directory containing main.go and any additional Go source files, with package main, buildable without external modules."
+    },
+    {
+      "id": "shared-025",
+      "visibility": "shared",
+      "text": "Write diagnostics only to stderr."
+    },
+    {
+      "id": "shared-026",
+      "visibility": "shared",
+      "text": "Initial submissions are frozen before evaluator feedback."
+    },
+    {
+      "id": "shared-027",
+      "visibility": "shared",
+      "text": "You may finish before the deadline."
+    },
+    {
+      "id": "document_only-001",
+      "visibility": "document_only",
+      "text": "# RosettaNode: CompactSize executable specification"
+    },
+    {
+      "id": "document_only-002",
+      "visibility": "document_only",
+      "text": "This is a bounded encoding experiment, not a Bitcoin node or a consensus proof."
+    },
+    {
+      "id": "document_only-003",
+      "visibility": "document_only",
+      "text": "Rule CS-1: encode an unsigned 64-bit integer using its shortest CompactSize form."
+    },
+    {
+      "id": "document_only-004",
+      "visibility": "document_only",
+      "text": "Values below 253 use one byte."
+    },
+    {
+      "id": "document_only-005",
+      "visibility": "document_only",
+      "text": "Values up to 65535 use fd and two little-endian\nbytes."
+    },
+    {
+      "id": "document_only-006",
+      "visibility": "document_only",
+      "text": "Values up to 4294967295 use fe and four bytes."
+    },
+    {
+      "id": "document_only-007",
+      "visibility": "document_only",
+      "text": "Larger values use ff and\neight bytes."
+    },
+    {
+      "id": "document_only-008",
+      "visibility": "document_only",
+      "text": "No maximum object-size policy is imposed by this primitive."
+    },
+    {
+      "id": "document_only-009",
+      "visibility": "document_only",
+      "text": "Rule CS-2: decoding requires the entire indicated payload and rejects a longer\nform when a shorter one could encode the same value."
+    },
+    {
+      "id": "document_only-010",
+      "visibility": "document_only",
+      "text": "Extra trailing bytes are\nnot consumed."
+    },
+    {
+      "id": "document_only-011",
+      "visibility": "document_only",
+      "text": "On success, consumed is relative to the start of this primitive."
+    },
+    {
+      "id": "document_only-012",
+      "visibility": "document_only",
+      "text": "On failure, caller-owned value and consumed outputs remain unchanged."
+    },
+    {
+      "id": "document_only-013",
+      "visibility": "document_only",
+      "text": "The worked examples below are inserted from a separately maintained fixture\nfile."
+    },
+    {
+      "id": "document_only-014",
+      "visibility": "document_only",
+      "text": "Expectations use the width boundaries above, not reference execution."
+    },
+    {
+      "id": "document_only-015",
+      "visibility": "document_only",
+      "text": "Provenance: Bitcoin Core v28.2 src/serialize.h ReadCompactSize and WriteCompactSize."
+    },
+    {
+      "id": "document_only-016",
+      "visibility": "document_only",
+      "text": "No Core MAX_SIZE allocation policy is claimed by this primitive."
+    },
+    {
+      "id": "document_only-017",
+      "visibility": "document_only",
+      "text": "0 -> 00\n1 -> 01\n252 -> fc\n253 -> fdfd00\n254 -> fdfe00\n65535 -> fdffff\n65536 -> fe00000100\n4294967295 -> feffffffff\n4294967296 -> ff0000000001000000\n18446744073709551615 -> ffffffffffffffffff"
+    },
+    {
+      "id": "document_only-018",
+      "visibility": "document_only",
+      "text": "# RosettaNode transaction encoding profile v1"
+    },
+    {
+      "id": "document_only-019",
+      "visibility": "document_only",
+      "text": "This is an experimental encoding specification, not consensus validation."
+    },
+    {
+      "id": "document_only-020",
+      "visibility": "document_only",
+      "text": "The caller selects legacy or witness mode."
+    },
+    {
+      "id": "document_only-021",
+      "visibility": "document_only",
+      "text": "Versions preserve 32 raw bits as unsigned `version_bits`; amounts preserve signed 64-bit values, including negative amounts."
+    },
+    {
+      "id": "document_only-022",
+      "visibility": "document_only",
+      "text": "Neither interpretation makes a transaction valid."
+    },
+    {
+      "id": "document_only-023",
+      "visibility": "document_only",
+      "text": "TX-1."
+    },
+    {
+      "id": "document_only-024",
+      "visibility": "document_only",
+      "text": "Read version, then the first input vector."
+    },
+    {
+      "id": "document_only-025",
+      "visibility": "document_only",
+      "text": "In witness mode only, an empty first vector is followed by one flags byte."
+    },
+    {
+      "id": "document_only-026",
+      "visibility": "document_only",
+      "text": "If flags is zero, omit output-vector reading and read locktime next."
+    },
+    {
+      "id": "document_only-027",
+      "visibility": "document_only",
+      "text": "If flags is nonzero, read another input vector and the output vector."
+    },
+    {
+      "id": "document_only-028",
+      "visibility": "document_only",
+      "text": "Otherwise read the ordinary output vector."
+    },
+    {
+      "id": "document_only-029",
+      "visibility": "document_only",
+      "text": "A nonempty first vector never introduces flags."
+    },
+    {
+      "id": "document_only-030",
+      "visibility": "document_only",
+      "text": "TX-2."
+    },
+    {
+      "id": "document_only-031",
+      "visibility": "document_only",
+      "text": "If bit 0 is set, read one witness stack per input and clear bit 0."
+    },
+    {
+      "id": "document_only-032",
+      "visibility": "document_only",
+      "text": "At least one stack must contain an item; a single empty item counts."
+    },
+    {
+      "id": "document_only-033",
+      "visibility": "document_only",
+      "text": "All stacks with zero items are a superfluous witness encoding."
+    },
+    {
+      "id": "document_only-034",
+      "visibility": "document_only",
+      "text": "Reject remaining flag bits."
+    },
+    {
+      "id": "document_only-035",
+      "visibility": "document_only",
+      "text": "Read locktime after optional-data checks."
+    },
+    {
+      "id": "document_only-036",
+      "visibility": "document_only",
+      "text": "Unknown flags and superfluous witness are malformed encoding, not consensus verdicts."
+    },
+    {
+      "id": "document_only-037",
+      "visibility": "document_only",
+      "text": "TX-3."
+    },
+    {
+      "id": "document_only-038",
+      "visibility": "document_only",
+      "text": "Every CompactSize is canonical."
+    },
+    {
+      "id": "document_only-039",
+      "visibility": "document_only",
+      "text": "Input records require at least 41 encoded bytes; outputs at least 9; witness items at least 1."
+    },
+    {
+      "id": "document_only-040",
+      "visibility": "document_only",
+      "text": "Check advertised counts against remaining bytes divided by these minima before iteration."
+    },
+    {
+      "id": "document_only-041",
+      "visibility": "document_only",
+      "text": "Scripts are opaque."
+    },
+    {
+      "id": "document_only-042",
+      "visibility": "document_only",
+      "text": "All variable iterations consume bytes."
+    },
+    {
+      "id": "document_only-043",
+      "visibility": "document_only",
+      "text": "Complete a constant-scratch forward structural scan before materializing objects."
+    },
+    {
+      "id": "document_only-044",
+      "visibility": "document_only",
+      "text": "Never allocate according to an unchecked count."
+    },
+    {
+      "id": "document_only-045",
+      "visibility": "document_only",
+      "text": "TX-4."
+    },
+    {
+      "id": "document_only-046",
+      "visibility": "document_only",
+      "text": "Admission is at most 4 MiB of bytes beginning at the caller's offset."
+    },
+    {
+      "id": "document_only-047",
+      "visibility": "document_only",
+      "text": "Offsets outside the supplied bytes are invalid requests."
+    },
+    {
+      "id": "document_only-048",
+      "visibility": "document_only",
+      "text": "Consumption is relative to the offset."
+    },
+    {
+      "id": "document_only-049",
+      "visibility": "document_only",
+      "text": "Exact decoding rejects trailing bytes before applying the combined input/output/witness-item budget, default 4096."
+    },
+    {
+      "id": "document_only-050",
+      "visibility": "document_only",
+      "text": "Continue scanning beyond that budget: impossible counts or truncation remain malformed; a complete over-budget object is resource_limit."
+    },
+    {
+      "id": "document_only-051",
+      "visibility": "document_only",
+      "text": "Failures leave the caller's cursor unchanged and expose no partial object."
+    },
+    {
+      "id": "document_only-052",
+      "visibility": "document_only",
+      "text": "Allocation failure is execution_failure."
+    },
+    {
+      "id": "document_only-053",
+      "visibility": "document_only",
+      "text": "Transport separately limits decoded bytes to 8 MiB and JSON request text to 20 MiB; these are harness limits, not Bitcoin rules."
+    },
+    {
+      "id": "document_only-054",
+      "visibility": "document_only",
+      "text": "TX-5."
+    },
+    {
+      "id": "document_only-055",
+      "visibility": "document_only",
+      "text": "Structured serialization takes field values, without requiring original bytes."
+    },
+    {
+      "id": "document_only-056",
+      "visibility": "document_only",
+      "text": "Emit marker zero and flags one only when include_witness is true and some stack contains an item."
+    },
+    {
+      "id": "document_only-057",
+      "visibility": "document_only",
+      "text": "Stripped serialization always omits witness."
+    },
+    {
+      "id": "document_only-058",
+      "visibility": "document_only",
+      "text": "The same structure must produce the same bytes irrespective of decode history."
+    },
+    {
+      "id": "document_only-059",
+      "visibility": "document_only",
+      "text": "Empty-input structures can serialize to bytes whose witness-mode interpretation differs; no unconditional decode/serialize inverse is promised."
+    },
+    {
+      "id": "document_only-060",
+      "visibility": "document_only",
+      "text": "Witness encoding decoded in legacy mode also has different meaning."
+    },
+    {
+      "id": "document_only-061",
+      "visibility": "document_only",
+      "text": "TX-6."
+    },
+    {
+      "id": "document_only-062",
+      "visibility": "document_only",
+      "text": "Identify uses SHA-256 twice on each serialization."
+    },
+    {
+      "id": "document_only-063",
+      "visibility": "document_only",
+      "text": "txid uses stripped bytes; wtxid uses full bytes."
+    },
+    {
+      "id": "document_only-064",
+      "visibility": "document_only",
+      "text": "Return both direct digest byte order and reversed display byte order with explicitly different names."
+    },
+    {
+      "id": "document_only-065",
+      "visibility": "document_only",
+      "text": "Report full and stripped byte sizes; weight is excluded."
+    },
+    {
+      "id": "document_only-066",
+      "visibility": "document_only",
+      "text": "Provenance: Bitcoin Core v28.2 src/primitives/transaction.h serialization state machine; src/serialize.h CompactSize; BIP141 and BIP144."
+    },
+    {
+      "id": "document_only-067",
+      "visibility": "document_only",
+      "text": "Resource/cursor/error precedence is this experimental profile and can differ from Core/btcd."
+    },
+    {
+      "id": "document_only-068",
+      "visibility": "document_only",
+      "text": "Independently justified synthetic fixtures and valid-chain commitments constrain different parts of this contract."
+    },
+    {
+      "id": "document_only-069",
+      "visibility": "document_only",
+      "text": "## Field layout and request interpretation"
+    },
+    {
+      "id": "document_only-070",
+      "visibility": "document_only",
+      "text": "A basic encoding consists of version (4 bytes), input count (CompactSize), input records, output count (CompactSize), output records, and locktime (4 bytes)."
+    },
+    {
+      "id": "document_only-071",
+      "visibility": "document_only",
+      "text": "All multi-byte integers are little endian."
+    },
+    {
+      "id": "document_only-072",
+      "visibility": "document_only",
+      "text": "An input is 32 transaction digest bytes, a 4-byte previous output index, CompactSize script length, script bytes, and 4-byte sequence."
+    },
+    {
+      "id": "document_only-073",
+      "visibility": "document_only",
+      "text": "An output is an 8-byte two's-complement amount, CompactSize script length, and script bytes."
+    },
+    {
+      "id": "document_only-074",
+      "visibility": "document_only",
+      "text": "A witness stack is CompactSize item count, then CompactSize length and bytes for each item."
+    },
+    {
+      "id": "document_only-075",
+      "visibility": "document_only",
+      "text": "CompactSize rules are defined in the preceding chapter."
+    },
+    {
+      "id": "document_only-076",
+      "visibility": "document_only",
+      "text": "version_bits, previous_index, sequence, and locktime must be in 0 through 4294967295."
+    },
+    {
+      "id": "document_only-077",
+      "visibility": "document_only",
+      "text": "Amounts range from -9223372036854775808 through 9223372036854775807."
+    },
+    {
+      "id": "document_only-078",
+      "visibility": "document_only",
+      "text": "Previous transaction digests contain exactly 32 bytes in digest order."
+    },
+    {
+      "id": "document_only-079",
+      "visibility": "document_only",
+      "text": "Decimal strings have no leading zeroes except zero itself and no plus sign."
+    },
+    {
+      "id": "document_only-080",
+      "visibility": "document_only",
+      "text": "Uppercase or lowercase input hex is accepted; emitted hex is lowercase."
+    },
+    {
+      "id": "document_only-081",
+      "visibility": "document_only",
+      "text": "Structured transaction field sets are exact; extra request-envelope fields are ignored."
+    },
+    {
+      "id": "document_only-082",
+      "visibility": "document_only",
+      "text": "Invalid shapes/ranges and invalid offsets return invalid_request."
+    },
+    {
+      "id": "document_only-083",
+      "visibility": "document_only",
+      "text": "Mode is required for decoding; prefix offset defaults to zero."
+    },
+    {
+      "id": "document_only-084",
+      "visibility": "document_only",
+      "text": "The limit may be lowered from 4096 but not increased."
+    },
+    {
+      "id": "document_only-085",
+      "visibility": "document_only",
+      "text": "For this experiment serialized output is also capped at 4 MiB; an otherwise correctly shaped over-envelope structure returns resource_limit."
+    },
+    {
+      "id": "document_only-086",
+      "visibility": "document_only",
+      "text": "Structured-input marshaling validates its field types and ranges before the item-budget verdict."
+    },
+    {
+      "id": "document_only-087",
+      "visibility": "document_only",
+      "text": "The transport budget applies to the aggregate structured byte pool as well as decoded request bytes."
+    },
+    {
+      "id": "document_only-088",
+      "visibility": "document_only",
+      "text": "These are experiment envelope choices, not Bitcoin validity rules."
+    },
+    {
+      "id": "document_only-089",
+      "visibility": "document_only",
+      "text": "Decode errors return status only, with neither a partial transaction nor a consumed field."
+    },
+    {
+      "id": "document_only-090",
+      "visibility": "document_only",
+      "text": "No operation performs signature, value-conservation, script, transaction-version, or block validity checks."
+    },
+    {
+      "id": "document_only-091",
+      "visibility": "document_only",
+      "text": "Size means encoded byte count."
+    },
+    {
+      "id": "document_only-092",
+      "visibility": "document_only",
+      "text": "Hash digest order is the 32 bytes returned by double SHA-256; display order is that byte string reversed."
+    },
+    {
+      "id": "document_only-093",
+      "visibility": "document_only",
+      "text": "## Worked structured example"
+    },
+    {
+      "id": "document_only-094",
+      "visibility": "document_only",
+      "text": "{\n  \"transaction\": {\n    \"version_bits\": \"1\",\n    \"inputs\": [\n      {\n        \"previous_txid_digest_order\": \"0000000000000000000000000000000000000000000000000000000000000000\",\n        \"previous_index\": \"0\",\n        \"script\": \"\",\n        \"sequence\": \"4294967295\",\n        \"witness\": []\n      }\n    ],\n    \"outputs\": [\n      {\n        \"amount\": \"42\",\n        \"script\": \"51\"\n      }\n    ],\n    \"locktime\": \"0\"\n  },\n  \"identify\": {\n    \"status\": \"ok\",\n    \"full\": \"010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000\",\n    \"stripped\": \"010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff012a00000000000000015100000000\",\n    \"full_size\": \"61\",\n    \"stripped_size\": \"61\",\n    \"txid_digest_order\": \"4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583\",\n    \"txid_display_order\": \"8305c52ea6df05b120fb9aa774eb7ff9565dc6d0e291c07140da29ca35d45342\",\n    \"wtxid_digest_order\": \"4253d435ca29da4071c091e2d0c65d56f97feb74a79afb20b105dfa62ec50583\",\n    \"wtxid_display_order\": \"8305c52ea6df05b120fb9aa774eb7ff9565dc6d0e291c07140da29ca35d45342\"\n  },\n  \"justification\": \"Field-by-field manual encoding cross-checked with independent Python encoder; identifiers independently derived using hashlib double SHA-256."
+    },
+    {
+      "id": "document_only-095",
+      "visibility": "document_only",
+      "text": "No chain-membership claim.\"\n}"
+    },
+    {
+      "id": "document_only-096",
+      "visibility": "document_only",
+      "text": "## Prefix example"
+    },
+    {
+      "id": "document_only-097",
+      "visibility": "document_only",
+      "text": "In witness mode, 05000000000044332211aa decodes a version of 5, empty input/output vectors, locktime 287454020, and consumes 10 bytes as a prefix."
+    },
+    {
+      "id": "document_only-098",
+      "visibility": "document_only",
+      "text": "Exact decoding rejects its remaining byte."
+    },
+    {
+      "id": "document_only-099",
+      "visibility": "document_only",
+      "text": "This expectation follows the zero-flags state transition and little-endian locktime independently of execution."
+    }
+  ],
+  "frozen_for_cohort": true,
+  "reason": "Materials match cohort-freeze.json"
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "rosettanode.source_provenance.v1",
+  "sources": {
+    "core_transaction": {
+      "url": "https://raw.githubusercontent.com/bitcoin/bitcoin/v28.2/src/primitives/transaction.h",
+      "sha256": "57769818190672703fb5e1159785a0f7c5b050987b591580450a72eb3fcbba05",
+      "bytes": 13730
+    },
+    "core_compactsize": {
+      "url": "https://raw.githubusercontent.com/bitcoin/bitcoin/v28.2/src/serialize.h",
+      "sha256": "fb90d0448ca9456377c1c213a1a5852e52ec3cd94ea9b97160c2c94a31294136",
+      "bytes": 42105
+    },
+    "bip141": {
+      "url": "https://raw.githubusercontent.com/bitcoin/bips/master/bip-0141.mediawiki",
+      "sha256": "d72409335872a32494f75e7547589abf4b3b23b6beebe6bc6999c7a84b135e2c",
+      "bytes": 26314,
+      "immutable_url": "https://raw.githubusercontent.com/bitcoin/bips/173f386dfb8b4f1c4b16d69190a753802802ac4d/bip-0141.mediawiki",
+      "commit": "173f386dfb8b4f1c4b16d69190a753802802ac4d"
+    },
+    "bip144": {
+      "url": "https://raw.githubusercontent.com/bitcoin/bips/master/bip-0144.mediawiki",
+      "sha256": "7a8e28a18939bf4523b11170eb7988559db3937bd5f49d0afd210e5cb7d6963b",
+      "bytes": 5204,
+      "immutable_url": "https://raw.githubusercontent.com/bitcoin/bips/173f386dfb8b4f1c4b16d69190a753802802ac4d/bip-0144.mediawiki",
+      "commit": "173f386dfb8b4f1c4b16d69190a753802802ac4d"
+    }
+  },
+  "bip_pin": "Content hashes of the reviewed BIP revisions; master URL alone is not treated as immutable."
+}

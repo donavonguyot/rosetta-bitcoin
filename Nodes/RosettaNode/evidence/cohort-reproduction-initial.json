@@ -1,0 +1,33 @@
+{
+  "schema": "rosettanode.cohort_reproduction.v1",
+  "phase": "initial",
+  "status": "passed",
+  "environment": "Fresh source/build/cache directories and fresh sandboxed processes on the same pinned macOS/Go host; no model rerun",
+  "attempts": {
+    "D1": {
+      "semantic_manifest_sha256": "fb507043e73ae846ad2b7fd21b11c8f9babe25f2a15bd7a95dded403ecaab605",
+      "status": "passed"
+    },
+    "C1": {
+      "semantic_manifest_sha256": "b5f5542f03903a56460b472a118183037011e4029407ccafd2e4d77b46c873fd",
+      "status": "passed"
+    },
+    "D2": {
+      "semantic_manifest_sha256": "f981b2f9e3d7ddcce145ee09c7951c486ad8d310e44739ee64bf40b0ccbc865d",
+      "status": "passed"
+    },
+    "C2": {
+      "semantic_manifest_sha256": "cc2593a9faef5376f38f44dd9eb4444d8ac65517f3199fd87e62f3b885e6bb1a",
+      "status": "passed"
+    },
+    "D3": {
+      "semantic_manifest_sha256": "2ebe47d86742dc1d2546e115c646d9b4dc0d21214c0c64a63e2f6a50d8f2a207",
+      "status": "passed"
+    },
+    "C3": {
+      "semantic_manifest_sha256": "57293f4be0b937027fd074c587195fd122b8d375378c834d437c206f4ba16275",
+      "status": "passed"
+    }
+  },
+  "elapsed_seconds": 95.66089766600635
+}

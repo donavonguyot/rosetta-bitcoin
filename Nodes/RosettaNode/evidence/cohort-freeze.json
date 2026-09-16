@@ -1,0 +1,23 @@
+{
+  "schema": "rosettanode.cohort_freeze.v1",
+  "packet_sha256": "44e1f0a4303afd211cbea688fd2918a49f885191c1505fca50631d55a467d08a",
+  "shared_sha256": "265877ff7cb9c50f09f97042b47aba03fc9b67d546e9e110b5033878b0978768",
+  "evaluator_sources": {
+    "tools/corpus.py": "d02b1b62fa794a05c928edc2d9c3e757820f507180c623f44edb35b49415043a",
+    "tools/chain_checker.py": "39576dd47727d538ba7122c77b1306d5340a418c2c397d87f556ae377d6d8cad",
+    "tools/cohort.py": "7ecad12f2720fc18990531f0f4f4614ad96f6d720ea72b716f95427777af26eb",
+    "tools/evaluate_attempt.py": "ad903f22a02f04f3bb38e6aa9dfea7c8c1146c6713cb746dabc8f81c3be67bf5"
+  },
+  "model": "gpt-6-astra",
+  "reasoning_effort": "high",
+  "language": "go",
+  "temperature": null,
+  "seed": null,
+  "reading_seconds": 900,
+  "implementation_seconds": 3600,
+  "repair_seconds": 1800,
+  "attempts_per_arm": 3,
+  "primary_result": "initial only; equal weighting of semantic families within each group",
+  "interpretation_rule": "observed improvement only if document median family score exceeds control in profile and no lower structured median; no observed improvement at ceiling or equal/lower medians; mixed directions/infrastructure defects inconclusive",
+  "cross_language_rule": "Only after completed Go analysis; never pool packet/evaluator versions."
+}

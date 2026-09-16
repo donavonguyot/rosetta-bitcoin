@@ -1,0 +1,10 @@
+{
+  "schema": "rosettanode.isolation_probe.v1",
+  "status": "passed",
+  "command_reads": "Repository/reference/evaluator/other-port/user-config reads denied by named filesystem profile",
+  "network": "Direct local IP, public IP and DNS probes denied in each attempt",
+  "go_build": "Standard-library build succeeds within allowed roots",
+  "native_view_image": "Read outside allowed workspace denied with os error 1",
+  "image_probe_stderr_sha256": "dbe88452253773767de27621174fd22b097c000efc9900c3f48e4eb50ca202cd",
+  "scope": "Same configuration function used for cohort; probe sessions are separate and never resumed as candidates"
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "rosettanode.work_session.v1",
+  "started_unix": 1789578079.599272,
+  "gate_active_seconds_limit": 28800,
+  "monetary_cost": null,
+  "model_usage": null,
+  "scope": "CompactSize gate before transaction expansion",
+  "gate_checkpoint_unix": 1789578569.9039512,
+  "elapsed_wall_seconds_to_checkpoint": 490.30467915534973,
+  "active_time_measurement": "Wall interval is an upper bound on active implementation time; exact active/model time unavailable.",
+  "known_failed_iterations": [
+    "Coverage probe insertion before phi nodes caused LLVM failure; fixed by inserting after phi group; final verification passed."
+  ],
+  "tool_usage": "Commands from final gate retained in compactsize-gate.json; earlier exploratory calls not completely counted.",
+  "gate_elapsed_upper_bound_seconds": 490.30467915534973,
+  "gate_budget_satisfied": true,
+  "first_gate_result": "passed with Alive2 unsupported",
+  "implementation_notes": [
+    "CompactSize gate preceded transaction source creation.",
+    "Transaction test harness initially had a Python typo and coverage declaration-order error; fixed before final evidence.",
+    "Unknown monetary cost and usage remain null for parent implementation; cohort CLI usage is separately retained."
+  ]
+}

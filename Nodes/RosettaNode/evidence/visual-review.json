@@ -1,0 +1,13 @@
+{
+  "schema": "rosettanode.visual_review.v1",
+  "scope": "CompactSize gate documents",
+  "pages_inspected": [
+    "compactsize:1",
+    "compactsize:2",
+    "compactsize:3",
+    "reconstruction:1"
+  ],
+  "method": "pdftoppm renders, visually inspected using view_image",
+  "result": "readable; no observed clipping or missing glyphs",
+  "figure_count": 0
+}

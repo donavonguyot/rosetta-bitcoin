@@ -1,0 +1,10 @@
+{
+  "CS-1": {"symbols": ["cs_encode"], "boundary": "Shortest CompactSize emission"},
+  "CS-2": {"symbols": ["cs_decode", "read_le"], "boundary": "Canonical checked CompactSize reads"},
+  "TX-1": {"symbols": ["tx_scan", "inputs", "outputs"], "boundary": "Version, vectors and zero-flags state machine"},
+  "TX-2": {"symbols": ["witness", "tx_scan"], "boundary": "Witness presence and optional flag rejection"},
+  "TX-3": {"symbols": ["take", "number", "compact", "count_fits"], "boundary": "Bounded structural scan"},
+  "TX-4": {"symbols": ["tx_scan"], "boundary": "Exactness before item budget; JSON admission and allocation failure are marshaler responsibilities"},
+  "TX-5": {"symbols": ["tx_serialize", "write_bytes", "write_number", "write_compact"], "boundary": "Structured emission and byte sizing"},
+  "TX-6": {"symbols": ["tx_digest"], "boundary": "Double SHA-256 composition; display reversal is marshaler presentation"}
+}

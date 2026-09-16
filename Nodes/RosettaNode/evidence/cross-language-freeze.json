@@ -1,0 +1,51 @@
+{
+  "schema": "rosettanode.cross_language_freeze.v1",
+  "go_freeze_sha256": "4f8d12d30e980401b3dea6905c680235d465ec35cb095a18236ee3d2a809480f",
+  "go_analysis_sha256": "0da9697c1173faf3c91098fc930d863ef90f6c1d5cf7c60c4c6137eca0e93e6d",
+  "packet_sha256": "44e1f0a4303afd211cbea688fd2918a49f885191c1505fca50631d55a467d08a",
+  "interface_sha256": "265877ff7cb9c50f09f97042b47aba03fc9b67d546e9e110b5033878b0978768",
+  "languages": {
+    "rust": {
+      "version": "1.98.1",
+      "root": "/opt/homebrew/Cellar/rust/1.98.1",
+      "compiler": "/opt/homebrew/Cellar/rust/1.98.1/bin/rustc",
+      "entry": "main.rs",
+      "extension": "rs",
+      "extra": [
+        "/opt/homebrew/opt/llvm@22",
+        "/opt/homebrew/opt/zstd",
+        "/Library/Developer/CommandLineTools"
+      ]
+    },
+    "zig": {
+      "version": "0.16.0",
+      "root": "/opt/homebrew/Cellar/zig/0.16.0_1",
+      "compiler": "/opt/homebrew/Cellar/zig/0.16.0_1/bin/zig",
+      "entry": "main.zig",
+      "extension": "zig",
+      "extra": [
+        "/opt/homebrew/opt/llvm@21",
+        "/opt/homebrew/opt/lld@21",
+        "/opt/homebrew/opt/zstd",
+        "/Library/Developer/CommandLineTools"
+      ]
+    }
+  },
+  "compiler_sha256": {
+    "rust": "2814fb55fb9cfb3eef5848a8104d77e3de7fd95394661144a12ee90cd4405340",
+    "zig": "71cc3995a7586753ebf82c66dfb8bef43df446517550678781834586a960f8c9"
+  },
+  "sources": {
+    "tools/cross_language.py": "53cf201eaa0fcfb5365c40e048a4348ab3d386c0772ee36c763a0271a8ab2b59",
+    "tools/evaluate_cross.py": "dc69f413a2c0284eb2b3755ad650ea36b948adec6e1a00722ff839f57055b2ae"
+  },
+  "dependency_rule": "Target standard library only; no Bitcoin libraries, reference/evaluator access or network tools",
+  "same_semantic_corpus": true,
+  "pool_with_go": false,
+  "driver_sha256": {
+    "rustc": "a4c1090da340c39647e2bd2303ed9042feca220961f4796cf6ca76ccd5724cbd",
+    "zig": "b2d8421171d87431535c54555b0642328da1eb6b08a86ff2b15320735fd6ba27"
+  },
+  "model": "gpt-6-astra",
+  "reasoning_effort": "high"
+}

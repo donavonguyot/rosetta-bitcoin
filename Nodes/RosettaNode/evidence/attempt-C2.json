@@ -1,0 +1,197 @@
+{
+  "schema": "rosettanode.attempt.v1",
+  "attempt": "C2",
+  "arm": "control",
+  "language": "go",
+  "model": "gpt-6-astra",
+  "packet_sha256": "44e1f0a4303afd211cbea688fd2918a49f885191c1505fca50631d55a467d08a",
+  "reading": {
+    "phase": "reading",
+    "elapsed_seconds": 32.36649800000305,
+    "limit_seconds": 900,
+    "timed_out": false,
+    "returncode": 0,
+    "thread_id": "01a0ab57-50ae-7c61-ba56-a8c5562603a1",
+    "usage": [
+      {
+        "input_tokens": 27844,
+        "cached_input_tokens": 17792,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 750,
+        "reasoning_output_tokens": 164
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "rosetta",
+      "permissions.rosetta.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace": "read",
+        "/opt/homebrew/Cellar/go/1.27.1/libexec": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp": "write",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache": "write"
+      },
+      "permissions.rosetta.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/opt/homebrew/Cellar/go/1.27.1/libexec/bin:/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp",
+        "GOCACHE": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
+        "GOENV": "off",
+        "GOTOOLCHAIN": "local",
+        "GOPROXY": "off",
+        "GOSUMDB": "off",
+        "CGO_ENABLED": "0",
+        "GO111MODULE": "off"
+      }
+    },
+    "events_sha256": "8da503443b8e2a6edff994bd914baea276867eb379a88a94a8334e4986b88d12"
+  },
+  "initial": {
+    "phase": "implementation",
+    "elapsed_seconds": 678.600073374997,
+    "limit_seconds": 3600,
+    "timed_out": false,
+    "returncode": 0,
+    "thread_id": "01a0ab57-50ae-7c61-ba56-a8c5562603a1",
+    "usage": [
+      {
+        "input_tokens": 282405,
+        "cached_input_tokens": 244736,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 21506,
+        "reasoning_output_tokens": 4478
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "rosetta",
+      "permissions.rosetta.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace": "write",
+        "/opt/homebrew/Cellar/go/1.27.1/libexec": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp": "write",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache": "write"
+      },
+      "permissions.rosetta.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/opt/homebrew/Cellar/go/1.27.1/libexec/bin:/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp",
+        "GOCACHE": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
+        "GOENV": "off",
+        "GOTOOLCHAIN": "local",
+        "GOPROXY": "off",
+        "GOSUMDB": "off",
+        "CGO_ENABLED": "0",
+        "GO111MODULE": "off"
+      }
+    },
+    "events_sha256": "e6133dc273596b9450187eb75b372e58db94f08184e3583f0c931136af873fcd"
+  },
+  "repair": {
+    "phase": "repair",
+    "elapsed_seconds": 267.06428695800423,
+    "limit_seconds": 1800,
+    "timed_out": false,
+    "returncode": 0,
+    "thread_id": "01a0ab57-50ae-7c61-ba56-a8c5562603a1",
+    "usage": [
+      {
+        "input_tokens": 408805,
+        "cached_input_tokens": 382336,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 7747,
+        "reasoning_output_tokens": 2393
+      }
+    ],
+    "temperature": null,
+    "seed": null,
+    "cost": null,
+    "configuration": {
+      "default_permissions": "rosetta",
+      "permissions.rosetta.filesystem": {
+        ":minimal": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace": "write",
+        "/opt/homebrew/Cellar/go/1.27.1/libexec": "read",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp": "write",
+        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache": "write"
+      },
+      "permissions.rosetta.network.enabled": false,
+      "project_doc_max_bytes": 0,
+      "agents.enabled": false,
+      "web_search": "disabled",
+      "features.apps": false,
+      "features.plugins": false,
+      "features.memories": false,
+      "features.browser_use": false,
+      "features.browser_use_external": false,
+      "features.computer_use": false,
+      "features.image_generation": false,
+      "features.hooks": false,
+      "features.workspace_dependencies": false,
+      "approval_policy": "never",
+      "allow_login_shell": false,
+      "model_reasoning_effort": "high",
+      "shell_environment_policy.inherit": "none",
+      "shell_environment_policy.set": {
+        "PATH": "/opt/homebrew/Cellar/go/1.27.1/libexec/bin:/usr/bin:/bin",
+        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp",
+        "GOCACHE": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
+        "GOENV": "off",
+        "GOTOOLCHAIN": "local",
+        "GOPROXY": "off",
+        "GOSUMDB": "off",
+        "CGO_ENABLED": "0",
+        "GO111MODULE": "off"
+      }
+    },
+    "events_sha256": "8d225b8c6fc06a7be7f4afdd00962f1b24912da8cbfcfe35d6f0b21788bb6546"
+  },
+  "status": "submitted",
+  "source_sha256": {
+    "wire.go": "9f1e906f6b6f1995308a1583cc6d37d89bb9cd2912dfc6da38d1c677ec699af8",
+    "main.go": "7f632b383b45b5d61ca4b015005d3e6cb632b4feb12764b0e89e1ba3401b16c6",
+    "main_test.go": "5533890f0b93bd3601ada60f5921531192246e81c86cad5449f3d3bf80b6861d"
+  },
+  "repair_source_sha256": {
+    "feedback_test.go": "f3d7feea3edadd82d947170c795df01c104fe0c9b0e9f7df5547be92d671c879",
+    "wire.go": "63f4f98af72d5d8940e6c043bafaacc576334a55f7c7e67763356e32296b041d",
+    "main.go": "441b6c68bdc3f709d09558df7cf9968974fdbb3f1535edae99b2e676046cb809",
+    "main_test.go": "4c8df58eda8d642366da53d29dbdfc64414295017908760b0e51f45cd2a930b9"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "rosettanode.transaction_reproduction.v1",
+  "status": "passed",
+  "environment": "fresh containers, fresh copied source/build tree; same pinned image and physical host",
+  "test_manifest_hashes": {
+    "adversarial": "eded37e5e8a8ec65ede2c10054c9e5427638573504228478180730dc364e5203",
+    "execution-variants": "7b5689d8e7c63eb6bb9c6636f69fd4ba985372aaab7300034b4e0e70cfa93e11",
+    "chain-composition": "de7b34b4c9ecfe5a757bf2e8ccffe041ad05485deaa7cdb9e8d68c0d2afc7845",
+    "packet": "5bf04d210886db7be2be30e6f7d9389e147ba2cae3649847171372afe8025597"
+  },
+  "document_text_hashes": {
+    "rosettanode": "cc1a9b0f7c803c9266f081dc0efc63397be186f3014291e4c5db4c639fd7ab97",
+    "reconstruction": "439d1879c23fffd316bc8b05dc881aea4ed742e19b1fa86be7767aa8b8355cb8"
+  },
+  "excluded": [
+    "elapsed_seconds",
+    "command timing",
+    "PDF metadata"
+  ],
+  "cross_architecture": false
+}

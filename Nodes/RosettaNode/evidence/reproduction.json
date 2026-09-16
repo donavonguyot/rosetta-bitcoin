@@ -1,0 +1,16 @@
+{
+  "schema": "rosettanode.reproduction.v1",
+  "status": "passed",
+  "environment": "fresh container and copied source tree using identical pinned image; same physical host/architecture",
+  "semantic_manifest_sha256": "27a8b304fdbe42ccb6b3908e65b212131776a5efa24464ff5ab4cac51d968371",
+  "document_text_sha256": {
+    "compactsize": "a324fe3c83f841dd9c2e5b37c1458cd95a15103e1464748c5cbfd2ffddfcea45",
+    "reconstruction": "931b7e6684610e3c18c0cdfdb201429e6e6e15fad9c5b07247dcf97257cdd4e9"
+  },
+  "excluded": [
+    "elapsed_seconds",
+    "commands timing",
+    "PDF binary metadata"
+  ],
+  "cross_architecture": false
+}

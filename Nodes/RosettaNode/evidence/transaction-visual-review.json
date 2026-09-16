@@ -1,0 +1,43 @@
+{
+  "schema": "rosettanode.transaction_visual_review.v1",
+  "documents": {
+    "rosettanode.pdf": {
+      "pages": 17,
+      "sha256": "af4c15b9222fcb7b7808c7e22db573d90aaf527862caffd2b5a00841c07f5c3a",
+      "renders": [
+        ".local/transaction-book/final-review-v2/rosettanode-01.png",
+        ".local/transaction-book/final-review-v2/rosettanode-02.png",
+        ".local/transaction-book/final-review-v2/rosettanode-03.png",
+        ".local/transaction-book/final-review-v2/rosettanode-04.png",
+        ".local/transaction-book/final-review-v2/rosettanode-05.png",
+        ".local/transaction-book/final-review-v2/rosettanode-06.png",
+        ".local/transaction-book/final-review-v2/rosettanode-07.png",
+        ".local/transaction-book/final-review-v2/rosettanode-08.png",
+        ".local/transaction-book/final-review-v2/rosettanode-09.png",
+        ".local/transaction-book/final-review-v2/rosettanode-10.png",
+        ".local/transaction-book/final-review-v2/rosettanode-11.png",
+        ".local/transaction-book/final-review-v2/rosettanode-12.png",
+        ".local/transaction-book/final-review-v2/rosettanode-13.png",
+        ".local/transaction-book/final-review-v2/rosettanode-14.png",
+        ".local/transaction-book/final-review-v2/rosettanode-15.png",
+        ".local/transaction-book/final-review-v2/rosettanode-16.png",
+        ".local/transaction-book/final-review-v2/rosettanode-17.png"
+      ]
+    },
+    "reconstruction.pdf": {
+      "pages": 3,
+      "sha256": "3efe774c5eae938dafa3d0d1210bfed44febaa44d277b20a9422f513308df91e",
+      "renders": [
+        ".local/transaction-book/final-review-v2/reconstruction-1.png",
+        ".local/transaction-book/final-review-v2/reconstruction-2.png",
+        ".local/transaction-book/final-review-v2/reconstruction-3.png"
+      ]
+    }
+  },
+  "result": "passed",
+  "figures": [],
+  "review": "All pages inspected in contact sheets. Final full-book pages 3\u20135 re-inspected after the page-break fix, pages 4\u20135 at full resolution. All other final renders, including the complete packet, are byte-identical to the previously inspected renders. No clipped text, missing glyphs or orphaned example heading observed.",
+  "limitations": [
+    "Executable appendix uses 7.5-point monospaced text and supports zoom/text extraction. Long JSON/IR lines wrap for display; Markdown and generated IR files are the copyable source artifacts."
+  ]
+}

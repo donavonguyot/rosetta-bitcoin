@@ -1,0 +1,1323 @@
+{
+  "schema": "rosettanode.evaluation.v1",
+  "attempt": "reproduce-repair-C2",
+  "phase": "initial",
+  "build": {
+    "status": "ok",
+    "binary_sha256": "e8b0223b31cb8957e2dd5618c2cb038e985f8fbd3592b8a44529fe84059a7ea2"
+  },
+  "isolation": [
+    {
+      "probe": "read /Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/spec/transactions.md",
+      "exit": 1,
+      "denied": true
+    },
+    {
+      "probe": "read /Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/tools/corpus.py",
+      "exit": 1,
+      "denied": true
+    },
+    {
+      "probe": "read /Users/donavonguyot/RosettaBitcoin/Nodes/Zig/README.md",
+      "exit": 1,
+      "denied": true
+    },
+    {
+      "probe": "read /Users/donavonguyot/RosettaBitcoin/README.md",
+      "exit": 1,
+      "denied": true
+    },
+    {
+      "probe": "read /Users/donavonguyot/.codex/config.toml",
+      "exit": 1,
+      "denied": true
+    },
+    {
+      "probe": "network http://127.0.0.1:48332",
+      "exit": 7,
+      "denied": true
+    },
+    {
+      "probe": "network https://1.1.1.1",
+      "exit": 7,
+      "denied": true
+    },
+    {
+      "probe": "network https://example.com",
+      "exit": 6,
+      "denied": true
+    }
+  ],
+  "matrix": {
+    "decode_plain": {
+      "pass": true,
+      "group": "encoding",
+      "family": "field_layout"
+    },
+    "truncate_plain_0": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_1": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_2": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_3": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_4": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_5": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_6": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_7": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_8": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_9": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_10": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_11": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_12": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_13": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_14": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_15": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_16": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_17": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_18": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_19": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_20": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_21": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_22": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_23": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_24": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_25": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_26": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_27": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_28": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_29": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_30": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_31": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_32": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_33": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_34": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_35": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_36": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_37": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_38": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_39": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_40": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_41": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_42": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_43": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_44": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_45": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_46": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_47": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_48": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_49": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_50": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_51": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_52": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_53": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_54": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_55": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_56": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_57": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_58": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_59": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_60": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_61": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_62": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_plain_63": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "identify_plain": {
+      "pass": true,
+      "group": "structured",
+      "family": "identifiers"
+    },
+    "serialize_plain_False": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_serialization"
+    },
+    "serialize_plain_True": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_serialization"
+    },
+    "decode_empty_item": {
+      "pass": true,
+      "group": "encoding",
+      "family": "field_layout"
+    },
+    "truncate_empty_item_0": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_1": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_2": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_3": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_4": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_5": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_6": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_7": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_8": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_9": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_10": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_11": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_12": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_13": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_14": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_15": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_16": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_17": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_18": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_19": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_20": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_21": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_22": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_23": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_24": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_25": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_26": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_27": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_28": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_29": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_30": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_31": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_32": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_33": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_34": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_35": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_36": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_37": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_38": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_39": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_40": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_41": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_42": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_43": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_44": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_45": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_46": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_47": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_48": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_49": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_50": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_51": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_52": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_53": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_54": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_55": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_56": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_57": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_58": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_59": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_60": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_61": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_62": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_63": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_64": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_65": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_66": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_empty_item_67": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "identify_empty_item": {
+      "pass": true,
+      "group": "structured",
+      "family": "identifiers"
+    },
+    "serialize_empty_item_False": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_serialization"
+    },
+    "serialize_empty_item_True": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_serialization"
+    },
+    "decode_witness": {
+      "pass": true,
+      "group": "encoding",
+      "family": "field_layout"
+    },
+    "truncate_witness_0": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_1": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_2": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_3": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_4": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_5": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_6": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_7": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_8": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_9": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_10": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_11": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_12": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_13": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_14": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_15": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_16": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_17": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_18": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_19": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_20": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_21": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_22": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_23": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_24": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_25": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_26": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_27": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_28": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_29": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_30": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_31": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_32": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_33": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_34": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_35": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_36": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_37": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_38": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_39": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_40": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_41": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_42": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_43": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_44": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_45": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_46": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_47": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_48": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_49": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_50": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_51": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_52": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_53": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_54": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_55": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_56": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_57": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_58": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_59": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_60": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_61": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_62": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_63": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_64": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_65": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_66": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_67": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_68": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_69": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "truncate_witness_70": {
+      "pass": true,
+      "group": "encoding",
+      "family": "truncation"
+    },
+    "identify_witness": {
+      "pass": true,
+      "group": "structured",
+      "family": "identifiers"
+    },
+    "serialize_witness_False": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_serialization"
+    },
+    "serialize_witness_True": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_serialization"
+    },
+    "superfluous": {
+      "pass": true,
+      "group": "encoding",
+      "family": "optional_flags"
+    },
+    "unknown3": {
+      "pass": true,
+      "group": "encoding",
+      "family": "optional_flags"
+    },
+    "unknown2": {
+      "pass": true,
+      "group": "encoding",
+      "family": "optional_flags"
+    },
+    "noncanonical": {
+      "pass": true,
+      "group": "encoding",
+      "family": "compactsize"
+    },
+    "impossible_count": {
+      "pass": true,
+      "group": "profile",
+      "family": "compactsize"
+    },
+    "zero_flags": {
+      "pass": true,
+      "group": "profile",
+      "family": "optional_flags"
+    },
+    "prefix_zero": {
+      "pass": true,
+      "group": "profile",
+      "family": "prefix_cursor"
+    },
+    "trailing_zero": {
+      "pass": true,
+      "group": "profile",
+      "family": "exact_trailing"
+    },
+    "budget_complete": {
+      "pass": false,
+      "group": "profile",
+      "family": "resource_precedence"
+    },
+    "budget_truncated": {
+      "pass": false,
+      "group": "profile",
+      "family": "resource_precedence"
+    },
+    "budget_trailing": {
+      "pass": false,
+      "group": "profile",
+      "family": "resource_precedence"
+    },
+    "prefix_plain": {
+      "pass": true,
+      "group": "profile",
+      "family": "prefix_cursor"
+    },
+    "modify_version": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_modification"
+    },
+    "modify_amount": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_modification"
+    },
+    "modify_script": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_modification"
+    },
+    "modify_witness": {
+      "pass": true,
+      "group": "structured",
+      "family": "structured_modification"
+    },
+    "budget_default_complete": {
+      "pass": false,
+      "group": "profile",
+      "family": "resource_precedence"
+    },
+    "budget_default_truncated": {
+      "pass": true,
+      "group": "profile",
+      "family": "resource_precedence"
+    }
+  },
+  "semantic_families": {
+    "field_layout": {
+      "group": "encoding",
+      "passed": 3,
+      "total": 3,
+      "score": 1.0
+    },
+    "truncation": {
+      "group": "encoding",
+      "passed": 203,
+      "total": 203,
+      "score": 1.0
+    },
+    "identifiers": {
+      "group": "structured",
+      "passed": 3,
+      "total": 3,
+      "score": 1.0
+    },
+    "structured_serialization": {
+      "group": "structured",
+      "passed": 6,
+      "total": 6,
+      "score": 1.0
+    },
+    "optional_flags": {
+      "group": "profile",
+      "passed": 1,
+      "total": 1,
+      "score": 1.0
+    },
+    "compactsize": {
+      "group": "profile",
+      "passed": 1,
+      "total": 1,
+      "score": 1.0
+    },
+    "prefix_cursor": {
+      "group": "profile",
+      "passed": 2,
+      "total": 2,
+      "score": 1.0
+    },
+    "exact_trailing": {
+      "group": "profile",
+      "passed": 1,
+      "total": 1,
+      "score": 1.0
+    },
+    "resource_precedence": {
+      "group": "profile",
+      "passed": 1,
+      "total": 5,
+      "score": 0.2
+    },
+    "structured_modification": {
+      "group": "structured",
+      "passed": 4,
+      "total": 4,
+      "score": 1.0
+    }
+  },
+  "groups": {
+    "encoding": 1.0,
+    "structured": 1.0,
+    "profile": 0.8400000000000001,
+    "valid_chain": 1.0
+  },
+  "feedback": [
+    {
+      "family": "resource_precedence",
+      "request": {
+        "op": "decode_exact",
+        "bytes": "03000080000101939393939393939393939393939393930102000002abcdfcffffff01dbffffffffffffff0252510100",
+        "mode": "witness",
+        "limits": {
+          "max_items": "0"
+        }
+      },
+      "expected": {
+        "status": "malformed_encoding"
+      },
+      "reduction_trials": 24,
+      "method": "bounded deletion reduction preserving expected outcome category",
+      "globally_minimal": false
+    }
+  ],
+  "execution": {
+    "returncode": 0,
+    "stderr": "",
+    "extra_response_lines": 0
+  },
+  "chain": {
+    "passed": 80376,
+    "total": 80376,
+    "examples": [],
+    "claim": "valid-chain parse/hash composition only"
+  },
+  "elapsed_seconds": 13.84909304100438,
+  "source_sha256": {
+    "feedback_test.go": "f3d7feea3edadd82d947170c795df01c104fe0c9b0e9f7df5547be92d671c879",
+    "wire.go": "63f4f98af72d5d8940e6c043bafaacc576334a55f7c7e67763356e32296b041d",
+    "main.go": "441b6c68bdc3f709d09558df7cf9968974fdbb3f1535edae99b2e676046cb809",
+    "main_test.go": "4c8df58eda8d642366da53d29dbdfc64414295017908760b0e51f45cd2a930b9"
+  }
+}

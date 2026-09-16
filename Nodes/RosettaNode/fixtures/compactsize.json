@@ -1,0 +1,11 @@
+{
+  "schema": "rosettanode.compactsize_cases.v1",
+  "provenance": "Independent width-boundary construction; Core v28.2 serialize.h as comparison source",
+  "valid": [
+    ["0", "00"], ["1", "01"], ["252", "fc"], ["253", "fdfd00"],
+    ["254", "fdfe00"], ["65535", "fdffff"], ["65536", "fe00000100"],
+    ["4294967295", "feffffffff"], ["4294967296", "ff0000000001000000"],
+    ["18446744073709551615", "ffffffffffffffffff"]
+  ],
+  "noncanonical": ["fd0000", "fdfc00", "feffff0000", "ff0000000000000000", "ffffffffff00000000"]
+}

@@ -1,0 +1,5568 @@
+{
+  "schema": "rosettanode.compactsize_gate.v1",
+  "status": "passed",
+  "identity": {
+    "source_sha256": "f6eef185194153c8df88e25256ae98cbc0ec772c71b12485806d38de5a908d84",
+    "ir_sha256": "77b4f8baf1e74532afc857637ebc3a0cf8cad631bb7621c704f55b1870f1ba7a",
+    "authored_ir_lines": 100,
+    "mechanically_generated_ir_lines": 0
+  },
+  "cases_per_build": 85,
+  "matrix": {
+    "jit": {
+      "decode-0": true,
+      "prefix-0": true,
+      "encode-0": true,
+      "capacity-0": true,
+      "truncated-0-0": true,
+      "decode-1": true,
+      "prefix-1": true,
+      "encode-1": true,
+      "capacity-1": true,
+      "truncated-1-0": true,
+      "decode-252": true,
+      "prefix-252": true,
+      "encode-252": true,
+      "capacity-252": true,
+      "truncated-252-0": true,
+      "decode-253": true,
+      "prefix-253": true,
+      "encode-253": true,
+      "capacity-253": true,
+      "truncated-253-0": true,
+      "truncated-253-1": true,
+      "truncated-253-2": true,
+      "decode-254": true,
+      "prefix-254": true,
+      "encode-254": true,
+      "capacity-254": true,
+      "truncated-254-0": true,
+      "truncated-254-1": true,
+      "truncated-254-2": true,
+      "decode-65535": true,
+      "prefix-65535": true,
+      "encode-65535": true,
+      "capacity-65535": true,
+      "truncated-65535-0": true,
+      "truncated-65535-1": true,
+      "truncated-65535-2": true,
+      "decode-65536": true,
+      "prefix-65536": true,
+      "encode-65536": true,
+      "capacity-65536": true,
+      "truncated-65536-0": true,
+      "truncated-65536-1": true,
+      "truncated-65536-2": true,
+      "truncated-65536-3": true,
+      "truncated-65536-4": true,
+      "decode-4294967295": true,
+      "prefix-4294967295": true,
+      "encode-4294967295": true,
+      "capacity-4294967295": true,
+      "truncated-4294967295-0": true,
+      "truncated-4294967295-1": true,
+      "truncated-4294967295-2": true,
+      "truncated-4294967295-3": true,
+      "truncated-4294967295-4": true,
+      "decode-4294967296": true,
+      "prefix-4294967296": true,
+      "encode-4294967296": true,
+      "capacity-4294967296": true,
+      "truncated-4294967296-0": true,
+      "truncated-4294967296-1": true,
+      "truncated-4294967296-2": true,
+      "truncated-4294967296-3": true,
+      "truncated-4294967296-4": true,
+      "truncated-4294967296-5": true,
+      "truncated-4294967296-6": true,
+      "truncated-4294967296-7": true,
+      "truncated-4294967296-8": true,
+      "decode-18446744073709551615": true,
+      "prefix-18446744073709551615": true,
+      "encode-18446744073709551615": true,
+      "capacity-18446744073709551615": true,
+      "truncated-18446744073709551615-0": true,
+      "truncated-18446744073709551615-1": true,
+      "truncated-18446744073709551615-2": true,
+      "truncated-18446744073709551615-3": true,
+      "truncated-18446744073709551615-4": true,
+      "truncated-18446744073709551615-5": true,
+      "truncated-18446744073709551615-6": true,
+      "truncated-18446744073709551615-7": true,
+      "truncated-18446744073709551615-8": true,
+      "noncanonical-0": true,
+      "noncanonical-1": true,
+      "noncanonical-2": true,
+      "noncanonical-3": true,
+      "noncanonical-4": true
+    },
+    "native_o0": {
+      "decode-0": true,
+      "prefix-0": true,
+      "encode-0": true,
+      "capacity-0": true,
+      "truncated-0-0": true,
+      "decode-1": true,
+      "prefix-1": true,
+      "encode-1": true,
+      "capacity-1": true,
+      "truncated-1-0": true,
+      "decode-252": true,
+      "prefix-252": true,
+      "encode-252": true,
+      "capacity-252": true,
+      "truncated-252-0": true,
+      "decode-253": true,
+      "prefix-253": true,
+      "encode-253": true,
+      "capacity-253": true,
+      "truncated-253-0": true,
+      "truncated-253-1": true,
+      "truncated-253-2": true,
+      "decode-254": true,
+      "prefix-254": true,
+      "encode-254": true,
+      "capacity-254": true,
+      "truncated-254-0": true,
+      "truncated-254-1": true,
+      "truncated-254-2": true,
+      "decode-65535": true,
+      "prefix-65535": true,
+      "encode-65535": true,
+      "capacity-65535": true,
+      "truncated-65535-0": true,
+      "truncated-65535-1": true,
+      "truncated-65535-2": true,
+      "decode-65536": true,
+      "prefix-65536": true,
+      "encode-65536": true,
+      "capacity-65536": true,
+      "truncated-65536-0": true,
+      "truncated-65536-1": true,
+      "truncated-65536-2": true,
+      "truncated-65536-3": true,
+      "truncated-65536-4": true,
+      "decode-4294967295": true,
+      "prefix-4294967295": true,
+      "encode-4294967295": true,
+      "capacity-4294967295": true,
+      "truncated-4294967295-0": true,
+      "truncated-4294967295-1": true,
+      "truncated-4294967295-2": true,
+      "truncated-4294967295-3": true,
+      "truncated-4294967295-4": true,
+      "decode-4294967296": true,
+      "prefix-4294967296": true,
+      "encode-4294967296": true,
+      "capacity-4294967296": true,
+      "truncated-4294967296-0": true,
+      "truncated-4294967296-1": true,
+      "truncated-4294967296-2": true,
+      "truncated-4294967296-3": true,
+      "truncated-4294967296-4": true,
+      "truncated-4294967296-5": true,
+      "truncated-4294967296-6": true,
+      "truncated-4294967296-7": true,
+      "truncated-4294967296-8": true,
+      "decode-18446744073709551615": true,
+      "prefix-18446744073709551615": true,
+      "encode-18446744073709551615": true,
+      "capacity-18446744073709551615": true,
+      "truncated-18446744073709551615-0": true,
+      "truncated-18446744073709551615-1": true,
+      "truncated-18446744073709551615-2": true,
+      "truncated-18446744073709551615-3": true,
+      "truncated-18446744073709551615-4": true,
+      "truncated-18446744073709551615-5": true,
+      "truncated-18446744073709551615-6": true,
+      "truncated-18446744073709551615-7": true,
+      "truncated-18446744073709551615-8": true,
+      "noncanonical-0": true,
+      "noncanonical-1": true,
+      "noncanonical-2": true,
+      "noncanonical-3": true,
+      "noncanonical-4": true
+    },
+    "native_o2": {
+      "decode-0": true,
+      "prefix-0": true,
+      "encode-0": true,
+      "capacity-0": true,
+      "truncated-0-0": true,
+      "decode-1": true,
+      "prefix-1": true,
+      "encode-1": true,
+      "capacity-1": true,
+      "truncated-1-0": true,
+      "decode-252": true,
+      "prefix-252": true,
+      "encode-252": true,
+      "capacity-252": true,
+      "truncated-252-0": true,
+      "decode-253": true,
+      "prefix-253": true,
+      "encode-253": true,
+      "capacity-253": true,
+      "truncated-253-0": true,
+      "truncated-253-1": true,
+      "truncated-253-2": true,
+      "decode-254": true,
+      "prefix-254": true,
+      "encode-254": true,
+      "capacity-254": true,
+      "truncated-254-0": true,
+      "truncated-254-1": true,
+      "truncated-254-2": true,
+      "decode-65535": true,
+      "prefix-65535": true,
+      "encode-65535": true,
+      "capacity-65535": true,
+      "truncated-65535-0": true,
+      "truncated-65535-1": true,
+      "truncated-65535-2": true,
+      "decode-65536": true,
+      "prefix-65536": true,
+      "encode-65536": true,
+      "capacity-65536": true,
+      "truncated-65536-0": true,
+      "truncated-65536-1": true,
+      "truncated-65536-2": true,
+      "truncated-65536-3": true,
+      "truncated-65536-4": true,
+      "decode-4294967295": true,
+      "prefix-4294967295": true,
+      "encode-4294967295": true,
+      "capacity-4294967295": true,
+      "truncated-4294967295-0": true,
+      "truncated-4294967295-1": true,
+      "truncated-4294967295-2": true,
+      "truncated-4294967295-3": true,
+      "truncated-4294967295-4": true,
+      "decode-4294967296": true,
+      "prefix-4294967296": true,
+      "encode-4294967296": true,
+      "capacity-4294967296": true,
+      "truncated-4294967296-0": true,
+      "truncated-4294967296-1": true,
+      "truncated-4294967296-2": true,
+      "truncated-4294967296-3": true,
+      "truncated-4294967296-4": true,
+      "truncated-4294967296-5": true,
+      "truncated-4294967296-6": true,
+      "truncated-4294967296-7": true,
+      "truncated-4294967296-8": true,
+      "decode-18446744073709551615": true,
+      "prefix-18446744073709551615": true,
+      "encode-18446744073709551615": true,
+      "capacity-18446744073709551615": true,
+      "truncated-18446744073709551615-0": true,
+      "truncated-18446744073709551615-1": true,
+      "truncated-18446744073709551615-2": true,
+      "truncated-18446744073709551615-3": true,
+      "truncated-18446744073709551615-4": true,
+      "truncated-18446744073709551615-5": true,
+      "truncated-18446744073709551615-6": true,
+      "truncated-18446744073709551615-7": true,
+      "truncated-18446744073709551615-8": true,
+      "noncanonical-0": true,
+      "noncanonical-1": true,
+      "noncanonical-2": true,
+      "noncanonical-3": true,
+      "noncanonical-4": true
+    },
+    "asan": {
+      "decode-0": true,
+      "prefix-0": true,
+      "encode-0": true,
+      "capacity-0": true,
+      "truncated-0-0": true,
+      "decode-1": true,
+      "prefix-1": true,
+      "encode-1": true,
+      "capacity-1": true,
+      "truncated-1-0": true,
+      "decode-252": true,
+      "prefix-252": true,
+      "encode-252": true,
+      "capacity-252": true,
+      "truncated-252-0": true,
+      "decode-253": true,
+      "prefix-253": true,
+      "encode-253": true,
+      "capacity-253": true,
+      "truncated-253-0": true,
+      "truncated-253-1": true,
+      "truncated-253-2": true,
+      "decode-254": true,
+      "prefix-254": true,
+      "encode-254": true,
+      "capacity-254": true,
+      "truncated-254-0": true,
+      "truncated-254-1": true,
+      "truncated-254-2": true,
+      "decode-65535": true,
+      "prefix-65535": true,
+      "encode-65535": true,
+      "capacity-65535": true,
+      "truncated-65535-0": true,
+      "truncated-65535-1": true,
+      "truncated-65535-2": true,
+      "decode-65536": true,
+      "prefix-65536": true,
+      "encode-65536": true,
+      "capacity-65536": true,
+      "truncated-65536-0": true,
+      "truncated-65536-1": true,
+      "truncated-65536-2": true,
+      "truncated-65536-3": true,
+      "truncated-65536-4": true,
+      "decode-4294967295": true,
+      "prefix-4294967295": true,
+      "encode-4294967295": true,
+      "capacity-4294967295": true,
+      "truncated-4294967295-0": true,
+      "truncated-4294967295-1": true,
+      "truncated-4294967295-2": true,
+      "truncated-4294967295-3": true,
+      "truncated-4294967295-4": true,
+      "decode-4294967296": true,
+      "prefix-4294967296": true,
+      "encode-4294967296": true,
+      "capacity-4294967296": true,
+      "truncated-4294967296-0": true,
+      "truncated-4294967296-1": true,
+      "truncated-4294967296-2": true,
+      "truncated-4294967296-3": true,
+      "truncated-4294967296-4": true,
+      "truncated-4294967296-5": true,
+      "truncated-4294967296-6": true,
+      "truncated-4294967296-7": true,
+      "truncated-4294967296-8": true,
+      "decode-18446744073709551615": true,
+      "prefix-18446744073709551615": true,
+      "encode-18446744073709551615": true,
+      "capacity-18446744073709551615": true,
+      "truncated-18446744073709551615-0": true,
+      "truncated-18446744073709551615-1": true,
+      "truncated-18446744073709551615-2": true,
+      "truncated-18446744073709551615-3": true,
+      "truncated-18446744073709551615-4": true,
+      "truncated-18446744073709551615-5": true,
+      "truncated-18446744073709551615-6": true,
+      "truncated-18446744073709551615-7": true,
+      "truncated-18446744073709551615-8": true,
+      "noncanonical-0": true,
+      "noncanonical-1": true,
+      "noncanonical-2": true,
+      "noncanonical-3": true,
+      "noncanonical-4": true
+    }
+  },
+  "mutation": {
+    "applied": true,
+    "case_results": {
+      "decode-0": true,
+      "prefix-0": true,
+      "encode-0": true,
+      "capacity-0": true,
+      "truncated-0-0": true,
+      "decode-1": true,
+      "prefix-1": true,
+      "encode-1": true,
+      "capacity-1": true,
+      "truncated-1-0": true,
+      "decode-252": true,
+      "prefix-252": true,
+      "encode-252": true,
+      "capacity-252": true,
+      "truncated-252-0": true,
+      "decode-253": true,
+      "prefix-253": true,
+      "encode-253": true,
+      "capacity-253": true,
+      "truncated-253-0": true,
+      "truncated-253-1": true,
+      "truncated-253-2": true,
+      "decode-254": true,
+      "prefix-254": true,
+      "encode-254": true,
+      "capacity-254": true,
+      "truncated-254-0": true,
+      "truncated-254-1": true,
+      "truncated-254-2": true,
+      "decode-65535": true,
+      "prefix-65535": true,
+      "encode-65535": true,
+      "capacity-65535": true,
+      "truncated-65535-0": true,
+      "truncated-65535-1": true,
+      "truncated-65535-2": true,
+      "decode-65536": true,
+      "prefix-65536": true,
+      "encode-65536": true,
+      "capacity-65536": true,
+      "truncated-65536-0": true,
+      "truncated-65536-1": true,
+      "truncated-65536-2": true,
+      "truncated-65536-3": true,
+      "truncated-65536-4": true,
+      "decode-4294967295": true,
+      "prefix-4294967295": true,
+      "encode-4294967295": true,
+      "capacity-4294967295": true,
+      "truncated-4294967295-0": true,
+      "truncated-4294967295-1": true,
+      "truncated-4294967295-2": true,
+      "truncated-4294967295-3": true,
+      "truncated-4294967295-4": true,
+      "decode-4294967296": true,
+      "prefix-4294967296": true,
+      "encode-4294967296": true,
+      "capacity-4294967296": true,
+      "truncated-4294967296-0": true,
+      "truncated-4294967296-1": true,
+      "truncated-4294967296-2": true,
+      "truncated-4294967296-3": true,
+      "truncated-4294967296-4": true,
+      "truncated-4294967296-5": true,
+      "truncated-4294967296-6": true,
+      "truncated-4294967296-7": true,
+      "truncated-4294967296-8": true,
+      "decode-18446744073709551615": true,
+      "prefix-18446744073709551615": true,
+      "encode-18446744073709551615": true,
+      "capacity-18446744073709551615": true,
+      "truncated-18446744073709551615-0": true,
+      "truncated-18446744073709551615-1": true,
+      "truncated-18446744073709551615-2": true,
+      "truncated-18446744073709551615-3": true,
+      "truncated-18446744073709551615-4": true,
+      "truncated-18446744073709551615-5": true,
+      "truncated-18446744073709551615-6": true,
+      "truncated-18446744073709551615-7": true,
+      "truncated-18446744073709551615-8": true,
+      "noncanonical-0": false,
+      "noncanonical-1": false,
+      "noncanonical-2": false,
+      "noncanonical-3": false,
+      "noncanonical-4": false
+    },
+    "intended_kills": [
+      "noncanonical-0",
+      "noncanonical-1",
+      "noncanonical-2",
+      "noncanonical-3",
+      "noncanonical-4"
+    ],
+    "unaffected_controls": [
+      "decode-0",
+      "prefix-0",
+      "encode-0",
+      "capacity-0",
+      "truncated-0-0",
+      "decode-1",
+      "prefix-1",
+      "encode-1",
+      "capacity-1",
+      "truncated-1-0",
+      "decode-252",
+      "prefix-252",
+      "encode-252",
+      "capacity-252",
+      "truncated-252-0",
+      "decode-253",
+      "prefix-253",
+      "encode-253",
+      "capacity-253",
+      "truncated-253-0",
+      "truncated-253-1",
+      "truncated-253-2",
+      "decode-254",
+      "prefix-254",
+      "encode-254",
+      "capacity-254",
+      "truncated-254-0",
+      "truncated-254-1",
+      "truncated-254-2",
+      "decode-65535",
+      "prefix-65535",
+      "encode-65535",
+      "capacity-65535",
+      "truncated-65535-0",
+      "truncated-65535-1",
+      "truncated-65535-2",
+      "decode-65536",
+      "prefix-65536",
+      "encode-65536",
+      "capacity-65536",
+      "truncated-65536-0",
+      "truncated-65536-1",
+      "truncated-65536-2",
+      "truncated-65536-3",
+      "truncated-65536-4",
+      "decode-4294967295",
+      "prefix-4294967295",
+      "encode-4294967295",
+      "capacity-4294967295",
+      "truncated-4294967295-0",
+      "truncated-4294967295-1",
+      "truncated-4294967295-2",
+      "truncated-4294967295-3",
+      "truncated-4294967295-4",
+      "decode-4294967296",
+      "prefix-4294967296",
+      "encode-4294967296",
+      "capacity-4294967296",
+      "truncated-4294967296-0",
+      "truncated-4294967296-1",
+      "truncated-4294967296-2",
+      "truncated-4294967296-3",
+      "truncated-4294967296-4",
+      "truncated-4294967296-5",
+      "truncated-4294967296-6",
+      "truncated-4294967296-7",
+      "truncated-4294967296-8",
+      "decode-18446744073709551615",
+      "prefix-18446744073709551615",
+      "encode-18446744073709551615",
+      "capacity-18446744073709551615",
+      "truncated-18446744073709551615-0",
+      "truncated-18446744073709551615-1",
+      "truncated-18446744073709551615-2",
+      "truncated-18446744073709551615-3",
+      "truncated-18446744073709551615-4",
+      "truncated-18446744073709551615-5",
+      "truncated-18446744073709551615-6",
+      "truncated-18446744073709551615-7",
+      "truncated-18446744073709551615-8"
+    ]
+  },
+  "asan": {
+    "clean_control": true,
+    "injected_fault": "heap-buffer-overflow",
+    "detected": true
+  },
+  "coverage": {
+    "blocks": {
+      "0": "read_le:entry",
+      "1": "read_le:loop",
+      "2": "read_le:exit",
+      "3": "cs_decode:entry",
+      "4": "cs_decode:tag",
+      "5": "cs_decode:one",
+      "6": "cs_decode:wide",
+      "7": "cs_decode:two",
+      "8": "cs_decode:four",
+      "9": "cs_decode:eight",
+      "10": "cs_decode:payload",
+      "11": "cs_decode:read",
+      "12": "cs_decode:accepted",
+      "13": "cs_decode:success",
+      "14": "cs_decode:truncated",
+      "15": "cs_decode:noncanonical",
+      "16": "cs_encode:entry",
+      "17": "cs_encode:write",
+      "18": "cs_encode:loop",
+      "19": "cs_encode:done",
+      "20": "cs_encode:short"
+    },
+    "hit": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "unhit": []
+  },
+  "alive2": {
+    "outcome": "unsupported",
+    "reason": "alive-tv is not installed in the pinned toolchain; no translation proof claimed",
+    "helper": "read_le",
+    "command_returncode": 127
+  },
+  "book": {
+    "schema": "rosettanode.book.v1",
+    "source_sha256": "f6eef185194153c8df88e25256ae98cbc0ec772c71b12485806d38de5a908d84",
+    "examples_sha256": "8e0dfa617dab2a8504d65f851faedc75ccd4f9c6897c9d96f97daca7a99d2be6",
+    "packet_sha256": "58a510add76737de8564ad5e541e9ccfaa91b3e6c3b12198ac14387feebf5a72",
+    "scope": "CompactSize only; not the transaction reconstruction packet",
+    "examples_provenance": "Independent width-boundary construction; Core v28.2 serialize.h as comparison source"
+  },
+  "elapsed_seconds": 3.726023189999978,
+  "commands": [
+    {
+      "argv": [
+        "opt",
+        "-passes=verify,lint",
+        "-disable-output",
+        "/work/generated/compactsize.ll"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007995619002031162
+    },
+    {
+      "argv": [
+        "llvm-as",
+        "/work/generated/compactsize.ll",
+        "-o",
+        "/work/.local/gate/core.bc"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005477712998981588
+    },
+    {
+      "argv": [
+        "clang",
+        "-O0",
+        "-emit-llvm",
+        "-c",
+        "host/compactsize.c",
+        "-o",
+        "/work/.local/gate/host.bc"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.016383931986638345
+    },
+    {
+      "argv": [
+        "llvm-link",
+        "/work/.local/gate/core.bc",
+        "/work/.local/gate/host.bc",
+        "-o",
+        "/work/.local/gate/jit.bc"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00578199299343396
+    },
+    {
+      "argv": [
+        "opt",
+        "-passes=verify",
+        "-disable-output",
+        "/work/generated/compactsize.ll"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005907822007429786
+    },
+    {
+      "argv": [
+        "clang",
+        "-O0",
+        "host/compactsize.c",
+        "/work/generated/compactsize.ll",
+        "-o",
+        "/work/.local/gate/o0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.04053341000690125
+    },
+    {
+      "argv": [
+        "opt",
+        "-passes=verify",
+        "-disable-output",
+        "/work/generated/compactsize.ll"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005766577000031248
+    },
+    {
+      "argv": [
+        "clang",
+        "-O2",
+        "host/compactsize.c",
+        "/work/generated/compactsize.ll",
+        "-o",
+        "/work/.local/gate/o2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.04749619201174937
+    },
+    {
+      "argv": [
+        "opt",
+        "-passes=verify",
+        "-disable-output",
+        "/work/.local/gate/checked.ll"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0060207340138731524
+    },
+    {
+      "argv": [
+        "clang",
+        "-O0",
+        "host/compactsize.c",
+        "/work/.local/gate/checked.ll",
+        "-o",
+        "/work/.local/gate/asan",
+        "-fsanitize=address",
+        "-fno-omit-frame-pointer",
+        "-g"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.07966353801020887
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015927448999718763
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011432200000854209
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011252081996644847
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "0",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015288890004740097
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015602752988343127
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "01"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.013119387003825977
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "01aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01164164999499917
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0162126469949726
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "1",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011382326003513299
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.016080318004242145
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fc"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01653371901193168
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fcaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.013157594003132544
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "252"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011890890993527137
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "252",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.013459708003210835
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011640441996860318
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdfd00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01186684999265708
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdfd00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015035065007396042
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "253"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.012032386002829298
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "253",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01192289000027813
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011752897000405937
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011341745004756376
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdfd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01631789300881792
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdfe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015555129997665063
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdfe00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.012084301008144394
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "254"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01602465400355868
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "254",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011402909003663808
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015846619004150853
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.013135845001670532
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdfe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011163752002175897
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01564800199412275
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.012337082996964455
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "65535"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011552986994502135
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "65535",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011126919998787344
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015711415995610878
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011634149996098131
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.012231336993863806
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fe00000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011829809998744167
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fe00000100aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.016375973995309323
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "65536"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.012584281997988
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "65536",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01100750699697528
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011281414001132362
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011665315993013792
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011827810012619011
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fe0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0151393959968118
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fe000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015672624998842366
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "feffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015647751002688892
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "feffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01217346399789676
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "4294967295"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01256057400314603
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "4294967295",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015318263991503045
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01609131800069008
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011601859994698316
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "feff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01625918700301554
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "feffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015706456993939355
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "feffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01561887799471151
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff0000000001000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011205250004422851
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff0000000001000000aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01618223200784996
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "4294967296"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011391118008759804
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "4294967296",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.012534783993032761
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011930180990020745
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011347410996677354
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.012846147001255304
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.012606322998180985
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01524597500974778
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0155397560010897
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff0000000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.010637855011736974
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff000000000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.014848696999251842
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff00000000010000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.015579087994410656
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.010712226998293772
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffffffffffffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01464487200428266
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "18446744073709551615"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.014453712006798014
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "encode",
+        "18446744073709551615",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01476590899983421
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.014720660998136736
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.010580649002804421
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.014854323002509773
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0105693160003284
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.010694644006434828
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.010461611003847793
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011001174003467895
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.012406289009959437
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.011664274003123865
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fd0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01413401699392125
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "fdfc00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.010284951000357978
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "feffff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.010395488003268838
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ff0000000000000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.010774349007988349
+    },
+    {
+      "argv": [
+        "lli",
+        "/work/.local/gate/jit.bc",
+        "decode",
+        "ffffffffff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.010361156004364602
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004611287004081532
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0047579900128766894
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004779656010214239
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "0",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013784490001853555
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004194635999738239
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "01"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0014821530057815835
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "01aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004361879997304641
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013328250061022118
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "1",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004380004000267945
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001433405006537214
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fc"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00432063099287916
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fcaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0012884110037703067
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "252"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004401502999826334
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "252",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013997400092193857
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004421043995535001
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdfd00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001303326993365772
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdfd00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004156344992225058
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "253"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004532915001618676
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "253",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004456334005226381
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004799821996130049
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0012949929950991645
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdfd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004433251990121789
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdfe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001320324998232536
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdfe00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004397419004817493
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "254"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004762905999086797
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "254",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004861195004195906
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0014540709962602705
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004251758000464179
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdfe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004820070011192001
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013404500059550628
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004368087000329979
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "65535"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013636579969897866
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "65535",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00435404600284528
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0049009849899448454
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004762656011735089
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013656569935847074
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fe00000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004386170010548085
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fe00000100aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004767239006469026
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "65536"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013803229958284646
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "65536",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0021778350055683404
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0003417370025999844
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004528915000264533
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0048405289999209344
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fe0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0018384730065008625
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fe000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004803987991181202
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "feffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004839611996430904
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "feffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00475290599570144
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "4294967295"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004690200992627069
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "4294967295",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0014864859986118972
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004234966996591538
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004798364010639489
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "feff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004752781998831779
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "feffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004664867999963462
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "feffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004712533002020791
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff0000000001000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00477944799058605
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff0000000001000000aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004670326001360081
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "4294967296"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004762530996231362
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "4294967296",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004771072999574244
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004794488995685242
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005017396004404873
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004618161008693278
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004952357994625345
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005415007006376982
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005366383993532509
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff0000000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004755073008709587
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff000000000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0053116359922569245
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff00000000010000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004683408988057636
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005309052008669823
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffffffffffffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0019134699978167191
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "18446744073709551615"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0050149379967479035
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "encode",
+        "18446744073709551615",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0054064659925643355
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0008751750137889758
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00527930298994761
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005248638000921346
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005396840992034413
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005414674000348896
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004980231009540148
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0023740789911244065
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004639827006030828
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005455339007312432
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fd0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005410174009739421
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "fdfc00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00540667399764061
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "feffff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005427547992439941
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ff0000000000000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005209597991779447
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o0",
+        "decode",
+        "ffffffffff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0008668840018799528
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00269081600708887
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004654160002246499
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0018321410025237128
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "0",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004720950004411861
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004741074008052237
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "01"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005517294994206168
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "01aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0020791309943888336
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005119976995047182
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "1",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004778613991220482
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.000829886004794389
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fc"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005187514994759113
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fcaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.002031007010373287
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "252"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0021258369961287826
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "252",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0020596729882527143
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004952023999067023
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdfd00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0024015770031837747
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdfd00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0021322539978427812
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "253"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004982814003597014
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "253",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004965564992744476
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0019509270059643313
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004956482007401064
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdfd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.003205130997230299
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdfe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0049222340021515265
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdfe00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004591620992869139
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "254"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00472265800635796
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "254",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004713867005193606
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004634203010937199
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004815363005036488
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdfe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004671535003581084
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004687159002060071
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004756865004310384
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "65535"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004761989999678917
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "65535",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004827320008189417
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004707575004431419
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004809821009985171
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004911109004751779
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fe00000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00468399201054126
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fe00000100aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00471182499313727
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "65536"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004802280003787018
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "65536",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004787405006936751
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004737907001981512
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004791988001670688
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0047198670072248206
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fe0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004851112011238001
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fe000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001342782998108305
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "feffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00523226399673149
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "feffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0062895999872125685
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "4294967295"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0050683529989328235
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "4294967295",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0045737049949821085
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004674451003666036
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005103060000692494
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "feff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004628327995305881
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "feffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004641077990527265
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "feffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005103226998471655
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff0000000001000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005376758010243066
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff0000000001000000aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0019131790031678975
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "4294967296"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.002448200000799261
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "4294967296",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005217555997660384
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005470254996907897
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001962344002095051
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0016250649932771921
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0018513889954192564
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0022164590045576915
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004335047997301444
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff0000000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005299260999890976
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff000000000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00526701299531851
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff00000000010000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005435380997369066
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0011244580091442913
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffffffffffffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004846903000725433
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "18446744073709551615"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005627833001199178
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "encode",
+        "18446744073709551615",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0020470070012379438
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005075103006674908
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0020766309899045154
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005028270999900997
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0053315940022002906
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005417423002654687
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005304052014253102
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005183807996218093
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005080893999547698
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005003980986657552
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fd0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0008649259980302304
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "fdfc00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.006241518000024371
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "feffff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005175056998268701
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ff0000000000000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0020764649962075055
+    },
+    {
+      "argv": [
+        "/work/.local/gate/o2",
+        "decode",
+        "ffffffffff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004901067994069308
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01073360099690035
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007455015002051368
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0067379989923210815
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "0",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005489504008437507
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.009039829994435422
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "01"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0050949769938597456
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "01aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005616249996819533
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0057863270048983395
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "1",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008281150003313087
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008579764995374717
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fc"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008724550003535114
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fcaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008703925996087492
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "252"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008701635000761598
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "252",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008763507998082787
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008005536001292057
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdfd00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008462351994239725
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdfd00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008730883011594415
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "253"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008453101996565238
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "253",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007973536005010828
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008715510004549287
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0062153520120773464
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdfd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.009215365003910847
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdfe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008676843994180672
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdfe00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005100476992083713
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "254"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004103680999833159
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "254",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00798245299665723
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004233800995280035
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008320482011185959
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdfe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004088139001396485
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008436643998720683
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00489990200730972
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "65535"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0073193110001739115
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "65535",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00525655499950517
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.009125119002419524
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0036763629905181006
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.006039733998477459
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fe00000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007548469002358615
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fe00000100aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004292882003937848
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "65536"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007309770007850602
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "65536",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.006914784011314623
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004264175004209392
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00730781200400088
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007753752986900508
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fe0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007842792008887045
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fe000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007416432999889366
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "feffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008190070991986431
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "feffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007771670003421605
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "4294967295"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007727838004939258
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "4294967295",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007239188998937607
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00834718999976758
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007864166007493623
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "feff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007754795005894266
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "feffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008718216995475814
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "feffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004139721000683494
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff0000000001000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008408061999944039
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff0000000001000000aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005315261005307548
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "4294967296"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008289149991469458
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "4294967296",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007812001000274904
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.003993018006440252
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00859643000876531
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.007807418005540967
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008719133998965845
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00874713298981078
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008515850000549108
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff0000000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00872771700960584
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff000000000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004264590999810025
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff00000000010000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008316232997458428
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008573806000640616
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffffffffffffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00862930400762707
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "18446744073709551615"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.006594922000658698
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "encode",
+        "18446744073709551615",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00789679000445176
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00875813199672848
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008766173996264115
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008687968002050184
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00867467699572444
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008747300002141856
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008706217995495535
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008687135996297002
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008647844995721243
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.006251268001506105
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fd0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004630243987776339
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "fdfc00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005752702985773794
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "feffff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0046669930015923455
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ff0000000000000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008041576002142392
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan",
+        "decode",
+        "ffffffffff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.008116990007692948
+    },
+    {
+      "argv": [
+        "opt",
+        "-passes=verify",
+        "-disable-output",
+        "/work/.local/gate/noncanonical.ll"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.01104396500159055
+    },
+    {
+      "argv": [
+        "clang",
+        "-O0",
+        "host/compactsize.c",
+        "/work/.local/gate/noncanonical.ll",
+        "-o",
+        "/work/.local/gate/mutant"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.045876919000875205
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004609953990438953
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013484499941114336
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004390002999571152
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "0",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001285202000872232
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004443126992555335
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "01"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013349499931791797
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "01aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004430502012837678
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001371281992760487
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "1",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004380337006296031
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013548250135499984
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fc"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004348754999227822
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fcaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001441279993741773
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "252"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004365003987913951
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "252",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001372824001009576
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0043144650117028505
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdfd00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001402613997925073
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdfd00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004388836998259649
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "253"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013714069937122986
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "253",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0035974080092273653
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004217092995531857
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004665284999646246
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdfd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004511040009674616
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdfe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.002196292989538051
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdfe00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004273131999070756
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "254"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001593816006788984
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "254",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00434787999256514
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013462839997373521
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004429293010616675
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdfe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0047804889909457415
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013700320123462006
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004374420997919515
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "65535"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013242849963717163
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "65535",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.003637656001956202
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004542038994259201
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004813446008483879
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004171552995103411
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fe00000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004495248998864554
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fe00000100aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013756160042248666
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "65536"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004400462014018558
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "65536",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004802028997801244
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013831569958711043
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004418043987243436
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004798737994860858
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fe0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013276590034365654
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fe000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004370713009848259
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "feffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0048159880097955465
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "feffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0045550810027634725
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "4294967295"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001642856004764326
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "4294967295",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004371504008304328
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004759114992339164
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004830486999708228
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "feff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004778489004820585
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "feffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00480182099272497
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "feffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004810612997971475
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff0000000001000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004174845002125949
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff0000000001000000aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0020210920047247782
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "4294967296"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0017049369926098734
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "4294967296",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004291841003578156
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004244133990141563
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004368795998743735
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004196219000732526
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004374003998236731
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00480519600387197
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004928900001686998
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff0000000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0050253970111953095
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff000000000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0046324110007844865
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff00000000010000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005277303003822453
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005413840000983328
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffffffffffffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004725781996967271
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "18446744073709551615"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0008255519933300093
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "encode",
+        "18446744073709551615",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005078061003587209
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0011027510045096278
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00525355500576552
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0008064700086833909
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0006388089968822896
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.003097259992500767
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00491594300547149
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00530622000223957
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004629703005775809
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004827402997761965
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fd0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004709492000984028
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "fdfc00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005021479999413714
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "feffff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005318594005075283
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ff0000000000000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004623828004696406
+    },
+    {
+      "argv": [
+        "/work/.local/gate/mutant",
+        "decode",
+        "ffffffffff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005368133992305957
+    },
+    {
+      "argv": [
+        "opt",
+        "-passes=verify",
+        "-disable-output",
+        "/work/.local/gate/bad-bound.ll"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.019260700995801017
+    },
+    {
+      "argv": [
+        "clang",
+        "-O0",
+        "host/compactsize.c",
+        "/work/.local/gate/bad-bound.ll",
+        "-o",
+        "/work/.local/gate/asan-bad",
+        "-fsanitize=address",
+        "-fno-omit-frame-pointer",
+        "-g"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.10387184499995783
+    },
+    {
+      "argv": [
+        "/work/.local/gate/asan-bad",
+        "decode",
+        "ff"
+      ],
+      "returncode": 1,
+      "elapsed_seconds": 0.019511607999447733
+    },
+    {
+      "argv": [
+        "opt",
+        "-passes=verify",
+        "-disable-output",
+        "/work/.local/gate/coverage.ll"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005766493995906785
+    },
+    {
+      "argv": [
+        "clang",
+        "-O0",
+        "/work/.local/gate/coverage.c",
+        "/work/.local/gate/coverage.ll",
+        "-o",
+        "/work/.local/gate/coverage"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.03434643101354595
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004474166998988949
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004854528000578284
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004755490008392371
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "0",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00135119998594746
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0043798370024887845
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "01"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013511579891201109
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "01aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004330131007009186
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001409322998370044
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "1",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004305507012759335
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013779899891233072
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fc"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004360630002338439
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fcaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013505329989129677
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "252"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004426460000104271
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "252",
+        "0"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004699949990026653
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0017750170081853867
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdfd00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0014720280014444143
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdfd00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0043713380000554025
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "253"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004781697003636509
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "253",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0014759039913769811
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004888693001703359
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005431590005173348
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdfd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004847737000091001
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdfe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0045668300008401275
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdfe00aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004511541003012098
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "254"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004674908996094018
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "254",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004580538006848656
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004653409996535629
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004637660997104831
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdfe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.002161544995033182
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0015256089973263443
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004243842005962506
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "65535"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004825570998946205
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "65535",
+        "2"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004427334992215037
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004733073990792036
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fd"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004621578002115712
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0043137570028193295
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fe00000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001479111990192905
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fe00000100aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0015631079877493903
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "65536"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004616328005795367
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "65536",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004553413993562572
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004346296002040617
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00488623499404639
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fe00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.003935978005756624
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fe0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0017688930092845112
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fe000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0016856450092745945
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "feffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0003100299945799634
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "feffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001352823994238861
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "4294967295"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004322755994508043
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "4294967295",
+        "4"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0013199090026319027
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004380879006930627
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fe"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0015507750067627057
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "feff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0015551510005025193
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "feffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004303006993723102
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "feffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00469932499981951
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff0000000001000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0026062359975185245
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff0000000001000000aabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0014890279999235645
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "4294967296"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004259216002537869
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "4294967296",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00479323799663689
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004816903994651511
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00474357399798464
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004678533994592726
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004811320992303081
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004794821987161413
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005457589009893127
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff0000000001"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004672035007388331
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff000000000100"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.003996434999862686
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff00000000010000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005513502997928299
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0017559349944349378
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffffffffffffffffffaabb"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0016584380064159632
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "18446744073709551615"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0017320190090686083
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "encode",
+        "18446744073709551615",
+        "8"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.001711477991193533
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        ""
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0005116469983477145
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004173969995463267
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0026527760055614635
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004839070999878459
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004627411006367765
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004604578993166797
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004565996001474559
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005286845000227913
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffffffffffffffff"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.005325760008418001
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fd0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004599994994350709
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "fdfc00"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.004537248009000905
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "feffff0000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.006020318003720604
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ff0000000000000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.0012132470001233742
+    },
+    {
+      "argv": [
+        "/work/.local/gate/coverage",
+        "decode",
+        "ffffffffff00000000"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.00218962699000258
+    },
+    {
+      "argv": [
+        "sh",
+        "-c",
+        "command -v alive-tv"
+      ],
+      "returncode": 127,
+      "elapsed_seconds": 0.001591025007655844
+    },
+    {
+      "argv": [
+        "pdftotext",
+        "-layout",
+        "/work/.local/book/compactsize.pdf",
+        "/work/.local/book/compactsize.txt"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.017579138002474792
+    },
+    {
+      "argv": [
+        "pdftotext",
+        "-layout",
+        "/work/.local/book/reconstruction.pdf",
+        "/work/.local/book/reconstruction.txt"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.006956865996471606
+    }
+  ],
+  "scope": "CompactSize only; visual document review recorded separately",
+  "cost": null
+}

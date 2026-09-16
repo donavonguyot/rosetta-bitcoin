@@ -1,0 +1,26 @@
+{
+  "schema": "rosettanode.usage_summary.v1",
+  "attempts": [
+    "D1",
+    "D2",
+    "D3",
+    "C1",
+    "C2",
+    "C3",
+    "RD1",
+    "RC1",
+    "ZD1",
+    "ZC1"
+  ],
+  "reported_tokens": {
+    "input_tokens": 6656471,
+    "cached_input_tokens": 6002176,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 265041,
+    "reasoning_output_tokens": 62996
+  },
+  "monetary_cost": null,
+  "parent_model_usage": null,
+  "iteration_latency": null,
+  "subsets": "cached input and reasoning output are subsets, not additional billable-token estimates"
+}

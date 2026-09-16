@@ -1,0 +1,22 @@
+{
+  "schema": "rosettanode.reference_export.v1",
+  "source_version": 280200,
+  "source_subversion": "/Satoshi:28.2.0/",
+  "chain": "testnet4",
+  "range": [
+    0,
+    5000
+  ],
+  "read_only_rpc_methods": [
+    "getnetworkinfo",
+    "getblockchaininfo",
+    "getblockhash",
+    "getblock"
+  ],
+  "block_count": 5001,
+  "total_bytes": 20105713,
+  "last_block_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+  "export_manifest_sha256": "fd2cae27d812595bdb0bd627323fce1304598068781b90aa7dfca785b5275859",
+  "source_image_identity": "sha256:effc8fdc4855f5e1f30354387efb6608e7d7b24383c2446e8b3fff725e8f8b11 bitcoin/bitcoin:28.2",
+  "raw_export_location": ".local/blocks/reference (ignored)"
+}

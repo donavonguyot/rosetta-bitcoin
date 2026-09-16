@@ -1,0 +1,338 @@
+{
+  "schema": "rosettanode.transfer_report.v1",
+  "outcome": "observed improvement",
+  "reason": "Document median improves profile families without a lower structured-serialization median",
+  "initial_only": true,
+  "attempts": {
+    "document": [
+      {
+        "attempt": "D1",
+        "groups": {
+          "encoding": 1.0,
+          "structured": 1.0,
+          "profile": 1.0,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      },
+      {
+        "attempt": "D2",
+        "groups": {
+          "encoding": 1.0,
+          "structured": 1.0,
+          "profile": 1.0,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      },
+      {
+        "attempt": "D3",
+        "groups": {
+          "encoding": 1.0,
+          "structured": 1.0,
+          "profile": 1.0,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      }
+    ],
+    "control": [
+      {
+        "attempt": "C1",
+        "groups": {
+          "encoding": 1.0,
+          "structured": 1.0,
+          "profile": 0.8400000000000001,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      },
+      {
+        "attempt": "C2",
+        "groups": {
+          "encoding": 0.75,
+          "structured": 0.0,
+          "profile": 0.74,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      },
+      {
+        "attempt": "C3",
+        "groups": {
+          "encoding": 0.75,
+          "structured": 0.0,
+          "profile": 0.74,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      }
+    ]
+  },
+  "group_medians": {
+    "document": {
+      "encoding": 1.0,
+      "profile": 1.0,
+      "structured": 1.0,
+      "valid_chain": 1.0
+    },
+    "control": {
+      "encoding": 0.75,
+      "profile": 0.74,
+      "structured": 0.0,
+      "valid_chain": 1.0
+    }
+  },
+  "repairs_separate": {
+    "C1": {
+      "encoding": 1.0,
+      "structured": 1.0,
+      "profile": 0.9199999999999999,
+      "valid_chain": 1.0
+    },
+    "C2": {
+      "encoding": 1.0,
+      "structured": 1.0,
+      "profile": 0.8400000000000001,
+      "valid_chain": 1.0
+    },
+    "C3": {
+      "encoding": 1.0,
+      "structured": 1.0,
+      "profile": 0.8400000000000001,
+      "valid_chain": 1.0
+    }
+  },
+  "phase_accounting": {
+    "D1": {
+      "reading": {
+        "elapsed_seconds": 27.877395875009825,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 20458,
+            "cached_input_tokens": 8576,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 758,
+            "reasoning_output_tokens": 165
+          }
+        ]
+      },
+      "initial": {
+        "elapsed_seconds": 931.7094833750016,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 427985,
+            "cached_input_tokens": 389504,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 30084,
+            "reasoning_output_tokens": 8229
+          }
+        ]
+      },
+      "repair": null
+    },
+    "D2": {
+      "reading": {
+        "elapsed_seconds": 35.62460337499215,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 20459,
+            "cached_input_tokens": 0,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 877,
+            "reasoning_output_tokens": 204
+          }
+        ]
+      },
+      "initial": {
+        "elapsed_seconds": 567.9956709159887,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 291705,
+            "cached_input_tokens": 262144,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 17597,
+            "reasoning_output_tokens": 2572
+          }
+        ]
+      },
+      "repair": null
+    },
+    "D3": {
+      "reading": {
+        "elapsed_seconds": 33.44357908400707,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 20574,
+            "cached_input_tokens": 8576,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 913,
+            "reasoning_output_tokens": 204
+          }
+        ]
+      },
+      "initial": {
+        "elapsed_seconds": 753.4848140410031,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 510227,
+            "cached_input_tokens": 458112,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 23544,
+            "reasoning_output_tokens": 5981
+          }
+        ]
+      },
+      "repair": null
+    },
+    "C1": {
+      "reading": {
+        "elapsed_seconds": 30.696946208001464,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 59268,
+            "cached_input_tokens": 27136,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 743,
+            "reasoning_output_tokens": 105
+          }
+        ]
+      },
+      "initial": {
+        "elapsed_seconds": 730.1092599999974,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 633616,
+            "cached_input_tokens": 604544,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 23197,
+            "reasoning_output_tokens": 5315
+          }
+        ]
+      },
+      "repair": {
+        "elapsed_seconds": 250.53005762500106,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 560193,
+            "cached_input_tokens": 539136,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 7389,
+            "reasoning_output_tokens": 2409
+          }
+        ]
+      }
+    },
+    "C2": {
+      "reading": {
+        "elapsed_seconds": 32.36649800000305,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 27844,
+            "cached_input_tokens": 17792,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 750,
+            "reasoning_output_tokens": 164
+          }
+        ]
+      },
+      "initial": {
+        "elapsed_seconds": 678.600073374997,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 282405,
+            "cached_input_tokens": 244736,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 21506,
+            "reasoning_output_tokens": 4478
+          }
+        ]
+      },
+      "repair": {
+        "elapsed_seconds": 267.06428695800423,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 408805,
+            "cached_input_tokens": 382336,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 7747,
+            "reasoning_output_tokens": 2393
+          }
+        ]
+      }
+    },
+    "C3": {
+      "reading": {
+        "elapsed_seconds": 34.8739717080025,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 27696,
+            "cached_input_tokens": 9216,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 882,
+            "reasoning_output_tokens": 218
+          }
+        ]
+      },
+      "initial": {
+        "elapsed_seconds": 513.7193276249891,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 203645,
+            "cached_input_tokens": 170112,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 16156,
+            "reasoning_output_tokens": 3664
+          }
+        ]
+      },
+      "repair": {
+        "elapsed_seconds": 162.5770344580087,
+        "timed_out": false,
+        "usage": [
+          {
+            "input_tokens": 320500,
+            "cached_input_tokens": 296704,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 4829,
+            "reasoning_output_tokens": 939
+          }
+        ]
+      }
+    }
+  },
+  "usage_totals": {
+    "cache_write_input_tokens": 0,
+    "cached_input_tokens": 3418624,
+    "input_tokens": 3815380,
+    "output_tokens": 156972,
+    "reasoning_output_tokens": 37040
+  },
+  "missing": [],
+  "cross_language": "one_frozen_pair_each_rust_zig",
+  "iteration_latency": null,
+  "iteration_latency_note": "CLI phase logs do not provide per-iteration timestamps; phase elapsed and reported usage retained, no inferred latency.",
+  "monetary_cost": null,
+  "cautions": [
+    "Three attempts per arm are descriptive, not a causal/significance study.",
+    "Familiar Bitcoin encoding is sensitive to prior knowledge.",
+    "Repairs are excluded from initial transfer scores.",
+    "C2/C3 structured cases share negative amounts: their zero score is driven by a correlated signedness defect, not evidence that they lack serializers.",
+    "All six Go attempts passed the valid-chain family; real chain data did not expose these profile/negative-amount failures.",
+    "No authored-IR superiority or consensus/node-readiness claim."
+  ]
+}

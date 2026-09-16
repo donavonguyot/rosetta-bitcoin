@@ -1,0 +1,2413 @@
+{
+  "schema": "rosettanode.btcd_comparison.v1",
+  "version": "v0.24.2",
+  "go_sum_sha256": "50a77ba15a495b46bb8d35a255293708e6f8586df812ee01f1725d04611d6a3f",
+  "rows": [
+    {
+      "id": "decode_plain",
+      "profile_status": "ok",
+      "btcd": {
+        "consumed": "64",
+        "status": "ok",
+        "txid_display_order": "67a1c127828712ab9221ed8ec6148e81e918bc8346c44c583f68e6230c2a7f4a",
+        "wtxid_display_order": "67a1c127828712ab9221ed8ec6148e81e918bc8346c44c583f68e6230c2a7f4a"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_0",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "0",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_1",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "1",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_2",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "2",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_3",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "3",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_4",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "4",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_5",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "5",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_6",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "6",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_7",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "7",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_8",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "8",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_9",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "9",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_10",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "10",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_11",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "11",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_12",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "12",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_13",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "13",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_14",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "14",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_15",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "15",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_16",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "16",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_17",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "17",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_18",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "18",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_19",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "19",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_20",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "20",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_21",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "21",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_22",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "22",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_23",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "23",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_24",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "24",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_25",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "25",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_26",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "26",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_27",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "27",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_28",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "28",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_29",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "29",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_30",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "30",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_31",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "31",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_32",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "32",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_33",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "33",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_34",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "34",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_35",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "35",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_36",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "36",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_37",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "37",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_38",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "38",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_39",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "39",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_40",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "40",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_41",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "41",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_42",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "42",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_43",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "43",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_44",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "44",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_45",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "45",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_46",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "46",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_47",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "47",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_48",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "48",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_49",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "49",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_50",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "50",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_51",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "51",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_52",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "52",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_53",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "53",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_54",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "54",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_55",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "55",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_56",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "56",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_57",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "57",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_58",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "58",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_59",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "59",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_60",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "60",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_61",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "61",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_62",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "62",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_plain_63",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "63",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "decode_empty_item",
+      "profile_status": "ok",
+      "btcd": {
+        "consumed": "68",
+        "status": "ok",
+        "txid_display_order": "67a1c127828712ab9221ed8ec6148e81e918bc8346c44c583f68e6230c2a7f4a",
+        "wtxid_display_order": "c2fd5633c732f6ef3fbca81c9065b4e0f22c9a0072738810cc32cbf3254ed188"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_0",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "0",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_1",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "1",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_2",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "2",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_3",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "3",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_4",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "4",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_5",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "5",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_6",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "6",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_7",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "7",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_8",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "8",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_9",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "9",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_10",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "10",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_11",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "11",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_12",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "12",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_13",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "13",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_14",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "14",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_15",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "15",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_16",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "16",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_17",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "17",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_18",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "18",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_19",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "19",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_20",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "20",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_21",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "21",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_22",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "22",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_23",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "23",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_24",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "24",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_25",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "25",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_26",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "26",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_27",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "27",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_28",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "28",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_29",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "29",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_30",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "30",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_31",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "31",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_32",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "32",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_33",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "33",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_34",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "34",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_35",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "35",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_36",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "36",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_37",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "37",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_38",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "38",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_39",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "39",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_40",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "40",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_41",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "41",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_42",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "42",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_43",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "43",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_44",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "44",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_45",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "45",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_46",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "46",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_47",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "47",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_48",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "48",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_49",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "49",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_50",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "50",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_51",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "51",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_52",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "52",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_53",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "53",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_54",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "54",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_55",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "55",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_56",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "56",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_57",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "57",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_58",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "58",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_59",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "59",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_60",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "60",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_61",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "61",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_62",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "62",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_63",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "63",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_64",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "64",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_65",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "65",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_66",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "66",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_empty_item_67",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "67",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "decode_witness",
+      "profile_status": "ok",
+      "btcd": {
+        "consumed": "71",
+        "status": "ok",
+        "txid_display_order": "67a1c127828712ab9221ed8ec6148e81e918bc8346c44c583f68e6230c2a7f4a",
+        "wtxid_display_order": "7b66eba05552896a8df57b8db596a0f2976caf7be516343bc41347851340fa97"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_0",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "0",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_1",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "1",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_2",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "2",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_3",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "3",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_4",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "4",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_5",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "5",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_6",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "6",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_7",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "7",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_8",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "8",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_9",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "9",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_10",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "10",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_11",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "11",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_12",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "12",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_13",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "13",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_14",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "14",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_15",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "15",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_16",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "16",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_17",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "17",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_18",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "18",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_19",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "19",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_20",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "20",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_21",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "21",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_22",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "22",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_23",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "23",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_24",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "24",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_25",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "25",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_26",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "26",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_27",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "27",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_28",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "28",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_29",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "29",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_30",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "30",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_31",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "31",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_32",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "32",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_33",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "33",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_34",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "34",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_35",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "35",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_36",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "36",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_37",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "37",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_38",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "38",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_39",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "39",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_40",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "40",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_41",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "41",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_42",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "42",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_43",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "43",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_44",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "44",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_45",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "45",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_46",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "46",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_47",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "47",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_48",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "48",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_49",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "49",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_50",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "50",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_51",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "51",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_52",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "52",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_53",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "53",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_54",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "54",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_55",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "55",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_56",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "56",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_57",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "57",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_58",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "58",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_59",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "59",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_60",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "60",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_61",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "61",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_62",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "62",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_63",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "63",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_64",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "64",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_65",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "65",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_66",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "66",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_67",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "67",
+        "error": "EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_68",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "68",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_69",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "69",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "truncate_witness_70",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "70",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "superfluous",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "63",
+        "error": "witness flag set but tx has no witnesses",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "unknown3",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "6",
+        "error": "MsgTx.BtcDecode: witness tx but flag byte is 03",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "unknown2",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "6",
+        "error": "MsgTx.BtcDecode: witness tx but flag byte is 02",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "noncanonical",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "7",
+        "error": "ReadVarInt: non-canonical varint 1 - discriminant fd must encode a value greater than fd",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "impossible_count",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "13",
+        "error": "MsgTx.BtcDecode: too many input transactions to fit into max message size [count 18446744073709551615, max 818401]",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "zero_flags",
+      "profile_status": "ok",
+      "btcd": {
+        "consumed": "6",
+        "error": "MsgTx.BtcDecode: witness tx but flag byte is 00",
+        "status": "error"
+      },
+      "difference": true,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "prefix_zero",
+      "profile_status": "ok",
+      "btcd": {
+        "consumed": "6",
+        "error": "MsgTx.BtcDecode: witness tx but flag byte is 00",
+        "status": "error"
+      },
+      "difference": true,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "trailing_zero",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "6",
+        "error": "MsgTx.BtcDecode: witness tx but flag byte is 00",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "budget_complete",
+      "profile_status": "resource_limit",
+      "btcd": {
+        "consumed": "68",
+        "status": "ok",
+        "txid_display_order": "67a1c127828712ab9221ed8ec6148e81e918bc8346c44c583f68e6230c2a7f4a",
+        "wtxid_display_order": "c2fd5633c732f6ef3fbca81c9065b4e0f22c9a0072738810cc32cbf3254ed188"
+      },
+      "difference": true,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "budget_truncated",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "67",
+        "error": "unexpected EOF",
+        "status": "error"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "budget_trailing",
+      "profile_status": "malformed_encoding",
+      "btcd": {
+        "consumed": "68",
+        "status": "ok",
+        "txid_display_order": "67a1c127828712ab9221ed8ec6148e81e918bc8346c44c583f68e6230c2a7f4a",
+        "wtxid_display_order": "c2fd5633c732f6ef3fbca81c9065b4e0f22c9a0072738810cc32cbf3254ed188"
+      },
+      "difference": true,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    },
+    {
+      "id": "prefix_plain",
+      "profile_status": "ok",
+      "btcd": {
+        "consumed": "64",
+        "status": "ok",
+        "txid_display_order": "67a1c127828712ab9221ed8ec6148e81e918bc8346c44c583f68e6230c2a7f4a",
+        "wtxid_display_order": "67a1c127828712ab9221ed8ec6148e81e918bc8346c44c583f68e6230c2a7f4a"
+      },
+      "difference": false,
+      "interpretation": "Comparison witness only; btcd has its own deserialization limits, cursor/error order and no exact/profile budget operation."
+    }
+  ],
+  "differences": 4,
+  "authority": false
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "rosettanode.cross_reproduction.v1",
+  "attempt": "RC1",
+  "phase": "repair",
+  "status": "passed",
+  "semantic_manifest_sha256": "6785efa82af83ed7f3b7f8f1e7df705f14f66cce3a563be2b404e33db32a1264",
+  "environment": "Fresh source/build/cache directories and sandboxed native processes, same pinned physical host; no model rerun"
+}

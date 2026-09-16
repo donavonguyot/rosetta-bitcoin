@@ -1,0 +1,21 @@
+{
+  "schema": "rosettanode.cohort_reproduction.v1",
+  "phase": "repair",
+  "status": "passed",
+  "environment": "Fresh source/build/cache directories and fresh sandboxed processes on the same pinned macOS/Go host; no model rerun",
+  "attempts": {
+    "C1": {
+      "semantic_manifest_sha256": "3cbcc7d5cd9e278711d00c99e97d8340eba47bfc6bd8bb5bca5139eab11e8cf9",
+      "status": "passed"
+    },
+    "C2": {
+      "semantic_manifest_sha256": "dee42ef96ca40c3439d5d261ab8eca66fc321945bff69f6ecfbe61aca18e4173",
+      "status": "passed"
+    },
+    "C3": {
+      "semantic_manifest_sha256": "d54214cf6ee9cb1e5e877c8192f0156bb5f4061d767a2ed4fdf31d2a4fd93f04",
+      "status": "passed"
+    }
+  },
+  "elapsed_seconds": 48.50189329200657
+}

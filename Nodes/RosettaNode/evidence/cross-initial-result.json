@@ -1,0 +1,31 @@
+{
+  "schema": "rosettanode.cross_initial_result.v1",
+  "initial_only": true,
+  "groups": {
+    "RD1": {
+      "encoding": 1.0,
+      "structured": 1.0,
+      "profile": 1.0,
+      "valid_chain": 1.0
+    },
+    "RC1": {
+      "encoding": 0.75,
+      "structured": 0.0,
+      "profile": 0.74,
+      "valid_chain": 1.0
+    },
+    "ZD1": {
+      "encoding": 1.0,
+      "structured": 1.0,
+      "profile": 1.0,
+      "valid_chain": 1.0
+    },
+    "ZC1": {
+      "encoding": 0.75,
+      "structured": 0.0,
+      "profile": 0.74,
+      "valid_chain": 1.0
+    }
+  },
+  "interpretation": "Descriptive pairs; not pooled with Go. Both controls repeat the correlated negative-amount and profile failures. No language ranking."
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "rosettanode.chain_composition.v1",
+  "status": "passed",
+  "groups": {
+    "shared": {
+      "blocks": 45,
+      "transactions": 16954,
+      "witness_blocks": 45,
+      "manifest_sha256": "9ebf1dd66612419c7b878e1246c01ef0a4be3d0f93bbb97d19c1335a2406508e"
+    },
+    "reference": {
+      "blocks": 5001,
+      "transactions": 23234,
+      "witness_blocks": 4657,
+      "manifest_sha256": "35ee98b14e5afe1f37b55b97a11530dbe5a95fbc55159d61023198c40718a91b"
+    }
+  },
+  "transaction_comparisons": 40188,
+  "builds": [
+    "o0",
+    "o2"
+  ],
+  "elapsed_seconds": 7.000044918007916,
+  "claim": "Valid parse/hash composition only; excludes malformed/profile and consensus validity",
+  "python_port_comparison": {
+    "path": "Nodes/Python/pybitnode/consensus/witness.py",
+    "observed": "first matching commitment with break; checker requires last matching output; no port modification"
+  }
+}

@@ -1,0 +1,261 @@
+{
+  "schema": "rosettanode.cross_language_report.v1",
+  "status": "complete",
+  "pairs": {
+    "rust": {
+      "document": {
+        "attempt": "RD1",
+        "groups": {
+          "encoding": 1.0,
+          "structured": 1.0,
+          "profile": 1.0,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      },
+      "control": {
+        "attempt": "RC1",
+        "groups": {
+          "encoding": 0.75,
+          "structured": 0.0,
+          "profile": 0.74,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      }
+    },
+    "zig": {
+      "document": {
+        "attempt": "ZD1",
+        "groups": {
+          "encoding": 1.0,
+          "structured": 1.0,
+          "profile": 1.0,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      },
+      "control": {
+        "attempt": "ZC1",
+        "groups": {
+          "encoding": 0.75,
+          "structured": 0.0,
+          "profile": 0.74,
+          "valid_chain": 1.0
+        },
+        "build": "ok"
+      }
+    }
+  },
+  "initial_only": true,
+  "repairs_separate": {
+    "RC1": {
+      "encoding": 1.0,
+      "structured": 1.0,
+      "profile": 0.8400000000000001,
+      "valid_chain": 1.0
+    },
+    "ZC1": {
+      "encoding": 1.0,
+      "structured": 1.0,
+      "profile": 0.8400000000000001,
+      "valid_chain": 1.0
+    }
+  },
+  "phase_accounting": {
+    "RD1": {
+      "reading": {
+        "elapsed_seconds": 43.249798000004375,
+        "limit_seconds": 900,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 30395,
+            "cached_input_tokens": 17664,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1197,
+            "reasoning_output_tokens": 364
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      },
+      "initial": {
+        "elapsed_seconds": 957.899728791992,
+        "limit_seconds": 3600,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 354427,
+            "cached_input_tokens": 317952,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 30774,
+            "reasoning_output_tokens": 9127
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      },
+      "repair": null
+    },
+    "RC1": {
+      "reading": {
+        "elapsed_seconds": 29.097398416008218,
+        "limit_seconds": 900,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 27938,
+            "cached_input_tokens": 17664,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 705,
+            "reasoning_output_tokens": 146
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      },
+      "initial": {
+        "elapsed_seconds": 696.7303048749891,
+        "limit_seconds": 3600,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 265083,
+            "cached_input_tokens": 238080,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 22333,
+            "reasoning_output_tokens": 3806
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      },
+      "repair": {
+        "elapsed_seconds": 217.1699382079969,
+        "limit_seconds": 1800,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 448561,
+            "cached_input_tokens": 425344,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 5872,
+            "reasoning_output_tokens": 1884
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      }
+    },
+    "ZD1": {
+      "reading": {
+        "elapsed_seconds": 43.08271887501178,
+        "limit_seconds": 900,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 30453,
+            "cached_input_tokens": 17792,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 1097,
+            "reasoning_output_tokens": 333
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      },
+      "initial": {
+        "elapsed_seconds": 560.3293737909989,
+        "limit_seconds": 3600,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 389381,
+            "cached_input_tokens": 331520,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 17213,
+            "reasoning_output_tokens": 3445
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      },
+      "repair": null
+    },
+    "ZC1": {
+      "reading": {
+        "elapsed_seconds": 33.99605129199335,
+        "limit_seconds": 900,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 28022,
+            "cached_input_tokens": 16256,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 779,
+            "reasoning_output_tokens": 196
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      },
+      "initial": {
+        "elapsed_seconds": 673.5041228749906,
+        "limit_seconds": 3600,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 577062,
+            "cached_input_tokens": 534784,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 20816,
+            "reasoning_output_tokens": 4781
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      },
+      "repair": {
+        "elapsed_seconds": 250.5828496660106,
+        "limit_seconds": 1800,
+        "timed_out": false,
+        "returncode": 0,
+        "usage": [
+          {
+            "input_tokens": 689769,
+            "cached_input_tokens": 666496,
+            "cache_write_input_tokens": 0,
+            "output_tokens": 7283,
+            "reasoning_output_tokens": 1874
+          }
+        ],
+        "temperature": null,
+        "seed": null,
+        "cost": null
+      }
+    }
+  },
+  "infrastructure_failures": [],
+  "interpretation": "One document/control pair per language under the frozen packet and semantic evaluator. Results are exploratory and are not pooled with Go or used to rank languages. Initial scores remain separate from counterexample-assisted repairs.",
+  "monetary_cost": null,
+  "iteration_latency": null
+}
