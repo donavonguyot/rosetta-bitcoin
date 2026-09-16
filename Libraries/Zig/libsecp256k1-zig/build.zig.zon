@@ -1,0 +1,1 @@
+.{ .name = .libsecp256k1_zig, .version = "0.1.0", .minimum_zig_version = "0.16.0", .fingerprint = 0xf65def0c4c9fa197, .paths = .{ "build.zig", "build.zig.zon", "src", "examples", "LICENSE", "README.md", "DERIVATIONS.md", "tools" } }

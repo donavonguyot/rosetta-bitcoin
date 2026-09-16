@@ -1,0 +1,277 @@
+{
+  "version": 1,
+  "target_backend": "libsecp256k1",
+  "status": "active",
+  "result_values": [
+    "valid",
+    "consensus_invalid",
+    "malformed_input",
+    "backend_unavailable"
+  ],
+  "vectors": [
+    {
+      "id": "ecdsa-valid-privkey-1-deadbeef",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4",
+      "expected": "valid"
+    },
+    {
+      "id": "ecdsa-consensus-invalid-wrong-message",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "signature_hex": "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4",
+      "expected": "consensus_invalid"
+    },
+    {
+      "id": "ecdsa-valid-high-s-normalized",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3045022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798022100a1dc3b8e6933781adc2049d3a49bb2435842447fa73e783dda3dd8a7c6a90d5d",
+      "expected": "valid"
+    },
+    {
+      "id": "ecdsa-consensus-invalid-high-s-wrong-message",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "signature_hex": "3045022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798022100a1dc3b8e6933781adc2049d3a49bb2435842447fa73e783dda3dd8a7c6a90d5d",
+      "expected": "consensus_invalid"
+    },
+    {
+      "id": "ecdsa-malformed-empty-pubkey",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "",
+      "msg_hash_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "signature_hex": "",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-sec1-infinity-pubkey",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "00",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-compressed-x-ge-field",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "02fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-uncompressed-point-not-on-curve",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0400000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-compressed-wrong-length",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0211111111111111111111111111111111111111111111111111111111111111",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-der-truncated-sequence",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-der-trailing-bytes",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e400",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-der-bad-total-length",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3045022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-der-missing-s",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3022022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-der-zero-r",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "30440220000000000000000000000000000000000000000000000000000000000000000002205e23c47196cc87e523dfb62c5b644dbb626c9867080a27fde59485e5098d33e4",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-malformed-der-zero-s",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3044022079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179802200000000000000000000000000000000000000000000000000000000000000000",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "ecdsa-consensus-invalid-der-negative-r",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "3006020180020101",
+      "expected": "consensus_invalid"
+    },
+    {
+      "id": "ecdsa-malformed-der-nonminimal-r-padding",
+      "operation": "verify_ecdsa",
+      "pubkey_hex": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+      "msg_hash_hex": "281dd50f6f56bc6e867fe73dd614a73c55a647a479704f64804b574cafb0f5c5",
+      "signature_hex": "300702020001020101",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "schnorr-valid-privkey-12345-cafebabe",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f",
+      "msg_hash_hex": "3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9",
+      "signature_hex": "632f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784c80478f3845b4719c92c339fe1032890f9d96b6b0b44a8ea05da6ce88a133b7b",
+      "expected": "valid"
+    },
+    {
+      "id": "schnorr-consensus-invalid-mutated-signature",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f",
+      "msg_hash_hex": "3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9",
+      "signature_hex": "622f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784c80478f3845b4719c92c339fe1032890f9d96b6b0b44a8ea05da6ce88a133b7b",
+      "expected": "consensus_invalid"
+    },
+    {
+      "id": "schnorr-consensus-invalid-wrong-message",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f",
+      "msg_hash_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "signature_hex": "632f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784c80478f3845b4719c92c339fe1032890f9d96b6b0b44a8ea05da6ce88a133b7b",
+      "expected": "consensus_invalid"
+    },
+    {
+      "id": "schnorr-malformed-zero-pubkey",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "msg_hash_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "signature_hex": "",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "schnorr-malformed-x-ge-field",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
+      "msg_hash_hex": "3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9",
+      "signature_hex": "632f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784c80478f3845b4719c92c339fe1032890f9d96b6b0b44a8ea05da6ce88a133b7b",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "schnorr-malformed-nonliftable-x",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "0000000000000000000000000000000000000000000000000000000000000005",
+      "msg_hash_hex": "3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9",
+      "signature_hex": "632f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784c80478f3845b4719c92c339fe1032890f9d96b6b0b44a8ea05da6ce88a133b7b",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "schnorr-consensus-invalid-r-x-ge-field",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f",
+      "msg_hash_hex": "3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9",
+      "signature_hex": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fc80478f3845b4719c92c339fe1032890f9d96b6b0b44a8ea05da6ce88a133b7b",
+      "expected": "consensus_invalid"
+    },
+    {
+      "id": "schnorr-consensus-invalid-s-zero",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f",
+      "msg_hash_hex": "3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9",
+      "signature_hex": "632f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac57840000000000000000000000000000000000000000000000000000000000000000",
+      "expected": "consensus_invalid"
+    },
+    {
+      "id": "schnorr-consensus-invalid-s-ge-order",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f",
+      "msg_hash_hex": "3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9",
+      "signature_hex": "632f89d23c32b7d66873d7ef89e730f44f3d063394f8661e4421469979ac5784fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+      "expected": "consensus_invalid"
+    },
+    {
+      "id": "schnorr-malformed-short-signature",
+      "operation": "verify_schnorr",
+      "xonly_pubkey_hex": "f01d6b9018ab421dd410404cb869072065522bf85734008f105cf385a023a80f",
+      "msg_hash_hex": "3ad22a0437431f2d102505b27048dfce20b1f90b32fe2116130d2bd4b35084b9",
+      "signature_hex": "00",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "taproot-valid-privkey-300-c0ffee",
+      "operation": "taproot_tweak_xonly",
+      "xonly_pubkey_hex": "85a7b790fc9d962493788317e4874a4ab07f1e9c78c773c47f2f6c96df756f05",
+      "merkle_root_hex": "446ba384864eb34196e08044029fb463d97748e4549dfd0e2612f60d74c4f165",
+      "expected_output_xonly_hex": "4b3e30f94e0ae82945cbb40d83088b8f3bea370c24c575b7788889ad5e64da8b",
+      "expected_parity": 1,
+      "expected": "valid"
+    },
+    {
+      "id": "taproot-malformed-short-key",
+      "operation": "taproot_tweak_xonly",
+      "xonly_pubkey_hex": "00",
+      "merkle_root_hex": "",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "taproot-malformed-internal-x-ge-field",
+      "operation": "taproot_tweak_xonly",
+      "xonly_pubkey_hex": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
+      "merkle_root_hex": "",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "taproot-malformed-internal-nonliftable-x",
+      "operation": "taproot_tweak_xonly",
+      "xonly_pubkey_hex": "0000000000000000000000000000000000000000000000000000000000000005",
+      "merkle_root_hex": "",
+      "expected": "malformed_input"
+    },
+    {
+      "id": "taproot-consensus-invalid-wrong-output",
+      "operation": "taproot_tweak_xonly",
+      "xonly_pubkey_hex": "85a7b790fc9d962493788317e4874a4ab07f1e9c78c773c47f2f6c96df756f05",
+      "merkle_root_hex": "446ba384864eb34196e08044029fb463d97748e4549dfd0e2612f60d74c4f165",
+      "expected_output_xonly_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "expected_parity": 1,
+      "expected": "consensus_invalid"
+    },
+    {
+      "id": "taproot-consensus-invalid-wrong-parity",
+      "operation": "taproot_tweak_xonly",
+      "xonly_pubkey_hex": "85a7b790fc9d962493788317e4874a4ab07f1e9c78c773c47f2f6c96df756f05",
+      "merkle_root_hex": "446ba384864eb34196e08044029fb463d97748e4549dfd0e2612f60d74c4f165",
+      "expected_output_xonly_hex": "4b3e30f94e0ae82945cbb40d83088b8f3bea370c24c575b7788889ad5e64da8b",
+      "expected_parity": 0,
+      "expected": "consensus_invalid"
+    }
+  ]
+}

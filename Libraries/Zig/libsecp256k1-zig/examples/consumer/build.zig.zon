@@ -1,0 +1,1 @@
+.{ .name = .secp_consumer, .version = "0.1.0", .minimum_zig_version = "0.16.0", .fingerprint = 0x3f565e9887ba414d, .dependencies = .{ .secp256k1 = .{ .path = "../.." } }, .paths = .{ "build.zig", "build.zig.zon", "main.zig" } }
