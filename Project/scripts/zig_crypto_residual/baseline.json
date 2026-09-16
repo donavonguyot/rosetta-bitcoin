@@ -1,0 +1,21 @@
+{
+  "schema": "rb.zig_residual_freeze.v1",
+  "commit": "d0551aa2f222acaa19854b9b22de1865c453be4e",
+  "tag": "codex/zig-residual-baseline-d0551aa2f222",
+  "package_digest": "cb491eda661d644ba87e88db7b7236a2d93cb7692785a7d74977aa1e4ec2fe44",
+  "node_digest": "86d24f45477ebc3fd2a45c97255cc738f8ae7e2728df0f38a02cb446b7c87d2d",
+  "node_tree_digest": "7acbf29df364b96fb8bbf290cafeb334be6b925a032dddae0b4e084284b9920a",
+  "archive_sha256": "a52a6161273e399853c5cb07859b3d61a464bb1721253daf253fb5e2cba4b8ab",
+  "paths": [
+    "Libraries/Zig/libsecp256k1-zig",
+    "Nodes/Zig"
+  ],
+  "excluded_working_changes": [
+    "Go",
+    "Shared",
+    "Docs",
+    "tmp"
+  ],
+  "timing_coverage": "scheduler worker loop; excludes verifier initialization/destruction; legacy per-job elapsed preserved",
+  "binary_gate_status": "not_attempted"
+}

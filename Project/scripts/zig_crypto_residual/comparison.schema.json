@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rb.zig_crypto_residual_comparison.v1",
+  "title": "Experimental Zig residual comparison, never a curated lane result",
+  "type": "object",
+  "required": [
+    "schema",
+    "report_label",
+    "variants",
+    "runs",
+    "warmups",
+    "components",
+    "validation",
+    "arithmetic",
+    "profile",
+    "holdout",
+    "historical_compatibility",
+    "binary_gate_status",
+    "curated_current"
+  ],
+  "properties": {
+    "schema": {
+      "const": "rb.zig_crypto_residual_comparison.v1"
+    },
+    "report_label": {
+      "const": "campaign_comparable"
+    },
+    "binary_gate_status": {
+      "const": "not_attempted"
+    },
+    "curated_current": {
+      "const": false
+    },
+    "variants": {
+      "type": "object",
+      "required": [
+        "baseline",
+        "candidate",
+        "c_control"
+      ],
+      "minProperties": 3,
+      "maxProperties": 3
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 27,
+      "maxItems": 54
+    },
+    "warmups": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "validation": {
+      "type": "object",
+      "required": [
+        "source_digest",
+        "checks"
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "required": [
+        "roster_locked",
+        "rows",
+        "fine_rows"
+      ],
+      "properties": {
+        "roster_locked": {
+          "const": true
+        }
+      }
+    },
+    "arithmetic": {
+      "type": "object",
+      "properties": {
+        "field_comparisons": {
+          "minimum": 1000000
+        },
+        "scalar_comparisons": {
+          "minimum": 1000000
+        },
+        "glv_splits": {
+          "minimum": 0,
+          "description": "comparison.py requires at least 100000 when GLV is retained; selecting the unchanged baseline is valid"
+        },
+        "point_equivalences": {
+          "minimum": 10000
+        }
+      }
+    }
+  },
+  "$comment": "comparison.py additionally validates identities, lanes, rotation, proof invariants, paired evidence and campaign-only floors. Historical validators are unchanged."
+}
