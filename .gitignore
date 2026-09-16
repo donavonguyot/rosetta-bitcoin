@@ -103,3 +103,10 @@ venv/
 # Build caches (defense in depth; ports also ignore locally)
 /Nodes/*/.zig-cache/
 /Project/logs/
+
+# Standalone library build artifacts.
+/Libraries/**/.zig-cache/
+/Libraries/**/zig-out/
+
+# Generated PDF review previews.
+/tmp/pdfs/
