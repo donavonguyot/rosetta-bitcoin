@@ -103,3 +103,19 @@ make docker-smoke-once
 `Nodes/Shared/conformance/results/`. `docker-proof-rpc-replay` keeps the old
 host Core RPC path at `host.docker.internal:48332` as explicit replay evidence.
 Docker proof and supervisor volumes are separate from host datadirs.
+
+## Experimental own-curve component
+
+The own_curve build imports the standalone library under Libraries. It excludes
+the C crypto binding and any ecosystem curve backend. RocksDB remains the node
+store. Library APIs contain no Bitcoin node types; this adapter owns digest and
+error mapping. The existing default backend remains c_binding.
+
+Build with `go build -tags owncurve ./cmd/...`; select only `own_curve` or
+`libsecp256k1-go` when setting GOBITNODE_CRYPTO_BACKEND.
+
+Reproduce independent evidence with
+`python3 Project/scripts/run_crypto_lane.py --port go --all` from the
+workspace root. This uses isolated named proof volumes and Project assembles
+experimental results. Query `Project/scripts/report.py --section crypto-lanes`;
+5k does not imply tip validation. Test-only probes are excluded from benchmarks.

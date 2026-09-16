@@ -536,6 +536,7 @@ def build_artifact(
         "chainstate_utxo_count": as_int(final.get("chainstate_utxo_count", final.get("utxo_count")), 0),
         "utxo_accounting_policy": "core_spendable_v1",
         "native_crypto_backend": str(final.get("native_crypto_backend") or BASELINE_CRYPTO_BACKENDS.get(port, "baseline-native")),
+        "crypto_lane": final.get("crypto_lane") or (final.get("crypto") or {}).get("lane", "c_binding"),
         "proof_mode": "tip_maintenance" if maintenance else "p2p_sync",
         "peer_mode": "tip_peer" if maintenance else "local_reference",
         "peer": str(final.get("peer") or expected_peer),

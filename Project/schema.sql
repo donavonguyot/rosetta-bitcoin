@@ -2455,3 +2455,9 @@ LEFT JOIN port_baseline_5k pb ON pb.port = p.port
 LEFT JOIN stage_gate_evidence sge ON sge.port = p.port AND sge.stage = cst.stage
 LEFT JOIN sync_evidence se ON se.port = p.port
 LEFT JOIN open_blockers ob ON ob.stage = cst.stage;
+
+-- Experimental crypto evidence is independent of canonical benchmark tables.
+CREATE TABLE IF NOT EXISTS crypto_lane_results (
+ path TEXT PRIMARY KEY, port TEXT NOT NULL, lane TEXT NOT NULL,
+ implementation TEXT NOT NULL, milestone TEXT NOT NULL, source_digest TEXT NOT NULL,
+ captured_at TEXT NOT NULL, result TEXT NOT NULL, payload TEXT NOT NULL);

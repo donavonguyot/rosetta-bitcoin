@@ -9,10 +9,7 @@ const bip340_challenge_tag_hash = [_]u8{
     0x49, 0xfe, 0x51, 0x8f, 0x6d, 0x48, 0xd3, 0x7c,
 };
 
-pub const TweakResult = struct {
-    output_xonly: [32]u8,
-    parity: u8,
-};
+pub const TweakResult = @import("crypto_types.zig").TweakResult;
 
 pub const PureVerifier = struct {
     pub fn create() PureVerifier {

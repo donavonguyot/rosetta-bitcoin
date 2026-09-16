@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Independent experimental crypto lane evidence",
+  "type": "object",
+  "required": [
+    "schema",
+    "port",
+    "lane",
+    "implementation",
+    "milestone",
+    "source_digest",
+    "captured_at",
+    "result",
+    "binary_gate_status",
+    "toolchain",
+    "build_settings",
+    "dependencies",
+    "checks"
+  ],
+  "properties": {
+    "schema": {
+      "const": "rb.crypto_lane_result.v1"
+    },
+    "lane": {
+      "enum": [
+        "own_curve",
+        "ecosystem_curve",
+        "c_binding"
+      ]
+    },
+    "milestone": {
+      "enum": [
+        "component",
+        "5k"
+      ]
+    },
+    "result": {
+      "enum": [
+        "passed",
+        "failed"
+      ]
+    },
+    "binary_gate_status": {
+      "const": "not_attempted"
+    },
+    "source_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "checks": {
+      "type": "object"
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3
+    }
+  },
+  "$comment": "Project/scripts/crypto_lanes.py additionally validates dependencies, gate completeness, per-run identities and 5k invariants."
+}

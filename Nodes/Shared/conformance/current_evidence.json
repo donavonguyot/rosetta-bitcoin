@@ -1,6 +1,6 @@
 {
   "schema": "rb.current_evidence.v1",
-  "generated_at": "2026-06-06",
+  "generated_at": "2026-09-16",
   "notes": "Curated current Project evidence. Historical artifacts remain in results/ but are not imported into current Project status by default.",
   "entries": [
     {
@@ -506,6 +506,38 @@
       "path": "Nodes/Shared/conformance/results/mojo_control_post_100k_to_tip_benchmark_20260617T071750Z.json",
       "status": "current",
       "notes": "Current comparable mojo post_100k_to_tip proof accepted by campaign post_100k_to_tip_20260617_001224."
+    },
+    {
+      "port": "go",
+      "claim": "crypto_lane:own_curve:libsecp256k1-go:component",
+      "gate_id": "crypto_own_curve_component",
+      "path": "Nodes/Shared/conformance/results/go_own_curve_component_20260916T034848Z.json",
+      "status": "current",
+      "notes": "Experimental verification-only own_curve evidence; independent of canonical baseline selection. Binary tip gate not_attempted."
+    },
+    {
+      "port": "go",
+      "claim": "crypto_lane:own_curve:libsecp256k1-go:5k",
+      "gate_id": "crypto_own_curve_5k",
+      "path": "Nodes/Shared/conformance/results/go_own_curve_5k_20260916T040439Z.json",
+      "status": "current",
+      "notes": "Experimental verification-only own_curve evidence; independent of canonical baseline selection. Binary tip gate not_attempted."
+    },
+    {
+      "port": "zig",
+      "claim": "crypto_lane:own_curve:libsecp256k1-zig:component",
+      "gate_id": "crypto_own_curve_component",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_component_20260916T040137Z.json",
+      "status": "current",
+      "notes": "Experimental verification-only own_curve evidence; independent of canonical baseline selection. Binary tip gate not_attempted."
+    },
+    {
+      "port": "zig",
+      "claim": "crypto_lane:own_curve:libsecp256k1-zig:5k",
+      "gate_id": "crypto_own_curve_5k",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_5k_20260916T040840Z.json",
+      "status": "current",
+      "notes": "Experimental verification-only own_curve evidence; independent of canonical baseline selection. Binary tip gate not_attempted."
     }
   ]
 }

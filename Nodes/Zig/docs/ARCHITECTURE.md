@@ -143,3 +143,17 @@ python3 Project/scripts/preflight_consensus_runway.py --db Project/project.db --
 
 When live connect ships, extend this document with P2P, connect, and lock sections
 using [`port_architecture_outline.md`](../../Shared/code-documentation/port_architecture_outline.md).
+
+## Reusable crypto boundary
+
+The own_curve build imports a standalone package from Libraries. The package owns
+public-input curve operations and contains no node imports. The port's crypto
+adapter translates byte arguments and errors; script code owns sighashes,
+signature suffixes and Taproot tagged hashing. The default C binding remains a
+separate build, and Zig's existing standard-library curve is ecosystem_curve.
+
+Candidate builds exclude alternate crypto implementations. Test-only probe builds
+record actual adapter calls and can reject a selected primitive. These probes
+never invoke a reference backend and are excluded from measured benchmarks.
+Crypto provenance is persisted in node-owned metadata and exported through writer
+progress; Project selects lane evidence independently of baseline readiness.

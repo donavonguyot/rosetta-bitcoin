@@ -7,6 +7,7 @@ database; it never opens port-local operational datadirs.
 
 from __future__ import annotations
 
+import crypto_lanes
 import argparse
 import csv
 import hashlib
@@ -1122,6 +1123,11 @@ def import_current_evidence_index(
         raise SystemExit(f"{path} must contain entries[]")
 
     artifact = make_artifact(path, root, payload)
+    existing = connection.execute(
+        "SELECT artifact_id FROM artifacts WHERE path = ?", (artifact.rel_path,)
+    ).fetchone()
+    if existing:
+        artifact = replace(artifact, artifact_id=text(existing[0]))
     upsert_artifact(connection, artifact)
 
     tracked_result_paths: set[Path] = set()
@@ -1511,6 +1517,16 @@ def result_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def import_json_artifact(connection: sqlite3.Connection, root: Path, path: Path, payload: dict[str, Any]) -> None:
+    if payload.get("schema") == crypto_lanes.SCHEMA:
+        crypto_lanes.import_result(connection, root, path, payload)
+        artifact = make_artifact(path, root, payload)
+        existing = connection.execute(
+            "SELECT artifact_id FROM artifacts WHERE path = ?", (artifact.rel_path,)
+        ).fetchone()
+        if existing:
+            artifact = replace(artifact, artifact_id=text(existing[0]))
+        upsert_artifact(connection, artifact)
+        return
     artifact = make_artifact(path, root, payload)
     existing = connection.execute(
         """

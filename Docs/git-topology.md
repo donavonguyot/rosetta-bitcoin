@@ -60,3 +60,7 @@ Use small root commits. Stage only intentional source, tests, docs, fixtures,
 contracts, manifests, scripts, and selected compact proof artifacts.
 
 Do not commit generated live state from any node directory.
+
+Reusable, independently buildable crypto packages live under `Libraries/`. They
+are root-owned source directories with package-local metadata and licenses, not
+nested Git repositories. See `Libraries/README.md` and Project `crypto-lanes`.

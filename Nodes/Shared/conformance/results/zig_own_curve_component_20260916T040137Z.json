@@ -1,0 +1,374 @@
+{
+  "schema": "rb.crypto_lane_result.v1",
+  "port": "zig",
+  "lane": "own_curve",
+  "implementation": "libsecp256k1-zig",
+  "source_digest": "22ffd40266905b179a99d95dd5354731838f9e0b18e484f2d5019df8f70ea7c1",
+  "captured_at": "2026-09-16T04:01:05.388359+00:00",
+  "binary_gate_status": "not_attempted",
+  "result": "passed",
+  "toolchain": {
+    "node": "0.16.0",
+    "component": "0.16.0"
+  },
+  "build_settings": {
+    "optimization": "ReleaseSafe",
+    "candidate_only": true,
+    "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cpu": "arm64"
+  },
+  "dependencies": {
+    "production": [],
+    "ffi": false,
+    "curve_provider": "package",
+    "arithmetic": "package u257/u512",
+    "hashing": "Zig std.crypto.hash.sha2.Sha256"
+  },
+  "checks": {
+    "shared_vectors": {
+      "result": "passed",
+      "cases": 52,
+      "hashes": {
+        "native.json": "880b6bf5046161441a84ffce5c59b19add70e4b084467cb8645789eec2e901b6",
+        "bip340.csv": "01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb"
+      }
+    },
+    "isolated_build": {
+      "result": "passed",
+      "network": "none",
+      "contents": "package only",
+      "command": "zig build test -Doptimize=ReleaseSafe && cd examples/consumer && zig build -Doptimize=ReleaseSafe"
+    },
+    "differential": {
+      "reference_commit": "0cdc758a56360bf58a851fe91085a327ec97685a",
+      "reference_archive_sha256": "385c115a21ee1ff31d0b0320acc2b278c92f7bde971f510566ad481a38835be0",
+      "reference_binary_sha256": "59ae44928e143f812a02c8c0b508c3b9645d5a45c0fdb8a01c02ab4b18b85e98",
+      "cases": 480,
+      "operations": {
+        "ecdsa": 192,
+        "schnorr": 192,
+        "tweak": 96
+      },
+      "failures": [],
+      "result": "passed",
+      "high_s": "normalized in reference",
+      "error_mapping": "shared vectors check structured errors; reference API compares acceptance"
+    },
+    "external_consumer": {
+      "result": "passed",
+      "operations": [
+        "ecdsa",
+        "schnorr",
+        "tweak"
+      ],
+      "separate_project": true
+    },
+    "dependency_audit": {
+      "result": "passed",
+      "builder_image_id": "sha256:241087cf44b764e4d0b5691205aebe26835886675a9ebf56bb12a3ee91ae7c87",
+      "dynamic_libraries": [
+        "\tlinux-vdso.so.1 (0x0000ffff93e67000)",
+        "\tlibrocksdb.so.7.8 => /lib/aarch64-linux-gnu/librocksdb.so.7.8 (0x0000ffff933e0000)",
+        "\tlibc.so.6 => /lib/aarch64-linux-gnu/libc.so.6 (0x0000ffff93230000)",
+        "\tlibgflags.so.2.2 => /lib/aarch64-linux-gnu/libgflags.so.2.2 (0x0000ffff931f0000)",
+        "\tlibsnappy.so.1 => /lib/aarch64-linux-gnu/libsnappy.so.1 (0x0000ffff931c0000)",
+        "\tlibz.so.1 => /lib/aarch64-linux-gnu/libz.so.1 (0x0000ffff93180000)",
+        "\tlibbz2.so.1.0 => /lib/aarch64-linux-gnu/libbz2.so.1.0 (0x0000ffff93150000)",
+        "\tliblz4.so.1 => /lib/aarch64-linux-gnu/liblz4.so.1 (0x0000ffff93100000)",
+        "\tlibzstd.so.1 => /lib/aarch64-linux-gnu/libzstd.so.1 (0x0000ffff93040000)",
+        "\tlibstdc++.so.6 => /lib/aarch64-linux-gnu/libstdc++.so.6 (0x0000ffff92e20000)",
+        "\tlibm.so.6 => /lib/aarch64-linux-gnu/libm.so.6 (0x0000ffff92d70000)",
+        "\tlibgcc_s.so.1 => /lib/aarch64-linux-gnu/libgcc_s.so.1 (0x0000ffff92d30000)",
+        "\t/lib/ld-linux-aarch64.so.1 (0x0000ffff93e20000)",
+        "\tlibpthread.so.0 => /lib/aarch64-linux-gnu/libpthread.so.0 (0x0000ffff92d00000)"
+      ],
+      "no_crypto_ffi": true,
+      "no_imported_curve": true
+    }
+  },
+  "milestone": "component",
+  "benchmarks": [
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 0,
+      "iterations": 64,
+      "total_ns": 44929541,
+      "allocations": 0
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 0,
+      "iterations": 64,
+      "total_ns": 42028125,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 0,
+      "iterations": 64,
+      "total_ns": 6950750,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 0,
+      "iterations": 64,
+      "total_ns": 6622375,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 0,
+      "iterations": 64,
+      "total_ns": 322167,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 0,
+      "iterations": 64,
+      "total_ns": 125,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 0,
+      "iterations": 64,
+      "total_ns": 3785000,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 0,
+      "iterations": 64,
+      "total_ns": 125,
+      "allocations": 0
+    },
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 1,
+      "iterations": 64,
+      "total_ns": 46843584,
+      "allocations": 0
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 1,
+      "iterations": 64,
+      "total_ns": 42292417,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 1,
+      "iterations": 64,
+      "total_ns": 6453708,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 1,
+      "iterations": 64,
+      "total_ns": 6580791,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 1,
+      "iterations": 64,
+      "total_ns": 318791,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 1,
+      "iterations": 64,
+      "total_ns": 41,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 1,
+      "iterations": 64,
+      "total_ns": 3723250,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 1,
+      "iterations": 64,
+      "total_ns": 83,
+      "allocations": 0
+    },
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 2,
+      "iterations": 64,
+      "total_ns": 45589500,
+      "allocations": 0
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 2,
+      "iterations": 64,
+      "total_ns": 41794875,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 2,
+      "iterations": 64,
+      "total_ns": 6474875,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 2,
+      "iterations": 64,
+      "total_ns": 6581917,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 2,
+      "iterations": 64,
+      "total_ns": 334792,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 2,
+      "iterations": 64,
+      "total_ns": 42,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 2,
+      "iterations": 64,
+      "total_ns": 3811167,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 2,
+      "iterations": 64,
+      "total_ns": 83,
+      "allocations": 0
+    },
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 3,
+      "iterations": 64,
+      "total_ns": 45191666,
+      "allocations": 0
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 3,
+      "iterations": 64,
+      "total_ns": 41616667,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 3,
+      "iterations": 64,
+      "total_ns": 6408750,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 3,
+      "iterations": 64,
+      "total_ns": 6692750,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 3,
+      "iterations": 64,
+      "total_ns": 385500,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 3,
+      "iterations": 64,
+      "total_ns": 84,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 3,
+      "iterations": 64,
+      "total_ns": 3963917,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 3,
+      "iterations": 64,
+      "total_ns": 83,
+      "allocations": 0
+    },
+    {
+      "operation": "ecdsa/valid",
+      "repetition": 4,
+      "iterations": 64,
+      "total_ns": 45353167,
+      "allocations": 0
+    },
+    {
+      "operation": "ecdsa/invalid",
+      "repetition": 4,
+      "iterations": 64,
+      "total_ns": 42480667,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/valid",
+      "repetition": 4,
+      "iterations": 64,
+      "total_ns": 6515750,
+      "allocations": 0
+    },
+    {
+      "operation": "schnorr/invalid",
+      "repetition": 4,
+      "iterations": 64,
+      "total_ns": 6720042,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/valid",
+      "repetition": 4,
+      "iterations": 64,
+      "total_ns": 325917,
+      "allocations": 0
+    },
+    {
+      "operation": "parse/invalid",
+      "repetition": 4,
+      "iterations": 64,
+      "total_ns": 41,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/valid",
+      "repetition": 4,
+      "iterations": 64,
+      "total_ns": 3748208,
+      "allocations": 0
+    },
+    {
+      "operation": "tweak/invalid",
+      "repetition": 4,
+      "iterations": 64,
+      "total_ns": 83,
+      "allocations": 0
+    }
+  ],
+  "git_revision": "f1ff69b591e4a32f2386efb0eebfbe07bed5ac9f",
+  "node_source_digest": "c8c92611a87cdc5bac1525a3528fc128f96230514390a1c3cb8b4fff04012383"
+}

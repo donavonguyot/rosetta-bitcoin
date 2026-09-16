@@ -113,10 +113,10 @@ func (r *scriptRunner) threads() int {
 
 func (r *scriptRunner) cryptoContextMode() string {
 	if r.parallel {
-		return "libsecp256k1/reused_context_per_worker"
+		return crypto.Info().SelectedBackend + "/reused_context_per_worker"
 	}
 	if r.verifier == nil {
-		return "libsecp256k1/unavailable"
+		return crypto.Info().SelectedBackend + "/unavailable"
 	}
 	return r.verifier.ContextMode()
 }

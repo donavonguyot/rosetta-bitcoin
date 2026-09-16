@@ -3,13 +3,27 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const backend = b.option([]const u8, "crypto-backend", "c_binding or own_curve") orelse "c_binding";
+    if (!std.mem.eql(u8, backend, "c_binding") and !std.mem.eql(u8, backend, "own_curve")) @panic("unknown crypto-backend");
+    const own_curve = std.mem.eql(u8, backend, "own_curve");
+    const options = b.addOptions();
+    options.addOption(bool, "own_curve", own_curve);
+    const probe = b.option(bool, "crypto-probe", "Test-only crypto call tracing") orelse false;
+    const reject = b.option([]const u8, "crypto-reject", "Test-only primitive rejection") orelse "";
+    if (reject.len > 0 and !probe) @panic("crypto-reject requires crypto-probe");
+    options.addOption(bool, "probe", probe);
+    options.addOption([]const u8, "reject", reject);
+    options.addOption([]const u8, "source_digest", b.option([]const u8, "crypto-source-digest", "Package source SHA256") orelse "unrecorded");
+    const secp = b.dependency("secp256k1", .{ .target = target, .optimize = optimize }).module("secp256k1");
 
     const core_mod = b.addModule("zigbitnode", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
-    addNativeDeps(core_mod, target);
+    core_mod.addOptions("crypto_options", options);
+    core_mod.addImport("secp256k1", secp);
+    addNativeDeps(core_mod, target, own_curve);
 
     const exe = b.addExecutable(.{
         .name = "zigbitnode",
@@ -22,7 +36,9 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    addNativeDeps(exe.root_module, target);
+    exe.root_module.addOptions("crypto_options", options);
+    exe.root_module.addImport("secp256k1", secp);
+    addNativeDeps(exe.root_module, target, own_curve);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -34,16 +50,16 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const tests = b.addTest(.{ .root_module = core_mod });
-    addNativeDeps(tests.root_module, target);
+    addNativeDeps(tests.root_module, target, own_curve);
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run ZigNode tests");
     test_step.dependOn(&run_tests.step);
 }
 
-fn addNativeDeps(module: *std.Build.Module, target: std.Build.ResolvedTarget) void {
+fn addNativeDeps(module: *std.Build.Module, target: std.Build.ResolvedTarget, own_curve: bool) void {
     module.link_libc = true;
     module.linkSystemLibrary("rocksdb", .{});
-    module.linkSystemLibrary("secp256k1", .{});
+    if (!own_curve) module.linkSystemLibrary("secp256k1", .{});
     if (target.result.os.tag == .macos) {
         module.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/include" });
         module.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/lib" });

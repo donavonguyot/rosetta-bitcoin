@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"rosettabitcoin/nodes/go/internal/crypto"
 	"strconv"
 	"time"
 	"unsafe"
@@ -43,25 +44,26 @@ const codecVersion = 2
 var binaryUTXOPrefix = []byte{'U'}
 
 type Metadata struct {
-	NodeID              string         `json:"node_id"`
-	GenerationID        string         `json:"generation_id"`
-	Chain               string         `json:"chain"`
-	SyncStatus          string         `json:"sync_status"`
-	ChainstateStatus    string         `json:"chainstate_status"`
-	ChainstateBackend   string         `json:"chainstate_backend"`
-	ValidatedHeight     int            `json:"validated_height"`
-	ValidatedHash       string         `json:"validated_hash"`
-	HeaderHeight        int            `json:"header_height"`
-	HeaderHash          string         `json:"header_hash"`
-	StoredBlockHeight   int            `json:"stored_block_height"`
-	StoredBlockHash     string         `json:"stored_block_hash"`
-	ChainstateUTXOCount int            `json:"chainstate_utxo_count"`
-	StorageCodecVersion int            `json:"storage_codec_version"`
-	RocksDBTuning       string         `json:"rocksdb_tuning"`
-	RocksDBWALDisabled  bool           `json:"rocksdb_wal_disabled"`
-	CurrentBlocker      map[string]any `json:"current_blocker"`
-	LastError           string         `json:"last_error"`
-	UpdatedAt           string         `json:"updated_at"`
+	Crypto              *crypto.Provenance `json:"crypto,omitempty"`
+	NodeID              string             `json:"node_id"`
+	GenerationID        string             `json:"generation_id"`
+	Chain               string             `json:"chain"`
+	SyncStatus          string             `json:"sync_status"`
+	ChainstateStatus    string             `json:"chainstate_status"`
+	ChainstateBackend   string             `json:"chainstate_backend"`
+	ValidatedHeight     int                `json:"validated_height"`
+	ValidatedHash       string             `json:"validated_hash"`
+	HeaderHeight        int                `json:"header_height"`
+	HeaderHash          string             `json:"header_hash"`
+	StoredBlockHeight   int                `json:"stored_block_height"`
+	StoredBlockHash     string             `json:"stored_block_hash"`
+	ChainstateUTXOCount int                `json:"chainstate_utxo_count"`
+	StorageCodecVersion int                `json:"storage_codec_version"`
+	RocksDBTuning       string             `json:"rocksdb_tuning"`
+	RocksDBWALDisabled  bool               `json:"rocksdb_wal_disabled"`
+	CurrentBlocker      map[string]any     `json:"current_blocker"`
+	LastError           string             `json:"last_error"`
+	UpdatedAt           string             `json:"updated_at"`
 }
 
 type Store struct {

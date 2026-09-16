@@ -33,6 +33,11 @@ pub fn main(init: std.process.Init) !void {
     }
 
     const command = args[1];
+    if (valueArg(args[2..], "--crypto-backend") orelse init.environ_map.get("ZIGBITNODE_CRYPTO_BACKEND")) |requested| {
+        const selected = parseScriptCryptoBackend(requested) orelse return error.UnsupportedCryptoBackend;
+        if (core.crypto.own_curve != (selected == .own_curve)) return error.CryptoBackendNotCompiled;
+        if (std.mem.eql(u8, command, "script-corpus") and selected == .pure) return error.CorpusBackendNotSupported;
+    }
     const io = init.io;
     const surface = init.environ_map.get("ZIGBITNODE_RUNTIME_SURFACE") orelse "host";
 
@@ -53,7 +58,7 @@ pub fn main(init: std.process.Init) !void {
         const prefetch_text = init.environ_map.get("PREFETCH_DEPTH") orelse "4";
         const script_threads_text = init.environ_map.get("ZIGBITNODE_SCRIPT_THREADS") orelse "";
         const default_peer = init.environ_map.get("REFERENCE_P2P_PEER") orelse "127.0.0.1:48333";
-        const default_crypto_backend = init.environ_map.get("ZIGBITNODE_CRYPTO_BACKEND") orelse "libsecp256k1";
+        const default_crypto_backend = init.environ_map.get("ZIGBITNODE_CRYPTO_BACKEND") orelse core.crypto.default_label;
         try cmdLocalReferenceProof(std.heap.smp_allocator, io, out, args[2..], surface, prefetch_text, script_threads_text, default_peer, default_crypto_backend);
     } else if (std.mem.eql(u8, command, "sync-supervisor-once")) {
         try cmdSupervisorOnce(allocator, out, args[2..]);
@@ -90,6 +95,8 @@ fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u
     var header_hash: []const u8 = "";
     var stored_block_height: []const u8 = "0";
     var stored_block_hash: []const u8 = "";
+    var validation_crypto: []const u8 = "unknown";
+    var crypto_digest: []const u8 = "unknown";
     var backend: []const u8 = "none";
     var utxo_count: []const u8 = "0";
     var chainstate_status: []const u8 = "missing";
@@ -105,21 +112,23 @@ fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "stored_block_hash"))) |value| stored_block_hash = value;
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_backend"))) |value| backend = value;
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_utxo_count"))) |value| utxo_count = value;
+        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validation_crypto_backend"))) |value| validation_crypto = value;
+        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "crypto_source_digest"))) |value| crypto_digest = value;
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "sync_status"))) |value| sync_status = value;
         chainstate_status = if (std.mem.eql(u8, backend, "rocksdb")) "usable" else "missing";
     } else |_| {}
 
     try out.print(
-        "{{\"schema\":\"port.status.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"datadir\":\"{s}\",\"sync_status\":\"{s}\",\"chainstate_backend\":\"{s}\",\"chainstate_status\":\"{s}\",\"validated_height\":{s},\"validated_hash\":\"{s}\",\"header_height\":{s},\"header_hash\":\"{s}\",\"stored_block_height\":{s},\"stored_block_hash\":\"{s}\",\"chainstate_utxo_count\":{s},\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\"}}\n",
-        .{ surface, datadir, sync_status, backend, chainstate_status, validated_height, validated_hash, header_height, header_hash, stored_block_height, stored_block_hash, utxo_count },
+        "{{\"schema\":\"port.status.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"datadir\":\"{s}\",\"sync_status\":\"{s}\",\"chainstate_backend\":\"{s}\",\"chainstate_status\":\"{s}\",\"validated_height\":{s},\"validated_hash\":\"{s}\",\"header_height\":{s},\"header_hash\":\"{s}\",\"stored_block_height\":{s},\"stored_block_hash\":\"{s}\",\"chainstate_utxo_count\":{s},\"native_crypto_backend\":\"{s}\",\"native_crypto_available\":{},\"taproot_tweak_backend\":\"{s}\",\"crypto_backend\":\"{s}\",\"crypto_source_digest\":\"{s}\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\"}}\n",
+        .{ surface, datadir, sync_status, backend, chainstate_status, validated_height, validated_hash, header_height, header_hash, stored_block_height, stored_block_hash, utxo_count, validation_crypto, std.mem.eql(u8, validation_crypto, "libsecp256k1"), validation_crypto, validation_crypto, crypto_digest },
     );
 }
 
 fn cmdNativeCrypto(out: anytype) !void {
     const available = core.secp256k1Available();
     try out.print(
-        "{{\"schema\":\"port.native_crypto_vectors.v1\",\"port\":\"zig\",\"passed\":{},\"delegated\":false,\"ecdsa_backend\":\"libsecp256k1\",\"schnorr_backend\":\"libsecp256k1\",\"taproot_tweak_backend\":\"libsecp256k1\",\"notes\":\"backend availability smoke vector only; full shared crypto vectors are next\"}}\n",
-        .{available},
+        "{{\"schema\":\"port.native_crypto_vectors.v1\",\"port\":\"zig\",\"passed\":{},\"delegated\":false,\"ecdsa_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"notes\":\"backend availability smoke vector only; full shared crypto vectors are next\"}}\n",
+        .{ available, core.crypto.default_label, core.crypto.default_label, core.crypto.default_label },
     );
 }
 
@@ -396,6 +405,7 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     const manifest = valueArg(args, "--manifest") orelse "../Shared/conformance/fixtures/scripts/manifest.json";
     const output = valueArg(args, "--output") orelse (ResultPaths{}).script;
     const shadow_crypto = flagArg(args, "--shadow-crypto");
+    if (shadow_crypto and core.crypto.own_curve) return error.CryptoBackendNotCompiled;
 
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, manifest, allocator, .limited(20 * 1024 * 1024));
     defer allocator.free(bytes);
@@ -467,8 +477,8 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     else
         try std.fmt.allocPrint(
             allocator,
-            "{{\"schema\":\"port.script_corpus_result.v1\",\"category\":\"script_corpus\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"runtime_surface\":\"{s}\",\"native_crypto_backend\":\"libsecp256k1\",\"fixture_count\":{},\"passed\":{},\"failed\":{},\"result\":\"{s}\",\"verifier\":{{\"engine\":\"zig_native\",\"delegated\":false,\"crypto_backend\":\"libsecp256k1\",\"implemented\":true,\"source\":\"Nodes/Zig/src/script.zig\"}},\"results\":[{s}]}}\n",
-            .{ surface, fixtures.array.items.len, passed, failed, result, rows.items },
+            "{{\"schema\":\"port.script_corpus_result.v1\",\"category\":\"script_corpus\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"runtime_surface\":\"{s}\",\"native_crypto_backend\":\"{s}\",\"fixture_count\":{},\"passed\":{},\"failed\":{},\"result\":\"{s}\",\"verifier\":{{\"engine\":\"zig_native\",\"delegated\":false,\"crypto_backend\":\"{s}\",\"implemented\":true,\"source\":\"Nodes/Zig/src/script.zig\"}},\"results\":[{s}]}}\n",
+            .{ surface, core.crypto.default_label, fixtures.array.items.len, passed, failed, result, core.crypto.default_label, rows.items },
         );
     defer allocator.free(json);
     try writeFileEnsuringParent(io, output, json);
@@ -482,6 +492,7 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const datadir = valueArg(args, "--datadir") orelse "/data";
     const crypto_backend = parseScriptCryptoBackend(valueArg(args, "--crypto-backend") orelse default_crypto_backend) orelse return error.UnsupportedCryptoBackend;
     const crypto_label = crypto_backend.label();
+    if (core.crypto.own_curve != (crypto_backend == .own_curve)) return error.CryptoBackendNotCompiled;
     const comparable = crypto_backend == .native;
     const target = try std.fmt.parseInt(u32, target_text, 10);
     const profile = proofProfile(target) orelse return error.UnsupportedProofTarget;
@@ -504,6 +515,12 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     var db = try core.RocksDb.open(allocator, db_path);
     defer db.close();
 
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validation_crypto_backend"))) |previous| {
+        defer allocator.free(previous);
+        if (!std.mem.eql(u8, previous, crypto_label)) return error.CryptoBackendMismatch;
+    }
+    try db.put(tryMetadataKey(allocator, "validation_crypto_backend"), crypto_label);
+    try db.put(tryMetadataKey(allocator, "crypto_source_digest"), core.crypto.source_digest);
     const meta = try db.readMetadata(allocator);
     defer db.deinitMetadata(allocator, meta);
     const start_height: u32 = if (meta.validated_height < 0) 0 else @intCast(meta.validated_height + 1);
@@ -582,6 +599,8 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             timing.script_threads = connect.timings.script_threads;
             timing.script_wall_ms += connect.timings.script_wall_ms;
             timing.script_worker_cpu_ms += connect.timings.script_worker_cpu_ms;
+            timing.script_worker_elapsed_ns += connect.timings.script_worker_elapsed_ns;
+            timing.script_worker_thread_cpu_ns += connect.timings.script_worker_thread_cpu_ns;
             timing.utxo_apply += connect.timings.utxo_apply;
             timing.commit += connect.timings.commit;
             timing.utxo_delete_prepare += connect.timings.utxo_delete_prepare;
@@ -639,11 +658,11 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     defer json_buf.deinit(allocator);
     try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_gate\":\"{s}\",\"benchmark_kind\":\"{s}\",\"benchmark_lane\":\"{s}\",\"benchmark_comparability\":\"{s}\",\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"captured_at\":\"unix_ms:{}\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"{s}\",", .{ profile.benchmark_gate, profile.benchmark_kind, profile.benchmark_lane, if (comparable) "comparable" else "diagnostic_non_comparable", core.nowMs(), target, target, profile.target_label });
     try appendFmt(allocator, &json_buf, "\"runtime_surface\":\"{s}\",\"peer_mode\":\"local_reference\",\"peer\":\"{s}\",\"byte_source\":\"local_reference_p2p\",\"proof_mode\":\"p2p_sync\",\"prefetch_depth\":{},\"script_runner_mode\":\"parallel\",\"script_threads\":{},\"rocksdb_wal_disabled\":false,\"fresh_state\":{},\"resume_supported\":true,", .{ surface, peer, prefetch, script_runner.thread_count, fresh_state });
-    try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"rocksdb\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":true,\"native_crypto_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"storage_codec_version\":2,", .{ datadir, db_path, crypto_label, crypto_label, crypto_label });
+    try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"rocksdb\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":{},\"native_crypto_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"storage_codec_version\":2,", .{ datadir, db_path, crypto_backend == .native, crypto_label, crypto_label, crypto_label });
     try appendFmt(allocator, &json_buf, "\"rocksdb_tuning\":\"{s}\",\"validated_height\":{},\"validated_hash\":\"{s}\",\"header_height\":{},\"stored_block_height\":{},\"blocks_fetched\":{},\"blocks_connected\":{},\"chainstate_utxo_count\":{},", .{ core.RocksDb.tuningDescription(), final_meta.validated_height, last_hash, final_meta.header_height, final_meta.stored_block_height, blocks_fetched, blocks_connected, final_meta.chainstate_utxo_count });
     try appendFmt(allocator, &json_buf, "\"utxo_accounting_policy\":\"core_spendable_v1\",\"sync_status\":\"blocks_current\",\"local_reference_status\":\"target_reached\",\"status\":\"passed\",\"result\":\"passed\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\",\"failures\":[],\"reference_start_height\":0,\"reference_start_hash\":\"00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043\",\"reference_finish_height\":{},\"reference_finish_hash\":\"{s}\",", .{ target, last_hash });
-    try appendFmt(allocator, &json_buf, "\"pipeline_timing_summary\":{{\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"block_store\":{},\"connect_total\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.block_store, timing.connect_total, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
-    try appendFmt(allocator, &json_buf, "\"timing_summary\":{{\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
+    try appendFmt(allocator, &json_buf, "\"pipeline_timing_summary\":{{\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"block_store\":{},\"connect_total\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"script_worker_elapsed_ns\":{},\"script_worker_thread_cpu_ns\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.block_store, timing.connect_total, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.script_worker_elapsed_ns, timing.script_worker_thread_cpu_ns, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
+    try appendFmt(allocator, &json_buf, "\"timing_summary\":{{\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"script_worker_elapsed_ns\":{},\"script_worker_thread_cpu_ns\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.script_worker_elapsed_ns, timing.script_worker_thread_cpu_ns, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
     try appendFmt(allocator, &json_buf, "\"telemetry_summary\":{{\"telemetry_quality\":\"clean\",\"tick_count\":{},\"heartbeat_max_gap_ms\":0,\"lifecycle_markers\":{{\"run_started\":0,\"container_started\":0,\"node_started\":0,\"first_peer_byte\":0,\"first_block_connected\":0,\"target_reached\":{},\"run_finished\":{}}},\"phase_counts\":{{}},\"stall_class_counts\":{{\"none\":{}}},\"slow_blocks\":[{s}]}}}}\n", .{ telemetry_tick_count, total_ms, total_ms, telemetry_tick_count, slow_json });
     const json = json_buf.items;
     try writeFileEnsuringParent(io, output, json);
@@ -671,6 +690,8 @@ const ProofTiming = struct {
     script_threads: usize = 0,
     script_wall_ms: i64 = 0,
     script_worker_cpu_ms: i64 = 0,
+    script_worker_elapsed_ns: u64 = 0,
+    script_worker_thread_cpu_ns: u64 = 0,
     utxo_apply: i64 = 0,
     commit: i64 = 0,
     utxo_delete_prepare: i64 = 0,
@@ -753,16 +774,16 @@ fn emitTelemetryTick(
         .{ profile.benchmark_gate, profile.benchmark_gate, started_ms, event, profile.target, height, percent, elapsed_ms, elapsed_ms, recent_rate, total_rate, phase, utxos, last_block_ms, stall_class, last_block_ms, height, hash, timing.tx_count, timing.input_count, timing.script_jobs, peer },
     );
     try out.print(
-        "\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},",
-        .{ timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, timing.script_wall_ms, timing.script_worker_cpu_ms },
+        "\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"script_worker_elapsed_ns\":{},\"script_worker_thread_cpu_ns\":{},",
+        .{ timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.script_worker_elapsed_ns, timing.script_worker_thread_cpu_ns },
     );
     try out.print(
         "\"timing_buckets_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}}}}\n",
         .{ timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit },
     );
     try out.print(
-        "rb.port_progress {{\"chain\":\"testnet4\",\"sync_status\":\"{s}\",\"header_height\":{},\"validated_height\":{},\"validated_hash\":\"{s}\",\"stored_block_height\":{},\"chainstate_utxo_count\":{},\"current_blocker\":null,\"peer\":\"{s}\",\"current_block_height\":{},\"current_block_hash\":\"{s}\",\"current_block_tx_count\":{},\"current_block_vin_count\":{},\"current_block_script_input_count\":{},\"last_block_ms\":{},\"native_crypto_backend\":\"{s}\",\"timing_buckets_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"block_connect_store_commit\":{}}}}}\n",
-        .{ if (height >= profile.target) "blocks_current" else "blocks_syncing", height, height, hash, height, utxos, peer, height, hash, timing.tx_count, timing.input_count, timing.script_jobs, last_block_ms, crypto_backend, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.block_connect_store_commit },
+        "rb.port_progress {{\"crypto_source_digest\":\"{s}\",\"crypto_lane\":\"{s}\",\"chain\":\"testnet4\",\"sync_status\":\"{s}\",\"header_height\":{},\"validated_height\":{},\"validated_hash\":\"{s}\",\"stored_block_height\":{},\"chainstate_utxo_count\":{},\"current_blocker\":null,\"peer\":\"{s}\",\"current_block_height\":{},\"current_block_hash\":\"{s}\",\"current_block_tx_count\":{},\"current_block_vin_count\":{},\"current_block_script_input_count\":{},\"last_block_ms\":{},\"native_crypto_backend\":\"{s}\",\"timing_buckets_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"block_connect_store_commit\":{}}}}}\n",
+        .{ core.crypto.source_digest, if (std.mem.eql(u8, crypto_backend, "libsecp256k1-zig")) "own_curve" else if (std.mem.eql(u8, crypto_backend, "zig-secp256k1")) "ecosystem_curve" else "c_binding", if (height >= profile.target) "blocks_current" else "blocks_syncing", height, height, hash, height, utxos, peer, height, hash, timing.tx_count, timing.input_count, timing.script_jobs, last_block_ms, crypto_backend, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.block_connect_store_commit },
     );
     try out.flush();
 }
@@ -950,6 +971,7 @@ fn flagArg(args: []const []const u8, name: []const u8) bool {
 }
 
 fn parseScriptCryptoBackend(value: []const u8) ?core.ScriptCryptoBackend {
+    if (std.mem.eql(u8, value, "own_curve") or std.mem.eql(u8, value, "libsecp256k1-zig")) return .own_curve;
     if (std.mem.eql(u8, value, "libsecp256k1") or std.mem.eql(u8, value, "native")) return .native;
     if (std.mem.eql(u8, value, "zig-secp256k1") or std.mem.eql(u8, value, "pure")) return .pure;
     return null;

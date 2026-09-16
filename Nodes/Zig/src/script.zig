@@ -158,6 +158,11 @@ pub fn verifyInput(
     input_index: usize,
     spent_prevouts: []const SpentPrevout,
 ) !void {
+    if (crypto.own_curve) {
+        var verifier = crypto.OwnVerifier.create();
+        defer verifier.destroy();
+        return verifyInputWithVerifier(allocator, transaction, input_index, spent_prevouts, .{ .own = &verifier }, null);
+    }
     var verifier = try crypto.NativeVerifier.create();
     defer verifier.destroy();
     return verifyInputWithVerifier(allocator, transaction, input_index, spent_prevouts, .{ .native = &verifier }, null);

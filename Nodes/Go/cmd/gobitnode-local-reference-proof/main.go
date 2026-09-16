@@ -33,6 +33,12 @@ func main() {
 	mode := flag.String("mode", "pipeline", "proof mode: pipeline or staged")
 	byteSource := flag.String("byte-source", "rpc", "byte source: p2p or rpc")
 	flag.Parse()
+	probe := crypto.NewVerifier()
+	if probe == nil {
+		fmt.Fprintln(os.Stderr, "requested crypto backend unavailable")
+		os.Exit(1)
+	}
+	probe.Close()
 
 	started := time.Now().UTC()
 	peerMode := "local_reference_rpc"
@@ -150,6 +156,7 @@ func main() {
 	}
 
 	info := crypto.Info()
+	doc["crypto"] = crypto.BuildProvenance()
 	doc["native_crypto_backend"] = info.ECDSABackend
 	doc["native_crypto_available"] = info.NativeAvailable
 	doc["taproot_tweak_backend"] = info.TaprootTweakBackend
@@ -275,6 +282,9 @@ func runPipeline(datadir string, target int, rpcURL, rpcUser, rpcPassword string
 		if err != nil {
 			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
 		}
+		if lastConnect.CurrentBlocker != nil {
+			return syncSummary(target, block.height, "local_reference_rpc", rpcURL, started, fetched, lastConnect), lastConnect, telemetry.summary(), fmt.Errorf("validation blocked at %d: %v", lastConnect.ValidatedHeight+1, lastConnect.CurrentBlocker)
+		}
 		mergeTiming(&aggregate, lastConnect.TimingSummary)
 		fetched++
 		if !firstBlockConnected && block.height > 0 {
@@ -376,6 +386,9 @@ func runP2PPipeline(datadir string, target int, peer string, progress int) (refs
 		aggregate.StageTotalsMillis["block_connect_store_commit"] += time.Since(connectStart).Milliseconds()
 		if err != nil {
 			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, telemetry.summary(), err
+		}
+		if lastConnect.CurrentBlocker != nil {
+			return syncSummary(target, block.Height, "local_reference", peer, started, fetched, lastConnect), lastConnect, telemetry.summary(), fmt.Errorf("validation blocked at %d: %v", lastConnect.ValidatedHeight+1, lastConnect.CurrentBlocker)
 		}
 		mergeTiming(&aggregate, lastConnect.TimingSummary)
 		fetched++
@@ -638,6 +651,8 @@ func emitTelemetryTick(state *telemetryState, tick telemetryTick) {
 			"connected_blocks":       tick.Connected,
 			"timing_buckets_ms":      timingBuckets(tick.Timing),
 		}
+		progress["crypto"] = crypto.BuildProvenance()
+		progress["native_crypto_backend"] = crypto.Info().SelectedBackend
 		progressRaw, _ := json.Marshal(progress)
 		fmt.Printf("rb.port_progress %s\n", progressRaw)
 	}

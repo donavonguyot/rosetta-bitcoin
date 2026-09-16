@@ -3,10 +3,8 @@ const std = @import("std");
 const c = @cImport({
     @cInclude("dirent.h");
     @cInclude("rocksdb/c.h");
-    @cInclude("secp256k1.h");
-    @cInclude("secp256k1_extrakeys.h");
-    @cInclude("secp256k1_schnorrsig.h");
     @cInclude("sys/time.h");
+    @cInclude("time.h");
 });
 
 pub const crypto = @import("crypto.zig");
@@ -819,6 +817,8 @@ pub const ConnectTimings = struct {
     script_threads: usize = 0,
     script_wall_ms: i64 = 0,
     script_worker_cpu_ms: i64 = 0,
+    script_worker_elapsed_ns: u64 = 0,
+    script_worker_thread_cpu_ns: u64 = 0,
     utxo_apply: i64 = 0,
     commit: i64 = 0,
     utxo_delete_prepare: i64 = 0,
@@ -853,6 +853,8 @@ pub const ScriptVerifyStats = struct {
     threads: usize = 0,
     wall_ms: i64 = 0,
     worker_cpu_ms: i64 = 0,
+    worker_elapsed_ns: u64 = 0,
+    worker_thread_cpu_ns: u64 = 0,
     batches: u64 = 0,
 };
 
@@ -864,11 +866,13 @@ pub fn defaultScriptThreadCount() usize {
 
 pub const ScriptCryptoBackend = enum {
     native,
+    own_curve,
     pure,
 
     pub fn label(self: ScriptCryptoBackend) []const u8 {
         return switch (self) {
             .native => "libsecp256k1",
+            .own_curve => "libsecp256k1-zig",
             .pure => "zig-secp256k1",
         };
     }
@@ -880,10 +884,11 @@ pub const ScriptVerifyRunner = struct {
     crypto_backend: ScriptCryptoBackend,
 
     pub fn create(allocator: std.mem.Allocator, requested_threads: usize) !*ScriptVerifyRunner {
-        return createWithCryptoBackend(allocator, requested_threads, .native);
+        return createWithCryptoBackend(allocator, requested_threads, if (crypto.own_curve) .own_curve else .native);
     }
 
     pub fn createWithCryptoBackend(allocator: std.mem.Allocator, requested_threads: usize, crypto_backend: ScriptCryptoBackend) !*ScriptVerifyRunner {
+        if (crypto.own_curve != (crypto_backend == .own_curve)) return error.CryptoBackendNotCompiled;
         const thread_count = @max(requested_threads, 1);
         const self = try allocator.create(ScriptVerifyRunner);
         self.* = .{
@@ -908,15 +913,21 @@ pub const ScriptVerifyRunner = struct {
         defer std.heap.c_allocator.free(results);
         for (results) |*result| result.* = .{};
         var next_job = std.atomic.Value(usize).init(0);
-        var worker_cpu = try std.heap.c_allocator.alloc(i64, worker_count);
+        var worker_cpu = try std.heap.c_allocator.alloc(WorkerTiming, worker_count);
         defer std.heap.c_allocator.free(worker_cpu);
-        for (worker_cpu) |*value| value.* = 0;
+        for (worker_cpu) |*value| value.* = .{};
         for (threads, 0..) |*thread, worker_index| {
             thread.* = try std.Thread.spawn(.{}, scriptVerifySchedulerWorker, .{ transactions, jobs, results, &next_job, &worker_cpu[worker_index], self.crypto_backend });
         }
         for (threads) |thread| thread.join();
         var worker_cpu_ms: i64 = 0;
-        for (worker_cpu) |value| worker_cpu_ms += value;
+        var worker_elapsed_ns: u64 = 0;
+        var worker_thread_cpu_ns: u64 = 0;
+        for (worker_cpu) |value| {
+            worker_cpu_ms += value.legacy_ms;
+            worker_elapsed_ns += value.elapsed_ns;
+            worker_thread_cpu_ns += value.cpu_ns;
+        }
 
         if (firstScriptFailure(results)) |result| {
             printScriptFailure(result);
@@ -927,6 +938,8 @@ pub const ScriptVerifyRunner = struct {
             .threads = self.thread_count,
             .wall_ms = elapsedMs(started),
             .worker_cpu_ms = worker_cpu_ms,
+            .worker_elapsed_ns = worker_elapsed_ns,
+            .worker_thread_cpu_ns = worker_thread_cpu_ns,
             .batches = 1,
         };
     }
@@ -1064,6 +1077,8 @@ pub fn connectDecodedBlock(
     timings.script_threads = script_stats.threads;
     timings.script_wall_ms += script_stats.wall_ms;
     timings.script_worker_cpu_ms += script_stats.worker_cpu_ms;
+    timings.script_worker_elapsed_ns += script_stats.worker_elapsed_ns;
+    timings.script_worker_thread_cpu_ns += script_stats.worker_thread_cpu_ns;
     timings.runner_batches += script_stats.batches;
 
     const created_count = try countUnspentCreatedOutputs(transactions, txids, height, &spent);
@@ -1167,15 +1182,28 @@ fn verifyScriptJobsParallel(transactions: []const tx.Transaction, jobs: []const 
     };
 }
 
+// Timers cover the scheduler loop, excluding verifier creation and destruction.
+const WorkerTiming = struct { legacy_ms: i64 = 0, elapsed_ns: u64 = 0, cpu_ns: u64 = 0 };
+fn clockNs(clock: c.clockid_t) u64 {
+    var value: c.struct_timespec = undefined;
+    if (c.clock_gettime(clock, &value) != 0) @panic("worker clock unavailable");
+    return @as(u64, @intCast(value.tv_sec)) * 1_000_000_000 + @as(u64, @intCast(value.tv_nsec));
+}
+
 fn scriptVerifySchedulerWorker(
     transactions: []const tx.Transaction,
     jobs: []const ScriptJob,
     results: []ScriptThreadResult,
     next_job: *std.atomic.Value(usize),
-    worker_cpu_ms: *i64,
+    worker_cpu_ms: *WorkerTiming,
     crypto_backend: ScriptCryptoBackend,
 ) void {
     switch (crypto_backend) {
+        .own_curve => {
+            var verifier = crypto.OwnVerifier.create();
+            defer verifier.destroy();
+            return scriptVerifySchedulerWorkerLoop(transactions, jobs, results, next_job, worker_cpu_ms, .{ .own = &verifier });
+        },
         .native => {
             var verifier = crypto.NativeVerifier.create() catch {
                 while (true) {
@@ -1206,20 +1234,31 @@ fn scriptVerifySchedulerWorkerLoop(
     jobs: []const ScriptJob,
     results: []ScriptThreadResult,
     next_job: *std.atomic.Value(usize),
-    worker_cpu_ms: *i64,
+    worker_cpu_ms: *WorkerTiming,
     verifier: crypto.CryptoVerifier,
 ) void {
+    const elapsed_start = clockNs(c.CLOCK_MONOTONIC);
+    const cpu_start = clockNs(c.CLOCK_THREAD_CPUTIME_ID);
+    defer {
+        worker_cpu_ms.cpu_ns += clockNs(c.CLOCK_THREAD_CPUTIME_ID) - cpu_start;
+        worker_cpu_ms.elapsed_ns += clockNs(c.CLOCK_MONOTONIC) - elapsed_start;
+    }
     while (true) {
         const job_index = next_job.fetchAdd(1, .monotonic);
         if (job_index >= jobs.len) return;
         const job = jobs[job_index];
         const started = nowMs();
         verifyScriptInputJob(transactions[job.tx_index], job, &results[job_index], verifier);
-        worker_cpu_ms.* += elapsedMs(started);
+        worker_cpu_ms.legacy_ms += elapsedMs(started);
     }
 }
 
 fn verifyScriptInputJobWithNative(transaction: tx.Transaction, job: ScriptJob, result: *ScriptThreadResult) void {
+    if (crypto.own_curve) {
+        var verifier = crypto.OwnVerifier.create();
+        defer verifier.destroy();
+        return verifyScriptInputJob(transaction, job, result, .{ .own = &verifier });
+    }
     var native = crypto.NativeVerifier.create() catch |err| {
         storeScriptFailure(transaction, job, result, err);
         return;

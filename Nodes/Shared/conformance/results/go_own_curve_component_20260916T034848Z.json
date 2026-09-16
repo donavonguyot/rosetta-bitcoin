@@ -1,0 +1,371 @@
+{
+  "schema": "rb.crypto_lane_result.v1",
+  "port": "go",
+  "lane": "own_curve",
+  "implementation": "libsecp256k1-go",
+  "source_digest": "149f46e6bafb32f55df8afc408759db38c881dd934ebc8250b34a4c2e7bbdad7",
+  "captured_at": "2026-09-16T03:48:40.631059+00:00",
+  "binary_gate_status": "not_attempted",
+  "result": "passed",
+  "toolchain": {
+    "node": "go version go1.23.12 linux/arm64",
+    "component": "go version go1.27.1 darwin/arm64"
+  },
+  "build_settings": {
+    "optimization": "Go default",
+    "candidate_only": true,
+    "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cpu": "arm64"
+  },
+  "dependencies": {
+    "production": [],
+    "ffi": false,
+    "curve_provider": "package",
+    "arithmetic": "Go math/big",
+    "hashing": "Go crypto/sha256"
+  },
+  "checks": {
+    "shared_vectors": {
+      "result": "passed",
+      "cases": 52,
+      "hashes": {
+        "native.json": "880b6bf5046161441a84ffce5c59b19add70e4b084467cb8645789eec2e901b6",
+        "bip340.csv": "01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb"
+      }
+    },
+    "isolated_build": {
+      "result": "passed",
+      "network": "none",
+      "contents": "package only",
+      "command": "CGO_ENABLED=0 GOWORK=off GOPROXY=off go test ./... && cd examples/consumer && CGO_ENABLED=0 GOWORK=off GOPROXY=off go build -o /tmp/consumer ."
+    },
+    "differential": {
+      "reference_commit": "0cdc758a56360bf58a851fe91085a327ec97685a",
+      "reference_archive_sha256": "385c115a21ee1ff31d0b0320acc2b278c92f7bde971f510566ad481a38835be0",
+      "reference_binary_sha256": "59ae44928e143f812a02c8c0b508c3b9645d5a45c0fdb8a01c02ab4b18b85e98",
+      "cases": 480,
+      "operations": {
+        "ecdsa": 192,
+        "schnorr": 192,
+        "tweak": 96
+      },
+      "failures": [],
+      "result": "passed",
+      "high_s": "normalized in reference",
+      "error_mapping": "shared vectors check structured errors; reference API compares acceptance"
+    },
+    "external_consumer": {
+      "result": "passed",
+      "operations": [
+        "ecdsa",
+        "schnorr",
+        "tweak"
+      ],
+      "separate_project": true
+    },
+    "dependency_audit": {
+      "result": "passed",
+      "dynamic_libraries": [
+        "\tlinux-vdso.so.1 (0x0000ffff98ce8000)",
+        "\tlibrocksdb.so.7.8 => /lib/aarch64-linux-gnu/librocksdb.so.7.8 (0x0000ffff98260000)",
+        "\tlibc.so.6 => /lib/aarch64-linux-gnu/libc.so.6 (0x0000ffff980b0000)",
+        "\tlibgflags.so.2.2 => /lib/aarch64-linux-gnu/libgflags.so.2.2 (0x0000ffff98070000)",
+        "\tlibsnappy.so.1 => /lib/aarch64-linux-gnu/libsnappy.so.1 (0x0000ffff98040000)",
+        "\tlibz.so.1 => /lib/aarch64-linux-gnu/libz.so.1 (0x0000ffff98000000)",
+        "\tlibbz2.so.1.0 => /lib/aarch64-linux-gnu/libbz2.so.1.0 (0x0000ffff97fd0000)",
+        "\tliblz4.so.1 => /lib/aarch64-linux-gnu/liblz4.so.1 (0x0000ffff97f80000)",
+        "\tlibzstd.so.1 => /lib/aarch64-linux-gnu/libzstd.so.1 (0x0000ffff97ec0000)",
+        "\tlibstdc++.so.6 => /lib/aarch64-linux-gnu/libstdc++.so.6 (0x0000ffff97ca0000)",
+        "\tlibm.so.6 => /lib/aarch64-linux-gnu/libm.so.6 (0x0000ffff97bf0000)",
+        "\tlibgcc_s.so.1 => /lib/aarch64-linux-gnu/libgcc_s.so.1 (0x0000ffff97bb0000)",
+        "\t/lib/ld-linux-aarch64.so.1 (0x0000ffff98ca0000)",
+        "\tlibpthread.so.0 => /lib/aarch64-linux-gnu/libpthread.so.0 (0x0000ffff97b80000)"
+      ],
+      "no_crypto_ffi": true,
+      "no_imported_curve": true
+    }
+  },
+  "milestone": "component",
+  "benchmarks": [
+    {
+      "operation": "BenchmarkOperations/ecdsa/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1899043.0,
+      "bytes_per_op": 4492435,
+      "allocations_per_op": 72827
+    },
+    {
+      "operation": "BenchmarkOperations/ecdsa/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1852346.0,
+      "bytes_per_op": 4492348,
+      "allocations_per_op": 72827
+    },
+    {
+      "operation": "BenchmarkOperations/ecdsa/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1818115.0,
+      "bytes_per_op": 4492338,
+      "allocations_per_op": 72827
+    },
+    {
+      "operation": "BenchmarkOperations/ecdsa/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1849028.0,
+      "bytes_per_op": 4492358,
+      "allocations_per_op": 72827
+    },
+    {
+      "operation": "BenchmarkOperations/ecdsa/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1833419.0,
+      "bytes_per_op": 4492343,
+      "allocations_per_op": 72827
+    },
+    {
+      "operation": "BenchmarkOperations/ecdsa/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 951268.0,
+      "bytes_per_op": 2330423,
+      "allocations_per_op": 37790
+    },
+    {
+      "operation": "BenchmarkOperations/ecdsa/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 948466.0,
+      "bytes_per_op": 2330424,
+      "allocations_per_op": 37790
+    },
+    {
+      "operation": "BenchmarkOperations/ecdsa/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 949070.0,
+      "bytes_per_op": 2330427,
+      "allocations_per_op": 37790
+    },
+    {
+      "operation": "BenchmarkOperations/ecdsa/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 947991.0,
+      "bytes_per_op": 2330410,
+      "allocations_per_op": 37790
+    },
+    {
+      "operation": "BenchmarkOperations/ecdsa/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 949929.0,
+      "bytes_per_op": 2330413,
+      "allocations_per_op": 37790
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1700795.0,
+      "bytes_per_op": 4211491,
+      "allocations_per_op": 68253
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1715880.0,
+      "bytes_per_op": 4211489,
+      "allocations_per_op": 68253
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1719938.0,
+      "bytes_per_op": 4211550,
+      "allocations_per_op": 68254
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1722237.0,
+      "bytes_per_op": 4211512,
+      "allocations_per_op": 68254
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/valid-15",
+      "iterations": 64,
+      "ns_per_op": 1708716.0,
+      "bytes_per_op": 4211491,
+      "allocations_per_op": 68253
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 1810719.0,
+      "bytes_per_op": 4376993,
+      "allocations_per_op": 70956
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 1786547.0,
+      "bytes_per_op": 4376997,
+      "allocations_per_op": 70956
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 1794828.0,
+      "bytes_per_op": 4377048,
+      "allocations_per_op": 70956
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 1800289.0,
+      "bytes_per_op": 4377041,
+      "allocations_per_op": 70956
+    },
+    {
+      "operation": "BenchmarkOperations/schnorr/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 1794296.0,
+      "bytes_per_op": 4377028,
+      "allocations_per_op": 70956
+    },
+    {
+      "operation": "BenchmarkOperations/parse/valid-15",
+      "iterations": 64,
+      "ns_per_op": 15123.0,
+      "bytes_per_op": 3513,
+      "allocations_per_op": 46
+    },
+    {
+      "operation": "BenchmarkOperations/parse/valid-15",
+      "iterations": 64,
+      "ns_per_op": 15046.0,
+      "bytes_per_op": 3512,
+      "allocations_per_op": 46
+    },
+    {
+      "operation": "BenchmarkOperations/parse/valid-15",
+      "iterations": 64,
+      "ns_per_op": 15336.0,
+      "bytes_per_op": 3513,
+      "allocations_per_op": 46
+    },
+    {
+      "operation": "BenchmarkOperations/parse/valid-15",
+      "iterations": 64,
+      "ns_per_op": 15368.0,
+      "bytes_per_op": 3513,
+      "allocations_per_op": 46
+    },
+    {
+      "operation": "BenchmarkOperations/parse/valid-15",
+      "iterations": 64,
+      "ns_per_op": 15341.0,
+      "bytes_per_op": 3513,
+      "allocations_per_op": 46
+    },
+    {
+      "operation": "BenchmarkOperations/parse/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 4.547,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    },
+    {
+      "operation": "BenchmarkOperations/parse/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 2.594,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    },
+    {
+      "operation": "BenchmarkOperations/parse/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 2.594,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    },
+    {
+      "operation": "BenchmarkOperations/parse/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 2.609,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    },
+    {
+      "operation": "BenchmarkOperations/parse/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 3.25,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/valid-15",
+      "iterations": 64,
+      "ns_per_op": 954604.0,
+      "bytes_per_op": 2253932,
+      "allocations_per_op": 36530
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/valid-15",
+      "iterations": 64,
+      "ns_per_op": 931923.0,
+      "bytes_per_op": 2253931,
+      "allocations_per_op": 36530
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/valid-15",
+      "iterations": 64,
+      "ns_per_op": 932790.0,
+      "bytes_per_op": 2253937,
+      "allocations_per_op": 36530
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/valid-15",
+      "iterations": 64,
+      "ns_per_op": 932009.0,
+      "bytes_per_op": 2253949,
+      "allocations_per_op": 36530
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/valid-15",
+      "iterations": 64,
+      "ns_per_op": 977561.0,
+      "bytes_per_op": 2254038,
+      "allocations_per_op": 36530
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 5.203,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 3.906,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 3.906,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 3.906,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    },
+    {
+      "operation": "BenchmarkOperations/tweak/invalid-15",
+      "iterations": 64,
+      "ns_per_op": 4.547,
+      "bytes_per_op": 0,
+      "allocations_per_op": 0
+    }
+  ]
+}

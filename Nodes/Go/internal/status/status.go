@@ -12,6 +12,7 @@ import (
 )
 
 type Document struct {
+	Crypto                 *crypto.Provenance     `json:"crypto,omitempty"`
 	OK                     bool                   `json:"ok"`
 	NodeID                 string                 `json:"node_id"`
 	Implementation         string                 `json:"implementation"`
@@ -69,12 +70,18 @@ func Build(datadir string) (Document, error) {
 		}
 	}
 	info := crypto.Info()
+	if meta.Crypto != nil {
+		info.ECDSABackend = meta.Crypto.Implementation
+		info.TaprootTweakBackend = meta.Crypto.Implementation
+		info.NativeAvailable = meta.Crypto.Lane == "c_binding"
+	}
 	lockStatus, pid := lockInfo(filepath.Join(datadir, ".gobitnode.lock"))
 	binary := "not_attempted"
 	if meta.CurrentBlocker != nil {
 		binary = "failed"
 	}
 	return Document{
+		Crypto:                 meta.Crypto,
 		OK:                     true,
 		NodeID:                 meta.NodeID,
 		Implementation:         "GoNode",

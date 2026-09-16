@@ -23,7 +23,8 @@
     "proof": "gobitnode_proof_data",
     "proof_50k": "gobitnode_50k_proof_data",
     "proof_100k": "gobitnode_100k_proof_data",
-    "supervisor": "gobitnode_sync_data"
+    "supervisor": "gobitnode_sync_data",
+    "crypto_own_curve_proof": "rosetta-go-own-curve-<run-id>"
   },
   "commands": {
     "docker_config": "cd Nodes/Go && make docker-config",
@@ -45,7 +46,9 @@
     "docker_supervisor_status": null,
     "docker_supervisor_stop": null,
     "docker_supervisor_resume": null,
-    "docker_smoke_once": "cd Nodes/Go && make docker-smoke-once"
+    "docker_smoke_once": "cd Nodes/Go && make docker-smoke-once",
+    "docker_crypto_own_curve_5k": "python3 Project/scripts/run_crypto_lane.py --port go --all",
+    "docker_crypto_own_curve_component": "python3 Project/scripts/run_crypto_lane.py --port go --component-only"
   },
   "peer_modes": {
     "local_reference": {
@@ -126,6 +129,7 @@
   "known_caveats": [
     "The local Reference P2P comparator is a bounded proof harness, not live tip maintenance",
     "docker_smoke_once is a one-shot supervisor tick smoke, not persistent supervisor support",
-    "Persistent live P2P supervisor is still a follow-up surface"
+    "Persistent live P2P supervisor is still a follow-up surface",
+    "own_curve uses a separate candidate-only build and per-run volume; default C-binding commands retain their lane."
   ]
 }

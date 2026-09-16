@@ -55,3 +55,19 @@ make docker-build
 
 ZigNode must not claim live external P2P discovery, tip maintenance, or binary
 gate completion until the Shared contracts are independently proven.
+
+## Experimental own-curve component
+
+The own_curve build imports the standalone library under Libraries. It excludes
+the C crypto binding and any ecosystem curve backend. RocksDB remains the node
+store. Library APIs contain no Bitcoin node types; this adapter owns digest and
+error mapping. The existing default backend remains c_binding.
+
+Build with `zig build -Dcrypto-backend=own_curve -Doptimize=ReleaseSafe`.
+The historical `zig-secp256k1`/`pure` selection remains ecosystem_curve.
+
+Reproduce independent evidence with
+`python3 Project/scripts/run_crypto_lane.py --port zig --all` from the
+workspace root. This uses isolated named proof volumes and Project assembles
+experimental results. Query `Project/scripts/report.py --section crypto-lanes`;
+5k does not imply tip validation. Test-only probes are excluded from benchmarks.

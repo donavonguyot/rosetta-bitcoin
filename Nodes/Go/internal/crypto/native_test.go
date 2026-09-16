@@ -22,7 +22,7 @@ func TestReusableVerifierVectors(t *testing.T) {
 		t.Fatal("native verifier unavailable")
 	}
 	defer verifier.Close()
-	if verifier.ContextMode() != "libsecp256k1/reused_context" {
+	if verifier.ContextMode() != Info().SelectedBackend+"/reused_context" {
 		t.Fatalf("unexpected context mode: %s", verifier.ContextMode())
 	}
 

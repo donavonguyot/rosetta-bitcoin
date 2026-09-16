@@ -46,29 +46,44 @@ per-blocker forgeries — added to the shared conformance corpus with provenance
 This is the highest-value, lowest-glamour contribution available, and it is the
 admission gate for the standing dares below.
 
-## 4. Standing dare: secp256k1 verification in your language
+## 4. Reusable secp256k1 verification components
 
-Every port's canonical path runs on one cryptography dependency behind a contract
-seam: libsecp256k1. The dare: a verification-only secp256k1 backend in the port's
-own language — ECDSA and BIP340 Schnorr verification, field and scalar arithmetic,
-point decompression. No signing, no key handling: validation research, never for
-use with funds.
+Build an independently importable verification library and a thin node adapter.
+The library owns public-key parsing, ECDSA/Schnorr verification and raw x-only
+public tweaks. The node owns Bitcoin sighashes, script flags and Taproot rules.
+Signing and secret-key operations are separate future work. Describe new
+implementations as experimental; correctness does not establish side-channel
+resistance.
 
-Reference instance: the Zig port already ships a pure-Zig verification backend
-(`Nodes/Zig/src/pure_secp.zig`) running as a shadow against libsecp256k1. Note
-that Zig's standard library provides the secp256k1 curve, so that is the easy end
-of the dare; the open frontier is languages with no curve in the standard library
-(hand-rolled field arithmetic), and — for every backend, Zig included — surviving
-the must-reject corpus of challenge 3, which does not yet exist.
+Three independent lanes are open:
 
-Rails (all three are mandatory):
+| Lane | Curve implementation |
+| --- | --- |
+| `own_curve` | Implemented in the package, with standard-library utilities, hashing and big integers allowed; imported curves and FFI prohibited. |
+| `ecosystem_curve` | Imported from the language ecosystem, including standard-library curves; record and pin dependencies. |
+| `c_binding` | C libsecp256k1 behind an explicitly named binding. |
 
-1. The backend is **added** behind the existing crypto-backend contract, never
-   substituted; libsecp256k1 remains the permanent differential oracle.
-2. Admission requires the shared native-crypto vector contracts **and** the
-   must-reject corpus (challenge 3) **and** full-chain differential replay
-   against the native backend.
-3. Any divergence is ledgered as a blocker with provenance, pass or fail.
+These lanes are not a ladder. An ecosystem entry is valid without qualifying
+for own_curve. Zig's existing standard-library backend belongs to ecosystem_curve;
+its historical `pure` name does not mean package-owned arithmetic.
+
+A submission includes package metadata, API/error/encoding documentation, license,
+tests, usage example, isolated offline build and an external public-API consumer.
+Production dependencies must be disclosed transitively. own_curve initially uses
+only allowed standard-library facilities; external utilities require a documented
+exception before adoption. Test references never become runtime fallbacks.
+
+Admission to the bounded 5k experiment requires shared crypto vectors, negative
+and boundary cases, pinned-upstream differential tests, adapter usage and failure
+injection, the 45-fixture script corpus, and candidate-only fresh Docker P2P
+proofs through 5000. Component and node benchmarks are separate. Full-chain
+replay and tip participation remain further evidence, not implied by 5k.
+Divergences remain blockers with input bytes and reference provenance.
+
+The initial own_curve packages live under `Libraries/Go/libsecp256k1-go` and
+`Libraries/Zig/libsecp256k1-zig`. Current results come from Project's `crypto-lanes`
+report, separately from the canonical C-backed baseline leaderboard. The pinned
+reference is test-only; default node backends remain independently selectable.
 
 ## 5. Standing dare: native storage in your language
 

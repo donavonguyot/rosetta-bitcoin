@@ -2,6 +2,7 @@ package connect
 
 import (
 	"fmt"
+	"rosettabitcoin/nodes/go/internal/crypto"
 	"sort"
 	"time"
 
@@ -61,6 +62,11 @@ func Run(opts Options) (Summary, error) {
 }
 
 func RunStore(store *storage.Store, opts Options) (Summary, error) {
+	probe := crypto.NewVerifier()
+	if probe == nil {
+		return Summary{}, fmt.Errorf("requested crypto backend unavailable")
+	}
+	probe.Close()
 	if opts.Target < 0 {
 		return Summary{}, fmt.Errorf("target must be >= 0")
 	}
@@ -133,6 +139,8 @@ func RunStore(store *storage.Store, opts Options) (Summary, error) {
 		prevHash = info.Hash
 		connected++
 		utxoCount = utxoCount - len(spent) + len(staged)
+		provenance := crypto.BuildProvenance()
+		meta.Crypto = &provenance
 		meta.ValidatedHeight = height
 		meta.ValidatedHash = info.Hash
 		meta.ChainstateUTXOCount = utxoCount

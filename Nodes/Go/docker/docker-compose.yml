@@ -2,8 +2,8 @@ services:
   gobitnode:
     image: gobitnode:local
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../../..
+      dockerfile: Nodes/Go/docker/Dockerfile
     environment:
       CHAIN: testnet4
       DATA_DIR: /data
@@ -15,8 +15,8 @@ services:
   gobitnode-proof:
     image: gobitnode:local
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../../..
+      dockerfile: Nodes/Go/docker/Dockerfile
     environment:
       CHAIN: testnet4
       DATA_DIR: /data
@@ -37,8 +37,8 @@ services:
   gobitnode-script-corpus:
     image: gobitnode:local
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../../..
+      dockerfile: Nodes/Go/docker/Dockerfile
     environment:
       CHAIN: testnet4
       GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-docker}
@@ -57,8 +57,8 @@ services:
   gobitnode-local-reference-proof:
     image: gobitnode:local
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../../..
+      dockerfile: Nodes/Go/docker/Dockerfile
     environment:
       CHAIN: testnet4
       DATA_DIR: /data
@@ -94,8 +94,8 @@ services:
   gobitnode-supervisor:
     image: gobitnode:local
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../../..
+      dockerfile: Nodes/Go/docker/Dockerfile
     environment:
       CHAIN: testnet4
       DATA_DIR: /data

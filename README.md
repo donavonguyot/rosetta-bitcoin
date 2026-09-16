@@ -185,3 +185,7 @@ while independently validating every stored connected block.
 
 Intermediate proofs and bounded syncs are useful evidence. They are not the
 binary gate unless they reach and maintain current tip independently.
+
+Reusable, independently buildable crypto packages live under `Libraries/`. They
+are root-owned source directories with package-local metadata and licenses, not
+nested Git repositories. See `Libraries/README.md` and Project `crypto-lanes`.

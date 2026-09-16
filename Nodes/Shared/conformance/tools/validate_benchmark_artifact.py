@@ -493,6 +493,10 @@ def validate_payload(
         errors.append(f"resume_supported={payload.get('resume_supported')!r}; expected true")
     if not spec.get("maintenance") and not spec.get("resume_from_state") and not as_bool(payload.get("fresh_state")):
         errors.append(f"fresh_state={payload.get('fresh_state')!r}; expected true")
+    crypto_identity = payload.get("crypto") or {}
+    crypto_lane = payload.get("crypto_lane") or (crypto_identity.get("lane") if isinstance(crypto_identity, dict) else None)
+    if crypto_lane in ("own_curve", "ecosystem_curve") or str(payload.get("native_crypto_backend", "")).split("/")[0] in ("libsecp256k1-go", "libsecp256k1-zig", "zig-secp256k1"):
+        errors.append("experimental crypto lane cannot qualify as canonical C-binding benchmark evidence")
     if not str(payload.get("native_crypto_backend") or "").strip():
         errors.append("native_crypto_backend must be present")
 

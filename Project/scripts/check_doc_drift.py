@@ -38,6 +38,9 @@ CONSENSUS_RUNWAY_DOCS = [
 PORT_DOC_STATUS_HEADINGS = re.compile(r"^##\s+(?:Live status|Current status|Current Status)\b")
 MARKDOWN_LINK = re.compile(r"!?\[[^\]\n]+\]\(([^)\n]+)\)")
 IGNORED_PATH_PARTS = {
+    ".campaigns",
+    ".zig-cache",
+    "zig-out",
     ".git",
     ".mojo-docs",
     ".pytest_cache",

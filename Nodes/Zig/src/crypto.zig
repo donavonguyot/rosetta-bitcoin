@@ -1,88 +1,23 @@
 const std = @import("std");
-const pure_secp = @import("pure_secp.zig");
-pub const PureVerifier = pure_secp.PureVerifier;
-pub const TweakResult = pure_secp.TweakResult;
-
-const c = @cImport({
-    @cInclude("secp256k1.h");
-    @cInclude("secp256k1_extrakeys.h");
-    @cInclude("secp256k1_schnorrsig.h");
-});
-
-pub const NativeVerifier = struct {
-    ctx: *c.secp256k1_context,
-
-    pub fn create() !NativeVerifier {
-        const ctx = c.secp256k1_context_create(c.SECP256K1_CONTEXT_VERIFY);
-        if (ctx == null) return error.NativeCryptoUnavailable;
-        return .{ .ctx = ctx.? };
-    }
-
-    pub fn destroy(self: *NativeVerifier) void {
-        c.secp256k1_context_destroy(self.ctx);
-    }
-
-    pub fn verifyEcdsaDer(self: *NativeVerifier, pubkey_bytes: []const u8, der_sig: []const u8, msg32: *const [32]u8) bool {
-        var pubkey: c.secp256k1_pubkey = undefined;
-        if (c.secp256k1_ec_pubkey_parse(self.ctx, &pubkey, pubkey_bytes.ptr, pubkey_bytes.len) != 1) return false;
-        var sig: c.secp256k1_ecdsa_signature = undefined;
-        if (c.secp256k1_ecdsa_signature_parse_der(self.ctx, &sig, der_sig.ptr, der_sig.len) != 1) return false;
-        _ = c.secp256k1_ecdsa_signature_normalize(self.ctx, &sig, &sig);
-        return c.secp256k1_ecdsa_verify(self.ctx, &sig, msg32, &pubkey) == 1;
-    }
-
-    pub fn verifySchnorr(self: *NativeVerifier, xonly_pubkey_bytes: []const u8, sig64: []const u8, msg: []const u8) bool {
-        if (xonly_pubkey_bytes.len != 32 or sig64.len != 64) return false;
-        var pubkey: c.secp256k1_xonly_pubkey = undefined;
-        if (c.secp256k1_xonly_pubkey_parse(self.ctx, &pubkey, xonly_pubkey_bytes.ptr) != 1) return false;
-        return c.secp256k1_schnorrsig_verify(self.ctx, sig64.ptr, msg.ptr, msg.len, &pubkey) == 1;
-    }
-
-    pub fn taprootTweakAddCheck(
-        self: *NativeVerifier,
-        tweaked_xonly: []const u8,
-        parity: u8,
-        internal_xonly: []const u8,
-        tweak32: *const [32]u8,
-    ) bool {
-        if (tweaked_xonly.len != 32 or internal_xonly.len != 32) return false;
-        var internal: c.secp256k1_xonly_pubkey = undefined;
-        if (c.secp256k1_xonly_pubkey_parse(self.ctx, &internal, internal_xonly.ptr) != 1) return false;
-        return c.secp256k1_xonly_pubkey_tweak_add_check(
-            self.ctx,
-            tweaked_xonly.ptr,
-            @intCast(parity),
-            &internal,
-            tweak32,
-        ) == 1;
-    }
-
-    pub fn taprootTweakPubkeyXOnly(
-        self: *NativeVerifier,
-        internal_xonly: []const u8,
-        tweak32: *const [32]u8,
-    ) ?TweakResult {
-        if (internal_xonly.len != 32) return null;
-        var internal: c.secp256k1_xonly_pubkey = undefined;
-        if (c.secp256k1_xonly_pubkey_parse(self.ctx, &internal, internal_xonly.ptr) != 1) return null;
-        var output_pubkey: c.secp256k1_pubkey = undefined;
-        if (c.secp256k1_xonly_pubkey_tweak_add(self.ctx, &output_pubkey, &internal, tweak32) != 1) return null;
-        var output_xonly_pubkey: c.secp256k1_xonly_pubkey = undefined;
-        var parity_c: c_int = 0;
-        if (c.secp256k1_xonly_pubkey_from_pubkey(self.ctx, &output_xonly_pubkey, &parity_c, &output_pubkey) != 1) return null;
-        var output_xonly: [32]u8 = undefined;
-        if (c.secp256k1_xonly_pubkey_serialize(self.ctx, &output_xonly, &output_xonly_pubkey) != 1) return null;
-        return .{ .output_xonly = output_xonly, .parity = @intCast(parity_c) };
-    }
-};
+pub const source_digest = @import("crypto_options").source_digest;
+pub const own_curve = @import("crypto_options").own_curve;
+const own = @import("own_crypto.zig");
+pub const OwnVerifier = own.OwnVerifier;
+pub const NativeVerifier = if (own_curve) own.DisabledVerifier else @import("native_crypto.zig").NativeVerifier;
+pub const PureVerifier = if (own_curve) own.DisabledPure else @import("pure_secp.zig").PureVerifier;
+pub const TweakResult = own.TweakResult;
+pub const default_label = if (own_curve) "libsecp256k1-zig" else "libsecp256k1";
+pub const lane = if (own_curve) "own_curve" else "c_binding";
 
 pub const CryptoVerifier = union(enum) {
     native: *NativeVerifier,
+    own: *OwnVerifier,
     pure: *PureVerifier,
 
     pub fn verifyEcdsaDer(self: CryptoVerifier, pubkey_bytes: []const u8, der_sig: []const u8, msg32: *const [32]u8) bool {
         return switch (self) {
             .native => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
+            .own => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
             .pure => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
         };
     }
@@ -90,6 +25,7 @@ pub const CryptoVerifier = union(enum) {
     pub fn verifySchnorr(self: CryptoVerifier, xonly_pubkey_bytes: []const u8, sig64: []const u8, msg: []const u8) bool {
         return switch (self) {
             .native => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
+            .own => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
             .pure => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
         };
     }
@@ -103,6 +39,7 @@ pub const CryptoVerifier = union(enum) {
     ) bool {
         return switch (self) {
             .native => |verifier| verifier.taprootTweakAddCheck(tweaked_xonly, parity, internal_xonly, tweak32),
+            .own => |verifier| verifier.taprootTweakAddCheck(tweaked_xonly, parity, internal_xonly, tweak32),
             .pure => |verifier| verifier.taprootTweakAddCheck(tweaked_xonly, parity, internal_xonly, tweak32),
         };
     }
@@ -114,18 +51,21 @@ pub const CryptoVerifier = union(enum) {
     ) ?TweakResult {
         return switch (self) {
             .native => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
+            .own => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
             .pure => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
         };
     }
 };
 
 pub fn available() bool {
+    if (own_curve) return true;
     var verifier = NativeVerifier.create() catch return false;
     verifier.destroy();
     return true;
 }
 
 test "pure schnorr verifier accepts BIP340 variable-length messages" {
+    if (own_curve) return error.SkipZigTest;
     const allocator = std.testing.allocator;
     var verifier = PureVerifier.create();
     defer verifier.destroy();
@@ -139,6 +79,7 @@ test "pure schnorr verifier accepts BIP340 variable-length messages" {
 }
 
 test "pure taproot tweak edge cases match native backend" {
+    if (own_curve) return error.SkipZigTest;
     const allocator = std.testing.allocator;
     var native = try NativeVerifier.create();
     defer native.destroy();
@@ -281,19 +222,19 @@ fn hexNibble(ch: u8) !u8 {
 }
 
 const ripemd_r1 = [_]u8{
-    0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
-    7,  4,  13, 1,  10, 6,  15, 3,  12, 0,  9,  5,  2,  14, 11, 8,
-    3,  10, 14, 4,  9,  15, 8,  1,  2,  7,  0,  6,  13, 11, 5,  12,
-    1,  9,  11, 10, 0,  8,  12, 4,  13, 3,  7,  15, 14, 5,  6,  2,
-    4,  0,  5,  9,  7,  12, 2,  10, 14, 1,  3,  8,  11, 6,  15, 13,
+    0, 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+    7, 4,  13, 1,  10, 6,  15, 3,  12, 0, 9,  5,  2,  14, 11, 8,
+    3, 10, 14, 4,  9,  15, 8,  1,  2,  7, 0,  6,  13, 11, 5,  12,
+    1, 9,  11, 10, 0,  8,  12, 4,  13, 3, 7,  15, 14, 5,  6,  2,
+    4, 0,  5,  9,  7,  12, 2,  10, 14, 1, 3,  8,  11, 6,  15, 13,
 };
 
 const ripemd_r2 = [_]u8{
-    5,  14, 7,  0,  9,  2,  11, 4,  13, 6,  15, 8,  1,  10, 3,  12,
-    6,  11, 3,  7,  0,  13, 5,  10, 14, 15, 8,  12, 4,  9,  1,  2,
-    15, 5,  1,  3,  7,  14, 6,  9,  11, 8,  12, 2,  10, 0,  4,  13,
-    8,  6,  4,  1,  3,  11, 15, 0,  5,  12, 2,  13, 9,  7,  10, 14,
-    12, 15, 10, 4,  1,  5,  8,  7,  6,  2,  13, 14, 0,  3,  9,  11,
+    5,  14, 7,  0, 9, 2,  11, 4,  13, 6,  15, 8,  1,  10, 3,  12,
+    6,  11, 3,  7, 0, 13, 5,  10, 14, 15, 8,  12, 4,  9,  1,  2,
+    15, 5,  1,  3, 7, 14, 6,  9,  11, 8,  12, 2,  10, 0,  4,  13,
+    8,  6,  4,  1, 3, 11, 15, 0,  5,  12, 2,  13, 9,  7,  10, 14,
+    12, 15, 10, 4, 1, 5,  8,  7,  6,  2,  13, 14, 0,  3,  9,  11,
 };
 
 const ripemd_s1 = [_]u8{
@@ -384,10 +325,12 @@ fn ripemdK2(round: u32) u32 {
 }
 
 test "native secp256k1 extrakeys and schnorr backend is available" {
+    if (own_curve) return error.SkipZigTest;
     try std.testing.expect(available());
 }
 
 test "display hash reverses internal bytes" {
+    if (own_curve) return error.SkipZigTest;
     var bytes: [32]u8 = undefined;
     for (&bytes, 0..) |*byte, i| byte.* = @intCast(i);
     const display = try displayHashAlloc(std.testing.allocator, bytes[0..]);
@@ -396,6 +339,7 @@ test "display hash reverses internal bytes" {
 }
 
 test "ripemd160 known vectors" {
+    if (own_curve) return error.SkipZigTest;
     const empty = ripemd160("");
     const empty_hex = try toHexAlloc(std.testing.allocator, empty[0..]);
     defer std.testing.allocator.free(empty_hex);

@@ -1,3 +1,5 @@
+//go:build !owncurve
+
 package crypto
 
 /*
@@ -10,15 +12,7 @@ package crypto
 import "C"
 
 import "unsafe"
-
-type BackendInfo struct {
-	SelectedBackend     string `json:"selected_backend"`
-	NativeAvailable     bool   `json:"native_available"`
-	NativePackage       string `json:"native_package"`
-	ECDSABackend        string `json:"ecdsa_backend"`
-	SchnorrBackend      string `json:"schnorr_backend"`
-	TaprootTweakBackend string `json:"taproot_tweak_backend"`
-}
+import "os"
 
 type Verifier struct {
 	ctx *C.secp256k1_context
@@ -50,6 +44,9 @@ func Available() bool {
 }
 
 func NewVerifier() *Verifier {
+	if selected := os.Getenv("GOBITNODE_CRYPTO_BACKEND"); selected != "" && selected != "c_binding" && selected != "libsecp256k1" {
+		return nil
+	}
 	ctx := C.secp256k1_context_create(C.SECP256K1_CONTEXT_VERIFY)
 	if ctx == nil {
 		return nil
@@ -132,11 +129,6 @@ func (v *Verifier) VerifySchnorrMessage(pubkeyXOnly, message, sig64 []byte) bool
 		msgPtr = (*C.uchar)(unsafe.Pointer(&message[0]))
 	}
 	return C.secp256k1_schnorrsig_verify(v.ctx, (*C.uchar)(unsafe.Pointer(&sig64[0])), msgPtr, C.size_t(len(message)), &pk) == 1
-}
-
-type TaprootTweakResult struct {
-	Parity      int
-	OutputXOnly []byte
 }
 
 func TaprootTweakPubkeyXOnly(internalXOnly, tweak32 []byte) (TaprootTweakResult, bool) {
