@@ -70,7 +70,7 @@ One human developer coordinated the repository, selected tasks, judged failures,
 
 ## 4. Verification Substrate
 
-![The RosettaBitcoin evidence pipeline. Raw blocks and runtime failures are reduced to provenance-rich blocker facts; reusable fixtures and rule cards are executed by each port; port-owned artifacts pass schema and gate validators before import; Project reports expose admitted evidence. Agreement is one check, not a substitute for negative tests or independent implementation.](substrate_pipeline.pdf){width=96%}
+![The RosettaBitcoin evidence pipeline. Raw blocks and runtime failures are reduced to provenance-rich blocker facts; reusable fixtures and rule cards are executed by each port; port-owned artifacts pass schema and gate validators before import; Project reports expose admitted evidence. Agreement is one check, not a substitute for negative tests or independent implementation.](paper/figures/substrate_pipeline.pdf){width=96%}
 
 The substrate converts runtime discoveries into bounded, reusable tests. A blocker record is intended to contain height, block hash, transaction ID, input index, spent output script, observed failure, missing rule, implementing fix, fixture, and follower notes. The shared script manifest contains 45 fixtures, and the rule inventory contains 45 corresponding rule records. The Project database contains 111 normalized blocker rows. These counts describe archived objects; they do not show that the corpus is complete.
 

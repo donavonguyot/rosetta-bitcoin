@@ -25,7 +25,9 @@ fi
 cp "$DIR/figures/substrate_pipeline.pdf" "$OUT/substrate_pipeline.pdf"
 
 echo "[2/6] Preparing Markdown body..."
-awk '/^## Abstract$/ { p=1 } p { print }' "$SRC" > "$OUT/body.md"
+awk '/^## Abstract$/ { p=1 } p { print }' "$SRC" \
+  | sed 's#](paper/figures/substrate_pipeline\.pdf)#](substrate_pipeline.pdf)#g' \
+  > "$OUT/body.md"
 
 echo "[3/6] Producing XeLaTeX source..."
 (
