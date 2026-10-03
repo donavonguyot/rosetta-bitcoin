@@ -73,12 +73,12 @@ fn usage(out: anytype) !void {
     try out.print(
         \\zigbitnode commands:
         \\  status [--datadir ./data-zig] [--store=rocksdb|native]
-        \\  storage-proof [--datadir ./data-zig] [--output path] [--store=rocksdb|native]
+        \\  storage-proof [--datadir ./data-zig] [--output path] [--gate-output path] [--store=rocksdb|native]
         \\  codec-vectors
         \\  native-crypto-vectors
         \\  test-capability --kind crypto-vectors --outcome-path path [--mutation schnorr-accept-bad-s|schnorr-accept-bad-xonly|taproot-ignore-output-check]
         \\  script-corpus [--manifest path] [--output path] [--shadow-crypto]
-        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append]
+        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--gate-output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append]
         \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
         \\
     , .{});
@@ -430,6 +430,15 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
         defer allocator.free(json);
         try writeFileEnsuringParent(io, output, json);
         try out.print("{s}", .{json});
+        const set_hash = core.store.writeSetHashHex(native.setHash());
+        const gate = try std.fmt.allocPrint(
+            allocator,
+            "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"storage_proof\",\"height\":2,\"utxo_count\":1,\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash\":\"{s}\",\"snapshot_every\":{},\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"proof_scope\":\"storage_proof\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"storage_proof\"]}}\n",
+            .{ core.store.peakRssBytes(), set_hash[0..], native.options.snapshot_every, surface, optimizeName() },
+        );
+        defer allocator.free(gate);
+        try out.print("{s}", .{gate});
+        if (valueArg(args, "--gate-output")) |path| try writeFileEnsuringParent(io, path, gate);
         return;
     }
     if (!std.mem.eql(u8, store_name, "rocksdb")) return error.UnsupportedStore;
@@ -762,31 +771,34 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     if (@hasField(@TypeOf(db.*), "divergence_count")) {
         const primary_hash = core.store.writeSetHashHex(db.primary.setHash());
         const shadow_hash = core.store.writeSetHashHex(db.shadow.setHash());
-        try out.print(
-            "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"{s}\",\"height\":{},\"divergence_count\":{},\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash_fold_ms\":{},\"snapshot_count\":{},\"snapshot_bytes\":{},\"primary_set_hash\":\"{s}\",\"shadow_set_hash\":\"{s}\",\"engines\":{{\"primary\":{{\"utxo_load\":{},\"commit\":{},\"snapshot_ms\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}},\"shadow\":{{\"utxo_load\":{},\"commit\":{},\"snapshot_ms\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}}}},\"total_ms\":{}}}\n",
-            .{
-                shadowGateName(store_name, target),
-                target,
-                db.divergence_count,
-                core.store.peakRssBytes(),
-                timing.set_hash_fold,
-                snapshotCount(db),
-                snapshotBytes(db),
-                primary_hash[0..],
-                shadow_hash[0..],
-                db.primary_utxo_load_ms,
-                db.primary_commit_ms,
-                db.primary_snapshot_ms,
-                timing.block_connect_store_commit,
-                db.primary_set_hash_fold_ms,
-                db.shadow_utxo_load_ms,
-                db.shadow_commit_ms,
-                db.shadow_snapshot_ms,
-                db.shadow_utxo_load_ms + db.shadow_commit_ms + db.shadow_snapshot_ms,
-                db.shadow_set_hash_fold_ms,
-                total_ms,
-            },
-        );
+        var gate_buf: std.ArrayList(u8) = .empty;
+        defer gate_buf.deinit(allocator);
+        try appendFmt(allocator, &gate_buf, "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"{s}\",\"height\":{},\"utxo_count\":{},\"divergence_count\":{},\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash_fold_ms\":{},\"snapshot_count\":{},\"snapshot_bytes\":{},\"primary_set_hash\":\"{s}\",\"shadow_set_hash\":\"{s}\",\"engines\":{{\"primary\":{{\"utxo_load\":{},\"commit\":{},\"snapshot_ms\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}},\"shadow\":{{\"utxo_load\":{},\"commit\":{},\"snapshot_ms\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}}}},\"total_ms\":{},", .{
+            shadowGateName(store_name, target),
+            target,
+            db.primary.utxo_count,
+            db.divergence_count,
+            core.store.peakRssBytes(),
+            timing.set_hash_fold,
+            snapshotCount(db),
+            snapshotBytes(db),
+            primary_hash[0..],
+            shadow_hash[0..],
+            db.primary_utxo_load_ms,
+            db.primary_commit_ms,
+            db.primary_snapshot_ms,
+            timing.block_connect_store_commit,
+            db.primary_set_hash_fold_ms,
+            db.shadow_utxo_load_ms,
+            db.shadow_commit_ms,
+            db.shadow_snapshot_ms,
+            db.shadow_utxo_load_ms + db.shadow_commit_ms + db.shadow_snapshot_ms,
+            db.shadow_set_hash_fold_ms,
+            total_ms,
+        });
+        try appendFmt(allocator, &gate_buf, "\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"snapshot_every\":{},\"proof_scope\":\"peer_shadow\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"storage_proof\"]}}\n", .{ surface, optimizeName(), snapshotEvery(db) });
+        try out.print("{s}", .{gate_buf.items});
+        if (valueArg(args, "--gate-output")) |path| try writeFileEnsuringParent(io, path, gate_buf.items);
         if (db.divergence_count != 0) return error.StoreDivergence;
     }
 }
@@ -1092,6 +1104,15 @@ fn nativeOpenOptions(args: []const []const u8) !core.native_store.OpenOptions {
     return options;
 }
 
+fn optimizeName() []const u8 {
+    return switch (@import("builtin").mode) {
+        .Debug => "Debug",
+        .ReleaseSafe => "ReleaseSafe",
+        .ReleaseFast => "ReleaseFast",
+        .ReleaseSmall => "ReleaseSmall",
+    };
+}
+
 fn shadowGateName(store_name: []const u8, target: u32) []const u8 {
     if (!std.mem.eql(u8, store_name, "native")) return "shadow_rocksdb";
     if (target == 5000) return "shadow_5k";
@@ -1106,6 +1127,11 @@ fn snapshotCount(db: anytype) u64 {
 
 fn snapshotBytes(db: anytype) u64 {
     if (@hasField(@TypeOf(db.primary.*), "snapshot_bytes")) return db.primary.snapshot_bytes;
+    return 0;
+}
+
+fn snapshotEvery(db: anytype) u32 {
+    if (@hasField(@TypeOf(db.primary.*), "options")) return db.primary.options.snapshot_every;
     return 0;
 }
 
