@@ -356,6 +356,54 @@
       "notes": "Current comparable zig performance_100k proof accepted by campaign performance_100k_20260607_123823."
     },
     {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_5k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_host_2026-10-03.json",
+      "status": "current",
+      "notes": "Diagnostic native-store differential run on the host. Not the comparable RocksDB baseline."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_5k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_docker_2026-10-03.json",
+      "status": "current",
+      "notes": "Diagnostic native-store differential run in Docker. Not the comparable RocksDB baseline."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_50k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_host_2026-10-03.json",
+      "status": "current",
+      "notes": "Diagnostic native-store differential run on the host. Not the comparable RocksDB shakedown."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_50k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_docker_2026-10-03.json",
+      "status": "current",
+      "notes": "Diagnostic native-store differential run in Docker. Not the comparable RocksDB shakedown."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_storage_proof",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_storage_proof_host_2026-10-03.json",
+      "status": "current",
+      "notes": "Diagnostic native-store storage proof on the host. Not the RocksDB storage gate."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_storage_proof",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_storage_proof_docker_2026-10-03.json",
+      "status": "current",
+      "notes": "Diagnostic native-store storage proof in Docker. Not the RocksDB storage gate."
+    },
+    {
       "port": "cpp",
       "claim": "performance_100k",
       "gate_id": "performance_100k",
