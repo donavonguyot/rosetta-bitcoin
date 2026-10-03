@@ -54,6 +54,21 @@ pub fn build(b: *std.Build) void {
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run ZigNode tests");
     test_step.dependOn(&run_tests.step);
+
+    const native_store_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/native_store.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zigbitnode", .module = core_mod },
+            },
+        }),
+    });
+    native_store_tests.root_module.addOptions("crypto_options", options);
+    native_store_tests.root_module.addImport("secp256k1", secp);
+    addNativeDeps(native_store_tests.root_module, target, own_curve);
+    test_step.dependOn(&b.addRunArtifact(native_store_tests).step);
 }
 
 fn addNativeDeps(module: *std.Build.Module, target: std.Build.ResolvedTarget, own_curve: bool) void {

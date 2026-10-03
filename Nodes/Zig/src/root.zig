@@ -12,6 +12,7 @@ pub const tx = @import("tx.zig");
 pub const block = @import("block.zig");
 pub const script = @import("script.zig");
 pub const p2p = @import("p2p.zig");
+pub const store = @import("store.zig");
 
 pub const PortInfo = struct {
     pub const port_key = "zig";
@@ -21,6 +22,8 @@ pub const PortInfo = struct {
     pub const marker_file = ".zigbitnode_native_storage";
     pub const lock_file = ".zigbitnode.lock";
     pub const rocksdb_dir = "chainstate-rocksdb";
+    pub const rocksdb_shadow_dir = "chainstate-rocksdb-shadow";
+    pub const native_dir = "chainstate-native";
 };
 
 pub const Outpoint = struct {
@@ -70,6 +73,7 @@ pub const Metadata = struct {
     chainstate_status: []const u8 = "missing",
     sync_status: []const u8 = "starting",
     chainstate_utxo_count: i64 = 0,
+    chainstate_set_hash: []const u8 = "",
     current_blocker: []const u8 = "",
 };
 
@@ -249,6 +253,10 @@ pub const RocksDb = struct {
     write_opts: *c.rocksdb_writeoptions_t,
     block_options: *c.rocksdb_block_based_table_options_t,
     block_cache: *c.rocksdb_cache_t,
+    allocator: std.mem.Allocator,
+    set_hash: store.SetHash = store.emptySetHash(),
+    utxo_count: i64 = 0,
+    validated_height: i64 = -1,
 
     pub const block_cache_mb: usize = 512;
     pub const write_buffer_mb: usize = 64;
@@ -304,13 +312,31 @@ pub const RocksDb = struct {
             c.rocksdb_close(db);
             return error.RocksDbOptions;
         };
-        return .{
+        errdefer c.rocksdb_writeoptions_destroy(write_opts);
+        errdefer c.rocksdb_close(db);
+        var opened = RocksDb{
             .db = db,
             .read_opts = read_opts,
             .write_opts = write_opts,
             .block_options = block_options,
             .block_cache = block_cache,
+            .allocator = allocator,
         };
+        try opened.loadRuntimeCounters();
+        return opened;
+    }
+
+    pub fn setHash(self: *RocksDb) store.SetHash {
+        return self.set_hash;
+    }
+
+    fn loadRuntimeCounters(self: *RocksDb) !void {
+        self.validated_height = try self.metaI64(self.allocator, "validated_height", -1);
+        self.utxo_count = try self.metaI64(self.allocator, "chainstate_utxo_count", 0);
+        const hex = try self.metaString(self.allocator, "chainstate_set_hash", "");
+        defer self.allocator.free(hex);
+        if (hex.len == 0) return;
+        self.set_hash = try store.parseSetHashHex(hex);
     }
 
     pub fn close(self: *RocksDb) void {
@@ -386,8 +412,8 @@ pub const RocksDb = struct {
         return self.getManyUtxosWithStats(allocator, chain, outpoints, null);
     }
 
-    pub fn getManyUtxosWithStats(self: *RocksDb, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint, stats: ?*UtxoLoadStats) ![]?StoredUtxo {
-        const out = try allocator.alloc(?StoredUtxo, outpoints.len);
+    pub fn getManyUtxoRaw(self: *RocksDb, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint, stats: ?*UtxoLoadStats) ![]?[]u8 {
+        const out = try allocator.alloc(?[]u8, outpoints.len);
         errdefer allocator.free(out);
         if (outpoints.len == 0) return out;
 
@@ -423,12 +449,12 @@ pub const RocksDb = struct {
         }
 
         c.rocksdb_multi_get(self.db, self.read_opts, outpoints.len, key_ptrs.ptr, key_lens.ptr, value_ptrs.ptr, value_lens.ptr, errs.ptr);
-        var decoded_count: usize = 0;
+        var copied: usize = 0;
         errdefer {
-            for (out[0..decoded_count]) |value| if (value) |utxo| utxo.deinit(allocator);
+            for (out[0..copied]) |value| if (value) |bytes| allocator.free(bytes);
             for (value_ptrs) |ptr| if (ptr != null) c.rocksdb_free(ptr);
         }
-        for (outpoints, 0..) |outpoint, i| {
+        for (outpoints, 0..) |_, i| {
             if (errs[i] != null) {
                 c.rocksdb_free(errs[i]);
                 return error.RocksDbRead;
@@ -436,11 +462,30 @@ pub const RocksDb = struct {
             if (value_ptrs[i] != null) {
                 const raw = value_ptrs[i][0..value_lens[i]];
                 if (stats) |s| s.value_bytes += raw.len;
-                out[i] = try decodeUtxoValue(allocator, outpoint, raw);
-                decoded_count += 1;
+                out[i] = try allocator.dupe(u8, raw);
+                copied += 1;
                 c.rocksdb_free(value_ptrs[i]);
                 value_ptrs[i] = null;
             }
+        }
+        return out;
+    }
+
+    pub fn getManyUtxosWithStats(self: *RocksDb, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint, stats: ?*UtxoLoadStats) ![]?StoredUtxo {
+        const raw = try self.getManyUtxoRaw(allocator, chain, outpoints, stats);
+        defer {
+            for (raw) |value| if (value) |bytes| allocator.free(bytes);
+            allocator.free(raw);
+        }
+        const out = try allocator.alloc(?StoredUtxo, outpoints.len);
+        var decoded: usize = 0;
+        errdefer {
+            for (out[0..decoded]) |value| if (value) |utxo| utxo.deinit(allocator);
+            allocator.free(out);
+        }
+        for (outpoints, raw, 0..) |outpoint, value, i| {
+            out[i] = if (value) |bytes| try decodeUtxoValue(allocator, outpoint, bytes) else null;
+            decoded += 1;
         }
         return out;
     }
@@ -487,6 +532,7 @@ pub const RocksDb = struct {
             .chainstate_status = try self.metaString(allocator, "chainstate_status", "missing"),
             .sync_status = try self.metaString(allocator, "sync_status", "starting"),
             .chainstate_utxo_count = chainstate_utxo_count,
+            .chainstate_set_hash = try store.formatSetHash(allocator, self.set_hash),
             .current_blocker = try self.metaString(allocator, "current_blocker", ""),
         };
     }
@@ -498,6 +544,7 @@ pub const RocksDb = struct {
         allocator.free(meta.chainstate_backend);
         allocator.free(meta.chainstate_status);
         allocator.free(meta.sync_status);
+        allocator.free(meta.chainstate_set_hash);
         allocator.free(meta.current_blocker);
     }
 
@@ -516,8 +563,13 @@ pub const RocksDb = struct {
 
     pub fn commitBlock(self: *RocksDb, allocator: std.mem.Allocator, commit: ChainstateBlockCommit) !CommitTimings {
         var timings = CommitTimings{};
+        var next_hash = self.set_hash;
         const batch = c.rocksdb_writebatch_create() orelse return error.RocksDbOptions;
         defer c.rocksdb_writebatch_destroy(batch);
+
+        const spend_fold_started = nowMs();
+        try foldSpends(allocator, &next_hash, commit.spent_external, commit.undo_entries);
+        timings.set_hash_fold += elapsedMs(spend_fold_started);
 
         const delete_started = nowMs();
         for (commit.spent_external) |outpoint| {
@@ -528,14 +580,19 @@ pub const RocksDb = struct {
         timings.utxo_delete_prepare += elapsedMs(delete_started);
 
         const put_started = nowMs();
+        var put_fold: i64 = 0;
         for (commit.created_utxos) |created| {
             const key = try encodeUtxoKey(allocator, "testnet4", created.outpoint);
             defer allocator.free(key);
             const value = try encodeUtxoValue(allocator, created.utxo);
             defer allocator.free(value);
+            const hash_started = nowMs();
+            store.foldSetHash(&next_hash, key, value);
+            put_fold += elapsedMs(hash_started);
             c.rocksdb_writebatch_put(batch, key.ptr, key.len, value.ptr, value.len);
         }
-        timings.utxo_put_prepare += elapsedMs(put_started);
+        timings.utxo_put_prepare += elapsedMs(put_started) - put_fold;
+        timings.set_hash_fold += put_fold;
 
         const undo_started = nowMs();
         const undo_key = try encodeUndoKey(allocator, "testnet4", commit.height);
@@ -578,6 +635,8 @@ pub const RocksDb = struct {
         const counter_value = try std.fmt.allocPrint(allocator, "{}", .{commit.new_utxo_count});
         defer allocator.free(counter_value);
         c.rocksdb_writebatch_put(batch, counter_key.ptr, counter_key.len, counter_value.ptr, counter_value.len);
+        const set_hash_hex = store.writeSetHashHex(next_hash);
+        try putMetaBatch(allocator, batch, "chainstate_set_hash", set_hash_hex[0..]);
         timings.metadata_put_prepare += elapsedMs(metadata_started);
 
         const write_started = nowMs();
@@ -588,6 +647,9 @@ pub const RocksDb = struct {
             c.rocksdb_free(err);
             return error.RocksDbWrite;
         }
+        self.set_hash = next_hash;
+        self.utxo_count = commit.new_utxo_count;
+        self.validated_height = commit.height;
         return timings;
     }
 
@@ -604,8 +666,13 @@ pub const RocksDb = struct {
         new_utxo_count: i64,
     ) !CommitTimings {
         var timings = CommitTimings{};
+        var next_hash = self.set_hash;
         const batch = c.rocksdb_writebatch_create() orelse return error.RocksDbOptions;
         defer c.rocksdb_writebatch_destroy(batch);
+
+        const spend_fold_started = nowMs();
+        try foldSpends(allocator, &next_hash, spent_external, undo_entries);
+        timings.set_hash_fold += elapsedMs(spend_fold_started);
 
         const delete_started = nowMs();
         for (spent_external) |outpoint| {
@@ -616,6 +683,7 @@ pub const RocksDb = struct {
         timings.utxo_delete_prepare += elapsedMs(delete_started);
 
         const put_started = nowMs();
+        var put_fold: i64 = 0;
         for (transactions, 0..) |transaction, tx_index| {
             if (height == 0 and tx_index == 0) continue;
             for (transaction.outputs, 0..) |output, vout| {
@@ -633,10 +701,14 @@ pub const RocksDb = struct {
                     .script_pubkey = output.script_pubkey,
                 });
                 defer allocator.free(value);
+                const hash_started = nowMs();
+                store.foldSetHash(&next_hash, key, value);
+                put_fold += elapsedMs(hash_started);
                 c.rocksdb_writebatch_put(batch, key.ptr, key.len, value.ptr, value.len);
             }
         }
-        timings.utxo_put_prepare += elapsedMs(put_started);
+        timings.utxo_put_prepare += elapsedMs(put_started) - put_fold;
+        timings.set_hash_fold += put_fold;
 
         const undo_started = nowMs();
         const undo_key = try encodeUndoKey(allocator, "testnet4", height);
@@ -647,7 +719,7 @@ pub const RocksDb = struct {
         timings.undo_put_prepare += elapsedMs(undo_started);
 
         const metadata_started = nowMs();
-        try putCommitMetadata(allocator, batch, height, block_hash, new_utxo_count);
+        try putCommitMetadata(allocator, batch, height, block_hash, new_utxo_count, next_hash);
         timings.metadata_put_prepare += elapsedMs(metadata_started);
 
         const write_started = nowMs();
@@ -658,6 +730,9 @@ pub const RocksDb = struct {
             c.rocksdb_free(err);
             return error.RocksDbWrite;
         }
+        self.set_hash = next_hash;
+        self.utxo_count = new_utxo_count;
+        self.validated_height = height;
         return timings;
     }
 
@@ -680,6 +755,12 @@ pub const RocksDb = struct {
         });
         defer allocator.free(utxo_value);
         c.rocksdb_writebatch_put(batch, utxo_key.ptr, utxo_key.len, utxo_value.ptr, utxo_value.len);
+        var next_hash = self.set_hash;
+        store.foldSetHash(&next_hash, utxo_key, utxo_value);
+        const set_hash_hex = store.writeSetHashHex(next_hash);
+        const set_hash_key = try encodeMetadataKey(allocator, "chainstate_set_hash");
+        defer allocator.free(set_hash_key);
+        c.rocksdb_writebatch_put(batch, set_hash_key.ptr, set_hash_key.len, set_hash_hex[0..].ptr, set_hash_hex.len);
 
         const counter_key = try encodeMetadataKey(allocator, "chainstate_utxo_count");
         defer allocator.free(counter_key);
@@ -699,6 +780,9 @@ pub const RocksDb = struct {
             c.rocksdb_free(err);
             return error.RocksDbWrite;
         }
+        self.set_hash = next_hash;
+        self.utxo_count = 1;
+        self.validated_height = 2;
     }
 };
 
@@ -725,7 +809,7 @@ pub fn encodeUndoValue(allocator: std.mem.Allocator, entries: []const UndoEntry)
     return bytes.toOwnedSlice(allocator);
 }
 
-fn decodeUtxoValue(allocator: std.mem.Allocator, outpoint: Outpoint, value: []const u8) !StoredUtxo {
+pub fn decodeUtxoValue(allocator: std.mem.Allocator, outpoint: Outpoint, value: []const u8) !StoredUtxo {
     if (value.len < 17) return error.UtxoValueTooShort;
     const height = std.mem.readInt(u32, value[0..4], .big);
     const value_sats = std.mem.readInt(u64, value[4..12], .big);
@@ -747,7 +831,19 @@ fn putMetaBatch(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, na
     c.rocksdb_writebatch_put(batch, key.ptr, key.len, value.ptr, value.len);
 }
 
-fn putCommitMetadata(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, height: u32, block_hash: [32]u8, utxo_count: i64) !void {
+pub fn foldSpends(allocator: std.mem.Allocator, set_hash: *store.SetHash, spent: []const Outpoint, undo_entries: []const UndoEntry) !void {
+    if (spent.len != undo_entries.len) return error.SpendUndoMismatch;
+    for (undo_entries, spent) |entry, outpoint| {
+        if (!std.mem.eql(u8, &entry.outpoint.txid, &outpoint.txid) or entry.outpoint.vout != outpoint.vout) return error.SpendUndoMismatch;
+        const key = try encodeUtxoKey(allocator, "testnet4", outpoint);
+        defer allocator.free(key);
+        const value = try encodeUtxoValue(allocator, entry.utxo);
+        defer allocator.free(value);
+        store.foldSetHash(set_hash, key, value);
+    }
+}
+
+fn putCommitMetadata(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, height: u32, block_hash: [32]u8, utxo_count: i64, set_hash: store.SetHash) !void {
     const tip_key = try encodeTipKey(allocator, "testnet4");
     defer allocator.free(tip_key);
     const tip_value = try encodeTipValue(allocator, height, block_hash);
@@ -780,6 +876,8 @@ fn putCommitMetadata(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_
     const counter_value = try std.fmt.allocPrint(allocator, "{}", .{utxo_count});
     defer allocator.free(counter_value);
     c.rocksdb_writebatch_put(batch, counter_key.ptr, counter_key.len, counter_value.ptr, counter_value.len);
+    const set_hash_hex = store.writeSetHashHex(set_hash);
+    try putMetaBatch(allocator, batch, "chainstate_set_hash", set_hash_hex[0..]);
 }
 
 pub const CommitTimings = struct {
@@ -788,9 +886,10 @@ pub const CommitTimings = struct {
     undo_put_prepare: i64 = 0,
     metadata_put_prepare: i64 = 0,
     rocksdb_write: i64 = 0,
+    set_hash_fold: i64 = 0,
 
     pub fn total(self: CommitTimings) i64 {
-        return self.utxo_delete_prepare + self.utxo_put_prepare + self.undo_put_prepare + self.metadata_put_prepare + self.rocksdb_write;
+        return self.utxo_delete_prepare + self.utxo_put_prepare + self.undo_put_prepare + self.metadata_put_prepare + self.rocksdb_write + self.set_hash_fold;
     }
 };
 
@@ -826,6 +925,7 @@ pub const ConnectTimings = struct {
     undo_put_prepare: i64 = 0,
     metadata_put_prepare: i64 = 0,
     rocksdb_write: i64 = 0,
+    set_hash_fold: i64 = 0,
     block_connect_store_commit: i64 = 0,
 };
 
@@ -947,7 +1047,7 @@ pub const ScriptVerifyRunner = struct {
 
 pub fn connectDecodedBlock(
     allocator: std.mem.Allocator,
-    db: *RocksDb,
+    db: anytype,
     height: u32,
     target: u32,
     info: block.BlockInfo,
@@ -1094,6 +1194,7 @@ pub fn connectDecodedBlock(
     timings.undo_put_prepare += commit_timings.undo_put_prepare;
     timings.metadata_put_prepare += commit_timings.metadata_put_prepare;
     timings.rocksdb_write += commit_timings.rocksdb_write;
+    timings.set_hash_fold += commit_timings.set_hash_fold;
     timings.utxo_apply += timings.commit;
     timings.block_connect_store_commit += elapsedMs(block_started);
 
@@ -1376,6 +1477,208 @@ fn hexNibble(ch: u8) !u8 {
         'A'...'F' => ch - 'A' + 10,
         else => error.InvalidHex,
     };
+}
+
+pub const DatadirLock = struct {
+    fd: std.c.fd_t,
+
+    pub fn acquire(allocator: std.mem.Allocator, datadir: []const u8) !DatadirLock {
+        const path = try std.fs.path.join(allocator, &.{ datadir, PortInfo.lock_file });
+        defer allocator.free(path);
+        const path_z = try allocator.dupeZ(u8, path);
+        defer allocator.free(path_z);
+        const fd = std.c.open(path_z, .{
+            .ACCMODE = .RDWR,
+            .CREAT = true,
+            .CLOEXEC = true,
+        }, @as(std.c.mode_t, 0o644));
+        if (fd < 0) return error.DatadirLock;
+        if (std.c.flock(fd, std.posix.LOCK.EX | std.posix.LOCK.NB) != 0) {
+            _ = std.c.close(fd);
+            return error.DatadirBusy;
+        }
+        return .{ .fd = fd };
+    }
+
+    pub fn release(self: DatadirLock) void {
+        _ = std.c.flock(self.fd, std.posix.LOCK.UN);
+        _ = std.c.close(self.fd);
+    }
+};
+
+pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
+    return struct {
+        primary: *Primary,
+        shadow: *Shadow,
+        primary_utxo_load_ms: i64 = 0,
+        shadow_utxo_load_ms: i64 = 0,
+        primary_commit_ms: i64 = 0,
+        shadow_commit_ms: i64 = 0,
+        primary_set_hash_fold_ms: i64 = 0,
+        shadow_set_hash_fold_ms: i64 = 0,
+        primary_record_block_ms: i64 = 0,
+        shadow_record_block_ms: i64 = 0,
+        divergence_count: u64 = 0,
+
+        const Self = @This();
+
+        pub fn init(primary: *Primary, shadow: *Shadow) Self {
+            return .{ .primary = primary, .shadow = shadow };
+        }
+
+        pub fn setHash(self: *Self) store.SetHash {
+            return self.primary.setHash();
+        }
+
+        pub fn put(self: *Self, key: []const u8, value: []const u8) !void {
+            try self.primary.put(key, value);
+            try self.shadow.put(key, value);
+        }
+
+        pub fn getAlloc(self: *Self, allocator: std.mem.Allocator, key: []const u8) !?[]u8 {
+            const primary_value = try self.primary.getAlloc(allocator, key);
+            const shadow_value = try self.shadow.getAlloc(allocator, key);
+            defer if (shadow_value) |bytes| allocator.free(bytes);
+            if (!store.rawEqual(primary_value, shadow_value)) {
+                if (primary_value) |bytes| allocator.free(bytes);
+                return self.fail("get", 0);
+            }
+            return primary_value;
+        }
+
+        pub fn getManyUtxoRaw(self: *Self, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint, stats: ?*UtxoLoadStats) ![]?[]u8 {
+            const started = store.nowMs();
+            const primary_raw = try self.primary.getManyUtxoRaw(allocator, chain, outpoints, stats);
+            self.primary_utxo_load_ms += elapsedMs(started);
+            errdefer freeRaw(allocator, primary_raw);
+            const shadow_started = store.nowMs();
+            const shadow_raw = try self.shadow.getManyUtxoRaw(allocator, chain, outpoints, null);
+            self.shadow_utxo_load_ms += elapsedMs(shadow_started);
+            defer freeRaw(allocator, shadow_raw);
+            for (primary_raw, shadow_raw, 0..) |primary_value, shadow_value, index| {
+                if (!store.rawEqual(primary_value, shadow_value)) return self.fail("get_many", index);
+            }
+            return primary_raw;
+        }
+
+        pub fn getManyUtxosWithStats(self: *Self, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint, stats: ?*UtxoLoadStats) ![]?StoredUtxo {
+            const raw = try self.getManyUtxoRaw(allocator, chain, outpoints, stats);
+            defer freeRaw(allocator, raw);
+            const out = try allocator.alloc(?StoredUtxo, outpoints.len);
+            var decoded: usize = 0;
+            errdefer {
+                for (out[0..decoded]) |value| if (value) |utxo| utxo.deinit(allocator);
+                allocator.free(out);
+            }
+            for (outpoints, raw, 0..) |outpoint, value, i| {
+                out[i] = if (value) |bytes| try decodeUtxoValue(allocator, outpoint, bytes) else null;
+                decoded += 1;
+            }
+            return out;
+        }
+
+        pub fn recordBlock(self: *Self, allocator: std.mem.Allocator, height: u32, hash: [32]u8, raw: []const u8) !void {
+            const started = store.nowMs();
+            try self.primary.recordBlock(allocator, height, hash, raw);
+            self.primary_record_block_ms += elapsedMs(started);
+            const shadow_started = store.nowMs();
+            try self.shadow.recordBlock(allocator, height, hash, raw);
+            self.shadow_record_block_ms += elapsedMs(shadow_started);
+        }
+
+        pub fn commitBlock(self: *Self, allocator: std.mem.Allocator, commit: ChainstateBlockCommit) !CommitTimings {
+            return self.commitBoth(allocator, commit, null);
+        }
+
+        pub fn commitConnectedBlock(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            height: u32,
+            block_hash: [32]u8,
+            spent_external: []const Outpoint,
+            undo_entries: []const UndoEntry,
+            transactions: []const tx.Transaction,
+            txids: []const [32]u8,
+            spent: *std.AutoHashMap(Outpoint, void),
+            new_utxo_count: i64,
+        ) !CommitTimings {
+            const started = store.nowMs();
+            const primary_timings = try self.primary.commitConnectedBlock(allocator, height, block_hash, spent_external, undo_entries, transactions, txids, spent, new_utxo_count);
+            self.notePrimaryCommit(primary_timings, elapsedMs(started));
+            const shadow_started = store.nowMs();
+            const shadow_timings = try self.shadow.commitConnectedBlock(allocator, height, block_hash, spent_external, undo_entries, transactions, txids, spent, new_utxo_count);
+            self.noteShadowCommit(shadow_timings, elapsedMs(shadow_started));
+            try self.expectTip();
+            return primary_timings;
+        }
+
+        pub fn readMetadata(self: *Self, allocator: std.mem.Allocator) !Metadata {
+            const primary_meta = try self.primary.readMetadata(allocator);
+            const shadow_meta = try self.shadow.readMetadata(allocator);
+            defer self.shadow.deinitMetadata(allocator, shadow_meta);
+            if (primary_meta.validated_height != shadow_meta.validated_height or
+                primary_meta.chainstate_utxo_count != shadow_meta.chainstate_utxo_count or
+                !std.mem.eql(u8, primary_meta.validated_hash, shadow_meta.validated_hash) or
+                !std.mem.eql(u8, primary_meta.chainstate_set_hash, shadow_meta.chainstate_set_hash))
+            {
+                self.primary.deinitMetadata(allocator, primary_meta);
+                return self.fail("read_metadata", 0);
+            }
+            return primary_meta;
+        }
+
+        pub fn deinitMetadata(self: *Self, allocator: std.mem.Allocator, meta: Metadata) void {
+            self.primary.deinitMetadata(allocator, meta);
+        }
+
+        fn commitBoth(self: *Self, allocator: std.mem.Allocator, commit: ChainstateBlockCommit, _: ?void) !CommitTimings {
+            const started = store.nowMs();
+            const primary_timings = try self.primary.commitBlock(allocator, commit);
+            self.notePrimaryCommit(primary_timings, elapsedMs(started));
+            const shadow_started = store.nowMs();
+            const shadow_timings = try self.shadow.commitBlock(allocator, commit);
+            self.noteShadowCommit(shadow_timings, elapsedMs(shadow_started));
+            try self.expectTip();
+            return primary_timings;
+        }
+
+        fn notePrimaryCommit(self: *Self, timings: CommitTimings, elapsed: i64) void {
+            self.primary_commit_ms += elapsed;
+            self.primary_set_hash_fold_ms += timings.set_hash_fold;
+        }
+
+        fn noteShadowCommit(self: *Self, timings: CommitTimings, elapsed: i64) void {
+            self.shadow_commit_ms += elapsed;
+            self.shadow_set_hash_fold_ms += timings.set_hash_fold;
+        }
+
+        fn expectTip(self: *Self) !void {
+            const primary_hash = self.primary.setHash();
+            const shadow_hash = self.shadow.setHash();
+            if (!std.mem.eql(u8, &primary_hash, &shadow_hash) or
+                self.primary.utxo_count != self.shadow.utxo_count or
+                self.primary.validated_height != self.shadow.validated_height)
+            {
+                return self.fail("commit", 0);
+            }
+        }
+
+        fn fail(self: *Self, op: []const u8, index: usize) error{StoreDivergence} {
+            self.divergence_count += 1;
+            const primary_hash = store.writeSetHashHex(self.primary.setHash());
+            const shadow_hash = store.writeSetHashHex(self.shadow.setHash());
+            std.debug.print(
+                "{{\"schema\":\"port.native_store.divergence.v1\",\"op\":\"{s}\",\"index\":{},\"primary_height\":{},\"shadow_height\":{},\"primary_utxo_count\":{},\"shadow_utxo_count\":{},\"primary_set_hash\":\"{s}\",\"shadow_set_hash\":\"{s}\"}}\n",
+                .{ op, index, self.primary.validated_height, self.shadow.validated_height, self.primary.utxo_count, self.shadow.utxo_count, primary_hash[0..], shadow_hash[0..] },
+            );
+            return error.StoreDivergence;
+        }
+    };
+}
+
+fn freeRaw(allocator: std.mem.Allocator, values: []?[]u8) void {
+    for (values) |value| if (value) |bytes| allocator.free(bytes);
+    allocator.free(values);
 }
 
 test "codec v2 golden vectors" {

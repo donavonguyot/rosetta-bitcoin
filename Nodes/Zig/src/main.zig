@@ -54,7 +54,7 @@ pub fn main(init: std.process.Init) !void {
         try cmdStorageProof(allocator, io, out, args[2..], surface);
     } else if (std.mem.eql(u8, command, "script-corpus")) {
         try cmdScriptCorpus(allocator, io, out, args[2..], surface);
-    } else if (std.mem.eql(u8, command, "local-reference-proof")) {
+    } else if (std.mem.eql(u8, command, "local-reference-proof") or std.mem.eql(u8, command, "sync")) {
         const prefetch_text = init.environ_map.get("PREFETCH_DEPTH") orelse "4";
         const script_threads_text = init.environ_map.get("ZIGBITNODE_SCRIPT_THREADS") orelse "";
         const default_peer = init.environ_map.get("REFERENCE_P2P_PEER") orelse "127.0.0.1:48333";
@@ -72,13 +72,13 @@ pub fn main(init: std.process.Init) !void {
 fn usage(out: anytype) !void {
     try out.print(
         \\zigbitnode commands:
-        \\  status [--datadir ./data-zig]
-        \\  storage-proof [--datadir ./data-zig] [--output path]
+        \\  status [--datadir ./data-zig] [--store=rocksdb|native]
+        \\  storage-proof [--datadir ./data-zig] [--output path] [--store=rocksdb|native]
         \\  codec-vectors
         \\  native-crypto-vectors
         \\  test-capability --kind crypto-vectors --outcome-path path [--mutation schnorr-accept-bad-s|schnorr-accept-bad-xonly|taproot-ignore-output-check]
         \\  script-corpus [--manifest path] [--output path] [--shadow-crypto]
-        \\  local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--crypto-backend libsecp256k1|zig-secp256k1]
+        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append]
         \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
         \\
     , .{});
@@ -101,6 +101,7 @@ fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u
     var utxo_count: []const u8 = "0";
     var chainstate_status: []const u8 = "missing";
     var sync_status: []const u8 = "starting";
+    var set_hash: []const u8 = "0000000000000000000000000000000000000000000000000000000000000000";
     if (core.RocksDb.open(allocator, db_path)) |db0| {
         var db = db0;
         defer db.close();
@@ -115,12 +116,13 @@ fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validation_crypto_backend"))) |value| validation_crypto = value;
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "crypto_source_digest"))) |value| crypto_digest = value;
         if (try db.getAlloc(allocator, tryMetadataKey(allocator, "sync_status"))) |value| sync_status = value;
-        chainstate_status = if (std.mem.eql(u8, backend, "rocksdb")) "usable" else "missing";
+        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_set_hash"))) |value| set_hash = value;
+        chainstate_status = if (std.mem.eql(u8, backend, "rocksdb") or std.mem.eql(u8, backend, "native")) "usable" else "missing";
     } else |_| {}
 
     try out.print(
-        "{{\"schema\":\"port.status.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"datadir\":\"{s}\",\"sync_status\":\"{s}\",\"chainstate_backend\":\"{s}\",\"chainstate_status\":\"{s}\",\"validated_height\":{s},\"validated_hash\":\"{s}\",\"header_height\":{s},\"header_hash\":\"{s}\",\"stored_block_height\":{s},\"stored_block_hash\":\"{s}\",\"chainstate_utxo_count\":{s},\"native_crypto_backend\":\"{s}\",\"native_crypto_available\":{},\"taproot_tweak_backend\":\"{s}\",\"crypto_backend\":\"{s}\",\"crypto_source_digest\":\"{s}\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\"}}\n",
-        .{ surface, datadir, sync_status, backend, chainstate_status, validated_height, validated_hash, header_height, header_hash, stored_block_height, stored_block_hash, utxo_count, validation_crypto, std.mem.eql(u8, validation_crypto, "libsecp256k1"), validation_crypto, validation_crypto, crypto_digest },
+        "{{\"schema\":\"port.status.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"datadir\":\"{s}\",\"sync_status\":\"{s}\",\"chainstate_backend\":\"{s}\",\"chainstate_status\":\"{s}\",\"validated_height\":{s},\"validated_hash\":\"{s}\",\"header_height\":{s},\"header_hash\":\"{s}\",\"stored_block_height\":{s},\"stored_block_hash\":\"{s}\",\"chainstate_utxo_count\":{s},\"chainstate_set_hash\":\"{s}\",\"native_crypto_backend\":\"{s}\",\"native_crypto_available\":{},\"taproot_tweak_backend\":\"{s}\",\"crypto_backend\":\"{s}\",\"crypto_source_digest\":\"{s}\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\"}}\n",
+        .{ surface, datadir, sync_status, backend, chainstate_status, validated_height, validated_hash, header_height, header_hash, stored_block_height, stored_block_hash, utxo_count, set_hash, validation_crypto, std.mem.eql(u8, validation_crypto, "libsecp256k1"), validation_crypto, validation_crypto, crypto_digest },
     );
 }
 
@@ -380,6 +382,8 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     const datadir = valueArg(args, "--datadir") orelse core.PortInfo.default_datadir;
     const output = valueArg(args, "--output") orelse (ResultPaths{}).storage;
     try std.Io.Dir.cwd().createDirPath(io, datadir);
+    var lock = try core.DatadirLock.acquire(allocator, datadir);
+    defer lock.release();
     const marker_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.marker_file });
     defer allocator.free(marker_path);
     try writeFileEnsuringParent(io, marker_path, "zig native storage\n");
@@ -486,6 +490,34 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
 }
 
 fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8, script_threads_text: []const u8, default_peer: []const u8, default_crypto_backend: []const u8) !void {
+    const datadir = valueArg(args, "--datadir") orelse "/data";
+    const store_name = valueArg(args, "--store") orelse "rocksdb";
+    if (!std.mem.eql(u8, store_name, "rocksdb")) return error.UnsupportedStore;
+    const shadow = flagArg(args, "--shadow");
+    try std.Io.Dir.cwd().createDirPath(io, datadir);
+    var lock = try core.DatadirLock.acquire(allocator, datadir);
+    defer lock.release();
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
+    defer allocator.free(db_path);
+    try std.Io.Dir.cwd().createDirPath(io, db_path);
+    if (shadow) {
+        const shadow_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_shadow_dir });
+        defer allocator.free(shadow_path);
+        try std.Io.Dir.cwd().createDirPath(io, shadow_path);
+        var primary = try core.RocksDb.open(allocator, db_path);
+        defer primary.close();
+        var shadow_db = try core.RocksDb.open(allocator, shadow_path);
+        defer shadow_db.close();
+        var pair = core.ShadowStore(core.RocksDb, core.RocksDb).init(&primary, &shadow_db);
+        try runLocalReferenceProof(allocator, io, out, args, surface, prefetch_text, script_threads_text, default_peer, default_crypto_backend, &pair, db_path, true);
+    } else {
+        var db = try core.RocksDb.open(allocator, db_path);
+        defer db.close();
+        try runLocalReferenceProof(allocator, io, out, args, surface, prefetch_text, script_threads_text, default_peer, default_crypto_backend, &db, db_path, false);
+    }
+}
+
+fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8, script_threads_text: []const u8, default_peer: []const u8, default_crypto_backend: []const u8, db: anytype, db_path: []const u8, shadow: bool) !void {
     const target_text = valueArg(args, "--target") orelse "5000";
     const peer = valueArg(args, "--peer") orelse default_peer;
     const output = valueArg(args, "--output") orelse (ResultPaths{}).proof;
@@ -493,7 +525,7 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const crypto_backend = parseScriptCryptoBackend(valueArg(args, "--crypto-backend") orelse default_crypto_backend) orelse return error.UnsupportedCryptoBackend;
     const crypto_label = crypto_backend.label();
     if (core.crypto.own_curve != (crypto_backend == .own_curve)) return error.CryptoBackendNotCompiled;
-    const comparable = crypto_backend == .native;
+    const comparable = crypto_backend == .native and !shadow;
     const target = try std.fmt.parseInt(u32, target_text, 10);
     const profile = proofProfile(target) orelse return error.UnsupportedProofTarget;
     const prefetch_raw = std.fmt.parseInt(usize, prefetch_text, 10) catch 4;
@@ -508,12 +540,6 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const marker_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.marker_file });
     defer allocator.free(marker_path);
     try writeFileEnsuringParent(io, marker_path, "zig native storage\n");
-
-    const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
-    defer allocator.free(db_path);
-    try std.Io.Dir.cwd().createDirPath(io, db_path);
-    var db = try core.RocksDb.open(allocator, db_path);
-    defer db.close();
 
     if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validation_crypto_backend"))) |previous| {
         defer allocator.free(previous);
@@ -580,7 +606,7 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             try db.recordBlock(allocator, fetched.height, decoded.info.hash, fetched.raw);
             timing.block_store += elapsedMs(store_started);
             const connect_started = core.nowMs();
-            var connect = try core.connectDecodedBlock(allocator, &db, fetched.height, target, decoded.info, decoded.transactions, script_runner, last_utxos);
+            var connect = try core.connectDecodedBlock(allocator, db, fetched.height, target, decoded.info, decoded.transactions, script_runner, last_utxos);
             defer connect.deinit(allocator);
             timing.connect_total += elapsedMs(connect_started);
             timing.prevout_batch_load += connect.timings.prevout_batch_load;
@@ -608,7 +634,9 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             timing.undo_put_prepare += connect.timings.undo_put_prepare;
             timing.metadata_put_prepare += connect.timings.metadata_put_prepare;
             timing.rocksdb_write += connect.timings.rocksdb_write;
+            timing.set_hash_fold += connect.timings.set_hash_fold;
             timing.block_connect_store_commit += connect.timings.block_connect_store_commit;
+            timing.set_hash_hex = core.store.writeSetHashHex(db.setHash());
             blocks_connected += connect.blocks_connected;
             last_height = fetched.height;
             allocator.free(last_hash);
@@ -659,14 +687,40 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_gate\":\"{s}\",\"benchmark_kind\":\"{s}\",\"benchmark_lane\":\"{s}\",\"benchmark_comparability\":\"{s}\",\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"captured_at\":\"unix_ms:{}\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"{s}\",", .{ profile.benchmark_gate, profile.benchmark_kind, profile.benchmark_lane, if (comparable) "comparable" else "diagnostic_non_comparable", core.nowMs(), target, target, profile.target_label });
     try appendFmt(allocator, &json_buf, "\"runtime_surface\":\"{s}\",\"peer_mode\":\"local_reference\",\"peer\":\"{s}\",\"byte_source\":\"local_reference_p2p\",\"proof_mode\":\"p2p_sync\",\"prefetch_depth\":{},\"script_runner_mode\":\"parallel\",\"script_threads\":{},\"rocksdb_wal_disabled\":false,\"fresh_state\":{},\"resume_supported\":true,", .{ surface, peer, prefetch, script_runner.thread_count, fresh_state });
     try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"rocksdb\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":{},\"native_crypto_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"storage_codec_version\":2,", .{ datadir, db_path, crypto_backend == .native, crypto_label, crypto_label, crypto_label });
-    try appendFmt(allocator, &json_buf, "\"rocksdb_tuning\":\"{s}\",\"validated_height\":{},\"validated_hash\":\"{s}\",\"header_height\":{},\"stored_block_height\":{},\"blocks_fetched\":{},\"blocks_connected\":{},\"chainstate_utxo_count\":{},", .{ core.RocksDb.tuningDescription(), final_meta.validated_height, last_hash, final_meta.header_height, final_meta.stored_block_height, blocks_fetched, blocks_connected, final_meta.chainstate_utxo_count });
+    try appendFmt(allocator, &json_buf, "\"rocksdb_tuning\":\"{s}\",\"validated_height\":{},\"validated_hash\":\"{s}\",\"header_height\":{},\"stored_block_height\":{},\"blocks_fetched\":{},\"blocks_connected\":{},\"chainstate_utxo_count\":{},\"chainstate_set_hash\":\"{s}\",", .{ core.RocksDb.tuningDescription(), final_meta.validated_height, last_hash, final_meta.header_height, final_meta.stored_block_height, blocks_fetched, blocks_connected, final_meta.chainstate_utxo_count, final_meta.chainstate_set_hash });
     try appendFmt(allocator, &json_buf, "\"utxo_accounting_policy\":\"core_spendable_v1\",\"sync_status\":\"blocks_current\",\"local_reference_status\":\"target_reached\",\"status\":\"passed\",\"result\":\"passed\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\",\"failures\":[],\"reference_start_height\":0,\"reference_start_hash\":\"00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043\",\"reference_finish_height\":{},\"reference_finish_hash\":\"{s}\",", .{ target, last_hash });
     try appendFmt(allocator, &json_buf, "\"pipeline_timing_summary\":{{\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"block_store\":{},\"connect_total\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"script_worker_elapsed_ns\":{},\"script_worker_thread_cpu_ns\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.block_store, timing.connect_total, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.script_worker_elapsed_ns, timing.script_worker_thread_cpu_ns, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
     try appendFmt(allocator, &json_buf, "\"timing_summary\":{{\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"script_worker_elapsed_ns\":{},\"script_worker_thread_cpu_ns\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.script_worker_elapsed_ns, timing.script_worker_thread_cpu_ns, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
+    try appendFmt(allocator, &json_buf, "\"set_hash_fold_ms\":{},", .{timing.set_hash_fold});
     try appendFmt(allocator, &json_buf, "\"telemetry_summary\":{{\"telemetry_quality\":\"clean\",\"tick_count\":{},\"heartbeat_max_gap_ms\":0,\"lifecycle_markers\":{{\"run_started\":0,\"container_started\":0,\"node_started\":0,\"first_peer_byte\":0,\"first_block_connected\":0,\"target_reached\":{},\"run_finished\":{}}},\"phase_counts\":{{}},\"stall_class_counts\":{{\"none\":{}}},\"slow_blocks\":[{s}]}}}}\n", .{ telemetry_tick_count, total_ms, total_ms, telemetry_tick_count, slow_json });
     const json = json_buf.items;
     try writeFileEnsuringParent(io, output, json);
     try out.print("{s}", .{json});
+    if (@hasField(@TypeOf(db.*), "divergence_count")) {
+        const primary_hash = core.store.writeSetHashHex(db.primary.setHash());
+        const shadow_hash = core.store.writeSetHashHex(db.shadow.setHash());
+        try out.print(
+            "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"shadow_rocksdb\",\"height\":{},\"divergence_count\":{},\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash_fold_ms\":{},\"primary_set_hash\":\"{s}\",\"shadow_set_hash\":\"{s}\",\"engines\":{{\"primary\":{{\"utxo_load\":{},\"commit\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}},\"shadow\":{{\"utxo_load\":{},\"commit\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}}}},\"total_ms\":{}}}\n",
+            .{
+                target,
+                db.divergence_count,
+                core.store.peakRssBytes(),
+                timing.set_hash_fold,
+                primary_hash[0..],
+                shadow_hash[0..],
+                db.primary_utxo_load_ms,
+                db.primary_commit_ms,
+                timing.block_connect_store_commit,
+                db.primary_set_hash_fold_ms,
+                db.shadow_utxo_load_ms,
+                db.shadow_commit_ms,
+                db.shadow_utxo_load_ms + db.shadow_commit_ms,
+                db.shadow_set_hash_fold_ms,
+                total_ms,
+            },
+        );
+        if (db.divergence_count != 0) return error.StoreDivergence;
+    }
 }
 
 const ProofTiming = struct {
@@ -699,7 +753,9 @@ const ProofTiming = struct {
     undo_put_prepare: i64 = 0,
     metadata_put_prepare: i64 = 0,
     rocksdb_write: i64 = 0,
+    set_hash_fold: i64 = 0,
     block_connect_store_commit: i64 = 0,
+    set_hash_hex: [64]u8 = [_]u8{'0'} ** 64,
 };
 
 fn proofProfile(target: u32) ?ProofProfile {
@@ -778,12 +834,12 @@ fn emitTelemetryTick(
         .{ timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.script_worker_elapsed_ns, timing.script_worker_thread_cpu_ns },
     );
     try out.print(
-        "\"timing_buckets_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}}}}\n",
-        .{ timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit },
+        "\"timing_buckets_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"set_hash_fold\":{},\"block_connect_store_commit\":{}}}}}\n",
+        .{ timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.set_hash_fold, timing.block_connect_store_commit },
     );
     try out.print(
-        "rb.port_progress {{\"crypto_source_digest\":\"{s}\",\"crypto_lane\":\"{s}\",\"chain\":\"testnet4\",\"sync_status\":\"{s}\",\"header_height\":{},\"validated_height\":{},\"validated_hash\":\"{s}\",\"stored_block_height\":{},\"chainstate_utxo_count\":{},\"current_blocker\":null,\"peer\":\"{s}\",\"current_block_height\":{},\"current_block_hash\":\"{s}\",\"current_block_tx_count\":{},\"current_block_vin_count\":{},\"current_block_script_input_count\":{},\"last_block_ms\":{},\"native_crypto_backend\":\"{s}\",\"timing_buckets_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"block_connect_store_commit\":{}}}}}\n",
-        .{ core.crypto.source_digest, if (std.mem.eql(u8, crypto_backend, "libsecp256k1-zig")) "own_curve" else if (std.mem.eql(u8, crypto_backend, "zig-secp256k1")) "ecosystem_curve" else "c_binding", if (height >= profile.target) "blocks_current" else "blocks_syncing", height, height, hash, height, utxos, peer, height, hash, timing.tx_count, timing.input_count, timing.script_jobs, last_block_ms, crypto_backend, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.block_connect_store_commit },
+        "rb.port_progress {{\"crypto_source_digest\":\"{s}\",\"crypto_lane\":\"{s}\",\"chain\":\"testnet4\",\"sync_status\":\"{s}\",\"header_height\":{},\"validated_height\":{},\"validated_hash\":\"{s}\",\"stored_block_height\":{},\"chainstate_utxo_count\":{},\"chainstate_set_hash\":\"{s}\",\"current_blocker\":null,\"peer\":\"{s}\",\"current_block_height\":{},\"current_block_hash\":\"{s}\",\"current_block_tx_count\":{},\"current_block_vin_count\":{},\"current_block_script_input_count\":{},\"last_block_ms\":{},\"native_crypto_backend\":\"{s}\",\"timing_buckets_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"utxo_load\":{},\"script_verify\":{},\"utxo_apply\":{},\"commit\":{},\"set_hash_fold\":{},\"block_connect_store_commit\":{}}}}}\n",
+        .{ core.crypto.source_digest, if (std.mem.eql(u8, crypto_backend, "libsecp256k1-zig")) "own_curve" else if (std.mem.eql(u8, crypto_backend, "zig-secp256k1")) "ecosystem_curve" else "c_binding", if (height >= profile.target) "blocks_current" else "blocks_syncing", height, height, hash, height, utxos, timing.set_hash_hex[0..], peer, height, hash, timing.tx_count, timing.input_count, timing.script_jobs, last_block_ms, crypto_backend, timing.p2p_fetch, timing.block_parse_validate, timing.utxo_load, timing.script_verify, timing.utxo_apply, timing.commit, timing.set_hash_fold, timing.block_connect_store_commit },
     );
     try out.flush();
 }
@@ -958,7 +1014,9 @@ fn cmdSupervisorOnce(allocator: std.mem.Allocator, out: anytype, args: []const [
 fn valueArg(args: []const []const u8, name: []const u8) ?[]const u8 {
     var i: usize = 0;
     while (i < args.len) : (i += 1) {
-        if (std.mem.eql(u8, args[i], name) and i + 1 < args.len) return args[i + 1];
+        const arg = args[i];
+        if (std.mem.eql(u8, arg, name) and i + 1 < args.len) return args[i + 1];
+        if (std.mem.startsWith(u8, arg, name) and arg.len > name.len and arg[name.len] == '=') return arg[name.len + 1 ..];
     }
     return null;
 }
