@@ -888,6 +888,7 @@ pub const CommitTimings = struct {
     metadata_put_prepare: i64 = 0,
     rocksdb_write: i64 = 0,
     set_hash_fold: i64 = 0,
+    snapshot: i64 = 0,
 
     pub fn total(self: CommitTimings) i64 {
         return self.utxo_delete_prepare + self.utxo_put_prepare + self.undo_put_prepare + self.metadata_put_prepare + self.rocksdb_write + self.set_hash_fold;
@@ -927,6 +928,7 @@ pub const ConnectTimings = struct {
     metadata_put_prepare: i64 = 0,
     rocksdb_write: i64 = 0,
     set_hash_fold: i64 = 0,
+    snapshot: i64 = 0,
     block_connect_store_commit: i64 = 0,
 };
 
@@ -1189,7 +1191,9 @@ pub fn connectDecodedBlock(
 
     const commit_started = nowMs();
     const commit_timings = try db.commitConnectedBlock(allocator, height, info.hash, external_spends.items, undo_entries.items, transactions, txids, &spent, new_utxo_count);
-    timings.commit += elapsedMs(commit_started);
+    const commit_wall = elapsedMs(commit_started);
+    timings.commit += if (commit_timings.snapshot > commit_wall) 0 else commit_wall - commit_timings.snapshot;
+    timings.snapshot += commit_timings.snapshot;
     timings.utxo_delete_prepare += commit_timings.utxo_delete_prepare;
     timings.utxo_put_prepare += commit_timings.utxo_put_prepare;
     timings.undo_put_prepare += commit_timings.undo_put_prepare;
@@ -1517,6 +1521,8 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
         shadow_commit_ms: i64 = 0,
         primary_set_hash_fold_ms: i64 = 0,
         shadow_set_hash_fold_ms: i64 = 0,
+        primary_snapshot_ms: i64 = 0,
+        shadow_snapshot_ms: i64 = 0,
         primary_record_block_ms: i64 = 0,
         shadow_record_block_ms: i64 = 0,
         divergence_count: u64 = 0,
@@ -1644,12 +1650,14 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
         }
 
         fn notePrimaryCommit(self: *Self, timings: CommitTimings, elapsed: i64) void {
-            self.primary_commit_ms += elapsed;
+            self.primary_commit_ms += if (timings.snapshot > elapsed) 0 else elapsed - timings.snapshot;
+            self.primary_snapshot_ms += timings.snapshot;
             self.primary_set_hash_fold_ms += timings.set_hash_fold;
         }
 
         fn noteShadowCommit(self: *Self, timings: CommitTimings, elapsed: i64) void {
-            self.shadow_commit_ms += elapsed;
+            self.shadow_commit_ms += if (timings.snapshot > elapsed) 0 else elapsed - timings.snapshot;
+            self.shadow_snapshot_ms += timings.snapshot;
             self.shadow_set_hash_fold_ms += timings.set_hash_fold;
         }
 

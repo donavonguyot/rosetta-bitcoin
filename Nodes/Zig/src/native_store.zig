@@ -5,7 +5,7 @@ const store = root.store;
 pub const CrashPoint = enum { none, before_append, after_append };
 
 pub const OpenOptions = struct {
-    snapshot_every: u32 = 1000,
+    snapshot_every: u32 = 10000,
     fsync_enabled: bool = false,
     crash_after_block: ?u32 = null,
     crash_point: CrashPoint = .none,
@@ -525,7 +525,9 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
         try self.crashCommit(height, .after_append);
         try self.applyPayload(payload.slice());
         if (self.options.snapshot_every != 0 and height > 0 and height % self.options.snapshot_every == 0) {
+            const snapshot_started = store.nowMs();
             try self.writeSnapshot();
+            timings.snapshot += elapsedMs(snapshot_started);
         }
     }
 
@@ -538,17 +540,16 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
 
     fn appendRecord(self: *NativeStore, payload: []const u8) !void {
         if (payload.len > std.math.maxInt(u32)) return error.RecordTooLarge;
-        var header: [4]u8 = undefined;
-        std.mem.writeInt(u32, &header, @intCast(payload.len), .little);
-        var crc_bytes: [4]u8 = undefined;
-        std.mem.writeInt(u32, &crc_bytes, std.hash.Crc32.hash(payload), .little);
+        const framed = try self.allocator.alloc(u8, 8 + payload.len);
+        defer self.allocator.free(framed);
+        std.mem.writeInt(u32, framed[0..4], @intCast(payload.len), .little);
+        @memcpy(framed[4..][0..payload.len], payload);
+        std.mem.writeInt(u32, framed[4 + payload.len ..][0..4], std.hash.Crc32.hash(framed[0 .. 4 + payload.len]), .little);
         const off = self.log_len;
-        try pwriteAll(self.log_fd, &header, off);
-        try pwriteAll(self.log_fd, payload, off + 4);
-        try pwriteAll(self.log_fd, &crc_bytes, off + 4 + payload.len);
+        try pwriteAll(self.log_fd, framed, off);
         try self.syncFd(self.log_fd);
         self.last_record_off = off;
-        self.log_len = off + 8 + payload.len;
+        self.log_len = off + framed.len;
     }
 
     fn applyPayload(self: *NativeStore, payload: []const u8) !void {
@@ -800,7 +801,7 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
             }
             const payload = bytes[offset + 4 .. offset + 4 + payload_len];
             const crc = std.mem.readInt(u32, bytes[offset + 4 + payload_len ..][0..4], .little);
-            if (crc != std.hash.Crc32.hash(payload)) {
+            if (crc != std.hash.Crc32.hash(bytes[offset .. offset + 4 + payload_len])) {
                 try self.noteTorn(offset);
                 return;
             }

@@ -697,6 +697,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             timing.metadata_put_prepare += connect.timings.metadata_put_prepare;
             timing.rocksdb_write += connect.timings.rocksdb_write;
             timing.set_hash_fold += connect.timings.set_hash_fold;
+            timing.snapshot += connect.timings.snapshot;
             timing.block_connect_store_commit += connect.timings.block_connect_store_commit;
             timing.set_hash_hex = core.store.writeSetHashHex(db.setHash());
             blocks_connected += connect.blocks_connected;
@@ -762,7 +763,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
         const primary_hash = core.store.writeSetHashHex(db.primary.setHash());
         const shadow_hash = core.store.writeSetHashHex(db.shadow.setHash());
         try out.print(
-            "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"{s}\",\"height\":{},\"divergence_count\":{},\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash_fold_ms\":{},\"snapshot_count\":{},\"snapshot_bytes\":{},\"primary_set_hash\":\"{s}\",\"shadow_set_hash\":\"{s}\",\"engines\":{{\"primary\":{{\"utxo_load\":{},\"commit\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}},\"shadow\":{{\"utxo_load\":{},\"commit\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}}}},\"total_ms\":{}}}\n",
+            "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"{s}\",\"height\":{},\"divergence_count\":{},\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash_fold_ms\":{},\"snapshot_count\":{},\"snapshot_bytes\":{},\"primary_set_hash\":\"{s}\",\"shadow_set_hash\":\"{s}\",\"engines\":{{\"primary\":{{\"utxo_load\":{},\"commit\":{},\"snapshot_ms\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}},\"shadow\":{{\"utxo_load\":{},\"commit\":{},\"snapshot_ms\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}}}},\"total_ms\":{}}}\n",
             .{
                 shadowGateName(store_name, target),
                 target,
@@ -775,11 +776,13 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
                 shadow_hash[0..],
                 db.primary_utxo_load_ms,
                 db.primary_commit_ms,
+                db.primary_snapshot_ms,
                 timing.block_connect_store_commit,
                 db.primary_set_hash_fold_ms,
                 db.shadow_utxo_load_ms,
                 db.shadow_commit_ms,
-                db.shadow_utxo_load_ms + db.shadow_commit_ms,
+                db.shadow_snapshot_ms,
+                db.shadow_utxo_load_ms + db.shadow_commit_ms + db.shadow_snapshot_ms,
                 db.shadow_set_hash_fold_ms,
                 total_ms,
             },
@@ -819,6 +822,7 @@ const ProofTiming = struct {
     metadata_put_prepare: i64 = 0,
     rocksdb_write: i64 = 0,
     set_hash_fold: i64 = 0,
+    snapshot: i64 = 0,
     block_connect_store_commit: i64 = 0,
     set_hash_hex: [64]u8 = [_]u8{'0'} ** 64,
 };
