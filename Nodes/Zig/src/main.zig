@@ -1186,7 +1186,12 @@ fn jsonInteger(value: ?std.json.Value) ?i64 {
 }
 
 fn writeFileEnsuringParent(io: std.Io, path: []const u8, bytes: []const u8) !void {
-    if (std.fs.path.dirname(path)) |parent| try std.Io.Dir.cwd().createDirPath(io, parent);
+    if (std.fs.path.dirname(path)) |parent| {
+        // createDirPath("/tmp") returns NotDir on this Zig. An existing parent needs no create.
+        std.Io.Dir.cwd().access(io, parent, .{}) catch {
+            try std.Io.Dir.cwd().createDirPath(io, parent);
+        };
+    }
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = bytes, .flags = .{} });
 }
 
