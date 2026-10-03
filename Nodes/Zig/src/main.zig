@@ -86,7 +86,8 @@ fn usage(out: anytype) !void {
 
 fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u8, surface: []const u8) !void {
     const datadir = valueArg(args, "--datadir") orelse core.PortInfo.default_datadir;
-    const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
+    const store_name = valueArg(args, "--store") orelse "rocksdb";
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.PortInfo.native_dir else core.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
 
     var validated_height: []const u8 = "0";
@@ -102,21 +103,17 @@ fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u
     var chainstate_status: []const u8 = "missing";
     var sync_status: []const u8 = "starting";
     var set_hash: []const u8 = "0000000000000000000000000000000000000000000000000000000000000000";
-    if (core.RocksDb.open(allocator, db_path)) |db0| {
+    if (std.mem.eql(u8, store_name, "native")) {
+        if (core.native_store.NativeStore.open(allocator, db_path, .{})) |db0| {
+            var db = db0;
+            defer db.close();
+            try readStatusFields(allocator, &db, &validated_height, &validated_hash, &header_height, &header_hash, &stored_block_height, &stored_block_hash, &backend, &utxo_count, &validation_crypto, &crypto_digest, &sync_status, &set_hash);
+            chainstate_status = if (std.mem.eql(u8, backend, "rocksdb") or std.mem.eql(u8, backend, "native")) "usable" else "missing";
+        } else |_| {}
+    } else if (core.RocksDb.open(allocator, db_path)) |db0| {
         var db = db0;
         defer db.close();
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validated_height"))) |value| validated_height = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validated_hash"))) |value| validated_hash = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "header_height"))) |value| header_height = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "header_hash"))) |value| header_hash = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "stored_block_height"))) |value| stored_block_height = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "stored_block_hash"))) |value| stored_block_hash = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_backend"))) |value| backend = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_utxo_count"))) |value| utxo_count = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validation_crypto_backend"))) |value| validation_crypto = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "crypto_source_digest"))) |value| crypto_digest = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "sync_status"))) |value| sync_status = value;
-        if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_set_hash"))) |value| set_hash = value;
+        try readStatusFields(allocator, &db, &validated_height, &validated_hash, &header_height, &header_hash, &stored_block_height, &stored_block_hash, &backend, &utxo_count, &validation_crypto, &crypto_digest, &sync_status, &set_hash);
         chainstate_status = if (std.mem.eql(u8, backend, "rocksdb") or std.mem.eql(u8, backend, "native")) "usable" else "missing";
     } else |_| {}
 
@@ -124,6 +121,36 @@ fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u
         "{{\"schema\":\"port.status.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"datadir\":\"{s}\",\"sync_status\":\"{s}\",\"chainstate_backend\":\"{s}\",\"chainstate_status\":\"{s}\",\"validated_height\":{s},\"validated_hash\":\"{s}\",\"header_height\":{s},\"header_hash\":\"{s}\",\"stored_block_height\":{s},\"stored_block_hash\":\"{s}\",\"chainstate_utxo_count\":{s},\"chainstate_set_hash\":\"{s}\",\"native_crypto_backend\":\"{s}\",\"native_crypto_available\":{},\"taproot_tweak_backend\":\"{s}\",\"crypto_backend\":\"{s}\",\"crypto_source_digest\":\"{s}\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\"}}\n",
         .{ surface, datadir, sync_status, backend, chainstate_status, validated_height, validated_hash, header_height, header_hash, stored_block_height, stored_block_hash, utxo_count, set_hash, validation_crypto, std.mem.eql(u8, validation_crypto, "libsecp256k1"), validation_crypto, validation_crypto, crypto_digest },
     );
+}
+
+fn readStatusFields(
+    allocator: std.mem.Allocator,
+    db: anytype,
+    validated_height: *[]const u8,
+    validated_hash: *[]const u8,
+    header_height: *[]const u8,
+    header_hash: *[]const u8,
+    stored_block_height: *[]const u8,
+    stored_block_hash: *[]const u8,
+    backend: *[]const u8,
+    utxo_count: *[]const u8,
+    validation_crypto: *[]const u8,
+    crypto_digest: *[]const u8,
+    sync_status: *[]const u8,
+    set_hash: *[]const u8,
+) !void {
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validated_height"))) |value| validated_height.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validated_hash"))) |value| validated_hash.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "header_height"))) |value| header_height.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "header_hash"))) |value| header_hash.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "stored_block_height"))) |value| stored_block_height.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "stored_block_hash"))) |value| stored_block_hash.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_backend"))) |value| backend.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_utxo_count"))) |value| utxo_count.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validation_crypto_backend"))) |value| validation_crypto.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "crypto_source_digest"))) |value| crypto_digest.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "sync_status"))) |value| sync_status.* = value;
+    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "chainstate_set_hash"))) |value| set_hash.* = value;
 }
 
 fn cmdNativeCrypto(out: anytype) !void {
@@ -388,6 +415,25 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     defer allocator.free(marker_path);
     try writeFileEnsuringParent(io, marker_path, "zig native storage\n");
 
+    const store_name = valueArg(args, "--store") orelse "rocksdb";
+    if (std.mem.eql(u8, store_name, "native")) {
+        const native_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.native_dir });
+        defer allocator.free(native_path);
+        var native = try core.native_store.NativeStore.open(allocator, native_path, try nativeOpenOptions(args));
+        defer native.close();
+        try native.writeBatchSmoke(allocator);
+        const json = try std.fmt.allocPrint(
+            allocator,
+            "{{\"schema\":\"port.storage_gate_result.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"storage_backend\":\"native\",\"runtime_truth_backend\":\"native\",\"rocksdb_runtime_truth\":false,\"durability_class\":\"process_crash\",\"native_marker\":\"{s}\",\"atomic_batch_commit\":true,\"validated_height\":2,\"chainstate_status\":\"usable\",\"chainstate_backend\":\"native\",\"chainstate_utxo_count\":1,\"binary_gate_status\":\"not_attempted\",\"current_blocker\":null}}\n",
+            .{ surface, core.PortInfo.marker_file },
+        );
+        defer allocator.free(json);
+        try writeFileEnsuringParent(io, output, json);
+        try out.print("{s}", .{json});
+        return;
+    }
+    if (!std.mem.eql(u8, store_name, "rocksdb")) return error.UnsupportedStore;
+
     const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
     try std.Io.Dir.cwd().createDirPath(io, db_path);
@@ -492,13 +538,29 @@ fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
 fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8, script_threads_text: []const u8, default_peer: []const u8, default_crypto_backend: []const u8) !void {
     const datadir = valueArg(args, "--datadir") orelse "/data";
     const store_name = valueArg(args, "--store") orelse "rocksdb";
-    if (!std.mem.eql(u8, store_name, "rocksdb")) return error.UnsupportedStore;
     const shadow = flagArg(args, "--shadow");
     try std.Io.Dir.cwd().createDirPath(io, datadir);
     var lock = try core.DatadirLock.acquire(allocator, datadir);
     defer lock.release();
     const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
+    if (std.mem.eql(u8, store_name, "native")) {
+        const native_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.native_dir });
+        defer allocator.free(native_path);
+        var native = try core.native_store.NativeStore.open(allocator, native_path, try nativeOpenOptions(args));
+        defer native.close();
+        if (shadow) {
+            try std.Io.Dir.cwd().createDirPath(io, db_path);
+            var rocks = try core.RocksDb.open(allocator, db_path);
+            defer rocks.close();
+            var pair = core.ShadowStore(core.native_store.NativeStore, core.RocksDb).init(&native, &rocks);
+            try runLocalReferenceProof(allocator, io, out, args, surface, prefetch_text, script_threads_text, default_peer, default_crypto_backend, &pair, native_path, true, "native");
+        } else {
+            try runLocalReferenceProof(allocator, io, out, args, surface, prefetch_text, script_threads_text, default_peer, default_crypto_backend, &native, native_path, false, "native");
+        }
+        return;
+    }
+    if (!std.mem.eql(u8, store_name, "rocksdb")) return error.UnsupportedStore;
     try std.Io.Dir.cwd().createDirPath(io, db_path);
     if (shadow) {
         const shadow_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_shadow_dir });
@@ -509,15 +571,15 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
         var shadow_db = try core.RocksDb.open(allocator, shadow_path);
         defer shadow_db.close();
         var pair = core.ShadowStore(core.RocksDb, core.RocksDb).init(&primary, &shadow_db);
-        try runLocalReferenceProof(allocator, io, out, args, surface, prefetch_text, script_threads_text, default_peer, default_crypto_backend, &pair, db_path, true);
+        try runLocalReferenceProof(allocator, io, out, args, surface, prefetch_text, script_threads_text, default_peer, default_crypto_backend, &pair, db_path, true, "rocksdb");
     } else {
         var db = try core.RocksDb.open(allocator, db_path);
         defer db.close();
-        try runLocalReferenceProof(allocator, io, out, args, surface, prefetch_text, script_threads_text, default_peer, default_crypto_backend, &db, db_path, false);
+        try runLocalReferenceProof(allocator, io, out, args, surface, prefetch_text, script_threads_text, default_peer, default_crypto_backend, &db, db_path, false, "rocksdb");
     }
 }
 
-fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8, script_threads_text: []const u8, default_peer: []const u8, default_crypto_backend: []const u8, db: anytype, db_path: []const u8, shadow: bool) !void {
+fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8, script_threads_text: []const u8, default_peer: []const u8, default_crypto_backend: []const u8, db: anytype, db_path: []const u8, shadow: bool, store_name: []const u8) !void {
     const target_text = valueArg(args, "--target") orelse "5000";
     const peer = valueArg(args, "--peer") orelse default_peer;
     const output = valueArg(args, "--output") orelse (ResultPaths{}).proof;
@@ -525,7 +587,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const crypto_backend = parseScriptCryptoBackend(valueArg(args, "--crypto-backend") orelse default_crypto_backend) orelse return error.UnsupportedCryptoBackend;
     const crypto_label = crypto_backend.label();
     if (core.crypto.own_curve != (crypto_backend == .own_curve)) return error.CryptoBackendNotCompiled;
-    const comparable = crypto_backend == .native and !shadow;
+    const comparable = crypto_backend == .native and !shadow and std.mem.eql(u8, store_name, "rocksdb");
     const target = try std.fmt.parseInt(u32, target_text, 10);
     const profile = proofProfile(target) orelse return error.UnsupportedProofTarget;
     const prefetch_raw = std.fmt.parseInt(usize, prefetch_text, 10) catch 4;
@@ -686,7 +748,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     defer json_buf.deinit(allocator);
     try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_gate\":\"{s}\",\"benchmark_kind\":\"{s}\",\"benchmark_lane\":\"{s}\",\"benchmark_comparability\":\"{s}\",\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"captured_at\":\"unix_ms:{}\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"{s}\",", .{ profile.benchmark_gate, profile.benchmark_kind, profile.benchmark_lane, if (comparable) "comparable" else "diagnostic_non_comparable", core.nowMs(), target, target, profile.target_label });
     try appendFmt(allocator, &json_buf, "\"runtime_surface\":\"{s}\",\"peer_mode\":\"local_reference\",\"peer\":\"{s}\",\"byte_source\":\"local_reference_p2p\",\"proof_mode\":\"p2p_sync\",\"prefetch_depth\":{},\"script_runner_mode\":\"parallel\",\"script_threads\":{},\"rocksdb_wal_disabled\":false,\"fresh_state\":{},\"resume_supported\":true,", .{ surface, peer, prefetch, script_runner.thread_count, fresh_state });
-    try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"rocksdb\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":{},\"native_crypto_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"storage_codec_version\":2,", .{ datadir, db_path, crypto_backend == .native, crypto_label, crypto_label, crypto_label });
+    try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"{s}\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":{},\"native_crypto_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"storage_codec_version\":2,", .{ datadir, store_name, db_path, crypto_backend == .native, crypto_label, crypto_label, crypto_label });
     try appendFmt(allocator, &json_buf, "\"rocksdb_tuning\":\"{s}\",\"validated_height\":{},\"validated_hash\":\"{s}\",\"header_height\":{},\"stored_block_height\":{},\"blocks_fetched\":{},\"blocks_connected\":{},\"chainstate_utxo_count\":{},\"chainstate_set_hash\":\"{s}\",", .{ core.RocksDb.tuningDescription(), final_meta.validated_height, last_hash, final_meta.header_height, final_meta.stored_block_height, blocks_fetched, blocks_connected, final_meta.chainstate_utxo_count, final_meta.chainstate_set_hash });
     try appendFmt(allocator, &json_buf, "\"utxo_accounting_policy\":\"core_spendable_v1\",\"sync_status\":\"blocks_current\",\"local_reference_status\":\"target_reached\",\"status\":\"passed\",\"result\":\"passed\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\",\"failures\":[],\"reference_start_height\":0,\"reference_start_hash\":\"00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043\",\"reference_finish_height\":{},\"reference_finish_hash\":\"{s}\",", .{ target, last_hash });
     try appendFmt(allocator, &json_buf, "\"pipeline_timing_summary\":{{\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"block_store\":{},\"connect_total\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"script_worker_elapsed_ns\":{},\"script_worker_thread_cpu_ns\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.block_store, timing.connect_total, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.script_worker_elapsed_ns, timing.script_worker_thread_cpu_ns, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
@@ -700,12 +762,15 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
         const primary_hash = core.store.writeSetHashHex(db.primary.setHash());
         const shadow_hash = core.store.writeSetHashHex(db.shadow.setHash());
         try out.print(
-            "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"shadow_rocksdb\",\"height\":{},\"divergence_count\":{},\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash_fold_ms\":{},\"primary_set_hash\":\"{s}\",\"shadow_set_hash\":\"{s}\",\"engines\":{{\"primary\":{{\"utxo_load\":{},\"commit\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}},\"shadow\":{{\"utxo_load\":{},\"commit\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}}}},\"total_ms\":{}}}\n",
+            "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"{s}\",\"height\":{},\"divergence_count\":{},\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash_fold_ms\":{},\"snapshot_count\":{},\"snapshot_bytes\":{},\"primary_set_hash\":\"{s}\",\"shadow_set_hash\":\"{s}\",\"engines\":{{\"primary\":{{\"utxo_load\":{},\"commit\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}},\"shadow\":{{\"utxo_load\":{},\"commit\":{},\"block_connect_store_commit\":{},\"set_hash_fold\":{}}}}},\"total_ms\":{}}}\n",
             .{
+                shadowGateName(store_name, target),
                 target,
                 db.divergence_count,
                 core.store.peakRssBytes(),
                 timing.set_hash_fold,
+                snapshotCount(db),
+                snapshotBytes(db),
                 primary_hash[0..],
                 shadow_hash[0..],
                 db.primary_utxo_load_ms,
@@ -1009,6 +1074,35 @@ fn cmdSupervisorOnce(allocator: std.mem.Allocator, out: anytype, args: []const [
     _ = args;
     try out.print("{{\"schema\":\"port.supervisor_once.v1\",\"port\":\"zig\",\"status\":\"not_ready\",\"current_blocker\":\"sync supervisor requires local-reference P2P implementation\",\"binary_gate_status\":\"not_attempted\"}}\n", .{});
     return error.SupervisorNotImplemented;
+}
+
+fn nativeOpenOptions(args: []const []const u8) !core.native_store.OpenOptions {
+    var options = core.native_store.OpenOptions{};
+    if (valueArg(args, "--snapshot-every")) |text| options.snapshot_every = try std.fmt.parseInt(u32, text, 10);
+    options.fsync_enabled = flagArg(args, "--fsync");
+    if (valueArg(args, "--crash-after-block")) |text| options.crash_after_block = try std.fmt.parseInt(u32, text, 10);
+    if (valueArg(args, "--crash-point")) |text| {
+        if (std.mem.eql(u8, text, "before-append")) options.crash_point = .before_append else if (std.mem.eql(u8, text, "after-append")) options.crash_point = .after_append else return error.UnsupportedCrashPoint;
+    }
+    if (options.crash_after_block != null and options.crash_point == .none) return error.UnsupportedCrashPoint;
+    return options;
+}
+
+fn shadowGateName(store_name: []const u8, target: u32) []const u8 {
+    if (!std.mem.eql(u8, store_name, "native")) return "shadow_rocksdb";
+    if (target == 5000) return "shadow_5k";
+    if (target == 50000) return "shadow_50k";
+    return "shadow_native";
+}
+
+fn snapshotCount(db: anytype) u64 {
+    if (@hasField(@TypeOf(db.primary.*), "snapshot_count")) return db.primary.snapshot_count;
+    return 0;
+}
+
+fn snapshotBytes(db: anytype) u64 {
+    if (@hasField(@TypeOf(db.primary.*), "snapshot_bytes")) return db.primary.snapshot_bytes;
+    return 0;
 }
 
 fn valueArg(args: []const []const u8, name: []const u8) ?[]const u8 {

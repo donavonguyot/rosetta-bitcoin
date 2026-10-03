@@ -13,6 +13,7 @@ pub const block = @import("block.zig");
 pub const script = @import("script.zig");
 pub const p2p = @import("p2p.zig");
 pub const store = @import("store.zig");
+pub const native_store = @import("native_store.zig");
 
 pub const PortInfo = struct {
     pub const port_key = "zig";
@@ -93,7 +94,7 @@ pub fn nowMs() i64 {
     return @as(i64, @intCast(tv.tv_sec)) * 1000 + @divTrunc(@as(i64, @intCast(tv.tv_usec)), 1000);
 }
 
-fn rejectUnapprovedRuntimeDbArtifacts(path: []const u8) !void {
+pub fn rejectUnapprovedRuntimeDbArtifacts(path: []const u8) !void {
     const datadir = std.fs.path.dirname(path) orelse path;
     const datadir_z = try std.heap.c_allocator.dupeZ(u8, datadir);
     defer std.heap.c_allocator.free(datadir_z);

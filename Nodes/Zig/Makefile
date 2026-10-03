@@ -23,7 +23,8 @@ POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_SYNC_TARGET ?= 5000
 BENCHMARK_GATE ?= baseline_5k
 
-.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once clean
+ZIG_PROOF_ARGS ?=
+.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-storage-proof clean
 
 build:
 	$(ZIG) build
@@ -112,7 +113,35 @@ docker-proof-local:
 	  zigbitnode local-reference-proof \
 	  --target $(DOCKER_SYNC_TARGET) \
 	  --peer $(DOCKER_P2P_PEER) \
-	  --output $(DOCKER_LOCAL_PROOF_RESULT)
+	  --output $(DOCKER_LOCAL_PROOF_RESULT) \
+	  $(ZIG_PROOF_ARGS)
+
+native-shadow-5k:
+	$(ZIG) build run -- sync --store=native --shadow --target 5000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) $(ZIG_PROOF_ARGS)
+
+native-shadow-50k:
+	$(ZIG) build run -- sync --store=native --shadow --target 50000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) $(ZIG_PROOF_ARGS)
+
+native-storage-proof:
+	$(ZIG) build run -- storage-proof --store=native --datadir $(DATA_DIR) --output $(STORAGE_RESULT)
+
+docker-native-shadow-5k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=zigbitnode_native_shadow_5k \
+	  DOCKER_SYNC_TARGET=5000 \
+	  DOCKER_LOCAL_PROOF_RESULT=/tmp/zig_native_shadow_5k.json \
+	  ZIG_PROOF_ARGS='--store=native --shadow'
+
+docker-native-shadow-50k:
+	$(MAKE) docker-proof-local \
+	  DOCKER_PROOF_VOLUME=zigbitnode_native_shadow_50k \
+	  DOCKER_SYNC_TARGET=50000 \
+	  DOCKER_LOCAL_PROOF_RESULT=/tmp/zig_native_shadow_50k.json \
+	  ZIG_PROOF_ARGS='--store=native --shadow'
+
+docker-native-storage-proof:
+	$(DOCKER_COMPOSE) run --rm --no-deps zigbitnode \
+	  zigbitnode storage-proof --store=native --datadir /data --output /tmp/zig_native_storage_gate.json
 
 docker-proof-10k:
 	$(MAKE) docker-proof-local \
