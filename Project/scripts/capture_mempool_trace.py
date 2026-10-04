@@ -12,11 +12,14 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import socket
 import struct
 import tarfile
+import threading
 import time
 import urllib.request
+from collections import deque
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -332,6 +335,9 @@ def assign_expected(events: list[dict]) -> None:
                 for inp in tx.inputs:
                     if spent.get((inp["prev"], inp["vout"])) == txid:
                         spent.pop((inp["prev"], inp["vout"]), None)
+            event["expected_set_hash"] = fold_wtxids([item.wtxid for item in pool.values()])
+            core_hash = event.get("core_set_hash")
+            event["policy_divergent"] = core_hash is not None and event["expected_set_hash"] != core_hash
             continue
         tx = event["tx"]
         overlap = any((inp["prev"], inp["vout"]) in spent for inp in tx.inputs)
@@ -341,6 +347,109 @@ def assign_expected(events: list[dict]) -> None:
         pool[tx.txid] = tx
         for inp in tx.inputs:
             spent[(inp["prev"], inp["vout"])] = tx.txid
+
+
+def mark_out_of_order(events: list[dict]) -> None:
+    """A non-preface tx is out of order when an in-trace parent arrived later."""
+    by_txid = {event["tx"].txid: event for event in events if event["kind"] == "tx"}
+    for event in events:
+        if event["kind"] != "tx" or event.get("preface") or event.get("capture_seq") is None:
+            continue
+        for inp in event["tx"].inputs:
+            parent = by_txid.get(inp["prev"])
+            if parent is None or parent.get("preface") or parent.get("capture_seq") is None:
+                continue
+            if parent["capture_seq"] > event["capture_seq"]:
+                event["out_of_order"] = True
+                break
+
+
+def signature_bearing_inputs(tx: Tx) -> int:
+    count = 0
+    for index, inp in enumerate(tx.inputs):
+        signed = any(is_signature(item) for item, _at in script_pushes(inp["script"]))
+        if not signed and index < len(tx.witness):
+            signed = any(is_signature(item) for item in tx.witness[index])
+        if signed:
+            count += 1
+    return count
+
+
+def per_window_rows(ordered: list[dict]) -> list[dict]:
+    rows = []
+    for start in range(0, len(ordered), 1000):
+        chunk = ordered[start:start + 1000]
+        tx_count = input_count = sig_inputs = payload = 0
+        for event in chunk:
+            payload += len(event["raw"])
+            if event["kind"] != "tx":
+                continue
+            tx_count += 1
+            input_count += len(event["tx"].inputs)
+            sig_inputs += signature_bearing_inputs(event["tx"])
+        rows.append({
+            "start_apply_seq": chunk[0]["apply_seq"],
+            "tx_count": tx_count,
+            "input_count": input_count,
+            "signature_input_count": sig_inputs,
+            "payload_bytes": payload,
+        })
+    return rows
+
+
+def coverage_report(ordered: list[dict], min_tx: int, min_blocks: int = 3) -> dict:
+    tx_events = [event for event in ordered if event["kind"] == "tx"]
+    divergent = [event for event in ordered if event["kind"] == "block" and event.get("policy_divergent")]
+    report = {
+        "status": "unmet",
+        "tx_count": len(tx_events),
+        "replacements": sum(1 for event in tx_events if event.get("expected_layer1") == "input_spent_in_pool"),
+        "out_of_order": sum(1 for event in tx_events if event.get("out_of_order")),
+        "policy_divergence_boundaries": len(divergent),
+        "policy_divergence_heights": [event.get("height") for event in divergent],
+        "blocks": sum(1 for event in ordered if event["kind"] == "block"),
+    }
+    if (
+        report["tx_count"] >= min_tx
+        and report["replacements"] >= 1
+        and report["out_of_order"] >= 1
+        and report["policy_divergence_boundaries"] >= 1
+        and report["blocks"] >= min_blocks
+    ):
+        report["status"] = "met"
+    return report
+
+
+def gbt_for_block(last_gbt: dict | None, previous_arrival_ms: int | None) -> dict | None:
+    """Drop a template captured before the previous block event arrived."""
+    if not last_gbt or last_gbt.get("captured_unix_ms") is None:
+        return None
+    if previous_arrival_ms is not None and last_gbt["captured_unix_ms"] < previous_arrival_ms:
+        return None
+    return last_gbt
+
+
+def assemble(preface: list[dict], live: list[dict]) -> list[dict]:
+    parse_events(preface)
+    parse_events(live)
+    ordered = arrange(preface, [event for event in live if event["kind"] in ("block", "tx")])
+    assign_expected(ordered)
+    mark_out_of_order(ordered)
+    return ordered
+
+
+def state_root() -> Path:
+    return Path(os.environ.get("RB_STATE_ROOT", Path.home() / ".rblab"))
+
+
+def watch_log(row: dict) -> None:
+    row.setdefault("unix_ms", int(time.time() * 1000))
+    line = json.dumps(row, sort_keys=True)
+    print(line, flush=True)
+    path = state_root() / "traces" / "watch.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as stream:
+        stream.write(line + "\n")
 
 
 def mutate(events: list[dict], start_height: int) -> list[dict]:
@@ -588,7 +697,9 @@ def parse_inv(payload: bytes) -> list[tuple[int, bytes]]:
     return items
 
 
-def capture_window(rpc: Rpc, height: int, start_hash: str, window_s: int) -> tuple[list[dict], list[dict], dict]:
+def capture_window(
+    rpc: Rpc, height: int, start_hash: str, window_s: int, max_bytes: int = RAW_CAP, reorg_hash: str | None = None,
+) -> tuple[list[dict], list[dict], dict]:
     live = []
     last_gbt = None
     raw_bytes = 0
@@ -598,13 +709,18 @@ def capture_window(rpc: Rpc, height: int, start_hash: str, window_s: int) -> tup
     capture_seq = 0
     started = time.time()
     next_progress = started + 60
+    next_reorg = 0.0
     sock = socket.create_connection(("127.0.0.1", 48333), timeout=30)
     try:
         handshake(sock, height)
         sock.settimeout(1.0)
         next_gbt = 0.0
-        while time.time() - started < window_s and raw_bytes < RAW_CAP:
+        while time.time() - started < window_s and raw_bytes < max_bytes:
             now = time.time()
+            if reorg_hash and now >= next_reorg:
+                next_reorg = now + 10
+                if start_hash_reorged(rpc, reorg_hash):
+                    return live, [], {"stop": "reorg", "started": int(started * 1000), "ended": int(time.time() * 1000)}
             if now >= next_gbt:
                 last_gbt = poll_gbt(rpc)
                 next_gbt = now + 10
@@ -642,10 +758,19 @@ def capture_window(rpc: Rpc, height: int, start_hash: str, window_s: int) -> tup
                 added, cursor, cursor_height, capture_seq, raw_bytes = take_block(
                     rpc, payload, cursor, cursor_height, live, capture_seq, raw_bytes, last_gbt)
                 if added is None:
-                    raise SystemExit(2)
+                    return live, [], {"stop": "reorg", "started": int(started * 1000), "ended": int(time.time() * 1000)}
     finally:
         sock.close()
-    return live, [], {"stop": "bytes" if raw_bytes >= RAW_CAP else "time", "started": int(started * 1000), "ended": int(time.time() * 1000)}
+    stop = "bytes" if raw_bytes >= max_bytes else "time"
+    return live, [], {"stop": stop, "started": int(started * 1000), "ended": int(time.time() * 1000)}
+
+
+def start_hash_reorged(rpc: Rpc, start_hash: str) -> bool:
+    try:
+        header = rpc.call("getblockheader", [start_hash])
+    except Exception:
+        return True
+    return int(header.get("confirmations", 0)) < 1
 
 
 def poll_gbt(rpc: Rpc) -> dict:
@@ -697,6 +822,7 @@ def take_block(rpc, raw, cursor, cursor_height, live, capture_seq, raw_bytes, gb
         if len(chain) > 64:
             ledger("capture_reorg", f"block gap from {cursor} to {block_hash} is not a single chain step")
             return None, cursor, cursor_height, capture_seq, raw_bytes
+    previous_arrival = next((event["ms"] for event in reversed(live) if event["kind"] == "block"), None)
     for digest in reversed(chain):
         payload = bytes.fromhex(rpc.call("getblock", [digest, 0]))
         capture_seq += 1
@@ -705,14 +831,16 @@ def take_block(rpc, raw, cursor, cursor_height, live, capture_seq, raw_bytes, gb
         pool = rpc.call("getrawmempool", [True])
         wtxids = [internal(entry["wtxid"]) for entry in pool.values()]
         block_txs = parse_block_txs(payload)
+        arrived = int(time.time() * 1000)
         live.append({
             "kind": "block", "raw": payload, "capture_seq": capture_seq,
-            "ms": int(time.time() * 1000), "preface": False, "txs": block_txs,
+            "ms": arrived, "preface": False, "txs": block_txs,
             "hash": digest, "prev_hash": info["previousblockhash"], "height": info["height"],
-            "gbt": gbt,
+            "gbt": gbt_for_block(gbt, previous_arrival),
             "core_set_hash": fold_wtxids(wtxids),
             "core_pool_count": len(pool),
         })
+        previous_arrival = arrived
         cursor = digest
         cursor_height = info["height"]
     return True, cursor, cursor_height, capture_seq, raw_bytes
@@ -754,17 +882,18 @@ def parse_events(events: list[dict]) -> None:
             event["txs"] = parse_block_txs(event["raw"])
 
 
-def publish(preface, live, meta, info, version, synthetic: bool) -> Path:
-    parse_events(preface)
-    parse_events(live)
-    # Drop live txs that do not parse; parse_events raises instead.
-    ordered = arrange(preface, [event for event in live if event["kind"] == "block" or event["kind"] == "tx"])
-    assign_expected(ordered)
+def publish(
+    preface, live, meta, info, version, synthetic: bool,
+    manifest_extra: dict | None = None, staging: Path | None = None, min_tx: int | None = None,
+) -> tuple[Path | None, dict]:
+    ordered = assemble(preface, live)
+    report = coverage_report(ordered, 0 if min_tx is None else min_tx)
+    if min_tx is not None and report["status"] != "met":
+        return None, report
     start_height = info["blocks"]
     mutations = mutate(ordered, start_height)
-    staging = FIXTURE_ROOT / ".staging-trace"
+    staging = staging or (FIXTURE_ROOT / ".staging-trace")
     if staging.exists():
-        import shutil
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
     events = b"".join(
@@ -782,7 +911,10 @@ def publish(preface, live, meta, info, version, synthetic: bool) -> Path:
                 "txid": event["tx"].txid_hex,
                 "wtxid": event["tx"].wtxid_hex,
                 "expected_layer1": event["expected_layer1"],
+                "input_count": len(event["tx"].inputs),
             }
+            if event.get("out_of_order"):
+                row["out_of_order"] = True
             if event.get("capture_seq") is not None:
                 row["capture_seq"] = event["capture_seq"]
             if event.get("entry"):
@@ -830,11 +962,19 @@ def publish(preface, live, meta, info, version, synthetic: bool) -> Path:
         "raw_bytes": sum(len(event["raw"]) for event in ordered if not event.get("preface")),
         "mutation_seed": "0x524F5345545441",
         "set_hash": "xor-sha256-wtxid-v1",
+        "per_window": per_window_rows(ordered),
     }
+    if min_tx is not None:
+        manifest["coverage"] = report
+    if manifest_extra:
+        manifest.update(manifest_extra)
     (staging / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     digest = hashlib.sha256(write_tar(staging)).hexdigest()
     dest = FIXTURE_ROOT / f"trace-{digest}"
-    staging.rename(dest)
+    if staging.parent == dest.parent:
+        staging.rename(dest)
+    else:
+        shutil.move(str(staging), dest)
     index_path = FIXTURE_ROOT / "index.json"
     index = {"schema": "mempool.trace_index.v1", "traces": []}
     if index_path.exists():
@@ -853,9 +993,11 @@ def publish(preface, live, meta, info, version, synthetic: bool) -> Path:
         "raw_bytes": manifest["raw_bytes"],
         "policy": manifest["policy"],
     })
+    if "coverage" in manifest:
+        index["traces"][-1]["coverage"] = manifest["coverage"]
     index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
     print(f"CAPTURE_DONE trace={digest} path={dest} txs={manifest['tx_count']} blocks={manifest['block_count']} fixture={manifest['fixture']}")
-    return dest
+    return dest, report
 
 
 def build_synthetic(rpc: Rpc | None) -> None:
@@ -935,6 +1077,43 @@ def self_test() -> None:
     rows = mutate([event], 10)
     flipped = [row for row in rows if row["class"] == "script_failed"]
     assert flipped and flipped[0]["raw_hex"] != event["raw"].hex()
+    mark_out_of_order(ordered)
+    assert ordered[1].get("out_of_order") is True
+    assert "out_of_order" not in ordered[0]
+    preface = [{"kind": "tx", "raw": parent.raw, "tx": parent, "capture_seq": None, "ms": 0, "preface": True}]
+    pref_ordered = arrange(preface, [{"kind": "tx", "raw": child.raw, "tx": child, "capture_seq": 1, "ms": 1, "preface": False}])
+    mark_out_of_order(pref_ordered)
+    assert not any(item.get("out_of_order") for item in pref_ordered)
+    stale = {"captured_unix_ms": 100, "fees_sat": 5, "tx_count": 1, "txids": []}
+    assert gbt_for_block(None, None) is None
+    assert gbt_for_block(stale, None) is stale
+    assert gbt_for_block(stale, 100) is stale
+    assert gbt_for_block(stale, 101) is None
+    traced = arrange([], [
+        {"kind": "tx", "raw": child.raw, "tx": child, "capture_seq": 1, "ms": 1, "preface": False},
+        {"kind": "tx", "raw": parent.raw, "tx": parent, "capture_seq": 2, "ms": 2, "preface": False},
+        {"kind": "tx", "raw": other.raw, "tx": other, "capture_seq": 3, "ms": 3, "preface": False},
+        {"kind": "block", "raw": b"", "capture_seq": 4, "ms": 200, "preface": False, "txs": [],
+         "hash": "11" * 32, "prev_hash": "00" * 32, "height": 11,
+         "core_set_hash": "00" * 32, "core_pool_count": 0, "gbt": gbt_for_block(stale, 200)},
+    ])
+    assign_expected(traced)
+    mark_out_of_order(traced)
+    assert traced[-1]["gbt"] is None
+    report = coverage_report(traced, min_tx=1, min_blocks=1)
+    assert report["status"] == "met", report
+    assert report["policy_divergence_heights"] == [11]
+    assert report["replacements"] == 1
+    assert report["out_of_order"] == 1
+    assert signature_bearing_inputs(event["tx"]) == 1
+    window_rows = per_window_rows([event])
+    assert window_rows == [{
+        "start_apply_seq": 1,
+        "tx_count": 1,
+        "input_count": 1,
+        "signature_input_count": 1,
+        "payload_bytes": len(event["raw"]),
+    }]
     print("self-test ok")
 
 
@@ -949,17 +1128,206 @@ def build_tx(prev: bytes, vout: int, outputs: list[tuple[int, bytes]], script: b
     return raw
 
 
+class ArrivalMeter:
+    """Count tx messages on a dedicated P2P connection over a 120s window."""
+
+    def __init__(self):
+        self.sock = None
+        self.arrivals = deque()
+        self.lock = threading.Lock()
+        self.thread = None
+        self.failure = None
+
+    def close(self) -> None:
+        sock = self.sock
+        self.sock = None
+        if sock is not None:
+            try:
+                sock.close()
+            except Exception:
+                pass
+
+    def ensure(self, height: int) -> None:
+        if self.thread is not None and self.thread.is_alive():
+            return
+        if self.failure:
+            watch_log({"event": "handshake_failure", "failure": self.failure})
+            self.failure = None
+        try:
+            sock = socket.create_connection(("127.0.0.1", 48333), timeout=10)
+            handshake(sock, height)
+            sock.settimeout(30)
+            self.sock = sock
+            self.thread = threading.Thread(target=self._read_loop, name="mempool-arrival", daemon=True)
+            self.thread.start()
+        except Exception as exc:
+            self.close()
+            watch_log({"event": "handshake_failure", "failure": str(exc)})
+
+    def _read_loop(self) -> None:
+        sock = self.sock
+        try:
+            while sock is not None and sock is self.sock:
+                command, payload = read_message(sock)
+                now = time.time()
+                if command == "ping":
+                    sock.sendall(message("pong", payload))
+                elif command == "inv":
+                    wanted = [item for item in parse_inv(payload) if item[0] in TX_TYPES]
+                    if wanted:
+                        body = encode_compact(len(wanted))
+                        for kind, txhash in wanted:
+                            request = kind if kind == 5 else kind | MSG_WITNESS
+                            body += struct.pack("<I", request) + txhash
+                        sock.sendall(message("getdata", body))
+                elif command == "tx":
+                    with self.lock:
+                        self.arrivals.append(now)
+        except Exception as exc:
+            self.failure = str(exc)
+            self.close()
+
+    def rate(self) -> float:
+        now = time.time()
+        with self.lock:
+            while self.arrivals and now - self.arrivals[0] > 120:
+                self.arrivals.popleft()
+            return len(self.arrivals) / 120.0
+
+
+def watcher_thresholds(args) -> dict:
+    return {
+        "open_pool": args.open_pool,
+        "open_rate": args.open_rate,
+        "min_tx": args.min_tx,
+        "max_seconds": args.max_seconds,
+        "max_bytes": args.max_bytes,
+        "keep": args.keep,
+        "max_watch_seconds": args.max_watch_seconds,
+    }
+
+
+def record_window(args, rpc: Rpc, chain: dict, trigger: dict, thresholds: dict) -> bool:
+    start_hash = chain["bestblockhash"]
+    staging = state_root() / "traces" / "inflight" / ".staging-trace"
+    try:
+        version = rpc.call("getnetworkinfo")["subversion"]
+        preface = snapshot_preface(rpc)
+        live, _, meta = capture_window(
+            rpc, int(chain["blocks"]), start_hash, args.max_seconds, args.max_bytes, reorg_hash=start_hash)
+    except Exception as exc:
+        watch_log({"event": "close", "stop_reason": "error", "failure": str(exc), "trigger": trigger})
+        watch_log({"event": "discard", "discard_reason": "capture_error", "failure": str(exc), "trigger": trigger, "thresholds": thresholds})
+        return False
+    window = {"started_unix_ms": meta["started"], "ended_unix_ms": meta["ended"], "stop_reason": meta["stop"]}
+    watch_log({
+        "event": "close",
+        "stop_reason": meta["stop"],
+        "trigger": trigger,
+        "live_tx": sum(1 for event in live if event["kind"] == "tx"),
+        "live_blocks": sum(1 for event in live if event["kind"] == "block"),
+    })
+    if meta["stop"] == "reorg":
+        watch_log({"event": "discard", "discard_reason": "reorg", "trigger": trigger, "thresholds": thresholds, "coverage": "unmet"})
+        return False
+    info = {"blocks": chain["blocks"], "bestblockhash": start_hash}
+    try:
+        dest, report = publish(
+            preface, live, window, info, version, False,
+            manifest_extra={"trigger": trigger, "thresholds": thresholds},
+            staging=staging, min_tx=args.min_tx,
+        )
+    except Exception as exc:
+        if staging.exists():
+            shutil.rmtree(staging)
+        watch_log({"event": "discard", "discard_reason": "capture_error", "failure": str(exc), "trigger": trigger, "thresholds": thresholds})
+        return False
+    if dest is None:
+        if staging.exists():
+            shutil.rmtree(staging)
+        watch_log({"event": "discard", "discard_reason": "coverage", "coverage": report, "trigger": trigger, "thresholds": thresholds})
+        return False
+    watch_log({
+        "event": "keep",
+        "coverage": report,
+        "path": f"Nodes/Shared/fixtures/mempool/{dest.name}",
+        "trace_hash": dest.name.removeprefix("trace-"),
+        "trigger": trigger,
+    })
+    return True
+
+
+def run_watch(args, rpc: Rpc) -> None:
+    meter = ArrivalMeter()
+    deadline = time.time() + args.max_watch_seconds
+    kept = 0
+    thresholds = watcher_thresholds(args)
+    while time.time() < deadline and kept < args.keep:
+        try:
+            chain = rpc.call("getblockchaininfo")
+            pool = rpc.call("getmempoolinfo")
+        except Exception as exc:
+            watch_log({"event": "poll", "failure": str(exc)})
+            time.sleep(30)
+            continue
+        ibd = bool(chain.get("initialblockdownload")) or chain.get("blocks") != chain.get("headers")
+        meter.ensure(int(chain.get("blocks") or 0))
+        rate = round(meter.rate(), 6)
+        pool_size = int(pool.get("size") or 0)
+        watch_log({
+            "event": "poll",
+            "ibd": ibd,
+            "blocks": chain.get("blocks"),
+            "headers": chain.get("headers"),
+            "pool_size": pool_size,
+            "pool_bytes": int(pool.get("bytes") or 0),
+            "rate_tx_per_s": rate,
+        })
+        if ibd:
+            time.sleep(30)
+            continue
+        trigger = None
+        if pool_size >= args.open_pool:
+            trigger = {"rule": "open_pool", "value": pool_size}
+        elif rate >= args.open_rate:
+            trigger = {"rule": "open_rate", "value": rate}
+        if trigger is None:
+            time.sleep(30)
+            continue
+        watch_log({
+            "event": "open",
+            "trigger": trigger,
+            "thresholds": thresholds,
+            "start_height": chain.get("blocks"),
+            "start_hash": chain.get("bestblockhash"),
+        })
+        if record_window(args, rpc, chain, trigger, thresholds):
+            kept += 1
+    watch_log({"event": "stop", "kept": kept, "reason": "keep" if kept >= args.keep else "max_watch_seconds"})
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--synthetic", action="store_true")
+    parser.add_argument("--watch", action="store_true")
     parser.add_argument("--window-seconds", type=int, default=WINDOW_S)
+    parser.add_argument("--open-pool", type=int, default=200)
+    parser.add_argument("--open-rate", type=float, default=1.0)
+    parser.add_argument("--min-tx", type=int, default=2000)
+    parser.add_argument("--max-seconds", type=int, default=WINDOW_S)
+    parser.add_argument("--max-bytes", type=int, default=RAW_CAP)
+    parser.add_argument("--keep", type=int, default=3)
+    parser.add_argument("--max-watch-seconds", type=int, default=86400)
     args = parser.parse_args()
     if args.self_test:
         self_test()
         return
     user, password = load_rpc()
     rpc = Rpc(user, password)
+    if args.watch:
+        run_watch(args, rpc)
+        return
     try:
         state = preflight(rpc)
     except Exception as exc:
@@ -985,6 +1353,9 @@ def main() -> None:
         print(f"reference_capture_unavailable {exc}", flush=True)
         build_synthetic(rpc)
         return
+    if meta["stop"] == "reorg":
+        print("CAPTURE_REORG", flush=True)
+        raise SystemExit(2)
     meta = {"started_unix_ms": meta["started"], "ended_unix_ms": meta["ended"], "stop_reason": meta["stop"]}
     publish(preface, live, meta, info, state["version"], False)
 

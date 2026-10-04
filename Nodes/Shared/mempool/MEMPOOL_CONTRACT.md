@@ -140,7 +140,16 @@ block_count
 raw_bytes               payload bytes, preface excluded from the cap
 mutation_seed
 set_hash                xor-sha256-wtxid-v1
+per_window              one row per 1000 applied events
 ```
+
+Each `per_window` row has `start_apply_seq`, `tx_count`, `input_count`,
+`signature_input_count`, and `payload_bytes`. A signature-bearing input has a
+witness item or a scriptSig push that matches the capture tool's signature
+shape. Watcher traces also carry `trigger` (`{rule, value}`), `thresholds`
+(the `--open-*` and `--min-*` knobs), and `coverage` (`status` plus the
+counts and `policy_divergence_heights`). `discard_reason` is recorded only
+for a window discarded before publish, and that window leaves no directory.
 
 A window that stops for `reorg` does not produce a directory. Blocks must form
 one chain: the first block's previous hash is `start_hash`, and each later
@@ -188,6 +197,8 @@ tx:
   txid                 display hex
   wtxid                display hex
   expected_layer1      accepted or input_spent_in_pool
+  input_count
+  out_of_order         true when an in-trace parent has a later capture_seq
   fee_sat              live arrivals only, from getmempoolentry
   vsize                live arrivals only
   ancestor_count       live arrivals only
@@ -220,8 +231,11 @@ gbt                  null, or {captured_unix_ms, fees_sat, tx_count, txids}
 ```
 
 `getblocktemplate` is polled every 10 seconds during the capture. The boundary
-keeps the last result from before the block. With the preface in the pool, a
-difference from the port's set hash is a policy difference.
+keeps that template when its `captured_unix_ms` is at or after the previous
+block event's arrival. A missing poll, or a poll older than that arrival, is
+stored as `gbt: null`. With the preface in the pool, a difference from the
+port's set hash is a policy difference. The capture tool predicts the same
+difference by folding the wtxids still accepted after the block eviction.
 
 ### mutations.json
 
