@@ -200,6 +200,40 @@ test "native restart replays the commit log" {
     try std.testing.expect(raw[0] != null);
 }
 
+test "direct apply and replay apply match map bytes and set hash" {
+    const allocator = std.testing.allocator;
+    const path = try freshPath(allocator, "direct-replay");
+    defer allocator.free(path);
+    const script_bytes = try core.fromHexAlloc(allocator, "51");
+    defer allocator.free(script_bytes);
+    const created = oneUtxo(script_bytes, 7);
+    var live_hash: [32]u8 = undefined;
+    var live_raw: []u8 = undefined;
+    {
+        var db = try Native.open(allocator, path, .{});
+        defer db.close();
+        try commitCreate(&db, allocator, created, 1);
+        live_hash = db.setHash();
+        const raw = try db.getManyUtxoRaw(allocator, "testnet4", &.{created.outpoint}, null);
+        defer {
+            for (raw) |value| if (value) |bytes| allocator.free(bytes);
+            allocator.free(raw);
+        }
+        live_raw = try allocator.dupe(u8, raw[0].?);
+    }
+    defer allocator.free(live_raw);
+    var db = try Native.open(allocator, path, .{});
+    defer db.close();
+    try std.testing.expectEqualSlices(u8, &live_hash, &db.setHash());
+    const raw = try db.getManyUtxoRaw(allocator, "testnet4", &.{created.outpoint}, null);
+    defer {
+        for (raw) |value| if (value) |bytes| allocator.free(bytes);
+        allocator.free(raw);
+    }
+    try std.testing.expectEqualSlices(u8, live_raw, raw[0].?);
+    try std.testing.expectEqual(@as(i64, 1), db.utxo_count);
+}
+
 test "snapshot rename before log truncate does not double apply" {
     const allocator = std.testing.allocator;
     const path = try freshPath(allocator, "snapshot-crash");

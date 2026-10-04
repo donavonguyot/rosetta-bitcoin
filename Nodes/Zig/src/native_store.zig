@@ -549,12 +549,37 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
         try self.appendRecord(payload.slice());
         timings.rocksdb_write += elapsedMs(write_started);
         try self.crashCommit(height, .after_append);
-        try self.applyPayload(payload.slice());
+        try self.applyCommitDirect(height, block_hash, spent, puts, new_utxo_count, next_hash, undo_off, @intCast(undo_bytes.len));
         if (self.options.snapshot_every != 0 and height > 0 and height % self.options.snapshot_every == 0) {
             const snapshot_started = store.nowMs();
             try self.writeSnapshot();
             timings.snapshot += elapsedMs(snapshot_started);
         }
+    }
+
+    fn applyCommitDirect(
+        self: *NativeStore,
+        height: u32,
+        block_hash: [32]u8,
+        spent: []const root.Outpoint,
+        puts: []const StagedPut,
+        new_utxo_count: i64,
+        next_hash: store.SetHash,
+        undo_off: u64,
+        undo_len: u32,
+    ) !void {
+        for (spent) |outpoint| {
+            const removed = self.utxos.fetchRemove(outpoint) orelse return error.MissingUtxo;
+            self.allocator.free(removed.value);
+        }
+        for (puts) |item| try self.putUtxoBytes(item.outpoint, item.value);
+        try self.putCommitMeta(height, block_hash, new_utxo_count, next_hash);
+        try self.undos.put(height, .{ .offset = undo_off, .len = undo_len });
+        self.undo_len = undo_off + undo_len;
+        self.set_hash = next_hash;
+        self.utxo_count = new_utxo_count;
+        self.validated_height = height;
+        self.last_seq += 1;
     }
 
     fn crashCommit(self: *NativeStore, height: u32, point: CrashPoint) !void {
