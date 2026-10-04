@@ -2,6 +2,8 @@
 
 const std = @import("std");
 const root = @import("root.zig");
+const consensus_context = @import("consensus_context.zig");
+const chain_params = @import("chain_params.zig");
 const tx = root.tx;
 const template = @import("template.zig");
 const coins_view = @import("coins_view.zig");
@@ -66,6 +68,16 @@ pub fn runManifest(allocator: std.mem.Allocator, io: std.Io, manifest_path: []co
         const obj = item.object;
         const id = obj.get("id").?.string;
         const kind = obj.get("kind").?.string;
+        if (std.mem.eql(u8, kind, "header")) {
+            const reason = obj.get("reject_reason").?.string;
+            const accept_text = try headerVerdict(allocator, obj.get("accept").?.object);
+            const reject_text = try headerVerdict(allocator, obj.get("reject").?.object);
+            const accept_ok = std.mem.eql(u8, accept_text, "pass");
+            const reject_ok = std.mem.eql(u8, reject_text, reason);
+            if (accept_ok and reject_ok) passed += 1 else failed += 1;
+            try out.print("{{\"fixture_id\":\"{s}\",\"accept\":\"{s}\",\"reject\":\"{s}\",\"expect\":\"{s}\"}}\n", .{ id, accept_text, reject_text, reason });
+            continue;
+        }
         if (!std.mem.eql(u8, kind, "block")) continue;
         const height: u32 = @intCast(obj.get("height").?.integer);
         const reason = obj.get("reject_reason").?.string;
@@ -180,6 +192,7 @@ pub fn writeBlockFixtures(allocator: std.mem.Allocator, io: std.Io, db: anytype,
         defer allocator.free(row);
         try manifest.appendSlice(allocator, row);
     }
+    try appendHeaderFixtures(allocator, &manifest);
     try manifest.appendSlice(allocator, "\n  ]\n}\n");
     const manifest_path = try std.fmt.allocPrint(allocator, "{s}/manifest.json", .{out_dir});
     defer allocator.free(manifest_path);
@@ -285,6 +298,148 @@ fn serializeBlock(allocator: std.mem.Allocator, header: []const u8, transactions
         try out.appendSlice(allocator, encoded);
     }
     return out.toOwnedSlice(allocator);
+}
+
+const SliceHeaders = struct {
+    items: []const consensus_context.HeaderFields,
+    pub fn header(self: @This(), height: u32) !consensus_context.HeaderFields {
+        if (height >= self.items.len) return error.MissingHeader;
+        return self.items[height];
+    }
+};
+
+fn headerVerdict(allocator: std.mem.Allocator, obj: std.json.ObjectMap) ![]const u8 {
+    const height: u32 = @intCast(obj.get("height").?.integer);
+    const time: u32 = @intCast(obj.get("time").?.integer);
+    const bits: u32 = @intCast(obj.get("bits").?.integer);
+    const encoded = obj.get("ancestors").?.array;
+    const ancestors = try allocator.alloc(consensus_context.HeaderFields, encoded.items.len);
+    defer allocator.free(ancestors);
+    for (encoded.items, 0..) |item, index| {
+        ancestors[index] = .{
+            .time = @intCast(item.object.get("time").?.integer),
+            .bits = @intCast(item.object.get("bits").?.integer),
+        };
+    }
+    const required = try consensus_context.requiredBits(SliceHeaders{ .items = ancestors }, height, time);
+    if (bits != required) return "nbits_mismatch";
+    if (height > 0 and consensus_context.timewarpViolation(height, time, ancestors[height - 1].time)) return "timewarp";
+    return "pass";
+}
+
+pub const HeaderCheck = struct {
+    heights: u32 = 0,
+    retarget_boundaries: u32 = 0,
+    min_difficulty_blocks: u32 = 0,
+    timewarp_checks: u32 = 0,
+};
+
+pub fn checkStoredHeaders(allocator: std.mem.Allocator, db: anytype, tip: u32) !HeaderCheck {
+    var fields: std.ArrayList(consensus_context.HeaderFields) = .empty;
+    defer fields.deinit(allocator);
+    var counts = HeaderCheck{};
+    var height: u32 = 0;
+    while (height <= tip) : (height += 1) {
+        const raw = (try db.headerAt(allocator, height)) orelse return error.MissingHeader;
+        const view = consensus_context.fieldsFromHeader(&raw);
+        const required = try consensus_context.requiredBits(SliceHeaders{ .items = fields.items }, height, view.time);
+        if (view.bits != required) {
+            std.debug.print("nbits mismatch height={d} have={x} required={x}\n", .{ height, view.bits, required });
+            return error.NbitsMismatch;
+        }
+        if (height > 0 and consensus_context.timewarpViolation(height, view.time, fields.items[height - 1].time)) {
+            std.debug.print("timewarp height={d} time={d} prev={d}\n", .{ height, view.time, fields.items[height - 1].time });
+            return error.Timewarp;
+        }
+        if (height > 0 and height % chain_params.interval == 0) {
+            counts.retarget_boundaries += 1;
+            counts.timewarp_checks += 1;
+        }
+        if (height % chain_params.interval != 0 and view.bits == chain_params.pow_limit_bits) counts.min_difficulty_blocks += 1;
+        try fields.append(allocator, view);
+        counts.heights += 1;
+    }
+    return counts;
+}
+
+fn appendHeaderFixtures(allocator: std.mem.Allocator, manifest: *std.ArrayList(u8)) !void {
+    try appendMinDifficulty(allocator, manifest);
+    try appendRetarget(allocator, manifest, "consensus.nbits_retarget_wrong", "nbits_mismatch", false);
+    try appendRetarget(allocator, manifest, "consensus.bip94_first_block_bits", "nbits_mismatch", true);
+    try appendTimewarp(allocator, manifest);
+}
+
+fn appendAncestor(allocator: std.mem.Allocator, out: *std.ArrayList(u8), header: consensus_context.HeaderFields, first: bool) !void {
+    if (!first) try out.append(allocator, ',');
+    const row = try std.fmt.allocPrint(allocator, "{{\"time\":{d},\"bits\":{d}}}", .{ header.time, header.bits });
+    defer allocator.free(row);
+    try out.appendSlice(allocator, row);
+}
+
+fn appendHeaderCase(
+    allocator: std.mem.Allocator,
+    manifest: *std.ArrayList(u8),
+    id: []const u8,
+    reason: []const u8,
+    ancestors: []const consensus_context.HeaderFields,
+    accept_time: u32,
+    accept_bits: u32,
+    reject_time: u32,
+    reject_bits: u32,
+) !void {
+    var body: std.ArrayList(u8) = .empty;
+    defer body.deinit(allocator);
+    const head = try std.fmt.allocPrint(allocator, ",\n    {{\"id\":\"{s}\",\"kind\":\"header\",\"reject_reason\":\"{s}\",\"accept\":{{\"height\":{d},\"time\":{d},\"bits\":{d},\"ancestors\":[", .{ id, reason, ancestors.len, accept_time, accept_bits });
+    defer allocator.free(head);
+    try body.appendSlice(allocator, head);
+    for (ancestors, 0..) |header, index| try appendAncestor(allocator, &body, header, index == 0);
+    const mid = try std.fmt.allocPrint(allocator, "]}},\"reject\":{{\"height\":{d},\"time\":{d},\"bits\":{d},\"ancestors\":[", .{ ancestors.len, reject_time, reject_bits });
+    defer allocator.free(mid);
+    try body.appendSlice(allocator, mid);
+    for (ancestors, 0..) |header, index| try appendAncestor(allocator, &body, header, index == 0);
+    try body.appendSlice(allocator, "]}}");
+    try manifest.appendSlice(allocator, body.items);
+}
+
+fn fillSpan(headers: []consensus_context.HeaderFields, first_bits: u32, first_time: u32, prev_bits: u32, prev_time: u32) void {
+    for (headers, 0..) |*header, index| header.* = .{ .time = first_time +% @as(u32, @intCast(index)), .bits = first_bits };
+    headers[0] = .{ .time = first_time, .bits = first_bits };
+    headers[headers.len - 1] = .{ .time = prev_time, .bits = prev_bits };
+}
+
+fn appendMinDifficulty(allocator: std.mem.Allocator, manifest: *std.ArrayList(u8)) !void {
+    const ancestors = [_]consensus_context.HeaderFields{
+        .{ .time = 1_000_000, .bits = 0x1d00fffe },
+        .{ .time = 1_000_600, .bits = chain_params.pow_limit_bits },
+    };
+    const time: u32 = 1_001_200;
+    const required = try consensus_context.requiredBits(SliceHeaders{ .items = &ancestors }, 2, time);
+    try appendHeaderCase(allocator, manifest, "consensus.nbits_min_difficulty_misuse", "nbits_mismatch", &ancestors, time, required, time, chain_params.pow_limit_bits);
+}
+
+fn appendRetarget(allocator: std.mem.Allocator, manifest: *std.ArrayList(u8), id: []const u8, reason: []const u8, use_first_bits: bool) !void {
+    const headers = try allocator.alloc(consensus_context.HeaderFields, chain_params.interval);
+    defer allocator.free(headers);
+    const first_time: u32 = 1_000_000;
+    const prev_time: u32 = first_time + @as(u32, @intCast(chain_params.timespan));
+    const first_bits: u32 = if (use_first_bits) 0x1d00fffe else chain_params.pow_limit_bits;
+    fillSpan(headers, first_bits, first_time, chain_params.pow_limit_bits, prev_time);
+    const required = try consensus_context.requiredBits(SliceHeaders{ .items = headers }, chain_params.interval, prev_time);
+    const wrong = if (use_first_bits)
+        try consensus_context.retargetBits(chain_params.pow_limit_bits, first_time, prev_time)
+    else
+        0x1d00fffe;
+    try appendHeaderCase(allocator, manifest, id, reason, headers, prev_time, required, prev_time, wrong);
+}
+
+fn appendTimewarp(allocator: std.mem.Allocator, manifest: *std.ArrayList(u8)) !void {
+    const headers = try allocator.alloc(consensus_context.HeaderFields, chain_params.interval);
+    defer allocator.free(headers);
+    const first_time: u32 = 1_000_000;
+    const prev_time: u32 = first_time + @as(u32, @intCast(chain_params.timespan));
+    fillSpan(headers, chain_params.pow_limit_bits, first_time, chain_params.pow_limit_bits, prev_time);
+    const required = try consensus_context.requiredBits(SliceHeaders{ .items = headers }, chain_params.interval, prev_time - chain_params.timewarp);
+    try appendHeaderCase(allocator, manifest, "consensus.bip94_timewarp", "timewarp", headers, prev_time - chain_params.timewarp, required, prev_time - chain_params.timewarp - 1, required);
 }
 
 fn decodeUndo(allocator: std.mem.Allocator, bytes: []const u8) ![]root.UndoEntry {

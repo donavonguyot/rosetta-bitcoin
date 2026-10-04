@@ -81,6 +81,8 @@ pub fn main(init: std.process.Init) !void {
         defer db.close();
         try core.context_fixture.writeBlockFixtures(allocator, io, &db, out_dir);
         try out.print("{{\"schema\":\"port.consensus_context.v1\",\"command\":\"write-context-fixtures\",\"passed\":true}}\n", .{});
+    } else if (std.mem.eql(u8, command, "check-headers")) {
+        try cmdCheckHeaders(allocator, out, args[2..]);
     } else {
         try out.print("error: unknown command: {s}\n", .{command});
         try usage(out);
@@ -103,6 +105,7 @@ fn usage(out: anytype) !void {
         \\  build-template --trace <dir> [--datadir ./data-zig] [--store=native|rocksdb] [--output path]
         \\  testblockvalidity --block <path> --height <n> [--datadir ./data-zig] [--store=native|rocksdb]
         \\  consensus-context [--manifest path]
+        \\  check-headers [--datadir ./data-zig] [--store=rocksdb|native]
         \\
     , .{});
 }
@@ -208,6 +211,31 @@ fn writeMiningGate(allocator: std.mem.Allocator, io: std.Io, path: []const u8, r
     }
     try body.appendSlice(allocator, "]}\n");
     try writeFileEnsuringParent(io, path, body.items);
+}
+
+fn cmdCheckHeaders(allocator: std.mem.Allocator, out: anytype, args: []const []const u8) !void {
+    const datadir = valueArg(args, "--datadir") orelse core.PortInfo.default_datadir;
+    const store_name = valueArg(args, "--store") orelse "rocksdb";
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.PortInfo.native_dir else core.PortInfo.rocksdb_dir });
+    defer allocator.free(db_path);
+    if (std.mem.eql(u8, store_name, "native")) {
+        var db = try core.native_store.NativeStore.open(allocator, db_path, .{});
+        defer db.close();
+        try finishCheckHeaders(allocator, out, &db, store_name);
+    } else if (std.mem.eql(u8, store_name, "rocksdb")) {
+        var db = try core.RocksDb.open(allocator, db_path);
+        defer db.close();
+        try finishCheckHeaders(allocator, out, &db, store_name);
+    } else return error.UnsupportedStore;
+}
+
+fn finishCheckHeaders(allocator: std.mem.Allocator, out: anytype, db: anytype, store_name: []const u8) !void {
+    const meta = try db.readMetadata(allocator);
+    defer db.deinitMetadata(allocator, meta);
+    if (meta.validated_height < 155063) return error.TipTooLow;
+    const tip: u32 = @intCast(meta.validated_height);
+    const counts = try core.context_fixture.checkStoredHeaders(allocator, db, tip);
+    try out.print("{{\"schema\":\"port.consensus_context.v1\",\"command\":\"check-headers\",\"store\":\"{s}\",\"tip\":{d},\"heights\":{d},\"retarget_boundaries\":{d},\"min_difficulty_blocks\":{d},\"timewarp_checks\":{d},\"passed\":true}}\n", .{ store_name, tip, counts.heights, counts.retarget_boundaries, counts.min_difficulty_blocks, counts.timewarp_checks });
 }
 
 fn cmdTestBlockValidity(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {

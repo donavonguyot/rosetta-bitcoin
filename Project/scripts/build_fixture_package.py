@@ -59,9 +59,19 @@ def write_tar(base: Path, files: list[Path], output) -> None:
 def reject_inputs(shared: Path) -> list[str]:
     manifest = json.loads((shared / "conformance/fixtures/scripts/manifest.json").read_text())
     fixtures = {f["fixture_id"]: f for f in manifest["fixtures"]}
-    return sorted({"conformance/fixtures/scripts/manifest.json", *(
+    paths = {"conformance/fixtures/scripts/manifest.json", *(
         "conformance/fixtures/scripts/" + p
-        for name in REJECT_FIXTURES for paths in fixtures[name]["files"].values() for p in paths)})
+        for name in REJECT_FIXTURES for paths in fixtures[name]["files"].values() for p in paths)}
+    context = shared / "conformance/fixtures/consensus/context/manifest.json"
+    if context.is_file():
+        family = json.loads(context.read_text())
+        paths.add("conformance/fixtures/consensus/context/manifest.json")
+        for fixture in family["fixtures"]:
+            if fixture.get("kind") != "block":
+                continue
+            for key in ("accept", "reject", "undo", "headers"):
+                paths.add("conformance/fixtures/consensus/context/" + fixture[key])
+    return sorted(paths)
 
 
 def package_path(digest: str, store: Path | None = None) -> Path:
