@@ -380,3 +380,21 @@ switch contains OCaml 5.2.1 but not Dune/project dependencies. Its first
 post-merge check is the package-backed corpus once that setup is ready; setup
 itself is outside this work. Core cutover remains deferred with the scheduled
 command above unchanged.
+
+## 2026-10-04 — OCaml follow-up
+
+The host OCaml check is now verified: build, 16/16 native unit tests, and
+45/45 package-backed script cases passed with no failures or unimplemented
+cases. The retained [receipt](../Nodes/Shared/conformance/ocaml_fixture_followup_2026-10-04.json)
+pins the source, package and raw corpus output. Historical selected results
+were not replaced. No Core workload or cutover was run; Core remains deferred
+under the previously recorded cutover procedure.
+
+The isolated Opam `rb-5.2` compiler had configured `HAS_PIPE2`, but native
+helpers crashed in `caml_unix_pipe` at a null call target. Reinstalling that
+switch's compiler with `ac_cv_func_pipe2=no opam reinstall --root="$HOME/.rblab/project-campaigns/toolchains/ocaml-opam" --switch=rb-5.2 --yes --jobs=4 ocaml-base-compiler.5.2.1`
+and then installing `--deps-only --with-test ./Nodes/OCaml` resolved both
+dependency failures. No port implementation changed.
+
+Reproduce from the checkout root with `OPAMROOT="$HOME/.rblab/project-campaigns/toolchains/ocaml-opam" OPAMSWITCH=rb-5.2 CPATH=/opt/homebrew/include LIBRARY_PATH=/opt/homebrew/lib make -C Nodes/OCaml build test ocbitnode-script-corpus RESULTS_DIR="$HOME/.rblab/project-campaigns/<new-receipt-directory>" RESULT_DATE=<new-date>`.
+Create and journal the new receipt directory first; preserve the prior receipt.

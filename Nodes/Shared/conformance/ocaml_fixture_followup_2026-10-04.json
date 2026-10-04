@@ -1,0 +1,30 @@
+{
+  "schema": "rb.ocaml_fixture_followup.v1",
+  "date": "2026-10-04",
+  "source_commit": "a623a173f8bb7813eada9c9db1167f192e157b41",
+  "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+  "compiler": "OCaml 5.2.1",
+  "opam": "2.6.0",
+  "compiler_repair": {
+    "symptom": "ocamlbuild and dune configurator SIGSEGV in caml_unix_pipe; null target",
+    "configure_override": "ac_cv_func_pipe2=no",
+    "scope": "isolated rb-5.2 switch only"
+  },
+  "build": "passed",
+  "unit_tests": {
+    "passed": 16,
+    "failed": 0
+  },
+  "corpus": {
+    "passed": 45,
+    "failed": 0,
+    "not_implemented": 0,
+    "total": 45,
+    "runtime_surface": "host",
+    "receipt": "state:campaigns/ocaml-provenance-followup-2026-10-04/ocaml_script_corpus_2026-10-04.json",
+    "sha256": "b1c5c82358e858288fef6f9326878c4f87b9766552161c9d2187263b8ccfeb80"
+  },
+  "core_workload_launched": false,
+  "core_cutover": "deferred",
+  "binary_sha256": "2aa5e4dfbc7fc8ac179bba0aa5050347dfd0a4ab77ea30e1fb48f35a6e605251"
+}
