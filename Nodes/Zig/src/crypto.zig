@@ -1,4 +1,5 @@
 const std = @import("std");
+const split = @import("script_verify_split.zig");
 pub const source_digest = @import("crypto_options").source_digest;
 pub const own_curve = @import("crypto_options").own_curve;
 const own = @import("own_crypto.zig");
@@ -15,19 +16,25 @@ pub const CryptoVerifier = union(enum) {
     pure: *PureVerifier,
 
     pub fn verifyEcdsaDer(self: CryptoVerifier, pubkey_bytes: []const u8, der_sig: []const u8, msg32: *const [32]u8) bool {
-        return switch (self) {
+        const started = split.nowNs();
+        const ok = switch (self) {
             .native => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
             .own => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
             .pure => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
         };
+        split.record(.ecdsa, started);
+        return ok;
     }
 
     pub fn verifySchnorr(self: CryptoVerifier, xonly_pubkey_bytes: []const u8, sig64: []const u8, msg: []const u8) bool {
-        return switch (self) {
+        const started = split.nowNs();
+        const ok = switch (self) {
             .native => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
             .own => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
             .pure => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
         };
+        split.record(.schnorr, started);
+        return ok;
     }
 
     pub fn taprootTweakAddCheck(
@@ -49,11 +56,14 @@ pub const CryptoVerifier = union(enum) {
         internal_xonly: []const u8,
         tweak32: *const [32]u8,
     ) ?TweakResult {
-        return switch (self) {
+        const started = split.nowNs();
+        const result = switch (self) {
             .native => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
             .own => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
             .pure => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
         };
+        split.record(.taproot_tweak, started);
+        return result;
     }
 };
 
@@ -322,6 +332,30 @@ fn ripemdK2(round: u32) u32 {
         3 => 0x7a6d76e9,
         else => 0x00000000,
     };
+}
+
+test "verifier dispatch records ecdsa schnorr and taproot tweak separately" {
+    split.reset();
+    const zero = [_]u8{0} ** 32;
+    if (own_curve) {
+        var verifier = OwnVerifier.create();
+        defer verifier.destroy();
+        const wrapped = CryptoVerifier{ .own = &verifier };
+        _ = wrapped.verifyEcdsaDer(&.{}, &.{}, &zero);
+        _ = wrapped.verifySchnorr(&.{}, &.{}, &.{});
+        _ = wrapped.taprootTweakPubkeyXOnly(&.{}, &zero);
+    } else {
+        var verifier = try NativeVerifier.create();
+        defer verifier.destroy();
+        const wrapped = CryptoVerifier{ .native = &verifier };
+        _ = wrapped.verifyEcdsaDer(&.{}, &.{}, &zero);
+        _ = wrapped.verifySchnorr(&.{}, &.{}, &.{});
+        _ = wrapped.taprootTweakPubkeyXOnly(&.{}, &zero);
+    }
+    const got = split.snapshot();
+    try std.testing.expectEqual(@as(u64, 1), got.ecdsa.count);
+    try std.testing.expectEqual(@as(u64, 1), got.schnorr.count);
+    try std.testing.expectEqual(@as(u64, 1), got.taproot_tweak.count);
 }
 
 test "native secp256k1 extrakeys and schnorr backend is available" {

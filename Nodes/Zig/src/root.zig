@@ -1,6 +1,7 @@
 const std = @import("std");
 const build_options = @import("crypto_options");
 
+pub const script_verify_split = @import("script_verify_split.zig");
 pub const store_mode = build_options.store;
 pub const rocksdb_compiled = build_options.store_rocksdb;
 
@@ -944,6 +945,7 @@ pub const ConnectTimings = struct {
     script_worker_cpu_ms: i64 = 0,
     script_worker_elapsed_ns: u64 = 0,
     script_worker_thread_cpu_ns: u64 = 0,
+    script_split: script_verify_split.Split = .{},
     utxo_apply: i64 = 0,
     commit: i64 = 0,
     utxo_delete_prepare: i64 = 0,
@@ -983,6 +985,7 @@ pub const ScriptVerifyStats = struct {
     worker_elapsed_ns: u64 = 0,
     worker_thread_cpu_ns: u64 = 0,
     batches: u64 = 0,
+    split: script_verify_split.Split = .{},
 };
 
 pub fn defaultScriptThreadCount() usize {
@@ -1032,6 +1035,7 @@ pub const ScriptVerifyRunner = struct {
 
     pub fn verifyBlock(self: *ScriptVerifyRunner, transactions: []const tx.Transaction, jobs: []const ScriptJob) !ScriptVerifyStats {
         if (jobs.len == 0) return .{ .threads = self.thread_count };
+        const split_before = script_verify_split.snapshot();
         const started = nowMs();
         const worker_count = @min(self.thread_count, jobs.len);
         const threads = try std.heap.c_allocator.alloc(std.Thread, worker_count);
@@ -1068,6 +1072,7 @@ pub const ScriptVerifyRunner = struct {
             .worker_elapsed_ns = worker_elapsed_ns,
             .worker_thread_cpu_ns = worker_thread_cpu_ns,
             .batches = 1,
+            .split = script_verify_split.snapshot().since(split_before),
         };
     }
 };
@@ -1218,6 +1223,7 @@ pub fn connectDecodedBlock(
     timings.script_worker_cpu_ms += script_stats.worker_cpu_ms;
     timings.script_worker_elapsed_ns += script_stats.worker_elapsed_ns;
     timings.script_worker_thread_cpu_ns += script_stats.worker_thread_cpu_ns;
+    timings.script_split.add(script_stats.split);
     timings.runner_batches += script_stats.batches;
 
     const created_count = try countUnspentCreatedOutputs(transactions, txids, height, &spent);
@@ -1301,6 +1307,7 @@ const ScriptThreadResult = struct {
 
 fn verifyScriptJobsParallel(transactions: []const tx.Transaction, jobs: []const ScriptJob) !ScriptVerifyStats {
     if (jobs.len == 0) return .{};
+    const split_before = script_verify_split.snapshot();
     const started = nowMs();
     var threads = try std.heap.c_allocator.alloc(std.Thread, jobs.len);
     defer std.heap.c_allocator.free(threads);
@@ -1321,6 +1328,7 @@ fn verifyScriptJobsParallel(transactions: []const tx.Transaction, jobs: []const 
         .wall_ms = elapsedMs(started),
         .worker_cpu_ms = elapsedMs(started),
         .batches = 1,
+        .split = script_verify_split.snapshot().since(split_before),
     };
 }
 
