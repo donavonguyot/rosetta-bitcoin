@@ -186,6 +186,17 @@ pub const NativeStore = struct {
         }
     }
 
+    pub fn headerAt(self: *NativeStore, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
+        const key = try root.encodeHeaderKey(allocator, "testnet4", height);
+        defer allocator.free(key);
+        const raw = (try self.getAlloc(allocator, key)) orelse return null;
+        defer allocator.free(raw);
+        if (raw.len < 80) return error.ShortHeader;
+        var header: [80]u8 = undefined;
+        @memcpy(header[0..], raw[0..80]);
+        return header;
+    }
+
     pub fn getManyUtxoRaw(self: *NativeStore, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.Outpoint, stats: ?*root.UtxoLoadStats) ![]?[]u8 {
         const out = try allocator.alloc(?[]u8, outpoints.len);
         errdefer allocator.free(out);

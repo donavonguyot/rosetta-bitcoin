@@ -28,7 +28,7 @@ RB_STATE_ROOT ?= $(HOME)/.rblab
 SELF_HOSTED_DATE ?= $(RESULT_DATE)
 
 ZIG_PROOF_ARGS ?=
-.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof self-hosted-5k self-hosted-50k self-hosted-100k docker-self-hosted-5k docker-self-hosted-50k clean
+.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof self-hosted-5k self-hosted-50k self-hosted-100k docker-self-hosted-5k docker-self-hosted-50k mempool-replay clean
 
 build:
 	$(ZIG) build
@@ -128,6 +128,9 @@ native-shadow-50k:
 
 native-shadow-100k:
 	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 100000 --snapshot-every 25000 --mem-limit none --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_100k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_100k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
+
+mempool-replay:
+	$(ZIG) build -Doptimize=ReleaseSafe run -- mempool-replay --trace $(TRACE) --store=$(or $(STORE),native) --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_mempool_rung0_host_$(RESULT_DATE).json
 
 native-storage-proof:
 	$(ZIG) build -Doptimize=ReleaseSafe run -- storage-proof --store=native --datadir $(DATA_DIR) --output /tmp/zig_native_storage_gate.json --gate-output ../Shared/conformance/results/zig_native_store_storage_proof_host_$(RESULT_DATE).json

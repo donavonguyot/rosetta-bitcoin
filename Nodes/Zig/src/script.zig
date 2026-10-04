@@ -21,6 +21,7 @@ const OP_2DROP = 0x6d;
 const OP_2DUP = 0x6e;
 const OP_3DUP = 0x6f;
 const OP_2OVER = 0x70;
+const OP_2ROT = 0x71;
 const OP_2SWAP = 0x72;
 const OP_IFDUP = 0x73;
 const OP_DEPTH = 0x74;
@@ -444,6 +445,8 @@ fn verifyTaprootScriptPath(
 
 fn evaluate(allocator: std.mem.Allocator, script: []const u8, stack: *Stack, context: ?*EvalContext) !void {
     var offset: usize = 0;
+    // BIP342 codesep_pos is the opcode index, counting each push as one opcode.
+    var opcode_pos: u32 = 0;
     var alt = Stack.init(allocator);
     defer alt.deinit();
     var conditions: std.ArrayList(bool) = .empty;
@@ -503,7 +506,7 @@ fn evaluate(allocator: std.mem.Allocator, script: []const u8, stack: *Stack, con
             offset += 1;
         } else if (opcode == OP_CODESEPARATOR) {
             if (active and context != null) {
-                context.?.code_separator_offset = if (context.?.mode == .tapscript) offset else offset + 1;
+                context.?.code_separator_offset = if (context.?.mode == .tapscript) opcode_pos else offset + 1;
             }
             offset += 1;
         } else {
@@ -519,6 +522,7 @@ fn evaluate(allocator: std.mem.Allocator, script: []const u8, stack: *Stack, con
             }
             offset += 1;
         }
+        opcode_pos += 1;
     }
     if (conditions.items.len != 0) return error.UnbalancedConditional;
 }
@@ -569,6 +573,27 @@ fn evalOpcode(allocator: std.mem.Allocator, opcode: u8, stack: *Stack, alt: *Sta
             if (stack.items.items.len < 4) return error.StackUnderflow;
             const a = stack.items.items[stack.items.items.len - 4];
             const b = stack.items.items[stack.items.items.len - 3];
+            try stack.push(a);
+            try stack.push(b);
+        },
+        OP_2ROT => {
+            if (stack.items.items.len < 6) return error.StackUnderflow;
+            const f = try stack.pop();
+            defer stack.allocator.free(f);
+            const e = try stack.pop();
+            defer stack.allocator.free(e);
+            const d = try stack.pop();
+            defer stack.allocator.free(d);
+            const c = try stack.pop();
+            defer stack.allocator.free(c);
+            const b = try stack.pop();
+            defer stack.allocator.free(b);
+            const a = try stack.pop();
+            defer stack.allocator.free(a);
+            try stack.push(c);
+            try stack.push(d);
+            try stack.push(e);
+            try stack.push(f);
             try stack.push(a);
             try stack.push(b);
         },

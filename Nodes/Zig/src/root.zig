@@ -19,6 +19,9 @@ pub const script = @import("script.zig");
 pub const p2p = @import("p2p.zig");
 pub const store = @import("store.zig");
 pub const native_store = @import("native_store.zig");
+pub const coins_view = @import("coins_view.zig");
+pub const mempool = @import("mempool.zig");
+pub const rung0 = @import("rung0.zig");
 
 pub const PortInfo = struct {
     pub const port_key = "zig";
@@ -373,6 +376,17 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         if (ptr == null) return null;
         defer c.rocksdb_free(ptr);
         return try allocator.dupe(u8, ptr[0..len]);
+    }
+
+    pub fn headerAt(self: *RocksDb, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
+        const key = try encodeHeaderKey(allocator, "testnet4", height);
+        defer allocator.free(key);
+        const raw = (try self.getAlloc(allocator, key)) orelse return null;
+        defer allocator.free(raw);
+        if (raw.len < 80) return error.ShortHeader;
+        var header: [80]u8 = undefined;
+        @memcpy(header[0..], raw[0..80]);
+        return header;
     }
 
     pub fn getManyRaw(self: *RocksDb, allocator: std.mem.Allocator, keys: []const []const u8) ![]?[]u8 {
