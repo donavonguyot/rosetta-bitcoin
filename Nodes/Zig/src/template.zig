@@ -28,15 +28,9 @@ pub fn headerTimeFor(mtp: u32, now: u32, height: u32, prev_time: u32) u32 {
 }
 
 pub fn nextBits(store: anytype, allocator: std.mem.Allocator, height: u32, time: u32) !u32 {
-    const Adapter = struct {
-        store: @TypeOf(store),
-        allocator: std.mem.Allocator,
-        pub fn header(self: @This(), h: u32) !consensus_context.HeaderFields {
-            const raw = (try self.store.headerAt(self.allocator, h)) orelse return error.MissingHeader;
-            return consensus_context.fieldsFromHeader(&raw);
-        }
-    };
-    return consensus_context.requiredBits(Adapter{ .store = store, .allocator = allocator }, height, time);
+    _ = allocator;
+    try store.ensureHeaderIndex();
+    return consensus_context.requiredBits(store.headerIndex(), height, time);
 }
 
 pub fn coinbaseWeight(allocator: std.mem.Allocator, height: u32) !struct { weight: u64, sigops: u32 } {
@@ -237,6 +231,22 @@ pub fn DiscardingStore(comptime Inner: type) type {
 
         pub fn headerAt(self: *Self, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
             return self.inner.headerAt(allocator, height);
+        }
+
+        pub fn ensureHeaderIndex(self: *Self) !void {
+            try self.inner.ensureHeaderIndex();
+        }
+
+        pub fn headerIndex(self: *Self) consensus_context.HeaderIndex {
+            return self.inner.headerIndex();
+        }
+
+        pub fn medianTimePast(self: *Self, height: u32) !u32 {
+            return self.inner.medianTimePast(height);
+        }
+
+        pub fn headerFields(self: *Self, height: u32) !?consensus_context.HeaderFields {
+            return self.inner.headerFields(height);
         }
 
         pub fn getManyUtxosWithStats(self: *Self, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.Outpoint, stats: ?*root.UtxoLoadStats) ![]?root.StoredUtxo {

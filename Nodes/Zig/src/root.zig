@@ -270,6 +270,8 @@ pub const RocksDb = if (rocksdb_compiled) struct {
     set_hash: store.SetHash = store.emptySetHash(),
     utxo_count: i64 = 0,
     validated_height: i64 = -1,
+    header_index: consensus_context.HeaderIndex = .{},
+    header_index_ready: bool = false,
 
     pub const block_cache_mb: usize = 512;
     pub const write_buffer_mb: usize = 64;
@@ -353,6 +355,7 @@ pub const RocksDb = if (rocksdb_compiled) struct {
     }
 
     pub fn close(self: *RocksDb) void {
+        self.header_index.deinit(self.allocator);
         c.rocksdb_close(self.db);
         c.rocksdb_readoptions_destroy(self.read_opts);
         c.rocksdb_writeoptions_destroy(self.write_opts);
@@ -391,6 +394,33 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         var header: [80]u8 = undefined;
         @memcpy(header[0..], raw[0..80]);
         return header;
+    }
+
+    pub fn ensureHeaderIndex(self: *RocksDb) !void {
+        if (self.header_index_ready) return;
+        if (self.validated_height >= 0) {
+            const last: u32 = @intCast(self.validated_height);
+            var height: u32 = 0;
+            while (height <= last) : (height += 1) {
+                const raw = (try self.headerAt(self.allocator, height)) orelse return error.MissingHeader;
+                try self.header_index.set(self.allocator, height, consensus_context.fieldsFromHeader(&raw));
+            }
+        }
+        self.header_index_ready = true;
+    }
+
+    pub fn headerIndex(self: *RocksDb) consensus_context.HeaderIndex {
+        return self.header_index;
+    }
+
+    pub fn medianTimePast(self: *RocksDb, height: u32) !u32 {
+        try self.ensureHeaderIndex();
+        return self.header_index.mtp(height);
+    }
+
+    pub fn headerFields(self: *RocksDb, height: u32) !?consensus_context.HeaderFields {
+        try self.ensureHeaderIndex();
+        return self.header_index.fields(height);
     }
 
     pub fn getManyRaw(self: *RocksDb, allocator: std.mem.Allocator, keys: []const []const u8) ![]?[]u8 {
@@ -537,6 +567,12 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         if (err != null) {
             c.rocksdb_free(err);
             return error.RocksDbWrite;
+        }
+        if (raw.len >= 80) {
+            var header_bytes: [80]u8 = undefined;
+            @memcpy(header_bytes[0..], raw[0..80]);
+            try self.ensureHeaderIndex();
+            try self.header_index.set(self.allocator, height, consensus_context.fieldsFromHeader(&header_bytes));
         }
     }
 
@@ -1095,20 +1131,6 @@ pub const ScriptVerifyRunner = struct {
     }
 };
 
-fn medianTimePastCached(db: anytype, allocator: std.mem.Allocator, cache: *std.AutoHashMap(u32, u32), height: u32) !u32 {
-    if (cache.get(height)) |found| return found;
-    const Adapter = struct {
-        db: @TypeOf(db),
-        allocator: std.mem.Allocator,
-        pub fn headerAt(self: @This(), h: u32) !?[80]u8 {
-            return self.db.headerAt(self.allocator, h);
-        }
-    };
-    const median = try consensus_context.medianTimePast(Adapter{ .db = db, .allocator = allocator }, height);
-    try cache.put(height, median);
-    return median;
-}
-
 pub fn connectDecodedBlock(
     allocator: std.mem.Allocator,
     db: anytype,
@@ -1124,11 +1146,10 @@ pub fn connectDecodedBlock(
     if (transactions.len == 0) return error.BlockWithoutTransactions;
     if (!transactions[0].isCoinbase()) return error.FirstTransactionNotCoinbase;
 
-    var mtp_cache = std.AutoHashMap(u32, u32).init(allocator);
-    defer mtp_cache.deinit();
-    const block_mtp: u32 = if (height == 0) 0 else try medianTimePastCached(db, allocator, &mtp_cache, height - 1);
+    try db.ensureHeaderIndex();
+    const block_mtp: u32 = if (height == 0) 0 else try db.medianTimePast(height - 1);
     var block_time: u32 = 0;
-    if (try db.headerAt(allocator, height)) |header| block_time = consensus_context.fieldsFromHeader(&header).time;
+    if (try db.headerFields(height)) |fields| block_time = fields.time;
     for (transactions) |transaction| {
         if (consensus_context.txNotFinal(transaction, height, block_mtp, block_time)) return error.TxNotFinal;
     }
@@ -1229,10 +1250,12 @@ pub fn connectDecodedBlock(
             const utxo = from_created orelse loaded.get(outpoint) orelse return error.MissingUtxo;
             if (from_created != null) timings.same_block_spends += 1;
             if (utxo.coinbase and height < utxo.height + 100) return error.CoinbaseMaturity;
-            const coin_time: u32 = if (from_created != null)
+            const coin_time: u32 = if (!consensus_context.sequenceNeedsCoinTime(transaction.version, input.sequence, height))
+                0
+            else if (from_created != null)
                 block_mtp
             else
-                try medianTimePastCached(db, allocator, &mtp_cache, if (utxo.height == 0) 0 else utxo.height - 1);
+                try db.medianTimePast(if (utxo.height == 0) 0 else utxo.height - 1);
             if (consensus_context.sequenceLockUnsatisfied(transaction.version, input.sequence, utxo.height, coin_time, height, block_mtp)) {
                 return error.SequenceLockUnsatisfied;
             }
@@ -1632,6 +1655,23 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
 
         pub fn headerAt(self: *Self, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
             return self.primary.headerAt(allocator, height);
+        }
+
+        pub fn ensureHeaderIndex(self: *Self) !void {
+            try self.primary.ensureHeaderIndex();
+            try self.shadow.ensureHeaderIndex();
+        }
+
+        pub fn headerIndex(self: *Self) consensus_context.HeaderIndex {
+            return self.primary.headerIndex();
+        }
+
+        pub fn medianTimePast(self: *Self, height: u32) !u32 {
+            return self.primary.medianTimePast(height);
+        }
+
+        pub fn headerFields(self: *Self, height: u32) !?consensus_context.HeaderFields {
+            return self.primary.headerFields(height);
         }
 
         pub fn put(self: *Self, key: []const u8, value: []const u8) !void {

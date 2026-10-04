@@ -8,7 +8,8 @@ pub const Coin = struct {
     value: u64,
     height: u32,
     coinbase: bool,
-    /// Median time past of the block before the confirmation block. Pool coins leave this 0.
+    /// Median time past of the block before the confirmation block. Left at 0;
+    /// a time lock reads it from the header index when the input needs it.
     confirmation_mtp: u32,
     script: []const u8,
     from_pool: bool,
@@ -25,7 +26,6 @@ pub fn Coins(comptime Store: type) type {
         pool_out: std.AutoHashMap(root.Outpoint, PoolCoin),
         pool_spent: std.AutoHashMap(root.Outpoint, void),
         chain_spent: std.AutoHashMap(root.Outpoint, void),
-        mtp_cache: std.AutoHashMap(u32, u32),
 
         const PoolCoin = struct {
             value: u64,
@@ -41,7 +41,6 @@ pub fn Coins(comptime Store: type) type {
                 .pool_out = std.AutoHashMap(root.Outpoint, PoolCoin).init(allocator),
                 .pool_spent = std.AutoHashMap(root.Outpoint, void).init(allocator),
                 .chain_spent = std.AutoHashMap(root.Outpoint, void).init(allocator),
-                .mtp_cache = std.AutoHashMap(u32, u32).init(allocator),
             };
         }
 
@@ -51,7 +50,6 @@ pub fn Coins(comptime Store: type) type {
             self.pool_out.deinit();
             self.pool_spent.deinit();
             self.chain_spent.deinit();
-            self.mtp_cache.deinit();
         }
 
         pub fn addPoolOutput(self: *Self, outpoint: root.Outpoint, value: u64, height: u32, coinbase: bool, script: []const u8) !void {
@@ -83,10 +81,8 @@ pub fn Coins(comptime Store: type) type {
         }
 
         pub fn medianTimePast(self: *Self, height: u32) !u32 {
-            if (self.mtp_cache.get(height)) |cached| return cached;
-            const median = try consensus_context.medianTimePast(self, height);
-            try self.mtp_cache.put(height, median);
-            return median;
+            try self.store.ensureHeaderIndex();
+            return self.store.medianTimePast(height);
         }
 
         pub fn lookup(self: *Self, outpoint: root.Outpoint) !struct { kind: LookupKind, coin: ?Coin } {
@@ -110,15 +106,13 @@ pub fn Coins(comptime Store: type) type {
             const loaded = try self.store.getManyUtxosWithStats(self.allocator, "testnet4", one[0..], null);
             defer self.allocator.free(loaded);
             const utxo = loaded[0] orelse return .{ .kind = .missing, .coin = null };
-            const parent_height: u32 = if (utxo.height == 0) 0 else utxo.height - 1;
-            const mtp = self.medianTimePast(parent_height) catch 0;
             return .{
                 .kind = .coin,
                 .coin = .{
                     .value = utxo.value_sats,
                     .height = utxo.height,
                     .coinbase = utxo.coinbase,
-                    .confirmation_mtp = mtp,
+                    .confirmation_mtp = 0,
                     .script = utxo.script_pubkey,
                     .from_pool = false,
                     .owned_script = true,
@@ -133,6 +127,7 @@ pub const MemoryStore = struct {
     allocator: std.mem.Allocator,
     utxos: std.AutoHashMap(root.Outpoint, root.StoredUtxo),
     headers: std.AutoHashMap(u32, [80]u8),
+    header_index: consensus_context.HeaderIndex = .{},
     commits: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator) MemoryStore {
@@ -148,6 +143,7 @@ pub const MemoryStore = struct {
         while (it.next()) |entry| self.allocator.free(entry.value_ptr.script_pubkey);
         self.utxos.deinit();
         self.headers.deinit();
+        self.header_index.deinit(self.allocator);
     }
 
     pub fn putUtxo(self: *MemoryStore, outpoint: root.Outpoint, utxo: root.StoredUtxo) !void {
@@ -161,6 +157,21 @@ pub const MemoryStore = struct {
 
     pub fn putHeader(self: *MemoryStore, height: u32, header: [80]u8) !void {
         try self.headers.put(height, header);
+        try self.header_index.set(self.allocator, height, consensus_context.fieldsFromHeader(&header));
+    }
+
+    pub fn ensureHeaderIndex(_: *MemoryStore) !void {}
+
+    pub fn headerIndex(self: *MemoryStore) consensus_context.HeaderIndex {
+        return self.header_index;
+    }
+
+    pub fn medianTimePast(self: *MemoryStore, height: u32) !u32 {
+        return self.header_index.mtp(height);
+    }
+
+    pub fn headerFields(self: *MemoryStore, height: u32) !?consensus_context.HeaderFields {
+        return self.header_index.fields(height);
     }
 
     pub fn headerAt(self: *MemoryStore, allocator: std.mem.Allocator, height: u32) !?[80]u8 {

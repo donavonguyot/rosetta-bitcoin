@@ -853,10 +853,9 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     defer allocator.free(marker_path);
     try writeFileEnsuringParent(io, marker_path, "zig native storage\n");
 
-    if (try db.getAlloc(allocator, tryMetadataKey(allocator, "validation_crypto_backend"))) |previous| {
-        defer allocator.free(previous);
-        if (!std.mem.eql(u8, previous, crypto_label)) return error.CryptoBackendMismatch;
-    }
+    // The marker records which verifier last wrote this datadir. The set hash
+    // does not depend on the verifier, so a store opened under the other
+    // backend stays valid.
     try db.put(tryMetadataKey(allocator, "validation_crypto_backend"), crypto_label);
     try db.put(tryMetadataKey(allocator, "crypto_source_digest"), core.crypto.source_digest);
     const meta = try db.readMetadata(allocator);

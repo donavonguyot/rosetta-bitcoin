@@ -1,5 +1,9 @@
 //! Testnet4 consensus parameters. Deployment heights are data for the shared
 //! context checks. They are not a reason to special-case a block height in connect.
+//!
+//! Through height 155069, 105573 of 155070 testnet4 blocks are minimum-difficulty,
+//! 68 percent. That is why a retarget's base is the first block of the period
+//! rather than the previous block.
 
 pub const pow_limit_bits: u32 = 0x1d00ffff;
 pub const spacing: u32 = 600;

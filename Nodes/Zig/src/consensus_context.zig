@@ -17,6 +17,48 @@ pub fn fieldsFromHeader(header: *const [80]u8) HeaderFields {
     };
 }
 
+/// Dense header time and bits from height 0. Eight bytes per height. MTP is the
+/// median of the timestamps in this array; callers do not re-read the store.
+pub const HeaderIndex = struct {
+    items: std.ArrayList(HeaderFields) = .empty,
+
+    pub fn deinit(self: *HeaderIndex, allocator: std.mem.Allocator) void {
+        self.items.deinit(allocator);
+    }
+
+    pub fn set(self: *HeaderIndex, allocator: std.mem.Allocator, height: u32, view: HeaderFields) !void {
+        while (self.items.items.len < height) {
+            try self.items.append(allocator, .{ .time = 0, .bits = 0 });
+        }
+        if (self.items.items.len == height) {
+            try self.items.append(allocator, view);
+        } else {
+            self.items.items[height] = view;
+        }
+    }
+
+    pub fn fields(self: HeaderIndex, height: u32) ?HeaderFields {
+        if (height >= self.items.items.len) return null;
+        return self.items.items[height];
+    }
+
+    pub fn header(self: HeaderIndex, height: u32) !HeaderFields {
+        return self.fields(height) orelse error.MissingHeader;
+    }
+
+    /// Median of up to 11 timestamps ending at `height`.
+    pub fn mtp(self: HeaderIndex, height: u32) u32 {
+        if (height >= self.items.items.len) return 0;
+        const end: usize = @as(usize, height) + 1;
+        const start: usize = if (end > 11) end - 11 else 0;
+        var times: [11]u32 = undefined;
+        const window = self.items.items[start..end];
+        for (window, 0..) |item, i| times[i] = item.time;
+        std.mem.sort(u32, times[0..window.len], {}, std.sort.asc(u32));
+        return times[window.len / 2];
+    }
+};
+
 pub fn txNotFinal(transaction: tx.Transaction, height: u32, mtp: u32, block_time: u32) bool {
     if (transaction.lock_time == 0) return false;
     if (allSequencesFinal(transaction)) return false;
@@ -28,6 +70,15 @@ pub fn txNotFinal(transaction: tx.Transaction, height: u32, mtp: u32, block_time
 fn allSequencesFinal(transaction: tx.Transaction) bool {
     for (transaction.inputs) |input| if (input.sequence != 0xffffffff) return false;
     return true;
+}
+
+/// True only for a BIP68 time lock that can fail. Height locks, version 1, and
+/// the disable bit do not need the creating block's MTP.
+pub fn sequenceNeedsCoinTime(version: i32, sequence: u32, block_height: u32) bool {
+    if (block_height < chain_params.csv_height) return false;
+    if (version < 2) return false;
+    if ((sequence & 0x80000000) != 0) return false;
+    return (sequence & 0x00400000) != 0;
 }
 
 /// `coin_time` is the MTP of `max(coin_height - 1, 0)`. Same-block spends use

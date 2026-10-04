@@ -137,7 +137,7 @@ pub fn Pool(comptime Store: type) type {
 
             for (transaction.inputs, coins) |input, coin_opt| {
                 const coin = coin_opt orelse return .{ .reason = .missing_input };
-                if (sequenceUnsatisfied(transaction, input.sequence, coin, self.next_height, self.tip_mtp)) {
+                if (try sequenceUnsatisfied(&self.coins, transaction, input.sequence, coin, self.next_height, self.tip_mtp)) {
                     return .{ .reason = .sequence_unsatisfied };
                 }
             }
@@ -360,10 +360,16 @@ fn locktimeUnsatisfied(transaction: tx.Transaction, next_height: u32, mtp: u32) 
     return consensus_context.txNotFinal(transaction, next_height, mtp, mtp);
 }
 
-fn sequenceUnsatisfied(transaction: tx.Transaction, sequence: u32, coin: coins_view.Coin, next_height: u32, mtp: u32) bool {
+fn sequenceUnsatisfied(coins: anytype, transaction: tx.Transaction, sequence: u32, coin: coins_view.Coin, next_height: u32, mtp: u32) !bool {
     // A pool output is created at `next_height`, so its confirmation MTP is the
-    // MTP of that height's parent: the tip MTP passed in here.
-    const coin_time = if (coin.from_pool) mtp else coin.confirmation_mtp;
+    // tip MTP passed in here. A chain output reads the header index only when
+    // this input is a relative time lock.
+    const coin_time: u32 = if (!consensus_context.sequenceNeedsCoinTime(transaction.version, sequence, next_height))
+        0
+    else if (coin.from_pool)
+        mtp
+    else
+        try coins.medianTimePast(if (coin.height == 0) 0 else coin.height - 1);
     return consensus_context.sequenceLockUnsatisfied(transaction.version, sequence, coin.height, coin_time, next_height, mtp);
 }
 

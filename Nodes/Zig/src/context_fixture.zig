@@ -335,20 +335,21 @@ pub const HeaderCheck = struct {
 };
 
 pub fn checkStoredHeaders(allocator: std.mem.Allocator, db: anytype, tip: u32) !HeaderCheck {
-    var fields: std.ArrayList(consensus_context.HeaderFields) = .empty;
-    defer fields.deinit(allocator);
+    _ = allocator;
+    try db.ensureHeaderIndex();
+    const index = db.headerIndex();
+    if (index.items.items.len < @as(usize, tip) + 1) return error.MissingHeader;
     var counts = HeaderCheck{};
     var height: u32 = 0;
     while (height <= tip) : (height += 1) {
-        const raw = (try db.headerAt(allocator, height)) orelse return error.MissingHeader;
-        const view = consensus_context.fieldsFromHeader(&raw);
-        const required = try consensus_context.requiredBits(SliceHeaders{ .items = fields.items }, height, view.time);
+        const view = index.items.items[height];
+        const required = try consensus_context.requiredBits(index, height, view.time);
         if (view.bits != required) {
             std.debug.print("nbits mismatch height={d} have={x} required={x}\n", .{ height, view.bits, required });
             return error.NbitsMismatch;
         }
-        if (height > 0 and consensus_context.timewarpViolation(height, view.time, fields.items[height - 1].time)) {
-            std.debug.print("timewarp height={d} time={d} prev={d}\n", .{ height, view.time, fields.items[height - 1].time });
+        if (height > 0 and consensus_context.timewarpViolation(height, view.time, index.items.items[height - 1].time)) {
+            std.debug.print("timewarp height={d} time={d} prev={d}\n", .{ height, view.time, index.items.items[height - 1].time });
             return error.Timewarp;
         }
         if (height > 0 and height % chain_params.interval == 0) {
@@ -356,7 +357,6 @@ pub fn checkStoredHeaders(allocator: std.mem.Allocator, db: anytype, tip: u32) !
             counts.timewarp_checks += 1;
         }
         if (height % chain_params.interval != 0 and view.bits == chain_params.pow_limit_bits) counts.min_difficulty_blocks += 1;
-        try fields.append(allocator, view);
         counts.heights += 1;
     }
     return counts;

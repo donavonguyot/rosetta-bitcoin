@@ -47,6 +47,27 @@ fn fillRetarget(headers: []context.HeaderFields, first_bits: u32, first_time: u3
     headers[headers.len - 1] = .{ .time = prev_time, .bits = prev_bits };
 }
 
+test "coin time is read only for a relative time lock" {
+    const height: u32 = 100;
+    try std.testing.expect(!context.sequenceNeedsCoinTime(1, 0x00400001, height));
+    try std.testing.expect(!context.sequenceNeedsCoinTime(2, 0x80000001, height));
+    try std.testing.expect(!context.sequenceNeedsCoinTime(2, 1, height));
+    try std.testing.expect(context.sequenceNeedsCoinTime(2, 0x00400001, height));
+    try std.testing.expect(!context.sequenceNeedsCoinTime(2, 0x00400001, 0));
+}
+
+test "header index median matches the header walk" {
+    var index = context.HeaderIndex{};
+    defer index.deinit(std.testing.allocator);
+    const times = [_]u32{ 30, 10, 20 };
+    for (times, 0..) |time, height| {
+        try index.set(std.testing.allocator, @intCast(height), .{ .time = time, .bits = 0 });
+    }
+    const walked = try context.medianTimePast(TimeHeaders{ .times = &times }, 2);
+    try std.testing.expectEqual(@as(u32, 20), index.mtp(2));
+    try std.testing.expectEqual(walked, index.mtp(2));
+}
+
 test "median time past uses the headers that exist" {
     const times = [_]u32{ 30, 10, 20 };
     const median = try context.medianTimePast(TimeHeaders{ .times = &times }, 2);
