@@ -1,6 +1,8 @@
 const std = @import("std");
 const split = @import("script_verify_split.zig");
 pub const source_digest = @import("crypto_options").source_digest;
+pub const source_commit = @import("crypto_options").source_commit;
+pub const curve_profile = @import("crypto_options").curve_profile;
 pub const own_curve = @import("crypto_options").own_curve;
 const own = @import("own_crypto.zig");
 pub const OwnVerifier = own.OwnVerifier;

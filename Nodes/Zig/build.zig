@@ -14,6 +14,9 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "probe", probe);
     options.addOption([]const u8, "reject", reject);
     options.addOption([]const u8, "source_digest", b.option([]const u8, "crypto-source-digest", "Package source SHA256") orelse "unrecorded");
+    const curve_profile = b.option(bool, "curve-profile", "Count own_curve field and group operations") orelse false;
+    options.addOption(bool, "curve_profile", curve_profile);
+    options.addOption([]const u8, "source_commit", b.option([]const u8, "source-commit", "Git commit of the measured binary") orelse "unrecorded");
     const utxo_hash = b.option([]const u8, "utxo-hash", "txid64, txid64_mix, or wyhash") orelse "txid64_mix";
     if (!std.mem.eql(u8, utxo_hash, "txid64") and !std.mem.eql(u8, utxo_hash, "txid64_mix") and !std.mem.eql(u8, utxo_hash, "wyhash")) @panic("unknown utxo-hash");
     options.addOption([]const u8, "utxo_hash", utxo_hash);
@@ -21,7 +24,7 @@ pub fn build(b: *std.Build) void {
     if (!std.mem.eql(u8, store, "rocksdb") and !std.mem.eql(u8, store, "native") and !std.mem.eql(u8, store, "both")) @panic("unknown store");
     options.addOption([]const u8, "store", store);
     options.addOption(bool, "store_rocksdb", !std.mem.eql(u8, store, "native"));
-    const secp = b.dependency("secp256k1", .{ .target = target, .optimize = optimize }).module("secp256k1");
+    const secp = b.dependency("secp256k1", .{ .target = target, .optimize = optimize, .curve_profile = curve_profile }).module("secp256k1");
 
     const core_mod = b.addModule("zigbitnode", .{
         .root_source_file = b.path("src/root.zig"),

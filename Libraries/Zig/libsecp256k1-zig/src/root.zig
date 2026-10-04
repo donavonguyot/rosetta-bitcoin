@@ -1,9 +1,80 @@
 //! Experimental variable-time public-input secp256k1. No secret-key operations.
+//! Verification handles public data. Constant-time execution is not a goal.
 const std = @import("std");
+const curve_profile = @import("curve_options").curve_profile;
 const p: u256 = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
 const n: u256 = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141;
 const g = Point{ .x = 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798, .y = 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8 };
 pub const Error = error{ MalformedInput, InvalidScalar, Infinity };
+const ProfileSlot = enum(u3) { fe_inv, fe_mul_sqr, point_double, point_add, to_affine, table_hit };
+var profile_counts: [6]u64 = @splat(0);
+fn profileNote(slot: ProfileSlot) void {
+    if (comptime !curve_profile) return;
+    _ = @atomicRmw(u64, &profile_counts[@intFromEnum(slot)], .Add, 1, .monotonic);
+}
+pub const ProfileCounts = struct {
+    fe_inv: u64,
+    fe_mul_sqr: u64,
+    point_double: u64,
+    point_add: u64,
+    to_affine: u64,
+    table_hit: u64,
+};
+pub fn profileReset() void {
+    for (&profile_counts) |*slot| @atomicStore(u64, slot, 0, .monotonic);
+}
+pub fn profileCounts() ProfileCounts {
+    return .{
+        .fe_inv = @atomicLoad(u64, &profile_counts[@intFromEnum(ProfileSlot.fe_inv)], .monotonic),
+        .fe_mul_sqr = @atomicLoad(u64, &profile_counts[@intFromEnum(ProfileSlot.fe_mul_sqr)], .monotonic),
+        .point_double = @atomicLoad(u64, &profile_counts[@intFromEnum(ProfileSlot.point_double)], .monotonic),
+        .point_add = @atomicLoad(u64, &profile_counts[@intFromEnum(ProfileSlot.point_add)], .monotonic),
+        .to_affine = @atomicLoad(u64, &profile_counts[@intFromEnum(ProfileSlot.to_affine)], .monotonic),
+        .table_hit = @atomicLoad(u64, &profile_counts[@intFromEnum(ProfileSlot.table_hit)], .monotonic),
+    };
+}
+pub fn benchBasePoint() Point {
+    return g;
+}
+pub fn benchFeMul(a: u256, b: u256) u256 {
+    return mul(a, b);
+}
+pub fn benchFeSqr(a: u256) u256 {
+    return mul(a, a);
+}
+pub fn benchFeInv(a: u256) Error!u256 {
+    return inverse(a, p);
+}
+pub fn benchFeNormalize(a: u256) u256 {
+    return if (a >= p) a - p else a;
+}
+pub fn benchScMul(a: u256, b: u256) u256 {
+    return reduceScalar(@as(u512, a) * b);
+}
+pub fn benchScInv(a: u256) Error!u256 {
+    return inverse(a, n);
+}
+pub fn benchRead(bytes: *const [32]u8) u256 {
+    return read(bytes);
+}
+pub fn benchPointDouble(q: Point) Point {
+    return q.double();
+}
+pub fn benchPointAdd(a: Point, b: Point) Point {
+    return a.plus(b);
+}
+pub fn benchToAffine(q: Point) Error!Point {
+    return q.affine();
+}
+pub fn benchScalarMulFixed(k: u256) Point {
+    return generatorMultiply(k);
+}
+pub fn benchScalarMulVar(q: Point, k: u256) Point {
+    return joint(0, q, k);
+}
+pub fn benchDoubleScalar(a: u256, q: Point, b: u256) Point {
+    return joint(a, q, b);
+}
 // p = 2^256 - (2^32 + 977). Three folds bound the result below 2^256;
 // a final subtraction canonicalizes it. No general division is needed here.
 fn reduceField(w: u512) u256 {
@@ -23,6 +94,7 @@ fn sub(a: u256, b: u256) u256 {
     return if (a >= b) a - b else p - (b - a);
 }
 fn mul(a: u256, b: u256) u256 {
+    profileNote(.fe_mul_sqr);
     return reduceField(@as(u512, a) * b);
 }
 fn times(a: u256, comptime b: u256) u256 {
@@ -43,6 +115,7 @@ fn times(a: u256, comptime b: u256) u256 {
 // Coefficients remain below the odd modulus. The odd half is formed from
 // two shifted values plus one, with sum below the modulus. Inputs are public.
 fn inverse(input: u256, modulus: u256) Error!u256 {
+    if (modulus == p) profileNote(.fe_inv);
     if (input == 0 or input >= modulus) return error.InvalidScalar;
     var u = input;
     var v = modulus;
@@ -83,7 +156,7 @@ fn write(a: u256) [32]u8 {
     std.mem.writeInt(u256, &out, a, .big);
     return out;
 }
-const Point = struct {
+pub const Point = struct {
     x: u256 = 0,
     y: u256 = 1,
     z: u256 = 1,
@@ -91,6 +164,7 @@ const Point = struct {
         return .{ .z = 0 };
     }
     fn double(self: Point) Point {
+        profileNote(.point_double);
         if (self.z == 0 or self.y == 0) return infinity();
         const a = mul(self.x, self.x);
         const b = mul(self.y, self.y);
@@ -103,6 +177,7 @@ const Point = struct {
         return .{ .x = x, .y = sub(mul(e, sub(d, x)), times(c, 8)), .z = times(mul(self.y, self.z), 2) };
     }
     fn plus(self: Point, q: Point) Point {
+        profileNote(.point_add);
         if (self.z == 0) return q;
         if (q.z == 0) return self;
         const z1 = mul(self.z, self.z);
@@ -123,6 +198,7 @@ const Point = struct {
     // q is affine (Z=1) or infinity. Equality is compared after scaling
     // q into this point's Jacobian coordinates, never by raw limbs.
     fn mixed(self: Point, q: Point) Point {
+        profileNote(.point_add);
         if (self.z == 0) return q;
         if (q.z == 0) return self;
         const zz = mul(self.z, self.z);
@@ -136,6 +212,7 @@ const Point = struct {
         return .{ .x = x, .y = sub(mul(d, sub(v, x)), mul(self.y, hhh)), .z = mul(self.z, h) };
     }
     fn affine(self: Point) Error!Point {
+        profileNote(.to_affine);
         if (self.z == 0) return error.Infinity;
         const zi = try inverse(self.z, p);
         const z2 = mul(zi, zi);
@@ -177,6 +254,7 @@ fn unpackTable(comptime data: []const u8) [data.len / 64]PackedPoint {
 const generator_table = unpackTable(@embedFile("generator.bin"));
 
 fn signedPoint(table: anytype, digit: i16) Point {
+    profileNote(.table_hit);
     const magnitude: u16 = @intCast(if (digit < 0) -@as(i16, digit) else digit);
     const stored = table[(magnitude - 1) / 2];
     var point = Point{ .x = stored.x, .y = stored.y, .z = if (@hasField(@TypeOf(stored), "z")) stored.z else 1 };
@@ -634,4 +712,96 @@ test "common-Z table and isomorphic joint multiplication" {
     }
     try std.testing.expect(joint(0, g, 0).z == 0);
     try expectSamePoint(joint(1, g, n - 1), original.Point.infinity());
+}
+
+fn modPow(base: u256, exp: u256, modulus: u256) u256 {
+    var result: u256 = 1;
+    var square = base % modulus;
+    var bits = exp;
+    while (bits != 0) {
+        if (bits & 1 == 1) result = @intCast((@as(u512, result) * square) % modulus);
+        square = @intCast((@as(u512, square) * square) % modulus);
+        bits >>= 1;
+    }
+    return result;
+}
+fn cubeRootOfUnity(modulus: u256) u256 {
+    const exponent = (modulus - 1) / 3;
+    var base: u256 = 2;
+    while (base < 1000) : (base += 1) {
+        const root = modPow(base, exponent, modulus);
+        if (root != 1) return root;
+    }
+    unreachable;
+}
+fn binaryMultiply(k: u256, point: Point) Point {
+    var acc = Point.infinity();
+    var bit: u9 = 256;
+    while (bit != 0) {
+        bit -= 1;
+        acc = acc.double();
+        if (((k >> @as(u8, @intCast(bit))) & 1) == 1) acc = acc.plus(point);
+    }
+    return acc;
+}
+fn wideAbs(v: i1024) i1024 {
+    return if (v < 0) -v else v;
+}
+fn nearestWide(value: i1024, denominator: i1024) i1024 {
+    var left = value;
+    var right = denominator;
+    if (right < 0) {
+        left = -left;
+        right = -right;
+    }
+    const quotient = @divTrunc(2 * wideAbs(left) + right, 2 * right);
+    return if (left >= 0) quotient else -quotient;
+}
+fn dotWide(left: [2]i1024, right: [2]i1024) i1024 {
+    return left[0] * right[0] + left[1] * right[1];
+}
+fn gaussBasis(lam: u256) [2][2]i1024 {
+    var first: [2]i1024 = .{ n, 0 };
+    var second: [2]i1024 = .{ -@as(i1024, lam), 1 };
+    while (true) {
+        if (dotWide(first, first) > dotWide(second, second)) {
+            const swap = first;
+            first = second;
+            second = swap;
+        }
+        const quotient = nearestWide(dotWide(first, second), dotWide(first, first));
+        if (quotient == 0) break;
+        second = .{ second[0] - quotient * first[0], second[1] - quotient * first[1] };
+    }
+    if (first[0] * second[1] - second[0] * first[1] < 0) second = .{ -second[0], -second[1] };
+    return .{ first, second };
+}
+
+test "derived cube roots and reduced lattice match the stored GLV constants" {
+    const derived_beta = cubeRootOfUnity(p);
+    var derived_lambda = cubeRootOfUnity(n);
+    try std.testing.expect(derived_beta != 1 and modPow(derived_beta, 3, p) == 1);
+    try std.testing.expect(derived_lambda != 1 and modPow(derived_lambda, 3, n) == 1);
+    const image = try binaryMultiply(derived_lambda, g).affine();
+    if (image.x != mul(derived_beta, g.x) or image.y != g.y) derived_lambda = @intCast((@as(u512, derived_lambda) * derived_lambda) % n);
+    const paired = try binaryMultiply(derived_lambda, g).affine();
+    try std.testing.expectEqual(mul(derived_beta, g.x), paired.x);
+    try std.testing.expectEqual(g.y, paired.y);
+    try std.testing.expectEqual(beta, derived_beta);
+    try std.testing.expectEqual(lambda, derived_lambda);
+    const basis = gaussBasis(derived_lambda);
+    try std.testing.expectEqual(@as(i1024, basis_a[0]), basis[0][0]);
+    try std.testing.expectEqual(@as(i1024, basis_a[1]), basis[0][1]);
+    try std.testing.expectEqual(@as(i1024, basis_b[0]), basis[1][0]);
+    try std.testing.expectEqual(@as(i1024, basis_b[1]), basis[1][1]);
+    const det = basis[0][0] * basis[1][1] - basis[1][0] * basis[0][1];
+    try std.testing.expectEqual(@as(i1024, n), det);
+    for (basis) |vector| {
+        const residue = vector[0] + @as(i1024, derived_lambda) * vector[1];
+        try std.testing.expectEqual(@as(i1024, 0), @mod(residue, n));
+        try std.testing.expect(wideAbs(vector[0]) < (@as(i1024, 1) << 129));
+        try std.testing.expect(wideAbs(vector[1]) < (@as(i1024, 1) << 129));
+    }
+    const coordinate_bound = @divTrunc(wideAbs(basis[0][0]) + wideAbs(basis[1][0]) + 1, 2);
+    try std.testing.expect(coordinate_bound < (@as(i1024, 1) << 129));
 }

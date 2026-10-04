@@ -31,7 +31,7 @@ SELF_HOSTED_DATE ?= $(RESULT_DATE)
 TOOLCHAIN_ENV = ZIG_TOOLCHAIN_SHA256=$$(python3 ../../Project/scripts/provenance.py --zig-binary $(ZIG))
 
 ZIG_PROOF_ARGS ?=
-.PHONY: build test check-toolchain zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof self-hosted-5k self-hosted-50k self-hosted-100k docker-self-hosted-5k docker-self-hosted-50k mempool-replay build-template clean
+.PHONY: build test check-toolchain zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations crypto-bench crypto-profile docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof self-hosted-5k self-hosted-50k self-hosted-100k docker-self-hosted-5k docker-self-hosted-50k mempool-replay build-template clean
 
 check-toolchain:
 	@version=$$($(ZIG) version); \
@@ -63,6 +63,12 @@ test-crypto-vectors:
 	trap 'rm -f "$$tmp"' EXIT; \
 	$(ZIG) build -Dcrypto-backend=$(CRYPTO_BACKEND) run -- test-capability --kind crypto-vectors --outcome-path "$$tmp"; \
 	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT)
+
+crypto-bench:
+	env -u ZIGBITNODE_CRYPTO_BACKEND $(ZIG) build -Doptimize=ReleaseSafe -Dsource-commit=$(shell git rev-parse HEAD) run -- crypto-bench
+
+crypto-profile:
+	env -u ZIGBITNODE_CRYPTO_BACKEND $(ZIG) build -Doptimize=ReleaseSafe -Dcurve-profile=true -Dsource-commit=$(shell git rev-parse HEAD) run -- crypto-bench --profile
 
 test-crypto-mutations:
 	@set -e; \
