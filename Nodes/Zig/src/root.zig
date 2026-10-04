@@ -13,6 +13,8 @@ const c = @cImport({
 });
 
 pub const crypto = @import("crypto.zig");
+pub const chain_params = @import("chain_params.zig");
+pub const consensus_context = @import("consensus_context.zig");
 pub const tx = @import("tx.zig");
 pub const block = @import("block.zig");
 pub const script = @import("script.zig");

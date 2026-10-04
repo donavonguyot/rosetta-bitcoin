@@ -89,8 +89,23 @@ pub fn build(b: *std.Build) void {
     });
     mempool_tests.root_module.addOptions("crypto_options", options);
     mempool_tests.root_module.addImport("secp256k1", secp);
-    addNativeDeps(mempool_tests.root_module, target, own_curve);
+    addNativeDeps(mempool_tests.root_module, target, own_curve, !std.mem.eql(u8, store, "native"));
     test_step.dependOn(&b.addRunArtifact(mempool_tests).step);
+
+    const context_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/consensus_context.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "zigbitnode", .module = core_mod },
+            },
+        }),
+    });
+    context_tests.root_module.addOptions("crypto_options", options);
+    context_tests.root_module.addImport("secp256k1", secp);
+    addNativeDeps(context_tests.root_module, target, own_curve, !std.mem.eql(u8, store, "native"));
+    test_step.dependOn(&b.addRunArtifact(context_tests).step);
 }
 
 fn addNativeDeps(module: *std.Build.Module, target: std.Build.ResolvedTarget, own_curve: bool, link_rocksdb: bool) void {

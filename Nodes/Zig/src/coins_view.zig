@@ -1,5 +1,6 @@
 const std = @import("std");
 const root = @import("root.zig");
+const consensus_context = @import("consensus_context.zig");
 
 pub const LookupKind = enum { coin, spent_in_pool, spent_on_chain, missing };
 
@@ -83,17 +84,7 @@ pub fn Coins(comptime Store: type) type {
 
         pub fn medianTimePast(self: *Self, height: u32) !u32 {
             if (self.mtp_cache.get(height)) |cached| return cached;
-            var times: [11]u32 = undefined;
-            var count: usize = 0;
-            var cursor: i64 = height;
-            while (count < 11 and cursor >= 0) : (cursor -= 1) {
-                const header = (try self.headerAt(@intCast(cursor))) orelse break;
-                times[count] = std.mem.readInt(u32, header[68..72], .little);
-                count += 1;
-            }
-            if (count == 0) return 0;
-            std.mem.sort(u32, times[0..count], {}, std.sort.asc(u32));
-            const median = times[count / 2];
+            const median = try consensus_context.medianTimePast(self, height);
             try self.mtp_cache.put(height, median);
             return median;
         }
