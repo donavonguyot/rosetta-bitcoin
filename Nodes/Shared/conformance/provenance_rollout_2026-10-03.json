@@ -193,5 +193,63 @@
     "current_evidence_selection": true,
     "tracked_project_database": true,
     "retired_port_source": true
-  }
+  },
+  "addenda": [
+    {
+      "date": "2026-10-03",
+      "kind": "retained_original_reclaim",
+      "prompt_sha256": "95ed6f037f496359650aaa8d8baf9c1999834c1bc3de671320f23b5f2791dde9",
+      "prompt_local_file": "Nodes/Shared/conformance/provenance_rollout_2026-10-03.request.txt",
+      "reclaim_receipt": "migrations/reclaim-2026-10-03-applied.json",
+      "reclaim_receipt_sha256": "1efae94bc28ceb4ac1c47dbebe6b09c8eb55ee1bd6754549dd72055d3466c17a",
+      "status": "complete",
+      "logical_bytes_deleted": 15632851927,
+      "free_before": 57438220288,
+      "free_after": 76814540800,
+      "host_free_delta": 19376320512,
+      "classes": {
+        "campaigns": {
+          "checks": {
+            "compatibility_link": true,
+            "complete_journal": true,
+            "destination_idle": true,
+            "expected_sockets": true,
+            "original_idle": true,
+            "original_path": true,
+            "original_unchanged": true,
+            "portable_comparison": true
+          },
+          "original_inventory_sha256": "4bb2dcd5c6bb424ef1e711cc6cc131d66522f765e39c3d29c6c7b0a9fadbe48b",
+          "original_only_sockets": 0,
+          "missing_destination_paths": [],
+          "changed_destination_paths": [],
+          "destination_additions_count": 2687
+        },
+        "substrate": {
+          "checks": {
+            "compatibility_link": true,
+            "complete_journal": true,
+            "destination_idle": true,
+            "expected_sockets": true,
+            "frozen_campaign": true,
+            "original_idle": true,
+            "original_path": true,
+            "original_unchanged": true,
+            "portable_comparison": true
+          },
+          "original_inventory_sha256": "f49bf1351933209f5a2cfb21a8ed4bce4f31c4cddd9623d5f73536233112512a",
+          "original_only_sockets": 276,
+          "missing_destination_paths": [],
+          "changed_destination_paths": [],
+          "destination_additions_count": 0,
+          "frozen_campaign": {
+            "expected_inventory_sha256": "de6f8592c4c1709be21d24a467807021b547cc31f302ab8528f0f1ce167a8f13",
+            "live_inventory_sha256": "de6f8592c4c1709be21d24a467807021b547cc31f302ab8528f0f1ce167a8f13",
+            "note_present": true,
+            "writable_paths": []
+          }
+        }
+      }
+    }
+  ]
 }

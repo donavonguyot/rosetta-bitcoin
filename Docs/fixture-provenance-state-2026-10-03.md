@@ -205,3 +205,32 @@ This operational Core sequence has not been run or live-tested here.
 Tests used offline fixtures and isolated databases. The remaining validation
 limits do not constitute benchmark evidence or permission to run a live-Core
 campaign.
+
+## 2026-10-03 addendum: retained-original reclaim
+
+The owner-authorized reclaim is complete. The local verbatim request and its
+SHA-256 sidecar are beside the rollout JSON, excluded from Git; the dated JSON
+addendum records the request digest. The full local audit and execution receipts
+are state-root `migrations/reclaim-2026-10-03-audit.json` and
+`migrations/reclaim-2026-10-03-applied.json`.
+
+Both migration inventories passed byte/mode/timestamp comparison against their
+live destinations; neither had an incomplete migration or detected writer.
+Compatibility links still resolve into the state root. New destination-only
+toolchain files were enumerated and retained. The originals contained no missing
+portable destination files; their only unique entries were the 276 recorded
+substrate socket paths. `state:substrate/campaign-v2` remains read-only with its
+dated note and unchanged evidence inventory hash.
+
+Only `retained-originals/campaigns` and `retained-originals/substrate` were
+deleted: 15,632,851,927 logical file bytes. The execution receipt records exact
+host free-space readings and a 19,376,320,512-byte increase. That host-wide delta
+includes filesystem allocation effects and concurrent activity, so it is not
+claimed as the exact physical size of the removed files. Rollback to these
+original copies is no longer available. Live destinations, fixture packages,
+build receipts, and Core were preserved.
+
+`Project/scripts/reclaim_state.py` audits by default and requires `--apply` to
+delete. Its four temporary-state tests cover changed/missing destinations,
+writer refusal, a read-only frozen campaign, and restriction to the two named
+originals. Reusing a receipt name is refused.
