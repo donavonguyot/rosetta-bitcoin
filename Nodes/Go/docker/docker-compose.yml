@@ -44,6 +44,7 @@ services:
       GOBITNODE_RUNTIME_SURFACE: ${GOBITNODE_RUNTIME_SURFACE:-docker}
     volumes:
       - ../../Shared/conformance:/shared/conformance
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/shared/conformance/fixtures:ro
     command:
       [
         "gobitnode",

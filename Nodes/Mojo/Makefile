@@ -22,7 +22,7 @@ MOJO_NATIVE_BOUNDARY_AUDIT ?= scripts/native_boundary_audit.py
 UV ?= uv
 PYTHON ?= /opt/homebrew/bin/python3.11
 PKG_CONFIG ?= pkg-config
-CRYPTO_VECTORS ?= ../Shared/conformance/fixtures/native_crypto_v1_vectors.json
+CRYPTO_VECTORS ?= $(RB_FIXTURE_SHARED)/conformance/fixtures/native_crypto_v1_vectors.json
 HOST_CRYPTO_RESULT ?= /tmp/mojo_native_crypto_vectors_host_$(RESULT_DATE).json
 HOST_STORAGE_RESULT ?= /tmp/mojo_rocksdb_storage_proof_host_$(RESULT_DATE).json
 HOST_SCRIPT_CORPUS_DEV_RESULT ?= /tmp/mojo_script_corpus_dev_$(RESULT_DATE).json
@@ -172,7 +172,7 @@ host-storage-proof: host-build
 
 host-script-corpus-dev: host-build
 	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus-dev \
-	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json \
 	  $(if $(FIXTURE_ID),--fixture-id $(FIXTURE_ID),--fixture-set $(FIXTURE_SET)) \
 	  --result-path $(HOST_SCRIPT_CORPUS_DEV_RESULT)); \
 	  echo "$$out"; \
@@ -182,7 +182,7 @@ host-script-corpus-dev: host-build
 
 host-script-corpus: host-build
 	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus \
-	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json); \
+	  --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json); \
 	  echo "$$out"; \
 	  printf "%s\n" "$$out" > $(SCRIPT_CORPUS_RESULT); \
 	  grep -q '"entrypoint_language":"mojo"' <<< "$$out"; \
@@ -195,7 +195,7 @@ host-script-corpus: host-build
 host-script-corpus-shadow: host-build
 	@mkdir -p .benchmark-results
 	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus \
-	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json \
 	  --shadow-crypto \
 	  --result-path $(HOST_SCRIPT_CORPUS_SHADOW_RESULT)); \
 	  echo "$$out"; \
@@ -207,13 +207,13 @@ host-script-corpus-shadow: host-build
 host-script-corpus-reject: host-build
 	@mkdir -p .benchmark-results
 	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus-reject \
-	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json \
 	  --crypto-backend native \
 	  --result-path $(HOST_SCRIPT_CORPUS_REJECT_NATIVE_RESULT)); \
 	  echo "$$out"; \
 	  python3 ../Shared/conformance/tools/validate_script_corpus_reject_result.py $(HOST_SCRIPT_CORPUS_REJECT_NATIVE_RESULT)
 	@out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) $(MOJO_BIN) script-corpus-reject \
-	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json \
 	  --crypto-backend pure \
 	  --result-path $(HOST_SCRIPT_CORPUS_REJECT_PURE_RESULT)); \
 	  echo "$$out"; \
@@ -226,7 +226,7 @@ host-script-corpus-reject-red: host-build
 	  out=$$(MOJOBITNODE_RUNTIME_SURFACE=host MOJOBITNODE_SHIM_PATH=$(abspath $(SHIM_LIB)) \
 	    MOJOBITNODE_ENABLE_REJECT_FAULTS=1 MOJOBITNODE_PURE_CRYPTO_FAULT=$$fault \
 	    $(MOJO_BIN) script-corpus-reject \
-	      --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	      --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json \
 	      --crypto-backend pure \
 	      --result-path $$result); \
 	  echo "$$out"; \
@@ -501,3 +501,6 @@ docker-parallel-runner-smoke:
 
 clean:
 	rm -rf data-mojo data-mojo-proof build .venv .benchmark-results .mojo-docs
+
+include ../Shared/fixture_package.mk
+host-build host-script-corpus-dev host-script-corpus host-script-corpus-shadow host-script-corpus-reject host-script-corpus-reject-red host-script-corpus-foundation-smoke docker-build docker-script-corpus docker-script-corpus-shadow docker-script-corpus-reject docker-script-corpus-reject-red: | fixture-package

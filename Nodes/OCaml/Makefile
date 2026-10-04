@@ -2,8 +2,8 @@ SHELL := /bin/bash
 
 DATA_DIR ?= ./data-ocaml
 RESULTS_DIR ?= ../Shared/conformance/results
-SCRIPT_MANIFEST ?= ../Shared/conformance/fixtures/scripts/manifest.json
-CRYPTO_VECTORS ?= ../Shared/conformance/fixtures/native_crypto_v1_vectors.json
+SCRIPT_MANIFEST ?= $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json
+CRYPTO_VECTORS ?= $(RB_FIXTURE_SHARED)/conformance/fixtures/native_crypto_v1_vectors.json
 TESTING_RESULTS_DIR ?= ../Shared/testing/results
 TESTING_CAPABILITY_EMITTER ?= python3 ../Shared/testing/tools/emit_crypto_capability_contract.py
 CRYPTO_CAPABILITY_RESULT ?= $(TESTING_RESULTS_DIR)/ocaml_crypto_vectors_$(RESULT_DATE).json
@@ -138,3 +138,6 @@ docker-proof-50k-profile:
 	DOCKER_LOCAL_PROOF_VOLUME=$(DOCKER_50K_PROFILE_VOLUME) $(DOCKER_COMPOSE) run --rm -e OCBITNODE_SCRIPT_THREADS=$(OCBITNODE_SCRIPT_THREADS) -e OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS=$(OCBITNODE_SCRIPT_PARALLEL_MIN_INPUTS) -e OCBITNODE_SCRIPT_CHUNK_SIZE=$(OCBITNODE_SCRIPT_CHUNK_SIZE) ocbitnode local-reference-proof --datadir /data --target $(DOCKER_50K_PROFILE_TARGET) --peer $(DOCKER_P2P_PEER) --progress $(PROGRESS) --result-path $(DOCKER_50K_PROFILE_RESULT) --runtime-surface docker --telemetry-log $(DOCKER_50K_PROFILE_TELEMETRY_LOG)
 
 docker-smoke-once: docker-status docker-native-crypto-vectors docker-storage-proof docker-script-corpus
+
+include ../Shared/fixture_package.mk
+build test docker-test test-crypto-vectors test-block-connect-backend ocbitnode-script-corpus docker-build docker-script-corpus: | fixture-package

@@ -8,6 +8,8 @@ services:
     volumes:
       - ${DOCKER_LOCAL_PROOF_VOLUME:-ocbitnode_proof_data}:/data
       - ../../Shared:/workspace/Shared
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/testing/fixtures:/workspace/Shared/testing/fixtures:ro
     networks:
       - default
       - reference

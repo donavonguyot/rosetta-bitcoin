@@ -70,7 +70,7 @@ test-block-connect-backend:
 	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 csharp-node-script-corpus:
-	SECP256K1_BACKEND=native $(DOTNET) run --project $(PROJECT) -c Release -- script-corpus --result-path $(SCRIPT_RESULT)
+	SECP256K1_BACKEND=native $(DOTNET) run --project $(PROJECT) -c Release -- script-corpus --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json --result-path $(SCRIPT_RESULT)
 
 node-status:
 	DATA_DIR=$(DATA_DIR) $(DOTNET) run --project $(PROJECT) -c Release --no-build 2>/dev/null || \
@@ -127,7 +127,7 @@ docker-csharp-native-crypto-proof:
 docker-script-corpus:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build csbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	SECP256K1_BACKEND=native $(DOCKER_COMPOSE) run --rm --no-deps \
-	  -v $(abspath ../Shared/conformance):/shared/conformance \
+	  -v $(abspath ../Shared/conformance):/shared/conformance -v $(RB_FIXTURE_SHARED)/conformance/fixtures:/shared/conformance/fixtures:ro \
 	  csbitnode-sync-proof script-corpus \
 	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
 	  --result-path $(DOCKER_SCRIPT_RESULT) \
@@ -251,3 +251,6 @@ export-snapshots:
 clean:
 	$(DOTNET) clean
 	rm -rf data-csharp-smoke data-csharp-native-proof data-csharp-live-smoke
+
+include ../Shared/fixture_package.mk
+build docker-build test csharp-node-native-crypto-test test-crypto-vectors test-block-connect-backend csharp-node-script-corpus docker-script-corpus: | fixture-package

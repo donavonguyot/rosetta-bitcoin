@@ -52,7 +52,7 @@ test-block-connect-backend:
 
 swift-node-script-corpus:
 	$(SWIFT) run swiftbitnode script-corpus \
-	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json \
 	  --output $(SCRIPT_RESULT)
 
 swift-node-proof-local:
@@ -164,3 +164,6 @@ docker-smoke-once:
 
 clean:
 	rm -rf .build data-swift
+
+include ../Shared/fixture_package.mk
+build test test-crypto-vectors test-block-connect-backend swift-node-script-corpus docker-build docker-script-corpus: | fixture-package

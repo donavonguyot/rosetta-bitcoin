@@ -46,7 +46,7 @@ public final class ChainstateBackendReplayService {
     Path dbPath = NodePaths.dbPathFromEnv(env.get("DATA_DIR"), env.get("DB_PATH"));
     Path dataDir = dbPath.getParent();
     Path fixtureDir =
-        Path.of(env.getOrDefault("FIXTURE_BLOCKS_DIR", "src/test/resources/fixtures"))
+        Path.of(env.getOrDefault("FIXTURE_BLOCKS_DIR", "target/generated-test-resources/fixtures"))
             .toAbsolutePath()
             .normalize();
     Path proofPath =

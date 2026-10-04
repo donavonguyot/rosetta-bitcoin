@@ -50,6 +50,7 @@
   </dependencies>
 
   <build>
+    <testResources><testResource><directory>${project.build.directory}/generated-test-resources</directory></testResource></testResources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -68,6 +69,7 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.5.0</version>
+        <executions><execution><id>fixture-package</id><phase>generate-test-resources</phase><goals><goal>exec</goal></goals><configuration><executable>python3</executable><arguments><argument>${project.basedir}/../../Project/scripts/build_fixture_package.py</argument><argument>--java-resources</argument></arguments></configuration></execution></executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

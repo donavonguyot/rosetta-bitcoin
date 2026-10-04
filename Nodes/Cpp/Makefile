@@ -73,7 +73,7 @@ cpp-node-storage-proof:
 	$(BUILD_DIR)/cpbitnode-storage-proof --datadir $(DATA_DIR) --chainstate-backend rocksdb --proof-path $(or $(PROOF_PATH),../Shared/conformance/results/cpp_rocksdb_codec_v2_storage.json)
 
 cpp-node-script-corpus:
-	$(BUILD_DIR)/cpbitnode-script-corpus --result-path $(SCRIPT_RESULT)
+	$(BUILD_DIR)/cpbitnode-script-corpus --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json --result-path $(SCRIPT_RESULT)
 
 cpp-node-native-crypto-test:
 	cmake -S . -B $(BUILD_DIR)-native -DCMAKE_BUILD_TYPE=Release -DCPBITNODE_USE_ROCKSDB=ON -DCPBITNODE_USE_NATIVE_SECP256K1=ON
@@ -101,7 +101,7 @@ test-block-connect-backend:
 docker-cpp-native-crypto-proof:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	$(DOCKER_COMPOSE) run --rm --no-deps \
-	  -v $(abspath ../Shared/conformance/fixtures):/Nodes/Shared/conformance/fixtures:ro \
+	  -v $(abspath $(RB_FIXTURE_SHARED)/conformance/fixtures):/Nodes/Shared/conformance/fixtures:ro \
 	  cpbitnode-sync-proof cpbitnode_tests
 
 docker-cpp-supporting-5k-proof:
@@ -159,7 +159,7 @@ docker-script-corpus:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build cpbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	$(DOCKER_COMPOSE) run --rm --no-deps \
 	  -e CPBITNODE_REPO_ROOT=/shared \
-	  -v $(abspath ../Shared/conformance):/shared/conformance \
+	  -v $(abspath ../Shared/conformance):/shared/conformance -v $(RB_FIXTURE_SHARED)/conformance/fixtures:/shared/conformance/fixtures:ro \
 	  cpbitnode-sync-proof cpbitnode-script-corpus \
 	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
 	  --result-path $(DOCKER_SCRIPT_RESULT) \
@@ -183,3 +183,6 @@ docker-cpp-sync-resume:
 
 clean:
 	rm -rf $(BUILD_DIR) $(BUILD_DIR)-native
+
+include ../Shared/fixture_package.mk
+build test test-core test-wire test-runtime docker-build cpp-node-script-corpus cpp-node-native-crypto-test test-crypto-vectors test-block-connect-backend docker-script-corpus: | fixture-package
