@@ -1,0 +1,39 @@
+{
+  "schema": "port.native_store.hash_mix.v1",
+  "runtime_surface": "host",
+  "optimize": "ReleaseSafe",
+  "decision": "keep txid64_mix and drop the capacity hint",
+  "decision_note": "Native commit was 36669 ms with utxo_capacity_hint 0 and rehash_count 22. That is the 40 s pass. rehash_ms was 702, so the 22 doublings are cheap once consecutive outputs stop sharing slots. The high-32 fold was not added.",
+  "datadir": "/Users/donavonguyot/.rblab/zig/native-chainstate-100k",
+  "run": {
+    "utxo_hash": "txid64_mix",
+    "utxo_capacity_hint": 0,
+    "rehash_count": 22,
+    "rehash_ms": 702,
+    "height": 100000,
+    "utxo_count": 13154991,
+    "divergence_count": 0,
+    "set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
+    "shadow_set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
+    "commit_ms": 36669,
+    "utxo_load_ms": 4305,
+    "snapshot_ms": 7699,
+    "rocksdb_commit_ms": 36277,
+    "total_ms": 352455,
+    "peak_rss_bytes": 4773527552
+  },
+  "comparison": {
+    "hinted_direct_apply_commit_ms": 35030,
+    "hinted_direct_apply_rocksdb_commit_ms": 32542,
+    "hinted_direct_apply_peak_rss_bytes": 5933318144,
+    "unhinted_txid64_rehash_count": 22,
+    "unhinted_txid64_commit_ms_before_direct_apply": 126108,
+    "unhinted_txid64_peak_rss_bytes": 3750608896
+  },
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "02470a31a984a429b53f2783a3a0a2acd6aa72cd",
+    "binary_sha256": "152a4007831921b3d95009ddfb0ede081d696b4c09abd1b87327107ff5b5f43c",
+    "run_ref": "native-store-hash-mix"
+  }
+}

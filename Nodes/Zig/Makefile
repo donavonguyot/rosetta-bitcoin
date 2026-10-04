@@ -118,13 +118,13 @@ docker-proof-local:
 	  $(ZIG_PROOF_ARGS)
 
 native-shadow-5k:
-	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 5000 --utxo-capacity-hint 8000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_5k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_5k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
+	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 5000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_5k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_5k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
 
 native-shadow-50k:
-	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 50000 --utxo-capacity-hint 600000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_50k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_50k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
+	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 50000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_50k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_50k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
 
 native-shadow-100k:
-	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 100000 --snapshot-every 25000 --utxo-capacity-hint 14000000 --mem-limit none --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_100k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_100k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
+	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 100000 --snapshot-every 25000 --mem-limit none --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_100k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_100k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
 
 native-storage-proof:
 	$(ZIG) build -Doptimize=ReleaseSafe run -- storage-proof --store=native --datadir $(DATA_DIR) --output /tmp/zig_native_storage_gate.json --gate-output ../Shared/conformance/results/zig_native_store_storage_proof_host_$(RESULT_DATE).json
@@ -134,14 +134,14 @@ docker-native-shadow-5k:
 	  DOCKER_PROOF_VOLUME=zigbitnode_native_shadow_5k \
 	  DOCKER_SYNC_TARGET=5000 \
 	  DOCKER_LOCAL_PROOF_RESULT=/tmp/zig_native_shadow_5k.json \
-	  ZIG_PROOF_ARGS='--store=native --shadow --utxo-capacity-hint 8000 --gate-output /results/zig_native_store_shadow_5k_docker_$(RESULT_DATE).json'
+	  ZIG_PROOF_ARGS='--store=native --shadow --gate-output /results/zig_native_store_shadow_5k_docker_$(RESULT_DATE).json'
 
 docker-native-shadow-50k:
 	$(MAKE) docker-proof-local \
 	  DOCKER_PROOF_VOLUME=zigbitnode_native_shadow_50k \
 	  DOCKER_SYNC_TARGET=50000 \
 	  DOCKER_LOCAL_PROOF_RESULT=/tmp/zig_native_shadow_50k.json \
-	  ZIG_PROOF_ARGS='--store=native --shadow --utxo-capacity-hint 600000 --gate-output /results/zig_native_store_shadow_50k_docker_$(RESULT_DATE).json'
+	  ZIG_PROOF_ARGS='--store=native --shadow --gate-output /results/zig_native_store_shadow_50k_docker_$(RESULT_DATE).json'
 
 docker-native-shadow-100k:
 	$(MAKE) docker-proof-local \
@@ -149,7 +149,7 @@ docker-native-shadow-100k:
 	  DOCKER_PROOF_VOLUME=zigbitnode_native_shadow_100k \
 	  DOCKER_SYNC_TARGET=100000 \
 	  DOCKER_LOCAL_PROOF_RESULT=/tmp/zig_native_shadow_100k.json \
-	  ZIG_PROOF_ARGS='--store=native --shadow --snapshot-every 25000 --utxo-capacity-hint 14000000 --mem-limit 10g --gate-output /results/zig_native_store_shadow_100k_docker_$(RESULT_DATE).json'
+	  ZIG_PROOF_ARGS='--store=native --shadow --snapshot-every 25000 --mem-limit 10g --gate-output /results/zig_native_store_shadow_100k_docker_$(RESULT_DATE).json'
 
 docker-native-storage-proof:
 	docker volume rm -f zigbitnode_native_storage_proof >/dev/null 2>&1 || true

@@ -518,6 +518,14 @@
     {
       "port": "zig",
       "claim": "native_store",
+      "gate_id": "native_store_hash_mix",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_hash_mix_host_2026-10-06.json",
+      "status": "current",
+      "notes": "Unhinted host 100k with txid64_mix. 22 rehashes took 702 ms and native commit was 36669 ms, so the mix is the default and the capacity hint is dropped."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
       "gate_id": "native_store_storage_proof",
       "path": "Nodes/Shared/conformance/results/zig_native_store_storage_proof_host_2026-10-03.json",
       "status": "current",
