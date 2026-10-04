@@ -1,5 +1,6 @@
 services:
   mojobitnode:
+    image: ${RB_PROVENANCE_IMAGE:-rb/mojo:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile

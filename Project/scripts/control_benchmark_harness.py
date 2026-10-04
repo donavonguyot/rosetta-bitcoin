@@ -432,6 +432,7 @@ def build_artifact(
     reference_finish_height: int | None = None,
     reference_finish_hash: str | None = None,
     source_state: dict[str, Any] | None = None,
+    provenance: dict[str, Any] | None = None,
 ) -> ControlBuildResult | None:
     entries = progress_entries(proof_log)
     if not entries:
@@ -570,6 +571,10 @@ def build_artifact(
             "telemetry_log": rel(telemetry_log_path),
         },
     }
+    if provenance is not None:
+        from provenance import validate as validate_build_provenance
+        validate_build_provenance({"provenance": provenance})
+        payload["provenance"] = dict(provenance)
     if script_metrics:
         payload["runner_truth_contract_version"] = 1
         payload["script_runner_actual_mode"] = runner_actual_mode

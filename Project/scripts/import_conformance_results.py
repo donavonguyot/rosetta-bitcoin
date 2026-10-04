@@ -30,6 +30,8 @@ def main() -> int:
     if not payload_path.exists():
         payload_path = Path(args.results_json)
     payload = read_json(payload_path)
+    from provenance import validate
+    validate(payload)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")

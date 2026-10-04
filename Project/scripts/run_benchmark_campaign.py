@@ -113,6 +113,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", default="Project/project.db", help="Project mission-control DB path")
     parser.add_argument("--gate", default="shakedown_50k", choices=SUPPORTED_GATES)
+    parser.add_argument("--run-ref", help="Opaque external run reference")
     parser.add_argument("--ports", help="Comma-separated port list")
     parser.add_argument("--all", action="store_true", help="Use all eligible non-reference ports")
     parser.add_argument("--campaign", type=Path, help="Existing campaign state path for --resume")
@@ -378,6 +379,7 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
     return {
         "schema": "rb.benchmark_campaign.v1",
         "campaign_id": campaign_id,
+        "run_ref": getattr(args, "run_ref", None),
         "created_at": utc_now(),
         "updated_at": utc_now(),
         "gate": args.gate,
@@ -691,6 +693,7 @@ def build_control_artifact(
         reference_finish_height=reference_finish_height,
         reference_finish_hash=reference_finish_hash,
         source_state=source_state,
+        provenance=next((row.get("provenance") for row in campaign["ports"] if row["port"] == port), None),
     )
 
 
@@ -907,6 +910,8 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
                 return 1
             continue
 
+        from provenance import prepare_port
+        entry["provenance"], provenance_env = prepare_port(port, campaign.get("run_ref"))
         reference_finish: dict[str, Any] = {}
         if campaign["gate"] == "post_100k_to_tip":
             source_log = campaign_dir(campaign) / "logs" / f"{port}_source_state.log"
@@ -963,6 +968,7 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
                 "REFERENCE_FINISH_HASH": str(reference_finish["hash"]),
                 "POST_100K_TIP_TARGET": str(int(reference_finish["height"])),
             }
+        proof_env.update(provenance_env)
         exit_code = run_shell(
             proof_command,
             proof_log,

@@ -64,8 +64,11 @@ def validate(d):
     require(all(k in r.get('timing_buckets_ms',{}) for k in ('p2p_fetch','block_parse_validate','utxo_load','script_verify','utxo_apply','commit','block_connect_store_commit')),'timing buckets')
  return errors
 def import_result(connection,root,path,payload):
+ from provenance import validate as validate_build_provenance
+ pins=validate_build_provenance(payload)
  errors=validate(payload)
  if errors:raise ValueError(f'{path}: '+', '.join(errors))
+ payload={**payload,**pins}
  connection.execute(DDL)
  connection.execute('INSERT OR REPLACE INTO crypto_lane_results VALUES(?,?,?,?,?,?,?,?,?)',(str(path.relative_to(root)),payload['port'],payload['lane'],payload['implementation'],payload['milestone'],payload['source_digest'],payload['captured_at'],payload['result'],json.dumps(payload,sort_keys=True)))
 def report(connection):

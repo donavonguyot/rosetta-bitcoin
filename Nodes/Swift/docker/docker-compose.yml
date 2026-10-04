@@ -1,5 +1,6 @@
 services:
   swiftbitnode:
+    image: ${RB_PROVENANCE_IMAGE:-rb/swift:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -16,6 +17,7 @@ services:
       - reference
 
   swiftbitnode-script-corpus:
+    image: ${RB_PROVENANCE_IMAGE:-rb/swift:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -28,6 +30,7 @@ services:
       - ../../Shared/conformance/results:/results
 
   swiftbitnode-local-reference-proof:
+    image: ${RB_PROVENANCE_IMAGE:-rb/swift:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile

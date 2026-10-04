@@ -28,19 +28,24 @@ def reference():
  return next(p for p in (build/'lib').iterdir() if p.name in ('libsecp256k1.dylib','libsecp256k1.so'))
 
 def image_build(port,digest,probe=False,reject=''):
+ from provenance import begin_build, finish_build
+ started=begin_build()
  lang=port.title();image=f'rosetta-{port}-own-curve'+('-probe' if probe else '')+('-reject-'+reject if reject else '')+':local'
  args=['docker','build','-f',f'Nodes/{lang}/docker/Dockerfile','--build-arg','CRYPTO_BACKEND=own_curve','--build-arg','CRYPTO_SOURCE_DIGEST='+digest,'--build-arg','CRYPTO_PROBE='+str(probe).lower()]
  if port=='zig':args+=['--build-arg','CRYPTO_REJECT='+reject]
  run(args+['-t',image,'.'],WORK/f'{port}-build-{probe}-{reject}.log')
  if not probe:
   run(args+['--target','build','-t',image+'-builder','.'],WORK/f'{port}-builder.log')
- return image
+ receipt=finish_build(started,image)
+ return 'sha256:'+receipt['binary_sha256']
 
 def base(port,lib,digest,toolchain):
  return {'schema':SCHEMA,'port':port,'lane':'own_curve','implementation':'libsecp256k1-'+port,'source_digest':digest,'captured_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'binary_gate_status':'not_attempted','result':'passed','toolchain':toolchain,'build_settings':{'optimization':'Go default' if port=='go' else 'ReleaseSafe','candidate_only':True,'host':platform.platform(),'cpu':platform.machine()},'dependencies':{'production':[],'ffi':False,'curve_provider':'package','arithmetic':'Go math/big' if port=='go' else 'package u257/u512','hashing':'Go crypto/sha256' if port=='go' else 'Zig std.crypto.hash.sha2.Sha256'},'checks':{}}
 
 def components(port,lib,image,ref,digest):
- builder=image+'-builder';lang=port.title();env=dict(os.environ,CGO_ENABLED='0',GOWORK='off')
+ from provenance import begin_build, finish_build, from_receipt
+ component_start=begin_build()
+ builder=f'rosetta-{port}-own-curve:local-builder';lang=port.title();env=dict(os.environ,CGO_ENABLED='0',GOWORK='off')
  toolchain=run(['docker','run','--rm','--network','none',builder,port,'version']).strip()
  d=base(port,lib,digest,{'node':toolchain,'component':run([port,'version']).strip()});checks=d['checks']
  sources={'native.json':ROOT/'Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json','bip340.csv':ROOT/'Nodes/Shared/testing/fixtures/bip340/test-vectors.csv'}
@@ -78,6 +83,10 @@ def components(port,lib,image,ref,digest):
  linkage=run(['docker','run','--rm','--network','none',image,'sh','-c',f'ldd /usr/local/bin/{binary}; test ! -e /usr/lib/aarch64-linux-gnu/libsecp256k1.so.1; test ! -e /usr/lib/x86_64-linux-gnu/libsecp256k1.so.1'])
  assert 'libsecp256k1' not in linkage
  checks['dependency_audit']={'result':'passed','builder_image_id':run(['docker','image','inspect',builder,'--format','{{.Id}}']).strip(),'dynamic_libraries':linkage.splitlines(),'no_crypto_ffi':True,'no_imported_curve':True}
+ from provenance import begin_build, finish_build, from_receipt
+ d['component_artifact_sha256']=hashlib.sha256(consumer.read_bytes()).hexdigest()
+ d['provenance']=from_receipt(finish_build(component_start,consumer,'file'))
+ d['runtime_image_id']=image
  d['milestone']='component';d['benchmarks']=benchmarks
  return d
 
@@ -143,7 +152,7 @@ def save(d):
  for folder in ('src','internal','cmd'):
   if (node/folder).exists():h.update(source_digest(node/folder).encode())
  d['node_source_digest']=h.hexdigest()
- image=f"rosetta-{d['port']}-own-curve:local"
+ image=d['runtime_image_id']
  d['node_dependencies']=run(['docker','run','--rm','--network','none',image,'dpkg-query','-W','librocksdb7.8']).strip()
  if d['port']=='go':d['node_module_manifest']=(ROOT/'Nodes/Go/go.mod').read_text()
  errors=validate(d)
@@ -153,15 +162,20 @@ def save(d):
  return p
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--port',choices=['go','zig'],required=True);p.add_argument('--all',action='store_true');p.add_argument('--component-only',action='store_true');p.add_argument('--node-only',action='store_true');a=p.parse_args();WORK.mkdir(parents=True,exist_ok=True)
+ p=argparse.ArgumentParser();p.add_argument('--run-ref');p.add_argument('--port',choices=['go','zig'],required=True);p.add_argument('--all',action='store_true');p.add_argument('--component-only',action='store_true');p.add_argument('--node-only',action='store_true');a=p.parse_args();WORK.mkdir(parents=True,exist_ok=True)
  lib=ROOT/'Libraries'/a.port.title()/('libsecp256k1-'+a.port);digest=source_digest(lib);ref=reference();image=image_build(a.port,digest)
  if a.node_only:
   matches=sorted((ROOT/'Nodes/Shared/conformance/results').glob(f'{a.port}_own_curve_component_*.json'))
   d=json.loads(matches[-1].read_text());assert d['source_digest']==digest
   d['captured_at']=datetime.datetime.now(datetime.timezone.utc).isoformat()
  else:
-  d=components(a.port,lib,image,ref,digest);save(d)
+  d=components(a.port,lib,image,ref,digest)
+  if a.run_ref is not None:d['provenance']['run_ref']=a.run_ref
+  save(d)
  if a.component_only:return
+ from provenance import for_image
+ d['provenance']=for_image(image,a.run_ref)
+ d['runtime_image_id']=image
  corpus_doc,_=corpus(a.port,image);d['checks']['script_corpus']={'result':'passed','passed':corpus_doc['passed'],'failed':corpus_doc['failed']}
  wrong=['docker','run','--rm','--network','none','-e',a.port.upper()+'BITNODE_CRYPTO_BACKEND=libsecp256k1',image]
  wrong+=['gobitnode-local-reference-proof'] if a.port=='go' else ['zigbitnode','local-reference-proof']
