@@ -1068,6 +1068,13 @@ pub fn connectDecodedBlock(
 
     var external_prevouts = std.AutoHashMap(Outpoint, void).init(allocator);
     defer external_prevouts.deinit();
+    var created_outpoints = std.AutoHashMap(Outpoint, void).init(allocator);
+    defer created_outpoints.deinit();
+    for (transactions, txids) |transaction, txid| {
+        for (transaction.outputs, 0..) |_, vout| {
+            try created_outpoints.put(.{ .txid = txid, .vout = @intCast(vout) }, {});
+        }
+    }
     var external_order = std.ArrayList(Outpoint).empty;
     defer external_order.deinit(allocator);
     for (transactions[1..]) |transaction| {
@@ -1075,7 +1082,8 @@ pub fn connectDecodedBlock(
             const outpoint = Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
             if (!external_prevouts.contains(outpoint)) {
                 try external_prevouts.put(outpoint, {});
-                try external_order.append(allocator, outpoint);
+                // Same-block outputs are resolved from the block itself. They are not in the store yet.
+                if (!created_outpoints.contains(outpoint)) try external_order.append(allocator, outpoint);
             }
         }
     }
