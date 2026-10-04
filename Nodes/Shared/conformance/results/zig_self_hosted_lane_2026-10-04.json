@@ -112,5 +112,35 @@
       "set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
       "baseline_set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32"
     }
-  ]
+  ],
+  "linked_libraries": {
+    "host_otool_L": [
+      "/usr/lib/libSystem.B.dylib"
+    ],
+    "docker_ldd": [
+      "linux-vdso.so.1",
+      "/lib/aarch64-linux-gnu/libc.so.6",
+      "/lib/ld-linux-aarch64.so.1"
+    ],
+    "docker_image": "sha256:f15e612ec2a600e2886859c2630b17ccf41c3d636591a5dd26dd2f5a750371c0",
+    "note": "The -Dstore=native -Dcrypto-backend=own_curve binary links libSystem on the host and libc plus the dynamic linker in Docker. It does not link librocksdb or libsecp256k1."
+  },
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "f15341c9bc63dba6cf7c52a33e6b3ef52aeb9a10",
+    "binary_sha256": "d3ef12e29dd873ade260956531d908a16440b76ee7beff954868a9dbdcbf33d0",
+    "run_ref": "zig-self-hosted-cleanup-split",
+    "linked_libraries": {
+      "host_otool_L": [
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "docker_ldd": [
+        "linux-vdso.so.1",
+        "/lib/aarch64-linux-gnu/libc.so.6",
+        "/lib/ld-linux-aarch64.so.1"
+      ],
+      "docker_image": "sha256:f15e612ec2a600e2886859c2630b17ccf41c3d636591a5dd26dd2f5a750371c0",
+      "note": "The -Dstore=native -Dcrypto-backend=own_curve binary links libSystem on the host and libc plus the dynamic linker in Docker. It does not link librocksdb or libsecp256k1."
+    }
+  }
 }

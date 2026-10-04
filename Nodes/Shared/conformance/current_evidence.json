@@ -769,7 +769,15 @@
       "gate_id": "",
       "path": "Nodes/Shared/conformance/results/zig_self_hosted_lane_2026-10-04.json",
       "status": "current",
-      "notes": "Lane summary. Headline ratio is own_curve script_verify against the same-surface c_binding native-store run. vs_canonical_june is the June Docker row, kept separate."
+      "notes": "Lane summary. Headline ratio is own_curve script_verify against the same-surface c_binding native-store run. vs_canonical_june is the June Docker row, kept separate. linked_libraries is libSystem on the host and libc plus the dynamic linker in Docker."
+    },
+    {
+      "port": "zig",
+      "claim": "self_hosted",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_store_native_5k_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Host own_curve built with -Dstore=native. Height 5000, hash, 4574 UTXOs, and set hash e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400 match the native-store oracle. otool -L shows libSystem only."
     }
   ]
 }
