@@ -7,6 +7,7 @@ pub const rocksdb_compiled = build_options.store_rocksdb;
 
 const c = @cImport({
     @cInclude("dirent.h");
+    @cInclude("pthread.h");
     @cInclude("sys/time.h");
     @cInclude("time.h");
     if (build_options.store_rocksdb) @cInclude("rocksdb/c.h");
@@ -1062,10 +1063,41 @@ pub const ScriptCryptoBackend = enum {
     }
 };
 
+const ScriptWork = struct {
+    mutex: c.pthread_mutex_t = undefined,
+    cond: c.pthread_cond_t = undefined,
+    stop: bool = false,
+    generation: u64 = 0,
+    transactions: []const tx.Transaction = &.{},
+    jobs: []const ScriptJob = &.{},
+    results: []ScriptThreadResult = &.{},
+    next_job: std.atomic.Value(usize) = std.atomic.Value(usize).init(0),
+    finished: usize = 0,
+
+    fn lock(self: *ScriptWork) void {
+        if (c.pthread_mutex_lock(&self.mutex) != 0) @panic("script pool lock");
+    }
+
+    fn unlock(self: *ScriptWork) void {
+        if (c.pthread_mutex_unlock(&self.mutex) != 0) @panic("script pool unlock");
+    }
+
+    fn wait(self: *ScriptWork) void {
+        if (c.pthread_cond_wait(&self.cond, &self.mutex) != 0) @panic("script pool wait");
+    }
+
+    fn broadcast(self: *ScriptWork) void {
+        if (c.pthread_cond_broadcast(&self.cond) != 0) @panic("script pool wake");
+    }
+};
+
 pub const ScriptVerifyRunner = struct {
     allocator: std.mem.Allocator,
     thread_count: usize,
     crypto_backend: ScriptCryptoBackend,
+    threads: []std.Thread,
+    timings: []WorkerTiming,
+    work: *ScriptWork,
 
     pub fn create(allocator: std.mem.Allocator, requested_threads: usize) !*ScriptVerifyRunner {
         return createWithCryptoBackend(allocator, requested_threads, if (crypto.own_curve) .own_curve else .native);
@@ -1074,46 +1106,83 @@ pub const ScriptVerifyRunner = struct {
     pub fn createWithCryptoBackend(allocator: std.mem.Allocator, requested_threads: usize, crypto_backend: ScriptCryptoBackend) !*ScriptVerifyRunner {
         if (crypto.own_curve != (crypto_backend == .own_curve)) return error.CryptoBackendNotCompiled;
         const thread_count = @max(requested_threads, 1);
+        const work = try allocator.create(ScriptWork);
+        errdefer allocator.destroy(work);
+        work.* = .{};
+        if (c.pthread_mutex_init(&work.mutex, null) != 0) return error.ScriptPool;
+        errdefer _ = c.pthread_mutex_destroy(&work.mutex);
+        if (c.pthread_cond_init(&work.cond, null) != 0) return error.ScriptPool;
+        errdefer _ = c.pthread_cond_destroy(&work.cond);
+        const timings = try allocator.alloc(WorkerTiming, thread_count);
+        errdefer allocator.free(timings);
+        for (timings) |*timing| timing.* = .{};
+        const threads = try allocator.alloc(std.Thread, thread_count);
+        errdefer allocator.free(threads);
         const self = try allocator.create(ScriptVerifyRunner);
         self.* = .{
             .allocator = allocator,
             .thread_count = thread_count,
             .crypto_backend = crypto_backend,
+            .threads = threads,
+            .timings = timings,
+            .work = work,
         };
+        var spawned: usize = 0;
+        errdefer {
+            work.lock();
+            work.stop = true;
+            work.broadcast();
+            work.unlock();
+            for (threads[0..spawned]) |thread| thread.join();
+        }
+        for (threads, 0..) |*thread, index| {
+            thread.* = try std.Thread.spawn(.{}, scriptPoolWorker, .{ self, index });
+            spawned += 1;
+        }
         return self;
     }
 
     pub fn destroy(self: *ScriptVerifyRunner) void {
+        self.work.lock();
+        self.work.stop = true;
+        self.work.broadcast();
+        self.work.unlock();
+        for (self.threads) |thread| thread.join();
+        _ = c.pthread_cond_destroy(&self.work.cond);
+        _ = c.pthread_mutex_destroy(&self.work.mutex);
+        self.allocator.free(self.threads);
+        self.allocator.free(self.timings);
+        self.allocator.destroy(self.work);
         self.allocator.destroy(self);
     }
 
     pub fn verifyBlock(self: *ScriptVerifyRunner, transactions: []const tx.Transaction, jobs: []const ScriptJob) !ScriptVerifyStats {
         if (jobs.len == 0) return .{ .threads = self.thread_count };
         const started = nowMs();
-        const worker_count = @min(self.thread_count, jobs.len);
-        const threads = try std.heap.c_allocator.alloc(std.Thread, worker_count);
-        defer std.heap.c_allocator.free(threads);
-        const results = try std.heap.c_allocator.alloc(ScriptThreadResult, jobs.len);
-        defer std.heap.c_allocator.free(results);
+        const results = try self.allocator.alloc(ScriptThreadResult, jobs.len);
+        defer self.allocator.free(results);
         for (results) |*result| result.* = .{};
-        var next_job = std.atomic.Value(usize).init(0);
-        var worker_cpu = try std.heap.c_allocator.alloc(WorkerTiming, worker_count);
-        defer std.heap.c_allocator.free(worker_cpu);
-        for (worker_cpu) |*value| value.* = .{};
-        for (threads, 0..) |*thread, worker_index| {
-            thread.* = try std.Thread.spawn(.{}, scriptVerifySchedulerWorker, .{ transactions, jobs, results, &next_job, &worker_cpu[worker_index], self.crypto_backend });
-        }
-        for (threads) |thread| thread.join();
+        self.work.lock();
+        for (self.timings) |*timing| timing.* = .{};
+        self.work.transactions = transactions;
+        self.work.jobs = jobs;
+        self.work.results = results;
+        self.work.next_job.store(0, .monotonic);
+        self.work.finished = 0;
+        self.work.generation += 1;
+        self.work.broadcast();
+        while (self.work.finished < self.thread_count) self.work.wait();
         var worker_cpu_ms: i64 = 0;
         var worker_elapsed_ns: u64 = 0;
         var worker_thread_cpu_ns: u64 = 0;
         var split = script_verify_split.Split{};
-        for (worker_cpu) |value| {
-            worker_cpu_ms += value.legacy_ms;
-            worker_elapsed_ns += value.elapsed_ns;
-            worker_thread_cpu_ns += value.cpu_ns;
-            split.add(value.split);
+        for (self.timings) |timing| {
+            worker_cpu_ms += timing.legacy_ms;
+            worker_elapsed_ns += timing.elapsed_ns;
+            worker_thread_cpu_ns += timing.cpu_ns;
+            split.add(timing.split);
         }
+        self.work.unlock();
 
         if (firstScriptFailure(results)) |result| {
             printScriptFailure(result);
@@ -1421,42 +1490,83 @@ fn clockNs(clock: c.clockid_t) u64 {
     return @as(u64, @intCast(value.tv_sec)) * 1_000_000_000 + @as(u64, @intCast(value.tv_nsec));
 }
 
-fn scriptVerifySchedulerWorker(
-    transactions: []const tx.Transaction,
-    jobs: []const ScriptJob,
-    results: []ScriptThreadResult,
-    next_job: *std.atomic.Value(usize),
-    worker_cpu_ms: *WorkerTiming,
-    crypto_backend: ScriptCryptoBackend,
-) void {
-    switch (crypto_backend) {
+fn scriptPoolWorker(self: *ScriptVerifyRunner, index: usize) void {
+    const timing = &self.timings[index];
+    var seen: u64 = 0;
+    switch (self.crypto_backend) {
         .own_curve => {
             var verifier = crypto.OwnVerifier.create();
             defer verifier.destroy();
-            return scriptVerifySchedulerWorkerLoop(transactions, jobs, results, next_job, worker_cpu_ms, .{ .own = &verifier });
+            scriptPoolLoop(self, timing, &seen, .{ .own = &verifier });
         },
         .native => {
             var verifier = crypto.NativeVerifier.create() catch {
-                while (true) {
-                    const job_index = next_job.fetchAdd(1, .monotonic);
-                    if (job_index >= jobs.len) return;
-                    const job = jobs[job_index];
-                    results[job_index] = .{
-                        .err = error.NativeCryptoUnavailable,
-                        .tx_index = job.tx_index,
-                        .input_index = job.input_index,
-                        .txid = transactions[job.tx_index].txid(),
-                    };
-                }
+                scriptPoolFailLoop(self, &seen, error.NativeCryptoUnavailable);
+                return;
             };
             defer verifier.destroy();
-            return scriptVerifySchedulerWorkerLoop(transactions, jobs, results, next_job, worker_cpu_ms, .{ .native = &verifier });
+            scriptPoolLoop(self, timing, &seen, .{ .native = &verifier });
         },
         .pure => {
             var verifier = crypto.PureVerifier.create();
             defer verifier.destroy();
-            return scriptVerifySchedulerWorkerLoop(transactions, jobs, results, next_job, worker_cpu_ms, .{ .pure = &verifier });
+            scriptPoolLoop(self, timing, &seen, .{ .pure = &verifier });
         },
+    }
+}
+
+fn scriptPoolLoop(
+    self: *ScriptVerifyRunner,
+    timing: *WorkerTiming,
+    seen: *u64,
+    verifier: crypto.CryptoVerifier,
+) void {
+    while (true) {
+        self.work.lock();
+        while (!self.work.stop and self.work.generation == seen.*) self.work.wait();
+        if (self.work.stop) {
+            self.work.unlock();
+            return;
+        }
+        seen.* = self.work.generation;
+        const transactions = self.work.transactions;
+        const jobs = self.work.jobs;
+        const results = self.work.results;
+        const next_job = &self.work.next_job;
+        self.work.unlock();
+        scriptVerifySchedulerWorkerLoop(transactions, jobs, results, next_job, timing, verifier);
+        self.work.lock();
+        self.work.finished += 1;
+        self.work.broadcast();
+        self.work.unlock();
+    }
+}
+
+fn scriptPoolFailLoop(self: *ScriptVerifyRunner, seen: *u64, err: anyerror) void {
+    while (true) {
+        self.work.lock();
+        while (!self.work.stop and self.work.generation == seen.*) self.work.wait();
+        if (self.work.stop) {
+            self.work.unlock();
+            return;
+        }
+        seen.* = self.work.generation;
+        const transactions = self.work.transactions;
+        const jobs = self.work.jobs;
+        const results = self.work.results;
+        self.work.unlock();
+        for (jobs, 0..) |job, job_index| {
+            results[job_index] = .{
+                .err = err,
+                .tx_index = job.tx_index,
+                .input_index = job.input_index,
+                .txid = transactions[job.tx_index].txid(),
+            };
+        }
+        self.work.lock();
+        self.work.finished += 1;
+        self.work.broadcast();
+        self.work.unlock();
     }
 }
 
