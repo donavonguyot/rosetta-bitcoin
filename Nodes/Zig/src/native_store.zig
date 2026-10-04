@@ -89,6 +89,7 @@ pub const NativeStore = struct {
     snapshot_bytes: u64 = 0,
     rehash_count: u32 = 0,
     rehash_ms: i64 = 0,
+    header_index: root.consensus_context.HeaderIndex = .{},
 
     pub fn open(allocator: std.mem.Allocator, path: []const u8, options: OpenOptions) !NativeStore {
         try root.rejectUnapprovedRuntimeDbArtifacts(path);
@@ -112,6 +113,7 @@ pub const NativeStore = struct {
         try self.truncateFlatFiles();
         try self.loadCounters();
         try self.reserveUtxoCapacity();
+        try self.loadHeaderIndex();
         return self;
     }
 
@@ -127,6 +129,7 @@ pub const NativeStore = struct {
         self.meta.deinit();
         self.blocks.deinit();
         self.undos.deinit();
+        self.header_index.deinit(self.allocator);
         if (self.log_fd >= 0) _ = std.c.close(self.log_fd);
         if (self.blocks_fd >= 0) _ = std.c.close(self.blocks_fd);
         if (self.headers_fd >= 0) _ = std.c.close(self.headers_fd);
@@ -273,6 +276,50 @@ pub const NativeStore = struct {
         try payload.bytes(display);
         try self.appendRecord(payload.slice());
         try self.applyPayload(payload.slice());
+        if (header_len >= 80) {
+            var header_bytes: [80]u8 = undefined;
+            @memcpy(header_bytes[0..], raw[0..80]);
+            try self.header_index.set(self.allocator, height, root.consensus_context.fieldsFromHeader(&header_bytes));
+        }
+    }
+
+    pub fn ensureHeaderIndex(_: *NativeStore) !void {}
+
+    pub fn headerIndex(self: *NativeStore) root.consensus_context.HeaderIndex {
+        return self.header_index;
+    }
+
+    pub fn medianTimePast(self: *NativeStore, height: u32) !u32 {
+        return self.header_index.mtp(height);
+    }
+
+    pub fn headerFields(self: *NativeStore, height: u32) !?root.consensus_context.HeaderFields {
+        return self.header_index.fields(height);
+    }
+
+    fn loadHeaderIndex(self: *NativeStore) !void {
+        if (self.blocks.count() == 0 or self.headers_len == 0) return;
+        if (self.headers_len > std.math.maxInt(u32)) return error.NativeIo;
+        const bytes = try readFile(self.allocator, self.headers_fd, .{ .offset = 0, .len = @intCast(self.headers_len) });
+        defer self.allocator.free(bytes);
+        var max_height: u32 = 0;
+        var it = self.blocks.iterator();
+        while (it.next()) |entry| {
+            if (entry.key_ptr.* > max_height) max_height = entry.key_ptr.*;
+        }
+        var height: u32 = 0;
+        while (height <= max_height) : (height += 1) {
+            const loc = self.blocks.get(height) orelse {
+                try self.header_index.set(self.allocator, height, .{ .time = 0, .bits = 0 });
+                continue;
+            };
+            if (loc.header.len < 80) return error.ShortHeader;
+            const start: usize = @intCast(loc.header.offset);
+            if (start + 80 > bytes.len) return error.ShortHeader;
+            var header: [80]u8 = undefined;
+            @memcpy(header[0..], bytes[start..][0..80]);
+            try self.header_index.set(self.allocator, height, root.consensus_context.fieldsFromHeader(&header));
+        }
     }
 
     pub fn commitBlock(self: *NativeStore, allocator: std.mem.Allocator, commit: root.ChainstateBlockCommit) !root.CommitTimings {

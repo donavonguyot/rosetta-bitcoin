@@ -12,6 +12,111 @@
       "size": 1924
     },
     {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_height/accept.bin",
+      "sha256": "d84667b4aa1dd74585af28d4a4b4c58b5283316c511726d9da75e9dd8c0fcf8b",
+      "size": 2676
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_height/headers.bin",
+      "sha256": "54e202c53cca6de73fb28f0c8a32aa68ca57d662497a07cae5c3810ce849ad62",
+      "size": 880
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_height/reject.bin",
+      "sha256": "58c65bd7d2bc33403e9bf8c1f871bdfe45a82ebe9157be9a7bbc091cba11a404",
+      "size": 2676
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_height/undo.bin",
+      "sha256": "b61c41af72e4e67cd9026385dfeef9b9b3f0684a563751cac284ffa18962d42d",
+      "size": 934
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_same_block/accept.bin",
+      "sha256": "249e161cf75ee64800e2df24ef12d62e2b233208bb8700ba4b6b7510e6b0c1a9",
+      "size": 3333
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_same_block/headers.bin",
+      "sha256": "5189977d06ad26f69bfa6c7ea5a7177b6df96e2050ee00e53eaf05497d37223b",
+      "size": 880
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_same_block/reject.bin",
+      "sha256": "f4d407e4dc607c1d26d033248808a1878764d4027c5a0c8a0aad081a5aa1b141",
+      "size": 3333
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_same_block/undo.bin",
+      "sha256": "186050d09e3eedd6f70aeded6022726a479c94fc7f759b20b6e82c2fbdace16f",
+      "size": 567
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_time/accept.bin",
+      "sha256": "249e161cf75ee64800e2df24ef12d62e2b233208bb8700ba4b6b7510e6b0c1a9",
+      "size": 3333
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_time/headers.bin",
+      "sha256": "5189977d06ad26f69bfa6c7ea5a7177b6df96e2050ee00e53eaf05497d37223b",
+      "size": 880
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_time/reject.bin",
+      "sha256": "09fa24be2070effc25cad493d4cccfc89cac45630ea8746e9cc04efcfd3e10fd",
+      "size": 3333
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.bip68_time/undo.bin",
+      "sha256": "186050d09e3eedd6f70aeded6022726a479c94fc7f759b20b6e82c2fbdace16f",
+      "size": 567
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.tx_finality_height/accept.bin",
+      "sha256": "d84667b4aa1dd74585af28d4a4b4c58b5283316c511726d9da75e9dd8c0fcf8b",
+      "size": 2676
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.tx_finality_height/headers.bin",
+      "sha256": "54e202c53cca6de73fb28f0c8a32aa68ca57d662497a07cae5c3810ce849ad62",
+      "size": 880
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.tx_finality_height/reject.bin",
+      "sha256": "3ca247f5466dbacd196d69e5ac6f0695a47263f6c9cad08efb7cf17fc5addb46",
+      "size": 2676
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.tx_finality_height/undo.bin",
+      "sha256": "b61c41af72e4e67cd9026385dfeef9b9b3f0684a563751cac284ffa18962d42d",
+      "size": 934
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.tx_finality_mtp/accept.bin",
+      "sha256": "d84667b4aa1dd74585af28d4a4b4c58b5283316c511726d9da75e9dd8c0fcf8b",
+      "size": 2676
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.tx_finality_mtp/headers.bin",
+      "sha256": "54e202c53cca6de73fb28f0c8a32aa68ca57d662497a07cae5c3810ce849ad62",
+      "size": 880
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.tx_finality_mtp/reject.bin",
+      "sha256": "589b40e8527aa62ab87ce5cd6914b971f4c3c01f5b76713bfd42f7dd8207ecec",
+      "size": 2676
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/consensus.tx_finality_mtp/undo.bin",
+      "sha256": "b61c41af72e4e67cd9026385dfeef9b9b3f0684a563751cac284ffa18962d42d",
+      "size": 934
+    },
+    {
+      "path": "conformance/fixtures/consensus/context/manifest.json",
+      "sha256": "1bc0b5b8c6b43544315eb211729aea4783b3f8067163d4e99fbe8e1fbbeb7eb6",
+      "size": 413965
+    },
+    {
       "path": "conformance/fixtures/native_crypto_v1_vectors.json",
       "sha256": "880b6bf5046161441a84ffce5c59b19add70e4b084467cb8645789eec2e901b6",
       "size": 14480
@@ -8837,8 +8942,29 @@
       "size": 1087
     }
   ],
-  "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+  "fixture_hash": "287eb4c5c202bb3ff2a9aa39c22b9849458301e2f9556693649fc91d068b49e8",
   "must_reject_inputs": [
+    "conformance/fixtures/consensus/context/consensus.bip68_height/accept.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_height/headers.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_height/reject.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_height/undo.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_same_block/accept.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_same_block/headers.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_same_block/reject.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_same_block/undo.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_time/accept.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_time/headers.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_time/reject.bin",
+    "conformance/fixtures/consensus/context/consensus.bip68_time/undo.bin",
+    "conformance/fixtures/consensus/context/consensus.tx_finality_height/accept.bin",
+    "conformance/fixtures/consensus/context/consensus.tx_finality_height/headers.bin",
+    "conformance/fixtures/consensus/context/consensus.tx_finality_height/reject.bin",
+    "conformance/fixtures/consensus/context/consensus.tx_finality_height/undo.bin",
+    "conformance/fixtures/consensus/context/consensus.tx_finality_mtp/accept.bin",
+    "conformance/fixtures/consensus/context/consensus.tx_finality_mtp/headers.bin",
+    "conformance/fixtures/consensus/context/consensus.tx_finality_mtp/reject.bin",
+    "conformance/fixtures/consensus/context/consensus.tx_finality_mtp/undo.bin",
+    "conformance/fixtures/consensus/context/manifest.json",
     "conformance/fixtures/scripts/manifest.json",
     "conformance/fixtures/scripts/scripts.bare_multisig_27840/block_27840.hex",
     "conformance/fixtures/scripts/scripts.bare_multisig_27840/tx_bare_multisig_27840.hex",

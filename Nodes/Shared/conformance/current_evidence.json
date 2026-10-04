@@ -802,6 +802,30 @@
       "path": "Nodes/Shared/conformance/results/zig_script_verify_split_host_2026-10-04.json",
       "status": "current",
       "notes": "Script verify split campaign. Same-surface c_binding and own_curve host runs on the native-only binary. The per-verify ratio stays flat; the mix shifts to Schnorr after height 50000."
+    },
+    {
+      "port": "zig",
+      "claim": "mempool",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_mempool_rung0_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Host rung-0 mempool replay of the live trace on native and RocksDB. Verdicts, mutations, and eviction passed, and the two stores agreed on every boundary set hash."
+    },
+    {
+      "port": "zig",
+      "claim": "mining",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_mining_rung0_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Host rung-0 templates from that same replay. All six templates passed testblockvalidity. Fee ratio against Core is diagnostic."
+    },
+    {
+      "port": "zig",
+      "claim": "consensus_context",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_consensus_context_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Host ReleaseSafe own_curve proof for finality, BIP68, required nBits, and the BIP94 timewarp. Nine must-reject fixtures passed, check-headers passed through 155069, and the 5k, 50k, and 100k native-store hashes match the indexed host proofs. The restored native mempool replay kept the rung-0 verdicts."
     }
   ]
 }

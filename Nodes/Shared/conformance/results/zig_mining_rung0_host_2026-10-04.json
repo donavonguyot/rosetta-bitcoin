@@ -1,0 +1,78 @@
+{
+  "schema": "port.mining.rung0.v1",
+  "port": "zig",
+  "runtime_surface": "host",
+  "optimize": "ReleaseSafe",
+  "fixture": "live",
+  "passed": true,
+  "trace_dir": "/Users/donavonguyot/RosettaBitcoin/Nodes/Shared/fixtures/mempool/trace-12415c0feab5a57debe1f641fbcab087854f8c5cdb0a73513b33db12ffaf253a",
+  "stores": [
+    "native",
+    "rocksdb"
+  ],
+  "stores_agree": true,
+  "template_checked": 6,
+  "template_failures": 0,
+  "results": [
+    {
+      "fixture_id": "mining.assembly_bytes",
+      "result": "passed"
+    },
+    {
+      "fixture_id": "mining.testblockvalidity",
+      "result": "passed"
+    },
+    {
+      "fixture_id": "mining.selection_fee_ratio",
+      "result": "passed"
+    }
+  ],
+  "ratio_boundaries": 6,
+  "ratio_omitted": 0,
+  "median_ratio_micros": 1000000,
+  "boundaries": [
+    {
+      "height": 155064,
+      "port_fees": 151829,
+      "core_fees": 151829,
+      "ratio_micros": 1000000
+    },
+    {
+      "height": 155065,
+      "port_fees": 0,
+      "core_fees": 151829,
+      "ratio_micros": 0
+    },
+    {
+      "height": 155066,
+      "port_fees": 0,
+      "core_fees": 151829,
+      "ratio_micros": 0
+    },
+    {
+      "height": 155067,
+      "port_fees": 143329,
+      "core_fees": 143329,
+      "ratio_micros": 1000000
+    },
+    {
+      "height": 155068,
+      "port_fees": 144440,
+      "core_fees": 144440,
+      "ratio_micros": 1000000
+    },
+    {
+      "height": 155069,
+      "port_fees": 303482,
+      "core_fees": 303482,
+      "ratio_micros": 1000000
+    }
+  ],
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "8e1653cbc0bf9e6a8e2f4d2e1bafbf80243a8b59",
+    "binary_sha256": "6ba6b3d067626489ddd7d738a32c3225d7f31337c5d9b8171c307b760aad6cf5",
+    "run_ref": "zig-mempool-mining-rung0",
+    "trace_hash": "12415c0feab5a57debe1f641fbcab087854f8c5cdb0a73513b33db12ffaf253a"
+  }
+}

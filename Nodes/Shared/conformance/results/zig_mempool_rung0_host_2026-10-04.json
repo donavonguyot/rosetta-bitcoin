@@ -1,0 +1,81 @@
+{
+  "schema": "port.mempool.rung0.v1",
+  "port": "zig",
+  "runtime_surface": "host",
+  "optimize": "ReleaseSafe",
+  "fixture": "live",
+  "passed": true,
+  "trace_dir": "/Users/donavonguyot/RosettaBitcoin/Nodes/Shared/fixtures/mempool/trace-12415c0feab5a57debe1f641fbcab087854f8c5cdb0a73513b33db12ffaf253a",
+  "stores": [
+    "native",
+    "rocksdb"
+  ],
+  "stores_agree": true,
+  "tx_checked": 30,
+  "verdict_mismatches": 0,
+  "mutation_checked": 138,
+  "mutation_mismatches": 0,
+  "results": [
+    {
+      "fixture_id": "mempool.layer1_verdicts",
+      "result": "passed"
+    },
+    {
+      "fixture_id": "mempool.mutation_rejects",
+      "result": "passed"
+    },
+    {
+      "fixture_id": "mempool.block_connect_eviction",
+      "result": "passed"
+    },
+    {
+      "fixture_id": "mempool.trace_replay_set_hash",
+      "result": "passed"
+    }
+  ],
+  "boundaries": [
+    {
+      "height": 155064,
+      "set_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "pool": 0,
+      "core_set_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "height": 155065,
+      "set_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "pool": 0,
+      "core_set_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "height": 155066,
+      "set_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "pool": 0,
+      "core_set_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "height": 155067,
+      "set_hash": "e471528ff7f8a64a46134bf1c4611af8b13693ad4c3539cbf9e1ab71ccedf87d",
+      "pool": 3,
+      "core_set_hash": "e471528ff7f8a64a46134bf1c4611af8b13693ad4c3539cbf9e1ab71ccedf87d"
+    },
+    {
+      "height": 155068,
+      "set_hash": "4f4e6ee5868154975f7309cebf34bd7dc1054b5055bae570458a6be1c7fcf8d7",
+      "pool": 6,
+      "core_set_hash": "4f4e6ee5868154975f7309cebf34bd7dc1054b5055bae570458a6be1c7fcf8d7"
+    },
+    {
+      "height": 155069,
+      "set_hash": "20cbc10eb63772ed2396219230ecae2bd91741d1d502600a5d22e6aa10726add",
+      "pool": 20,
+      "core_set_hash": "20cbc10eb63772ed2396219230ecae2bd91741d1d502600a5d22e6aa10726add"
+    }
+  ],
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "8e1653cbc0bf9e6a8e2f4d2e1bafbf80243a8b59",
+    "binary_sha256": "6ba6b3d067626489ddd7d738a32c3225d7f31337c5d9b8171c307b760aad6cf5",
+    "run_ref": "zig-mempool-mining-rung0",
+    "trace_hash": "12415c0feab5a57debe1f641fbcab087854f8c5cdb0a73513b33db12ffaf253a"
+  }
+}

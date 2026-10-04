@@ -1,0 +1,93 @@
+{
+  "schema": "port.consensus_context.v1",
+  "port": "zig",
+  "implementation": "ZigNode",
+  "runtime_surface": "host",
+  "optimize": "ReleaseSafe",
+  "crypto_backend": "own_curve",
+  "category": "consensus_context",
+  "passed": true,
+  "results": [
+    {"fixture_id": "consensus.tx_finality_height", "result": "passed", "accept": "pass", "reject": "tx_not_final"},
+    {"fixture_id": "consensus.tx_finality_mtp", "result": "passed", "accept": "pass", "reject": "tx_not_final"},
+    {"fixture_id": "consensus.bip68_height", "result": "passed", "accept": "pass", "reject": "sequence_lock_unsatisfied"},
+    {"fixture_id": "consensus.bip68_time", "result": "passed", "accept": "pass", "reject": "sequence_lock_unsatisfied"},
+    {"fixture_id": "consensus.bip68_same_block", "result": "passed", "accept": "pass", "reject": "sequence_lock_unsatisfied"},
+    {"fixture_id": "consensus.nbits_min_difficulty_misuse", "result": "passed", "accept": "pass", "reject": "nbits_mismatch"},
+    {"fixture_id": "consensus.nbits_retarget_wrong", "result": "passed", "accept": "pass", "reject": "nbits_mismatch"},
+    {"fixture_id": "consensus.bip94_first_block_bits", "result": "passed", "accept": "pass", "reject": "nbits_mismatch"},
+    {"fixture_id": "consensus.bip94_timewarp", "result": "passed", "accept": "pass", "reject": "timewarp"}
+  ],
+  "check_headers": {
+    "store": "rocksdb",
+    "datadir": "mempool-rung0",
+    "tip": 155069,
+    "heights": 155070,
+    "retarget_boundaries": 76,
+    "min_difficulty_blocks": 105573,
+    "timewarp_checks": 76,
+    "passed": true
+  },
+  "host_gates": [
+    {
+      "target_height": 5000,
+      "store": "native",
+      "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+      "utxo_count": 4574,
+      "set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+      "matches_indexed_host_proof": true,
+      "block_parse_validate_ms": 31,
+      "indexed_block_parse_validate_ms": 30,
+      "block_parse_validate_delta_ms": 1,
+      "connect_total_ms": 1019,
+      "indexed_connect_total_ms": 977,
+      "connect_total_delta_ms": 42
+    },
+    {
+      "target_height": 50000,
+      "store": "native",
+      "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+      "utxo_count": 568855,
+      "set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "matches_indexed_host_proof": true,
+      "block_parse_validate_ms": 680,
+      "indexed_block_parse_validate_ms": 584,
+      "block_parse_validate_delta_ms": 96,
+      "connect_total_ms": 14844,
+      "indexed_connect_total_ms": 14090,
+      "connect_total_delta_ms": 754
+    },
+    {
+      "target_height": 100000,
+      "store": "native",
+      "validated_hash": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
+      "utxo_count": 13154991,
+      "set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
+      "matches_indexed_host_proof": true,
+      "block_parse_validate_ms": 15486,
+      "indexed_block_parse_validate_ms": 14768,
+      "block_parse_validate_delta_ms": 718,
+      "connect_total_ms": 273146,
+      "indexed_connect_total_ms": 258489,
+      "connect_total_delta_ms": 14657
+    }
+  ],
+  "mempool_replay": {
+    "store": "native",
+    "crypto_backend": "c_binding",
+    "binary_sha256": "ca3ddc800910235da510db15d7bf0559627b8eae608d6da6321ae4c7ef64b1b4",
+    "restored_to_start_hash": "0000000000e0ebc4288ef677ff3918f6876bb582fd402719baf2cb19a617d27e",
+    "passed": true,
+    "tx_checked": 30,
+    "verdict_mismatches": 0,
+    "mutation_checked": 138,
+    "mutation_mismatches": 0,
+    "boundaries_match_rung0": true
+  },
+  "provenance": {
+    "run_ref": "zig-consensus-gaps",
+    "fixture_hash": "287eb4c5c202bb3ff2a9aa39c22b9849458301e2f9556693649fc91d068b49e8",
+    "source_commit": "5ea0db2175e883e11d8795d82ea90e6a7a0ecb91",
+    "binary_sha256": "1e9740220ccb2d043cdf6ad21db826a09b0ac87b369846d9a6930f7dbf67c7a4"
+  }
+}

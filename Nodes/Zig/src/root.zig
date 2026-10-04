@@ -13,6 +13,8 @@ const c = @cImport({
 });
 
 pub const crypto = @import("crypto.zig");
+pub const chain_params = @import("chain_params.zig");
+pub const consensus_context = @import("consensus_context.zig");
 pub const tx = @import("tx.zig");
 pub const block = @import("block.zig");
 pub const script = @import("script.zig");
@@ -22,6 +24,7 @@ pub const native_store = @import("native_store.zig");
 pub const coins_view = @import("coins_view.zig");
 pub const mempool = @import("mempool.zig");
 pub const template = @import("template.zig");
+pub const context_fixture = @import("context_fixture.zig");
 pub const rung0 = @import("rung0.zig");
 
 pub const PortInfo = struct {
@@ -267,6 +270,8 @@ pub const RocksDb = if (rocksdb_compiled) struct {
     set_hash: store.SetHash = store.emptySetHash(),
     utxo_count: i64 = 0,
     validated_height: i64 = -1,
+    header_index: consensus_context.HeaderIndex = .{},
+    header_index_ready: bool = false,
 
     pub const block_cache_mb: usize = 512;
     pub const write_buffer_mb: usize = 64;
@@ -350,6 +355,7 @@ pub const RocksDb = if (rocksdb_compiled) struct {
     }
 
     pub fn close(self: *RocksDb) void {
+        self.header_index.deinit(self.allocator);
         c.rocksdb_close(self.db);
         c.rocksdb_readoptions_destroy(self.read_opts);
         c.rocksdb_writeoptions_destroy(self.write_opts);
@@ -388,6 +394,33 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         var header: [80]u8 = undefined;
         @memcpy(header[0..], raw[0..80]);
         return header;
+    }
+
+    pub fn ensureHeaderIndex(self: *RocksDb) !void {
+        if (self.header_index_ready) return;
+        if (self.validated_height >= 0) {
+            const last: u32 = @intCast(self.validated_height);
+            var height: u32 = 0;
+            while (height <= last) : (height += 1) {
+                const raw = (try self.headerAt(self.allocator, height)) orelse return error.MissingHeader;
+                try self.header_index.set(self.allocator, height, consensus_context.fieldsFromHeader(&raw));
+            }
+        }
+        self.header_index_ready = true;
+    }
+
+    pub fn headerIndex(self: *RocksDb) consensus_context.HeaderIndex {
+        return self.header_index;
+    }
+
+    pub fn medianTimePast(self: *RocksDb, height: u32) !u32 {
+        try self.ensureHeaderIndex();
+        return self.header_index.mtp(height);
+    }
+
+    pub fn headerFields(self: *RocksDb, height: u32) !?consensus_context.HeaderFields {
+        try self.ensureHeaderIndex();
+        return self.header_index.fields(height);
     }
 
     pub fn getManyRaw(self: *RocksDb, allocator: std.mem.Allocator, keys: []const []const u8) ![]?[]u8 {
@@ -534,6 +567,12 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         if (err != null) {
             c.rocksdb_free(err);
             return error.RocksDbWrite;
+        }
+        if (raw.len >= 80) {
+            var header_bytes: [80]u8 = undefined;
+            @memcpy(header_bytes[0..], raw[0..80]);
+            try self.ensureHeaderIndex();
+            try self.header_index.set(self.allocator, height, consensus_context.fieldsFromHeader(&header_bytes));
         }
     }
 
@@ -1105,6 +1144,15 @@ pub fn connectDecodedBlock(
     _ = target;
     const block_started = nowMs();
     if (transactions.len == 0) return error.BlockWithoutTransactions;
+    if (!transactions[0].isCoinbase()) return error.FirstTransactionNotCoinbase;
+
+    try db.ensureHeaderIndex();
+    const block_mtp: u32 = if (height == 0) 0 else try db.medianTimePast(height - 1);
+    var block_time: u32 = 0;
+    if (try db.headerFields(height)) |fields| block_time = fields.time;
+    for (transactions) |transaction| {
+        if (consensus_context.txNotFinal(transaction, height, block_mtp, block_time)) return error.TxNotFinal;
+    }
 
     var txids = try allocator.alloc([32]u8, transactions.len);
     defer allocator.free(txids);
@@ -1202,6 +1250,15 @@ pub fn connectDecodedBlock(
             const utxo = from_created orelse loaded.get(outpoint) orelse return error.MissingUtxo;
             if (from_created != null) timings.same_block_spends += 1;
             if (utxo.coinbase and height < utxo.height + 100) return error.CoinbaseMaturity;
+            const coin_time: u32 = if (!consensus_context.sequenceNeedsCoinTime(transaction.version, input.sequence, height))
+                0
+            else if (from_created != null)
+                block_mtp
+            else
+                try db.medianTimePast(if (utxo.height == 0) 0 else utxo.height - 1);
+            if (consensus_context.sequenceLockUnsatisfied(transaction.version, input.sequence, utxo.height, coin_time, height, block_mtp)) {
+                return error.SequenceLockUnsatisfied;
+            }
             prevouts[input_index] = .{ .amount = @intCast(utxo.value_sats), .script_pubkey = utxo.script_pubkey };
         }
         try script_prevout_sets.append(allocator, prevouts);
@@ -1594,6 +1651,27 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
 
         pub fn setHash(self: *Self) store.SetHash {
             return self.primary.setHash();
+        }
+
+        pub fn headerAt(self: *Self, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
+            return self.primary.headerAt(allocator, height);
+        }
+
+        pub fn ensureHeaderIndex(self: *Self) !void {
+            try self.primary.ensureHeaderIndex();
+            try self.shadow.ensureHeaderIndex();
+        }
+
+        pub fn headerIndex(self: *Self) consensus_context.HeaderIndex {
+            return self.primary.headerIndex();
+        }
+
+        pub fn medianTimePast(self: *Self, height: u32) !u32 {
+            return self.primary.medianTimePast(height);
+        }
+
+        pub fn headerFields(self: *Self, height: u32) !?consensus_context.HeaderFields {
+            return self.primary.headerFields(height);
         }
 
         pub fn put(self: *Self, key: []const u8, value: []const u8) !void {

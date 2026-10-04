@@ -1,6 +1,8 @@
 const std = @import("std");
 const crypto = @import("crypto.zig");
 const tx = @import("tx.zig");
+const chain_params = @import("chain_params.zig");
+const consensus_context = @import("consensus_context.zig");
 
 const c = @cImport({
     @cInclude("errno.h");
@@ -10,6 +12,14 @@ const c = @cImport({
     @cInclude("sys/time.h");
     @cInclude("unistd.h");
 });
+
+const FieldHeaders = struct {
+    items: []const consensus_context.HeaderFields,
+    pub fn header(self: @This(), height: u32) !consensus_context.HeaderFields {
+        if (height >= self.items.len) return error.MissingHeader;
+        return self.items[height];
+    }
+};
 
 const PROTOCOL_VERSION: i32 = 70016;
 const SERVICES: u64 = 1 | 8;
@@ -95,7 +105,10 @@ pub const Client = struct {
     pub fn headersThrough(self: *Client, target: u32) ![][32]u8 {
         var hashes = std.ArrayList([32]u8).empty;
         errdefer hashes.deinit(self.allocator);
+        var fields = std.ArrayList(consensus_context.HeaderFields).empty;
+        defer fields.deinit(self.allocator);
         try hashes.append(self.allocator, try crypto.internalHashFromDisplay(self.allocator, GENESIS_HASH));
+        try fields.append(self.allocator, .{ .time = chain_params.genesis_time, .bits = chain_params.genesis_bits });
         while (hashes.items.len <= target) {
             const payload = try getHeadersPayload(self.allocator, hashes.items[hashes.items.len - 1]);
             defer self.allocator.free(payload);
@@ -108,7 +121,13 @@ pub const Client = struct {
             for (headers) |header| {
                 if (hashes.items.len > target) break;
                 if (!std.mem.eql(u8, header[4..36], hashes.items[hashes.items.len - 1][0..])) return error.HeaderPrevMismatch;
+                const height: u32 = @intCast(fields.items.len);
+                const view = consensus_context.fieldsFromHeader(&header);
+                const required = try consensus_context.requiredBits(FieldHeaders{ .items = fields.items }, height, view.time);
+                if (view.bits != required) return error.NbitsMismatch;
                 if (!checkHeaderProofOfWork(header)) return error.HeaderPowInvalid;
+                if (consensus_context.timewarpViolation(height, view.time, fields.items[height - 1].time)) return error.Timewarp;
+                try fields.append(self.allocator, view);
                 try hashes.append(self.allocator, crypto.doubleSha256(header[0..]));
             }
         }

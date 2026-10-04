@@ -1,6 +1,7 @@
 const std = @import("std");
 const root = @import("root.zig");
 const coins_view = @import("coins_view.zig");
+const consensus_context = @import("consensus_context.zig");
 const tx = root.tx;
 const script = root.script;
 const store = root.store;
@@ -136,7 +137,7 @@ pub fn Pool(comptime Store: type) type {
 
             for (transaction.inputs, coins) |input, coin_opt| {
                 const coin = coin_opt orelse return .{ .reason = .missing_input };
-                if (sequenceUnsatisfied(transaction, input.sequence, coin, self.next_height, self.tip_mtp)) {
+                if (try sequenceUnsatisfied(&self.coins, transaction, input.sequence, coin, self.next_height, self.tip_mtp)) {
                     return .{ .reason = .sequence_unsatisfied };
                 }
             }
@@ -356,29 +357,20 @@ pub fn sigopCost(transaction: tx.Transaction, prev_scripts: []const []const u8) 
 }
 
 fn locktimeUnsatisfied(transaction: tx.Transaction, next_height: u32, mtp: u32) bool {
-    if (allSequencesFinal(transaction)) return false;
-    if (transaction.lock_time == 0) return false;
-    if (transaction.lock_time < 500_000_000) return transaction.lock_time >= next_height;
-    return transaction.lock_time >= mtp;
+    return consensus_context.txNotFinal(transaction, next_height, mtp, mtp);
 }
 
-fn allSequencesFinal(transaction: tx.Transaction) bool {
-    for (transaction.inputs) |input| if (input.sequence != 0xffffffff) return false;
-    return true;
-}
-
-fn sequenceUnsatisfied(transaction: tx.Transaction, sequence: u32, coin: coins_view.Coin, next_height: u32, mtp: u32) bool {
-    if (transaction.version < 2) return false;
-    if ((sequence & 0x80000000) != 0) return false;
-    if (coin.from_pool) return true;
-    const masked = sequence & 0x0000ffff;
-    if ((sequence & 0x00400000) != 0) {
-        const need = @as(u64, masked) * 512;
-        const age: u64 = if (mtp > coin.confirmation_mtp) mtp - coin.confirmation_mtp else 0;
-        return age < need;
-    }
-    const age: u32 = if (next_height > coin.height) next_height - coin.height else 0;
-    return age < masked;
+fn sequenceUnsatisfied(coins: anytype, transaction: tx.Transaction, sequence: u32, coin: coins_view.Coin, next_height: u32, mtp: u32) !bool {
+    // A pool output is created at `next_height`, so its confirmation MTP is the
+    // tip MTP passed in here. A chain output reads the header index only when
+    // this input is a relative time lock.
+    const coin_time: u32 = if (!consensus_context.sequenceNeedsCoinTime(transaction.version, sequence, next_height))
+        0
+    else if (coin.from_pool)
+        mtp
+    else
+        try coins.medianTimePast(if (coin.height == 0) 0 else coin.height - 1);
+    return consensus_context.sequenceLockUnsatisfied(transaction.version, sequence, coin.height, coin_time, next_height, mtp);
 }
 
 fn legacySigops(bytes: []const u8) u32 {
