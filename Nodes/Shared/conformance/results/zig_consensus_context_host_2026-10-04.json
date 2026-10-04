@@ -50,12 +50,12 @@
       "utxo_count": 568855,
       "set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
       "matches_indexed_host_proof": true,
-      "block_parse_validate_ms": 634,
+      "block_parse_validate_ms": 680,
       "indexed_block_parse_validate_ms": 584,
-      "block_parse_validate_delta_ms": 50,
-      "connect_total_ms": 16176,
+      "block_parse_validate_delta_ms": 96,
+      "connect_total_ms": 14844,
       "indexed_connect_total_ms": 14090,
-      "connect_total_delta_ms": 2086
+      "connect_total_delta_ms": 754
     },
     {
       "target_height": 100000,
@@ -64,12 +64,12 @@
       "utxo_count": 13154991,
       "set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
       "matches_indexed_host_proof": true,
-      "block_parse_validate_ms": 15117,
+      "block_parse_validate_ms": 15486,
       "indexed_block_parse_validate_ms": 14768,
-      "block_parse_validate_delta_ms": 349,
-      "connect_total_ms": 277546,
+      "block_parse_validate_delta_ms": 718,
+      "connect_total_ms": 273146,
       "indexed_connect_total_ms": 258489,
-      "connect_total_delta_ms": 19057
+      "connect_total_delta_ms": 14657
     }
   ],
   "mempool_replay": {
@@ -87,7 +87,7 @@
   "provenance": {
     "run_ref": "zig-consensus-gaps",
     "fixture_hash": "287eb4c5c202bb3ff2a9aa39c22b9849458301e2f9556693649fc91d068b49e8",
-    "source_commit": "d4b2094c8c64bc17926a188a6f8f1bf56f95e671",
-    "binary_sha256": "fa774ff89a91a097477d9d15c43a874e1d667dda07b7319cb06f743d2a24acbc"
+    "source_commit": "5ea0db2175e883e11d8795d82ea90e6a7a0ecb91",
+    "binary_sha256": "1e9740220ccb2d043cdf6ad21db826a09b0ac87b369846d9a6930f7dbf67c7a4"
   }
 }
