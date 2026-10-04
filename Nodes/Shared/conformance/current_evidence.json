@@ -727,7 +727,7 @@
       "port": "zig",
       "claim": "self_hosted",
       "gate_id": "self_hosted_5k",
-      "path": "Nodes/Shared/conformance/results/zig_self_hosted_5k_host_2026-10-07.json",
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_5k_host_2026-10-04.json",
       "status": "current",
       "notes": "Host own_curve on the native store at 5k. Set hash and UTXO count match the native-store oracle. utxo_load moved 3 ms to 4 ms, inside timer noise."
     },
@@ -735,7 +735,7 @@
       "port": "zig",
       "claim": "self_hosted",
       "gate_id": "self_hosted_50k",
-      "path": "Nodes/Shared/conformance/results/zig_self_hosted_50k_host_2026-10-07.json",
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_50k_host_2026-10-04.json",
       "status": "current",
       "notes": "Host own_curve on the native store at 50k. Set hash and UTXO count match the native-store oracle. Commit is 2203 ms against the hinted txid64 shadow's 1778 ms, while wall time is 21763 vs 21264 and set_hash_fold is 359 vs 367. The commit gap is not script and not the 25 ms rehash timer."
     },
@@ -743,7 +743,7 @@
       "port": "zig",
       "claim": "self_hosted",
       "gate_id": "self_hosted_100k",
-      "path": "Nodes/Shared/conformance/results/zig_self_hosted_100k_host_2026-10-07.json",
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_100k_host_2026-10-04.json",
       "status": "current",
       "notes": "Host own_curve on the native store at 100k. Height, hash, UTXO count 13154991, and set hash match the native-store oracle, including after reopening the datadir. Commit is 37057 ms against the unhinted txid64_mix c_binding run's 36669 ms. utxo_load is 5097 vs 4305 and rehash_ms is 782 vs 702; both counters sum sub-millisecond batches, rehash_count stays 22, and wall time is 340252 vs 352455. script_verify is 171470 ms against the canonical c_binding 116901 ms."
     },
@@ -751,7 +751,7 @@
       "port": "zig",
       "claim": "self_hosted",
       "gate_id": "self_hosted_5k",
-      "path": "Nodes/Shared/conformance/results/zig_self_hosted_5k_docker_2026-10-07.json",
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_5k_docker_2026-10-04.json",
       "status": "current",
       "notes": "Docker own_curve on the native store at 5k. Set hash and UTXO count match the native-store oracle. Commit is 271 ms against the hinted txid64 docker shadow's 209 ms, and wall time is 2329 vs 2486."
     },
@@ -759,7 +759,7 @@
       "port": "zig",
       "claim": "self_hosted",
       "gate_id": "self_hosted_50k",
-      "path": "Nodes/Shared/conformance/results/zig_self_hosted_50k_docker_2026-10-07.json",
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_50k_docker_2026-10-04.json",
       "status": "current",
       "notes": "Docker own_curve on the native store at 50k. Set hash and UTXO count match the native-store oracle. Commit is 5378 ms against the hinted txid64 docker shadow's 4018 ms, while wall time is 39442 vs 39690 and set_hash_fold is 1491 vs 1437."
     },
@@ -767,7 +767,7 @@
       "port": "zig",
       "claim": "self_hosted",
       "gate_id": "",
-      "path": "Nodes/Shared/conformance/results/zig_self_hosted_lane_2026-10-07.json",
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_lane_2026-10-04.json",
       "status": "current",
       "notes": "Lane summary. Own_curve script_verify against this port's canonical c_binding row, plus the native-store set hash both runs matched."
     }
