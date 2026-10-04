@@ -20,6 +20,7 @@ json_extract(summary_json, '$.provenance.run_ref') AS run_ref,
 json_extract(summary_json, '$.provenance.fixture_hash') AS fixture_hash,
 json_extract(summary_json, '$.provenance.source_commit') AS source_commit,
 json_extract(summary_json, '$.provenance.binary_sha256') AS binary_sha256,
+json_extract(summary_json, '$.provenance.toolchain_sha256') AS toolchain_sha256,
 NULL AS port
 FROM artifacts WHERE json_type(summary_json, '$.provenance_by_port') IS NULL
 UNION ALL
@@ -27,7 +28,8 @@ SELECT artifact_id, artifacts.path, json_extract(p.value, '$.provenance_status')
 json_extract(p.value, '$.provenance.run_ref'),
 json_extract(p.value, '$.provenance.fixture_hash'),
 json_extract(p.value, '$.provenance.source_commit'),
-json_extract(p.value, '$.provenance.binary_sha256'), p.key
+json_extract(p.value, '$.provenance.binary_sha256'),
+json_extract(p.value, '$.provenance.toolchain_sha256'), p.key
 FROM artifacts, json_each(summary_json, '$.provenance_by_port') AS p"""
 
 
@@ -76,6 +78,14 @@ def finish_build(start: dict, subject: str | Path, kind: str = "image") -> dict:
     return receipt
 
 
+def toolchain_sha256(zig: Path) -> str:
+    """SHA256 of the zig compiler binary a gate will run."""
+    path = zig.expanduser()
+    if not path.is_file():
+        raise ValueError(f"zig binary missing: {path}")
+    return sha256(path)
+
+
 def from_receipt(receipt: dict, run_ref: str | None = None) -> dict:
     result = {key: receipt[key] for key in ("fixture_hash", "source_commit", "binary_sha256")}
     if run_ref is not None:
@@ -119,11 +129,20 @@ def validate(payload: dict, store: Path | None = None) -> dict:
     value = payload["provenance"]
     if not isinstance(value, dict):
         raise ValueError("provenance must be an object")
+    if "run_ref" in value and not isinstance(value["run_ref"], str):
+        raise ValueError("provenance.run_ref must be a string")
+    if "toolchain_sha256" in value and (
+        not isinstance(value["toolchain_sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", value["toolchain_sha256"])
+    ):
+        raise ValueError("invalid provenance.toolchain_sha256")
+    build_fields = ("fixture_hash", "source_commit", "binary_sha256")
+    if not any(field in value for field in build_fields):
+        if "toolchain_sha256" not in value:
+            raise ValueError("invalid provenance.fixture_hash")
+        return {"provenance_status": "toolchain", "provenance": dict(value)}
     for field, length in (("fixture_hash", 64), ("source_commit", 40), ("binary_sha256", 64)):
         if not isinstance(value.get(field), str) or not re.fullmatch(f"[0-9a-f]{{{length}}}", value[field]):
             raise ValueError(f"invalid provenance.{field}")
-    if "run_ref" in value and not isinstance(value["run_ref"], str):
-        raise ValueError("provenance.run_ref must be a string")
     verify(value["fixture_hash"], store)
     return {"provenance_status": "verified", "provenance": dict(value)}
 
@@ -165,9 +184,15 @@ def prepare_port(port: str, run_ref: str | None = None) -> tuple[dict, dict]:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--image", required=True)
+    parser.add_argument("--zig-binary", type=Path, help="Print the SHA256 of this zig binary and exit")
+    parser.add_argument("--image")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    if args.zig_binary:
+        print(toolchain_sha256(args.zig_binary))
+        return
+    if not args.image:
+        parser.error("--image is required unless --zig-binary is set")
     if not args.command:
         parser.error("provide the build command after --")
     started = begin_build()
