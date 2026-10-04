@@ -1,4 +1,9 @@
 """Build baseline/candidate/C controls from the same frozen node and pinned tools."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import argparse,shutil,fcntl
 from common import *
 def build(variant,probe=False,reject=''):
@@ -17,7 +22,7 @@ def build(variant,probe=False,reject=''):
  lib=ctx/'Libraries/Zig/libsecp256k1-zig';shutil.copytree(package,lib,ignore=shutil.ignore_patterns('.zig-cache','zig-out','__pycache__','*.pyc'))
  bench=ctx/'bench';bench.mkdir();shutil.copy(HERE/'bench.zig',bench/'bench.zig')
  shutil.copy(ROOT/'Project/scripts/zig_crypto_campaign/c_control.zig',bench/'c_control.zig')
- shutil.copy(ROOT/'Project/.campaigns/crypto-lanes/reference.tar.gz',ctx/'reference.tar.gz');shutil.copy(HERE/'Dockerfile',ctx/'Dockerfile')
+ shutil.copy((_rb_paths()['campaigns'] / 'crypto-lanes/reference.tar.gz'),ctx/'reference.tar.gz');shutil.copy(HERE/'Dockerfile',ctx/'Dockerfile')
  backend='c_binding' if variant=='c_control' else 'own_curve'
  digest=source_digest(lib) if backend=='own_curve' else json.loads((HERE/'toolchains.lock.json').read_text())['reference_archive_sha256']
  image='rosetta-zig-open-'+label+':'+digest[:12]
@@ -34,5 +39,5 @@ def build(variant,probe=False,reject=''):
  print('built',label,identity,flush=True);return meta
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('variant',choices=['baseline','candidate','c_control']);p.add_argument('--probe',action='store_true');p.add_argument('--reject',default='');a=p.parse_args()
- with (ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock').open('a') as lock:
+ with ((_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')).open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX);build(a.variant,a.probe,a.reject)

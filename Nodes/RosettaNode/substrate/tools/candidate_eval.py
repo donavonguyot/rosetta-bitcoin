@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """Frozen candidate evaluator. Candidate runs as UID 65534; evaluator stays root."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import argparse,json,os,sys,time,traceback,hashlib,concurrent.futures
 from pathlib import Path
 from service_probe import ROOT,Host,ITEM,invariant
@@ -103,7 +110,7 @@ def upgrade(base):
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--phase',choices=['initial','maintenance','optimization'],required=True);args=parser.parse_args()
-    base=ROOT/'.local'/('candidate-'+str(time.monotonic_ns()));base.mkdir();results=[]
+    base=(_rb_paths()['substrate'])/('candidate-'+str(time.monotonic_ns()));base.mkdir();results=[]
     def test(name,fn):
         start=time.monotonic()
         try:detail=fn();passed=True;error=None

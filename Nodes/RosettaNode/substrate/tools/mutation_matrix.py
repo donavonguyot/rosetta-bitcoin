@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import concurrent.futures,json,socket,time
 from service_probe import ROOT,Host,ITEM,invariant
 from recovery_probe import complete
@@ -13,7 +20,7 @@ def cell(base,variant,family):
     if family in ['early_ack','admission_atomic']:boundary='native_success';transition='p/00000000000000000001'
     if family in ['terminal_atomic','late_cancel']:boundary='native_success';transition='r/00000000000000000001'
     env={}
-    if variant in ['dummy_arena','dummy_asan']:env={'LD_PRELOAD':'/usr/lib/aarch64-linux-gnu/libasan.so.8:'+str(ROOT/'.local/interpose.so'),'ASAN_OPTIONS':'detect_leaks=1:abort_on_error=1'}
+    if variant in ['dummy_arena','dummy_asan']:env={'LD_PRELOAD':'/usr/lib/aarch64-linux-gnu/libasan.so.8:'+str((_rb_paths()['substrate'] / 'interpose.so')),'ASAN_OPTIONS':'detect_leaks=1:abort_on_error=1'}
     h=Host(base,variant,boundary,transition,extra_env=env);observed='pass';detail=None
     try:
         if family=='unknown':
@@ -47,10 +54,10 @@ def cell(base,variant,family):
         if h.process.poll() is None:h.process.kill();h.process.wait()
     expected='failure' if TARGET.get(variant)==family else 'pass'
     allowed=observed==expected or variant=='dummy_arena' and observed=='blocked_by_lifetime_fault' and family in ['terminal_atomic','conflicting_id','late_cancel']
-    return {'variant':variant,'family':family,'observed':observed,'expected':expected,'qualified':allowed,'detail':detail,'diagnostics':str(h.root.relative_to(ROOT))}
+    return {'variant':variant,'family':family,'observed':observed,'expected':expected,'qualified':allowed,'detail':detail,'diagnostics':_rb_logical(h.root)}
 
 def main():
-    base=ROOT/'.local'/('matrix-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();matrix=[]
+    base=(_rb_paths()['substrate'])/('matrix-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();matrix=[]
     for variant in VARIANTS:
         for family in FAMILIES:matrix.append(cell(base,variant,family))
     matrix.append(cell(base,'dummy_asan','arena_lifetime'))

@@ -1,0 +1,14 @@
+{
+  "schema": "rb.fixture_package_scope.v1",
+  "roots": ["conformance/fixtures", "testing/fixtures"],
+  "excluded_port_inputs": [
+    {
+      "path": "Nodes/Mojo/fixtures/script_corpus_reject_cases.json",
+      "reason": "Port-owned mutation definitions; retained in port source and covered by source_commit. Shared source-fixture bytes are included in the package."
+    },
+    {
+      "path": "Nodes/Mojo/src/script_corpus_foundation.mojo",
+      "reason": "Port-owned rejection implementation, covered by source_commit."
+    }
+  ]
+}

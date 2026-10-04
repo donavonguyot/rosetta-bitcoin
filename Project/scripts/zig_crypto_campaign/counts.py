@@ -1,7 +1,12 @@
 """Instrument disposable test copies only; production never imports counters."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import json,re,shutil,subprocess
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[3];WORK=ROOT/'Project/.campaigns/zig-opt'
+ROOT=Path(__file__).resolve().parents[3];WORK=(_rb_paths()['campaigns'] / 'zig-opt')
 for name in ('original','stage1','stage2','stage3','stage4'):
  src=WORK/name;dest=WORK/(name+'-counts')
  if dest.exists():shutil.rmtree(dest)

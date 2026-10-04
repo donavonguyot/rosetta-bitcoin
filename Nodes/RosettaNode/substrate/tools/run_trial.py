@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """Run retained rounds; never restart or replace an existing attempt."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import concurrent.futures,json,subprocess
 from campaign import ROOT,frozen,save
 
@@ -10,7 +17,7 @@ def run_one(lineage,round):
     if previous:
         p=ROOT/f'evidence/lineage-{lineage}-{previous}.json'
         if not p.exists() or json.loads(p.read_text())['status']!='qualified':return 'dependent_round_not_attempted'
-    log=ROOT/'.local/campaign-controller'/f'{lineage}-{round}.log';log.parent.mkdir(exist_ok=True)
+    log=(_rb_paths()['substrate'] / 'campaign-controller')/f'{lineage}-{round}.log';log.parent.mkdir(exist_ok=True)
     with log.open('x') as stream:
         p=subprocess.run(['python3',str(ROOT/'tools/campaign.py'),lineage,round],stdout=stream,stderr=stream)
     return json.loads(path.read_text())['status'] if path.exists() else 'controller_failure'

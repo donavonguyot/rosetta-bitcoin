@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 """Native ASan lane with swapped instrumented adapter; no whole-service claim."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import json,os,time
 from pathlib import Path
 from service_probe import ROOT,Host,ITEM
 from recovery_probe import complete
 
 def main():
-    base=ROOT/'.local'/('native-diagnostic-'+str(time.monotonic_ns()));base.mkdir();h=None
+    base=(_rb_paths()['substrate'])/('native-diagnostic-'+str(time.monotonic_ns()));base.mkdir();h=None
     try:
-        h=Host(base,boundary='adapter_enter',transition='*',extra_env={'LD_PRELOAD':'/usr/lib/aarch64-linux-gnu/libasan.so.8:'+str(ROOT/'.local/interpose.so'),'ASAN_OPTIONS':'detect_leaks=0:abort_on_error=1'})
+        h=Host(base,boundary='adapter_enter',transition='*',extra_env={'LD_PRELOAD':'/usr/lib/aarch64-linux-gnu/libasan.so.8:'+str((_rb_paths()['substrate'] / 'interpose.so')),'ASAN_OPTIONS':'detect_leaks=0:abort_on_error=1'})
         assert h.request({'op':'submit','id':'job','items':[ITEM]})['status']=='accepted';h.barrier();h.release.touch();complete(h);h.stop()
         diagnostic=(h.root/'stderr').read_text();assert 'ERROR: AddressSanitizer' not in diagnostic
         result={'status':'passed','coverage':'native adapter/IR/arena access only; leak checking disabled for foreign runtime','diagnostics':str(h.root)}

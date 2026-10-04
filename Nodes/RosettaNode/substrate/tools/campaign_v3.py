@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """Parent controller: frozen instruments, isolated fresh sessions, retained attempts."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import argparse,hashlib,json,os,re,shutil,signal,subprocess,time,uuid
 from pathlib import Path
 from isolation_probe import CODEX,config,toml,sandbox
 from build import ROOT,parent_check
 MODEL='gpt-6-astra'
-BASE=ROOT/'.local/campaign-v2'
+BASE=(_rb_paths()['substrate'] / 'campaign-v2')
 EXCLUDE={'cache','target','.zig-cache','zig-out','tmp','home','queue','.git','__pycache__'}
 def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def save(p,data):p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(data,indent=2)+'\n')
@@ -40,7 +47,7 @@ def phase(work,logs,name,prompt,seconds,thread=None,reading=False):
     values=config(work)
     if reading:values['permissions.substrate.filesystem']={':minimal':'read',str(work):'read',str(work/'tmp'):'write',str(work/'queue'):'write'}
     stop=logs/(name+'.broker-stop');blog=(logs/(name+'.broker.log')).open('w')
-    broker=subprocess.Popen(['python3',str(ROOT/'tools/broker_v3.py'),str(work),str(ROOT/'.local/adapter-bundle'),str(stop),*(['--reading'] if reading else [])],stdout=blog,stderr=blog)
+    broker=subprocess.Popen(['python3',str(ROOT/'tools/broker_v3.py'),str(work),str((_rb_paths()['substrate'] / 'adapter-bundle')),str(stop),*(['--reading'] if reading else [])],stdout=blog,stderr=blog)
     flags=[x for k,v in values.items() for x in ['-c',k+'='+toml(v)]]
     common=['--ignore-user-config','--ignore-rules','--skip-git-repo-check','--json','-m',MODEL,*flags]
     cmd=[CODEX,'exec',*common,'-C',str(work),prompt] if thread is None else [CODEX,'exec','resume',*common,thread,prompt]
@@ -82,13 +89,13 @@ def prepare(lineage,language,round,predecessor=None):
         shutil.copytree(ROOT/'contracts',work/'contracts')
     for name in ['tmp','home','queue','cache']:(work/name).mkdir(exist_ok=True)
     if language=='rust':
-        shutil.copytree(ROOT/'.local/rust-infra/cargo',work/'cache/cargo',dirs_exist_ok=True)
+        shutil.copytree((_rb_paths()['substrate'] / 'rust-infra/cargo'),work/'cache/cargo',dirs_exist_ok=True)
     shutil.copyfile(ROOT/'tools/candidate_run.py',work/'run.py')
     save(logs/'isolation.json',audit(work));return root,work,logs
 
 def evaluate(submission,output,round,predecessor=None):
     f=frozen();output.mkdir(parents=True);name='rn-substrate-eval-'+uuid.uuid4().hex[:12]
-    cmd=['docker','run','--name',name,'--network','none','--security-opt','no-new-privileges','--cpus','4','--memory','4g','--label','rosettanode.substrate=evaluation','-e','RN_CANDIDATE=/candidate/service','-v',str(ROOT/'.local/adapter-bundle')+':/adapter:ro','-v',str(submission)+':/candidate:ro','-v',str(output)+':/output']
+    cmd=['docker','run','--name',name,'--network','none','--security-opt','no-new-privileges','--cpus','4','--memory','4g','--label','rosettanode.substrate=evaluation','-e','RN_CANDIDATE=/candidate/service','-v',str((_rb_paths()['substrate'] / 'adapter-bundle'))+':/adapter:ro','-v',str(submission)+':/candidate:ro','-v',str(output)+':/output']
     if predecessor:cmd+=['-v',str(predecessor)+':/predecessor:ro']
     cmd += [f['evaluator_image'],'python3','tools/candidate_eval_v2.py','--phase',round]
     started=time.monotonic()

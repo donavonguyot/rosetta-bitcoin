@@ -1,4 +1,9 @@
 """Build and measure explicit upstream window/target/LTO configurations."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import argparse
 import json
 import math
@@ -12,7 +17,7 @@ ARCHIVE_SHA='385c115a21ee1ff31d0b0320acc2b278c92f7bde971f510566ad481a38835be0'
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--window',type=int,choices=WINDOWS);a=parser.parse_args()
-    archive=ROOT/'Project/.campaigns/crypto-lanes/reference.tar.gz'
+    archive=(_rb_paths()['campaigns'] / 'crypto-lanes/reference.tar.gz')
     if digest(archive)!=ARCHIVE_SHA:raise ValueError('Wrong reference archive')
     shutil.copy(archive,WORK/'reference.tar.gz')
     shutil.copy(ROOT/'Project/scripts/zig_crypto_campaign/c_control.zig',WORK/'c_control.zig')

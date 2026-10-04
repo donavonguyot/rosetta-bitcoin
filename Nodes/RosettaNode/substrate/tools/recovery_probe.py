@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """External barriers and independent post-crash inspection for the dummy service."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import concurrent.futures,json,time
 from service_probe import ROOT,Host,ITEM,invariant
 
@@ -12,7 +19,7 @@ def complete(host,id='job'):
     raise TimeoutError('receipt')
 
 def main():
-    base=ROOT/'.local'/('recovery-probe-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();results=[]
+    base=(_rb_paths()['substrate'])/('recovery-probe-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();results=[]
     for variant in ['dummy','dummy_cancel']:
         h=Host(base,variant,'native_success','r/00000000000000000001')
         try:

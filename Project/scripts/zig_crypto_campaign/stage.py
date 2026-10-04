@@ -1,10 +1,15 @@
 """Freeze and measure an arithmetic stage; never changes the production package."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import json,shutil,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT/'Project/scripts'))
 from crypto_lanes import source_digest
-name=sys.argv[1];work=ROOT/'Project/.campaigns/zig-opt';lib=ROOT/'Libraries/Zig/libsecp256k1-zig';dest=work/name
+name=sys.argv[1];work=(_rb_paths()['campaigns'] / 'zig-opt');lib=ROOT/'Libraries/Zig/libsecp256k1-zig';dest=work/name
 if '--existing' not in sys.argv:
  assert not dest.exists(),dest
  shutil.copytree(lib,dest,ignore=shutil.ignore_patterns('.zig-cache','zig-out'))

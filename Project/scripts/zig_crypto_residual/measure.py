@@ -1,4 +1,9 @@
 """27 fresh-volume measurements; one lock, one instrumented node, three variants."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import fcntl,importlib.util
 from common import *
 from selection import node_interval
@@ -11,7 +16,7 @@ def main():
  assert len({m['node_digest'] for m in metadata.values()})==1
  assert all(not m['probe'] and not m['reject'] for m in metadata.values())
  result=dict(variants=metadata,warmups=[],runs=[],components={})
- with (ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock').open('a') as lock:
+ with ((_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')).open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX)
   for variant,meta in metadata.items():
    print('warmup',variant,flush=True);result['warmups'].append(previous.replay(meta,'residual-'+variant+'-warmup'))

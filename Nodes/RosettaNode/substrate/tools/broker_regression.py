@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """Completed requests must not execute again when a broker restarts."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import json,subprocess,time,uuid
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def main():
-    work=ROOT/'.local'/('broker-regression-'+uuid.uuid4().hex[:8]);work.mkdir();q=work/'queue';q.mkdir();token='1'*32
+    work=(_rb_paths()['substrate'])/('broker-regression-'+uuid.uuid4().hex[:8]);work.mkdir();q=work/'queue';q.mkdir();token='1'*32
     request={'command':'echo replayed >> /workspace/REPLAYED','seconds':10}
     (q/(token+'.request')).write_text(json.dumps(request));(q/(token+'.response')).write_text(json.dumps({'exit':0,'stdout':'original','stderr':''}))
-    stop=work/'stop';log=(work/'log').open('w');p=subprocess.Popen(['python3',str(ROOT/'tools/broker_v3.py'),str(work),str(ROOT/'.local/adapter-bundle'),str(stop)],stdout=log,stderr=log)
+    stop=work/'stop';log=(work/'log').open('w');p=subprocess.Popen(['python3',str(ROOT/'tools/broker_v3.py'),str(work),str((_rb_paths()['substrate'] / 'adapter-bundle')),str(stop)],stdout=log,stderr=log)
     try:
         time.sleep(.3);assert p.poll() is None
         token2='2'*32;(q/(token2+'.request')).write_text(json.dumps({'command':'echo fresh > /workspace/FRESH','seconds':10}))

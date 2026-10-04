@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """Archive trial-owned stopped container diagnostics before removing layers."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import gzip,hashlib,json,subprocess,tarfile,time,datetime
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def main():
-    destination=ROOT/'.local/retained-docker';destination.mkdir(exist_ok=True);results=[]
+    destination=(_rb_paths()['substrate'] / 'retained-docker');destination.mkdir(exist_ok=True);results=[]
     ids=subprocess.check_output(['docker','ps','-aq','--filter','name=rn-substrate-'],text=True).split()
     if not ids:return
     for info in json.loads(subprocess.check_output(['docker','inspect',*ids],text=True)):

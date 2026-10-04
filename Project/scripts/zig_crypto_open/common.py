@@ -1,4 +1,9 @@
 """Pinned execution and shared exclusion for the open crypto campaign."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import contextlib
 import fcntl
 import hashlib
@@ -8,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).parent
-WORK = ROOT / 'Project/.campaigns/zig-open'
+WORK = (_rb_paths()['campaigns'] / 'zig-open')
 BUILDER = 'sha256:fe102cac43fe57c51179c86b49660c2cf6b971056e9b71c4cc4290694e684955'
 FROZEN = WORK / 'frozen/Libraries/Zig/libsecp256k1-zig'
 
@@ -36,7 +41,7 @@ def digest(path):
 
 @contextlib.contextmanager
 def exclusive():
-    path = ROOT / 'Project/.campaigns/crypto-lanes/node-benchmark.lock'
+    path = (_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)

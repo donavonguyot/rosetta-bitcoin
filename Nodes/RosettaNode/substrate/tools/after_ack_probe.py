@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import json,time
 from service_probe import ROOT,Host,ITEM,invariant
 from workload_probe import Client
 from storage_probe import inspect
 
 def main():
-    base=ROOT/'.local'/('after-ack-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();db=None;results=[]
+    base=(_rb_paths()['substrate'])/('after-ack-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();db=None;results=[]
     for cycle in range(3):
         h=Host(base,db=db);db=h.db
         try:

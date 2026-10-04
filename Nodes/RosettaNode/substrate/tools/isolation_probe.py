@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import hashlib,json,os,shutil,subprocess,time,uuid
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -12,9 +19,9 @@ def sandbox(work,args):
     c=config(work);flags=[x for k,v in c.items() for x in ['-c',k+'='+toml(v)]]
     return subprocess.run([CODEX,'sandbox','-P','substrate','-C',str(work),*flags,*args],capture_output=True,text=True,timeout=150,env={**os.environ,**c['shell_environment_policy.set']})
 def main():
-    work=ROOT/'.local'/('isolation-'+uuid.uuid4().hex[:8]);work.mkdir();(work/'tmp').mkdir();(work/'home').mkdir();shutil.copyfile(ROOT/'tools/candidate_run.py',work/'run.py')
-    stop=ROOT/'.local'/('broker-stop-'+uuid.uuid4().hex);log=(work/'broker.log').open('w')
-    broker=subprocess.Popen(['/usr/bin/python3',str(ROOT/'tools/broker.py'),str(work),str(ROOT/'.local/adapter-bundle'),str(stop)],stdout=log,stderr=log)
+    work=(_rb_paths()['substrate'])/('isolation-'+uuid.uuid4().hex[:8]);work.mkdir();(work/'tmp').mkdir();(work/'home').mkdir();shutil.copyfile(ROOT/'tools/candidate_run.py',work/'run.py')
+    stop=(_rb_paths()['substrate'])/('broker-stop-'+uuid.uuid4().hex);log=(work/'broker.log').open('w')
+    broker=subprocess.Popen(['/usr/bin/python3',str(ROOT/'tools/broker.py'),str(work),str((_rb_paths()['substrate'] / 'adapter-bundle')),str(stop)],stdout=log,stderr=log)
     results=[]
     try:
         for target in [ROOT/'tools/service_probe.py',ROOT.parent/'spec/transactions.md',ROOT.parents[1]/'Zig/src/root.zig',Path.home()/'.codex/config.toml']:
