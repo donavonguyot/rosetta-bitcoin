@@ -1,0 +1,1 @@
+{"height_after":51000,"failure":"ReleaseSafe integer overflow","site":"script.zig prescanOpSuccess OP_PUSHDATA4","missing_rule":"OP_PUSHDATA4 span addition must not wrap the u32 length","fix":"checked usize addition returns TruncatedPush","follower_notes":"Host shadow 100k aborted after committed height 51000. 5 + len was a u32 add before the bounds check."}

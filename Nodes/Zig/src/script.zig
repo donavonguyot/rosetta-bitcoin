@@ -479,11 +479,10 @@ fn evaluate(allocator: std.mem.Allocator, script: []const u8, stack: *Stack, con
             if (active) try stack.push(script[offset + 3 .. offset + 3 + len]);
             offset += 3 + len;
         } else if (opcode == OP_PUSHDATA4) {
-            if (offset + 5 > script.len) return error.TruncatedPush;
-            const len = std.mem.readInt(u32, script[offset + 1 ..][0..4], .little);
-            if (offset + 5 + len > script.len) return error.TruncatedPush;
-            if (active) try stack.push(script[offset + 5 .. offset + 5 + len]);
-            offset += 5 + len;
+            const len = if (offset + 5 > script.len) return error.TruncatedPush else std.mem.readInt(u32, script[offset + 1 ..][0..4], .little);
+            const end = try pushSpanEnd(offset, 5, len, script.len);
+            if (active) try stack.push(script[offset + 5 .. end]);
+            offset = end;
         } else if (opcode == OP_IF or opcode == OP_NOTIF) {
             const parent_active = active;
             var branch_active = false;
@@ -1376,6 +1375,13 @@ fn serializedWitnessStack(allocator: std.mem.Allocator, witness: []const []const
     return out.toOwnedSlice(allocator);
 }
 
+fn pushSpanEnd(offset: usize, header: usize, len: u32, script_len: usize) !usize {
+    const after_header = std.math.add(usize, offset, header) catch return error.TruncatedPush;
+    const end = std.math.add(usize, after_header, @as(usize, len)) catch return error.TruncatedPush;
+    if (end > script_len) return error.TruncatedPush;
+    return end;
+}
+
 fn prescanOpSuccess(script: []const u8) !bool {
     var offset: usize = 0;
     while (offset < script.len) {
@@ -1396,10 +1402,8 @@ fn prescanOpSuccess(script: []const u8) !bool {
             if (offset + 3 + len > script.len) return error.TruncatedPush;
             offset += 3 + len;
         } else if (opcode == OP_PUSHDATA4) {
-            if (offset + 5 > script.len) return error.TruncatedPush;
-            const len = std.mem.readInt(u32, script[offset + 1 ..][0..4], .little);
-            if (offset + 5 + len > script.len) return error.TruncatedPush;
-            offset += 5 + len;
+            const len = if (offset + 5 > script.len) return error.TruncatedPush else std.mem.readInt(u32, script[offset + 1 ..][0..4], .little);
+            offset = try pushSpanEnd(offset, 5, len, script.len);
         } else {
             if (opcodeIsSuccess(opcode)) return true;
             offset += 1;
