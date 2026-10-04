@@ -1,5 +1,6 @@
 services:
   zigbitnode:
+    image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
       context: ../../..
       dockerfile: Nodes/Zig/docker/Dockerfile
@@ -16,6 +17,7 @@ services:
       - reference
 
   zigbitnode-script-corpus:
+    image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
       context: ../../..
       dockerfile: Nodes/Zig/docker/Dockerfile
@@ -28,6 +30,7 @@ services:
       - ../../Shared/conformance/results:/results
 
   zigbitnode-local-reference-proof:
+    image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
       context: ../../..
       dockerfile: Nodes/Zig/docker/Dockerfile

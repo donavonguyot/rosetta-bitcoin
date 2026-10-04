@@ -27,6 +27,7 @@ services:
       start_period: 60s
 
   jbitnode:
+    image: ${RB_PROVENANCE_IMAGE:-rb/java:local}
     build:
       context: ../../..
       dockerfile: Nodes/Java/docker/Dockerfile
@@ -43,6 +44,7 @@ services:
     restart: unless-stopped
 
   jbitnode-sync-proof:
+    image: ${RB_PROVENANCE_IMAGE:-rb/java:local}
     build:
       context: ../../..
       dockerfile: Nodes/Java/docker/Dockerfile

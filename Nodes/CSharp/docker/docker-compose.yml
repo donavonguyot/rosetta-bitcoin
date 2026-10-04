@@ -1,5 +1,6 @@
 services:
   csbitnode-sync-proof:
+    image: ${RB_PROVENANCE_IMAGE:-rb/csharp:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
