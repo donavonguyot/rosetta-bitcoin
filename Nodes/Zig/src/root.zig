@@ -24,6 +24,7 @@ pub const native_store = @import("native_store.zig");
 pub const coins_view = @import("coins_view.zig");
 pub const mempool = @import("mempool.zig");
 pub const template = @import("template.zig");
+pub const context_fixture = @import("context_fixture.zig");
 pub const rung0 = @import("rung0.zig");
 
 pub const PortInfo = struct {
@@ -1094,6 +1095,20 @@ pub const ScriptVerifyRunner = struct {
     }
 };
 
+fn medianTimePastCached(db: anytype, allocator: std.mem.Allocator, cache: *std.AutoHashMap(u32, u32), height: u32) !u32 {
+    if (cache.get(height)) |found| return found;
+    const Adapter = struct {
+        db: @TypeOf(db),
+        allocator: std.mem.Allocator,
+        pub fn headerAt(self: @This(), h: u32) !?[80]u8 {
+            return self.db.headerAt(self.allocator, h);
+        }
+    };
+    const median = try consensus_context.medianTimePast(Adapter{ .db = db, .allocator = allocator }, height);
+    try cache.put(height, median);
+    return median;
+}
+
 pub fn connectDecodedBlock(
     allocator: std.mem.Allocator,
     db: anytype,
@@ -1107,6 +1122,16 @@ pub fn connectDecodedBlock(
     _ = target;
     const block_started = nowMs();
     if (transactions.len == 0) return error.BlockWithoutTransactions;
+    if (!transactions[0].isCoinbase()) return error.FirstTransactionNotCoinbase;
+
+    var mtp_cache = std.AutoHashMap(u32, u32).init(allocator);
+    defer mtp_cache.deinit();
+    const block_mtp: u32 = if (height == 0) 0 else try medianTimePastCached(db, allocator, &mtp_cache, height - 1);
+    var block_time: u32 = 0;
+    if (try db.headerAt(allocator, height)) |header| block_time = consensus_context.fieldsFromHeader(&header).time;
+    for (transactions) |transaction| {
+        if (consensus_context.txNotFinal(transaction, height, block_mtp, block_time)) return error.TxNotFinal;
+    }
 
     var txids = try allocator.alloc([32]u8, transactions.len);
     defer allocator.free(txids);
@@ -1204,6 +1229,13 @@ pub fn connectDecodedBlock(
             const utxo = from_created orelse loaded.get(outpoint) orelse return error.MissingUtxo;
             if (from_created != null) timings.same_block_spends += 1;
             if (utxo.coinbase and height < utxo.height + 100) return error.CoinbaseMaturity;
+            const coin_time: u32 = if (from_created != null)
+                block_mtp
+            else
+                try medianTimePastCached(db, allocator, &mtp_cache, if (utxo.height == 0) 0 else utxo.height - 1);
+            if (consensus_context.sequenceLockUnsatisfied(transaction.version, input.sequence, utxo.height, coin_time, height, block_mtp)) {
+                return error.SequenceLockUnsatisfied;
+            }
             prevouts[input_index] = .{ .amount = @intCast(utxo.value_sats), .script_pubkey = utxo.script_pubkey };
         }
         try script_prevout_sets.append(allocator, prevouts);
@@ -1596,6 +1628,10 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
 
         pub fn setHash(self: *Self) store.SetHash {
             return self.primary.setHash();
+        }
+
+        pub fn headerAt(self: *Self, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
+            return self.primary.headerAt(allocator, height);
         }
 
         pub fn put(self: *Self, key: []const u8, value: []const u8) !void {

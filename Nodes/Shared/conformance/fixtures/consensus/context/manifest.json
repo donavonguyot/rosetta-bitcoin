@@ -1,0 +1,10 @@
+{
+  "family": "consensus.context",
+  "fixtures": [
+    {"id":"consensus.tx_finality_height","kind":"block","height":38010,"accept":"consensus.tx_finality_height/accept.bin","reject":"consensus.tx_finality_height/reject.bin","undo":"consensus.tx_finality_height/undo.bin","headers":"consensus.tx_finality_height/headers.bin","header_base":37999,"reject_reason":"tx_not_final"},
+    {"id":"consensus.tx_finality_mtp","kind":"block","height":38010,"accept":"consensus.tx_finality_mtp/accept.bin","reject":"consensus.tx_finality_mtp/reject.bin","undo":"consensus.tx_finality_mtp/undo.bin","headers":"consensus.tx_finality_mtp/headers.bin","header_base":37999,"reject_reason":"tx_not_final"},
+    {"id":"consensus.bip68_height","kind":"block","height":38010,"accept":"consensus.bip68_height/accept.bin","reject":"consensus.bip68_height/reject.bin","undo":"consensus.bip68_height/undo.bin","headers":"consensus.bip68_height/headers.bin","header_base":37999,"reject_reason":"sequence_lock_unsatisfied"},
+    {"id":"consensus.bip68_time","kind":"block","height":32712,"accept":"consensus.bip68_time/accept.bin","reject":"consensus.bip68_time/reject.bin","undo":"consensus.bip68_time/undo.bin","headers":"consensus.bip68_time/headers.bin","header_base":32701,"reject_reason":"sequence_lock_unsatisfied"},
+    {"id":"consensus.bip68_same_block","kind":"block","height":32712,"accept":"consensus.bip68_same_block/accept.bin","reject":"consensus.bip68_same_block/reject.bin","undo":"consensus.bip68_same_block/undo.bin","headers":"consensus.bip68_same_block/headers.bin","header_base":32701,"reject_reason":"sequence_lock_unsatisfied"}
+  ]
+}

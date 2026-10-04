@@ -68,6 +68,19 @@ pub fn main(init: std.process.Init) !void {
         try cmdRung0(std.heap.smp_allocator, io, out, args[1..], surface, default_peer, default_crypto_backend);
     } else if (std.mem.eql(u8, command, "testblockvalidity")) {
         try cmdTestBlockValidity(allocator, io, out, args[2..]);
+    } else if (std.mem.eql(u8, command, "consensus-context")) {
+        const manifest = valueArg(args[2..], "--manifest") orelse "../Shared/conformance/fixtures/consensus/context/manifest.json";
+        const ok = try core.context_fixture.runManifest(allocator, io, manifest, out);
+        if (!ok) return error.ConsensusContextFailed;
+    } else if (std.mem.eql(u8, command, "write-context-fixtures")) {
+        const datadir = valueArg(args[2..], "--datadir") orelse return error.MissingDatadir;
+        const out_dir = valueArg(args[2..], "--out") orelse return error.MissingOutput;
+        const db_path = try std.fs.path.join(allocator, &.{ datadir, "chainstate-rocksdb" });
+        defer allocator.free(db_path);
+        var db = try core.RocksDb.open(allocator, db_path);
+        defer db.close();
+        try core.context_fixture.writeBlockFixtures(allocator, io, &db, out_dir);
+        try out.print("{{\"schema\":\"port.consensus_context.v1\",\"command\":\"write-context-fixtures\",\"passed\":true}}\n", .{});
     } else {
         try out.print("error: unknown command: {s}\n", .{command});
         try usage(out);
@@ -89,6 +102,7 @@ fn usage(out: anytype) !void {
         \\  mempool-replay --trace <dir> [--datadir ./data-zig] [--store=native|rocksdb] [--output path] [--template-output path]
         \\  build-template --trace <dir> [--datadir ./data-zig] [--store=native|rocksdb] [--output path]
         \\  testblockvalidity --block <path> --height <n> [--datadir ./data-zig] [--store=native|rocksdb]
+        \\  consensus-context [--manifest path]
         \\
     , .{});
 }
