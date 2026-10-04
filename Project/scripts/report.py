@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import crypto_lanes
+import provenance
 import argparse
 import json
 import sqlite3
@@ -16,6 +17,7 @@ from port_progress_posture import audit_ports
 
 
 SECTIONS = (
+    "provenance",
     "crypto-lanes",
     "summary",
     "port-status",
@@ -1175,6 +1177,7 @@ def print_decisions(connection: sqlite3.Connection) -> None:
 
 REPORTS: dict[str, Callable[[sqlite3.Connection], None]] = {
     "crypto-lanes": crypto_lanes.report,
+    "provenance": provenance.report,
     "summary": print_summary,
     "port-status": print_port_status,
     "docker-coverage": print_docker_coverage,

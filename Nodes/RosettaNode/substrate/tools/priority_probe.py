@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import hashlib,json,time
 from service_probe import ROOT,Host,invariant
 
@@ -33,7 +40,7 @@ def trial(base,variant,mixed):
     finally:
         if h.process.poll() is None:h.process.kill();h.process.wait()
 def main():
-    base=ROOT/'.local'/('priority-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir()
+    base=(_rb_paths()['substrate'])/('priority-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir()
     rows=[trial(base,v,mixed) for v in ['dummy_v2','dummy_starve'] for mixed in [False,True]]
     result={'schema':'rosettanode.substrate.priority_probe.v1','status':'passed' if all(r['passed'] for r in rows) else 'failed','results':rows,'candidate_launch_allowed':False}
     (base/'result.json').write_text(json.dumps(result,indent=2)+'\n');(ROOT/'evidence/priority-probe.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))

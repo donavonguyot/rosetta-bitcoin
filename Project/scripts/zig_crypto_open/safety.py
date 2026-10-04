@@ -1,4 +1,9 @@
 """Unchanged-package ReleaseSafe/ReleaseFast diagnostic, never shipping selection."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import shutil
 import statistics
 from common import ROOT, WORK, FROZEN, BUILDER, run, docker, save, digest, exclusive
@@ -6,7 +11,7 @@ from common import ROOT, WORK, FROZEN, BUILDER, run, docker, save, digest, exclu
 
 def main():
     shutil.copy(ROOT/'Project/scripts/zig_crypto_residual/bench.zig', WORK/'safety-bench.zig')
-    shutil.copy(ROOT/'Project/.campaigns/zig-residual/tuning.json', WORK/'safety-inputs.json')
+    shutil.copy((_rb_paths()['campaigns'] / 'zig-residual/tuning.json'), WORK/'safety-inputs.json')
     result = {'schema': 'rb.zig_open_safety_diagnostic.v1', 'builder': BUILDER,
               'input_sha256': digest(WORK/'safety-inputs.json'),
               'baseline': __import__('json').loads((ROOT/'Project/scripts/zig_crypto_open/baseline.json').read_text()),

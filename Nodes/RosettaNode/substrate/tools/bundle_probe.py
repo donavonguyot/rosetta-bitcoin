@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import hashlib,json,shutil,subprocess,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 IMAGE='sha256:cc9b0ebe055af2cf067e3ca206f6d236682c87c48debb5f205d0657dbcc0476e'
 def main():
-    base=ROOT/'.local'/('bundles-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir()
+    base=(_rb_paths()['substrate'])/('bundles-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir()
     (base/'go/storage').mkdir(parents=True);shutil.copyfile(ROOT/'bundles/go/storage.go',base/'go/storage/storage.go')
     (base/'go/go.mod').write_text('module bundle\ngo 1.27.1\n')
     (base/'go/main.go').write_text('''package main

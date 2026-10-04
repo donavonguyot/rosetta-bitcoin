@@ -71,7 +71,7 @@ test-block-connect-backend:
 	$(CARGO) run -- test-block-connect-backend --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 rust-node-script-corpus:
-	$(CARGO) run -- script-corpus --result-path $(SCRIPT_RESULT)
+	$(CARGO) run -- script-corpus --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json --result-path $(SCRIPT_RESULT)
 
 rust-node-sync-local:
 	$(CARGO) run -- sync --datadir $(SYNC_DATA_DIR) --target $(SYNC_TARGET) --rpc-url $(RPC_URL) --rpc-user $(RPC_USER) --rpc-password $(RPC_PASSWORD)
@@ -190,3 +190,6 @@ docker-smoke-once:
 
 clean:
 	rm -rf data-rust data-rust-proof target
+
+include ../Shared/fixture_package.mk
+build test test-crypto-vectors test-block-connect-backend rust-node-script-corpus docker-build docker-script-corpus: | fixture-package

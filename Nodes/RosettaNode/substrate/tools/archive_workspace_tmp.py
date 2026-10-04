@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """Lossless archival of a completed phase's temporary tree; never volumes."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import argparse,hashlib,json,os,shutil,stat,subprocess,tarfile,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -10,14 +17,14 @@ def sha(path):
     return h.hexdigest()
 def main():
     p=argparse.ArgumentParser();p.add_argument('workspace',type=Path);a=p.parse_args();work=a.workspace.resolve();tree=work/'tmp'
-    assert work.is_relative_to(ROOT/'.local') and work.name=='workspace' and tree.is_dir() and not tree.is_symlink()
+    assert work.is_relative_to((_rb_paths()['substrate'])) and work.name=='workspace' and tree.is_dir() and not tree.is_symlink()
     commands=subprocess.check_output(['ps','-axo','command'],text=True)
     assert not any(str(work) in line and ('codex exec' in line or 'tools/broker' in line) for line in commands.splitlines()),'active agent or broker'
     ids=subprocess.check_output(['docker','ps','-q'],text=True).split()
     if ids:
         for container in json.loads(subprocess.check_output(['docker','inspect',*ids],text=True)):
             assert not any(m.get('Source','')==str(work) for m in container.get('Mounts',[])),'active mounted workspace'
-    destination=ROOT/'.local/retained-archives';destination.mkdir(exist_ok=True);name='-'.join(work.relative_to(ROOT/'.local').parts[:-1]);archive=destination/(name+'-tmp.tar.gz');assert not archive.exists()
+    destination=(_rb_paths()['substrate'] / 'retained-archives');destination.mkdir(exist_ok=True);name='-'.join(work.relative_to((_rb_paths()['substrate'])).parts[:-1]);archive=destination/(name+'-tmp.tar.gz');assert not archive.exists()
     manifest={};size=0
     for path in sorted(tree.rglob('*')):
         metadata=path.lstat();relative=str(path.relative_to(work))

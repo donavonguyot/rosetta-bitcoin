@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import concurrent.futures,json,sys,time
 from service_probe import ROOT,Host,invariant
 from workload_probe import Client,expected
@@ -9,7 +16,7 @@ from corpus import structure
 from chain_checker import serialize
 
 def main():
-    base=ROOT/'.local'/('mixed-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();h=Host(base,'dummy_v2');original=h.socket
+    base=(_rb_paths()['substrate'])/('mixed-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();h=Host(base,'dummy_v2');original=h.socket
     ids=[f'job_{p}_{i}' for p in range(8) for i in range(1250) if i%11==0]
     proxy=Proxy(h.root/'proxy',original,ids);h.socket=h.root/'proxy'
     txs=[structure([]),structure(['']),structure(['0011'])]
@@ -42,7 +49,7 @@ def main():
         proxy.close();h.socket=original;time.sleep(.02);rows=h.stop();elapsed=time.monotonic()-start
         acks={k:v for part in parts for k,v in part[0].items()};cancelled=[k for part in parts for k in part[1]]
         problem=check(rows,acks,cancelled);assert problem is None,problem;assert rows['meta/checkpoint']=='10000';assert len(proxy.events)==len(ids)
-        result={'schema':'rosettanode.substrate.mixed_probe.v1','status':'passed','jobs':10000,'clients':8,'elapsed_seconds':elapsed,'lost_acknowledgements':len(proxy.events),'accepted_cancellations':len(cancelled),'late_cancellations':sum(p[2]['too_late'] for p in parts),'negative_amount_family':'one of three fixture families, reported separately','independent_receipts_checked':10000,'stats_path':str((h.root/'rocksdb-stats.txt').relative_to(ROOT)),'candidate_launch_allowed':False}
+        result={'schema':'rosettanode.substrate.mixed_probe.v1','status':'passed','jobs':10000,'clients':8,'elapsed_seconds':elapsed,'lost_acknowledgements':len(proxy.events),'accepted_cancellations':len(cancelled),'late_cancellations':sum(p[2]['too_late'] for p in parts),'negative_amount_family':'one of three fixture families, reported separately','independent_receipts_checked':10000,'stats_path':_rb_logical(h.root/'rocksdb-stats.txt'),'candidate_launch_allowed':False}
         (base/'result.json').write_text(json.dumps(result,indent=2)+'\n');(ROOT/'evidence/mixed-probe.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
     finally:
         proxy.close()

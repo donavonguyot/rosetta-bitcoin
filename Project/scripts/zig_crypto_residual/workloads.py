@@ -1,9 +1,14 @@
 """Reference-generated tuning/holdout data, exclusively outside timed work."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import itertools,hashlib,inspect,textwrap
 from differential import refmod
 from common import *
 def main():
- ref=refmod.Reference(ROOT/'Project/.campaigns/crypto-lanes/reference-build/lib/libsecp256k1.dylib')
+ ref=refmod.Reference((_rb_paths()['campaigns'] / 'crypto-lanes/reference-build/lib/libsecp256k1.dylib'))
  cases=list(ref.cases(256));groups={}
  source=textwrap.dedent(inspect.getsource(refmod.Reference.cases)).replace('rosetta-secp-test-', 'rosetta-residual-holdout-')
  scope=dict(refmod.__dict__);exec(source,scope)

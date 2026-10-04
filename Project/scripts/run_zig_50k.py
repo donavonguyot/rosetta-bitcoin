@@ -1,4 +1,9 @@
 """One experimental own-curve shakedown; preserve state and never retry a run."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[2] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import argparse
 import datetime
 import fcntl
@@ -35,7 +40,8 @@ def require_fields(value, expected):
 def summarize(artifact):
     """Reassemble interval observations from saved telemetry, without running a node."""
     result = json.loads(artifact.read_text())
-    work = ROOT/result['raw_directory']
+    from state_root import resolve_path
+    work = resolve_path(result['raw_directory'])
     ticks = [json.loads(line.split('benchmark.telemetry_tick ',1)[1])
              for line in (work/'run.log').read_text().splitlines()
              if line.startswith('benchmark.telemetry_tick ')]
@@ -99,16 +105,24 @@ def summarize(artifact):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--image-metadata', type=Path, default=ROOT/'Project/.campaigns/zig-open/candidate-image.json')
+    parser.add_argument('--run-ref', help='Opaque external run reference')
+    parser.add_argument('--image-metadata', type=Path, default=(_rb_paths()['campaigns'] / 'zig-open/candidate-image.json'))
     parser.add_argument('--summarize', type=Path, help='Summarize an existing result without replaying')
     args = parser.parse_args()
     if args.summarize:
         summarize(args.summarize)
         return
+    from state_root import acquire_writer_lease
+    acquire_writer_lease()
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    work = ROOT/'Project/.campaigns'/('zig-50k-' + stamp)
+    work = (_rb_paths()['campaigns'])/('zig-50k-' + stamp)
     work.mkdir(parents=True, exist_ok=False)
     meta = json.loads(args.image_metadata.read_text())
+    from provenance import for_image
+    pins = for_image(meta['image_id'], args.run_ref)
+    from build_fixture_package import unpack
+    fixtures = work / 'fixture-package'
+    unpack(pins['fixture_hash'], fixtures)
     require_fields(meta, {'lane': 'own_curve', 'probe': False, 'reject': ''})
     assert source_digest(ROOT/'Libraries/Zig/libsecp256k1-zig') == meta['source_digest']
     assert source_digest(ROOT/'Nodes/Zig/src') == meta['node_digest']
@@ -118,9 +132,10 @@ def main():
                   result='failed', experimental=True, binary_gate_status='not_attempted',
                   captured_at=stamp, image=meta, git_revision=run(['git','rev-parse','HEAD']).strip(),
                   git_status=run(['git','status','--short']), volume=volume,
-                  raw_directory=str(work.relative_to(ROOT)), measurements=1, warmups=0)
+                  raw_directory='state:campaigns/'+work.relative_to(_rb_paths()['campaigns']).as_posix(), measurements=1, warmups=0)
     artifact = ROOT/'Nodes/Shared/conformance/crypto_comparisons'/('zig_own_curve_50k_' + stamp + '.json')
-    lock_path = ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock'
+    result['provenance'] = pins
+    lock_path = (_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')
     with lock_path.open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
@@ -138,7 +153,7 @@ def main():
             packages = run(['docker','run','--rm','--network','none',image,'dpkg-query','-W'])
             assert 'libsecp256k1' not in packages
             # Reuse source-matched symbol/fallback validation without a second replay.
-            validation = json.loads((ROOT/'Project/.campaigns/zig-open/validation.json').read_text())
+            validation = json.loads(((_rb_paths()['campaigns'] / 'zig-open/validation.json')).read_text())
             assert validation['source_digest'] == meta['source_digest']
             audit = validation['checks']['dependency_audit']['binary_symbol_audit']
             binary_hash = run(['docker','run','--rm','--network','none',image,'sha256sum','/usr/local/bin/zigbitnode']).split()[0]
@@ -151,7 +166,7 @@ def main():
             endpoint = json.loads(run(reference + ['getblock',EXPECTED_HASH,'1']))
             result['reference_endpoint'] = {k:endpoint[k] for k in ('hash','height','size','weight','nTx')}
             corpus_cmd = ['docker','run','--rm','--network','none','--user','0','-e','ZIGBITNODE_RUNTIME_SURFACE=docker',
-                          '-v',str(ROOT/'Nodes/Shared')+':/shared:ro','-v',str(work)+':/results',image,
+                          '-v',str(fixtures)+':/shared:ro','-v',str(work)+':/results',image,
                           'zigbitnode','script-corpus','--manifest','/shared/conformance/fixtures/scripts/manifest.json','--output','/results/corpus.json']
             (work/'corpus.log').write_text(run(corpus_cmd))
             corpus = json.loads((work/'corpus.json').read_text())

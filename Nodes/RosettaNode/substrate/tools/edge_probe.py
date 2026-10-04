@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import ctypes,json,os,subprocess,time
 from service_probe import ROOT,Host,ITEM,invariant
 from priority_probe import item,token
@@ -38,7 +45,7 @@ def incompatible(base):
     for name,(args,restype) in signatures.items():fn=getattr(lib,name);fn.argtypes=args;fn.restype=restype
     error=ctypes.c_char_p();options=lib.rocksdb_options_create();db=lib.rocksdb_open(options,str(h.db).encode(),ctypes.byref(error));assert db and not error.value
     wo=lib.rocksdb_writeoptions_create();lib.rocksdb_writeoptions_set_sync(wo,1);lib.rocksdb_put(db,wo,b'meta/version',12,b'99',2,ctypes.byref(error));assert not error.value;lib.rocksdb_close(db)
-    program=os.environ.get('RN_CANDIDATE',str(ROOT/'.local/dummy'))
+    program=os.environ.get('RN_CANDIDATE',str((_rb_paths()['substrate'] / 'dummy')))
     def demote():os.setgroups([]);os.setgid(65534);os.setuid(65534)
     p=subprocess.run([program,str(h.db),str(h.root/'new-socket')],capture_output=True,timeout=5,cwd=h.root,preexec_fn=demote if 'RN_CANDIDATE' in os.environ else None)
     assert p.returncode!=0 and p.stderr,('incompatible version accepted',p.returncode)

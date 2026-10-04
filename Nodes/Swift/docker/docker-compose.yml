@@ -1,5 +1,6 @@
 services:
   swiftbitnode:
+    image: ${RB_PROVENANCE_IMAGE:-rb/swift:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -8,12 +9,15 @@ services:
     volumes:
       - swiftbitnode_data:/data
       - ../../Shared:/workspace/Shared:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/testing/fixtures:/workspace/Shared/testing/fixtures:ro
       - ../../Shared/conformance/results:/results
     networks:
       - default
       - reference
 
   swiftbitnode-script-corpus:
+    image: ${RB_PROVENANCE_IMAGE:-rb/swift:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -21,9 +25,12 @@ services:
       SWIFTBITNODE_RUNTIME_SURFACE: docker
     volumes:
       - ../../Shared:/workspace/Shared:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/testing/fixtures:/workspace/Shared/testing/fixtures:ro
       - ../../Shared/conformance/results:/results
 
   swiftbitnode-local-reference-proof:
+    image: ${RB_PROVENANCE_IMAGE:-rb/swift:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile

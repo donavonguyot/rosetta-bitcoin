@@ -255,12 +255,18 @@ public final class Secp256k1 {
       throw new Secp256k1Error("invalid DER signature r marker");
     }
     int rLen = data[3] & 0xff;
+    if (rLen == 0 || 4 + rLen + 2 > data.length) {
+      throw new Secp256k1Error("invalid DER signature r length");
+    }
     BigInteger r = new BigInteger(1, Arrays.copyOfRange(data, 4, 4 + rLen));
     int offset = 4 + rLen;
     if (data[offset] != 0x02) {
       throw new Secp256k1Error("invalid DER signature s marker");
     }
     int sLen = data[offset + 1] & 0xff;
+    if (sLen == 0 || offset + 2 + sLen != data.length) {
+      throw new Secp256k1Error("invalid DER signature s length");
+    }
     BigInteger s = new BigInteger(1, Arrays.copyOfRange(data, offset + 2, offset + 2 + sLen));
     if (r.compareTo(BigInteger.ZERO) <= 0
         || s.compareTo(BigInteger.ZERO) <= 0

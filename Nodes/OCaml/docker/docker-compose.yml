@@ -3,11 +3,13 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: rb/ocbitnode:foundation
+    image: ${RB_PROVENANCE_IMAGE:-rb/ocbitnode:foundation}
     working_dir: /workspace/OCaml
     volumes:
       - ${DOCKER_LOCAL_PROOF_VOLUME:-ocbitnode_proof_data}:/data
       - ../../Shared:/workspace/Shared
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/testing/fixtures:/workspace/Shared/testing/fixtures:ro
     networks:
       - default
       - reference

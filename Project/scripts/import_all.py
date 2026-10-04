@@ -733,7 +733,10 @@ def artifact_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "suite_id",
         "suite_hash",
     ]
-    return {key: payload[key] for key in keys if key in payload}
+    summary = {key: payload[key] for key in keys if key in payload}
+    if "provenance" not in payload:
+        summary["provenance_status"] = "absent"
+    return summary
 
 
 def make_artifact(path: Path, root: Path, payload: dict[str, Any]) -> Artifact:
@@ -1517,9 +1520,13 @@ def result_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def import_json_artifact(connection: sqlite3.Connection, root: Path, path: Path, payload: dict[str, Any]) -> None:
+    from provenance import validate as validate_build_provenance, PROJECTION_SQL
+    pins = validate_build_provenance(payload)
+    connection.execute(PROJECTION_SQL)
     if payload.get("schema") == crypto_lanes.SCHEMA:
         crypto_lanes.import_result(connection, root, path, payload)
         artifact = make_artifact(path, root, payload)
+        artifact = replace(artifact, summary={**artifact.summary, **pins})
         existing = connection.execute(
             "SELECT artifact_id FROM artifacts WHERE path = ?", (artifact.rel_path,)
         ).fetchone()
@@ -1528,6 +1535,7 @@ def import_json_artifact(connection: sqlite3.Connection, root: Path, path: Path,
         upsert_artifact(connection, artifact)
         return
     artifact = make_artifact(path, root, payload)
+    artifact = replace(artifact, summary={**artifact.summary, **pins})
     existing = connection.execute(
         """
         SELECT artifact_id, source_sha256
@@ -1539,6 +1547,8 @@ def import_json_artifact(connection: sqlite3.Connection, root: Path, path: Path,
     if existing:
         artifact = replace(artifact, artifact_id=text(existing[0]))
         if text(existing[1]) == artifact.source_sha256:
+            upsert_artifact(connection, artifact)
+            connection.execute("UPDATE benchmarks SET settings_json = json_patch(settings_json, ?) WHERE source_artifact_id = ?", (stable_json(pins), artifact.artifact_id))
             return
     elif artifact_exists(connection, artifact.artifact_id):
         return
@@ -1943,6 +1953,7 @@ def import_benchmark_rows(connection: sqlite3.Connection, artifact: Artifact, pa
                     **({"benchmark_kind": benchmark_kind} if benchmark_kind else {}),
                     **({"benchmark_lane": benchmark_lane} if benchmark_lane else {}),
                     **({"benchmark_gate": canonical_benchmark_label(reported_benchmark_gate)} if reported_benchmark_gate else {}),
+                    **{key: artifact.summary[key] for key in ("provenance", "provenance_status") if key in artifact.summary},
                     "artifact_quality": artifact_quality,
                     "telemetry_quality": telemetry_quality,
                     **({"target_height": target_height} if target_height is not None else {}),

@@ -1,5 +1,6 @@
 services:
   cpbitnode:
+    image: ${RB_PROVENANCE_IMAGE:-rb/cpp:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -25,6 +26,7 @@ services:
       retries: 3
 
   cpbitnode-sync-proof:
+    image: ${RB_PROVENANCE_IMAGE:-rb/cpp:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile

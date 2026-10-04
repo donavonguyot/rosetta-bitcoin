@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """Serial rotating repetitions; volumes prepared before timing and retained."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import argparse,json,statistics,subprocess,time,uuid
 from pathlib import Path
 from campaign_v3 import ROOT,frozen,save,digest
@@ -9,9 +16,9 @@ def repetition(submission,lineage,lane,workload,number,warmup=False):
     f=frozen();m=json.loads((ROOT/'evidence/measurement-freeze.json').read_text())
     for path,sha in m['files'].items():assert digest(ROOT/path)==sha,('measurement source changed',path)
     token=uuid.uuid4().hex[:12];name='rn-substrate-measure-'+token;volume=name+'-state'
-    out=ROOT/'.local/measurements'/name;out.mkdir(parents=True)
+    out=(_rb_paths()['substrate'] / 'measurements')/name;out.mkdir(parents=True)
     subprocess.run(['docker','volume','create','--label','rosettanode.substrate=measurement',volume],check=True,capture_output=True)
-    cmd=['docker','run','--name',name,'--network','none','--security-opt','no-new-privileges','--cpus','4','--memory','4g','--label','rosettanode.substrate=measurement','-e','RN_CANDIDATE=/candidate/service','-v',str(ROOT/'.local/adapter-bundle')+':/adapter:ro','-v',str(submission)+':/candidate:ro','-v',str(out)+':/output','-v',volume+':/state',m['image_id'],'python3','tools/benchmark_resources.py','--workload',workload,'--lane',lane]
+    cmd=['docker','run','--name',name,'--network','none','--security-opt','no-new-privileges','--cpus','4','--memory','4g','--label','rosettanode.substrate=measurement','-e','RN_CANDIDATE=/candidate/service','-v',str((_rb_paths()['substrate'] / 'adapter-bundle'))+':/adapter:ro','-v',str(submission)+':/candidate:ro','-v',str(out)+':/output','-v',volume+':/state',m['image_id'],'python3','tools/benchmark_resources.py','--workload',workload,'--lane',lane]
     samples=[];start=time.monotonic();timeout=False
     with (out/'log.txt').open('w') as log:
         p=subprocess.Popen(cmd,stdout=log,stderr=log);next_sample=start

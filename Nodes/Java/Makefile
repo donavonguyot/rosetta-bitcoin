@@ -77,7 +77,7 @@ docker-script-corpus:
 	@if [ "$(DOCKER_REBUILD)" = "1" ]; then $(DOCKER_COMPOSE) build jbitnode-sync-proof; else echo "docker image warm reuse; run 'make docker-warm' or DOCKER_REBUILD=1 to rebuild"; fi
 	$(DOCKER_COMPOSE) run --rm --no-deps \
 	  -e SECP256K1_BACKEND=native \
-	  -v $(abspath ../Shared/conformance):/shared/conformance \
+	  -v $(abspath ../Shared/conformance):/shared/conformance -v $(RB_FIXTURE_SHARED)/conformance/fixtures:/shared/conformance/fixtures:ro \
 	  jbitnode-sync-proof com.jbitnode.cli.ScriptCorpus \
 	  --manifest /shared/conformance/fixtures/scripts/manifest.json \
 	  --result-path $(DOCKER_SCRIPT_RESULT) \
@@ -250,7 +250,7 @@ java-node-native-status:
 	@DATA_DIR=$(or $(DATA_DIR),./data-java-rocksdb) $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.DbStatus
 
 java-node-script-corpus:
-	SECP256K1_BACKEND=native $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ScriptCorpus -Dexec.args="--result-path $(SCRIPT_RESULT)"
+	SECP256K1_BACKEND=native $(MVN) -q -DskipTests exec:java -Dexec.mainClass=com.jbitnode.cli.ScriptCorpus -Dexec.args="--manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json --result-path $(SCRIPT_RESULT)"
 
 test-crypto-vectors:
 	@tmp=$$(mktemp); \
@@ -365,7 +365,7 @@ java-node-native-crypto-test:
 java-node-chainstate-backend-replay:
 	DATA_DIR=$(or $(DATA_DIR),./data-java-rocksdb-replay) UTXO_BACKEND=rocksdb \
 	ROCKSDB_DIR=$(or $(ROCKSDB_DIR),$(or $(DATA_DIR),./data-java-rocksdb-replay)/utxo-rocksdb) \
-	FIXTURE_BLOCKS_DIR=$(or $(FIXTURE_BLOCKS_DIR),src/test/resources/fixtures) \
+	FIXTURE_BLOCKS_DIR=$(or $(FIXTURE_BLOCKS_DIR),target/generated-test-resources/fixtures) \
 	REPLAY_CORPUS_DIR=$(REPLAY_CORPUS_DIR) \
 	PROOF_PATH=$(or $(PROOF_PATH),../Shared/conformance/results/java_rocksdb_codec_v2_storage_2026-06-01.json) \
 	SECP256K1_BACKEND=$(or $(SECP256K1_BACKEND),pure_java) \
@@ -390,3 +390,6 @@ java-node-chainstate-backend-benchmark:
 	WORK_DIR=$(or $(WORK_DIR),./benchmark-chainstate) \
 	BLOCKS_MAX=$(or $(BLOCKS_MAX),500) PEERS=$(or $(PEERS),127.0.0.1:48333) \
 	./scripts/chainstate_backend_replay_benchmark.sh
+
+include ../Shared/fixture_package.mk
+test docker-build docker-script-corpus java-node-script-corpus test-crypto-vectors test-block-connect-backend java-node-rocksdb-clean-rebuild java-node-native-crypto-test java-node-replay-corpus-export: | fixture-package

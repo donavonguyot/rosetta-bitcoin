@@ -1,0 +1,559 @@
+{
+  "schema": "rb.provenance_rollout.v1",
+  "date": "2026-10-03",
+  "timezone": "America/Los_Angeles",
+  "classification": "implementation_validation",
+  "base_commit": "05e2f841853e0e54fe878e36f0dd91ae0b710c4d",
+  "implementation_commits": {
+    "B": "6ef3fb3e8a51991567a640d27f66cadb97bf2a57",
+    "A": "6acc19e9be34dbe5a29d1f57826cadf0c894f2fd",
+    "C": "0ca5dd814e8138f73eeed16705ff33946fc8c654"
+  },
+  "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+  "fixture_inventory": "Nodes/Shared/conformance/fixture_package.json",
+  "java": {
+    "removed_verified_duplicates": 1762,
+    "retained_unmatched": 79,
+    "mapping": "Nodes/Java/fixture_resources.json",
+    "parity": "Nodes/Java/fixture_parity.json",
+    "parity_sha256": "facca5c7579c021037586998c488c8f6992aea402bea0236351a84f76a6bb4b7",
+    "tests": 438,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0,
+    "before_after": "identical identities and outcomes after baseline DER/Taproot fixes",
+    "final_build_receipt": {
+      "schema": "rb.build_receipt.v1",
+      "source_commit": "0ca5dd814e8138f73eeed16705ff33946fc8c654",
+      "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+      "binary_sha256": "b72ef706474fa208969a8187a8394099f2fe678360e70db0a2bc0011e050e3ce",
+      "subject_type": "file"
+    }
+  },
+  "migrations": [
+    {
+      "class": "campaigns",
+      "status": "complete",
+      "destination": "state:campaigns/",
+      "original": "Project/.campaigns",
+      "retained_original": "retained-originals/campaigns",
+      "local_receipt": "migrations/campaigns.json",
+      "date": "2026-10-03",
+      "portable_inventory_entries": 51704,
+      "bytes": 4398652094,
+      "inventory_sha256": "4bb2dcd5c6bb424ef1e711cc6cc131d66522f765e39c3d29c6c7b0a9fadbe48b",
+      "retained_socket_count": 0
+    },
+    {
+      "class": "substrate",
+      "status": "complete",
+      "destination": "state:substrate/",
+      "original": "Nodes/RosettaNode/substrate/.local",
+      "retained_original": "retained-originals/substrate",
+      "local_receipt": "migrations/substrate.json",
+      "date": "2026-10-03",
+      "portable_inventory_entries": 56770,
+      "bytes": 11234199742,
+      "inventory_sha256": "f49bf1351933209f5a2cfb21a8ed4bce4f31c4cddd9623d5f73536233112512a",
+      "retained_socket_count": 276
+    }
+  ],
+  "migration_execution_order": [
+    "substrate",
+    "campaigns"
+  ],
+  "migration_order_deviation": "Campaigns idleness investigation initially blocked on read-only virtualization handles; no detected writer at either cutover.",
+  "frozen_campaign": {
+    "old": "Nodes/RosettaNode/substrate/.local/campaign-v2",
+    "current": "state:substrate/campaign-v2",
+    "dated_note": "FROZEN.txt",
+    "read_only": true
+  },
+  "core": {
+    "status": "deferred",
+    "effective_location": "Nodes/Reference/bitcoin-core-testnet4",
+    "scheduled_destination": "state:core/",
+    "pre_seed_sha256": null,
+    "post_seed_sha256": null,
+    "live_workload_launched": false
+  },
+  "validation": {
+    "fixture_package_tests": 4,
+    "provenance_tests": 6,
+    "migration_tests": 6,
+    "crypto_lane_tests": 6,
+    "java_tests": 438,
+    "core_harness_gate_cases": 3,
+    "importer_self_test": "passed",
+    "campaign_self_tests": "passed",
+    "consumers": [
+      {
+        "port": "cpp",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "1816ab6339e519eda4df76838e92c6e2819bcfa739321fbe5eac0ddd0381601c",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "csharp",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "66570d15e90e5b30616dbf41d426653b0225579209f3efd80cda8940cf6f6e79",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "go",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "4bbf755b085550c7c1d1a3de03d73bf062371fd45908a33deb6149b342835838",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "java",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "f91b68cd4c4cb2eb49647f908c467b49e86d79f837d4fb327ff924bd88e5c556",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "mojo",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "d8d1f8c82ddc85402c2360d2884a675d3574927ed9087d21bff3fc9af933517f",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "rust",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "945ea9c4839e74252b017daa41c581155601b3ae2b458dff56a8e3c0450d4abc",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "swift",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "d990199b5cc08e4a9243d2b066d91b27cdee0791ee5664c828a78d64e70d7439",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "zig",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "4840785e110df705eb62e61d19d4ed4b1f492086116a61198de838f85db68f27",
+        "runtime_surface": "host"
+      }
+    ],
+    "ocaml": {
+      "package_prepare": "passed",
+      "compose_render": "passed",
+      "corpus": "blocked",
+      "reason": "Opam is not initialized"
+    },
+    "compose_ports": 9,
+    "docker_contract_manifests": 13,
+    "docker_contract_errors": 0,
+    "current_evidence_import": {
+      "isolated_database": true,
+      "artifact_count": 153,
+      "provenance_status": "absent"
+    },
+    "default_custom_resolution": "passed; no allocation",
+    "documentation_drift": {
+      "status": "blocked_existing",
+      "missing_target": "Docs/paper/figures/substrate_pipeline.pdf"
+    },
+    "path_hygiene": {
+      "status": "blocked_existing",
+      "finding_count": 717,
+      "new_runtime_root_findings": 0
+    },
+    "live_core_validation": false,
+    "fresh_docker_benchmark_execution": false
+  },
+  "preserved": {
+    "primary_uncommitted_zig_work": true,
+    "historical_results": true,
+    "current_evidence_selection": true,
+    "tracked_project_database": true,
+    "retired_port_source": true
+  },
+  "addenda": [
+    {
+      "date": "2026-10-03",
+      "kind": "retained_original_reclaim",
+      "prompt_sha256": "95ed6f037f496359650aaa8d8baf9c1999834c1bc3de671320f23b5f2791dde9",
+      "prompt_local_file": "Nodes/Shared/conformance/provenance_rollout_2026-10-03.request.txt",
+      "reclaim_receipt": "migrations/reclaim-2026-10-03-applied.json",
+      "reclaim_receipt_sha256": "1efae94bc28ceb4ac1c47dbebe6b09c8eb55ee1bd6754549dd72055d3466c17a",
+      "status": "complete",
+      "logical_bytes_deleted": 15632851927,
+      "free_before": 57438220288,
+      "free_after": 76814540800,
+      "host_free_delta": 19376320512,
+      "classes": {
+        "campaigns": {
+          "checks": {
+            "compatibility_link": true,
+            "complete_journal": true,
+            "destination_idle": true,
+            "expected_sockets": true,
+            "original_idle": true,
+            "original_path": true,
+            "original_unchanged": true,
+            "portable_comparison": true
+          },
+          "original_inventory_sha256": "4bb2dcd5c6bb424ef1e711cc6cc131d66522f765e39c3d29c6c7b0a9fadbe48b",
+          "original_only_sockets": 0,
+          "missing_destination_paths": [],
+          "changed_destination_paths": [],
+          "destination_additions_count": 2687
+        },
+        "substrate": {
+          "checks": {
+            "compatibility_link": true,
+            "complete_journal": true,
+            "destination_idle": true,
+            "expected_sockets": true,
+            "frozen_campaign": true,
+            "original_idle": true,
+            "original_path": true,
+            "original_unchanged": true,
+            "portable_comparison": true
+          },
+          "original_inventory_sha256": "f49bf1351933209f5a2cfb21a8ed4bce4f31c4cddd9623d5f73536233112512a",
+          "original_only_sockets": 276,
+          "missing_destination_paths": [],
+          "changed_destination_paths": [],
+          "destination_additions_count": 0,
+          "frozen_campaign": {
+            "expected_inventory_sha256": "de6f8592c4c1709be21d24a467807021b547cc31f302ab8528f0f1ce167a8f13",
+            "live_inventory_sha256": "de6f8592c4c1709be21d24a467807021b547cc31f302ab8528f0f1ce167a8f13",
+            "note_present": true,
+            "writable_paths": []
+          }
+        }
+      }
+    },
+    {
+      "date": "2026-10-03",
+      "kind": "merge_readiness",
+      "prompt_sha256": "95ed6f037f496359650aaa8d8baf9c1999834c1bc3de671320f23b5f2791dde9",
+      "rebase": {
+        "tested_base": "05e2f841853e0e54fe878e36f0dd91ae0b710c4d",
+        "initial_outcome": "already_up_to_date",
+        "primary_tip_observed_after_validation": "f59b40a8eb989a95e7742938ced82fd957c3ba72",
+        "status": "stopped_before_rebase_to_new_tip",
+        "reason": "Primary advanced during validation and changes four historical Zig results, the current evidence selection, and Project/project.db.",
+        "historical_result_paths": [
+          "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_docker_2026-10-03.json",
+          "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_host_2026-10-03.json",
+          "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_docker_2026-10-03.json",
+          "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_host_2026-10-03.json"
+        ],
+        "conflict_resolution_attempted": false
+      },
+      "java_defects": [
+        {
+          "blocker_id": "c1745189110b951b574ab2b3aa07d372681715f34d6303b7a11d1421236b3a1b",
+          "source_port": "java",
+          "source_commit": "6ef3fb3e8a51991567a640d27f66cadb97bf2a57",
+          "fixture": "Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json#ecdsa-malformed-der-missing-s",
+          "test_name": "com.jbitnode.consensus.secp256k1.NativeCryptoVectorContractTest#sharedNativeCryptoVectorsRunAgainstAllJavaBackends",
+          "status": "cleared",
+          "follower_notes": "JAVA-DER-BOUNDS-2026-10-03; file Nodes/Java/src/main/java/com/jbitnode/consensus/secp256k1/Secp256k1.java; fixed by r/s bounds checks in 6ef3fb3e8a51991567a640d27f66cadb97bf2a57. Reproduce: mvn -B -f Nodes/Java/pom.xml -Dtest=NativeCryptoVectorContractTest test. Height -1 denotes a synthetic vector, not a chain-height blocker."
+        },
+        {
+          "blocker_id": "817350929c818d165351727c896ab44bf398a7f4d68d229a397a1587c39ab177",
+          "source_port": "java",
+          "source_commit": "6ef3fb3e8a51991567a640d27f66cadb97bf2a57",
+          "fixture": "Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json#taproot-consensus-invalid-wrong-output",
+          "test_name": "com.jbitnode.consensus.secp256k1.NativeCryptoVectorContractTest#sharedNativeCryptoVectorsRunAgainstAllJavaBackends",
+          "status": "cleared",
+          "follower_notes": "JAVA-TAPROOT-EXPECTATION-2026-10-03; test-only correction in Nodes/Java/src/test/java/com/jbitnode/consensus/secp256k1/NativeCryptoVectorContractTest.java; fixed by expected-output/parity comparison in 6ef3fb3e8a51991567a640d27f66cadb97bf2a57. Also covers taproot-consensus-invalid-wrong-parity. Reproduce: mvn -B -f Nodes/Java/pom.xml -Dtest=NativeCryptoVectorContractTest test. Height -1 denotes a synthetic vector, not a chain-height blocker."
+        }
+      ],
+      "fixture_change_required": false,
+      "validation": {
+        "packaging": {
+          "tests": 4,
+          "status": "passed"
+        },
+        "provenance": {
+          "tests": 6,
+          "status": "passed"
+        },
+        "migration": {
+          "tests": 6,
+          "status": "passed"
+        },
+        "reclaim": {
+          "tests": 4,
+          "status": "passed"
+        },
+        "crypto_lane": {
+          "tests": 6,
+          "status": "passed"
+        },
+        "java": {
+          "tests": 438,
+          "skipped": 0,
+          "failures": 0,
+          "errors": 0,
+          "identities_match_prior_receipt": true
+        },
+        "harness": {
+          "cases": 3,
+          "status": "passed",
+          "state_relative_log_paths": true
+        },
+        "importer_self_test": "passed",
+        "serial_campaign_self_test": "passed",
+        "parallel_campaign_self_test": "passed",
+        "nested_tooling_tests": 11,
+        "consumers": [
+          {
+            "port": "cpp",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "75e731495ecf018376e011de2f59027a234cf79ed71e8d0132dd3a4caaff2349"
+          },
+          {
+            "port": "csharp",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "0af71109486228fb2cc49eaa26952b9ffc2850618bbf56380bb86e052c2a8b7a"
+          },
+          {
+            "port": "go",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "7bcdbf8712342fc33cb66ece573eb2c0581402069add621d5473b86484ff9923"
+          },
+          {
+            "port": "java",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "c8b85ce11ca564657c76d23dc825b1ec53dc60ed5fafe58e635ff0c0dbc6f1f5"
+          },
+          {
+            "port": "mojo",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "d8d1f8c82ddc85402c2360d2884a675d3574927ed9087d21bff3fc9af933517f"
+          },
+          {
+            "port": "rust",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "4ac9d898a03ec847b4a985651e04fecfa215055ecf8738c551e05bc0e9b81fe7"
+          },
+          {
+            "port": "swift",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "219b415c29b3d457c6fe72dcfbb1079f258a5724ce331541c98fe7a9df310f26"
+          },
+          {
+            "port": "zig",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "4840785e110df705eb62e61d19d4ed4b1f492086116a61198de838f85db68f27"
+          }
+        ],
+        "mojo_rejection": {
+          "native_passed": 6,
+          "pure_passed": 6
+        },
+        "docker_contract": {
+          "manifests": 13,
+          "errors": 0
+        },
+        "path_hygiene": {
+          "status": "existing_findings",
+          "count": 717,
+          "core_exception": "deferred"
+        },
+        "doc_drift": {
+          "status": "existing_missing_figure",
+          "path": "Docs/paper/figures/substrate_pipeline.pdf"
+        }
+      },
+      "smoke": {
+        "artifact": "Nodes/Shared/conformance/results/cpp_control_baseline_5k_benchmark_20261004T021539Z.json",
+        "artifact_sha256": "f13ca2c6902acdfaed0a7c82b215943e0f2dcaccd1815cbc384f7d6f9f4a858b",
+        "original_local_artifact_sha256": "2dfe3e9f3f55da07dd6025e7b19c683d3b3a47654003b666db6a5e94be68522b",
+        "publication_transformation": "Only control_harness proof_log and telemetry_log were changed from machine paths to logical state references.",
+        "result": "passed",
+        "validated_height": 5000,
+        "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+        "total_ms": 5036,
+        "telemetry_quality": "clean",
+        "provenance": {
+          "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+          "source_commit": "6d18cd7a9da5137f0a92c668b7372ac383643a07",
+          "binary_sha256": "d169f774ce0d321358c960d4e7828b87813328eca45e2ed20bb0e3511a6068eb",
+          "run_ref": "smoke-2026-10-03"
+        },
+        "build_receipt": {
+          "binary_sha256": "d169f774ce0d321358c960d4e7828b87813328eca45e2ed20bb0e3511a6068eb",
+          "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+          "schema": "rb.build_receipt.v1",
+          "source_commit": "6d18cd7a9da5137f0a92c668b7372ac383643a07",
+          "subject_type": "image"
+        },
+        "container_start_events": [
+          {
+            "event": "start",
+            "container_id": "1df80fcc0bc9c627686a937e51f08d808b3c1d71838c03262200e1c6a83ea8ba",
+            "image": "sha256:d169f774ce0d321358c960d4e7828b87813328eca45e2ed20bb0e3511a6068eb",
+            "container_name": "rb-provenance-smoke-20261003-cpbitnode-sync-proof-run-185c20a1686d",
+            "unix_time": 1791080136
+          },
+          {
+            "event": "start",
+            "container_id": "09bc3f69908cd114a29a401c77570fa351286c7f3e5c2b753e85807d2593437c",
+            "image": "sha256:d169f774ce0d321358c960d4e7828b87813328eca45e2ed20bb0e3511a6068eb",
+            "container_name": "rb-provenance-smoke-20261003-cpbitnode-sync-proof-run-087fc4005e30",
+            "unix_time": 1791080138
+          }
+        ],
+        "import_all_status": "verified",
+        "single_file_import_status": "verified",
+        "canonical_current_evidence_changed": false,
+        "temporary_volume_removed": true,
+        "temporary_network_removed": true,
+        "image_retained_for_published_evidence": true
+      },
+      "ocaml": {
+        "observed_compiler": "5.2.1",
+        "switch": "rb-5.2",
+        "root": "state:campaigns/toolchains/ocaml-opam",
+        "dune_installed": false,
+        "project_dependencies_installed": false,
+        "corpus_status": "not_rerun; separate setup left untouched"
+      },
+      "core": {
+        "cutover": "deferred",
+        "pre_seed_sha256": null,
+        "post_seed_sha256": null,
+        "scheduled_command": "python3 Project/scripts/migrate_core.py --execute-scheduled --container rosetta-bitcoin-core-testnet4",
+        "cutover_executed": false,
+        "existing_reference_used_for_smoke": true
+      },
+      "merge_ready": false,
+      "owner_decision": "Authorize how to reconcile the newly committed primary evidence and Project database changes before attempting another rebase. No merge or PR performed."
+    },
+    {
+      "date": "2026-10-03",
+      "kind": "owner_authorized_reconciliation",
+      "requested_rebase_base": "f59b40a8eb989a95e7742938ced82fd957c3ba72",
+      "rebased_tip": "37c51f3",
+      "integrated_primary": "72ea75bd4998d982400be525f6a9bc355c41a9dc",
+      "primary_integration_commit": "dcba037",
+      "binary_database_merge": false,
+      "database_source": "72ea75bd4998d982400be525f6a9bc355c41a9dc:Project/project.db",
+      "database_migration": "Project/scripts/migrate_artifact_provenance.py",
+      "migration": {
+        "added_columns": [],
+        "after": {
+          "artifacts": 163,
+          "provenance_status": {
+            "absent": 163
+          }
+        },
+        "before": {
+          "artifacts": 163,
+          "provenance_status": {
+            "unmarked": 163
+          }
+        },
+        "updated_summaries": 163
+      },
+      "after_import": {
+        "artifacts": 164,
+        "provenance_status": {
+          "absent": 163,
+          "verified": 1
+        },
+        "projection_counts": {
+          "absent": 163,
+          "verified": 1
+        },
+        "selected_evidence_count": 81,
+        "java_defects": [
+          [
+            "817350929c818d165351727c896ab44bf398a7f4d68d229a397a1587c39ab177",
+            "cleared"
+          ],
+          [
+            "c1745189110b951b574ab2b3aa07d372681715f34d6303b7a11d1421236b3a1b",
+            "cleared"
+          ]
+        ],
+        "logical_database_sha256": "e48063c8136ed4e07b01f1d6b0369e052629d3cb279fca7d93d7bc49c6e4cffa"
+      },
+      "repeat_import_logically_unchanged": true,
+      "original_requested_base_artifact_count": 157,
+      "preserved_zig_result_count": 31,
+      "primary_current_evidence_unchanged": true,
+      "smoke_explicit_import": "Nodes/Shared/conformance/results/cpp_control_baseline_5k_benchmark_20261004T021539Z.json",
+      "pre_rebase_smoke_source_ref": "refs/tags/evidence/provenance-smoke-2026-10-03",
+      "ocaml": {
+        "corpus": "unverified",
+        "merge_gate": false,
+        "observed_compiler": "5.2.1",
+        "dune_and_project_dependencies": "not installed",
+        "post_merge_first_check": "Run package-backed OCaml corpus as soon as the separate Opam setup is ready; do not initialize or modify it here."
+      },
+      "checks": {
+        "database_migration_tests": 2,
+        "provenance_tests": 6,
+        "package_tests": 4,
+        "migration_tests": 6,
+        "reclaim_tests": 4,
+        "crypto_lane_tests": 6,
+        "java_parity_tests": 438,
+        "java_skipped": 0,
+        "importer_harness_campaign_self_tests": "passed",
+        "docker_contract_errors": 0,
+        "path_hygiene_existing_findings": 717,
+        "doc_drift": "existing missing substrate_pipeline.pdf"
+      },
+      "core_cutover": "deferred; not executed",
+      "merge_authorized": true
+    }
+  ]
+}

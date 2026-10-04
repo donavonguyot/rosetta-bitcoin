@@ -8,6 +8,11 @@ Dry-run is the default.
 
 from __future__ import annotations
 
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[2] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
+
 import argparse
 import importlib.util
 import json
@@ -113,6 +118,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", default="Project/project.db", help="Project mission-control DB path")
     parser.add_argument("--gate", default="shakedown_50k", choices=SUPPORTED_GATES)
+    parser.add_argument("--run-ref", help="Opaque external run reference")
     parser.add_argument("--ports", help="Comma-separated port list")
     parser.add_argument("--all", action="store_true", help="Use all eligible non-reference ports")
     parser.add_argument("--campaign", type=Path, help="Existing campaign state path for --resume")
@@ -175,7 +181,8 @@ def one(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -> dic
 
 
 def rel(path: Path) -> str:
-    return str(path.resolve().relative_to(ROOT))
+    from state_root import logical_path
+    return logical_path(path)
 
 
 def as_bool(value: Any) -> bool:
@@ -378,6 +385,7 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
     return {
         "schema": "rb.benchmark_campaign.v1",
         "campaign_id": campaign_id,
+        "run_ref": getattr(args, "run_ref", None),
         "created_at": utc_now(),
         "updated_at": utc_now(),
         "gate": args.gate,
@@ -395,7 +403,7 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
 
 
 def campaign_dir(campaign: dict[str, Any]) -> Path:
-    return ROOT / "Project/.campaigns" / str(campaign["campaign_id"])
+    return (_rb_paths()['campaigns']) / str(campaign["campaign_id"])
 
 
 def save_campaign(campaign: dict[str, Any]) -> Path:
@@ -406,7 +414,8 @@ def save_campaign(campaign: dict[str, Any]) -> Path:
 
 
 def load_campaign(path: Path) -> dict[str, Any]:
-    payload = read_json(path if path.is_absolute() else ROOT / path)
+    from state_root import resolve_path
+    payload = read_json(resolve_path(path))
     if payload.get("schema") != "rb.benchmark_campaign.v1":
         raise SystemExit(f"{path} is not an rb.benchmark_campaign.v1 state file")
     return payload
@@ -691,6 +700,7 @@ def build_control_artifact(
         reference_finish_height=reference_finish_height,
         reference_finish_hash=reference_finish_hash,
         source_state=source_state,
+        provenance=next((row.get("provenance") for row in campaign["ports"] if row["port"] == port), None),
     )
 
 
@@ -868,6 +878,8 @@ def campaign_should_pause(campaign: dict[str, Any], port: str, reason: str) -> b
 
 
 def execute_campaign(campaign: dict[str, Any]) -> int:
+    from state_root import acquire_writer_lease
+    acquire_writer_lease()
     conn = connect(campaign["db"])
     gate = gate_row(conn, campaign["gate"])
     expected_peer = read_env(REFERENCE_TOPOLOGY).get("REFERENCE_P2P_PEER", "")
@@ -907,6 +919,8 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
                 return 1
             continue
 
+        from provenance import prepare_port
+        entry["provenance"], provenance_env = prepare_port(port, campaign.get("run_ref"))
         reference_finish: dict[str, Any] = {}
         if campaign["gate"] == "post_100k_to_tip":
             source_log = campaign_dir(campaign) / "logs" / f"{port}_source_state.log"
@@ -963,6 +977,7 @@ def execute_campaign(campaign: dict[str, Any]) -> int:
                 "REFERENCE_FINISH_HASH": str(reference_finish["hash"]),
                 "POST_100K_TIP_TARGET": str(int(reference_finish["height"])),
             }
+        proof_env.update(provenance_env)
         exit_code = run_shell(
             proof_command,
             proof_log,

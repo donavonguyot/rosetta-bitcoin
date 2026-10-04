@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """Run instrument qualification serially; this does not launch candidates."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import hashlib,json,subprocess,time,uuid
 from pathlib import Path
 from build import ROOT,RUNTIME,parent_check
@@ -7,7 +14,7 @@ PROBES=['storage_probe','service_probe','adapter_probe','linkage_probe','recover
 FILES={name:name.replace('_','-')+'.json' for name in PROBES}
 
 def main():
-    folder=ROOT/'.local'/('qualification-'+uuid.uuid4().hex[:10]);folder.mkdir();started=time.monotonic();runs=[]
+    folder=(_rb_paths()['substrate'])/('qualification-'+uuid.uuid4().hex[:10]);folder.mkdir();started=time.monotonic();runs=[]
     p=subprocess.run(['python3',str(ROOT/'tools/build.py')],capture_output=True,text=True);(folder/'build.log').write_text(p.stdout+p.stderr)
     if p.returncode:raise RuntimeError('build failed; see '+str(folder))
     for probe in PROBES:

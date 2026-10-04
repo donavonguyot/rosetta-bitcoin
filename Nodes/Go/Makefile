@@ -51,7 +51,7 @@ go-node-storage-proof:
 	$(GO) run ./cmd/gobitnode-storage-proof --datadir $(PROOF_DATA_DIR) --result-path $(STORAGE_RESULT)
 
 go-node-script-corpus:
-	$(GO) run ./cmd/gobitnode-script-corpus --result-path $(SCRIPT_RESULT)
+	$(GO) run ./cmd/gobitnode-script-corpus --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json --result-path $(SCRIPT_RESULT)
 
 go-node-sync-local:
 	$(GO) run ./cmd/gobitnode-sync --datadir $(DATA_DIR) --target $(SYNC_TARGET) --rpc-url $(RPC_URL) --rpc-user $(RPC_USER) --rpc-password $(RPC_PASSWORD)
@@ -164,3 +164,6 @@ docker-smoke-once:
 
 clean:
 	rm -rf data-go data-go-proof bin
+
+include ../Shared/fixture_package.mk
+build test go-node-script-corpus go-node-native-crypto-test test-crypto-vectors test-block-connect-backend docker-build docker-script-corpus: | fixture-package

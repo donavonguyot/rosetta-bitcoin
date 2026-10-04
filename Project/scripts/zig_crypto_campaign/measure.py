@@ -1,7 +1,12 @@
 """Fresh-volume, rotated three-way measurements, separate from canonical claims."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import fcntl,json,subprocess,sys,time
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[3];WORK=ROOT/'Project/.campaigns/zig-opt'
+ROOT=Path(__file__).resolve().parents[3];WORK=(_rb_paths()['campaigns'] / 'zig-opt')
 sys.path.insert(0,str(ROOT/'Project/scripts'));from crypto_lanes import HASH
 
 def run(cmd):
@@ -31,7 +36,7 @@ def main():
  metadata={v:json.loads((WORK/f'{v}-image.json').read_text()) for v in ('original','optimized','c_control')}
  assert len({v['node_digest'] for v in metadata.values()})==1
  result={'variants':metadata,'warmups':[],'runs':[],'components':{}}
- with (ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock').open('w') as lock:
+ with ((_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')).open('w') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX)
   for variant,meta in metadata.items():
    print('warmup',variant,flush=True);result['warmups'].append(replay(meta,variant+'-warmup'))

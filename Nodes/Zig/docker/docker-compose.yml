@@ -1,5 +1,6 @@
 services:
   zigbitnode:
+    image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
       context: ../../..
       dockerfile: Nodes/Zig/docker/Dockerfile
@@ -8,12 +9,15 @@ services:
     volumes:
       - zigbitnode_data:/data
       - ../../Shared:/workspace/Shared:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/testing/fixtures:/workspace/Shared/testing/fixtures:ro
       - ../../Shared/conformance/results:/results
     networks:
       - default
       - reference
 
   zigbitnode-script-corpus:
+    image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
       context: ../../..
       dockerfile: Nodes/Zig/docker/Dockerfile
@@ -21,9 +25,12 @@ services:
       ZIGBITNODE_RUNTIME_SURFACE: docker
     volumes:
       - ../../Shared:/workspace/Shared:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/testing/fixtures:/workspace/Shared/testing/fixtures:ro
       - ../../Shared/conformance/results:/results
 
   zigbitnode-local-reference-proof:
+    image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
       context: ../../..
       dockerfile: Nodes/Zig/docker/Dockerfile

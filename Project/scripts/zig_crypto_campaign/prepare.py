@@ -1,7 +1,12 @@
 """Reconstruct the frozen baseline and measured arithmetic snapshots from Git."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import hashlib,io,json,subprocess,tarfile,sys,shutil
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[3];HERE=Path(__file__).parent;WORK=ROOT/'Project/.campaigns/zig-opt'
+ROOT=Path(__file__).resolve().parents[3];HERE=Path(__file__).parent;WORK=(_rb_paths()['campaigns'] / 'zig-opt')
 sys.path.insert(0,str(ROOT/'Project/scripts'));from crypto_lanes import source_digest
 WORK.mkdir(parents=True,exist_ok=True)
 if '--reference' in sys.argv:

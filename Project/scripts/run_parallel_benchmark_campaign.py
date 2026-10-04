@@ -9,6 +9,11 @@ concurrently and summarizes their product progress.
 
 from __future__ import annotations
 
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[2] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
+
 import argparse
 import json
 import os
@@ -95,6 +100,7 @@ def utc_now() -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-ref", help="Opaque external run reference")
     parser.add_argument("--ports", default=",".join(DEFAULT_PORTS), help="Comma-separated ports in launch order")
     parser.add_argument("--gate", default="baseline_5k", choices=tuple(GATE_SPECS), help="Parallel campaign gate")
     parser.add_argument("--stagger-sec", type=float, default=2.0, help="Delay between proof launches")
@@ -128,10 +134,8 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def rel(path: Path) -> str:
-    try:
-        return str(path.resolve().relative_to(ROOT))
-    except ValueError:
-        return str(path)
+    from state_root import logical_path
+    return logical_path(path)
 
 
 def parse_ports(raw: str) -> list[str]:
@@ -596,6 +600,8 @@ def print_summary(summary: dict[str, Any]) -> None:
 
 
 def run_campaign(args: argparse.Namespace) -> int:
+    from state_root import acquire_writer_lease
+    acquire_writer_lease()
     spec = gate_spec(args.gate)
     run_id = campaign_id(args, spec)
     run_timeout_sec = timeout_sec(args, spec)
@@ -604,7 +610,7 @@ def run_campaign(args: argparse.Namespace) -> int:
         print_dry_run(plan, args, run_id, spec)
         return 0
 
-    base_dir = ROOT / "Project/.campaigns" / run_id / f"parallel_reference_{spec.gate}"
+    base_dir = (_rb_paths()['campaigns']) / run_id / f"parallel_reference_{spec.gate}"
     logs_dir = base_dir / "logs"
     removed_networks = cleanup_unused_parallel_networks(exclude_project=compose_project_name(run_id))
     reference_log = logs_dir / "reference_p2p_check.log"
@@ -636,6 +642,9 @@ def run_campaign(args: argparse.Namespace) -> int:
         "ports": [],
     }
 
+    from provenance import prepare_port
+    provenance_by_port = {}
+    provenance_env_by_port = {}
     runnable: list[PortPlan] = []
     for item in plan:
         warm_log = logs_dir / f"{item.port}_warm.log"
@@ -646,6 +655,7 @@ def run_campaign(args: argparse.Namespace) -> int:
         if code != 0:
             summary["ports"].append(warm_failed_row(item, warm_log, code))
             continue
+        provenance_by_port[item.port], provenance_env_by_port[item.port] = prepare_port(item.port, args.run_ref)
         runnable.append(item)
 
     processes: list[dict[str, Any]] = []
@@ -655,6 +665,7 @@ def run_campaign(args: argparse.Namespace) -> int:
         env = dict(base_env)
         env["COMPOSE_PROJECT_NAME"] = item.compose_project_name
         env["ROSETTABITCOIN_PARALLEL_CAMPAIGN_PORT"] = item.port
+        env.update(provenance_env_by_port[item.port])
         launched_at = utc_now()
         started = time.time()
         process = launch_shell(item.proof_command, proof_log, env)
@@ -716,6 +727,9 @@ def run_campaign(args: argparse.Namespace) -> int:
             )
         )
 
+    for row in summary["ports"]:
+        if row["port"] in provenance_by_port:
+            row["provenance"] = provenance_by_port[row["port"]]
     summary["finished_at"] = utc_now()
     summary["field_wall_time_ms"] = max((as_int(row.get("elapsed_ms"), 0) for row in summary["ports"]), default=0)
     expected_outcome = f"passed_{spec.label}"
@@ -769,7 +783,9 @@ def self_test() -> int:
             "chainstate_utxo_count": performance.expected_utxos,
         }
     )
-    with tempfile.TemporaryDirectory() as tmp:
+    from state_root import mkdir
+    mkdir(_rb_paths()['campaigns'])
+    with tempfile.TemporaryDirectory(dir=_rb_paths()['campaigns']) as tmp:
         tmp_path = Path(tmp)
         log_5k = tmp_path / "proof_5k.log"
         log_5k.write_text(PRODUCT_PREFIX + json.dumps(clean_5k) + "\n", encoding="utf-8")

@@ -117,3 +117,27 @@ may import canonical result JSON, Docker manifests, blocker ledgers, and
 exported status JSON. Node runtimes and proof paths must not depend on
 `Project/project.db` for sync, validation, chainstate, UTXO, block lookup,
 blocker enforcement, or status truth.
+
+## Operational roots (2026-10-03 amendment)
+
+`Project/scripts/state_root.py` resolves `RB_STATE_ROOT` (default `~/.rblab`).
+Retained fixture packages live in `fixture-packages/`, Project campaigns and
+toolchains in `project-campaigns/`, and substrate output in `substrate/`.
+Project campaigns contain evidence as well as caches: migration preserves the
+entire tree and verifies file bytes and metadata before switching consumers.
+Package storage is append-only; historical imports require the retained tar
+whose bytes match their recorded fixture hash.
+
+Port-local generated build directories remain permitted, including Java
+`target/` and Rust `target/`. Retired ports are unchanged. Core's original
+datadir is a dated temporary exception until an owner-scheduled cutover; the
+eventual destination is `reference/bitcoin-core-testnet4` beneath the state root.
+
+Migration retains originals outside the repository. Receipt-backed compatibility
+symlinks at the former campaign roots support already-open checkouts; they hold
+no repository-local bulk. Unix socket endpoints stay in the retained original
+tree and are enumerated in the migration receipt, not copied as portable files.
+New published paths use `state:<class>/...`; absolute resolved paths stay local.
+Use `migrate_state.py` for dry-run, `--apply` for idle non-Core roots, and its
+`--recover` or `--rollback` operations after interruption. Core is excluded from
+that command and requires the separately scheduled `migrate_core.py` procedure.

@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """Exercise full-size dummy-host traffic and independently inspect all receipts."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import concurrent.futures,hashlib,json,statistics,sys,time
 from pathlib import Path
 from service_probe import ROOT,Host,invariant
@@ -24,7 +31,7 @@ def expected(tx):
     ex=identity(tx)
     return {'status':'0','consumed':str(len(serialize(tx))),'full_size':ex['full_size'],'stripped_size':ex['stripped_size'],'txid_digest_order':ex['txid_digest_order'],'wtxid_digest_order':ex['wtxid_digest_order']}
 def main():
-    base=ROOT/'.local'/('workloads-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();rows=[]
+    base=(_rb_paths()['substrate'])/('workloads-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();rows=[]
     tx=structure(['']);item={'hex':serialize(tx).hex(),'mode':'witness','operation':'exact'};ex=expected(tx)
     for batch in [1,8,64]:
         h=Host(base,'dummy')

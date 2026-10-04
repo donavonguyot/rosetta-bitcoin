@@ -12,7 +12,7 @@ services:
       - "127.0.0.1:48332:48332"
     volumes:
       - ../bitcoin.conf:/config/bitcoin.conf:ro
-      - ../bitcoin-core-testnet4:/home/bitcoin/.bitcoin
+      - ${RB_REFERENCE_DATADIR:-../bitcoin-core-testnet4}:/home/bitcoin/.bitcoin
     healthcheck:
       test:
         [

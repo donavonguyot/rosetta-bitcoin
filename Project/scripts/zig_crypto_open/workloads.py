@@ -1,4 +1,9 @@
 """Disjoint deterministic public API workloads; reference is test-only."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import hashlib
 import importlib.util
 import inspect
@@ -10,9 +15,9 @@ from common import ROOT, WORK, save
 def main():
     spec=importlib.util.spec_from_file_location('reference_tool', ROOT/'Nodes/Shared/conformance/tools/crypto_lanes/differential.py')
     refmod=importlib.util.module_from_spec(spec);spec.loader.exec_module(refmod)
-    archive=ROOT/'Project/.campaigns/crypto-lanes/reference.tar.gz'
+    archive=(_rb_paths()['campaigns'] / 'crypto-lanes/reference.tar.gz')
     assert hashlib.sha256(archive.read_bytes()).hexdigest()==refmod.ARCHIVE_SHA256
-    reference=refmod.Reference(ROOT/'Project/.campaigns/crypto-lanes/reference-build/lib/libsecp256k1.dylib')
+    reference=refmod.Reference((_rb_paths()['campaigns'] / 'crypto-lanes/reference-build/lib/libsecp256k1.dylib'))
     names=('ecdsa/valid','schnorr/valid','parse/valid','tweak/valid','ecdsa/late_invalid','schnorr/late_invalid','parse/early_invalid','tweak/early_invalid','ecdsa/scalar_early_invalid')
     bad_s=bytes.fromhex('3026020101022100fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141')
     for phase in ('tuning','confirmation','holdout'):

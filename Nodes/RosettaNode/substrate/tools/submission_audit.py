@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """Post-submission build/link evidence. Static checks do not replace source review."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import argparse,json,shutil,subprocess,time,uuid
 from pathlib import Path
 from campaign_v2 import ROOT,save,digest
 from broker import IMAGE
 
 def audit(submission,language):
-    base=ROOT/'.local/source-audits'/uuid.uuid4().hex;work=base/'workspace';shutil.copytree(submission,work)
+    base=(_rb_paths()['substrate'] / 'source-audits')/uuid.uuid4().hex;work=base/'workspace';shutil.copytree(submission,work)
     (work/'tmp').mkdir(exist_ok=True);(work/'cache').mkdir(exist_ok=True)
-    if language=='rust':shutil.copytree(ROOT/'.local/rust-infra/cargo',work/'cache/cargo')
-    cmd=['docker','run','--rm','--network','none','--cap-drop','ALL','--security-opt','no-new-privileges','--cpus','4','--memory','4g','--read-only','--tmpfs','/tmp:rw,size=512m','-e','CARGO_HOME=/workspace/cache/cargo','-e','GOCACHE=/workspace/cache/go','-e','ZIG_GLOBAL_CACHE_DIR=/workspace/cache/zig','-v',str(work)+':/workspace','-v',str(ROOT/'.local/adapter-bundle')+':/adapter:ro','-w','/workspace',IMAGE,'sh','-c','./build.sh && readelf -d service && nm -D --undefined-only service && ldd service']
+    if language=='rust':shutil.copytree((_rb_paths()['substrate'] / 'rust-infra/cargo'),work/'cache/cargo')
+    cmd=['docker','run','--rm','--network','none','--cap-drop','ALL','--security-opt','no-new-privileges','--cpus','4','--memory','4g','--read-only','--tmpfs','/tmp:rw,size=512m','-e','CARGO_HOME=/workspace/cache/cargo','-e','GOCACHE=/workspace/cache/go','-e','ZIG_GLOBAL_CACHE_DIR=/workspace/cache/zig','-v',str(work)+':/workspace','-v',str((_rb_paths()['substrate'] / 'adapter-bundle'))+':/adapter:ro','-w','/workspace',IMAGE,'sh','-c','./build.sh && readelf -d service && nm -D --undefined-only service && ldd service']
     start=time.monotonic();p=subprocess.run(cmd,capture_output=True,text=True,timeout=600);(base/'build-link.log').write_text(p.stdout+p.stderr)
     text=p.stdout;forbidden=['rocksdb_put','rocksdb_delete','rocksdb_merge','rocksdb_write_writebatch_wi','rocksdb_ingest_external_file','rocksdb_transactiondb_write']
     symbols=[line.split()[-1].split('@')[0] for line in text.splitlines() if ' U ' in line]

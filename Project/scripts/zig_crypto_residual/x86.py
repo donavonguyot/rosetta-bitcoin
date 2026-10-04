@@ -1,4 +1,9 @@
 """Network-disabled package correctness under Docker linux/amd64 emulation."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import hashlib,tarfile,urllib.request,fcntl,time,shutil
 from common import *
 def main():
@@ -22,5 +27,5 @@ def main():
  save(WORK/'x86.json',evidence)
  print('x86 correctness passed',flush=True)
 if __name__=='__main__':
- with (ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock').open('a') as lock:
+ with ((_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')).open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX);main()

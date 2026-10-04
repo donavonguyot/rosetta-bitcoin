@@ -1,5 +1,6 @@
 services:
   rsbitnode:
+    image: ${RB_PROVENANCE_IMAGE:-rb/rust:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -11,6 +12,7 @@ services:
     command: ["rsbitnode", "status", "--datadir", "/data", "--runtime-surface", "docker"]
 
   rsbitnode-proof:
+    image: ${RB_PROVENANCE_IMAGE:-rb/rust:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -33,6 +35,7 @@ services:
       ]
 
   rsbitnode-script-corpus:
+    image: ${RB_PROVENANCE_IMAGE:-rb/rust:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -40,7 +43,7 @@ services:
       CHAIN: testnet4
     volumes:
       - ../../Shared/conformance/results:/results
-      - ../../Shared/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
+      - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
     command:
       [
         "rsbitnode",
@@ -54,6 +57,7 @@ services:
       ]
 
   rsbitnode-local-reference-proof:
+    image: ${RB_PROVENANCE_IMAGE:-rb/rust:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -86,6 +90,7 @@ services:
       ]
 
   rsbitnode-supervisor:
+    image: ${RB_PROVENANCE_IMAGE:-rb/rust:local}
     build:
       context: ..
       dockerfile: docker/Dockerfile

@@ -5,6 +5,13 @@ A candidate submits shell text via a bounded JSON file. It runs only inside a
 resource-limited container mounting that candidate workspace and the adapter.
 This module must stay outside every candidate filesystem permission profile.
 """
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import argparse,json,os,signal,stat,subprocess,time,uuid
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -23,7 +30,7 @@ def write_at(fd,name,value):
 
 def serve(work,control,stop,reading=False):
     work=work.resolve(strict=True);control=control.resolve(strict=True)
-    if not work.is_relative_to(ROOT/'.local'):raise ValueError('not campaign-owned workspace')
+    if not work.is_relative_to((_rb_paths()['substrate'])):raise ValueError('not campaign-owned workspace')
     queue=work/'queue';queue.mkdir(exist_ok=True);fd=os.open(queue,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
     seen={name for name in os.listdir(fd) if name.endswith('.request') and name[:-8]+'.response' in os.listdir(fd)}
     try:
@@ -38,7 +45,7 @@ def serve(work,control,stop,reading=False):
                 cname='rn-substrate-build-'+uuid.uuid4().hex[:16]
                 cmd=['docker','run','--name',cname,'--rm','--network','none','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','256','--cpus','4','--memory','4g','--read-only','--tmpfs','/tmp:rw,size=512m','--label','rosettanode.substrate=broker','-e','HOME=/workspace/home','-e','GOCACHE=/workspace/cache/go','-e','ZIG_GLOBAL_CACHE_DIR=/workspace/cache/zig','-e','CARGO_HOME=/workspace/cache/cargo','-v',str(work)+(':/workspace:ro' if reading else ':/workspace'),'-v',str(control)+':/adapter:ro','-w','/workspace',IMAGE,'sh','-c',command]
                 started=time.monotonic();timeout=False
-                output=ROOT/'.local/broker-logs'/cname;output.mkdir(parents=True)
+                output=(_rb_paths()['substrate'] / 'broker-logs')/cname;output.mkdir(parents=True)
                 with (output/(token+'.stdout')).open('w') as out,(output/(token+'.stderr')).open('w') as err:
                     p=subprocess.Popen(cmd,stdout=out,stderr=err,start_new_session=True)
                     while p.poll() is None:

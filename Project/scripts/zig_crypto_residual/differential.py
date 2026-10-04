@@ -1,4 +1,9 @@
 """Batched candidate/reference comparison; references never enter candidate binaries."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import argparse, hashlib, itertools, sys, json
 from common import *
 sys.path.insert(0,str(ROOT/'Nodes/Shared/conformance/tools/crypto_lanes'))
@@ -21,8 +26,8 @@ def responses(text,ids):
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--package',type=Path,default=LIB);p.add_argument('--count',type=int,default=100_005);p.add_argument('--label',default='candidate');a=p.parse_args()
-    refpath=ROOT/'Project/.campaigns/crypto-lanes/reference-build/lib/libsecp256k1.dylib'
-    assert hashlib.sha256((ROOT/'Project/.campaigns/crypto-lanes/reference.tar.gz').read_bytes()).hexdigest()==refmod.ARCHIVE_SHA256
+    refpath=(_rb_paths()['campaigns'] / 'crypto-lanes/reference-build/lib/libsecp256k1.dylib')
+    assert hashlib.sha256(((_rb_paths()['campaigns'] / 'crypto-lanes/reference.tar.gz')).read_bytes()).hexdigest()==refmod.ARCHIVE_SHA256
     ref=refmod.Reference(refpath)
     exe=WORK/('batch-'+a.label)
     run(['zig','build-exe','-O','ReleaseSafe','--dep','secp256k1','-Mroot='+str(HERE/'batch.zig'),'-O','ReleaseSafe','-Msecp256k1='+str(a.package/'src/root.zig'),'-femit-bin='+str(exe)])

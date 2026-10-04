@@ -1,10 +1,15 @@
 """Profile a disposable frozen-source copy. No instrumentation enters packages."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import json,re,shutil
 from common import *
 categories=['field_mul','field_reduce','field_add_sub','double','plus','mixed','table','recode','joint','inverse','sqrt','scalar_reduce','sha256','der','byte_io','parse','ecdsa','schnorr','tweak','glv_split']
 functions={'mul':0,'reduceField':1,'add':2,'sub':2,'double':3,'plus':4,'mixed':5,'oddTable':6,'recode':7,'joint':8,'inverse':9,'pow':10,'profileScalar':11,'profileSha':12,'parseDer':13,'read':14,'write':14,'parsePublicKey':15,'parseXOnly':15,'verifyEcdsa':16,'verifySchnorr':17,'addXOnlyTweak':18,'splitScalar':19,'oddTableWidth':6,'recodeSigned':7,'sqrtPower':10,'reduceScalar':11,'scalar256':11}
 import fcntl
-_lock=(ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock').open('a')
+_lock=((_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')).open('a')
 fcntl.flock(_lock,fcntl.LOCK_EX)
 dest=WORK/'profile';shutil.copytree(FROZEN,dest,dirs_exist_ok=True)
 s=(dest/'src/root.zig').read_text()

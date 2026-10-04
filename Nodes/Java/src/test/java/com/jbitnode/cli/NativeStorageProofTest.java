@@ -47,7 +47,7 @@ class NativeStorageProofTest {
                 "DATA_DIR",
                 tempDir.resolve("data-java-replay").toString(),
                 "FIXTURE_BLOCKS_DIR",
-                Path.of("src/test/resources/fixtures").toAbsolutePath().normalize().toString(),
+                Path.of("target/generated-test-resources/fixtures").toAbsolutePath().normalize().toString(),
                 "PROOF_PATH",
                 proof.toString(),
                 "BLOCKS_MAX",

@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """Run inside the pinned instrument image. This is a prerequisite, not Gate A."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import hashlib,json,os,selectors,signal,subprocess,time,uuid
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 
 def run(args,**kw):return subprocess.run(args,check=True,text=True,capture_output=True,**kw)
 def inspect(path):
-    result=run([str(ROOT/'.local/inspect'),str(path)])
+    result=run([str((_rb_paths()['substrate'] / 'inspect')),str(path)])
     return {bytes.fromhex(k).decode():bytes.fromhex(v).decode() for k,v in (line.split('\t') for line in result.stdout.splitlines())}
 def invariant(rows):
     if 'p/1' in rows and rows.get('m/sequence')!='1':return 'pending_without_sequence'
@@ -18,10 +25,10 @@ def invariant(rows):
 def trial(base,variant,operation,boundary,kill=False):
     root=base/f'{variant}-{operation}-{boundary}-{uuid.uuid4().hex[:6]}';root.mkdir()
     db=root/'db';trace=root/'events.jsonl';release=root/'release'
-    if operation=='terminal':run([str(ROOT/'.local/probe'),str(db),'admit'])
-    env={**os.environ,'LD_PRELOAD':str(ROOT/'.local/interpose.so'),'RN_TRACE':str(trace),'RN_BARRIER':boundary,'RN_TRANSITION':('p/1' if operation=='admit' else 'r/1'),'RN_RELEASE':str(release)}
+    if operation=='terminal':run([str((_rb_paths()['substrate'] / 'probe')),str(db),'admit'])
+    env={**os.environ,'LD_PRELOAD':str((_rb_paths()['substrate'] / 'interpose.so')),'RN_TRACE':str(trace),'RN_BARRIER':boundary,'RN_TRANSITION':('p/1' if operation=='admit' else 'r/1'),'RN_RELEASE':str(release)}
     with (root/'stderr').open('w') as stderr:
-        p=subprocess.Popen([str(ROOT/f'.local/{variant}'),str(db),operation],env=env,stdout=subprocess.PIPE,stderr=stderr,text=True)
+        p=subprocess.Popen([str((_rb_paths()['substrate']/variant)),str(db),operation],env=env,stdout=subprocess.PIPE,stderr=stderr,text=True)
         deadline=time.monotonic()+10
         try:
             while time.monotonic()<deadline:
@@ -41,12 +48,12 @@ def trial(base,variant,operation,boundary,kill=False):
     events=[json.loads(x) for x in trace.read_text().splitlines()]
     writes=[e for e in events if e['phase']=='write_enter']
     syncs=[e for e in events if e['phase']=='wal_sync_enter' and e['transition']==env['RN_TRANSITION']]
-    return {'variant':variant,'operation':operation,'boundary':boundary,'killed':kill,'ack_while_return_withheld':bool(ack),'ack':ack or tail.strip(),'rows':rows,'invariant_failure':invariant(rows),'sync_options_valid':bool(writes) and all(e['sync']==1 and e['wal']==1 for e in writes),'correlated_wal_syncs':syncs,'returncode':p.returncode,'trace_sha256':hashlib.sha256(trace.read_bytes()).hexdigest(),'local_diagnostics':str(root.relative_to(ROOT))}
+    return {'variant':variant,'operation':operation,'boundary':boundary,'killed':kill,'ack_while_return_withheld':bool(ack),'ack':ack or tail.strip(),'rows':rows,'invariant_failure':invariant(rows),'sync_options_valid':bool(writes) and all(e['sync']==1 and e['wal']==1 for e in writes),'correlated_wal_syncs':syncs,'returncode':p.returncode,'trace_sha256':hashlib.sha256(trace.read_bytes()).hexdigest(),'local_diagnostics':_rb_logical(root)}
 
 def main():
-    base=ROOT/'.local'/('storage-probe-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir()
+    base=(_rb_paths()['substrate'])/('storage-probe-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir()
     for name,macro in [('probe',None),('early','EARLY_ACK'),('torn_admit','TORN_ADMIT'),('torn_terminal','TORN_TERMINAL')]:
-        run(['gcc','-Wall','-Wextra','-Werror',*( ['-D'+macro] if macro else []),'native/probe.c','-lrocksdb','-o',str(ROOT/f'.local/{name}')],cwd=ROOT)
+        run(['gcc','-Wall','-Wextra','-Werror',*( ['-D'+macro] if macro else []),'native/probe.c','-lrocksdb','-o',str((_rb_paths()['substrate']/name))],cwd=ROOT)
     rows=[]
     for op in ['admit','terminal']:
         rows.append(trial(base,'probe',op,'native_success'))
