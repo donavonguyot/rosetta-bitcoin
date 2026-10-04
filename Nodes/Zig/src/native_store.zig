@@ -30,6 +30,11 @@ pub fn utxoHashName() []const u8 {
 }
 
 const OutpointContext = struct {
+    //! `std.HashMap` is linear probing on `hash & mask` and does not mix a custom hash.
+    //! Outputs of one transaction differ only in `vout`, so `txid[0..8] XOR vout` puts
+    //! them in consecutive slots and every neighbor probe walks that run. The measured
+    //! cost was 22 rehashes at ~78 s unmixed versus 0.7 s after the odd multiply, and
+    //! misses at height 50000 cost ~4 µs. Leave the multiply in place.
     pub fn hash(_: @This(), key: root.Outpoint) u64 {
         if (comptime utxo_hash_wyhash) {
             if (@sizeOf(root.Outpoint) != 36) @compileError("outpoint hash expects 36 bytes");

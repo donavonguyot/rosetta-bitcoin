@@ -5,6 +5,11 @@
   "decision": "keep txid64_mix and drop the capacity hint",
   "decision_note": "Native commit was 36669 ms with utxo_capacity_hint 0 and rehash_count 22. That is the 40 s pass. rehash_ms was 702, so the 22 doublings are cheap once consecutive outputs stop sharing slots. The high-32 fold was not added.",
   "datadir": "/Users/donavonguyot/.rblab/zig/native-chainstate-100k",
+  "disk_tradeoff": {
+    "native_bytes": 10309763072,
+    "rocksdb_bytes": 6443491328,
+    "note": "RocksDB compresses stored blocks. Native chainstate uses uncompressed flat block files, and the commit log keeps delete preimages so replay can check them. 9.6 GB native against 6.0 GB RocksDB on this datadir is that tradeoff. Block-file compression and pruning are later lane work."
+  },
   "run": {
     "utxo_hash": "txid64_mix",
     "utxo_capacity_hint": 0,
