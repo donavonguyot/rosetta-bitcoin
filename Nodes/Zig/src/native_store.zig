@@ -21,9 +21,12 @@ const kind_commit: u8 = 3;
 
 const build_options = @import("crypto_options");
 const utxo_hash_wyhash = std.mem.eql(u8, build_options.utxo_hash, "wyhash");
+const utxo_hash_mix = std.mem.eql(u8, build_options.utxo_hash, "txid64_mix");
 
 pub fn utxoHashName() []const u8 {
-    return if (utxo_hash_wyhash) "wyhash" else "txid64";
+    if (utxo_hash_wyhash) return "wyhash";
+    if (utxo_hash_mix) return "txid64_mix";
+    return "txid64";
 }
 
 const OutpointContext = struct {
@@ -32,7 +35,9 @@ const OutpointContext = struct {
             if (@sizeOf(root.Outpoint) != 36) @compileError("outpoint hash expects 36 bytes");
             return std.hash.Wyhash.hash(0, std.mem.asBytes(&key));
         }
-        return std.mem.readInt(u64, key.txid[0..8], .little) ^ @as(u64, key.vout);
+        const mixed = std.mem.readInt(u64, key.txid[0..8], .little) ^ @as(u64, key.vout);
+        if (comptime utxo_hash_mix) return mixed *% 0x9E3779B97F4A7C15;
+        return mixed;
     }
 
     pub fn eql(_: @This(), a: root.Outpoint, b: root.Outpoint) bool {
@@ -78,6 +83,7 @@ pub const NativeStore = struct {
     snapshot_count: u32 = 0,
     snapshot_bytes: u64 = 0,
     rehash_count: u32 = 0,
+    rehash_ms: i64 = 0,
 
     pub fn open(allocator: std.mem.Allocator, path: []const u8, options: OpenOptions) !NativeStore {
         try root.rejectUnapprovedRuntimeDbArtifacts(path);
@@ -764,11 +770,17 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
     fn putUtxoBytes(self: *NativeStore, outpoint: root.Outpoint, value: []const u8) !void {
         const owned = try self.allocator.dupe(u8, value);
         const before = self.utxos.capacity();
+        const grow_started = store.nowMs();
+        self.utxos.ensureUnusedCapacity(1) catch |err| {
+            self.allocator.free(owned);
+            return err;
+        };
+        self.rehash_ms += elapsedMs(grow_started);
+        if (self.utxos.capacity() != before) self.rehash_count += 1;
         const old = self.utxos.fetchPut(outpoint, owned) catch |err| {
             self.allocator.free(owned);
             return err;
         };
-        if (self.utxos.capacity() != before) self.rehash_count += 1;
         if (old) |kv| self.allocator.free(kv.value);
     }
 
