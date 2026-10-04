@@ -1,7 +1,12 @@
 """Build immutable comparison variants from one node snapshot and pinned inputs."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import argparse,json,shutil,subprocess,sys,tarfile
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[3];WORK=ROOT/'Project/.campaigns/zig-opt';HERE=Path(__file__).parent
+ROOT=Path(__file__).resolve().parents[3];WORK=(_rb_paths()['campaigns'] / 'zig-opt');HERE=Path(__file__).parent
 sys.path.insert(0,str(ROOT/'Project/scripts'));from crypto_lanes import source_digest
 p=argparse.ArgumentParser();p.add_argument('variant',choices=['original','optimized','c_control']);p.add_argument('--probe',action='store_true');p.add_argument('--reject',default='');a=p.parse_args()
 base=json.loads((WORK/'baseline.json').read_text());assert source_digest(ROOT/'Nodes/Zig/src')==base['node_digest']
@@ -20,7 +25,7 @@ else:
 bench=ctx/'bench';bench.mkdir()
 for name in ('bench.zig','c_control.zig'):shutil.copy(HERE/name,bench/name)
 shutil.copytree(lib/'src/testdata',bench/'testdata')
-shutil.copy(ROOT/'Project/.campaigns/crypto-lanes/reference.tar.gz',ctx/'reference.tar.gz')
+shutil.copy((_rb_paths()['campaigns'] / 'crypto-lanes/reference.tar.gz'),ctx/'reference.tar.gz')
 shutil.copy(HERE/'Dockerfile',ctx/'Dockerfile')
 digest=source_digest(lib) if a.variant!='c_control' else '385c115a21ee1ff31d0b0320acc2b278c92f7bde971f510566ad481a38835be0'
 backend='c_binding' if a.variant=='c_control' else 'own_curve';image='rosetta-zig-opt-'+label+':'+digest[:12]

@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import json,time
 from service_probe import ROOT,Host,ITEM,invariant
 from recovery_probe import complete
 
 def main():
-    base=ROOT/'.local'/('errors-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();results=[]
+    base=(_rb_paths()['substrate'])/('errors-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir();results=[]
     for fault in ['admission','terminal','allocation']:
         env={'RN_FAIL_ARENA':'1'} if fault=='allocation' else {'RN_FAIL_TRANSITION':('p/' if fault=='admission' else 'r/')+'00000000000000000001'}
         h=Host(base,extra_env=env)

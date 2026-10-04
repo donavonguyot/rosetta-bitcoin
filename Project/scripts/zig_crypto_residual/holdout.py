@@ -1,11 +1,16 @@
 """One confirmation, no holdout-driven retuning."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import fcntl,shutil
 from common import *
 from bench import bench
 from selection import assess
 if __name__=='__main__':
  if (WORK/'holdout-decision.json').exists():raise SystemExit('holdout already consumed')
- with (ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock').open('a') as lock:
+ with ((_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')).open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX)
   baseline=bench('baseline','holdout');candidate=bench('candidate','holdout');decision=assess(baseline,candidate)
   decision['candidate_digest']=source_digest(WORK/'candidate');decision['holdout_identity']=json.loads((WORK/'holdout-identity.json').read_text())

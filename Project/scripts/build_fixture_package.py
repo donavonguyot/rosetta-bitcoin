@@ -149,6 +149,10 @@ def unpack(digest: str, destination: Path, store: Path | None = None) -> None:
             target = destination.joinpath(*name.parts)
             if not target.resolve().is_relative_to(destination.resolve()) or target.is_symlink():
                 raise ValueError(f"unsafe fixture destination: {member.name}")
+        extras = [p.relative_to(destination).as_posix() for p in destination.rglob("*")
+                  if p.is_file() and p.relative_to(destination).as_posix() not in seen]
+        if extras:
+            raise ValueError("stale or unrelated files in extraction directory; use a clean build directory")
         for member in members:
             target = destination / member.name
             mkdir(target.parent)

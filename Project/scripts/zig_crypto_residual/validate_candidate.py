@@ -1,7 +1,12 @@
 """Campaign-local stronger gates; historical crypto validators remain unchanged."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import hashlib,json,random,subprocess,sys,tempfile,shutil
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[3];WORK=ROOT/'Project/.campaigns/zig-residual';HERE=Path(__file__).parent
+ROOT=Path(__file__).resolve().parents[3];WORK=(_rb_paths()['campaigns'] / 'zig-residual');HERE=Path(__file__).parent
 sys.path.insert(0,str(ROOT/'Project/scripts'));import run_crypto_lane as old
 from crypto_lanes import source_digest
 
@@ -11,7 +16,7 @@ def command(args,cwd=ROOT):
  return p.stdout+p.stderr
 
 def main():
- reference_dir=ROOT/'Project/.campaigns/crypto-lanes/reference-build/lib'
+ reference_dir=(_rb_paths()['campaigns'] / 'crypto-lanes/reference-build/lib')
  reference=next(p for p in reference_dir.iterdir() if p.name in ('libsecp256k1.dylib','libsecp256k1.so'))
  lib=ROOT/'Libraries/Zig/libsecp256k1-zig';checks={};meta=json.loads((WORK/'candidate-image.json').read_text());assert source_digest(lib)==meta['source_digest']
  for index,args in enumerate([['zig','build','test','-Doptimize=ReleaseSafe'],['zig','build','test','-Doptimize=ReleaseSafe','-Dcrypto-backend=own_curve'],['zig','build','test','-Doptimize=ReleaseSafe']]):

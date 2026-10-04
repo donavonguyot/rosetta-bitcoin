@@ -1,8 +1,13 @@
 """Shared paths and checked commands for the isolated residual campaign."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import json, subprocess, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3]; HERE=Path(__file__).parent
-WORK=ROOT/'Project/.campaigns/zig-residual'; LIB=ROOT/'Libraries/Zig/libsecp256k1-zig'
+WORK=(_rb_paths()['campaigns'] / 'zig-residual'); LIB=ROOT/'Libraries/Zig/libsecp256k1-zig'
 FROZEN=WORK/'frozen/Libraries/Zig/libsecp256k1-zig'
 sys.path.insert(0,str(ROOT/'Project/scripts'))
 from crypto_lanes import source_digest

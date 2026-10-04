@@ -1,4 +1,9 @@
 """Sequential ARM64 uninstrumented component measurements with recorded identities."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import argparse,time,shutil,fcntl,statistics
 from common import *
 def bench(name,phase='tuning'):
@@ -17,6 +22,6 @@ def bench(name,phase='tuning'):
  return result
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('names',nargs='+');p.add_argument('--phase',default='tuning');a=p.parse_args()
- with (ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock').open('a') as lock:
+ with ((_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')).open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX)
   for name in a.names:bench(name,a.phase)

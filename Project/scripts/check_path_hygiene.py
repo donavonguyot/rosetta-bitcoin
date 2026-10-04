@@ -119,6 +119,7 @@ def main() -> int:
 
     root = repo_root()
     failures: list[str] = []
+    failures.extend(scan_runtime_roots(root))
     if not args.db_only:
         failures.extend(scan_files(root))
     failures.extend(scan_db(root))
@@ -136,6 +137,31 @@ def main() -> int:
 
     print("PATH HYGIENE: PASS (tracked text artifacts and project.db)")
     return 0
+
+
+def scan_runtime_roots(root: Path) -> list[str]:
+    from state_root import PATHS
+    import json
+    failures = []
+    for key, relative in (("campaigns", "Project/.campaigns"), ("substrate", "Nodes/RosettaNode/substrate/.local")):
+        path = root / relative
+        if not path.exists() and not path.is_symlink():
+            continue
+        marker = PATHS["root"] / "migrations" / (key + ".json")
+        record = json.loads(marker.read_text()) if marker.exists() else {}
+        if path.is_symlink() and path.resolve() == PATHS[key] and record.get("phase") == "complete":
+            continue
+        failures.append(f"{relative}: migrated runtime class still in repository; phase={record.get('phase', 'unmigrated')}")
+    core_marker = PATHS["root"] / "migrations/core.json"
+    if core_marker.exists() and json.loads(core_marker.read_text()).get("phase") == "complete":
+        core = root / "Nodes/Reference/bitcoin-core-testnet4"
+        if core.exists() and (not core.is_symlink() or core.resolve() != PATHS["core"]):
+            failures.append("Core runtime root differs from completed migration receipt")
+    if PATHS["packages"].is_relative_to(root.resolve()):
+        failures.append("retained package store must be outside the repository")
+    # 2026-10-03: Core remains at its original path until the owner schedules cutover.
+    # Port build directories and retired-port runtime paths are permitted.
+    return failures
 
 
 if __name__ == "__main__":

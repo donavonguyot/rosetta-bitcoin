@@ -1,4 +1,9 @@
 """Strong gates injected into isolated test copies, never runtime binaries."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import argparse,shutil,time,fcntl
 from common import *
 from source_tools import strip_tests
@@ -73,5 +78,5 @@ test "residual specialized square and limb round trips" {
  save(WORK/(a.name+'-arithmetic.json'),dict(result='passed',source_digest=source_digest(source),field_comparisons=1_000_000,scalar_comparisons=1_000_000 if 'fn reduceScalar(' in s else 0,inverse_comparisons_per_modulus=100_000,glv_splits=100_000 if 'fn splitScalar(' in s else 0,point_equivalences=10_000,seconds=time.monotonic()-start,architecture='aarch64-linux',runtime_safety=True))
  print(a.name,'arithmetic passed',flush=True)
 if __name__=='__main__':
- with (ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock').open('a') as lock:
+ with ((_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')).open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX);main()

@@ -3,6 +3,11 @@
 
 from __future__ import annotations
 
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[2] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
+
 import argparse
 import json
 import sys
@@ -230,7 +235,7 @@ def analyze_progress_lines(lines: Iterable[str]) -> dict[str, Any]:
 
 
 def latest_proof_log(port: str) -> Path | None:
-    campaign_dir = ROOT / "Project/.campaigns"
+    campaign_dir = (_rb_paths()['campaigns'])
     if not campaign_dir.exists():
         return None
     candidates = []

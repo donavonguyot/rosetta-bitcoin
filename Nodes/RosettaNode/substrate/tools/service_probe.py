@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """Preliminary socket and crash checks, not the complete launch gate."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import hashlib,json,os,socket,subprocess,time,uuid
 from pathlib import Path
 from storage_probe import ROOT,run,inspect
@@ -15,11 +22,11 @@ class Host:
     def __init__(self,base,variant='dummy',boundary=None,transition=None,db=None,per_job=False,extra_env=None):
         self.root=base/(Path(variant).name+'-'+uuid.uuid4().hex[:8]);self.root.mkdir();self.db=db or self.root/'db';self.socket=self.root/'s';self.trace=self.root/'events';self.release=self.root/'release'
         self.stderr=(self.root/'stderr').open('w');self.stdout=(self.root/'stdout').open('w')
-        env={**os.environ,'LD_PRELOAD':str(ROOT/'.local/interpose.so'),'RN_TRACE':str(self.trace),'RN_STATS':str(self.root/'rocksdb-stats.txt')}
+        env={**os.environ,'LD_PRELOAD':str((_rb_paths()['substrate'] / 'interpose.so')),'RN_TRACE':str(self.trace),'RN_STATS':str(self.root/'rocksdb-stats.txt')}
         env.update(extra_env or {})
         if boundary:env.update(RN_BARRIER=boundary,RN_TRANSITION=transition,RN_RELEASE=str(self.release))
         if per_job:self.release.mkdir();env['RN_RELEASE_DIR']=str(self.release)
-        program=str(ROOT/'.local'/variant)
+        program=str((_rb_paths()['substrate'])/variant)
         override=os.environ.get('RN_CANDIDATE')
         if override and variant in ['dummy','dummy_v2']:program=override
         untrusted=program.startswith(('/candidate/','/predecessor/'))
@@ -58,9 +65,9 @@ class Host:
         return inspect(self.db) if inspect_state else None
 
 def main():
-    base=ROOT/'.local'/('service-probe-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir()
+    base=(_rb_paths()['substrate'])/('service-probe-'+time.strftime('%Y%m%dT%H%M%S'));base.mkdir()
     for name,macro in [('dummy',None),('dummy_early','EARLY_ACK'),('dummy_torn','TORN_ADMIT'),('dummy_terminal','TORN_TERMINAL'),('dummy_conflict','ID_CONFLICT'),('dummy_cancel','LATE_CANCEL'),('dummy_v2','ABI_V2'),('dummy_starve','STARVE_NORMAL')]:
-        run(['gcc','-g','-Wno-deprecated-declarations',*(['-D'+macro] if macro else []),*(['-DABI_V2'] if name=='dummy_starve' else []),'native/dummy.c','-L.local','-l:adapter.so','-Wl,-rpath,/work/.local','-lrocksdb','-ljson-c','-lcrypto','-lpthread','-o',str(ROOT/'.local'/name)],cwd=ROOT)
+        run(['gcc','-g','-Wno-deprecated-declarations',*(['-D'+macro] if macro else []),*(['-DABI_V2'] if name=='dummy_starve' else []),'native/dummy.c','-L.local','-l:adapter.so','-Wl,-rpath,/work/.local','-lrocksdb','-ljson-c','-lcrypto','-lpthread','-o',str((_rb_paths()['substrate'])/name)],cwd=ROOT)
     results=[]
     for variant in ['dummy','dummy_early','dummy_torn','dummy_terminal']:
         terminal=variant=='dummy_terminal';h=Host(base,variant,'native_success',('r/' if terminal else 'p/')+'00000000000000000001')

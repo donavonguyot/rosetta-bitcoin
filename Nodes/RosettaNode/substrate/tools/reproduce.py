@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 """Fresh build and fresh evaluator run for a retained qualified submission."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[4] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths, logical_path as _rb_logical, acquire_writer_lease as _rb_writer_lease
+if __name__ == '__main__':
+    _rb_writer_lease()
 import argparse,json,uuid
 from pathlib import Path
 from campaign_v3 import ROOT,evaluate,save,digest,frozen
@@ -11,7 +18,7 @@ def main():
     submission=Path(record['qualified_submission']);build=audit(submission,record['language']);assert build['status']=='passed',build
     work=Path(build['logs'])/'workspace';predecessor=None
     if a.round!='initial':predecessor=Path(json.loads((ROOT/f'evidence/lineage-v2-{a.lineage}-initial.json').read_text())['qualified_submission'])
-    out=ROOT/'.local/reproductions'/f'{a.lineage}-{a.round}-{uuid.uuid4().hex[:8]}'
+    out=(_rb_paths()['substrate'] / 'reproductions')/f'{a.lineage}-{a.round}-{uuid.uuid4().hex[:8]}'
     result=evaluate(work,out,a.round,predecessor)
     # Compare semantic family manifests only; race-permitted outcomes and timings differ.
     prior_path=record.get('corrected_evaluation') if not record.get('repair') or record.get('repair_attribution') else None

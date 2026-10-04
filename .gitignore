@@ -114,3 +114,5 @@ venv/
 # Fixture package extraction and local verification
 Nodes/*/build/fixture-package/
 Project/.provenance-validation/
+Project/.campaigns
+Nodes/RosettaNode/substrate/.local

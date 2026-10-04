@@ -1,9 +1,14 @@
 """Freeze only Zig source in an isolated Git index; leave HEAD/index untouched."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import hashlib, json, os, subprocess, sys, tempfile, io, tarfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3]
 HERE=Path(__file__).parent
-WORK=ROOT/'Project/.campaigns/zig-open'
+WORK=(_rb_paths()['campaigns'] / 'zig-open')
 sys.path.insert(0,str(ROOT/'Project/scripts'))
 from crypto_lanes import source_digest
 

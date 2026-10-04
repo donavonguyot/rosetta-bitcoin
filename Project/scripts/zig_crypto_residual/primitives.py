@@ -1,4 +1,9 @@
 """Separate primitive timings in disposable copies; runtime safety stays enabled."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import shutil,fcntl,re
 from common import *
 DRIVER='''const std=@import("std");const secp=@import("secp256k1");
@@ -37,5 +42,5 @@ def main():
   save(WORK/(name+'-primitives.json'),dict(source_digest=source_digest(WORK/name),rows=rows,safety='ReleaseSafe enabled; timings include generated checks; no safety-off counterfactual',conversion='bitcast roundtrip optimizes to identity; result includes dispatch/call cost',safety_assembly_trap_references=len(re.findall(r'bl\s+.*(?:Panic|panic)',asm)),safety_cost_attribution='not independently identifiable from inclusive cost without a counterfactual; trap references are static, not executed counts'))
  print('primitive measurements complete')
 if __name__=='__main__':
- with (ROOT/'Project/.campaigns/crypto-lanes/node-benchmark.lock').open('a') as lock:
+ with ((_rb_paths()['campaigns'] / 'crypto-lanes/node-benchmark.lock')).open('a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX);main()

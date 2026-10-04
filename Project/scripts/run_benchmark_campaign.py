@@ -8,6 +8,11 @@ Dry-run is the default.
 
 from __future__ import annotations
 
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[2] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
+
 import argparse
 import importlib.util
 import json
@@ -176,7 +181,8 @@ def one(conn: sqlite3.Connection, sql: str, params: tuple[Any, ...] = ()) -> dic
 
 
 def rel(path: Path) -> str:
-    return str(path.resolve().relative_to(ROOT))
+    from state_root import logical_path
+    return logical_path(path)
 
 
 def as_bool(value: Any) -> bool:
@@ -397,7 +403,7 @@ def initial_campaign(conn: sqlite3.Connection, args: argparse.Namespace) -> dict
 
 
 def campaign_dir(campaign: dict[str, Any]) -> Path:
-    return ROOT / "Project/.campaigns" / str(campaign["campaign_id"])
+    return (_rb_paths()['campaigns']) / str(campaign["campaign_id"])
 
 
 def save_campaign(campaign: dict[str, Any]) -> Path:
@@ -408,7 +414,8 @@ def save_campaign(campaign: dict[str, Any]) -> Path:
 
 
 def load_campaign(path: Path) -> dict[str, Any]:
-    payload = read_json(path if path.is_absolute() else ROOT / path)
+    from state_root import resolve_path
+    payload = read_json(resolve_path(path))
     if payload.get("schema") != "rb.benchmark_campaign.v1":
         raise SystemExit(f"{path} is not an rb.benchmark_campaign.v1 state file")
     return payload
@@ -871,6 +878,8 @@ def campaign_should_pause(campaign: dict[str, Any], port: str, reason: str) -> b
 
 
 def execute_campaign(campaign: dict[str, Any]) -> int:
+    from state_root import acquire_writer_lease
+    acquire_writer_lease()
     conn = connect(campaign["db"])
     gate = gate_row(conn, campaign["gate"])
     expected_peer = read_env(REFERENCE_TOPOLOGY).get("REFERENCE_P2P_PEER", "")

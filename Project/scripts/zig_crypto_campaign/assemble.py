@@ -1,7 +1,12 @@
 """Assemble comparison and uncurated candidate evidence from writer-owned output."""
+
+import sys as _rb_sys
+from pathlib import Path as _RBPath
+_rb_sys.path.insert(0, str(_RBPath(__file__).resolve().parents[3] / 'Project/scripts'))
+from state_root import operational_paths as _rb_paths
 import copy,datetime,hashlib,json,platform,statistics,subprocess,sys
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[3];WORK=ROOT/'Project/.campaigns/zig-opt';HERE=Path(__file__).parent
+ROOT=Path(__file__).resolve().parents[3];WORK=(_rb_paths()['campaigns'] / 'zig-opt');HERE=Path(__file__).parent
 sys.path.insert(0,str(ROOT/'Project/scripts'));import crypto_lanes
 from comparison import SCHEMA,validate,summary
 
