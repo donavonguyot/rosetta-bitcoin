@@ -13,7 +13,8 @@ DOCKER_LOCAL_PROOF_RESULT ?= /tmp/zig_docker_baseline_5k_benchmark_$(RESULT_DATE
 DOCKER_10K_PROOF_RESULT ?= /results/zig_docker_diagnostic_10k_benchmark_$(RESULT_DATE).json
 DOCKER_50K_PROOF_RESULT ?= /tmp/zig_docker_shakedown_50k_benchmark_$(RESULT_DATE).json
 DOCKER_100K_PROOF_RESULT ?= /tmp/zig_docker_performance_100k_benchmark_$(RESULT_DATE).json
-DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml
+COMPOSE_OVERRIDE ?=
+DOCKER_COMPOSE = docker compose --env-file ../Shared/docker/reference_topology.env -f docker/docker-compose.yml $(COMPOSE_OVERRIDE)
 include ../Shared/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 ../Shared/conformance/tools/validate_benchmark_artifact.py
 DOCKER_PROOF_VOLUME ?= zigbitnode_proof_data
@@ -24,7 +25,7 @@ DOCKER_SYNC_TARGET ?= 5000
 BENCHMARK_GATE ?= baseline_5k
 
 ZIG_PROOF_ARGS ?=
-.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-storage-proof clean
+.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof clean
 
 build:
 	$(ZIG) build
@@ -122,6 +123,9 @@ native-shadow-5k:
 native-shadow-50k:
 	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 50000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_50k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_50k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
 
+native-shadow-100k:
+	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 100000 --snapshot-every 25000 --mem-limit none --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_100k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_100k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
+
 native-storage-proof:
 	$(ZIG) build -Doptimize=ReleaseSafe run -- storage-proof --store=native --datadir $(DATA_DIR) --output /tmp/zig_native_storage_gate.json --gate-output ../Shared/conformance/results/zig_native_store_storage_proof_host_$(RESULT_DATE).json
 
@@ -138,6 +142,14 @@ docker-native-shadow-50k:
 	  DOCKER_SYNC_TARGET=50000 \
 	  DOCKER_LOCAL_PROOF_RESULT=/tmp/zig_native_shadow_50k.json \
 	  ZIG_PROOF_ARGS='--store=native --shadow --gate-output /results/zig_native_store_shadow_50k_docker_$(RESULT_DATE).json'
+
+docker-native-shadow-100k:
+	$(MAKE) docker-proof-local \
+	  COMPOSE_OVERRIDE='-f docker/docker-compose.100k.yml' \
+	  DOCKER_PROOF_VOLUME=zigbitnode_native_shadow_100k \
+	  DOCKER_SYNC_TARGET=100000 \
+	  DOCKER_LOCAL_PROOF_RESULT=/tmp/zig_native_shadow_100k.json \
+	  ZIG_PROOF_ARGS='--store=native --shadow --snapshot-every 25000 --mem-limit 10g --gate-output /results/zig_native_store_shadow_100k_docker_$(RESULT_DATE).json'
 
 docker-native-storage-proof:
 	docker volume rm -f zigbitnode_native_storage_proof >/dev/null 2>&1 || true

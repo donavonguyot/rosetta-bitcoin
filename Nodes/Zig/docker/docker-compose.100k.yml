@@ -1,0 +1,3 @@
+services:
+  zigbitnode-local-reference-proof:
+    mem_limit: 10g

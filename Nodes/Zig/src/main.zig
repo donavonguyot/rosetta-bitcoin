@@ -78,7 +78,7 @@ fn usage(out: anytype) !void {
         \\  native-crypto-vectors
         \\  test-capability --kind crypto-vectors --outcome-path path [--mutation schnorr-accept-bad-s|schnorr-accept-bad-xonly|taproot-ignore-output-check]
         \\  script-corpus [--manifest path] [--output path] [--shadow-crypto]
-        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--gate-output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append]
+        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--gate-output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--mem-limit <text>] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append]
         \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
         \\
     , .{});
@@ -796,7 +796,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             db.shadow_set_hash_fold_ms,
             total_ms,
         });
-        try appendFmt(allocator, &gate_buf, "\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"snapshot_every\":{},\"proof_scope\":\"peer_shadow\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"storage_proof\"]}}\n", .{ surface, optimizeName(), snapshotEvery(db) });
+        try appendFmt(allocator, &gate_buf, "\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"snapshot_every\":{},\"mem_limit\":\"{s}\",\"proof_scope\":\"peer_shadow\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"shadow_100k\",\"storage_proof\"],\"comparability\":\"utxo_load and commit are comparable between engines.primary and engines.shadow; block_connect_store_commit is not, because the primary bucket includes the whole connect and the shadow comparisons\"}}\n", .{ surface, optimizeName(), snapshotEvery(db), memLimit(args) });
         try out.print("{s}", .{gate_buf.items});
         if (valueArg(args, "--gate-output")) |path| try writeFileEnsuringParent(io, path, gate_buf.items);
         if (db.divergence_count != 0) return error.StoreDivergence;
@@ -1117,7 +1117,12 @@ fn shadowGateName(store_name: []const u8, target: u32) []const u8 {
     if (!std.mem.eql(u8, store_name, "native")) return "shadow_rocksdb";
     if (target == 5000) return "shadow_5k";
     if (target == 50000) return "shadow_50k";
+    if (target == 100000) return "shadow_100k";
     return "shadow_native";
+}
+
+fn memLimit(args: []const []const u8) []const u8 {
+    return valueArg(args, "--mem-limit") orelse "none";
 }
 
 fn snapshotCount(db: anytype) u64 {
