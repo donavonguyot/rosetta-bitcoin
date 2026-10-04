@@ -322,3 +322,61 @@ python3 Project/scripts/migrate_core.py --execute-scheduled --container rosetta-
 That command has not been run. No merge or PR was made. Before merging, the owner
 must decide how the newer primary evidence and database changes should be
 reconciled, and whether OCaml validation must finish first.
+
+## 2026-10-03 addendum: authorized reconciliation and non-blocking OCaml
+
+The owner authorized the rebase onto `f59b40a`, database regeneration through a
+migration/import, and PR merge. The rebase completed as `37c51f3`. Text changes
+applied cleanly; its only conflict was the binary Project database, for which the
+primary version was taken unchanged. No binary database merge was performed.
+
+The primary then advanced to `72ea75bd4998d982400be525f6a9bc355c41a9dc`, adding
+six newer Zig evidence artifacts. Merge `dcba037` preserves those committed
+updates too. All 31 primary Zig result files are byte-identical on this branch,
+and the current-evidence selection matches that primary exactly. No primary
+working-tree edits were incorporated.
+
+The database reconciliation started with the exact `72ea75b:Project/project.db`.
+The explicit, idempotent migration is
+`Project/scripts/migrate_artifact_provenance.py`: it validates stored payloads
+before writes, backfills importer-owned provenance metadata, and installs the
+complete `artifact_provenance` view. No table columns changed. The importer was
+also corrected to retain explicit absent status on the evidence-index artifact,
+which otherwise lost the marker when the index was refreshed.
+
+| Stage | Artifact count | Provenance metadata |
+| --- | ---: | --- |
+| Requested base `f59b40a` | 157 | Unmarked |
+| Integrated primary `72ea75b`, before migration | 163 | Unmarked |
+| After migration | 163 | 163 absent |
+| After current-selection import plus explicit smoke import | 164 | 163 absent, 1 verified |
+
+The six additional primary artifacts explain the increase beyond the previously
+reported counts. There are 81 current-evidence entries. All imported Zig results
+are `absent`; the verified artifact is the C++ smoke with unchanged
+`run_ref=smoke-2026-10-03`. Both Java defect identities are present and cleared.
+A second identical import leaves the complete logical database dump unchanged.
+The reproducible commands, from the repository root, are:
+
+```sh
+python3 Project/scripts/migrate_artifact_provenance.py --db Project/project.db
+python3 Project/scripts/import_all.py --tracked-only --status-json Nodes/Shared/conformance/results/cpp_control_baseline_5k_benchmark_20261004T021539Z.json
+```
+
+The migration's two tests pass, including refusal before writes on malformed
+pins. Packaging, provenance, migration, reclaim, crypto-lane, importer, harness,
+and campaign tests pass. Java clean verification again matches all 438 test
+identities with zero skips. Docker contracts report zero errors. The same 717
+path-hygiene findings and missing paper figure remain known baseline findings.
+
+The smoke's build commit predates the rebase and must remain its true build
+identity. It is preserved under
+`refs/tags/evidence/provenance-smoke-2026-10-03`; the historical result and build
+receipt are not repinned to a commit that did not produce the measured image.
+
+**OCaml runtime corpus remains explicitly unverified and does not gate this
+merge.** Package acquisition was verified earlier. The observed separate Opam
+switch contains OCaml 5.2.1 but not Dune/project dependencies. Its first
+post-merge check is the package-backed corpus once that setup is ready; setup
+itself is outside this work. Core cutover remains deferred with the scheduled
+command above unchanged.

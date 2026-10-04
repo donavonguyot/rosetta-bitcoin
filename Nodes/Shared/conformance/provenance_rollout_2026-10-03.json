@@ -475,6 +475,85 @@
       },
       "merge_ready": false,
       "owner_decision": "Authorize how to reconcile the newly committed primary evidence and Project database changes before attempting another rebase. No merge or PR performed."
+    },
+    {
+      "date": "2026-10-03",
+      "kind": "owner_authorized_reconciliation",
+      "requested_rebase_base": "f59b40a8eb989a95e7742938ced82fd957c3ba72",
+      "rebased_tip": "37c51f3",
+      "integrated_primary": "72ea75bd4998d982400be525f6a9bc355c41a9dc",
+      "primary_integration_commit": "dcba037",
+      "binary_database_merge": false,
+      "database_source": "72ea75bd4998d982400be525f6a9bc355c41a9dc:Project/project.db",
+      "database_migration": "Project/scripts/migrate_artifact_provenance.py",
+      "migration": {
+        "added_columns": [],
+        "after": {
+          "artifacts": 163,
+          "provenance_status": {
+            "absent": 163
+          }
+        },
+        "before": {
+          "artifacts": 163,
+          "provenance_status": {
+            "unmarked": 163
+          }
+        },
+        "updated_summaries": 163
+      },
+      "after_import": {
+        "artifacts": 164,
+        "provenance_status": {
+          "absent": 163,
+          "verified": 1
+        },
+        "projection_counts": {
+          "absent": 163,
+          "verified": 1
+        },
+        "selected_evidence_count": 81,
+        "java_defects": [
+          [
+            "817350929c818d165351727c896ab44bf398a7f4d68d229a397a1587c39ab177",
+            "cleared"
+          ],
+          [
+            "c1745189110b951b574ab2b3aa07d372681715f34d6303b7a11d1421236b3a1b",
+            "cleared"
+          ]
+        ],
+        "logical_database_sha256": "e48063c8136ed4e07b01f1d6b0369e052629d3cb279fca7d93d7bc49c6e4cffa"
+      },
+      "repeat_import_logically_unchanged": true,
+      "original_requested_base_artifact_count": 157,
+      "preserved_zig_result_count": 31,
+      "primary_current_evidence_unchanged": true,
+      "smoke_explicit_import": "Nodes/Shared/conformance/results/cpp_control_baseline_5k_benchmark_20261004T021539Z.json",
+      "pre_rebase_smoke_source_ref": "refs/tags/evidence/provenance-smoke-2026-10-03",
+      "ocaml": {
+        "corpus": "unverified",
+        "merge_gate": false,
+        "observed_compiler": "5.2.1",
+        "dune_and_project_dependencies": "not installed",
+        "post_merge_first_check": "Run package-backed OCaml corpus as soon as the separate Opam setup is ready; do not initialize or modify it here."
+      },
+      "checks": {
+        "database_migration_tests": 2,
+        "provenance_tests": 6,
+        "package_tests": 4,
+        "migration_tests": 6,
+        "reclaim_tests": 4,
+        "crypto_lane_tests": 6,
+        "java_parity_tests": 438,
+        "java_skipped": 0,
+        "importer_harness_campaign_self_tests": "passed",
+        "docker_contract_errors": 0,
+        "path_hygiene_existing_findings": 717,
+        "doc_drift": "existing missing substrate_pipeline.pdf"
+      },
+      "core_cutover": "deferred; not executed",
+      "merge_authorized": true
     }
   ]
 }

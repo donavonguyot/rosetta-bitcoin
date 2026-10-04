@@ -733,7 +733,10 @@ def artifact_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "suite_id",
         "suite_hash",
     ]
-    return {key: payload[key] for key in keys if key in payload}
+    summary = {key: payload[key] for key in keys if key in payload}
+    if "provenance" not in payload:
+        summary["provenance_status"] = "absent"
+    return summary
 
 
 def make_artifact(path: Path, root: Path, payload: dict[str, Any]) -> Artifact:
