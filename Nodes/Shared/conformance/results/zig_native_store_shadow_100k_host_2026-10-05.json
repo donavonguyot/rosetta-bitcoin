@@ -1,0 +1,57 @@
+{
+  "schema": "port.native_store.gate.v1",
+  "gate": "shadow_100k",
+  "height": 100000,
+  "utxo_count": 13154991,
+  "divergence_count": 0,
+  "reorg_tested": false,
+  "peak_rss_bytes": 5933318144,
+  "set_hash_fold_ms": 6755,
+  "snapshot_count": 4,
+  "snapshot_bytes": 1186460974,
+  "primary_set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
+  "shadow_set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
+  "engines": {
+    "primary": {
+      "utxo_load": 3950,
+      "commit": 35030,
+      "snapshot_ms": 7141,
+      "block_connect_store_commit": 250799,
+      "set_hash_fold": 6755
+    },
+    "shadow": {
+      "utxo_load": 48444,
+      "commit": 32542,
+      "snapshot_ms": 0,
+      "block_connect_store_commit": 80986,
+      "set_hash_fold": 4960
+    }
+  },
+  "total_ms": 333405,
+  "runtime_surface": "host",
+  "optimize": "ReleaseSafe",
+  "utxo_hash": "txid64",
+  "snapshot_every": 25000,
+  "utxo_capacity_hint": 14000000,
+  "rehash_count": 1,
+  "mem_limit": "none",
+  "utxo_hit_ns": 3580888000,
+  "utxo_miss_ns": 0,
+  "utxo_hit_count": 20478744,
+  "utxo_miss_count": 0,
+  "proof_scope": "peer_shadow",
+  "mechanism_tests": "zig build test",
+  "peer_gates": [
+    "shadow_5k",
+    "shadow_50k",
+    "shadow_100k",
+    "storage_proof"
+  ],
+  "comparability": "utxo_load and commit are comparable between engines.primary and engines.shadow; block_connect_store_commit is not, because the primary bucket includes the whole connect and the shadow comparisons",
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "a792f25081286a787b75589ec7e043851f0ecd5c",
+    "binary_sha256": "acf9f2f82865fdee475b57c01f2aa9d4627d4c7974ef89b00f9abfeb3ae84f65",
+    "run_ref": "native-store-commit"
+  }
+}

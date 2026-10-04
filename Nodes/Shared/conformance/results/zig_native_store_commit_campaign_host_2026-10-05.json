@@ -1,0 +1,167 @@
+{
+  "schema": "port.native_store.commit_campaign.v1",
+  "runtime_surface": "host",
+  "optimize": "ReleaseSafe",
+  "hash_decision": "keep txid64",
+  "hash_decision_note": "Wyhash did not move host 50k utxo_load or commit outside noise. std.HashMap does not expose probe length.",
+  "target": "native commit at or below same-run RocksDB commit at height 100000",
+  "target_met": false,
+  "target_note": "After the kept shapes, the re-emitted host 100k shadow measured native commit 35030 ms and RocksDB commit 32542 ms.",
+  "shapes": [
+    {
+      "change": "utxo capacity hint",
+      "disposition": "kept",
+      "rehash_count_before": 22,
+      "rehash_count_after": 1,
+      "before": {
+        "utxo_capacity_hint": 0,
+        "commit_ms": 126108,
+        "utxo_load_ms": 17548,
+        "snapshot_ms": 11706,
+        "peak_rss_bytes": 3750608896,
+        "total_ms": 562404,
+        "rocksdb_commit_ms": 51318
+      },
+      "after": {
+        "utxo_capacity_hint": 14000000,
+        "commit_ms": 48131,
+        "utxo_load_ms": 4730,
+        "snapshot_ms": 7506,
+        "peak_rss_bytes": 5849808896,
+        "total_ms": 370123,
+        "rocksdb_commit_ms": 37496
+      }
+    },
+    {
+      "change": "append-only value slab",
+      "disposition": "reverted",
+      "rehash_count": 1,
+      "commit_ms": 56309,
+      "utxo_load_ms": 6341,
+      "snapshot_ms": 11663,
+      "peak_rss_bytes": 5020434432,
+      "total_ms": 413600,
+      "rocksdb_commit_ms": 44498,
+      "reason": "Native commit rose from 48131 ms to 56309 ms and the gap to same-run RocksDB commit did not shrink."
+    },
+    {
+      "change": "direct apply from the staged commit",
+      "disposition": "kept",
+      "rehash_count": 1,
+      "before": {
+        "commit_ms": 48131,
+        "utxo_load_ms": 4730,
+        "snapshot_ms": 7506,
+        "peak_rss_bytes": 5849808896,
+        "total_ms": 370123,
+        "rocksdb_commit_ms": 37496
+      },
+      "after": {
+        "commit_ms": 44134,
+        "utxo_load_ms": 7304,
+        "snapshot_ms": 8585,
+        "peak_rss_bytes": 4491395072,
+        "total_ms": 375223,
+        "rocksdb_commit_ms": 40159
+      }
+    },
+    {
+      "change": "contiguous per-entry SHA256 fold",
+      "disposition": "reverted",
+      "rehash_count": 1,
+      "commit_ms": 41781,
+      "utxo_load_ms": 6073,
+      "snapshot_ms": 8080,
+      "peak_rss_bytes": 5932793856,
+      "total_ms": 367028,
+      "rocksdb_commit_ms": 39150,
+      "set_hash_fold_ms": 7743,
+      "reason": "The fold counter rose from 7392 ms to 7743 ms. Native commit fell with same-run RocksDB commit, and the digest path was not faster, so the change was not kept."
+    }
+  ],
+  "gates": {
+    "5k": {
+      "utxo_count": 4574,
+      "divergence_count": 0,
+      "set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+      "commit_ms": 104,
+      "utxo_load_ms": 3,
+      "rocksdb_commit_ms": 118,
+      "total_ms": 1442,
+      "peak_rss_bytes": 68239360,
+      "rehash_count": 1
+    },
+    "50k": {
+      "utxo_count": 568855,
+      "divergence_count": 0,
+      "set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "commit_ms": 1778,
+      "utxo_load_ms": 87,
+      "rocksdb_commit_ms": 2465,
+      "total_ms": 21264,
+      "peak_rss_bytes": 477839360,
+      "rehash_count": 1
+    },
+    "100k": {
+      "utxo_count": 13154991,
+      "divergence_count": 0,
+      "set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
+      "commit_ms": 35030,
+      "utxo_load_ms": 3950,
+      "snapshot_ms": 7141,
+      "rocksdb_commit_ms": 32542,
+      "total_ms": 333405,
+      "peak_rss_bytes": 5933318144,
+      "rehash_count": 1
+    }
+  },
+  "rocksdb_canonical": {
+    "baseline_5k": {
+      "block_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+      "set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+      "utxo_count": 4574,
+      "commit_ms": 146,
+      "utxo_load_ms": 37,
+      "total_ms": 1276,
+      "reference_commit_ms": 130
+    },
+    "shakedown_50k": {
+      "block_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+      "set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "utxo_count": 568855,
+      "commit_ms": [
+        2513,
+        2647
+      ],
+      "utxo_load_ms": [
+        942,
+        978
+      ],
+      "total_ms": [
+        18046,
+        17652
+      ],
+      "reference_commit_ms": 2880,
+      "note": "Hash and utxo count match the 2026-10-04 campaign. The two commits differ by 134 ms and both sit more than that spread under the earlier 2880 ms figure."
+    }
+  },
+  "restart": {
+    "reopen": {
+      "height": 100000,
+      "utxo_count": 13154991,
+      "set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32"
+    },
+    "torn_tail": {
+      "truncated_record": "commit at height 100000",
+      "height": 99999,
+      "utxo_count": 13154990,
+      "set_hash": "2d0fff45aca68158887d52b093387632293fc05167712e958f5d1bc072bf0ef7"
+    }
+  },
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "a792f25081286a787b75589ec7e043851f0ecd5c",
+    "binary_sha256": "acf9f2f82865fdee475b57c01f2aa9d4627d4c7974ef89b00f9abfeb3ae84f65",
+    "run_ref": "native-store-commit"
+  }
+}

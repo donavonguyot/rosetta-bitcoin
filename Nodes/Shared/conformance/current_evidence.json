@@ -462,6 +462,62 @@
     {
       "port": "zig",
       "claim": "native_store",
+      "gate_id": "native_store_shadow_5k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_host_2026-10-05.json",
+      "status": "current",
+      "notes": "Re-emitted after the native commit campaign. Diagnostic differential run, not the comparable RocksDB baseline. Earlier files remain."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_5k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_docker_2026-10-05.json",
+      "status": "current",
+      "notes": "Re-emitted after the native commit campaign. Diagnostic differential run in Docker, not the comparable RocksDB baseline. Earlier files remain."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_50k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_host_2026-10-05.json",
+      "status": "current",
+      "notes": "Re-emitted after the native commit campaign. Diagnostic differential run, not the comparable RocksDB shakedown. Earlier files remain."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_50k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_docker_2026-10-05.json",
+      "status": "current",
+      "notes": "Re-emitted after the native commit campaign. Diagnostic differential run in Docker, not the comparable RocksDB shakedown. Earlier files remain."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_100k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_100k_host_2026-10-05.json",
+      "status": "current",
+      "notes": "Re-emitted host 100k shadow after the kept capacity hint and direct apply. Diagnostic differential run, not the comparable RocksDB performance gate."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_commit_campaign",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_commit_campaign_host_2026-10-05.json",
+      "status": "current",
+      "notes": "Host commit shapes: capacity hint kept, value slab reverted, direct apply kept, contiguous fold reverted. Includes the 100k reopen and torn-tail check."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_commit_campaign",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_commit_campaign_docker_2026-10-05.json",
+      "status": "current",
+      "notes": "Docker 5k and 50k re-emit for the commit campaign. Shape measurements were taken on the host."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
       "gate_id": "native_store_storage_proof",
       "path": "Nodes/Shared/conformance/results/zig_native_store_storage_proof_host_2026-10-03.json",
       "status": "current",
