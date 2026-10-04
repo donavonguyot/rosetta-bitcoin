@@ -68,3 +68,15 @@ archaeology. Active-port current benchmark evidence is built by the control
 harness from product progress and final status. New active benchmark runs must
 not commit port-authored benchmark JSON under
 `Nodes/Shared/conformance/results/`; any local port JSON is ignored debug output.
+
+## Known technique
+
+`utxo_load` queries only prevouts already in the store. Outputs created in the
+same block are resolved from the block-local created set; they are not store
+keys yet, and including them spends the lookup on misses. This is a connect-path
+property, independent of the storage engine. Go `gatherPrevouts` and Rust
+`gather_prevouts` still batch every non-coinbase input. Zig's ReleaseSafe
+testnet4 measurement, after excluding those outpoints: RocksDB 50k `utxo_load`
+1806 ms to 1070 ms and lookups 1385632 to 1129233, validated hash and UTXO count
+unchanged. Native-store shadow 50k `utxo_load` went from 1095 ms to 95 ms on the
+host and from 1852 ms to 169 ms in Docker, set hash unchanged.
