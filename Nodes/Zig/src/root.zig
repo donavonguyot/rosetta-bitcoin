@@ -1492,6 +1492,8 @@ fn clockNs(clock: c.clockid_t) u64 {
 
 fn scriptPoolWorker(self: *ScriptVerifyRunner, index: usize) void {
     const timing = &self.timings[index];
+    script_verify_split.bind(&timing.split);
+    defer script_verify_split.bind(null);
     var seen: u64 = 0;
     switch (self.crypto_backend) {
         .own_curve => {
@@ -1578,8 +1580,6 @@ fn scriptVerifySchedulerWorkerLoop(
     worker_cpu_ms: *WorkerTiming,
     verifier: crypto.CryptoVerifier,
 ) void {
-    script_verify_split.bind(&worker_cpu_ms.split);
-    defer script_verify_split.bind(null);
     const elapsed_start = clockNs(c.CLOCK_MONOTONIC);
     const cpu_start = clockNs(c.CLOCK_THREAD_CPUTIME_ID);
     defer {
