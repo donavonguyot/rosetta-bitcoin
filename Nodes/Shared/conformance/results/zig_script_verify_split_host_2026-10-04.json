@@ -1,0 +1,944 @@
+{
+  "schema": "port.script_verify_split.campaign.v1",
+  "port": "zig",
+  "runtime_surface": "host",
+  "chainstate_backend": "native",
+  "optimize": "ReleaseSafe",
+  "utxo_hash": "txid64_mix",
+  "script_threads": 8,
+  "snapshot_every": 25000,
+  "shadow": false,
+  "utxo_capacity_hint": 0,
+  "oracle": {
+    "validated_height": 100000,
+    "validated_hash": "0000000000524911745ab6eee9348bca9843c2c2b1b27eada246e3dc2f80b6b1",
+    "chainstate_utxo_count": 13154991,
+    "chainstate_set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32"
+  },
+  "pubkey_parse": "Pubkey parsing is inside the ECDSA and Schnorr verify calls, not a separate script step, so it is not a fourth kind.",
+  "ratio_meaning": "own_curve divided by the same-run c_binding native-store host binary",
+  "share_meaning": "share_of_verify_ns is that kind's total_ns divided by the sum of ecdsa, schnorr, and taproot_tweak total_ns in the window. total_ns sums worker threads. script_verify_ms is the wall-clock bucket; the window script_verify_ms values sum to the proof's script_verify.",
+  "sources": {
+    "c_binding": "Nodes/Shared/conformance/results/zig_script_verify_split_c_binding_host_2026-10-04.json",
+    "own_curve": "Nodes/Shared/conformance/results/zig_script_verify_split_own_curve_host_2026-10-04.json"
+  },
+  "datadirs": {
+    "c_binding": "/Users/donavonguyot/.rblab/zig/script-split-100k-c_binding",
+    "own_curve": "/Users/donavonguyot/.rblab/zig/script-split-100k-own_curve"
+  },
+  "bands": {
+    "through_49999": {
+      "script_verify_ms": {
+        "c_binding": 6803,
+        "own_curve": 10419
+      },
+      "script_verify_ratio": "1.532",
+      "kinds": {
+        "ecdsa": {
+          "count": 1306131,
+          "count_share": "0.919",
+          "mean_ns": {
+            "c_binding": 18743,
+            "own_curve": 39111
+          },
+          "mean_ns_ratio": "2.087"
+        },
+        "schnorr": {
+          "count": 79828,
+          "count_share": "0.056",
+          "mean_ns": {
+            "c_binding": 18887,
+            "own_curve": 39640
+          },
+          "mean_ns_ratio": "2.099"
+        },
+        "taproot_tweak": {
+          "count": 34589,
+          "count_share": "0.024",
+          "mean_ns": {
+            "c_binding": 15295,
+            "own_curve": 26694
+          },
+          "mean_ns_ratio": "1.745"
+        }
+      }
+    },
+    "50000_through_99999": {
+      "script_verify_ms": {
+        "c_binding": 86076,
+        "own_curve": 160791
+      },
+      "script_verify_ratio": "1.868",
+      "kinds": {
+        "ecdsa": {
+          "count": 9551879,
+          "count_share": "0.267",
+          "mean_ns": {
+            "c_binding": 17962,
+            "own_curve": 36901
+          },
+          "mean_ns_ratio": "2.054"
+        },
+        "schnorr": {
+          "count": 18425389,
+          "count_share": "0.516",
+          "mean_ns": {
+            "c_binding": 18468,
+            "own_curve": 37165
+          },
+          "mean_ns_ratio": "2.012"
+        },
+        "taproot_tweak": {
+          "count": 7739723,
+          "count_share": "0.217",
+          "mean_ns": {
+            "c_binding": 14023,
+            "own_curve": 22443
+          },
+          "mean_ns_ratio": "1.600"
+        }
+      }
+    }
+  },
+  "windows": [
+    {
+      "height_start": 0,
+      "height_end": 9999,
+      "c_binding": {
+        "script_verify_ms": 1318,
+        "ecdsa": {
+          "count": 327190,
+          "total_ns": 6140773000,
+          "mean_ns": 18768
+        },
+        "schnorr": {
+          "count": 1,
+          "total_ns": 16000,
+          "mean_ns": 16000
+        },
+        "taproot_tweak": {
+          "count": 0,
+          "total_ns": 0,
+          "mean_ns": 0
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "1.000",
+          "schnorr": "0.000",
+          "taproot_tweak": "0.000"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 2094,
+        "ecdsa": {
+          "count": 327190,
+          "total_ns": 12715537000,
+          "mean_ns": 38862
+        },
+        "schnorr": {
+          "count": 1,
+          "total_ns": 41000,
+          "mean_ns": 41000
+        },
+        "taproot_tweak": {
+          "count": 0,
+          "total_ns": 0,
+          "mean_ns": 0
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "1.000",
+          "schnorr": "0.000",
+          "taproot_tweak": "0.000"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.589",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.071",
+          "mean_ns": "2.071"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "2.562",
+          "mean_ns": "2.562"
+        },
+        "taproot_tweak": {
+          "count": null,
+          "total_ns": null,
+          "mean_ns": null
+        }
+      }
+    },
+    {
+      "height_start": 10000,
+      "height_end": 19999,
+      "c_binding": {
+        "script_verify_ms": 15,
+        "ecdsa": {
+          "count": 3401,
+          "total_ns": 64741000,
+          "mean_ns": 19035
+        },
+        "schnorr": {
+          "count": 4,
+          "total_ns": 86000,
+          "mean_ns": 21500
+        },
+        "taproot_tweak": {
+          "count": 0,
+          "total_ns": 0,
+          "mean_ns": 0
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.999",
+          "schnorr": "0.001",
+          "taproot_tweak": "0.000"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 27,
+        "ecdsa": {
+          "count": 3401,
+          "total_ns": 137808000,
+          "mean_ns": 40519
+        },
+        "schnorr": {
+          "count": 4,
+          "total_ns": 196000,
+          "mean_ns": 49000
+        },
+        "taproot_tweak": {
+          "count": 0,
+          "total_ns": 0,
+          "mean_ns": 0
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.999",
+          "schnorr": "0.001",
+          "taproot_tweak": "0.000"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.800",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.129",
+          "mean_ns": "2.129"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "2.279",
+          "mean_ns": "2.279"
+        },
+        "taproot_tweak": {
+          "count": null,
+          "total_ns": null,
+          "mean_ns": null
+        }
+      }
+    },
+    {
+      "height_start": 20000,
+      "height_end": 29999,
+      "c_binding": {
+        "script_verify_ms": 2179,
+        "ecdsa": {
+          "count": 471308,
+          "total_ns": 8917189000,
+          "mean_ns": 18920
+        },
+        "schnorr": {
+          "count": 16204,
+          "total_ns": 313690000,
+          "mean_ns": 19358
+        },
+        "taproot_tweak": {
+          "count": 13203,
+          "total_ns": 207022000,
+          "mean_ns": 15679
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.945",
+          "schnorr": "0.033",
+          "taproot_tweak": "0.022"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 3464,
+        "ecdsa": {
+          "count": 471308,
+          "total_ns": 18359227000,
+          "mean_ns": 38953
+        },
+        "schnorr": {
+          "count": 16204,
+          "total_ns": 662292000,
+          "mean_ns": 40872
+        },
+        "taproot_tweak": {
+          "count": 13203,
+          "total_ns": 370850000,
+          "mean_ns": 28088
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.947",
+          "schnorr": "0.034",
+          "taproot_tweak": "0.019"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.590",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.059",
+          "mean_ns": "2.059"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "2.111",
+          "mean_ns": "2.111"
+        },
+        "taproot_tweak": {
+          "count": "1.000",
+          "total_ns": "1.791",
+          "mean_ns": "1.791"
+        }
+      }
+    },
+    {
+      "height_start": 30000,
+      "height_end": 39999,
+      "c_binding": {
+        "script_verify_ms": 2079,
+        "ecdsa": {
+          "count": 363203,
+          "total_ns": 6812992000,
+          "mean_ns": 18758
+        },
+        "schnorr": {
+          "count": 31177,
+          "total_ns": 590156000,
+          "mean_ns": 18929
+        },
+        "taproot_tweak": {
+          "count": 17989,
+          "total_ns": 271824000,
+          "mean_ns": 15110
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.888",
+          "schnorr": "0.077",
+          "taproot_tweak": "0.035"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 3078,
+        "ecdsa": {
+          "count": 363203,
+          "total_ns": 14232633000,
+          "mean_ns": 39186
+        },
+        "schnorr": {
+          "count": 31177,
+          "total_ns": 1239113000,
+          "mean_ns": 39744
+        },
+        "taproot_tweak": {
+          "count": 17989,
+          "total_ns": 462582000,
+          "mean_ns": 25714
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.893",
+          "schnorr": "0.078",
+          "taproot_tweak": "0.029"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.481",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.089",
+          "mean_ns": "2.089"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "2.100",
+          "mean_ns": "2.100"
+        },
+        "taproot_tweak": {
+          "count": "1.000",
+          "total_ns": "1.702",
+          "mean_ns": "1.702"
+        }
+      }
+    },
+    {
+      "height_start": 40000,
+      "height_end": 49999,
+      "c_binding": {
+        "script_verify_ms": 1212,
+        "ecdsa": {
+          "count": 141029,
+          "total_ns": 2545230000,
+          "mean_ns": 18047
+        },
+        "schnorr": {
+          "count": 32442,
+          "total_ns": 603773000,
+          "mean_ns": 18610
+        },
+        "taproot_tweak": {
+          "count": 3397,
+          "total_ns": 50203000,
+          "mean_ns": 14778
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.796",
+          "schnorr": "0.189",
+          "taproot_tweak": "0.016"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 1756,
+        "ecdsa": {
+          "count": 141029,
+          "total_ns": 5639184000,
+          "mean_ns": 39985
+        },
+        "schnorr": {
+          "count": 32442,
+          "total_ns": 1262814000,
+          "mean_ns": 38925
+        },
+        "taproot_tweak": {
+          "count": 3397,
+          "total_ns": 89888000,
+          "mean_ns": 26460
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.807",
+          "schnorr": "0.181",
+          "taproot_tweak": "0.013"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.449",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.216",
+          "mean_ns": "2.216"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "2.092",
+          "mean_ns": "2.092"
+        },
+        "taproot_tweak": {
+          "count": "1.000",
+          "total_ns": "1.790",
+          "mean_ns": "1.790"
+        }
+      }
+    },
+    {
+      "height_start": 50000,
+      "height_end": 59999,
+      "c_binding": {
+        "script_verify_ms": 22976,
+        "ecdsa": {
+          "count": 5488690,
+          "total_ns": 97819867000,
+          "mean_ns": 17822
+        },
+        "schnorr": {
+          "count": 2745425,
+          "total_ns": 50150134000,
+          "mean_ns": 18266
+        },
+        "taproot_tweak": {
+          "count": 1237480,
+          "total_ns": 17481424000,
+          "mean_ns": 14126
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.591",
+          "schnorr": "0.303",
+          "taproot_tweak": "0.106"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 44172,
+        "ecdsa": {
+          "count": 5488690,
+          "total_ns": 201572809000,
+          "mean_ns": 36725
+        },
+        "schnorr": {
+          "count": 2745425,
+          "total_ns": 102837075000,
+          "mean_ns": 37457
+        },
+        "taproot_tweak": {
+          "count": 1237480,
+          "total_ns": 28136841000,
+          "mean_ns": 22737
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.606",
+          "schnorr": "0.309",
+          "taproot_tweak": "0.085"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.923",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.061",
+          "mean_ns": "2.061"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "2.051",
+          "mean_ns": "2.051"
+        },
+        "taproot_tweak": {
+          "count": "1.000",
+          "total_ns": "1.610",
+          "mean_ns": "1.610"
+        }
+      }
+    },
+    {
+      "height_start": 60000,
+      "height_end": 69999,
+      "c_binding": {
+        "script_verify_ms": 20455,
+        "ecdsa": {
+          "count": 1192743,
+          "total_ns": 21504888000,
+          "mean_ns": 18029
+        },
+        "schnorr": {
+          "count": 5017219,
+          "total_ns": 91880146000,
+          "mean_ns": 18312
+        },
+        "taproot_tweak": {
+          "count": 2416433,
+          "total_ns": 33748856000,
+          "mean_ns": 13966
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.146",
+          "schnorr": "0.624",
+          "taproot_tweak": "0.229"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 38135,
+        "ecdsa": {
+          "count": 1192743,
+          "total_ns": 44719486000,
+          "mean_ns": 37492
+        },
+        "schnorr": {
+          "count": 5017219,
+          "total_ns": 187238011000,
+          "mean_ns": 37319
+        },
+        "taproot_tweak": {
+          "count": 2416433,
+          "total_ns": 54680562000,
+          "mean_ns": 22628
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.156",
+          "schnorr": "0.653",
+          "taproot_tweak": "0.191"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.864",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.080",
+          "mean_ns": "2.080"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "2.038",
+          "mean_ns": "2.038"
+        },
+        "taproot_tweak": {
+          "count": "1.000",
+          "total_ns": "1.620",
+          "mean_ns": "1.620"
+        }
+      }
+    },
+    {
+      "height_start": 70000,
+      "height_end": 79999,
+      "c_binding": {
+        "script_verify_ms": 23926,
+        "ecdsa": {
+          "count": 1170557,
+          "total_ns": 21319201000,
+          "mean_ns": 18212
+        },
+        "schnorr": {
+          "count": 6161600,
+          "total_ns": 114197422000,
+          "mean_ns": 18533
+        },
+        "taproot_tweak": {
+          "count": 2772760,
+          "total_ns": 38873488000,
+          "mean_ns": 14019
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.122",
+          "schnorr": "0.655",
+          "taproot_tweak": "0.223"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 43929,
+        "ecdsa": {
+          "count": 1170557,
+          "total_ns": 43189223000,
+          "mean_ns": 36896
+        },
+        "schnorr": {
+          "count": 6161600,
+          "total_ns": 228061326000,
+          "mean_ns": 37013
+        },
+        "taproot_tweak": {
+          "count": 2772760,
+          "total_ns": 61556371000,
+          "mean_ns": 22200
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.130",
+          "schnorr": "0.685",
+          "taproot_tweak": "0.185"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.836",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.026",
+          "mean_ns": "2.026"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "1.997",
+          "mean_ns": "1.997"
+        },
+        "taproot_tweak": {
+          "count": "1.000",
+          "total_ns": "1.584",
+          "mean_ns": "1.584"
+        }
+      }
+    },
+    {
+      "height_start": 80000,
+      "height_end": 89999,
+      "c_binding": {
+        "script_verify_ms": 15559,
+        "ecdsa": {
+          "count": 1467454,
+          "total_ns": 26528512000,
+          "mean_ns": 18077
+        },
+        "schnorr": {
+          "count": 3764297,
+          "total_ns": 69968784000,
+          "mean_ns": 18587
+        },
+        "taproot_tweak": {
+          "count": 1171555,
+          "total_ns": 16409812000,
+          "mean_ns": 14006
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.235",
+          "schnorr": "0.620",
+          "taproot_tweak": "0.145"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 28963,
+        "ecdsa": {
+          "count": 1467454,
+          "total_ns": 54168666000,
+          "mean_ns": 36913
+        },
+        "schnorr": {
+          "count": 3764297,
+          "total_ns": 138793876000,
+          "mean_ns": 36871
+        },
+        "taproot_tweak": {
+          "count": 1171555,
+          "total_ns": 26065939000,
+          "mean_ns": 22249
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.247",
+          "schnorr": "0.634",
+          "taproot_tweak": "0.119"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.861",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.042",
+          "mean_ns": "2.042"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "1.984",
+          "mean_ns": "1.984"
+        },
+        "taproot_tweak": {
+          "count": "1.000",
+          "total_ns": "1.588",
+          "mean_ns": "1.589"
+        }
+      }
+    },
+    {
+      "height_start": 90000,
+      "height_end": 99999,
+      "c_binding": {
+        "script_verify_ms": 3160,
+        "ecdsa": {
+          "count": 232435,
+          "total_ns": 4398539000,
+          "mean_ns": 18923
+        },
+        "schnorr": {
+          "count": 736848,
+          "total_ns": 14084975000,
+          "mean_ns": 19115
+        },
+        "taproot_tweak": {
+          "count": 141495,
+          "total_ns": 2022191000,
+          "mean_ns": 14291
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.215",
+          "schnorr": "0.687",
+          "taproot_tweak": "0.099"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 5592,
+        "ecdsa": {
+          "count": 232435,
+          "total_ns": 8831942000,
+          "mean_ns": 37997
+        },
+        "schnorr": {
+          "count": 736848,
+          "total_ns": 27866351000,
+          "mean_ns": 37818
+        },
+        "taproot_tweak": {
+          "count": 141495,
+          "total_ns": 3268579000,
+          "mean_ns": 23100
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.221",
+          "schnorr": "0.697",
+          "taproot_tweak": "0.082"
+        }
+      },
+      "ratio": {
+        "script_verify": "1.770",
+        "ecdsa": {
+          "count": "1.000",
+          "total_ns": "2.008",
+          "mean_ns": "2.008"
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "1.978",
+          "mean_ns": "1.978"
+        },
+        "taproot_tweak": {
+          "count": "1.000",
+          "total_ns": "1.616",
+          "mean_ns": "1.616"
+        }
+      }
+    },
+    {
+      "height_start": 100000,
+      "height_end": 100000,
+      "c_binding": {
+        "script_verify_ms": 0,
+        "ecdsa": {
+          "count": 0,
+          "total_ns": 0,
+          "mean_ns": 0
+        },
+        "schnorr": {
+          "count": 11,
+          "total_ns": 217000,
+          "mean_ns": 19727
+        },
+        "taproot_tweak": {
+          "count": 11,
+          "total_ns": 196000,
+          "mean_ns": 17818
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.000",
+          "schnorr": "0.525",
+          "taproot_tweak": "0.475"
+        }
+      },
+      "own_curve": {
+        "script_verify_ms": 1,
+        "ecdsa": {
+          "count": 0,
+          "total_ns": 0,
+          "mean_ns": 0
+        },
+        "schnorr": {
+          "count": 11,
+          "total_ns": 468000,
+          "mean_ns": 42545
+        },
+        "taproot_tweak": {
+          "count": 11,
+          "total_ns": 316000,
+          "mean_ns": 28727
+        },
+        "share_of_verify_ns": {
+          "ecdsa": "0.000",
+          "schnorr": "0.597",
+          "taproot_tweak": "0.403"
+        }
+      },
+      "ratio": {
+        "script_verify": null,
+        "ecdsa": {
+          "count": null,
+          "total_ns": null,
+          "mean_ns": null
+        },
+        "schnorr": {
+          "count": "1.000",
+          "total_ns": "2.157",
+          "mean_ns": "2.157"
+        },
+        "taproot_tweak": {
+          "count": "1.000",
+          "total_ns": "1.612",
+          "mean_ns": "1.612"
+        }
+      }
+    }
+  ],
+  "totals": {
+    "script_verify_ms": {
+      "c_binding": 92879,
+      "own_curve": 171211,
+      "ratio": "1.843"
+    },
+    "script_jobs": 27818301,
+    "input_count": 27818301,
+    "kinds": {
+      "ecdsa": {
+        "c_binding": {
+          "count": 10858010,
+          "total_ns": 196051932000,
+          "mean_ns": 18055
+        },
+        "own_curve": {
+          "count": 10858010,
+          "total_ns": 403566515000,
+          "mean_ns": 37167
+        },
+        "ratio": {
+          "count": "1.000",
+          "total_ns": "2.058",
+          "mean_ns": "2.059"
+        },
+        "share_of_verify_ns": {
+          "c_binding": "0.303",
+          "own_curve": "0.319"
+        }
+      },
+      "schnorr": {
+        "c_binding": {
+          "count": 18505228,
+          "total_ns": 341789399000,
+          "mean_ns": 18469
+        },
+        "own_curve": {
+          "count": 18505228,
+          "total_ns": 687961563000,
+          "mean_ns": 37176
+        },
+        "ratio": {
+          "count": "1.000",
+          "total_ns": "2.013",
+          "mean_ns": "2.013"
+        },
+        "share_of_verify_ns": {
+          "c_binding": "0.528",
+          "own_curve": "0.543"
+        }
+      },
+      "taproot_tweak": {
+        "c_binding": {
+          "count": 7774323,
+          "total_ns": 109065016000,
+          "mean_ns": 14028
+        },
+        "own_curve": {
+          "count": 7774323,
+          "total_ns": 174631928000,
+          "mean_ns": 22462
+        },
+        "ratio": {
+          "count": "1.000",
+          "total_ns": "1.601",
+          "mean_ns": "1.601"
+        },
+        "share_of_verify_ns": {
+          "c_binding": "0.169",
+          "own_curve": "0.138"
+        }
+      }
+    }
+  },
+  "reading": "The per-verify cost ratio does not grow with height. ECDSA moves from 2.087\u00d7 through height 49999 to 2.054\u00d7 from 50000 through 99999, and Schnorr from 2.099\u00d7 to 2.012\u00d7. The Taproot tweak moves from 1.745\u00d7 to 1.600\u00d7. The mix does shift: through height 49999 the verifications are 92% ECDSA, and from 50000 through 99999 they are 52% Schnorr, 27% ECDSA, and 22% tweaks. Schnorr costs about the same ratio as ECDSA, so that shift does not raise the penalty. The script_verify wall ratio still rises from 1.532\u00d7 to 1.868\u00d7 because the later windows fill the worker threads: own_curve verify time is 7.53\u00d7 the wall-clock script bucket after height 50000, against 5.30\u00d7 before, with 8 script threads. Counts match on both backends. There is one script job per input overall (27818301). The split does not record inputs per window, so it cannot say whether the jump in verifications per block after height 50000 is more inputs or more signatures per input. Pubkey parsing sits inside the ECDSA and Schnorr calls.",
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "97fe6d35d88ecb95424ef2bf5a93ff27dad304e1",
+    "binary_sha256": "2f1b066877f8f9598f7c509763fcafda755abee11b06b3e9c49fccd20edf0e3b",
+    "run_ref": "zig-self-hosted-cleanup-split",
+    "linked_libraries": {
+      "c_binding": [
+        "/opt/homebrew/opt/secp256k1/lib/libsecp256k1.7.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "own_curve": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    "binary_sha256_c_binding": "7d963b51935ed6dd8d007a6083f3bb1a125e34d6eabb2c863d4bd1d1fc0be050"
+  }
+}

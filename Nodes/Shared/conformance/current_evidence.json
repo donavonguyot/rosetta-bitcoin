@@ -778,6 +778,30 @@
       "path": "Nodes/Shared/conformance/results/zig_store_native_5k_host_2026-10-04.json",
       "status": "current",
       "notes": "Host own_curve built with -Dstore=native. Height 5000, hash, 4574 UTXOs, and set hash e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400 match the native-store oracle. otool -L shows libSystem only."
+    },
+    {
+      "port": "zig",
+      "claim": "self_hosted",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_script_verify_split_c_binding_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Host c_binding on -Dstore=native to 100k. Height, hash, 13154991 UTXOs, and set hash match the native-store oracle. Per-kind script_verify split is on the proof."
+    },
+    {
+      "port": "zig",
+      "claim": "self_hosted",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_script_verify_split_own_curve_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Host own_curve on -Dstore=native to 100k. Height, hash, 13154991 UTXOs, and set hash match the native-store oracle. Per-kind script_verify split is on the proof."
+    },
+    {
+      "port": "zig",
+      "claim": "self_hosted",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_script_verify_split_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Script verify split campaign. Same-surface c_binding and own_curve host runs on the native-only binary. The per-verify ratio stays flat; the mix shifts to Schnorr after height 50000."
     }
   ]
 }
