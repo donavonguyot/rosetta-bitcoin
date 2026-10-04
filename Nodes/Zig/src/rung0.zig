@@ -1,7 +1,9 @@
 const std = @import("std");
 const root = @import("root.zig");
 const mempool = @import("mempool.zig");
+const template = @import("template.zig");
 
+const tx = root.tx;
 const block = root.block;
 const crypto = root.crypto;
 
@@ -137,8 +139,8 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
     var verdict_mismatches: u32 = 0;
     var mutation_checked: u32 = 0;
     var mutation_mismatches: u32 = 0;
-    const template_checked: u32 = 0;
-    const template_failures: u32 = 0;
+    var template_checked: u32 = 0;
+    var template_failures: u32 = 0;
     var accepted: u32 = 0;
     var rejected: u32 = 0;
     var rows: std.ArrayList(Boundary) = .empty;
@@ -179,7 +181,48 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
                 try out.print("verdict mismatch apply_seq={d} have={s} want=missing\n", .{ apply_seq, verdict.reason.name() });
             }
         } else if (kind == 2) {
-            const port_fees: u64 = 0;
+            const cb = try template.coinbaseWeight(allocator, height);
+            const selected = try template.selectPackages(Store, allocator, &pool, cb.weight, cb.sigops);
+            defer allocator.free(selected);
+            var port_fees: u64 = 0;
+            var filled: usize = 0;
+            const txs = try allocator.alloc(tx.Transaction, selected.len);
+            defer {
+                for (txs[0..filled]) |transaction| transaction.deinit(allocator);
+                allocator.free(txs);
+            }
+            for (selected) |wtxid| {
+                const entry = pool.get(wtxid) orelse return error.MissingPoolEntry;
+                port_fees += entry.fee;
+                const parsed = try tx.deserialize(allocator, entry.raw, 0);
+                txs[filled] = parsed.transaction;
+                filled += 1;
+            }
+            if (tip_hash) |prev| {
+                const prev_header = (try db.headerAt(allocator, height - 1)) orelse return error.MissingHeader;
+                const prev_time = std.mem.readInt(u32, prev_header[68..72], .little);
+                const now_i = @divTrunc(root.nowMs(), 1000);
+                const now: u32 = if (now_i <= 0) 0 else if (now_i > std.math.maxInt(u32)) std.math.maxInt(u32) else @intCast(now_i);
+                const stamp = template.headerTimeFor(pool.tip_mtp, now, height, prev_time);
+                const bits = try template.nextBits(db, allocator, height, stamp);
+                const raw_template = try template.assemble(allocator, .{
+                    .height = height,
+                    .prev_hash = prev,
+                    .time = stamp,
+                    .bits = bits,
+                    .fees = port_fees,
+                    .transactions = txs[0..filled],
+                });
+                defer allocator.free(raw_template);
+                template_checked += 1;
+                if (template.testBlockValidity(allocator, db, raw_template, height, utxo_count)) {
+                    try out.print("template height={d} valid=pass fees={d} bytes={d}\n", .{ height, port_fees, raw_template.len });
+                } else |err| {
+                    template_failures += 1;
+                    try out.print("template height={d} valid=fail fees={d} err={s}\n", .{ height, port_fees, @errorName(err) });
+                }
+            }
+
             const expected_prev: ?[32]u8 = if (height == 0) null else tip_hash;
             const decoded = try block.decodeBlock(allocator, payload, null, expected_prev);
             defer {

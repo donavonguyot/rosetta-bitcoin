@@ -220,3 +220,118 @@ test "disconnect replay is a loud stub" {
     defer pool.deinit();
     try std.testing.expectError(error.DisconnectReplayNotImplemented, pool.restoreAfterDisconnect());
 }
+
+test "assembly bytes are stable and the witness commitment matches" {
+    const allocator = std.testing.allocator;
+    const prev = [_]u8{0x11} ** 32;
+    const spend_prev = [_]u8{0x22} ** 32;
+    const raw = try rawTx(allocator, 2, spend_prev, 0, 0xffffffff, &.{}, 1000, &script_true, 0);
+    defer allocator.free(raw);
+    const parsed = try core.tx.deserialize(allocator, raw, 0);
+    defer parsed.transaction.deinit(allocator);
+    const bytes = try core.template.assemble(allocator, .{
+        .height = 100,
+        .prev_hash = prev,
+        .time = 1_700_000_000,
+        .bits = 0x1d00ffff,
+        .fees = 42,
+        .transactions = &.{parsed.transaction},
+    });
+    defer allocator.free(bytes);
+    const again = try core.template.assemble(allocator, .{
+        .height = 100,
+        .prev_hash = prev,
+        .time = 1_700_000_000,
+        .bits = 0x1d00ffff,
+        .fees = 42,
+        .transactions = &.{parsed.transaction},
+    });
+    defer allocator.free(again);
+    try std.testing.expectEqualSlices(u8, bytes, again);
+
+    const template = try core.template.parseTemplate(allocator, bytes);
+    defer template.deinit(allocator);
+    try core.block.validateWitnessCommitment(allocator, template.transactions);
+    const commitment = try core.template.witnessCommitment(allocator, &.{parsed.transaction});
+    try std.testing.expectEqualSlices(u8, commitment[0..], template.transactions[0].outputs[1].script_pubkey[6..38]);
+
+    const io = std.testing.io;
+    const fixture = "../Shared/fixtures/mining/assembly_bytes_v1.bin";
+    try std.Io.Dir.cwd().createDirPath(io, "../Shared/fixtures/mining");
+    const existing = std.Io.Dir.cwd().readFileAlloc(io, fixture, allocator, .limited(1_000_000)) catch null;
+    if (existing) |frozen| {
+        defer allocator.free(frozen);
+        try std.testing.expectEqualSlices(u8, frozen, bytes);
+    } else {
+        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = fixture, .data = bytes, .flags = .{} });
+    }
+}
+
+test "template limits reject a duplicate txid and an overweight block" {
+    const allocator = std.testing.allocator;
+    const prev = [_]u8{1} ** 32;
+    const raw = try rawTx(allocator, 2, prev, 0, 0xffffffff, &.{}, 1, &script_true, 0);
+    defer allocator.free(raw);
+    const parsed = try core.tx.deserialize(allocator, raw, 0);
+    defer parsed.transaction.deinit(allocator);
+    try std.testing.expectError(error.DuplicateTxid, core.template.checkTemplateLimits(allocator, &.{ parsed.transaction, parsed.transaction }));
+
+    var owned = std.ArrayList([]u8).empty;
+    defer {
+        for (owned.items) |item| allocator.free(item);
+        owned.deinit(allocator);
+    }
+    const filler = [_]u8{0x01} ** 400;
+    var i: usize = 0;
+    while (i < 2500) : (i += 1) {
+        var unique = [_]u8{0} ** 32;
+        std.mem.writeInt(u32, unique[0..4], @intCast(i + 1), .little);
+        const one = try rawTx(allocator, 2, unique, 0, 0xffffffff, &filler, 1, &script_true, 0);
+        try owned.append(allocator, one);
+    }
+    var parsed_all = try allocator.alloc(core.tx.Transaction, owned.items.len);
+    defer {
+        for (parsed_all) |transaction| transaction.deinit(allocator);
+        allocator.free(parsed_all);
+    }
+    for (owned.items, 0..) |item, n| {
+        const one = try core.tx.deserialize(allocator, item, 0);
+        parsed_all[n] = one.transaction;
+    }
+    try std.testing.expectError(error.BlockWeightExceeded, core.template.checkTemplateLimits(allocator, parsed_all));
+}
+
+test "discarding store wrapper forwards a real utxo and drops the commit" {
+    const allocator = std.testing.allocator;
+    const path = ".zig-cache/mempool-wrapper-utxo";
+    var db = try core.RocksDb.open(allocator, path);
+    defer db.close();
+    const txid = [_]u8{9} ** 32;
+    const outpoint = core.Outpoint{ .txid = txid, .vout = 0 };
+    const script = try core.fromHexAlloc(allocator, "51");
+    defer allocator.free(script);
+    const utxo = core.StoredUtxo{ .height = 1, .vout = 0, .value_sats = 42, .coinbase = false, .script_pubkey = script };
+    const key = try core.encodeUtxoKey(allocator, "testnet4", outpoint);
+    defer allocator.free(key);
+    const value = try core.encodeUtxoValue(allocator, utxo);
+    defer allocator.free(value);
+    try db.put(key, value);
+
+    var wrapper = core.template.DiscardingStore(core.RocksDb){ .inner = &db };
+    const loaded = try wrapper.getManyUtxosWithStats(allocator, "testnet4", &.{outpoint}, null);
+    defer {
+        for (loaded) |item| if (item) |owned_utxo| owned_utxo.deinit(allocator);
+        allocator.free(loaded);
+    }
+    try std.testing.expectEqual(@as(u64, 42), loaded[0].?.value_sats);
+
+    var spent = std.AutoHashMap(core.Outpoint, void).init(allocator);
+    defer spent.deinit();
+    _ = try wrapper.commitConnectedBlock(allocator, 2, [_]u8{0} ** 32, &.{}, &.{}, &.{}, &.{}, &spent, 0);
+    const again = try db.getManyUtxosWithStats(allocator, "testnet4", &.{outpoint}, null);
+    defer {
+        for (again) |item| if (item) |owned_utxo| owned_utxo.deinit(allocator);
+        allocator.free(again);
+    }
+    try std.testing.expectEqual(@as(u64, 42), again[0].?.value_sats);
+}

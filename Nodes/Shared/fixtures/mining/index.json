@@ -1,0 +1,13 @@
+{
+  "schema": "mining.assembly_index.v1",
+  "assembly_bytes": "assembly_bytes_v1.bin",
+  "sha256": "c1c9e8480971ebe783b0e07e7f0edad23626615107f07d882a6e3a355fd7e253",
+  "parameters": {
+    "height": 100,
+    "prev_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+    "time": 1700000000,
+    "bits": "0x1d00ffff",
+    "fees": 42,
+    "tag": "RosettaBitcoin/zig"
+  }
+}

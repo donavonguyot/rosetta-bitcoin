@@ -21,6 +21,7 @@ pub const store = @import("store.zig");
 pub const native_store = @import("native_store.zig");
 pub const coins_view = @import("coins_view.zig");
 pub const mempool = @import("mempool.zig");
+pub const template = @import("template.zig");
 pub const rung0 = @import("rung0.zig");
 
 pub const PortInfo = struct {

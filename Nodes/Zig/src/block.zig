@@ -46,7 +46,7 @@ pub fn decodeBlock(
     };
 }
 
-fn validateWitnessCommitment(allocator: std.mem.Allocator, transactions: []const tx.Transaction) !void {
+pub fn validateWitnessCommitment(allocator: std.mem.Allocator, transactions: []const tx.Transaction) !void {
     if (transactions.len == 0) return error.EmptyBlock;
     var has_witness = false;
     for (transactions) |transaction| {
