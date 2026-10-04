@@ -78,7 +78,7 @@ fn usage(out: anytype) !void {
         \\  native-crypto-vectors
         \\  test-capability --kind crypto-vectors --outcome-path path [--mutation schnorr-accept-bad-s|schnorr-accept-bad-xonly|taproot-ignore-output-check]
         \\  script-corpus [--manifest path] [--output path] [--shadow-crypto]
-        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--gate-output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--mem-limit <text>] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append]
+        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--gate-output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--utxo-capacity-hint N] [--mem-limit <text>] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append]
         \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
         \\
     , .{});
@@ -800,7 +800,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             db.shadow_set_hash_fold_ms,
             total_ms,
         });
-        try appendFmt(allocator, &gate_buf, "\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"utxo_hash\":\"{s}\",\"snapshot_every\":{},\"mem_limit\":\"{s}\",\"utxo_hit_ns\":{},\"utxo_miss_ns\":{},\"utxo_hit_count\":{},\"utxo_miss_count\":{},\"proof_scope\":\"peer_shadow\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"shadow_100k\",\"storage_proof\"],\"comparability\":\"utxo_load and commit are comparable between engines.primary and engines.shadow; block_connect_store_commit is not, because the primary bucket includes the whole connect and the shadow comparisons\"}}\n", .{ surface, optimizeName(), core.native_store.utxoHashName(), snapshotEvery(db), memLimit(args), timing.utxo_hit_ns, timing.utxo_miss_ns, timing.utxo_hit_count, timing.utxo_miss_count });
+        try appendFmt(allocator, &gate_buf, "\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"utxo_hash\":\"{s}\",\"snapshot_every\":{},\"utxo_capacity_hint\":{},\"rehash_count\":{},\"mem_limit\":\"{s}\",\"utxo_hit_ns\":{},\"utxo_miss_ns\":{},\"utxo_hit_count\":{},\"utxo_miss_count\":{},\"proof_scope\":\"peer_shadow\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"shadow_100k\",\"storage_proof\"],\"comparability\":\"utxo_load and commit are comparable between engines.primary and engines.shadow; block_connect_store_commit is not, because the primary bucket includes the whole connect and the shadow comparisons\"}}\n", .{ surface, optimizeName(), core.native_store.utxoHashName(), snapshotEvery(db), capacityHint(db), rehashCount(db), memLimit(args), timing.utxo_hit_ns, timing.utxo_miss_ns, timing.utxo_hit_count, timing.utxo_miss_count });
         try out.print("{s}", .{gate_buf.items});
         if (valueArg(args, "--gate-output")) |path| try writeFileEnsuringParent(io, path, gate_buf.items);
         if (db.divergence_count != 0) return error.StoreDivergence;
@@ -1103,6 +1103,7 @@ fn cmdSupervisorOnce(allocator: std.mem.Allocator, out: anytype, args: []const [
 fn nativeOpenOptions(args: []const []const u8) !core.native_store.OpenOptions {
     var options = core.native_store.OpenOptions{};
     if (valueArg(args, "--snapshot-every")) |text| options.snapshot_every = try std.fmt.parseInt(u32, text, 10);
+    if (valueArg(args, "--utxo-capacity-hint")) |text| options.utxo_capacity_hint = try std.fmt.parseInt(u32, text, 10);
     options.fsync_enabled = flagArg(args, "--fsync");
     if (valueArg(args, "--crash-after-block")) |text| options.crash_after_block = try std.fmt.parseInt(u32, text, 10);
     if (valueArg(args, "--crash-point")) |text| {
@@ -1145,6 +1146,16 @@ fn snapshotBytes(db: anytype) u64 {
 
 fn snapshotEvery(db: anytype) u32 {
     if (@hasField(@TypeOf(db.primary.*), "options")) return db.primary.options.snapshot_every;
+    return 0;
+}
+
+fn capacityHint(db: anytype) u32 {
+    if (@hasField(@TypeOf(db.primary.*), "options")) return db.primary.options.utxo_capacity_hint;
+    return 0;
+}
+
+fn rehashCount(db: anytype) u32 {
+    if (@hasField(@TypeOf(db.primary.*), "rehash_count")) return db.primary.rehash_count;
     return 0;
 }
 

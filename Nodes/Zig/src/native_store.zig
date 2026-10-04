@@ -11,6 +11,8 @@ pub const OpenOptions = struct {
     crash_point: CrashPoint = .none,
     /// CLI crash points exit 86. Tests set this false and get `error.CrashInjected`.
     crash_exit: bool = true,
+    /// 0 keeps HashMap doubling. A positive hint reserves that many entries at open.
+    utxo_capacity_hint: u32 = 0,
 };
 
 const kind_meta: u8 = 1;
@@ -75,6 +77,7 @@ pub const NativeStore = struct {
     last_record_off: u64 = 0,
     snapshot_count: u32 = 0,
     snapshot_bytes: u64 = 0,
+    rehash_count: u32 = 0,
 
     pub fn open(allocator: std.mem.Allocator, path: []const u8, options: OpenOptions) !NativeStore {
         try root.rejectUnapprovedRuntimeDbArtifacts(path);
@@ -97,6 +100,7 @@ pub const NativeStore = struct {
         try self.replayLog();
         try self.truncateFlatFiles();
         try self.loadCounters();
+        try self.reserveUtxoCapacity();
         return self;
     }
 
@@ -734,11 +738,20 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
 
     fn putUtxoBytes(self: *NativeStore, outpoint: root.Outpoint, value: []const u8) !void {
         const owned = try self.allocator.dupe(u8, value);
+        const before = self.utxos.capacity();
         const old = self.utxos.fetchPut(outpoint, owned) catch |err| {
             self.allocator.free(owned);
             return err;
         };
+        if (self.utxos.capacity() != before) self.rehash_count += 1;
         if (old) |kv| self.allocator.free(kv.value);
+    }
+
+    fn reserveUtxoCapacity(self: *NativeStore) !void {
+        if (self.options.utxo_capacity_hint == 0) return;
+        const before = self.utxos.capacity();
+        try self.utxos.ensureTotalCapacity(self.options.utxo_capacity_hint);
+        if (self.utxos.capacity() != before) self.rehash_count += 1;
     }
 
     fn loadSnapshot(self: *NativeStore) !void {
@@ -772,7 +785,11 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
         self.headers_len = try rd.readU64();
         self.undo_len = try rd.readU64();
         const n_utxo = try rd.readU32();
-        if (n_utxo > 0) try self.utxos.ensureTotalCapacity(@intCast(n_utxo));
+        if (n_utxo > 0) {
+            const before = self.utxos.capacity();
+            try self.utxos.ensureTotalCapacity(@intCast(n_utxo));
+            if (self.utxos.capacity() != before) self.rehash_count += 1;
+        }
         var i: u32 = 0;
         while (i < n_utxo) : (i += 1) {
             const outpoint = try rd.outpoint();
