@@ -1,0 +1,34 @@
+{
+  "schema": "port.self_hosted_link_audit.v1",
+  "crypto_backend": "own_curve",
+  "optimize": "ReleaseSafe",
+  "host": {
+    "tool": "otool -L",
+    "binary_sha256": "d076ea28e5d8021d3083bdfea228a08693b302dfa244563e7d6c86e82a3e3f79",
+    "linked_libraries": [
+      "/opt/homebrew/opt/rocksdb/lib/librocksdb.11.dylib",
+      "/usr/lib/libSystem.B.dylib"
+    ]
+  },
+  "docker": {
+    "image": "rb/zig:own-curve",
+    "tool": "ldd",
+    "linked_libraries": [
+      "linux-vdso.so.1",
+      "librocksdb.so.7.8",
+      "libc.so.6",
+      "libgflags.so.2.2",
+      "libsnappy.so.1",
+      "libz.so.1",
+      "libbz2.so.1.0",
+      "liblz4.so.1",
+      "libzstd.so.1",
+      "libstdc++.so.6",
+      "libm.so.6",
+      "libgcc_s.so.1",
+      "/lib/ld-linux-aarch64.so.1",
+      "libpthread.so.0"
+    ]
+  },
+  "notes": "own_curve does not link libsecp256k1. The executable still links libc and librocksdb because the RocksDB store remains in the binary. The Docker ldd list also includes RocksDB's own dependencies. libc is recorded and left in place."
+}

@@ -173,6 +173,7 @@ fn cmdTestCapability(allocator: std.mem.Allocator, io: std.Io, out: anytype, arg
 }
 
 fn cryptoCapabilityOutcomes(allocator: std.mem.Allocator, io: std.Io, mutation: CryptoMutation) ![]u8 {
+    if (comptime core.crypto.own_curve) return ownCurveCapabilityOutcomes(allocator, io, mutation);
     var native_verifier = try core.crypto.NativeVerifier.create();
     defer native_verifier.destroy();
     var pure_verifier = core.crypto.PureVerifier.create();
@@ -214,6 +215,48 @@ fn cryptoCapabilityOutcomes(allocator: std.mem.Allocator, io: std.Io, mutation: 
             if (combined_passed == combined_total) "pass" else "fail",
             combined_passed,
             combined_total,
+            equivalence_notes,
+        },
+    );
+}
+
+fn ownCurveCapabilityOutcomes(allocator: std.mem.Allocator, io: std.Io, mutation: CryptoMutation) ![]u8 {
+    var own_verifier = core.crypto.OwnVerifier.create();
+    defer own_verifier.destroy();
+    const clean = TestCryptoVerifier{ .backend = .{ .own = &own_verifier } };
+    const mutated = TestCryptoVerifier{ .backend = .{ .own = &own_verifier }, .mutation = mutation };
+    const label = "libsecp256k1-zig";
+    const bip = try runBip340Vectors(allocator, io, clean, label);
+    defer allocator.free(bip.failures);
+    const native = try runNativeCryptoVectors(allocator, io, clean, label);
+    defer allocator.free(native.failures);
+    const mut_bip = try runBip340Vectors(allocator, io, mutated, label);
+    defer allocator.free(mut_bip.failures);
+    const mut_native = try runNativeCryptoVectors(allocator, io, mutated, label);
+    defer allocator.free(mut_native.failures);
+    const eq_passed = mut_bip.passed + mut_native.passed;
+    const eq_total = mut_bip.total + mut_native.total;
+    const bip_notes = if (bip.passed == bip.total)
+        try std.fmt.allocPrint(allocator, "all BIP340 vectors matched expected verification result", .{})
+    else
+        try std.fmt.allocPrint(allocator, "BIP340 vector failures: {s}", .{bip.failures});
+    defer allocator.free(bip_notes);
+    const equivalence_notes = if (eq_passed == eq_total)
+        try std.fmt.allocPrint(allocator, "libsecp256k1-zig BIP340 {}/{} plus native crypto vectors {}/{}", .{ mut_bip.passed, mut_bip.total, mut_native.passed, mut_native.total })
+    else
+        try std.fmt.allocPrint(allocator, "libsecp256k1-zig BIP340 {}/{} plus native crypto vectors {}/{}; failures: libsecp256k1-zig_bip340=[{s}] libsecp256k1-zig_native=[{s}]", .{ mut_bip.passed, mut_bip.total, mut_native.passed, mut_native.total, mut_bip.failures, mut_native.failures });
+    defer allocator.free(equivalence_notes);
+    return std.fmt.allocPrint(
+        allocator,
+        "{{\"port\":\"zig\",\"backend\":\"libsecp256k1-zig\",\"shadow_backend\":\"libsecp256k1-zig\",\"outcomes\":[{{\"capability\":\"crypto_bip340_vectors\",\"status\":\"{s}\",\"case_passed\":{},\"case_total\":{},\"notes\":\"{s}\"}},{{\"capability\":\"crypto_libsecp256k1_equivalence\",\"status\":\"{s}\",\"case_passed\":{},\"case_total\":{},\"notes\":\"{s}\"}}]}}\n",
+        .{
+            if (bip.passed == bip.total) "pass" else "fail",
+            bip.passed,
+            bip.total,
+            bip_notes,
+            if (eq_passed == eq_total) "pass" else "fail",
+            eq_passed,
+            eq_total,
             equivalence_notes,
         },
     );
