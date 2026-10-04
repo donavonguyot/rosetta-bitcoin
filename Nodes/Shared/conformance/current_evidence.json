@@ -406,6 +406,54 @@
     {
       "port": "zig",
       "claim": "native_store",
+      "gate_id": "native_store_shadow_5k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Re-emitted after skipping same-block store lookups. Diagnostic differential run, not the comparable RocksDB baseline. The 2026-10-03 file remains the earlier measurement."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_5k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_docker_2026-10-04.json",
+      "status": "current",
+      "notes": "Re-emitted after skipping same-block store lookups. Diagnostic differential run in Docker, not the comparable RocksDB baseline. The 2026-10-03 file remains the earlier measurement."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_50k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Re-emitted after skipping same-block store lookups. Diagnostic differential run, not the comparable RocksDB shakedown. The 2026-10-03 file remains the earlier measurement."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_50k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_docker_2026-10-04.json",
+      "status": "current",
+      "notes": "Re-emitted after skipping same-block store lookups. Diagnostic differential run in Docker, not the comparable RocksDB shakedown. The 2026-10-03 file remains the earlier measurement."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_utxo_load_campaign",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_utxo_load_campaign_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Host before/after utxo_load for the same-block lookup skip, plus the reverted key-buffer measurement."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_utxo_load_campaign",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_utxo_load_campaign_docker_2026-10-04.json",
+      "status": "current",
+      "notes": "Docker before/after utxo_load for the same-block lookup skip."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
       "gate_id": "native_store_storage_proof",
       "path": "Nodes/Shared/conformance/results/zig_native_store_storage_proof_host_2026-10-03.json",
       "status": "current",
