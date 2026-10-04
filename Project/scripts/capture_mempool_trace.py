@@ -1168,7 +1168,10 @@ class ArrivalMeter:
         sock = self.sock
         try:
             while sock is not None and sock is self.sock:
-                command, payload = read_message(sock)
+                try:
+                    command, payload = read_message(sock)
+                except socket.timeout:
+                    continue
                 now = time.time()
                 if command == "ping":
                     sock.sendall(message("pong", payload))
