@@ -314,6 +314,19 @@ Noncanonical evidence remains visible in `current_benchmark_results` and gate
 reports so operators can see what is missing, but it does not support current
 rankings.
 
+## Self-hosted lane
+
+`self_hosted_5k`, `self_hosted_50k`, and `self_hosted_100k` are a separate
+comparability class named `self_hosted`. A row is comparable with other
+`self_hosted` rows at the same gate, across ports and host or Docker runs.
+`artifact_quality` for this class is `self_hosted`, not `canonical`. Default
+leaderboards and the canonical gate tables do not rank these rows against
+canonical rows. The suite report's Self-hosted heading is a diagnostic
+cross-reference: each row's `script_verify` beside that port's own canonical
+`c_binding` row at the same height. The native store reports WAL as not
+applicable. The recorded backend differences are `crypto_backend=own_curve`
+and `chainstate_backend=native`.
+
 ## Independent reusable crypto lanes
 
 `own_curve`, `ecosystem_curve`, and `c_binding` are independent dependency

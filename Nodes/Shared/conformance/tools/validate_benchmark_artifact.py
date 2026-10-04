@@ -294,6 +294,8 @@ def compatible_timing(payload: dict[str, Any]) -> dict[str, Any] | None:
 
 def gate_for_payload(payload: dict[str, Any]) -> str:
     gate = canonical_label(payload.get("benchmark_gate"))
+    if gate.startswith("self_hosted_"):
+        return gate
     if gate in GATES:
         return gate
     kind = canonical_label(payload.get("benchmark_kind"))
@@ -544,6 +546,8 @@ def validate_payload(
 
 def artifact_quality(payload: dict[str, Any], path: Path = Path("<artifact>")) -> str:
     gate_id = gate_for_payload(payload)
+    if gate_id.startswith("self_hosted_"):
+        return "self_hosted"
     if gate_id not in GATES:
         return "historical"
     strict_errors, _ = validate_payload(payload, gate_id=gate_id, path=path, strict_current=True)

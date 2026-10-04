@@ -78,7 +78,7 @@ fn usage(out: anytype) !void {
         \\  native-crypto-vectors
         \\  test-capability --kind crypto-vectors --outcome-path path [--mutation schnorr-accept-bad-s|schnorr-accept-bad-xonly|taproot-ignore-output-check]
         \\  script-corpus [--manifest path] [--output path] [--shadow-crypto]
-        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--gate-output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--utxo-capacity-hint N] [--mem-limit <text>] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append]
+        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--gate-output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--utxo-capacity-hint N] [--mem-limit <text>] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append] [--benchmark-lane self_hosted]
         \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
         \\
     , .{});
@@ -641,7 +641,10 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     if (core.crypto.own_curve != (crypto_backend == .own_curve)) return error.CryptoBackendNotCompiled;
     const comparable = crypto_backend == .native and !shadow and std.mem.eql(u8, store_name, "rocksdb");
     const target = try std.fmt.parseInt(u32, target_text, 10);
-    const profile = proofProfile(target) orelse return error.UnsupportedProofTarget;
+    const benchmark_lane_arg = valueArg(args, "--benchmark-lane") orelse "";
+    var profile = proofProfile(target) orelse return error.UnsupportedProofTarget;
+    profile = try overrideBenchmarkLane(profile, benchmark_lane_arg);
+    const comparability_label = if (std.mem.eql(u8, benchmark_lane_arg, "self_hosted")) "self_hosted" else if (comparable) "comparable" else "diagnostic_non_comparable";
     const prefetch_raw = std.fmt.parseInt(usize, prefetch_text, 10) catch 4;
     const prefetch = @min(@max(prefetch_raw, 1), 16);
     const requested_script_threads = if (script_threads_text.len == 0)
@@ -803,9 +806,9 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const total_ms = elapsedMs(started);
     var json_buf = std.ArrayList(u8).empty;
     defer json_buf.deinit(allocator);
-    try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_gate\":\"{s}\",\"benchmark_kind\":\"{s}\",\"benchmark_lane\":\"{s}\",\"benchmark_comparability\":\"{s}\",\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"captured_at\":\"unix_ms:{}\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"{s}\",", .{ profile.benchmark_gate, profile.benchmark_kind, profile.benchmark_lane, if (comparable) "comparable" else "diagnostic_non_comparable", core.nowMs(), target, target, profile.target_label });
+    try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_gate\":\"{s}\",\"benchmark_kind\":\"{s}\",\"benchmark_lane\":\"{s}\",\"benchmark_comparability\":\"{s}\",\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"captured_at\":\"unix_ms:{}\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"{s}\",", .{ profile.benchmark_gate, profile.benchmark_kind, profile.benchmark_lane, comparability_label, core.nowMs(), target, target, profile.target_label });
     try appendFmt(allocator, &json_buf, "\"runtime_surface\":\"{s}\",\"peer_mode\":\"local_reference\",\"peer\":\"{s}\",\"byte_source\":\"local_reference_p2p\",\"proof_mode\":\"p2p_sync\",\"prefetch_depth\":{},\"script_runner_mode\":\"parallel\",\"script_threads\":{},\"rocksdb_wal_disabled\":false,\"fresh_state\":{},\"resume_supported\":true,", .{ surface, peer, prefetch, script_runner.thread_count, fresh_state });
-    try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"{s}\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":{},\"native_crypto_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"storage_codec_version\":2,", .{ datadir, store_name, db_path, crypto_backend == .native, crypto_label, crypto_label, crypto_label });
+    try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"{s}\",\"crypto_backend\":\"{s}\",\"utxo_hash\":\"{s}\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":{},\"native_crypto_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"storage_codec_version\":2,", .{ datadir, store_name, core.crypto.lane, core.native_store.utxoHashName(), db_path, crypto_backend == .native, crypto_label, crypto_label, crypto_label });
     try appendFmt(allocator, &json_buf, "\"rocksdb_tuning\":\"{s}\",\"validated_height\":{},\"validated_hash\":\"{s}\",\"header_height\":{},\"stored_block_height\":{},\"blocks_fetched\":{},\"blocks_connected\":{},\"chainstate_utxo_count\":{},\"chainstate_set_hash\":\"{s}\",", .{ core.RocksDb.tuningDescription(), final_meta.validated_height, last_hash, final_meta.header_height, final_meta.stored_block_height, blocks_fetched, blocks_connected, final_meta.chainstate_utxo_count, final_meta.chainstate_set_hash });
     try appendFmt(allocator, &json_buf, "\"utxo_accounting_policy\":\"core_spendable_v1\",\"sync_status\":\"blocks_current\",\"local_reference_status\":\"target_reached\",\"status\":\"passed\",\"result\":\"passed\",\"current_blocker\":null,\"binary_gate_status\":\"not_attempted\",\"failures\":[],\"reference_start_height\":0,\"reference_start_hash\":\"00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043\",\"reference_finish_height\":{},\"reference_finish_hash\":\"{s}\",", .{ target, last_hash });
     try appendFmt(allocator, &json_buf, "\"pipeline_timing_summary\":{{\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"total_ms\":{},\"stage_totals_ms\":{{\"p2p_fetch\":{},\"block_parse_validate\":{},\"block_store\":{},\"connect_total\":{},\"utxo_load\":{},\"prevout_batch_load\":{},\"script_verify\":{},\"script_wall_ms\":{},\"script_worker_cpu_ms\":{},\"script_worker_elapsed_ns\":{},\"script_worker_thread_cpu_ns\":{},\"utxo_apply\":{},\"commit\":{},\"utxo_delete_prepare\":{},\"utxo_put_prepare\":{},\"undo_put_prepare\":{},\"metadata_put_prepare\":{},\"rocksdb_write\":{},\"block_connect_store_commit\":{}}},\"utxo_lookup_count\":{},\"utxo_key_bytes\":{},\"utxo_value_bytes\":{},\"created_utxos\":{},\"spent_external\":{},\"same_block_spends\":{},\"runner_batches\":{},\"tx_count\":{},\"input_count\":{},\"script_jobs\":{},\"script_threads\":{},\"slow_blocks\":[{s}]}},", .{ total_ms, timing.p2p_fetch, timing.block_parse_validate, timing.block_store, timing.connect_total, timing.utxo_load, timing.prevout_batch_load, timing.script_verify, timing.script_wall_ms, timing.script_worker_cpu_ms, timing.script_worker_elapsed_ns, timing.script_worker_thread_cpu_ns, timing.utxo_apply, timing.commit, timing.utxo_delete_prepare, timing.utxo_put_prepare, timing.undo_put_prepare, timing.metadata_put_prepare, timing.rocksdb_write, timing.block_connect_store_commit, timing.utxo_lookup_count, timing.utxo_key_bytes, timing.utxo_value_bytes, timing.created_utxos, timing.spent_external, timing.same_block_spends, timing.runner_batches, timing.tx_count, timing.input_count, timing.script_jobs, timing.script_threads, slow_json });
@@ -930,6 +933,26 @@ fn proofProfile(target: u32) ?ProofProfile {
             .expected_utxo_count = -1,
         } else null,
     };
+}
+
+fn overrideBenchmarkLane(profile: ProofProfile, lane: []const u8) !ProofProfile {
+    if (lane.len == 0) return profile;
+    if (!std.mem.eql(u8, lane, "self_hosted")) return error.UnsupportedBenchmarkLane;
+    var overridden = profile;
+    if (profile.target == 5000) {
+        overridden.benchmark_gate = "self_hosted_5k";
+        overridden.benchmark_kind = "self_hosted_5k_p2p";
+        overridden.benchmark_lane = "self_hosted_5k_p2p";
+    } else if (profile.target == 50000) {
+        overridden.benchmark_gate = "self_hosted_50k";
+        overridden.benchmark_kind = "self_hosted_50k_p2p";
+        overridden.benchmark_lane = "self_hosted_50k_p2p";
+    } else if (profile.target == 100000) {
+        overridden.benchmark_gate = "self_hosted_100k";
+        overridden.benchmark_kind = "self_hosted_100k_p2p";
+        overridden.benchmark_lane = "self_hosted_100k_p2p";
+    } else return error.UnsupportedBenchmarkLane;
+    return overridden;
 }
 
 fn emitTelemetryTick(

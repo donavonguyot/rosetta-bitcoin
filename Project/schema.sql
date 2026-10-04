@@ -970,7 +970,7 @@ WITH benchmark_rows AS (
     coalesce(
       json_extract(b.result_json, '$.telemetry_quality'),
       json_extract(b.settings_json, '$.telemetry_quality'),
-      CASE WHEN bg.gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') THEN 'missing' ELSE 'clean' END
+      CASE WHEN bg.gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance', 'self_hosted_50k', 'self_hosted_100k') THEN 'missing' ELSE 'clean' END
     ) AS telemetry_quality,
     CASE WHEN coalesce(a.raw_json, '') LIKE '%"slow_blocks"%' THEN 1 ELSE 0 END AS has_slow_blocks,
     (
@@ -1033,7 +1033,7 @@ scored AS (
   SELECT
     *,
     trim(
-      CASE WHEN runtime_surface <> preferred_runtime_surface THEN 'runtime_surface;' ELSE '' END ||
+      CASE WHEN gate_id NOT LIKE 'self_hosted_%' AND runtime_surface <> preferred_runtime_surface THEN 'runtime_surface;' ELSE '' END ||
       CASE WHEN evidence_lane <> official_lane THEN 'lane;' ELSE '' END ||
       CASE WHEN byte_source <> official_byte_source THEN 'byte_source;' ELSE '' END ||
       CASE WHEN peer_mode <> official_peer_mode THEN 'peer_mode;' ELSE '' END ||
@@ -1046,10 +1046,10 @@ scored AS (
       CASE WHEN rocksdb_wal_disabled <> wal_disabled_required THEN 'rocksdb_wal;' ELSE '' END ||
       CASE WHEN resume_supported <> resume_supported_required THEN 'resume_supported;' ELSE '' END ||
       CASE WHEN fresh_state_required = 1 AND fresh_state <> 1 THEN 'fresh_state;' ELSE '' END ||
-      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') AND telemetry_schema <> 'benchmark.telemetry_tick.v1' THEN 'telemetry_schema;' ELSE '' END ||
-      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') AND telemetry_quality <> 'clean' THEN 'telemetry_quality;' ELSE '' END ||
-      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once') AND has_slow_blocks <> 1 THEN 'slow_blocks;' ELSE '' END ||
-      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') AND long_run_timing_bucket_count < 7 THEN 'long_run_timing_buckets;' ELSE '' END ||
+      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance', 'self_hosted_50k', 'self_hosted_100k') AND telemetry_schema <> 'benchmark.telemetry_tick.v1' THEN 'telemetry_schema;' ELSE '' END ||
+      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance', 'self_hosted_50k', 'self_hosted_100k') AND telemetry_quality <> 'clean' THEN 'telemetry_quality;' ELSE '' END ||
+      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'self_hosted_50k', 'self_hosted_100k') AND has_slow_blocks <> 1 THEN 'slow_blocks;' ELSE '' END ||
+      CASE WHEN gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance', 'self_hosted_50k', 'self_hosted_100k') AND long_run_timing_bucket_count < 7 THEN 'long_run_timing_buckets;' ELSE '' END ||
       CASE WHEN binary_gate_status <> required_binary_gate_status THEN 'binary_gate_status;' ELSE '' END
     ) AS comparability_notes
   FROM classified
@@ -1224,7 +1224,7 @@ SELECT
   bgm.fresh_state,
   coalesce(bc.binary_gate_status, '') AS binary_gate_status,
   coalesce(bc.artifact_quality, 'incomplete') AS artifact_quality,
-  coalesce(bc.telemetry_quality, CASE WHEN bgm.gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance') THEN 'missing' ELSE 'clean' END) AS telemetry_quality,
+  coalesce(bc.telemetry_quality, CASE WHEN bgm.gate_id IN ('shakedown_50k', 'performance_100k', 'post_100k_to_tip', 'tip_once', 'tip_maintenance', 'self_hosted_50k', 'self_hosted_100k') THEN 'missing' ELSE 'clean' END) AS telemetry_quality,
   coalesce(json_extract(a.raw_json, '$.control_harness.artifact_source'), 'port_authored_or_historical') AS artifact_source,
   bgm.utxo_accounting_policy,
   bgm.chainstate_utxo_count,
@@ -1315,8 +1315,11 @@ SELECT
 FROM current_benchmark_results
 WHERE gate_status = 'passed'
   AND comparability_status = 'comparable'
-  AND artifact_quality = 'canonical'
   AND telemetry_quality = 'clean'
+  AND (
+    (artifact_quality = 'canonical' AND gate_id NOT LIKE 'self_hosted_%')
+    OR (artifact_quality = 'self_hosted' AND gate_id LIKE 'self_hosted_%')
+  )
   AND lifecycle_status <> 'baseline_retired'
   AND total_ms > 0;
 

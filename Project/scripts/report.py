@@ -63,6 +63,18 @@ GATES = (
     "post_100k_to_tip",
     "tip_once",
     "tip_maintenance",
+    "self_hosted_5k",
+    "self_hosted_50k",
+    "self_hosted_100k",
+)
+
+CANONICAL_GATES = (
+    "baseline_5k",
+    "shakedown_50k",
+    "performance_100k",
+    "post_100k_to_tip",
+    "tip_once",
+    "tip_maintenance",
 )
 
 SECTION_ALIASES = {
@@ -698,6 +710,7 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
         select gate_id, target_label, target_height, benchmark_kind, role,
                preferred_runtime_surface, preferred_command_key, official_lane
         from benchmark_gates
+        where gate_id not like 'self_hosted_%'
         order by
           case gate_id
             when 'baseline_5k' then 0
@@ -721,6 +734,7 @@ def print_benchmark_gates(connection: sqlite3.Connection) -> None:
                fresh_state, utxo_accounting_policy, chainstate_utxo_count,
                comparability_notes, captured_at
         from benchmark_gate_matrix
+        where gate_id not like 'self_hosted_%'
         order by
           case gate_id
             when 'baseline_5k' then 0
@@ -935,6 +949,66 @@ def print_port_progress_posture(connection: sqlite3.Connection) -> None:
     )
 
 
+def print_self_hosted_lane(connection: sqlite3.Connection) -> None:
+    print("## Self-hosted")
+    print()
+    print("Comparable within the self_hosted lane. The canonical column is this port's own c_binding row at the same height, not a ranking.")
+    print()
+    raw = rows(
+        connection,
+        """
+        select bc.gate_id, bc.port, bc.runtime_surface,
+               coalesce(json_extract(a.raw_json, '$.timing_summary.stage_totals_ms.script_verify'),
+                        json_extract(a.raw_json, '$.pipeline_timing_summary.stage_totals_ms.script_verify'), -1) as own_script,
+               c.script_verify_ms as canonical_script,
+               coalesce(json_extract(a.raw_json, '$.chainstate_set_hash'), '') as own_set_hash,
+               coalesce(json_extract(ca.raw_json, '$.chainstate_set_hash'), '') as canonical_set_hash
+        from benchmark_comparability bc
+        join artifacts a on a.artifact_id = bc.source_artifact_id
+        left join current_benchmark_results c
+          on c.port = bc.port
+         and c.comparability_status = 'comparable'
+         and c.artifact_quality = 'canonical'
+         and c.gate_id = case bc.gate_id
+              when 'self_hosted_5k' then 'baseline_5k'
+              when 'self_hosted_50k' then 'shakedown_50k'
+              when 'self_hosted_100k' then 'performance_100k'
+            end
+        left join artifacts ca on ca.artifact_id = c.source_artifact_id
+        where bc.gate_id like 'self_hosted_%'
+          and bc.comparability_status = 'comparable'
+        order by bc.target_height, bc.runtime_surface, bc.port
+        """,
+    )
+    data = []
+    for gate_id, port, surface, own_script, canonical_script, own_hash, canonical_hash in raw:
+        data.append((
+            gate_id,
+            port,
+            surface,
+            own_script,
+            canonical_script if canonical_script is not None else "",
+            _script_ratio(own_script, canonical_script),
+            own_hash,
+            canonical_hash,
+        ))
+    print(table(
+        ("gate", "port", "surface", "script_verify", "canonical_script_verify", "ratio", "set_hash", "canonical_set_hash"),
+        data,
+    ))
+
+
+def _script_ratio(own: object, canonical: object) -> str:
+    try:
+        own_ms = int(own)  # type: ignore[arg-type]
+        canonical_ms = int(canonical)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return ""
+    if own_ms < 0 or canonical_ms <= 0:
+        return ""
+    return f"{own_ms / canonical_ms:.2f}"
+
+
 def print_benchmark_suite(connection: sqlite3.Connection) -> None:
     print_benchmark_gates(connection)
     print()
@@ -949,6 +1023,8 @@ def print_benchmark_suite(connection: sqlite3.Connection) -> None:
     print_gate_matrix(connection, "tip_once", "Tip Once")
     print()
     print_gate_matrix(connection, "tip_maintenance", "Tip Maintenance")
+    print()
+    print_self_hosted_lane(connection)
 
 
 def print_leaderboard(connection: sqlite3.Connection, gate_id: str | None = None) -> None:
@@ -957,7 +1033,7 @@ def print_leaderboard(connection: sqlite3.Connection, gate_id: str | None = None
         title += f" ({gate_id})"
     print(f"## {title}")
     print()
-    where = f"where gate_id = '{gate_id}'" if gate_id else ""
+    where = f"where gate_id = '{gate_id}'" if gate_id else "where gate_id not like 'self_hosted_%'"
     data = rows(
         connection,
         f"""
