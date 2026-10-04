@@ -14,6 +14,9 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "probe", probe);
     options.addOption([]const u8, "reject", reject);
     options.addOption([]const u8, "source_digest", b.option([]const u8, "crypto-source-digest", "Package source SHA256") orelse "unrecorded");
+    const utxo_hash = b.option([]const u8, "utxo-hash", "txid64 or wyhash") orelse "txid64";
+    if (!std.mem.eql(u8, utxo_hash, "txid64") and !std.mem.eql(u8, utxo_hash, "wyhash")) @panic("unknown utxo-hash");
+    options.addOption([]const u8, "utxo_hash", utxo_hash);
     const secp = b.dependency("secp256k1", .{ .target = target, .optimize = optimize }).module("secp256k1");
 
     const core_mod = b.addModule("zigbitnode", .{

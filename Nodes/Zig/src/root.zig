@@ -899,6 +899,10 @@ pub const UtxoLoadStats = struct {
     lookup_count: u64 = 0,
     key_bytes: u64 = 0,
     value_bytes: u64 = 0,
+    utxo_hit_ns: u64 = 0,
+    utxo_miss_ns: u64 = 0,
+    utxo_hit_count: u64 = 0,
+    utxo_miss_count: u64 = 0,
 };
 
 pub const ConnectTimings = struct {
@@ -907,6 +911,10 @@ pub const ConnectTimings = struct {
     utxo_lookup_count: u64 = 0,
     utxo_key_bytes: u64 = 0,
     utxo_value_bytes: u64 = 0,
+    utxo_hit_ns: u64 = 0,
+    utxo_miss_ns: u64 = 0,
+    utxo_hit_count: u64 = 0,
+    utxo_miss_count: u64 = 0,
     created_utxos: u64 = 0,
     spent_external: u64 = 0,
     same_block_spends: u64 = 0,
@@ -1099,6 +1107,10 @@ pub fn connectDecodedBlock(
     timings.utxo_lookup_count += load_stats.lookup_count;
     timings.utxo_key_bytes += load_stats.key_bytes;
     timings.utxo_value_bytes += load_stats.value_bytes;
+    timings.utxo_hit_ns += load_stats.utxo_hit_ns;
+    timings.utxo_miss_ns += load_stats.utxo_miss_ns;
+    timings.utxo_hit_count += load_stats.utxo_hit_count;
+    timings.utxo_miss_count += load_stats.utxo_miss_count;
 
     var loaded = std.AutoHashMap(Outpoint, StoredUtxo).init(allocator);
     defer {

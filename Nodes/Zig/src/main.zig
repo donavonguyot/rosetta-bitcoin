@@ -685,6 +685,10 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             timing.utxo_lookup_count += connect.timings.utxo_lookup_count;
             timing.utxo_key_bytes += connect.timings.utxo_key_bytes;
             timing.utxo_value_bytes += connect.timings.utxo_value_bytes;
+            timing.utxo_hit_ns += connect.timings.utxo_hit_ns;
+            timing.utxo_miss_ns += connect.timings.utxo_miss_ns;
+            timing.utxo_hit_count += connect.timings.utxo_hit_count;
+            timing.utxo_miss_count += connect.timings.utxo_miss_count;
             timing.created_utxos += connect.timings.created_utxos;
             timing.spent_external += connect.timings.spent_external;
             timing.same_block_spends += connect.timings.same_block_spends;
@@ -796,7 +800,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             db.shadow_set_hash_fold_ms,
             total_ms,
         });
-        try appendFmt(allocator, &gate_buf, "\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"snapshot_every\":{},\"mem_limit\":\"{s}\",\"proof_scope\":\"peer_shadow\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"shadow_100k\",\"storage_proof\"],\"comparability\":\"utxo_load and commit are comparable between engines.primary and engines.shadow; block_connect_store_commit is not, because the primary bucket includes the whole connect and the shadow comparisons\"}}\n", .{ surface, optimizeName(), snapshotEvery(db), memLimit(args) });
+        try appendFmt(allocator, &gate_buf, "\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"utxo_hash\":\"{s}\",\"snapshot_every\":{},\"mem_limit\":\"{s}\",\"utxo_hit_ns\":{},\"utxo_miss_ns\":{},\"utxo_hit_count\":{},\"utxo_miss_count\":{},\"proof_scope\":\"peer_shadow\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"shadow_100k\",\"storage_proof\"],\"comparability\":\"utxo_load and commit are comparable between engines.primary and engines.shadow; block_connect_store_commit is not, because the primary bucket includes the whole connect and the shadow comparisons\"}}\n", .{ surface, optimizeName(), core.native_store.utxoHashName(), snapshotEvery(db), memLimit(args), timing.utxo_hit_ns, timing.utxo_miss_ns, timing.utxo_hit_count, timing.utxo_miss_count });
         try out.print("{s}", .{gate_buf.items});
         if (valueArg(args, "--gate-output")) |path| try writeFileEnsuringParent(io, path, gate_buf.items);
         if (db.divergence_count != 0) return error.StoreDivergence;
@@ -813,6 +817,10 @@ const ProofTiming = struct {
     utxo_lookup_count: u64 = 0,
     utxo_key_bytes: u64 = 0,
     utxo_value_bytes: u64 = 0,
+    utxo_hit_ns: u64 = 0,
+    utxo_miss_ns: u64 = 0,
+    utxo_hit_count: u64 = 0,
+    utxo_miss_count: u64 = 0,
     created_utxos: u64 = 0,
     spent_external: u64 = 0,
     same_block_spends: u64 = 0,

@@ -17,8 +17,19 @@ const kind_meta: u8 = 1;
 const kind_record_block: u8 = 2;
 const kind_commit: u8 = 3;
 
+const build_options = @import("crypto_options");
+const utxo_hash_wyhash = std.mem.eql(u8, build_options.utxo_hash, "wyhash");
+
+pub fn utxoHashName() []const u8 {
+    return if (utxo_hash_wyhash) "wyhash" else "txid64";
+}
+
 const OutpointContext = struct {
     pub fn hash(_: @This(), key: root.Outpoint) u64 {
+        if (comptime utxo_hash_wyhash) {
+            if (@sizeOf(root.Outpoint) != 36) @compileError("outpoint hash expects 36 bytes");
+            return std.hash.Wyhash.hash(0, std.mem.asBytes(&key));
+        }
         return std.mem.readInt(u64, key.txid[0..8], .little) ^ @as(u64, key.vout);
     }
 
@@ -173,11 +184,22 @@ pub const NativeStore = struct {
             for (out[0..copied]) |value| if (value) |bytes| allocator.free(bytes);
         }
         for (outpoints, 0..) |outpoint, i| {
+            const started = monoNs();
             if (self.utxos.get(outpoint)) |value| {
                 if (stats) |s| s.value_bytes += value.len;
                 out[i] = try allocator.dupe(u8, value);
                 copied += 1;
-            } else out[i] = null;
+                if (stats) |s| {
+                    s.utxo_hit_count += 1;
+                    s.utxo_hit_ns += monoNs() - started;
+                }
+            } else {
+                out[i] = null;
+                if (stats) |s| {
+                    s.utxo_miss_count += 1;
+                    s.utxo_miss_ns += monoNs() - started;
+                }
+            }
         }
         return out;
     }
@@ -983,6 +1005,12 @@ fn decodeOutpoint(key: []const u8) !root.Outpoint {
 fn keyHeight(key: []const u8) !u32 {
     if (key.len < 4) return error.BadKey;
     return std.mem.readInt(u32, key[key.len - 4 ..][0..4], .big);
+}
+
+fn monoNs() u64 {
+    var value: std.c.timespec = undefined;
+    if (std.c.clock_gettime(.MONOTONIC, &value) != 0) return 0;
+    return @as(u64, @intCast(value.sec)) * 1_000_000_000 + @as(u64, @intCast(value.nsec));
 }
 
 fn elapsedMs(start_ms: i64) i64 {
