@@ -1,0 +1,76 @@
+{
+  "schema": "reference.activity.v1",
+  "chain": "testnet4",
+  "core_blocks": 155101,
+  "core_headers": 155101,
+  "initialblockdownload": false,
+  "sample_blocks": 2016,
+  "sample_start_height": 153086,
+  "sampled_unix_ms": 1791129251260,
+  "tx_per_block": {
+    "median": 1.0,
+    "p95": 53.0
+  },
+  "total_size": {
+    "median": 0.0,
+    "p95": 36486.0
+  },
+  "bursts": [
+    {
+      "start_height": 153275,
+      "length": 6
+    },
+    {
+      "start_height": 153292,
+      "length": 7
+    },
+    {
+      "start_height": 153469,
+      "length": 10
+    },
+    {
+      "start_height": 153941,
+      "length": 9
+    },
+    {
+      "start_height": 153953,
+      "length": 11
+    },
+    {
+      "start_height": 153965,
+      "length": 15
+    },
+    {
+      "start_height": 153986,
+      "length": 10
+    },
+    {
+      "start_height": 154002,
+      "length": 7
+    },
+    {
+      "start_height": 154140,
+      "length": 8
+    },
+    {
+      "start_height": 154528,
+      "length": 5
+    }
+  ],
+  "chaintxstats": {
+    "window_block_count": 2016,
+    "window_tx_count": 20499,
+    "window_interval": 1303028,
+    "txrate": 0.01573181850274898,
+    "tx_per_s": 0.01573181850274898
+  },
+  "mempool": {
+    "size": 180,
+    "bytes": 33084
+  },
+  "watcher_thresholds": {
+    "open_pool": 200,
+    "open_rate": 1.0,
+    "reason": "the live pool is 180 tx and the longest 3x-median burst is 15 blocks, so open-pool is 200 inside 200-500; chain arrival is 0.02 tx/s, below a busy window, so open-rate stays 1.0 tx/s."
+  }
+}
