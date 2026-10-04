@@ -1,0 +1,56 @@
+{
+  "schema": "port.self_hosted_lane.v1",
+  "port": "zig",
+  "crypto_backend": "own_curve",
+  "chainstate_backend": "native",
+  "utxo_hash": "txid64_mix",
+  "canonical_script_source": "current comparable c_binding row at the same height",
+  "set_hash_source": "native-store oracle matched by the own_curve run and the c_binding native run",
+  "rows": [
+    {
+      "height": 5000,
+      "surface": "docker",
+      "script_verify_ms": 1135,
+      "canonical_script_verify_ms": 797,
+      "ratio": "1.42",
+      "set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+      "canonical_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400"
+    },
+    {
+      "height": 5000,
+      "surface": "host",
+      "script_verify_ms": 777,
+      "canonical_script_verify_ms": 797,
+      "ratio": "0.97",
+      "set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+      "canonical_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400"
+    },
+    {
+      "height": 50000,
+      "surface": "docker",
+      "script_verify_ms": 17208,
+      "canonical_script_verify_ms": 11413,
+      "ratio": "1.51",
+      "set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "canonical_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231"
+    },
+    {
+      "height": 50000,
+      "surface": "host",
+      "script_verify_ms": 10206,
+      "canonical_script_verify_ms": 11413,
+      "ratio": "0.89",
+      "set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "canonical_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231"
+    },
+    {
+      "height": 100000,
+      "surface": "host",
+      "script_verify_ms": 171470,
+      "canonical_script_verify_ms": 116901,
+      "ratio": "1.47",
+      "set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
+      "canonical_set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32"
+    }
+  ]
+}
