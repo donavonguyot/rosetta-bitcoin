@@ -36,12 +36,12 @@
       "utxo_count": 4574,
       "set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
       "matches_indexed_host_proof": true,
-      "block_parse_validate_ms": 40,
+      "block_parse_validate_ms": 31,
       "indexed_block_parse_validate_ms": 30,
-      "block_parse_validate_delta_ms": 10,
-      "connect_total_ms": 1034,
+      "block_parse_validate_delta_ms": 1,
+      "connect_total_ms": 1019,
       "indexed_connect_total_ms": 977,
-      "connect_total_delta_ms": 57
+      "connect_total_delta_ms": 42
     },
     {
       "target_height": 50000,
