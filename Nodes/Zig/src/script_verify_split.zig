@@ -73,14 +73,6 @@ var ecdsa_counters = Counters{};
 var schnorr_counters = Counters{};
 var tweak_counters = Counters{};
 
-/// Set by a script worker so its signatures stay on that thread's split.
-/// Unbound calls keep the process counters, which the direct verifier tests use.
-threadlocal var bound_split: ?*Split = null;
-
-pub fn bind(split: ?*Split) void {
-    bound_split = split;
-}
-
 fn counters(kind: Kind) *Counters {
     return switch (kind) {
         .ecdsa => &ecdsa_counters,
@@ -92,16 +84,6 @@ fn counters(kind: Kind) *Counters {
 pub fn record(kind: Kind, started_ns: u64) void {
     const now = nowNs();
     const ns = if (now > started_ns) now - started_ns else 0;
-    if (bound_split) |split| {
-        const stats = switch (kind) {
-            .ecdsa => &split.ecdsa,
-            .schnorr => &split.schnorr,
-            .taproot_tweak => &split.taproot_tweak,
-        };
-        stats.count += 1;
-        stats.total_ns += ns;
-        return;
-    }
     counters(kind).add(ns);
 }
 

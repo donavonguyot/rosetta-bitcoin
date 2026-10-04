@@ -1089,6 +1089,7 @@ pub const ScriptVerifyRunner = struct {
 
     pub fn verifyBlock(self: *ScriptVerifyRunner, transactions: []const tx.Transaction, jobs: []const ScriptJob) !ScriptVerifyStats {
         if (jobs.len == 0) return .{ .threads = self.thread_count };
+        const split_before = script_verify_split.snapshot();
         const started = nowMs();
         const worker_count = @min(self.thread_count, jobs.len);
         const threads = try std.heap.c_allocator.alloc(std.Thread, worker_count);
@@ -1107,12 +1108,10 @@ pub const ScriptVerifyRunner = struct {
         var worker_cpu_ms: i64 = 0;
         var worker_elapsed_ns: u64 = 0;
         var worker_thread_cpu_ns: u64 = 0;
-        var split = script_verify_split.Split{};
         for (worker_cpu) |value| {
             worker_cpu_ms += value.legacy_ms;
             worker_elapsed_ns += value.elapsed_ns;
             worker_thread_cpu_ns += value.cpu_ns;
-            split.add(value.split);
         }
 
         if (firstScriptFailure(results)) |result| {
@@ -1127,7 +1126,7 @@ pub const ScriptVerifyRunner = struct {
             .worker_elapsed_ns = worker_elapsed_ns,
             .worker_thread_cpu_ns = worker_thread_cpu_ns,
             .batches = 1,
-            .split = split,
+            .split = script_verify_split.snapshot().since(split_before),
         };
     }
 };
@@ -1376,11 +1375,11 @@ const ScriptThreadResult = struct {
     tx_index: usize = 0,
     input_index: usize = 0,
     txid: [32]u8 = [_]u8{0} ** 32,
-    split: script_verify_split.Split = .{},
 };
 
 fn verifyScriptJobsParallel(transactions: []const tx.Transaction, jobs: []const ScriptJob) !ScriptVerifyStats {
     if (jobs.len == 0) return .{};
+    const split_before = script_verify_split.snapshot();
     const started = nowMs();
     var threads = try std.heap.c_allocator.alloc(std.Thread, jobs.len);
     defer std.heap.c_allocator.free(threads);
@@ -1395,26 +1394,18 @@ fn verifyScriptJobsParallel(transactions: []const tx.Transaction, jobs: []const 
         printScriptFailure(result);
         return result.err.?;
     }
-    var split = script_verify_split.Split{};
-    for (results) |result| split.add(result.split);
     return .{
         .jobs = @intCast(jobs.len),
         .threads = jobs.len,
         .wall_ms = elapsedMs(started),
         .worker_cpu_ms = elapsedMs(started),
         .batches = 1,
-        .split = split,
+        .split = script_verify_split.snapshot().since(split_before),
     };
 }
 
 // Timers cover the scheduler loop, excluding verifier creation and destruction.
-const WorkerTiming = struct {
-    legacy_ms: i64 = 0,
-    elapsed_ns: u64 = 0,
-    cpu_ns: u64 = 0,
-    split: script_verify_split.Split = .{},
-};
-const script_job_batch: usize = 32;
+const WorkerTiming = struct { legacy_ms: i64 = 0, elapsed_ns: u64 = 0, cpu_ns: u64 = 0 };
 fn clockNs(clock: c.clockid_t) u64 {
     var value: c.struct_timespec = undefined;
     if (c.clock_gettime(clock, &value) != 0) @panic("worker clock unavailable");
@@ -1468,8 +1459,6 @@ fn scriptVerifySchedulerWorkerLoop(
     worker_cpu_ms: *WorkerTiming,
     verifier: crypto.CryptoVerifier,
 ) void {
-    script_verify_split.bind(&worker_cpu_ms.split);
-    defer script_verify_split.bind(null);
     const elapsed_start = clockNs(c.CLOCK_MONOTONIC);
     const cpu_start = clockNs(c.CLOCK_THREAD_CPUTIME_ID);
     defer {
@@ -1477,22 +1466,16 @@ fn scriptVerifySchedulerWorkerLoop(
         worker_cpu_ms.elapsed_ns += clockNs(c.CLOCK_MONOTONIC) - elapsed_start;
     }
     while (true) {
-        const start = next_job.fetchAdd(script_job_batch, .monotonic);
-        if (start >= jobs.len) return;
-        const end = @min(start + script_job_batch, jobs.len);
-        var job_index = start;
-        while (job_index < end) : (job_index += 1) {
-            const job = jobs[job_index];
-            const started = nowMs();
-            verifyScriptInputJob(transactions[job.tx_index], job, &results[job_index], verifier);
-            worker_cpu_ms.legacy_ms += elapsedMs(started);
-        }
+        const job_index = next_job.fetchAdd(1, .monotonic);
+        if (job_index >= jobs.len) return;
+        const job = jobs[job_index];
+        const started = nowMs();
+        verifyScriptInputJob(transactions[job.tx_index], job, &results[job_index], verifier);
+        worker_cpu_ms.legacy_ms += elapsedMs(started);
     }
 }
 
 fn verifyScriptInputJobWithNative(transaction: tx.Transaction, job: ScriptJob, result: *ScriptThreadResult) void {
-    script_verify_split.bind(&result.split);
-    defer script_verify_split.bind(null);
     if (crypto.own_curve) {
         var verifier = crypto.OwnVerifier.create();
         defer verifier.destroy();
