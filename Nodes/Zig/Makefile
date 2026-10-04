@@ -1,4 +1,7 @@
-ZIG ?= zig
+# Same root as Project/scripts/state_root.py: RB_STATE_ROOT, otherwise ~/.rblab.
+RB_STATE_ROOT ?= $(shell python3 ../../Project/scripts/state_root.py --path root)
+# An explicit ZIG= on the command line or in the environment still wins.
+ZIG ?= $(RB_STATE_ROOT)/toolchains/zig-0.16.0/zig
 DATA_DIR ?= ./data-zig
 RESULT_DATE ?= $(shell date +%F)
 SCRIPT_RESULT ?= ../Shared/conformance/results/zig_script_corpus_$(RESULT_DATE).json
@@ -24,11 +27,18 @@ POST_100K_TIP_TARGET ?= $(or $(REFERENCE_FINISH_HEIGHT),100000)
 DOCKER_SYNC_TARGET ?= 5000
 BENCHMARK_GATE ?= baseline_5k
 CRYPTO_BACKEND ?= c_binding
-RB_STATE_ROOT ?= $(HOME)/.rblab
 SELF_HOSTED_DATE ?= $(RESULT_DATE)
+TOOLCHAIN_ENV = ZIG_TOOLCHAIN_SHA256=$$(python3 ../../Project/scripts/provenance.py --zig-binary $(ZIG))
 
 ZIG_PROOF_ARGS ?=
-.PHONY: build test zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof self-hosted-5k self-hosted-50k self-hosted-100k docker-self-hosted-5k docker-self-hosted-50k mempool-replay build-template clean
+.PHONY: build test check-toolchain zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof self-hosted-5k self-hosted-50k self-hosted-100k docker-self-hosted-5k docker-self-hosted-50k mempool-replay build-template clean
+
+check-toolchain:
+	@version=$$($(ZIG) version); \
+	if [ "$$version" != "0.16.0" ]; then \
+	  echo "error: zig version $$version is not pinned 0.16.0 ($(ZIG))" >&2; \
+	  exit 1; \
+	fi
 
 build:
 	$(ZIG) build
@@ -39,8 +49,8 @@ test:
 zig-node-status:
 	$(ZIG) build run -- status --datadir $(DATA_DIR)
 
-zig-node-storage-proof:
-	$(ZIG) build run -- storage-proof --datadir $(DATA_DIR) --output $(STORAGE_RESULT)
+zig-node-storage-proof: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build run -- storage-proof --datadir $(DATA_DIR) --output $(STORAGE_RESULT)
 
 zig-node-codec-vectors:
 	$(ZIG) build run -- codec-vectors
@@ -120,23 +130,23 @@ docker-proof-local:
 	  --output $(DOCKER_LOCAL_PROOF_RESULT) \
 	  $(ZIG_PROOF_ARGS)
 
-native-shadow-5k:
-	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 5000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_5k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_5k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
+native-shadow-5k: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 5000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_5k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_5k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
 
-native-shadow-50k:
-	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 50000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_50k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_50k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
+native-shadow-50k: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 50000 --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_50k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_50k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
 
-native-shadow-100k:
-	$(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 100000 --snapshot-every 25000 --mem-limit none --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_100k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_100k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
+native-shadow-100k: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe run -- sync --store=native --shadow --target 100000 --snapshot-every 25000 --mem-limit none --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output /tmp/zig_native_shadow_100k.json --gate-output ../Shared/conformance/results/zig_native_store_shadow_100k_host_$(RESULT_DATE).json $(ZIG_PROOF_ARGS)
 
-mempool-replay:
-	$(ZIG) build -Doptimize=ReleaseSafe run -- mempool-replay --trace $(TRACE) --store=$(or $(STORE),native) --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_mempool_rung0_host_$(RESULT_DATE).json --template-output ../Shared/conformance/results/zig_mining_rung0_host_$(RESULT_DATE).json
+mempool-replay: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe run -- mempool-replay --trace $(TRACE) --store=$(or $(STORE),native) --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_mempool_rung0_host_$(RESULT_DATE).json --template-output ../Shared/conformance/results/zig_mining_rung0_host_$(RESULT_DATE).json
 
-build-template:
-	$(ZIG) build -Doptimize=ReleaseSafe run -- build-template --trace $(TRACE) --store=$(or $(STORE),native) --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_mining_rung0_host_$(RESULT_DATE).json
+build-template: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe run -- build-template --trace $(TRACE) --store=$(or $(STORE),native) --datadir $(DATA_DIR) --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_mining_rung0_host_$(RESULT_DATE).json
 
-native-storage-proof:
-	$(ZIG) build -Doptimize=ReleaseSafe run -- storage-proof --store=native --datadir $(DATA_DIR) --output /tmp/zig_native_storage_gate.json --gate-output ../Shared/conformance/results/zig_native_store_storage_proof_host_$(RESULT_DATE).json
+native-storage-proof: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe run -- storage-proof --store=native --datadir $(DATA_DIR) --output /tmp/zig_native_storage_gate.json --gate-output ../Shared/conformance/results/zig_native_store_storage_proof_host_$(RESULT_DATE).json
 
 docker-native-shadow-5k:
 	$(MAKE) docker-proof-local \
@@ -197,14 +207,14 @@ docker-proof-post-100k-to-tip:
 
 docker-smoke-once: docker-status docker-storage-proof docker-script-corpus
 
-self-hosted-5k:
-	$(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 5000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-5k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_5k_host_$(SELF_HOSTED_DATE).json
+self-hosted-5k: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 5000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-5k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_5k_host_$(SELF_HOSTED_DATE).json
 
-self-hosted-50k:
-	$(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 50000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-50k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_50k_host_$(SELF_HOSTED_DATE).json
+self-hosted-50k: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 50000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-50k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_50k_host_$(SELF_HOSTED_DATE).json
 
-self-hosted-100k:
-	$(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 100000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-100k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_100k_host_$(SELF_HOSTED_DATE).json
+self-hosted-100k: check-toolchain
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 100000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-100k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_100k_host_$(SELF_HOSTED_DATE).json
 
 docker-self-hosted-5k:
 	CRYPTO_BACKEND=own_curve STORE=native RB_PROVENANCE_IMAGE=rb/zig:own-curve $(MAKE) docker-build

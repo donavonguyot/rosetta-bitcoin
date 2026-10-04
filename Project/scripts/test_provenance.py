@@ -78,6 +78,18 @@ class ProvenanceTests(unittest.TestCase):
                 provenance.validate({"provenance": value})
         self.assertEqual(provenance.validate({}), {"provenance_status": "absent"})
 
+    def test_toolchain_sha256_is_optional_hex(self):
+        digest = "c" * 64
+        summary = provenance.validate({"provenance": {**self.pins, "toolchain_sha256": digest}})
+        self.assertEqual(summary["provenance"]["toolchain_sha256"], digest)
+        with self.assertRaisesRegex(ValueError, "toolchain_sha256"):
+            provenance.validate({"provenance": {**self.pins, "toolchain_sha256": "0.16.0"}})
+        pins = {"toolchain_sha256": digest}
+        self.assertEqual(provenance.validate({"provenance": pins}), {"provenance_status": "toolchain", "provenance": pins})
+        binary = self.root / "zig"
+        binary.write_bytes(b"zig-bytes")
+        self.assertEqual(provenance.toolchain_sha256(binary), packages.sha256(binary))
+
     def test_experimental_dispatch_validates_before_writes(self):
         path = self.root / "crypto.json"
         value = {"schema": "rb.crypto_lane_result.v1", "provenance": {**self.pins, "fixture_hash": "0" * 64}}

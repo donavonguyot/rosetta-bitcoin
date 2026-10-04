@@ -177,8 +177,9 @@ fn writeMempoolGate(allocator: std.mem.Allocator, io: std.Io, path: []const u8, 
         if (i != 0) try body.append(allocator, ',');
         try body.print(allocator, "{{\"height\":{d},\"set_hash\":\"{s}\",\"pool\":{d},\"core_set_hash\":\"{s}\"}}", .{ row.height, row.set_hash, row.pool_count, row.core_set_hash });
     }
-    try body.appendSlice(allocator, "]}");
-    try body.append(allocator, '\n');
+    try body.appendSlice(allocator, "]");
+    try appendToolchainProvenance(allocator, &body);
+    try body.appendSlice(allocator, "}\n");
     try writeFileEnsuringParent(io, path, body.items);
 }
 
@@ -209,7 +210,9 @@ fn writeMiningGate(allocator: std.mem.Allocator, io: std.Io, path: []const u8, r
         }
         if (row.ratio_micros) |ratio| try body.print(allocator, "{d}}}", .{ratio}) else try body.appendSlice(allocator, "null}");
     }
-    try body.appendSlice(allocator, "]}\n");
+    try body.appendSlice(allocator, "]");
+    try appendToolchainProvenance(allocator, &body);
+    try body.appendSlice(allocator, "}\n");
     try writeFileEnsuringParent(io, path, body.items);
 }
 
@@ -648,10 +651,12 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
         var native = try core.native_store.NativeStore.open(allocator, native_path, try nativeOpenOptions(args));
         defer native.close();
         try native.writeBatchSmoke(allocator);
+        var pin_buf: [128]u8 = undefined;
+        const pins = toolchainProvenance(&pin_buf);
         const json = try std.fmt.allocPrint(
             allocator,
-            "{{\"schema\":\"port.storage_gate_result.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"storage_backend\":\"native\",\"runtime_truth_backend\":\"native\",\"rocksdb_runtime_truth\":false,\"durability_class\":\"process_crash\",\"native_marker\":\"{s}\",\"atomic_batch_commit\":true,\"validated_height\":2,\"chainstate_status\":\"usable\",\"chainstate_backend\":\"native\",\"chainstate_utxo_count\":1,\"binary_gate_status\":\"not_attempted\",\"current_blocker\":null}}\n",
-            .{ surface, core.PortInfo.marker_file },
+            "{{\"schema\":\"port.storage_gate_result.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"storage_backend\":\"native\",\"runtime_truth_backend\":\"native\",\"rocksdb_runtime_truth\":false,\"durability_class\":\"process_crash\",\"native_marker\":\"{s}\",\"atomic_batch_commit\":true,\"validated_height\":2,\"chainstate_status\":\"usable\",\"chainstate_backend\":\"native\",\"chainstate_utxo_count\":1,\"binary_gate_status\":\"not_attempted\",\"current_blocker\":null{s}}}\n",
+            .{ surface, core.PortInfo.marker_file, pins },
         );
         defer allocator.free(json);
         try writeFileEnsuringParent(io, output, json);
@@ -659,8 +664,8 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
         const set_hash = core.store.writeSetHashHex(native.setHash());
         const gate = try std.fmt.allocPrint(
             allocator,
-            "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"storage_proof\",\"height\":2,\"utxo_count\":1,\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash\":\"{s}\",\"snapshot_every\":{},\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"proof_scope\":\"storage_proof\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"storage_proof\"]}}\n",
-            .{ core.store.peakRssBytes(), set_hash[0..], native.options.snapshot_every, surface, optimizeName() },
+            "{{\"schema\":\"port.native_store.gate.v1\",\"gate\":\"storage_proof\",\"height\":2,\"utxo_count\":1,\"reorg_tested\":false,\"peak_rss_bytes\":{},\"set_hash\":\"{s}\",\"snapshot_every\":{},\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"proof_scope\":\"storage_proof\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"storage_proof\"]{s}}}\n",
+            .{ core.store.peakRssBytes(), set_hash[0..], native.options.snapshot_every, surface, optimizeName(), pins },
         );
         defer allocator.free(gate);
         try out.print("{s}", .{gate});
@@ -680,10 +685,12 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     defer db.close();
     try db.writeBatchSmoke(allocator);
 
+    var pin_buf: [128]u8 = undefined;
+    const pins = toolchainProvenance(&pin_buf);
     const json = try std.fmt.allocPrint(
         allocator,
-        "{{\"schema\":\"port.storage_gate_result.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"storage_backend\":\"rocksdb\",\"runtime_truth_backend\":\"rocksdb\",\"rocksdb_runtime_truth\":true,\"native_marker\":\"{s}\",\"atomic_batch_commit\":true,\"validated_height\":2,\"chainstate_status\":\"usable\",\"chainstate_backend\":\"rocksdb\",\"chainstate_utxo_count\":1,\"binary_gate_status\":\"not_attempted\",\"current_blocker\":null}}\n",
-        .{ surface, core.PortInfo.marker_file },
+        "{{\"schema\":\"port.storage_gate_result.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"storage_backend\":\"rocksdb\",\"runtime_truth_backend\":\"rocksdb\",\"rocksdb_runtime_truth\":true,\"native_marker\":\"{s}\",\"atomic_batch_commit\":true,\"validated_height\":2,\"chainstate_status\":\"usable\",\"chainstate_backend\":\"rocksdb\",\"chainstate_utxo_count\":1,\"binary_gate_status\":\"not_attempted\",\"current_blocker\":null{s}}}\n",
+        .{ surface, core.PortInfo.marker_file, pins },
     );
     defer allocator.free(json);
     try writeFileEnsuringParent(io, output, json);
@@ -1056,7 +1063,9 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             db.shadow_set_hash_fold_ms,
             total_ms,
         });
-        try appendFmt(allocator, &gate_buf, "\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"utxo_hash\":\"{s}\",\"snapshot_every\":{},\"utxo_capacity_hint\":{},\"rehash_count\":{},\"rehash_ms\":{},\"mem_limit\":\"{s}\",\"utxo_hit_ns\":{},\"utxo_miss_ns\":{},\"utxo_hit_count\":{},\"utxo_miss_count\":{},\"proof_scope\":\"peer_shadow\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"shadow_100k\",\"storage_proof\"],\"disk_tradeoff\":\"RocksDB compresses stored blocks. Native chainstate uses uncompressed flat block files, and the commit log keeps delete preimages so replay can check them. A larger native datadir is that tradeoff.\",\"comparability\":\"utxo_load and commit are comparable between engines.primary and engines.shadow; block_connect_store_commit is not, because the primary bucket includes the whole connect and the shadow comparisons\"}}\n", .{ surface, optimizeName(), core.native_store.utxoHashName(), snapshotEvery(db), capacityHint(db), rehashCount(db), rehashMs(db), memLimit(args), timing.utxo_hit_ns, timing.utxo_miss_ns, timing.utxo_hit_count, timing.utxo_miss_count });
+        var pin_buf: [128]u8 = undefined;
+        const pins = toolchainProvenance(&pin_buf);
+        try appendFmt(allocator, &gate_buf, "\"runtime_surface\":\"{s}\",\"optimize\":\"{s}\",\"utxo_hash\":\"{s}\",\"snapshot_every\":{},\"utxo_capacity_hint\":{},\"rehash_count\":{},\"rehash_ms\":{},\"mem_limit\":\"{s}\",\"utxo_hit_ns\":{},\"utxo_miss_ns\":{},\"utxo_hit_count\":{},\"utxo_miss_count\":{},\"proof_scope\":\"peer_shadow\",\"mechanism_tests\":\"zig build test\",\"peer_gates\":[\"shadow_5k\",\"shadow_50k\",\"shadow_100k\",\"storage_proof\"],\"disk_tradeoff\":\"RocksDB compresses stored blocks. Native chainstate uses uncompressed flat block files, and the commit log keeps delete preimages so replay can check them. A larger native datadir is that tradeoff.\",\"comparability\":\"utxo_load and commit are comparable between engines.primary and engines.shadow; block_connect_store_commit is not, because the primary bucket includes the whole connect and the shadow comparisons\"{s}}}\n", .{ surface, optimizeName(), core.native_store.utxoHashName(), snapshotEvery(db), capacityHint(db), rehashCount(db), rehashMs(db), memLimit(args), timing.utxo_hit_ns, timing.utxo_miss_ns, timing.utxo_hit_count, timing.utxo_miss_count, pins });
         try out.print("{s}", .{gate_buf.items});
         if (valueArg(args, "--gate-output")) |path| try writeFileEnsuringParent(io, path, gate_buf.items);
         if (db.divergence_count != 0) return error.StoreDivergence;
@@ -1508,6 +1517,19 @@ fn writeFileEnsuringParent(io: std.Io, path: []const u8, bytes: []const u8) !voi
         };
     }
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = bytes, .flags = .{} });
+}
+
+fn toolchainProvenance(buf: *[128]u8) []const u8 {
+    const raw = std.c.getenv("ZIG_TOOLCHAIN_SHA256") orelse return "";
+    const text = std.mem.span(raw);
+    if (text.len != 64) return "";
+    return std.fmt.bufPrint(buf, ",\"provenance\":{{\"toolchain_sha256\":\"{s}\"}}", .{text}) catch "";
+}
+
+fn appendToolchainProvenance(allocator: std.mem.Allocator, out: *std.ArrayList(u8)) !void {
+    var buf: [128]u8 = undefined;
+    const pins = toolchainProvenance(&buf);
+    if (pins.len != 0) try out.appendSlice(allocator, pins);
 }
 
 fn appendFmt(allocator: std.mem.Allocator, out: *std.ArrayList(u8), comptime fmt: []const u8, args: anytype) !void {
