@@ -1,0 +1,68 @@
+{
+  "schema": "port.native_store.miss_cost.v1",
+  "runtime_surface": "host",
+  "optimize": "ReleaseSafe",
+  "run_ref": "native-store-miss-cost",
+  "decision": "keep txid64",
+  "explanation": "A successful connect after the same-block skip issued 1129233 hits and 0 misses, so this split does not show what the earlier misses cost. Wyhash native utxo_load was 215 ms against 167 ms and native commit 3046 ms against 2826 ms, while RocksDB commit on the same runs moved from 3028 ms to 3472 ms, so the hash did not move either bucket outside noise.",
+  "runs": [
+    {
+      "utxo_hash": "txid64",
+      "binary_sha256": "7153bcb77f2bbdf71279a2f1e44e32825997e1faaf46a2e8975135d42050a203",
+      "optimize": "ReleaseSafe",
+      "height": 50000,
+      "utxo_count": 568855,
+      "divergence_count": 0,
+      "primary_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "shadow_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "total_ms": 25035,
+      "peak_rss_bytes": 512901120,
+      "primary": {
+        "utxo_load": 167,
+        "commit": 2826
+      },
+      "shadow": {
+        "utxo_load": 1321,
+        "commit": 3028
+      },
+      "utxo_hit_count": 1129233,
+      "utxo_hit_ns": 125256000,
+      "utxo_miss_count": 0,
+      "utxo_miss_ns": 0,
+      "max_probe_length": null,
+      "max_probe_note": "std.HashMap does not expose probe length"
+    },
+    {
+      "utxo_hash": "wyhash",
+      "binary_sha256": "ab6b5589c3d1248e5bf85eec93c24b37150bceb38bc90d6e0687fe6539a6fe80",
+      "optimize": "ReleaseSafe",
+      "height": 50000,
+      "utxo_count": 568855,
+      "divergence_count": 0,
+      "primary_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "shadow_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "total_ms": 27098,
+      "peak_rss_bytes": 429047808,
+      "primary": {
+        "utxo_load": 215,
+        "commit": 3046
+      },
+      "shadow": {
+        "utxo_load": 1604,
+        "commit": 3472
+      },
+      "utxo_hit_count": 1129233,
+      "utxo_hit_ns": 212821000,
+      "utxo_miss_count": 0,
+      "utxo_miss_ns": 0,
+      "max_probe_length": null,
+      "max_probe_note": "std.HashMap does not expose probe length"
+    }
+  ],
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "6c369a29b55c3d2254de5e185105628bad390a2f",
+    "binary_sha256": "7153bcb77f2bbdf71279a2f1e44e32825997e1faaf46a2e8975135d42050a203",
+    "run_ref": "native-store-miss-cost"
+  }
+}

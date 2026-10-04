@@ -454,6 +454,14 @@
     {
       "port": "zig",
       "claim": "native_store",
+      "gate_id": "native_store_miss_cost",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_miss_cost_host_2026-10-05.json",
+      "status": "current",
+      "notes": "Host 50k hit/miss split for txid64 and Wyhash. Wyhash did not move utxo_load or commit outside noise, so the default hash stays txid64."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
       "gate_id": "native_store_storage_proof",
       "path": "Nodes/Shared/conformance/results/zig_native_store_storage_proof_host_2026-10-03.json",
       "status": "current",
