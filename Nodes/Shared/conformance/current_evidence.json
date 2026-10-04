@@ -769,7 +769,7 @@
       "gate_id": "",
       "path": "Nodes/Shared/conformance/results/zig_self_hosted_lane_2026-10-04.json",
       "status": "current",
-      "notes": "Lane summary. Own_curve script_verify against this port's canonical c_binding row, plus the native-store set hash both runs matched."
+      "notes": "Lane summary. Headline ratio is own_curve script_verify against the same-surface c_binding native-store run. vs_canonical_june is the June Docker row, kept separate."
     }
   ]
 }

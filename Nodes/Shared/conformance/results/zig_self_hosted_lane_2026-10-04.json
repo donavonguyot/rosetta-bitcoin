@@ -4,53 +4,113 @@
   "crypto_backend": "own_curve",
   "chainstate_backend": "native",
   "utxo_hash": "txid64_mix",
-  "canonical_script_source": "current comparable c_binding row at the same height",
+  "ratio_meaning": "own_curve script_verify divided by the same-surface c_binding native-store run at the same height",
+  "script_verify_baseline_note": "The stored gate files omit script_verify. Each baseline script_verify_ms is taken from the proof JSON that run printed, matched to the gate file on total_ms.",
   "set_hash_source": "native-store oracle matched by the own_curve run and the c_binding native run",
+  "docker_100k_c_binding": {
+    "exists": true,
+    "own_curve_run": false,
+    "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_100k_docker_2026-10-03.json",
+    "source_commit": null,
+    "script_verify_ms": 132612,
+    "matched_total_ms": 855816,
+    "note": "A same-surface c_binding native-store Docker 100k run exists. Its gate file has no provenance source_commit. No own_curve Docker 100k run was made, so there is no ratio."
+  },
   "rows": [
     {
       "height": 5000,
       "surface": "docker",
       "script_verify_ms": 1135,
-      "canonical_script_verify_ms": 797,
-      "ratio": "1.42",
+      "baseline_script_verify_ms": 890,
+      "ratio": "1.28",
+      "script_verify_baseline_source": {
+        "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_docker_2026-10-05.json",
+        "source_commit": "a792f25081286a787b75589ec7e043851f0ecd5c",
+        "matched_total_ms": 2486
+      },
+      "vs_canonical_june": {
+        "script_verify_ms": 797,
+        "ratio": "1.42",
+        "path": "Nodes/Shared/conformance/results/zig_control_baseline_5k_benchmark_20260607T192633Z.json"
+      },
       "set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
-      "canonical_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400"
+      "baseline_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400"
     },
     {
       "height": 5000,
       "surface": "host",
       "script_verify_ms": 777,
-      "canonical_script_verify_ms": 797,
-      "ratio": "0.97",
+      "baseline_script_verify_ms": 472,
+      "ratio": "1.65",
+      "script_verify_baseline_source": {
+        "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_host_2026-10-05.json",
+        "source_commit": "a792f25081286a787b75589ec7e043851f0ecd5c",
+        "matched_total_ms": 1442
+      },
+      "vs_canonical_june": {
+        "script_verify_ms": 797,
+        "ratio": "0.97",
+        "path": "Nodes/Shared/conformance/results/zig_control_baseline_5k_benchmark_20260607T192633Z.json"
+      },
       "set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
-      "canonical_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400"
+      "baseline_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400"
     },
     {
       "height": 50000,
       "surface": "docker",
       "script_verify_ms": 17208,
-      "canonical_script_verify_ms": 11413,
-      "ratio": "1.51",
+      "baseline_script_verify_ms": 12436,
+      "ratio": "1.38",
+      "script_verify_baseline_source": {
+        "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_docker_2026-10-05.json",
+        "source_commit": "a792f25081286a787b75589ec7e043851f0ecd5c",
+        "matched_total_ms": 39690
+      },
+      "vs_canonical_june": {
+        "script_verify_ms": 11413,
+        "ratio": "1.51",
+        "path": "Nodes/Shared/conformance/results/zig_control_shakedown_50k_benchmark_20260613T010031Z.json"
+      },
       "set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
-      "canonical_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231"
+      "baseline_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231"
     },
     {
       "height": 50000,
       "surface": "host",
       "script_verify_ms": 10206,
-      "canonical_script_verify_ms": 11413,
-      "ratio": "0.89",
+      "baseline_script_verify_ms": 6689,
+      "ratio": "1.53",
+      "script_verify_baseline_source": {
+        "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_host_2026-10-05.json",
+        "source_commit": "a792f25081286a787b75589ec7e043851f0ecd5c",
+        "matched_total_ms": 21264
+      },
+      "vs_canonical_june": {
+        "script_verify_ms": 11413,
+        "ratio": "0.89",
+        "path": "Nodes/Shared/conformance/results/zig_control_shakedown_50k_benchmark_20260613T010031Z.json"
+      },
       "set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
-      "canonical_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231"
+      "baseline_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231"
     },
     {
       "height": 100000,
       "surface": "host",
       "script_verify_ms": 171470,
-      "canonical_script_verify_ms": 116901,
-      "ratio": "1.47",
+      "baseline_script_verify_ms": 94266,
+      "ratio": "1.82",
+      "script_verify_baseline_source": {
+        "path": "Nodes/Shared/conformance/results/zig_native_store_hash_mix_host_2026-10-06.json",
+        "source_commit": "02470a31a984a429b53f2783a3a0a2acd6aa72cd",
+        "matched_total_ms": 352455
+      },
+      "vs_canonical_june": {
+        "script_verify_ms": 116901,
+        "ratio": "1.47",
+        "path": "Nodes/Shared/conformance/results/zig_control_performance_100k_benchmark_20260607T195319Z.json"
+      },
       "set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32",
-      "canonical_set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32"
+      "baseline_set_hash": "8d9903614494e20141a3d93c7c23de26ee198d6b50c4f62287bc81613c66fc32"
     }
   ]
 }
