@@ -826,6 +826,78 @@
       "path": "Nodes/Shared/conformance/results/zig_consensus_context_host_2026-10-04.json",
       "status": "current",
       "notes": "Host ReleaseSafe own_curve proof for finality, BIP68, required nBits, and the BIP94 timewarp. Nine must-reject fixtures passed, check-headers passed through 155069, and the 5k, 50k, and 100k native-store hashes match the indexed host proofs. The restored native mempool replay kept the rung-0 verdicts."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "kernel_campaign",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Own-curve kernel campaign. The lazy 5x52 field was reverted. ECDSA verify stays 1.84x the C binding. 100k oracle matches. Port status is unchanged."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_baseline",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_2026-10-04.json",
+      "status": "current",
+      "notes": "Baseline microbench. ECDSA 28335 ns vs C 15375, Schnorr 29203 vs 15311, fe_mul 14 ns."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "profile_baseline",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_profile_baseline_2026-10-04.json",
+      "status": "current",
+      "notes": "ECDSA does 127 doubles and zero field inverses. Schnorr does 128 doubles and one field inverse."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_field_reverted",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_field_reverted_2026-10-04.json",
+      "status": "current",
+      "notes": "Reverted lazy 5x52 bench. fe_mul median 72 ns against the baseline 14 ns."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "split_100k",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_100k_host_2026-10-04.json",
+      "status": "current",
+      "notes": "Final 100k host own_curve split. Height, hash, 13154991 UTXOs, and set hash match the oracle. ECDSA mean 2.079x and Schnorr mean 2.091x the stored c_binding split."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "crypto_vectors",
+      "path": "Nodes/Shared/conformance/results/zig_crypto_vectors_2026-10-04.json",
+      "status": "current",
+      "notes": "own_curve crypto vector capability contract after the field revert."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "mutation_schnorr_accept_bad_s",
+      "path": "Nodes/Shared/conformance/results/zig_crypto_mutation_schnorr-accept-bad-s_2026-10-04.json",
+      "status": "current",
+      "notes": "schnorr-accept-bad-s stays red."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "mutation_schnorr_accept_bad_xonly",
+      "path": "Nodes/Shared/conformance/results/zig_crypto_mutation_schnorr-accept-bad-xonly_2026-10-04.json",
+      "status": "current",
+      "notes": "schnorr-accept-bad-xonly stays red."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "mutation_taproot_ignore_output_check",
+      "path": "Nodes/Shared/conformance/results/zig_crypto_mutation_taproot-ignore-output-check_2026-10-04.json",
+      "status": "current",
+      "notes": "taproot-ignore-output-check stays red."
     }
   ]
 }

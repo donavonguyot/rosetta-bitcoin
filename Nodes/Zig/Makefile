@@ -31,7 +31,7 @@ SELF_HOSTED_DATE ?= $(RESULT_DATE)
 TOOLCHAIN_ENV = ZIG_TOOLCHAIN_SHA256=$$(python3 ../../Project/scripts/provenance.py --zig-binary $(ZIG))
 
 ZIG_PROOF_ARGS ?=
-.PHONY: build test check-toolchain zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-mutations crypto-bench crypto-profile docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof self-hosted-5k self-hosted-50k self-hosted-100k docker-self-hosted-5k docker-self-hosted-50k mempool-replay build-template clean
+.PHONY: build test check-toolchain zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-vectors test-crypto-mutations crypto-bench crypto-profile docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof self-hosted-5k self-hosted-50k self-hosted-100k own-curve-kernel-50k own-curve-kernel-100k docker-self-hosted-5k docker-self-hosted-50k mempool-replay build-template clean
 
 check-toolchain:
 	@version=$$($(ZIG) version); \
@@ -62,12 +62,13 @@ test-crypto-vectors:
 	@tmp=$$(mktemp); \
 	trap 'rm -f "$$tmp"' EXIT; \
 	$(ZIG) build -Dcrypto-backend=$(CRYPTO_BACKEND) run -- test-capability --kind crypto-vectors --outcome-path "$$tmp"; \
-	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT)
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(CRYPTO_CAPABILITY_RESULT); \
+	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path ../Shared/conformance/results/zig_crypto_vectors_$(RESULT_DATE).json
 
-crypto-bench:
+crypto-bench: check-toolchain
 	env -u ZIGBITNODE_CRYPTO_BACKEND $(ZIG) build -Doptimize=ReleaseSafe -Dsource-commit=$(shell git rev-parse HEAD) run -- crypto-bench
 
-crypto-profile:
+crypto-profile: check-toolchain
 	env -u ZIGBITNODE_CRYPTO_BACKEND $(ZIG) build -Doptimize=ReleaseSafe -Dcurve-profile=true -Dsource-commit=$(shell git rev-parse HEAD) run -- crypto-bench --profile
 
 test-crypto-mutations:
@@ -76,6 +77,7 @@ test-crypto-mutations:
 	  tmp=$$(mktemp); \
 	  $(ZIG) build -Dcrypto-backend=$(CRYPTO_BACKEND) run -- test-capability --kind crypto-vectors --outcome-path "$$tmp" --mutation "$$mutation" >/dev/null; \
 	  python3 -c 'import json,sys; p,m=sys.argv[1:3]; expected={"schnorr-accept-bad-s":"schnorr-consensus-invalid-s-zero","schnorr-accept-bad-xonly":"schnorr-malformed-x-ge-field","taproot-ignore-output-check":"taproot-consensus-invalid-wrong-output"}[m]; d=json.load(open(p)); o=next(row for row in d["outcomes"] if row["capability"]=="crypto_libsecp256k1_equivalence"); notes=o.get("notes",""); assert o["status"]=="fail", o; assert o["case_passed"] < o["case_total"], o; assert ("zig-secp256k1:" + expected in notes) or ("libsecp256k1-zig:" + expected in notes), notes; print(m + ": red-lighted " + expected)' "$$tmp" "$$mutation"; \
+	  $(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path ../Shared/conformance/results/zig_crypto_mutation_$${mutation}_$(RESULT_DATE).json; \
 	  rm -f "$$tmp"; \
 	done
 
@@ -221,6 +223,14 @@ self-hosted-50k: check-toolchain
 
 self-hosted-100k: check-toolchain
 	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 100000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-100k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_100k_host_$(SELF_HOSTED_DATE).json
+
+own-curve-kernel-50k: check-toolchain
+	rm -rf $(RB_STATE_ROOT)/zig/own-curve-kernel-50k
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 50000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/own-curve-kernel-50k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_own_curve_kernel_50k_host_$(SELF_HOSTED_DATE).json
+
+own-curve-kernel-100k: check-toolchain
+	rm -rf $(RB_STATE_ROOT)/zig/own-curve-kernel-100k
+	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 100000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/own-curve-kernel-100k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_own_curve_kernel_100k_host_$(SELF_HOSTED_DATE).json
 
 docker-self-hosted-5k:
 	CRYPTO_BACKEND=own_curve STORE=native RB_PROVENANCE_IMAGE=rb/zig:own-curve $(MAKE) docker-build

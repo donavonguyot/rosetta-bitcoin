@@ -1,0 +1,402 @@
+{
+  "schema": "port.own_curve.kernel_campaign.v1",
+  "port": "zig",
+  "runtime_surface": "host",
+  "cpu": "Apple M5 Pro",
+  "optimize": "ReleaseSafe",
+  "compiler": "0.16.0",
+  "judge": "median",
+  "lineage": {
+    "created": {
+      "method": "clean_room",
+      "commit": "628b2c024837dcd8ca929122eced49e76c1aaf3a"
+    },
+    "optimized": null,
+    "reference_informed_attempt": "lazy 5x52 magnitude field, measured and reverted"
+  },
+  "table": {
+    "bytes": 2097152,
+    "runtime_initialized": false,
+    "one_time_load": null
+  },
+  "profile_baseline": {
+    "path": "Nodes/Shared/conformance/results/zig_own_curve_profile_baseline_2026-10-04.json",
+    "verifies": [
+      {
+        "name": "ecdsa_verify",
+        "fe_inv": 0,
+        "fe_mul_sqr": 1950,
+        "point_double": 127,
+        "point_add": 71,
+        "to_affine": 0,
+        "table_hit": 68
+      },
+      {
+        "name": "schnorr_verify",
+        "fe_inv": 1,
+        "fe_mul_sqr": 2052,
+        "point_double": 128,
+        "point_add": 72,
+        "to_affine": 1,
+        "table_hit": 69
+      },
+      {
+        "name": "taproot_tweak_check",
+        "fe_inv": 1,
+        "fe_mul_sqr": 1316,
+        "point_double": 121,
+        "point_add": 17,
+        "to_affine": 1,
+        "table_hit": 16
+      }
+    ],
+    "matches_128_bit_joint_schedule": true
+  },
+  "shapes": [
+    {
+      "name": "lazy_5x52_magnitude",
+      "target": "fe_mul",
+      "kept": false,
+      "reason": "fe_mul median went from 14 ns to 72 ns, 5.14x slower, below the 10 percent keep bar",
+      "before": {
+        "fe_mul": 14,
+        "fe_sqr": 14,
+        "ecdsa_verify": 28335,
+        "schnorr_verify": 29203,
+        "taproot_tweak_check": 18647
+      },
+      "after": {
+        "fe_mul": 72,
+        "fe_sqr": 68,
+        "ecdsa_verify": 144208,
+        "schnorr_verify": 155655,
+        "taproot_tweak_check": 102002
+      },
+      "bench_after": "Nodes/Shared/conformance/results/zig_own_curve_bench_field_reverted_2026-10-04.json"
+    }
+  ],
+  "safegcd": {
+    "attempted": false,
+    "reason": "fe_inv is 793 ns, 2.7 percent of Schnorr verify and 4.3 percent of tweak, under the 15 percent bar",
+    "fe_inv_median_ns": 793,
+    "schnorr_verify_median_ns": 29203,
+    "taproot_tweak_check_median_ns": 18647
+  },
+  "gates": {
+    "self_hosted_50k": "not_run",
+    "self_hosted_50k_reason": "No kept shape moved ecdsa_verify or schnorr_verify by 10 percent",
+    "split_100k": "run",
+    "split_100k_reason": "Required at the end. Cumulative verify-median gain did not exceed 25 percent."
+  },
+  "bench_baseline": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_2026-10-04.json",
+  "bench_final": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_2026-10-04.json",
+  "microbench_ratios_vs_c": {
+    "ecdsa_verify": 1.843,
+    "schnorr_verify": 1.907,
+    "taproot_tweak_check": 1.493
+  },
+  "split_100k": {
+    "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_100k_host_2026-10-04.json",
+    "c_binding_path": "Nodes/Shared/conformance/results/zig_script_verify_split_c_binding_host_2026-10-04.json",
+    "oracle_match": true,
+    "script_verify_ms": 175900,
+    "c_binding_script_verify_ms": 92879,
+    "mean_ratios": {
+      "ecdsa": 2.079,
+      "schnorr": 2.091,
+      "taproot_tweak": 1.656
+    },
+    "windows": [
+      {
+        "height_start": 0,
+        "height_end": 9999,
+        "script_verify_ms": 2115,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 38960,
+            "c_binding_mean_ns": 18768,
+            "count": 327190,
+            "ratio": 2.076
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 34000,
+            "c_binding_mean_ns": 16000,
+            "count": 1,
+            "ratio": 2.125
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 0,
+            "c_binding_mean_ns": 0,
+            "count": 0,
+            "ratio": null
+          }
+        }
+      },
+      {
+        "height_start": 10000,
+        "height_end": 19999,
+        "script_verify_ms": 25,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 39995,
+            "c_binding_mean_ns": 19035,
+            "count": 3401,
+            "ratio": 2.101
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 47000,
+            "c_binding_mean_ns": 21500,
+            "count": 4,
+            "ratio": 2.186
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 0,
+            "c_binding_mean_ns": 0,
+            "count": 0,
+            "ratio": null
+          }
+        }
+      },
+      {
+        "height_start": 20000,
+        "height_end": 29999,
+        "script_verify_ms": 3476,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 38867,
+            "c_binding_mean_ns": 18920,
+            "count": 471308,
+            "ratio": 2.054
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 40535,
+            "c_binding_mean_ns": 19358,
+            "count": 16204,
+            "ratio": 2.094
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 27319,
+            "c_binding_mean_ns": 15679,
+            "count": 13203,
+            "ratio": 1.742
+          }
+        }
+      },
+      {
+        "height_start": 30000,
+        "height_end": 39999,
+        "script_verify_ms": 2983,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 38304,
+            "c_binding_mean_ns": 18758,
+            "count": 363203,
+            "ratio": 2.042
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 38887,
+            "c_binding_mean_ns": 18929,
+            "count": 31177,
+            "ratio": 2.054
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 25030,
+            "c_binding_mean_ns": 15110,
+            "count": 17989,
+            "ratio": 1.657
+          }
+        }
+      },
+      {
+        "height_start": 40000,
+        "height_end": 49999,
+        "script_verify_ms": 1723,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 39330,
+            "c_binding_mean_ns": 18047,
+            "count": 141029,
+            "ratio": 2.179
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 38586,
+            "c_binding_mean_ns": 18610,
+            "count": 32442,
+            "ratio": 2.073
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 26168,
+            "c_binding_mean_ns": 14778,
+            "count": 3397,
+            "ratio": 1.771
+          }
+        }
+      },
+      {
+        "height_start": 50000,
+        "height_end": 59999,
+        "script_verify_ms": 45001,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 36958,
+            "c_binding_mean_ns": 17822,
+            "count": 5488690,
+            "ratio": 2.074
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 38738,
+            "c_binding_mean_ns": 18266,
+            "count": 2745425,
+            "ratio": 2.121
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 23614,
+            "c_binding_mean_ns": 14126,
+            "count": 1237480,
+            "ratio": 1.672
+          }
+        }
+      },
+      {
+        "height_start": 60000,
+        "height_end": 69999,
+        "script_verify_ms": 38333,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 37764,
+            "c_binding_mean_ns": 18029,
+            "count": 1192743,
+            "ratio": 2.095
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 37620,
+            "c_binding_mean_ns": 18312,
+            "count": 5017219,
+            "ratio": 2.054
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 22794,
+            "c_binding_mean_ns": 13966,
+            "count": 2416433,
+            "ratio": 1.632
+          }
+        }
+      },
+      {
+        "height_start": 70000,
+        "height_end": 79999,
+        "script_verify_ms": 44661,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 37393,
+            "c_binding_mean_ns": 18212,
+            "count": 1170557,
+            "ratio": 2.053
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 37672,
+            "c_binding_mean_ns": 18533,
+            "count": 6161600,
+            "ratio": 2.033
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 22594,
+            "c_binding_mean_ns": 14019,
+            "count": 2772760,
+            "ratio": 1.612
+          }
+        }
+      },
+      {
+        "height_start": 80000,
+        "height_end": 89999,
+        "script_verify_ms": 32037,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 38467,
+            "c_binding_mean_ns": 18077,
+            "count": 1467454,
+            "ratio": 2.128
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 41631,
+            "c_binding_mean_ns": 18587,
+            "count": 3764297,
+            "ratio": 2.24
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 25175,
+            "c_binding_mean_ns": 14006,
+            "count": 1171555,
+            "ratio": 1.797
+          }
+        }
+      },
+      {
+        "height_start": 90000,
+        "height_end": 99999,
+        "script_verify_ms": 5546,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 37771,
+            "c_binding_mean_ns": 18923,
+            "count": 232435,
+            "ratio": 1.996
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 37574,
+            "c_binding_mean_ns": 19115,
+            "count": 736848,
+            "ratio": 1.966
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 22891,
+            "c_binding_mean_ns": 14291,
+            "count": 141495,
+            "ratio": 1.602
+          }
+        }
+      },
+      {
+        "height_start": 100000,
+        "height_end": 100000,
+        "script_verify_ms": 0,
+        "kinds": {
+          "ecdsa": {
+            "own_curve_mean_ns": 0,
+            "c_binding_mean_ns": 0,
+            "count": 0,
+            "ratio": null
+          },
+          "schnorr": {
+            "own_curve_mean_ns": 40636,
+            "c_binding_mean_ns": 19727,
+            "count": 11,
+            "ratio": 2.06
+          },
+          "taproot_tweak": {
+            "own_curve_mean_ns": 26000,
+            "c_binding_mean_ns": 17818,
+            "count": 11,
+            "ratio": 1.459
+          }
+        }
+      }
+    ],
+    "within_1_3": false
+  },
+  "papers": [
+    "Gallant, Lambert, Vanstone, Faster point multiplication on elliptic curves with efficient endomorphisms, 2001",
+    "Hankerson, Menezes, Vanstone, Guide to Elliptic Curve Cryptography",
+    "Explicit Formulas Database, Jacobian coordinates with a=0",
+    "libsecp256k1 0.8.0 README, src/ecmult.h, src/ecmult_impl.h"
+  ],
+  "residual": "A magnitude-tracked 5x52 multiply measured 72 ns against the u256 multiply's 14 ns (5.14x slower) on this Apple M5 Pro, so it was reverted. Field multiplication is 1950 operations and 96 percent of the 28335 ns ECDSA verify, which remains 1.84x the C binding. The remaining gap is that instruction schedule against libsecp256k1 0.8.0's 5x52 field.",
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "041621db04b32bcb2e81be5e89613ebd31f39d34",
+    "binary_sha256": "e46ad75e95ef816adfc05ac7c5d57cc117af3257d14d3d753929e19715dfc90f",
+    "run_ref": "zig-own-curve-kernel"
+  },
+  "binary_note": "source_commit pins the arithmetic tree at 041621d. The measured binary also contains the native-store compile gate in Nodes/Zig/src/main.zig."
+}

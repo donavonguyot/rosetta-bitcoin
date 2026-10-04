@@ -1,0 +1,96 @@
+{
+  "captured_at": "2026-10-04T17:31:27Z",
+  "category": "test_capability_contracts",
+  "contracts": [
+    {
+      "backend": "libsecp256k1-zig",
+      "blocking_for": [
+        "pure_crypto_experiment"
+      ],
+      "capability": "crypto_bip340_vectors",
+      "case_passed": 19,
+      "case_total": 19,
+      "command_key": "test_crypto_vectors",
+      "contract_id": "zig.crypto_bip340_vectors",
+      "does_not_prove": "BIP340 verification vectors do not prove ECDSA, Taproot tweak handling, block connect usage, or every secp256k1 implementation behavior.",
+      "evidence_kind": "suite",
+      "evidence_path": "Nodes/Shared/testing/fixtures/bip340/test-vectors.csv",
+      "notes": "all BIP340 vectors matched expected verification result",
+      "port": "zig",
+      "provenance": [
+        "bip_standard_vector"
+      ],
+      "scope": "host",
+      "status": "pass",
+      "suite_hash": "01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb",
+      "suite_id": "bitcoin.bip340_schnorr_vectors",
+      "suite_version": "2026-06-07"
+    },
+    {
+      "backend": "libsecp256k1-zig",
+      "blocking_for": [
+        "pure_crypto_experiment"
+      ],
+      "capability": "crypto_libsecp256k1_equivalence",
+      "case_passed": 50,
+      "case_total": 52,
+      "command_key": "test_crypto_vectors",
+      "contract_id": "zig.crypto_libsecp256k1_equivalence",
+      "does_not_prove": "Backend equivalence vectors do not prove every libsecp256k1 internal test, every consensus path, or block-connect usage.",
+      "evidence_kind": "suite",
+      "evidence_path": "Nodes/Shared/testing/fixtures/crypto_backend_equivalence_v1.json",
+      "notes": "libsecp256k1-zig BIP340 19/19 plus native crypto vectors 31/33; failures: libsecp256k1-zig_bip340=[] libsecp256k1-zig_native=[libsecp256k1-zig:schnorr-malformed-x-ge-field,libsecp256k1-zig:schnorr-malformed-nonliftable-x]",
+      "port": "zig",
+      "provenance": [
+        "bip_standard_vector",
+        "proof_derived"
+      ],
+      "scope": "host",
+      "status": "fail",
+      "suite_hash": "67d87dd5d9d35aa0345c398d40d71b11f04bfb74b0902116d66a7308a8fa6897",
+      "suite_id": "rb.crypto_backend_equivalence_v1",
+      "suite_version": "2026-06-07"
+    }
+  ],
+  "port": "zig",
+  "results": [
+    {
+      "case_passed": 19,
+      "case_total": 19,
+      "notes": "all BIP340 vectors matched expected verification result",
+      "result": "pass",
+      "suite_id": "bitcoin.bip340_schnorr_vectors"
+    },
+    {
+      "case_passed": 50,
+      "case_total": 52,
+      "notes": "libsecp256k1-zig BIP340 19/19 plus native crypto vectors 31/33; failures: libsecp256k1-zig_bip340=[] libsecp256k1-zig_native=[libsecp256k1-zig:schnorr-malformed-x-ge-field,libsecp256k1-zig:schnorr-malformed-nonliftable-x]",
+      "result": "fail",
+      "suite_id": "rb.crypto_backend_equivalence_v1"
+    }
+  ],
+  "schema": "port.test_capability_contract.v1",
+  "suites": [
+    {
+      "case_total": 19,
+      "does_not_prove": "BIP340 verification vectors do not prove ECDSA, Taproot tweak handling, block connect usage, or every secp256k1 implementation behavior.",
+      "provenance": [
+        "bip_standard_vector"
+      ],
+      "suite_hash": "01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb",
+      "suite_id": "bitcoin.bip340_schnorr_vectors",
+      "suite_version": "2026-06-07"
+    },
+    {
+      "case_total": 52,
+      "does_not_prove": "Backend equivalence vectors do not prove every libsecp256k1 internal test, every consensus path, or block-connect usage.",
+      "provenance": [
+        "bip_standard_vector",
+        "proof_derived"
+      ],
+      "suite_hash": "67d87dd5d9d35aa0345c398d40d71b11f04bfb74b0902116d66a7308a8fa6897",
+      "suite_id": "rb.crypto_backend_equivalence_v1",
+      "suite_version": "2026-06-07"
+    }
+  ]
+}

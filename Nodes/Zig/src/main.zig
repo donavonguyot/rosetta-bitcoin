@@ -150,7 +150,7 @@ fn cmdRung0(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []cons
         var db = try core.native_store.NativeStore.open(allocator, db_path, .{});
         defer db.close();
         try finishRung0(allocator, io, out, &db, command, flags, info, surface, store_name, synthetic);
-    } else if (std.mem.eql(u8, store_name, "rocksdb")) {
+    } else if (comptime core.rocksdb_compiled) {
         var db = try core.RocksDb.open(allocator, db_path);
         defer db.close();
         try finishRung0(allocator, io, out, &db, command, flags, info, surface, store_name, synthetic);
@@ -266,13 +266,13 @@ fn cmdTestBlockValidity(allocator: std.mem.Allocator, io: std.Io, out: anytype, 
         const meta = try db.readMetadata(allocator);
         defer db.deinitMetadata(allocator, meta);
         try core.template.testBlockValidity(allocator, &db, raw, height, meta.chainstate_utxo_count);
-    } else {
+    } else if (comptime core.rocksdb_compiled) {
         var db = try core.RocksDb.open(allocator, db_path);
         defer db.close();
         const meta = try db.readMetadata(allocator);
         defer db.deinitMetadata(allocator, meta);
         try core.template.testBlockValidity(allocator, &db, raw, height, meta.chainstate_utxo_count);
-    }
+    } else return error.UnsupportedStore;
     try out.print("{{\"schema\":\"port.mining.rung0.v1\",\"command\":\"testblockvalidity\",\"passed\":true}}\n", .{});
 }
 
