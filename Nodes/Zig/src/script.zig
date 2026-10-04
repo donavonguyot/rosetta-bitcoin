@@ -467,17 +467,15 @@ fn evaluate(allocator: std.mem.Allocator, script: []const u8, stack: *Stack, con
             if (active) try stack.push(script[offset + 1 .. offset + 1 + len]);
             offset += 1 + len;
         } else if (opcode == OP_PUSHDATA1) {
-            if (offset + 2 > script.len) return error.TruncatedPush;
-            const len = script[offset + 1];
-            if (offset + 2 + len > script.len) return error.TruncatedPush;
-            if (active) try stack.push(script[offset + 2 .. offset + 2 + len]);
-            offset += 2 + len;
+            const len = if (offset + 2 > script.len) return error.TruncatedPush else script[offset + 1];
+            const end = try pushSpanEnd(offset, 2, len, script.len);
+            if (active) try stack.push(script[offset + 2 .. end]);
+            offset = end;
         } else if (opcode == OP_PUSHDATA2) {
-            if (offset + 3 > script.len) return error.TruncatedPush;
-            const len = std.mem.readInt(u16, script[offset + 1 ..][0..2], .little);
-            if (offset + 3 + len > script.len) return error.TruncatedPush;
-            if (active) try stack.push(script[offset + 3 .. offset + 3 + len]);
-            offset += 3 + len;
+            const len = if (offset + 3 > script.len) return error.TruncatedPush else std.mem.readInt(u16, script[offset + 1 ..][0..2], .little);
+            const end = try pushSpanEnd(offset, 3, len, script.len);
+            if (active) try stack.push(script[offset + 3 .. end]);
+            offset = end;
         } else if (opcode == OP_PUSHDATA4) {
             const len = if (offset + 5 > script.len) return error.TruncatedPush else std.mem.readInt(u32, script[offset + 1 ..][0..4], .little);
             const end = try pushSpanEnd(offset, 5, len, script.len);
@@ -876,17 +874,15 @@ fn parsePushOnly(allocator: std.mem.Allocator, script: []const u8) ![][]const u8
             try pushes.append(allocator, try allocator.dupe(u8, script[offset + 1 .. offset + 1 + len]));
             offset += 1 + len;
         } else if (opcode == OP_PUSHDATA1) {
-            if (offset + 2 > script.len) return error.TruncatedPush;
-            const len = script[offset + 1];
-            if (offset + 2 + len > script.len) return error.TruncatedPush;
-            try pushes.append(allocator, try allocator.dupe(u8, script[offset + 2 .. offset + 2 + len]));
-            offset += 2 + len;
+            const len = if (offset + 2 > script.len) return error.TruncatedPush else script[offset + 1];
+            const end = try pushSpanEnd(offset, 2, len, script.len);
+            try pushes.append(allocator, try allocator.dupe(u8, script[offset + 2 .. end]));
+            offset = end;
         } else if (opcode == OP_PUSHDATA2) {
-            if (offset + 3 > script.len) return error.TruncatedPush;
-            const len = std.mem.readInt(u16, script[offset + 1 ..][0..2], .little);
-            if (offset + 3 + len > script.len) return error.TruncatedPush;
-            try pushes.append(allocator, try allocator.dupe(u8, script[offset + 3 .. offset + 3 + len]));
-            offset += 3 + len;
+            const len = if (offset + 3 > script.len) return error.TruncatedPush else std.mem.readInt(u16, script[offset + 1 ..][0..2], .little);
+            const end = try pushSpanEnd(offset, 3, len, script.len);
+            try pushes.append(allocator, try allocator.dupe(u8, script[offset + 3 .. end]));
+            offset = end;
         } else {
             return error.ScriptSigNotPushOnly;
         }
@@ -1375,7 +1371,7 @@ fn serializedWitnessStack(allocator: std.mem.Allocator, witness: []const []const
     return out.toOwnedSlice(allocator);
 }
 
-fn pushSpanEnd(offset: usize, header: usize, len: u32, script_len: usize) !usize {
+fn pushSpanEnd(offset: usize, header: usize, len: anytype, script_len: usize) !usize {
     const after_header = std.math.add(usize, offset, header) catch return error.TruncatedPush;
     const end = std.math.add(usize, after_header, @as(usize, len)) catch return error.TruncatedPush;
     if (end > script_len) return error.TruncatedPush;
@@ -1392,15 +1388,11 @@ fn prescanOpSuccess(script: []const u8) !bool {
             if (offset + 1 + opcode > script.len) return error.TruncatedPush;
             offset += 1 + opcode;
         } else if (opcode == OP_PUSHDATA1) {
-            if (offset + 2 > script.len) return error.TruncatedPush;
-            const len = script[offset + 1];
-            if (offset + 2 + len > script.len) return error.TruncatedPush;
-            offset += 2 + len;
+            const len = if (offset + 2 > script.len) return error.TruncatedPush else script[offset + 1];
+            offset = try pushSpanEnd(offset, 2, len, script.len);
         } else if (opcode == OP_PUSHDATA2) {
-            if (offset + 3 > script.len) return error.TruncatedPush;
-            const len = std.mem.readInt(u16, script[offset + 1 ..][0..2], .little);
-            if (offset + 3 + len > script.len) return error.TruncatedPush;
-            offset += 3 + len;
+            const len = if (offset + 3 > script.len) return error.TruncatedPush else std.mem.readInt(u16, script[offset + 1 ..][0..2], .little);
+            offset = try pushSpanEnd(offset, 3, len, script.len);
         } else if (opcode == OP_PUSHDATA4) {
             const len = if (offset + 5 > script.len) return error.TruncatedPush else std.mem.readInt(u32, script[offset + 1 ..][0..4], .little);
             offset = try pushSpanEnd(offset, 5, len, script.len);
