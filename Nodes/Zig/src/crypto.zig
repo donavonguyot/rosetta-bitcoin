@@ -1,5 +1,6 @@
 const std = @import("std");
 const split = @import("script_verify_split.zig");
+const time_signatures = @import("builtin").mode == .Debug;
 pub const source_digest = @import("crypto_options").source_digest;
 pub const own_curve = @import("crypto_options").own_curve;
 const own = @import("own_crypto.zig");
@@ -16,24 +17,24 @@ pub const CryptoVerifier = union(enum) {
     pure: *PureVerifier,
 
     pub fn verifyEcdsaDer(self: CryptoVerifier, pubkey_bytes: []const u8, der_sig: []const u8, msg32: *const [32]u8) bool {
-        const started = split.nowNs();
+        const started = if (time_signatures) split.nowNs() else 0;
         const ok = switch (self) {
             .native => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
             .own => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
             .pure => |verifier| verifier.verifyEcdsaDer(pubkey_bytes, der_sig, msg32),
         };
-        split.record(.ecdsa, started);
+        if (time_signatures) split.record(.ecdsa, started);
         return ok;
     }
 
     pub fn verifySchnorr(self: CryptoVerifier, xonly_pubkey_bytes: []const u8, sig64: []const u8, msg: []const u8) bool {
-        const started = split.nowNs();
+        const started = if (time_signatures) split.nowNs() else 0;
         const ok = switch (self) {
             .native => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
             .own => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
             .pure => |verifier| verifier.verifySchnorr(xonly_pubkey_bytes, sig64, msg),
         };
-        split.record(.schnorr, started);
+        if (time_signatures) split.record(.schnorr, started);
         return ok;
     }
 
@@ -56,13 +57,13 @@ pub const CryptoVerifier = union(enum) {
         internal_xonly: []const u8,
         tweak32: *const [32]u8,
     ) ?TweakResult {
-        const started = split.nowNs();
+        const started = if (time_signatures) split.nowNs() else 0;
         const result = switch (self) {
             .native => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
             .own => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
             .pure => |verifier| verifier.taprootTweakPubkeyXOnly(internal_xonly, tweak32),
         };
-        split.record(.taproot_tweak, started);
+        if (time_signatures) split.record(.taproot_tweak, started);
         return result;
     }
 };
