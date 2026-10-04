@@ -1667,3 +1667,39 @@ follower_notes:
 5. Re-run status and import Project evidence after the fix lands.
 
 See workspace [`AGENTS.md`](../../../AGENTS.md) for the consensus runway and binary gate definition.
+
+## Cleared defects recorded 2026-10-03
+
+### JAVA-DER-BOUNDS-2026-10-03
+
+```text
+height: -1
+missing_rule: java.der-scalar-bounds
+source_port: java
+source_file: Nodes/Java/src/main/java/com/jbitnode/consensus/secp256k1/Secp256k1.java
+source_commit: 6ef3fb3e8a51991567a640d27f66cadb97bf2a57
+failure: Malformed DER with absent/truncated scalar length or payload could index past the byte array instead of returning rejection; ecdsa-malformed-der-missing-s is the concrete reproducer.
+fixture: Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json#ecdsa-malformed-der-missing-s
+test_name: com.jbitnode.consensus.secp256k1.NativeCryptoVectorContractTest#sharedNativeCryptoVectorsRunAgainstAllJavaBackends
+status: cleared
+first_seen_at: 2026-10-03
+cleared_at: 2026-10-03
+follower_notes: JAVA-DER-BOUNDS-2026-10-03; file Nodes/Java/src/main/java/com/jbitnode/consensus/secp256k1/Secp256k1.java; fixed by r/s bounds checks in 6ef3fb3e8a51991567a640d27f66cadb97bf2a57. Reproduce: mvn -B -f Nodes/Java/pom.xml -Dtest=NativeCryptoVectorContractTest test. Height -1 denotes a synthetic vector, not a chain-height blocker.
+```
+
+### JAVA-TAPROOT-EXPECTATION-2026-10-03
+
+```text
+height: -1
+missing_rule: java.taproot-invalid-expected-output-test
+source_port: java
+source_file: Nodes/Java/src/test/java/com/jbitnode/consensus/secp256k1/NativeCryptoVectorContractTest.java
+source_commit: 6ef3fb3e8a51991567a640d27f66cadb97bf2a57
+failure: Valid Taproot tweak inputs with deliberately wrong expected output/parity were treated as requiring a throw; successful calculation incorrectly failed the vector adapter instead of comparing the mismatch.
+fixture: Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json#taproot-consensus-invalid-wrong-output
+test_name: com.jbitnode.consensus.secp256k1.NativeCryptoVectorContractTest#sharedNativeCryptoVectorsRunAgainstAllJavaBackends
+status: cleared
+first_seen_at: 2026-10-03
+cleared_at: 2026-10-03
+follower_notes: JAVA-TAPROOT-EXPECTATION-2026-10-03; test-only correction in Nodes/Java/src/test/java/com/jbitnode/consensus/secp256k1/NativeCryptoVectorContractTest.java; fixed by expected-output/parity comparison in 6ef3fb3e8a51991567a640d27f66cadb97bf2a57. Also covers taproot-consensus-invalid-wrong-parity. Reproduce: mvn -B -f Nodes/Java/pom.xml -Dtest=NativeCryptoVectorContractTest test. Height -1 denotes a synthetic vector, not a chain-height blocker.
+```
