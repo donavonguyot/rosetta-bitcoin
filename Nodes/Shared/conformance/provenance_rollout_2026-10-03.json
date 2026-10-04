@@ -1,0 +1,197 @@
+{
+  "schema": "rb.provenance_rollout.v1",
+  "date": "2026-10-03",
+  "timezone": "America/Los_Angeles",
+  "classification": "implementation_validation",
+  "base_commit": "05e2f841853e0e54fe878e36f0dd91ae0b710c4d",
+  "implementation_commits": {
+    "B": "6ef3fb3e8a51991567a640d27f66cadb97bf2a57",
+    "A": "6acc19e9be34dbe5a29d1f57826cadf0c894f2fd",
+    "C": "0ca5dd814e8138f73eeed16705ff33946fc8c654"
+  },
+  "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+  "fixture_inventory": "Nodes/Shared/conformance/fixture_package.json",
+  "java": {
+    "removed_verified_duplicates": 1762,
+    "retained_unmatched": 79,
+    "mapping": "Nodes/Java/fixture_resources.json",
+    "parity": "Nodes/Java/fixture_parity.json",
+    "parity_sha256": "facca5c7579c021037586998c488c8f6992aea402bea0236351a84f76a6bb4b7",
+    "tests": 438,
+    "skipped": 0,
+    "failures": 0,
+    "errors": 0,
+    "before_after": "identical identities and outcomes after baseline DER/Taproot fixes",
+    "final_build_receipt": {
+      "schema": "rb.build_receipt.v1",
+      "source_commit": "0ca5dd814e8138f73eeed16705ff33946fc8c654",
+      "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+      "binary_sha256": "b72ef706474fa208969a8187a8394099f2fe678360e70db0a2bc0011e050e3ce",
+      "subject_type": "file"
+    }
+  },
+  "migrations": [
+    {
+      "class": "campaigns",
+      "status": "complete",
+      "destination": "state:campaigns/",
+      "original": "Project/.campaigns",
+      "retained_original": "retained-originals/campaigns",
+      "local_receipt": "migrations/campaigns.json",
+      "date": "2026-10-03",
+      "portable_inventory_entries": 51704,
+      "bytes": 4398652094,
+      "inventory_sha256": "4bb2dcd5c6bb424ef1e711cc6cc131d66522f765e39c3d29c6c7b0a9fadbe48b",
+      "retained_socket_count": 0
+    },
+    {
+      "class": "substrate",
+      "status": "complete",
+      "destination": "state:substrate/",
+      "original": "Nodes/RosettaNode/substrate/.local",
+      "retained_original": "retained-originals/substrate",
+      "local_receipt": "migrations/substrate.json",
+      "date": "2026-10-03",
+      "portable_inventory_entries": 56770,
+      "bytes": 11234199742,
+      "inventory_sha256": "f49bf1351933209f5a2cfb21a8ed4bce4f31c4cddd9623d5f73536233112512a",
+      "retained_socket_count": 276
+    }
+  ],
+  "migration_execution_order": [
+    "substrate",
+    "campaigns"
+  ],
+  "migration_order_deviation": "Campaigns idleness investigation initially blocked on read-only virtualization handles; no detected writer at either cutover.",
+  "frozen_campaign": {
+    "old": "Nodes/RosettaNode/substrate/.local/campaign-v2",
+    "current": "state:substrate/campaign-v2",
+    "dated_note": "FROZEN.txt",
+    "read_only": true
+  },
+  "core": {
+    "status": "deferred",
+    "effective_location": "Nodes/Reference/bitcoin-core-testnet4",
+    "scheduled_destination": "state:core/",
+    "pre_seed_sha256": null,
+    "post_seed_sha256": null,
+    "live_workload_launched": false
+  },
+  "validation": {
+    "fixture_package_tests": 4,
+    "provenance_tests": 6,
+    "migration_tests": 6,
+    "crypto_lane_tests": 6,
+    "java_tests": 438,
+    "core_harness_gate_cases": 3,
+    "importer_self_test": "passed",
+    "campaign_self_tests": "passed",
+    "consumers": [
+      {
+        "port": "cpp",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "1816ab6339e519eda4df76838e92c6e2819bcfa739321fbe5eac0ddd0381601c",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "csharp",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "66570d15e90e5b30616dbf41d426653b0225579209f3efd80cda8940cf6f6e79",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "go",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "4bbf755b085550c7c1d1a3de03d73bf062371fd45908a33deb6149b342835838",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "java",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "f91b68cd4c4cb2eb49647f908c467b49e86d79f837d4fb327ff924bd88e5c556",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "mojo",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "d8d1f8c82ddc85402c2360d2884a675d3574927ed9087d21bff3fc9af933517f",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "rust",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "945ea9c4839e74252b017daa41c581155601b3ae2b458dff56a8e3c0450d4abc",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "swift",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "d990199b5cc08e4a9243d2b066d91b27cdee0791ee5664c828a78d64e70d7439",
+        "runtime_surface": "host"
+      },
+      {
+        "port": "zig",
+        "status": "passed",
+        "fixtures": 45,
+        "passed": 45,
+        "failed": 0,
+        "raw_validation_sha256": "4840785e110df705eb62e61d19d4ed4b1f492086116a61198de838f85db68f27",
+        "runtime_surface": "host"
+      }
+    ],
+    "ocaml": {
+      "package_prepare": "passed",
+      "compose_render": "passed",
+      "corpus": "blocked",
+      "reason": "Opam is not initialized"
+    },
+    "compose_ports": 9,
+    "docker_contract_manifests": 13,
+    "docker_contract_errors": 0,
+    "current_evidence_import": {
+      "isolated_database": true,
+      "artifact_count": 153,
+      "provenance_status": "absent"
+    },
+    "default_custom_resolution": "passed; no allocation",
+    "documentation_drift": {
+      "status": "blocked_existing",
+      "missing_target": "Docs/paper/figures/substrate_pipeline.pdf"
+    },
+    "path_hygiene": {
+      "status": "blocked_existing",
+      "finding_count": 717,
+      "new_runtime_root_findings": 0
+    },
+    "live_core_validation": false,
+    "fresh_docker_benchmark_execution": false
+  },
+  "preserved": {
+    "primary_uncommitted_zig_work": true,
+    "historical_results": true,
+    "current_evidence_selection": true,
+    "tracked_project_database": true,
+    "retired_port_source": true
+  }
+}
