@@ -33,6 +33,8 @@ class ProvenanceTests(unittest.TestCase):
         value = json.loads(source.read_text())
         if pins:
             value["provenance"] = self.pins.copy()
+        else:
+            value.pop("provenance", None)
         path = self.root / source.name
         path.write_text(json.dumps(value))
         return path, value

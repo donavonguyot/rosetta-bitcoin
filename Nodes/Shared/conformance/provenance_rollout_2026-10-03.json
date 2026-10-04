@@ -250,6 +250,231 @@
           }
         }
       }
+    },
+    {
+      "date": "2026-10-03",
+      "kind": "merge_readiness",
+      "prompt_sha256": "95ed6f037f496359650aaa8d8baf9c1999834c1bc3de671320f23b5f2791dde9",
+      "rebase": {
+        "tested_base": "05e2f841853e0e54fe878e36f0dd91ae0b710c4d",
+        "initial_outcome": "already_up_to_date",
+        "primary_tip_observed_after_validation": "f59b40a8eb989a95e7742938ced82fd957c3ba72",
+        "status": "stopped_before_rebase_to_new_tip",
+        "reason": "Primary advanced during validation and changes four historical Zig results, the current evidence selection, and Project/project.db.",
+        "historical_result_paths": [
+          "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_docker_2026-10-03.json",
+          "Nodes/Shared/conformance/results/zig_native_store_shadow_50k_host_2026-10-03.json",
+          "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_docker_2026-10-03.json",
+          "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_host_2026-10-03.json"
+        ],
+        "conflict_resolution_attempted": false
+      },
+      "java_defects": [
+        {
+          "blocker_id": "c1745189110b951b574ab2b3aa07d372681715f34d6303b7a11d1421236b3a1b",
+          "source_port": "java",
+          "source_commit": "6ef3fb3e8a51991567a640d27f66cadb97bf2a57",
+          "fixture": "Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json#ecdsa-malformed-der-missing-s",
+          "test_name": "com.jbitnode.consensus.secp256k1.NativeCryptoVectorContractTest#sharedNativeCryptoVectorsRunAgainstAllJavaBackends",
+          "status": "cleared",
+          "follower_notes": "JAVA-DER-BOUNDS-2026-10-03; file Nodes/Java/src/main/java/com/jbitnode/consensus/secp256k1/Secp256k1.java; fixed by r/s bounds checks in 6ef3fb3e8a51991567a640d27f66cadb97bf2a57. Reproduce: mvn -B -f Nodes/Java/pom.xml -Dtest=NativeCryptoVectorContractTest test. Height -1 denotes a synthetic vector, not a chain-height blocker."
+        },
+        {
+          "blocker_id": "817350929c818d165351727c896ab44bf398a7f4d68d229a397a1587c39ab177",
+          "source_port": "java",
+          "source_commit": "6ef3fb3e8a51991567a640d27f66cadb97bf2a57",
+          "fixture": "Nodes/Shared/conformance/fixtures/native_crypto_v1_vectors.json#taproot-consensus-invalid-wrong-output",
+          "test_name": "com.jbitnode.consensus.secp256k1.NativeCryptoVectorContractTest#sharedNativeCryptoVectorsRunAgainstAllJavaBackends",
+          "status": "cleared",
+          "follower_notes": "JAVA-TAPROOT-EXPECTATION-2026-10-03; test-only correction in Nodes/Java/src/test/java/com/jbitnode/consensus/secp256k1/NativeCryptoVectorContractTest.java; fixed by expected-output/parity comparison in 6ef3fb3e8a51991567a640d27f66cadb97bf2a57. Also covers taproot-consensus-invalid-wrong-parity. Reproduce: mvn -B -f Nodes/Java/pom.xml -Dtest=NativeCryptoVectorContractTest test. Height -1 denotes a synthetic vector, not a chain-height blocker."
+        }
+      ],
+      "fixture_change_required": false,
+      "validation": {
+        "packaging": {
+          "tests": 4,
+          "status": "passed"
+        },
+        "provenance": {
+          "tests": 6,
+          "status": "passed"
+        },
+        "migration": {
+          "tests": 6,
+          "status": "passed"
+        },
+        "reclaim": {
+          "tests": 4,
+          "status": "passed"
+        },
+        "crypto_lane": {
+          "tests": 6,
+          "status": "passed"
+        },
+        "java": {
+          "tests": 438,
+          "skipped": 0,
+          "failures": 0,
+          "errors": 0,
+          "identities_match_prior_receipt": true
+        },
+        "harness": {
+          "cases": 3,
+          "status": "passed",
+          "state_relative_log_paths": true
+        },
+        "importer_self_test": "passed",
+        "serial_campaign_self_test": "passed",
+        "parallel_campaign_self_test": "passed",
+        "nested_tooling_tests": 11,
+        "consumers": [
+          {
+            "port": "cpp",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "75e731495ecf018376e011de2f59027a234cf79ed71e8d0132dd3a4caaff2349"
+          },
+          {
+            "port": "csharp",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "0af71109486228fb2cc49eaa26952b9ffc2850618bbf56380bb86e052c2a8b7a"
+          },
+          {
+            "port": "go",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "7bcdbf8712342fc33cb66ece573eb2c0581402069add621d5473b86484ff9923"
+          },
+          {
+            "port": "java",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "c8b85ce11ca564657c76d23dc825b1ec53dc60ed5fafe58e635ff0c0dbc6f1f5"
+          },
+          {
+            "port": "mojo",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "d8d1f8c82ddc85402c2360d2884a675d3574927ed9087d21bff3fc9af933517f"
+          },
+          {
+            "port": "rust",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "4ac9d898a03ec847b4a985651e04fecfa215055ecf8738c551e05bc0e9b81fe7"
+          },
+          {
+            "port": "swift",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "219b415c29b3d457c6fe72dcfbb1079f258a5724ce331541c98fe7a9df310f26"
+          },
+          {
+            "port": "zig",
+            "passed": 45,
+            "failed": 0,
+            "fixture_count": 45,
+            "result": "passed",
+            "receipt_sha256": "4840785e110df705eb62e61d19d4ed4b1f492086116a61198de838f85db68f27"
+          }
+        ],
+        "mojo_rejection": {
+          "native_passed": 6,
+          "pure_passed": 6
+        },
+        "docker_contract": {
+          "manifests": 13,
+          "errors": 0
+        },
+        "path_hygiene": {
+          "status": "existing_findings",
+          "count": 717,
+          "core_exception": "deferred"
+        },
+        "doc_drift": {
+          "status": "existing_missing_figure",
+          "path": "Docs/paper/figures/substrate_pipeline.pdf"
+        }
+      },
+      "smoke": {
+        "artifact": "Nodes/Shared/conformance/results/cpp_control_baseline_5k_benchmark_20261004T021539Z.json",
+        "artifact_sha256": "f13ca2c6902acdfaed0a7c82b215943e0f2dcaccd1815cbc384f7d6f9f4a858b",
+        "original_local_artifact_sha256": "2dfe3e9f3f55da07dd6025e7b19c683d3b3a47654003b666db6a5e94be68522b",
+        "publication_transformation": "Only control_harness proof_log and telemetry_log were changed from machine paths to logical state references.",
+        "result": "passed",
+        "validated_height": 5000,
+        "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+        "total_ms": 5036,
+        "telemetry_quality": "clean",
+        "provenance": {
+          "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+          "source_commit": "6d18cd7a9da5137f0a92c668b7372ac383643a07",
+          "binary_sha256": "d169f774ce0d321358c960d4e7828b87813328eca45e2ed20bb0e3511a6068eb",
+          "run_ref": "smoke-2026-10-03"
+        },
+        "build_receipt": {
+          "binary_sha256": "d169f774ce0d321358c960d4e7828b87813328eca45e2ed20bb0e3511a6068eb",
+          "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+          "schema": "rb.build_receipt.v1",
+          "source_commit": "6d18cd7a9da5137f0a92c668b7372ac383643a07",
+          "subject_type": "image"
+        },
+        "container_start_events": [
+          {
+            "event": "start",
+            "container_id": "1df80fcc0bc9c627686a937e51f08d808b3c1d71838c03262200e1c6a83ea8ba",
+            "image": "sha256:d169f774ce0d321358c960d4e7828b87813328eca45e2ed20bb0e3511a6068eb",
+            "container_name": "rb-provenance-smoke-20261003-cpbitnode-sync-proof-run-185c20a1686d",
+            "unix_time": 1791080136
+          },
+          {
+            "event": "start",
+            "container_id": "09bc3f69908cd114a29a401c77570fa351286c7f3e5c2b753e85807d2593437c",
+            "image": "sha256:d169f774ce0d321358c960d4e7828b87813328eca45e2ed20bb0e3511a6068eb",
+            "container_name": "rb-provenance-smoke-20261003-cpbitnode-sync-proof-run-087fc4005e30",
+            "unix_time": 1791080138
+          }
+        ],
+        "import_all_status": "verified",
+        "single_file_import_status": "verified",
+        "canonical_current_evidence_changed": false,
+        "temporary_volume_removed": true,
+        "temporary_network_removed": true,
+        "image_retained_for_published_evidence": true
+      },
+      "ocaml": {
+        "observed_compiler": "5.2.1",
+        "switch": "rb-5.2",
+        "root": "state:campaigns/toolchains/ocaml-opam",
+        "dune_installed": false,
+        "project_dependencies_installed": false,
+        "corpus_status": "not_rerun; separate setup left untouched"
+      },
+      "core": {
+        "cutover": "deferred",
+        "pre_seed_sha256": null,
+        "post_seed_sha256": null,
+        "scheduled_command": "python3 Project/scripts/migrate_core.py --execute-scheduled --container rosetta-bitcoin-core-testnet4",
+        "cutover_executed": false,
+        "existing_reference_used_for_smoke": true
+      },
+      "merge_ready": false,
+      "owner_decision": "Authorize how to reconcile the newly committed primary evidence and Project database changes before attempting another rebase. No merge or PR performed."
     }
   ]
 }

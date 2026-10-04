@@ -63,10 +63,8 @@ def utc_now() -> str:
 
 
 def rel(path: Path) -> str:
-    try:
-        return path.resolve().relative_to(ROOT).as_posix()
-    except ValueError:
-        return path.as_posix()
+    from state_root import logical_path
+    return logical_path(path)
 
 
 def read_env(path: Path = REFERENCE_TOPOLOGY) -> dict[str, str]:
@@ -627,12 +625,13 @@ def build_artifact(
 
 
 def self_test() -> int:
+    from unittest.mock import patch
     failures = 0
     progress = [
         {"chain": "testnet4", "sync_status": "blocks_syncing", "header_height": 5000, "validated_height": 1, "validated_hash": "a", "stored_block_height": 1, "chainstate_utxo_count": 1, "current_blocker": None},
         {"chain": "testnet4", "sync_status": "blocks_current", "header_height": 5000, "validated_height": 5000, "validated_hash": _artifact_validator.EXPECTED_HASHES["baseline_5k"], "stored_block_height": 5000, "chainstate_utxo_count": 4574, "current_blocker": None, "downloaded_blocks": 5000, "connected_blocks": 5000},
     ]
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory() as tmp, patch("state_root.operational_paths", return_value={"campaigns": Path(tmp)}):
         tmp_path = Path(tmp)
         log = tmp_path / "proof.log"
         log.write_text("\n".join(PRODUCT_PREFIX + json.dumps(item) for item in progress), encoding="utf-8")
@@ -649,6 +648,8 @@ def self_test() -> int:
             print("self_test: failed to build artifact")
             return 1
         payload = json.loads(result.artifact_path.read_text(encoding="utf-8"))
+        assert payload["control_harness"]["proof_log"] == "state:campaigns/proof.log"
+        assert payload["control_harness"]["telemetry_log"] == "state:campaigns/go_control_telemetry.log"
         errors, _ = _artifact_validator.validate_payload(
             payload,
             gate_id="baseline_5k",

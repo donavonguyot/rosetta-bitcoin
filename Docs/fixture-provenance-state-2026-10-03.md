@@ -234,3 +234,91 @@ build receipts, and Core were preserved.
 delete. Its four temporary-state tests cover changed/missing destinations,
 writer refusal, a read-only frozen campaign, and restriction to the two named
 originals. Reusing a receipt name is refused.
+
+## 2026-10-03 addendum: validation and rebase stop
+
+The initial requested rebase targeted
+`05e2f841853e0e54fe878e36f0dd91ae0b710c4d`, then the primary branch's committed
+tip. Git reported this branch already up to date. No historical result changed
+and no uncommitted primary-checkout content was incorporated.
+
+During validation, the primary advanced to
+`f59b40a8eb989a95e7742938ced82fd957c3ba72` through `f0ebab7` and `f59b40a`.
+That delta modifies the existing Zig native-store 5k/50k host/Docker result files,
+adds the 100k results, and changes `current_evidence.json`, Zig source, and
+`Project/project.db`. **The requested historical-result stop condition applies.**
+No rebase onto that newer tip or evidence-conflict resolution was attempted.
+The validation below applies to the tested base `05e2f84`, not the new primary.
+The branch is therefore not ready to merge onto the new tip without an owner
+decision about evidence and database reconciliation.
+
+The two Java records are documented in
+[`java-provenance-defects-2026-10-03.md`](java-provenance-defects-2026-10-03.md)
+and stored as cleared Project blockers. The existing malformed-DER rejection
+vectors already cover the failure, so fixture bytes and package digest did not
+change. Reclaim details and exact before/after free space are in the preceding
+addendum and the dated JSON receipt.
+
+| Check rerun on the tested branch | Result |
+| --- | --- |
+| Canonical packaging | 4 tests passed |
+| Java clean Maven verify and case-level parity | 438 passed; identical identities/outcomes; 0 skipped |
+| Provenance/import | 6 tests passed, including unchanged and per-port verification |
+| Migration | 6 tests passed |
+| Retained-original reclaim | 4 tests passed |
+| Crypto lanes | 6 tests passed |
+| Importer, serial campaign, parallel campaign self-tests | Passed |
+| Control harness | 3 cases passed; state-relative log serialization asserted |
+| Nested state-path tooling | 11 tests passed |
+| Package-backed host script corpus | C++, C#, Go, Java, Mojo, Rust, Swift, Zig each 45/45 |
+| Mojo must-reject mutations | 6/6 native and 6/6 pure |
+| Docker contracts | 13 manifests, 0 errors |
+| Path hygiene | Same 717 existing findings; Core exception remains deferred |
+| Documentation drift | Same missing `Docs/paper/figures/substrate_pipeline.pdf` |
+
+### Live provenance smoke
+
+One fresh C++ control `baseline_5k` Docker run passed at height 5,000 with clean
+telemetry and 5,036 ms harness wall time. Its opaque reference is
+`smoke-2026-10-03`. This was a binding smoke test with concurrent host activity,
+not a new ranking selection. Canonical current evidence was not changed.
+
+The retained result is
+[`cpp_control_baseline_5k_benchmark_20261004T021539Z.json`](../Nodes/Shared/conformance/results/cpp_control_baseline_5k_benchmark_20261004T021539Z.json).
+Its provenance identifies build source
+`6d18cd7a9da5137f0a92c668b7372ac383643a07`, the unchanged fixture package, and
+Docker image SHA-256
+`d169f774ce0d321358c960d4e7828b87813328eca45e2ed20bb0e3511a6068eb`.
+Both observed container-start events identify that same immutable image. The
+dated JSON addendum includes the build receipt and sanitized event records.
+`import_all` and the single-file importer both accepted the result in isolated
+databases; the SQL projection reports `provenance_status: verified` with the
+four exact pins. The dedicated proof volume and Compose network were removed;
+the measured image remains retained for this published evidence.
+
+The live run exposed absolute log paths in the control-harness serializer.
+That serializer now uses the shared logical-path helper. The original raw
+artifact remains local, and the published artifact differs only in the two
+`control_harness` log references, now `state:campaigns/...`. Both file hashes and
+the transformation are recorded in the JSON addendum; measured values and build
+pins were preserved. The absent-provenance test fixture also now explicitly
+removes pins when constructing an absent case, since a fresh verified result
+can be selected by its fixture-file glob.
+
+### Remaining boundaries
+
+OCaml was observed with a completed isolated 5.2.1 compiler switch `rb-5.2`, but
+without Dune or the project dependencies. Its separate setup was left alone and
+its corpus was not rerun. That remains an outstanding validation item.
+
+Core's existing reference service served the smoke; no stop, datadir move, or
+cutover occurred. Seed hashes remain pending. The exact command for a separately
+scheduled cutover, from the RB checkout, is:
+
+```sh
+python3 Project/scripts/migrate_core.py --execute-scheduled --container rosetta-bitcoin-core-testnet4
+```
+
+That command has not been run. No merge or PR was made. Before merging, the owner
+must decide how the newer primary evidence and database changes should be
+reconciled, and whether OCaml validation must finish first.
