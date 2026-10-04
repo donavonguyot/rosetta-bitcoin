@@ -2868,7 +2868,6 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
     db_path = root / args.db
     if args.rebuild and db_path.exists():
         db_path.unlink()
-    initialize_schema = not db_path.exists()
     db_path.parent.mkdir(parents=True, exist_ok=True)
     counts = {
         "docker_manifests": 0,
@@ -2887,8 +2886,7 @@ def import_all(args: argparse.Namespace) -> dict[str, int]:
     }
     with sqlite3.connect(db_path) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
-        if initialize_schema:
-            init_db(connection, root / "Project/schema.sql")
+        init_db(connection, root / "Project/schema.sql")
         connection.execute("INSERT OR IGNORE INTO meta(key, value) VALUES('schema', 'mission-control-baseline')")
         import_benchmark_gates(connection)
         import_port_lifecycle(connection)

@@ -722,6 +722,22 @@
       "path": "Nodes/Shared/conformance/results/zig_own_curve_5k_20260916T040840Z.json",
       "status": "current",
       "notes": "Experimental verification-only own_curve evidence; independent of canonical baseline selection. Binary tip gate not_attempted."
+    },
+    {
+      "port": "zig",
+      "claim": "self_hosted",
+      "gate_id": "self_hosted_5k",
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_5k_host_2026-10-07.json",
+      "status": "current",
+      "notes": "Host own_curve on the native store at 5k. Set hash and UTXO count match the native-store oracle. utxo_load moved 3 ms to 4 ms, inside timer noise."
+    },
+    {
+      "port": "zig",
+      "claim": "self_hosted",
+      "gate_id": "self_hosted_50k",
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_50k_host_2026-10-07.json",
+      "status": "current",
+      "notes": "Host own_curve on the native store at 50k. Set hash and UTXO count match the native-store oracle. Commit is 2203 ms against the hinted txid64 shadow's 1778 ms, while wall time is 21763 vs 21264 and set_hash_fold is 359 vs 367. The commit gap is not script and not the 25 ms rehash timer."
     }
   ]
 }
