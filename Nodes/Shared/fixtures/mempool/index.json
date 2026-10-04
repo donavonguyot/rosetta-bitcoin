@@ -1,0 +1,23 @@
+{
+  "schema": "mempool.trace_index.v1",
+  "traces": [
+    {
+      "block_count": 6,
+      "chain": "testnet4",
+      "core_version": "Satoshi:28.2.0",
+      "event_count": 36,
+      "fixture": "live",
+      "path": "Nodes/Shared/fixtures/mempool/trace-12415c0feab5a57debe1f641fbcab087854f8c5cdb0a73513b33db12ffaf253a",
+      "policy": "policy@core-Satoshi:28.2.0",
+      "preface_count": 8,
+      "raw_bytes": 25510,
+      "trace_hash": "12415c0feab5a57debe1f641fbcab087854f8c5cdb0a73513b33db12ffaf253a",
+      "tx_count": 30,
+      "window": {
+        "ended_unix_ms": 1791102272506,
+        "started_unix_ms": 1791098672028,
+        "stop_reason": "time"
+      }
+    }
+  ]
+}

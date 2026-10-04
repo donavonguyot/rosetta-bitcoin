@@ -247,7 +247,8 @@ script_failed
   flip the last byte of the last signature item
   a signature item is a witness stack item or scriptSig push that is
   64 or 65 bytes, or at least 9 bytes and DER-shaped
-  (first byte 0x30, declared length matching the item)
+  (first byte 0x30, and the DER length byte equals len(item) - 3,
+  leaving the trailing sighash byte)
   walk items from the end; a transaction with no such item is not eligible
 
 input_spent_in_pool

@@ -1,0 +1,22 @@
+{
+  "block_count": 6,
+  "chain": "testnet4",
+  "core_version": "Satoshi:28.2.0",
+  "event_count": 36,
+  "fixture": "live",
+  "mutation_seed": "0x524F5345545441",
+  "policy": "policy@core-Satoshi:28.2.0",
+  "policy_note": "policy, not consensus",
+  "preface_count": 8,
+  "raw_bytes": 25510,
+  "schema": "mempool.trace.v1",
+  "set_hash": "xor-sha256-wtxid-v1",
+  "start_hash": "0000000000e0ebc4288ef677ff3918f6876bb582fd402719baf2cb19a617d27e",
+  "start_height": 155063,
+  "tx_count": 30,
+  "window": {
+    "ended_unix_ms": 1791102272506,
+    "started_unix_ms": 1791098672028,
+    "stop_reason": "time"
+  }
+}
