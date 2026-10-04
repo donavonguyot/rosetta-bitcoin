@@ -3,6 +3,12 @@ const core = @import("zigbitnode");
 
 const script_true = [_]u8{0x51};
 const script_false = [_]u8{0x00};
+const rocksdb_dependent_tests = 1;
+
+fn reportRocksDbSkip(comptime name: []const u8) void {
+    std.debug.print("skip: {s}: -Dstore=native does not link RocksDB\n", .{name});
+    std.debug.print("rocksdb-dependent tests skipped: {d}\n", .{rocksdb_dependent_tests});
+}
 
 fn rawTx(
     allocator: std.mem.Allocator,
@@ -302,6 +308,10 @@ test "template limits reject a duplicate txid and an overweight block" {
 }
 
 test "discarding store wrapper forwards a real utxo and drops the commit" {
+    if (comptime !core.rocksdb_compiled) {
+        reportRocksDbSkip("discarding store wrapper forwards a real utxo and drops the commit");
+        return;
+    }
     const allocator = std.testing.allocator;
     const path = ".zig-cache/mempool-wrapper-utxo";
     var db = try core.RocksDb.open(allocator, path);
