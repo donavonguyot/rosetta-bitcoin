@@ -88,6 +88,9 @@ class NativeCryptoVectorContractTest {
       if ("valid".equals(expected)) {
         assertEquals(vector.path("expected_parity").asInt(), result.parity());
         assertEquals(vector.path("expected_output_xonly_hex").asText(), Hex.encode(result.outputXonly()));
+      } else if ("consensus_invalid".equals(expected)) {
+        assertFalse(result.parity() == vector.path("expected_parity").asInt()
+            && Hex.encode(result.outputXonly()).equals(vector.path("expected_output_xonly_hex").asText()));
       } else {
         throw new AssertionError("taproot vector should not be valid: " + vector.path("id").asText());
       }

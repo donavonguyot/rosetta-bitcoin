@@ -1,0 +1,2197 @@
+{
+  "cases": [
+    {
+      "class": "com.jbitnode.JbitnodeTest",
+      "name": "versionIsPresent",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.chain.ChainRegistryTest",
+      "name": "genesisForChain",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.chain.ChainRegistryTest",
+      "name": "genesisMatchesKnownHash",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.chain.ChainRegistryTest",
+      "name": "rejectsUnknownChain",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.chain.ChainRegistryTest",
+      "name": "resolvesTestnet4",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.cli.DbStatusNativeTest",
+      "name": "statusReadsNativeStoresWithoutCreatingLocalSqlite(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.cli.NativeStorageProofTest",
+      "name": "rocksDbReplayProofWritesArtifact(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.cli.NativeStorageProofTest",
+      "name": "scriptSurveyReportsNativeUnsupported",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.cli.NativeStorageProofTest",
+      "name": "snapshotExportReportsNativeUnsupported",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.cli.PublicPeerRotationProbeServiceTest",
+      "name": "blockedAttemptDoesNotCountAsHealthyPeer",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.cli.PublicPeerRotationProbeServiceTest",
+      "name": "failedAttemptDoesNotCountAsHealthyPeer",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.cli.PublicPeerRotationProbeServiceTest",
+      "name": "requiresTwoDistinctPassingAttempts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.NodePathsTest",
+      "name": "constantsAreDocumented",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.NodePathsTest",
+      "name": "dbPathFromEnvUsesDataDir(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.NodePathsTest",
+      "name": "defaultsUseDataJava",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.NodePathsTest",
+      "name": "resolveChainHonorsOverride",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.NodePathsTest",
+      "name": "resolveDataDirHonorsOverride",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.NodePathsTest",
+      "name": "resolveDataDirUsesDefaultWhenBlank",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.NodePathsTest",
+      "name": "resolveDbPathDefaultsUnderDataDir(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.NodePathsTest",
+      "name": "resolveDbPathHonorsOverride(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.PeerConfigTest",
+      "name": "defaultsToLocalCore",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.PeerConfigTest",
+      "name": "parseBooleanUsesDefaultAndRecognizesValues",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.PeerConfigTest",
+      "name": "parseIntValueUsesDefault",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.PeerConfigTest",
+      "name": "parsesHostPortPairs",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.PeerConfigTest",
+      "name": "publicPeersAcceptPublicHostnames",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.PeerConfigTest",
+      "name": "publicPeersAreRequired",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.PeerConfigTest",
+      "name": "publicPeersRejectLocalReferenceAndLocalhost",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.PeerConfigTest",
+      "name": "publicPeersRejectPrivateAndLinkLocalRanges",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.PeerConfigTest",
+      "name": "publicRotationPeersRequireTwoDistinctPublicEndpoints",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.ScriptVerifySettingsTest",
+      "name": "clampsInvalidThreadAndMinInputValues",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.ScriptVerifySettingsTest",
+      "name": "defaultsEnableParallelVerify",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.ScriptVerifySettingsTest",
+      "name": "fromEnvParsesParallelFlags",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.ScriptVerifySettingsTest",
+      "name": "fromEnvUsesDefaultsForMissingValues",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.config.ScriptVerifySettingsTest",
+      "name": "sequentialOnlyDisablesParallelVerify",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.ChainWorkTest",
+      "name": "workIncreasesWithValidBits",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.HeaderValidatorTest",
+      "name": "rejectsBadPow",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.HeaderValidatorTest",
+      "name": "rejectsBadPrevHash",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.HeaderValidatorTest",
+      "name": "validatesGenesisPrevAndPow",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.TargetTest",
+      "name": "compactToTargetMatchesGenesisBits",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.TargetTest",
+      "name": "rejectsZeroMantissa",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.block.BlockDeserializerTest",
+      "name": "deserializesCommittedBlkFixture",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.block.BlockDeserializerTest",
+      "name": "rejectsTrailingBytes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.connect.BlockConnectorNativeTest",
+      "name": "connectsEarlyFixtureBlocksIntoNativeRocksDbChainstate(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.connect.BlockConnectorNativeTest",
+      "name": "spendableOutputRejectsCoreUnspendableScripts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.connect.BlockConnectorNativeTest",
+      "name": "summarizesSlowBlockShapeDeterministically",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.merkle.MerkleTest",
+      "name": "blockMerkleRootHandlesMultipleTransactions",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.merkle.MerkleTest",
+      "name": "coinbaseTxidMatchesNonWitnessSerialization",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.merkle.MerkleTest",
+      "name": "emptyMerkleRootIsZeroHash",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.merkle.MerkleTest",
+      "name": "matchesBlock1HeaderMerkleRoot",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.merkle.MerkleTest",
+      "name": "merkleRootDuplicatesLastHashForOddCount",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.merkle.MerkleTest",
+      "name": "witnessTxidIgnoresWitnessData",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareBlock46779FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareBlock51340FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareCltv32868FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareFixture31842Test",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareFixture32712Test",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareFixture33500Test",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareFixture38010Test",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareFixture61174Test",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareLegacy118555RegressionTest",
+      "name": "acceptsRealTestnet4Block118555BareLegacyInput1",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareLegacy118555RegressionTest",
+      "name": "bareLegacyScriptEvaluatesToTruthyTop",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareLegacy118555RegressionTest",
+      "name": "detectsBareLegacyTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareLegacy118555RegressionTest",
+      "name": "legacySighashAllMatchesReference",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "acceptsRealTestnet4Block27840BareMultisigInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "bareMultisigTemplateRejectsInvalidShapes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "classifierLabelsBareMultisig",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "detectsBareMultisigScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "isEcdsaPubkeyCoversCompressedAndUncompressed",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "rejects27840SpendWithWrongPrevoutScriptPubKey",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "rejectsBareMultisigMissingCheckmultisig",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "rejectsBareMultisigSpendWithWitnessStack",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "rejectsBareMultisigWhenPubkeyCountMismatch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "rejectsBareMultisigWhenRequiredExceedsPubkeyCount",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "rejectsBareMultisigWithTrailingBytes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "rejectsUnsupportedBareMultisigWithTooManyPubkeys",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareMultisig27840RegressionTest",
+      "name": "rejectsUnsupportedTemplateWhenNotBareMultisig",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareOp1Push41700FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareOp1Push41700RegressionTest",
+      "name": "acceptsRealTestnet4Block41700BareOp1PushInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareOp1_25207FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2sh2dup63603FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2sh3dup63305FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2shCltv38191FixtureTest",
+      "name": "prevoutScriptPubKeyMatchesLedger",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2shCltv38191FixtureTest",
+      "name": "redeemScriptMatchesCoreDecode",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2shIfElseNumeric27815FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2shIfElseSha25627807FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2trScriptPath44295FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2trScriptPath46599FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2trTapscriptSha25652024FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2trTapscriptSize52497FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2wsh27042FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2wsh2drop54287FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2wshBooland136369FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2wshIfElse27251FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2wshIfdupCsv54297FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2wshMul58173FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.BareP2wshRot62754FixtureTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.LegacySighashTest",
+      "name": "coversAnyoneCanPayNoneAndSingleOutputBranches",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.LegacySighashTest",
+      "name": "rejectsOutOfRangeInputIndex",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.LegacySighashTest",
+      "name": "serializeHelpersRoundTripOutPointAndTxOut",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.LegacySighashTest",
+      "name": "sighashAllZeroesNonSigningInputSequences",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.LegacySighashTest",
+      "name": "sighashSingleKeepsSigningInputSequence",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.LegacySighashTest",
+      "name": "sighashSinglePlaceholderUsesNullTxOutValue",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.LegacySighashTest",
+      "name": "sighashSingleUsesEmptyPlaceholderOutputsBeforeSignedIndex",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.LegacySighashTest",
+      "name": "sighashSingleWithoutMatchingOutputReturnsOne",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.Op1_25207RegressionTest",
+      "name": "acceptsRealTestnet4Block25207BareOp1Input1",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.Op1_25207RegressionTest",
+      "name": "detectsBareOp1ScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.Op1_25207RegressionTest",
+      "name": "rejectsBareOp1SpendWithWitnessStack",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.Op1_25207RegressionTest",
+      "name": "syntheticBareOp1SpendWithEmptyScriptSig",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkh107951RegressionTest",
+      "name": "accepts107951Input0P2pkhExtraScriptSigStackItem",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkh107951RegressionTest",
+      "name": "detectsP2pkhScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkh107951RegressionTest",
+      "name": "rejects107951SpendWithTamperedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkh61174Hash160Test",
+      "name": "pubkeyHash160MatchesScriptPubKey",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkhSighashSingle38010RegressionTest",
+      "name": "acceptsRealTestnet4Block38010P2pkhSighashSingleInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkhSighashSingle38010RegressionTest",
+      "name": "detectsP2pkhScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkhSighashSingle38010RegressionTest",
+      "name": "rejects38010SpendWithTamperedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkhSighashSingle61174RegressionTest",
+      "name": "accepts61174Input1P2pkhSighashSingle",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkhSighashSingle61174RegressionTest",
+      "name": "accepts61174Input2P2pkhSighashSingleOutOfRange",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkhSighashSingle61174RegressionTest",
+      "name": "detectsP2pkhScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkhSighashSingle61174RegressionTest",
+      "name": "placeholderSighashIgnoresPriorRealOutputsForInput1",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2pkhSighashSingle61174RegressionTest",
+      "name": "rejects61174SpendWithTamperedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh108972RegressionTest",
+      "name": "acceptsRealTestnet4Block108972P2shStackOpsInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh108972RegressionTest",
+      "name": "detectsP2shScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh108972RegressionTest",
+      "name": "rejects108972SpendWithWrongPrevoutScriptPubKey",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh116040RegressionTest",
+      "name": "acceptsRealTestnet4Block116040P2shSighashSingleAcpInput1",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh18675RegressionTest",
+      "name": "acceptsRealTestnet4Block18675NestedP2shP2wpkhInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh18675RegressionTest",
+      "name": "detectsP2shScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh18675RegressionTest",
+      "name": "rejects18675SpendWithWrongPrevoutAmount",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh2dup63603RegressionTest",
+      "name": "acceptsRealTestnet4Block63603P2sh2dupInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh2dup63603RegressionTest",
+      "name": "redeemScriptUsesOp2dupBeforeAddEqualVerifyChain",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh2dup63603RegressionTest",
+      "name": "rejects63603SpendWithWrongPrevoutScriptPubKey",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh3dup63305RegressionTest",
+      "name": "acceptsRealTestnet4Block63305P2sh3dupInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh3dup63305RegressionTest",
+      "name": "redeemScriptUsesOp3dupBeforeAddEqualVerifyChain",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh3dup63305RegressionTest",
+      "name": "rejects63305SpendWithWrongPrevoutScriptPubKey",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh82112RegressionTest",
+      "name": "acceptsRealTestnet4Block82112P2shOpNopInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh82112RegressionTest",
+      "name": "detectsP2shScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh82112RegressionTest",
+      "name": "rejects82112SpendWithWrongPrevoutScriptPubKey",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh82921RegressionTest",
+      "name": "acceptsRealTestnet4Block82921P2shInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2sh82921RegressionTest",
+      "name": "fixtureDocumentsExpectedRedeemScript",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shAbs132361RegressionTest",
+      "name": "acceptsRealTestnet4Block132361P2shInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shAbs132361RegressionTest",
+      "name": "fixtureDocumentsExpectedRedeemScript",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shAdd51340RegressionTest",
+      "name": "acceptsRealTestnet4Block51340P2shAddInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shAdd51340RegressionTest",
+      "name": "detectsP2shScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shAdd51340RegressionTest",
+      "name": "rejects51340SpendWithWrongPrevoutScriptPubKey",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shCltv38191RegressionTest",
+      "name": "acceptsRealTestnet4Block38191P2shCltvRedeemInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shCltv38191RegressionTest",
+      "name": "detectsP2shScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shCltv38191RegressionTest",
+      "name": "rejects38191SpendWithTamperedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shIfElseNumeric27815RegressionTest",
+      "name": "acceptsRealTestnet4Block27815P2shIfElseNumericInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shIfElseNumeric27815RegressionTest",
+      "name": "detectsP2shScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shIfElseNumeric27815RegressionTest",
+      "name": "rejects27815SpendWithWrongPrevoutScriptPubKey",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shIfElseSha25627807RegressionTest",
+      "name": "acceptsRealTestnet4Block27807P2shIfElseSha256Input0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shIfElseSha25627807RegressionTest",
+      "name": "detectsP2shScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shIfElseSha25627807RegressionTest",
+      "name": "rejects27807SpendWithWrongPrevoutScriptPubKey",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shP2wshOp1Only33500RegressionTest",
+      "name": "acceptsRealTestnet4Block33500P2shP2wshOp1OnlyInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shP2wshOp1Only33500RegressionTest",
+      "name": "detectsP2shScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shP2wshOp1Only33500RegressionTest",
+      "name": "rejects33500SpendWithEmptyWitnessStack",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shSha182921RegressionTest",
+      "name": "acceptsRealTestnet4Block82921P2shSha1Input0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2shSha182921RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trScriptPath22830RegressionTest",
+      "name": "acceptsRealTestnet4Block22830ScriptPathInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trScriptPath22830RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trScriptPath22830RegressionTest",
+      "name": "rejects22830SpendWithoutSpentPrevouts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trScriptPath44295RegressionTest",
+      "name": "acceptsRealTestnet4Block44295ScriptPathInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trScriptPath44295RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trScriptPath44295RegressionTest",
+      "name": "rejects44295SpendWithoutSpentPrevouts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trScriptPath46599RegressionTest",
+      "name": "acceptsRealTestnet4Block46599ScriptPathInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trScriptPath46599RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trScriptPath46599RegressionTest",
+      "name": "rejects46599SpendWithoutSpentPrevouts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript100372RegressionTest",
+      "name": "acceptsRealTestnet4Block100372TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript100372RegressionTest",
+      "name": "fixtureDocumentsOp0NotequalInTapscript",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript108508RegressionTest",
+      "name": "acceptsRealTestnet4Block108508TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript108508RegressionTest",
+      "name": "fixtureDocumentsOp1SubInTapscript",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript121035RegressionTest",
+      "name": "acceptsRealTestnet4Block121035TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript121035RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript126975RegressionTest",
+      "name": "acceptsRealTestnet4Block126975TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript126975RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript133634RegressionTest",
+      "name": "acceptsRealTestnet4Block133634TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript133634RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript70924RegressionTest",
+      "name": "acceptsRealTestnet4Block70924TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript70924RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript71267RegressionTest",
+      "name": "acceptsRealTestnet4Block71267TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript71267RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript78841RegressionTest",
+      "name": "acceptsRealTestnet4Block78841TapscriptInput1",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript78841RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript82856RegressionTest",
+      "name": "acceptsRealTestnet4Block82856TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript82856RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript87214RegressionTest",
+      "name": "acceptsRealTestnet4Block87214TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript87214RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript89632RegressionTest",
+      "name": "acceptsRealTestnet4Block89632TapscriptInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscript89632RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptHash25667562RegressionTest",
+      "name": "acceptsRealTestnet4Block67562TapscriptHash256Input0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptHash25667562RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptNumequal32712RegressionTest",
+      "name": "acceptsRealTestnet4Block32712TapscriptNumequalInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptNumequal32712RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptNumequal32712RegressionTest",
+      "name": "rejects32712SpendWithoutSpentPrevouts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptSha25652024RegressionTest",
+      "name": "acceptsRealTestnet4Block52024TapscriptSha256Input0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptSha25652024RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptSha25652024RegressionTest",
+      "name": "rejects52024SpendWithoutSpentPrevouts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptSize52497RegressionTest",
+      "name": "acceptsRealTestnet4Block52497TapscriptSizeInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptSize52497RegressionTest",
+      "name": "fixtureDocumentsExpectedFields",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2trTapscriptSize52497RegressionTest",
+      "name": "rejects52497SpendWithoutSpentPrevouts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wpkh739RegressionTest",
+      "name": "acceptsRealTestnet4Block739P2wpkhInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wpkh739RegressionTest",
+      "name": "detectsP2wpkhScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wpkh739RegressionTest",
+      "name": "rejects739SpendWithWrongPrevoutAmount",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wsh27042RegressionTest",
+      "name": "acceptsRealTestnet4Block27042P2wshInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wsh27042RegressionTest",
+      "name": "detectsP2wshScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wsh27042RegressionTest",
+      "name": "rejects27042SpendWithWrongPrevoutAmount",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wsh2drop54287RegressionTest",
+      "name": "acceptsRealTestnet4Block54287P2wsh2dropSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wsh2drop54287RegressionTest",
+      "name": "rejects54287SpendWithCorruptedWitnessStack",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wsh2drop54287RegressionTest",
+      "name": "witnessScriptStartsWithOp2Drop",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshAltstack66241RegressionTest",
+      "name": "acceptsRealTestnet4Block66241P2wshAltstackSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshAltstack66241RegressionTest",
+      "name": "rejects66241SpendWithCorruptedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshAltstack66241RegressionTest",
+      "name": "witnessScriptUsesAltstackAroundSecondMultisigResult",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshBooland136369RegressionTest",
+      "name": "acceptsRealTestnet4Block136369P2wshBoolandSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshBooland136369RegressionTest",
+      "name": "rejects136369SpendWithCorruptedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshBooland136369RegressionTest",
+      "name": "witnessScriptEndsWithOpBoolandAfterRipemd160Hashlock",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshCltv32868RegressionTest",
+      "name": "acceptsRealTestnet4Block32868P2wshCltvInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshCltv32868RegressionTest",
+      "name": "detectsP2wshScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshCltv32868RegressionTest",
+      "name": "rejects32868SpendWithWrongPrevoutAmount",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshIfElse27251RegressionTest",
+      "name": "acceptsRealTestnet4Block27251P2wshIfElseAllInputs",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshIfElse27251RegressionTest",
+      "name": "detectsP2wshScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshIfElse27251RegressionTest",
+      "name": "rejects27251SpendWithWrongPrevoutAmount",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshIfElse27251RegressionTest",
+      "name": "witnessScriptUsesIfElseEnvelope",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshIfdupCsv54297RegressionTest",
+      "name": "acceptsRealTestnet4Block54297P2wshIfdupCsvSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshIfdupCsv54297RegressionTest",
+      "name": "rejects54297SpendWithCorruptedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshIfdupCsv54297RegressionTest",
+      "name": "witnessScriptUsesIfdupAfterMultisig",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshMul58173RegressionTest",
+      "name": "acceptsRealTestnet4Block58173P2wshMulSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshMul58173RegressionTest",
+      "name": "rejects58173SpendWithCorruptedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshMul58173RegressionTest",
+      "name": "witnessScriptUsesOp0NotEqualAfterSize",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshNip98631RegressionTest",
+      "name": "acceptsRealTestnet4Block98631P2wshNipSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshNip98631RegressionTest",
+      "name": "rejects98631SpendWithCorruptedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshNip98631RegressionTest",
+      "name": "witnessScriptUsesOpNipBeforeFinalChecksig",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshRot62754RegressionTest",
+      "name": "acceptsRealTestnet4Block62754P2wshRotSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshRot62754RegressionTest",
+      "name": "rejects62754SpendWithCorruptedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshRot62754RegressionTest",
+      "name": "witnessScriptUsesOpRotAfterCsvDrop",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshSizeLessthan46779RegressionTest",
+      "name": "acceptsRealTestnet4Block46779P2wshSizeLessthanInput0",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshSizeLessthan46779RegressionTest",
+      "name": "detectsP2wshScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshSizeLessthan46779RegressionTest",
+      "name": "rejects46779SpendWithWrongPrevoutAmount",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshWithin98025RegressionTest",
+      "name": "acceptsRealTestnet4Block98025P2wshWithinSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshWithin98025RegressionTest",
+      "name": "rejects98025SpendWithCorruptedSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.P2wshWithin98025RegressionTest",
+      "name": "witnessScriptUsesOpWithinAfterSizeBounds",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScoutFixturesAbove38191Test",
+      "name": "noPythonScoutFixturesExistAbove38191",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptHashTest",
+      "name": "hash160ProducesTwentyBytes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptHashTest",
+      "name": "hash160Vectors",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptHashTest",
+      "name": "ripemd160Vectors",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "castToBoolAcceptsLeadingNegativeZeroByteBeforeTrailingZeros",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "castToBoolHandlesNegativeZero",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "cltvAcceptsSatisfiedHeightLock",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "cltvNoOpsOnVersionOneTransaction",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "cltvNoOpsWithoutVerifyFlag",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "cltvRejectsEmptyStackAndMissingContext",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "cltvRejectsFinalTransaction",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "cltvRejectsLocktimeTypeMismatch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "cltvRejectsUnsatisfiedLocktime",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "csvAcceptsSatisfiedRelativeLock",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "csvIsNoOpWhenStackOperandHasDisableFlag",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "csvRejectsFinalSequenceAndDisabledFlag",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "csvRejectsTypeMismatchAndMissingContext",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "csvRejectsUnsatisfiedSequence",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "encodeOpNRejectsOutOfRange",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "evalOptionsDefaults",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "evaluateUnderflowThrows",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "legacyIfElseSkipsInactiveBranch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "legacyIfStackEmptyThrows",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "legacyInactiveBranchSkipsPushData",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "legacyNotifInvertsBranch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "legacyRejectsUnbalancedConditional",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "nullOptionsUsesDefaults",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "op2dupDuplicatesTopTwoItems",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "op2overCopiesThirdAndFourthFromTop",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "op2swapSwapsTopTwoPairs",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "op3dupDuplicatesTopThreeItems",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opAbsPushesAbsoluteScriptNum",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opAddPushesSumAsScriptNum",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opChecksigVerifyFailsWithStubSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opCodeSeparatorIsNoOpWithoutContext",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opCodeSeparatorTruncatesEffectiveScriptCode",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opDepthPushesStackSize",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opDupDuplicatesTopItem",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opEqualVerifyAcceptsMatchingItems",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opEqualVerifyAndDrop",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opEqualVerifyRejectsMismatch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opGreaterThanComparesScriptNums",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opHash160HashesTopItem",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opLessThanComparesScriptNums",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opNipRemovesSecondFromTopItem",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opOverCopiesSecondFromTopItem",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opPickCopiesNthItemFromTop",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opRipemd160HashesTopItem",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opRotRotatesTopThreeItems",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opSha256EqualVerifyAcceptsMatchingDigest",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opSha256HashesTopItem",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opSizePushesTopItemLength",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opSubPushesDifferenceAsScriptNum",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opSwapExchangesTopTwoItems",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opToAltStackAndFromAltStackRoundTripTopItem",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "opWithinChecksMinInclusiveMaxExclusiveRange",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "p2pkhTemplateShapeExecutesThroughHash160",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "pushDataOpcodes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "pushOpcodesAndSmallNumbers",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "scriptPushErrors",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "stackPeekUnderflowThrows",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "stackPopUnderflowThrows",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "terminalSuccessRelaxedAllowsJunkBelowTrueTop",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "terminalSuccessRelaxedRejectsEmptyOrFalseTop",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptInterpreterTest",
+      "name": "unsupportedOpcodeThrows",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptTemplatesBareOpNTest",
+      "name": "acceptsSingleOpcodeAndOp1WithTrailingPush",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptTemplatesBareOpNTest",
+      "name": "rejectsInvalidBareOpNShapes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyRunnerTest",
+      "name": "belowThresholdPathDoesNotCreateExecutor",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyRunnerTest",
+      "name": "blockParallelReportsLowestTransactionThenInputOnFailure",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyRunnerTest",
+      "name": "emptyTaskListIsNoOp",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyRunnerTest",
+      "name": "parallelPathReusesExecutorAndCloseShutsItDown",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyRunnerTest",
+      "name": "parallelReportsLowestInputIndexOnFailure",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyRunnerTest",
+      "name": "sequentialAndParallelAgreeOnValidMultiInputSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyRunnerTest",
+      "name": "sequentialPathUsedForSingleInputEvenWhenParallelEnabled",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "bareOpNCoversOpRangeAndRejectsInvalidTemplates",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "describeScriptPubKeyRecognizesTemplates",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "p2pkSpendRoundtrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "p2pkhSpendRoundtrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "p2shP2pkhSpendRoundtrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "p2shP2wpkhSpendRoundtrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "p2wpkhSpendRoundtrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "rejectsOutOfRangeInputIndex",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "rejectsP2shP2wpkhWithWrongWitnessCount",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "rejectsP2shWhenRedeemScriptMissingFromStack",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "rejectsP2shWithNonPushScriptSig",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.ScriptVerifyTest",
+      "name": "rejectsP2trWithoutSpentPrevouts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.Taproot6975RegressionTest",
+      "name": "acceptsRealTestnet4Block6975KeyPathSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.Taproot6975RegressionTest",
+      "name": "detectsP2trScriptTemplate",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.Taproot6975RegressionTest",
+      "name": "rejects6975SpendWithoutSpentPrevouts",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.Taproot6975RegressionTest",
+      "name": "rejectsInvalidKeyPathWitnessStack",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootHashTest",
+      "name": "merkleBranchOrdersSiblingsLexicographically",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootHashTest",
+      "name": "serializedWitnessStackBytesIncludesCompactSizes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootHashTest",
+      "name": "tapleafHashIsDeterministic",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "anyoneCanPayAndAnnexBranchesProduceDigest",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "bitcoinTaggedHashMatchesDoubleSha256Prefix",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "cachedTaprootSighashMatchesUncachedBranches",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "keyPathDefaultSighashIsDeterministic",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "rejectsInvalidExtFlag",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "rejectsPrevoutLengthMismatch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "rejectsTapscriptSighashWithoutLeafHash",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "rejectsUnsupportedHashType",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "sighashSingleRequiresMatchingOutput",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "syntheticKeyPathRoundtripWithSchnorrSign",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootSighashTest",
+      "name": "taprootAllowedHashtypesCoversCoreSet",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootTest",
+      "name": "rejects65ByteSignatureWithDefaultHashType",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootTest",
+      "name": "rejectsAnnexWitnessStack",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootTest",
+      "name": "rejectsNonP2trScript",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TaprootTest",
+      "name": "rejectsScriptPathWitnessStack",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "acceptsNonTapscriptLeafWithoutExecution",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "acceptsSyntheticScriptPathOp1Spend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "prescanOpSuccessDetectsSuccessOpcode",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "rejectsMerkleMismatch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "scriptNumRoundTrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "tapscriptIfElseSkipsInactiveBranch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "tapscriptNipRemovesSecondFromTop",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "tapscriptNumequalComparesScriptNumbers",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "tapscriptRejectsUnbalancedConditional",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "tapscriptSha256HashesStackItem",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.TapscriptTest",
+      "name": "tapscriptWithinChecksMinInclusiveMaxExclusiveRange",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.WitnessSighashTest",
+      "name": "bip143SighashAllMatchesSyntheticP2wpkhSpend",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.WitnessSighashTest",
+      "name": "cachedBip143SighashMatchesUncachedBranches",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.WitnessSighashTest",
+      "name": "coversAnyoneCanPayAndSingleOutputBranches",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.script.WitnessSighashTest",
+      "name": "rejectsOutOfRangeInputIndex",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.NativeCryptoVectorContractTest",
+      "name": "sharedNativeCryptoVectorsRunAgainstAllJavaBackends",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "nativeBackendMatchesPureJavaForGeneratedCases",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "optimizedDerVerifierMatchesReference",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "optimizedSchnorrVerifierMatchesReference",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "profilerRecordsCryptoSubstages",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "schnorrSignRejectsInvalidSecret",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "schnorrSignVerifyRoundtrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "schnorrVerifyRejectsInvalidSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "schnorrVerifyRejectsWrongLengths",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "signVerifyRoundtrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "taprootTweakHelpersRejectInvalidInternalKeyLength",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "verifyRejectsInvalidSignature",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.secp256k1.Secp256k1Test",
+      "name": "verifyRejectsWrongMessageLength",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.tx.TransactionParserTest",
+      "name": "parsesBlock1CoinbaseFromFixtureBlock",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.tx.TransactionParserTest",
+      "name": "parsesTaproot6975WitnessTransaction",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.tx.TransactionParserTest",
+      "name": "rejectsInvalidOutPointHashLength",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.tx.TransactionParserTest",
+      "name": "roundTripsCoinbaseSerialization",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.consensus.tx.TransactionParserTest",
+      "name": "roundTripsWitnessSerialization",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.db.NativeChainstateCodecV2Test",
+      "name": "matchesSharedGoldenVectors",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.db.ProjectTrackerNativeTest",
+      "name": "nativeChainstateCommitUpdatesOperationalTip(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.db.ProjectTrackerNativeTest",
+      "name": "nativeChainstateMaintainsUtxoCountWithoutPrefixScan(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.db.ProjectTrackerNativeTest",
+      "name": "storesHeadersBlocksSyncStateAndEventsInOperationalRocksDb(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.HandshakeMessagesTest",
+      "name": "rejectsInvalidIpv4",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.HandshakeMessagesTest",
+      "name": "roundTripsIpv6Address",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.HandshakeMessagesTest",
+      "name": "roundTripsVersionMessage",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.HandshakeMessagesTest",
+      "name": "serializesEmptyVerackAndSendheaders",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.HeaderMessagesTest",
+      "name": "blockHeaderCodecRoundTrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.HeaderMessagesTest",
+      "name": "rejectsInvalidBlockHeaderFieldSizes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.HeaderMessagesTest",
+      "name": "rejectsInvalidGetHeadersLength",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.HeaderMessagesTest",
+      "name": "roundTripsGetHeaders",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.HeaderMessagesTest",
+      "name": "roundTripsHeadersMessage",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.InventoryMessagesTest",
+      "name": "blockMessagePassesThroughPayload",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.InventoryMessagesTest",
+      "name": "detectsBlockInventoryAndHashMembership",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.InventoryMessagesTest",
+      "name": "rejectsInvalidInvPayloadLength",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.InventoryMessagesTest",
+      "name": "rejectsInvalidInventoryHashLength",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.InventoryMessagesTest",
+      "name": "roundTripsGetDataInventory",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.messages.InventoryMessagesTest",
+      "name": "roundTripsNotFound",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.scripts.ScriptTemplateClassifierTest",
+      "name": "classifiesStandardTemplates",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.scripts.ScriptTemplateClassifierTest",
+      "name": "classifiesWitnessFutureAndOther",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.BlockStorageNativeTest",
+      "name": "storesBlockBytesAndMetadataInNativeStores(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.BlockStoreTest",
+      "name": "fileNumberFromNameParsesBlkIndex",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.BlockStoreTest",
+      "name": "readRejectsMagicAndSizeMismatch(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.BlockStoreTest",
+      "name": "readRejectsUnexpectedEof(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.BlockStoreTest",
+      "name": "rejectsInvalidMagicLength",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.BlockStoreTest",
+      "name": "rotatesFilesWhenMaxSizeExceeded(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.BlockStoreTest",
+      "name": "verifyMagicDetectsMismatch(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.BlockStoreTest",
+      "name": "verifyMagicReturnsTrueForEmptyBlocksDir(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.BlockStoreTest",
+      "name": "writesAndReadsBlockRecord(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.DatadirLockTest",
+      "name": "acquireAndRelease(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.DatadirLockTest",
+      "name": "lockFileRecordsHolderPid(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.storage.DatadirLockTest",
+      "name": "rejectsSecondWriter(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.sync.BlockSyncNativeTest",
+      "name": "syncsFixtureBlocksAndPersistsNativeTipAcrossRestart(Path)",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.sync.BlockValidatorTest",
+      "name": "detectsNonCoinbaseOnlyBlock",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.sync.BlockValidatorTest",
+      "name": "rejectsHashMismatch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.sync.BlockValidatorTest",
+      "name": "rejectsOversizedPayload",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.sync.BlockValidatorTest",
+      "name": "rejectsSmallPayloadAndEmptyTransactions",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.sync.BlockValidatorTest",
+      "name": "validatesCommittedBlockFixture",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.util.HexTest",
+      "name": "encodeDecodeRoundTrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.util.HexTest",
+      "name": "rejectsOddLengthHex",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.util.HexTest",
+      "name": "reverseBytes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.MessageFramerTest",
+      "name": "headerToBytesRoundTrip",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.MessageFramerTest",
+      "name": "roundTripsMessageFrame",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.MessageStreamTest",
+      "name": "readUntilAnyCommandAcceptsFirstMatch",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.MessageStreamTest",
+      "name": "readUntilCommandSkipsOtherMessages",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.MessageStreamTest",
+      "name": "readsAndWritesFramedMessages",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.MessageStreamTest",
+      "name": "readsLargeHeadersPayload",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.MessageStreamTest",
+      "name": "respondsToPingWhileWaiting",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.MessageStreamTest",
+      "name": "timesOutWhenNoData",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.WireCapabilityLoaderTest",
+      "name": "loadFromStreamThrowsWhenMissing",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.WireCapabilityLoaderTest",
+      "name": "loadsScoutRegistry",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.WireCapabilityLoaderTest",
+      "name": "recordsRequiredAndImplementedFlags",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.WireSerializeTest",
+      "name": "doubleSha256IsDeterministic",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.WireSerializeTest",
+      "name": "messageChecksumUsesFirstFourBytes",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.WireSerializeTest",
+      "name": "rejectsTruncatedCompactSize",
+      "outcome": "passed"
+    },
+    {
+      "class": "com.jbitnode.wire.WireSerializeTest",
+      "name": "roundTripsCompactSize",
+      "outcome": "passed"
+    }
+  ],
+  "count": 438,
+  "schema": "rb.java_fixture_parity.v1",
+  "skipped": 0
+}

@@ -63,18 +63,18 @@ test-crypto-mutations:
 test-block-connect-backend:
 	@tmp=$$(mktemp); \
 	trap 'rm -f "$$tmp"' EXIT; \
-	if $(ZIG) build run -- script-corpus --manifest ../Shared/conformance/fixtures/scripts/manifest.json --output ../Shared/conformance/results/zig_backend_probe_script_corpus_$(RESULT_DATE).json >/dev/null; then status=pass; passed=2; notes="native script corpus passed, including backend probe fixtures"; else status=fail; passed=0; notes="native script corpus failed before backend probe fixtures could be claimed"; fi; \
+	if $(ZIG) build run -- script-corpus --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json --output ../Shared/conformance/results/zig_backend_probe_script_corpus_$(RESULT_DATE).json >/dev/null; then status=pass; passed=2; notes="native script corpus passed, including backend probe fixtures"; else status=fail; passed=0; notes="native script corpus failed before backend probe fixtures could be claimed"; fi; \
 	printf '{"port":"zig","backend":"libsecp256k1","outcomes":[{"capability":"block_connect_with_backend","status":"%s","case_passed":%s,"case_total":2,"notes":"%s"}]}\n' "$$status" "$$passed" "$$notes" > "$$tmp"; \
 	$(TESTING_CAPABILITY_EMITTER) --outcomes "$$tmp" --result-path $(BLOCK_CONNECT_BACKEND_RESULT)
 
 zig-node-script-corpus:
 	$(ZIG) build run -- script-corpus \
-	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json \
 	  --output $(SCRIPT_RESULT)
 
 zig-node-script-corpus-shadow:
 	$(ZIG) build run -- script-corpus \
-	  --manifest ../Shared/conformance/fixtures/scripts/manifest.json \
+	  --manifest $(RB_FIXTURE_SHARED)/conformance/fixtures/scripts/manifest.json \
 	  --output ../Shared/conformance/results/zig_shadow_crypto_script_corpus_$(RESULT_DATE).json \
 	  --shadow-crypto
 
@@ -190,3 +190,6 @@ docker-smoke-once: docker-status docker-storage-proof docker-script-corpus
 
 clean:
 	rm -rf .zig-cache zig-cache zig-out data-zig data-zig-*
+
+include ../Shared/fixture_package.mk
+build test test-crypto-vectors test-crypto-mutations test-block-connect-backend zig-node-script-corpus zig-node-script-corpus-shadow docker-build docker-script-corpus: | fixture-package

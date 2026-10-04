@@ -28,8 +28,8 @@ services:
 
   jbitnode:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../../..
+      dockerfile: Nodes/Java/docker/Dockerfile
     container_name: jbitnode-dev
     depends_on:
       bitcoin-core-testnet4:
@@ -44,8 +44,8 @@ services:
 
   jbitnode-sync-proof:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../../..
+      dockerfile: Nodes/Java/docker/Dockerfile
     command:
       - com.jbitnode.cli.SyncLocalCore
     environment:
