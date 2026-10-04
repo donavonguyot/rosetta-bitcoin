@@ -105,3 +105,61 @@ every attempt deposits fixtures into the substrate whether it passes or not.
 No port yet holds live tip from empty state on the public network. The gate is
 defined in [`Nodes/Shared/SPEC.md`](Nodes/Shared/SPEC.md), the evidence path is
 defined, and that leaderboard is empty.
+
+## 7. Open experiments, ranked
+
+Each of these has a binary oracle and a known cost class, so each can be run,
+priced, and ledgered the same way. Ranked by what a pass deposits into the
+substrate, not by how impressive it sounds. Compute-only means no model budget is
+required to judge the result.
+
+1. **Set hash across every port.** Add the incremental, order-independent
+   `chainstate_set_hash` (first landed in ZigNode's store seam) to each port's
+   commit path and proof JSON. Oracle: every active port reports the same hash at
+   5k, 50k, and 100k. Cost: compute only. Deposits: a consensus oracle that
+   depends on no storage engine, no single port, and not on Reference Core; and
+   one near-identical ladder task in every language. Stretch rung: MuHash parity
+   with Core's `gettxoutsetinfo`, which makes the hash externally checkable.
+
+2. **Mechanical optimization campaigns.** One hot stage, one metric, a fixed
+   oracle, one commit per shape change with the measured delta in the message,
+   and anything that does not move the metric outside noise is reverted and
+   recorded. The ZigNode `utxo_load` allocation campaign is the template. Run the
+   same shape on `block_parse_validate`, script dispatch, and P2P prefetch, in
+   more than one port. Deposits: measured cost-in, gain-out rows for repeatable
+   optimizations.
+
+3. **Snapshot as a verified starting state.** A native-store snapshot carries
+   its set hash. Oracle: load, recompute, match, then run the gate from there.
+   Cost: compute only, and it lowers the compute of every later long gate by
+   letting 100k start from a verified 50k. Once the format is in Shared, a
+   snapshot that another port loads and hashes identically is a stronger storage
+   proof than the storage gate itself.
+
+4. **Fuzzing with differential oracles.** Fuzz the script interpreter, tx/block
+   parsers, Codec v2, and commit-log replay. Oracle: the other ports, plus the
+   cross-port set hash. Cost: compute only. Deposits: must-reject fixtures found
+   by disagreement rather than imagination; every finding lands in Shared whether
+   or not anyone fixes it that day.
+
+5. **Fresh-port races at the 5k gate.** The original port race, now with
+   fixtures pinned by content hash. Oracle: the 5k baseline. Cost: model budget.
+   Deposits: volume. This is the cheapest place to learn harness effects; it does
+   not stand in for the long gates.
+
+6. **Native-store test shapes as Shared fixtures.** Torn tail, crash before and
+   after the log append, snapshot rename before log truncate, as fixture IDs
+   under the storage gate. Cost: small, one-time. Deposits: an admission test for
+   dare #5 instead of an argument.
+
+7. **Zero-C audit and reproducible builds.** For any port claiming the
+   self-hosted rung: no libc where the language can avoid it, a binary hash and
+   source commit in every gate line, and a CI build-twice check. Cost: small.
+   Deposits: a sovereignty claim anyone can verify mechanically.
+
+8. **Real peers, reorg, tip.** Required for the binary gate, not optional, but
+   its oracle is partly environmental and its runs are long and noisy. Do it when
+   a lane needs it, not as a standalone experiment.
+
+If you only pick two: #1 is the broadest cheap grid available, and #3 lowers
+the price of everything after it.
