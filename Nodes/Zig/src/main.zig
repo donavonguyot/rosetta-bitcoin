@@ -110,6 +110,9 @@ fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u
             try readStatusFields(allocator, &db, &validated_height, &validated_hash, &header_height, &header_hash, &stored_block_height, &stored_block_hash, &backend, &utxo_count, &validation_crypto, &crypto_digest, &sync_status, &set_hash);
             chainstate_status = if (std.mem.eql(u8, backend, "rocksdb") or std.mem.eql(u8, backend, "native")) "usable" else "missing";
         } else |_| {}
+    } else if (comptime !core.rocksdb_compiled) {
+        try out.print("error: --store=rocksdb needs RocksDB, which this binary did not link; rebuild without -Dstore=native or pass --store=native\n", .{});
+        return error.StoreNotCompiled;
     } else if (core.RocksDb.open(allocator, db_path)) |db0| {
         var db = db0;
         defer db.close();
@@ -485,6 +488,10 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
         return;
     }
     if (!std.mem.eql(u8, store_name, "rocksdb")) return error.UnsupportedStore;
+    if (comptime !core.rocksdb_compiled) {
+        try out.print("error: --store=rocksdb needs RocksDB, which this binary did not link; rebuild without -Dstore=native or pass --store=native\n", .{});
+        return error.StoreNotCompiled;
+    }
 
     const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
@@ -602,6 +609,10 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
         var native = try core.native_store.NativeStore.open(allocator, native_path, try nativeOpenOptions(args));
         defer native.close();
         if (shadow) {
+            if (comptime !core.rocksdb_compiled) {
+                try out.print("error: --shadow needs RocksDB, which this binary did not link; rebuild without -Dstore=native\n", .{});
+                return error.StoreNotCompiled;
+            }
             try std.Io.Dir.cwd().createDirPath(io, db_path);
             var rocks = try core.RocksDb.open(allocator, db_path);
             defer rocks.close();
@@ -613,6 +624,10 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
         return;
     }
     if (!std.mem.eql(u8, store_name, "rocksdb")) return error.UnsupportedStore;
+    if (comptime !core.rocksdb_compiled) {
+        try out.print("error: --store=rocksdb needs RocksDB, which this binary did not link; rebuild without -Dstore=native or pass --store=native\n", .{});
+        return error.StoreNotCompiled;
+    }
     try std.Io.Dir.cwd().createDirPath(io, db_path);
     if (shadow) {
         const shadow_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_shadow_dir });

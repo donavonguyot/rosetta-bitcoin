@@ -6,6 +6,7 @@ services:
       dockerfile: Nodes/Zig/docker/Dockerfile
       args:
         CRYPTO_BACKEND: ${CRYPTO_BACKEND:-c_binding}
+        STORE: ${STORE:-both}
     environment:
       ZIGBITNODE_RUNTIME_SURFACE: docker
     volumes:
@@ -25,6 +26,7 @@ services:
       dockerfile: Nodes/Zig/docker/Dockerfile
       args:
         CRYPTO_BACKEND: ${CRYPTO_BACKEND:-c_binding}
+        STORE: ${STORE:-both}
     environment:
       ZIGBITNODE_RUNTIME_SURFACE: docker
     volumes:
@@ -40,6 +42,7 @@ services:
       dockerfile: Nodes/Zig/docker/Dockerfile
       args:
         CRYPTO_BACKEND: ${CRYPTO_BACKEND:-c_binding}
+        STORE: ${STORE:-both}
     environment:
       ZIGBITNODE_RUNTIME_SURFACE: docker
     volumes:

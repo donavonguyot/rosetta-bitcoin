@@ -192,29 +192,29 @@ docker-proof-post-100k-to-tip:
 docker-smoke-once: docker-status docker-storage-proof docker-script-corpus
 
 self-hosted-5k:
-	$(ZIG) build -Doptimize=ReleaseSafe -Dcrypto-backend=own_curve run -- sync --store=native --target 5000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-5k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_5k_host_$(SELF_HOSTED_DATE).json
+	$(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 5000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-5k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_5k_host_$(SELF_HOSTED_DATE).json
 
 self-hosted-50k:
-	$(ZIG) build -Doptimize=ReleaseSafe -Dcrypto-backend=own_curve run -- sync --store=native --target 50000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-50k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_50k_host_$(SELF_HOSTED_DATE).json
+	$(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 50000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-50k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_50k_host_$(SELF_HOSTED_DATE).json
 
 self-hosted-100k:
-	$(ZIG) build -Doptimize=ReleaseSafe -Dcrypto-backend=own_curve run -- sync --store=native --target 100000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-100k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_100k_host_$(SELF_HOSTED_DATE).json
+	$(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 100000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/self-hosted-100k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_self_hosted_100k_host_$(SELF_HOSTED_DATE).json
 
 docker-self-hosted-5k:
-	CRYPTO_BACKEND=own_curve RB_PROVENANCE_IMAGE=rb/zig:own-curve $(MAKE) docker-build
+	CRYPTO_BACKEND=own_curve STORE=native RB_PROVENANCE_IMAGE=rb/zig:own-curve $(MAKE) docker-build
 	$(REFERENCE_P2P_CHECK)
 	docker volume rm -f zigbitnode_self_hosted_5k >/dev/null 2>&1 || true
-	CRYPTO_BACKEND=own_curve RB_PROVENANCE_IMAGE=rb/zig:own-curve DOCKER_PROOF_VOLUME=zigbitnode_self_hosted_5k $(DOCKER_COMPOSE) run --rm --no-deps \
+	CRYPTO_BACKEND=own_curve STORE=native RB_PROVENANCE_IMAGE=rb/zig:own-curve DOCKER_PROOF_VOLUME=zigbitnode_self_hosted_5k $(DOCKER_COMPOSE) run --rm --no-deps \
 	  zigbitnode-local-reference-proof \
 	  zigbitnode sync --store=native --target 5000 --snapshot-every 25000 --benchmark-lane self_hosted \
 	  --datadir /data --peer $(DOCKER_P2P_PEER) \
 	  --output /results/zig_self_hosted_5k_docker_$(SELF_HOSTED_DATE).json
 
 docker-self-hosted-50k:
-	CRYPTO_BACKEND=own_curve RB_PROVENANCE_IMAGE=rb/zig:own-curve $(MAKE) docker-build
+	CRYPTO_BACKEND=own_curve STORE=native RB_PROVENANCE_IMAGE=rb/zig:own-curve $(MAKE) docker-build
 	$(REFERENCE_P2P_CHECK)
 	docker volume rm -f zigbitnode_self_hosted_50k >/dev/null 2>&1 || true
-	CRYPTO_BACKEND=own_curve RB_PROVENANCE_IMAGE=rb/zig:own-curve DOCKER_PROOF_VOLUME=zigbitnode_self_hosted_50k $(DOCKER_COMPOSE) run --rm --no-deps \
+	CRYPTO_BACKEND=own_curve STORE=native RB_PROVENANCE_IMAGE=rb/zig:own-curve DOCKER_PROOF_VOLUME=zigbitnode_self_hosted_50k $(DOCKER_COMPOSE) run --rm --no-deps \
 	  zigbitnode-local-reference-proof \
 	  zigbitnode sync --store=native --target 50000 --snapshot-every 25000 --benchmark-lane self_hosted \
 	  --datadir /data --peer $(DOCKER_P2P_PEER) \

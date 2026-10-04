@@ -1,10 +1,14 @@
 const std = @import("std");
+const build_options = @import("crypto_options");
+
+pub const store_mode = build_options.store;
+pub const rocksdb_compiled = build_options.store_rocksdb;
 
 const c = @cImport({
     @cInclude("dirent.h");
-    @cInclude("rocksdb/c.h");
     @cInclude("sys/time.h");
     @cInclude("time.h");
+    if (build_options.store_rocksdb) @cInclude("rocksdb/c.h");
 });
 
 pub const crypto = @import("crypto.zig");
@@ -248,7 +252,7 @@ pub fn verifyCodecVectors(allocator: std.mem.Allocator) !void {
     if (!std.mem.eql(u8, metadata_hex, CodecVectors.metadata_key_hex)) return error.CodecVectorMismatch;
 }
 
-pub const RocksDb = struct {
+pub const RocksDb = if (rocksdb_compiled) struct {
     db: *c.rocksdb_t,
     read_opts: *c.rocksdb_readoptions_t,
     write_opts: *c.rocksdb_writeoptions_t,
@@ -618,14 +622,14 @@ pub const RocksDb = struct {
 
         const hash_display = try crypto.displayHashAlloc(allocator, commit.block_hash[0..]);
         defer allocator.free(hash_display);
-        try putMetaBatch(allocator, batch, "validated_hash", hash_display);
-        try putMetaBatch(allocator, batch, "header_height", height_value);
-        try putMetaBatch(allocator, batch, "header_hash", hash_display);
-        try putMetaBatch(allocator, batch, "stored_block_height", height_value);
-        try putMetaBatch(allocator, batch, "stored_block_hash", hash_display);
-        try putMetaBatch(allocator, batch, "sync_status", "blocks_current");
-        try putMetaBatch(allocator, batch, "chainstate_status", "usable");
-        try putMetaBatch(allocator, batch, "current_blocker", "");
+        try rocks_meta.putMetaBatch(allocator, batch, "validated_hash", hash_display);
+        try rocks_meta.putMetaBatch(allocator, batch, "header_height", height_value);
+        try rocks_meta.putMetaBatch(allocator, batch, "header_hash", hash_display);
+        try rocks_meta.putMetaBatch(allocator, batch, "stored_block_height", height_value);
+        try rocks_meta.putMetaBatch(allocator, batch, "stored_block_hash", hash_display);
+        try rocks_meta.putMetaBatch(allocator, batch, "sync_status", "blocks_current");
+        try rocks_meta.putMetaBatch(allocator, batch, "chainstate_status", "usable");
+        try rocks_meta.putMetaBatch(allocator, batch, "current_blocker", "");
 
         const backend_key = try encodeMetadataKey(allocator, "chainstate_backend");
         defer allocator.free(backend_key);
@@ -637,7 +641,7 @@ pub const RocksDb = struct {
         defer allocator.free(counter_value);
         c.rocksdb_writebatch_put(batch, counter_key.ptr, counter_key.len, counter_value.ptr, counter_value.len);
         const set_hash_hex = store.writeSetHashHex(next_hash);
-        try putMetaBatch(allocator, batch, "chainstate_set_hash", set_hash_hex[0..]);
+        try rocks_meta.putMetaBatch(allocator, batch, "chainstate_set_hash", set_hash_hex[0..]);
         timings.metadata_put_prepare += elapsedMs(metadata_started);
 
         const write_started = nowMs();
@@ -720,7 +724,7 @@ pub const RocksDb = struct {
         timings.undo_put_prepare += elapsedMs(undo_started);
 
         const metadata_started = nowMs();
-        try putCommitMetadata(allocator, batch, height, block_hash, new_utxo_count, next_hash);
+        try rocks_meta.putCommitMetadata(allocator, batch, height, block_hash, new_utxo_count, next_hash);
         timings.metadata_put_prepare += elapsedMs(metadata_started);
 
         const write_started = nowMs();
@@ -785,6 +789,16 @@ pub const RocksDb = struct {
         self.utxo_count = 1;
         self.validated_height = 2;
     }
+} else struct {
+    pub fn open(_: std.mem.Allocator, _: []const u8) error{StoreNotCompiled}!@This() {
+        return error.StoreNotCompiled;
+    }
+
+    pub fn close(_: *@This()) void {}
+
+    pub fn tuningDescription() []const u8 {
+        return "not compiled";
+    }
 };
 
 pub fn encodeTipValue(allocator: std.mem.Allocator, height: u32, block_hash: [32]u8) ![]u8 {
@@ -826,12 +840,6 @@ pub fn decodeUtxoValue(allocator: std.mem.Allocator, outpoint: Outpoint, value: 
     };
 }
 
-fn putMetaBatch(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, name: []const u8, value: []const u8) !void {
-    const key = try encodeMetadataKey(allocator, name);
-    defer allocator.free(key);
-    c.rocksdb_writebatch_put(batch, key.ptr, key.len, value.ptr, value.len);
-}
-
 pub fn foldSpends(allocator: std.mem.Allocator, set_hash: *store.SetHash, spent: []const Outpoint, undo_entries: []const UndoEntry) !void {
     if (spent.len != undo_entries.len) return error.SpendUndoMismatch;
     for (undo_entries, spent) |entry, outpoint| {
@@ -844,7 +852,14 @@ pub fn foldSpends(allocator: std.mem.Allocator, set_hash: *store.SetHash, spent:
     }
 }
 
-fn putCommitMetadata(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, height: u32, block_hash: [32]u8, utxo_count: i64, set_hash: store.SetHash) !void {
+const rocks_meta = if (rocksdb_compiled) struct {
+    fn putMetaBatch(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, name: []const u8, value: []const u8) !void {
+        const key = try encodeMetadataKey(allocator, name);
+        defer allocator.free(key);
+        c.rocksdb_writebatch_put(batch, key.ptr, key.len, value.ptr, value.len);
+    }
+
+    fn putCommitMetadata(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, height: u32, block_hash: [32]u8, utxo_count: i64, set_hash: store.SetHash) !void {
     const tip_key = try encodeTipKey(allocator, "testnet4");
     defer allocator.free(tip_key);
     const tip_value = try encodeTipValue(allocator, height, block_hash);
@@ -859,14 +874,14 @@ fn putCommitMetadata(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_
 
     const hash_display = try crypto.displayHashAlloc(allocator, block_hash[0..]);
     defer allocator.free(hash_display);
-    try putMetaBatch(allocator, batch, "validated_hash", hash_display);
-    try putMetaBatch(allocator, batch, "header_height", height_value);
-    try putMetaBatch(allocator, batch, "header_hash", hash_display);
-    try putMetaBatch(allocator, batch, "stored_block_height", height_value);
-    try putMetaBatch(allocator, batch, "stored_block_hash", hash_display);
-    try putMetaBatch(allocator, batch, "sync_status", "blocks_current");
-    try putMetaBatch(allocator, batch, "chainstate_status", "usable");
-    try putMetaBatch(allocator, batch, "current_blocker", "");
+    try rocks_meta.putMetaBatch(allocator, batch, "validated_hash", hash_display);
+    try rocks_meta.putMetaBatch(allocator, batch, "header_height", height_value);
+    try rocks_meta.putMetaBatch(allocator, batch, "header_hash", hash_display);
+    try rocks_meta.putMetaBatch(allocator, batch, "stored_block_height", height_value);
+    try rocks_meta.putMetaBatch(allocator, batch, "stored_block_hash", hash_display);
+    try rocks_meta.putMetaBatch(allocator, batch, "sync_status", "blocks_current");
+    try rocks_meta.putMetaBatch(allocator, batch, "chainstate_status", "usable");
+    try rocks_meta.putMetaBatch(allocator, batch, "current_blocker", "");
 
     const backend_key = try encodeMetadataKey(allocator, "chainstate_backend");
     defer allocator.free(backend_key);
@@ -878,8 +893,9 @@ fn putCommitMetadata(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_
     defer allocator.free(counter_value);
     c.rocksdb_writebatch_put(batch, counter_key.ptr, counter_key.len, counter_value.ptr, counter_value.len);
     const set_hash_hex = store.writeSetHashHex(set_hash);
-    try putMetaBatch(allocator, batch, "chainstate_set_hash", set_hash_hex[0..]);
+    try rocks_meta.putMetaBatch(allocator, batch, "chainstate_set_hash", set_hash_hex[0..]);
 }
+} else struct {};
 
 pub const CommitTimings = struct {
     utxo_delete_prepare: i64 = 0,
@@ -1710,6 +1726,11 @@ fn freeRaw(allocator: std.mem.Allocator, values: []?[]u8) void {
     allocator.free(values);
 }
 
+test "native-only build does not open rocksdb" {
+    if (comptime rocksdb_compiled) return;
+    try std.testing.expectError(error.StoreNotCompiled, RocksDb.open(std.testing.allocator, "unused"));
+}
+
 test "codec v2 golden vectors" {
     try verifyCodecVectors(std.testing.allocator);
 }
@@ -1749,6 +1770,7 @@ test "parallel script results choose deterministic first failure" {
 }
 
 test "get many raw preserves requested order and missing slots" {
+    if (comptime !rocksdb_compiled) return;
     const allocator = std.testing.allocator;
     const path = try std.fmt.allocPrint(allocator, ".zig-cache/test-get-many-rocksdb-{}", .{std.testing.random_seed});
     defer allocator.free(path);
@@ -1779,6 +1801,7 @@ test "scratch utxo key encoding matches codec vector" {
 }
 
 test "direct utxo multi get preserves order missing slots and decoded equality" {
+    if (comptime !rocksdb_compiled) return;
     const allocator = std.testing.allocator;
     const path = try std.fmt.allocPrint(allocator, ".zig-cache/test-get-many-utxos-rocksdb-{}", .{std.testing.random_seed});
     defer allocator.free(path);
@@ -1823,6 +1846,7 @@ test "direct utxo multi get preserves order missing slots and decoded equality" 
 }
 
 test "commit block writes created utxos undo tip metadata and counters" {
+    if (comptime !rocksdb_compiled) return;
     const allocator = std.testing.allocator;
     const path = try std.fmt.allocPrint(allocator, ".zig-cache/test-commit-block-rocksdb-{}", .{std.testing.random_seed});
     defer allocator.free(path);

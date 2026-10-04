@@ -10,6 +10,7 @@ test "set hash fold is its own inverse" {
 }
 
 test "rocks shadow create and spend returns set hash to zero" {
+    if (comptime !core.rocksdb_compiled) return;
     const allocator = std.testing.allocator;
     const seed = std.testing.random_seed;
     const primary_path = try std.fmt.allocPrint(allocator, ".zig-cache/native-store-primary-{}", .{seed});
@@ -125,6 +126,7 @@ fn commitCreate(db: anytype, allocator: std.mem.Allocator, created: core.Created
 }
 
 test "native shadow create and spend matches rocksdb bytes" {
+    if (comptime !core.rocksdb_compiled) return;
     const allocator = std.testing.allocator;
     const native_path = try freshPath(allocator, "shadow-native");
     defer allocator.free(native_path);
