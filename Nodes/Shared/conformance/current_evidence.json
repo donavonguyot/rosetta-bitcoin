@@ -390,6 +390,22 @@
     {
       "port": "zig",
       "claim": "native_store",
+      "gate_id": "native_store_shadow_100k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_100k_host_2026-10-03.json",
+      "status": "current",
+      "notes": "Diagnostic native-store differential run on the host at height 100000. Not the comparable RocksDB performance_100k proof."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
+      "gate_id": "native_store_shadow_100k",
+      "path": "Nodes/Shared/conformance/results/zig_native_store_shadow_100k_docker_2026-10-03.json",
+      "status": "current",
+      "notes": "Diagnostic native-store differential run in Docker at height 100000 with mem_limit 10g. Not the comparable RocksDB performance_100k proof."
+    },
+    {
+      "port": "zig",
+      "claim": "native_store",
       "gate_id": "native_store_storage_proof",
       "path": "Nodes/Shared/conformance/results/zig_native_store_storage_proof_host_2026-10-03.json",
       "status": "current",
