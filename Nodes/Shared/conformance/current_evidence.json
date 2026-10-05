@@ -878,6 +878,14 @@
     {
       "port": "zig",
       "claim": "own_curve_kernel",
+      "gate_id": "profile_schedule",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_profile_schedule_2026-10-05.json",
+      "status": "current",
+      "notes": "Committed schedule profile. ECDSA verify is 1950 field multiplications, 127 doublings, 71 additions, and 68 generator-table hits."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
       "gate_id": "crypto_vectors",
       "path": "Nodes/Shared/conformance/results/zig_crypto_vectors_2026-10-04.json",
       "status": "current",

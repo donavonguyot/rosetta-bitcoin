@@ -17,7 +17,15 @@
   "table": {
     "bytes": 2097152,
     "runtime_initialized": false,
-    "one_time_load": null
+    "one_time_load": null,
+    "kind": "fixed_window",
+    "window": 16,
+    "points_per_table": 16384,
+    "tables": [
+      "generator.bin",
+      "phi-generator.bin"
+    ],
+    "note": "Embedded build artifacts. Not built at first use. A runtime rebuild of the same window cannot remove the measured table hits."
   },
   "profile_baseline": {
     "path": "Nodes/Shared/conformance/results/zig_own_curve_profile_baseline_2026-10-04.json",
@@ -111,6 +119,36 @@
       "bench_before": "Nodes/Shared/conformance/results/zig_own_curve_bench_safety_before_2026-10-05.json",
       "bench_after": "Nodes/Shared/conformance/results/zig_own_curve_bench_safety_reverted_2026-10-05.json",
       "tests_before_bench": "test-crypto-vectors and test-crypto-mutations passed on the candidate; those artifacts were not indexed because the shape was reverted"
+    },
+    {
+      "name": "fixed_window_g",
+      "target": "fe_mul_count",
+      "kept": false,
+      "reason": "Width-16 fixed windows for G and lambda*G are already the committed schedule, 16384 affine points each, 2097152 bytes together. ECDSA verify already records 68 table hits, 127 doublings, and 1950 field multiplications. Building that table at first use would not change the verify count, so it was not rebuilt and the embed stays.",
+      "window": 16,
+      "table_bytes": 2097152,
+      "one_time_ns": null,
+      "profile": "Nodes/Shared/conformance/results/zig_own_curve_profile_schedule_2026-10-05.json",
+      "fe_mul_sqr": {
+        "ecdsa_verify": 1950,
+        "schnorr_verify": 2052,
+        "taproot_tweak_check": 1316
+      },
+      "point_double": {
+        "ecdsa_verify": 127,
+        "schnorr_verify": 128,
+        "taproot_tweak_check": 121
+      },
+      "point_add": {
+        "ecdsa_verify": 71,
+        "schnorr_verify": 72,
+        "taproot_tweak_check": 17
+      },
+      "table_hit": {
+        "ecdsa_verify": 68,
+        "schnorr_verify": 69,
+        "taproot_tweak_check": 16
+      }
     }
   ],
   "safegcd": {
