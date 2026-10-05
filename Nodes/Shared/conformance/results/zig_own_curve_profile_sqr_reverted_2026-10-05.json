@@ -1,0 +1,52 @@
+{
+  "schema": "port.own_curve.profile.v1",
+  "port": "zig",
+  "cpu": "Apple M5 Pro",
+  "optimize": "ReleaseSafe",
+  "source_commit": "5abb7eb0615c49baa542f1699021962a0d811528",
+  "binary_sha256": "769a78c25f9dbb45177cdd48bd6121f437a9120fdc374b346f0e8b1b8c0d61ff",
+  "verifies": [
+    {
+      "name": "ecdsa_verify",
+      "fe_inv": 0,
+      "fe_mul": 1142,
+      "fe_sqr": 808,
+      "fe_mul_sqr": 1950,
+      "point_double": 127,
+      "point_add": 71,
+      "to_affine": 0,
+      "table_hit": 68
+    },
+    {
+      "name": "schnorr_verify",
+      "fe_inv": 1,
+      "fe_mul": 1201,
+      "fe_sqr": 851,
+      "fe_mul_sqr": 2052,
+      "point_double": 128,
+      "point_add": 72,
+      "to_affine": 1,
+      "table_hit": 69
+    },
+    {
+      "name": "taproot_tweak_check",
+      "fe_inv": 1,
+      "fe_mul": 668,
+      "fe_sqr": 648,
+      "fe_mul_sqr": 1316,
+      "point_double": 121,
+      "point_add": 17,
+      "to_affine": 1,
+      "table_hit": 16
+    }
+  ],
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "5abb7eb0615c49baa542f1699021962a0d811528",
+    "binary_sha256": "769a78c25f9dbb45177cdd48bd6121f437a9120fdc374b346f0e8b1b8c0d61ff",
+    "run_ref": "zig-own-curve-kernel",
+    "toolchain_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec"
+  },
+  "decision": "reverted",
+  "decision_note": "Counts from the dedicated square before it was reverted. fe_mul_sqr stays the sum of fe_mul and fe_sqr and matches the October 4 totals."
+}

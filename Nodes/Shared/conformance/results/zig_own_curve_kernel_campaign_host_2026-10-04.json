@@ -13,7 +13,7 @@
     },
     "optimized": null,
     "reference_informed_attempt": "lazy 5x52 magnitude field, measured and reverted",
-    "optimized_reason": "No shape in this continuation cleared the 10 percent keep bar, so optimized stays unset."
+    "optimized_reason": "No shape in this continuation cleared the 10 percent keep bar, so optimized stays unset. The dedicated square lowered fe_sqr own min by 9.3 percent and slowed point_double, then was reverted."
   },
   "table": {
     "bytes": 2097152,
@@ -186,6 +186,71 @@
       "doublings_ecdsa": 127,
       "test": "derived cube roots and reduced lattice match the stored GLV constants",
       "profile": "Nodes/Shared/conformance/results/zig_own_curve_profile_schedule_2026-10-05.json"
+    },
+    {
+      "name": "dedicated_fe_sqr",
+      "target": "fe_sqr",
+      "kept": false,
+      "reason": "fe_sqr own min went from 13.15 ns to 11.93 ns (repeat 12.00 ns), 9.3 percent, short of the 10 percent bar at 11.84 ns. point_double went from 88.10 ns to 94.63 ns. ECDSA ratio_min went from 1.920 to 1.979, Schnorr from 1.949 to 2.019, tweak from 1.587 to 1.636. _root.sqr does the 10 limb products (10 mul and 10 umulh) and then the same 0x1000003d1 folds, but it is a call: sub sp, #0xc0 and three stp, and Point.double contains five bl _root.sqr. The widening mul stayed inlined; there is no _root.mul symbol. Reverted.",
+      "judge": "ratio_min",
+      "before": {
+        "fe_sqr": 13.15,
+        "fe_mul": 12.38,
+        "point_double": 88.1,
+        "ecdsa_verify_ratio_min": 1.92,
+        "schnorr_verify_ratio_min": 1.949,
+        "taproot_tweak_check_ratio_min": 1.587
+      },
+      "after": {
+        "fe_sqr": 11.93,
+        "fe_sqr_repeat": 12.0,
+        "fe_mul": 12.26,
+        "point_double": 94.63,
+        "point_double_repeat": 93.3,
+        "ecdsa_verify_ratio_min": 1.979,
+        "schnorr_verify_ratio_min": 2.019,
+        "taproot_tweak_check_ratio_min": 1.636,
+        "ecdsa_verify_own_min_ns": 28415.47,
+        "schnorr_verify_own_min_ns": 29585.0,
+        "taproot_tweak_check_own_min_ns": 19651.87
+      },
+      "asm": {
+        "tool": "xcrun llvm-objdump -d --disassemble-symbols=_root.sqr,_root.Point.double",
+        "sqr_limb_mul": 10,
+        "sqr_limb_umulh": 10,
+        "sqr_frame": "sub sp, #0xc0; stp x22,x21; stp x20,x19; stp x29,x30",
+        "point_double_bl_sqr": 5,
+        "point_double_stp": 19,
+        "point_double_ldp": 18,
+        "widening_mul_inlined": true
+      },
+      "profile": {
+        "ecdsa_verify": {
+          "fe_mul": 1142,
+          "fe_sqr": 808,
+          "fe_mul_sqr": 1950
+        },
+        "schnorr_verify": {
+          "fe_mul": 1201,
+          "fe_sqr": 851,
+          "fe_mul_sqr": 2052
+        },
+        "taproot_tweak_check": {
+          "fe_mul": 668,
+          "fe_sqr": 648,
+          "fe_mul_sqr": 1316
+        }
+      },
+      "bench_before": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_v2_2026-10-05.json",
+      "bench_after": "Nodes/Shared/conformance/results/zig_own_curve_bench_sqr_reverted_2026-10-05.json",
+      "profile_after": "Nodes/Shared/conformance/results/zig_own_curve_profile_sqr_reverted_2026-10-05.json",
+      "tests_before_bench": "package tests, test-crypto-vectors, and test-crypto-mutations passed on the candidate; those artifacts were not indexed because the shape was reverted",
+      "scheduling": "utility",
+      "loadavg": [
+        4.4,
+        5.92,
+        7.35
+      ]
     }
   ],
   "safegcd": {
@@ -218,7 +283,7 @@
     "Explicit Formulas Database, Jacobian coordinates with a=0",
     "libsecp256k1 0.8.0 README, src/ecmult.h, src/ecmult_impl.h"
   ],
-  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried.",
+  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried. A dedicated 4x64 square, 10 limb multiplies against 16, lowered the isolated fe_sqr own min from 13.15 ns to 11.93 ns and left the verify field-op total at 1950, of which 808 were squares. Point.double called that square five times (bl _root.sqr) and the square spilled a 0xc0 frame, so point_double moved from 88.10 ns to 94.63 ns and the verify ratio_min values rose. Reverted.",
   "provenance": {
     "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
     "source_commit": "041621db04b32bcb2e81be5e89613ebd31f39d34",
@@ -265,6 +330,15 @@
       "point_double": 88.12,
       "fe_inv": 802.42
     },
-    "acceptance_residual": "double_scalar_mul, point_add, and to_affine own mins differ by 3.49, 3.62, and 3.56 percent. Every verify ratio_min, and the fe_mul, fe_sqr, and point_double own mins, agree within 1.4 percent."
+    "acceptance_residual": "double_scalar_mul, point_add, and to_affine own mins differ by 3.49, 3.62, and 3.56 percent. Every verify ratio_min, and the fe_mul, fe_sqr, and point_double own mins, agree within 1.4 percent.",
+    "dedicated_sqr": {
+      "kept": false,
+      "bench": "Nodes/Shared/conformance/results/zig_own_curve_bench_sqr_reverted_2026-10-05.json",
+      "profile": "Nodes/Shared/conformance/results/zig_own_curve_profile_sqr_reverted_2026-10-05.json",
+      "fe_sqr_own_min_ns": 11.93,
+      "fe_sqr_repeat_own_min_ns": 12.0,
+      "baseline_fe_sqr_own_min_ns": 13.15,
+      "bar_ns": 11.84
+    }
   }
 }

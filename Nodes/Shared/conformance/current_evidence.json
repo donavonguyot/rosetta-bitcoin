@@ -833,7 +833,7 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Own-curve kernel campaign. fe_mul stays about 12 ns and 1950 operations. The v2 bench judges ratio_min under taskpolicy utility. Safety-off, the 977 reduction, and window 5 were reverted. GLV and the width-16 generator tables were already the schedule. The no-shape 100k artifact stays withdrawn."
+      "notes": "Shapes 0-3 and the dedicated square missed the 10 percent bar. Bench v2 judges ratio_min. fe_sqr own min 13.15 ns to 11.93 ns, then reverted. Optimized stays unset."
     },
     {
       "port": "zig",
@@ -850,6 +850,22 @@
       "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_v2_repeat_2026-10-05.json",
       "status": "current",
       "notes": "Back-to-back repeat of the v2 baseline. Verify ratio_min agrees within 1 percent. fe_sqr own min 13.33 ns against 13.15 ns."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_sqr_reverted",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_sqr_reverted_2026-10-05.json",
+      "status": "current",
+      "notes": "Dedicated square, reverted. fe_sqr own min 11.93 ns against v2 13.15 ns (9.3 percent). ECDSA ratio_min 1.979 against 1.920. point_double 94.63 ns against 88.10 ns."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "profile_sqr_reverted",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_profile_sqr_reverted_2026-10-05.json",
+      "status": "current",
+      "notes": "ECDSA field ops stayed 1950, split 1142 mul and 808 sqr, before the dedicated square was reverted."
     },
     {
       "port": "zig",

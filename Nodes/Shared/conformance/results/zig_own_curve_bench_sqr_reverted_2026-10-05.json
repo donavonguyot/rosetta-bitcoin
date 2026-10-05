@@ -1,0 +1,278 @@
+{
+  "schema": "port.own_curve.bench.v2",
+  "port": "zig",
+  "cpu": "Apple M5 Pro",
+  "optimize": "ReleaseSafe",
+  "source_commit": "5abb7eb0615c49baa542f1699021962a0d811528",
+  "binary_sha256": "46d6095d7842e041cc7925030b8b3f0fcd36f2963d58b7548d866ec8c55e8462",
+  "judge": "ratio_min",
+  "scheduling": "utility",
+  "c_field_group": "not_exposed",
+  "vectors": [
+    "ecdsa-valid-privkey-1-deadbeef",
+    "schnorr-valid-privkey-12345-cafebabe",
+    "taproot-valid-privkey-300-c0ffee"
+  ],
+  "ambient": {
+    "loadavg": [
+      4.4,
+      5.92,
+      7.35
+    ],
+    "other_zig_build": false,
+    "sync_running": false,
+    "thermal": "Note: No thermal warning level has been recorded Note: No performance warning level has been recorded Note: No CPU power status has been recorded",
+    "qos": "utility"
+  },
+  "operations": [
+    {
+      "name": "ecdsa_verify",
+      "iterations": 800,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 28415.47,
+        "median_ns": 28535.14,
+        "p90_ns": 28644.58
+      },
+      "c_binding": {
+        "min_ns": 14354.07,
+        "median_ns": 14514.72,
+        "p90_ns": 14529.85
+      },
+      "ratio_min": 1.979,
+      "ratio_median": 1.965
+    },
+    {
+      "name": "schnorr_verify",
+      "iterations": 800,
+      "batches": 4,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 29585.0,
+        "median_ns": 30044.95,
+        "p90_ns": 31323.47
+      },
+      "c_binding": {
+        "min_ns": 14652.08,
+        "median_ns": 14735.2,
+        "p90_ns": 15588.9
+      },
+      "ratio_min": 2.019,
+      "ratio_median": 2.038
+    },
+    {
+      "name": "taproot_tweak_check",
+      "iterations": 800,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 19651.87,
+        "median_ns": 19702.23,
+        "p90_ns": 19721.01
+      },
+      "c_binding": {
+        "min_ns": 12009.7,
+        "median_ns": 12015.79,
+        "p90_ns": 12153.11
+      },
+      "ratio_min": 1.636,
+      "ratio_median": 1.639
+    },
+    {
+      "name": "pubkey_parse",
+      "iterations": 800,
+      "batches": 25,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 3375.46,
+        "median_ns": 3358.43,
+        "p90_ns": 3421.35
+      },
+      "c_binding": {
+        "min_ns": 2203.57,
+        "median_ns": 2206.81,
+        "p90_ns": 2245.11
+      },
+      "ratio_min": 1.531,
+      "ratio_median": 1.521
+    },
+    {
+      "name": "double_scalar_mul",
+      "iterations": 800,
+      "batches": 5,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 25428.59,
+        "median_ns": 25463.23,
+        "p90_ns": 26818.9
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "scalar_mul_fixed",
+      "iterations": 800,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 15458.02,
+        "median_ns": 15506.66,
+        "p90_ns": 15605.0
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "scalar_mul_var",
+      "iterations": 800,
+      "batches": 8,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 20728.69,
+        "median_ns": 20974.32,
+        "p90_ns": 22562.76
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "point_add",
+      "iterations": 200000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 167.63,
+        "median_ns": 167.69,
+        "p90_ns": 167.9
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "point_double",
+      "iterations": 200000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 94.63,
+        "median_ns": 95.79,
+        "p90_ns": 96.47
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "to_affine",
+      "iterations": 800,
+      "batches": 10,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 845.0,
+        "median_ns": 853.95,
+        "p90_ns": 868.38
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "fe_mul",
+      "iterations": 2000000,
+      "batches": 4,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 12.26,
+        "median_ns": 12.38,
+        "p90_ns": 12.52
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "fe_sqr",
+      "iterations": 2000000,
+      "batches": 5,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 11.93,
+        "median_ns": 12.15,
+        "p90_ns": 13.4
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "fe_inv",
+      "iterations": 30000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 787.54,
+        "median_ns": 788.74,
+        "p90_ns": 790.43
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "fe_normalize",
+      "iterations": 16000000,
+      "batches": 4,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 1.08,
+        "median_ns": 1.09,
+        "p90_ns": 1.17
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "sc_mul",
+      "iterations": 2000000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 17.35,
+        "median_ns": 17.6,
+        "p90_ns": 17.62
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "sc_inv",
+      "iterations": 30000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 790.32,
+        "median_ns": 791.78,
+        "p90_ns": 794.05
+      },
+      "c_binding": "not_exposed"
+    }
+  ],
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "5abb7eb0615c49baa542f1699021962a0d811528",
+    "binary_sha256": "46d6095d7842e041cc7925030b8b3f0fcd36f2963d58b7548d866ec8c55e8462",
+    "run_ref": "zig-own-curve-kernel",
+    "toolchain_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec"
+  },
+  "decision": "reverted",
+  "decision_note": "fe_sqr own min 11.93 ns against the v2 baseline 13.15 ns, 9.3 percent lower, short of the 10 percent bar (11.84 ns). The back-to-back repeat was 12.00 ns. point_double moved 88.10 ns to 94.63 ns. Dedicated square was reverted.",
+  "repeat_own_min_ns": {
+    "fe_sqr": 12.0,
+    "fe_mul": 12.29,
+    "point_double": 93.3,
+    "ecdsa_verify": 28431.86,
+    "schnorr_verify": 29819.34,
+    "taproot_tweak_check": 19569.32
+  }
+}
