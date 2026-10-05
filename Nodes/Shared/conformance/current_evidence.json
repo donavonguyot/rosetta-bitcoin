@@ -833,7 +833,7 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Inlined dedicated square spilled point_double to sub sp, #0x770, 25 str and 15 ldr, and was reverted. u256 stays at 8 str, 6 ldr, sub sp, #0xc0. ECDSA ratio_min 1.872. Optimized stays unset."
+      "notes": "Shape D kept ReleaseFast and inlined field ops. point_double is sub sp, #0xc0, 8 str, 6 ldr, no field bl. Explicit limbs and the inlined square spilled and were reverted. The 5-limb probe is 14 str and 24 ldr under sub sp, #0x160 and was not timed. ECDSA ratio_min 1.872. Optimized stays unset."
     },
     {
       "port": "zig",
