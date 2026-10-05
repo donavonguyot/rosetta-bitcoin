@@ -55,7 +55,7 @@ pub fn benchFeInv(a: u256) Error!u256 {
     @setRuntimeSafety(false);
     return inverse(a, p);
 }
-pub fn benchFeNormalize(a: u256) u256 {
+pub inline fn benchFeNormalize(a: u256) u256 {
     @setRuntimeSafety(false);
     return if (a >= p) a - p else a;
 }
@@ -97,7 +97,7 @@ pub fn benchDoubleScalar(a: u256, q: Point, b: u256) Point {
 }
 // p = 2^256 - (2^32 + 977). Three folds bound the result below 2^256;
 // a final subtraction canonicalizes it. No general division is needed here.
-fn reduceField(w: u512) u256 {
+inline fn reduceField(w: u512) u256 {
     @setRuntimeSafety(false);
     const mask: u512 = std.math.maxInt(u256);
     const complement: u512 = 0x1000003d1;
@@ -107,21 +107,21 @@ fn reduceField(w: u512) u256 {
     if (r >= p) r -= p;
     return @intCast(r);
 }
-fn add(a: u256, b: u256) u256 {
+inline fn add(a: u256, b: u256) u256 {
     @setRuntimeSafety(false);
     const sum = @as(u257, a) + b;
     return @intCast(if (sum >= p) sum - p else sum);
 }
-fn sub(a: u256, b: u256) u256 {
+inline fn sub(a: u256, b: u256) u256 {
     @setRuntimeSafety(false);
     return if (a >= b) a - b else p - (b - a);
 }
-fn mul(a: u256, b: u256) u256 {
+inline fn mul(a: u256, b: u256) u256 {
     @setRuntimeSafety(false);
     profileNote(.fe_mul_sqr);
     return reduceField(@as(u512, a) * b);
 }
-fn times(a: u256, comptime b: u256) u256 {
+inline fn times(a: u256, comptime b: u256) u256 {
     @setRuntimeSafety(false);
     const twice = add(a, a);
     return switch (b) {

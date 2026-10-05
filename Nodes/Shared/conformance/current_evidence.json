@@ -833,7 +833,23 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "ReleaseFast crypto module is kept. point_double frame sub sp, #0xe0 to #0xc0. ECDSA ratio_min read 1.667 against 1.920 at load 12.7 while fe_mul read 27.54 ns, so the 10 percent bar is not claimed. Optimized stays unset."
+      "notes": "Field ops are inline. point_double has no field bl, sub sp, #0xc0, 8 str and 6 ldr. ECDSA ratio_min 1.872 against 1.920. The 10 percent bar is not claimed. Optimized stays unset."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_inline",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_inline_2026-10-05.json",
+      "status": "current",
+      "notes": "Forced inline of mul, add, sub, reduceField, and times. ECDSA ratio_min 1.872 against v2 1.920. fe_mul own min 29.16 ns. point_double 8 str and 6 ldr, sub sp, #0xc0, no field bl."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_inline_repeat",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_inline_repeat_2026-10-05.json",
+      "status": "current",
+      "notes": "Repeat at load 6.57. ECDSA ratio_min 1.900. fe_mul own min 26.32 ns."
     },
     {
       "port": "zig",
