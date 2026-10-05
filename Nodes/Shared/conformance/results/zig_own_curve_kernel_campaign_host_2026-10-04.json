@@ -12,7 +12,8 @@
       "commit": "628b2c024837dcd8ca929122eced49e76c1aaf3a"
     },
     "optimized": null,
-    "reference_informed_attempt": "lazy 5x52 magnitude field, measured and reverted"
+    "reference_informed_attempt": "lazy 5x52 magnitude field, measured and reverted",
+    "optimized_reason": "No shape in this continuation cleared the 10 percent keep bar, so optimized stays unset."
   },
   "table": {
     "bytes": 2097152,
@@ -175,6 +176,16 @@
       },
       "profile_before": "Nodes/Shared/conformance/results/zig_own_curve_profile_schedule_2026-10-05.json",
       "profile_after": "Nodes/Shared/conformance/results/zig_own_curve_profile_wnaf5_reverted_2026-10-05.json"
+    },
+    {
+      "name": "glv_endomorphism",
+      "target": "fe_mul_count",
+      "kept": false,
+      "reason": "Both scalars are already split. The package test derives beta and lambda as cube roots, checks lambda^3 = 1 mod n, beta^3 = 1 mod p, and beta*G = lambda*G, and checks the reduced basis. The joint chain has four terms. ECDSA doublings are 127. A second endomorphism pass would not shorten that chain.",
+      "terms": 4,
+      "doublings_ecdsa": 127,
+      "test": "derived cube roots and reduced lattice match the stored GLV constants",
+      "profile": "Nodes/Shared/conformance/results/zig_own_curve_profile_schedule_2026-10-05.json"
     }
   ],
   "safegcd": {
@@ -186,9 +197,9 @@
   },
   "gates": {
     "self_hosted_50k": "not_run",
-    "self_hosted_50k_reason": "No kept shape moved ecdsa_verify or schnorr_verify by 10 percent",
+    "self_hosted_50k_reason": "No kept shape in this continuation moved ecdsa_verify by 10 percent.",
     "split_100k": "withdrawn",
-    "split_100k_reason": "The host 100k artifact was produced with no kept shape, so it is not a campaign result. The file and its evidence-index entry were removed. Cumulative verify-median gain had not exceeded 25 percent."
+    "split_100k_reason": "The no-shape host artifact was removed. Cumulative verify-median gain did not exceed 25 percent, so the 100k split was not rerun after shapes 0-3."
   },
   "bench_baseline": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_2026-10-04.json",
   "bench_final": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_2026-10-04.json",
@@ -207,7 +218,7 @@
     "Explicit Formulas Database, Jacobian coordinates with a=0",
     "libsecp256k1 0.8.0 README, src/ecmult.h, src/ecmult_impl.h"
   ],
-  "residual": "Field multiplication stays 14 ns and 1950 operations, 96 percent of ECDSA verify. Turning runtime safety off and replacing the widening complement multiply with a 977-and-shift reduction did not lower fe_mul and slowed fe_inv and verify, so it was reverted. The committed schedule is already a width-16 fixed window for G, a width-4 wNAF for P, and a four-term GLV joint chain at about 128 doublings. A magnitude-tracked 5x52 multiply measured 72 ns against this u256 multiply.",
+  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried.",
   "provenance": {
     "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
     "source_commit": "041621db04b32bcb2e81be5e89613ebd31f39d34",

@@ -833,7 +833,7 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Own-curve kernel campaign. The lazy 5x52 field was reverted. ECDSA verify stays 1.84x the C binding. The no-shape 100k artifact was withdrawn. Port status is unchanged."
+      "notes": "Own-curve kernel campaign. fe_mul stays 14 ns and 1950 operations. Safety-off, the 977 reduction, and window 5 were reverted. GLV and the width-16 generator tables were already the schedule. The no-shape 100k artifact stays withdrawn. Port status is unchanged."
     },
     {
       "port": "zig",
