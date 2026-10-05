@@ -149,6 +149,32 @@
         "schnorr_verify": 69,
         "taproot_tweak_check": 16
       }
+    },
+    {
+      "name": "strauss_shamir_wnaf_width_5",
+      "target": "fe_mul_count",
+      "kept": false,
+      "window": 5,
+      "why_window": "Width 4 was already the variable-point window on two 128-bit GLV halves, about one nonzero digit per five bits. Width 5 is the neighbor that shortens those digits. It was measured because the joint chain is already one doubling ladder.",
+      "reason": "ECDSA field multiplications went from 1950 to 1913 (1.9 percent) and additions from 71 to 69. Doublings stayed 127. Schnorr field multiplications went from 2052 to 2056. Below the 10 percent keep bar, so the variable window stays 4.",
+      "before": {
+        "ecdsa_fe_mul_sqr": 1950,
+        "ecdsa_point_double": 127,
+        "ecdsa_point_add": 71,
+        "schnorr_fe_mul_sqr": 2052,
+        "schnorr_point_double": 128,
+        "schnorr_point_add": 72
+      },
+      "after": {
+        "ecdsa_fe_mul_sqr": 1913,
+        "ecdsa_point_double": 127,
+        "ecdsa_point_add": 69,
+        "schnorr_fe_mul_sqr": 2056,
+        "schnorr_point_double": 129,
+        "schnorr_point_add": 67
+      },
+      "profile_before": "Nodes/Shared/conformance/results/zig_own_curve_profile_schedule_2026-10-05.json",
+      "profile_after": "Nodes/Shared/conformance/results/zig_own_curve_profile_wnaf5_reverted_2026-10-05.json"
     }
   ],
   "safegcd": {

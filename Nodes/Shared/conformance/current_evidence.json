@@ -886,6 +886,14 @@
     {
       "port": "zig",
       "claim": "own_curve_kernel",
+      "gate_id": "profile_wnaf5_reverted",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_profile_wnaf5_reverted_2026-10-05.json",
+      "status": "current",
+      "notes": "Reverted variable-point window 5. ECDSA field multiplications 1950 to 1913. Doublings stayed 127."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
       "gate_id": "crypto_vectors",
       "path": "Nodes/Shared/conformance/results/zig_crypto_vectors_2026-10-04.json",
       "status": "current",
