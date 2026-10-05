@@ -467,6 +467,30 @@
         "ldr": 9,
         "bl": 0
       }
+    },
+    {
+      "name": "inlined_dedicated_sqr",
+      "target": "point_double",
+      "kept": false,
+      "judge": "asm",
+      "reason": "Same 10-product square as the reverted 11.93 ns fe_sqr, this time inline. point_double contains no bl to it. The body spilled: sub sp, #0x770, 25 str and 15 ldr, against the u256 square-via-mul at sub sp, #0xc0, 8 str and 6 ldr. mul count fell only from 150 to 142. Reverted before timing. The 9.3 percent isolated gain does not appear at point_double.",
+      "before": {
+        "frame": "sub sp, #0xc0",
+        "str": 8,
+        "ldr": 6,
+        "mul": 150,
+        "umulh": 124,
+        "bl": 0
+      },
+      "after": {
+        "frame": "sub sp, #0x770",
+        "str": 25,
+        "ldr": 15,
+        "mul": 142,
+        "umulh": 124,
+        "bl": 0
+      },
+      "tests": "ReleaseFast package tests passed, including sqr(x) == mul(x, x), then reverted"
     }
   ],
   "safegcd": {
@@ -499,7 +523,7 @@
     "Explicit Formulas Database, Jacobian coordinates with a=0",
     "libsecp256k1 0.8.0 README, src/ecmult.h, src/ecmult_impl.h"
   ],
-  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried. A dedicated 4x64 square, 10 limb multiplies against 16, lowered the isolated fe_sqr own min from 13.15 ns to 11.93 ns and left the verify field-op total at 1950, of which 808 were squares. Point.double called that square five times (bl _root.sqr) and the square spilled a 0xc0 frame, so point_double moved from 88.10 ns to 94.63 ns and the verify ratio_min values rose. Reverted. A lazy 5x52 field with one 2^260 fold and no normalize inside mul raised fe_mul from 12.38 ns to 34.79 ns. point_double contains 71 str and 39 ldr, against 10 str and 9 ldr for the inlined widening multiply, and it calls fe_mul, which opens with sub sp, #0x110. ECDSA normalizes 73 times. Reverted. ReleaseFast codegen, with runtime safety turned off because an imported module still emitted overflow checks, shrank point_double from sub sp, #0xe0 (10 str, 9 ldr, two panic bls) to sub sp, #0xc0 (9 str, 7 ldr, no bl). fe_mul is still the inlined widening multiply: 24 mul and 22 umulh, and no sub sp of its own. A bench at load 12.7 read ECDSA ratio_min 1.667 against 1.920 while fe_mul read 27.54 ns against 12.38 ns, so that ratio is not a keep. Forcing inline on mul, add, sub, reduceField, and times left point_double with no field bl, sub sp, #0xc0, 8 str and 6 ldr. ECDSA ratio_min was 1.872 against 1.920. Explicit four-limb fields spilled point_double to 27 str under sub sp, #0xb60, and a 4-lane vector spilled it to 15 str under sub sp, #0x990. The u256 form, 8 str and 6 ldr under sub sp, #0xc0, stays.",
+  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried. A dedicated 4x64 square, 10 limb multiplies against 16, lowered the isolated fe_sqr own min from 13.15 ns to 11.93 ns and left the verify field-op total at 1950, of which 808 were squares. Point.double called that square five times (bl _root.sqr) and the square spilled a 0xc0 frame, so point_double moved from 88.10 ns to 94.63 ns and the verify ratio_min values rose. Reverted. A lazy 5x52 field with one 2^260 fold and no normalize inside mul raised fe_mul from 12.38 ns to 34.79 ns. point_double contains 71 str and 39 ldr, against 10 str and 9 ldr for the inlined widening multiply, and it calls fe_mul, which opens with sub sp, #0x110. ECDSA normalizes 73 times. Reverted. ReleaseFast codegen, with runtime safety turned off because an imported module still emitted overflow checks, shrank point_double from sub sp, #0xe0 (10 str, 9 ldr, two panic bls) to sub sp, #0xc0 (9 str, 7 ldr, no bl). fe_mul is still the inlined widening multiply: 24 mul and 22 umulh, and no sub sp of its own. A bench at load 12.7 read ECDSA ratio_min 1.667 against 1.920 while fe_mul read 27.54 ns against 12.38 ns, so that ratio is not a keep. Forcing inline on mul, add, sub, reduceField, and times left point_double with no field bl, sub sp, #0xc0, 8 str and 6 ldr. ECDSA ratio_min was 1.872 against 1.920. Explicit four-limb fields spilled point_double to 27 str under sub sp, #0xb60, and a 4-lane vector spilled it to 15 str under sub sp, #0x990. The u256 form, 8 str and 6 ldr under sub sp, #0xc0, stays. The inlined 10-product square put no bl in point_double and spilled it instead: sub sp, #0x770, 25 str and 15 ldr, against 8 str and 6 ldr. Reverted.",
   "provenance": {
     "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
     "source_commit": "041621db04b32bcb2e81be5e89613ebd31f39d34",
@@ -595,6 +619,14 @@
       "vector_str": 15,
       "u256_str": 8,
       "u256_ldr": 6
+    },
+    "inlined_dedicated_sqr": {
+      "kept": false,
+      "point_double_frame": "sub sp, #0x770",
+      "point_double_str": 25,
+      "point_double_ldr": 15,
+      "u256_str": 8,
+      "u256_frame": "sub sp, #0xc0"
     }
   }
 }
