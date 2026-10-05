@@ -29,6 +29,8 @@ BENCHMARK_GATE ?= baseline_5k
 CRYPTO_BACKEND ?= c_binding
 SELF_HOSTED_DATE ?= $(RESULT_DATE)
 TOOLCHAIN_ENV = ZIG_TOOLCHAIN_SHA256=$$(python3 ../../Project/scripts/provenance.py --zig-binary $(ZIG))
+# Load, competing builds, and thermal state travel with later kernel proofs.
+stamp_ambient = python3 -c 'import json,os,subprocess,sys; p=sys.argv[1]; d=json.load(open(p)); ps=subprocess.check_output(["ps","-axo","command="],text=True); therm=subprocess.run(["pmset","-g","therm"],capture_output=True,text=True); lines=ps.splitlines(); d["ambient"]={"loadavg":[round(x,2) for x in os.getloadavg()],"other_zig_build":any("zig" in line and " build" in line for line in lines),"sync_running":any(("pybitnode" in line) or ("tsbitnode" in line) or ("sync_batch" in line) or ("syncRunner" in line) or ("zigbitnode" in line and " sync" in line) for line in lines),"thermal":(therm.stdout.strip() or None) if therm.returncode==0 else None}; json.dump(d,open(p,"w"),separators=(",",":")); open(p,"a").write("\n")'
 
 ZIG_PROOF_ARGS ?=
 .PHONY: build test check-toolchain zig-node-status zig-node-storage-proof zig-node-codec-vectors zig-node-native-crypto-vectors zig-node-script-corpus zig-node-script-corpus-shadow test-crypto-vectors test-crypto-mutations crypto-bench crypto-profile docker-config docker-build docker-warm docker-status docker-storage-proof docker-script-corpus docker-proof-local docker-proof-10k docker-proof-50k docker-proof-100k docker-proof-post-100k-to-tip docker-smoke-once native-shadow-5k native-shadow-50k native-shadow-100k native-storage-proof docker-native-shadow-5k docker-native-shadow-50k docker-native-shadow-100k docker-native-storage-proof self-hosted-5k self-hosted-50k self-hosted-100k own-curve-kernel-50k own-curve-kernel-100k docker-self-hosted-5k docker-self-hosted-50k mempool-replay build-template clean
@@ -227,10 +229,12 @@ self-hosted-100k: check-toolchain
 own-curve-kernel-50k: check-toolchain
 	rm -rf $(RB_STATE_ROOT)/zig/own-curve-kernel-50k
 	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 50000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/own-curve-kernel-50k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_own_curve_kernel_50k_host_$(SELF_HOSTED_DATE).json
+	$(stamp_ambient) ../Shared/conformance/results/zig_own_curve_kernel_50k_host_$(SELF_HOSTED_DATE).json
 
 own-curve-kernel-100k: check-toolchain
 	rm -rf $(RB_STATE_ROOT)/zig/own-curve-kernel-100k
 	$(TOOLCHAIN_ENV) $(ZIG) build -Doptimize=ReleaseSafe -Dstore=native -Dcrypto-backend=own_curve run -- sync --store=native --target 100000 --snapshot-every 25000 --benchmark-lane self_hosted --datadir $(RB_STATE_ROOT)/zig/own-curve-kernel-100k --peer $(or $(PEER),127.0.0.1:48333) --output ../Shared/conformance/results/zig_own_curve_kernel_100k_host_$(SELF_HOSTED_DATE).json
+	$(stamp_ambient) ../Shared/conformance/results/zig_own_curve_kernel_100k_host_$(SELF_HOSTED_DATE).json
 
 docker-self-hosted-5k:
 	CRYPTO_BACKEND=own_curve STORE=native RB_PROVENANCE_IMAGE=rb/zig:own-curve $(MAKE) docker-build

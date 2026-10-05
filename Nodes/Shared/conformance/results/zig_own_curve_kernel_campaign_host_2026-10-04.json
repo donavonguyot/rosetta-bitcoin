@@ -226,5 +226,45 @@
     "run_ref": "zig-own-curve-kernel",
     "toolchain_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec"
   },
-  "binary_note": "source_commit pins the arithmetic tree at 041621d. The measured binary also contains the native-store compile gate in Nodes/Zig/src/main.zig."
+  "binary_note": "source_commit pins the arithmetic tree at 041621d. The measured binary also contains the native-store compile gate in Nodes/Zig/src/main.zig.",
+  "bench_v2": {
+    "reason": "The October 4 ECDSA median was 28335 ns and the October 5 same-tree median was 37202 ns. The v1 instrument timed own_curve, then the C binding, and judged the median, so a clock change landed on one arm.",
+    "scheduling": "utility",
+    "qos": "utility",
+    "mode_note": "Default and user-interactive runs drifted while Flutter, Clang, and Chrome occupied the machine. taskpolicy -c utility, measuring each operation twice back to back in one process, is the mode that held the verify ratios.",
+    "baseline": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_v2_2026-10-05.json",
+    "repeat": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_v2_repeat_2026-10-05.json",
+    "loadavg": [
+      4.31,
+      8.11,
+      8.67
+    ],
+    "ratio_min": {
+      "ecdsa_verify": 1.92,
+      "schnorr_verify": 1.949,
+      "taproot_tweak_check": 1.587,
+      "pubkey_parse": 1.582
+    },
+    "repeat_ratio_min": {
+      "ecdsa_verify": 1.911,
+      "schnorr_verify": 1.948,
+      "taproot_tweak_check": 1.586,
+      "pubkey_parse": 1.585
+    },
+    "own_min_ns": {
+      "ecdsa_verify": 27897.08,
+      "fe_mul": 12.38,
+      "fe_sqr": 13.15,
+      "point_double": 88.1,
+      "fe_inv": 798.98
+    },
+    "repeat_own_min_ns": {
+      "ecdsa_verify": 27845.64,
+      "fe_mul": 12.23,
+      "fe_sqr": 13.33,
+      "point_double": 88.12,
+      "fe_inv": 802.42
+    },
+    "acceptance_residual": "double_scalar_mul, point_add, and to_affine own mins differ by 3.49, 3.62, and 3.56 percent. Every verify ratio_min, and the fe_mul, fe_sqr, and point_double own mins, agree within 1.4 percent."
+  }
 }

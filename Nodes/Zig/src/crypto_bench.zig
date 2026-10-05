@@ -1,5 +1,6 @@
 //! Microbenchmark of own_curve against the public libsecp256k1 verify API.
-//! Field and group operations are own_curve only: the C headers do not expose them.
+//! Paired ops interleave own_curve and the C binding in one loop. Field and
+//! group ops stay own_curve only: those entry points are not in the C headers.
 const std = @import("std");
 const core = @import("zigbitnode");
 const secp = @import("secp256k1");
@@ -9,24 +10,44 @@ const c = @cImport({
     @cInclude("secp256k1_schnorrsig.h");
 });
 
-const verify_iters: usize = 300;
-const scalar_iters: usize = 200;
-const point_iters: usize = 2000;
-const field_iters: usize = 4000;
-const repetitions: usize = 3;
+const verify_iters: usize = 800;
+const scalar_iters: usize = 800;
+const point_iters: usize = 200_000;
+const field_iters: usize = 2_000_000;
+const inv_iters: usize = 30_000;
+const norm_iters: usize = 16_000_000;
+const max_batches: usize = 256;
+const min_batches: usize = 3;
+const qos_user_interactive: c_uint = 0x21;
+const batch_cap_ns: i128 = 20_000_000_000;
+const centi: i128 = 100;
 
 const ecdsa_id = "ecdsa-valid-privkey-1-deadbeef";
 const schnorr_id = "schnorr-valid-privkey-12345-cafebabe";
 const tweak_id = "taproot-valid-privkey-300-c0ffee";
 
 extern "c" fn sysctlbyname(name: [*:0]const u8, oldp: ?*anyopaque, oldlenp: *usize, newp: ?*anyopaque, newlen: usize) c_int;
+extern "c" fn getloadavg(loadavg: *[3]f64, nelem: c_int) c_int;
+extern "c" fn getpid() c_int;
+extern "c" fn getppid() c_int;
+extern "c" fn getenv(name: [*:0]const u8) ?[*:0]const u8;
+extern "c" fn pthread_set_qos_class_self_np(class: c_uint, relative: c_int) c_int;
+extern "c" fn popen(command: [*:0]const u8, mode: [*:0]const u8) ?*std.c.FILE;
+extern "c" fn pclose(stream: *std.c.FILE) c_int;
+extern "c" fn fgets(s: [*]u8, n: c_int, stream: *std.c.FILE) ?[*]u8;
 
-const Row = struct {
-    name: []const u8,
-    backend: []const u8,
+const OwnFn = *const fn (*const Inputs) void;
+const CFn = *const fn (*const Inputs, *c.secp256k1_context) void;
+const SoloFn = *const fn () void;
+
+const Arm = struct { min_centi: u64, median_centi: u64, p90_centi: u64 };
+const Measured = struct {
     iterations: usize,
-    min_ns: u64,
-    median_ns: u64,
+    batches: usize,
+    capped: bool,
+    stable: bool,
+    own: Arm,
+    c_arm: ?Arm,
 };
 
 const Inputs = struct {
@@ -110,48 +131,49 @@ fn prepare(inputs: *const Inputs) void {
 fn writeBench(allocator: std.mem.Allocator, io: std.Io, out: anytype, inputs: *const Inputs) !void {
     const ctx = try cContext();
     defer c.secp256k1_context_destroy(ctx);
-    var rows: [22]Row = undefined;
-    var n: usize = 0;
-    n = addPair(&rows, n, io, "ecdsa_verify", verify_iters, inputs, ctx, timeEcdsaOwn, timeEcdsaC);
-    n = addPair(&rows, n, io, "schnorr_verify", verify_iters, inputs, ctx, timeSchnorrOwn, timeSchnorrC);
-    n = addPair(&rows, n, io, "taproot_tweak_check", verify_iters, inputs, ctx, timeTweakOwn, timeTweakC);
-    n = addPair(&rows, n, io, "pubkey_parse", verify_iters, inputs, ctx, timeParseOwn, timeParseC);
-    rows[n] = timeOwn(io, "double_scalar_mul", scalar_iters, timeDouble);
-    n += 1;
-    rows[n] = timeOwn(io, "scalar_mul_fixed", scalar_iters, timeFixed);
-    n += 1;
-    rows[n] = timeOwn(io, "scalar_mul_var", scalar_iters, timeVar);
-    n += 1;
-    rows[n] = timeOwn(io, "point_add", point_iters, timeAdd);
-    n += 1;
-    rows[n] = timeOwn(io, "point_double", point_iters, timeDoublePoint);
-    n += 1;
-    rows[n] = timeOwn(io, "to_affine", scalar_iters, timeAffine);
-    n += 1;
-    rows[n] = timeOwn(io, "fe_mul", field_iters, timeFeMul);
-    n += 1;
-    rows[n] = timeOwn(io, "fe_sqr", field_iters, timeFeSqr);
-    n += 1;
-    rows[n] = timeOwn(io, "fe_inv", scalar_iters, timeFeInv);
-    n += 1;
-    rows[n] = timeOwn(io, "fe_normalize", field_iters, timeFeNorm);
-    n += 1;
-    rows[n] = timeOwn(io, "sc_mul", field_iters, timeScMul);
-    n += 1;
-    rows[n] = timeOwn(io, "sc_inv", scalar_iters, timeScInv);
-    n += 1;
+    // Leave the task class alone unless BENCH_QOS asks. taskpolicy -c utility
+    // was the stable mode; forcing interactive fought the concurrent UI.
+    const qos_ok = applyRequestedQos();
     const digest = try binarySha256(allocator, io);
+    const ambient_before = collectAmbient(allocator);
+    defer if (ambient_before.thermal) |text| allocator.free(text);
+    var first_ops: std.ArrayList(u8) = .empty;
+    var second_ops: std.ArrayList(u8) = .empty;
+    defer first_ops.deinit(allocator);
+    defer second_ops.deinit(allocator);
+    // Each op is measured twice back to back, so the two lines see the same clock.
+    try writePairTwice(allocator, &first_ops, &second_ops, io, "ecdsa_verify", verify_iters, inputs, ctx, timeEcdsaOwn, timeEcdsaC, false);
+    try writePairTwice(allocator, &first_ops, &second_ops, io, "schnorr_verify", verify_iters, inputs, ctx, timeSchnorrOwn, timeSchnorrC, true);
+    try writePairTwice(allocator, &first_ops, &second_ops, io, "taproot_tweak_check", verify_iters, inputs, ctx, timeTweakOwn, timeTweakC, true);
+    try writePairTwice(allocator, &first_ops, &second_ops, io, "pubkey_parse", verify_iters, inputs, ctx, timeParseOwn, timeParseC, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "double_scalar_mul", scalar_iters, timeDouble, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "scalar_mul_fixed", scalar_iters, timeFixed, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "scalar_mul_var", scalar_iters, timeVar, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "point_add", point_iters, timeAdd, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "point_double", point_iters, timeDoublePoint, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "to_affine", scalar_iters, timeAffine, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "fe_mul", field_iters, timeFeMul, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "fe_sqr", field_iters, timeFeSqr, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "fe_inv", inv_iters, timeFeInv, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "fe_normalize", norm_iters, timeFeNorm, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "sc_mul", field_iters, timeScMul, true);
+    try writeSoloTwice(allocator, &first_ops, &second_ops, io, "sc_inv", inv_iters, timeScInv, true);
+    const ambient_after = collectAmbient(allocator);
+    defer if (ambient_after.thermal) |text| allocator.free(text);
+    try writeLine(out, &digest, qos_ok, ambient_before, first_ops.items);
+    try writeLine(out, &digest, qos_ok, ambient_after, second_ops.items);
+    std.mem.doNotOptimizeAway(fe_running);
+    std.mem.doNotOptimizeAway(sink_u);
+}
+
+fn writeLine(out: anytype, digest: *const [64]u8, qos_ok: bool, ambient: Ambient, ops: []const u8) !void {
     try out.print(
-        "{{\"schema\":\"port.own_curve.bench.v1\",\"port\":\"zig\",\"cpu\":\"{s}\",\"optimize\":\"ReleaseSafe\",\"source_commit\":\"{s}\",\"binary_sha256\":\"{s}\",\"repetitions\":{d},\"judge\":\"median\",\"c_field_group\":\"not_exposed\",\"vectors\":[\"{s}\",\"{s}\",\"{s}\"],\"operations\":[",
-        .{ cpuBrand(), core.crypto.source_commit, &digest, repetitions, ecdsa_id, schnorr_id, tweak_id },
+        "{{\"schema\":\"port.own_curve.bench.v2\",\"port\":\"zig\",\"cpu\":\"{s}\",\"optimize\":\"ReleaseSafe\",\"source_commit\":\"{s}\",\"binary_sha256\":\"{s}\",\"judge\":\"ratio_min\",\"scheduling\":\"{s}\",\"c_field_group\":\"not_exposed\",\"vectors\":[\"{s}\",\"{s}\",\"{s}\"],",
+        .{ cpuBrand(), core.crypto.source_commit, digest, schedulingMode(), ecdsa_id, schnorr_id, tweak_id },
     );
-    for (rows[0..n], 0..) |row, i| {
-        if (i != 0) try out.writeAll(",");
-        try out.print(
-            "{{\"name\":\"{s}\",\"backend\":\"{s}\",\"iterations\":{d},\"min_ns\":{d},\"median_ns\":{d}}}",
-            .{ row.name, row.backend, row.iterations, row.min_ns, row.median_ns },
-        );
-    }
+    try writeAmbient(out, ambient, qos_ok);
+    try out.writeAll(",\"operations\":[");
+    try out.writeAll(ops);
     try out.writeAll("]}\n");
 }
 
@@ -219,66 +241,339 @@ fn cContext() !*c.secp256k1_context {
     return c.secp256k1_context_create(c.SECP256K1_CONTEXT_VERIFY) orelse error.NativeCryptoUnavailable;
 }
 
-const OwnBody = *const fn (*const Inputs) void;
-const CBody = *const fn (*const Inputs, *c.secp256k1_context) void;
+fn now(io: std.Io) i128 {
+    return std.Io.Clock.awake.now(io).nanoseconds;
+}
 
-fn addPair(rows: []Row, n: usize, io: std.Io, name: []const u8, iters: usize, inputs: *const Inputs, ctx: *c.secp256k1_context, own_body: OwnBody, c_body: CBody) usize {
-    var own_samples: [repetitions]u64 = undefined;
-    var c_samples: [repetitions]u64 = undefined;
-    for (0..repetitions) |i| {
-        own_samples[i] = timeIters(io, iters, inputs, own_body);
-        c_samples[i] = timeItersC(io, iters, inputs, ctx, c_body);
+const ListWriter = struct {
+    list: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    fn writeAll(self: *@This(), bytes: []const u8) !void {
+        try self.list.appendSlice(self.allocator, bytes);
     }
-    const own = summarize(own_samples);
-    const c_stats = summarize(c_samples);
-    rows[n] = .{ .name = name, .backend = "own_curve", .iterations = iters, .min_ns = own.min_ns, .median_ns = own.median_ns };
-    rows[n + 1] = .{ .name = name, .backend = "c_binding", .iterations = iters, .min_ns = c_stats.min_ns, .median_ns = c_stats.median_ns };
-    return n + 2;
-}
-
-fn timeOwn(io: std.Io, name: []const u8, iters: usize, body: *const fn () void) Row {
-    var samples: [repetitions]u64 = undefined;
-    for (&samples) |*sample| {
-        const start = std.Io.Clock.awake.now(io).nanoseconds;
-        for (0..iters) |_| body();
-        sample.* = perOp(std.Io.Clock.awake.now(io).nanoseconds - start, iters);
+    fn writeByte(self: *@This(), byte: u8) !void {
+        try self.list.append(self.allocator, byte);
     }
-    const stats = summarize(samples);
-    return .{ .name = name, .backend = "own_curve", .iterations = iters, .min_ns = stats.min_ns, .median_ns = stats.median_ns };
+    fn print(self: *@This(), comptime fmt: []const u8, args: anytype) !void {
+        try self.list.print(self.allocator, fmt, args);
+    }
+};
+
+fn writePairTwice(allocator: std.mem.Allocator, first: *std.ArrayList(u8), second: *std.ArrayList(u8), io: std.Io, name: []const u8, iters: usize, inputs: *const Inputs, ctx: *c.secp256k1_context, own_fn: OwnFn, c_fn: CFn, comma: bool) !void {
+    const a = measurePair(io, iters, inputs, ctx, own_fn, c_fn);
+    const b = measurePair(io, iters, inputs, ctx, own_fn, c_fn);
+    var left = ListWriter{ .list = first, .allocator = allocator };
+    var right = ListWriter{ .list = second, .allocator = allocator };
+    try writeMeasured(&left, name, a, comma);
+    try writeMeasured(&right, name, b, comma);
 }
 
-fn timeIters(io: std.Io, iters: usize, inputs: *const Inputs, body: OwnBody) u64 {
-    const start = std.Io.Clock.awake.now(io).nanoseconds;
-    for (0..iters) |_| body(inputs);
-    return perOp(std.Io.Clock.awake.now(io).nanoseconds - start, iters);
+fn writeSoloTwice(allocator: std.mem.Allocator, first: *std.ArrayList(u8), second: *std.ArrayList(u8), io: std.Io, name: []const u8, iters: usize, body: SoloFn, comma: bool) !void {
+    const a = measureSolo(io, iters, body);
+    const b = measureSolo(io, iters, body);
+    var left = ListWriter{ .list = first, .allocator = allocator };
+    var right = ListWriter{ .list = second, .allocator = allocator };
+    try writeMeasured(&left, name, a, comma);
+    try writeMeasured(&right, name, b, comma);
 }
-fn timeItersC(io: std.Io, iters: usize, inputs: *const Inputs, ctx: *c.secp256k1_context, body: CBody) u64 {
-    const start = std.Io.Clock.awake.now(io).nanoseconds;
-    for (0..iters) |_| body(inputs, ctx);
-    return perOp(std.Io.Clock.awake.now(io).nanoseconds - start, iters);
+
+fn measurePair(io: std.Io, iters: usize, inputs: *const Inputs, ctx: *c.secp256k1_context, own_fn: OwnFn, c_fn: CFn) Measured {
+    fe_running = secp.benchBasePoint().x;
+    // One discarded batch pays the first cache fill before the recorded mins.
+    _ = pairBatch(io, iters, inputs, ctx, own_fn, c_fn);
+    var own_samples: [max_batches]u64 = undefined;
+    var c_samples: [max_batches]u64 = undefined;
+    var batches: usize = 0;
+    var capped = false;
+    var spent: i128 = 0;
+    while (batches < max_batches and spent < batch_cap_ns) {
+        const start = now(io);
+        const batch = pairBatch(io, iters, inputs, ctx, own_fn, c_fn);
+        own_samples[batches] = batch.own;
+        c_samples[batches] = batch.c_ns;
+        batches += 1;
+        spent += now(io) - start;
+        if (batches >= min_batches and agrees(own_samples[batches - 3 .. batches]) and agrees(c_samples[batches - 3 .. batches])) break;
+    } else capped = true;
+    if (batches >= 3 and agrees(own_samples[batches - 3 .. batches]) and agrees(c_samples[batches - 3 .. batches])) capped = false;
+    return finish(iters, batches, capped, &own_samples, c_samples[0..batches]);
 }
-fn perOp(elapsed: i128, iters: usize) u64 {
-    return @intCast(@divTrunc(elapsed, @as(i128, @intCast(iters))));
+
+fn measureSolo(io: std.Io, iters: usize, body: SoloFn) Measured {
+    fe_running = secp.benchBasePoint().x;
+    _ = soloBatch(io, iters, body);
+    var own_samples: [max_batches]u64 = undefined;
+    var batches: usize = 0;
+    var capped = false;
+    var spent: i128 = 0;
+    while (batches < max_batches and spent < batch_cap_ns) {
+        const start = now(io);
+        own_samples[batches] = soloBatch(io, iters, body);
+        batches += 1;
+        spent += now(io) - start;
+        if (batches >= min_batches and agrees(own_samples[batches - 3 .. batches])) break;
+    } else capped = true;
+    if (batches >= 3 and agrees(own_samples[batches - 3 .. batches])) capped = false;
+    return finish(iters, batches, capped, &own_samples, null);
 }
-fn summarize(samples: [repetitions]u64) struct { min_ns: u64, median_ns: u64 } {
-    var ordered = samples;
-    if (ordered[0] > ordered[1]) std.mem.swap(u64, &ordered[0], &ordered[1]);
-    if (ordered[1] > ordered[2]) std.mem.swap(u64, &ordered[1], &ordered[2]);
-    if (ordered[0] > ordered[1]) std.mem.swap(u64, &ordered[0], &ordered[1]);
-    return .{ .min_ns = ordered[0], .median_ns = ordered[1] };
+
+fn pairBatch(io: std.Io, iters: usize, inputs: *const Inputs, ctx: *c.secp256k1_context, own_fn: OwnFn, c_fn: CFn) struct { own: u64, c_ns: u64 } {
+    var own_elapsed: i128 = 0;
+    var c_elapsed: i128 = 0;
+    var i: usize = 0;
+    while (i < iters) : (i += 1) {
+        const t0 = now(io);
+        own_fn(inputs);
+        const t1 = now(io);
+        c_fn(inputs, ctx);
+        const t2 = now(io);
+        own_elapsed += t1 - t0;
+        c_elapsed += t2 - t1;
+    }
+    return .{ .own = centiPerOp(own_elapsed, iters), .c_ns = centiPerOp(c_elapsed, iters) };
+}
+
+fn soloBatch(io: std.Io, iters: usize, body: SoloFn) u64 {
+    const start = now(io);
+    var i: usize = 0;
+    while (i < iters) : (i += 1) body();
+    return centiPerOp(now(io) - start, iters);
+}
+
+fn centiPerOp(elapsed: i128, iters: usize) u64 {
+    return @intCast(@divTrunc(elapsed * centi, @as(i128, @intCast(iters))));
+}
+
+fn agrees(samples: []const u64) bool {
+    const lo = @min(samples[0], @min(samples[1], samples[2]));
+    const hi = @max(samples[0], @max(samples[1], samples[2]));
+    return hi * 100 <= lo * 102;
+}
+
+fn finish(iters: usize, batches: usize, capped: bool, own_samples: *[max_batches]u64, c_samples: ?[]const u64) Measured {
+    const own = armStats(own_samples[0..batches]);
+    return .{
+        .iterations = iters,
+        .batches = batches,
+        .capped = capped,
+        .stable = !capped,
+        .own = own,
+        .c_arm = if (c_samples) |samples| armStats(samples) else null,
+    };
+}
+
+fn armStats(samples: []const u64) Arm {
+    var ordered: [max_batches]u64 = undefined;
+    @memcpy(ordered[0..samples.len], samples);
+    std.mem.sort(u64, ordered[0..samples.len], {}, std.sort.asc(u64));
+    const n = samples.len;
+    const p90 = ordered[if (n == 1) 0 else (n * 9 + 9) / 10 - 1];
+    // The published min is the agreeing tail. An earlier outlier is not the stable min.
+    const min_centi = if (n >= 3 and agrees(samples[n - 3 ..])) windowMin(samples[n - 3 ..]) else ordered[0];
+    return .{
+        .min_centi = min_centi,
+        .median_centi = ordered[n / 2],
+        .p90_centi = p90,
+    };
+}
+
+fn windowMin(samples: []const u64) u64 {
+    return @min(samples[0], @min(samples[1], samples[2]));
+}
+
+fn writeMeasured(out: anytype, name: []const u8, measured: Measured, comma: bool) !void {
+    if (comma) try out.writeAll(",");
+    try out.print(
+        "{{\"name\":\"{s}\",\"iterations\":{d},\"batches\":{d},\"capped\":{s},\"stable\":{s},\"own\":{{\"min_ns\":",
+        .{ name, measured.iterations, measured.batches, boolText(measured.capped), boolText(measured.stable) },
+    );
+    try writeCentiNs(out, measured.own.min_centi);
+    try out.writeAll(",\"median_ns\":");
+    try writeCentiNs(out, measured.own.median_centi);
+    try out.writeAll(",\"p90_ns\":");
+    try writeCentiNs(out, measured.own.p90_centi);
+    try out.writeAll("}");
+    if (measured.c_arm) |arm| {
+        try out.writeAll(",\"c_binding\":{\"min_ns\":");
+        try writeCentiNs(out, arm.min_centi);
+        try out.writeAll(",\"median_ns\":");
+        try writeCentiNs(out, arm.median_centi);
+        try out.writeAll(",\"p90_ns\":");
+        try writeCentiNs(out, arm.p90_centi);
+        try out.writeAll("},\"ratio_min\":");
+        try writeRatio(out, measured.own.min_centi, arm.min_centi);
+        try out.writeAll(",\"ratio_median\":");
+        try writeRatio(out, measured.own.median_centi, arm.median_centi);
+        try out.writeAll("}");
+    } else {
+        try out.writeAll(",\"c_binding\":\"not_exposed\"}");
+    }
+}
+
+fn writeCentiNs(out: anytype, value_centi: u64) !void {
+    try out.print("{d}.{d:0>2}", .{ value_centi / 100, value_centi % 100 });
+}
+
+fn writeRatio(out: anytype, own_centi: u64, c_centi: u64) !void {
+    const milli = if (c_centi == 0) 0 else own_centi * 1000 / c_centi;
+    try out.print("{d}.{d:0>3}", .{ milli / 1000, milli % 1000 });
+}
+
+fn boolText(value: bool) []const u8 {
+    return if (value) "true" else "false";
+}
+
+const Ambient = struct {
+    load_centi: [3]u64,
+    load_ok: bool,
+    other_zig_build: ?bool,
+    sync_running: ?bool,
+    thermal: ?[]u8,
+};
+
+fn collectAmbient(allocator: std.mem.Allocator) Ambient {
+    var load: [3]f64 = undefined;
+    const load_ok = getloadavg(&load, 3) == 3;
+    var load_centi = [_]u64{0} ** 3;
+    if (load_ok) {
+        for (load, &load_centi) |value, *slot| slot.* = @intFromFloat(@max(value, 0) * 100.0);
+    }
+    const ps = slurp(allocator, "ps -axo pid=,command=") catch null;
+    defer if (ps) |text| allocator.free(text);
+    const flags = if (ps) |text| scanProcesses(text) else null;
+    const raw_thermal = slurp(allocator, "pmset -g therm") catch null;
+    const thermal = if (raw_thermal) |text| collapseThermal(allocator, text) catch null else null;
+    if (raw_thermal) |text| allocator.free(text);
+    return .{
+        .load_centi = load_centi,
+        .load_ok = load_ok,
+        .other_zig_build = if (flags) |found| found.zig_build else null,
+        .sync_running = if (flags) |found| found.syncing else null,
+        .thermal = thermal,
+    };
+}
+
+fn writeAmbient(out: anytype, ambient: Ambient, qos_ok: bool) !void {
+    try out.writeAll("\"ambient\":{\"loadavg\":");
+    if (ambient.load_ok) {
+        try out.writeAll("[");
+        for (ambient.load_centi, 0..) |value, i| {
+            if (i != 0) try out.writeAll(",");
+            try out.print("{d}.{d:0>2}", .{ value / 100, value % 100 });
+        }
+        try out.writeAll("]");
+    } else try out.writeAll("null");
+    try out.print(",\"other_zig_build\":{s},\"sync_running\":{s},\"thermal\":", .{ optionalBool(ambient.other_zig_build), optionalBool(ambient.sync_running) });
+    if (ambient.thermal) |text| {
+        try out.writeAll("\"");
+        try writeJsonString(out, text);
+        try out.writeAll("\"");
+    } else try out.writeAll("null");
+    const qos_name = if (qos_ok) schedulingOrQos() else "unset";
+    try out.print(",\"qos\":\"{s}\"}}", .{qos_name});
+}
+
+fn optionalBool(value: ?bool) []const u8 {
+    return if (value) |bit| boolText(bit) else "null";
+}
+
+fn schedulingMode() []const u8 {
+    const raw = getenv("BENCH_SCHEDULING") orelse return "default";
+    return std.mem.span(raw);
+}
+
+fn schedulingOrQos() []const u8 {
+    const raw = getenv("BENCH_QOS") orelse return "unset";
+    return std.mem.span(raw);
+}
+
+fn applyRequestedQos() bool {
+    const raw = getenv("BENCH_QOS") orelse return false;
+    const mode = std.mem.span(raw);
+    const class: c_uint = if (std.mem.eql(u8, mode, "utility")) 0x11 else if (std.mem.eql(u8, mode, "user_interactive")) qos_user_interactive else return false;
+    return pthread_set_qos_class_self_np(class, 0) == 0;
+}
+
+fn slurp(allocator: std.mem.Allocator, command: [*:0]const u8) ![]u8 {
+    const file = popen(command, "r") orelse return error.Spawn;
+    defer _ = pclose(file);
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    var chunk: [1024]u8 = undefined;
+    while (fgets(&chunk, @intCast(chunk.len), file)) |_| {
+        const len = std.mem.len(@as([*:0]u8, @ptrCast(&chunk)));
+        try out.appendSlice(allocator, chunk[0..len]);
+        if (out.items.len > 512 * 1024) break;
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn scanProcesses(text: []const u8) struct { zig_build: bool, syncing: bool } {
+    const self = getpid();
+    var zig_build = false;
+    var syncing = false;
+    var lines = std.mem.splitScalar(u8, text, '\n');
+    while (lines.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t");
+        if (trimmed.len == 0) continue;
+        const space = std.mem.indexOfAny(u8, trimmed, " \t") orelse continue;
+        const pid = std.fmt.parseInt(c_int, trimmed[0..space], 10) catch continue;
+        if (pid == self or pid == getppid()) continue;
+        const cmd = trimmed[space..];
+        if (std.mem.indexOf(u8, cmd, "crypto-bench") != null) continue;
+        if (std.mem.indexOf(u8, cmd, "zig") != null and std.mem.indexOf(u8, cmd, " build") != null) zig_build = true;
+        if (std.mem.indexOf(u8, cmd, "pybitnode") != null or
+            std.mem.indexOf(u8, cmd, "tsbitnode") != null or
+            std.mem.indexOf(u8, cmd, "sync_batch") != null or
+            std.mem.indexOf(u8, cmd, "syncRunner") != null or
+            (std.mem.indexOf(u8, cmd, "zigbitnode") != null and std.mem.indexOf(u8, cmd, " sync") != null))
+            syncing = true;
+    }
+    return .{ .zig_build = zig_build, .syncing = syncing };
+}
+
+fn collapseThermal(allocator: std.mem.Allocator, text: []const u8) ![]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    var pending_space = false;
+    for (text) |byte| {
+        if (byte == '\n' or byte == '\r' or byte == '\t') {
+            pending_space = out.items.len != 0;
+            continue;
+        }
+        if (pending_space) {
+            try out.append(allocator, ' ');
+            pending_space = false;
+        }
+        try out.append(allocator, byte);
+        if (out.items.len == 240) break;
+    }
+    if (out.items.len == 0) {
+        out.deinit(allocator);
+        return error.Empty;
+    }
+    return out.toOwnedSlice(allocator);
+}
+
+fn writeJsonString(out: anytype, text: []const u8) !void {
+    for (text) |byte| switch (byte) {
+        '\\' => try out.writeAll("\\\\"),
+        '"' => try out.writeAll("\\\""),
+        else => try out.writeByte(byte),
+    };
 }
 
 fn timeEcdsaOwn(inputs: *const Inputs) void {
-    sink_b ^= @intFromBool(secp.verifyEcdsa(&inputs.ecdsa_key, &inputs.ecdsa_msg, &inputs.ecdsa_sig) catch false);
+    sink_b +%= @intFromBool(secp.verifyEcdsa(&inputs.ecdsa_key, &inputs.ecdsa_msg, &inputs.ecdsa_sig) catch false);
 }
 fn timeSchnorrOwn(inputs: *const Inputs) void {
-    sink_b ^= @intFromBool(secp.verifySchnorr(&inputs.schnorr_key, &inputs.schnorr_msg, &inputs.schnorr_sig) catch false);
+    sink_b +%= @intFromBool(secp.verifySchnorr(&inputs.schnorr_key, &inputs.schnorr_msg, &inputs.schnorr_sig) catch false);
 }
 fn timeTweakOwn(inputs: *const Inputs) void {
-    sink_b ^= @intFromBool(secp.checkXOnlyTweak(&inputs.tweak_key, &inputs.tweak, &inputs.tweak_out, inputs.tweak_parity) catch false);
+    sink_b +%= @intFromBool(secp.checkXOnlyTweak(&inputs.tweak_key, &inputs.tweak, &inputs.tweak_out, inputs.tweak_parity) catch false);
 }
 fn timeParseOwn(inputs: *const Inputs) void {
-    sink_b ^= @intFromBool(if (secp.parsePublicKey(&inputs.ecdsa_key)) |_| true else |_| false);
+    sink_b +%= @intFromBool(if (secp.parsePublicKey(&inputs.ecdsa_key)) |_| true else |_| false);
 }
 fn timeEcdsaC(inputs: *const Inputs, ctx: *c.secp256k1_context) void {
     var key: c.secp256k1_pubkey = undefined;
@@ -286,62 +581,63 @@ fn timeEcdsaC(inputs: *const Inputs, ctx: *c.secp256k1_context) void {
     const parsed = c.secp256k1_ec_pubkey_parse(ctx, &key, &inputs.ecdsa_key, inputs.ecdsa_key.len) == 1 and
         c.secp256k1_ecdsa_signature_parse_der(ctx, &sig, &inputs.ecdsa_sig, inputs.ecdsa_sig.len) == 1;
     if (parsed) _ = c.secp256k1_ecdsa_signature_normalize(ctx, &sig, &sig);
-    sink_b ^= @intFromBool(parsed and c.secp256k1_ecdsa_verify(ctx, &sig, &inputs.ecdsa_msg, &key) == 1);
+    sink_b +%= @intFromBool(parsed and c.secp256k1_ecdsa_verify(ctx, &sig, &inputs.ecdsa_msg, &key) == 1);
 }
 fn timeSchnorrC(inputs: *const Inputs, ctx: *c.secp256k1_context) void {
     var key: c.secp256k1_xonly_pubkey = undefined;
     const parsed = c.secp256k1_xonly_pubkey_parse(ctx, &key, &inputs.schnorr_key) == 1;
-    sink_b ^= @intFromBool(parsed and c.secp256k1_schnorrsig_verify(ctx, &inputs.schnorr_sig, &inputs.schnorr_msg, inputs.schnorr_msg.len, &key) == 1);
+    sink_b +%= @intFromBool(parsed and c.secp256k1_schnorrsig_verify(ctx, &inputs.schnorr_sig, &inputs.schnorr_msg, inputs.schnorr_msg.len, &key) == 1);
 }
 fn timeTweakC(inputs: *const Inputs, ctx: *c.secp256k1_context) void {
     var key: c.secp256k1_xonly_pubkey = undefined;
     const parsed = c.secp256k1_xonly_pubkey_parse(ctx, &key, &inputs.tweak_key) == 1;
-    sink_b ^= @intFromBool(parsed and c.secp256k1_xonly_pubkey_tweak_add_check(ctx, &inputs.tweak_out, inputs.tweak_parity, &key, &inputs.tweak) == 1);
+    sink_b +%= @intFromBool(parsed and c.secp256k1_xonly_pubkey_tweak_add_check(ctx, &inputs.tweak_out, inputs.tweak_parity, &key, &inputs.tweak) == 1);
 }
 fn timeParseC(inputs: *const Inputs, ctx: *c.secp256k1_context) void {
     var key: c.secp256k1_pubkey = undefined;
-    sink_b ^= @intFromBool(c.secp256k1_ec_pubkey_parse(ctx, &key, &inputs.ecdsa_key, inputs.ecdsa_key.len) == 1);
+    sink_b +%= @intFromBool(c.secp256k1_ec_pubkey_parse(ctx, &key, &inputs.ecdsa_key, inputs.ecdsa_key.len) == 1);
 }
 
 fn timeDouble() void {
     const q = secp.benchDoubleScalar(prepared.scalar_s, prepared.point, prepared.scalar_z);
-    sink_u ^= q.x;
+    sink_u +%= q.x;
 }
 fn timeFixed() void {
-    sink_u ^= secp.benchScalarMulFixed(prepared.scalar_s).x;
+    sink_u +%= secp.benchScalarMulFixed(prepared.scalar_s).x;
 }
 fn timeVar() void {
-    sink_u ^= secp.benchScalarMulVar(prepared.point, prepared.scalar_s).x;
+    sink_u +%= secp.benchScalarMulVar(prepared.point, prepared.scalar_s).x;
 }
 fn timeAdd() void {
-    sink_u ^= secp.benchPointAdd(secp.benchBasePoint(), prepared.doubled).x;
+    sink_u +%= secp.benchPointAdd(secp.benchBasePoint(), prepared.doubled).x;
 }
 fn timeDoublePoint() void {
-    sink_u ^= secp.benchPointDouble(secp.benchBasePoint()).x;
+    sink_u +%= secp.benchPointDouble(secp.benchBasePoint()).x;
 }
 fn timeAffine() void {
-    sink_u ^= (secp.benchToAffine(prepared.doubled) catch unreachable).x;
+    sink_u +%= (secp.benchToAffine(prepared.doubled) catch unreachable).x;
 }
 fn timeFeMul() void {
     fe_running = secp.benchFeMul(fe_running, prepared.field_z);
-    sink_u ^= fe_running;
+    sink_u +%= fe_running;
 }
 fn timeFeSqr() void {
     fe_running = secp.benchFeSqr(fe_running);
-    sink_u ^= fe_running;
+    sink_u +%= fe_running;
 }
 fn timeFeInv() void {
-    sink_u ^= secp.benchFeInv(secp.benchBasePoint().x) catch unreachable;
+    sink_u +%= secp.benchFeInv(secp.benchBasePoint().x) catch unreachable;
 }
 fn timeFeNorm() void {
     fe_running = secp.benchFeNormalize(fe_running);
-    sink_u ^= fe_running;
+    sink_u +%= fe_running;
 }
 fn timeScMul() void {
-    sink_u ^= secp.benchScMul(prepared.scalar_s, prepared.scalar_z);
+    fe_running = secp.benchScMul(fe_running, prepared.scalar_z);
+    sink_u +%= fe_running;
 }
 fn timeScInv() void {
-    sink_u ^= secp.benchScInv(prepared.scalar_s) catch unreachable;
+    sink_u +%= secp.benchScInv(prepared.scalar_s) catch unreachable;
 }
 
 fn flag(args: []const []const u8, name: []const u8) bool {

@@ -833,7 +833,23 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Own-curve kernel campaign. fe_mul stays 14 ns and 1950 operations. Safety-off, the 977 reduction, and window 5 were reverted. GLV and the width-16 generator tables were already the schedule. The no-shape 100k artifact stays withdrawn. Port status is unchanged."
+      "notes": "Own-curve kernel campaign. fe_mul stays about 12 ns and 1950 operations. The v2 bench judges ratio_min under taskpolicy utility. Safety-off, the 977 reduction, and window 5 were reverted. GLV and the width-16 generator tables were already the schedule. The no-shape 100k artifact stays withdrawn."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_baseline_v2",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_v2_2026-10-05.json",
+      "status": "current",
+      "notes": "Bench v2 baseline, utility class. ECDSA ratio_min 1.920, Schnorr 1.949, tweak 1.587. fe_mul own min 12.38 ns, fe_sqr 13.15 ns."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_baseline_v2_repeat",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_v2_repeat_2026-10-05.json",
+      "status": "current",
+      "notes": "Back-to-back repeat of the v2 baseline. Verify ratio_min agrees within 1 percent. fe_sqr own min 13.33 ns against 13.15 ns."
     },
     {
       "port": "zig",
