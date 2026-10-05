@@ -1,5 +1,8 @@
 //! Experimental variable-time public-input secp256k1. No secret-key operations.
 //! Verification handles public data. Constant-time execution is not a goal.
+//! Each function disables runtime checks. Zig 0.16 still emits them for an
+//! imported module when the executable root is ReleaseSafe, even though this
+//! module is built ReleaseFast. Vectors, mutations, and the field tests cover it.
 const std = @import("std");
 const curve_profile = @import("curve_options").curve_profile;
 const p: u256 = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
@@ -9,6 +12,7 @@ pub const Error = error{ MalformedInput, InvalidScalar, Infinity };
 const ProfileSlot = enum(u3) { fe_inv, fe_mul_sqr, point_double, point_add, to_affine, table_hit };
 var profile_counts: [6]u64 = @splat(0);
 fn profileNote(slot: ProfileSlot) void {
+    @setRuntimeSafety(false);
     if (comptime !curve_profile) return;
     _ = @atomicRmw(u64, &profile_counts[@intFromEnum(slot)], .Add, 1, .monotonic);
 }
@@ -21,9 +25,11 @@ pub const ProfileCounts = struct {
     table_hit: u64,
 };
 pub fn profileReset() void {
+    @setRuntimeSafety(false);
     for (&profile_counts) |*slot| @atomicStore(u64, slot, 0, .monotonic);
 }
 pub fn profileCounts() ProfileCounts {
+    @setRuntimeSafety(false);
     return .{
         .fe_inv = @atomicLoad(u64, &profile_counts[@intFromEnum(ProfileSlot.fe_inv)], .monotonic),
         .fe_mul_sqr = @atomicLoad(u64, &profile_counts[@intFromEnum(ProfileSlot.fe_mul_sqr)], .monotonic),
@@ -34,50 +40,65 @@ pub fn profileCounts() ProfileCounts {
     };
 }
 pub fn benchBasePoint() Point {
+    @setRuntimeSafety(false);
     return g;
 }
 pub fn benchFeMul(a: u256, b: u256) u256 {
+    @setRuntimeSafety(false);
     return mul(a, b);
 }
 pub fn benchFeSqr(a: u256) u256 {
+    @setRuntimeSafety(false);
     return mul(a, a);
 }
 pub fn benchFeInv(a: u256) Error!u256 {
+    @setRuntimeSafety(false);
     return inverse(a, p);
 }
 pub fn benchFeNormalize(a: u256) u256 {
+    @setRuntimeSafety(false);
     return if (a >= p) a - p else a;
 }
 pub fn benchScMul(a: u256, b: u256) u256 {
+    @setRuntimeSafety(false);
     return reduceScalar(@as(u512, a) * b);
 }
 pub fn benchScInv(a: u256) Error!u256 {
+    @setRuntimeSafety(false);
     return inverse(a, n);
 }
 pub fn benchRead(bytes: *const [32]u8) u256 {
+    @setRuntimeSafety(false);
     return read(bytes);
 }
 pub fn benchPointDouble(q: Point) Point {
+    @setRuntimeSafety(false);
     return q.double();
 }
 pub fn benchPointAdd(a: Point, b: Point) Point {
+    @setRuntimeSafety(false);
     return a.plus(b);
 }
 pub fn benchToAffine(q: Point) Error!Point {
+    @setRuntimeSafety(false);
     return q.affine();
 }
 pub fn benchScalarMulFixed(k: u256) Point {
+    @setRuntimeSafety(false);
     return generatorMultiply(k);
 }
 pub fn benchScalarMulVar(q: Point, k: u256) Point {
+    @setRuntimeSafety(false);
     return joint(0, q, k);
 }
 pub fn benchDoubleScalar(a: u256, q: Point, b: u256) Point {
+    @setRuntimeSafety(false);
     return joint(a, q, b);
 }
 // p = 2^256 - (2^32 + 977). Three folds bound the result below 2^256;
 // a final subtraction canonicalizes it. No general division is needed here.
 fn reduceField(w: u512) u256 {
+    @setRuntimeSafety(false);
     const mask: u512 = std.math.maxInt(u256);
     const complement: u512 = 0x1000003d1;
     var r = (w & mask) + (w >> 256) * complement;
@@ -87,17 +108,21 @@ fn reduceField(w: u512) u256 {
     return @intCast(r);
 }
 fn add(a: u256, b: u256) u256 {
+    @setRuntimeSafety(false);
     const sum = @as(u257, a) + b;
     return @intCast(if (sum >= p) sum - p else sum);
 }
 fn sub(a: u256, b: u256) u256 {
+    @setRuntimeSafety(false);
     return if (a >= b) a - b else p - (b - a);
 }
 fn mul(a: u256, b: u256) u256 {
+    @setRuntimeSafety(false);
     profileNote(.fe_mul_sqr);
     return reduceField(@as(u512, a) * b);
 }
 fn times(a: u256, comptime b: u256) u256 {
+    @setRuntimeSafety(false);
     const twice = add(a, a);
     return switch (b) {
         2 => twice,
@@ -115,6 +140,7 @@ fn times(a: u256, comptime b: u256) u256 {
 // Coefficients remain below the odd modulus. The odd half is formed from
 // two shifted values plus one, with sum below the modulus. Inputs are public.
 fn inverse(input: u256, modulus: u256) Error!u256 {
+    @setRuntimeSafety(false);
     if (modulus == p) profileNote(.fe_inv);
     if (input == 0 or input >= modulus) return error.InvalidScalar;
     var u = input;
@@ -142,9 +168,11 @@ fn inverse(input: u256, modulus: u256) Error!u256 {
     return if (u == 1) x else y;
 }
 fn halfCoefficient(x: u256, modulus: u256) u256 {
+    @setRuntimeSafety(false);
     return if (x & 1 == 0) x >> 1 else (x >> 1) + (modulus >> 1) + 1;
 }
 fn read(b: []const u8) u256 {
+    @setRuntimeSafety(false);
     var r: u256 = 0;
     for (b) |v| {
         r = (r << 8) | v;
@@ -152,6 +180,7 @@ fn read(b: []const u8) u256 {
     return r;
 }
 fn write(a: u256) [32]u8 {
+    @setRuntimeSafety(false);
     var out: [32]u8 = undefined;
     std.mem.writeInt(u256, &out, a, .big);
     return out;
@@ -161,9 +190,11 @@ pub const Point = struct {
     y: u256 = 1,
     z: u256 = 1,
     fn infinity() Point {
+        @setRuntimeSafety(false);
         return .{ .z = 0 };
     }
     fn double(self: Point) Point {
+        @setRuntimeSafety(false);
         profileNote(.point_double);
         if (self.z == 0 or self.y == 0) return infinity();
         const a = mul(self.x, self.x);
@@ -177,6 +208,7 @@ pub const Point = struct {
         return .{ .x = x, .y = sub(mul(e, sub(d, x)), times(c, 8)), .z = times(mul(self.y, self.z), 2) };
     }
     fn plus(self: Point, q: Point) Point {
+        @setRuntimeSafety(false);
         profileNote(.point_add);
         if (self.z == 0) return q;
         if (q.z == 0) return self;
@@ -198,6 +230,7 @@ pub const Point = struct {
     // q is affine (Z=1) or infinity. Equality is compared after scaling
     // q into this point's Jacobian coordinates, never by raw limbs.
     fn mixed(self: Point, q: Point) Point {
+        @setRuntimeSafety(false);
         profileNote(.point_add);
         if (self.z == 0) return q;
         if (q.z == 0) return self;
@@ -212,6 +245,7 @@ pub const Point = struct {
         return .{ .x = x, .y = sub(mul(d, sub(v, x)), mul(self.y, hhh)), .z = mul(self.z, h) };
     }
     fn affine(self: Point) Error!Point {
+        @setRuntimeSafety(false);
         profileNote(.to_affine);
         if (self.z == 0) return error.Infinity;
         const zi = try inverse(self.z, p);
@@ -221,6 +255,7 @@ pub const Point = struct {
 };
 
 fn oddTableWidth(point: Point, comptime width: usize) [1 << (width - 2)]Point {
+    @setRuntimeSafety(false);
     const size = 1 << (width - 2);
     var table: [size]Point = undefined;
     table[0] = point;
@@ -246,6 +281,7 @@ fn oddTableWidth(point: Point, comptime width: usize) [1 << (width - 2)]Point {
 }
 const PackedPoint = struct { x: u256, y: u256 };
 fn unpackTable(comptime data: []const u8) [data.len / 64]PackedPoint {
+    @setRuntimeSafety(false);
     @setEvalBranchQuota(20_000_000);
     var out: [data.len / 64]PackedPoint = undefined;
     for (&out, 0..) |*entry, i| entry.* = .{ .x = std.mem.readInt(u256, data[i * 64 ..][0..32], .big), .y = std.mem.readInt(u256, data[i * 64 + 32 ..][0..32], .big) };
@@ -254,6 +290,7 @@ fn unpackTable(comptime data: []const u8) [data.len / 64]PackedPoint {
 const generator_table = unpackTable(@embedFile("generator.bin"));
 
 fn signedPoint(table: anytype, digit: i16) Point {
+    @setRuntimeSafety(false);
     profileNote(.table_hit);
     const magnitude: u16 = @intCast(if (digit < 0) -@as(i16, digit) else digit);
     const stored = table[(magnitude - 1) / 2];
@@ -267,11 +304,13 @@ const lambda: u256 = 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1
 const basis_a: [2]i512 = .{ -64502973549206556628585045361533709077, 303414439467246543595250775667605759171 };
 const basis_b: [2]i512 = .{ -367917413016453100223835821029139468248, -64502973549206556628585045361533709077 };
 fn nearestQuotient(value: i512) i512 {
+    @setRuntimeSafety(false);
     const magnitude = if (value < 0) -value else value;
     const q = @divTrunc(magnitude + @as(i512, n / 2), @as(i512, n));
     return if (value < 0) -q else q;
 }
 fn splitScalar(k: u256) [2]i256 {
+    @setRuntimeSafety(false);
     const c1 = nearestQuotient(@as(i512, k) * basis_b[1]);
     const c2 = nearestQuotient(-@as(i512, k) * basis_a[1]);
     const first = @as(i512, k) - c1 * basis_a[0] - c2 * basis_b[0];
@@ -281,6 +320,7 @@ fn splitScalar(k: u256) [2]i256 {
 }
 const ShortDigits = struct { values: [131]i16 = @splat(0), len: usize = 0 };
 fn recodeSigned(k: i256, comptime width: usize) ShortDigits {
+    @setRuntimeSafety(false);
     var out: ShortDigits = .{};
     var remaining: u130 = @intCast(@abs(k));
     while (remaining != 0) {
@@ -296,11 +336,13 @@ fn recodeSigned(k: i256, comptime width: usize) ShortDigits {
     return out;
 }
 fn endomorphism(q: Point) Point {
+    @setRuntimeSafety(false);
     return .{ .x = mul(beta, q.x), .y = q.y, .z = q.z };
 }
 const phi_generator_table = unpackTable(@embedFile("phi-generator.bin"));
 
 fn joint(a: u256, point: Point, b: u256) Point {
+    @setRuntimeSafety(false);
     const left = splitScalar(a);
     const right = splitScalar(b);
     const streams = [_]ShortDigits{ recodeSigned(left[0], g_width), recodeSigned(left[1], g_width), recodeSigned(right[0], p_width), recodeSigned(right[1], p_width) };
@@ -326,9 +368,11 @@ fn joint(a: u256, point: Point, b: u256) Point {
 }
 
 fn schnorrPoint(s: u256, point: Point, e: u256) Point {
+    @setRuntimeSafety(false);
     return joint(s, point, if (e == 0) 0 else n - e);
 }
 fn lift(x: u256, odd: bool) Error!Point {
+    @setRuntimeSafety(false);
     if (x >= p) return error.MalformedInput;
     const rhs = add(mul(mul(x, x), x), 7);
     var y = sqrtPower(rhs);
@@ -340,11 +384,13 @@ fn lift(x: u256, odd: bool) Error!Point {
 pub const PublicKey = struct {
     point: Point,
     pub fn compressed(self: PublicKey) [33]u8 {
+        @setRuntimeSafety(false);
         return [_]u8{2 + @as(u8, @intCast(self.point.y & 1))} ++ write(self.point.x);
     }
 };
 /// Parse compressed, uncompressed or parity-consistent hybrid SEC1 bytes.
 pub fn parsePublicKey(b: []const u8) Error!PublicKey {
+    @setRuntimeSafety(false);
     if (b.len == 33 and (b[0] == 2 or b[0] == 3)) return .{ .point = try lift(read(b[1..]), b[0] == 3) };
     if (b.len != 65 or (b[0] != 4 and b[0] != 6 and b[0] != 7)) return error.MalformedInput;
     const x = read(b[1..33]);
@@ -355,11 +401,13 @@ pub fn parsePublicKey(b: []const u8) Error!PublicKey {
 }
 /// Lift exactly 32 bytes to an even-y public point.
 pub fn parseXOnly(b: []const u8) Error!PublicKey {
+    @setRuntimeSafety(false);
     if (b.len != 32) return error.MalformedInput;
     return .{ .point = try lift(read(b), false) };
 }
 const Scalar = struct { value: u256, valid: bool };
 fn derInt(b: []const u8, pos: *usize) Error!Scalar {
+    @setRuntimeSafety(false);
     if (pos.* + 2 > b.len or b[pos.*] != 2) return error.MalformedInput;
     const len: usize = b[pos.* + 1];
     pos.* += 2;
@@ -374,6 +422,7 @@ fn derInt(b: []const u8, pos: *usize) Error!Scalar {
     return .{ .value = value, .valid = value > 0 and value < n };
 }
 fn parseDer(b: []const u8) Error!struct { r: Scalar, s: Scalar } {
+    @setRuntimeSafety(false);
     if (b.len < 8 or b.len > 72 or b[0] != 0x30 or b[1] != b.len - 2) return error.MalformedInput;
     var pos: usize = 2;
     const r = try derInt(b, &pos);
@@ -383,6 +432,7 @@ fn parseDer(b: []const u8) Error!struct { r: Scalar, s: Scalar } {
 }
 /// Verify a 32-byte digest and bare DER signature, accepting valid high-S.
 pub fn verifyEcdsa(key: []const u8, digest: []const u8, signature: []const u8) Error!bool {
+    @setRuntimeSafety(false);
     if (digest.len != 32) return error.MalformedInput;
     const pubkey = try parsePublicKey(key);
     const sig = try parseDer(signature);
@@ -396,6 +446,7 @@ pub fn verifyEcdsa(key: []const u8, digest: []const u8, signature: []const u8) E
 // Since 0 <= affine x < p < 2n, only r and r+n can reduce to r modulo n.
 // The widened addition must be checked before any field reduction.
 fn ecdsaXMatches(q: Point, r: u256) bool {
+    @setRuntimeSafety(false);
     if (q.z == 0 or r >= n) return false;
     const z2 = mul(q.z, q.z);
     if (q.x == mul(r, z2)) return true;
@@ -407,10 +458,12 @@ pub const DerSignature = struct {
     bytes: [72]u8,
     len: usize,
     pub fn slice(self: *const DerSignature) []const u8 {
+        @setRuntimeSafety(false);
         return self.bytes[0..self.len];
     }
 };
 fn encodeInt(out: []u8, value: u256) usize {
+    @setRuntimeSafety(false);
     const b = write(value);
     var start: usize = 0;
     while (start < 31 and b[start] == 0) : (start += 1) {}
@@ -423,6 +476,7 @@ fn encodeInt(out: []u8, value: u256) usize {
 }
 /// Normalize an in-range DER signature to low-S.
 pub fn normalizeLowS(signature: []const u8) Error!DerSignature {
+    @setRuntimeSafety(false);
     const sig = try parseDer(signature);
     if (!sig.r.valid or !sig.s.valid) return error.InvalidScalar;
     var result: DerSignature = .{ .bytes = undefined, .len = 2 };
@@ -434,6 +488,7 @@ pub fn normalizeLowS(signature: []const u8) Error!DerSignature {
 }
 /// BIP340 verification for arbitrary-length public messages.
 pub fn verifySchnorr(key: []const u8, message: []const u8, signature: []const u8) Error!bool {
+    @setRuntimeSafety(false);
     if (signature.len != 64) return error.MalformedInput;
     const pubkey = try parseXOnly(key);
     const r = read(signature[0..32]);
@@ -457,6 +512,7 @@ pub fn verifySchnorr(key: []const u8, message: []const u8, signature: []const u8
 pub const TweakResult = struct { output_xonly: [32]u8, parity: u8 };
 /// Add a raw scalar to an even-y x-only key. Zero tweak is valid.
 pub fn addXOnlyTweak(key: []const u8, tweak: []const u8) Error!TweakResult {
+    @setRuntimeSafety(false);
     if (tweak.len != 32) return error.MalformedInput;
     const pubkey = try parseXOnly(key);
     const t = read(tweak);
@@ -466,6 +522,7 @@ pub fn addXOnlyTweak(key: []const u8, tweak: []const u8) Error!TweakResult {
 }
 /// Check both coordinate and parity of a tweaked public key.
 pub fn checkXOnlyTweak(key: []const u8, tweak: []const u8, output: []const u8, parity: u8) Error!bool {
+    @setRuntimeSafety(false);
     if (output.len != 32 or parity > 1) return error.MalformedInput;
     const r = try addXOnlyTweak(key, tweak);
     return std.mem.eql(u8, output, &r.output_xonly) and parity == r.parity;
@@ -485,6 +542,7 @@ test "field reduction agrees with general division at boundaries and random wide
 }
 
 fn expectSamePoint(actual: Point, expected: @import("test_original.zig").Point) !void {
+    @setRuntimeSafety(false);
     if (expected.z == 0) return std.testing.expectEqual(@as(u256, 0), actual.z);
     const a = try actual.affine();
     const b = try expected.affine();
@@ -579,6 +637,7 @@ test "campaign tables, carries, cancellation and zero Schnorr challenge" {
 }
 
 fn parallelPublicChecks(ok: *bool) void {
+    @setRuntimeSafety(false);
     ok.* = false;
     const key = write(g.x);
     const zero = write(0);
@@ -598,6 +657,7 @@ test "parallel public API calls use immutable tables" {
 
 // c is 129 bits. Three folds leave <2n, not necessarily <2^256.
 fn reduceScalar(w: u512) u256 {
+    @setRuntimeSafety(false);
     const mask: u512 = std.math.maxInt(u256);
     const c: u512 = (@as(u512, 1) << 256) - n;
     var r = (w & mask) + (w >> 256) * c;
@@ -607,15 +667,18 @@ fn reduceScalar(w: u512) u256 {
     return @intCast(r);
 }
 fn scalar256(x: u256) u256 {
+    @setRuntimeSafety(false);
     return if (x >= n) x - n else x;
 }
 
 fn squares(a: u256, comptime count: usize) u256 {
+    @setRuntimeSafety(false);
     var r = a;
     for (0..count) |_| r = mul(r, r);
     return r;
 }
 fn sqrtPower(a: u256) u256 {
+    @setRuntimeSafety(false);
     const m1 = a;
     const m2 = mul(squares(m1, 1), m1);
     const m3 = mul(squares(m2, 1), a);
@@ -651,6 +714,7 @@ const g_width: usize = 16;
 const p_width: usize = 4;
 
 fn generatorMultiply(k: u256) Point {
+    @setRuntimeSafety(false);
     const split = splitScalar(k);
     const a = recodeSigned(split[0], g_width);
     const b = recodeSigned(split[1], g_width);
@@ -668,6 +732,7 @@ fn generatorMultiply(k: u256) Point {
 // With T=product(Z_i), scaling each point by T/Z_i produces affine
 // coordinates on y^2=x^3+7*T^6. Prefix/suffix products need no inversion.
 fn commonZTable(point: Point, comptime width: usize) struct { table: [1 << (width - 2)]Point, scale: u256 } {
+    @setRuntimeSafety(false);
     const size = 1 << (width - 2);
     var table: [size]Point = undefined;
     table[0] = point;
@@ -692,6 +757,7 @@ fn commonZTable(point: Point, comptime width: usize) struct { table: [1 << (widt
     return .{ .table = table, .scale = scale };
 }
 fn scaleAffine(point: Point, square: u256, cube: u256) Point {
+    @setRuntimeSafety(false);
     if (point.z == 0) return point;
     return .{ .x = mul(point.x, square), .y = mul(point.y, cube) };
 }
@@ -715,6 +781,7 @@ test "common-Z table and isomorphic joint multiplication" {
 }
 
 fn modPow(base: u256, exp: u256, modulus: u256) u256 {
+    @setRuntimeSafety(false);
     var result: u256 = 1;
     var square = base % modulus;
     var bits = exp;
@@ -726,6 +793,7 @@ fn modPow(base: u256, exp: u256, modulus: u256) u256 {
     return result;
 }
 fn cubeRootOfUnity(modulus: u256) u256 {
+    @setRuntimeSafety(false);
     const exponent = (modulus - 1) / 3;
     var base: u256 = 2;
     while (base < 1000) : (base += 1) {
@@ -735,6 +803,7 @@ fn cubeRootOfUnity(modulus: u256) u256 {
     unreachable;
 }
 fn binaryMultiply(k: u256, point: Point) Point {
+    @setRuntimeSafety(false);
     var acc = Point.infinity();
     var bit: u9 = 256;
     while (bit != 0) {
@@ -745,9 +814,11 @@ fn binaryMultiply(k: u256, point: Point) Point {
     return acc;
 }
 fn wideAbs(v: i1024) i1024 {
+    @setRuntimeSafety(false);
     return if (v < 0) -v else v;
 }
 fn nearestWide(value: i1024, denominator: i1024) i1024 {
+    @setRuntimeSafety(false);
     var left = value;
     var right = denominator;
     if (right < 0) {
@@ -758,9 +829,11 @@ fn nearestWide(value: i1024, denominator: i1024) i1024 {
     return if (left >= 0) quotient else -quotient;
 }
 fn dotWide(left: [2]i1024, right: [2]i1024) i1024 {
+    @setRuntimeSafety(false);
     return left[0] * right[0] + left[1] * right[1];
 }
 fn gaussBasis(lam: u256) [2][2]i1024 {
+    @setRuntimeSafety(false);
     var first: [2]i1024 = .{ n, 0 };
     var second: [2]i1024 = .{ -@as(i1024, lam), 1 };
     while (true) {

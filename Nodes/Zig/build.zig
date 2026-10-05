@@ -24,7 +24,10 @@ pub fn build(b: *std.Build) void {
     if (!std.mem.eql(u8, store, "rocksdb") and !std.mem.eql(u8, store, "native") and !std.mem.eql(u8, store, "both")) @panic("unknown store");
     options.addOption([]const u8, "store", store);
     options.addOption(bool, "store_rocksdb", !std.mem.eql(u8, store, "native"));
-    const secp = b.dependency("secp256k1", .{ .target = target, .optimize = optimize, .curve_profile = curve_profile }).module("secp256k1");
+    // Field and group code is its own module at ReleaseFast. The node keeps
+    // the caller's mode (ReleaseSafe for benches). Vectors, mutations, and
+    // the package property tests are the safety net for this module.
+    const secp = b.dependency("secp256k1", .{ .target = target, .optimize = .ReleaseFast, .curve_profile = curve_profile }).module("secp256k1");
 
     const core_mod = b.addModule("zigbitnode", .{
         .root_source_file = b.path("src/root.zig"),

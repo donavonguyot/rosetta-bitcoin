@@ -13,7 +13,7 @@
     },
     "optimized": null,
     "reference_informed_attempt": "lazy 5x52, twice: the magnitude field that normalized inside mul (72 ns), then a single 2^260 fold that still spilled (34.79 ns)",
-    "optimized_reason": "No shape cleared the 10 percent keep bar, so optimized stays unset. The single-fold 5x52 field raised ECDSA ratio_min from 1.920 to 2.831 and was reverted."
+    "optimized_reason": "No shape cleared the 10 percent keep bar on a valid bench, so optimized stays unset. ReleaseFast codegen removed point_double's overflow checks, but the verify ratio was read while fe_mul's own min was 27.54 ns against the v2 12.38 ns."
   },
   "table": {
     "bytes": 2097152,
@@ -339,6 +339,64 @@
         6.19,
         6.88
       ]
+    },
+    {
+      "name": "releasefast_module",
+      "target": "ecdsa_verify_ratio_min",
+      "kept": true,
+      "judge": "ratio_min",
+      "reason": "The crypto module is ReleaseFast while the node stays ReleaseSafe. Zig 0.16 still emitted integerOverflow checks for that imported module, so each function also turns runtime safety off. point_double's frame went from sub sp, #0xe0 with 2 panic bls to sub sp, #0xc0 with no bl. The verify ratio_min values fell, but fe_mul's own min rose from 12.38 ns to 27.54 ns at load 12.7, the same scale as the verify times, so the ratio is not a 10 percent keep. The codegen stays because the later steps build on it.",
+      "before_frame": {
+        "fe_mul": "no sub sp; inlined in timeFeMul as stp x29, x30, [sp, #-0x10]!",
+        "point_double": "sub sp, #0xe0",
+        "point_double_str": 10,
+        "point_double_ldr": 9,
+        "point_double_bl": "integerOverflow and integerOutOfBounds"
+      },
+      "after_frame": {
+        "fe_mul": "no sub sp; inlined in timeFeMul as stp x29, x30, [sp, #-0x10]!",
+        "point_double": "sub sp, #0xc0",
+        "point_double_str": 9,
+        "point_double_ldr": 7,
+        "point_double_mul": 150,
+        "point_double_umulh": 124,
+        "point_double_bl": 0
+      },
+      "before": {
+        "ecdsa_verify_ratio_min": 1.92,
+        "schnorr_verify_ratio_min": 1.949,
+        "taproot_tweak_check_ratio_min": 1.587,
+        "fe_mul": 12.38,
+        "fe_sqr": 13.15,
+        "point_double": 88.1,
+        "point_add": 168.06
+      },
+      "after": {
+        "ecdsa_verify_ratio_min": 1.667,
+        "ecdsa_verify_ratio_min_repeat": 1.688,
+        "schnorr_verify_ratio_min": 1.678,
+        "schnorr_verify_ratio_min_repeat": 1.641,
+        "taproot_tweak_check_ratio_min": 1.368,
+        "taproot_tweak_check_ratio_min_repeat": 1.384,
+        "fe_mul": 27.54,
+        "fe_mul_repeat": 27.03,
+        "fe_sqr": 24.54,
+        "point_double": 190.06,
+        "point_double_repeat": 207.38,
+        "point_add": 352.61
+      },
+      "bar": 1.728,
+      "bench_before": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_v2_2026-10-05.json",
+      "bench_after": "Nodes/Shared/conformance/results/zig_own_curve_bench_releasefast_2026-10-05.json",
+      "bench_repeat": "Nodes/Shared/conformance/results/zig_own_curve_bench_releasefast_repeat_2026-10-05.json",
+      "tests_before_bench": "ReleaseFast package tests passed. own_curve vectors and the three mutations red-lighted. Those vector artifacts were not indexed.",
+      "scheduling": "utility",
+      "loadavg": [
+        12.71,
+        11.62,
+        13.91
+      ],
+      "load_note": "Flutter, Xcode, and Chrome kept the 1-minute load between 7 and 22 for the whole window. The v2 baseline was load 4.31. fe_mul scaled 2.22x and the C verify arm scaled about 2.53x, which accounts for the ratio move."
     }
   ],
   "safegcd": {
@@ -350,7 +408,7 @@
   },
   "gates": {
     "self_hosted_50k": "not_run",
-    "self_hosted_50k_reason": "No kept shape in this continuation moved ecdsa_verify by 10 percent.",
+    "self_hosted_50k_reason": "No kept step has moved ecdsa_verify by 10 percent on a bench whose fe_mul own min is still near 12 ns.",
     "split_100k": "withdrawn",
     "split_100k_reason": "The no-shape host artifact was removed. Cumulative verify-median gain did not exceed 25 percent, so the 100k split was not rerun after shapes 0-3."
   },
@@ -371,7 +429,7 @@
     "Explicit Formulas Database, Jacobian coordinates with a=0",
     "libsecp256k1 0.8.0 README, src/ecmult.h, src/ecmult_impl.h"
   ],
-  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried. A dedicated 4x64 square, 10 limb multiplies against 16, lowered the isolated fe_sqr own min from 13.15 ns to 11.93 ns and left the verify field-op total at 1950, of which 808 were squares. Point.double called that square five times (bl _root.sqr) and the square spilled a 0xc0 frame, so point_double moved from 88.10 ns to 94.63 ns and the verify ratio_min values rose. Reverted. A lazy 5x52 field with one 2^260 fold and no normalize inside mul raised fe_mul from 12.38 ns to 34.79 ns. point_double contains 71 str and 39 ldr, against 10 str and 9 ldr for the inlined widening multiply, and it calls fe_mul, which opens with sub sp, #0x110. ECDSA normalizes 73 times. Reverted.",
+  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried. A dedicated 4x64 square, 10 limb multiplies against 16, lowered the isolated fe_sqr own min from 13.15 ns to 11.93 ns and left the verify field-op total at 1950, of which 808 were squares. Point.double called that square five times (bl _root.sqr) and the square spilled a 0xc0 frame, so point_double moved from 88.10 ns to 94.63 ns and the verify ratio_min values rose. Reverted. A lazy 5x52 field with one 2^260 fold and no normalize inside mul raised fe_mul from 12.38 ns to 34.79 ns. point_double contains 71 str and 39 ldr, against 10 str and 9 ldr for the inlined widening multiply, and it calls fe_mul, which opens with sub sp, #0x110. ECDSA normalizes 73 times. Reverted. ReleaseFast codegen, with runtime safety turned off because an imported module still emitted overflow checks, shrank point_double from sub sp, #0xe0 (10 str, 9 ldr, two panic bls) to sub sp, #0xc0 (9 str, 7 ldr, no bl). fe_mul is still the inlined widening multiply: 24 mul and 22 umulh, and no sub sp of its own. A bench at load 12.7 read ECDSA ratio_min 1.667 against 1.920 while fe_mul read 27.54 ns against 12.38 ns, so that ratio is not a keep.",
   "provenance": {
     "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
     "source_commit": "041621db04b32bcb2e81be5e89613ebd31f39d34",
@@ -438,6 +496,19 @@
       "fe_mul_own_min_ns": 34.79,
       "point_double_own_min_ns": 140.71,
       "ecdsa_normalize": 73
+    },
+    "releasefast_module": {
+      "kept_codegen": true,
+      "bar_cleared": false,
+      "bench": "Nodes/Shared/conformance/results/zig_own_curve_bench_releasefast_2026-10-05.json",
+      "repeat": "Nodes/Shared/conformance/results/zig_own_curve_bench_releasefast_repeat_2026-10-05.json",
+      "ecdsa_ratio_min": 1.667,
+      "baseline_ecdsa_ratio_min": 1.92,
+      "bar": 1.728,
+      "fe_mul_own_min_ns": 27.54,
+      "point_double_frame_before": "sub sp, #0xe0",
+      "point_double_frame_after": "sub sp, #0xc0",
+      "fe_mul_frame": "no sub sp"
     }
   }
 }

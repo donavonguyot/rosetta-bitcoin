@@ -833,7 +833,23 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Shapes through the single-fold 5x52 field missed the 10 percent bar. ECDSA ratio_min 1.920 to 2.831, then reverted. Optimized stays unset."
+      "notes": "ReleaseFast crypto module is kept. point_double frame sub sp, #0xe0 to #0xc0. ECDSA ratio_min read 1.667 against 1.920 at load 12.7 while fe_mul read 27.54 ns, so the 10 percent bar is not claimed. Optimized stays unset."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_releasefast",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_releasefast_2026-10-05.json",
+      "status": "current",
+      "notes": "ReleaseFast crypto module, utility class, load 12.71. ECDSA ratio_min 1.667 against v2 1.920. fe_mul own min 27.54 ns against 12.38 ns. point_double frame sub sp, #0xc0."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_releasefast_repeat",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_releasefast_repeat_2026-10-05.json",
+      "status": "current",
+      "notes": "Back-to-back repeat at load 16.98. ECDSA ratio_min 1.688. fe_mul own min 27.03 ns. point_double own min 207.38 ns against 190.06 ns."
     },
     {
       "port": "zig",
