@@ -73,6 +73,44 @@
         "taproot_tweak_check": 102002
       },
       "bench_after": "Nodes/Shared/conformance/results/zig_own_curve_bench_field_reverted_2026-10-04.json"
+    },
+    {
+      "name": "runtime_safety_off_and_977_reduction",
+      "target": "fe_mul",
+      "kept": false,
+      "reason": "fe_mul median stayed 14 ns. ReleaseSafe fe_mul is 604 bytes with 24 mul and 22 umulh and no library call; the reduction is three widening multiplies by 0x1000003d1, not a loop. @setRuntimeSafety(false) left that object the same size, because the widening product cannot overflow. A straight-line multiply by 977 plus a 32-bit shift was correct against the division test and was 372 bytes with 16 mul and 16 umulh in isolation, but in the node bench fe_inv moved 740 to 1253 ns, point_double 89 to 112 ns, and ecdsa_verify 37202 to 40910 ns. Reverted.",
+      "asm": {
+        "tool": "zig build-obj -O ReleaseSafe and objdump -d",
+        "wide_safe_bytes": 604,
+        "wide_safe_mul": 24,
+        "wide_safe_umulh": 22,
+        "wide_safety_off_bytes": 604,
+        "limb_977_bytes": 372,
+        "limb_977_mul": 16,
+        "limb_977_umulh": 16,
+        "library_calls": false
+      },
+      "before": {
+        "fe_mul": 14,
+        "fe_sqr": 14,
+        "fe_inv": 740,
+        "ecdsa_verify": 37202,
+        "schnorr_verify": 30514,
+        "taproot_tweak_check": 18607,
+        "point_double": 89
+      },
+      "after": {
+        "fe_mul": 14,
+        "fe_sqr": 14,
+        "fe_inv": 1253,
+        "ecdsa_verify": 40910,
+        "schnorr_verify": 34542,
+        "taproot_tweak_check": 23007,
+        "point_double": 112
+      },
+      "bench_before": "Nodes/Shared/conformance/results/zig_own_curve_bench_safety_before_2026-10-05.json",
+      "bench_after": "Nodes/Shared/conformance/results/zig_own_curve_bench_safety_reverted_2026-10-05.json",
+      "tests_before_bench": "test-crypto-vectors and test-crypto-mutations passed on the candidate; those artifacts were not indexed because the shape was reverted"
     }
   ],
   "safegcd": {
@@ -105,12 +143,13 @@
     "Explicit Formulas Database, Jacobian coordinates with a=0",
     "libsecp256k1 0.8.0 README, src/ecmult.h, src/ecmult_impl.h"
   ],
-  "residual": "A magnitude-tracked 5x52 multiply measured 72 ns against the u256 multiply's 14 ns (5.14x slower) on this Apple M5 Pro, so it was reverted. Field multiplication is 1950 operations and 96 percent of the 28335 ns ECDSA verify, which remains 1.84x the C binding. The remaining gap is that instruction schedule against libsecp256k1 0.8.0's 5x52 field.",
+  "residual": "Field multiplication stays 14 ns and 1950 operations, 96 percent of ECDSA verify. Turning runtime safety off and replacing the widening complement multiply with a 977-and-shift reduction did not lower fe_mul and slowed fe_inv and verify, so it was reverted. The committed schedule is already a width-16 fixed window for G, a width-4 wNAF for P, and a four-term GLV joint chain at about 128 doublings. A magnitude-tracked 5x52 multiply measured 72 ns against this u256 multiply.",
   "provenance": {
     "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
     "source_commit": "041621db04b32bcb2e81be5e89613ebd31f39d34",
     "binary_sha256": "e46ad75e95ef816adfc05ac7c5d57cc117af3257d14d3d753929e19715dfc90f",
-    "run_ref": "zig-own-curve-kernel"
+    "run_ref": "zig-own-curve-kernel",
+    "toolchain_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec"
   },
   "binary_note": "source_commit pins the arithmetic tree at 041621d. The measured binary also contains the native-store compile gate in Nodes/Zig/src/main.zig."
 }

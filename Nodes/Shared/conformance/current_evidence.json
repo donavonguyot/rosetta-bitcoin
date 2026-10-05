@@ -862,6 +862,22 @@
     {
       "port": "zig",
       "claim": "own_curve_kernel",
+      "gate_id": "bench_safety_before",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_safety_before_2026-10-05.json",
+      "status": "current",
+      "notes": "Same-day before line for the safety and 977-reduction shape. fe_mul median 14 ns. ECDSA verify 37202 ns on this boot."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_safety_reverted",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_safety_reverted_2026-10-05.json",
+      "status": "current",
+      "notes": "Reverted runtime-safety-off and 977 reduction. fe_mul stayed 14 ns. fe_inv 740 to 1253 ns and ECDSA verify 37202 to 40910 ns."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
       "gate_id": "crypto_vectors",
       "path": "Nodes/Shared/conformance/results/zig_crypto_vectors_2026-10-04.json",
       "status": "current",
