@@ -833,7 +833,7 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Own-curve kernel campaign. The lazy 5x52 field was reverted. ECDSA verify stays 1.84x the C binding. 100k oracle matches. Port status is unchanged."
+      "notes": "Own-curve kernel campaign. The lazy 5x52 field was reverted. ECDSA verify stays 1.84x the C binding. The no-shape 100k artifact was withdrawn. Port status is unchanged."
     },
     {
       "port": "zig",
@@ -858,14 +858,6 @@
       "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_field_reverted_2026-10-04.json",
       "status": "current",
       "notes": "Reverted lazy 5x52 bench. fe_mul median 72 ns against the baseline 14 ns."
-    },
-    {
-      "port": "zig",
-      "claim": "own_curve_kernel",
-      "gate_id": "split_100k",
-      "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_100k_host_2026-10-04.json",
-      "status": "current",
-      "notes": "Final 100k host own_curve split. Height, hash, 13154991 UTXOs, and set hash match the oracle. ECDSA mean 2.079x and Schnorr mean 2.091x the stored c_binding split."
     },
     {
       "port": "zig",
