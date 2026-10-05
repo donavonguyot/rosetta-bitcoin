@@ -833,7 +833,7 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Field ops are inline. point_double has no field bl, sub sp, #0xc0, 8 str and 6 ldr. ECDSA ratio_min 1.872 against 1.920. The 10 percent bar is not claimed. Optimized stays unset."
+      "notes": "Limb trial kept u256. Explicit fields spilled point_double to 27 str and sub sp, #0xb60. A 4-lane vector spilled it to 15 str and sub sp, #0x990. u256 stays at 8 str, 6 ldr, sub sp, #0xc0. ECDSA ratio_min 1.872. Optimized stays unset."
     },
     {
       "port": "zig",
