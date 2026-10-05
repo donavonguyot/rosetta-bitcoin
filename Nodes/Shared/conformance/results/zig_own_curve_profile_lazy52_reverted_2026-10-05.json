@@ -1,0 +1,55 @@
+{
+  "schema": "port.own_curve.profile.v1",
+  "port": "zig",
+  "cpu": "Apple M5 Pro",
+  "optimize": "ReleaseSafe",
+  "source_commit": "10610eea76880876059629d4a3d0aed8104a52c6",
+  "binary_sha256": "6179e0d1401e93a4e3d42961fc4b37011d12964d396a0b44963aebfe76402cb0",
+  "verifies": [
+    {
+      "name": "ecdsa_verify",
+      "fe_inv": 0,
+      "fe_mul": 1106,
+      "fe_sqr": 1089,
+      "fe_mul_sqr": 2195,
+      "fe_normalize": 73,
+      "point_double": 127,
+      "point_add": 71,
+      "to_affine": 0,
+      "table_hit": 68
+    },
+    {
+      "name": "schnorr_verify",
+      "fe_inv": 1,
+      "fe_mul": 1175,
+      "fe_sqr": 1132,
+      "fe_mul_sqr": 2307,
+      "fe_normalize": 78,
+      "point_double": 128,
+      "point_add": 72,
+      "to_affine": 1,
+      "table_hit": 69
+    },
+    {
+      "name": "taproot_tweak_check",
+      "fe_inv": 1,
+      "fe_mul": 633,
+      "fe_sqr": 924,
+      "fe_mul_sqr": 1557,
+      "fe_normalize": 23,
+      "point_double": 121,
+      "point_add": 17,
+      "to_affine": 1,
+      "table_hit": 16
+    }
+  ],
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "10610eea76880876059629d4a3d0aed8104a52c6",
+    "binary_sha256": "6179e0d1401e93a4e3d42961fc4b37011d12964d396a0b44963aebfe76402cb0",
+    "run_ref": "zig-own-curve-kernel",
+    "toolchain_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec"
+  },
+  "decision": "reverted",
+  "decision_note": "ECDSA normalize count is 73. fe_mul 1106 and fe_sqr 1089, sum 2195 against the October 4 total 1950. Recorded before the lazy field was reverted."
+}

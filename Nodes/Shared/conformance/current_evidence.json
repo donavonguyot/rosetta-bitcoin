@@ -833,7 +833,7 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Shapes 0-3 and the dedicated square missed the 10 percent bar. Bench v2 judges ratio_min. fe_sqr own min 13.15 ns to 11.93 ns, then reverted. Optimized stays unset."
+      "notes": "Shapes through the single-fold 5x52 field missed the 10 percent bar. ECDSA ratio_min 1.920 to 2.831, then reverted. Optimized stays unset."
     },
     {
       "port": "zig",
@@ -866,6 +866,22 @@
       "path": "Nodes/Shared/conformance/results/zig_own_curve_profile_sqr_reverted_2026-10-05.json",
       "status": "current",
       "notes": "ECDSA field ops stayed 1950, split 1142 mul and 808 sqr, before the dedicated square was reverted."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_lazy52_reverted",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_lazy52_reverted_2026-10-05.json",
+      "status": "current",
+      "notes": "Lazy 5x52 single fold, reverted. ECDSA ratio_min 2.831 against v2 1.920. fe_mul 34.79 ns against 12.38 ns. point_double 140.71 ns against 88.10 ns."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "profile_lazy52_reverted",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_profile_lazy52_reverted_2026-10-05.json",
+      "status": "current",
+      "notes": "ECDSA normalizes 73 times. Field ops 1106 mul and 1089 sqr, sum 2195, before the lazy field was reverted."
     },
     {
       "port": "zig",

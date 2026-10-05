@@ -1,0 +1,280 @@
+{
+  "schema": "port.own_curve.bench.v2",
+  "port": "zig",
+  "cpu": "Apple M5 Pro",
+  "optimize": "ReleaseSafe",
+  "source_commit": "10610eea76880876059629d4a3d0aed8104a52c6",
+  "binary_sha256": "48db53be5e0793074a2019ef79baaa70322fbf0243f58675dfdf245d783bbf23",
+  "judge": "ratio_min",
+  "scheduling": "utility",
+  "c_field_group": "not_exposed",
+  "vectors": [
+    "ecdsa-valid-privkey-1-deadbeef",
+    "schnorr-valid-privkey-12345-cafebabe",
+    "taproot-valid-privkey-300-c0ffee"
+  ],
+  "ambient": {
+    "loadavg": [
+      5.05,
+      6.19,
+      6.88
+    ],
+    "other_zig_build": false,
+    "sync_running": false,
+    "thermal": "Note: No thermal warning level has been recorded Note: No performance warning level has been recorded Note: No CPU power status has been recorded",
+    "qos": "utility"
+  },
+  "operations": [
+    {
+      "name": "ecdsa_verify",
+      "iterations": 800,
+      "batches": 4,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 41968.86,
+        "median_ns": 42362.0,
+        "p90_ns": 44399.73
+      },
+      "c_binding": {
+        "min_ns": 14823.92,
+        "median_ns": 14993.22,
+        "p90_ns": 16102.5
+      },
+      "ratio_min": 2.831,
+      "ratio_median": 2.825
+    },
+    {
+      "name": "schnorr_verify",
+      "iterations": 800,
+      "batches": 50,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 48874.98,
+        "median_ns": 48553.62,
+        "p90_ns": 52209.68
+      },
+      "c_binding": {
+        "min_ns": 16923.9,
+        "median_ns": 16983.53,
+        "p90_ns": 18728.1
+      },
+      "ratio_min": 2.887,
+      "ratio_median": 2.858
+    },
+    {
+      "name": "taproot_tweak_check",
+      "iterations": 800,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 31110.79,
+        "median_ns": 31332.28,
+        "p90_ns": 31623.95
+      },
+      "c_binding": {
+        "min_ns": 13794.87,
+        "median_ns": 13822.4,
+        "p90_ns": 13981.85
+      },
+      "ratio_min": 2.255,
+      "ratio_median": 2.266
+    },
+    {
+      "name": "pubkey_parse",
+      "iterations": 800,
+      "batches": 13,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 7093.76,
+        "median_ns": 7159.74,
+        "p90_ns": 7248.05
+      },
+      "c_binding": {
+        "min_ns": 2482.89,
+        "median_ns": 2511.98,
+        "p90_ns": 2555.7
+      },
+      "ratio_min": 2.857,
+      "ratio_median": 2.85
+    },
+    {
+      "name": "double_scalar_mul",
+      "iterations": 800,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 38756.45,
+        "median_ns": 39088.48,
+        "p90_ns": 39346.87
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "scalar_mul_fixed",
+      "iterations": 800,
+      "batches": 4,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 22149.84,
+        "median_ns": 22474.68,
+        "p90_ns": 22779.01
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "scalar_mul_var",
+      "iterations": 800,
+      "batches": 4,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 33068.95,
+        "median_ns": 33231.14,
+        "p90_ns": 33394.58
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "point_add",
+      "iterations": 200000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 280.49,
+        "median_ns": 283.52,
+        "p90_ns": 285.0
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "point_double",
+      "iterations": 200000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 140.71,
+        "median_ns": 141.44,
+        "p90_ns": 141.89
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "to_affine",
+      "iterations": 800,
+      "batches": 8,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 1083.59,
+        "median_ns": 1089.94,
+        "p90_ns": 1123.8
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "fe_mul",
+      "iterations": 2000000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 34.79,
+        "median_ns": 34.82,
+        "p90_ns": 35.11
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "fe_sqr",
+      "iterations": 2000000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 34.15,
+        "median_ns": 34.18,
+        "p90_ns": 34.4
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "fe_inv",
+      "iterations": 30000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 882.5,
+        "median_ns": 883.61,
+        "p90_ns": 890.18
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "fe_normalize",
+      "iterations": 16000000,
+      "batches": 9,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 4.08,
+        "median_ns": 4.08,
+        "p90_ns": 4.21
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "sc_mul",
+      "iterations": 2000000,
+      "batches": 3,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 18.42,
+        "median_ns": 18.62,
+        "p90_ns": 18.72
+      },
+      "c_binding": "not_exposed"
+    },
+    {
+      "name": "sc_inv",
+      "iterations": 30000,
+      "batches": 15,
+      "capped": false,
+      "stable": true,
+      "own": {
+        "min_ns": 915.56,
+        "median_ns": 927.33,
+        "p90_ns": 985.31
+      },
+      "c_binding": "not_exposed"
+    }
+  ],
+  "provenance": {
+    "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+    "source_commit": "10610eea76880876059629d4a3d0aed8104a52c6",
+    "binary_sha256": "48db53be5e0793074a2019ef79baaa70322fbf0243f58675dfdf245d783bbf23",
+    "run_ref": "zig-own-curve-kernel",
+    "toolchain_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec"
+  },
+  "decision": "reverted",
+  "decision_note": "ECDSA ratio_min 2.831 against the v2 baseline 1.920. fe_mul own min 34.79 ns against 12.38 ns. point_double 140.71 ns against 88.10 ns. Lazy 5x52 was reverted.",
+  "repeat_ratio_min": {
+    "ecdsa_verify": 2.872,
+    "schnorr_verify": 2.879,
+    "taproot_tweak_check": 2.258
+  },
+  "repeat_own_min_ns": {
+    "fe_mul": 34.44,
+    "fe_sqr": 34.19,
+    "point_double": 141.39
+  }
+}

@@ -12,8 +12,8 @@
       "commit": "628b2c024837dcd8ca929122eced49e76c1aaf3a"
     },
     "optimized": null,
-    "reference_informed_attempt": "lazy 5x52 magnitude field, measured and reverted",
-    "optimized_reason": "No shape in this continuation cleared the 10 percent keep bar, so optimized stays unset. The dedicated square lowered fe_sqr own min by 9.3 percent and slowed point_double, then was reverted."
+    "reference_informed_attempt": "lazy 5x52, twice: the magnitude field that normalized inside mul (72 ns), then a single 2^260 fold that still spilled (34.79 ns)",
+    "optimized_reason": "No shape cleared the 10 percent keep bar, so optimized stays unset. The single-fold 5x52 field raised ECDSA ratio_min from 1.920 to 2.831 and was reverted."
   },
   "table": {
     "bytes": 2097152,
@@ -251,6 +251,94 @@
         5.92,
         7.35
       ]
+    },
+    {
+      "name": "lazy_5x52_single_fold",
+      "target": "ecdsa_verify_ratio_min",
+      "kept": false,
+      "judge": "ratio_min",
+      "reason": "ECDSA ratio_min went from 1.920 to 2.831 (repeat 2.872), Schnorr from 1.949 to 2.887, tweak from 1.587 to 2.255. fe_mul own min went from 12.38 ns to 34.79 ns and point_double from 88.10 ns to 140.71 ns. The 10 percent bar was 1.728. Reverted.",
+      "before": {
+        "ecdsa_verify_ratio_min": 1.92,
+        "schnorr_verify_ratio_min": 1.949,
+        "taproot_tweak_check_ratio_min": 1.587,
+        "fe_mul": 12.38,
+        "fe_sqr": 13.15,
+        "point_double": 88.1,
+        "point_add": 168.06
+      },
+      "after": {
+        "ecdsa_verify_ratio_min": 2.831,
+        "ecdsa_verify_ratio_min_repeat": 2.872,
+        "schnorr_verify_ratio_min": 2.887,
+        "taproot_tweak_check_ratio_min": 2.255,
+        "fe_mul": 34.79,
+        "fe_mul_repeat": 34.44,
+        "fe_sqr": 34.15,
+        "point_double": 140.71,
+        "point_double_repeat": 141.39,
+        "point_add": 280.49,
+        "fe_inv": 882.5
+      },
+      "normalize": {
+        "ecdsa_verify": 73,
+        "schnorr_verify": 78,
+        "taproot_tweak_check": 23
+      },
+      "field_ops": {
+        "ecdsa_fe_mul": 1106,
+        "ecdsa_fe_sqr": 1089,
+        "ecdsa_fe_mul_sqr": 2195,
+        "baseline_fe_mul_sqr": 1950
+      },
+      "asm": {
+        "tool": "xcrun llvm-objdump -d",
+        "before_point_double": {
+          "mul": 149,
+          "umulh": 133,
+          "str": 10,
+          "ldr": 9,
+          "stp": 16,
+          "ldp": 17,
+          "calls": "overflow panics only; the widening multiply is inlined"
+        },
+        "after_point_double": {
+          "mul": 55,
+          "umulh": 55,
+          "str": 71,
+          "ldr": 39,
+          "stp": 25,
+          "ldp": 20,
+          "bl_feSqr": 3,
+          "bl_feMul": 3,
+          "bl_fold": 3
+        },
+        "fe_mul": {
+          "frame": "sub sp, #0x110",
+          "stp": 15,
+          "ldr": 10,
+          "mul": 25,
+          "umulh": 25
+        },
+        "fe_sqr": {
+          "frame": "sub sp, #0xf0",
+          "stp": 13,
+          "ldr": 7,
+          "mul": 15,
+          "umulh": 15
+        }
+      },
+      "residual": "point_double stores the five-limb temporaries: 71 str and 39 ldr, against 10 str and 9 ldr when the widening multiply was inlined. fe_mul is a call that opens with sub sp, #0x110. Those stores, not a normalize, are the gap: ECDSA normalizes 73 times and fe_normalize itself is 4.08 ns.",
+      "bench_before": "Nodes/Shared/conformance/results/zig_own_curve_bench_baseline_v2_2026-10-05.json",
+      "bench_after": "Nodes/Shared/conformance/results/zig_own_curve_bench_lazy52_reverted_2026-10-05.json",
+      "profile_after": "Nodes/Shared/conformance/results/zig_own_curve_profile_lazy52_reverted_2026-10-05.json",
+      "tests_before_bench": "package tests, test-crypto-vectors, and test-crypto-mutations passed on the candidate; those artifacts were not indexed because the shape was reverted",
+      "scheduling": "utility",
+      "loadavg": [
+        5.05,
+        6.19,
+        6.88
+      ]
     }
   ],
   "safegcd": {
@@ -283,7 +371,7 @@
     "Explicit Formulas Database, Jacobian coordinates with a=0",
     "libsecp256k1 0.8.0 README, src/ecmult.h, src/ecmult_impl.h"
   ],
-  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried. A dedicated 4x64 square, 10 limb multiplies against 16, lowered the isolated fe_sqr own min from 13.15 ns to 11.93 ns and left the verify field-op total at 1950, of which 808 were squares. Point.double called that square five times (bl _root.sqr) and the square spilled a 0xc0 frame, so point_double moved from 88.10 ns to 94.63 ns and the verify ratio_min values rose. Reverted.",
+  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried. A dedicated 4x64 square, 10 limb multiplies against 16, lowered the isolated fe_sqr own min from 13.15 ns to 11.93 ns and left the verify field-op total at 1950, of which 808 were squares. Point.double called that square five times (bl _root.sqr) and the square spilled a 0xc0 frame, so point_double moved from 88.10 ns to 94.63 ns and the verify ratio_min values rose. Reverted. A lazy 5x52 field with one 2^260 fold and no normalize inside mul raised fe_mul from 12.38 ns to 34.79 ns. point_double contains 71 str and 39 ldr, against 10 str and 9 ldr for the inlined widening multiply, and it calls fe_mul, which opens with sub sp, #0x110. ECDSA normalizes 73 times. Reverted.",
   "provenance": {
     "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
     "source_commit": "041621db04b32bcb2e81be5e89613ebd31f39d34",
@@ -339,6 +427,17 @@
       "fe_sqr_repeat_own_min_ns": 12.0,
       "baseline_fe_sqr_own_min_ns": 13.15,
       "bar_ns": 11.84
+    },
+    "lazy_5x52": {
+      "kept": false,
+      "bench": "Nodes/Shared/conformance/results/zig_own_curve_bench_lazy52_reverted_2026-10-05.json",
+      "profile": "Nodes/Shared/conformance/results/zig_own_curve_profile_lazy52_reverted_2026-10-05.json",
+      "ecdsa_ratio_min": 2.831,
+      "baseline_ecdsa_ratio_min": 1.92,
+      "bar": 1.728,
+      "fe_mul_own_min_ns": 34.79,
+      "point_double_own_min_ns": 140.71,
+      "ecdsa_normalize": 73
     }
   }
 }
