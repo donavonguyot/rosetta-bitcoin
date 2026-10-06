@@ -1,3 +1,16 @@
+//! Connect one decoded testnet4 block: finality, BIP68, coinbase maturity, then scripts, then the UTXO commit.
+//! Finality (`txNotFinal`) runs before inputs are resolved, and BIP68 runs before any script,
+//! so a non-final transaction never reaches the verifier
+//! (`zig_consensus_context_host_2026-10-04.json`, blocker ledger `consensus_gap_closed`).
+//! Same-block outputs are not store lookups. At height 50000 they are 256399 of 1385632 inputs,
+//! 18 percent (`zig_self_hosted_50k_host_2026-10-04.json`). Skipping them cut native `utxo_load`
+//! from 1852 ms to 169 ms, 91 percent (`zig_native_store_utxo_load_campaign_docker_2026-10-04.json`).
+//! Three per-operation costs each blow up across about 27 million ops: a shared atomic, a thread wake,
+//! and an unmixed outpoint hash. The worker counters and the persistent pool were reverted
+//! (blocker ledger `performance_note`).
+//! `snapshot_ms` is subtracted from the commit wall so commit is the apply, not the snapshot.
+//! Does not own the UTXO map or the sighash preimage. Those are the store and `script.zig`.
+
 const std = @import("std");
 const types = @import("types.zig");
 const codec = @import("codec.zig");
@@ -25,6 +38,9 @@ const encodeUtxoKey = codec.encodeUtxoKey;
 const encodeUtxoValue = codec.encodeUtxoValue;
 const encodeUndoValue = codec.encodeUndoValue;
 
+/// Fold each spent UTXO out of the set hash using canonical key and value bytes.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub fn foldSpends(allocator: std.mem.Allocator, set_hash: *store.SetHash, spent: []const Outpoint, undo_entries: []const UndoEntry) !void {
     if (spent.len != undo_entries.len) return error.SpendUndoMismatch;
     for (undo_entries, spent) |entry, outpoint| {
@@ -37,6 +53,9 @@ pub fn foldSpends(allocator: std.mem.Allocator, set_hash: *store.SetHash, spent:
     }
 }
 
+/// Per-stage cost of applying one block to a store.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub const CommitTimings = struct {
     utxo_delete_prepare: i64 = 0,
     utxo_put_prepare: i64 = 0,
@@ -46,11 +65,17 @@ pub const CommitTimings = struct {
     set_hash_fold: i64 = 0,
     snapshot: i64 = 0,
 
+    /// Prepare plus write time. Snapshot is outside this sum so commit stays the apply.
+    /// A connected block has already passed finality and BIP68 before any script runs.
+    /// test "same block view rejects double spends"
     pub fn total(self: CommitTimings) i64 {
         return self.utxo_delete_prepare + self.utxo_put_prepare + self.undo_put_prepare + self.metadata_put_prepare + self.rocksdb_write + self.set_hash_fold;
     }
 };
 
+/// Hit and miss counts for store lookups that were not same-block spends.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub const UtxoLoadStats = struct {
     lookup_count: u64 = 0,
     key_bytes: u64 = 0,
@@ -61,6 +86,9 @@ pub const UtxoLoadStats = struct {
     utxo_miss_count: u64 = 0,
 };
 
+/// Connect stages, including same-block spends kept out of the store lookup.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub const ConnectTimings = struct {
     utxo_load: i64 = 0,
     prevout_batch_load: i64 = 0,
@@ -97,6 +125,9 @@ pub const ConnectTimings = struct {
     block_connect_store_commit: i64 = 0,
 };
 
+/// Height, display hash, and UTXO count after one successful connect.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub const ConnectResult = struct {
     validated_height: u32,
     validated_hash: []u8,
@@ -104,6 +135,9 @@ pub const ConnectResult = struct {
     blocks_connected: u32,
     timings: ConnectTimings,
 
+    /// Free the bytes this value owns. The caller does not free them again.
+    /// A connected block has already passed finality and BIP68 before any script runs.
+    /// test "same block view rejects double spends"
     pub fn deinit(self: ConnectResult, allocator: std.mem.Allocator) void {
         allocator.free(self.validated_hash);
     }
@@ -116,6 +150,9 @@ const ScriptJob = struct {
     sighash_cache: *const script.SighashCache,
 };
 
+/// Jobs, threads, and the split timings for one block's scripts.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub const ScriptVerifyStats = struct {
     jobs: u64 = 0,
     threads: usize = 0,
@@ -127,17 +164,26 @@ pub const ScriptVerifyStats = struct {
     split: script_verify_split.Split = .{},
 };
 
+/// Worker count for script verify, capped so the machine is not oversubscribed.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub fn defaultScriptThreadCount() usize {
     const cpu_count = std.Thread.getCpuCount() catch 2;
     const minus_one = if (cpu_count > 1) cpu_count - 1 else 1;
     return @min(@max(minus_one, 1), 8);
 }
 
+/// Which compiled verifier a script worker must call.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub const ScriptCryptoBackend = enum {
     native,
     own_curve,
     pure,
 
+    /// Backend name recorded in a proof: libsecp256k1, libsecp256k1-zig, or zig-secp256k1.
+    /// A connected block has already passed finality and BIP68 before any script runs.
+    /// test "same block view rejects double spends"
     pub fn label(self: ScriptCryptoBackend) []const u8 {
         return switch (self) {
             .native => "libsecp256k1",
@@ -147,15 +193,24 @@ pub const ScriptCryptoBackend = enum {
     }
 };
 
+/// Owns the worker count and the backend for one process.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub const ScriptVerifyRunner = struct {
     allocator: std.mem.Allocator,
     thread_count: usize,
     crypto_backend: ScriptCryptoBackend,
 
+    /// Construct the verifier or runner this binary is allowed to use.
+    /// A connected block has already passed finality and BIP68 before any script runs.
+    /// test "same block view rejects double spends"
     pub fn create(allocator: std.mem.Allocator, requested_threads: usize) !*ScriptVerifyRunner {
         return createWithCryptoBackend(allocator, requested_threads, if (crypto.own_curve) .own_curve else .native);
     }
 
+    /// Construct a script runner for one backend, or fail if that backend was not compiled.
+    /// A connected block has already passed finality and BIP68 before any script runs.
+    /// test "same block view rejects double spends"
     pub fn createWithCryptoBackend(allocator: std.mem.Allocator, requested_threads: usize, crypto_backend: ScriptCryptoBackend) !*ScriptVerifyRunner {
         if (crypto.own_curve != (crypto_backend == .own_curve)) return error.CryptoBackendNotCompiled;
         const thread_count = @max(requested_threads, 1);
@@ -168,10 +223,16 @@ pub const ScriptVerifyRunner = struct {
         return self;
     }
 
+    /// Drop a verifier or runner the matching create allocated.
+    /// A connected block has already passed finality and BIP68 before any script runs.
+    /// test "same block view rejects double spends"
     pub fn destroy(self: *ScriptVerifyRunner) void {
         self.allocator.destroy(self);
     }
 
+    /// Run the block's script jobs on the compiled backend. Finality has already passed.
+    /// A connected block has already passed finality and BIP68 before any script runs.
+    /// test "same block view rejects double spends"
     pub fn verifyBlock(self: *ScriptVerifyRunner, transactions: []const tx.Transaction, jobs: []const ScriptJob) !ScriptVerifyStats {
         if (jobs.len == 0) return .{ .threads = self.thread_count };
         const split_before = script_verify_split.snapshot();
@@ -216,6 +277,9 @@ pub const ScriptVerifyRunner = struct {
     }
 };
 
+/// Connect one block: finality, then BIP68, then scripts, then the store commit.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub fn connectDecodedBlock(
     allocator: std.mem.Allocator,
     db: anytype,
@@ -451,6 +515,9 @@ fn countUnspentCreatedOutputs(transactions: []const tx.Transaction, txids: []con
     return count;
 }
 
+/// False for outputs the UTXO set must not keep, including OP_RETURN.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub fn isSpendableOutput(script_pubkey: []const u8) bool {
     return script_pubkey.len != 0 and script_pubkey[0] != 0x6a;
 }
@@ -618,6 +685,9 @@ fn hexAlloc(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
     return out;
 }
 
+/// Milliseconds since a timestamp taken with the process clock.
+/// A connected block has already passed finality and BIP68 before any script runs.
+/// test "same block view rejects double spends"
 pub fn elapsedMs(start_ms: i64) i64 {
     return @max(0, nowMs() - start_ms);
 }

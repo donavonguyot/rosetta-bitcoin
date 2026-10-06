@@ -1,8 +1,13 @@
+//! `consensus-context` writes the must-reject corpus result.
+//! The gate is the consensus-context host proof.
+//! Does not retarget. `consensus_context.zig` does.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const common = @import("common.zig");
 const valueArg = common.valueArg;
 
+/// consensus-context gate. Writes the must-reject corpus result.
 pub fn cmdConsensusContext(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
     const default_manifest = try common.joinFixtures(allocator, "conformance/fixtures/consensus/context/manifest.json");
     defer allocator.free(default_manifest);
@@ -11,6 +16,7 @@ pub fn cmdConsensusContext(allocator: std.mem.Allocator, io: std.Io, out: anytyp
     if (!ok) return error.ConsensusContextFailed;
 }
 
+/// Writes the consensus-context fixtures the corpus gate reads.
 pub fn cmdWriteContextFixtures(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
     if (comptime !core.rocksdb_compiled) return error.StoreNotCompiled;
     const datadir = valueArg(args, "--datadir") orelse return error.MissingDatadir;

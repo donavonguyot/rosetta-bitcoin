@@ -1,3 +1,7 @@
+//! libsecp256k1 binding for ECDSA, BIP340 Schnorr, and the BIP341 tweak.
+//! The node calls this only on the c_binding lane. Checks are variable-time on public data.
+//! Does not link into an own_curve node binary.
+
 const TweakResult = @import("crypto_types.zig").TweakResult;
 const c = @cImport({
     @cInclude("secp256k1.h");

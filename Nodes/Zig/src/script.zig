@@ -1,3 +1,9 @@
+//! Spend-path scripts for the Shared templates (BIP16, BIP141, BIP143, BIP341, BIP342).
+//! An unsupported template is an error, not a success. Cached sighash bytes match the uncached digest.
+//! Signature checks are public-data and variable-time; the kernel result lives in `own_crypto.zig`
+//! (`zig_own_curve_kernel_campaign_host_2026-10-04.json`, script-corpus, 45 scripts.* fixtures).
+//! Does not implement field arithmetic or decide nSequence against MTP.
+
 const std = @import("std");
 const crypto = @import("crypto.zig");
 const tx = @import("tx.zig");
@@ -88,11 +94,17 @@ const SEQUENCE_LOCKTIME_DISABLE_FLAG: u32 = 1 << 31;
 const SEQUENCE_LOCKTIME_TYPE_FLAG: u32 = 1 << 22;
 const SEQUENCE_LOCKTIME_MASK: u32 = 0x0000ffff;
 
+/// Amount and scriptPubKey of one spent output. BIP143 sighash and the interpreter both read them.
+/// Amount is satoshis. The script is the prevout script, not the scriptSig.
+/// script-corpus, 45 scripts.* fixtures.
 pub const SpentPrevout = struct {
     amount: i64,
     script_pubkey: []const u8,
 };
 
+/// Legacy, BIP143, and BIP341 digests computed once per transaction.
+/// A cached digest matches a fresh hash of the same transaction and prevouts.
+/// test "sighash cache matches uncached legacy bip143 and taproot digests"
 pub const SighashCache = struct {
     bip143_hash_prevouts: [32]u8,
     bip143_hash_sequence: [32]u8,
@@ -105,6 +117,9 @@ pub const SighashCache = struct {
     tap_hash_outputs: [32]u8,
     tap_single_outputs: [][32]u8,
 
+    /// Fill the sighash cache. spent_prevouts must have one entry per input.
+    /// Per-output single hashes are allocated here and freed by deinit.
+    /// test "sighash cache matches uncached legacy bip143 and taproot digests"
     pub fn init(allocator: std.mem.Allocator, transaction: tx.Transaction, spent_prevouts: []const SpentPrevout) !SighashCache {
         if (spent_prevouts.len != transaction.inputs.len) return error.SpentPrevoutsLengthMismatch;
         var bip143_single_outputs = try allocator.alloc([32]u8, transaction.outputs.len);
@@ -129,6 +144,8 @@ pub const SighashCache = struct {
         };
     }
 
+    /// Free the per-output single hashes. The transaction is not owned here.
+    /// test "sighash cache matches uncached legacy bip143 and taproot digests"
     pub fn deinit(self: *SighashCache, allocator: std.mem.Allocator) void {
         allocator.free(self.bip143_single_outputs);
         allocator.free(self.tap_single_outputs);
@@ -152,7 +169,9 @@ const EvalContext = struct {
     sigop_budget: ?*i32 = null,
 };
 
-/// Spend-path verifier for Shared-supported templates. Unsupported shapes return error (validation blocker).
+/// Spend-path check for one Shared template. An unsupported shape is an error.
+/// Prevouts must match the inputs. Connect has already applied finality and BIP68.
+/// script-corpus, 45 scripts.* fixtures. consensus.* fixtures reject before this runs.
 pub fn verifyInput(
     allocator: std.mem.Allocator,
     transaction: tx.Transaction,
@@ -169,6 +188,9 @@ pub fn verifyInput(
     return verifyInputWithVerifier(allocator, transaction, input_index, spent_prevouts, .{ .native = &verifier }, null);
 }
 
+/// Same spend check with the caller's verifier, so a corpus run can pin the lane.
+/// An unsupported template is still an error.
+/// script-corpus, 45 scripts.* fixtures.
 pub fn verifyInputWithVerifier(
     allocator: std.mem.Allocator,
     transaction: tx.Transaction,

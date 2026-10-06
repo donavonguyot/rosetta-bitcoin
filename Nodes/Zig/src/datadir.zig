@@ -1,3 +1,7 @@
+//! Datadir lock and the ban on unapproved runtime files beside the chainstate.
+//! One process holds the lock. A second writer does not open the store.
+//! Does not read blocks or UTXOs.
+
 const std = @import("std");
 const types = @import("types.zig");
 

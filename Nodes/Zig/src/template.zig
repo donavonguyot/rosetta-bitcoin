@@ -1,3 +1,10 @@
+//! Rung-0 block template from the layer-1 pool (BIP34, BIP141).
+//! Coinbase scriptSig is the BIP34 height push. The witness commitment is `OP_RETURN` plus the
+//! witness merkle root. `nBits` comes from `consensus_context.requiredBits`, the port's own rule.
+//! Selection is ancestor feerate, compared with a cross-multiply so a fee ratio does not divide
+//! (test "assembly bytes are stable and the witness commitment matches").
+//! Does not grind a nonce or write chainstate. `testBlockValidity` connects into a discarding store.
+
 const std = @import("std");
 const root = @import("root.zig");
 const mempool = @import("mempool.zig");
@@ -6,10 +13,22 @@ const tx = root.tx;
 const crypto = root.crypto;
 const block = root.block;
 
+/// BIP141 block weight limit the template refuses to pass.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub const MAX_BLOCK_WEIGHT: u64 = 4_000_000;
+/// Sigop cost limit applied to the assembled block.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub const MAX_SIGOP_COST: u32 = 80_000;
+/// Compact testnet4 pow limit used when the template asks for the ceiling.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub const POW_LIMIT_BITS: u32 = root.chain_params.pow_limit_bits;
 
+/// Assembled coinbase, transactions, and header fields for one template.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub const Assembly = struct {
     height: u32,
     prev_hash: [32]u8,
@@ -19,20 +38,32 @@ pub const Assembly = struct {
     transactions: []const tx.Transaction,
 };
 
+/// Block subsidy at a height, halved every 210000 blocks.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn subsidy(height: u32) u64 {
     return @as(u64, 5_000_000_000) >> @intCast(height / 210_000);
 }
 
+/// Template timestamp: at least MTP+1, and the BIP94 floor on a retarget height.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn headerTimeFor(mtp: u32, now: u32, height: u32, prev_time: u32) u32 {
     return consensus_context.clampedHeaderTime(mtp, now, height, prev_time);
 }
 
+/// nBits for the next block from the port retarget rule, not from a peer.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn nextBits(store: anytype, allocator: std.mem.Allocator, height: u32, time: u32) !u32 {
     _ = allocator;
     try store.ensureHeaderIndex();
     return consensus_context.requiredBits(store.headerIndex(), height, time);
 }
 
+/// Weight of the BIP34 coinbase this template will prepend.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn coinbaseWeight(allocator: std.mem.Allocator, height: u32) !struct { weight: u64, sigops: u32 } {
     const coinbase = try buildCoinbase(allocator, height, 0, &.{});
     defer coinbase.deinit(allocator);
@@ -42,6 +73,9 @@ pub fn coinbaseWeight(allocator: std.mem.Allocator, height: u32) !struct { weigh
     };
 }
 
+/// Build the rung-0 block: BIP34 coinbase, witness commitment, port nBits.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn assemble(allocator: std.mem.Allocator, input: Assembly) ![]u8 {
     const coinbase = try buildCoinbase(allocator, input.height, input.fees, input.transactions);
     defer coinbase.deinit(allocator);
@@ -164,6 +198,9 @@ fn pushScriptNum(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: u
     try out.appendSlice(allocator, buf[0..n]);
 }
 
+/// 32-byte BIP141 witness commitment the coinbase OP_RETURN carries.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn witnessCommitment(allocator: std.mem.Allocator, others: []const tx.Transaction) ![32]u8 {
     var wtxids = try allocator.alloc([32]u8, others.len + 1);
     defer allocator.free(wtxids);
@@ -176,10 +213,16 @@ pub fn witnessCommitment(allocator: std.mem.Allocator, others: []const tx.Transa
     return crypto.doubleSha256(payload[0..]);
 }
 
+/// Transactions parsed back out of assembled block bytes.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub const ParsedTemplate = struct {
     info: block.BlockInfo,
     transactions: []tx.Transaction,
 
+    /// Free the bytes this value owns. The caller does not free them again.
+    /// Assembly uses the port nBits rule and does not call proof of work.
+    /// test "assembly bytes are stable and the witness commitment matches"
     pub fn deinit(self: ParsedTemplate, allocator: std.mem.Allocator) void {
         for (self.transactions) |transaction| transaction.deinit(allocator);
         allocator.free(self.transactions);
@@ -187,6 +230,7 @@ pub const ParsedTemplate = struct {
 };
 
 /// Block bytes without the proof-of-work check. Merkle root and witness commitment are checked.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn parseTemplate(allocator: std.mem.Allocator, raw: []const u8) !ParsedTemplate {
     if (raw.len < 81) return error.BlockTooShort;
     const header = raw[0..80];
@@ -211,6 +255,9 @@ pub fn parseTemplate(allocator: std.mem.Allocator, raw: []const u8) !ParsedTempl
     };
 }
 
+/// Reject a duplicate txid or a block over the BIP141 weight limit.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn checkTemplateLimits(allocator: std.mem.Allocator, transactions: []const tx.Transaction) !void {
     var seen = std.AutoHashMap([32]u8, void).init(allocator);
     defer seen.deinit();
@@ -224,35 +271,59 @@ pub fn checkTemplateLimits(allocator: std.mem.Allocator, transactions: []const t
     if (weight > MAX_BLOCK_WEIGHT) return error.BlockWeightExceeded;
 }
 
+/// Template validity connects here and the commit is dropped.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn DiscardingStore(comptime Inner: type) type {
     return struct {
         const Self = @This();
         inner: *Inner,
 
+        /// The 80-byte header at a height, or null past the stored tip.
+        /// Assembly uses the port nBits rule and does not call proof of work.
+        /// test "assembly bytes are stable and the witness commitment matches"
         pub fn headerAt(self: *Self, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
             return self.inner.headerAt(allocator, height);
         }
 
+        /// Make header time and bits readable. Native open already loaded them.
+        /// Assembly uses the port nBits rule and does not call proof of work.
+        /// test "assembly bytes are stable and the witness commitment matches"
         pub fn ensureHeaderIndex(self: *Self) !void {
             try self.inner.ensureHeaderIndex();
         }
 
+        /// The dense header index connect and the mempool use for MTP.
+        /// Assembly uses the port nBits rule and does not call proof of work.
+        /// test "assembly bytes are stable and the witness commitment matches"
         pub fn headerIndex(self: *Self) consensus_context.HeaderIndex {
             return self.inner.headerIndex();
         }
 
+        /// Median of up to 11 header timestamps ending at a height. BIP113 and the template use it.
+        /// Assembly uses the port nBits rule and does not call proof of work.
+        /// test "assembly bytes are stable and the witness commitment matches"
         pub fn medianTimePast(self: *Self, height: u32) !u32 {
             return self.inner.medianTimePast(height);
         }
 
+        /// Indexed time and nBits at a height, or null when that height is not stored.
+        /// Assembly uses the port nBits rule and does not call proof of work.
+        /// test "assembly bytes are stable and the witness commitment matches"
         pub fn headerFields(self: *Self, height: u32) !?consensus_context.HeaderFields {
             return self.inner.headerFields(height);
         }
 
+        /// Decoded UTXOs plus hit and miss timing for the lookups connect actually issued.
+        /// Assembly uses the port nBits rule and does not call proof of work.
+        /// test "assembly bytes are stable and the witness commitment matches"
         pub fn getManyUtxosWithStats(self: *Self, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.types.Outpoint, stats: ?*root.connect.UtxoLoadStats) ![]?root.types.StoredUtxo {
             return self.inner.getManyUtxosWithStats(allocator, chain, outpoints, stats);
         }
 
+        /// Apply the spends and creates from a block that connect has already checked.
+        /// Assembly uses the port nBits rule and does not call proof of work.
+        /// test "assembly bytes are stable and the witness commitment matches"
         pub fn commitConnectedBlock(
             self: *Self,
             allocator: std.mem.Allocator,
@@ -280,6 +351,9 @@ pub fn DiscardingStore(comptime Inner: type) type {
     };
 }
 
+/// Connect the assembled block through the port rule without writing state.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn testBlockValidity(allocator: std.mem.Allocator, store: anytype, raw: []const u8, height: u32, utxo_count: i64) !void {
     const parsed = try parseTemplate(allocator, raw);
     defer parsed.deinit(allocator);
@@ -296,6 +370,9 @@ const Candidate = struct {
     sigops: u32,
 };
 
+/// Ancestor-feerate selection. Comparison is a cross-multiply, not a division.
+/// Assembly uses the port nBits rule and does not call proof of work.
+/// test "assembly bytes are stable and the witness commitment matches"
 pub fn selectPackages(comptime Store: type, allocator: std.mem.Allocator, pool: *mempool.Pool(Store), coinbase_weight: u64, coinbase_sigops: u32) ![][32]u8 {
     var remaining_weight: u64 = if (coinbase_weight >= MAX_BLOCK_WEIGHT) 0 else MAX_BLOCK_WEIGHT - coinbase_weight;
     var remaining_sigops: u32 = if (coinbase_sigops >= MAX_SIGOP_COST) 0 else MAX_SIGOP_COST - coinbase_sigops;

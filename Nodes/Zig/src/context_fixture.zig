@@ -1,4 +1,6 @@
 //! Must-reject block fixtures for finality and BIP68, loaded into a memory store.
+//! Each fixture has one expected reject reason from the consensus-context corpus.
+//! Does not connect a live chain. The host gate does that.
 
 const std = @import("std");
 const root = @import("root.zig");

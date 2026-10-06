@@ -1,3 +1,7 @@
+//! Mining rung 0: assembly bytes, testblockvalidity, and the fee-ratio diagnostic.
+//! The gate schema is `port.mining.rung0.v1`. Selection is not a pass/fail against Core.
+//! Does not grind proof of work.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const common = @import("common.zig");
@@ -5,6 +9,7 @@ const valueArg = common.valueArg;
 const appendToolchainProvenance = common.appendToolchainProvenance;
 const writeFileEnsuringParent = common.writeFileEnsuringParent;
 
+/// Writes `port.mining.rung0.v1`, including mining.assembly_bytes.
 pub fn writeMiningGate(allocator: std.mem.Allocator, io: std.Io, path: []const u8, report: core.rung0.Report, info: core.rung0.TraceInfo, surface: []const u8, store_name: []const u8) !void {
     var body: std.ArrayList(u8) = .empty;
     defer body.deinit(allocator);
@@ -38,6 +43,7 @@ pub fn writeMiningGate(allocator: std.mem.Allocator, io: std.Io, path: []const u
     try writeFileEnsuringParent(io, path, body.items);
 }
 
+/// mining.rung0 testblockvalidity. Connects the template without writing state.
 pub fn cmdTestBlockValidity(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
     const block_path = valueArg(args, "--block") orelse return error.MissingBlock;
     const height_text = valueArg(args, "--height") orelse return error.MissingHeight;

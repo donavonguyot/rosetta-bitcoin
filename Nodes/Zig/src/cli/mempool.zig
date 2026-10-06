@@ -1,3 +1,7 @@
+//! `mempool-replay` and `build-template` against a trace.
+//! The gate is mempool-rung0. The store must be at the trace start; there is no rewind.
+//! Does not restore evicted transactions.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const common = @import("common.zig");
@@ -9,6 +13,7 @@ const cmdLocalReferenceProof = sync.cmdLocalReferenceProof;
 const mining = @import("mining.zig");
 const writeMiningGate = mining.writeMiningGate;
 
+/// mempool-rung0. Replays the trace, then builds the template.
 pub fn cmdRung0(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, default_peer: []const u8, default_crypto_backend: []const u8) !void {
     const command = args[0];
     const flags = args[1..];

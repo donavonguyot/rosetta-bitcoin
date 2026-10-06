@@ -1,3 +1,8 @@
+//! `sync` and `local-reference-proof`: connect toward a height and write the shadow gate.
+//! native-shadow-5k, the 50k and 100k shadows, and self-hosted-50k all enter here.
+//! `--build-info` is checked by the Makefile before this command runs.
+//! Does not rewind a store that is already past the target.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const common = @import("common.zig");
@@ -27,6 +32,7 @@ const ProofProfile = struct {
     expected_utxo_count: i64,
 };
 
+/// native-shadow-5k and the other shadow gates. Refuses a store already past the target.
 pub fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, prefetch_text: []const u8, script_threads_text: []const u8, default_peer: []const u8, default_crypto_backend: []const u8) !void {
     const datadir = valueArg(args, "--datadir") orelse "/data";
     const store_name = valueArg(args, "--store") orelse "rocksdb";
@@ -516,6 +522,7 @@ const SlowBlocks = struct {
     }
 };
 
+/// One supervisor pass over local-reference-proof.
 pub fn cmdSupervisorOnce(allocator: std.mem.Allocator, out: anytype, args: []const []const u8) !void {
     _ = allocator;
     _ = args;

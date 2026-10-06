@@ -1,3 +1,9 @@
+//! `zigbitnode` command dispatch.
+//! `--build-info` prints crypto lane, store mode, source commit, and binary hash before any
+//! command runs, so a gate refuses a binary that does not match the build it just made.
+//! The toolchain pin exists because a Homebrew compiler was not Zig 0.16.0.
+//! Does not implement consensus. Each command module does.
+
 const std = @import("std");
 const Io = std.Io;
 const core = @import("zigbitnode");
@@ -27,6 +33,7 @@ const cmdRung0 = mempool.cmdRung0;
 const mining = @import("mining.zig");
 const cmdTestBlockValidity = mining.cmdTestBlockValidity;
 
+/// Dispatch. `--build-info` runs before any command so a mismatched binary never starts a gate.
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
     const args = try init.minimal.args.toSlice(allocator);
@@ -113,6 +120,7 @@ fn usage(out: anytype) !void {
     , .{});
 }
 
+/// `--build-info`: lane, store, source commit, and binary hash. Gates refuse a mismatch.
 fn cmdBuildInfo(allocator: std.mem.Allocator, io: Io, out: anytype) !void {
     const digest = try binarySha256(allocator, io);
     try out.print(

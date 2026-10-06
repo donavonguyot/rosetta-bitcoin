@@ -1,3 +1,7 @@
+//! Stored UTXO, undo, and chainstate commit records passed between connect and the stores.
+//! The same structs are what codec v2 encodes. Callers do not invent a second UTXO layout.
+//! Does not hash the set or apply a block.
+
 const std = @import("std");
 
 pub const PortInfo = struct {

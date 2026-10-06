@@ -119,7 +119,22 @@ pub fn build(b: *std.Build) void {
     const guard = b.addSystemCommand(&.{ "sh", "scripts/check_no_external_paths.sh" });
     guard.setCwd(b.path("."));
     test_step.dependOn(&guard.step);
+    const coverage = b.addSystemCommand(&.{ "python3", "scripts/doc_coverage.py" });
+    coverage.setCwd(b.path("."));
+    test_step.dependOn(&coverage.step);
     test_step.dependOn(&run_tests.step);
+
+    const docs_lib = b.addLibrary(.{
+        .name = "zigbitnode-docs",
+        .root_module = core_mod,
+    });
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = docs_lib.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+    const docs_step = b.step("docs", "Install autodoc under zig-out/docs");
+    docs_step.dependOn(&install_docs.step);
 
     const native_store_tests = b.addTest(.{
         .root_module = b.createModule(.{

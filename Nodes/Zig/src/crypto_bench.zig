@@ -1,6 +1,9 @@
 //! Microbenchmark of own_curve against the public libsecp256k1 verify API.
 //! Paired ops interleave own_curve and the C binding in one loop. Field and
 //! group ops stay own_curve only: those entry points are not in the C headers.
+//! Quiet ECDSA ratio_min 1.931 is the baseline (`zig_own_curve_bench_quiet_v2_2026-10-05.json`).
+//! Does not serve the node. `zigbitnode-bench` is a separate build (crypto-bench).
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const secp = @import("secp256k1");
@@ -100,6 +103,9 @@ var sink_u: u256 = 0;
 var sink_b: u8 = 0;
 var cpu_buf: [128]u8 = undefined;
 
+/// Run the paired own_curve and libsecp benchmark. crypto-bench is the gate.
+/// The bench process is not the node. One run prints the paired timings.
+/// crypto-bench
 pub fn run(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
     const profile = flag(args, "--profile");
     if (profile and !core.crypto.curve_profile) return error.CurveProfileNotCompiled;

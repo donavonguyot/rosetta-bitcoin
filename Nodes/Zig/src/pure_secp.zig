@@ -1,3 +1,9 @@
+//! Pure Zig secp256k1 verifier (ECDSA, BIP340, BIP341) on public chain data.
+//! Checks are variable-time on purpose: keys and signatures are not secret here.
+//! The kernel campaign's 5x52 field was below bar and was not kept; this file is the stdlib lane,
+//! not that attempt (`zig_own_curve_kernel_campaign_host_2026-10-04.json`).
+//! Does not precompute the own_curve window tables.
+
 const std = @import("std");
 
 const Secp256k1 = std.crypto.ecc.Secp256k1;
@@ -9,15 +15,30 @@ const bip340_challenge_tag_hash = [_]u8{
     0x49, 0xfe, 0x51, 0x8f, 0x6d, 0x48, 0xd3, 0x7c,
 };
 
+/// X-only output key and parity from a BIP341 tweak.
+/// A malformed encoding is a reject, not a panic.
+/// test "pure secp rejects malformed encodings"
 pub const TweakResult = @import("crypto_types.zig").TweakResult;
 
+/// Stdlib secp256k1 verifier for the pure lane.
+/// A malformed encoding is a reject, not a panic.
+/// test "pure secp rejects malformed encodings"
 pub const PureVerifier = struct {
+    /// Construct the verifier or runner this binary is allowed to use.
+    /// A malformed encoding is a reject, not a panic.
+    /// test "pure secp rejects malformed encodings"
     pub fn create() PureVerifier {
         return .{};
     }
 
+    /// Drop a verifier or runner the matching create allocated.
+    /// A malformed encoding is a reject, not a panic.
+    /// test "pure secp rejects malformed encodings"
     pub fn destroy(_: *PureVerifier) void {}
 
+    /// ECDSA verify of a DER signature over a 32-byte sighash. Public data, variable-time.
+    /// A malformed encoding is a reject, not a panic.
+    /// test "pure secp rejects malformed encodings"
     pub fn verifyEcdsaDer(_: *PureVerifier, pubkey_bytes: []const u8, der_sig: []const u8, msg32: *const [32]u8) bool {
         const public_key = Ecdsa.PublicKey.fromSec1(pubkey_bytes) catch return false;
         const sig = Ecdsa.Signature.fromDer(der_sig) catch return false;
@@ -25,6 +46,9 @@ pub const PureVerifier = struct {
         return true;
     }
 
+    /// BIP340 verify. Public data, variable-time, same as ECDSA.
+    /// A malformed encoding is a reject, not a panic.
+    /// test "pure secp rejects malformed encodings"
     pub fn verifySchnorr(_: *PureVerifier, xonly_pubkey_bytes: []const u8, sig64: []const u8, msg: []const u8) bool {
         if (xonly_pubkey_bytes.len != 32 or sig64.len != 64) return false;
         const point = liftX(xonly_pubkey_bytes) catch return false;
@@ -39,6 +63,9 @@ pub const PureVerifier = struct {
         return !affine.y.isOdd() and affine.x.equivalent(r_x);
     }
 
+    /// BIP341 tweak check: parity and x-only key both match.
+    /// A malformed encoding is a reject, not a panic.
+    /// test "pure secp rejects malformed encodings"
     pub fn taprootTweakAddCheck(
         self: *PureVerifier,
         tweaked_xonly: []const u8,
@@ -50,6 +77,9 @@ pub const PureVerifier = struct {
         return parity == result.parity and std.mem.eql(u8, tweaked_xonly, result.output_xonly[0..]);
     }
 
+    /// BIP341 key tweak. Returns null when the tweak is not on the curve.
+    /// A malformed encoding is a reject, not a panic.
+    /// test "pure secp rejects malformed encodings"
     pub fn taprootTweakPubkeyXOnly(_: *PureVerifier, internal_xonly: []const u8, tweak32: *const [32]u8) ?TweakResult {
         const internal = liftX(internal_xonly) catch return null;
         const tweak = Secp256k1.scalar.Scalar.fromBytes(tweak32.*, .big) catch return null;

@@ -1,8 +1,13 @@
+//! `check-headers` checks stored headers against the port nBits rule through the tip.
+//! The gate is check-headers (`zig_consensus_context_host_2026-10-04.json`).
+//! Does not download headers.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const common = @import("common.zig");
 const valueArg = common.valueArg;
 
+/// check-headers gate through the stored tip.
 pub fn cmdCheckHeaders(allocator: std.mem.Allocator, out: anytype, args: []const []const u8) !void {
     const datadir = valueArg(args, "--datadir") orelse core.types.PortInfo.default_datadir;
     const store_name = valueArg(args, "--store") orelse "rocksdb";

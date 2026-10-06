@@ -1,3 +1,8 @@
+//! Chainstate codec v2 key and value bytes shared with the other ports.
+//! `encodeUtxoValue` is the canonical value the set-hash fold hashes. A different layout is a different set.
+//! Proved by test "codec v2 golden vectors".
+//! Does not interpret scripts or decide which UTXO is spent.
+
 const std = @import("std");
 const types = @import("types.zig");
 
@@ -5,16 +10,43 @@ const Outpoint = types.Outpoint;
 const StoredUtxo = types.StoredUtxo;
 const UndoEntry = types.UndoEntry;
 
+/// Golden codec v2 hex the port must reproduce byte for byte.
+/// Each field is one key or value, not a decoded UTXO.
+/// test "codec v2 golden vectors"
 pub const CodecVectors = struct {
+    /// Golden hex for a UTXO key: prefix `u`, chain name, txid, vout.
+    /// A key does not decode to a UTXO. The value hex is a different constant.
+    /// test "scratch utxo key encoding matches codec vector"
     pub const utxo_key_hex = "7508746573746e657434000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f00000001";
+    /// Golden hex for a UTXO value: height, satoshis, coinbase flag, script.
+    /// These are the bytes the set-hash fold hashes. decodeUtxoValue reads them back.
+    /// test "codec v2 golden vectors"
     pub const utxo_value_hex = "00000001000000012a05f200010000001976a914000102030405060708090a0b0c0d0e0f1011121388ac";
+    /// Golden hex for an undo key: prefix `d` and a height.
+    /// The undo payload is encodeUndoValue, not this key.
+    /// test "codec v2 golden vectors"
     pub const undo_key_hex = "6408746573746e65743400000002";
+    /// Golden hex for the tip key: prefix `t` and the chain name, no height.
+    /// The tip value is a separate encoding of height and block hash.
+    /// test "codec v2 golden vectors"
     pub const tip_key_hex = "7408746573746e657434";
+    /// Golden hex for a block-index key: prefix `b` and a height.
+    /// The indexed value is the display hash, not a UTXO.
+    /// test "codec v2 golden vectors"
     pub const block_index_key_hex = "6208746573746e65743400000002";
+    /// Golden hex for a header key: prefix `h` and a height.
+    /// The stored value is the 80-byte header.
+    /// test "codec v2 golden vectors"
     pub const header_key_hex = "6808746573746e65743400000002";
+    /// Golden hex for a metadata key: prefix `m` and the field name.
+    /// No chain id. The value is the metadata string.
+    /// test "codec v2 golden vectors"
     pub const metadata_key_hex = "6d0d636f6465635f76657273696f6e";
 };
 
+/// Allocate the `u` key for one outpoint. The set hash updates with this key.
+/// The paired value is encodeUtxoValue. Chain names over 252 bytes are refused.
+/// test "scratch utxo key encoding matches codec vector"
 pub fn encodeUtxoKey(allocator: std.mem.Allocator, chain: []const u8, outpoint: Outpoint) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -22,6 +54,9 @@ pub fn encodeUtxoKey(allocator: std.mem.Allocator, chain: []const u8, outpoint: 
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Write the `u` key into the caller buffer.
+/// The write is the key only. The buffer grows by encodedUtxoKeyLen.
+/// test "scratch utxo key encoding matches codec vector"
 pub fn encodeUtxoKeyInto(allocator: std.mem.Allocator, bytes: *std.ArrayList(u8), chain: []const u8, outpoint: Outpoint) !void {
     try bytes.append(allocator, 'u');
     try appendVarBytes(allocator, bytes, chain);
@@ -29,11 +64,17 @@ pub fn encodeUtxoKeyInto(allocator: std.mem.Allocator, bytes: *std.ArrayList(u8)
     try appendU32Be(allocator, bytes, outpoint.vout);
 }
 
+/// Byte length of a `u` key: tag, chain length, chain, 32-byte txid, vout.
+/// Chain names longer than 252 bytes are refused before any write.
+/// test "scratch utxo key encoding matches codec vector"
 pub fn encodedUtxoKeyLen(chain: []const u8) !usize {
     if (chain.len > 252) return error.ValueTooLarge;
     return 1 + 1 + chain.len + 32 + 4;
 }
 
+/// Canonical UTXO value: height, satoshis, coinbase flag, script.
+/// The set-hash fold hashes these bytes and no other layout.
+/// test "codec v2 golden vectors"
 pub fn encodeUtxoValue(allocator: std.mem.Allocator, utxo: StoredUtxo) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -44,10 +85,16 @@ pub fn encodeUtxoValue(allocator: std.mem.Allocator, utxo: StoredUtxo) ![]u8 {
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Key for the undo of one height, prefix `d`.
+/// The payload under this key is encodeUndoValue.
+/// test "codec v2 golden vectors"
 pub fn encodeUndoKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
     return keyWithHeight(allocator, 'd', chain, height);
 }
 
+/// Key for the chain tip marker, prefix `t` and the chain name.
+/// No height in the key. The value is encodeTipValue.
+/// test "codec v2 golden vectors"
 pub fn encodeTipKey(allocator: std.mem.Allocator, chain: []const u8) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -56,18 +103,30 @@ pub fn encodeTipKey(allocator: std.mem.Allocator, chain: []const u8) ![]u8 {
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Key for a block-index row, prefix `b` and a height.
+/// The value is the display hash, not the raw block.
+/// test "codec v2 golden vectors"
 pub fn encodeBlockIndexKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
     return keyWithHeight(allocator, 'b', chain, height);
 }
 
+/// Key for a stored header, prefix `h` and a height.
+/// The value is the 80-byte header.
+/// test "codec v2 golden vectors"
 pub fn encodeHeaderKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
     return keyWithHeight(allocator, 'h', chain, height);
 }
 
+/// Key for raw block bytes, prefix `r` and a height.
+/// The value is the block, not a UTXO.
+/// test "record block survives restart before connect"
 pub fn encodeRawBlockKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
     return keyWithHeight(allocator, 'r', chain, height);
 }
 
+/// Key for one named chainstate field, prefix `m` and the name.
+/// No chain id. Callers use the same name at read and write.
+/// test "codec v2 golden vectors"
 pub fn encodeMetadataKey(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -76,6 +135,9 @@ pub fn encodeMetadataKey(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Lowercase hex of a byte slice, two chars per byte.
+/// Golden vectors compare this form. It is not a key or a value layout.
+/// test "codec v2 golden vectors"
 pub fn toHexAlloc(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
     const alphabet = "0123456789abcdef";
     var out = try allocator.alloc(u8, bytes.len * 2);
@@ -86,6 +148,9 @@ pub fn toHexAlloc(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
     return out;
 }
 
+/// Decode even-length hex into owned bytes.
+/// Odd length or a bad nibble is InvalidHex. Upper and lower case both read.
+/// test "codec v2 golden vectors"
 pub fn fromHexAlloc(allocator: std.mem.Allocator, hex: []const u8) ![]u8 {
     if (hex.len % 2 != 0) return error.InvalidHex;
     var out = try allocator.alloc(u8, hex.len / 2);
@@ -97,6 +162,9 @@ pub fn fromHexAlloc(allocator: std.mem.Allocator, hex: []const u8) ![]u8 {
     return out;
 }
 
+/// Compare live key and value encodings to CodecVectors.
+/// A drift returns CodecVectorMismatch. The command that runs this is codec-vectors.
+/// codec-vectors
 pub fn verifyCodecVectors(allocator: std.mem.Allocator) !void {
     var txid: [32]u8 = undefined;
     for (&txid, 0..) |*byte, i| byte.* = @intCast(i);
@@ -152,6 +220,9 @@ pub fn verifyCodecVectors(allocator: std.mem.Allocator) !void {
     if (!std.mem.eql(u8, metadata_hex, CodecVectors.metadata_key_hex)) return error.CodecVectorMismatch;
 }
 
+/// Big-endian height, then the internal block hash.
+/// Stored under the tip key. This is not a UTXO value.
+/// test "commit block writes created utxos undo tip metadata and counters"
 pub fn encodeTipValue(allocator: std.mem.Allocator, height: u32, block_hash: [32]u8) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -160,6 +231,9 @@ pub fn encodeTipValue(allocator: std.mem.Allocator, height: u32, block_hash: [32
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Undo records a commit must be able to reverse: outpoint, height, value, coinbase, script.
+/// One record per external spend, in that spend's order.
+/// test "commit block writes created utxos undo tip metadata and counters"
 pub fn encodeUndoValue(allocator: std.mem.Allocator, entries: []const UndoEntry) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -175,6 +249,9 @@ pub fn encodeUndoValue(allocator: std.mem.Allocator, entries: []const UndoEntry)
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Read a UTXO value back: height, satoshis, coinbase, script.
+/// The outpoint supplies vout. A short or truncated script is an error.
+/// test "direct utxo multi get preserves order missing slots and decoded equality"
 pub fn decodeUtxoValue(allocator: std.mem.Allocator, outpoint: Outpoint, value: []const u8) !StoredUtxo {
     if (value.len < 17) return error.UtxoValueTooShort;
     const height = std.mem.readInt(u32, value[0..4], .big);

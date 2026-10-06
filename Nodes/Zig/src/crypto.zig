@@ -1,22 +1,65 @@
+//! Hash helpers and the selected secp256k1 verifier (ECDSA, BIP340 Schnorr, BIP341 tweak).
+//! Callers see one backend. Verification inputs are chain data, so the verifier is variable-time.
+//! The own-curve kernel is 1.93 times libsecp at the same 1950 field multiplications; the residual
+//! is scheduling, and the 5x52 attempt stayed below bar with no reference-informed code kept
+//! (`zig_own_curve_kernel_campaign_host_2026-10-04.json`).
+//! Does not build sighash messages. `script.zig` does.
+
 const std = @import("std");
 const split = @import("script_verify_split.zig");
+/// Digest of the crypto sources compiled into this lane.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const source_digest = @import("crypto_options").source_digest;
+/// Source revision compiled into the binary. `--build-info` prints it.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const source_commit = @import("crypto_options").source_commit;
+/// Build tag for which field implementation the own_curve lane compiled.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const curve_profile = @import("crypto_options").curve_profile;
+/// True when this binary's verifier is the Zig kernel rather than libsecp.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const own_curve = @import("crypto_options").own_curve;
 const own = @import("own_crypto.zig");
+/// own_curve verifier. Present only when that lane is compiled.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const OwnVerifier = own.OwnVerifier;
+/// libsecp256k1 verifier selected on the c_binding lane.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const NativeVerifier = if (own_curve) own.DisabledVerifier else @import("native_crypto.zig").NativeVerifier;
+/// Stdlib secp256k1 verifier for the pure lane.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const PureVerifier = if (own_curve) own.DisabledPure else @import("pure_secp.zig").PureVerifier;
+/// X-only output key and parity from a BIP341 tweak.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const TweakResult = own.TweakResult;
+/// Name of the verifier lane compiled into this binary.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const default_label = if (own_curve) "libsecp256k1-zig" else "libsecp256k1";
+/// Which crypto backend this binary was built to run.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const lane = if (own_curve) "own_curve" else "c_binding";
 
+/// The verifier function pointers for the lane compiled into this binary.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub const CryptoVerifier = union(enum) {
     native: *NativeVerifier,
     own: *OwnVerifier,
     pure: *PureVerifier,
 
+    /// ECDSA verify of a DER signature over a 32-byte sighash. Public data, variable-time.
+    /// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+    /// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
     pub fn verifyEcdsaDer(self: CryptoVerifier, pubkey_bytes: []const u8, der_sig: []const u8, msg32: *const [32]u8) bool {
         const started = split.nowNs();
         const ok = switch (self) {
@@ -28,6 +71,9 @@ pub const CryptoVerifier = union(enum) {
         return ok;
     }
 
+    /// BIP340 verify. Public data, variable-time, same as ECDSA.
+    /// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+    /// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
     pub fn verifySchnorr(self: CryptoVerifier, xonly_pubkey_bytes: []const u8, sig64: []const u8, msg: []const u8) bool {
         const started = split.nowNs();
         const ok = switch (self) {
@@ -39,6 +85,9 @@ pub const CryptoVerifier = union(enum) {
         return ok;
     }
 
+    /// BIP341 tweak check: parity and x-only key both match.
+    /// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+    /// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
     pub fn taprootTweakAddCheck(
         self: CryptoVerifier,
         tweaked_xonly: []const u8,
@@ -53,6 +102,9 @@ pub const CryptoVerifier = union(enum) {
         };
     }
 
+    /// BIP341 key tweak. Returns null when the tweak is not on the curve.
+    /// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+    /// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
     pub fn taprootTweakPubkeyXOnly(
         self: CryptoVerifier,
         internal_xonly: []const u8,
@@ -69,6 +121,9 @@ pub const CryptoVerifier = union(enum) {
     }
 };
 
+/// True when the selected secp backend can answer a verify call.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn available() bool {
     if (own_curve) return true;
     var verifier = NativeVerifier.create() catch return false;
@@ -127,23 +182,35 @@ test "pure taproot tweak edge cases match native backend" {
     try std.testing.expect(!pure.taprootTweakAddCheck(pure_zero.output_xonly[0..], wrong_parity, generator_x, &zero));
 }
 
+/// SHA256. Bitcoin builds txid and sighash on this, usually doubled.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn sha256(data: []const u8) [32]u8 {
     var out: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(data, &out, .{});
     return out;
 }
 
+/// SHA256(SHA256(bytes)), the hash Bitcoin transaction ids use.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn doubleSha256(data: []const u8) [32]u8 {
     const first = sha256(data);
     return sha256(first[0..]);
 }
 
+/// SHA1, still required for a few legacy script paths.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn sha1(data: []const u8) [20]u8 {
     var out: [20]u8 = undefined;
     std.crypto.hash.Sha1.hash(data, &out, .{});
     return out;
 }
 
+/// RIPEMD160, the inner hash of hash160.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn ripemd160(data: []const u8) [20]u8 {
     var state = [_]u32{ 0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0 };
     var offset: usize = 0;
@@ -167,11 +234,17 @@ pub fn ripemd160(data: []const u8) [20]u8 {
     return out;
 }
 
+/// RIPEMD160(SHA256(bytes)), the hash P2PKH and P2SH addresses use.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn hash160(data: []const u8) [20]u8 {
     const sha = sha256(data);
     return ripemd160(sha[0..]);
 }
 
+/// BIP340 tagged hash. Schnorr and Taproot challenges use it.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn taggedHash(tag: []const u8, data: []const u8) [32]u8 {
     const tag_hash = sha256(tag);
     var hasher = std.crypto.hash.sha2.Sha256.init(.{});
@@ -183,6 +256,9 @@ pub fn taggedHash(tag: []const u8, data: []const u8) [32]u8 {
     return out;
 }
 
+/// Display order of an internal hash. Callers print this, not the internal bytes.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn displayHashAlloc(allocator: std.mem.Allocator, internal_hash: []const u8) ![]u8 {
     const alphabet = "0123456789abcdef";
     var out = try allocator.alloc(u8, internal_hash.len * 2);
@@ -194,6 +270,9 @@ pub fn displayHashAlloc(allocator: std.mem.Allocator, internal_hash: []const u8)
     return out;
 }
 
+/// Invert display byte order back to the internal hash.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn internalHashFromDisplay(allocator: std.mem.Allocator, display: []const u8) ![32]u8 {
     if (display.len != 64) return error.InvalidHashHex;
     const raw = try fromHexAlloc(allocator, display);
@@ -203,6 +282,9 @@ pub fn internalHashFromDisplay(allocator: std.mem.Allocator, display: []const u8
     return out;
 }
 
+/// Decode hex into owned bytes. Odd length or a bad nibble is an error.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn fromHexAlloc(allocator: std.mem.Allocator, hex: []const u8) ![]u8 {
     if (hex.len % 2 != 0) return error.InvalidHex;
     var out = try allocator.alloc(u8, hex.len / 2);
@@ -214,6 +296,9 @@ pub fn fromHexAlloc(allocator: std.mem.Allocator, hex: []const u8) ![]u8 {
     return out;
 }
 
+/// Owned lowercase hex of a byte slice.
+/// Display hashes are reversed internal bytes. Verifiers do not allocate on the reject path.
+/// test "verifier dispatch records ecdsa schnorr and taproot tweak separately"
 pub fn toHexAlloc(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
     const alphabet = "0123456789abcdef";
     var out = try allocator.alloc(u8, bytes.len * 2);

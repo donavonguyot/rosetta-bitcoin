@@ -1,0 +1,354 @@
+{
+  "schema": "port.docs.coverage.v1",
+  "port": "zig",
+  "modules": [
+    {
+      "module": "src/block.zig",
+      "module_header": true,
+      "pub_count": 5,
+      "documented": 5,
+      "with_proof_ref": 5,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/chain_params.zig",
+      "module_header": true,
+      "pub_count": 11,
+      "documented": 11,
+      "with_proof_ref": 11,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/cli/bench.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/common.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/context.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/headers.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/main.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/mempool.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/mining.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/script_corpus.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/status.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/storage_proof.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/sync.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/cli/vectors.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/codec.zig",
+      "module_header": true,
+      "pub_count": 24,
+      "documented": 24,
+      "with_proof_ref": 24,
+      "distinct_proof_refs": 6,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 1,
+        "unit_test": 5
+      }
+    },
+    {
+      "module": "src/coins_view.zig",
+      "module_header": true,
+      "pub_count": 25,
+      "documented": 25,
+      "with_proof_ref": 25,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/connect.zig",
+      "module_header": true,
+      "pub_count": 19,
+      "documented": 19,
+      "with_proof_ref": 19,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/consensus_context.zig",
+      "module_header": true,
+      "pub_count": 17,
+      "documented": 17,
+      "with_proof_ref": 17,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/context_fixture.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/crypto.zig",
+      "module_header": true,
+      "pub_count": 26,
+      "documented": 26,
+      "with_proof_ref": 26,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/crypto_bench.zig",
+      "module_header": true,
+      "pub_count": 1,
+      "documented": 1,
+      "with_proof_ref": 1,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 1,
+        "unit_test": 0
+      }
+    },
+    {
+      "module": "src/crypto_glue.zig",
+      "module_header": true,
+      "pub_count": 2,
+      "documented": 2,
+      "with_proof_ref": 2,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/crypto_types.zig",
+      "module_header": true,
+      "pub_count": 1,
+      "documented": 1,
+      "with_proof_ref": 1,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/datadir.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/mempool.zig",
+      "module_header": true,
+      "pub_count": 17,
+      "documented": 17,
+      "with_proof_ref": 17,
+      "distinct_proof_refs": 10,
+      "proof_ref_kinds": {
+        "fixture": 3,
+        "gate": 1,
+        "unit_test": 6
+      }
+    },
+    {
+      "module": "src/native_crypto.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/native_store.zig",
+      "module_header": true,
+      "pub_count": 29,
+      "documented": 29,
+      "with_proof_ref": 29,
+      "distinct_proof_refs": 12,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 3,
+        "unit_test": 9
+      }
+    },
+    {
+      "module": "src/own_crypto.zig",
+      "module_header": true,
+      "pub_count": 22,
+      "documented": 22,
+      "with_proof_ref": 22,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/p2p.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/pure_secp.zig",
+      "module_header": true,
+      "pub_count": 8,
+      "documented": 8,
+      "with_proof_ref": 8,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/rocks_store.zig",
+      "module_header": true,
+      "pub_count": 30,
+      "documented": 30,
+      "with_proof_ref": 30,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/root.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/rung0.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/script.zig",
+      "module_header": true,
+      "pub_count": 6,
+      "documented": 6,
+      "with_proof_ref": 6,
+      "distinct_proof_refs": 4,
+      "proof_ref_kinds": {
+        "fixture": 2,
+        "gate": 1,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/script_verify_split.zig",
+      "module_header": true
+    },
+    {
+      "module": "src/shadow_store.zig",
+      "module_header": true,
+      "pub_count": 17,
+      "documented": 17,
+      "with_proof_ref": 17,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/store.zig",
+      "module_header": true,
+      "pub_count": 9,
+      "documented": 9,
+      "with_proof_ref": 9,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/template.zig",
+      "module_header": true,
+      "pub_count": 24,
+      "documented": 24,
+      "with_proof_ref": 24,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/tx.zig",
+      "module_header": true,
+      "pub_count": 14,
+      "documented": 14,
+      "with_proof_ref": 14,
+      "distinct_proof_refs": 1,
+      "proof_ref_kinds": {
+        "fixture": 0,
+        "gate": 0,
+        "unit_test": 1
+      }
+    },
+    {
+      "module": "src/types.zig",
+      "module_header": true
+    }
+  ],
+  "module_headers_present": 40,
+  "module_headers_absent": 0,
+  "distinct_proof_refs": 43,
+  "proof_ref_kinds": {
+    "fixture": 4,
+    "gate": 7,
+    "unit_test": 32
+  }
+}
