@@ -73,6 +73,7 @@ pub fn main(init: std.process.Init) !void {
         const ok = try core.context_fixture.runManifest(allocator, io, manifest, out);
         if (!ok) return error.ConsensusContextFailed;
     } else if (std.mem.eql(u8, command, "write-context-fixtures")) {
+        if (comptime !core.rocksdb_compiled) return error.StoreNotCompiled;
         const datadir = valueArg(args[2..], "--datadir") orelse return error.MissingDatadir;
         const out_dir = valueArg(args[2..], "--out") orelse return error.MissingOutput;
         const db_path = try std.fs.path.join(allocator, &.{ datadir, "chainstate-rocksdb" });
@@ -235,6 +236,7 @@ fn cmdCheckHeaders(allocator: std.mem.Allocator, out: anytype, args: []const []c
         defer db.close();
         try finishCheckHeaders(allocator, out, &db, store_name);
     } else if (std.mem.eql(u8, store_name, "rocksdb")) {
+        if (comptime !core.rocksdb_compiled) return error.StoreNotCompiled;
         var db = try core.RocksDb.open(allocator, db_path);
         defer db.close();
         try finishCheckHeaders(allocator, out, &db, store_name);
