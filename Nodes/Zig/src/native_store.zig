@@ -23,13 +23,13 @@ const root = @import("root.zig");
 const store = root.store;
 
 /// Test hook that fails a commit just before or just after the log append.
-/// The map, the log, and the flat-file lengths agree after every successful open or commit.
-/// test "native restart replays the commit log"
+/// before_append drops the commit. after_append keeps it.
+/// test "crash before append drops the commit and after append keeps it"
 pub const CrashPoint = enum { none, before_append, after_append };
 
 /// Snapshot interval, fsync, crash injection, and the optional UTXO reserve.
-/// The map, the log, and the flat-file lengths agree after every successful open or commit.
-/// test "native restart replays the commit log"
+/// snapshot_every 0 disables snapshots. fsync_enabled is power-loss; the default is process_crash.
+/// storage-proof
 pub const OpenOptions = struct {
     snapshot_every: u32 = 10000,
     fsync_enabled: bool = false,
@@ -49,9 +49,9 @@ const build_options = @import("crypto_options");
 const utxo_hash_wyhash = std.mem.eql(u8, build_options.utxo_hash, "wyhash");
 const utxo_hash_mix = std.mem.eql(u8, build_options.utxo_hash, "txid64_mix");
 
-/// `txid64_mix` unless the binary was built to compare wyhash or the unmixed hash.
-/// The map, the log, and the flat-file lengths agree after every successful open or commit.
-/// test "native restart replays the commit log"
+/// txid64_mix unless this binary was built to compare wyhash or the unmixed hash.
+/// The mix is the default because the unmixed hash clustered.
+/// zig_native_store_hash_mix_host_2026-10-06.json
 pub fn utxoHashName() []const u8 {
     if (utxo_hash_wyhash) return "wyhash";
     if (utxo_hash_mix) return "txid64_mix";
@@ -59,9 +59,9 @@ pub fn utxoHashName() []const u8 {
 }
 
 const OutpointContext = struct {
-    /// Outpoint hash for the UTXO map. The odd multiply keeps one transaction's outputs out of one probe run.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Outpoint hash for the UTXO map.
+    /// std.HashMap does not mix. The odd multiply keeps one transaction's outputs out of one probe run.
+    /// zig_native_store_hash_mix_host_2026-10-06.json
     pub fn hash(_: @This(), key: root.types.Outpoint) u64 {
         if (comptime utxo_hash_wyhash) {
             if (@sizeOf(root.types.Outpoint) != 36) @compileError("outpoint hash expects 36 bytes");
@@ -72,9 +72,8 @@ const OutpointContext = struct {
         return mixed;
     }
 
-    /// Outpoints match on txid and vout. The map must not treat padding as part of the key.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Outpoints match on txid and vout. Padding is not part of the key.
+    /// test "native shadow create and spend matches rocksdb bytes"
     pub fn eql(_: @This(), a: root.types.Outpoint, b: root.types.Outpoint) bool {
         return std.mem.eql(u8, &a.txid, &b.txid) and a.vout == b.vout;
     }
@@ -93,8 +92,8 @@ const BlockLoc = struct {
     display_hash: [64]u8,
 };
 
-/// The open native chainstate: log, flat files, and the UTXO map.
-/// The map, the log, and the flat-file lengths agree after every successful open or commit.
+/// Open native chainstate: commit log, flat files, and the UTXO map.
+/// After open, complete records are applied and flat files end at the committed extent.
 /// test "native restart replays the commit log"
 pub const NativeStore = struct {
     allocator: std.mem.Allocator,
@@ -124,8 +123,8 @@ pub const NativeStore = struct {
     rehash_ms: i64 = 0,
     header_index: root.consensus_context.HeaderIndex = .{},
 
-    /// Open a chainstate datadir, or `StoreNotCompiled` when this binary has no RocksDB.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
+    /// Open the datadir, load the snapshot, replay the log, then truncate flat files.
+    /// A torn tail is ignored. The map matches the last complete record.
     /// test "native restart replays the commit log"
     pub fn open(allocator: std.mem.Allocator, path: []const u8, options: OpenOptions) !NativeStore {
         try root.datadir.rejectUnapprovedRuntimeDbArtifacts(path);
@@ -153,8 +152,8 @@ pub const NativeStore = struct {
         return self;
     }
 
-    /// Release the store handle. The datadir stays on disk.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
+    /// Free the map and close the log and flat-file descriptors.
+    /// The datadir stays. A later open replays it.
     /// test "native restart replays the commit log"
     pub fn close(self: *NativeStore) void {
         var utxo_it = self.utxos.iterator();
@@ -180,16 +179,16 @@ pub const NativeStore = struct {
         self.allocator.free(self.path);
     }
 
-    /// Current set hash. Shadow comparison reads this after the commit.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Set hash after the last applied commit.
+    /// Shadow comparison reads this. Replay must reproduce it.
+    /// test "direct apply and replay apply match map bytes and set hash"
     pub fn setHash(self: *NativeStore) store.SetHash {
         return self.set_hash;
     }
 
-    /// Store one key's bytes. The caller still owns the slice it passed.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Append a metadata record and apply it. UTXO creates go through commit, not here.
+    /// The caller keeps the slices it passed.
+    /// test "native shadow create and spend matches rocksdb bytes"
     pub fn put(self: *NativeStore, key: []const u8, value: []const u8) !void {
         var payload = Buf.init(self.allocator);
         defer payload.deinit();
@@ -203,9 +202,9 @@ pub const NativeStore = struct {
         try self.applyPayload(payload.slice());
     }
 
-    /// Owned value bytes for one key, or null when the store does not have it.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Owned bytes for one codec key, or null when it is absent.
+    /// Prefix `u` is a UTXO, `r` raw block, `h` header, `b` display hash, `d` undo. Anything else is metadata.
+    /// test "native shadow create and spend matches rocksdb bytes"
     pub fn getAlloc(self: *NativeStore, allocator: std.mem.Allocator, key: []const u8) !?[]u8 {
         if (key.len == 0) return null;
         switch (key[0]) {
@@ -238,8 +237,8 @@ pub const NativeStore = struct {
     }
 
     /// The 80-byte header at a height, or null past the stored tip.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Bytes come from headers.dat at the extent recordBlock saved.
+    /// test "record block survives restart before connect"
     pub fn headerAt(self: *NativeStore, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
         const key = try root.codec.encodeHeaderKey(allocator, "testnet4", height);
         defer allocator.free(key);
@@ -251,9 +250,9 @@ pub const NativeStore = struct {
         return header;
     }
 
-    /// Raw UTXO values for outpoints, order preserved, missing slots null.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Raw UTXO values in request order. A missing outpoint stays null.
+    /// Same-block spends are not in this list; connect resolved those already.
+    /// test "native shadow create and spend matches rocksdb bytes"
     pub fn getManyUtxoRaw(self: *NativeStore, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.types.Outpoint, stats: ?*root.connect.UtxoLoadStats) ![]?[]u8 {
         const out = try allocator.alloc(?[]u8, outpoints.len);
         errdefer allocator.free(out);
@@ -287,9 +286,9 @@ pub const NativeStore = struct {
         return out;
     }
 
-    /// Decoded UTXOs plus hit and miss timing for the lookups connect actually issued.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Decoded UTXOs plus hit and miss timing for the lookups connect issued.
+    /// Order matches the request. A miss is an absent outpoint, not a same-block spend.
+    /// zig_native_store_miss_cost_host_2026-10-05.json
     pub fn getManyUtxosWithStats(self: *NativeStore, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.types.Outpoint, stats: ?*root.connect.UtxoLoadStats) ![]?root.types.StoredUtxo {
         const raw = try self.getManyUtxoRaw(allocator, chain, outpoints, stats);
         defer {
@@ -309,9 +308,9 @@ pub const NativeStore = struct {
         return out;
     }
 
-    /// Append raw block bytes and a log record of its own, before connect commits the spends.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Append raw block bytes and a log record of their own, before connect commits spends.
+    /// A restart before connect still finds the block.
+    /// test "record block survives restart before connect"
     pub fn recordBlock(self: *NativeStore, allocator: std.mem.Allocator, height: u32, hash: [32]u8, raw: []const u8) !void {
         const raw_off = self.blocks_len;
         try pwriteAll(self.blocks_fd, raw, raw_off);
@@ -343,28 +342,28 @@ pub const NativeStore = struct {
         }
     }
 
-    /// Make header time and bits readable. Native open already loaded them.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Header time and bits are already loaded by open.
+    /// Connect calls this on every store. Here it does not re-read the files.
+    /// test "record block survives restart before connect"
     pub fn ensureHeaderIndex(_: *NativeStore) !void {}
 
     /// The dense header index connect and the mempool use for MTP.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Filled from headers.dat at open and from recordBlock after that.
+    /// test "header index median matches the header walk"
     pub fn headerIndex(self: *NativeStore) root.consensus_context.HeaderIndex {
         return self.header_index;
     }
 
-    /// Median of up to 11 header timestamps ending at a height. BIP113 and the template use it.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Median of up to 11 indexed timestamps ending at a height.
+    /// BIP113 locktime and the template both use this. Height 0 is 0.
+    /// test "header index median matches the header walk"
     pub fn medianTimePast(self: *NativeStore, height: u32) !u32 {
         return self.header_index.mtp(height);
     }
 
-    /// Indexed time and nBits at a height, or null when that height is not stored.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Indexed time and nBits at a height, or null when that height was not stored.
+    /// nBits checks read this instead of re-parsing the header.
+    /// test "record block survives restart before connect"
     pub fn headerFields(self: *NativeStore, height: u32) !?root.consensus_context.HeaderFields {
         return self.header_index.fields(height);
     }
@@ -395,8 +394,8 @@ pub const NativeStore = struct {
     }
 
     /// Apply a prepared chainstate commit and fold its UTXOs into the set hash.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// The log record includes delete preimages so replay can check them.
+    /// test "direct apply and replay apply match map bytes and set hash"
     pub fn commitBlock(self: *NativeStore, allocator: std.mem.Allocator, commit: root.types.ChainstateBlockCommit) !root.connect.CommitTimings {
         var timings = root.connect.CommitTimings{};
         var next_hash = self.set_hash;
@@ -427,9 +426,9 @@ pub const NativeStore = struct {
         return timings;
     }
 
-    /// Apply the spends and creates from a block that connect has already checked.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Apply spends and creates from a block connect has already checked.
+    /// Direct apply and a later replay produce the same map bytes and set hash.
+    /// test "direct apply and replay apply match map bytes and set hash"
     pub fn commitConnectedBlock(
         self: *NativeStore,
         allocator: std.mem.Allocator,
@@ -484,9 +483,9 @@ pub const NativeStore = struct {
         return timings;
     }
 
-    /// Named chainstate fields as owned strings. The caller frees them.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Named chainstate fields as owned strings.
+    /// The caller frees them with deinitMetadata.
+    /// storage-proof
     pub fn readMetadata(self: *NativeStore, allocator: std.mem.Allocator) !root.types.Metadata {
         const validated_height = try self.metaI64(allocator, "validated_height", -1);
         return .{
@@ -505,9 +504,9 @@ pub const NativeStore = struct {
         };
     }
 
-    /// Free metadata strings returned by a read.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Free the strings readMetadata returned.
+    /// The store itself stays open.
+    /// storage-proof
     pub fn deinitMetadata(_: *NativeStore, allocator: std.mem.Allocator, meta: root.types.Metadata) void {
         allocator.free(meta.validated_hash);
         allocator.free(meta.header_hash);
@@ -519,9 +518,9 @@ pub const NativeStore = struct {
         allocator.free(meta.current_blocker);
     }
 
-    /// One-key batch used by the storage proof, not by block connect.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// One-key write used by the storage proof, not by block connect.
+    /// Durability class of that proof is process_crash unless fsync was set.
+    /// storage-proof
     pub fn writeBatchSmoke(self: *NativeStore, allocator: std.mem.Allocator) !void {
         var txid: [32]u8 = undefined;
         for (&txid, 0..) |*byte, i| byte.* = @intCast(i);
@@ -549,9 +548,9 @@ pub const NativeStore = struct {
         try self.recordBlock(allocator, 2, block_hash, &raw);
     }
 
-    /// Atomically replace `snapshot.bin`, then truncate the log. Replay must tolerate the window between the two.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Replace snapshot.bin by rename, then truncate the log.
+    /// Replay must tolerate a crash in that window and must not apply the snapshotted records twice.
+    /// test "snapshot rename before log truncate does not double apply"
     pub fn writeSnapshot(self: *NativeStore) !void {
         if (self.validated_height < 0) return;
         var body = Buf.init(self.allocator);
@@ -624,27 +623,24 @@ pub const NativeStore = struct {
         self.snapshot_bytes = body.slice().len;
     }
 
-    /// Read the commit log. Tests use this to build a torn tail.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Read the commit log as stored, including a torn tail.
+    /// test "torn commit record and one corrupted byte keep the previous tip"
     pub fn testingReadLog(self: *NativeStore, allocator: std.mem.Allocator) ![]u8 {
         const out = try allocator.alloc(u8, @intCast(self.log_len));
         if (out.len > 0) try preadAll(self.log_fd, out, 0);
         return out;
     }
 
-    /// Overwrite the open log and its length for a replay test.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Overwrite the open log and its length so a test can plant a torn tail.
+    /// test "torn commit record and one corrupted byte keep the previous tip"
     pub fn testingWriteLogFile(self: *NativeStore, bytes: []const u8) !void {
         if (bytes.len > 0) try pwriteAll(self.log_fd, bytes, 0);
         if (std.c.ftruncate(self.log_fd, @intCast(bytes.len)) != 0) return error.NativeIo;
         self.log_len = bytes.len;
     }
 
-    /// Replace the log file the way a crash between rename and truncate would.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Replace the log file the way a crash between snapshot rename and truncate would.
+    /// test "snapshot rename before log truncate does not double apply"
     pub fn testingRewriteLog(dir: []const u8, bytes: []const u8, len: usize) !void {
         const fd = try openAt(dir, "commit.log", true);
         defer _ = std.c.close(fd);
@@ -652,9 +648,8 @@ pub const NativeStore = struct {
         if (std.c.ftruncate(fd, @intCast(len)) != 0) return error.NativeIo;
     }
 
-    /// Append bytes past the committed end so the truncate test has something to cut.
-    /// The map, the log, and the flat-file lengths agree after every successful open or commit.
-    /// test "native restart replays the commit log"
+    /// Append bytes past the committed end so truncate has something to cut.
+    /// test "flat files truncate to the last committed extent"
     pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, log }, extra: []const u8) !void {
         const fd = switch (which) {
             .blocks => self.blocks_fd,

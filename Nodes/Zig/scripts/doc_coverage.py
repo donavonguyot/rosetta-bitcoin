@@ -4,8 +4,13 @@
 Emits port.docs.coverage.v1. A declaration counts as documented when a ///
 block sits on the lines immediately above it. A proof reference is a
 test "..." name that exists under this tree, a fixture id
-(consensus.|mining.|script.|codec.), a gate name, or a zig_* result
-filename that exists under the Shared conformance results directory.
+(consensus.|mining.|scripts.|script.|codec., including a family such as
+scripts.*), a gate name, or a zig_* result filename that exists under the
+Shared conformance results directory.
+
+with_proof_ref counts declarations. distinct_proof_refs counts unique
+references, split into fixture, gate, and unit_test. One test name repeated
+on every declaration stays one unit_test.
 """
 
 from __future__ import annotations
@@ -55,7 +60,7 @@ GATES = (
 
 DECL_RE = re.compile(r"^(\s*)pub (?:fn|const) \w+")
 TEST_RE = re.compile(r'test "([^"]+)"')
-FIXTURE_RE = re.compile(r"\b(?:consensus|mining|script|codec)\.[a-z0-9_]+")
+FIXTURE_RE = re.compile(r"\b(?:consensus|mining|scripts|script|codec)\.[a-z0-9_*]+")
 RESULT_RE = re.compile(r"zig_[A-Za-z0-9_.-]+\.json")
 
 
@@ -102,14 +107,27 @@ def doc_block(lines: list[str], index: int) -> str | None:
     return "\n".join(reversed(collected))
 
 
-def has_proof(doc: str, tests: set[str], results: set[str]) -> bool:
-    if any(name in tests for name in TEST_RE.findall(doc)):
-        return True
-    if FIXTURE_RE.search(doc):
-        return True
-    if any(gate in doc for gate in GATES):
-        return True
-    return any(name in results for name in RESULT_RE.findall(doc))
+def proof_refs(doc: str, tests: set[str], results: set[str]) -> dict[str, str]:
+    found: dict[str, str] = {}
+    for name in TEST_RE.findall(doc):
+        if name in tests:
+            found[f'test "{name}"'] = "unit_test"
+    for token in FIXTURE_RE.findall(doc):
+        found[token] = "fixture"
+    for gate in GATES:
+        if gate in doc:
+            found[gate] = "gate"
+    for name in RESULT_RE.findall(doc):
+        if name in results:
+            found[name] = "gate"
+    return found
+
+
+def kind_counts(refs: dict[str, str]) -> dict[str, int]:
+    counts = {"fixture": 0, "gate": 0, "unit_test": 0}
+    for kind in refs.values():
+        counts[kind] += 1
+    return counts
 
 
 def module_row(path: Path, tests: set[str], results: set[str]) -> dict:
@@ -122,6 +140,7 @@ def module_row(path: Path, tests: set[str], results: set[str]) -> dict:
     if not consensus(path):
         return row
     pub_count = documented = with_proof = 0
+    refs: dict[str, str] = {}
     for index, line in enumerate(lines):
         if not DECL_RE.match(line):
             continue
@@ -130,11 +149,16 @@ def module_row(path: Path, tests: set[str], results: set[str]) -> dict:
         if doc is None:
             continue
         documented += 1
-        if has_proof(doc, tests, results):
+        found = proof_refs(doc, tests, results)
+        if found:
             with_proof += 1
+            refs.update(found)
     row["pub_count"] = pub_count
     row["documented"] = documented
     row["with_proof_ref"] = with_proof
+    row["distinct_proof_refs"] = len(refs)
+    row["proof_ref_kinds"] = kind_counts(refs)
+    row["_refs"] = refs
     return row
 
 
@@ -143,12 +167,17 @@ def main() -> int:
     results = result_names()
     modules = [module_row(path, tests, results) for path in sorted(SRC.rglob("*.zig"))]
     headers_present = sum(1 for row in modules if row["module_header"])
+    union: dict[str, str] = {}
+    for row in modules:
+        union.update(row.pop("_refs", {}))
     payload = {
         "schema": "port.docs.coverage.v1",
         "port": "zig",
         "modules": modules,
         "module_headers_present": headers_present,
         "module_headers_absent": len(modules) - headers_present,
+        "distinct_proof_refs": len(union),
+        "proof_ref_kinds": kind_counts(union),
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -156,9 +185,13 @@ def main() -> int:
     pub_count = sum(row["pub_count"] for row in counted)
     documented = sum(row["documented"] for row in counted)
     proved = sum(row["with_proof_ref"] for row in counted)
+    kinds = payload["proof_ref_kinds"]
     print(
         f"port.docs.coverage.v1 headers {headers_present}/{len(modules)} "
-        f"pub {documented}/{pub_count} proof {proved}/{pub_count} -> {OUT.name}",
+        f"pub {documented}/{pub_count} proof {proved}/{pub_count} "
+        f"distinct {payload['distinct_proof_refs']} "
+        f"(fixture {kinds['fixture']}, gate {kinds['gate']}, unit_test {kinds['unit_test']}) "
+        f"-> {OUT.name}",
         file=sys.stderr,
     )
     return 0
