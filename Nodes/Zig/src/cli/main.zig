@@ -21,6 +21,9 @@ const script_corpus = @import("script_corpus.zig");
 const cmdScriptCorpus = script_corpus.cmdScriptCorpus;
 const headers = @import("headers.zig");
 const cmdCheckHeaders = headers.cmdCheckHeaders;
+const context = @import("context.zig");
+const cmdConsensusContext = context.cmdConsensusContext;
+const cmdWriteContextFixtures = context.cmdWriteContextFixtures;
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
@@ -75,19 +78,9 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, command, "testblockvalidity")) {
         try cmdTestBlockValidity(allocator, io, out, args[2..]);
     } else if (std.mem.eql(u8, command, "consensus-context")) {
-        const manifest = valueArg(args[2..], "--manifest") orelse "../Shared/conformance/fixtures/consensus/context/manifest.json";
-        const ok = try core.context_fixture.runManifest(allocator, io, manifest, out);
-        if (!ok) return error.ConsensusContextFailed;
+        try cmdConsensusContext(allocator, io, out, args[2..]);
     } else if (std.mem.eql(u8, command, "write-context-fixtures")) {
-        if (comptime !core.rocksdb_compiled) return error.StoreNotCompiled;
-        const datadir = valueArg(args[2..], "--datadir") orelse return error.MissingDatadir;
-        const out_dir = valueArg(args[2..], "--out") orelse return error.MissingOutput;
-        const db_path = try std.fs.path.join(allocator, &.{ datadir, "chainstate-rocksdb" });
-        defer allocator.free(db_path);
-        var db = try core.RocksDb.open(allocator, db_path);
-        defer db.close();
-        try core.context_fixture.writeBlockFixtures(allocator, io, &db, out_dir);
-        try out.print("{{\"schema\":\"port.consensus_context.v1\",\"command\":\"write-context-fixtures\",\"passed\":true}}\n", .{});
+        try cmdWriteContextFixtures(allocator, io, out, args[2..]);
     } else if (std.mem.eql(u8, command, "check-headers")) {
         try cmdCheckHeaders(allocator, out, args[2..]);
     } else if (comptime !core.crypto.own_curve) {
