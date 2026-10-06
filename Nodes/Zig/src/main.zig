@@ -44,7 +44,7 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, command, "status")) {
         try cmdStatus(allocator, out, args[2..], surface);
     } else if (std.mem.eql(u8, command, "codec-vectors")) {
-        try core.verifyCodecVectors(allocator);
+        try core.codec.verifyCodecVectors(allocator);
         try out.print("{{\"schema\":\"port.codec_vectors.v1\",\"port\":\"zig\",\"codec_version\":2,\"passed\":true}}\n", .{});
     } else if (std.mem.eql(u8, command, "native-crypto-vectors")) {
         try cmdNativeCrypto(out);
@@ -124,7 +124,7 @@ fn cmdRung0(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []cons
     const command = args[0];
     const flags = args[1..];
     const trace_dir = valueArg(flags, "--trace") orelse return error.MissingTrace;
-    const datadir = valueArg(flags, "--datadir") orelse core.PortInfo.default_datadir;
+    const datadir = valueArg(flags, "--datadir") orelse core.types.PortInfo.default_datadir;
     const store_name = valueArg(flags, "--store") orelse "rocksdb";
     const info = try core.rung0.loadTraceInfo(allocator, io, trace_dir);
     defer info.deinit(allocator);
@@ -145,7 +145,7 @@ fn cmdRung0(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []cons
         const prefetch_text = "4";
         try cmdLocalReferenceProof(allocator, io, out, sync_flags[0..], surface, prefetch_text, "", default_peer, default_crypto_backend);
     }
-    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.PortInfo.native_dir else core.PortInfo.rocksdb_dir });
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.types.PortInfo.native_dir else core.types.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
     if (std.mem.eql(u8, store_name, "native")) {
         var db = try core.native_store.NativeStore.open(allocator, db_path, .{});
@@ -227,9 +227,9 @@ fn writeMiningGate(allocator: std.mem.Allocator, io: std.Io, path: []const u8, r
 }
 
 fn cmdCheckHeaders(allocator: std.mem.Allocator, out: anytype, args: []const []const u8) !void {
-    const datadir = valueArg(args, "--datadir") orelse core.PortInfo.default_datadir;
+    const datadir = valueArg(args, "--datadir") orelse core.types.PortInfo.default_datadir;
     const store_name = valueArg(args, "--store") orelse "rocksdb";
-    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.PortInfo.native_dir else core.PortInfo.rocksdb_dir });
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.types.PortInfo.native_dir else core.types.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
     if (std.mem.eql(u8, store_name, "native")) {
         var db = try core.native_store.NativeStore.open(allocator, db_path, .{});
@@ -256,11 +256,11 @@ fn cmdTestBlockValidity(allocator: std.mem.Allocator, io: std.Io, out: anytype, 
     const block_path = valueArg(args, "--block") orelse return error.MissingBlock;
     const height_text = valueArg(args, "--height") orelse return error.MissingHeight;
     const height = try std.fmt.parseInt(u32, height_text, 10);
-    const datadir = valueArg(args, "--datadir") orelse core.PortInfo.default_datadir;
+    const datadir = valueArg(args, "--datadir") orelse core.types.PortInfo.default_datadir;
     const store_name = valueArg(args, "--store") orelse "rocksdb";
     const raw = try std.Io.Dir.cwd().readFileAlloc(io, block_path, allocator, .limited(8 * 1024 * 1024));
     defer allocator.free(raw);
-    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.PortInfo.native_dir else core.PortInfo.rocksdb_dir });
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.types.PortInfo.native_dir else core.types.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
     if (std.mem.eql(u8, store_name, "native")) {
         var db = try core.native_store.NativeStore.open(allocator, db_path, .{});
@@ -279,9 +279,9 @@ fn cmdTestBlockValidity(allocator: std.mem.Allocator, io: std.Io, out: anytype, 
 }
 
 fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u8, surface: []const u8) !void {
-    const datadir = valueArg(args, "--datadir") orelse core.PortInfo.default_datadir;
+    const datadir = valueArg(args, "--datadir") orelse core.types.PortInfo.default_datadir;
     const store_name = valueArg(args, "--store") orelse "rocksdb";
-    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.PortInfo.native_dir else core.PortInfo.rocksdb_dir });
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.types.PortInfo.native_dir else core.types.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
 
     var validated_height: []const u8 = "0";
@@ -351,7 +351,7 @@ fn readStatusFields(
 }
 
 fn cmdNativeCrypto(out: anytype) !void {
-    const available = core.secp256k1Available();
+    const available = core.crypto_glue.secp256k1Available();
     try out.print(
         "{{\"schema\":\"port.native_crypto_vectors.v1\",\"port\":\"zig\",\"passed\":{},\"delegated\":false,\"ecdsa_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"notes\":\"backend availability smoke vector only; full shared crypto vectors are next\"}}\n",
         .{ available, core.crypto.default_label, core.crypto.default_label, core.crypto.default_label },
@@ -646,18 +646,18 @@ fn csvField(line: []const u8, target: usize) ?[]const u8 {
 }
 
 fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8) !void {
-    const datadir = valueArg(args, "--datadir") orelse core.PortInfo.default_datadir;
+    const datadir = valueArg(args, "--datadir") orelse core.types.PortInfo.default_datadir;
     const output = valueArg(args, "--output") orelse (ResultPaths{}).storage;
     try std.Io.Dir.cwd().createDirPath(io, datadir);
-    var lock = try core.DatadirLock.acquire(allocator, datadir);
+    var lock = try core.datadir.DatadirLock.acquire(allocator, datadir);
     defer lock.release();
-    const marker_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.marker_file });
+    const marker_path = try std.fs.path.join(allocator, &.{ datadir, core.types.PortInfo.marker_file });
     defer allocator.free(marker_path);
     try writeFileEnsuringParent(io, marker_path, "zig native storage\n");
 
     const store_name = valueArg(args, "--store") orelse "rocksdb";
     if (std.mem.eql(u8, store_name, "native")) {
-        const native_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.native_dir });
+        const native_path = try std.fs.path.join(allocator, &.{ datadir, core.types.PortInfo.native_dir });
         defer allocator.free(native_path);
         var native = try core.native_store.NativeStore.open(allocator, native_path, try nativeOpenOptions(args));
         defer native.close();
@@ -667,7 +667,7 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
         const json = try std.fmt.allocPrint(
             allocator,
             "{{\"schema\":\"port.storage_gate_result.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"storage_backend\":\"native\",\"runtime_truth_backend\":\"native\",\"rocksdb_runtime_truth\":false,\"durability_class\":\"process_crash\",\"native_marker\":\"{s}\",\"atomic_batch_commit\":true,\"validated_height\":2,\"chainstate_status\":\"usable\",\"chainstate_backend\":\"native\",\"chainstate_utxo_count\":1,\"binary_gate_status\":\"not_attempted\",\"current_blocker\":null{s}}}\n",
-            .{ surface, core.PortInfo.marker_file, pins },
+            .{ surface, core.types.PortInfo.marker_file, pins },
         );
         defer allocator.free(json);
         try writeFileEnsuringParent(io, output, json);
@@ -689,7 +689,7 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
         return error.StoreNotCompiled;
     }
 
-    const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, core.types.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
     try std.Io.Dir.cwd().createDirPath(io, db_path);
     var db = try core.RocksDb.open(allocator, db_path);
@@ -701,7 +701,7 @@ fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args:
     const json = try std.fmt.allocPrint(
         allocator,
         "{{\"schema\":\"port.storage_gate_result.v1\",\"port\":\"zig\",\"node\":\"ZigNode\",\"runtime_surface\":\"{s}\",\"storage_backend\":\"rocksdb\",\"runtime_truth_backend\":\"rocksdb\",\"rocksdb_runtime_truth\":true,\"native_marker\":\"{s}\",\"atomic_batch_commit\":true,\"validated_height\":2,\"chainstate_status\":\"usable\",\"chainstate_backend\":\"rocksdb\",\"chainstate_utxo_count\":1,\"binary_gate_status\":\"not_attempted\",\"current_blocker\":null{s}}}\n",
-        .{ surface, core.PortInfo.marker_file, pins },
+        .{ surface, core.types.PortInfo.marker_file, pins },
     );
     defer allocator.free(json);
     try writeFileEnsuringParent(io, output, json);
@@ -797,12 +797,12 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const store_name = valueArg(args, "--store") orelse "rocksdb";
     const shadow = flagArg(args, "--shadow");
     try std.Io.Dir.cwd().createDirPath(io, datadir);
-    var lock = try core.DatadirLock.acquire(allocator, datadir);
+    var lock = try core.datadir.DatadirLock.acquire(allocator, datadir);
     defer lock.release();
-    const db_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_dir });
+    const db_path = try std.fs.path.join(allocator, &.{ datadir, core.types.PortInfo.rocksdb_dir });
     defer allocator.free(db_path);
     if (std.mem.eql(u8, store_name, "native")) {
-        const native_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.native_dir });
+        const native_path = try std.fs.path.join(allocator, &.{ datadir, core.types.PortInfo.native_dir });
         defer allocator.free(native_path);
         var native = try core.native_store.NativeStore.open(allocator, native_path, try nativeOpenOptions(args));
         defer native.close();
@@ -828,7 +828,7 @@ fn cmdLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     }
     try std.Io.Dir.cwd().createDirPath(io, db_path);
     if (shadow) {
-        const shadow_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.rocksdb_shadow_dir });
+        const shadow_path = try std.fs.path.join(allocator, &.{ datadir, core.types.PortInfo.rocksdb_shadow_dir });
         defer allocator.free(shadow_path);
         try std.Io.Dir.cwd().createDirPath(io, shadow_path);
         var primary = try core.RocksDb.open(allocator, db_path);
@@ -861,13 +861,13 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const prefetch_raw = std.fmt.parseInt(usize, prefetch_text, 10) catch 4;
     const prefetch = @min(@max(prefetch_raw, 1), 16);
     const requested_script_threads = if (script_threads_text.len == 0)
-        core.defaultScriptThreadCount()
+        core.connect.defaultScriptThreadCount()
     else
-        @min(@max(std.fmt.parseInt(usize, script_threads_text, 10) catch core.defaultScriptThreadCount(), 1), 64);
-    const started = core.nowMs();
+        @min(@max(std.fmt.parseInt(usize, script_threads_text, 10) catch core.connect.defaultScriptThreadCount(), 1), 64);
+    const started = core.datadir.nowMs();
 
     try std.Io.Dir.cwd().createDirPath(io, datadir);
-    const marker_path = try std.fs.path.join(allocator, &.{ datadir, core.PortInfo.marker_file });
+    const marker_path = try std.fs.path.join(allocator, &.{ datadir, core.types.PortInfo.marker_file });
     defer allocator.free(marker_path);
     try writeFileEnsuringParent(io, marker_path, "zig native storage\n");
 
@@ -883,7 +883,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
 
     var client = try core.p2p.Client.connect(allocator, peer);
     defer client.close();
-    var script_runner = try core.ScriptVerifyRunner.createWithCryptoBackend(allocator, requested_script_threads, crypto_backend);
+    var script_runner = try core.connect.ScriptVerifyRunner.createWithCryptoBackend(allocator, requested_script_threads, crypto_backend);
     defer script_runner.destroy();
     try client.handshake(if (meta.validated_height < 0) 0 else @intCast(meta.validated_height));
     const headers = try client.headersThrough(target);
@@ -916,15 +916,15 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     var emitted_first_block_connected = false;
     while (cursor <= target) {
         const end = @min(cursor + prefetch, @as(usize, target) + 1);
-        const fetch_started = core.nowMs();
+        const fetch_started = core.datadir.nowMs();
         const blocks = try client.requestBlocks(headers[cursor..end], @intCast(cursor));
         timing.p2p_fetch += elapsedMs(fetch_started);
         defer allocator.free(blocks);
         for (blocks) |fetched| {
             defer fetched.deinit(allocator);
             blocks_fetched += 1;
-            const block_started = core.nowMs();
-            const parse_started = core.nowMs();
+            const block_started = core.datadir.nowMs();
+            const parse_started = core.datadir.nowMs();
             const expected_prev: ?[32]u8 = if (fetched.height == 0) null else headers[fetched.height - 1];
             const decoded = try core.block.decodeBlock(allocator, fetched.raw, fetched.hash, expected_prev);
             defer {
@@ -932,11 +932,11 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
                 allocator.free(decoded.transactions);
             }
             timing.block_parse_validate += elapsedMs(parse_started);
-            const store_started = core.nowMs();
+            const store_started = core.datadir.nowMs();
             try db.recordBlock(allocator, fetched.height, decoded.info.hash, fetched.raw);
             timing.block_store += elapsedMs(store_started);
-            const connect_started = core.nowMs();
-            var connect = try core.connectDecodedBlock(allocator, db, fetched.height, target, decoded.info, decoded.transactions, script_runner, last_utxos);
+            const connect_started = core.datadir.nowMs();
+            var connect = try core.connect.connectDecodedBlock(allocator, db, fetched.height, target, decoded.info, decoded.transactions, script_runner, last_utxos);
             defer connect.deinit(allocator);
             timing.connect_total += elapsedMs(connect_started);
             timing.prevout_batch_load += connect.timings.prevout_batch_load;
@@ -990,7 +990,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
                 telemetry_tick_count += 1;
                 emitted_first_block_connected = true;
             }
-            const should_tick = fetched.height % progress_interval == 0 or fetched.height == target or core.nowMs() - last_tick_ms >= 15_000;
+            const should_tick = fetched.height % progress_interval == 0 or fetched.height == target or core.datadir.nowMs() - last_tick_ms >= 15_000;
             if (should_tick) {
                 try out.print("zigbitnode-local-reference-proof progress height={} target={} hash={s} utxos={} blocks_fetched={} blocks_connected={}\n", .{
                     fetched.height,
@@ -1003,7 +1003,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
                 try out.flush();
                 try emitTelemetryTick(out, profile, peer, crypto_label, if (fetched.height == target) "target_reached" else "heartbeat", if (fetched.height == target) "complete" else "heartbeat", fetched.height, connect.validated_hash, connect.chainstate_utxo_count, last_block_ms, started, last_tick_ms, last_tick_height, timing);
                 telemetry_tick_count += 1;
-                last_tick_ms = core.nowMs();
+                last_tick_ms = core.datadir.nowMs();
                 last_tick_height = fetched.height;
             }
         }
@@ -1034,7 +1034,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     const total_ms = elapsedMs(started);
     var json_buf = std.ArrayList(u8).empty;
     defer json_buf.deinit(allocator);
-    try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_gate\":\"{s}\",\"benchmark_kind\":\"{s}\",\"benchmark_lane\":\"{s}\",\"benchmark_comparability\":\"{s}\",\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"captured_at\":\"unix_ms:{}\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"{s}\",", .{ profile.benchmark_gate, profile.benchmark_kind, profile.benchmark_lane, comparability_label, core.nowMs(), target, target, profile.target_label });
+    try appendFmt(allocator, &json_buf, "{{\"schema\":\"port.local_reference_proof.v1\",\"category\":\"local_reference_sync\",\"benchmark_contract_version\":1,\"benchmark_gate\":\"{s}\",\"benchmark_kind\":\"{s}\",\"benchmark_lane\":\"{s}\",\"benchmark_comparability\":\"{s}\",\"telemetry_schema\":\"benchmark.telemetry_tick.v1\",\"captured_at\":\"unix_ms:{}\",\"implementation\":\"ZigNode\",\"port\":\"zig\",\"node\":\"ZigNode\",\"chain\":\"testnet4\",\"target_height\":{},\"header_target_height\":{},\"target_label\":\"{s}\",", .{ profile.benchmark_gate, profile.benchmark_kind, profile.benchmark_lane, comparability_label, core.datadir.nowMs(), target, target, profile.target_label });
     try appendFmt(allocator, &json_buf, "\"runtime_surface\":\"{s}\",\"peer_mode\":\"local_reference\",\"peer\":\"{s}\",\"byte_source\":\"local_reference_p2p\",\"proof_mode\":\"p2p_sync\",\"prefetch_depth\":{},\"script_runner_mode\":\"parallel\",\"script_threads\":{},\"rocksdb_wal_disabled\":false,\"fresh_state\":{},\"resume_supported\":true,", .{ surface, peer, prefetch, script_runner.thread_count, fresh_state });
     try appendFmt(allocator, &json_buf, "\"datadir\":\"{s}\",\"chainstate_backend\":\"{s}\",\"crypto_backend\":\"{s}\",\"utxo_hash\":\"{s}\",\"chainstate_backend_path\":\"{s}\",\"chainstate_status\":\"usable\",\"native_storage\":true,\"native_crypto_available\":{},\"native_crypto_backend\":\"{s}\",\"schnorr_backend\":\"{s}\",\"taproot_tweak_backend\":\"{s}\",\"storage_codec_version\":2,", .{ datadir, store_name, core.crypto.lane, core.native_store.utxoHashName(), db_path, crypto_backend == .native, crypto_label, crypto_label, crypto_label });
     try appendFmt(allocator, &json_buf, "\"rocksdb_tuning\":\"{s}\",\"validated_height\":{},\"validated_hash\":\"{s}\",\"header_height\":{},\"stored_block_height\":{},\"blocks_fetched\":{},\"blocks_connected\":{},\"chainstate_utxo_count\":{},\"chainstate_set_hash\":\"{s}\",", .{ core.RocksDb.tuningDescription(), final_meta.validated_height, last_hash, final_meta.header_height, final_meta.stored_block_height, blocks_fetched, blocks_connected, final_meta.chainstate_utxo_count, final_meta.chainstate_set_hash });
@@ -1201,7 +1201,7 @@ fn emitTelemetryTick(
     previous_tick_height: u32,
     timing: ProofTiming,
 ) !void {
-    const now = core.nowMs();
+    const now = core.datadir.nowMs();
     const elapsed_ms = @max(0, now - started_ms);
     const since_tick_ms = @max(1, now - previous_tick_ms);
     const recent_blocks: i64 = if (height >= previous_tick_height) @intCast(height - previous_tick_height) else 0;
@@ -1245,7 +1245,7 @@ const SlowBlocks = struct {
     entries: [10]Entry = [_]Entry{.{}} ** 10,
     len: usize = 0,
 
-    fn record(self: *SlowBlocks, height: u32, ms: i64, timings: core.ConnectTimings) void {
+    fn record(self: *SlowBlocks, height: u32, ms: i64, timings: core.connect.ConnectTimings) void {
         var pos: usize = 0;
         while (pos < self.len and self.entries[pos].ms >= ms) : (pos += 1) {}
         if (pos >= 10) return;
@@ -1282,7 +1282,7 @@ const SlowBlocks = struct {
 };
 
 fn elapsedMs(start_ms: i64) i64 {
-    return @max(0, core.nowMs() - start_ms);
+    return @max(0, core.datadir.nowMs() - start_ms);
 }
 
 fn verifyScriptFixture(allocator: std.mem.Allocator, io: std.Io, manifest: []const u8, obj: std.json.ObjectMap, shadow_crypto: bool) !void {
@@ -1487,7 +1487,7 @@ fn flagArg(args: []const []const u8, name: []const u8) bool {
     return false;
 }
 
-fn parseScriptCryptoBackend(value: []const u8) ?core.ScriptCryptoBackend {
+fn parseScriptCryptoBackend(value: []const u8) ?core.connect.ScriptCryptoBackend {
     if (std.mem.eql(u8, value, "own_curve") or std.mem.eql(u8, value, "libsecp256k1-zig")) return .own_curve;
     if (std.mem.eql(u8, value, "libsecp256k1") or std.mem.eql(u8, value, "native")) return .native;
     if (std.mem.eql(u8, value, "zig-secp256k1") or std.mem.eql(u8, value, "pure")) return .pure;
@@ -1503,7 +1503,7 @@ fn parseCryptoMutation(value: []const u8) ?CryptoMutation {
 }
 
 fn tryMetadataKey(allocator: std.mem.Allocator, name: []const u8) []u8 {
-    return core.encodeMetadataKey(allocator, name) catch @panic("metadata key allocation failed");
+    return core.codec.encodeMetadataKey(allocator, name) catch @panic("metadata key allocation failed");
 }
 
 fn jsonString(value: ?std.json.Value) ?[]const u8 {

@@ -121,7 +121,7 @@ pub fn Pool(comptime Store: type) type {
             for (coins) |*slot| slot.* = null;
 
             for (transaction.inputs, 0..) |input, i| {
-                const outpoint = root.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+                const outpoint = root.types.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
                 const found = try self.coins.lookup(outpoint);
                 switch (found.kind) {
                     .spent_in_pool => return .{ .reason = .input_spent_in_pool },
@@ -170,7 +170,7 @@ pub fn Pool(comptime Store: type) type {
             defer ancestors.deinit();
             var in_value: u128 = 0;
             for (transaction.inputs) |input| {
-                const outpoint = root.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+                const outpoint = root.types.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
                 const found = try self.coins.lookup(outpoint);
                 defer if (found.coin) |coin| if (coin.owned_script) self.allocator.free(coin.script);
                 const coin = found.coin orelse return error.MissingInput;
@@ -197,7 +197,7 @@ pub fn Pool(comptime Store: type) type {
             }
             for (owned_scripts) |*slot| slot.* = &.{};
             for (transaction.inputs, 0..) |input, i| {
-                const outpoint = root.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+                const outpoint = root.types.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
                 const found = try self.coins.lookup(outpoint);
                 const coin = found.coin orelse return error.MissingInput;
                 if (coin.owned_script) {
@@ -234,12 +234,12 @@ pub fn Pool(comptime Store: type) type {
             store.foldSetHash(&self.set_hash, &wtxid, "");
 
             for (transaction.inputs) |input| {
-                const outpoint = root.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+                const outpoint = root.types.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
                 try self.coins.markPoolSpend(outpoint);
             }
             for (transaction.outputs, 0..) |output, vout| {
                 if (output.value < 0) return error.NegativeOutputValue;
-                const outpoint = root.Outpoint{ .txid = txid, .vout = @intCast(vout) };
+                const outpoint = root.types.Outpoint{ .txid = txid, .vout = @intCast(vout) };
                 try self.coins.addPoolOutput(outpoint, @intCast(output.value), self.next_height, false, output.script_pubkey);
             }
         }
@@ -247,13 +247,13 @@ pub fn Pool(comptime Store: type) type {
         pub fn onBlockConnected(self: *Self, transactions: []const tx.Transaction, txids: []const [32]u8) !void {
             var confirmed = std.AutoHashMap([32]u8, void).init(self.allocator);
             defer confirmed.deinit();
-            var block_spends = std.AutoHashMap(root.Outpoint, void).init(self.allocator);
+            var block_spends = std.AutoHashMap(root.types.Outpoint, void).init(self.allocator);
             defer block_spends.deinit();
             for (transactions, txids) |transaction, txid| {
                 try confirmed.put(txid, {});
                 if (transaction.isCoinbase()) continue;
                 for (transaction.inputs) |input| {
-                    const outpoint = root.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+                    const outpoint = root.types.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
                     try block_spends.put(outpoint, {});
                     try self.coins.markChainSpend(outpoint);
                 }
@@ -274,7 +274,7 @@ pub fn Pool(comptime Store: type) type {
                 const parsed = try tx.deserialize(self.allocator, entry.value_ptr.raw, 0);
                 defer parsed.transaction.deinit(self.allocator);
                 for (parsed.transaction.inputs) |input| {
-                    const outpoint = root.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+                    const outpoint = root.types.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
                     if (block_spends.contains(outpoint)) {
                         try drop.put(entry.value_ptr.wtxid, {});
                         try dropped_txids.put(entry.value_ptr.txid, {});
@@ -317,11 +317,11 @@ pub fn Pool(comptime Store: type) type {
             const parsed = try tx.deserialize(self.allocator, entry.value.raw, 0);
             defer parsed.transaction.deinit(self.allocator);
             for (parsed.transaction.inputs) |input| {
-                const outpoint = root.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
+                const outpoint = root.types.Outpoint{ .txid = input.previous_output.hash, .vout = input.previous_output.index };
                 self.coins.unmarkPoolSpend(outpoint);
             }
             for (parsed.transaction.outputs, 0..) |_, vout| {
-                const outpoint = root.Outpoint{ .txid = entry.value.txid, .vout = @intCast(vout) };
+                const outpoint = root.types.Outpoint{ .txid = entry.value.txid, .vout = @intCast(vout) };
                 self.coins.removePoolOutput(outpoint);
             }
         }

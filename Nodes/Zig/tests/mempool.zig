@@ -317,13 +317,13 @@ test "discarding store wrapper forwards a real utxo and drops the commit" {
     var db = try core.RocksDb.open(allocator, path);
     defer db.close();
     const txid = [_]u8{9} ** 32;
-    const outpoint = core.Outpoint{ .txid = txid, .vout = 0 };
-    const script = try core.fromHexAlloc(allocator, "51");
+    const outpoint = core.types.Outpoint{ .txid = txid, .vout = 0 };
+    const script = try core.codec.fromHexAlloc(allocator, "51");
     defer allocator.free(script);
-    const utxo = core.StoredUtxo{ .height = 1, .vout = 0, .value_sats = 42, .coinbase = false, .script_pubkey = script };
-    const key = try core.encodeUtxoKey(allocator, "testnet4", outpoint);
+    const utxo = core.types.StoredUtxo{ .height = 1, .vout = 0, .value_sats = 42, .coinbase = false, .script_pubkey = script };
+    const key = try core.codec.encodeUtxoKey(allocator, "testnet4", outpoint);
     defer allocator.free(key);
-    const value = try core.encodeUtxoValue(allocator, utxo);
+    const value = try core.codec.encodeUtxoValue(allocator, utxo);
     defer allocator.free(value);
     try db.put(key, value);
 
@@ -335,7 +335,7 @@ test "discarding store wrapper forwards a real utxo and drops the commit" {
     }
     try std.testing.expectEqual(@as(u64, 42), loaded[0].?.value_sats);
 
-    var spent = std.AutoHashMap(core.Outpoint, void).init(allocator);
+    var spent = std.AutoHashMap(core.types.Outpoint, void).init(allocator);
     defer spent.deinit();
     _ = try wrapper.commitConnectedBlock(allocator, 2, [_]u8{0} ** 32, &.{}, &.{}, &.{}, &.{}, &spent, 0);
     const again = try db.getManyUtxosWithStats(allocator, "testnet4", &.{outpoint}, null);

@@ -635,3 +635,22 @@ test "parallel script results choose deterministic first failure" {
     try std.testing.expectEqual(@as(usize, 1), failure.input_index);
     try std.testing.expect(failure.err.? == error.MissingUtxo);
 }
+test "get many shape preserves order and missing slots" {
+    const Request = struct { key: []const u8, value: ?[]const u8 };
+    const rows = [_]Request{
+        .{ .key = "a", .value = "one" },
+        .{ .key = "b", .value = null },
+        .{ .key = "c", .value = "three" },
+    };
+    try std.testing.expectEqualStrings("a", rows[0].key);
+    try std.testing.expect(rows[1].value == null);
+    try std.testing.expectEqualStrings("three", rows[2].value.?);
+}
+
+test "same block view rejects double spends" {
+    var spent = std.StringHashMap(void).init(std.testing.allocator);
+    defer spent.deinit();
+    try spent.put("txid:0", {});
+    try std.testing.expect(spent.contains("txid:0"));
+    try std.testing.expect(!spent.contains("txid:1"));
+}

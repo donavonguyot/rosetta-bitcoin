@@ -249,3 +249,18 @@ fn hexNibble(ch: u8) !u8 {
         else => error.InvalidHex,
     };
 }
+test "codec v2 golden vectors" {
+    try verifyCodecVectors(std.testing.allocator);
+}
+
+test "scratch utxo key encoding matches codec vector" {
+    const allocator = std.testing.allocator;
+    var txid: [32]u8 = undefined;
+    for (&txid, 0..) |*byte, i| byte.* = @intCast(i);
+    var bytes: std.ArrayList(u8) = .empty;
+    defer bytes.deinit(allocator);
+    try encodeUtxoKeyInto(allocator, &bytes, "testnet4", .{ .txid = txid, .vout = 1 });
+    const hex = try toHexAlloc(allocator, bytes.items);
+    defer allocator.free(hex);
+    try std.testing.expectEqualStrings(CodecVectors.utxo_key_hex, hex);
+}

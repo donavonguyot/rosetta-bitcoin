@@ -23,9 +23,9 @@ pub fn Coins(comptime Store: type) type {
 
         allocator: std.mem.Allocator,
         store: *Store,
-        pool_out: std.AutoHashMap(root.Outpoint, PoolCoin),
-        pool_spent: std.AutoHashMap(root.Outpoint, void),
-        chain_spent: std.AutoHashMap(root.Outpoint, void),
+        pool_out: std.AutoHashMap(root.types.Outpoint, PoolCoin),
+        pool_spent: std.AutoHashMap(root.types.Outpoint, void),
+        chain_spent: std.AutoHashMap(root.types.Outpoint, void),
 
         const PoolCoin = struct {
             value: u64,
@@ -38,9 +38,9 @@ pub fn Coins(comptime Store: type) type {
             return .{
                 .allocator = allocator,
                 .store = store,
-                .pool_out = std.AutoHashMap(root.Outpoint, PoolCoin).init(allocator),
-                .pool_spent = std.AutoHashMap(root.Outpoint, void).init(allocator),
-                .chain_spent = std.AutoHashMap(root.Outpoint, void).init(allocator),
+                .pool_out = std.AutoHashMap(root.types.Outpoint, PoolCoin).init(allocator),
+                .pool_spent = std.AutoHashMap(root.types.Outpoint, void).init(allocator),
+                .chain_spent = std.AutoHashMap(root.types.Outpoint, void).init(allocator),
             };
         }
 
@@ -52,26 +52,26 @@ pub fn Coins(comptime Store: type) type {
             self.chain_spent.deinit();
         }
 
-        pub fn addPoolOutput(self: *Self, outpoint: root.Outpoint, value: u64, height: u32, coinbase: bool, script: []const u8) !void {
+        pub fn addPoolOutput(self: *Self, outpoint: root.types.Outpoint, value: u64, height: u32, coinbase: bool, script: []const u8) !void {
             const owned = try self.allocator.dupe(u8, script);
             errdefer self.allocator.free(owned);
             if (self.pool_out.fetchRemove(outpoint)) |old| self.allocator.free(old.value.script);
             try self.pool_out.put(outpoint, .{ .value = value, .height = height, .coinbase = coinbase, .script = owned });
         }
 
-        pub fn markPoolSpend(self: *Self, outpoint: root.Outpoint) !void {
+        pub fn markPoolSpend(self: *Self, outpoint: root.types.Outpoint) !void {
             try self.pool_spent.put(outpoint, {});
         }
 
-        pub fn unmarkPoolSpend(self: *Self, outpoint: root.Outpoint) void {
+        pub fn unmarkPoolSpend(self: *Self, outpoint: root.types.Outpoint) void {
             _ = self.pool_spent.remove(outpoint);
         }
 
-        pub fn removePoolOutput(self: *Self, outpoint: root.Outpoint) void {
+        pub fn removePoolOutput(self: *Self, outpoint: root.types.Outpoint) void {
             if (self.pool_out.fetchRemove(outpoint)) |old| self.allocator.free(old.value.script);
         }
 
-        pub fn markChainSpend(self: *Self, outpoint: root.Outpoint) !void {
+        pub fn markChainSpend(self: *Self, outpoint: root.types.Outpoint) !void {
             try self.chain_spent.put(outpoint, {});
             self.removePoolOutput(outpoint);
         }
@@ -85,7 +85,7 @@ pub fn Coins(comptime Store: type) type {
             return self.store.medianTimePast(height);
         }
 
-        pub fn lookup(self: *Self, outpoint: root.Outpoint) !struct { kind: LookupKind, coin: ?Coin } {
+        pub fn lookup(self: *Self, outpoint: root.types.Outpoint) !struct { kind: LookupKind, coin: ?Coin } {
             if (self.pool_spent.contains(outpoint)) return .{ .kind = .spent_in_pool, .coin = null };
             if (self.chain_spent.contains(outpoint)) return .{ .kind = .spent_on_chain, .coin = null };
             if (self.pool_out.get(outpoint)) |pool| {
@@ -102,7 +102,7 @@ pub fn Coins(comptime Store: type) type {
                     },
                 };
             }
-            var one = [_]root.Outpoint{outpoint};
+            var one = [_]root.types.Outpoint{outpoint};
             const loaded = try self.store.getManyUtxosWithStats(self.allocator, "testnet4", one[0..], null);
             defer self.allocator.free(loaded);
             const utxo = loaded[0] orelse return .{ .kind = .missing, .coin = null };
@@ -125,7 +125,7 @@ pub fn Coins(comptime Store: type) type {
 /// In-memory store for mechanism tests. `commitConnectedBlock` counts calls and writes nothing.
 pub const MemoryStore = struct {
     allocator: std.mem.Allocator,
-    utxos: std.AutoHashMap(root.Outpoint, root.StoredUtxo),
+    utxos: std.AutoHashMap(root.types.Outpoint, root.types.StoredUtxo),
     headers: std.AutoHashMap(u32, [80]u8),
     header_index: consensus_context.HeaderIndex = .{},
     commits: usize = 0,
@@ -133,7 +133,7 @@ pub const MemoryStore = struct {
     pub fn init(allocator: std.mem.Allocator) MemoryStore {
         return .{
             .allocator = allocator,
-            .utxos = std.AutoHashMap(root.Outpoint, root.StoredUtxo).init(allocator),
+            .utxos = std.AutoHashMap(root.types.Outpoint, root.types.StoredUtxo).init(allocator),
             .headers = std.AutoHashMap(u32, [80]u8).init(allocator),
         };
     }
@@ -146,7 +146,7 @@ pub const MemoryStore = struct {
         self.header_index.deinit(self.allocator);
     }
 
-    pub fn putUtxo(self: *MemoryStore, outpoint: root.Outpoint, utxo: root.StoredUtxo) !void {
+    pub fn putUtxo(self: *MemoryStore, outpoint: root.types.Outpoint, utxo: root.types.StoredUtxo) !void {
         const script = try self.allocator.dupe(u8, utxo.script_pubkey);
         errdefer self.allocator.free(script);
         var owned = utxo;
@@ -179,9 +179,9 @@ pub const MemoryStore = struct {
         return self.headers.get(height);
     }
 
-    pub fn getManyUtxosWithStats(self: *MemoryStore, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.Outpoint, stats: ?*root.UtxoLoadStats) ![]?root.StoredUtxo {
+    pub fn getManyUtxosWithStats(self: *MemoryStore, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.types.Outpoint, stats: ?*root.connect.UtxoLoadStats) ![]?root.types.StoredUtxo {
         _ = chain;
-        const out = try allocator.alloc(?root.StoredUtxo, outpoints.len);
+        const out = try allocator.alloc(?root.types.StoredUtxo, outpoints.len);
         errdefer allocator.free(out);
         for (outpoints, 0..) |outpoint, i| {
             if (self.utxos.get(outpoint)) |utxo| {
@@ -201,7 +201,7 @@ pub const MemoryStore = struct {
         return out;
     }
 
-    pub fn commitConnectedBlock(self: *MemoryStore, allocator: std.mem.Allocator, height: u32, block_hash: [32]u8, spent_external: []const root.Outpoint, undo_entries: []const root.UndoEntry, transactions: []const root.tx.Transaction, txids: []const [32]u8, spent: *std.AutoHashMap(root.Outpoint, void), new_utxo_count: i64) !root.CommitTimings {
+    pub fn commitConnectedBlock(self: *MemoryStore, allocator: std.mem.Allocator, height: u32, block_hash: [32]u8, spent_external: []const root.types.Outpoint, undo_entries: []const root.types.UndoEntry, transactions: []const root.tx.Transaction, txids: []const [32]u8, spent: *std.AutoHashMap(root.types.Outpoint, void), new_utxo_count: i64) !root.connect.CommitTimings {
         _ = allocator;
         _ = height;
         _ = block_hash;
