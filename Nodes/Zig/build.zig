@@ -41,7 +41,7 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "zigbitnode",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
+            .root_source_file = b.path("src/cli/main.zig"),
             .target = target,
             .optimize = optimize,
             .imports = &.{
@@ -51,6 +51,17 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addOptions("crypto_options", options);
     exe.root_module.addImport("secp256k1", secp);
+    const bench_mod = b.createModule(.{
+        .root_source_file = b.path("src/crypto_bench.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "zigbitnode", .module = core_mod },
+            .{ .name = "secp256k1", .module = secp },
+        },
+    });
+    addNativeDeps(bench_mod, target, own_curve, !std.mem.eql(u8, store, "native"));
+    exe.root_module.addImport("crypto_bench", bench_mod);
     addNativeDeps(exe.root_module, target, own_curve, !std.mem.eql(u8, store, "native"));
     b.installArtifact(exe);
 
