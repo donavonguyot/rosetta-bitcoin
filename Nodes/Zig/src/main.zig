@@ -33,12 +33,16 @@ pub fn main(init: std.process.Init) !void {
     }
 
     const command = args[1];
+    const io = init.io;
+    if (std.mem.eql(u8, command, "--build-info")) {
+        try cmdBuildInfo(allocator, io, out);
+        return;
+    }
     if (valueArg(args[2..], "--crypto-backend") orelse init.environ_map.get("ZIGBITNODE_CRYPTO_BACKEND")) |requested| {
         const selected = parseScriptCryptoBackend(requested) orelse return error.UnsupportedCryptoBackend;
         if (core.crypto.own_curve != (selected == .own_curve)) return error.CryptoBackendNotCompiled;
         if (std.mem.eql(u8, command, "script-corpus") and selected == .pure) return error.CorpusBackendNotSupported;
     }
-    const io = init.io;
     const surface = init.environ_map.get("ZIGBITNODE_RUNTIME_SURFACE") orelse "host";
 
     if (std.mem.eql(u8, command, "status")) {
@@ -116,8 +120,29 @@ fn usage(out: anytype) !void {
         \\  consensus-context [--manifest path]
         \\  check-headers [--datadir ./data-zig] [--store=rocksdb|native]
         \\  crypto-bench [--profile]
+        \\  --build-info
         \\
     , .{});
+}
+
+fn cmdBuildInfo(allocator: std.mem.Allocator, io: Io, out: anytype) !void {
+    const digest = try binarySha256(allocator, io);
+    try out.print(
+        "{{\"crypto_backend\":\"{s}\",\"store_mode\":\"{s}\",\"source_commit\":\"{s}\",\"binary_sha256\":\"{s}\"}}\n",
+        .{ core.crypto.lane, core.store_mode, core.crypto.source_commit, digest },
+    );
+}
+
+fn binarySha256(allocator: std.mem.Allocator, io: Io) ![64]u8 {
+    const file = try std.process.openExecutable(io, .{});
+    defer file.close(io);
+    const len = try file.length(io);
+    const bytes = try allocator.alloc(u8, @intCast(len));
+    defer allocator.free(bytes);
+    const n = try file.readPositionalAll(io, bytes, 0);
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(bytes[0..n], &digest, .{});
+    return std.fmt.bytesToHex(digest, .lower);
 }
 
 fn cmdRung0(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, default_peer: []const u8, default_crypto_backend: []const u8) !void {
