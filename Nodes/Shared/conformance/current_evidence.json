@@ -833,7 +833,7 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Campaign closed. Quiet ECDSA ratio_min is 1.931; the load-12.7 value 1.667 is withdrawn. The two-accumulator 5x52 field reached 1.844 and was reverted. fe_mul is 33 mul and 31 umulh against 24 and 22. point_double is 15 str under sub sp, #0xf0. optimized stays unset."
+      "notes": "Campaign closed. Quiet ECDSA ratio_min is 1.931; the load-12.7 value 1.667 is withdrawn. The two-accumulator 5x52 field reached 1.844, below bar, not worse, and was reverted without being evidence that 5x52 does not work in Zig. The remaining ~1.8x against libsecp is scheduling inside and around the multiply, and stays open. optimized stays unset."
     },
     {
       "port": "zig",
@@ -1017,7 +1017,7 @@
       "gate_id": "bench_two_acc",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_two_acc_2026-10-05.json",
       "status": "current",
-      "notes": "Two-accumulator 5x52, not kept. Quiet ECDSA ratio_min 1.844 against 1.931. fe_mul 16.49 ns, 33 mul and 31 umulh. point_double 71.56 ns, 15 str, sub sp, #0xf0."
+      "notes": "Two-accumulator 5x52, below bar, not worse. Quiet ECDSA ratio_min 1.844 against 1.931. point_double -18 percent, point_add -6.5 percent, verify -4.5 percent. fe_mul 33 mul and 31 umulh. Reverted to keep the u256 kernel."
     }
   ]
 }
