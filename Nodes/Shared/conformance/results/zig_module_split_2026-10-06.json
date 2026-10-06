@@ -1,0 +1,450 @@
+{
+  "schema": "port.module_split.v1",
+  "claim": "refactor",
+  "port": "zig",
+  "node": "ZigNode",
+  "base": "8bb670c7c761b68db43c236f4272a0891b8e99b8",
+  "head": "538cd60ddab0326131a89bf6e9b1e53f1b227bbe",
+  "behavior_change": false,
+  "tests": {
+    "command": "zig build test",
+    "count": 56,
+    "stores": [
+      "both",
+      "rocksdb",
+      "native"
+    ],
+    "native_skip": 1
+  },
+  "final_line_counts": {
+    "src/root.zig": 43,
+    "src/cli/main.zig": 134,
+    "src/native_store.zig": 1196,
+    "src/script.zig": 1703,
+    "cap": "no source file over 1000 except script.zig; native_store.zig left whole",
+    "root_under_60": true
+  },
+  "commits": [
+    {
+      "commit": "a82a0d8",
+      "subject": "Record the Zig module-split plan before moving any code.",
+      "added": [
+        {
+          "path": "Nodes/Zig/docs/module-split-plan.md",
+          "lines": 108
+        }
+      ]
+    },
+    {
+      "commit": "820116d",
+      "subject": "Move chainstate types and the codec out of root.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/codec.zig",
+          "lines": 251
+        },
+        {
+          "path": "Nodes/Zig/src/types.zig",
+          "lines": 64
+        }
+      ]
+    },
+    {
+      "commit": "0b209ab",
+      "subject": "Skip RocksDB-only commands when the native-store build does not link RocksDB.",
+      "added": []
+    },
+    {
+      "commit": "8f4e3f4",
+      "subject": "Move the datadir lock and the secp selection out of root.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/crypto_glue.zig",
+          "lines": 7
+        },
+        {
+          "path": "Nodes/Zig/src/datadir.zig",
+          "lines": 60
+        }
+      ]
+    },
+    {
+      "commit": "d3a8ef1",
+      "subject": "Move block connect and script verification out of root.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/connect.zig",
+          "lines": 637
+        }
+      ]
+    },
+    {
+      "commit": "3a5616e",
+      "subject": "Move the RocksDB and shadow stores out of root.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/rocks_store.zig",
+          "lines": 793
+        },
+        {
+          "path": "Nodes/Zig/src/shadow_store.zig",
+          "lines": 217
+        }
+      ],
+      "root_zig_lines_after": 41
+    },
+    {
+      "commit": "913d707",
+      "subject": "Refuse a gate when the binary was not just built for that target.",
+      "added": [
+        {
+          "path": "Nodes/Zig/scripts/check_build_info.py",
+          "lines": 59
+        }
+      ]
+    },
+    {
+      "commit": "75e4558",
+      "subject": "Move the CLI entry point under src/cli and share the argument helpers.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/common.zig",
+          "lines": 66
+        }
+      ]
+    },
+    {
+      "commit": "76b0dec",
+      "subject": "Move sync and the local-reference proof command into cli/sync.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/sync.zig",
+          "lines": 576
+        }
+      ]
+    },
+    {
+      "commit": "067c34c",
+      "subject": "Move the status command into cli/status.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/status.zig",
+          "lines": 77
+        }
+      ]
+    },
+    {
+      "commit": "32a637e",
+      "subject": "Move the storage-proof command into cli/storage_proof.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/storage_proof.zig",
+          "lines": 75
+        }
+      ]
+    },
+    {
+      "commit": "edb282b",
+      "subject": "Move the crypto vector commands into cli/vectors.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/vectors.zig",
+          "lines": 311
+        }
+      ]
+    },
+    {
+      "commit": "13af509",
+      "subject": "Move the script-corpus command into cli/script_corpus.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/script_corpus.zig",
+          "lines": 201
+        }
+      ]
+    },
+    {
+      "commit": "c62a750",
+      "subject": "Move codec-vectors into cli/vectors.zig with the other vector commands.",
+      "added": []
+    },
+    {
+      "commit": "c0c022a",
+      "subject": "Move the check-headers command into cli/headers.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/headers.zig",
+          "lines": 30
+        }
+      ]
+    },
+    {
+      "commit": "6b48c31",
+      "subject": "Move the consensus-context commands into cli/context.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/context.zig",
+          "lines": 22
+        }
+      ]
+    },
+    {
+      "commit": "0cd9e59",
+      "subject": "Move mempool replay into cli/mempool.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/mempool.zig",
+          "lines": 114
+        }
+      ]
+    },
+    {
+      "commit": "379bcdc",
+      "subject": "Move template and testblockvalidity commands into cli/mining.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/mining.zig",
+          "lines": 65
+        }
+      ]
+    },
+    {
+      "commit": "8b210e7",
+      "subject": "Move the crypto-bench dispatch into cli/bench.zig.",
+      "added": [
+        {
+          "path": "Nodes/Zig/src/cli/bench.zig",
+          "lines": 5
+        }
+      ],
+      "dispatcher_lines": 143
+    },
+    {
+      "commit": "538cd60",
+      "subject": "Resolve paths outside the Zig tree through build options.",
+      "added": [
+        {
+          "path": "Nodes/Zig/scripts/check_no_external_paths.sh",
+          "lines": 18
+        },
+        {
+          "path": "Nodes/Zig/libsecp256k1-zig",
+          "lines": 0,
+          "note": "symlink to the secp package"
+        }
+      ],
+      "root_zig_lines_after": 43,
+      "dispatcher_lines": 134
+    }
+  ],
+  "external_path_check": {
+    "script": "Nodes/Zig/scripts/check_no_external_paths.sh",
+    "wired_into": "zig build test",
+    "acceptance": "zig build test -Dfixtures-root=/tmp/zig-ms/fixtures-copy",
+    "fixture_moved_aside": "Nodes/Shared/fixtures/mining/assembly_bytes_v1.bin",
+    "passed": true,
+    "tests": "56/56",
+    "original_path_recreated": false
+  },
+  "bench": {
+    "binary": "zig-out/bin/zigbitnode-bench",
+    "baseline": "Nodes/Shared/conformance/results/zig_own_curve_bench_quiet_v2_2026-10-05.json",
+    "baseline_ecdsa_ratio_min": 1.931,
+    "ecdsa_ratio_min": 1.885,
+    "ecdsa_ratio_median": 1.903,
+    "band": [
+      1.873,
+      1.989
+    ],
+    "within_3_percent": true,
+    "scheduling": "utility",
+    "qos": "utility",
+    "taskpolicy": false,
+    "like_for_like": "BENCH_QOS=utility and BENCH_SCHEDULING=utility, no taskpolicy, matching the baseline",
+    "quiet_polls": [
+      1.71,
+      1.83,
+      1.58,
+      1.45,
+      1.31
+    ],
+    "quiet_rule": "one-minute load under 2.0 for five 30s polls, and no zig, zigbitnode, cursor-agent, or codex process at or above 1 percent CPU",
+    "point_double_bl": 0,
+    "point_double_mul": 150,
+    "point_double_umulh": 124,
+    "source_commit": "538cd60ddab0326131a89bf6e9b1e53f1b227bbe",
+    "binary_sha256": "de418b01bd2ad10aaabcf7d9df6ef4253e626933a8cc24c165eee4b705e10967"
+  },
+  "trace_seed": {
+    "datadir": "/Users/donavonguyot/.rblab/zig/trace-seed-155063",
+    "store": "native",
+    "validated_height": 155063,
+    "validated_hash": "0000000000e0ebc4288ef677ff3918f6876bb582fd402719baf2cb19a617d27e",
+    "chainstate_utxo_count": 14264801,
+    "kept_at_start_height": true,
+    "replay_datadir": "clone; connect advances the tip, so the named seed was not the datadir the gate wrote"
+  },
+  "gates": [
+    {
+      "gate": "native-storage-proof",
+      "predecessor": "Nodes/Shared/conformance/results/zig_native_store_storage_proof_host_2026-10-03.json",
+      "identity_match": true,
+      "set_hash": "5a6cd24b3d073e14a19e0bcc0f5c0ffa4485d0edbe90f3775838b8fc3f5743a4",
+      "height": 2,
+      "utxo_count": 1,
+      "diffs": [
+        {
+          "field": "peak_rss_bytes",
+          "predecessor": 7258112,
+          "this_run": 7307264,
+          "note": "wall-clock field"
+        },
+        {
+          "field": "provenance",
+          "note": "binary_sha256 and source_commit are stamped from the binary just built; the Oct 3 file has no provenance block"
+        }
+      ]
+    },
+    {
+      "gate": "zig-node-storage-proof",
+      "predecessor": null,
+      "note": "no host rocks predecessor; docker file zig_storage_gate_docker_2026-06-05-zig-5k-docker.json is a different surface",
+      "identity": {
+        "validated_height": 2,
+        "chainstate_utxo_count": 1,
+        "rocksdb_runtime_truth": true,
+        "schema": "port.storage_gate_result.v1"
+      }
+    },
+    {
+      "gate": "check-headers",
+      "predecessor": "Nodes/Shared/conformance/results/zig_consensus_context_host_2026-10-04.json",
+      "predecessor_object": "check_headers",
+      "identity_match": true,
+      "tip": 155069,
+      "heights": 155070,
+      "retarget_boundaries": 76,
+      "min_difficulty_blocks": 105573,
+      "timewarp_checks": 76,
+      "datadir": "mempool-rung0"
+    },
+    {
+      "gate": "native-shadow-5k",
+      "predecessor": "Nodes/Shared/conformance/results/zig_native_store_shadow_5k_host_2026-10-05.json",
+      "predecessor_source_commit": "a792f25081286a787b75589ec7e043851f0ecd5c",
+      "identity_match": true,
+      "primary_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+      "utxo_count": 4574,
+      "divergence_count": 0,
+      "height": 5000,
+      "diffs_not_this_branch": [
+        {
+          "field": "utxo_hash",
+          "predecessor": "txid64",
+          "this_run": "txid64_mix",
+          "changed_by": "91e5d2d5737f4699285b95125ff59ffa081eafcf",
+          "subject": "Make the mixed outpoint hash the default and drop the capacity hint."
+        },
+        {
+          "field": "utxo_capacity_hint",
+          "predecessor": 8000,
+          "this_run": 0,
+          "changed_by": "91e5d2d5737f4699285b95125ff59ffa081eafcf",
+          "subject": "That commit dropped --utxo-capacity-hint 8000 from the shadow recipe."
+        },
+        {
+          "field": "rehash_count",
+          "predecessor": 1,
+          "this_run": 11,
+          "changed_by": "91e5d2d5737f4699285b95125ff59ffa081eafcf",
+          "subject": "Unhinted growth rehashes as the map doubles; the hint removal is the cause."
+        },
+        {
+          "field": "disk_tradeoff",
+          "predecessor": null,
+          "this_run": "present",
+          "changed_by": "b21f6b5ad6dc3f6140ec8d2a44dd0f500321d17d",
+          "subject": "Record why the outpoint hash is mixed and why native datadirs are larger."
+        }
+      ],
+      "wall_clock_diffs": [
+        "total_ms",
+        "peak_rss_bytes",
+        "engines",
+        "utxo_hit_ns",
+        "set_hash_fold_ms"
+      ],
+      "next_diff": "Diff the next run against the newest result on main, not this Oct 5 file."
+    },
+    {
+      "gate": "self-hosted-50k",
+      "predecessor": "Nodes/Shared/conformance/results/zig_self_hosted_50k_host_2026-10-04.json",
+      "predecessor_source_commit": "ad7d77f50257a7f07e76f79ea9a6c552184cf1cc",
+      "identity_match": true,
+      "validated_height": 50000,
+      "validated_hash": "00000000e2c8c94ba126169a88997233f07a9769e2b009fb10cad0e893eff2cb",
+      "chainstate_utxo_count": 568855,
+      "chainstate_set_hash": "84f599c5259062428db7dc44de4444c7e918f4e4ae2b8bb2d3a3b8142e642231",
+      "crypto_backend": "own_curve",
+      "fresh": true,
+      "diffs_not_this_branch": [
+        {
+          "field": "rocksdb_tuning",
+          "predecessor": "create_if_missing=true,parallelism=4,block_cache_mb=512,bloom_bits_per_key=10,cache_index_filter_blocks=true,write_buffer_mb=64,max_write_buffer_number=4,max_background_jobs=4",
+          "this_run": "not compiled",
+          "changed_by": "f15341c9bc63dba6cf7c52a33e6b3ef52aeb9a10",
+          "subject": "Compile a native-only chainstate binary so the self-hosted lane does not link RocksDB."
+        }
+      ],
+      "wall_clock_diffs": [
+        "rehash_ms",
+        "set_hash_fold_ms",
+        "snapshot_ms"
+      ]
+    },
+    {
+      "gate": "mempool-replay",
+      "predecessor": "Nodes/Shared/conformance/results/zig_mempool_rung0_host_2026-10-04.json",
+      "predecessor_source_commit": "8e1653cbc0bf9e6a8e2f4d2e1bafbf80243a8b59",
+      "identity_match": true,
+      "tx_checked": 30,
+      "mutation_checked": 138,
+      "verdict_mismatches": 0,
+      "mutation_mismatches": 0,
+      "boundary_hashes_match": true,
+      "boundaries": [
+        155064,
+        155065,
+        155066,
+        155067,
+        155068,
+        155069
+      ],
+      "diffs_not_this_branch": [
+        {
+          "field": "stores",
+          "predecessor": [
+            "native",
+            "rocksdb"
+          ],
+          "this_run": "store=native",
+          "note": "The writer on main at 8bb670c already emits one store field. The Oct 4 file recorded both stores. Not this branch."
+        },
+        {
+          "field": "results[].result",
+          "predecessor": "passed",
+          "this_run": "pass",
+          "note": "Same writer shape already on main at 8bb670c."
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "toolchain_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec",
+    "source_commit": "538cd60ddab0326131a89bf6e9b1e53f1b227bbe",
+    "zig": "0.16.0",
+    "c_binding_both_binary_sha256": "84026d037c0e60af7af59cde2e6e3ba327670b2c5289a1eb76fd90fd6f1cabd9",
+    "own_curve_native_binary_sha256": "7ba12957788f0b6ea59e9d2c1267df8fe4b4cdb9fa482e269ea758d11452c880",
+    "bench_binary_sha256": "de418b01bd2ad10aaabcf7d9df6ef4253e626933a8cc24c165eee4b705e10967"
+  }
+}
