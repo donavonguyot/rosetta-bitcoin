@@ -1,15 +1,26 @@
-//! One copy of transaction finality, BIP68, and testnet4 nBits / BIP94.
-//! Block connect, header ingest, templates, and the mempool all call these.
+//! One copy of transaction finality (BIP113), BIP68 sequence locks, and testnet4 nBits (BIP94).
+//! Block connect, header ingest, templates, and the mempool call these instead of reimplementing them.
+//! The mempool lane found two gaps: connect accepted a transaction that was not final for the block,
+//! and header PoW did not require nBits to equal the retarget. Both are closed
+//! (`zig_consensus_context_host_2026-10-04.json`).
+//! 105573 of 155070 blocks are minimum-difficulty, so BIP94 retargets from the first block of the period.
+//! Does not verify scripts or store headers.
 
 const std = @import("std");
 const chain_params = @import("chain_params.zig");
 const tx = @import("tx.zig");
 
+/// Time and nBits copied out of an 80-byte header.
+/// Height 0 has no previous header. MTP uses only headers that exist.
+/// test "nLockTime at the block height is not final"
 pub const HeaderFields = struct {
     time: u32,
     bits: u32,
 };
 
+/// Read time and nBits from the compact header fields Bitcoin already defines.
+/// Height 0 has no previous header. MTP uses only headers that exist.
+/// test "nLockTime at the block height is not final"
 pub fn fieldsFromHeader(header: *const [80]u8) HeaderFields {
     return .{
         .time = std.mem.readInt(u32, header[68..72], .little),
@@ -19,13 +30,20 @@ pub fn fieldsFromHeader(header: *const [80]u8) HeaderFields {
 
 /// Dense header time and bits from height 0. Eight bytes per height. MTP is the
 /// median of the timestamps in this array; callers do not re-read the store.
+/// test "nLockTime at the block height is not final"
 pub const HeaderIndex = struct {
     items: std.ArrayList(HeaderFields) = .empty,
 
+    /// Free the bytes this value owns. The caller does not free them again.
+    /// Height 0 has no previous header. MTP uses only headers that exist.
+    /// test "nLockTime at the block height is not final"
     pub fn deinit(self: *HeaderIndex, allocator: std.mem.Allocator) void {
         self.items.deinit(allocator);
     }
 
+    /// Store time and nBits at a height, filling any gap with empty fields.
+    /// Height 0 has no previous header. MTP uses only headers that exist.
+    /// test "nLockTime at the block height is not final"
     pub fn set(self: *HeaderIndex, allocator: std.mem.Allocator, height: u32, view: HeaderFields) !void {
         while (self.items.items.len < height) {
             try self.items.append(allocator, .{ .time = 0, .bits = 0 });
@@ -37,16 +55,23 @@ pub const HeaderIndex = struct {
         }
     }
 
+    /// Time and nBits at a height, or null past the indexed tip.
+    /// Height 0 has no previous header. MTP uses only headers that exist.
+    /// test "nLockTime at the block height is not final"
     pub fn fields(self: HeaderIndex, height: u32) ?HeaderFields {
         if (height >= self.items.items.len) return null;
         return self.items.items[height];
     }
 
+    /// Time and nBits at a height, or an error when the index has not reached it.
+    /// Height 0 has no previous header. MTP uses only headers that exist.
+    /// test "nLockTime at the block height is not final"
     pub fn header(self: HeaderIndex, height: u32) !HeaderFields {
         return self.fields(height) orelse error.MissingHeader;
     }
 
     /// Median of up to 11 timestamps ending at `height`.
+    /// test "nLockTime at the block height is not final"
     pub fn mtp(self: HeaderIndex, height: u32) u32 {
         if (height >= self.items.items.len) return 0;
         const end: usize = @as(usize, height) + 1;
@@ -59,6 +84,9 @@ pub const HeaderIndex = struct {
     }
 };
 
+/// BIP113 finality. A transaction that fails this never reaches script verification.
+/// Height 0 has no previous header. MTP uses only headers that exist.
+/// test "nLockTime at the block height is not final"
 pub fn txNotFinal(transaction: tx.Transaction, height: u32, mtp: u32, block_time: u32) bool {
     if (transaction.lock_time == 0) return false;
     if (allSequencesFinal(transaction)) return false;
@@ -74,6 +102,7 @@ fn allSequencesFinal(transaction: tx.Transaction) bool {
 
 /// True only for a BIP68 time lock that can fail. Height locks, version 1, and
 /// the disable bit do not need the creating block's MTP.
+/// test "nLockTime at the block height is not final"
 pub fn sequenceNeedsCoinTime(version: i32, sequence: u32, block_height: u32) bool {
     if (block_height < chain_params.csv_height) return false;
     if (version < 2) return false;
@@ -83,6 +112,7 @@ pub fn sequenceNeedsCoinTime(version: i32, sequence: u32, block_height: u32) boo
 
 /// `coin_time` is the MTP of `max(coin_height - 1, 0)`. Same-block spends use
 /// `coin_height == block_height` and the MTP of `block_height - 1`.
+/// test "nLockTime at the block height is not final"
 pub fn sequenceLockUnsatisfied(
     version: i32,
     sequence: u32,
@@ -106,6 +136,7 @@ pub fn sequenceLockUnsatisfied(
 
 /// Median of up to 11 header timestamps ending at `height`. `source.headerAt`
 /// returns the 80-byte header, or null when the chain has not reached it.
+/// test "nLockTime at the block height is not final"
 pub fn medianTimePast(source: anytype, height: u32) !u32 {
     var times: [11]u32 = undefined;
     var count: usize = 0;
@@ -120,6 +151,9 @@ pub fn medianTimePast(source: anytype, height: u32) !u32 {
     return times[count / 2];
 }
 
+/// nBits this height must carry: retarget, minimum-difficulty, or the walked-back target.
+/// Height 0 has no previous header. MTP uses only headers that exist.
+/// test "nLockTime at the block height is not final"
 pub fn requiredBits(source: anytype, height: u32, time: u32) !u32 {
     if (height == 0) return chain_params.pow_limit_bits;
     const prev = try source.header(height - 1);
@@ -139,16 +173,25 @@ pub fn requiredBits(source: anytype, height: u32, time: u32) !u32 {
     return retargetBits(first.bits, first.time, prev.time);
 }
 
+/// True when a retarget timestamp is more than 600 seconds before the previous block.
+/// Height 0 has no previous header. MTP uses only headers that exist.
+/// test "nLockTime at the block height is not final"
 pub fn timewarpViolation(height: u32, time: u32, prev_time: u32) bool {
     if (height == 0 or height % chain_params.interval != 0) return false;
     return @as(i64, time) < @as(i64, prev_time) - @as(i64, chain_params.timewarp);
 }
 
+/// Earliest legal timestamp on a BIP94 retarget: previous time minus 600.
+/// Height 0 has no previous header. MTP uses only headers that exist.
+/// test "nLockTime at the block height is not final"
 pub fn timewarpFloor(prev_time: u32) u32 {
     if (prev_time > chain_params.timewarp) return prev_time - chain_params.timewarp;
     return 0;
 }
 
+/// Header time is at least MTP+1, and at least the BIP94 floor on a retarget.
+/// Height 0 has no previous header. MTP uses only headers that exist.
+/// test "nLockTime at the block height is not final"
 pub fn clampedHeaderTime(mtp: u32, now: u32, height: u32, prev_time: u32) u32 {
     var stamp = @max(mtp +% 1, now);
     if (height % chain_params.interval == 0 and height > 0) {
@@ -158,6 +201,9 @@ pub fn clampedHeaderTime(mtp: u32, now: u32, height: u32, prev_time: u32) u32 {
     return stamp;
 }
 
+/// BIP94 retarget from the first block of the period, clamped to the pow limit.
+/// Height 0 has no previous header. MTP uses only headers that exist.
+/// test "nLockTime at the block height is not final"
 pub fn retargetBits(first_bits: u32, first_time: u32, prev_time: u32) !u32 {
     const raw: i64 = @as(i64, prev_time) - @as(i64, first_time);
     const span = std.math.clamp(raw, @divTrunc(chain_params.timespan, 4), chain_params.timespan * 4);

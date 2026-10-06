@@ -1,3 +1,7 @@
+//! Runs the primary store and a shadow store on the same connect and compares set hashes.
+//! A non-zero divergence is a failed differential oracle, not a second validity rule.
+//! Does not mix the two UTXO maps. Each engine commits its own bytes.
+
 const std = @import("std");
 const types = @import("types.zig");
 const codec = @import("codec.zig");
@@ -16,6 +20,9 @@ const decodeUtxoValue = codec.decodeUtxoValue;
 const Metadata = types.Metadata;
 const ChainstateBlockCommit = types.ChainstateBlockCommit;
 
+/// Primary engine plus a shadow engine on the same blocks.
+/// Both engines see the same block. The set hashes are compared after the commit.
+/// test "rocks shadow create and spend returns set hash to zero"
 pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
     return struct {
         primary: *Primary,
@@ -34,40 +41,67 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
 
         const Self = @This();
 
+        /// Build an empty value the caller frees with deinit.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn init(primary: *Primary, shadow: *Shadow) Self {
             return .{ .primary = primary, .shadow = shadow };
         }
 
+        /// Current set hash. Shadow comparison reads this after the commit.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn setHash(self: *Self) store.SetHash {
             return self.primary.setHash();
         }
 
+        /// The 80-byte header at a height, or null past the stored tip.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn headerAt(self: *Self, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
             return self.primary.headerAt(allocator, height);
         }
 
+        /// Make header time and bits readable. Native open already loaded them.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn ensureHeaderIndex(self: *Self) !void {
             try self.primary.ensureHeaderIndex();
             try self.shadow.ensureHeaderIndex();
         }
 
+        /// The dense header index connect and the mempool use for MTP.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn headerIndex(self: *Self) consensus_context.HeaderIndex {
             return self.primary.headerIndex();
         }
 
+        /// Median of up to 11 header timestamps ending at a height. BIP113 and the template use it.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn medianTimePast(self: *Self, height: u32) !u32 {
             return self.primary.medianTimePast(height);
         }
 
+        /// Indexed time and nBits at a height, or null when that height is not stored.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn headerFields(self: *Self, height: u32) !?consensus_context.HeaderFields {
             return self.primary.headerFields(height);
         }
 
+        /// Store one key's bytes. The caller still owns the slice it passed.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn put(self: *Self, key: []const u8, value: []const u8) !void {
             try self.primary.put(key, value);
             try self.shadow.put(key, value);
         }
 
+        /// Owned value bytes for one key, or null when the store does not have it.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn getAlloc(self: *Self, allocator: std.mem.Allocator, key: []const u8) !?[]u8 {
             const primary_value = try self.primary.getAlloc(allocator, key);
             const shadow_value = try self.shadow.getAlloc(allocator, key);
@@ -79,6 +113,9 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
             return primary_value;
         }
 
+        /// Raw UTXO values for outpoints, order preserved, missing slots null.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn getManyUtxoRaw(self: *Self, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint, stats: ?*UtxoLoadStats) ![]?[]u8 {
             const started = store.nowMs();
             const primary_raw = try self.primary.getManyUtxoRaw(allocator, chain, outpoints, stats);
@@ -94,6 +131,9 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
             return primary_raw;
         }
 
+        /// Decoded UTXOs plus hit and miss timing for the lookups connect actually issued.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn getManyUtxosWithStats(self: *Self, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint, stats: ?*UtxoLoadStats) ![]?StoredUtxo {
             const raw = try self.getManyUtxoRaw(allocator, chain, outpoints, stats);
             defer freeRaw(allocator, raw);
@@ -110,6 +150,9 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
             return out;
         }
 
+        /// Append raw block bytes and a log record of its own, before connect commits the spends.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn recordBlock(self: *Self, allocator: std.mem.Allocator, height: u32, hash: [32]u8, raw: []const u8) !void {
             const started = store.nowMs();
             try self.primary.recordBlock(allocator, height, hash, raw);
@@ -119,10 +162,16 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
             self.shadow_record_block_ms += elapsedMs(shadow_started);
         }
 
+        /// Apply a prepared chainstate commit and fold its UTXOs into the set hash.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn commitBlock(self: *Self, allocator: std.mem.Allocator, commit: ChainstateBlockCommit) !CommitTimings {
             return self.commitBoth(allocator, commit, null);
         }
 
+        /// Apply the spends and creates from a block that connect has already checked.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn commitConnectedBlock(
             self: *Self,
             allocator: std.mem.Allocator,
@@ -145,6 +194,9 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
             return primary_timings;
         }
 
+        /// Named chainstate fields as owned strings. The caller frees them.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn readMetadata(self: *Self, allocator: std.mem.Allocator) !Metadata {
             const primary_meta = try self.primary.readMetadata(allocator);
             const shadow_meta = try self.shadow.readMetadata(allocator);
@@ -160,6 +212,9 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
             return primary_meta;
         }
 
+        /// Free metadata strings returned by a read.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "rocks shadow create and spend returns set hash to zero"
         pub fn deinitMetadata(self: *Self, allocator: std.mem.Allocator, meta: Metadata) void {
             self.primary.deinitMetadata(allocator, meta);
         }

@@ -1,22 +1,38 @@
+//! Bitcoin transactions: outpoints, txid, wtxid (BIP141), and compact size.
+//! Txid hashes the non-witness serialization. Wtxid hashes the witness serialization.
+//! Does not check locktime or scripts. Connect and the mempool do. test "parse fixture transaction and preserve txid".
+
 const std = @import("std");
 const crypto = @import("crypto.zig");
 
+/// The prevout a spend names. Txid is internal byte order.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub const OutPoint = struct {
     hash: [32]u8,
     index: u32,
 };
 
+/// One input: prevout, scriptSig, sequence, and witness stack.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub const TxIn = struct {
     previous_output: OutPoint,
     script_sig: []const u8,
     sequence: u32,
 };
 
+/// One output: satoshi value and scriptPubKey.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub const TxOut = struct {
     value: i64,
     script_pubkey: []const u8,
 };
 
+/// One deserialized transaction, witness included when the bytes had one.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub const Transaction = struct {
     version: i32,
     inputs: []TxIn,
@@ -25,6 +41,9 @@ pub const Transaction = struct {
     witness: []const []const []const u8,
     raw_no_witness: []const u8,
 
+    /// Free the bytes this value owns. The caller does not free them again.
+    /// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+    /// test "parse fixture transaction and preserve txid"
     pub fn deinit(self: Transaction, allocator: std.mem.Allocator) void {
         for (self.inputs) |input| allocator.free(input.script_sig);
         allocator.free(self.inputs);
@@ -38,16 +57,25 @@ pub const Transaction = struct {
         allocator.free(self.raw_no_witness);
     }
 
+    /// True for the single null prevout Bitcoin uses to mark a coinbase.
+    /// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+    /// test "parse fixture transaction and preserve txid"
     pub fn isCoinbase(self: Transaction) bool {
         if (self.inputs.len != 1) return false;
         const input = self.inputs[0];
         return input.previous_output.index == 0xffff_ffff and std.mem.allEqual(u8, input.previous_output.hash[0..], 0);
     }
 
+    /// Internal txid. Display order is a separate reversal.
+    /// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+    /// test "parse fixture transaction and preserve txid"
     pub fn txid(self: Transaction) [32]u8 {
         return crypto.doubleSha256(self.raw_no_witness);
     }
 
+    /// Internal wtxid over the witness serialization. The pool set hash folds this, not the display hex.
+    /// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+    /// test "parse fixture transaction and preserve txid"
     pub fn wtxid(self: Transaction, allocator: std.mem.Allocator) ![32]u8 {
         if (self.witness.len == 0) return self.txid();
         const raw = try serialize(allocator, self, true);
@@ -56,6 +84,9 @@ pub const Transaction = struct {
     }
 };
 
+/// Bitcoin compact size. A truncated or non-minimal encoding is an error.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub fn readCompactSize(data: []const u8, offset_in: usize) !struct { value: u64, offset: usize } {
     var offset = offset_in;
     if (offset >= data.len) return error.TruncatedCompactSize;
@@ -78,6 +109,9 @@ pub fn readCompactSize(data: []const u8, offset_in: usize) !struct { value: u64,
     };
 }
 
+/// Bitcoin compact size for a length the following bytes must match.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub fn writeCompactSize(allocator: std.mem.Allocator, out: *std.ArrayList(u8), value: u64) !void {
     if (value < 0xfd) {
         try out.append(allocator, @intCast(value));
@@ -99,6 +133,9 @@ pub fn writeCompactSize(allocator: std.mem.Allocator, out: *std.ArrayList(u8), v
     }
 }
 
+/// Parse one transaction from a byte slice at an offset.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub fn deserialize(allocator: std.mem.Allocator, data: []const u8, offset_in: usize) !struct { transaction: Transaction, offset: usize } {
     var offset = offset_in;
     if (offset + 4 > data.len) return error.TruncatedTxVersion;
@@ -202,10 +239,16 @@ pub fn deserialize(allocator: std.mem.Allocator, data: []const u8, offset_in: us
     };
 }
 
+/// Serialization hashed for the txid. Witness bytes are omitted.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub fn serializeNoWitness(allocator: std.mem.Allocator, transaction: Transaction) ![]u8 {
     return serializePartsNoWitness(allocator, transaction.version, transaction.inputs, transaction.outputs, transaction.lock_time);
 }
 
+/// Full serialization, witness included when the transaction has one.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub fn serialize(allocator: std.mem.Allocator, transaction: Transaction, include_witness: bool) ![]u8 {
     if (!include_witness or transaction.witness.len == 0) return serializeNoWitness(allocator, transaction);
     var out: std.ArrayList(u8) = .empty;
@@ -286,6 +329,9 @@ fn serializePartsNoWitness(
     return out.toOwnedSlice(allocator);
 }
 
+/// Walk the transaction list inside an already-decoded block payload.
+/// Internal hashes are not display byte order. Compact size matches the bytes that follow.
+/// test "parse fixture transaction and preserve txid"
 pub fn parseBlockTransactions(allocator: std.mem.Allocator, raw: []const u8) ![]Transaction {
     if (raw.len < 81) return error.BlockTooShort;
     const count_result = try readCompactSize(raw, 80);

@@ -1,3 +1,7 @@
+//! Shared script corpus runner.
+//! The gate is script-corpus. Pure crypto is refused for this command.
+//! Does not add templates the corpus does not already name.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const common = @import("common.zig");
@@ -8,6 +12,7 @@ const jsonInteger = common.jsonInteger;
 const writeFileEnsuringParent = common.writeFileEnsuringParent;
 const toolchainProvenance = common.toolchainProvenance;
 
+/// script-corpus gate.
 pub fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8) !void {
     const default_manifest = try common.joinFixtures(allocator, "conformance/fixtures/scripts/manifest.json");
     defer allocator.free(default_manifest);

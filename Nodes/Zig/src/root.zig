@@ -1,3 +1,7 @@
+//! Re-exports the Zig node library. Build options select store and crypto lane.
+//! Importers use these names. This file does not connect blocks or open a store.
+//! Does not grow past the export list. New code belongs in the module that owns the rule.
+
 const build_options = @import("crypto_options");
 
 pub const script_verify_split = @import("script_verify_split.zig");

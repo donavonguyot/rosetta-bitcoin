@@ -1,3 +1,8 @@
+//! RocksDB chainstate for the ports that compile it, codec v2 keys, one atomic batch per block.
+//! A native-only binary exposes the same type and returns `StoreNotCompiled` (test "native-only build does not open rocksdb").
+//! Cache, write buffer, and bloom are the tuning string gates record.
+//! Does not implement the native commit log. `native_store.zig` does.
+
 const std = @import("std");
 const build_options = @import("crypto_options");
 const types = @import("types.zig");
@@ -43,6 +48,9 @@ const UtxoLoadStats = connect.UtxoLoadStats;
 const rejectUnapprovedRuntimeDbArtifacts = datadir.rejectUnapprovedRuntimeDbArtifacts;
 const nowMs = datadir.nowMs;
 
+/// RocksDB chainstate, or the native-only stub that cannot open.
+/// One block is one write batch. A failed batch leaves the previous tip.
+/// test "commit block writes created utxos undo tip metadata and counters"
 pub const RocksDb = if (rocksdb_compiled) struct {
     db: *c.rocksdb_t,
     read_opts: *c.rocksdb_readoptions_t,
@@ -56,16 +64,37 @@ pub const RocksDb = if (rocksdb_compiled) struct {
     header_index: consensus_context.HeaderIndex = .{},
     header_index_ready: bool = false,
 
+    /// RocksDB block cache size recorded in the tuning string.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub const block_cache_mb: usize = 512;
+    /// RocksDB write-buffer size recorded in the tuning string.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub const write_buffer_mb: usize = 64;
+    /// RocksDB write-buffer count recorded in the tuning string.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub const max_write_buffers: c_int = 4;
+    /// RocksDB background job cap recorded in the tuning string.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub const max_background_jobs: c_int = 4;
+    /// RocksDB bloom filter bits recorded in the tuning string.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub const bloom_bits_per_key: f64 = 10.0;
 
+    /// RocksDB knobs, or "not compiled" on a native-only binary.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn tuningDescription() []const u8 {
         return "create_if_missing=true,parallelism=4,block_cache_mb=512,bloom_bits_per_key=10,cache_index_filter_blocks=true,write_buffer_mb=64,max_write_buffer_number=4,max_background_jobs=4";
     }
 
+    /// Open a chainstate datadir, or `StoreNotCompiled` when this binary has no RocksDB.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn open(allocator: std.mem.Allocator, path: []const u8) !RocksDb {
         try rejectUnapprovedRuntimeDbArtifacts(path);
         const path_z = try allocator.dupeZ(u8, path);
@@ -124,6 +153,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return opened;
     }
 
+    /// Current set hash. Shadow comparison reads this after the commit.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn setHash(self: *RocksDb) store.SetHash {
         return self.set_hash;
     }
@@ -137,6 +169,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         self.set_hash = try store.parseSetHashHex(hex);
     }
 
+    /// Release the store handle. The datadir stays on disk.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn close(self: *RocksDb) void {
         self.header_index.deinit(self.allocator);
         c.rocksdb_close(self.db);
@@ -146,6 +181,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         c.rocksdb_cache_destroy(self.block_cache);
     }
 
+    /// Store one key's bytes. The caller still owns the slice it passed.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn put(self: *RocksDb, key: []const u8, value: []const u8) !void {
         var err: [*c]u8 = null;
         c.rocksdb_put(self.db, self.write_opts, key.ptr, key.len, value.ptr, value.len, &err);
@@ -155,6 +193,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         }
     }
 
+    /// Owned value bytes for one key, or null when the store does not have it.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn getAlloc(self: *RocksDb, allocator: std.mem.Allocator, key: []const u8) !?[]u8 {
         var err: [*c]u8 = null;
         var len: usize = 0;
@@ -168,6 +209,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return try allocator.dupe(u8, ptr[0..len]);
     }
 
+    /// The 80-byte header at a height, or null past the stored tip.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn headerAt(self: *RocksDb, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
         const key = try encodeHeaderKey(allocator, "testnet4", height);
         defer allocator.free(key);
@@ -179,6 +223,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return header;
     }
 
+    /// Make header time and bits readable. Native open already loaded them.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn ensureHeaderIndex(self: *RocksDb) !void {
         if (self.header_index_ready) return;
         if (self.validated_height >= 0) {
@@ -192,20 +239,32 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         self.header_index_ready = true;
     }
 
+    /// The dense header index connect and the mempool use for MTP.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn headerIndex(self: *RocksDb) consensus_context.HeaderIndex {
         return self.header_index;
     }
 
+    /// Median of up to 11 header timestamps ending at a height. BIP113 and the template use it.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn medianTimePast(self: *RocksDb, height: u32) !u32 {
         try self.ensureHeaderIndex();
         return self.header_index.mtp(height);
     }
 
+    /// Indexed time and nBits at a height, or null when that height is not stored.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn headerFields(self: *RocksDb, height: u32) !?consensus_context.HeaderFields {
         try self.ensureHeaderIndex();
         return self.header_index.fields(height);
     }
 
+    /// Raw values for a key list. Missing keys stay null and the order matches the request.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn getManyRaw(self: *RocksDb, allocator: std.mem.Allocator, keys: []const []const u8) ![]?[]u8 {
         const out = try allocator.alloc(?[]u8, keys.len);
         errdefer allocator.free(out);
@@ -245,10 +304,16 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return out;
     }
 
+    /// Decoded UTXOs for outpoints, order preserved.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn getManyUtxos(self: *RocksDb, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint) ![]?StoredUtxo {
         return self.getManyUtxosWithStats(allocator, chain, outpoints, null);
     }
 
+    /// Raw UTXO values for outpoints, order preserved, missing slots null.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn getManyUtxoRaw(self: *RocksDb, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint, stats: ?*UtxoLoadStats) ![]?[]u8 {
         const out = try allocator.alloc(?[]u8, outpoints.len);
         errdefer allocator.free(out);
@@ -308,6 +373,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return out;
     }
 
+    /// Decoded UTXOs plus hit and miss timing for the lookups connect actually issued.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn getManyUtxosWithStats(self: *RocksDb, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const Outpoint, stats: ?*UtxoLoadStats) ![]?StoredUtxo {
         const raw = try self.getManyUtxoRaw(allocator, chain, outpoints, stats);
         defer {
@@ -327,6 +395,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return out;
     }
 
+    /// Append raw block bytes and a log record of its own, before connect commits the spends.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn recordBlock(self: *RocksDb, allocator: std.mem.Allocator, height: u32, hash: [32]u8, raw: []const u8) !void {
         const batch = c.rocksdb_writebatch_create() orelse return error.RocksDbOptions;
         defer c.rocksdb_writebatch_destroy(batch);
@@ -359,6 +430,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         }
     }
 
+    /// Named chainstate fields as owned strings. The caller frees them.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn readMetadata(self: *RocksDb, allocator: std.mem.Allocator) !Metadata {
         const validated_height = try self.metaI64(allocator, "validated_height", -1);
         const header_height = try self.metaI64(allocator, "header_height", validated_height);
@@ -380,6 +454,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         };
     }
 
+    /// Free metadata strings returned by a read.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn deinitMetadata(_: *RocksDb, allocator: std.mem.Allocator, meta: Metadata) void {
         allocator.free(meta.validated_hash);
         allocator.free(meta.header_hash);
@@ -404,6 +481,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return std.fmt.parseInt(i64, value, 10) catch default;
     }
 
+    /// Apply a prepared chainstate commit and fold its UTXOs into the set hash.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn commitBlock(self: *RocksDb, allocator: std.mem.Allocator, commit: ChainstateBlockCommit) !CommitTimings {
         var timings = CommitTimings{};
         var next_hash = self.set_hash;
@@ -496,6 +576,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return timings;
     }
 
+    /// Apply the spends and creates from a block that connect has already checked.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn commitConnectedBlock(
         self: *RocksDb,
         allocator: std.mem.Allocator,
@@ -579,6 +662,9 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return timings;
     }
 
+    /// One-key batch used by the storage proof, not by block connect.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn writeBatchSmoke(self: *RocksDb, allocator: std.mem.Allocator) !void {
         const batch = c.rocksdb_writebatch_create() orelse return error.RocksDbOptions;
         defer c.rocksdb_writebatch_destroy(batch);
@@ -628,12 +714,21 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         self.validated_height = 2;
     }
 } else struct {
+    /// Open a chainstate datadir, or `StoreNotCompiled` when this binary has no RocksDB.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn open(_: std.mem.Allocator, _: []const u8) error{StoreNotCompiled}!@This() {
         return error.StoreNotCompiled;
     }
 
+    /// Release the store handle. The datadir stays on disk.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn close(_: *@This()) void {}
 
+    /// RocksDB knobs, or "not compiled" on a native-only binary.
+    /// One block is one write batch. A failed batch leaves the previous tip.
+    /// test "commit block writes created utxos undo tip metadata and counters"
     pub fn tuningDescription() []const u8 {
         return "not compiled";
     }

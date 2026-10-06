@@ -1,3 +1,7 @@
+//! Testnet4 wire messages this node sends and parses (version, headers, blocks, inv).
+//! Inventory uses witness-block type. Payload lengths match the bytes written.
+//! Does not choose peers or decide header validity.
+
 const std = @import("std");
 const crypto = @import("crypto.zig");
 const tx = @import("tx.zig");

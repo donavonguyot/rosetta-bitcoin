@@ -1,3 +1,7 @@
+//! Per-kind timings for script verification, reported beside the connect total.
+//! Windows close every 10000 blocks so a gate can see where verify time went.
+//! Does not verify a script. `script.zig` does. test "script verify windows close every 10000 blocks".
+
 const std = @import("std");
 
 const c = @cImport({

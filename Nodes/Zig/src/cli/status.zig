@@ -1,9 +1,14 @@
+//! `status` reads chainstate metadata for a datadir.
+//! Operators use it to see validated height before another writer starts.
+//! Does not connect blocks.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const common = @import("common.zig");
 const valueArg = common.valueArg;
 const tryMetadataKey = common.tryMetadataKey;
 
+/// status. Reads validated height from the datadir.
 pub fn cmdStatus(allocator: std.mem.Allocator, out: anytype, args: []const []const u8, surface: []const u8) !void {
     const datadir = valueArg(args, "--datadir") orelse core.types.PortInfo.default_datadir;
     const store_name = valueArg(args, "--store") orelse "rocksdb";

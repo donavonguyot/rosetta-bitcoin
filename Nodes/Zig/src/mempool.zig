@@ -1,3 +1,11 @@
+//! Layer-1 mempool: consensus against the chainstate plus in-pool ancestors.
+//! The first failure wins, in contract order: coinbase, in-pool spend, on-chain spend,
+//! missing input, locktime, BIP68, then script (`MEMPOOL_CONTRACT`).
+//! `restoreAfterDisconnect` is a loud `DisconnectReplayNotImplemented` stub. Re-adding
+//! evicted transactions waits on disconnect, which this port does not have
+//! (blocker ledger `mempool_gap`, test "disconnect replay is a loud stub").
+//! Does not price relay policy, RBF, or standardness. That is layer 2.
+
 const std = @import("std");
 const root = @import("root.zig");
 const coins_view = @import("coins_view.zig");
@@ -6,6 +14,9 @@ const tx = root.tx;
 const script = root.script;
 const store = root.store;
 
+/// The first layer-1 failure, or accepted.
+/// Later checks are not reported after the first failure.
+/// test "mutation classes are rejected with their reasons"
 pub const Reason = enum {
     accepted,
     coinbase,
@@ -16,6 +27,9 @@ pub const Reason = enum {
     sequence_unsatisfied,
     script_failed,
 
+    /// Stable reason string the rung-0 gate writes.
+    /// Later checks are not reported after the first failure.
+    /// test "mutation classes are rejected with their reasons"
     pub fn name(self: Reason) []const u8 {
         return switch (self) {
             .accepted => "accepted",
@@ -30,10 +44,16 @@ pub const Reason = enum {
     }
 };
 
+/// The reason a layer-1 check stopped.
+/// Later checks are not reported after the first failure.
+/// test "mutation classes are rejected with their reasons"
 pub const Verdict = struct {
     reason: Reason,
 };
 
+/// One accepted layer-1 transaction: raw bytes, ids, fee, weight, and ancestor txids.
+/// Later checks are not reported after the first failure.
+/// test "mutation classes are rejected with their reasons"
 pub const Entry = struct {
     raw: []u8,
     txid: [32]u8,
@@ -44,6 +64,9 @@ pub const Entry = struct {
     ancestors: [][32]u8,
 };
 
+/// Layer-1 pool keyed by wtxid, with a txid index for ancestor walks.
+/// Later checks are not reported after the first failure.
+/// test "mutation classes are rejected with their reasons"
 pub fn Pool(comptime Store: type) type {
     return struct {
         const Self = @This();
@@ -56,6 +79,9 @@ pub fn Pool(comptime Store: type) type {
         next_height: u32,
         tip_mtp: u32,
 
+        /// Build an empty value the caller frees with deinit.
+        /// Later checks are not reported after the first failure.
+        /// test "mutation classes are rejected with their reasons"
         pub fn init(allocator: std.mem.Allocator, backend: *Store, next_height: u32, tip_mtp: u32) Self {
             return .{
                 .allocator = allocator,
@@ -67,6 +93,9 @@ pub fn Pool(comptime Store: type) type {
             };
         }
 
+        /// Free the bytes this value owns. The caller does not free them again.
+        /// Later checks are not reported after the first failure.
+        /// test "mutation classes are rejected with their reasons"
         pub fn deinit(self: *Self) void {
             var it = self.entries.iterator();
             while (it.next()) |entry| {
@@ -78,20 +107,30 @@ pub fn Pool(comptime Store: type) type {
             self.coins.deinit();
         }
 
+        /// Hex of the pool set hash. XOR folds an accept in and an eviction out.
+        /// Later checks are not reported after the first failure.
+        /// test "mutation classes are rejected with their reasons"
         pub fn setHashHex(self: *Self) [64]u8 {
             return store.writeSetHashHex(self.set_hash);
         }
 
+        /// How many layer-1 transactions are in the pool.
+        /// Later checks are not reported after the first failure.
+        /// test "mutation classes are rejected with their reasons"
         pub fn count(self: *Self) usize {
             return self.entries.count();
         }
 
         /// Re-adding evicted transactions after a disconnect is tip-lane work.
+        /// test "mutation classes are rejected with their reasons"
         pub fn restoreAfterDisconnect(self: *Self) error{DisconnectReplayNotImplemented}!void {
             _ = self;
             return error.DisconnectReplayNotImplemented;
         }
 
+        /// Layer-1 check only. The pool is unchanged.
+        /// Later checks are not reported after the first failure.
+        /// test "mutation classes are rejected with their reasons"
         pub fn check(self: *Self, raw: []const u8) !Verdict {
             const parsed = tx.deserialize(self.allocator, raw, 0) catch return .{ .reason = .script_failed };
             defer parsed.transaction.deinit(self.allocator);
@@ -99,6 +138,9 @@ pub fn Pool(comptime Store: type) type {
             return self.checkParsed(parsed.transaction);
         }
 
+        /// Check a transaction and, on accept, fold it into the pool set hash.
+        /// Later checks are not reported after the first failure.
+        /// test "mutation classes are rejected with their reasons"
         pub fn apply(self: *Self, raw: []const u8) !Verdict {
             const parsed = tx.deserialize(self.allocator, raw, 0) catch return .{ .reason = .script_failed };
             defer parsed.transaction.deinit(self.allocator);
@@ -244,6 +286,9 @@ pub fn Pool(comptime Store: type) type {
             }
         }
 
+        /// Drop the confirmed transaction, its conflict, and the in-pool child.
+        /// Later checks are not reported after the first failure.
+        /// test "mutation classes are rejected with their reasons"
         pub fn onBlockConnected(self: *Self, transactions: []const tx.Transaction, txids: []const [32]u8) !void {
             var confirmed = std.AutoHashMap([32]u8, void).init(self.allocator);
             defer confirmed.deinit();
@@ -326,16 +371,25 @@ pub fn Pool(comptime Store: type) type {
             }
         }
 
+        /// Walk accepted pool entries. The set hash does not depend on this order.
+        /// Later checks are not reported after the first failure.
+        /// test "mutation classes are rejected with their reasons"
         pub fn iterator(self: *Self) std.AutoHashMap([32]u8, Entry).Iterator {
             return self.entries.iterator();
         }
 
+        /// One pool entry by wtxid, or null when the pool does not have it.
+        /// Later checks are not reported after the first failure.
+        /// test "mutation classes are rejected with their reasons"
         pub fn get(self: *Self, wtxid: [32]u8) ?Entry {
             return self.entries.get(wtxid);
         }
     };
 }
 
+/// BIP141 weight of one transaction, used by ancestor feerate.
+/// Later checks are not reported after the first failure.
+/// test "mutation classes are rejected with their reasons"
 pub fn transactionWeight(allocator: std.mem.Allocator, transaction: tx.Transaction) !u64 {
     const stripped = try tx.serialize(allocator, transaction, false);
     defer allocator.free(stripped);
@@ -344,6 +398,9 @@ pub fn transactionWeight(allocator: std.mem.Allocator, transaction: tx.Transacti
     return @as(u64, stripped.len) * 3 + @as(u64, full.len);
 }
 
+/// BIP141 sigop cost of one transaction, counted the way the template limit counts it.
+/// Later checks are not reported after the first failure.
+/// test "mutation classes are rejected with their reasons"
 pub fn sigopCost(transaction: tx.Transaction, prev_scripts: []const []const u8) u32 {
     var cost: u32 = 0;
     for (transaction.inputs) |input| cost += legacySigops(input.script_sig) * 4;

@@ -1,3 +1,8 @@
+//! Shared CLI parsers. Paths come from the build options, not from a source string.
+//! `--fsync` is the only switch that changes native durability from `process_crash` to power-loss.
+//! The Makefile pins Zig 0.16.0 under the state root so a Homebrew `zig` on PATH is not the gate compiler.
+//! Does not open a store.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 
@@ -46,6 +51,7 @@ pub fn writeFileEnsuringParent(io: std.Io, path: []const u8, bytes: []const u8) 
     try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = path, .data = bytes, .flags = .{} });
 }
 
+/// Stamp toolchain_sha256 when the pinned Zig 0.16.0 compiler provides it.
 pub fn toolchainProvenance(buf: *[128]u8) []const u8 {
     const raw = std.c.getenv("ZIG_TOOLCHAIN_SHA256") orelse return "";
     const text = std.mem.span(raw);

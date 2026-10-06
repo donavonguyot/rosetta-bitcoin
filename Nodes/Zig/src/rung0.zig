@@ -1,3 +1,7 @@
+//! Replay a mempool trace and assemble the rung-0 template against the port's own connect.
+//! Layer-1 verdicts and the ancestor-feerate selection are what the gate compares.
+//! Does not disconnect blocks or restore the pool. `restoreAfterDisconnect` is the loud stub.
+
 const std = @import("std");
 const root = @import("root.zig");
 const mempool = @import("mempool.zig");

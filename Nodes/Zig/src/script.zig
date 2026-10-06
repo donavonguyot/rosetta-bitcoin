@@ -1,3 +1,9 @@
+//! Spend-path scripts for the Shared templates (BIP16, BIP141, BIP143, BIP341, BIP342).
+//! An unsupported template is an error, not a success. Cached sighash bytes match the uncached digest.
+//! Signature checks are public-data and variable-time; the kernel result lives in `own_crypto.zig`
+//! (`zig_own_curve_kernel_campaign_host_2026-10-04.json`, test "minimal P2WSH OP_TRUE verifies").
+//! Does not implement field arithmetic or decide nSequence against MTP.
+
 const std = @import("std");
 const crypto = @import("crypto.zig");
 const tx = @import("tx.zig");
@@ -88,11 +94,17 @@ const SEQUENCE_LOCKTIME_DISABLE_FLAG: u32 = 1 << 31;
 const SEQUENCE_LOCKTIME_TYPE_FLAG: u32 = 1 << 22;
 const SEQUENCE_LOCKTIME_MASK: u32 = 0x0000ffff;
 
+/// Amount and scriptPubKey an input spends. Sighash and the interpreter both read it.
+/// The sighash cache and a fresh hash of the same transaction agree.
+/// test "minimal P2WSH OP_TRUE verifies"
 pub const SpentPrevout = struct {
     amount: i64,
     script_pubkey: []const u8,
 };
 
+/// Legacy, BIP143, and BIP341 digest cache for one transaction.
+/// The sighash cache and a fresh hash of the same transaction agree.
+/// test "minimal P2WSH OP_TRUE verifies"
 pub const SighashCache = struct {
     bip143_hash_prevouts: [32]u8,
     bip143_hash_sequence: [32]u8,
@@ -105,6 +117,9 @@ pub const SighashCache = struct {
     tap_hash_outputs: [32]u8,
     tap_single_outputs: [][32]u8,
 
+    /// Build an empty value the caller frees with deinit.
+    /// The sighash cache and a fresh hash of the same transaction agree.
+    /// test "minimal P2WSH OP_TRUE verifies"
     pub fn init(allocator: std.mem.Allocator, transaction: tx.Transaction, spent_prevouts: []const SpentPrevout) !SighashCache {
         if (spent_prevouts.len != transaction.inputs.len) return error.SpentPrevoutsLengthMismatch;
         var bip143_single_outputs = try allocator.alloc([32]u8, transaction.outputs.len);
@@ -129,6 +144,9 @@ pub const SighashCache = struct {
         };
     }
 
+    /// Free the bytes this value owns. The caller does not free them again.
+    /// The sighash cache and a fresh hash of the same transaction agree.
+    /// test "minimal P2WSH OP_TRUE verifies"
     pub fn deinit(self: *SighashCache, allocator: std.mem.Allocator) void {
         allocator.free(self.bip143_single_outputs);
         allocator.free(self.tap_single_outputs);
@@ -153,6 +171,7 @@ const EvalContext = struct {
 };
 
 /// Spend-path verifier for Shared-supported templates. Unsupported shapes return error (validation blocker).
+/// test "minimal P2WSH OP_TRUE verifies"
 pub fn verifyInput(
     allocator: std.mem.Allocator,
     transaction: tx.Transaction,
@@ -169,6 +188,9 @@ pub fn verifyInput(
     return verifyInputWithVerifier(allocator, transaction, input_index, spent_prevouts, .{ .native = &verifier }, null);
 }
 
+/// Same spend check with an explicit verifier, so a test can pin the backend.
+/// The sighash cache and a fresh hash of the same transaction agree.
+/// test "minimal P2WSH OP_TRUE verifies"
 pub fn verifyInputWithVerifier(
     allocator: std.mem.Allocator,
     transaction: tx.Transaction,

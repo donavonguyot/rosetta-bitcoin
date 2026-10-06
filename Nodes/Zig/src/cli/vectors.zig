@@ -1,3 +1,7 @@
+//! Codec and crypto vector commands, including the capability mutation runner.
+//! codec-vectors and native-crypto-vectors are the gates.
+//! Does not change verifier behavior. Mutations are a separate outcome file.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const common = @import("common.zig");
@@ -7,11 +11,13 @@ const jsonInteger = common.jsonInteger;
 const appendFmt = common.appendFmt;
 const writeFileEnsuringParent = common.writeFileEnsuringParent;
 
+/// codec-vectors gate.
 pub fn cmdCodecVectors(allocator: std.mem.Allocator, out: anytype) !void {
     try core.codec.verifyCodecVectors(allocator);
     try out.print("{{\"schema\":\"port.codec_vectors.v1\",\"port\":\"zig\",\"codec_version\":2,\"passed\":true}}\n", .{});
 }
 
+/// native-crypto-vectors availability gate.
 pub fn cmdNativeCrypto(out: anytype) !void {
     const available = core.crypto_glue.secp256k1Available();
     try out.print(
@@ -20,6 +26,7 @@ pub fn cmdNativeCrypto(out: anytype) !void {
     );
 }
 
+/// crypto-vectors capability outcomes, including the mutation runner.
 pub fn cmdTestCapability(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
     const kind = valueArg(args, "--kind") orelse return error.MissingKind;
     const output = valueArg(args, "--outcome-path") orelse return error.MissingOutputPath;

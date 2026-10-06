@@ -1,3 +1,7 @@
+//! `storage-proof` writes `port.storage_gate_result.v1` for the native store.
+//! Durability class in that proof is `process_crash` unless the open used `--fsync`.
+//! Does not shadow a second engine. `local-reference-proof --shadow` does.
+
 const std = @import("std");
 const core = @import("zigbitnode");
 const common = @import("common.zig");
@@ -7,6 +11,7 @@ const toolchainProvenance = common.toolchainProvenance;
 const nativeOpenOptions = common.nativeOpenOptions;
 const optimizeName = common.optimizeName;
 
+/// storage-proof. Native durability class `process_crash` unless `--fsync` was set.
 pub fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8) !void {
     const datadir = valueArg(args, "--datadir") orelse core.types.PortInfo.default_datadir;
     const default_output = try common.joinShared(allocator, "conformance/results/zig_storage_gate_docker_latest.json");

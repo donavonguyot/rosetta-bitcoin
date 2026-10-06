@@ -1,7 +1,14 @@
+//! Block decode, merkle root (BIP141 witness commitment), and compact proof of work.
+//! A decoded block's merkle root matches the transactions, and PoW matches the header target.
+//! Does not decide the next nBits. That is `consensus_context.requiredBits` (BIP94).
+
 const std = @import("std");
 const crypto = @import("crypto.zig");
 const tx = @import("tx.zig");
 
+/// Hash, previous hash, and time taken from an 80-byte header.
+/// Header bytes are the 80-byte serialization. Callers do not re-parse a field the decoder already checked.
+/// test "merkle root duplicates odd leaf"
 pub const BlockInfo = struct {
     hash: [32]u8,
     prev_hash: [32]u8,
@@ -10,6 +17,9 @@ pub const BlockInfo = struct {
     bits: u32,
 };
 
+/// Parse an 80-byte header and the transaction list into a block.
+/// Header bytes are the 80-byte serialization. Callers do not re-parse a field the decoder already checked.
+/// test "merkle root duplicates odd leaf"
 pub fn decodeBlock(
     allocator: std.mem.Allocator,
     raw: []const u8,
@@ -46,6 +56,9 @@ pub fn decodeBlock(
     };
 }
 
+/// BIP141 witness commitment in the coinbase matches the witness merkle root.
+/// Header bytes are the 80-byte serialization. Callers do not re-parse a field the decoder already checked.
+/// test "merkle root duplicates odd leaf"
 pub fn validateWitnessCommitment(allocator: std.mem.Allocator, transactions: []const tx.Transaction) !void {
     if (transactions.len == 0) return error.EmptyBlock;
     var has_witness = false;
@@ -94,6 +107,9 @@ pub fn validateWitnessCommitment(allocator: std.mem.Allocator, transactions: []c
     if (!std.mem.eql(u8, actual[0..], commitment)) return error.WitnessCommitmentMismatch;
 }
 
+/// Bitcoin merkle root. An odd trailing leaf is duplicated.
+/// Header bytes are the 80-byte serialization. Callers do not re-parse a field the decoder already checked.
+/// test "merkle root duplicates odd leaf"
 pub fn merkleRoot(allocator: std.mem.Allocator, txids: []const [32]u8) ![32]u8 {
     if (txids.len == 0) return error.EmptyMerkleTree;
     var level = try allocator.dupe([32]u8, txids);
@@ -115,6 +131,9 @@ pub fn merkleRoot(allocator: std.mem.Allocator, txids: []const [32]u8) ![32]u8 {
     return level[0];
 }
 
+/// Header hash is at or under the compact target stored in the header.
+/// Header bytes are the 80-byte serialization. Callers do not re-parse a field the decoder already checked.
+/// test "merkle root duplicates odd leaf"
 pub fn checkProofOfWork(hash_internal: [32]u8, bits: u32) bool {
     const target = compactTargetLe(bits) catch return false;
     var i: usize = 32;

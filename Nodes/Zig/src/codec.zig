@@ -1,3 +1,8 @@
+//! Chainstate codec v2 key and value bytes shared with the other ports.
+//! `encodeUtxoValue` is the canonical value the set-hash fold hashes. A different layout is a different set.
+//! Proved by test "codec v2 golden vectors".
+//! Does not interpret scripts or decide which UTXO is spent.
+
 const std = @import("std");
 const types = @import("types.zig");
 
@@ -5,16 +10,43 @@ const Outpoint = types.Outpoint;
 const StoredUtxo = types.StoredUtxo;
 const UndoEntry = types.UndoEntry;
 
+/// Golden codec v2 hex vectors the port must match byte for byte.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub const CodecVectors = struct {
+    /// Golden hex for a codec v2 UTXO key.
+    /// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+    /// test "codec v2 golden vectors"
     pub const utxo_key_hex = "7508746573746e657434000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f00000001";
+    /// Golden hex for the canonical UTXO value `encodeUtxoValue` must emit.
+    /// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+    /// test "codec v2 golden vectors"
     pub const utxo_value_hex = "00000001000000012a05f200010000001976a914000102030405060708090a0b0c0d0e0f1011121388ac";
+    /// Golden hex for a codec v2 undo key.
+    /// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+    /// test "codec v2 golden vectors"
     pub const undo_key_hex = "6408746573746e65743400000002";
+    /// Golden hex for the codec v2 tip key.
+    /// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+    /// test "codec v2 golden vectors"
     pub const tip_key_hex = "7408746573746e657434";
+    /// Golden hex for a codec v2 block-index key.
+    /// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+    /// test "codec v2 golden vectors"
     pub const block_index_key_hex = "6208746573746e65743400000002";
+    /// Golden hex for a codec v2 header key.
+    /// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+    /// test "codec v2 golden vectors"
     pub const header_key_hex = "6808746573746e65743400000002";
+    /// Golden hex for a codec v2 metadata key.
+    /// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+    /// test "codec v2 golden vectors"
     pub const metadata_key_hex = "6d0d636f6465635f76657273696f6e";
 };
 
+/// Codec v2 key for one outpoint. The set hash uses these bytes.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeUtxoKey(allocator: std.mem.Allocator, chain: []const u8, outpoint: Outpoint) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -22,6 +54,9 @@ pub fn encodeUtxoKey(allocator: std.mem.Allocator, chain: []const u8, outpoint: 
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Write an outpoint key into a caller buffer of `encodedUtxoKeyLen`.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeUtxoKeyInto(allocator: std.mem.Allocator, bytes: *std.ArrayList(u8), chain: []const u8, outpoint: Outpoint) !void {
     try bytes.append(allocator, 'u');
     try appendVarBytes(allocator, bytes, chain);
@@ -29,11 +64,17 @@ pub fn encodeUtxoKeyInto(allocator: std.mem.Allocator, bytes: *std.ArrayList(u8)
     try appendU32Be(allocator, bytes, outpoint.vout);
 }
 
+/// Byte length of a codec v2 UTXO key for the caller's buffer.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodedUtxoKeyLen(chain: []const u8) !usize {
     if (chain.len > 252) return error.ValueTooLarge;
     return 1 + 1 + chain.len + 32 + 4;
 }
 
+/// Canonical UTXO value bytes. The set-hash fold hashes these and no other layout.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeUtxoValue(allocator: std.mem.Allocator, utxo: StoredUtxo) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -44,10 +85,16 @@ pub fn encodeUtxoValue(allocator: std.mem.Allocator, utxo: StoredUtxo) ![]u8 {
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Codec v2 key for the undo of one height.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeUndoKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
     return keyWithHeight(allocator, 'd', chain, height);
 }
 
+/// Codec v2 key for the chain tip marker.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeTipKey(allocator: std.mem.Allocator, chain: []const u8) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -56,18 +103,30 @@ pub fn encodeTipKey(allocator: std.mem.Allocator, chain: []const u8) ![]u8 {
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Codec v2 key for a block-index row.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeBlockIndexKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
     return keyWithHeight(allocator, 'b', chain, height);
 }
 
+/// Codec v2 key for a stored header.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeHeaderKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
     return keyWithHeight(allocator, 'h', chain, height);
 }
 
+/// Codec v2 key for raw block bytes.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeRawBlockKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
     return keyWithHeight(allocator, 'r', chain, height);
 }
 
+/// Codec v2 key for one named chainstate metadata field.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeMetadataKey(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -76,6 +135,9 @@ pub fn encodeMetadataKey(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Owned lowercase hex of a byte slice.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn toHexAlloc(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
     const alphabet = "0123456789abcdef";
     var out = try allocator.alloc(u8, bytes.len * 2);
@@ -86,6 +148,9 @@ pub fn toHexAlloc(allocator: std.mem.Allocator, bytes: []const u8) ![]u8 {
     return out;
 }
 
+/// Decode hex into owned bytes. Odd length or a bad nibble is an error.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn fromHexAlloc(allocator: std.mem.Allocator, hex: []const u8) ![]u8 {
     if (hex.len % 2 != 0) return error.InvalidHex;
     var out = try allocator.alloc(u8, hex.len / 2);
@@ -97,6 +162,9 @@ pub fn fromHexAlloc(allocator: std.mem.Allocator, hex: []const u8) ![]u8 {
     return out;
 }
 
+/// Compare live encodings to the golden codec v2 vectors.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn verifyCodecVectors(allocator: std.mem.Allocator) !void {
     var txid: [32]u8 = undefined;
     for (&txid, 0..) |*byte, i| byte.* = @intCast(i);
@@ -152,6 +220,9 @@ pub fn verifyCodecVectors(allocator: std.mem.Allocator) !void {
     if (!std.mem.eql(u8, metadata_hex, CodecVectors.metadata_key_hex)) return error.CodecVectorMismatch;
 }
 
+/// Height and block hash stored under the tip key.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeTipValue(allocator: std.mem.Allocator, height: u32, block_hash: [32]u8) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -160,6 +231,9 @@ pub fn encodeTipValue(allocator: std.mem.Allocator, height: u32, block_hash: [32
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Undo records for the spends a block commit must be able to reverse.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn encodeUndoValue(allocator: std.mem.Allocator, entries: []const UndoEntry) ![]u8 {
     var bytes: std.ArrayList(u8) = .empty;
     errdefer bytes.deinit(allocator);
@@ -175,6 +249,9 @@ pub fn encodeUndoValue(allocator: std.mem.Allocator, entries: []const UndoEntry)
     return bytes.toOwnedSlice(allocator);
 }
 
+/// Inverse of `encodeUtxoValue`. The set-hash bytes round-trip through this.
+/// The same bytes decode back to the same UTXO. Key order is the codec v2 order.
+/// test "codec v2 golden vectors"
 pub fn decodeUtxoValue(allocator: std.mem.Allocator, outpoint: Outpoint, value: []const u8) !StoredUtxo {
     if (value.len < 17) return error.UtxoValueTooShort;
     const height = std.mem.readInt(u32, value[0..4], .big);
