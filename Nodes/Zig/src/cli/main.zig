@@ -87,7 +87,7 @@ pub fn main(init: std.process.Init) !void {
         try cmdCheckHeaders(allocator, out, args[2..]);
     } else if (comptime !core.crypto.own_curve) {
         if (std.mem.eql(u8, command, "crypto-bench")) {
-            try @import("crypto_bench").run(allocator, io, out, args[2..]);
+            try @import("bench.zig").cmdCryptoBench(allocator, io, out, args[2..]);
         } else {
             try out.print("error: unknown command: {s}\n", .{command});
             try usage(out);
