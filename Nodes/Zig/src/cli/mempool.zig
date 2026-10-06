@@ -6,6 +6,8 @@ const valueArg = common.valueArg;
 const appendToolchainProvenance = common.appendToolchainProvenance;
 const writeFileEnsuringParent = common.writeFileEnsuringParent;
 const cmdLocalReferenceProof = sync.cmdLocalReferenceProof;
+const mining = @import("mining.zig");
+const writeMiningGate = mining.writeMiningGate;
 
 pub fn cmdRung0(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8, default_peer: []const u8, default_crypto_backend: []const u8) !void {
     const command = args[0];
@@ -73,39 +75,6 @@ fn writeMempoolGate(allocator: std.mem.Allocator, io: std.Io, path: []const u8, 
     for (report.boundaries, 0..) |row, i| {
         if (i != 0) try body.append(allocator, ',');
         try body.print(allocator, "{{\"height\":{d},\"set_hash\":\"{s}\",\"pool\":{d},\"core_set_hash\":\"{s}\"}}", .{ row.height, row.set_hash, row.pool_count, row.core_set_hash });
-    }
-    try body.appendSlice(allocator, "]");
-    try appendToolchainProvenance(allocator, &body);
-    try body.appendSlice(allocator, "}\n");
-    try writeFileEnsuringParent(io, path, body.items);
-}
-
-fn writeMiningGate(allocator: std.mem.Allocator, io: std.Io, path: []const u8, report: core.rung0.Report, info: core.rung0.TraceInfo, surface: []const u8, store_name: []const u8) !void {
-    var body: std.ArrayList(u8) = .empty;
-    defer body.deinit(allocator);
-    const median = core.rung0.medianRatio(report.boundaries);
-    var omitted: usize = 0;
-    var reported: usize = 0;
-    for (report.boundaries) |row| {
-        if (row.ratio_micros == null) omitted += 1 else reported += 1;
-    }
-    try body.print(allocator,
-        \\{{"schema":"port.mining.rung0.v1","port":"zig","runtime_surface":"{s}","store":"{s}","passed":{s},"trace_dir":"{s}","fixture":"{s}","template_checked":{d},"template_failures":{d},"results":[{{"fixture_id":"mining.assembly_bytes","result":"pass"}},{{"fixture_id":"mining.testblockvalidity","result":"{s}"}},{{"fixture_id":"mining.selection_fee_ratio","result":"pass"}}],"ratio_boundaries":{d},"ratio_omitted":{d},"median_ratio_micros":
-    , .{ surface, store_name, if (report.template_failures == 0) "true" else "false", info.trace_dir, info.fixture, report.template_checked, report.template_failures, if (report.template_failures == 0) "pass" else "fail", reported, omitted });
-    if (median) |value| {
-        try body.print(allocator, "{d}", .{value});
-    } else {
-        try body.appendSlice(allocator, "null");
-    }
-    try body.appendSlice(allocator, ",\"boundaries\":[");
-    for (report.boundaries, 0..) |row, i| {
-        if (i != 0) try body.append(allocator, ',');
-        if (row.core_fees) |fees| {
-            try body.print(allocator, "{{\"height\":{d},\"port_fees\":{d},\"core_fees\":{d},\"ratio_micros\":", .{ row.height, row.port_fees, fees });
-        } else {
-            try body.print(allocator, "{{\"height\":{d},\"port_fees\":{d},\"core_fees\":null,\"ratio_micros\":", .{ row.height, row.port_fees });
-        }
-        if (row.ratio_micros) |ratio| try body.print(allocator, "{d}}}", .{ratio}) else try body.appendSlice(allocator, "null}");
     }
     try body.appendSlice(allocator, "]");
     try appendToolchainProvenance(allocator, &body);

@@ -24,6 +24,8 @@ const cmdConsensusContext = context.cmdConsensusContext;
 const cmdWriteContextFixtures = context.cmdWriteContextFixtures;
 const mempool = @import("mempool.zig");
 const cmdRung0 = mempool.cmdRung0;
+const mining = @import("mining.zig");
+const cmdTestBlockValidity = mining.cmdTestBlockValidity;
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
@@ -138,30 +140,4 @@ fn binarySha256(allocator: std.mem.Allocator, io: Io) ![64]u8 {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(bytes[0..n], &digest, .{});
     return std.fmt.bytesToHex(digest, .lower);
-}
-
-fn cmdTestBlockValidity(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
-    const block_path = valueArg(args, "--block") orelse return error.MissingBlock;
-    const height_text = valueArg(args, "--height") orelse return error.MissingHeight;
-    const height = try std.fmt.parseInt(u32, height_text, 10);
-    const datadir = valueArg(args, "--datadir") orelse core.types.PortInfo.default_datadir;
-    const store_name = valueArg(args, "--store") orelse "rocksdb";
-    const raw = try std.Io.Dir.cwd().readFileAlloc(io, block_path, allocator, .limited(8 * 1024 * 1024));
-    defer allocator.free(raw);
-    const db_path = try std.fs.path.join(allocator, &.{ datadir, if (std.mem.eql(u8, store_name, "native")) core.types.PortInfo.native_dir else core.types.PortInfo.rocksdb_dir });
-    defer allocator.free(db_path);
-    if (std.mem.eql(u8, store_name, "native")) {
-        var db = try core.native_store.NativeStore.open(allocator, db_path, .{});
-        defer db.close();
-        const meta = try db.readMetadata(allocator);
-        defer db.deinitMetadata(allocator, meta);
-        try core.template.testBlockValidity(allocator, &db, raw, height, meta.chainstate_utxo_count);
-    } else if (comptime core.rocksdb_compiled) {
-        var db = try core.RocksDb.open(allocator, db_path);
-        defer db.close();
-        const meta = try db.readMetadata(allocator);
-        defer db.deinitMetadata(allocator, meta);
-        try core.template.testBlockValidity(allocator, &db, raw, height, meta.chainstate_utxo_count);
-    } else return error.UnsupportedStore;
-    try out.print("{{\"schema\":\"port.mining.rung0.v1\",\"command\":\"testblockvalidity\",\"passed\":true}}\n", .{});
 }
