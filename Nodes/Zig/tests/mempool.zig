@@ -262,8 +262,11 @@ test "assembly bytes are stable and the witness commitment matches" {
     try std.testing.expectEqualSlices(u8, commitment[0..], template.transactions[0].outputs[1].script_pubkey[6..38]);
 
     const io = std.testing.io;
-    const fixture = "../Shared/fixtures/mining/assembly_bytes_v1.bin";
-    try std.Io.Dir.cwd().createDirPath(io, "../Shared/fixtures/mining");
+    const fixture = try std.fs.path.join(allocator, &.{ core.fixtures_root, "fixtures/mining/assembly_bytes_v1.bin" });
+    defer allocator.free(fixture);
+    const fixture_dir = try std.fs.path.join(allocator, &.{ core.fixtures_root, "fixtures/mining" });
+    defer allocator.free(fixture_dir);
+    try std.Io.Dir.cwd().createDirPath(io, fixture_dir);
     const existing = std.Io.Dir.cwd().readFileAlloc(io, fixture, allocator, .limited(1_000_000)) catch null;
     if (existing) |frozen| {
         defer allocator.free(frozen);

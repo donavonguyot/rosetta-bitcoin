@@ -8,13 +8,13 @@ const jsonInteger = common.jsonInteger;
 const writeFileEnsuringParent = common.writeFileEnsuringParent;
 const toolchainProvenance = common.toolchainProvenance;
 
-const ResultPaths = struct {
-    script: []const u8 = "../Shared/conformance/results/zig_script_corpus_latest.json",
-};
-
 pub fn cmdScriptCorpus(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8) !void {
-    const manifest = valueArg(args, "--manifest") orelse "../Shared/conformance/fixtures/scripts/manifest.json";
-    const output = valueArg(args, "--output") orelse (ResultPaths{}).script;
+    const default_manifest = try common.joinFixtures(allocator, "conformance/fixtures/scripts/manifest.json");
+    defer allocator.free(default_manifest);
+    const default_output = try common.joinShared(allocator, "conformance/results/zig_script_corpus_latest.json");
+    defer allocator.free(default_output);
+    const manifest = valueArg(args, "--manifest") orelse default_manifest;
+    const output = valueArg(args, "--output") orelse default_output;
     const shadow_crypto = flagArg(args, "--shadow-crypto");
     if (shadow_crypto and core.crypto.own_curve) return error.CryptoBackendNotCompiled;
 

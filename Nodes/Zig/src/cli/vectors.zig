@@ -156,7 +156,8 @@ const TestCryptoVerifier = struct {
 };
 
 fn runBip340Vectors(allocator: std.mem.Allocator, io: std.Io, verifier: TestCryptoVerifier, backend_label: []const u8) !Count {
-    const path = "../Shared/testing/fixtures/bip340/test-vectors.csv";
+    const path = try common.joinFixtures(allocator, "testing/fixtures/bip340/test-vectors.csv");
+    defer allocator.free(path);
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(2 * 1024 * 1024));
     defer allocator.free(bytes);
     var lines = std.mem.splitScalar(u8, bytes, '\n');
@@ -193,7 +194,8 @@ fn runBip340Vectors(allocator: std.mem.Allocator, io: std.Io, verifier: TestCryp
 }
 
 fn runNativeCryptoVectors(allocator: std.mem.Allocator, io: std.Io, verifier: TestCryptoVerifier, backend_label: []const u8) !Count {
-    const path = "../Shared/conformance/fixtures/native_crypto_v1_vectors.json";
+    const path = try common.joinFixtures(allocator, "conformance/fixtures/native_crypto_v1_vectors.json");
+    defer allocator.free(path);
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(2 * 1024 * 1024));
     defer allocator.free(bytes);
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, bytes, .{});

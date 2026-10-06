@@ -4,7 +4,9 @@ const common = @import("common.zig");
 const valueArg = common.valueArg;
 
 pub fn cmdConsensusContext(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8) !void {
-    const manifest = valueArg(args, "--manifest") orelse "../Shared/conformance/fixtures/consensus/context/manifest.json";
+    const default_manifest = try common.joinFixtures(allocator, "conformance/fixtures/consensus/context/manifest.json");
+    defer allocator.free(default_manifest);
+    const manifest = valueArg(args, "--manifest") orelse default_manifest;
     const ok = try core.context_fixture.runManifest(allocator, io, manifest, out);
     if (!ok) return error.ConsensusContextFailed;
 }

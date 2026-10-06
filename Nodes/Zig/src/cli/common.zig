@@ -59,6 +59,14 @@ pub fn appendToolchainProvenance(allocator: std.mem.Allocator, out: *std.ArrayLi
     if (pins.len != 0) try out.appendSlice(allocator, pins);
 }
 
+pub fn joinShared(allocator: std.mem.Allocator, rel: []const u8) ![]u8 {
+    return std.fs.path.join(allocator, &.{ core.shared_root, rel });
+}
+
+pub fn joinFixtures(allocator: std.mem.Allocator, rel: []const u8) ![]u8 {
+    return std.fs.path.join(allocator, &.{ core.fixtures_root, rel });
+}
+
 pub fn appendFmt(allocator: std.mem.Allocator, out: *std.ArrayList(u8), comptime fmt: []const u8, args: anytype) !void {
     const part = try std.fmt.allocPrint(allocator, fmt, args);
     defer allocator.free(part);

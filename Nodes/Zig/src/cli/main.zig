@@ -85,14 +85,6 @@ pub fn main(init: std.process.Init) !void {
         try cmdWriteContextFixtures(allocator, io, out, args[2..]);
     } else if (std.mem.eql(u8, command, "check-headers")) {
         try cmdCheckHeaders(allocator, out, args[2..]);
-    } else if (comptime !core.crypto.own_curve) {
-        if (std.mem.eql(u8, command, "crypto-bench")) {
-            try @import("bench.zig").cmdCryptoBench(allocator, io, out, args[2..]);
-        } else {
-            try out.print("error: unknown command: {s}\n", .{command});
-            try usage(out);
-            return error.UnknownCommand;
-        }
     } else {
         try out.print("error: unknown command: {s}\n", .{command});
         try usage(out);
@@ -116,7 +108,6 @@ fn usage(out: anytype) !void {
         \\  testblockvalidity --block <path> --height <n> [--datadir ./data-zig] [--store=native|rocksdb]
         \\  consensus-context [--manifest path]
         \\  check-headers [--datadir ./data-zig] [--store=rocksdb|native]
-        \\  crypto-bench [--profile]
         \\  --build-info
         \\
     , .{});

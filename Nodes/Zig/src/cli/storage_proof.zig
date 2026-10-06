@@ -7,13 +7,11 @@ const toolchainProvenance = common.toolchainProvenance;
 const nativeOpenOptions = common.nativeOpenOptions;
 const optimizeName = common.optimizeName;
 
-const ResultPaths = struct {
-    storage: []const u8 = "../Shared/conformance/results/zig_storage_gate_docker_latest.json",
-};
-
 pub fn cmdStorageProof(allocator: std.mem.Allocator, io: std.Io, out: anytype, args: []const []const u8, surface: []const u8) !void {
     const datadir = valueArg(args, "--datadir") orelse core.types.PortInfo.default_datadir;
-    const output = valueArg(args, "--output") orelse (ResultPaths{}).storage;
+    const default_output = try common.joinShared(allocator, "conformance/results/zig_storage_gate_docker_latest.json");
+    defer allocator.free(default_output);
+    const output = valueArg(args, "--output") orelse default_output;
     try std.Io.Dir.cwd().createDirPath(io, datadir);
     var lock = try core.datadir.DatadirLock.acquire(allocator, datadir);
     defer lock.release();
