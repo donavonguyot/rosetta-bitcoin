@@ -12,8 +12,8 @@
       "commit": "628b2c024837dcd8ca929122eced49e76c1aaf3a"
     },
     "optimized": null,
-    "reference_informed_attempt": "lazy 5x52, twice: the magnitude field that normalized inside mul (72 ns), then a single 2^260 fold that still spilled (34.79 ns)",
-    "optimized_reason": "No shape cleared the 10 percent keep bar on a valid bench, so optimized stays unset. ReleaseFast removed the overflow checks. The inlined square and both limb forms spilled, and the 5-limb probe was not a correct field subtraction, so it was not timed."
+    "reference_informed_attempt": "lazy 5x52, three times: normalize-inside-mul (72 ns), one 2^260 fold that spilled (34.79 ns), then a two-accumulator column schedule that stayed at 0 str in fe_mul and 15 str in point_double (ECDSA ratio_min 1.844)",
+    "optimized_reason": "Closed without a 10 percent verify keep. The quiet baseline ECDSA ratio_min is 1.931. The two-accumulator 5x52 field reached 1.844."
   },
   "table": {
     "bytes": 2097152,
@@ -396,7 +396,9 @@
         11.62,
         13.91
       ],
-      "load_note": "Flutter, Xcode, and Chrome kept the 1-minute load between 7 and 22 for the whole window. The v2 baseline was load 4.31. fe_mul scaled 2.22x and the C verify arm scaled about 2.53x, which accounts for the ratio move."
+      "load_note": "Flutter, Xcode, and Chrome kept the 1-minute load between 7 and 22 for the whole window. The v2 baseline was load 4.31. fe_mul scaled 2.22x and the C verify arm scaled about 2.53x, which accounts for the ratio move.",
+      "ratio_withdrawn": true,
+      "withdrawn_reason": "The ECDSA ratio_min of 1.667 was read at load 12.7 and is withdrawn. The quiet remeasure of the same kernel is 1.931."
     },
     {
       "name": "force_inline_field",
@@ -513,6 +515,79 @@
       },
       "store_gate": "14 str is within 2x of 8",
       "timed": false
+    },
+    {
+      "name": "quiet_remeasure",
+      "target": "ecdsa_verify_ratio_min",
+      "kept": true,
+      "judge": "ratio_min",
+      "reason": "HEAD after the kept ReleaseFast module and forced inline, measured at one-minute load 1.30 through 1.90 with no zig, zigbitnode, cursor-agent, or codex process at or above 1 percent CPU. This replaces the load-12.7 ratio of 1.667, which is withdrawn. ECDSA ratio_min is 1.931, repeat 1.923. fe_mul own min is 12.46 ns and point_double is 86.98 ns.",
+      "ambient_quiet": true,
+      "bench": "Nodes/Shared/conformance/results/zig_own_curve_bench_quiet_v2_2026-10-05.json",
+      "repeat": "Nodes/Shared/conformance/results/zig_own_curve_bench_quiet_v2_repeat_2026-10-05.json",
+      "ratio_min": {
+        "ecdsa_verify": 1.931,
+        "schnorr_verify": 1.953,
+        "taproot_tweak_check": 1.58,
+        "pubkey_parse": 1.524
+      },
+      "repeat_ratio_min": {
+        "ecdsa_verify": 1.923,
+        "schnorr_verify": 1.956,
+        "taproot_tweak_check": 1.58,
+        "pubkey_parse": 1.545
+      },
+      "own_min_ns": {
+        "fe_mul": 12.46,
+        "fe_sqr": 12.11,
+        "point_double": 86.98,
+        "point_add": 164.03,
+        "ecdsa_verify": 27482.02
+      }
+    },
+    {
+      "name": "two_accumulator_5x52",
+      "target": "ecdsa_verify_ratio_min",
+      "kept": false,
+      "judge": "ratio_min",
+      "timed": true,
+      "reason": "The store gate passed: point_double has 15 str under sub sp, #0xf0, within 2x of 8, and fe_mul has 0 str. Quiet ECDSA ratio_min is 1.844 against the quiet baseline 1.931, a 4.5 percent move, short of 10 percent. fe_mul own min rose from 12.46 ns to 16.49 ns. point_double own min fell from 86.98 ns to 71.56 ns. Reverted.",
+      "asm": {
+        "point_double_frame": "sub sp, #0xf0",
+        "point_double_str": 15,
+        "point_double_ldr": 15,
+        "point_double_mul": 181,
+        "point_double_umulh": 167,
+        "fe_mul_str": 0,
+        "fe_mul_mul": 33,
+        "fe_mul_umulh": 31,
+        "u256_fe_mul_mul": 24,
+        "u256_fe_mul_umulh": 22,
+        "u256_point_double_str": 8,
+        "u256_point_double_frame": "sub sp, #0xc0"
+      },
+      "bench": "Nodes/Shared/conformance/results/zig_own_curve_bench_two_acc_2026-10-05.json",
+      "repeat": "Nodes/Shared/conformance/results/zig_own_curve_bench_two_acc_repeat_2026-10-05.json",
+      "ratio_min": {
+        "ecdsa_verify": 1.844,
+        "schnorr_verify": 1.871,
+        "taproot_tweak_check": 1.476,
+        "pubkey_parse": 1.894
+      },
+      "repeat_ratio_min": {
+        "ecdsa_verify": 1.841,
+        "schnorr_verify": 1.872,
+        "taproot_tweak_check": 1.478,
+        "pubkey_parse": 1.914
+      },
+      "own_min_ns": {
+        "fe_mul": 16.49,
+        "fe_sqr": 15.24,
+        "point_double": 71.56,
+        "point_add": 153.36,
+        "ecdsa_verify": 26298.74
+      },
+      "bar": 1.738
     }
   ],
   "safegcd": {
@@ -524,7 +599,7 @@
   },
   "gates": {
     "self_hosted_50k": "not_run",
-    "self_hosted_50k_reason": "No kept step has moved ecdsa_verify by 10 percent on a bench whose fe_mul own min is still near 12 ns.",
+    "self_hosted_50k_reason": "Closed. No kept step moved quiet ECDSA ratio_min by 10 percent. The two-accumulator field reached 1.844 against 1.931.",
     "split_100k": "withdrawn",
     "split_100k_reason": "The no-shape host artifact was removed. Cumulative verify-median gain did not exceed 25 percent, so the 100k split was not rerun after shapes 0-3."
   },
@@ -545,7 +620,7 @@
     "Explicit Formulas Database, Jacobian coordinates with a=0",
     "libsecp256k1 0.8.0 README, src/ecmult.h, src/ecmult_impl.h"
   ],
-  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried. A dedicated 4x64 square, 10 limb multiplies against 16, lowered the isolated fe_sqr own min from 13.15 ns to 11.93 ns and left the verify field-op total at 1950, of which 808 were squares. Point.double called that square five times (bl _root.sqr) and the square spilled a 0xc0 frame, so point_double moved from 88.10 ns to 94.63 ns and the verify ratio_min values rose. Reverted. A lazy 5x52 field with one 2^260 fold and no normalize inside mul raised fe_mul from 12.38 ns to 34.79 ns. point_double contains 71 str and 39 ldr, against 10 str and 9 ldr for the inlined widening multiply, and it calls fe_mul, which opens with sub sp, #0x110. ECDSA normalizes 73 times. Reverted. ReleaseFast codegen, with runtime safety turned off because an imported module still emitted overflow checks, shrank point_double from sub sp, #0xe0 (10 str, 9 ldr, two panic bls) to sub sp, #0xc0 (9 str, 7 ldr, no bl). fe_mul is still the inlined widening multiply: 24 mul and 22 umulh, and no sub sp of its own. A bench at load 12.7 read ECDSA ratio_min 1.667 against 1.920 while fe_mul read 27.54 ns against 12.38 ns, so that ratio is not a keep. Forcing inline on mul, add, sub, reduceField, and times left point_double with no field bl, sub sp, #0xc0, 8 str and 6 ldr. ECDSA ratio_min was 1.872 against 1.920. Explicit four-limb fields spilled point_double to 27 str under sub sp, #0xb60, and a 4-lane vector spilled it to 15 str under sub sp, #0x990. The u256 form, 8 str and 6 ldr under sub sp, #0xc0, stays. The inlined 10-product square put no bl in point_double and spilled it instead: sub sp, #0x770, 25 str and 15 ldr, against 8 str and 6 ldr. Reverted. The inlined 5-limb double has no bl and 14 str under sub sp, #0x160, within 2x of the u256 8 str, and 24 ldr. It was not timed: its subtract is a wrapping lane subtract, not a reduction modulo p.",
+  "residual": "fe_mul is 14 ns and 1950 operations, 96 percent of the October 4 ECDSA verify and still the gap after shapes 0-3. The widening u256 multiply is already 24 mul and 22 umulh with no library call. Safety-off and a 977-and-shift reduction left the median at 14 ns and slowed verify, so they were reverted. The count is already the four-term GLV joint schedule: width-16 G, width-4 P, 127 doublings. Window 5 moved the ECDSA count by 1.9 percent and was reverted. The uncommitted lazy 5x52 measured 72 ns. The committed 5x52 kernel in Project/scripts/zig_crypto_open/field52.zig returns Field(1) from mul, so every product runs the carry and the 2^256 fold before the next addition, and the value is a five-limb struct passed by value. That is a reduction on every operation plus a memory round trip. A lazy field only beats the register u256 multiply if the five limbs stay unnormalized across double and mixed and are normalized at compares. That representation was not retried. A dedicated 4x64 square, 10 limb multiplies against 16, lowered the isolated fe_sqr own min from 13.15 ns to 11.93 ns and left the verify field-op total at 1950, of which 808 were squares. Point.double called that square five times (bl _root.sqr) and the square spilled a 0xc0 frame, so point_double moved from 88.10 ns to 94.63 ns and the verify ratio_min values rose. Reverted. A lazy 5x52 field with one 2^260 fold and no normalize inside mul raised fe_mul from 12.38 ns to 34.79 ns. point_double contains 71 str and 39 ldr, against 10 str and 9 ldr for the inlined widening multiply, and it calls fe_mul, which opens with sub sp, #0x110. ECDSA normalizes 73 times. Reverted. ReleaseFast codegen, with runtime safety turned off because an imported module still emitted overflow checks, shrank point_double from sub sp, #0xe0 (10 str, 9 ldr, two panic bls) to sub sp, #0xc0 (9 str, 7 ldr, no bl). fe_mul is still the inlined widening multiply: 24 mul and 22 umulh, and no sub sp of its own. A bench at load 12.7 read ECDSA ratio_min 1.667 against 1.920 while fe_mul read 27.54 ns against 12.38 ns, so that ratio is not a keep. Forcing inline on mul, add, sub, reduceField, and times left point_double with no field bl, sub sp, #0xc0, 8 str and 6 ldr. ECDSA ratio_min was 1.872 against 1.920. Explicit four-limb fields spilled point_double to 27 str under sub sp, #0xb60, and a 4-lane vector spilled it to 15 str under sub sp, #0x990. The u256 form, 8 str and 6 ldr under sub sp, #0xc0, stays. The inlined 10-product square put no bl in point_double and spilled it instead: sub sp, #0x770, 25 str and 15 ldr, against 8 str and 6 ldr. Reverted. The inlined 5-limb double has no bl and 14 str under sub sp, #0x160, within 2x of the u256 8 str, and 24 ldr. It was not timed: its subtract is a wrapping lane subtract, not a reduction modulo p. A quiet remeasure withdraws the load-12.7 ECDSA ratio_min of 1.667; at load 1.30 the same kernel is 1.931. 5x52 is register-resident in fe_mul (0 str) but the column schedule costs 9 mul and 9 umulh more than u256 (33 mul and 31 umulh against 24 and 22) and the carry-chain saving does not cover it. point_double is 15 str under sub sp, #0xf0, and its own min fell from 86.98 ns to 71.56 ns, while fe_mul rose from 12.46 ns to 16.49 ns. Quiet ECDSA ratio_min is 1.844 against 1.931. The campaign is closed.",
   "provenance": {
     "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
     "source_commit": "041621db04b32bcb2e81be5e89613ebd31f39d34",
@@ -624,7 +699,9 @@
       "fe_mul_own_min_ns": 27.54,
       "point_double_frame_before": "sub sp, #0xe0",
       "point_double_frame_after": "sub sp, #0xc0",
-      "fe_mul_frame": "no sub sp"
+      "fe_mul_frame": "no sub sp",
+      "withdrawn": true,
+      "withdrawn_reason": "1.667 was load 12.7 and is withdrawn. The quiet remeasure is 1.931."
     },
     "force_inline": {
       "kept_codegen": true,
@@ -658,6 +735,56 @@
       "frame": "sub sp, #0x160",
       "u256_str": 8,
       "verify_ratio_min": 1.872
+    },
+    "quiet_baseline": {
+      "ambient_quiet": true,
+      "loadavg": [
+        1.3,
+        2.66,
+        3.88
+      ],
+      "polls": [
+        1.9,
+        1.68,
+        1.73,
+        1.49,
+        1.3
+      ],
+      "bench": "Nodes/Shared/conformance/results/zig_own_curve_bench_quiet_v2_2026-10-05.json",
+      "repeat": "Nodes/Shared/conformance/results/zig_own_curve_bench_quiet_v2_repeat_2026-10-05.json",
+      "ratio_min": {
+        "ecdsa_verify": 1.931,
+        "schnorr_verify": 1.953,
+        "taproot_tweak_check": 1.58,
+        "pubkey_parse": 1.524
+      },
+      "repeat_ratio_min": {
+        "ecdsa_verify": 1.923,
+        "schnorr_verify": 1.956,
+        "taproot_tweak_check": 1.58,
+        "pubkey_parse": 1.545
+      },
+      "own_min_ns": {
+        "ecdsa_verify": 27482.02,
+        "fe_mul": 12.46,
+        "fe_sqr": 12.11,
+        "point_double": 86.98,
+        "point_add": 164.03
+      },
+      "withdraws": "releasefast_module ecdsa_ratio_min 1.667 at load 12.7"
+    },
+    "two_accumulator_5x52": {
+      "kept": false,
+      "ambient_quiet": true,
+      "ecdsa_ratio_min": 1.844,
+      "baseline_ecdsa_ratio_min": 1.931,
+      "bar": 1.738,
+      "fe_mul_own_min_ns": 16.49,
+      "point_double_own_min_ns": 71.56,
+      "fe_mul_mul": 33,
+      "fe_mul_umulh": 31,
+      "point_double_str": 15,
+      "point_double_frame": "sub sp, #0xf0"
     }
   }
 }

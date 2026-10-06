@@ -833,7 +833,7 @@
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",
       "status": "current",
-      "notes": "Shape D kept ReleaseFast and inlined field ops. point_double is sub sp, #0xc0, 8 str, 6 ldr, no field bl. Explicit limbs and the inlined square spilled and were reverted. The 5-limb probe is 14 str and 24 ldr under sub sp, #0x160 and was not timed. ECDSA ratio_min 1.872. Optimized stays unset."
+      "notes": "Campaign closed. Quiet ECDSA ratio_min is 1.931; the load-12.7 value 1.667 is withdrawn. The two-accumulator 5x52 field reached 1.844 and was reverted. fe_mul is 33 mul and 31 umulh against 24 and 22. point_double is 15 str under sub sp, #0xf0. optimized stays unset."
     },
     {
       "port": "zig",
@@ -1002,6 +1002,22 @@
       "path": "Nodes/Shared/conformance/results/zig_crypto_mutation_taproot-ignore-output-check_2026-10-04.json",
       "status": "current",
       "notes": "taproot-ignore-output-check stays red."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_quiet",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_quiet_v2_2026-10-05.json",
+      "status": "current",
+      "notes": "Quiet remeasure of the kept u256 kernel. Load polls 1.90, 1.68, 1.73, 1.49, 1.30. ECDSA ratio_min 1.931. fe_mul 12.46 ns. point_double 86.98 ns. ambient.quiet true."
+    },
+    {
+      "port": "zig",
+      "claim": "own_curve_kernel",
+      "gate_id": "bench_two_acc",
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_two_acc_2026-10-05.json",
+      "status": "current",
+      "notes": "Two-accumulator 5x52, not kept. Quiet ECDSA ratio_min 1.844 against 1.931. fe_mul 16.49 ns, 33 mul and 31 umulh. point_double 71.56 ns, 15 str, sub sp, #0xf0."
     }
   ]
 }
