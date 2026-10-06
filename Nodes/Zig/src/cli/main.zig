@@ -14,6 +14,7 @@ const cmdStatus = status.cmdStatus;
 const storage_proof = @import("storage_proof.zig");
 const cmdStorageProof = storage_proof.cmdStorageProof;
 const vectors = @import("vectors.zig");
+const cmdCodecVectors = vectors.cmdCodecVectors;
 const cmdNativeCrypto = vectors.cmdNativeCrypto;
 const cmdTestCapability = vectors.cmdTestCapability;
 const script_corpus = @import("script_corpus.zig");
@@ -48,8 +49,7 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, command, "status")) {
         try cmdStatus(allocator, out, args[2..], surface);
     } else if (std.mem.eql(u8, command, "codec-vectors")) {
-        try core.codec.verifyCodecVectors(allocator);
-        try out.print("{{\"schema\":\"port.codec_vectors.v1\",\"port\":\"zig\",\"codec_version\":2,\"passed\":true}}\n", .{});
+        try cmdCodecVectors(allocator, out);
     } else if (std.mem.eql(u8, command, "native-crypto-vectors")) {
         try cmdNativeCrypto(out);
     } else if (std.mem.eql(u8, command, "test-capability")) {

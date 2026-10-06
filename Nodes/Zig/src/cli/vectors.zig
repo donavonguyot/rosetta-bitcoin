@@ -7,6 +7,11 @@ const jsonInteger = common.jsonInteger;
 const appendFmt = common.appendFmt;
 const writeFileEnsuringParent = common.writeFileEnsuringParent;
 
+pub fn cmdCodecVectors(allocator: std.mem.Allocator, out: anytype) !void {
+    try core.codec.verifyCodecVectors(allocator);
+    try out.print("{{\"schema\":\"port.codec_vectors.v1\",\"port\":\"zig\",\"codec_version\":2,\"passed\":true}}\n", .{});
+}
+
 pub fn cmdNativeCrypto(out: anytype) !void {
     const available = core.crypto_glue.secp256k1Available();
     try out.print(
