@@ -35,9 +35,9 @@ const OutpointContext = struct {
     //! them in consecutive slots and every neighbor probe walks that run. The measured
     //! cost was 22 rehashes at ~78 s unmixed versus 0.7 s after the odd multiply, and
     //! misses at height 50000 cost ~4 µs. Leave the multiply in place.
-    pub fn hash(_: @This(), key: root.Outpoint) u64 {
+    pub fn hash(_: @This(), key: root.types.Outpoint) u64 {
         if (comptime utxo_hash_wyhash) {
-            if (@sizeOf(root.Outpoint) != 36) @compileError("outpoint hash expects 36 bytes");
+            if (@sizeOf(root.types.Outpoint) != 36) @compileError("outpoint hash expects 36 bytes");
             return std.hash.Wyhash.hash(0, std.mem.asBytes(&key));
         }
         const mixed = std.mem.readInt(u64, key.txid[0..8], .little) ^ @as(u64, key.vout);
@@ -45,12 +45,12 @@ const OutpointContext = struct {
         return mixed;
     }
 
-    pub fn eql(_: @This(), a: root.Outpoint, b: root.Outpoint) bool {
+    pub fn eql(_: @This(), a: root.types.Outpoint, b: root.types.Outpoint) bool {
         return std.mem.eql(u8, &a.txid, &b.txid) and a.vout == b.vout;
     }
 };
 
-const UtxoMap = std.HashMap(root.Outpoint, []u8, OutpointContext, 80);
+const UtxoMap = std.HashMap(root.types.Outpoint, []u8, OutpointContext, 80);
 
 const Extent = struct {
     offset: u64,
@@ -92,7 +92,7 @@ pub const NativeStore = struct {
     header_index: root.consensus_context.HeaderIndex = .{},
 
     pub fn open(allocator: std.mem.Allocator, path: []const u8, options: OpenOptions) !NativeStore {
-        try root.rejectUnapprovedRuntimeDbArtifacts(path);
+        try root.datadir.rejectUnapprovedRuntimeDbArtifacts(path);
         var self = NativeStore{
             .allocator = allocator,
             .path = try allocator.dupe(u8, path),
@@ -190,7 +190,7 @@ pub const NativeStore = struct {
     }
 
     pub fn headerAt(self: *NativeStore, allocator: std.mem.Allocator, height: u32) !?[80]u8 {
-        const key = try root.encodeHeaderKey(allocator, "testnet4", height);
+        const key = try root.codec.encodeHeaderKey(allocator, "testnet4", height);
         defer allocator.free(key);
         const raw = (try self.getAlloc(allocator, key)) orelse return null;
         defer allocator.free(raw);
@@ -200,10 +200,10 @@ pub const NativeStore = struct {
         return header;
     }
 
-    pub fn getManyUtxoRaw(self: *NativeStore, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.Outpoint, stats: ?*root.UtxoLoadStats) ![]?[]u8 {
+    pub fn getManyUtxoRaw(self: *NativeStore, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.types.Outpoint, stats: ?*root.connect.UtxoLoadStats) ![]?[]u8 {
         const out = try allocator.alloc(?[]u8, outpoints.len);
         errdefer allocator.free(out);
-        const key_len = try root.encodedUtxoKeyLen(chain);
+        const key_len = try root.codec.encodedUtxoKeyLen(chain);
         if (stats) |s| {
             s.lookup_count += outpoints.len;
             s.key_bytes += key_len * outpoints.len;
@@ -233,20 +233,20 @@ pub const NativeStore = struct {
         return out;
     }
 
-    pub fn getManyUtxosWithStats(self: *NativeStore, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.Outpoint, stats: ?*root.UtxoLoadStats) ![]?root.StoredUtxo {
+    pub fn getManyUtxosWithStats(self: *NativeStore, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.types.Outpoint, stats: ?*root.connect.UtxoLoadStats) ![]?root.types.StoredUtxo {
         const raw = try self.getManyUtxoRaw(allocator, chain, outpoints, stats);
         defer {
             for (raw) |value| if (value) |bytes| allocator.free(bytes);
             allocator.free(raw);
         }
-        const out = try allocator.alloc(?root.StoredUtxo, outpoints.len);
+        const out = try allocator.alloc(?root.types.StoredUtxo, outpoints.len);
         var decoded: usize = 0;
         errdefer {
             for (out[0..decoded]) |value| if (value) |utxo| utxo.deinit(allocator);
             allocator.free(out);
         }
         for (outpoints, raw, 0..) |outpoint, value, i| {
-            out[i] = if (value) |bytes| try root.decodeUtxoValue(allocator, outpoint, bytes) else null;
+            out[i] = if (value) |bytes| try root.codec.decodeUtxoValue(allocator, outpoint, bytes) else null;
             decoded += 1;
         }
         return out;
@@ -322,11 +322,11 @@ pub const NativeStore = struct {
         }
     }
 
-    pub fn commitBlock(self: *NativeStore, allocator: std.mem.Allocator, commit: root.ChainstateBlockCommit) !root.CommitTimings {
-        var timings = root.CommitTimings{};
+    pub fn commitBlock(self: *NativeStore, allocator: std.mem.Allocator, commit: root.types.ChainstateBlockCommit) !root.connect.CommitTimings {
+        var timings = root.connect.CommitTimings{};
         var next_hash = self.set_hash;
         const spend_started = store.nowMs();
-        try root.foldSpends(allocator, &next_hash, commit.spent_external, commit.undo_entries);
+        try root.connect.foldSpends(allocator, &next_hash, commit.spent_external, commit.undo_entries);
         timings.set_hash_fold += elapsedMs(spend_started);
 
         var puts = std.ArrayList(StagedPut).empty;
@@ -337,9 +337,9 @@ pub const NativeStore = struct {
         const put_started = store.nowMs();
         var put_fold: i64 = 0;
         for (commit.created_utxos) |created| {
-            const value = try root.encodeUtxoValue(allocator, created.utxo);
+            const value = try root.codec.encodeUtxoValue(allocator, created.utxo);
             const hash_started = store.nowMs();
-            const key = try root.encodeUtxoKey(allocator, "testnet4", created.outpoint);
+            const key = try root.codec.encodeUtxoKey(allocator, "testnet4", created.outpoint);
             defer allocator.free(key);
             store.foldSetHash(&next_hash, key, value);
             put_fold += elapsedMs(hash_started);
@@ -357,17 +357,17 @@ pub const NativeStore = struct {
         allocator: std.mem.Allocator,
         height: u32,
         block_hash: [32]u8,
-        spent_external: []const root.Outpoint,
-        undo_entries: []const root.UndoEntry,
+        spent_external: []const root.types.Outpoint,
+        undo_entries: []const root.types.UndoEntry,
         transactions: []const root.tx.Transaction,
         txids: []const [32]u8,
-        spent: *std.AutoHashMap(root.Outpoint, void),
+        spent: *std.AutoHashMap(root.types.Outpoint, void),
         new_utxo_count: i64,
-    ) !root.CommitTimings {
-        var timings = root.CommitTimings{};
+    ) !root.connect.CommitTimings {
+        var timings = root.connect.CommitTimings{};
         var next_hash = self.set_hash;
         const spend_started = store.nowMs();
-        try root.foldSpends(allocator, &next_hash, spent_external, undo_entries);
+        try root.connect.foldSpends(allocator, &next_hash, spent_external, undo_entries);
         timings.set_hash_fold += elapsedMs(spend_started);
 
         var puts = std.ArrayList(StagedPut).empty;
@@ -381,10 +381,10 @@ pub const NativeStore = struct {
             if (height == 0 and tx_index == 0) continue;
             for (transaction.outputs, 0..) |output, vout| {
                 if (output.value < 0) return error.NegativeOutputValue;
-                if (!root.isSpendableOutput(output.script_pubkey)) continue;
-                const outpoint = root.Outpoint{ .txid = txids[tx_index], .vout = @intCast(vout) };
+                if (!root.connect.isSpendableOutput(output.script_pubkey)) continue;
+                const outpoint = root.types.Outpoint{ .txid = txids[tx_index], .vout = @intCast(vout) };
                 if (spent.contains(outpoint)) continue;
-                const value = try root.encodeUtxoValue(allocator, .{
+                const value = try root.codec.encodeUtxoValue(allocator, .{
                     .height = height,
                     .vout = @intCast(vout),
                     .value_sats = @intCast(output.value),
@@ -392,7 +392,7 @@ pub const NativeStore = struct {
                     .script_pubkey = output.script_pubkey,
                 });
                 const hash_started = store.nowMs();
-                const key = try root.encodeUtxoKey(allocator, "testnet4", outpoint);
+                const key = try root.codec.encodeUtxoKey(allocator, "testnet4", outpoint);
                 defer allocator.free(key);
                 store.foldSetHash(&next_hash, key, value);
                 put_fold += elapsedMs(hash_started);
@@ -406,7 +406,7 @@ pub const NativeStore = struct {
         return timings;
     }
 
-    pub fn readMetadata(self: *NativeStore, allocator: std.mem.Allocator) !root.Metadata {
+    pub fn readMetadata(self: *NativeStore, allocator: std.mem.Allocator) !root.types.Metadata {
         const validated_height = try self.metaI64(allocator, "validated_height", -1);
         return .{
             .validated_height = validated_height,
@@ -424,7 +424,7 @@ pub const NativeStore = struct {
         };
     }
 
-    pub fn deinitMetadata(_: *NativeStore, allocator: std.mem.Allocator, meta: root.Metadata) void {
+    pub fn deinitMetadata(_: *NativeStore, allocator: std.mem.Allocator, meta: root.types.Metadata) void {
         allocator.free(meta.validated_hash);
         allocator.free(meta.header_hash);
         allocator.free(meta.stored_block_hash);
@@ -438,16 +438,16 @@ pub const NativeStore = struct {
     pub fn writeBatchSmoke(self: *NativeStore, allocator: std.mem.Allocator) !void {
         var txid: [32]u8 = undefined;
         for (&txid, 0..) |*byte, i| byte.* = @intCast(i);
-        const script_bytes = try root.fromHexAlloc(allocator, "76a914000102030405060708090a0b0c0d0e0f1011121388ac");
+        const script_bytes = try root.codec.fromHexAlloc(allocator, "76a914000102030405060708090a0b0c0d0e0f1011121388ac");
         defer allocator.free(script_bytes);
-        const utxo = root.StoredUtxo{
+        const utxo = root.types.StoredUtxo{
             .height = 1,
             .vout = 1,
             .value_sats = 5_000_000_000,
             .coinbase = true,
             .script_pubkey = script_bytes,
         };
-        const created = root.CreatedUtxo{ .outpoint = .{ .txid = txid, .vout = 1 }, .utxo = utxo };
+        const created = root.types.CreatedUtxo{ .outpoint = .{ .txid = txid, .vout = 1 }, .utxo = utxo };
         const block_hash = [_]u8{2} ** 32;
         _ = try self.commitBlock(allocator, .{
             .height = 2,
@@ -547,13 +547,13 @@ pub const NativeStore = struct {
     }
 
     pub fn testingRewriteLog(dir: []const u8, bytes: []const u8, len: usize) !void {
-    const fd = try openAt(dir, "commit.log", true);
-    defer _ = std.c.close(fd);
-    if (bytes.len > 0) try pwriteAll(fd, bytes, 0);
-    if (std.c.ftruncate(fd, @intCast(len)) != 0) return error.NativeIo;
-}
+        const fd = try openAt(dir, "commit.log", true);
+        defer _ = std.c.close(fd);
+        if (bytes.len > 0) try pwriteAll(fd, bytes, 0);
+        if (std.c.ftruncate(fd, @intCast(len)) != 0) return error.NativeIo;
+    }
 
-pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, log }, extra: []const u8) !void {
+    pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, log }, extra: []const u8) !void {
         const fd = switch (which) {
             .blocks => self.blocks_fd,
             .headers => self.headers_fd,
@@ -569,15 +569,15 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
         allocator: std.mem.Allocator,
         height: u32,
         block_hash: [32]u8,
-        spent: []const root.Outpoint,
-        undo_entries: []const root.UndoEntry,
+        spent: []const root.types.Outpoint,
+        undo_entries: []const root.types.UndoEntry,
         puts: []const StagedPut,
         new_utxo_count: i64,
         next_hash: store.SetHash,
-        timings: *root.CommitTimings,
+        timings: *root.connect.CommitTimings,
     ) !void {
         const undo_started = store.nowMs();
-        const undo_bytes = try root.encodeUndoValue(allocator, undo_entries);
+        const undo_bytes = try root.codec.encodeUndoValue(allocator, undo_entries);
         defer allocator.free(undo_bytes);
         const undo_off = self.undo_len;
         try pwriteAll(self.undo_fd, undo_bytes, undo_off);
@@ -604,7 +604,7 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
             try payload.bytes(item.value);
         }
         for (undo_entries) |entry| {
-            const preimage = try root.encodeUtxoValue(allocator, entry.utxo);
+            const preimage = try root.codec.encodeUtxoValue(allocator, entry.utxo);
             defer allocator.free(preimage);
             try payload.bytes(&entry.outpoint.txid);
             try payload.putU32(entry.outpoint.vout);
@@ -630,7 +630,7 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
         self: *NativeStore,
         height: u32,
         block_hash: [32]u8,
-        spent: []const root.Outpoint,
+        spent: []const root.types.Outpoint,
         puts: []const StagedPut,
         new_utxo_count: i64,
         next_hash: store.SetHash,
@@ -739,7 +739,7 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
             // The logged preimage is a replay check. The map already holds the
             // bytes that were folded out; removing this compare drops the check.
             if (!std.mem.eql(u8, current, preimage)) return error.ReplayPreimageMismatch;
-            const key = try root.encodeUtxoKey(self.allocator, "testnet4", outpoint);
+            const key = try root.codec.encodeUtxoKey(self.allocator, "testnet4", outpoint);
             defer self.allocator.free(key);
             store.foldSetHash(&check, key, preimage);
         }
@@ -748,7 +748,7 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
         while (i < n_puts) : (i += 1) {
             const outpoint = try rd.outpoint();
             const value = try rd.blob();
-            const key = try root.encodeUtxoKey(self.allocator, "testnet4", outpoint);
+            const key = try root.codec.encodeUtxoKey(self.allocator, "testnet4", outpoint);
             defer self.allocator.free(key);
             store.foldSetHash(&check, key, value);
         }
@@ -785,9 +785,9 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
     }
 
     fn putCommitMeta(self: *NativeStore, height: u32, block_hash: [32]u8, utxo_count: i64, set_hash: store.SetHash) !void {
-        const tip_key = try root.encodeTipKey(self.allocator, "testnet4");
+        const tip_key = try root.codec.encodeTipKey(self.allocator, "testnet4");
         defer self.allocator.free(tip_key);
-        const tip_value = try root.encodeTipValue(self.allocator, height, block_hash);
+        const tip_value = try root.codec.encodeTipValue(self.allocator, height, block_hash);
         defer self.allocator.free(tip_value);
         try self.putMeta(tip_key, tip_value);
         var height_buf: [16]u8 = undefined;
@@ -812,7 +812,7 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
     }
 
     fn putMetaName(self: *NativeStore, name: []const u8, value: []const u8) !void {
-        const key = try root.encodeMetadataKey(self.allocator, name);
+        const key = try root.codec.encodeMetadataKey(self.allocator, name);
         defer self.allocator.free(key);
         try self.putMeta(key, value);
     }
@@ -830,7 +830,7 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
         try self.meta.put(owned_key, owned_value);
     }
 
-    fn putUtxoBytes(self: *NativeStore, outpoint: root.Outpoint, value: []const u8) !void {
+    fn putUtxoBytes(self: *NativeStore, outpoint: root.types.Outpoint, value: []const u8) !void {
         const owned = try self.allocator.dupe(u8, value);
         const before = self.utxos.capacity();
         const grow_started = store.nowMs();
@@ -994,7 +994,7 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
     }
 
     fn metaStringRaw(self: *NativeStore, name: []const u8) ?[]const u8 {
-        const key = root.encodeMetadataKey(self.allocator, name) catch return null;
+        const key = root.codec.encodeMetadataKey(self.allocator, name) catch return null;
         defer self.allocator.free(key);
         return self.meta.get(key);
     }
@@ -1018,7 +1018,7 @@ pub fn testingExtend(self: *NativeStore, which: enum { blocks, headers, undo, lo
 };
 
 const StagedPut = struct {
-    outpoint: root.Outpoint,
+    outpoint: root.types.Outpoint,
     value: []u8,
 };
 
@@ -1092,7 +1092,7 @@ const Rd = struct {
         return std.mem.readInt(i64, (try self.take(8))[0..8], .little);
     }
 
-    fn outpoint(self: *Rd) !root.Outpoint {
+    fn outpoint(self: *Rd) !root.types.Outpoint {
         var txid: [32]u8 = undefined;
         @memcpy(&txid, try self.take(32));
         return .{ .txid = txid, .vout = try self.readU32() };
@@ -1109,7 +1109,7 @@ const Rd = struct {
     }
 };
 
-fn decodeOutpoint(key: []const u8) !root.Outpoint {
+fn decodeOutpoint(key: []const u8) !root.types.Outpoint {
     if (key.len < 1 + 1 + 32 + 4 or key[0] != 'u') return error.BadKey;
     const chain_len: usize = key[1];
     const txid_at = 2 + chain_len;

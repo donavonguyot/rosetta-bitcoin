@@ -249,7 +249,7 @@ pub fn DiscardingStore(comptime Inner: type) type {
             return self.inner.headerFields(height);
         }
 
-        pub fn getManyUtxosWithStats(self: *Self, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.Outpoint, stats: ?*root.UtxoLoadStats) ![]?root.StoredUtxo {
+        pub fn getManyUtxosWithStats(self: *Self, allocator: std.mem.Allocator, chain: []const u8, outpoints: []const root.types.Outpoint, stats: ?*root.connect.UtxoLoadStats) ![]?root.types.StoredUtxo {
             return self.inner.getManyUtxosWithStats(allocator, chain, outpoints, stats);
         }
 
@@ -258,13 +258,13 @@ pub fn DiscardingStore(comptime Inner: type) type {
             allocator: std.mem.Allocator,
             height: u32,
             block_hash: [32]u8,
-            spent_external: []const root.Outpoint,
-            undo_entries: []const root.UndoEntry,
+            spent_external: []const root.types.Outpoint,
+            undo_entries: []const root.types.UndoEntry,
             transactions: []const tx.Transaction,
             txids: []const [32]u8,
-            spent: *std.AutoHashMap(root.Outpoint, void),
+            spent: *std.AutoHashMap(root.types.Outpoint, void),
             new_utxo_count: i64,
-        ) !root.CommitTimings {
+        ) !root.connect.CommitTimings {
             _ = self;
             _ = allocator;
             _ = height;
@@ -286,7 +286,7 @@ pub fn testBlockValidity(allocator: std.mem.Allocator, store: anytype, raw: []co
     try checkTemplateLimits(allocator, parsed.transactions);
     const Store = @TypeOf(store.*);
     var wrapper = DiscardingStore(Store){ .inner = store };
-    _ = try root.connectDecodedBlock(allocator, &wrapper, height, height, parsed.info, parsed.transactions, null, utxo_count);
+    _ = try root.connect.connectDecodedBlock(allocator, &wrapper, height, height, parsed.info, parsed.transactions, null, utxo_count);
 }
 
 const Candidate = struct {
@@ -404,4 +404,3 @@ fn packageBetter(a: Candidate, b: Candidate) bool {
     if (left < right) return false;
     return std.mem.order(u8, &a.wtxid, &b.wtxid) == .lt;
 }
-

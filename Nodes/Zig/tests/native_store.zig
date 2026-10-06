@@ -24,19 +24,19 @@ test "rocks shadow create and spend returns set hash to zero" {
     defer shadow.close();
     var pair = core.ShadowStore(core.RocksDb, core.RocksDb).init(&primary, &shadow);
 
-    const script_bytes = try core.fromHexAlloc(allocator, "51");
+    const script_bytes = try core.codec.fromHexAlloc(allocator, "51");
     defer allocator.free(script_bytes);
     var txid = [_]u8{0} ** 32;
     txid[0] = 9;
-    const outpoint = core.Outpoint{ .txid = txid, .vout = 0 };
-    const utxo = core.StoredUtxo{
+    const outpoint = core.types.Outpoint{ .txid = txid, .vout = 0 };
+    const utxo = core.types.StoredUtxo{
         .height = 1,
         .vout = 0,
         .value_sats = 42,
         .coinbase = false,
         .script_pubkey = script_bytes,
     };
-    const created = core.CreatedUtxo{ .outpoint = outpoint, .utxo = utxo };
+    const created = core.types.CreatedUtxo{ .outpoint = outpoint, .utxo = utxo };
     const block_one = [_]u8{1} ** 32;
     const create_timings = try pair.commitBlock(allocator, .{
         .height = 1,
@@ -59,7 +59,7 @@ test "rocks shadow create and spend returns set hash to zero" {
     }
     try std.testing.expect(raw[0] != null);
 
-    const undo = core.UndoEntry{ .outpoint = outpoint, .utxo = utxo };
+    const undo = core.types.UndoEntry{ .outpoint = outpoint, .utxo = utxo };
     const block_two = [_]u8{2} ** 32;
     _ = try pair.commitBlock(allocator, .{
         .height = 2,
@@ -97,7 +97,7 @@ fn freshPath(allocator: std.mem.Allocator, label: []const u8) ![]u8 {
     return std.fmt.allocPrint(allocator, ".zig-cache/native-{s}-{}-{}", .{ label, std.testing.random_seed, fresh_seq });
 }
 
-fn oneUtxo(script_bytes: []const u8, mark: u8) core.CreatedUtxo {
+fn oneUtxo(script_bytes: []const u8, mark: u8) core.types.CreatedUtxo {
     var txid = [_]u8{0} ** 32;
     txid[0] = mark;
     return .{
@@ -112,7 +112,7 @@ fn oneUtxo(script_bytes: []const u8, mark: u8) core.CreatedUtxo {
     };
 }
 
-fn commitCreate(db: anytype, allocator: std.mem.Allocator, created: core.CreatedUtxo, height: u32) !void {
+fn commitCreate(db: anytype, allocator: std.mem.Allocator, created: core.types.CreatedUtxo, height: u32) !void {
     var hash = [_]u8{0} ** 32;
     hash[0] = @intCast(height);
     _ = try db.commitBlock(allocator, .{
@@ -137,7 +137,7 @@ test "native shadow create and spend matches rocksdb bytes" {
     var rocks = try core.RocksDb.open(allocator, rocks_path);
     defer rocks.close();
     var pair = core.ShadowStore(Native, core.RocksDb).init(&native, &rocks);
-    const script_bytes = try core.fromHexAlloc(allocator, "51");
+    const script_bytes = try core.codec.fromHexAlloc(allocator, "51");
     defer allocator.free(script_bytes);
     const created = oneUtxo(script_bytes, 9);
     try commitCreate(&pair, allocator, created, 1);
@@ -147,7 +147,7 @@ test "native shadow create and spend matches rocksdb bytes" {
         allocator.free(raw);
     }
     try std.testing.expect(raw[0] != null);
-    const undo = core.UndoEntry{ .outpoint = created.outpoint, .utxo = created.utxo };
+    const undo = core.types.UndoEntry{ .outpoint = created.outpoint, .utxo = created.utxo };
     const spend_hash = [_]u8{2} ** 32;
     _ = try pair.commitBlock(allocator, .{
         .height = 2,
@@ -172,14 +172,14 @@ test "native restart replays the commit log" {
     const allocator = std.testing.allocator;
     const path = try freshPath(allocator, "restart");
     defer allocator.free(path);
-    const script_bytes = try core.fromHexAlloc(allocator, "51");
+    const script_bytes = try core.codec.fromHexAlloc(allocator, "51");
     defer allocator.free(script_bytes);
     const created = oneUtxo(script_bytes, 4);
     var first_hash: [32]u8 = undefined;
     {
         var db = try Native.open(allocator, path, .{});
         defer db.close();
-        const key = try core.encodeMetadataKey(allocator, "validation_crypto_backend");
+        const key = try core.codec.encodeMetadataKey(allocator, "validation_crypto_backend");
         defer allocator.free(key);
         try db.put(key, "libsecp256k1");
         try commitCreate(&db, allocator, created, 1);
@@ -189,7 +189,7 @@ test "native restart replays the commit log" {
     defer db.close();
     try std.testing.expectEqualSlices(u8, &first_hash, &db.setHash());
     try std.testing.expectEqual(@as(i64, 1), db.validated_height);
-    const key = try core.encodeMetadataKey(allocator, "validation_crypto_backend");
+    const key = try core.codec.encodeMetadataKey(allocator, "validation_crypto_backend");
     defer allocator.free(key);
     const backend = (try db.getAlloc(allocator, key)).?;
     defer allocator.free(backend);
@@ -206,7 +206,7 @@ test "direct apply and replay apply match map bytes and set hash" {
     const allocator = std.testing.allocator;
     const path = try freshPath(allocator, "direct-replay");
     defer allocator.free(path);
-    const script_bytes = try core.fromHexAlloc(allocator, "51");
+    const script_bytes = try core.codec.fromHexAlloc(allocator, "51");
     defer allocator.free(script_bytes);
     const created = oneUtxo(script_bytes, 7);
     var live_hash: [32]u8 = undefined;
@@ -240,7 +240,7 @@ test "snapshot rename before log truncate does not double apply" {
     const allocator = std.testing.allocator;
     const path = try freshPath(allocator, "snapshot-crash");
     defer allocator.free(path);
-    const script_bytes = try core.fromHexAlloc(allocator, "51");
+    const script_bytes = try core.codec.fromHexAlloc(allocator, "51");
     defer allocator.free(script_bytes);
     const created = oneUtxo(script_bytes, 5);
     var expected: [32]u8 = undefined;
@@ -249,7 +249,7 @@ test "snapshot rename before log truncate does not double apply" {
         var db = try Native.open(allocator, path, .{ .snapshot_every = 1000 });
         defer db.close();
         try commitCreate(&db, allocator, created, 1);
-        const undo = core.UndoEntry{ .outpoint = created.outpoint, .utxo = created.utxo };
+        const undo = core.types.UndoEntry{ .outpoint = created.outpoint, .utxo = created.utxo };
         const spend_hash = [_]u8{2} ** 32;
         _ = try db.commitBlock(allocator, .{
             .height = 2,
@@ -286,7 +286,7 @@ test "record block survives restart before connect" {
     }
     var db = try Native.open(allocator, path, .{});
     defer db.close();
-    const key = try core.encodeRawBlockKey(allocator, "testnet4", 3);
+    const key = try core.codec.encodeRawBlockKey(allocator, "testnet4", 3);
     defer allocator.free(key);
     const loaded = (try db.getAlloc(allocator, key)).?;
     defer allocator.free(loaded);
@@ -309,7 +309,7 @@ test "flat files truncate to the last committed extent" {
     var db = try Native.open(allocator, path, .{});
     defer db.close();
     try std.testing.expectEqual(@as(u64, raw.len), db.blocks_len);
-    const key = try core.encodeRawBlockKey(allocator, "testnet4", 1);
+    const key = try core.codec.encodeRawBlockKey(allocator, "testnet4", 1);
     defer allocator.free(key);
     const loaded = (try db.getAlloc(allocator, key)).?;
     defer allocator.free(loaded);
@@ -320,7 +320,7 @@ test "torn commit record and one corrupted byte keep the previous tip" {
     const allocator = std.testing.allocator;
     const path = try freshPath(allocator, "atomic");
     defer allocator.free(path);
-    const script_bytes = try core.fromHexAlloc(allocator, "51");
+    const script_bytes = try core.codec.fromHexAlloc(allocator, "51");
     defer allocator.free(script_bytes);
     const first = oneUtxo(script_bytes, 1);
     const second = oneUtxo(script_bytes, 2);
@@ -357,7 +357,7 @@ test "torn commit record and one corrupted byte keep the previous tip" {
 
 test "crash before append drops the commit and after append keeps it" {
     const allocator = std.testing.allocator;
-    const script_bytes = try core.fromHexAlloc(allocator, "51");
+    const script_bytes = try core.codec.fromHexAlloc(allocator, "51");
     defer allocator.free(script_bytes);
     const created = oneUtxo(script_bytes, 8);
     const before_path = try freshPath(allocator, "crash-before");

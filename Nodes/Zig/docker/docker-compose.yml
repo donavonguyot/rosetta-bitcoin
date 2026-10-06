@@ -2,7 +2,7 @@ services:
   zigbitnode:
     image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
-      context: ../../..
+      context: ${RB_WORKSPACE:?set RB_WORKSPACE}
       dockerfile: Nodes/Zig/docker/Dockerfile
       args:
         CRYPTO_BACKEND: ${CRYPTO_BACKEND:-c_binding}
@@ -11,10 +11,10 @@ services:
       ZIGBITNODE_RUNTIME_SURFACE: docker
     volumes:
       - zigbitnode_data:/data
-      - ../../Shared:/workspace/Shared:ro
+      - ${RB_SHARED_ROOT:?set RB_SHARED_ROOT}:/workspace/Shared:ro
       - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
       - ${RB_FIXTURE_SHARED:-../build/fixture-package}/testing/fixtures:/workspace/Shared/testing/fixtures:ro
-      - ../../Shared/conformance/results:/results
+      - ${RB_SHARED_ROOT:?set RB_SHARED_ROOT}/conformance/results:/results
     networks:
       - default
       - reference
@@ -22,7 +22,7 @@ services:
   zigbitnode-script-corpus:
     image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
-      context: ../../..
+      context: ${RB_WORKSPACE:?set RB_WORKSPACE}
       dockerfile: Nodes/Zig/docker/Dockerfile
       args:
         CRYPTO_BACKEND: ${CRYPTO_BACKEND:-c_binding}
@@ -30,15 +30,15 @@ services:
     environment:
       ZIGBITNODE_RUNTIME_SURFACE: docker
     volumes:
-      - ../../Shared:/workspace/Shared:ro
+      - ${RB_SHARED_ROOT:?set RB_SHARED_ROOT}:/workspace/Shared:ro
       - ${RB_FIXTURE_SHARED:-../build/fixture-package}/conformance/fixtures:/workspace/Shared/conformance/fixtures:ro
       - ${RB_FIXTURE_SHARED:-../build/fixture-package}/testing/fixtures:/workspace/Shared/testing/fixtures:ro
-      - ../../Shared/conformance/results:/results
+      - ${RB_SHARED_ROOT:?set RB_SHARED_ROOT}/conformance/results:/results
 
   zigbitnode-local-reference-proof:
     image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
-      context: ../../..
+      context: ${RB_WORKSPACE:?set RB_WORKSPACE}
       dockerfile: Nodes/Zig/docker/Dockerfile
       args:
         CRYPTO_BACKEND: ${CRYPTO_BACKEND:-c_binding}
@@ -47,7 +47,7 @@ services:
       ZIGBITNODE_RUNTIME_SURFACE: docker
     volumes:
       - zigbitnode_proof_data:/data
-      - ../../Shared/conformance/results:/results
+      - ${RB_SHARED_ROOT:?set RB_SHARED_ROOT}/conformance/results:/results
     networks:
       - default
       - reference

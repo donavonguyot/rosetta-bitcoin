@@ -262,8 +262,11 @@ test "assembly bytes are stable and the witness commitment matches" {
     try std.testing.expectEqualSlices(u8, commitment[0..], template.transactions[0].outputs[1].script_pubkey[6..38]);
 
     const io = std.testing.io;
-    const fixture = "../Shared/fixtures/mining/assembly_bytes_v1.bin";
-    try std.Io.Dir.cwd().createDirPath(io, "../Shared/fixtures/mining");
+    const fixture = try std.fs.path.join(allocator, &.{ core.fixtures_root, "fixtures/mining/assembly_bytes_v1.bin" });
+    defer allocator.free(fixture);
+    const fixture_dir = try std.fs.path.join(allocator, &.{ core.fixtures_root, "fixtures/mining" });
+    defer allocator.free(fixture_dir);
+    try std.Io.Dir.cwd().createDirPath(io, fixture_dir);
     const existing = std.Io.Dir.cwd().readFileAlloc(io, fixture, allocator, .limited(1_000_000)) catch null;
     if (existing) |frozen| {
         defer allocator.free(frozen);
@@ -317,13 +320,13 @@ test "discarding store wrapper forwards a real utxo and drops the commit" {
     var db = try core.RocksDb.open(allocator, path);
     defer db.close();
     const txid = [_]u8{9} ** 32;
-    const outpoint = core.Outpoint{ .txid = txid, .vout = 0 };
-    const script = try core.fromHexAlloc(allocator, "51");
+    const outpoint = core.types.Outpoint{ .txid = txid, .vout = 0 };
+    const script = try core.codec.fromHexAlloc(allocator, "51");
     defer allocator.free(script);
-    const utxo = core.StoredUtxo{ .height = 1, .vout = 0, .value_sats = 42, .coinbase = false, .script_pubkey = script };
-    const key = try core.encodeUtxoKey(allocator, "testnet4", outpoint);
+    const utxo = core.types.StoredUtxo{ .height = 1, .vout = 0, .value_sats = 42, .coinbase = false, .script_pubkey = script };
+    const key = try core.codec.encodeUtxoKey(allocator, "testnet4", outpoint);
     defer allocator.free(key);
-    const value = try core.encodeUtxoValue(allocator, utxo);
+    const value = try core.codec.encodeUtxoValue(allocator, utxo);
     defer allocator.free(value);
     try db.put(key, value);
 
@@ -335,7 +338,7 @@ test "discarding store wrapper forwards a real utxo and drops the commit" {
     }
     try std.testing.expectEqual(@as(u64, 42), loaded[0].?.value_sats);
 
-    var spent = std.AutoHashMap(core.Outpoint, void).init(allocator);
+    var spent = std.AutoHashMap(core.types.Outpoint, void).init(allocator);
     defer spent.deinit();
     _ = try wrapper.commitConnectedBlock(allocator, 2, [_]u8{0} ** 32, &.{}, &.{}, &.{}, &.{}, &spent, 0);
     const again = try db.getManyUtxosWithStats(allocator, "testnet4", &.{outpoint}, null);

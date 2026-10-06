@@ -201,7 +201,7 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
             if (tip_hash) |prev| {
                 const prev_fields = (try db.headerFields(height - 1)) orelse return error.MissingHeader;
                 const prev_time = prev_fields.time;
-                const now_i = @divTrunc(root.nowMs(), 1000);
+                const now_i = @divTrunc(root.datadir.nowMs(), 1000);
                 const now: u32 = if (now_i <= 0) 0 else if (now_i > std.math.maxInt(u32)) std.math.maxInt(u32) else @intCast(now_i);
                 const stamp = template.headerTimeFor(pool.tip_mtp, now, height, prev_time);
                 const bits = try template.nextBits(db, allocator, height, stamp);
@@ -230,7 +230,7 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
                 allocator.free(decoded.transactions);
             }
             try db.recordBlock(allocator, height, decoded.info.hash, payload);
-            var connected = try root.connectDecodedBlock(allocator, db, height, height, decoded.info, decoded.transactions, null, utxo_count);
+            var connected = try root.connect.connectDecodedBlock(allocator, db, height, height, decoded.info, decoded.transactions, null, utxo_count);
             defer connected.deinit(allocator);
             var ids = try allocator.alloc([32]u8, decoded.transactions.len);
             defer allocator.free(ids);

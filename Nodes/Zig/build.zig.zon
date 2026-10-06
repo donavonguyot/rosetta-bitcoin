@@ -1,1 +1,1 @@
-.{ .name = .zigbitnode, .version = "0.1.0", .minimum_zig_version = "0.16.0", .fingerprint = 0xb3b49172e4adc0a7, .dependencies = .{ .secp256k1 = .{ .path = "../../Libraries/Zig/libsecp256k1-zig" } }, .paths = .{ "build.zig", "build.zig.zon", "src", "tests" } }
+.{ .name = .zigbitnode, .version = "0.1.0", .minimum_zig_version = "0.16.0", .fingerprint = 0xb3b49172e4adc0a7, .dependencies = .{ .secp256k1 = .{ .path = "libsecp256k1-zig" } }, .paths = .{ "build.zig", "build.zig.zon", "src", "tests" } }

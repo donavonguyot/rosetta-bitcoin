@@ -134,11 +134,11 @@ pub fn writeBlockFixtures(allocator: std.mem.Allocator, io: std.Io, db: anytype,
     defer manifest.deinit(allocator);
     try manifest.appendSlice(allocator, "{\n  \"family\": \"consensus.context\",\n  \"fixtures\": [\n");
     for (jobs, 0..) |job, index| {
-        const raw_key = try root.encodeRawBlockKey(allocator, "testnet4", job.height);
+        const raw_key = try root.codec.encodeRawBlockKey(allocator, "testnet4", job.height);
         defer allocator.free(raw_key);
         const raw = (try db.getAlloc(allocator, raw_key)) orelse return error.MissingBlock;
         defer allocator.free(raw);
-        const undo_key = try root.encodeUndoKey(allocator, "testnet4", job.height);
+        const undo_key = try root.codec.encodeUndoKey(allocator, "testnet4", job.height);
         defer allocator.free(undo_key);
         const undo = (try db.getAlloc(allocator, undo_key)) orelse return error.MissingUndo;
         defer allocator.free(undo);
@@ -442,12 +442,12 @@ fn appendTimewarp(allocator: std.mem.Allocator, manifest: *std.ArrayList(u8)) !v
     try appendHeaderCase(allocator, manifest, "consensus.bip94_timewarp", "timewarp", headers, prev_time - chain_params.timewarp, required, prev_time - chain_params.timewarp - 1, required);
 }
 
-fn decodeUndo(allocator: std.mem.Allocator, bytes: []const u8) ![]root.UndoEntry {
+fn decodeUndo(allocator: std.mem.Allocator, bytes: []const u8) ![]root.types.UndoEntry {
     if (bytes.len < 4) return error.UndoTooShort;
     var offset: usize = 0;
     const count = std.mem.readInt(u32, bytes[0..4], .big);
     offset = 4;
-    const entries = try allocator.alloc(root.UndoEntry, count);
+    const entries = try allocator.alloc(root.types.UndoEntry, count);
     var filled: usize = 0;
     errdefer {
         for (entries[0..filled]) |entry| allocator.free(entry.utxo.script_pubkey);
