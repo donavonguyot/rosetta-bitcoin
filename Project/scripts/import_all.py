@@ -618,12 +618,16 @@ def tracked_paths(root: Path, pattern: str) -> set[Path]:
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return set()
-    return {root / line.strip() for line in completed.stdout.splitlines() if line.strip()}
+    return {
+        root / line.strip()
+        for line in completed.stdout.splitlines()
+        if line.strip() and "worktrees" not in Path(line.strip()).parts
+    }
 
 
 def iter_default_json_files(root: Path, directory: Path, tracked_only: bool) -> list[Path]:
     if not tracked_only:
-        return sorted(directory.glob("*.json"))
+        return sorted(path for path in directory.glob("*.json") if "worktrees" not in path.parts)
     try:
         pattern = rel(directory, root) + "/*.json"
     except ValueError:
@@ -2710,7 +2714,9 @@ def default_blocker_ledgers(root: Path) -> list[Path]:
         root / "Docs/consensus-blockers-testnet4.md",
         root / "Nodes/Shared/BLOCKER_LEDGER.md",
     ]
-    paths.extend(sorted((root / "Nodes").glob("*/docs/BLOCKER_LEDGER.md")))
+    paths.extend(sorted(
+        path for path in (root / "Nodes").glob("*/docs/BLOCKER_LEDGER.md") if "worktrees" not in path.parts
+    ))
     return [path for path in paths if path.exists()]
 
 

@@ -63,6 +63,8 @@ def _ensure_owner_writable_tree(root: Path) -> None:
     except OSError:
         pass
     for path in root.rglob("*"):
+        if "worktrees" in path.parts:
+            continue
         try:
             m = path.lstat().st_mode
             if stat.S_ISLNK(m):

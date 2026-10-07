@@ -22,6 +22,7 @@ FREE_FLOOR = 5 * 1024**3
 def inventory(root: Path) -> dict:
     result = {}
     for directory, dirs, files in os.walk(root, followlinks=False):
+        dirs[:] = [name for name in dirs if name != "worktrees"]
         for name in sorted(dirs + files):
             path = Path(directory) / name
             info = path.lstat()
@@ -83,6 +84,7 @@ def freeze_campaign(source: Path) -> None:
         journal("freeze_note", note, {"retain_evidence": str(note)})
         note.write_text(f"Frozen read-only on {datetime.date.today().isoformat()}. Historical campaign; new runs require a new campaign root.\n")
     for root, dirs, files in os.walk(frozen):
+        dirs[:] = [name for name in dirs if name != "worktrees"]
         for name in files + dirs:
             path = Path(root) / name
             if not path.is_symlink():
@@ -116,7 +118,10 @@ def migrate(repo: Path, key: str, apply: bool, idle=assert_idle, floor: int = FR
     result = {"class": key, "source": str(source), "destination": str(dest), "phase": "planned",
               "bytes": size, "free_before": free, "file_count": len(entries),
               "date": datetime.date.today().isoformat()}
-    result["retained_socket_paths"] = sorted(str(p.relative_to(source)) for p in source.rglob("*") if stat.S_ISSOCK(p.lstat().st_mode))
+    result["retained_socket_paths"] = sorted(
+        str(p.relative_to(source)) for p in source.rglob("*")
+        if "worktrees" not in p.parts and stat.S_ISSOCK(p.lstat().st_mode)
+    )
     if not apply:
         return result
     idle(source)

@@ -20,7 +20,10 @@ def digest(value: dict) -> str:
 
 
 def sockets(root: Path) -> list[str]:
-    return sorted(str(p.relative_to(root)) for p in root.rglob("*") if stat.S_ISSOCK(p.lstat().st_mode))
+    return sorted(
+        str(p.relative_to(root)) for p in root.rglob("*")
+        if "worktrees" not in p.parts and stat.S_ISSOCK(p.lstat().st_mode)
+    )
 
 
 def audit(repo: Path, idle=assert_idle) -> dict:

@@ -39,6 +39,7 @@ def command(args, **kwargs):
 
 def source_commit() -> str:
     changed = command(["git", "status", "--porcelain", "--untracked-files=all", "--", "Project/scripts", "Nodes", "Libraries",
+                       ":(exclude)worktrees", ":(exclude)**/worktrees/**",
                        ":(exclude)Nodes/Shared/conformance/results", ":(exclude)Nodes/Shared/testing/results",
                        ":(exclude)Nodes/Shared/conformance/crypto_comparisons", ":(exclude)Nodes/Shared/conformance/current_evidence.json"])
     if changed:
@@ -97,6 +98,7 @@ def from_receipt(receipt: dict, run_ref: str | None = None) -> dict:
 def for_image(image: str, run_ref: str | None = None, expected: dict | None = None) -> dict:
     identity = image_id(image)
     candidates = [receipt_path(identity, expected)] if expected else sorted(receipt_path(identity).glob("*.json"))
+    candidates = [path for path in candidates if "worktrees" not in path.parts]
     if len(candidates) != 1:
         raise ValueError(f"executed image {identity} needs an unambiguous build receipt")
     path = candidates[0]

@@ -116,3 +116,6 @@ Nodes/*/build/fixture-package/
 Project/.provenance-validation/
 Project/.campaigns
 Nodes/RosettaNode/substrate/.local
+
+# Branch worktrees live inside the repo; never tracked
+/worktrees/

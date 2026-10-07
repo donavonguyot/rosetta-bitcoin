@@ -50,6 +50,7 @@ IGNORED_PATH_PARTS = {
     "dist",
     "node_modules",
     "target",
+    "worktrees",
 }
 
 FORBIDDEN_PATTERNS = [

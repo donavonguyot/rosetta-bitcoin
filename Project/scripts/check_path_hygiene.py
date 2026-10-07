@@ -63,7 +63,7 @@ def tracked_files(root: Path) -> list[str]:
 def scan_files(root: Path) -> list[str]:
     failures: list[str] = []
     for rel in tracked_files(root):
-        if rel in ALLOWLIST:
+        if rel in ALLOWLIST or rel == "worktrees" or rel.startswith("worktrees/") or "/worktrees/" in rel:
             continue
         path = root / rel
         if path.suffix.lower() not in TEXT_SUFFIXES:

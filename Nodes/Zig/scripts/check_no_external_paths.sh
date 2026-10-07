@@ -5,12 +5,15 @@ cd "$(dirname "$0")/.."
 pat_shared=$(printf '%s%s' '../' 'Shared')
 pat_up=$(printf '%s%s' '../' '../')
 pat_users=$(printf '%s%s' '/Users' '/')
-if find . -type f \
+if find . \
+    \( -type d -name worktrees -prune \) -o \
+    -type f \
     ! -path './docs/*' \
     ! -path './.zig-cache/*' \
     ! -path './zig-out/*' \
     ! -path './build/*' \
     ! -path './scripts/check_no_external_paths.sh' \
+    ! -path '*/worktrees/*' \
     -print0 | xargs -0 grep -n -F -e "$pat_shared" -e "$pat_up" -e "$pat_users"; then
     echo "external path: use -Dfixtures-root or -Dshared-root" >&2
     exit 1

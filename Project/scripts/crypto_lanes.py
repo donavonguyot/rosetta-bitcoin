@@ -11,7 +11,7 @@ DDL='''CREATE TABLE IF NOT EXISTS crypto_lane_results (
 def source_digest(path):
  h=hashlib.sha256()
  for p in sorted(Path(path).rglob('*')):
-  if not p.is_file() or any(x in ('.zig-cache','zig-out','.git','__pycache__') for x in p.parts):continue
+  if not p.is_file() or any(x in ('.zig-cache','zig-out','.git','__pycache__','worktrees') for x in p.parts):continue
   h.update(p.relative_to(path).as_posix().encode()+b'\0'+p.read_bytes()+b'\0')
  return h.hexdigest()
 def validate(d):

@@ -240,6 +240,8 @@ def latest_proof_log(port: str) -> Path | None:
         return None
     candidates = []
     for path in campaign_dir.rglob("*.log"):
+        if "worktrees" in path.parts:
+            continue
         name = path.name.lower()
         if port.lower() in name and ("proof" in name or "run" in name):
             candidates.append(path)

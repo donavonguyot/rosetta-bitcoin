@@ -71,10 +71,14 @@ def consensus(path: Path) -> bool:
     return stem in EXACT or stem.startswith("crypto")
 
 
+def skipped_zig(path: Path) -> bool:
+    return any(part in path.parts for part in (".zig-cache", "zig-out", "worktrees"))
+
+
 def test_names() -> set[str]:
     found: set[str] = set()
     for path in ROOT.rglob("*.zig"):
-        if any(part in path.parts for part in (".zig-cache", "zig-out")):
+        if skipped_zig(path):
             continue
         found.update(TEST_RE.findall(path.read_text(encoding="utf-8", errors="replace")))
     return found
@@ -165,7 +169,11 @@ def module_row(path: Path, tests: set[str], results: set[str]) -> dict:
 def main() -> int:
     tests = test_names()
     results = result_names()
-    modules = [module_row(path, tests, results) for path in sorted(SRC.rglob("*.zig"))]
+    modules = [
+        module_row(path, tests, results)
+        for path in sorted(SRC.rglob("*.zig"))
+        if not skipped_zig(path)
+    ]
     headers_present = sum(1 for row in modules if row["module_header"])
     union: dict[str, str] = {}
     for row in modules:

@@ -578,6 +578,20 @@ Re-run tests after P2P changes: `npm test` in `Nodes/TypeScript`.
 
 ---
 
+## Branch worktrees
+
+`~/RosettaBitcoin` stays on `main`. Nobody works in that checkout. A branch
+starts there with:
+
+```bash
+git worktree add worktrees/<leaf> -b <branch>
+```
+
+`zig/mempool-stimulus` lives at `worktrees/mempool-stimulus`. The worktree is
+removed and the branch deleted in the same report that announces the merge.
+Node state lives in `~/.rblab`, never in a worktree. `git worktree prune` runs
+only on the Mac.
+
 ## Repo hygiene
 
 This workspace uses a single root Git repo. For ownership boundaries, read

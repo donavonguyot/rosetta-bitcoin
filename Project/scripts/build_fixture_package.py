@@ -41,6 +41,8 @@ def fixture_files(shared: Path) -> list[Path]:
         if not source.is_dir() or source.is_symlink():
             raise ValueError(f"missing fixture root: {name}")
         for path in source.rglob("*"):
+            if "worktrees" in path.parts:
+                continue
             if path.is_symlink() or not (path.is_file() or path.is_dir()):
                 raise ValueError(f"unsupported fixture entry: {path}")
             if path.is_file():
@@ -175,7 +177,7 @@ def unpack(digest: str, destination: Path, store: Path | None = None) -> None:
             if not target.resolve().is_relative_to(destination.resolve()) or target.is_symlink():
                 raise ValueError(f"unsafe fixture destination: {member.name}")
         extras = [p.relative_to(destination).as_posix() for p in destination.rglob("*")
-                  if p.is_file() and p.relative_to(destination).as_posix() not in seen]
+                  if "worktrees" not in p.parts and p.is_file() and p.relative_to(destination).as_posix() not in seen]
         if extras:
             raise ValueError("stale or unrelated files in extraction directory; use a clean build directory")
         for member in members:
