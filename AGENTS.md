@@ -237,6 +237,8 @@ or Project evidence replace it.
 
 **Never share datadirs or operational state between nodes or parallel agent runs.** One writer per datadir at a time.
 
+Lab datadir copies go through `Project/scripts/datadir_copy.sh`. It clones with `cp -Rc` and refuses a copy that is not a clone unless the volume has more than 20% free. Scratch is the default role. A seed or specimen copy must say why. `--sweep-scratch N` deletes scratch clones older than N days whose task is named by an indexed evidence file.
+
 ### Single writer rule (TypeScript)
 
 TypeScript enforces one native chainstate writer per datadir via

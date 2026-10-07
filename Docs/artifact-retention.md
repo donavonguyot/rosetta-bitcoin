@@ -121,6 +121,7 @@ blocker enforcement, or status truth.
 ## Operational roots (2026-10-03 amendment)
 
 `Project/scripts/state_root.py` resolves `RB_STATE_ROOT` (default `~/.rblab`).
+Datadir copies under that root go through `Project/scripts/datadir_copy.sh`: an APFS clone (`cp -Rc`), recorded in `zig/datadirs.jsonl`. Scratch is the default role. Seed and specimen copies must say why. A non-clone copy is refused unless the volume has more than 20% free.
 Retained fixture packages live in `fixture-packages/`, Project campaigns and
 toolchains in `project-campaigns/`, and substrate output in `substrate/`.
 Project campaigns contain evidence as well as caches: migration preserves the

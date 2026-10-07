@@ -102,6 +102,7 @@ Rules:
 - Do not skip validation.
 - Do not run two writers on one datadir.
 - Do not mutate another port's datadir.
+- Copy a lab datadir only with `Project/scripts/datadir_copy.sh`. Scratch is the default role; a seed or specimen copy must say why.
 - Do not commit unless explicitly asked.
 
 Return:
