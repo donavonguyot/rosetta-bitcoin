@@ -361,6 +361,17 @@ pub const NativeStore = struct {
         return self.header_index.mtp(height);
     }
 
+    /// Internal hash of the committed tip, or null before genesis.
+    /// Connect compares a candidate's prev_hash to this. A stored competing block is not the tip.
+    /// test "parent mismatch rejects a block whose prev is not the tip"
+    pub fn tipHash(self: *NativeStore) !?[32]u8 {
+        if (self.validated_height < 0) return null;
+        const meta = try self.readMetadata(self.allocator);
+        defer self.deinitMetadata(self.allocator, meta);
+        if (meta.validated_hash.len != 64) return error.MissingTipHash;
+        return try root.crypto.internalHashFromDisplay(self.allocator, meta.validated_hash);
+    }
+
     /// Indexed time and nBits at a height, or null when that height was not stored.
     /// nBits checks read this instead of re-parsing the header.
     /// test "record block survives restart before connect"

@@ -55,6 +55,13 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
             return self.primary.setHash();
         }
 
+        /// Internal hash of the primary store's committed tip.
+        /// Connect compares a candidate's prev_hash to this. The shadow tip is not a second parent.
+        /// test "parent mismatch rejects a block whose prev is not the tip"
+        pub fn tipHash(self: *Self) !?[32]u8 {
+            return self.primary.tipHash();
+        }
+
         /// The 80-byte header at a height, or null past the stored tip.
         /// Both engines see the same block. The set hashes are compared after the commit.
         /// test "rocks shadow create and spend returns set hash to zero"

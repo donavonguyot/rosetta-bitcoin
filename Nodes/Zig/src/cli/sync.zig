@@ -166,8 +166,12 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             blocks_fetched += 1;
             const block_started = core.datadir.nowMs();
             const parse_started = core.datadir.nowMs();
-            const expected_prev: ?[32]u8 = if (fetched.height == 0) null else headers[fetched.height - 1];
-            const decoded = try core.block.decodeBlock(allocator, fetched.raw, fetched.hash, expected_prev);
+            if (fetched.raw.len < 80) return error.BlockTooShort;
+            var prev_hash: [32]u8 = undefined;
+            @memcpy(&prev_hash, fetched.raw[4..36]);
+            const tip_hash = try db.tipHash();
+            try core.connect.requireParentLink(fetched.height, prev_hash, tip_hash);
+            const decoded = try core.block.decodeBlock(allocator, fetched.raw, fetched.hash, tip_hash);
             defer {
                 for (decoded.transactions) |transaction| transaction.deinit(allocator);
                 allocator.free(decoded.transactions);

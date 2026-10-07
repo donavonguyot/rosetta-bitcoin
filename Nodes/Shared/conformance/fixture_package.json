@@ -8927,6 +8927,36 @@
       "size": 84
     },
     {
+      "path": "fixtures/consensus/reorg_155428/155427.bin",
+      "sha256": "5f4d90c762ba637a2091b8ac46326afb60bd2394bd5f7da2ee836f4aedab6383",
+      "size": 6438
+    },
+    {
+      "path": "fixtures/consensus/reorg_155428/155428-loser.bin",
+      "sha256": "69cefe22b4b5bda4642078115028b7beadf711903ab0fe3f33938878d0572e9c",
+      "size": 187
+    },
+    {
+      "path": "fixtures/consensus/reorg_155428/155428-winner.bin",
+      "sha256": "0dc9b9a0f465567b8f799c64bd4b57da82adffb14b18f07307a08dbc770cf544",
+      "size": 4661
+    },
+    {
+      "path": "fixtures/consensus/reorg_155428/155429.bin",
+      "sha256": "34636c8c6a0de12fe76766def168017d5efb464e01eea61ddea7f93be492e958",
+      "size": 189
+    },
+    {
+      "path": "fixtures/consensus/reorg_155428/155448.bin",
+      "sha256": "e38e793e4e45500ca4942c398a2649aa0c1bd197fb2dda0ad6754f3c3f4e5b97",
+      "size": 147596
+    },
+    {
+      "path": "fixtures/consensus/reorg_155428/manifest.json",
+      "sha256": "815995e3231e0a1a14b0caa46c80aaa53a5bc1576d0bd7d45c01e6783f24f442",
+      "size": 2572
+    },
+    {
       "path": "testing/fixtures/bip340/test-vectors.csv",
       "sha256": "01c8cabba63b4c9b2f44c975902990086a4fe56eee9d265b187d1e2c1d98ccfb",
       "size": 6872
@@ -8942,7 +8972,7 @@
       "size": 1087
     }
   ],
-  "fixture_hash": "287eb4c5c202bb3ff2a9aa39c22b9849458301e2f9556693649fc91d068b49e8",
+  "fixture_hash": "daeaf577e38f71b0f179a8ebc2eae1a7631a283bdad39fa93644f09bc765dee2",
   "must_reject_inputs": [
     "conformance/fixtures/consensus/context/consensus.bip68_height/accept.bin",
     "conformance/fixtures/consensus/context/consensus.bip68_height/headers.bin",
@@ -9016,7 +9046,9 @@
     "conformance/fixtures/scripts/scripts.p2wsh_op1_only_31842/tx_p2wsh_op1_only_31842_prev_spk.hex",
     "conformance/fixtures/scripts/scripts.p2wsh_op1_only_31842/tx_p2wsh_op1_only_31842_prevouts.json",
     "conformance/fixtures/scripts/scripts.p2wsh_op1_only_31842/tx_p2wsh_op1_only_31842_witness_0.hex",
-    "conformance/fixtures/scripts/scripts.p2wsh_op1_only_31842/tx_p2wsh_op1_only_31842_witness_script.hex"
+    "conformance/fixtures/scripts/scripts.p2wsh_op1_only_31842/tx_p2wsh_op1_only_31842_witness_script.hex",
+    "fixtures/consensus/reorg_155428/155429.bin",
+    "fixtures/consensus/reorg_155428/manifest.json"
   ],
   "roots": [
     "conformance/fixtures",

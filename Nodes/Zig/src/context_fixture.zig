@@ -109,6 +109,10 @@ pub fn runManifest(allocator: std.mem.Allocator, io: std.Io, manifest_path: []co
 fn runBlock(allocator: std.mem.Allocator, undo: []const u8, headers: []const u8, header_base: u32, raw: []const u8, height: u32) !void {
     var store = try storeFromParts(allocator, undo, headers, header_base);
     defer store.deinit();
+    if (height > 0) {
+        const parent = (try store.headerAt(allocator, height - 1)) orelse return error.MissingHeader;
+        store.tip_hash = root.crypto.doubleSha256(&parent);
+    }
     try template.testBlockValidity(allocator, &store, raw, height, 0);
 }
 

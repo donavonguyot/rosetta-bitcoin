@@ -1,3 +1,5 @@
+//! Connect check order: parent link, then proof of work (`decodeBlock`), then finality, BIP68, coinbase maturity, scripts, and the UTXO commit.
+//! The parent link is `prev_hash` against the store tip. A competing block may be stored by `recordBlock` and must not be applied.
 //! Connect one decoded testnet4 block: finality, BIP68, coinbase maturity, then scripts, then the UTXO commit.
 //! Finality (`txNotFinal`) runs before inputs are resolved, and BIP68 runs before any script,
 //! so a non-final transaction never reaches the verifier
@@ -277,9 +279,43 @@ pub const ScriptVerifyRunner = struct {
     }
 };
 
-/// Connect one block: finality, then BIP68, then scripts, then the store commit.
+/// Reject a block whose previous hash is not the store tip.
+/// Height 0 on an empty store has no parent. Every later block does.
+/// test "parent mismatch rejects a block whose prev is not the tip"
+pub fn requireParentLink(height: u32, prev_hash: [32]u8, tip_hash: ?[32]u8) !void {
+    const tip = tip_hash orelse {
+        if (height == 0) return;
+        printParentMismatch(height, prev_hash, null);
+        return error.ParentMismatch;
+    };
+    if (std.mem.eql(u8, &prev_hash, &tip)) return;
+    printParentMismatch(height, prev_hash, tip);
+    return error.ParentMismatch;
+}
+
+fn printParentMismatch(height: u32, prev_hash: [32]u8, tip_hash: ?[32]u8) void {
+    var prev_hex: [64]u8 = undefined;
+    var tip_hex: [64]u8 = undefined;
+    writeDisplayHex(&prev_hex, &prev_hash);
+    const tip_text: []const u8 = if (tip_hash) |tip| blk: {
+        writeDisplayHex(&tip_hex, &tip);
+        break :blk &tip_hex;
+    } else "";
+    std.debug.print("{{\"error\":\"ParentMismatch\",\"height\":{d},\"prev_hash\":\"{s}\",\"tip_hash\":\"{s}\"}}\n", .{ height, &prev_hex, tip_text });
+}
+
+fn writeDisplayHex(out: *[64]u8, internal: *const [32]u8) void {
+    const alphabet = "0123456789abcdef";
+    for (0..32) |i| {
+        const byte = internal[31 - i];
+        out[i * 2] = alphabet[byte >> 4];
+        out[i * 2 + 1] = alphabet[byte & 0x0f];
+    }
+}
+
+/// Connect one block: parent link, then finality, then BIP68, then scripts, then the store commit.
 /// A connected block has already passed finality and BIP68 before any script runs.
-/// test "same block view rejects double spends"
+/// test "parent mismatch rejects a block whose prev is not the tip"
 pub fn connectDecodedBlock(
     allocator: std.mem.Allocator,
     db: anytype,
@@ -292,6 +328,7 @@ pub fn connectDecodedBlock(
 ) !ConnectResult {
     _ = target;
     const block_started = nowMs();
+    try requireParentLink(height, info.prev_hash, try db.tipHash());
     if (transactions.len == 0) return error.BlockWithoutTransactions;
     if (!transactions[0].isCoinbase()) return error.FirstTransactionNotCoinbase;
 
@@ -723,4 +760,25 @@ test "same block view rejects double spends" {
     try spent.put("txid:0", {});
     try std.testing.expect(spent.contains("txid:0"));
     try std.testing.expect(!spent.contains("txid:1"));
+}
+
+test "parent mismatch rejects a block whose prev is not the tip" {
+    const allocator = std.testing.allocator;
+    var db = coins_view.MemoryStore.init(allocator);
+    defer db.deinit();
+    const tip = [_]u8{0x11} ** 32;
+    db.tip_hash = tip;
+    const foreign = block.BlockInfo{
+        .hash = [_]u8{0x22} ** 32,
+        .prev_hash = [_]u8{0x33} ** 32,
+        .merkle_root = [_]u8{0} ** 32,
+        .tx_count = 0,
+        .bits = 0,
+    };
+    try std.testing.expectError(error.ParentMismatch, connectDecodedBlock(allocator, &db, 1, 1, foreign, &.{}, null, 0));
+    var linked = foreign;
+    linked.prev_hash = tip;
+    try std.testing.expectError(error.BlockWithoutTransactions, connectDecodedBlock(allocator, &db, 1, 1, linked, &.{}, null, 0));
+    db.tip_hash = null;
+    try std.testing.expectError(error.BlockWithoutTransactions, connectDecodedBlock(allocator, &db, 0, 0, foreign, &.{}, null, 0));
 }

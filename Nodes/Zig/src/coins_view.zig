@@ -173,6 +173,7 @@ pub const MemoryStore = struct {
     headers: std.AutoHashMap(u32, [80]u8),
     header_index: consensus_context.HeaderIndex = .{},
     commits: usize = 0,
+    tip_hash: ?[32]u8 = null,
 
     /// Build an empty value the caller frees with deinit.
     /// Lookup sees a pool output before a chain coin, and never a spent pool input.
@@ -242,6 +243,13 @@ pub const MemoryStore = struct {
         return self.header_index.fields(height);
     }
 
+    /// Internal hash of the last connected block, or null before genesis.
+    /// Connect compares a candidate's prev_hash to this and does not apply a competing parent.
+    /// test "parent mismatch rejects a block whose prev is not the tip"
+    pub fn tipHash(self: *MemoryStore) !?[32]u8 {
+        return self.tip_hash;
+    }
+
     /// The 80-byte header at a height, or null past the stored tip.
     /// Lookup sees a pool output before a chain coin, and never a spent pool input.
     /// test "in-pool spend is accepted and a second spend is rejected"
@@ -281,13 +289,13 @@ pub const MemoryStore = struct {
     pub fn commitConnectedBlock(self: *MemoryStore, allocator: std.mem.Allocator, height: u32, block_hash: [32]u8, spent_external: []const root.types.Outpoint, undo_entries: []const root.types.UndoEntry, transactions: []const root.tx.Transaction, txids: []const [32]u8, spent: *std.AutoHashMap(root.types.Outpoint, void), new_utxo_count: i64) !root.connect.CommitTimings {
         _ = allocator;
         _ = height;
-        _ = block_hash;
         _ = spent_external;
         _ = undo_entries;
         _ = transactions;
         _ = txids;
         _ = spent;
         _ = new_utxo_count;
+        self.tip_hash = block_hash;
         self.commits += 1;
         return .{};
     }

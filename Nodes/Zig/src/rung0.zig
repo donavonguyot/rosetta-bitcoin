@@ -227,8 +227,11 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
                 }
             }
 
-            const expected_prev: ?[32]u8 = if (height == 0) null else tip_hash;
-            const decoded = try block.decodeBlock(allocator, payload, null, expected_prev);
+            if (payload.len < 80) return error.BlockTooShort;
+            var prev_hash: [32]u8 = undefined;
+            @memcpy(&prev_hash, payload[4..36]);
+            try root.connect.requireParentLink(height, prev_hash, tip_hash);
+            const decoded = try block.decodeBlock(allocator, payload, null, tip_hash);
             defer {
                 for (decoded.transactions) |transaction| transaction.deinit(allocator);
                 allocator.free(decoded.transactions);

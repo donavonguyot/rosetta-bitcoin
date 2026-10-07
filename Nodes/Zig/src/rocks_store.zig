@@ -209,6 +209,17 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         return try allocator.dupe(u8, ptr[0..len]);
     }
 
+    /// Internal hash of the committed tip, or null before genesis.
+    /// Connect compares a candidate's prev_hash to this. A stored competing block is not the tip.
+    /// test "parent mismatch rejects a block whose prev is not the tip"
+    pub fn tipHash(self: *RocksDb) !?[32]u8 {
+        if (self.validated_height < 0) return null;
+        const meta = try self.readMetadata(self.allocator);
+        defer self.deinitMetadata(self.allocator, meta);
+        if (meta.validated_hash.len != 64) return error.MissingTipHash;
+        return try crypto.internalHashFromDisplay(self.allocator, meta.validated_hash);
+    }
+
     /// The 80-byte header at a height, or null past the stored tip.
     /// One block is one write batch. A failed batch leaves the previous tip.
     /// test "commit block writes created utxos undo tip metadata and counters"

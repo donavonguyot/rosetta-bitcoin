@@ -1,0 +1,81 @@
+{
+  "schema": "consensus.reorg_fixture.v1",
+  "chain": "testnet4",
+  "core_version": "28.2.0",
+  "core_subversion": "/Satoshi:28.2.0/",
+  "fetched_unix": 1791392088,
+  "common_parent": {
+    "height": 155427,
+    "hash": "0000000012ac0f7aa64aa9ef451e1cbdecd1ce775d1394ace1ad1fb4623d317c",
+    "tx_count": 21,
+    "file": "155427.bin"
+  },
+  "loser": {
+    "height": 155428,
+    "hash": "000000007e9f81c1562ff674f264ecca2bcf74d9b1298d08d20ef3e60c3a1245",
+    "tx_count": 1,
+    "file": "155428-loser.bin",
+    "role": "orphan",
+    "confirmations_at_fetch": -1
+  },
+  "winner": {
+    "height": 155428,
+    "hash": "000000007d2588ec9234ed9be196acc323fe454aa8e48c3217f40d1ce286498d",
+    "tx_count": 13,
+    "file": "155428-winner.bin"
+  },
+  "child": {
+    "height": 155429,
+    "hash": "0000000000afc07fcf843863ec264c27a409496650a72f30551b024d3db78f7d",
+    "tx_count": 1,
+    "file": "155429.bin",
+    "prev_hash": "000000007d2588ec9234ed9be196acc323fe454aa8e48c3217f40d1ce286498d"
+  },
+  "spend_block": {
+    "height": 155448,
+    "hash": "00000000000000009baaf5ccbd55840bb39de2193249d9d1eec9b6afa091fcc8",
+    "tx_count": 271,
+    "file": "155448.bin"
+  },
+  "outpoints": [
+    {
+      "txid": "10e8a93c283b65b1cb12a9285d57003fa655b39a9d1e76b5ddf4697d447ffc96",
+      "vout": 1,
+      "spending_txid": "a9936dc98827a78f2498edab20522523a5f88c2af8be10779fd32dac03eca8ad",
+      "tx_index": 2,
+      "input_index": 0,
+      "created_in": "155428-winner"
+    },
+    {
+      "txid": "7f56fb7a8ffbeedbdd00f0844a1c7e6decbb419f36d2c1fe28133f794c076cdd",
+      "vout": 1,
+      "spending_txid": "e2f56351177fc644d6f50c57376a1222b399027b6b4214d9e32bab6c602c2ff1",
+      "tx_index": 86,
+      "input_index": 0,
+      "created_in": "155428-winner"
+    },
+    {
+      "txid": "10e8a93c283b65b1cb12a9285d57003fa655b39a9d1e76b5ddf4697d447ffc96",
+      "vout": 0,
+      "spending_txid": "8f25ed499aed6a10f494fa7d2b1486917203576bd3d2d1538537c30dd7706732",
+      "tx_index": 174,
+      "input_index": 14,
+      "created_in": "155428-winner"
+    }
+  ],
+  "set_hash_155448": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72",
+  "fixtures": [
+    {
+      "id": "consensus.parent_link_reject",
+      "block": "155429.bin",
+      "offered_to": "store whose tip is not this block's parent",
+      "error": "ParentMismatch"
+    },
+    {
+      "id": "consensus.reorg_155428",
+      "height": 155448,
+      "hash": "00000000000000009baaf5ccbd55840bb39de2193249d9d1eec9b6afa091fcc8",
+      "set_hash": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72"
+    }
+  ]
+}

@@ -279,6 +279,13 @@ pub fn DiscardingStore(comptime Inner: type) type {
         const Self = @This();
         inner: *Inner,
 
+        /// Internal hash of the inner store's committed tip.
+        /// Connect compares a candidate's prev_hash to this before the discarded commit.
+        /// test "parent mismatch rejects a block whose prev is not the tip"
+        pub fn tipHash(self: *Self) !?[32]u8 {
+            return self.inner.tipHash();
+        }
+
         /// The 80-byte header at a height, or null past the stored tip.
         /// Assembly uses the port nBits rule and does not call proof of work.
         /// test "assembly bytes are stable and the witness commitment matches"

@@ -15,6 +15,7 @@ import uuid
 from state_root import ROOT, PATHS, journal, mkdir
 
 ROOTS = ("conformance/fixtures", "testing/fixtures")
+OPTIONAL_ROOTS = ("fixtures/consensus",)
 FORMAT = "rb.canonical_tar.v1"
 REJECT_FIXTURES = (
     "scripts.p2pkh_sighash_single_38010", "scripts.bare_multisig_27840",
@@ -30,7 +31,12 @@ def sha256(path: Path) -> str:
 
 def fixture_files(shared: Path) -> list[Path]:
     files = []
-    for name in ROOTS:
+    names = list(ROOTS)
+    for name in OPTIONAL_ROOTS:
+        source = shared / name
+        if source.is_dir() and not source.is_symlink():
+            names.append(name)
+    for name in names:
         source = shared / name
         if not source.is_dir() or source.is_symlink():
             raise ValueError(f"missing fixture root: {name}")
@@ -71,6 +77,14 @@ def reject_inputs(shared: Path) -> list[str]:
                 continue
             for key in ("accept", "reject", "undo", "headers"):
                 paths.add("conformance/fixtures/consensus/context/" + fixture[key])
+    reorg = shared / "fixtures/consensus/reorg_155428/manifest.json"
+    if reorg.is_file():
+        family = json.loads(reorg.read_text())
+        paths.add("fixtures/consensus/reorg_155428/manifest.json")
+        for fixture in family["fixtures"]:
+            if fixture["id"] != "consensus.parent_link_reject":
+                continue
+            paths.add("fixtures/consensus/reorg_155428/" + fixture["block"])
     return sorted(paths)
 
 
@@ -152,8 +166,9 @@ def unpack(digest: str, destination: Path, store: Path | None = None) -> None:
         seen = set()
         for member in members:
             name = PurePosixPath(member.name)
+            allowed = (*ROOTS, *OPTIONAL_ROOTS)
             if (not member.isfile() or name.is_absolute() or ".." in name.parts
-                    or member.name in seen or not any(member.name.startswith(r + "/") for r in ROOTS)):
+                    or member.name in seen or not any(member.name.startswith(r + "/") for r in allowed)):
                 raise ValueError(f"unsafe fixture member: {member.name}")
             seen.add(member.name)
             target = destination.joinpath(*name.parts)
