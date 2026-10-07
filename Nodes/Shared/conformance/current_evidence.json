@@ -829,6 +829,14 @@
     },
     {
       "port": "zig",
+      "claim": "consensus_context",
+      "gate_id": "parent_link",
+      "path": "Nodes/Shared/conformance/results/zig_parent_link_host_2026-10-07.json",
+      "status": "current",
+      "notes": "Parent link is checked before any other connect validation. check-headers reports the one break at 155429 on the triage store and none on the RocksDB tip or the new native stimulus seed. The 155428 fork is pinned as consensus.reorg_155428; disconnect stays open."
+    },
+    {
+      "port": "zig",
       "claim": "own_curve_kernel",
       "gate_id": "kernel_campaign",
       "path": "Nodes/Shared/conformance/results/zig_own_curve_kernel_campaign_host_2026-10-04.json",

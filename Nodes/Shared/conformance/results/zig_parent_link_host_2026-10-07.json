@@ -1,0 +1,104 @@
+{
+  "schema": "port.consensus_context.v1",
+  "port": "zig",
+  "implementation": "ZigNode",
+  "runtime_surface": "host",
+  "optimize": "ReleaseSafe",
+  "crypto_backend": "c_binding",
+  "category": "consensus_context",
+  "passed": true,
+  "unit_tests": {
+    "command": "zig build test --summary all",
+    "stores": ["both", "rocksdb", "native"],
+    "passed": 57,
+    "total": 57,
+    "test": "parent mismatch rejects a block whose prev is not the tip"
+  },
+  "results": [
+    {
+      "fixture_id": "consensus.parent_link_reject",
+      "result": "passed",
+      "block": "155429.bin",
+      "height": 155429,
+      "datadir": "triage-155447-native",
+      "store": "native",
+      "command": "testblockvalidity",
+      "error": "ParentMismatch",
+      "prev_hash": "000000007d2588ec9234ed9be196acc323fe454aa8e48c3217f40d1ce286498d",
+      "tip_hash": "0000000000b2212c7074bc0fdab48b923c05089978299a0a646c5dcb24cd07ea"
+    },
+    {
+      "fixture_id": "consensus.reorg_155428",
+      "result": "recorded",
+      "height": 155448,
+      "hash": "00000000000000009baaf5ccbd55840bb39de2193249d9d1eec9b6afa091fcc8",
+      "set_hash": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72",
+      "utxo_count": 14266898,
+      "fresh_sync_datadir": "reorg-155448-fresh",
+      "fresh_sync_store": "rocksdb",
+      "fresh_sync_from": 0,
+      "fresh_sync_binary": "pre-parent-link"
+    }
+  ],
+  "check_headers": [
+    {
+      "store": "native",
+      "datadir": "triage-155447-native",
+      "tip": 155447,
+      "link_breaks": [
+        {
+          "height": 155429,
+          "stored_prev": "000000007d2588ec9234ed9be196acc323fe454aa8e48c3217f40d1ce286498d",
+          "expected_prev": "000000007e9f81c1562ff674f264ecca2bcf74d9b1298d08d20ef3e60c3a1245"
+        }
+      ],
+      "passed": false,
+      "error": "ParentLinkBreak"
+    },
+    {
+      "store": "rocksdb",
+      "datadir": "mempool-rung0",
+      "tip": 155448,
+      "link_breaks": [],
+      "passed": true
+    },
+    {
+      "store": "native",
+      "datadir": "stimulus-seed",
+      "tip": 155539,
+      "link_breaks": [],
+      "passed": true
+    }
+  ],
+  "host_gates": [
+    {
+      "target_height": 5000,
+      "store": "native",
+      "shadow": true,
+      "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+      "utxo_count": 4574,
+      "set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+      "shadow_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+      "divergence_count": 0,
+      "matches_indexed_host_proof": true
+    }
+  ],
+  "stimulus_seed": {
+    "datadir": "stimulus-seed",
+    "store": "native",
+    "base": "trace-seed-155063",
+    "validated_height": 155539,
+    "validated_hash": "00000000085ced1751ec8f61acc671eaa54e4c42119cc58f9e3a9cff0a71ab0b",
+    "matches_core_tip": true,
+    "chainstate_utxo_count": 14266802,
+    "chainstate_set_hash": "74e5b2e9876623b8eb48580b4b3c681021bce11191ebb57797832523830d54f9",
+    "link_breaks": 0
+  },
+  "provenance": {
+    "run_ref": "zig-parent-link",
+    "fixture_hash": "daeaf577e38f71b0f179a8ebc2eae1a7631a283bdad39fa93644f09bc765dee2",
+    "source_commit": "7aca6c96ec43f361329cc1013d87dab42daaf4d6",
+    "binary_sha256": "af1076161e69608e3b3141cef8ae8f134a94985e29c1f4964d73f302ae75592d",
+    "toolchain_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec"
+  }
+}
