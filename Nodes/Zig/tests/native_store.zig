@@ -406,3 +406,457 @@ test "crash before append drops the commit and after append keeps it" {
         try std.testing.expectEqual(@as(i64, 1), db.validated_height);
     }
 }
+
+test "disconnect restores the recorded set hash" {
+    const allocator = std.testing.allocator;
+    const native_path = try freshPath(allocator, "reorg");
+    defer allocator.free(native_path);
+    {
+        var db = try Native.open(allocator, native_path, .{});
+        defer db.close();
+        try exerciseDisconnect(&db, allocator);
+        try expectNoRecordedNative(allocator);
+        try expectCorruptUndoNative(allocator);
+    }
+    try expectReplayAndSnapshot(allocator);
+    if (comptime core.rocksdb_compiled) {
+        const rocks_path = try freshPath(allocator, "reorg-rocks");
+        defer allocator.free(rocks_path);
+        var rocks = try core.RocksDb.open(allocator, rocks_path);
+        defer rocks.close();
+        try exerciseDisconnect(&rocks, allocator);
+        try expectNoRecordedRocks(allocator);
+        try expectCorruptUndoRocks(allocator);
+
+        const primary_path = try freshPath(allocator, "reorg-shadow-primary");
+        defer allocator.free(primary_path);
+        const shadow_path = try freshPath(allocator, "reorg-shadow");
+        defer allocator.free(shadow_path);
+        var primary = try Native.open(allocator, primary_path, .{});
+        defer primary.close();
+        var shadow = try core.RocksDb.open(allocator, shadow_path);
+        defer shadow.close();
+        var pair = core.ShadowStore(Native, core.RocksDb).init(&primary, &shadow);
+        try exerciseDisconnect(&pair, allocator);
+        const spend_primary_path = try freshPath(allocator, "reorg-spend-primary");
+        defer allocator.free(spend_primary_path);
+        const spend_shadow_path = try freshPath(allocator, "reorg-spend-shadow");
+        defer allocator.free(spend_shadow_path);
+        var spend_primary = try Native.open(allocator, spend_primary_path, .{});
+        defer spend_primary.close();
+        var spend_shadow = try core.RocksDb.open(allocator, spend_shadow_path);
+        defer spend_shadow.close();
+        var spend_pair = core.ShadowStore(Native, core.RocksDb).init(&spend_primary, &spend_shadow);
+        try expectSpendRestore(&spend_pair, allocator);
+    }
+    const spend_native_path = try freshPath(allocator, "reorg-spend");
+    defer allocator.free(spend_native_path);
+    {
+        var db = try Native.open(allocator, spend_native_path, .{});
+        defer db.close();
+        try expectSpendRestore(&db, allocator);
+    }
+    if (comptime core.rocksdb_compiled) {
+        const spend_rocks_path = try freshPath(allocator, "reorg-spend-rocks");
+        defer allocator.free(spend_rocks_path);
+        var rocks = try core.RocksDb.open(allocator, spend_rocks_path);
+        defer rocks.close();
+        try expectSpendRestore(&rocks, allocator);
+    }
+}
+
+fn expectSpendRestore(db: anytype, allocator: std.mem.Allocator) !void {
+    const zero = [_]u8{0} ** 32;
+    const block0 = try buildCoinbaseBlock(allocator, zero, 21);
+    defer allocator.free(block0.raw);
+    const block1 = try buildCoinbaseBlock(allocator, block0.hash, 22);
+    defer allocator.free(block1.raw);
+    var utxos: i64 = 0;
+    utxos = try connectBuilt(db, allocator, 0, block0, utxos);
+    utxos = try connectBuilt(db, allocator, 1, block1, utxos);
+    const hash1 = db.setHash();
+    const created = try core.tx.parseBlockTransactions(allocator, block1.raw);
+    defer {
+        for (created) |transaction| transaction.deinit(allocator);
+        allocator.free(created);
+    }
+    const spend_txid = created[0].txid();
+    const block2 = try buildSpendBlock(allocator, block1.hash, 23, spend_txid);
+    defer allocator.free(block2.raw);
+    const transactions = try core.tx.parseBlockTransactions(allocator, block2.raw);
+    defer {
+        for (transactions) |transaction| transaction.deinit(allocator);
+        allocator.free(transactions);
+    }
+    var txids = [_][32]u8{ transactions[0].txid(), transactions[1].txid() };
+    var spent = std.AutoHashMap(core.types.Outpoint, void).init(allocator);
+    defer spent.deinit();
+    const outpoint = core.types.Outpoint{ .txid = spend_txid, .vout = 0 };
+    try spent.put(outpoint, {});
+    const script = [_]u8{0x51};
+    const undo = [_]core.types.UndoEntry{.{
+        .outpoint = outpoint,
+        .utxo = .{
+            .height = 1,
+            .vout = 0,
+            .value_sats = 5_000_000_000,
+            .coinbase = true,
+            .script_pubkey = &script,
+        },
+    }};
+    try db.recordBlock(allocator, 2, block2.hash, block2.raw);
+    _ = try db.commitConnectedBlock(allocator, 2, block2.hash, &.{outpoint}, &undo, transactions, &txids, &spent, utxos - 1 + 2);
+    const removed = try db.disconnectTip(allocator);
+    try std.testing.expectEqual(@as(u32, 2), removed.utxos_removed);
+    try std.testing.expectEqual(@as(u32, 1), removed.utxos_restored);
+    try std.testing.expectEqualSlices(u8, &hash1, &removed.set_hash_after);
+    try std.testing.expectEqualSlices(u8, &hash1, &db.setHash());
+    try std.testing.expectEqual(utxos, dbUtxoCount(db));
+}
+
+fn buildSpendBlock(allocator: std.mem.Allocator, prev: [32]u8, marker: u8, spend_txid: [32]u8) !BuiltBlock {
+    const coinbase = try coinbaseTx(allocator, marker);
+    defer allocator.free(coinbase);
+    const spend = try spendTx(allocator, spend_txid);
+    defer allocator.free(spend);
+    const txids = [_][32]u8{ core.crypto.doubleSha256(coinbase), core.crypto.doubleSha256(spend) };
+    const merkle = try core.block.merkleRoot(allocator, &txids);
+    var raw: std.ArrayList(u8) = .empty;
+    errdefer raw.deinit(allocator);
+    var version = std.mem.toBytes(@as(u32, 1));
+    try putInt(&raw, allocator, &version);
+    try putInt(&raw, allocator, &prev);
+    try putInt(&raw, allocator, &merkle);
+    var time = std.mem.toBytes(@as(u32, 1_700_000_000));
+    try putInt(&raw, allocator, &time);
+    var bits = std.mem.toBytes(@as(u32, 0x1d00ffff));
+    try putInt(&raw, allocator, &bits);
+    var nonce = std.mem.toBytes(@as(u32, marker));
+    try putInt(&raw, allocator, &nonce);
+    try raw.append(allocator, 2);
+    try putInt(&raw, allocator, coinbase);
+    try putInt(&raw, allocator, spend);
+    const hash = core.crypto.doubleSha256(raw.items[0..80]);
+    return .{ .raw = try raw.toOwnedSlice(allocator), .hash = hash, .prev = prev };
+}
+
+fn coinbaseTx(allocator: std.mem.Allocator, marker: u8) ![]u8 {
+    var tx: std.ArrayList(u8) = .empty;
+    errdefer tx.deinit(allocator);
+    var version = std.mem.toBytes(@as(u32, 1));
+    try putInt(&tx, allocator, &version);
+    try tx.append(allocator, 1);
+    try tx.appendNTimes(allocator, 0, 32);
+    var null_vout = std.mem.toBytes(@as(u32, 0xffffffff));
+    try putInt(&tx, allocator, &null_vout);
+    try tx.append(allocator, 1);
+    try tx.append(allocator, marker);
+    try putInt(&tx, allocator, &null_vout);
+    try tx.append(allocator, 1);
+    var value = std.mem.toBytes(@as(u64, 5_000_000_000));
+    try putInt(&tx, allocator, &value);
+    try tx.append(allocator, 1);
+    try tx.append(allocator, 0x51);
+    var lock_time = std.mem.toBytes(@as(u32, 0));
+    try putInt(&tx, allocator, &lock_time);
+    return tx.toOwnedSlice(allocator);
+}
+
+fn spendTx(allocator: std.mem.Allocator, spend_txid: [32]u8) ![]u8 {
+    var tx: std.ArrayList(u8) = .empty;
+    errdefer tx.deinit(allocator);
+    var version = std.mem.toBytes(@as(u32, 1));
+    try putInt(&tx, allocator, &version);
+    try tx.append(allocator, 1);
+    try putInt(&tx, allocator, &spend_txid);
+    var vout = std.mem.toBytes(@as(u32, 0));
+    try putInt(&tx, allocator, &vout);
+    try tx.append(allocator, 0);
+    var sequence = std.mem.toBytes(@as(u32, 0xffffffff));
+    try putInt(&tx, allocator, &sequence);
+    try tx.append(allocator, 1);
+    var value = std.mem.toBytes(@as(u64, 1000));
+    try putInt(&tx, allocator, &value);
+    try tx.append(allocator, 1);
+    try tx.append(allocator, 0x51);
+    var lock_time = std.mem.toBytes(@as(u32, 0));
+    try putInt(&tx, allocator, &lock_time);
+    return tx.toOwnedSlice(allocator);
+}
+
+const BuiltBlock = struct {
+    raw: []u8,
+    hash: [32]u8,
+    prev: [32]u8,
+};
+
+fn putInt(list: *std.ArrayList(u8), allocator: std.mem.Allocator, bytes: []const u8) !void {
+    try list.appendSlice(allocator, bytes);
+}
+
+fn buildCoinbaseBlock(allocator: std.mem.Allocator, prev: [32]u8, marker: u8) !BuiltBlock {
+    var tx: std.ArrayList(u8) = .empty;
+    errdefer tx.deinit(allocator);
+    var version = std.mem.toBytes(@as(u32, 1));
+    try putInt(&tx, allocator, &version);
+    try tx.append(allocator, 1);
+    try tx.appendNTimes(allocator, 0, 32);
+    var null_vout = std.mem.toBytes(@as(u32, 0xffffffff));
+    try putInt(&tx, allocator, &null_vout);
+    try tx.append(allocator, 1);
+    try tx.append(allocator, marker);
+    try putInt(&tx, allocator, &null_vout);
+    try tx.append(allocator, 1);
+    var value = std.mem.toBytes(@as(u64, 5_000_000_000));
+    try putInt(&tx, allocator, &value);
+    try tx.append(allocator, 1);
+    try tx.append(allocator, 0x51);
+    var lock_time = std.mem.toBytes(@as(u32, 0));
+    try putInt(&tx, allocator, &lock_time);
+    const txid = core.crypto.doubleSha256(tx.items);
+
+    var raw: std.ArrayList(u8) = .empty;
+    errdefer raw.deinit(allocator);
+    try putInt(&raw, allocator, &version);
+    try putInt(&raw, allocator, &prev);
+    try putInt(&raw, allocator, &txid);
+    var time = std.mem.toBytes(@as(u32, 1_700_000_000));
+    try putInt(&raw, allocator, &time);
+    var bits = std.mem.toBytes(@as(u32, 0x1d00ffff));
+    try putInt(&raw, allocator, &bits);
+    var nonce = std.mem.toBytes(@as(u32, marker));
+    try putInt(&raw, allocator, &nonce);
+    try raw.append(allocator, 1);
+    try putInt(&raw, allocator, tx.items);
+    tx.deinit(allocator);
+    const hash = core.crypto.doubleSha256(raw.items[0..80]);
+    return .{ .raw = try raw.toOwnedSlice(allocator), .hash = hash, .prev = prev };
+}
+
+fn connectBuilt(db: anytype, allocator: std.mem.Allocator, height: u32, block: BuiltBlock, utxos: i64) !i64 {
+    return connectBuiltRecord(db, allocator, height, block, utxos, true);
+}
+
+fn connectBuiltRecord(db: anytype, allocator: std.mem.Allocator, height: u32, block: BuiltBlock, utxos: i64, record: bool) !i64 {
+    const transactions = try core.tx.parseBlockTransactions(allocator, block.raw);
+    defer {
+        for (transactions) |transaction| transaction.deinit(allocator);
+        allocator.free(transactions);
+    }
+    if (record) try db.recordBlock(allocator, height, block.hash, block.raw);
+    const connected = try core.connect.connectDecodedBlock(allocator, db, height, height, .{
+        .hash = block.hash,
+        .prev_hash = block.prev,
+        .merkle_root = block.hash,
+        .tx_count = 1,
+        .bits = 0x1d00ffff,
+    }, transactions, null, utxos);
+    defer connected.deinit(allocator);
+    return connected.chainstate_utxo_count;
+}
+
+fn exerciseDisconnect(db: anytype, allocator: std.mem.Allocator) !void {
+    const zero = [_]u8{0} ** 32;
+    const block0 = try buildCoinbaseBlock(allocator, zero, 1);
+    defer allocator.free(block0.raw);
+    const block1 = try buildCoinbaseBlock(allocator, block0.hash, 2);
+    defer allocator.free(block1.raw);
+    const block2 = try buildCoinbaseBlock(allocator, block1.hash, 3);
+    defer allocator.free(block2.raw);
+    const fork = try buildCoinbaseBlock(allocator, block0.hash, 9);
+    defer allocator.free(fork.raw);
+
+    var utxos: i64 = 0;
+    utxos = try connectBuilt(db, allocator, 0, block0, utxos);
+    const hash0 = db.setHash();
+    const count0 = utxos;
+    utxos = try connectBuilt(db, allocator, 1, block1, utxos);
+    const hash1 = db.setHash();
+    const count1 = utxos;
+    utxos = try connectBuilt(db, allocator, 2, block2, utxos);
+    const hash2 = db.setHash();
+    try std.testing.expectEqualSlices(u8, &hash2, &db.setHash());
+    const recorded0 = (try db.setHashAt(0)).?;
+    const recorded1 = (try db.setHashAt(1)).?;
+    try std.testing.expectEqualSlices(u8, &hash0, &recorded0);
+    try std.testing.expectEqualSlices(u8, &hash1, &recorded1);
+
+    try std.testing.expectError(error.ParentMismatch, connectBuiltRecord(db, allocator, 1, fork, utxos, false));
+
+    const removed = try db.disconnectTip(allocator);
+    try std.testing.expectEqual(@as(u32, 2), removed.height);
+    try std.testing.expectEqual(@as(u32, 1), removed.utxos_removed);
+    try std.testing.expectEqual(@as(u32, 0), removed.utxos_restored);
+    try std.testing.expectEqualSlices(u8, &hash1, &removed.set_hash_after);
+    try std.testing.expectEqualSlices(u8, &hash1, &db.setHash());
+    try std.testing.expectEqual(count1, dbUtxoCount(db));
+
+    utxos = count1;
+    utxos = try connectBuilt(db, allocator, 2, block2, utxos);
+    try std.testing.expectEqualSlices(u8, &hash2, &db.setHash());
+
+    _ = try db.disconnectTip(allocator);
+    const back = try db.disconnectTip(allocator);
+    try std.testing.expectEqual(@as(u32, 1), back.height);
+    try std.testing.expectEqualSlices(u8, &hash0, &back.set_hash_after);
+    try std.testing.expectEqual(count0, dbUtxoCount(db));
+    utxos = try connectBuilt(db, allocator, 1, fork, count0);
+    try std.testing.expect(utxos == count1);
+    try std.testing.expect(!std.mem.eql(u8, &db.setHash(), &hash1));
+}
+
+fn dbUtxoCount(db: anytype) i64 {
+    const Child = @TypeOf(db.*);
+    if (@hasField(Child, "utxo_count")) return db.utxo_count;
+    return db.primary.utxo_count;
+}
+
+fn expectNoRecordedNative(allocator: std.mem.Allocator) !void {
+    const path = try freshPath(allocator, "reorg-norecord");
+    defer allocator.free(path);
+    var db = try Native.open(allocator, path, .{});
+    defer db.close();
+    try expectNoRecordedOn(&db, allocator);
+}
+
+fn expectNoRecordedRocks(allocator: std.mem.Allocator) !void {
+    const path = try freshPath(allocator, "reorg-norecord-rocks");
+    defer allocator.free(path);
+    var db = try core.RocksDb.open(allocator, path);
+    defer db.close();
+    try expectNoRecordedOn(&db, allocator);
+}
+
+fn expectNoRecordedOn(db: anytype, allocator: std.mem.Allocator) !void {
+    const zero = [_]u8{0} ** 32;
+    const block0 = try buildCoinbaseBlock(allocator, zero, 4);
+    defer allocator.free(block0.raw);
+    const block1 = try buildCoinbaseBlock(allocator, block0.hash, 5);
+    defer allocator.free(block1.raw);
+    try db.recordBlock(allocator, 0, block0.hash, block0.raw);
+    try db.recordBlock(allocator, 1, block1.hash, block1.raw);
+    const transactions = try core.tx.parseBlockTransactions(allocator, block1.raw);
+    defer {
+        for (transactions) |transaction| transaction.deinit(allocator);
+        allocator.free(transactions);
+    }
+    var txids = [_][32]u8{transactions[0].txid()};
+    var spent = std.AutoHashMap(core.types.Outpoint, void).init(allocator);
+    defer spent.deinit();
+    _ = try db.commitConnectedBlock(allocator, 1, block1.hash, &.{}, &.{}, transactions, &txids, &spent, 1);
+    try std.testing.expect((try db.setHashAt(0)) == null);
+    const before = db.setHash();
+    try std.testing.expectError(error.NoRecordedSetHash, db.disconnectTip(allocator));
+    try std.testing.expectEqualSlices(u8, &before, &db.setHash());
+    try std.testing.expectEqual(@as(i64, 1), dbUtxoCount(db));
+}
+
+fn expectCorruptUndoNative(allocator: std.mem.Allocator) !void {
+    const path = try freshPath(allocator, "reorg-bad-undo");
+    defer allocator.free(path);
+    var db = try Native.open(allocator, path, .{});
+    defer db.close();
+    const zero = [_]u8{0} ** 32;
+    const block0 = try buildCoinbaseBlock(allocator, zero, 6);
+    defer allocator.free(block0.raw);
+    const block1 = try buildCoinbaseBlock(allocator, block0.hash, 7);
+    defer allocator.free(block1.raw);
+    var utxos: i64 = 0;
+    utxos = try connectBuilt(&db, allocator, 0, block0, utxos);
+    _ = try connectBuilt(&db, allocator, 1, block1, utxos);
+    const before = db.setHash();
+    try flipNativeUndo(path);
+    try std.testing.expectError(error.UndoTruncated, db.disconnectTip(allocator));
+    try std.testing.expectEqualSlices(u8, &before, &db.setHash());
+    try std.testing.expectEqual(@as(i64, 1), db.utxo_count);
+    try std.testing.expectEqual(@as(i64, 1), db.validated_height);
+}
+
+fn flipNativeUndo(path: []const u8) !void {
+    const undo_path = try std.fs.path.join(std.testing.allocator, &.{ path, "undo.dat" });
+    defer std.testing.allocator.free(undo_path);
+    const path_z = try std.testing.allocator.dupeZ(u8, undo_path);
+    defer std.testing.allocator.free(path_z);
+    const fd = std.c.open(path_z, .{ .ACCMODE = .RDWR, .CLOEXEC = true }, @as(std.c.mode_t, 0));
+    if (fd < 0) return error.NativeIo;
+    defer _ = std.c.close(fd);
+    const len = std.c.lseek(fd, 0, std.c.SEEK.END);
+    if (len < 4) return error.NativeIo;
+    var byte = [_]u8{0};
+    const at: i64 = @intCast(len - 4);
+    if (std.c.pread(fd, &byte, 1, at) != 1) return error.NativeIo;
+    byte[0] ^= 0xff;
+    if (std.c.pwrite(fd, &byte, 1, at) != 1) return error.NativeIo;
+}
+
+fn expectCorruptUndoRocks(allocator: std.mem.Allocator) !void {
+    const path = try freshPath(allocator, "reorg-bad-undo-rocks");
+    defer allocator.free(path);
+    var db = try core.RocksDb.open(allocator, path);
+    defer db.close();
+    const zero = [_]u8{0} ** 32;
+    const block0 = try buildCoinbaseBlock(allocator, zero, 8);
+    defer allocator.free(block0.raw);
+    const block1 = try buildCoinbaseBlock(allocator, block0.hash, 10);
+    defer allocator.free(block1.raw);
+    var utxos: i64 = 0;
+    utxos = try connectBuilt(&db, allocator, 0, block0, utxos);
+    _ = try connectBuilt(&db, allocator, 1, block1, utxos);
+    const before = db.setHash();
+    const key = try core.codec.encodeUndoKey(allocator, "testnet4", 1);
+    defer allocator.free(key);
+    const undo = (try db.getAlloc(allocator, key)).?;
+    defer allocator.free(undo);
+    undo[0] ^= 0xff;
+    try db.put(key, undo);
+    try std.testing.expectError(error.UndoTruncated, db.disconnectTip(allocator));
+    try std.testing.expectEqualSlices(u8, &before, &db.setHash());
+    try std.testing.expectEqual(@as(i64, 1), db.utxo_count);
+    try std.testing.expectEqual(@as(i64, 1), db.validated_height);
+}
+
+fn expectReplayAndSnapshot(allocator: std.mem.Allocator) !void {
+    const path = try freshPath(allocator, "reorg-replay");
+    defer allocator.free(path);
+    const zero = [_]u8{0} ** 32;
+    const block0 = try buildCoinbaseBlock(allocator, zero, 11);
+    defer allocator.free(block0.raw);
+    const block1 = try buildCoinbaseBlock(allocator, block0.hash, 12);
+    defer allocator.free(block1.raw);
+    const block2 = try buildCoinbaseBlock(allocator, block1.hash, 13);
+    defer allocator.free(block2.raw);
+    var hash1: [32]u8 = undefined;
+    var hash2: [32]u8 = undefined;
+    var count1: i64 = 0;
+    {
+        var db = try Native.open(allocator, path, .{});
+        var utxos: i64 = 0;
+        utxos = try connectBuilt(&db, allocator, 0, block0, utxos);
+        utxos = try connectBuilt(&db, allocator, 1, block1, utxos);
+        hash1 = db.setHash();
+        count1 = utxos;
+        _ = try connectBuilt(&db, allocator, 2, block2, utxos);
+        hash2 = db.setHash();
+        _ = try db.disconnectTip(allocator);
+        db.close();
+    }
+    {
+        var db = try Native.open(allocator, path, .{});
+        defer db.close();
+        try std.testing.expectEqualSlices(u8, &hash1, &db.setHash());
+        try std.testing.expectEqual(count1, db.utxo_count);
+        const again = try connectBuilt(&db, allocator, 2, block2, count1);
+        try std.testing.expectEqualSlices(u8, &hash2, &db.setHash());
+        _ = try db.disconnectTip(allocator);
+        try db.writeSnapshot();
+        try std.testing.expectEqualSlices(u8, &hash1, &db.setHash());
+        _ = again;
+    }
+    {
+        var db = try Native.open(allocator, path, .{});
+        defer db.close();
+        try std.testing.expectEqualSlices(u8, &hash1, &db.setHash());
+        try std.testing.expectEqual(count1, db.utxo_count);
+        try std.testing.expectEqualSlices(u8, &hash1, &(try db.setHashAt(1)).?);
+    }
+}

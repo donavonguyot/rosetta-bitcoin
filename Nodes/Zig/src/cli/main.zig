@@ -25,6 +25,8 @@ const script_corpus = @import("script_corpus.zig");
 const cmdScriptCorpus = script_corpus.cmdScriptCorpus;
 const headers = @import("headers.zig");
 const cmdCheckHeaders = headers.cmdCheckHeaders;
+const reorg = @import("reorg.zig");
+const cmdDisconnectTip = reorg.cmdDisconnectTip;
 const context = @import("context.zig");
 const cmdConsensusContext = context.cmdConsensusContext;
 const cmdWriteContextFixtures = context.cmdWriteContextFixtures;
@@ -92,6 +94,8 @@ pub fn main(init: std.process.Init) !void {
         try cmdWriteContextFixtures(allocator, io, out, args[2..]);
     } else if (std.mem.eql(u8, command, "check-headers")) {
         try cmdCheckHeaders(allocator, out, args[2..]);
+    } else if (std.mem.eql(u8, command, "disconnect-tip")) {
+        try cmdDisconnectTip(allocator, out, args[2..]);
     } else {
         try out.print("error: unknown command: {s}\n", .{command});
         try usage(out);
@@ -108,7 +112,8 @@ fn usage(out: anytype) !void {
         \\  native-crypto-vectors
         \\  test-capability --kind crypto-vectors --outcome-path path [--mutation schnorr-accept-bad-s|schnorr-accept-bad-xonly|taproot-ignore-output-check]
         \\  script-corpus [--manifest path] [--output path] [--shadow-crypto]
-        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--gate-output path] [--store=rocksdb|native] [--shadow] [--snapshot-every N] [--utxo-capacity-hint N] [--mem-limit <text>] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append] [--benchmark-lane self_hosted]
+        \\  sync|local-reference-proof [--target <height>] [--peer <host:port>] [--output path] [--gate-output path] [--store=rocksdb|native] [--shadow] [--allow-reorg-depth N] [--snapshot-every N] [--utxo-capacity-hint N] [--mem-limit <text>] [--fsync] [--crash-after-block N] [--crash-point before-append|after-append] [--benchmark-lane self_hosted]
+        \\  disconnect-tip [--datadir ./data-zig] [--store=rocksdb|native]
         \\  sync-supervisor-once [--target 5000] [--peer <host:port>] [--datadir ./data-zig]
         \\  mempool-replay --trace <dir> [--datadir ./data-zig] [--store=native|rocksdb] [--output path] [--template-output path]
         \\  build-template --trace <dir> [--datadir ./data-zig] [--store=native|rocksdb] [--output path]

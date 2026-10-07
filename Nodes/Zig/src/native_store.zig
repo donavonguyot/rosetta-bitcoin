@@ -11,6 +11,11 @@
 //! window (test "snapshot rename before log truncate does not double apply").
 //! Flat files truncate to the committed extent (test "flat files truncate to the last committed extent").
 //! `recordBlock` is its own log record (test "record block survives restart before connect").
+//! The set hash after each committed height is stored for `setHashAt`. Replay of a commit fills it,
+//! and snapshot version 2 writes the map so truncating the log does not drop heights already recorded.
+//! A height with no record is null. Disconnect will not invent one (`NoRecordedSetHash`).
+//! `disconnectTip` appends `kind_disconnect` and leaves block and undo bytes in place
+//! (test "disconnect restores the recorded set hash").
 //! Delete preimages stay in the commit record so replay can check them.
 //! Durability class is `process_crash`. `--fsync` is the power-loss class (storage-proof).
 //! RocksDB compresses blocks. Native files do not. The 100k datadir was 9.6 GB native against
@@ -19,6 +24,7 @@
 //! Does not validate scripts, proof of work, or the next nBits.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const root = @import("root.zig");
 const store = root.store;
 
@@ -44,6 +50,7 @@ pub const OpenOptions = struct {
 const kind_meta: u8 = 1;
 const kind_record_block: u8 = 2;
 const kind_commit: u8 = 3;
+const kind_disconnect: u8 = 4;
 
 const build_options = @import("crypto_options");
 const utxo_hash_wyhash = std.mem.eql(u8, build_options.utxo_hash, "wyhash");
@@ -107,6 +114,8 @@ pub const NativeStore = struct {
     meta: std.StringHashMap([]u8),
     blocks: std.AutoHashMap(u32, BlockLoc),
     undos: std.AutoHashMap(u32, Extent),
+    /// Set hash after each committed height. Missing heights stay absent.
+    set_hashes: std.AutoHashMap(u32, store.SetHash),
     set_hash: store.SetHash = store.emptySetHash(),
     utxo_count: i64 = 0,
     validated_height: i64 = -1,
@@ -136,6 +145,7 @@ pub const NativeStore = struct {
             .meta = std.StringHashMap([]u8).init(allocator),
             .blocks = std.AutoHashMap(u32, BlockLoc).init(allocator),
             .undos = std.AutoHashMap(u32, Extent).init(allocator),
+            .set_hashes = std.AutoHashMap(u32, store.SetHash).init(allocator),
         };
         errdefer self.close();
         try mkdir(self.path);
@@ -167,6 +177,7 @@ pub const NativeStore = struct {
         self.meta.deinit();
         self.blocks.deinit();
         self.undos.deinit();
+        self.set_hashes.deinit();
         self.header_index.deinit(self.allocator);
         if (self.log_fd >= 0) _ = std.c.close(self.log_fd);
         if (self.blocks_fd >= 0) _ = std.c.close(self.blocks_fd);
@@ -372,6 +383,117 @@ pub const NativeStore = struct {
         return try root.crypto.internalHashFromDisplay(self.allocator, meta.validated_hash);
     }
 
+    /// Set hash recorded when this height committed, or null when that commit was not kept.
+    /// Disconnect compares against this. It does not recompute a missing height.
+    /// test "disconnect restores the recorded set hash"
+    pub fn setHashAt(self: *NativeStore, height: u32) !?store.SetHash {
+        return self.set_hashes.get(height);
+    }
+
+    /// Remove the committed tip. Block and undo bytes stay. The log gains kind_disconnect.
+    /// The resulting set hash must equal the hash recorded at H−1.
+    /// test "disconnect restores the recorded set hash"
+    pub fn disconnectTip(self: *NativeStore, allocator: std.mem.Allocator) !store.DisconnectResult {
+        if (self.validated_height < 1) return error.NoUndoForTip;
+        const height: u32 = @intCast(self.validated_height);
+        const raw_loc = self.blocks.get(height) orelse return error.NoUndoForTip;
+        const undo_loc = self.undos.get(height) orelse return error.NoUndoForTip;
+        if (raw_loc.raw.len < 80 or raw_loc.header.len < 80) return error.NoUndoForTip;
+        const recorded = self.set_hashes.get(height - 1) orelse return error.NoRecordedSetHash;
+        const parent = self.blocks.get(height - 1) orelse return error.NoUndoForTip;
+        if (parent.header.len < 80) return error.NoUndoForTip;
+
+        const raw = try readFile(allocator, self.blocks_fd, raw_loc.raw);
+        defer allocator.free(raw);
+        const undo_bytes = try readFile(allocator, self.undo_fd, undo_loc);
+        defer allocator.free(undo_bytes);
+        const undo = try root.codec.decodeUndoValue(allocator, undo_bytes);
+        defer root.codec.freeUndoEntries(allocator, undo);
+        const parent_header = try readFile(allocator, self.headers_fd, parent.header);
+        defer allocator.free(parent_header);
+
+        const result = try self.revertTip(allocator, height, raw, undo, parent_header[0..80]);
+        var payload = Buf.init(self.allocator);
+        defer payload.deinit();
+        try payload.putU8(kind_disconnect);
+        try payload.putU64(self.last_seq + 1);
+        try payload.putU32(height);
+        try payload.bytes(&result.block_hash);
+        try payload.bytes(&result.new_tip_hash);
+        try payload.bytes(&result.set_hash_after);
+        try payload.putI64(self.utxo_count);
+        try self.appendRecord(payload.slice());
+        self.last_seq += 1;
+        if (!std.mem.eql(u8, &result.set_hash_after, &recorded)) return error.SetHashMismatchAfterDisconnect;
+        return result;
+    }
+
+    fn revertTip(self: *NativeStore, allocator: std.mem.Allocator, height: u32, raw: []const u8, undo: []const root.types.UndoEntry, parent_header: []const u8) !store.DisconnectResult {
+        const transactions = try root.tx.parseBlockTransactions(allocator, raw);
+        defer {
+            for (transactions) |transaction| transaction.deinit(allocator);
+            allocator.free(transactions);
+        }
+        var next_hash = self.set_hash;
+        var removed: u32 = 0;
+        for (transactions, 0..) |transaction, tx_index| {
+            if (height == 0 and tx_index == 0) continue;
+            const txid = transaction.txid();
+            for (transaction.outputs, 0..) |output, vout_index| {
+                if (output.value < 0) return error.NegativeOutputValue;
+                if (!root.connect.isSpendableOutput(output.script_pubkey)) continue;
+                const outpoint = root.types.Outpoint{ .txid = txid, .vout = @intCast(vout_index) };
+                const current = self.utxos.get(outpoint) orelse continue;
+                if (builtin.mode == .Debug) {
+                    const encoded = try root.codec.encodeUtxoValue(allocator, .{
+                        .height = height,
+                        .vout = @intCast(vout_index),
+                        .value_sats = @intCast(output.value),
+                        .coinbase = tx_index == 0,
+                        .script_pubkey = output.script_pubkey,
+                    });
+                    defer allocator.free(encoded);
+                    if (!std.mem.eql(u8, current, encoded)) return error.ReplayPreimageMismatch;
+                }
+                const key = try root.codec.encodeUtxoKey(allocator, "testnet4", outpoint);
+                defer allocator.free(key);
+                store.foldSetHash(&next_hash, key, current);
+                const taken = self.utxos.fetchRemove(outpoint).?;
+                self.allocator.free(taken.value);
+                removed += 1;
+            }
+        }
+        var restored: u32 = 0;
+        for (undo) |entry| {
+            const value = try root.codec.encodeUtxoValue(allocator, entry.utxo);
+            const key = try root.codec.encodeUtxoKey(allocator, "testnet4", entry.outpoint);
+            defer allocator.free(key);
+            store.foldSetHash(&next_hash, key, value);
+            try self.putUtxoBytes(entry.outpoint, value);
+            allocator.free(value);
+            restored += 1;
+        }
+        self.utxo_count = self.utxo_count - @as(i64, removed) + @as(i64, restored);
+        self.set_hash = next_hash;
+        self.validated_height = height - 1;
+        _ = self.undos.remove(height);
+        const block_hash = root.crypto.doubleSha256(raw[0..80]);
+        const tip_hash = root.crypto.doubleSha256(parent_header[0..80]);
+        try self.putCommitMeta(height - 1, tip_hash, self.utxo_count, next_hash);
+        return .{
+            .height = height,
+            .block_hash = block_hash,
+            .new_tip_hash = tip_hash,
+            .utxos_removed = removed,
+            .utxos_restored = restored,
+            .set_hash_after = next_hash,
+        };
+    }
+
+    fn rememberSetHash(self: *NativeStore, height: u32, set_hash: store.SetHash) !void {
+        try self.set_hashes.put(height, set_hash);
+    }
+
     /// Indexed time and nBits at a height, or null when that height was not stored.
     /// nBits checks read this instead of re-parsing the header.
     /// test "record block survives restart before connect"
@@ -567,7 +689,7 @@ pub const NativeStore = struct {
         var body = Buf.init(self.allocator);
         defer body.deinit();
         try body.bytes("ZN01");
-        try body.putU32(1);
+        try body.putU32(2);
         try body.putU64(self.last_seq);
         try body.putU32(@intCast(self.validated_height));
         try body.bytes(&self.set_hash);
@@ -607,6 +729,12 @@ pub const NativeStore = struct {
             try body.putU32(entry.key_ptr.*);
             try body.putU64(entry.value_ptr.offset);
             try body.putU32(entry.value_ptr.len);
+        }
+        try body.putU32(@intCast(self.set_hashes.count()));
+        var hash_it = self.set_hashes.iterator();
+        while (hash_it.next()) |entry| {
+            try body.putU32(entry.key_ptr.*);
+            try body.bytes(entry.value_ptr);
         }
         var crc_bytes: [4]u8 = undefined;
         std.mem.writeInt(u32, &crc_bytes, std.hash.Crc32.hash(body.slice()), .little);
@@ -757,6 +885,7 @@ pub const NativeStore = struct {
         self.utxo_count = new_utxo_count;
         self.validated_height = height;
         self.last_seq += 1;
+        try self.rememberSetHash(height, next_hash);
     }
 
     fn crashCommit(self: *NativeStore, height: u32, point: CrashPoint) !void {
@@ -788,6 +917,7 @@ pub const NativeStore = struct {
             kind_meta => try self.applyMeta(&rd),
             kind_record_block => try self.applyRecordBlock(&rd),
             kind_commit => try self.applyCommit(&rd),
+            kind_disconnect => try self.applyDisconnect(&rd),
             else => return error.BadRecord,
         }
         self.last_seq = seq;
@@ -890,6 +1020,31 @@ pub const NativeStore = struct {
         self.set_hash = set_bytes;
         self.utxo_count = new_count;
         self.validated_height = height;
+        try self.rememberSetHash(height, set_bytes);
+    }
+
+    fn applyDisconnect(self: *NativeStore, rd: *Rd) !void {
+        const height = try rd.readU32();
+        const block_hash = try rd.take(32);
+        const tip_hash = try rd.take(32);
+        const logged_set = try rd.take(32);
+        const logged_count = try rd.readI64();
+        const raw_loc = self.blocks.get(height) orelse return error.NoUndoForTip;
+        const undo_loc = self.undos.get(height) orelse return error.NoUndoForTip;
+        const parent = self.blocks.get(height - 1) orelse return error.NoUndoForTip;
+        const raw = try readFile(self.allocator, self.blocks_fd, raw_loc.raw);
+        defer self.allocator.free(raw);
+        const undo_bytes = try readFile(self.allocator, self.undo_fd, undo_loc);
+        defer self.allocator.free(undo_bytes);
+        const undo = try root.codec.decodeUndoValue(self.allocator, undo_bytes);
+        defer root.codec.freeUndoEntries(self.allocator, undo);
+        const parent_header = try readFile(self.allocator, self.headers_fd, parent.header);
+        defer self.allocator.free(parent_header);
+        const result = try self.revertTip(self.allocator, height, raw, undo, parent_header[0..80]);
+        if (!std.mem.eql(u8, &result.block_hash, block_hash)) return error.SetHashMismatchAfterDisconnect;
+        if (!std.mem.eql(u8, &result.new_tip_hash, tip_hash)) return error.SetHashMismatchAfterDisconnect;
+        if (!std.mem.eql(u8, &result.set_hash_after, logged_set)) return error.SetHashMismatchAfterDisconnect;
+        if (self.utxo_count != logged_count) return error.SetHashMismatchAfterDisconnect;
     }
 
     fn putCommitMeta(self: *NativeStore, height: u32, block_hash: [32]u8, utxo_count: i64, set_hash: store.SetHash) !void {
@@ -982,12 +1137,14 @@ pub const NativeStore = struct {
         if (stored != std.hash.Crc32.hash(bytes[0 .. bytes.len - 4])) return error.SnapshotCorrupt;
         var rd = Rd{ .bytes = bytes[0 .. bytes.len - 4] };
         _ = try rd.take(4);
-        if (try rd.readU32() != 1) return error.SnapshotCorrupt;
+        const version = try rd.readU32();
+        if (version != 1 and version != 2) return error.SnapshotCorrupt;
         self.last_seq = try rd.readU64();
         self.snapshot_height = try rd.readU32();
         self.validated_height = self.snapshot_height;
         const hash_bytes = try rd.take(32);
         @memcpy(&self.set_hash, hash_bytes);
+        try self.rememberSetHash(@intCast(self.snapshot_height), self.set_hash);
         self.utxo_count = try rd.readI64();
         self.blocks_len = try rd.readU64();
         self.headers_len = try rd.readU64();
@@ -1029,6 +1186,16 @@ pub const NativeStore = struct {
             const height = try rd.readU32();
             try self.undos.put(height, .{ .offset = try rd.readU64(), .len = try rd.readU32() });
         }
+        if (version == 2) {
+            const n_hashes = try rd.readU32();
+            i = 0;
+            while (i < n_hashes) : (i += 1) {
+                const height = try rd.readU32();
+                var recorded: store.SetHash = undefined;
+                @memcpy(&recorded, try rd.take(32));
+                try self.rememberSetHash(height, recorded);
+            }
+        }
         self.snapshot_bytes = bytes.len;
         self.snapshot_count = 1;
     }
@@ -1062,7 +1229,7 @@ pub const NativeStore = struct {
                 offset += total;
                 continue;
             }
-            if (self.snapshot_height >= 0 and (kind == kind_commit or kind == kind_record_block)) {
+            if (self.snapshot_height >= 0 and (kind == kind_commit or kind == kind_record_block or kind == kind_disconnect)) {
                 const height = std.mem.readInt(u32, payload[9..13], .little);
                 if (height <= self.snapshot_height) {
                     self.last_seq = seq;

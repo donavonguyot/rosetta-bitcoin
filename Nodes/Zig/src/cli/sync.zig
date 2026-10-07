@@ -1,7 +1,8 @@
 //! `sync` and `local-reference-proof`: connect toward a height and write the shadow gate.
 //! native-shadow-5k, the 50k and 100k shadows, and self-hosted-50k all enter here.
 //! `--build-info` is checked by the Makefile before this command runs.
-//! Does not rewind a store that is already past the target.
+//! `--allow-reorg-depth=0` refuses a parent mismatch. A positive depth disconnects at most that many tips.
+//! test "disconnect restores the recorded set hash"
 
 const std = @import("std");
 const core = @import("zigbitnode");
@@ -95,6 +96,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
     if (core.crypto.own_curve != (crypto_backend == .own_curve)) return error.CryptoBackendNotCompiled;
     const comparable = crypto_backend == .native and !shadow and std.mem.eql(u8, store_name, "rocksdb");
     const target = try std.fmt.parseInt(u32, target_text, 10);
+    const reorg_depth = try std.fmt.parseInt(u32, valueArg(args, "--allow-reorg-depth") orelse "0", 10);
     const benchmark_lane_arg = valueArg(args, "--benchmark-lane") orelse "";
     var profile = proofProfile(target) orelse return error.UnsupportedProofTarget;
     profile = try overrideBenchmarkLane(profile, benchmark_lane_arg);
@@ -155,7 +157,7 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
 
     var cursor: usize = start_height;
     var emitted_first_block_connected = false;
-    while (cursor <= target) {
+    connect_loop: while (cursor <= target) {
         const end = @min(cursor + prefetch, @as(usize, target) + 1);
         const fetch_started = core.datadir.nowMs();
         const blocks = try client.requestBlocks(headers[cursor..end], @intCast(cursor));
@@ -170,7 +172,16 @@ fn runLocalReferenceProof(allocator: std.mem.Allocator, io: std.Io, out: anytype
             var prev_hash: [32]u8 = undefined;
             @memcpy(&prev_hash, fetched.raw[4..36]);
             const tip_hash = try db.tipHash();
-            try core.connect.requireParentLink(fetched.height, prev_hash, tip_hash);
+            core.connect.requireParentLink(fetched.height, prev_hash, tip_hash) catch |err| {
+                if (err != error.ParentMismatch or reorg_depth == 0) return err;
+                const aligned = try rewindTowardPeer(allocator, db, headers, reorg_depth);
+                cursor = @as(usize, aligned.height) + 1;
+                last_height = aligned.height;
+                last_utxos = aligned.utxo_count;
+                allocator.free(last_hash);
+                last_hash = aligned.hash_display;
+                continue :connect_loop;
+            };
             const decoded = try core.block.decodeBlock(allocator, fetched.raw, fetched.hash, tip_hash);
             defer {
                 for (decoded.transactions) |transaction| transaction.deinit(allocator);
@@ -525,6 +536,35 @@ const SlowBlocks = struct {
         return out.toOwnedSlice(allocator);
     }
 };
+
+const RewoundTip = struct {
+    height: u32,
+    utxo_count: i64,
+    hash_display: []u8,
+};
+
+fn rewindTowardPeer(allocator: std.mem.Allocator, db: anytype, headers: []const [32]u8, max_depth: u32) !RewoundTip {
+    var used: u32 = 0;
+    while (true) {
+        const meta = try db.readMetadata(allocator);
+        const tip = try db.tipHash();
+        const height: u32 = if (meta.validated_height < 0) 0 else @intCast(meta.validated_height);
+        const matched = if (tip) |tip_hash|
+            height < headers.len and std.mem.eql(u8, &tip_hash, &headers[height])
+        else
+            false;
+        if (matched) {
+            const hash_display = try allocator.dupe(u8, meta.validated_hash);
+            const utxo_count = meta.chainstate_utxo_count;
+            db.deinitMetadata(allocator, meta);
+            return .{ .height = height, .utxo_count = utxo_count, .hash_display = hash_display };
+        }
+        db.deinitMetadata(allocator, meta);
+        if (used >= max_depth) return error.ReorgDepthExceeded;
+        _ = try db.disconnectTip(allocator);
+        used += 1;
+    }
+}
 
 /// One supervisor pass over local-reference-proof.
 pub fn cmdSupervisorOnce(allocator: std.mem.Allocator, out: anytype, args: []const []const u8) !void {

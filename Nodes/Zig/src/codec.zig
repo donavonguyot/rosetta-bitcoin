@@ -92,6 +92,13 @@ pub fn encodeUndoKey(allocator: std.mem.Allocator, chain: []const u8, height: u3
     return keyWithHeight(allocator, 'd', chain, height);
 }
 
+/// Key for the set hash after a committed height, prefix `s`.
+/// The value is the 32-byte hash recorded in that commit, not a recomputation.
+/// test "disconnect restores the recorded set hash"
+pub fn encodeSetHashKey(allocator: std.mem.Allocator, chain: []const u8, height: u32) ![]u8 {
+    return keyWithHeight(allocator, 's', chain, height);
+}
+
 /// Key for the chain tip marker, prefix `t` and the chain name.
 /// No height in the key. The value is encodeTipValue.
 /// test "codec v2 golden vectors"
@@ -247,6 +254,61 @@ pub fn encodeUndoValue(allocator: std.mem.Allocator, entries: []const UndoEntry)
         try appendVarBytes32(allocator, &bytes, entry.utxo.script_pubkey);
     }
     return bytes.toOwnedSlice(allocator);
+}
+
+/// Inverse of encodeUndoValue. Each script is owned by the caller.
+/// A short payload is UndoTruncated. Disconnect reads this before it mutates.
+/// test "disconnect restores the recorded set hash"
+pub fn decodeUndoValue(allocator: std.mem.Allocator, bytes: []const u8) ![]UndoEntry {
+    if (bytes.len < 4) return error.UndoTruncated;
+    const count = std.mem.readInt(u32, bytes[0..4], .big);
+    // One entry is at least the fixed fields. A flipped count must not allocate.
+    if (count > (bytes.len - 4) / 53) return error.UndoTruncated;
+    var entries = try allocator.alloc(UndoEntry, count);
+    errdefer allocator.free(entries);
+    var offset: usize = 4;
+    var filled: usize = 0;
+    errdefer {
+        for (entries[0..filled]) |entry| allocator.free(entry.utxo.script_pubkey);
+    }
+    while (filled < count) : (filled += 1) {
+        if (offset + 32 + 4 + 4 + 8 + 1 + 4 > bytes.len) return error.UndoTruncated;
+        var txid: [32]u8 = undefined;
+        @memcpy(&txid, bytes[offset..][0..32]);
+        offset += 32;
+        const vout = std.mem.readInt(u32, bytes[offset..][0..4], .big);
+        offset += 4;
+        const height = std.mem.readInt(u32, bytes[offset..][0..4], .big);
+        offset += 4;
+        const value_sats = std.mem.readInt(u64, bytes[offset..][0..8], .big);
+        offset += 8;
+        const coinbase = bytes[offset] == 1;
+        offset += 1;
+        const script_len = std.mem.readInt(u32, bytes[offset..][0..4], .big);
+        offset += 4;
+        if (offset + script_len > bytes.len) return error.UndoTruncated;
+        const script = try allocator.dupe(u8, bytes[offset..][0..script_len]);
+        offset += script_len;
+        entries[filled] = .{
+            .outpoint = .{ .txid = txid, .vout = vout },
+            .utxo = .{
+                .height = height,
+                .vout = vout,
+                .value_sats = value_sats,
+                .coinbase = coinbase,
+                .script_pubkey = script,
+            },
+        };
+    }
+    if (offset != bytes.len) return error.UndoTruncated;
+    return entries;
+}
+
+/// Free scripts from decodeUndoValue.
+/// test "disconnect restores the recorded set hash"
+pub fn freeUndoEntries(allocator: std.mem.Allocator, entries: []UndoEntry) void {
+    for (entries) |entry| allocator.free(entry.utxo.script_pubkey);
+    allocator.free(entries);
 }
 
 /// Read a UTXO value back: height, satoshis, coinbase, script.

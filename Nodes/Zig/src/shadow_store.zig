@@ -62,6 +62,32 @@ pub fn ShadowStore(comptime Primary: type, comptime Shadow: type) type {
             return self.primary.tipHash();
         }
 
+        /// Set hash the primary recorded at this height. The shadow key is checked on disconnect.
+        /// Both engines see the same block. The set hashes are compared after the commit.
+        /// test "disconnect restores the recorded set hash"
+        pub fn setHashAt(self: *Self, height: u32) !?store.SetHash {
+            return self.primary.setHashAt(height);
+        }
+
+        /// Disconnect the tip on both engines and compare every result field.
+        /// A field mismatch is StoreDivergence. Block bytes stay on each engine.
+        /// test "disconnect restores the recorded set hash"
+        pub fn disconnectTip(self: *Self, allocator: std.mem.Allocator) !store.DisconnectResult {
+            const primary = try self.primary.disconnectTip(allocator);
+            const shadow_result = try self.shadow.disconnectTip(allocator);
+            if (primary.height != shadow_result.height or
+                primary.utxos_removed != shadow_result.utxos_removed or
+                primary.utxos_restored != shadow_result.utxos_restored or
+                !std.mem.eql(u8, &primary.block_hash, &shadow_result.block_hash) or
+                !std.mem.eql(u8, &primary.new_tip_hash, &shadow_result.new_tip_hash) or
+                !std.mem.eql(u8, &primary.set_hash_after, &shadow_result.set_hash_after))
+            {
+                return self.fail("disconnect", primary.height);
+            }
+            try self.expectTip();
+            return primary;
+        }
+
         /// The 80-byte header at a height, or null past the stored tip.
         /// Both engines see the same block. The set hashes are compared after the commit.
         /// test "rocks shadow create and spend returns set hash to zero"
