@@ -2,8 +2,12 @@
 //! A native-only binary exposes the same type and returns `StoreNotCompiled` (test "native-only build does not open rocksdb").
 //! Cache, write buffer, and bloom are the tuning string gates record.
 //! Does not implement the native commit log. `native_store.zig` does.
+//! The set hash after each commit is a prefix `s` key in that commit's WriteBatch.
+//! Heights written before that key existed return null from `setHashAt`.
+//! test "disconnect restores the recorded set hash"
 
 const std = @import("std");
+const builtin = @import("builtin");
 const build_options = @import("crypto_options");
 const types = @import("types.zig");
 const codec = @import("codec.zig");
@@ -32,6 +36,7 @@ const encodedUtxoKeyLen = codec.encodedUtxoKeyLen;
 const decodeUtxoValue = codec.decodeUtxoValue;
 const encodeUtxoValue = codec.encodeUtxoValue;
 const encodeUndoKey = codec.encodeUndoKey;
+const encodeSetHashKey = codec.encodeSetHashKey;
 const encodeUndoValue = codec.encodeUndoValue;
 const encodeTipKey = codec.encodeTipKey;
 const encodeTipValue = codec.encodeTipValue;
@@ -218,6 +223,132 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         defer self.deinitMetadata(self.allocator, meta);
         if (meta.validated_hash.len != 64) return error.MissingTipHash;
         return try crypto.internalHashFromDisplay(self.allocator, meta.validated_hash);
+    }
+
+    /// Set hash recorded in the commit batch for this height, or null if that key was never written.
+    /// Disconnect compares against this. It does not recompute a missing height.
+    /// test "disconnect restores the recorded set hash"
+    pub fn setHashAt(self: *RocksDb, height: u32) !?store.SetHash {
+        const key = try encodeSetHashKey(self.allocator, "testnet4", height);
+        defer self.allocator.free(key);
+        const raw = (try self.getAlloc(self.allocator, key)) orelse return null;
+        defer self.allocator.free(raw);
+        if (raw.len != 32) return error.BadSetHash;
+        var recorded: store.SetHash = undefined;
+        @memcpy(&recorded, raw);
+        return recorded;
+    }
+
+    /// Remove the committed tip in one WriteBatch. Raw block and undo keys stay.
+    /// The resulting set hash must equal the hash recorded at H−1.
+    /// test "disconnect restores the recorded set hash"
+    pub fn disconnectTip(self: *RocksDb, allocator: std.mem.Allocator) !store.DisconnectResult {
+        if (self.validated_height < 1) return error.NoUndoForTip;
+        const height: u32 = @intCast(self.validated_height);
+        const recorded = (try self.setHashAt(height - 1)) orelse return error.NoRecordedSetHash;
+        const raw_key = try encodeRawBlockKey(allocator, "testnet4", height);
+        defer allocator.free(raw_key);
+        const raw = (try self.getAlloc(allocator, raw_key)) orelse return error.NoUndoForTip;
+        defer allocator.free(raw);
+        if (raw.len < 80) return error.NoUndoForTip;
+        const undo_key = try encodeUndoKey(allocator, "testnet4", height);
+        defer allocator.free(undo_key);
+        const undo_bytes = (try self.getAlloc(allocator, undo_key)) orelse return error.NoUndoForTip;
+        defer allocator.free(undo_bytes);
+        const parent = (try self.headerAt(allocator, height - 1)) orelse return error.NoUndoForTip;
+        const undo = try codec.decodeUndoValue(allocator, undo_bytes);
+        defer codec.freeUndoEntries(allocator, undo);
+        const transactions = try tx.parseBlockTransactions(allocator, raw);
+        defer {
+            for (transactions) |transaction| transaction.deinit(allocator);
+            allocator.free(transactions);
+        }
+
+        var next_hash = self.set_hash;
+        var removed: u32 = 0;
+        var restores = std.ArrayList(struct { outpoint: Outpoint, value: []u8 }).empty;
+        defer {
+            for (restores.items) |item| allocator.free(item.value);
+            restores.deinit(allocator);
+        }
+        var removals = std.ArrayList(struct { outpoint: Outpoint, value: []u8 }).empty;
+        defer {
+            for (removals.items) |item| allocator.free(item.value);
+            removals.deinit(allocator);
+        }
+        for (transactions, 0..) |transaction, tx_index| {
+            if (height == 0 and tx_index == 0) continue;
+            const id = transaction.txid();
+            for (transaction.outputs, 0..) |output, vout_index| {
+                if (output.value < 0) return error.NegativeOutputValue;
+                if (!connect.isSpendableOutput(output.script_pubkey)) continue;
+                const outpoint = Outpoint{ .txid = id, .vout = @intCast(vout_index) };
+                const key = try encodeUtxoKey(allocator, "testnet4", outpoint);
+                defer allocator.free(key);
+                const current = (try self.getAlloc(allocator, key)) orelse continue;
+                if (builtin.mode == .Debug) {
+                    const encoded = try encodeUtxoValue(allocator, .{
+                        .height = height,
+                        .vout = @intCast(vout_index),
+                        .value_sats = @intCast(output.value),
+                        .coinbase = tx_index == 0,
+                        .script_pubkey = output.script_pubkey,
+                    });
+                    defer allocator.free(encoded);
+                    if (!std.mem.eql(u8, current, encoded)) {
+                        allocator.free(current);
+                        return error.ReplayPreimageMismatch;
+                    }
+                }
+                store.foldSetHash(&next_hash, key, current);
+                try removals.append(allocator, .{ .outpoint = outpoint, .value = current });
+                removed += 1;
+            }
+        }
+        var restored: u32 = 0;
+        for (undo) |entry| {
+            const value = try encodeUtxoValue(allocator, entry.utxo);
+            const key = try encodeUtxoKey(allocator, "testnet4", entry.outpoint);
+            defer allocator.free(key);
+            store.foldSetHash(&next_hash, key, value);
+            try restores.append(allocator, .{ .outpoint = entry.outpoint, .value = value });
+            restored += 1;
+        }
+        const new_count = self.utxo_count - @as(i64, removed) + @as(i64, restored);
+        const block_hash = crypto.doubleSha256(raw[0..80]);
+        const tip_hash = crypto.doubleSha256(&parent);
+        const batch = c.rocksdb_writebatch_create() orelse return error.RocksDbOptions;
+        defer c.rocksdb_writebatch_destroy(batch);
+        for (removals.items) |item| {
+            const key = try encodeUtxoKey(allocator, "testnet4", item.outpoint);
+            defer allocator.free(key);
+            c.rocksdb_writebatch_delete(batch, key.ptr, key.len);
+        }
+        for (restores.items) |item| {
+            const key = try encodeUtxoKey(allocator, "testnet4", item.outpoint);
+            defer allocator.free(key);
+            c.rocksdb_writebatch_put(batch, key.ptr, key.len, item.value.ptr, item.value.len);
+        }
+        try rocks_meta.putCommitMetadata(allocator, batch, height - 1, tip_hash, new_count, next_hash, false);
+        var err: [*c]u8 = null;
+        c.rocksdb_write(self.db, self.write_opts, batch, &err);
+        if (err != null) {
+            c.rocksdb_free(err);
+            return error.RocksDbWrite;
+        }
+        self.set_hash = next_hash;
+        self.utxo_count = new_count;
+        self.validated_height = height - 1;
+        const result = store.DisconnectResult{
+            .height = height,
+            .block_hash = block_hash,
+            .new_tip_hash = tip_hash,
+            .utxos_removed = removed,
+            .utxos_restored = restored,
+            .set_hash_after = next_hash,
+        };
+        if (!std.mem.eql(u8, &next_hash, &recorded)) return error.SetHashMismatchAfterDisconnect;
+        return result;
     }
 
     /// The 80-byte header at a height, or null past the stored tip.
@@ -571,6 +702,7 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         c.rocksdb_writebatch_put(batch, counter_key.ptr, counter_key.len, counter_value.ptr, counter_value.len);
         const set_hash_hex = store.writeSetHashHex(next_hash);
         try rocks_meta.putMetaBatch(allocator, batch, "chainstate_set_hash", set_hash_hex[0..]);
+        try rocks_meta.putSetHashAt(allocator, batch, commit.height, next_hash);
         timings.metadata_put_prepare += elapsedMs(metadata_started);
 
         const write_started = nowMs();
@@ -656,7 +788,7 @@ pub const RocksDb = if (rocksdb_compiled) struct {
         timings.undo_put_prepare += elapsedMs(undo_started);
 
         const metadata_started = nowMs();
-        try rocks_meta.putCommitMetadata(allocator, batch, height, block_hash, new_utxo_count, next_hash);
+        try rocks_meta.putCommitMetadata(allocator, batch, height, block_hash, new_utxo_count, next_hash, true);
         timings.metadata_put_prepare += elapsedMs(metadata_started);
 
         const write_started = nowMs();
@@ -752,7 +884,7 @@ const rocks_meta = if (rocksdb_compiled) struct {
         c.rocksdb_writebatch_put(batch, key.ptr, key.len, value.ptr, value.len);
     }
 
-    fn putCommitMetadata(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, height: u32, block_hash: [32]u8, utxo_count: i64, set_hash: store.SetHash) !void {
+    fn putCommitMetadata(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, height: u32, block_hash: [32]u8, utxo_count: i64, set_hash: store.SetHash, record_set_hash: bool) !void {
         const tip_key = try encodeTipKey(allocator, "testnet4");
         defer allocator.free(tip_key);
         const tip_value = try encodeTipValue(allocator, height, block_hash);
@@ -787,6 +919,13 @@ const rocks_meta = if (rocksdb_compiled) struct {
         c.rocksdb_writebatch_put(batch, counter_key.ptr, counter_key.len, counter_value.ptr, counter_value.len);
         const set_hash_hex = store.writeSetHashHex(set_hash);
         try rocks_meta.putMetaBatch(allocator, batch, "chainstate_set_hash", set_hash_hex[0..]);
+        if (record_set_hash) try rocks_meta.putSetHashAt(allocator, batch, height, set_hash);
+    }
+
+    fn putSetHashAt(allocator: std.mem.Allocator, batch: *c.rocksdb_writebatch_t, height: u32, set_hash: store.SetHash) !void {
+        const key = try encodeSetHashKey(allocator, "testnet4", height);
+        defer allocator.free(key);
+        c.rocksdb_writebatch_put(batch, key.ptr, key.len, &set_hash, set_hash.len);
     }
 } else struct {};
 test "native-only build does not open rocksdb" {

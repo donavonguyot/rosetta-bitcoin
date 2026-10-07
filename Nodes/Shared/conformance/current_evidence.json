@@ -1026,6 +1026,14 @@
       "path": "Nodes/Shared/conformance/results/zig_own_curve_bench_two_acc_2026-10-05.json",
       "status": "current",
       "notes": "Two-accumulator 5x52, below bar, not worse. Quiet ECDSA ratio_min 1.844 against 1.931. point_double -18 percent, point_add -6.5 percent, verify -4.5 percent. fe_mul 33 mul and 31 umulh. Reverted to keep the u256 kernel."
+    },
+    {
+      "port": "zig",
+      "claim": "consensus_context",
+      "gate_id": "reorg_disconnect",
+      "path": "Nodes/Shared/conformance/results/zig_reorg_disconnect_host_2026-10-07.json",
+      "status": "current",
+      "notes": "disconnectTip on native and RocksDB. Both reach the 155448 witness set hash and UTXO count with link_breaks empty. restoreAfterDisconnect stays a loud stub."
     }
   ]
 }

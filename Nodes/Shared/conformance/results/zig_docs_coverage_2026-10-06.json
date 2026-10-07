@@ -57,6 +57,10 @@
       "module_header": true
     },
     {
+      "module": "src/cli/reorg.zig",
+      "module_header": true
+    },
+    {
       "module": "src/cli/script_corpus.zig",
       "module_header": true
     },
@@ -79,14 +83,14 @@
     {
       "module": "src/codec.zig",
       "module_header": true,
-      "pub_count": 24,
-      "documented": 24,
-      "with_proof_ref": 24,
-      "distinct_proof_refs": 6,
+      "pub_count": 27,
+      "documented": 27,
+      "with_proof_ref": 27,
+      "distinct_proof_refs": 7,
       "proof_ref_kinds": {
         "fixture": 0,
         "gate": 1,
-        "unit_test": 5
+        "unit_test": 6
       }
     },
     {
@@ -208,14 +212,14 @@
     {
       "module": "src/native_store.zig",
       "module_header": true,
-      "pub_count": 30,
-      "documented": 30,
-      "with_proof_ref": 30,
-      "distinct_proof_refs": 13,
+      "pub_count": 32,
+      "documented": 32,
+      "with_proof_ref": 32,
+      "distinct_proof_refs": 14,
       "proof_ref_kinds": {
         "fixture": 0,
         "gate": 3,
-        "unit_test": 10
+        "unit_test": 11
       }
     },
     {
@@ -251,14 +255,14 @@
     {
       "module": "src/rocks_store.zig",
       "module_header": true,
-      "pub_count": 31,
-      "documented": 31,
-      "with_proof_ref": 31,
-      "distinct_proof_refs": 2,
+      "pub_count": 33,
+      "documented": 33,
+      "with_proof_ref": 33,
+      "distinct_proof_refs": 3,
       "proof_ref_kinds": {
         "fixture": 0,
         "gate": 0,
-        "unit_test": 2
+        "unit_test": 3
       }
     },
     {
@@ -289,27 +293,27 @@
     {
       "module": "src/shadow_store.zig",
       "module_header": true,
-      "pub_count": 18,
-      "documented": 18,
-      "with_proof_ref": 18,
-      "distinct_proof_refs": 2,
+      "pub_count": 20,
+      "documented": 20,
+      "with_proof_ref": 20,
+      "distinct_proof_refs": 3,
       "proof_ref_kinds": {
         "fixture": 0,
         "gate": 0,
-        "unit_test": 2
+        "unit_test": 3
       }
     },
     {
       "module": "src/store.zig",
       "module_header": true,
-      "pub_count": 9,
-      "documented": 9,
-      "with_proof_ref": 9,
-      "distinct_proof_refs": 1,
+      "pub_count": 10,
+      "documented": 10,
+      "with_proof_ref": 10,
+      "distinct_proof_refs": 2,
       "proof_ref_kinds": {
         "fixture": 0,
         "gate": 0,
-        "unit_test": 1
+        "unit_test": 2
       }
     },
     {
@@ -343,12 +347,12 @@
       "module_header": true
     }
   ],
-  "module_headers_present": 40,
+  "module_headers_present": 41,
   "module_headers_absent": 0,
-  "distinct_proof_refs": 44,
+  "distinct_proof_refs": 45,
   "proof_ref_kinds": {
     "fixture": 4,
     "gate": 7,
-    "unit_test": 33
+    "unit_test": 34
   }
 }

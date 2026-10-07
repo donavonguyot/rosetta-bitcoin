@@ -1,0 +1,640 @@
+{
+  "schema": "port.consensus.reorg.v1",
+  "port": "zig",
+  "implementation": "ZigNode",
+  "runtime_surface": "host",
+  "optimize": "ReleaseSafe",
+  "crypto_backend": "c_binding",
+  "store_mode": "both",
+  "passed": true,
+  "stub_retired": false,
+  "expected_witnesses": [
+    {
+      "source": "mempool-rung0 status",
+      "store": "rocksdb",
+      "height": 155448,
+      "chainstate_set_hash": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72",
+      "chainstate_utxo_count": 14266898,
+      "link_breaks": []
+    },
+    {
+      "source": "consensus.reorg_155428 fixture and fresh sync reorg-155448-fresh",
+      "height": 155448,
+      "chainstate_set_hash": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72",
+      "chainstate_utxo_count": 14266898
+    }
+  ],
+  "unit_tests": {
+    "command": "zig build test --summary all",
+    "test": "disconnect restores the recorded set hash",
+    "stores": [
+      {
+        "option": "native",
+        "passed": 58,
+        "total": 58
+      },
+      {
+        "option": "rocksdb",
+        "passed": 58,
+        "total": 58
+      },
+      {
+        "option": "both",
+        "passed": 58,
+        "total": 58
+      }
+    ]
+  },
+  "disconnect_results": {
+    "native": [
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155447,
+        "block_hash": "0000000000b2212c7074bc0fdab48b923c05089978299a0a646c5dcb24cd07ea",
+        "new_tip_hash": "000000000086af53d0811d0ca0b559b89cc321229b2eea620a80610ba7b0f164",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "901dc5cad969b76f0c9cf3c173c5e4cd8d89675f856defb4308915533d300bd3",
+        "utxo_count": 14266509
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155446,
+        "block_hash": "000000000086af53d0811d0ca0b559b89cc321229b2eea620a80610ba7b0f164",
+        "new_tip_hash": "000000000013830251aa5499e252a605c0b1ac347f7e0fd9fc9d962f06990dde",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "6045ea896be8f24b6b4fcbed873685e6b1272ff8d1dd0d109426d7b9d9398ea0",
+        "utxo_count": 14266508
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155445,
+        "block_hash": "000000000013830251aa5499e252a605c0b1ac347f7e0fd9fc9d962f06990dde",
+        "new_tip_hash": "0000000000122a6097ba0e49cb2c55f43fdafb307410d1cb3a5387a2b6b9b33b",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "88e61bee541be7cbb0b883938fa2bcfb9a74fd44138a45ca989ef5e940428ee8",
+        "utxo_count": 14266507
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155444,
+        "block_hash": "0000000000122a6097ba0e49cb2c55f43fdafb307410d1cb3a5387a2b6b9b33b",
+        "new_tip_hash": "0000000000c94ac77732657455119a2a7485ab34b1c64c9600ff33530d810135",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "e398fff6edec52e49a9251a01d11dbc616adc6ff1f0c3c27ffa32b3e0ec35e40",
+        "utxo_count": 14266506
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155443,
+        "block_hash": "0000000000c94ac77732657455119a2a7485ab34b1c64c9600ff33530d810135",
+        "new_tip_hash": "0000000000afed2c8ab1d89d960993113eab8f1fbf665e48df7c4fcddc0cd492",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "99135a951c5404392e1429247b304260b314c8ce32dfaad97d65a089c6457cb9",
+        "utxo_count": 14266505
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155442,
+        "block_hash": "0000000000afed2c8ab1d89d960993113eab8f1fbf665e48df7c4fcddc0cd492",
+        "new_tip_hash": "0000000000d107fb44d26365bb68771c80acde51a35cf3773461ccaf1f212983",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "ac0216c65693a6fb335ac14d2bc96474fe2cfe7519ba03922bb4bcd198d034d2",
+        "utxo_count": 14266504
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155441,
+        "block_hash": "0000000000d107fb44d26365bb68771c80acde51a35cf3773461ccaf1f212983",
+        "new_tip_hash": "0000000000ae7df0f8e6db83ad90a20c28a635afb423361acb5bac1e05efc8ef",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "c668aca8dc407a73fa02cc36686b893daa6369763a5bba88becf95bb9a8fd7b7",
+        "utxo_count": 14266503
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155440,
+        "block_hash": "0000000000ae7df0f8e6db83ad90a20c28a635afb423361acb5bac1e05efc8ef",
+        "new_tip_hash": "0000000000132418ccf777bb859a29d3f584262ebaedf8eb32b144520b181d0d",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "438236fd101c973748cf70be50b96224efb7db82458502c855426c401ef6f89f",
+        "utxo_count": 14266502
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155439,
+        "block_hash": "0000000000132418ccf777bb859a29d3f584262ebaedf8eb32b144520b181d0d",
+        "new_tip_hash": "000000000088812bc34c88e91dd0ba4b0cbef7c76e10a21ef1fbf32e388c45bd",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "c8fc5b6caac474a719a4cb5c813c71252d8e6c21bde18a47fb8f708b9cde4faf",
+        "utxo_count": 14266501
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155438,
+        "block_hash": "000000000088812bc34c88e91dd0ba4b0cbef7c76e10a21ef1fbf32e388c45bd",
+        "new_tip_hash": "0000000000c4bbe221ac9e8e73398f96237401746a5a028158333cdfca2a3a7d",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "2c9b70f69eb5c4901a79f78c01f469aee10bed369409d543aff78e30794f86f4",
+        "utxo_count": 14266500
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155437,
+        "block_hash": "0000000000c4bbe221ac9e8e73398f96237401746a5a028158333cdfca2a3a7d",
+        "new_tip_hash": "000000000004d171180d1b2f349c57a07bdd22c7fcba22efc36e54acaf36ca5d",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "eed639323cb784739ac1817a9883050f0e3b8f5397eaede00600aeeef08cf20c",
+        "utxo_count": 14266499
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155436,
+        "block_hash": "000000000004d171180d1b2f349c57a07bdd22c7fcba22efc36e54acaf36ca5d",
+        "new_tip_hash": "0000000000a8d57f5101833dba8a728c5b50a0c15a73ac123489528e0fc543de",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "fed8dfd5177c8ca5dee4ff8e36a815eb313d9becb7d01a79c5292da116ba3f2d",
+        "utxo_count": 14266498
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155435,
+        "block_hash": "0000000000a8d57f5101833dba8a728c5b50a0c15a73ac123489528e0fc543de",
+        "new_tip_hash": "00000000008479d64dfb77bde8bdb1465bef19c7adb8fc82b462edd2da910e6c",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "cdcf4bf1cb85a7b92f2d4807f1a7bcc51964afa6610a9e18127f3aac1b849d06",
+        "utxo_count": 14266497
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155434,
+        "block_hash": "00000000008479d64dfb77bde8bdb1465bef19c7adb8fc82b462edd2da910e6c",
+        "new_tip_hash": "0000000000fdbd7a56da14bf5d53b127c4b9120294f0fb2523d828fa1a3af0f4",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "f29b5f30c9ea519035ab0c032200bdd0e14bb3b246700540b80f33122aaaaedf",
+        "utxo_count": 14266496
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155433,
+        "block_hash": "0000000000fdbd7a56da14bf5d53b127c4b9120294f0fb2523d828fa1a3af0f4",
+        "new_tip_hash": "0000000000c303139aade6f573d5a6e11f9579c70b9785660cba63262b24f7d3",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "634d65249331310c3b56e95c3caaea63178f1d4b9a39617e742d37452f9e5c4a",
+        "utxo_count": 14266495
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155432,
+        "block_hash": "0000000000c303139aade6f573d5a6e11f9579c70b9785660cba63262b24f7d3",
+        "new_tip_hash": "0000000000f0b8ee0c5354304d4da15838fc94db44ece12ceb4e27d8649f09df",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "d90d3c1711b79a34228e4c4c6e7f822f0540b9dcfb3051a055aee24d02b92650",
+        "utxo_count": 14266494
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155431,
+        "block_hash": "0000000000f0b8ee0c5354304d4da15838fc94db44ece12ceb4e27d8649f09df",
+        "new_tip_hash": "000000000049b9c43881da6f9a9d4e29ceafb2a32e075fdda8360a80e5a4d246",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "3f98fa8eabf3bb70d7df29e14a5ba04585080b3f98d05a15c9e9d0e1a8a0c3b7",
+        "utxo_count": 14266493
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155430,
+        "block_hash": "000000000049b9c43881da6f9a9d4e29ceafb2a32e075fdda8360a80e5a4d246",
+        "new_tip_hash": "0000000000afc07fcf843863ec264c27a409496650a72f30551b024d3db78f7d",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "5f79005912f0582bcddf67475bf777c174524693a1be86d95063fc09f8aa90ea",
+        "utxo_count": 14266492
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155429,
+        "block_hash": "0000000000afc07fcf843863ec264c27a409496650a72f30551b024d3db78f7d",
+        "new_tip_hash": "000000007e9f81c1562ff674f264ecca2bcf74d9b1298d08d20ef3e60c3a1245",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "9786897099b221fe5128b1e9a006a2dc5154ec9c1be051604413c6724d24e2a8",
+        "utxo_count": 14266491
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "native",
+        "height": 155428,
+        "block_hash": "000000007e9f81c1562ff674f264ecca2bcf74d9b1298d08d20ef3e60c3a1245",
+        "new_tip_hash": "0000000012ac0f7aa64aa9ef451e1cbdecd1ce775d1394ace1ad1fb4623d317c",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "475c1fb95713e0c3be8ac1257f20fd7c64951a18d49f3d1f7498321d02785e11",
+        "utxo_count": 14266490
+      }
+    ],
+    "rocksdb": [
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155448,
+        "block_hash": "00000000000000009baaf5ccbd55840bb39de2193249d9d1eec9b6afa091fcc8",
+        "new_tip_hash": "0000000000b2212c7074bc0fdab48b923c05089978299a0a646c5dcb24cd07ea",
+        "utxos_removed": 698,
+        "utxos_restored": 314,
+        "set_hash_after": "670acec5bd59e99be5a29683d689c073b10e920f91a4f0214edced8cba5cb841",
+        "utxo_count": 14266514
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155447,
+        "block_hash": "0000000000b2212c7074bc0fdab48b923c05089978299a0a646c5dcb24cd07ea",
+        "new_tip_hash": "000000000086af53d0811d0ca0b559b89cc321229b2eea620a80610ba7b0f164",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "f6cd7f5853a31a62a7e16a8cd1b0ed70d59c9b752887ea33da73c7e13e5de7ed",
+        "utxo_count": 14266513
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155446,
+        "block_hash": "000000000086af53d0811d0ca0b559b89cc321229b2eea620a80610ba7b0f164",
+        "new_tip_hash": "000000000013830251aa5499e252a605c0b1ac347f7e0fd9fc9d962f06990dde",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "0695501be1225f46c03252a025438c5be932d3d27c3708977edc050bda54629e",
+        "utxo_count": 14266512
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155445,
+        "block_hash": "000000000013830251aa5499e252a605c0b1ac347f7e0fd9fc9d962f06990dde",
+        "new_tip_hash": "0000000000122a6097ba0e49cb2c55f43fdafb307410d1cb3a5387a2b6b9b33b",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "ee36a17cded14ac61bc51ade2dd7b546c261016ebe60404d7264275b432f62d6",
+        "utxo_count": 14266511
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155444,
+        "block_hash": "0000000000122a6097ba0e49cb2c55f43fdafb307410d1cb3a5387a2b6b9b33b",
+        "new_tip_hash": "0000000000c94ac77732657455119a2a7485ab34b1c64c9600ff33530d810135",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "854845646726ffe931efc8edbf64d27b4eb83ad5b2e639a01559f98c0daeb27e",
+        "utxo_count": 14266510
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155443,
+        "block_hash": "0000000000c94ac77732657455119a2a7485ab34b1c64c9600ff33530d810135",
+        "new_tip_hash": "0000000000afed2c8ab1d89d960993113eab8f1fbf665e48df7c4fcddc0cd492",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "ffc3e007969ea9348569b069d9454bddeb0134e49f35af5e979f723bc5289087",
+        "utxo_count": 14266509
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155442,
+        "block_hash": "0000000000afed2c8ab1d89d960993113eab8f1fbf665e48df7c4fcddc0cd492",
+        "new_tip_hash": "0000000000d107fb44d26365bb68771c80acde51a35cf3773461ccaf1f212983",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "cad2ac54dc590bf69827580089bc6dc9a639025fb4500615c14e6e639bbdd8ec",
+        "utxo_count": 14266508
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155441,
+        "block_hash": "0000000000d107fb44d26365bb68771c80acde51a35cf3773461ccaf1f212983",
+        "new_tip_hash": "0000000000ae7df0f8e6db83ad90a20c28a635afb423361acb5bac1e05efc8ef",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "a0b8163a568ad77e517f557bca1e8080f276955c97b1bf0f5435470999e23b89",
+        "utxo_count": 14266507
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155440,
+        "block_hash": "0000000000ae7df0f8e6db83ad90a20c28a635afb423361acb5bac1e05efc8ef",
+        "new_tip_hash": "0000000000132418ccf777bb859a29d3f584262ebaedf8eb32b144520b181d0d",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "25528c6f9ad63a3ae3b2e9f3f2cc6b99b7a227a8e86f074fbfb8bef21d9b14a1",
+        "utxo_count": 14266506
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155439,
+        "block_hash": "0000000000132418ccf777bb859a29d3f584262ebaedf8eb32b144520b181d0d",
+        "new_tip_hash": "000000000088812bc34c88e91dd0ba4b0cbef7c76e10a21ef1fbf32e388c45bd",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "ae2ce1fe200ed9aab2d9521123497898759b900b100b8fc01175a2399fb3a391",
+        "utxo_count": 14266505
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155438,
+        "block_hash": "000000000088812bc34c88e91dd0ba4b0cbef7c76e10a21ef1fbf32e388c45bd",
+        "new_tip_hash": "0000000000c4bbe221ac9e8e73398f96237401746a5a028158333cdfca2a3a7d",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "4a4bca64147f699db1046ec1a3816013b91e111c39e3d0c4450d5c827a226aca",
+        "utxo_count": 14266504
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155437,
+        "block_hash": "0000000000c4bbe221ac9e8e73398f96237401746a5a028158333cdfca2a3a7d",
+        "new_tip_hash": "000000000004d171180d1b2f349c57a07bdd22c7fcba22efc36e54acaf36ca5d",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "880683a0b67d297e31bc18373af60cb2562e73793a00e867ecfa7c5cf3e11e32",
+        "utxo_count": 14266503
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155436,
+        "block_hash": "000000000004d171180d1b2f349c57a07bdd22c7fcba22efc36e54acaf36ca5d",
+        "new_tip_hash": "0000000000a8d57f5101833dba8a728c5b50a0c15a73ac123489528e0fc543de",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "980865479db621a8759966c394dd1c56692867c61a3a1ffe2fd3ff1315d7d313",
+        "utxo_count": 14266502
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155435,
+        "block_hash": "0000000000a8d57f5101833dba8a728c5b50a0c15a73ac123489528e0fc543de",
+        "new_tip_hash": "00000000008479d64dfb77bde8bdb1465bef19c7adb8fc82b462edd2da910e6c",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "ab1ff163414f0ab48450d14a53d2b5784171538ccce09b9ff885e81e18e97138",
+        "utxo_count": 14266501
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155434,
+        "block_hash": "00000000008479d64dfb77bde8bdb1465bef19c7adb8fc82b462edd2da910e6c",
+        "new_tip_hash": "0000000000fdbd7a56da14bf5d53b127c4b9120294f0fb2523d828fa1a3af0f4",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "944be5a24320fc9d9ed6954e8075b46db95e4f98eb9a00c752f5e1a029c742e1",
+        "utxo_count": 14266500
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155433,
+        "block_hash": "0000000000fdbd7a56da14bf5d53b127c4b9120294f0fb2523d828fa1a3af0f4",
+        "new_tip_hash": "0000000000c303139aade6f573d5a6e11f9579c70b9785660cba63262b24f7d3",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "059ddfb619fb9c01902b70119edfe3de4f9ae16137d364f99ed7e5f72cf3b074",
+        "utxo_count": 14266499
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155432,
+        "block_hash": "0000000000c303139aade6f573d5a6e11f9579c70b9785660cba63262b24f7d3",
+        "new_tip_hash": "0000000000f0b8ee0c5354304d4da15838fc94db44ece12ceb4e27d8649f09df",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "bfdd86859b7d373989f3d501cc0a8b925d5545f656da5427bf5430ff01d4ca6e",
+        "utxo_count": 14266498
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155431,
+        "block_hash": "0000000000f0b8ee0c5354304d4da15838fc94db44ece12ceb4e27d8649f09df",
+        "new_tip_hash": "000000000049b9c43881da6f9a9d4e29ceafb2a32e075fdda8360a80e5a4d246",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "5948401c2139167d7ca2b0ace82ea9f8dd1df715353a5f9223130253abcd2f89",
+        "utxo_count": 14266497
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155430,
+        "block_hash": "000000000049b9c43881da6f9a9d4e29ceafb2a32e075fdda8360a80e5a4d246",
+        "new_tip_hash": "0000000000afc07fcf843863ec264c27a409496650a72f30551b024d3db78f7d",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "39a9bacb983af52666a2fe0af9827e7c2c47bab90c54835eba992ebbfbc77cd4",
+        "utxo_count": 14266496
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155429,
+        "block_hash": "0000000000afc07fcf843863ec264c27a409496650a72f30551b024d3db78f7d",
+        "new_tip_hash": "000000007d2588ec9234ed9be196acc323fe454aa8e48c3217f40d1ce286498d",
+        "utxos_removed": 1,
+        "utxos_restored": 0,
+        "set_hash_after": "f15633e213788cf3fa5528a40273ab61094110b6b60a54e7aee914c04e490e96",
+        "utxo_count": 14266495
+      },
+      {
+        "schema": "port.consensus.reorg.v1",
+        "command": "disconnect-tip",
+        "store": "rocksdb",
+        "height": 155428,
+        "block_hash": "000000007d2588ec9234ed9be196acc323fe454aa8e48c3217f40d1ce286498d",
+        "new_tip_hash": "0000000012ac0f7aa64aa9ef451e1cbdecd1ce775d1394ace1ad1fb4623d317c",
+        "utxos_removed": 19,
+        "utxos_restored": 14,
+        "set_hash_after": "475c1fb95713e0c3be8ac1257f20fd7c64951a18d49f3d1f7498321d02785e11",
+        "utxo_count": 14266490
+      }
+    ]
+  },
+  "fixture_acceptance": [
+    {
+      "fixture_id": "consensus.reorg_155428",
+      "store": "native",
+      "datadir": "reorg-native-accept",
+      "copied_from": "triage-155447-native",
+      "method": "disconnect 155447 to 155427, then sync --target 155448",
+      "height": 155448,
+      "validated_hash": "00000000000000009baaf5ccbd55840bb39de2193249d9d1eec9b6afa091fcc8",
+      "chainstate_set_hash": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72",
+      "chainstate_utxo_count": 14266898,
+      "link_breaks": [],
+      "check_headers_passed": true,
+      "set_hash_at_155427": "475c1fb95713e0c3be8ac1257f20fd7c64951a18d49f3d1f7498321d02785e11",
+      "utxo_count_at_155427": 14266490
+    },
+    {
+      "fixture_id": "consensus.reorg_155428",
+      "store": "rocksdb",
+      "datadir": "reorg-rocks-accept",
+      "method": "fresh sync to 155448 with this binary, disconnect 155448 to 155427, sync --target 155448",
+      "height": 155448,
+      "validated_hash": "00000000000000009baaf5ccbd55840bb39de2193249d9d1eec9b6afa091fcc8",
+      "chainstate_set_hash": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72",
+      "chainstate_utxo_count": 14266898,
+      "link_breaks": [],
+      "check_headers_passed": true,
+      "set_hash_at_155427": "475c1fb95713e0c3be8ac1257f20fd7c64951a18d49f3d1f7498321d02785e11",
+      "utxo_count_at_155427": 14266490,
+      "note": "The historical mempool-rung0 store has no per-height set-hash keys, so it cannot be rewound. The positive rewind used a store this binary synced from genesis."
+    }
+  ],
+  "allow_reorg_depth": {
+    "datadir": "reorg-native-flag",
+    "copied_from": "triage-155447-native",
+    "tip_before": {
+      "height": 155428,
+      "validated_hash": "000000007e9f81c1562ff674f264ecca2bcf74d9b1298d08d20ef3e60c3a1245"
+    },
+    "depth_0": {
+      "error": "ParentMismatch",
+      "store_unchanged": true
+    },
+    "depth_25": {
+      "target": 155448,
+      "validated_hash": "00000000000000009baaf5ccbd55840bb39de2193249d9d1eec9b6afa091fcc8",
+      "chainstate_set_hash": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72",
+      "chainstate_utxo_count": 14266898,
+      "link_breaks": [],
+      "check_headers_passed": true
+    }
+  },
+  "negative": [
+    {
+      "case": "NoRecordedSetHash",
+      "command": "disconnect-tip",
+      "store": "rocksdb",
+      "datadir": "reorg-rocks-historical",
+      "copied_from": "mempool-rung0",
+      "error": "NoRecordedSetHash",
+      "store_unchanged": true,
+      "height": 155448,
+      "chainstate_set_hash": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72",
+      "chainstate_utxo_count": 14266898
+    },
+    {
+      "case": "corrupt_undo",
+      "command": "disconnect-tip",
+      "store": "native",
+      "datadir": "reorg-native-corrupt",
+      "copied_from": "reorg-native-accept",
+      "flipped": "first byte of the height 155448 undo extent",
+      "error": "UndoTruncated",
+      "store_unchanged": true,
+      "height": 155448,
+      "chainstate_set_hash": "9d033ca932bc4818c1410189e08927dcd7e052d375fe1cf3ac374bf0fc00fc72",
+      "chainstate_utxo_count": 14266898
+    },
+    {
+      "case": "corrupt_undo",
+      "command": "unit disconnectTip",
+      "store": "rocksdb",
+      "test": "disconnect restores the recorded set hash",
+      "error": "UndoTruncated",
+      "store_unchanged": true
+    }
+  ],
+  "provenance": {
+    "run_ref": "zig-reorg-disconnect",
+    "fixture_hash": "daeaf577e38f71b0f179a8ebc2eae1a7631a283bdad39fa93644f09bc765dee2",
+    "source_commit": "fd0858164300cb07e43b99293efdb7dc94ca295e",
+    "binary_sha256": "b2788e47ab009814ca6381bd635713e87da4c2680d9fe66fc9793c892911beb6",
+    "toolchain_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec"
+  }
+}

@@ -13,6 +13,18 @@ const builtin = @import("builtin");
 /// test "set hash fold is its own inverse"
 pub const SetHash = [32]u8;
 
+/// What one `disconnectTip` removed. The set hash is the recorded H−1 value when it matches.
+/// The block bytes stay on disk. Only the committed tip moves back.
+/// test "disconnect restores the recorded set hash"
+pub const DisconnectResult = struct {
+    height: u32,
+    block_hash: [32]u8,
+    new_tip_hash: [32]u8,
+    utxos_removed: u32,
+    utxos_restored: u32,
+    set_hash_after: SetHash,
+};
+
 /// The all-zero set hash. Folding every member of a set returns here.
 /// Folding the same key and value twice returns the previous digest.
 /// test "set hash fold is its own inverse"
