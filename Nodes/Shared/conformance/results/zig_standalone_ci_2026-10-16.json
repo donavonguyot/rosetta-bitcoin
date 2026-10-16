@@ -1,0 +1,191 @@
+{
+  "schema": "port.portability.v1",
+  "port": "zig",
+  "claim": "standalone_build_and_test_with_mempool_diagnostics",
+  "captured_at": "2026-10-16T23:45:55.628873+00:00",
+  "source_commit": "d1c0e4fda5f532a28544960098469fc3fe92a21c",
+  "scope": "Selected reporting and Rosetta capture tooling, standalone CI, offline export acceptance. No live capture, wallet operation, network sync, or readiness promotion.",
+  "repository_created": false,
+  "project_status_changed": false,
+  "binary_gate_status": "not_attempted",
+  "export": {
+    "files": 1898,
+    "manifest_sha256": "9bf7701597198155b64652105194fb46b956c300f61c3ba175686bbb93573d9d",
+    "source_dirty": false,
+    "git_metadata": false,
+    "symlinks": 0,
+    "checksums_after_tests": "passed"
+  },
+  "toolchain": {
+    "version": "0.16.0",
+    "installer_download_checksum": "passed",
+    "installed_binary_matches_previous_pinned_binary": true
+  },
+  "lanes": [
+    {
+      "crypto_backend": "c_binding",
+      "store": "both",
+      "host": {
+        "platform": "Darwin arm64",
+        "exit_code": 0,
+        "tests_passed": 59,
+        "tests_total": 59,
+        "tests_skipped": 0,
+        "build": "passed",
+        "docs": "passed",
+        "script_corpus": "45/45",
+        "consensus_context": "passed",
+        "codec_vectors": "passed",
+        "crypto_outcomes": [
+          {
+            "capability": "crypto_bip340_vectors",
+            "status": "pass",
+            "case_passed": 19,
+            "case_total": 19,
+            "notes": "all BIP340 vectors matched expected verification result"
+          },
+          {
+            "capability": "crypto_libsecp256k1_equivalence",
+            "status": "pass",
+            "case_passed": 104,
+            "case_total": 104,
+            "notes": "libsecp256k1 BIP340 19/19 plus native crypto vectors 33/33; pure Zig shadow BIP340 19/19 plus native crypto vectors 33/33"
+          }
+        ],
+        "ci_inventory_regression": "passed",
+        "replay_diagnostics_regression": "passed",
+        "source_checksums_after_tests": "passed"
+      },
+      "docker": {
+        "platform": "Linux arm64",
+        "image_id": "sha256:5c91c50f987ce755da16a674ac83e18509737ca72485e561b9668f49340870f3",
+        "target": "test",
+        "exit_code": 0,
+        "tests_passed": 59,
+        "tests_total": 59,
+        "tests_skipped": 0,
+        "docs": "passed",
+        "script_corpus": "45/45",
+        "consensus_context": "passed",
+        "codec_vectors": "passed",
+        "replay_diagnostics_regression": "passed",
+        "test_network": "none",
+        "context": "standalone export only"
+      }
+    },
+    {
+      "crypto_backend": "own_curve",
+      "store": "native",
+      "host": {
+        "platform": "Darwin arm64",
+        "exit_code": 0,
+        "tests_passed": 53,
+        "tests_total": 58,
+        "tests_skipped": 5,
+        "build": "passed",
+        "docs": "passed",
+        "script_corpus": "45/45",
+        "consensus_context": "passed",
+        "codec_vectors": "passed",
+        "crypto_outcomes": [
+          {
+            "capability": "crypto_bip340_vectors",
+            "status": "pass",
+            "case_passed": 19,
+            "case_total": 19,
+            "notes": "all BIP340 vectors matched expected verification result"
+          },
+          {
+            "capability": "crypto_libsecp256k1_equivalence",
+            "status": "pass",
+            "case_passed": 52,
+            "case_total": 52,
+            "notes": "libsecp256k1-zig BIP340 19/19 plus native crypto vectors 33/33"
+          }
+        ],
+        "ci_inventory_regression": "passed",
+        "replay_diagnostics_regression": "passed",
+        "source_checksums_after_tests": "passed"
+      },
+      "docker": {
+        "platform": "Linux arm64",
+        "image_id": "sha256:11d1ddd715803c585c0c2a30cff4f5c6fe6d7ad174cfebf027e0c9746dbcef5d",
+        "target": "test",
+        "exit_code": 0,
+        "tests_passed": 53,
+        "tests_total": 58,
+        "tests_skipped": 5,
+        "docs": "passed",
+        "script_corpus": "45/45",
+        "consensus_context": "passed",
+        "codec_vectors": "passed",
+        "replay_diagnostics_regression": "passed",
+        "test_network": "none",
+        "context": "standalone export only"
+      }
+    }
+  ],
+  "other_checks": {
+    "watcher_regressions": "6 passed",
+    "exporter_regression": "passed, including exported workflow",
+    "workflow_lint": "actionlint 1.7.7 passed",
+    "doc_drift": "passed",
+    "docker_contract": "passed",
+    "git_diff_check": "passed",
+    "path_hygiene": {
+      "status": "pre_existing_failure",
+      "branch_findings": 732,
+      "main_findings": 734,
+      "introduced_findings": 0
+    }
+  },
+  "ci": {
+    "workflow": ".github/workflows/zig-standalone.yml",
+    "configured_host_runners": [
+      "ubuntu-24.04",
+      "macos-14"
+    ],
+    "hosted_actions_run": false,
+    "validation": "local host acceptance commands, Linux Docker test stages, and workflow lint; no push or hosted dispatch"
+  },
+  "deferred": {
+    "mempool-stimulus": {
+      "branch": "zig/mempool-stimulus",
+      "head": "564a9c51af541645f403f3bfdd68d295a791d2c2",
+      "local_changes_preserved": true,
+      "backup": "state:campaigns/zig-selective-integration-20261016/",
+      "patch_sha256": "174dfb0536d0ed5bad58132ac3c2517ea373694391a54e3bd9f1d937b2ef416b",
+      "untracked_files_backed_up": 8
+    },
+    "trace-watcher": {
+      "branch": "zig/trace-watcher",
+      "head": "59616eb75e855ce4f0b8ee2d0cf819ee6a683fe3",
+      "local_changes_preserved": true,
+      "backup": "state:campaigns/zig-selective-integration-20261016/",
+      "patch_sha256": "9abcef0663a04c5980e26ecb398b4780c46e058692197f9efc1f27af331b3747",
+      "untracked_files_backed_up": 0
+    }
+  },
+  "logs": {
+    "host-default-v2": {
+      "path": "state:campaigns/zig-selective-integration-20261016/zig-selective-host-default-v2.log",
+      "sha256": "e705e54c769f3d8fd66736a54a989fc7a220fe5eb47f367b58e0567d4a686acd"
+    },
+    "host-own-v2": {
+      "path": "state:campaigns/zig-selective-integration-20261016/zig-selective-host-own-v2.log",
+      "sha256": "c81545ce7595c7a3ce69e72a9b21b76942a390a3ba967c45b38a32c92191baae"
+    },
+    "docker-default-v2": {
+      "path": "state:campaigns/zig-selective-integration-20261016/zig-selective-docker-default-v2.log",
+      "sha256": "d88099fe594c06a714d741817b3240d0bfe0b6333386fa133107919afa9274ce"
+    },
+    "docker-own-v2": {
+      "path": "state:campaigns/zig-selective-integration-20261016/zig-selective-docker-own-v2.log",
+      "sha256": "d0706bc7984f00590015ed419c494a40712ca1ec76d3b4e766d289ae104ebdd3"
+    },
+    "toolchain-install": {
+      "path": "state:campaigns/zig-selective-integration-20261016/zig-selective-toolchain-install.log",
+      "sha256": "a7c75031e2e4f5045fac4c33df6b95dc9143d1936480a728824f8dae70db2503"
+    }
+  }
+}

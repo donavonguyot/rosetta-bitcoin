@@ -2,6 +2,7 @@
 """Verify the exported source inventory and reject escaping symlinks."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -10,12 +11,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def main() -> None:
-    manifest = json.loads((ROOT / "standalone-manifest.json").read_text())
+def main(manifest_path: Path | None = None) -> None:
+    manifest = json.loads((manifest_path or ROOT / "standalone-manifest.json").read_text())
     if manifest["schema"] != "zigbitnode.standalone_source.v1":
         raise ValueError("unsupported standalone manifest")
     for directory, children, files in os.walk(ROOT):
-        children[:] = [name for name in children if name not in {".zig-cache", "zig-out", "__pycache__"}]
+        children[:] = [name for name in children if name not in {".git", ".zig-cache", "zig-out", "__pycache__"}]
         for name in children + files:
             path = Path(directory) / name
             if path.is_symlink():
@@ -33,4 +34,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path)
+    main(parser.parse_args().manifest)

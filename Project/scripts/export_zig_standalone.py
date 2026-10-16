@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PORT = Path("Nodes/Zig")
 CRYPTO = Path("Libraries/Zig/libsecp256k1-zig")
 SHARED = Path("Nodes/Shared")
+WORKFLOW = Path(".github/workflows/zig-standalone.yml")
 FIXTURE_ROOTS = ("conformance/fixtures", "testing/fixtures", "fixtures")
 
 
@@ -21,14 +22,16 @@ def git(*args: str) -> str:
 
 
 def inputs() -> list[tuple[Path, Path]]:
-    scopes = [str(PORT), str(CRYPTO), *(str(SHARED / p) for p in FIXTURE_ROOTS)]
+    scopes = [str(PORT), str(CRYPTO), str(WORKFLOW), *(str(SHARED / p) for p in FIXTURE_ROOTS)]
     names = sorted(set(git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *scopes).split("\0")) - {""})
     result = []
     for name in names:
         source = Path(name)
         if source == PORT / "libsecp256k1-zig":
             continue  # Materialized from its single canonical source below.
-        if source.is_relative_to(PORT):
+        if source == WORKFLOW:
+            destination = WORKFLOW
+        elif source.is_relative_to(PORT):
             destination = source.relative_to(PORT)
         elif source.is_relative_to(CRYPTO):
             destination = Path("libsecp256k1-zig") / source.relative_to(CRYPTO)
@@ -54,7 +57,7 @@ def export(destination: Path) -> dict:
         entries.append({"path": relative.as_posix(), "source": source.as_posix(),
                         "sha256": hashlib.sha256(target.read_bytes()).hexdigest()})
     manifest = {"schema": "zigbitnode.standalone_source.v1", "source_commit": git("rev-parse", "HEAD").strip(),
-                "source_dirty": bool(git("status", "--porcelain", "--", str(PORT), str(CRYPTO), *(str(SHARED / p) for p in FIXTURE_ROOTS)).strip()),
+                "source_dirty": bool(git("status", "--porcelain", "--", str(PORT), str(CRYPTO), str(WORKFLOW), *(str(SHARED / p) for p in FIXTURE_ROOTS)).strip()),
                 "zig_version": "0.16.0", "fixture_roots": list(FIXTURE_ROOTS), "files": entries}
     (destination / "standalone-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return {"destination": str(destination), "files": len(entries), "source_commit": manifest["source_commit"], "source_dirty": manifest["source_dirty"]}

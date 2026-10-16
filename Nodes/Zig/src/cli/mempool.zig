@@ -81,6 +81,20 @@ fn writeMempoolGate(allocator: std.mem.Allocator, io: std.Io, path: []const u8, 
         if (i != 0) try body.append(allocator, ',');
         try body.print(allocator, "{{\"height\":{d},\"set_hash\":\"{s}\",\"pool\":{d},\"core_set_hash\":\"{s}\"}}", .{ row.height, row.set_hash, row.pool_count, row.core_set_hash });
     }
+    try body.appendSlice(allocator, "],\"replacements\":{\"count\":");
+    try body.print(allocator, "{d},\"verdicts\":[", .{report.replacement_verdicts.len});
+    for (report.replacement_verdicts, 0..) |verdict, i| {
+        if (i != 0) try body.append(allocator, ',');
+        try body.print(allocator, "\"{s}\"", .{verdict});
+    }
+    try body.print(allocator, "]}},\"out_of_order_accepted\":{d},\"divergent_boundaries\":[", .{report.out_of_order_accepted});
+    var emitted_divergent = false;
+    for (report.boundaries) |row| {
+        if (row.core_set_hash.len == 0 or std.mem.eql(u8, &row.set_hash, row.core_set_hash)) continue;
+        if (emitted_divergent) try body.append(allocator, ',');
+        emitted_divergent = true;
+        try body.print(allocator, "{{\"height\":{d},\"set_hash\":\"{s}\",\"core_set_hash\":\"{s}\"}}", .{ row.height, row.set_hash, row.core_set_hash });
+    }
     try body.appendSlice(allocator, "]");
     try appendToolchainProvenance(allocator, &body);
     try body.appendSlice(allocator, "}\n");

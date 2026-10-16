@@ -113,3 +113,37 @@ python3 Project/scripts/report.py --db Project/project.db --section consensus-ru
 
 Portability does not establish independent empty-state sync to tip, tip
 maintenance, serving, or relay readiness. Those require their own runtime proof.
+
+## Standalone CI and dependency updates
+
+The exported `.github/workflows/zig-standalone.yml` runs macOS and Linux builds,
+unit tests, documentation, replay diagnostics, and offline vectors with Zig
+0.16.0. It checks the default C-binding/both-store lane and the experimental
+own-curve/native lane. Linux also builds the offline Docker test stage for both
+lanes. In RosettaBitcoin, CI first exports outside the checkout and uses only
+that export as the source and Docker context. Run its host checks locally with:
+
+```sh
+python3 scripts/ci_standalone.py --zig /path/to/zig-0.16.0/zig
+python3 scripts/ci_standalone.py --zig /path/to/zig-0.16.0/zig \
+  --store native --crypto-backend own_curve
+```
+
+After an eventual repository move, CI inventories each clean Git revision in
+`.zig-cache/ci-source-manifest.json` and verifies it after testing. The original
+export manifest stays unchanged as provenance. Compiler downloads are pinned
+by version and SHA-256 in `scripts/install_ci_zig.py` and the Dockerfile.
+
+Until that move, RosettaBitcoin remains the canonical node source. After the
+move, node changes should originate in Zigibit's repository; Rosetta lab
+integration should consume a pinned revision instead of maintaining a second
+editable copy. Capture, activity sampling, stimulus funding, Project imports,
+and benchmark orchestration remain Rosetta tools. They are not node runtime
+or standalone test dependencies.
+
+The crypto package and Shared fixtures are vendored snapshots with source paths
+and hashes in the export manifest. Update them deliberately from their canonical
+Rosetta sources, record the upstream revision, preserve licenses, and rerun the
+standalone acceptance checks. Do not regenerate frozen expected bytes merely to
+make a failing test pass. Shared contracts and Project readiness claims remain
+owned by RosettaBitcoin.

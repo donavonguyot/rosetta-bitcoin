@@ -29,7 +29,10 @@ class StandaloneExportTest(unittest.TestCase):
             fixture.write_bytes(b"frozen")
             (port / "zig-out").mkdir()
             (port / "zig-out/ignored").write_text("build output")
-            names = [str(exporter.PORT / "build.zig"), str(exporter.PORT / "libsecp256k1-zig"),
+            workflow = root / exporter.WORKFLOW
+            workflow.parent.mkdir(parents=True)
+            workflow.write_text("name: Standalone CI\n")
+            names = [str(exporter.WORKFLOW), str(exporter.PORT / "build.zig"), str(exporter.PORT / "libsecp256k1-zig"),
                      str(exporter.CRYPTO / "build.zig"), str(fixture.relative_to(root))]
 
             def fake_git(*args):
@@ -59,7 +62,8 @@ class StandaloneExportTest(unittest.TestCase):
             self.assertFalse((destination / "libsecp256k1-zig").is_symlink())
             self.assertEqual((destination / "libsecp256k1-zig/build.zig").read_text(), "crypto source\n")
             manifest = json.loads((destination / "standalone-manifest.json").read_text())
-            self.assertEqual(len(manifest["files"]), 3)
+            self.assertEqual(len(manifest["files"]), 4)
+            self.assertEqual((destination / exporter.WORKFLOW).read_text(), "name: Standalone CI\n")
             verifier_path = exporter.ROOT / exporter.PORT / "scripts/verify_standalone.py"
             spec = importlib.util.spec_from_file_location("verify_export", verifier_path)
             verifier = importlib.util.module_from_spec(spec)
