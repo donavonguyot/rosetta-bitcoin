@@ -64,3 +64,29 @@ Do not commit generated live state from any node directory.
 Reusable, independently buildable crypto packages live under `Libraries/`. They
 are root-owned source directories with package-local metadata and licenses, not
 nested Git repositories. See `Libraries/README.md` and Project `crypto-lanes`.
+
+## Zig extraction preparation
+
+Zig remains root-owned until a separately authorized repository move. The
+standalone export includes node source, its crypto dependency, fixture snapshots,
+and the standalone workflow. The dependency update and future ownership boundary
+are described in `Nodes/Zig/README.md`. No new repository is created by export.
+
+The selective mempool integration takes watcher/activity tooling from
+`zig/trace-watcher` through `59616eb`, ports its uncommitted replay diagnostics
+into the split CLI, and takes only the selected-transaction witness from
+`zig/mempool-stimulus` commit `f17dea2`. Historical captures are not promoted as
+new proof. Capture-order replay, derived fixtures, and stimulus funding/broadcast
+orchestration remain deferred.
+
+Preserve `zig/trace-watcher` (`59616eb`) and `zig/mempool-stimulus` (`564a9c5`)
+and their existing worktrees until the deferred work is explicitly resumed or
+archived. Their uncommitted patches and untracked files were also copied to
+`state:campaigns/zig-selective-integration-20261016/`, with a SHA-256 receipt.
+The stimulus worktree includes the unfinished, untracked proof driver and
+unrelated crypto evidence; neither belongs in this selective merge.
+
+Before resuming stimulus, repair the preface JSON parsing, pre-block Core
+sampling, non-vacuous RBF/CPFP checks, derived-directory discovery, and the
+missing second replay on fresh state. No busy-trace, reorder, or tip-readiness
+claim follows from the selected reporting changes.

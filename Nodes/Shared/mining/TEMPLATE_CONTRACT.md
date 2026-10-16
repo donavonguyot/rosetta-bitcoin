@@ -162,3 +162,12 @@ not a failure.
 Proof-of-work search, fee estimation, `getblocktemplate` proposal mode as an
 oracle, and changing header validation or block connect to enforce `nBits` or
 transaction finality. Those remain consensus-lane gaps.
+
+## Selection witness
+
+Zig mining reports include `selected_txids` at each boundary, in template
+selection order and RPC display byte order. These are transaction IDs, not
+witness transaction IDs. The witness describes the pre-block pool; the Core
+fee comparison also uses a template sampled before that block. A missing or
+stale Core sample remains null. An empty selection is an empty array and does
+not prove that a CPFP package was exercised.

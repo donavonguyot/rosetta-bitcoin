@@ -35,7 +35,8 @@ pub fn writeMiningGate(allocator: std.mem.Allocator, io: std.Io, path: []const u
         } else {
             try body.print(allocator, "{{\"height\":{d},\"port_fees\":{d},\"core_fees\":null,\"ratio_micros\":", .{ row.height, row.port_fees });
         }
-        if (row.ratio_micros) |ratio| try body.print(allocator, "{d}}}", .{ratio}) else try body.appendSlice(allocator, "null}");
+        if (row.ratio_micros) |ratio| try body.print(allocator, "{d}", .{ratio}) else try body.appendSlice(allocator, "null");
+        try body.print(allocator, ",\"selected_txids\":{s}}}", .{row.selected_txids});
     }
     try body.appendSlice(allocator, "]");
     try appendToolchainProvenance(allocator, &body);

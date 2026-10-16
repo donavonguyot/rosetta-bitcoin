@@ -40,7 +40,10 @@ COPY ${FIXTURE_SOURCE}/testing/fixtures ./fixtures/testing/fixtures
 COPY ${FIXTURE_SOURCE}/fixtures ./fixtures/fixtures
 RUN --network=none zig build test -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND --summary all \
   && zig build docs -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND \
-  && zig build run -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND -- script-corpus --output zig-out/script-corpus.json
+  && zig build run -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND -- script-corpus --output zig-out/script-corpus.json \
+  && ./zig-out/bin/zigbitnode consensus-context \
+  && ./zig-out/bin/zigbitnode codec-vectors \
+  && python3 scripts/test_replay_diagnostics.py
 
 FROM debian:bookworm-slim AS runtime
 ARG CRYPTO_BACKEND=c_binding
