@@ -18,18 +18,31 @@ RUN arch="$(dpkg --print-architecture)" \
   && mkdir -p /opt/zig \
   && tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1 \
   && ln -s /opt/zig/zig /usr/local/bin/zig
-WORKDIR /src/Nodes/Zig
-COPY Nodes/Zig/build.zig Nodes/Zig/build.zig.zon ./
-COPY Libraries/Zig/libsecp256k1-zig /src/Libraries/Zig/libsecp256k1-zig
-COPY Nodes/Zig/src ./src
-COPY Nodes/Zig/tests ./tests
+ARG NODE_SOURCE=Nodes/Zig
+ARG CRYPTO_SOURCE=Libraries/Zig/libsecp256k1-zig
+WORKDIR /src/node
+COPY ${NODE_SOURCE}/build.zig ${NODE_SOURCE}/build.zig.zon ./
+COPY ${CRYPTO_SOURCE} ./libsecp256k1-zig
+COPY ${NODE_SOURCE}/src ./src
+COPY ${NODE_SOURCE}/tests ./tests
+COPY ${NODE_SOURCE}/scripts ./scripts
 RUN --mount=type=cache,target=/root/.cache/zig \
   --mount=type=cache,target=/src/.zig-cache \
   zig build -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND -Dcrypto-source-digest=$CRYPTO_SOURCE_DIGEST -Dcrypto-probe=$CRYPTO_PROBE -Dcrypto-reject=$CRYPTO_REJECT \
   && mkdir -p /out \
-  && cp /src/Nodes/Zig/zig-out/bin/zigbitnode /out/zigbitnode
+  && cp /src/node/zig-out/bin/zigbitnode /out/zigbitnode
 
-FROM debian:bookworm-slim
+FROM build AS test
+ARG FIXTURE_SOURCE=Nodes/Shared
+RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
+COPY ${FIXTURE_SOURCE}/conformance/fixtures ./fixtures/conformance/fixtures
+COPY ${FIXTURE_SOURCE}/testing/fixtures ./fixtures/testing/fixtures
+COPY ${FIXTURE_SOURCE}/fixtures ./fixtures/fixtures
+RUN --network=none zig build test -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND --summary all \
+  && zig build docs -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND \
+  && zig build run -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND -- script-corpus --output zig-out/script-corpus.json
+
+FROM debian:bookworm-slim AS runtime
 ARG CRYPTO_BACKEND=c_binding
 ARG STORE=both
 RUN apt-get update \

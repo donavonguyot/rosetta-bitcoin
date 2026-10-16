@@ -8,3 +8,5 @@ data-zig-*/
 *.sqlite
 *.sqlite3
 chainstate-rocksdb/
+
+__pycache__/

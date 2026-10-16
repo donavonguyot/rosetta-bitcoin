@@ -1,6 +1,6 @@
 //! Shared CLI parsers. Paths come from the build options, not from a source string.
 //! `--fsync` is the only switch that changes native durability from `process_crash` to power-loss.
-//! The Makefile pins Zig 0.16.0 under the state root so a Homebrew `zig` on PATH is not the gate compiler.
+//! Build entrypoints require Zig 0.16.0; proof commands record the selected compiler.
 //! Does not open a store.
 
 const std = @import("std");
