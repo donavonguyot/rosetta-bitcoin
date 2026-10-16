@@ -19,6 +19,7 @@ def main():
     scratch.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=scratch) as temporary:
         work = Path(temporary)
+        (work / 'state').mkdir()
         trace = work / 'trace'
         trace.mkdir()
         (trace / 'manifest.json').write_text(json.dumps({'fixture': 'synthetic', 'start_height': 0, 'start_hash': '00' * 32}))

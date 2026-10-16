@@ -19,6 +19,9 @@ class SourceTest(unittest.TestCase):
             original.write_text('{"source_commit": "upstream"}\n')
             source = root / 'build.zig'
             source.write_text('current source\n')
+            metadata = root / '.git'
+            metadata.mkdir()
+            (metadata / 'hook').symlink_to(source)
             def git(*args):
                 if args == ('rev-parse', '--show-toplevel'):
                     return str(root)

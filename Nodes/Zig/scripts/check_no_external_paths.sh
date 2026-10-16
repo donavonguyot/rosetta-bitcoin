@@ -6,7 +6,7 @@ pat_shared=$(printf '%s%s' '../' 'Shared')
 pat_up=$(printf '%s%s' '../' '../')
 pat_users=$(printf '%s%s' '/Users' '/')
 if find . \
-    \( -type d \( -name worktrees -o -name __pycache__ \) -prune \) -o \
+    \( -type d \( -name .git -o -name worktrees -o -name __pycache__ \) -prune \) -o \
     -type f \
     ! -path './docs/*' \
     ! -path './libsecp256k1-zig/*' \

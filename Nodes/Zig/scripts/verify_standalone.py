@@ -16,7 +16,7 @@ def main(manifest_path: Path | None = None) -> None:
     if manifest["schema"] != "zigbitnode.standalone_source.v1":
         raise ValueError("unsupported standalone manifest")
     for directory, children, files in os.walk(ROOT):
-        children[:] = [name for name in children if name not in {".zig-cache", "zig-out", "__pycache__"}]
+        children[:] = [name for name in children if name not in {".git", ".zig-cache", "zig-out", "__pycache__"}]
         for name in children + files:
             path = Path(directory) / name
             if path.is_symlink():
