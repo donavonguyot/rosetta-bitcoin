@@ -111,6 +111,27 @@ python3 Project/scripts/report.py --db Project/project.db --section port-status
 python3 Project/scripts/report.py --db Project/project.db --section consensus-runway
 ```
 
+RB can also test a pinned external checkout without its sibling-directory layout:
+
+```sh
+python3 Project/scripts/run_zig_external_lab.py --source /path/to/zigibit
+```
+
+Run that command from RB. Supply a clean standalone export, or use `--manifest`
+with a clean inventory produced by `snapshot_ci_source.py` after a future move.
+The adapter verifies all inventoried inputs, uses only the external tree as its
+Docker build context, checks the built revision and binary hash, and runs offline
+tests, corpus, codec, storage smoke, fresh local Reference P2P through height
+5,000, and separate-process reopen/resume checks. No Project DB or RB source is
+mounted into the node. RB still owns topology, orchestration, and evidence import.
+
+Each invocation creates unique proof volumes and a new results directory under
+`RB_STATE_ROOT/project-campaigns/`. It refuses existing campaign state, never
+resets operational volumes, and retains failed runs for diagnosis. Review the
+compact `bounded.json`, `storage.json`, and `corpus.json` before promoting evidence;
+raw outputs and logs remain in the campaign directory. This is a bounded
+extraction check; it does not replace ranked benchmark campaign evidence.
+
 Portability does not establish independent empty-state sync to tip, tip
 maintenance, serving, or relay readiness. Those require their own runtime proof.
 

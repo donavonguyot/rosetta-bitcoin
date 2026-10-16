@@ -160,6 +160,8 @@ def main() -> int:
     parser.add_argument("--port", required=True, choices=sorted(contract_emitter.BACKENDS))
     parser.add_argument("--proof-path")
     parser.add_argument("--result-path", required=True)
+    parser.add_argument("--scope", choices=("host", "docker"), default="host")
+    parser.add_argument("--evidence-path", help="Reviewed proof path to cite instead of the suite definition")
     args = parser.parse_args()
 
     payload = None
@@ -173,6 +175,10 @@ def main() -> int:
         artifact = contract_emitter.outcome_payload(tmp)
     finally:
         tmp.unlink(missing_ok=True)
+    for contract in artifact["contracts"]:
+        contract["scope"] = args.scope
+        if args.evidence_path:
+            contract["evidence_path"] = args.evidence_path
     path = Path(args.result_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
