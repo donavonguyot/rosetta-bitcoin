@@ -120,6 +120,7 @@
     "Zig script corpus is 45/45 with engine=zig_native and delegated=false",
     "Live external P2P discovery and tip maintenance remain out of scope for proof_partial",
     "Binary gate remains not_attempted",
-    "own_curve uses a separate candidate-only build and per-run volume; default C-binding commands retain their lane."
+    "own_curve uses a separate candidate-only build and per-run volume; default C-binding commands retain their lane.",
+    "The Dockerfile supports standalone source exports via NODE_SOURCE, CRYPTO_SOURCE, and FIXTURE_SOURCE build arguments; its test stage is an offline portability check, not a network proof."
   ]
 }

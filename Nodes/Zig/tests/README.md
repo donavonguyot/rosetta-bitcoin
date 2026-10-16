@@ -1,10 +1,16 @@
-# ZigNode Tests
+# Zig node tests
 
-`zig build test` currently exercises the scaffold's reusable core module:
+Run `zig build test` with Zig 0.16.0. The suite exercises the core library,
+native store, mempool/template logic, and consensus context. Run store modes
+with `-Dstore=both`, `rocksdb`, and `native`; select experimental crypto with
+`-Dcrypto-backend=own_curve`.
 
-- Chainstate Codec v2 byte key/value golden vectors.
-- RocksDB runtime truth setup.
-- Ordered `get_many_utxos` shape.
-- Block-local double-spend guard shape.
+Tests consume frozen fixture bytes and fail if required inputs are absent.
+The standalone export bundles them; `-Dfixtures-root` overrides their location.
+Documentation coverage is informational and writes under `zig-out/`.
+`python3 scripts/test_doc_coverage.py` checks that nested worktrees do not affect
+coverage or the external-path guard.
 
-The Shared script corpus and local-reference P2P gate are CLI-level proofs.
+CLI checks include `script-corpus`, `consensus-context`, `codec-vectors`, and
+`test-capability --kind crypto-vectors`. See the [README](../README.md) for
+standalone commands and separate lab proof targets.

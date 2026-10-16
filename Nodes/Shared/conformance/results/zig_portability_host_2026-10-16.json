@@ -1,0 +1,242 @@
+{
+  "schema": "port.portability.v1",
+  "port": "zig",
+  "claim": "standalone_build_and_test",
+  "captured_at": "2026-10-16T23:18:11.634650+00:00",
+  "source_commit": "49a445348c3a81e2ce0e4557dc7d6e2a3c9f3452",
+  "scope": "Source export, offline compilation/tests, and synthetic storage smoke. No network sync, benchmark promotion, or binary-gate advancement.",
+  "repository_created": false,
+  "project_status_changed": false,
+  "export": {
+    "command": "python3 Project/scripts/export_zig_standalone.py <new-external-directory>",
+    "files": 1892,
+    "manifest_sha256": "91260319420840027870e86b5880e97926ad16a4a49c84806e6fd5a846bd0d3c",
+    "source_dirty": false,
+    "symlinks": 0,
+    "checksums_after_tests": "passed"
+  },
+  "toolchain": {
+    "version": "0.16.0",
+    "host": "Darwin arm64",
+    "compiler_sha256": "e6cd688d25664983833aae272f501d4bceeae304875b8f1741209d15fd13a4ec",
+    "optimize": "ReleaseSafe"
+  },
+  "final_host": {
+    "checks": [
+      {
+        "name": "make-build-test-docs",
+        "command": [
+          "make",
+          "build",
+          "test",
+          "docs",
+          "ZIG=zig",
+          "ZIG_ARGS=-Doptimize=ReleaseSafe --summary all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "coverage-regression",
+        "command": [
+          "python3",
+          "scripts/test_doc_coverage.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "script-corpus",
+        "command": [
+          "./zig-out/bin/zigbitnode",
+          "script-corpus"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "consensus-context",
+        "command": [
+          "./zig-out/bin/zigbitnode",
+          "consensus-context"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "codec",
+        "command": [
+          "./zig-out/bin/zigbitnode",
+          "codec-vectors"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "crypto",
+        "command": [
+          "./zig-out/bin/zigbitnode",
+          "test-capability",
+          "--kind",
+          "crypto-vectors",
+          "--outcome-path",
+          "zig-out/crypto-vectors.json"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "verify",
+        "command": [
+          "python3",
+          "scripts/verify_standalone.py"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "tests": {
+      "passed": 58,
+      "total": 58
+    },
+    "script_corpus": {
+      "passed": 45,
+      "total": 45
+    },
+    "consensus_context": {
+      "passed": 9,
+      "total": 9
+    },
+    "crypto_outcomes": [
+      {
+        "capability": "crypto_bip340_vectors",
+        "status": "pass",
+        "case_passed": 19,
+        "case_total": 19,
+        "notes": "all BIP340 vectors matched expected verification result"
+      },
+      {
+        "capability": "crypto_libsecp256k1_equivalence",
+        "status": "pass",
+        "case_passed": 104,
+        "case_total": 104,
+        "notes": "libsecp256k1 BIP340 19/19 plus native crypto vectors 33/33; pure Zig shadow BIP340 19/19 plus native crypto vectors 33/33"
+      }
+    ]
+  },
+  "worktree_tests": {
+    "command": "make -C Nodes/Zig test ZIG=<zig-0.16.0> ZIG_ARGS=\"-Doptimize=ReleaseSafe --summary all\"",
+    "passed": 58,
+    "total": 58
+  },
+  "matrix_before_final_packaging_cleanup": {
+    "export_manifest_sha256": "98890cae81549340fee33d88c3af73cb858413a881dba9caebc9663b30d2d6fa",
+    "source_commit": "ff371a737fc23767c843387412068272f8d26a87",
+    "source_dirty": true,
+    "results": [
+      {
+        "name": "c_binding-both",
+        "exit_code": 0,
+        "summary": "Build Summary: 13/13 steps succeeded; 58/58 tests passed"
+      },
+      {
+        "name": "c_binding-rocksdb",
+        "exit_code": 0,
+        "summary": "Build Summary: 13/13 steps succeeded; 58/58 tests passed"
+      },
+      {
+        "name": "c_binding-native",
+        "exit_code": 0,
+        "summary": "Build Summary: 13/13 steps succeeded; 58/58 tests passed"
+      },
+      {
+        "name": "own_curve-both",
+        "exit_code": 0,
+        "summary": "Build Summary: 13/13 steps succeeded; 52/57 tests passed (5 skipped)"
+      },
+      {
+        "name": "own_curve-rocksdb",
+        "exit_code": 0,
+        "summary": "Build Summary: 13/13 steps succeeded; 52/57 tests passed (5 skipped)"
+      },
+      {
+        "name": "own_curve-native",
+        "exit_code": 0,
+        "summary": "Build Summary: 13/13 steps succeeded; 52/57 tests passed (5 skipped)"
+      }
+    ],
+    "subsequent_changes": [
+      "Exclude Python caches in the path guard and Docker context",
+      "Update CLI compiler comment and doc-coverage help text",
+      "Remove stale Makefile comment"
+    ],
+    "note": "All runtime logic, fixtures, crypto, and storage implementations are identical to the final export; final host default and Linux native/own_curve checks below cover the cleaned-up packaging."
+  },
+  "docker": [
+    {
+      "snapshot": "matrix_before_final_packaging_cleanup",
+      "store": "both",
+      "crypto": "c_binding",
+      "image": "sha256:5754984ac664f7c39737ec763a0856a730e83108dd56b39b67121daa8dcc4766",
+      "tests_passed": 58,
+      "tests_total": 58,
+      "docs": "passed",
+      "script_corpus_passed": 45,
+      "script_corpus_total": 45
+    },
+    {
+      "snapshot": "final_export",
+      "store": "native",
+      "crypto": "own_curve",
+      "image": "sha256:a5b59624735c69daf3e84cbc36fd77f9740380669638e883b5926a00c396ca57",
+      "tests_passed": 52,
+      "tests_total": 57,
+      "tests_skipped": 5,
+      "skip_reason": "Existing backend-specific skips",
+      "docs": "passed",
+      "script_corpus_passed": 45,
+      "script_corpus_total": 45,
+      "crypto_outcomes": [
+        {
+          "capability": "crypto_bip340_vectors",
+          "status": "pass",
+          "case_passed": 19,
+          "case_total": 19,
+          "notes": "all BIP340 vectors matched expected verification result"
+        },
+        {
+          "capability": "crypto_libsecp256k1_equivalence",
+          "status": "pass",
+          "case_passed": 52,
+          "case_total": 52,
+          "notes": "libsecp256k1-zig BIP340 19/19 plus native crypto vectors 33/33"
+        }
+      ]
+    }
+  ],
+  "docker_test_command": "docker build --target test --build-arg NODE_SOURCE=. --build-arg CRYPTO_SOURCE=libsecp256k1-zig --build-arg FIXTURE_SOURCE=fixtures [--build-arg STORE=native --build-arg CRYPTO_BACKEND=own_curve] -f docker/Dockerfile .",
+  "docker_isolation": "Only the exported tree is sent as build context. Test-stage RUN uses --network=none after dependency installation; no workspace or Project mounts.",
+  "runtime_smoke": {
+    "image": "sha256:8cc93481190e183414a0bdad90dce608c23c39590c88c5076f39b0c71d91b42d",
+    "network": "none",
+    "datadir": "ephemeral /data tmpfs",
+    "scope": "synthetic two-block storage smoke, not live validation",
+    "native_reopened_height": 2,
+    "build_info": {
+      "crypto_backend": "own_curve",
+      "store_mode": "native",
+      "source_commit": "unrecorded",
+      "binary_sha256": "72361d385ade3f1fe32aef7798eb2a0d70c7a38aa8489669cda7c971202c413a"
+    },
+    "linked_libraries": "libc and system loader only; no RocksDB or libsecp256k1"
+  },
+  "regressions": {
+    "missing_fixture": "fails assembly-bytes test without regenerating fixture; restored suite passes 58/58",
+    "changed_fixture": "checksum verification fails",
+    "external_symlink": "export/verification rejects",
+    "existing_destination": "export refuses overwrite",
+    "wrong_compiler": "Make rejects Zig 0.17.0 with required version",
+    "nested_worktrees_and_python_caches": "do not affect documentation coverage or path guard"
+  },
+  "integration_checks": {
+    "docker_contract_strict": "13 manifests, zero errors/warnings",
+    "compose_config": "passed",
+    "doc_drift": "passed",
+    "exporter_regression_test": "passed",
+    "git_diff_check": "passed"
+  },
+  "binary_gate_status": "not_attempted"
+}

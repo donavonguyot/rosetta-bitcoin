@@ -264,16 +264,9 @@ test "assembly bytes are stable and the witness commitment matches" {
     const io = std.testing.io;
     const fixture = try std.fs.path.join(allocator, &.{ core.fixtures_root, "fixtures/mining/assembly_bytes_v1.bin" });
     defer allocator.free(fixture);
-    const fixture_dir = try std.fs.path.join(allocator, &.{ core.fixtures_root, "fixtures/mining" });
-    defer allocator.free(fixture_dir);
-    try std.Io.Dir.cwd().createDirPath(io, fixture_dir);
-    const existing = std.Io.Dir.cwd().readFileAlloc(io, fixture, allocator, .limited(1_000_000)) catch null;
-    if (existing) |frozen| {
-        defer allocator.free(frozen);
-        try std.testing.expectEqualSlices(u8, frozen, bytes);
-    } else {
-        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = fixture, .data = bytes, .flags = .{} });
-    }
+    const frozen = try std.Io.Dir.cwd().readFileAlloc(io, fixture, allocator, .limited(1_000_000));
+    defer allocator.free(frozen);
+    try std.testing.expectEqualSlices(u8, frozen, bytes);
 }
 
 test "template limits reject a duplicate txid and an overweight block" {
