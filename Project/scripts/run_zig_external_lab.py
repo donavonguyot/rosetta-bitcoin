@@ -101,6 +101,8 @@ class Lab:
         self.manifest_path = manifest_path
         self.manifest = verify_source(source, manifest_path, primary_root())
         self.manifest_hash = digest(manifest_path)
+        self.adapter_commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+        self.adapter_sha = digest(Path(__file__))
         self.run_id = run_id
         self.directory = PATHS['campaigns'] / run_id
         require(not self.directory.resolve().is_relative_to(primary_root()), 'campaign state must be outside RB')
@@ -122,7 +124,8 @@ class Lab:
     def container(self, name: str, command: list[str], volume: str | None = None,
                   network: str = 'none', node: bool = True) -> str:
         container_name = f'{self.run_id}-{name}'
-        argv = ['docker', 'run', '--rm', '--name', container_name, '--network', network,
+        cidfile = self.directory / f'{name}.cid'
+        argv = ['docker', 'run', '--rm', '--name', container_name, '--cidfile', str(cidfile), '--network', network,
                 '-e', 'ZIGBITNODE_RUNTIME_SURFACE=docker', '-e', 'PREFETCH_DEPTH=4',
                 '--mount', f'type=bind,src={self.source / "fixtures"},dst=/fixtures,readonly',
                 '--mount', f'type=bind,src={self.directory},dst=/results']
@@ -132,7 +135,11 @@ class Lab:
             return self.run(name, argv + [self.image] + (['zigbitnode'] if node else []) + command)
         finally:
             # A client timeout must not leave a background writer on a proof volume.
-            subprocess.run(['docker', 'rm', '-f', container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # The CID file also prevents a name collision from removing another run.
+            if cidfile.exists():
+                identity = cidfile.read_text().strip()
+                if re.fullmatch(r'[0-9a-f]{64}', identity):
+                    subprocess.run(['docker', 'rm', '-f', identity], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def volume(self, suffix: str) -> str:
         name = f'{self.run_id}-{suffix}'
@@ -166,7 +173,7 @@ class Lab:
         pins = {'source_commit': self.manifest['source_commit'], 'fixture_hash': package['fixture_hash'],
                 'binary_sha256': binary_sha, 'run_ref': f'state:campaigns/{self.run_id}'}
         boundary = {'source_manifest_sha256': self.manifest_hash, 'source_file_count': len(self.manifest['files']),
-                    'runtime_image': self.image, 'adapter_commit': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),
+                    'runtime_image': self.image, 'adapter_commit': self.adapter_commit, 'adapter_sha256': self.adapter_sha,
                     'project_db_mounted': False, 'source_context': 'external_standalone_checkout'}
         codec = json.loads(self.container('codec-vectors', ['codec-vectors']))
         require(codec.get('passed') is True and codec.get('codec_version') == 2, 'codec vectors failed')
@@ -186,6 +193,10 @@ class Lab:
         self.container('sync-5k', sync_args + ['--output', '/results/sync.raw.json'], volume, network)
         sync = json.loads((self.directory / 'sync.raw.json').read_text())
         require(sync.get('fresh_state') is True and sync.get('blocks_connected') == 5001, 'sync was not empty-state through 5000')
+        for key, expected in {'result': 'passed', 'runtime_surface': 'docker', 'target_height': 5000,
+                              'prefetch_depth': 4, 'script_runner_mode': 'parallel', 'rocksdb_wal_disabled': False,
+                              'utxo_accounting_policy': 'core_spendable_v1', 'peer': peer}.items():
+            require(key in sync and sync[key] == expected, f'sync proof mismatch: {key}')
         before = json.loads(self.container('status-reopen', ['status', '--datadir', '/data'], volume))
         check_status(before)
         self.container('resume-5k', sync_args + ['--output', '/results/resume.raw.json'], volume, network)
@@ -194,6 +205,7 @@ class Lab:
         check_restart(before, after, resumed)
         require(verify_source(self.source, self.manifest_path, primary_root()) == self.manifest
                 and digest(self.manifest_path) == self.manifest_hash, 'source changed during proof')
+        require(digest(Path(__file__)) == self.adapter_sha, 'adapter changed during proof')
         captured = datetime.now(timezone.utc).isoformat()
         common = {'captured_at': captured, 'provenance': pins, 'external_checkout': boundary}
         corpus.update(common)

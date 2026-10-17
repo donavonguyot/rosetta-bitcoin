@@ -3,8 +3,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from run_zig_external_lab import STATUS_FIELDS, TIP_5K, check_restart, verify_source
+from run_zig_external_lab import Lab, STATUS_FIELDS, TIP_5K, check_restart, verify_source
 
 
 class ExternalLabTests(unittest.TestCase):
@@ -62,6 +63,21 @@ class ExternalLabTests(unittest.TestCase):
         (self.source / 'extra').symlink_to(self.base)
         with self.assertRaisesRegex(ValueError, 'symlink'):
             self.verify()
+
+    def test_cleanup_only_removes_the_container_this_run_created(self):
+        lab = object.__new__(Lab)
+        lab.source, lab.directory = self.source, self.base
+        lab.run_id, lab.image = 'zig-external-test', 'sha256:' + 'a' * 64
+        with patch.object(lab, 'run', side_effect=ValueError('name collision')), patch('run_zig_external_lab.subprocess.run') as cleanup:
+            with self.assertRaises(ValueError):
+                lab.container('status', ['status'])
+            cleanup.assert_not_called()
+        identity = 'b' * 64
+        (self.base / 'status.cid').write_text(identity)
+        with patch.object(lab, 'run', side_effect=TimeoutError()), patch('run_zig_external_lab.subprocess.run') as cleanup:
+            with self.assertRaises(TimeoutError):
+                lab.container('status', ['status'])
+            self.assertEqual(cleanup.call_args.args[0], ['docker', 'rm', '-f', identity])
 
     def test_restart_requires_persisted_tip_set_and_no_replay(self):
         before = dict.fromkeys(STATUS_FIELDS)
