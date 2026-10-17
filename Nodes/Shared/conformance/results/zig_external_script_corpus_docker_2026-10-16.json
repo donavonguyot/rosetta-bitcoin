@@ -1,0 +1,262 @@
+{
+  "captured_at": "2026-10-17T00:03:31.527246+00:00",
+  "category": "script_corpus",
+  "external_checkout": {
+    "adapter_commit": "2877990526b23b6931dd501f115ec05e9c96e50f",
+    "adapter_sha256": "48837ec98673b553b6fa258717c9b1cf72b0f6da91ad58b45389d87799db0521",
+    "project_db_mounted": false,
+    "runtime_image": "sha256:2f2fe0e4059771cbd2d309b006707c40a99a519d37f8b5de11954c5a5f4564e2",
+    "source_context": "external_standalone_checkout",
+    "source_file_count": 1898,
+    "source_manifest_sha256": "5df90994a5e892614058bed0b341323014b58528a14d711085462a6500e22fa9"
+  },
+  "failed": 0,
+  "fixture_count": 45,
+  "implementation": "ZigNode",
+  "native_crypto_backend": "libsecp256k1",
+  "passed": 45,
+  "port": "zig",
+  "provenance": {
+    "binary_sha256": "34e500c3f4f44d39c85894d93dba00743ffe774bc22c1301937210233bd629c1",
+    "fixture_hash": "daeaf577e38f71b0f179a8ebc2eae1a7631a283bdad39fa93644f09bc765dee2",
+    "run_ref": "state:campaigns/zig-external-20261016-final",
+    "source_commit": "c889d751765256ba09158e1a525d96975f4b9c9d"
+  },
+  "result": "passed",
+  "results": [
+    {
+      "failure": "",
+      "fixture_id": "scripts.bare_multisig_27840",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_op1_only_31842",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_numequal_32712",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_cltv_32868",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_p2wsh_op1_only_33500",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2pkh_sighash_single_38010",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_cltv_38191",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_scriptpath_44295",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_scriptpath_46599",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_size_lessthan_46779",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_add_51340",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_sha256_52024",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_size_52497",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_2drop_54287",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_ifdup_csv_54297",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_mul_58173",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2pkh_61174",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_rot_62754",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_3dup_63305",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_2dup_63603",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_altstack_66241",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_hash256_67562",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_70924",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_71267",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_78841",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_82112",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_82856",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_82921",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_sha1_82921",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_87214",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_89632",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_within_98025",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_98631",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_nip_98631",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_100372",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2pkh_107951",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_108508",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_108972",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_116040",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.bare_legacy_118555",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_121035",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_126975",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2sh_abs_132361",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2tr_tapscript_133634",
+      "result": "passed"
+    },
+    {
+      "failure": "",
+      "fixture_id": "scripts.p2wsh_booland_136369",
+      "result": "passed"
+    }
+  ],
+  "runtime_surface": "docker",
+  "schema": "port.script_corpus_result.v1",
+  "verifier": {
+    "crypto_backend": "libsecp256k1",
+    "delegated": false,
+    "engine": "zig_native",
+    "implemented": true,
+    "source": "Nodes/Zig/src/script.zig"
+  }
+}
