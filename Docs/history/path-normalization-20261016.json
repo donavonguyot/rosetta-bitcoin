@@ -1,0 +1,477 @@
+{
+  "schema": "rb.path_normalization.v1",
+  "original_commit": "299b5165f5edaafc50e7ed52e2db82c68d8edf5a",
+  "scope": "Published path metadata only; measurements and proof outcomes unchanged. Original bytes retained in Git at original_commit and state:campaigns/zig-final-cutover-20261016/path-originals.",
+  "files": [
+    {
+      "path": "Docs/paper/build.sh",
+      "original_sha256": "6abc4ca0552a65e7c5f623af80b76e14e08296fd013c6cf2d88901f49c00e744",
+      "normalized_sha256": "22bae01fc3305b4acfc0fac4dc664578f05150e3aac730af4e548e3d43d1f317"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-C1.json",
+      "original_sha256": "69c0078bd82f3bafaf940ad469c392984e72dcac80e921170eb9fb2a9ddc5b78",
+      "normalized_sha256": "f2146f8326a628a37e4a89342af42a794070af19c35bc3c1018adf5d4746fd6f"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-C2.json",
+      "original_sha256": "d230780fd4dbcb39a846f0eade26ec63f90e3920826d648b09169094b17fde02",
+      "normalized_sha256": "992e2db85c7ffa4125802994b784963dd2fe4c07e47ec84350f4d0c5d2a36fcc"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-C3.json",
+      "original_sha256": "494d914e60bc66b0269f21d96a0c27c5d7dd5ef15bc031e1d751c19bf3d0323a",
+      "normalized_sha256": "e82b078500aca85a7af4ec8afe4717d0265525dc2d3115290f50add04eabacb1"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-D1.json",
+      "original_sha256": "562b7b00ac47617994b2c4bf54b73efb5621bf0edecc352675ef00a7e8a6abf4",
+      "normalized_sha256": "f6c9b160db25010a0b5c56a278406837c120731287c2b0f5f8986c2b42cc015f"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-D2.json",
+      "original_sha256": "05c95f246888ec83476dd6165714cda21bbf876432370743ff098a6c77c66106",
+      "normalized_sha256": "d4bc8497fe52cebb7895222d19266678593caf920d451f3d71d4a93402667454"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-D3.json",
+      "original_sha256": "8789f29c27d1fc80a8bb65c58b2fbd05d94337bdf88388122ad31d45e6a643ae",
+      "normalized_sha256": "b4c94cdeeb854d62666bd2bdaa7dbb5e117adb83a6e0bdc05d5d48f2cafa26f0"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-RC1.json",
+      "original_sha256": "c2abc5e04031297ca7cde81f698815cd307a95fd78044b7f3e2fa6dd4e3deb7a",
+      "normalized_sha256": "0dd3b83a4bfa9bee19398e2e194aac5aa7e063cd5d61e201eb52691987e24d87"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-RD1.json",
+      "original_sha256": "7cc984e1bc2954d85c12817875583cc2d5f15c07c84de27987e1db2a8ead4093",
+      "normalized_sha256": "507fa65a5b5b8a6ab5b9626e84d3bcab5c2cc38957da950617e9027060a6147d"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-ZC1.json",
+      "original_sha256": "453fa910ef4fa43596a0940545d667a3e90e846a33c798824246c602e2ef69c6",
+      "normalized_sha256": "998e8cd171b2b08797d658954a0a869b021feb60b86b2fafb4ff3549bd40215f"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-ZD1.json",
+      "original_sha256": "2266baaac5d48ae48135d2753c4e0ffd053a31d645cd6c7afc602b3c5dc3d206",
+      "normalized_sha256": "7faeef8411aa081ae48bc53ee074edb34eac0213495a97c8f1507885c7c894bd"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/attempt-observations.json",
+      "original_sha256": "0f3bc2212d4006e28187d3f8939b0494ed83ffd319bf48f5639f80f941382c0e",
+      "normalized_sha256": "891cc0cc306f9e609bca54895ce701f6be9c6eed91ffb7e0d6df8389af42210e"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/cross-toolchain-preflight.json",
+      "original_sha256": "dc6985e810d7d2407cb7eaca1000951246bfb3b712c3903e9e35ed62b96e5b13",
+      "normalized_sha256": "337ca6d5e52d2d79c9d03c07eb2288f899853880ce12ea7f2466aead5d4d9447"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-C1-initial.json",
+      "original_sha256": "1b9f55a2d9acdb07bc90761af2760f1619941ef4a0c300c1729a947dab660d16",
+      "normalized_sha256": "15f4a227a65ca739351fb5e0a79e46029ae105a56852b4544848ec0f627d98d5"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-C1-repair.json",
+      "original_sha256": "0b24404b5cc4651d5f324f51937f90358c0b5232f23caac1710f107248cafd9c",
+      "normalized_sha256": "ae98d6be7ea98c6e7ab14d97733144fa92f800a4882bb5421317f981056e3328"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-C2-initial.json",
+      "original_sha256": "c6f370cafa2cf5bf26f1f59651a1b5d183f17c4a80ca3f9a62a8092974595e51",
+      "normalized_sha256": "d5181632d18e75c82ba90b0475a72bcd3efdb35f728f8be715da5cd3d81dcf9f"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-C2-repair.json",
+      "original_sha256": "eee357bba7276ab84067e72ef9a0c83790389284b371520fdb33cf5600c96bdc",
+      "normalized_sha256": "4b6cd0be04f055d1040f186b7584fe34f7408de35f44c68ca4af85ff2592ed30"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-C3-initial.json",
+      "original_sha256": "9cec7312108accf6d4cf8769d1c0e7b504f7d84b2bd69aa1d07b932f48d27c4e",
+      "normalized_sha256": "5c6b01e1b24f836cdd0f8e7f125a6dbaeb05860294dff8f2beee4d9faced4e8f"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-C3-repair.json",
+      "original_sha256": "4a3fcb0471a2b7b86901d1d94f12bdc7afee9ccae05b91a5b00edf12720eddc2",
+      "normalized_sha256": "e43b6e645bea86a412685fbeefee7882d625ee1d59d9e83adf14987a3eca5d6c"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-D1-initial.json",
+      "original_sha256": "ae53945ed101da7d5bc450964795c77f570729c0ad8ae42fa2bdcd626d73f05d",
+      "normalized_sha256": "0ed419df80523a0120c9bc85540db7f17d74ef42e73bc1978d994fc8025ac08b"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-D2-initial.json",
+      "original_sha256": "8ae4d702b20939e932033d3c6601c1c698653fd79a1d49d58fc9cc20fcc197bc",
+      "normalized_sha256": "ffa6d95d523fba2ce9d22e114cdffd944dcae0599da76f9b819005378fd2d051"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-D3-initial.json",
+      "original_sha256": "9a7949ec28353583657f73d343c48216cd0619f0032bf606a80d1c3b8fd4f6c2",
+      "normalized_sha256": "d7e147734443ee89d365ea340b84310b5f5b15b8ecfc512238f3d38e1820c374"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-RC1-initial.json",
+      "original_sha256": "51c27c7372506b49667f7aa04fad22c364c20e3424fdbc8941a007351f6363a2",
+      "normalized_sha256": "0b607702309295087eaed491c0bf2d9db31f30724a0d0fbb665f854866040211"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-RC1-repair.json",
+      "original_sha256": "245dcf721d9f811307d99d8f9a8b8a5176e6e811e3d2a15cb9064aeb32074b1c",
+      "normalized_sha256": "9819d12dcb8cdffb6d2dc733c896a8a9197a52c1ac5707226d9acd62ad5a71bd"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-RD1-initial.json",
+      "original_sha256": "bd1650944e50ac228be5539067d5e915f785fedec679047f11fbf9395a4745b3",
+      "normalized_sha256": "8a26b0aea8b63fabe8ae5ffe43e403860324b8b11cbe6265ea475dc452a8a5e8"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-ZC1-initial.json",
+      "original_sha256": "4060322164d98e6acc6a584469e30ded5aaebbc8c3be2c0d93103c1a16608c65",
+      "normalized_sha256": "b0d669e07c17728018695b478ed371a164860a114a729401a381e5ff4c66bb79"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-ZC1-repair.json",
+      "original_sha256": "79ce2851fdd7bd9b614bb6fe788f69b67eb3697f20dcaa0f0eed87d883c7e4d7",
+      "normalized_sha256": "a77e848fa685c974b15e0e0ac29a8f6f6d4bfb88d3a20514ad1b869b1f8e303d"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-ZD1-initial.json",
+      "original_sha256": "32f9808501f0e3fe76f6eb64fb51c84b577491995e358fcc6d3bc928a5e8f519",
+      "normalized_sha256": "cb3958a6de780c56c2e5d3b4cd5e6bb855383bc15bdcc1a62d1b2bfe13d5a142"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-C1-initial.json",
+      "original_sha256": "ba1a85a7f1caf6f78d2afe406d2ea34db43a334a1507148f204f0fdf0671aa78",
+      "normalized_sha256": "fa33ac5ff36086e2db6e84e9940559513ecb94b7f5d7a68d5c490d6d6da78964"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-C2-initial.json",
+      "original_sha256": "b63a0169afad7c85070112126d772919db6537aef7c0032d9052a88aba1feb82",
+      "normalized_sha256": "8dd0617f0b0e9745ecff7c7a909c24359612ca504646e3b7f7459cb49f8c1351"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-C3-initial.json",
+      "original_sha256": "402b3705de389b84d137bd03fb733d9f8e92a9d880268e7d5aa60e9b136522b7",
+      "normalized_sha256": "36caeae13b3ae9a50ff6d7fe3d5afb0ede531e602c3d033e333d00d7855b6f21"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-D1-initial.json",
+      "original_sha256": "9c613150fa3c2930df28a7f0102bcabf759eb67ec9394f672406c97be8b1673c",
+      "normalized_sha256": "ec32047eb674493b22cb36a2831887fab366a2289a7829c848bb65165331583b"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-D2-initial.json",
+      "original_sha256": "c13b32a7f1365cbd3f4c16e6ac6e261441b228cdd8fc7a0cb9e56e5aa8093a56",
+      "normalized_sha256": "27dd0cd8f6720631e0cfdb3efd1767932d9985dd4fbd0f4b87f000b90cc1dd5e"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-D3-initial.json",
+      "original_sha256": "e9ce020e28ede8d5e89b2ebf79110adee7f370a37a00cd6e2e6b8e1b210d2ea9",
+      "normalized_sha256": "8e8b8f0a9edb524c1e7b8ddd34811a4ad6b99f170f8809a00248c7aee17d88ae"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-RC1-initial.json",
+      "original_sha256": "294a49ce1996b059bbed0cdca4075bce9c0c71bc75db6283242874fd452e0c03",
+      "normalized_sha256": "5147cb84e3d281791770c46fe34c7fcea9fae6e628649a2b58bcf8713c72ae80"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-RD1-initial.json",
+      "original_sha256": "7aa9e8bfa6fedb82be9daf7006cd94d3a3249c5c591eb6c88113d54193b27b65",
+      "normalized_sha256": "169b0a096439f72def8534811d95e49d1fe128456babbbebc499aea70a9531a0"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-ZC1-initial.json",
+      "original_sha256": "975a2128cfc6fea65f9b72fcd49c27e14987b8181b40cd2749f8998f7de317bb",
+      "normalized_sha256": "16345cea2082f1281da663cd65fccb76dbb65320b4ec2b53ec09697b99a0105f"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-initial-ZD1-initial.json",
+      "original_sha256": "a74df91f647d5811439f0d41eaa1f53b06198c58433130cfbf7bce07b2cc696d",
+      "normalized_sha256": "1557ae19a44c0982bc87fed058b590e4fa1f49831434f37fadcee3e414462f86"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-repair-C1-initial.json",
+      "original_sha256": "dcb28d2b84e03849c39d1938dc00a5cccc8099b9a4614aa8adc6ee72cfbc17f4",
+      "normalized_sha256": "009ac2cd57ace93306458e4fad7b38f6d1ddaa281cb6eaafad4a6d8984a8b6e2"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-repair-C2-initial.json",
+      "original_sha256": "f73e41178e76e4ce1b5e441cee92d148da83c0ec748f0a4e04127efa63457de6",
+      "normalized_sha256": "b8c20a30c6f805eb07a436dd03c46c5d5dc26888a705ce35d45c3e322186bab7"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-repair-C3-initial.json",
+      "original_sha256": "78c22a06548358149bf1a22faf8e0a487dfbe3f8577792f0caa719ce19e9fc49",
+      "normalized_sha256": "21f9feac91dee09d1e6e094fa0be2fc94639768f9cc77b99a29ce467b92b5854"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-repair-RC1-initial.json",
+      "original_sha256": "3bac078975ab87618a78c04c4b8afac7e91df7029083e39e43b53641207d5e83",
+      "normalized_sha256": "fa96aad7eb96ce87d7e98cd3468a47f96242491268cd497148bf154cb2996271"
+    },
+    {
+      "path": "Nodes/RosettaNode/evidence/evaluation-reproduce-repair-ZC1-initial.json",
+      "original_sha256": "144e8a8a3b696a41aad792dcc9fc990d4ba1e5eca7432a95a2a6f5e7a62b2036",
+      "normalized_sha256": "e20000513fc48ba4652019b6bdd3ea47ec9e433eab0df1d180d863709219cdda"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/checkpoints/pause.json",
+      "original_sha256": "cfe28f1971c5a846b12ec4b517fe895a82aaf1a9ad6403e49d82504cc306e465",
+      "normalized_sha256": "8f4fec0ef7b2e1f223275c779456cf140c962c9dce1fa81d08ac92fb38b61739"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/analysis-v2.json",
+      "original_sha256": "4f41ecbab15092f9a129ac942626d64704c04e7e35d89286d8fc4532893b00a4",
+      "normalized_sha256": "c706875d31c6f2d9f503857ca07c97fde31b4b72ffcddfddfd3fd79f49087991"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/broker-regression-v3.json",
+      "original_sha256": "41608ebc83c6421564b8c983b53bdef0f80bdb9f3af38994c2e1f644ae925dab",
+      "normalized_sha256": "155f27d7fe9ad369f53abaeee4e719967307364feef3a02494b5adbec37a9965"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/container-retention.json",
+      "original_sha256": "ef796ca7f636f482d49e21e5abc9a89f4c658966fcfa767d1e09ac768ab71e90",
+      "normalized_sha256": "b52a617b1b408ddba4ed2140fc59a265d975829be0bad83a351fca64bfca17d9"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/controller-correction-v3.json",
+      "original_sha256": "82dfe1c36e97e2dc417727c864f12aeba82c0421d893bc1a1fdc9d0c28c093c6",
+      "normalized_sha256": "66c1ad78bd60ffb22473d988c6f541965f41a15ec3bea935c03d4c3eb1b12323"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/controller-revisions/rust-1-initial-pre-v3.json",
+      "original_sha256": "b3fca176b12bb26004db35c408f14400886e52ffd2ee6ac6d1ed69637ce453c3",
+      "normalized_sha256": "3ae3fd766614d4b7372c9d83207e35001ab224b0138312c02d611c5265a972b2"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/controller-revisions/zig-2-initial-pre-v3.json",
+      "original_sha256": "05a05fca7ef5c5eeb2851f3f86153d9ce23d6f7a6f8eef78ec1430a015bd8a5c",
+      "normalized_sha256": "3731b5ffa157071daeb45dc990f65113e6ed1247e9f24319c49504dab023f54a"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/controller-revisions/zig-2-storage-exhaustion.json",
+      "original_sha256": "9e0569bc73a2fa9823a1957241adde00c3d0cbe0a2fee05304b20428d5034f19",
+      "normalized_sha256": "1006de76c5f1cdf601ee5b6978e94fd7ce512526303eb34b9164bd9279ba9c6a"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/isolation-probe.json",
+      "original_sha256": "5e4920babe302f017848879aafc409eca9a52c3b737f872337bc64e64cd1ce47",
+      "normalized_sha256": "a2b5af445729a2d6890a4d0832244e2d4805638466dd93d77887e07664b4bf3e"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-go-1-initial.json",
+      "original_sha256": "1d969e252d6178a5044610d6f5c213190802f22e4501631b6a47fe86917be232",
+      "normalized_sha256": "0d6e746fc5a7c807be9135106a1079f5e320822ca8d913e58d7168b0e3f381f9"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-rust-1-initial.json",
+      "original_sha256": "b3fca176b12bb26004db35c408f14400886e52ffd2ee6ac6d1ed69637ce453c3",
+      "normalized_sha256": "3ae3fd766614d4b7372c9d83207e35001ab224b0138312c02d611c5265a972b2"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-go-1-initial.json",
+      "original_sha256": "5e90849d8a3c02f4d595eebf425d77fbaffeec3c35ca7c88771097f57876fd6d",
+      "normalized_sha256": "4437d2381e67c28682527f0988c7d955df5b3c0ec58a239cb1c0682a818daa53"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-go-1-maintenance.json",
+      "original_sha256": "e0a7fd93f480da409211479ba8169b0a7628e5fd3cda5f67593d9884dbad1c89",
+      "normalized_sha256": "db3a1758c93474744a2a292abf31a5f2e4f3e036791670266afbb57d41361405"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-go-1-optimization.json",
+      "original_sha256": "7827ab6bb46dd96446671896740379ad1850bc1fbd952ec8fcb5d5ead2f25b14",
+      "normalized_sha256": "086109aab59f608ba251ec08229a8a9efb628d55dfcfd5e12cb4e7d0046a34bb"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-go-2-initial.json",
+      "original_sha256": "b9bf603984a8162918a005d6e1d37218ac3434c8b06958cbae0db14636ddd850",
+      "normalized_sha256": "9bfd6cd8e6bf967264787b72e716b195111c94f47ea715207c0aa2832c295e71"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-go-2-maintenance.json",
+      "original_sha256": "3f54dbc491a8519a10b41c998ecf654c20f5aa8ebe975e60ea2df6366da64a64",
+      "normalized_sha256": "780c4e02895be8c7583e43c76923377a8ea0115c3a1226c924dde3064b102c08"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-1-initial.json",
+      "original_sha256": "955b2f5ef6578fe859d358cdabdbb488d207381348ffcbb484195061e4c4478f",
+      "normalized_sha256": "1438be721789f1146269ca9c3e88683a5a0e5b517d4630ab025dec4eb297371b"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-1-maintenance.json",
+      "original_sha256": "51aed3d0d04bc53733fddeae68d507041b254af162bfb5ca8483d74392ba6415",
+      "normalized_sha256": "22c59ddeb34394831c5762b4e0f44f9e9aa649cf567e137d0ccbd00f3e6885b1"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-1-optimization.json",
+      "original_sha256": "9a7e1806cbdc948c33bb6a7782812db56fdd3bfc2af4c0223654df8b4060966c",
+      "normalized_sha256": "bd59eb47915d1eda55c0d85693e90901f321701c8285383e5724671ad182a916"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-2-initial.json",
+      "original_sha256": "02cfbebff538d7938113ba79dd0fb94bed2a3cbef1e144626f24cf4cd496e78f",
+      "normalized_sha256": "47e2bc7b61b465623d5f2f340a46aabc3615617f786d06493115d7cdb48ae4bb"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-2-maintenance.json",
+      "original_sha256": "0010c8e79ec7d2effe1223e9b049d8eb244f2119ada068a20085b669135eca20",
+      "normalized_sha256": "c7aeedf30f5f4a2b73e54d7b160fc10d12342f7e87fad95a84b975142be28736"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-1-initial.json",
+      "original_sha256": "d78b9b065dc921923d23af2929284f2b22e8427ee1dfa60d584ea47ebebce797",
+      "normalized_sha256": "848cb5abcb2a8e7f565a1825905007490c2ef8201bdbb5b3b97d770771430095"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-1-maintenance.json",
+      "original_sha256": "04a81ffe306d75074e62cec6f9b801a5bd6596c2a0c3fa59d0e3d438d1a63a05",
+      "normalized_sha256": "c8f61dc7825c61d7950f92ddfe67f4debbc2bd2171e53771034cd00f32f061ab"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-1-optimization.json",
+      "original_sha256": "c9f965951576b2012aeb7c9597cce6edfe5cbaaf02e29c7f089a86c07eb51da9",
+      "normalized_sha256": "89ad663d5c4a64aef560bfd9aa940a3f812d4eb6172502e305e32f047558d12a"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-2-initial.json",
+      "original_sha256": "699dad933732388ec5df1773094f392092fd6213321d21f9576c6612ebaf0119",
+      "normalized_sha256": "b556821ebcf6993300c38e98720f09c8be0bb32cb3bfcf9e6143a58e0fb3179e"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-2-maintenance.json",
+      "original_sha256": "8846a1bd0903e0e11bda2cd87f20b9499d0bf48a27be0ef7a8c785fc8514c600",
+      "normalized_sha256": "efdb9682cc9263019e45267f392e5213ef121d04ef2d80171bf22fdc15129f5f"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/lineage-zig-1-initial.json",
+      "original_sha256": "eafe1bdaa69f342e872368612b3e7d6d6da51c7547f2be045fc10f690eebfd04",
+      "normalized_sha256": "c61f320197198ae1704b9f2b4b43e26dce3316b74f88a85a3640421ab8ead42b"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/source-audit-go-1-initial.json",
+      "original_sha256": "f3022e81027358fa357964b5f87e34f8c0ee9ec99c72fa04e2391dff7255bd7c",
+      "normalized_sha256": "cea50d3460f3c62862f6bcfc27017735046a92ed77129727ff6d2e53707d12e6"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/source-audit-go-2-initial.json",
+      "original_sha256": "566290bf87da4a2c15a2222492300c9951205ade8c7b3f6895e1e7a805cc5d5d",
+      "normalized_sha256": "b9761c026df4acf17edf5f5889577f2e85dac522dea4828f0553131065b94630"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/source-audit-rust-1-initial.json",
+      "original_sha256": "27e6bc06075203ed4fa435d72f0e8e894273dddf736ac2a10fa0f964177cc390",
+      "normalized_sha256": "9a6d79a57a4781b0901b98b9b30278d05ddad84961de3254a50d31cb1660a07a"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/source-audit-rust-2-initial.json",
+      "original_sha256": "9f24d623ebc2c3b63bf9b6122c3c47a28de1afc161da60fed4261fdc246c0646",
+      "normalized_sha256": "54bad12739dc4da0cc4fe4442792817fe4191e0c76be58bb4230926df2656637"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/source-audit-zig-1-initial.json",
+      "original_sha256": "c4c9df7bb24541c496249ee4db5dce85b5c70ace8ee1eba95f6937d956979051",
+      "normalized_sha256": "ffc1d861c362015f13eca49c33ead0989ba18059633752b6d3e0d0d9302942a9"
+    },
+    {
+      "path": "Nodes/RosettaNode/substrate/evidence/source-audit-zig-2-initial.json",
+      "original_sha256": "fa6d90e9ee8c5ef94454df1b4a8337b8ccdf2c5fe0af47e6ea867e573718ee0e",
+      "normalized_sha256": "055dd28215b14750b920ceb788bf6efdecbb3c6a4a390be34641940293d10c43"
+    },
+    {
+      "path": "Nodes/Shared/conformance/crypto_comparisons/zig_open_20260916T084333Z.json",
+      "original_sha256": "31ec62eb1ced3c51d47416f0fa3d9e641463393f4be5c0b2df2e03324017faef",
+      "normalized_sha256": "4ce700d64d56ea54f7fe952ca97f09730451a181b86d3e5a49e3f5a792660b7a"
+    },
+    {
+      "path": "Nodes/Shared/conformance/crypto_comparisons/zig_optimization_20260916T053740Z.json",
+      "original_sha256": "af482ffe707e5e414b859ab493cb955ff6fa375cba24d2d1be856de3e1867eda",
+      "normalized_sha256": "c9223efa08d4d1a472d3f84d407f35b365e8f6970579a346b85968cc0fe17c1f"
+    },
+    {
+      "path": "Nodes/Shared/conformance/crypto_comparisons/zig_own_curve_50k_20260916T143340Z.json",
+      "original_sha256": "089964ef76c77dc9b89ba427fc8d094fc00ea2ecd97dce2ed24fe6e9ea3bc040",
+      "normalized_sha256": "ac73f7ba48c1530ec1fd61ab8f9af1b7eb24df4badbde591bbcc880be20fef6a"
+    },
+    {
+      "path": "Nodes/Shared/conformance/crypto_comparisons/zig_residual_20260916T064240Z.json",
+      "original_sha256": "b585dabce9c9c30194c228b3a1756d8af7a6d9b43e49614f8a9633b830a67486",
+      "normalized_sha256": "65c37a47209355658d8d9a38e1298a39380b53d27031c05765f0e234e9c4a078"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/go_own_curve_5k_20260916T040439Z.json",
+      "original_sha256": "fc997a01184da1e245b280c99266ff432dd269538287ed196e547fe82a88dbb9",
+      "normalized_sha256": "daf9a9f32ac342381cac3485d922a592d6f425249bca35de23da3514ccdc8449"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_mempool_rung0_host_2026-10-04.json",
+      "original_sha256": "c5cabd54747b0be4e62d4962c36cabac0f3763a599c7467626b5e9b9f13fc864",
+      "normalized_sha256": "701e8277f32933bb94fcde863768ab4992faf138134ce17d9e399bc34011239d"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_mining_rung0_host_2026-10-04.json",
+      "original_sha256": "78581e4f52ba303d23170f16790ac9a0ee9f0c4556d6b9133c9e3073da990005",
+      "normalized_sha256": "a8ec0a10dbdba4b88f614470ef327bfc5c50ffeec788a010f59026ebb0313d7c"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_module_split_2026-10-06.json",
+      "original_sha256": "d224c7db77185f9552d8da4a2b6f5945fca49e2f9e7ab5180c6eef3b699702d9",
+      "normalized_sha256": "7e63d56f40b00720c620af6eab206cb953f38204e84e90c8c3f3a325f7a618a3"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_native_store_hash_mix_host_2026-10-06.json",
+      "original_sha256": "dbdf0c12f21a20de8f023f9a7622bb0a59dcc67d4f3b6d0e36c05bb0f48039c5",
+      "normalized_sha256": "b88323314ba6a874713fe669e43546d2f8f9b4be2cfbe65bb07d809ee63c738f"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_5k_20260916T040840Z.json",
+      "original_sha256": "7c3cfa4d66ac92522500bb8482155cf0c419219d0eaea34c3fc6c912d5798cda",
+      "normalized_sha256": "87af4c4e2f4c9907664ac4635ff3784c687671e0879112bf3aab0f17d6093a82"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_own_curve_optimized_5k_20260916T053740Z.json",
+      "original_sha256": "0945920b6e62ab073117535a557d700c586e3aa9907f5d20b782244610eaa92c",
+      "normalized_sha256": "be2832fc4f9ee73bc8b976f4deeea9d3993f2f444d4ed5febb488349d1142a26"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_script_verify_split_c_binding_host_2026-10-04.json",
+      "original_sha256": "bf9c53c34671a479c99b5ac482425827e527f3d0b9ffd453c56c057f2e31df0b",
+      "normalized_sha256": "95f61569cee76d91e29562e076038e3bcb51ee210ec109f931957a8c3ad50c85"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_script_verify_split_host_2026-10-04.json",
+      "original_sha256": "e0e7af2fba743c4b26c1470e587af53da76df57396f4c9d7bfc01abe2e9f8637",
+      "normalized_sha256": "b306514372ca93661c077263b24934fa9b554ca95db68c93e683329682d76923"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_script_verify_split_own_curve_host_2026-10-04.json",
+      "original_sha256": "f4d7baef1fd3b920fc0b590c6c1fbb3bac7950aa0a8f832ffc7a5075c8a95868",
+      "normalized_sha256": "b2716f350ab464660a7c4f6c825569b9f00ad524960be10d674fe8b83e0010c4"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_100k_host_2026-10-04.json",
+      "original_sha256": "ccf4ccf7231c8674082a2fd8f671e46a6150810baf75263a1656aee0b343574b",
+      "normalized_sha256": "896fc26d825cbb948fda9084b6a9651f5a94f7d77b1f4aeb196ab0240cca4657"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_50k_host_2026-10-04.json",
+      "original_sha256": "ed047d98fca0ad8a5e7844465e28f604252a8d2af125deb4220e3ba8a4fcf2ea",
+      "normalized_sha256": "b33123fc2105cf609dd0f518014a6032e0877f6ee6474338cdf1d5a4a8c1310a"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_self_hosted_5k_host_2026-10-04.json",
+      "original_sha256": "b279a43f9241bea957911f4f0fba9332aea2abcf073550c5d6bf197212945dab",
+      "normalized_sha256": "8ec4ae7a469b26e8da39f069f5bd1fdcf909940c7e7bab4708f42db2cf35c5fd"
+    },
+    {
+      "path": "Nodes/Shared/conformance/results/zig_store_native_5k_host_2026-10-04.json",
+      "original_sha256": "51e335b8054e43ff644eaa2b9c9be868769b888424821dab393684c61a180e60",
+      "normalized_sha256": "985f27964918cc3323fc0d507fb20ffdfa7144f5f35758a13519ae4e98171fcd"
+    }
+  ]
+}

@@ -28,7 +28,7 @@
       "REJECT=",
       "-t",
       "rosetta-zig-open-candidate:77914c01c967",
-      "/Users/donavonguyot/RosettaBitcoin/Project/.campaigns/zig-open/context-candidate"
+      "Project/.campaigns/zig-open/context-candidate"
     ],
     "probe": false,
     "reject": ""
@@ -373,7 +373,7 @@
             "Version": "v0.33.0",
             "ShortDescription": "Docker Buildx",
             "Name": "buildx",
-            "Path": "/Users/donavonguyot/.docker/cli-plugins/docker-buildx"
+            "Path": "~/.docker/cli-plugins/docker-buildx"
           },
           {
             "SchemaVersion": "0.1.0",
@@ -381,7 +381,7 @@
             "Version": "v5.1.2",
             "ShortDescription": "Docker Compose",
             "Name": "compose",
-            "Path": "/Users/donavonguyot/.docker/cli-plugins/docker-compose"
+            "Path": "~/.docker/cli-plugins/docker-compose"
           }
         ],
         "Warnings": null
@@ -696,7 +696,7 @@
     "-v",
     "rosetta-zig-own-curve-50k-20260916t143340z:/data",
     "-v",
-    "/Users/donavonguyot/RosettaBitcoin/Project/.campaigns/zig-50k-20260916T143340Z:/results",
+    "Project/.campaigns/zig-50k-20260916T143340Z:/results",
     "-e",
     "ZIGBITNODE_RUNTIME_SURFACE=docker",
     "-e",

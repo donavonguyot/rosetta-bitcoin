@@ -8,7 +8,7 @@
       "record": "lineage-v2-go-1-initial.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign/go-1/initial/submission",
       "usage": {
         "reading": [
           {
@@ -44,7 +44,7 @@
       "record": "lineage-v2-go-1-maintenance.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/go-1/maintenance/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/go-1/maintenance/submission",
       "usage": {
         "reading": [
           {
@@ -92,7 +92,7 @@
       "record": "lineage-v2-go-2-initial.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/go-2/initial/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/go-2/initial/submission",
       "usage": {
         "reading": [
           {
@@ -120,7 +120,7 @@
       "record": "lineage-v2-go-2-maintenance.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/go-2/maintenance/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/go-2/maintenance/submission",
       "usage": {
         "reading": [
           {
@@ -148,7 +148,7 @@
       "record": "lineage-v2-rust-1-initial.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign/rust-1/initial/submission",
       "usage": {
         "reading": [
           {
@@ -176,7 +176,7 @@
       "record": "lineage-v2-rust-1-maintenance.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/rust-1/maintenance/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-1/maintenance/submission",
       "usage": {
         "reading": [
           {
@@ -224,7 +224,7 @@
       "record": "lineage-v2-rust-2-initial.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/initial/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/initial/submission",
       "usage": {
         "reading": [
           {
@@ -252,7 +252,7 @@
       "record": "lineage-v2-rust-2-maintenance.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/maintenance/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/maintenance/submission",
       "usage": {
         "reading": [
           {
@@ -280,7 +280,7 @@
       "record": "lineage-v2-zig-1-initial.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/submission",
       "usage": {
         "reading": [
           {
@@ -308,7 +308,7 @@
       "record": "lineage-v2-zig-1-maintenance.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/maintenance/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/maintenance/submission",
       "usage": {
         "reading": [
           {
@@ -336,7 +336,7 @@
       "record": "lineage-v2-zig-1-optimization.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/optimization/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-1/optimization/submission",
       "usage": {
         "reading": [
           {
@@ -364,7 +364,7 @@
       "record": "lineage-v2-zig-2-initial.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/initial/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/initial/submission",
       "usage": {
         "reading": [
           {
@@ -400,7 +400,7 @@
       "record": "lineage-v2-zig-2-maintenance.json",
       "recorded_status": "qualified",
       "checkpoint_status": "qualified",
-      "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/submission",
+      "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/submission",
       "usage": {
         "reading": [
           {

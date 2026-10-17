@@ -13,7 +13,7 @@ mkdir -p "$OUT" "$FINAL"
 echo "[1/6] Generating substrate pipeline figure..."
 FIGURE_PYTHON="${FIGURE_PYTHON:-python3}"
 if ! "$FIGURE_PYTHON" -c 'import reportlab' >/dev/null 2>&1; then
-  BUNDLED_PYTHON="/Users/donavonguyot/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
+  BUNDLED_PYTHON="${HOME}/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
   if [[ -x "$BUNDLED_PYTHON" ]]; then
     FIGURE_PYTHON="$BUNDLED_PYTHON"
   else

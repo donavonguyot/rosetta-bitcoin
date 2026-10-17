@@ -1,6 +1,6 @@
 {
   "schema": "rosettanode.substrate.submission_audit.v1",
-  "submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/initial/submission",
+  "submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/rust-2/initial/submission",
   "language": "rust",
   "fresh_build_exit": 0,
   "fresh_build_seconds": 2.8015889590024017,
@@ -17,6 +17,6 @@
     "rn_verify_v1"
   ],
   "source_review_required": true,
-  "logs": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/source-audits/188beefba48c403da4f888072ecb76f6",
+  "logs": "Nodes/RosettaNode/substrate/.local/source-audits/188beefba48c403da4f888072ecb76f6",
   "status": "passed"
 }

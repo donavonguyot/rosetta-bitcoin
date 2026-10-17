@@ -11,7 +11,7 @@
   "attempts": [
     {
       "kind": "initial_submission",
-      "evaluation": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/evaluation/result.json",
+      "evaluation": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/evaluation/result.json",
       "status": "passed"
     }
   ],
@@ -38,9 +38,9 @@
       "default_permissions": "substrate",
       "permissions.substrate.filesystem": {
         ":minimal": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/tmp": "write",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/queue": "write"
+        "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace": "read",
+        "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/tmp": "write",
+        "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/queue": "write"
       },
       "permissions.substrate.network.enabled": false,
       "project_doc_max_bytes": 0,
@@ -61,7 +61,7 @@
       "shell_environment_policy.inherit": "none",
       "shell_environment_policy.set": {
         "PATH": "/usr/bin:/bin",
-        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/tmp"
+        "TMPDIR": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/tmp"
       }
     },
     "transcript_sha256": "c0fb4cba5632fdee9dd68280c36dd95a25b25c15c1050929b1fce10b7adfc793"
@@ -89,7 +89,7 @@
       "default_permissions": "substrate",
       "permissions.substrate.filesystem": {
         ":minimal": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace": "write"
+        "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace": "write"
       },
       "permissions.substrate.network.enabled": false,
       "project_doc_max_bytes": 0,
@@ -110,7 +110,7 @@
       "shell_environment_policy.inherit": "none",
       "shell_environment_policy.set": {
         "PATH": "/usr/bin:/bin",
-        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/tmp"
+        "TMPDIR": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/workspace/tmp"
       }
     },
     "transcript_sha256": "19b57c9579aae5d9e0075e8314a4e9c39378c87097078a63b751ff6bc6ac967c"
@@ -136,5 +136,5 @@
     "storage.zig": "99fba9b26c6860bf2089051cbefd1705232f2ee2fa40faa0511d7b5863c2769d",
     "tests/check.py": "a1ba2785b83beb03028577e84af69212f5ed252c110f5a0eebe7d98ed0b98d2d"
   },
-  "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/submission"
+  "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign-v2/zig-2/maintenance/submission"
 }

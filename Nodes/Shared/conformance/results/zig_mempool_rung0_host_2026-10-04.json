@@ -5,7 +5,7 @@
   "optimize": "ReleaseSafe",
   "fixture": "live",
   "passed": true,
-  "trace_dir": "/Users/donavonguyot/RosettaBitcoin/Nodes/Shared/fixtures/mempool/trace-12415c0feab5a57debe1f641fbcab087854f8c5cdb0a73513b33db12ffaf253a",
+  "trace_dir": "Nodes/Shared/fixtures/mempool/trace-12415c0feab5a57debe1f641fbcab087854f8c5cdb0a73513b33db12ffaf253a",
   "stores": [
     "native",
     "rocksdb"

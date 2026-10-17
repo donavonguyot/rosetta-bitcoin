@@ -1,6 +1,6 @@
 {
   "schema": "rosettanode.substrate.submission_audit.v1",
-  "submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/submission",
+  "submission": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/submission",
   "language": "zig",
   "fresh_build_exit": 0,
   "fresh_build_seconds": 32.848110250008176,
@@ -17,6 +17,6 @@
     "rn_verify_v1"
   ],
   "source_review_required": true,
-  "logs": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/source-audits/594ae8aa48d447b0b8ecfd459be3b8f4",
+  "logs": "Nodes/RosettaNode/substrate/.local/source-audits/594ae8aa48d447b0b8ecfd459be3b8f4",
   "status": "passed"
 }

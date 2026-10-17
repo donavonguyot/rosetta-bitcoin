@@ -28,10 +28,10 @@
       "default_permissions": "rosetta",
       "permissions.rosetta.filesystem": {
         ":minimal": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace": "read",
+        "Nodes/RosettaNode/.local/cohort/C2/workspace": "read",
         "/opt/homebrew/Cellar/go/1.27.1/libexec": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp": "write",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache": "write"
+        "Nodes/RosettaNode/.local/cohort/C2/workspace/tmp": "write",
+        "Nodes/RosettaNode/.local/cohort/C2/workspace/cache": "write"
       },
       "permissions.rosetta.network.enabled": false,
       "project_doc_max_bytes": 0,
@@ -52,8 +52,8 @@
       "shell_environment_policy.inherit": "none",
       "shell_environment_policy.set": {
         "PATH": "/opt/homebrew/Cellar/go/1.27.1/libexec/bin:/usr/bin:/bin",
-        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp",
-        "GOCACHE": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
+        "TMPDIR": "Nodes/RosettaNode/.local/cohort/C2/workspace/tmp",
+        "GOCACHE": "Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
         "GOENV": "off",
         "GOTOOLCHAIN": "local",
         "GOPROXY": "off",
@@ -87,10 +87,10 @@
       "default_permissions": "rosetta",
       "permissions.rosetta.filesystem": {
         ":minimal": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace": "write",
+        "Nodes/RosettaNode/.local/cohort/C2/workspace": "write",
         "/opt/homebrew/Cellar/go/1.27.1/libexec": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp": "write",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache": "write"
+        "Nodes/RosettaNode/.local/cohort/C2/workspace/tmp": "write",
+        "Nodes/RosettaNode/.local/cohort/C2/workspace/cache": "write"
       },
       "permissions.rosetta.network.enabled": false,
       "project_doc_max_bytes": 0,
@@ -111,8 +111,8 @@
       "shell_environment_policy.inherit": "none",
       "shell_environment_policy.set": {
         "PATH": "/opt/homebrew/Cellar/go/1.27.1/libexec/bin:/usr/bin:/bin",
-        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp",
-        "GOCACHE": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
+        "TMPDIR": "Nodes/RosettaNode/.local/cohort/C2/workspace/tmp",
+        "GOCACHE": "Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
         "GOENV": "off",
         "GOTOOLCHAIN": "local",
         "GOPROXY": "off",
@@ -146,10 +146,10 @@
       "default_permissions": "rosetta",
       "permissions.rosetta.filesystem": {
         ":minimal": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace": "write",
+        "Nodes/RosettaNode/.local/cohort/C2/workspace": "write",
         "/opt/homebrew/Cellar/go/1.27.1/libexec": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp": "write",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache": "write"
+        "Nodes/RosettaNode/.local/cohort/C2/workspace/tmp": "write",
+        "Nodes/RosettaNode/.local/cohort/C2/workspace/cache": "write"
       },
       "permissions.rosetta.network.enabled": false,
       "project_doc_max_bytes": 0,
@@ -170,8 +170,8 @@
       "shell_environment_policy.inherit": "none",
       "shell_environment_policy.set": {
         "PATH": "/opt/homebrew/Cellar/go/1.27.1/libexec/bin:/usr/bin:/bin",
-        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/tmp",
-        "GOCACHE": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
+        "TMPDIR": "Nodes/RosettaNode/.local/cohort/C2/workspace/tmp",
+        "GOCACHE": "Nodes/RosettaNode/.local/cohort/C2/workspace/cache",
         "GOENV": "off",
         "GOTOOLCHAIN": "local",
         "GOPROXY": "off",

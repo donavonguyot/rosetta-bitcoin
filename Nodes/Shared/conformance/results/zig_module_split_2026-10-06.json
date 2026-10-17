@@ -276,7 +276,7 @@
     "binary_sha256": "de418b01bd2ad10aaabcf7d9df6ef4253e626933a8cc24c165eee4b705e10967"
   },
   "trace_seed": {
-    "datadir": "/Users/donavonguyot/.rblab/zig/trace-seed-155063",
+    "datadir": "state:zig/trace-seed-155063",
     "store": "native",
     "validated_height": 155063,
     "validated_hash": "0000000000e0ebc4288ef677ff3918f6876bb582fd402719baf2cb19a617d27e",

@@ -10,27 +10,27 @@
   },
   "isolation": [
     {
-      "probe": "read /Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/spec/transactions.md",
+      "probe": "read Nodes/RosettaNode/spec/transactions.md",
       "exit": 1,
       "denied": true
     },
     {
-      "probe": "read /Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/tools/corpus.py",
+      "probe": "read Nodes/RosettaNode/tools/corpus.py",
       "exit": 1,
       "denied": true
     },
     {
-      "probe": "read /Users/donavonguyot/RosettaBitcoin/Nodes/Zig/README.md",
+      "probe": "read Nodes/Zig/README.md",
       "exit": 1,
       "denied": true
     },
     {
-      "probe": "read /Users/donavonguyot/RosettaBitcoin/README.md",
+      "probe": "read README.md",
       "exit": 1,
       "denied": true
     },
     {
-      "probe": "read /Users/donavonguyot/.codex/config.toml",
+      "probe": "read ~/.codex/config.toml",
       "exit": 1,
       "denied": true
     },

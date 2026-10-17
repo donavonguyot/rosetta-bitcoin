@@ -9,70 +9,70 @@
   "retained_log_examples": {
     "0d771130ea8141dd9d08cc1ad3861e5a": [
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-c33f4f3249424245/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-c33f4f3249424245/record.json",
         "reading": false,
         "elapsed_seconds": 0.2757676250039367
       },
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-89e84aeb5adc48a6/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-89e84aeb5adc48a6/record.json",
         "reading": false,
         "elapsed_seconds": 0.28108858299674466
       }
     ],
     "ecb82c7cc12d4907aebddea3c6e5aad7": [
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-d2ca49b8401c4158/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-d2ca49b8401c4158/record.json",
         "reading": false,
         "elapsed_seconds": 2.259049000000232
       },
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-544293c4d67b4ac1/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-544293c4d67b4ac1/record.json",
         "reading": true,
         "elapsed_seconds": 0.31943399998999666
       }
     ],
     "5072c3b7a83043d2977f015f9cd89664": [
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-5e31bc7b4611433b/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-5e31bc7b4611433b/record.json",
         "reading": true,
         "elapsed_seconds": 0.22629458300070837
       },
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-f1ac529b972840ad/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-f1ac529b972840ad/record.json",
         "reading": false,
         "elapsed_seconds": 0.17244433300220408
       },
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-04bdad6077054a48/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-04bdad6077054a48/record.json",
         "reading": false,
         "elapsed_seconds": 0.16637350000382867
       }
     ],
     "cee71e5cbd42489c8e751310c6545d8f": [
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-6d13af0c1cc24094/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-6d13af0c1cc24094/record.json",
         "reading": false,
         "elapsed_seconds": 0.16702437501226086
       },
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-6aa7317a41b545fe/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-6aa7317a41b545fe/record.json",
         "reading": true,
         "elapsed_seconds": 0.22544258399284445
       },
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-51da112fa1684dbf/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-51da112fa1684dbf/record.json",
         "reading": false,
         "elapsed_seconds": 0.17662162501073908
       }
     ],
     "65e44ff71361441fb06bafb878176de6": [
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-b291de7c0d5f4db0/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-b291de7c0d5f4db0/record.json",
         "reading": false,
         "elapsed_seconds": 1.09989445899555
       },
       {
-        "log": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-1b993503ac4544d9/record.json",
+        "log": "Nodes/RosettaNode/substrate/.local/broker-logs/rn-substrate-build-1b993503ac4544d9/record.json",
         "reading": false,
         "elapsed_seconds": 1.8206270829978166
       }
