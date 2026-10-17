@@ -215,7 +215,7 @@ class Lab:
         bounded = {**common, 'schema': 'port.external_checkout_lab.v1', 'category': 'external_checkout_lab',
                    'port': 'zig', 'implementation': 'ZigNode', 'runtime_surface': 'docker', 'chain': 'testnet4',
                    'result': 'passed', 'proof_scope': 'bounded_sync_and_clean_restart', 'binary_gate_status': 'not_attempted',
-                   'peer': peer, 'peer_mode': 'local_reference', 'fresh_state': True, 'target_height': 5000,
+                   'peer': peer, 'peer_mode': 'local_reference', 'fresh_state': True, 'bounded_target_height': 5000,
                    'prefetch_depth': 4, 'rocksdb_wal_disabled': False, 'script_runner_mode': 'parallel',
                    'blocks_connected': sync['blocks_connected'], 'resume_blocks_connected': resumed['blocks_connected'],
                    'status_before_resume': before, 'status_after_resume': after, 'volumes': self.volumes,
