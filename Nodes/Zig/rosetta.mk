@@ -33,7 +33,7 @@ DOCKER_COMPOSE = python3 $(PROJECT_ROOT)/scripts/zig_checkout.py compose --env-f
 .PHONY: external-source-check
 external-source-check:
 	python3 $(PROJECT_ROOT)/scripts/zig_checkout.py verify
-$(MAKECMDGOALS): external-source-check
+$(MAKECMDGOALS) docker-proof-local docker-native-storage-proof docker-self-hosted-5k docker-self-hosted-50k: external-source-check
 endif
 include $(SHARED_ROOT)/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 $(SHARED_ROOT)/conformance/tools/validate_benchmark_artifact.py
@@ -299,5 +299,7 @@ docker-self-hosted-50k:
 	  --datadir /data --peer $(DOCKER_P2P_PEER) \
 	  --output /results/zig_self_hosted_50k_docker_$(SELF_HOSTED_DATE).json
 
+ifeq ($(strip $(RB_ZIG_SOURCE)$(RB_ZIG_MANIFEST)),)
 include $(SHARED_ROOT)/fixture_package.mk
 test-crypto-vectors test-crypto-mutations test-block-connect-backend zig-node-script-corpus zig-node-script-corpus-shadow docker-build docker-script-corpus: | fixture-package
+endif

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 
 from state_root import ROOT, PATHS, primary_root
 
@@ -69,9 +71,33 @@ def verify_source(source: Path, manifest_path: Path, workspace: Path) -> dict:
 
 
 
+def fixture_checkout(package):
+    """Publish once, then verify without rewriting fixtures used by other runs."""
+    from build_fixture_package import unpack
+    parent = PATHS['root'] / 'fixture-checkouts'
+    parent.mkdir(parents=True, exist_ok=True)
+    destination = parent / package['fixture_hash']
+    with (parent / (package['fixture_hash'] + '.lock')).open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not destination.exists():
+            with tempfile.TemporaryDirectory(prefix='.extract-', dir=parent) as scratch:
+                staged = Path(scratch) / 'fixtures'
+                unpack(package['fixture_hash'], staged)
+                staged.rename(destination)
+        expected = {entry['path']: entry['sha256'] for entry in package['files']}
+        observed = {}
+        require(not destination.is_symlink(), 'symlink fixture checkout')
+        for path in destination.rglob('*'):
+            require(not path.is_symlink(), 'symlink fixture input')
+            if path.is_file():
+                observed[path.relative_to(destination).as_posix()] = digest(path)
+        require(observed == expected, 'retained fixture checkout changed; preserve and investigate')
+    return destination
+
+
 def prepare(run_ref=None):
     """Build or reuse a verified external runtime and return campaign pins and env."""
-    from build_fixture_package import build, unpack, publish
+    from build_fixture_package import build, publish
     from provenance import image_id, receipt_path, for_image
     source, inventory = selected_source()
     manifest = verify_source(source, inventory, primary_root())
@@ -110,8 +136,7 @@ def prepare(run_ref=None):
         require(json.loads(destination.read_text()) == receipt, 'external receipt mismatch')
     else:
         publish(destination, (json.dumps(receipt, sort_keys=True, indent=2) + '\n').encode())
-    extracted = PATHS['root'] / 'fixture-checkouts' / start['fixture_hash']
-    unpack(start['fixture_hash'], extracted)
+    extracted = fixture_checkout(package)
     return for_image(identity, run_ref, start), {
         'RB_PROVENANCE_IMAGE': identity, 'RB_FIXTURE_SHARED': str(extracted), 'DOCKER_REBUILD': '0',
         'RB_ZIG_CONTEXT': str(source), 'RB_ZIG_DOCKERFILE': 'docker/Dockerfile',

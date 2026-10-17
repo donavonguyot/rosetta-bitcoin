@@ -40,6 +40,24 @@ class CheckoutTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('zig_checkout.py verify', result.stdout)
         self.assertIn('zig_checkout.py prepare', result.stdout)
+        self.assertNotIn('build_fixture_package.py', result.stdout)
+
+    def test_fixture_checkout_does_not_rewrite_or_repair_changed_inputs(self):
+        import hashlib
+        package = {'fixture_hash': 'c' * 64, 'files': [{'path': 'fixture',
+                   'sha256': hashlib.sha256(b'frozen').hexdigest()}]}
+        def unpack(_digest, destination):
+            destination.mkdir()
+            (destination / 'fixture').write_bytes(b'frozen')
+        with patch('zig_checkout.PATHS', {'root': self.base / 'state'}), \
+             patch('build_fixture_package.unpack', side_effect=unpack) as extract:
+            directory = checkout.fixture_checkout(package)
+            checkout.fixture_checkout(package)
+            self.assertEqual(extract.call_count, 1)
+            (directory / 'fixture').write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError, 'checkout changed'):
+                checkout.fixture_checkout(package)
+            self.assertEqual((directory / 'fixture').read_bytes(), b'changed')
 
     def test_cached_image_must_match_revision_and_binary(self):
         info = {'source_commit': 'a' * 40, 'store_mode': 'both', 'crypto_backend': 'c_binding',
@@ -48,7 +66,7 @@ class CheckoutTests(unittest.TestCase):
         with patch('zig_checkout.primary_root', return_value=self.base / 'rb'), \
              patch('zig_checkout.PATHS', {'root': self.base / 'state'}), \
              patch('build_fixture_package.build', return_value={'fixture_hash': 'c' * 64}), \
-             patch('build_fixture_package.unpack'), \
+             patch('zig_checkout.fixture_checkout', return_value=self.base / 'fixtures'), \
              patch('provenance.image_id', return_value='sha256:' + 'd' * 64), \
              patch('provenance.receipt_path', return_value=receipt), \
              patch('provenance.for_image', return_value={'source_commit': 'a' * 40}), \
