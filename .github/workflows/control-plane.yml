@@ -23,6 +23,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Generate the paper figure referenced by Markdown
+        run: |
+          python3 -m pip install reportlab==4.4.9
+          python3 Docs/paper/figures/substrate_pipeline.py
+
+      - name: Check documentation checker in worktrees
+        run: python3 Project/scripts/test_doc_drift.py
+
       - name: Check documentation drift
         run: python3 Project/scripts/check_doc_drift.py
 
