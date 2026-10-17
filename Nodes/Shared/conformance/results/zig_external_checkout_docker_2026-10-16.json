@@ -1,0 +1,197 @@
+{
+  "binary_gate_status": "not_attempted",
+  "blocks_connected": 5001,
+  "bounded_target_height": 5000,
+  "captured_at": "2026-10-17T00:03:31.527246+00:00",
+  "category": "external_checkout_lab",
+  "chain": "testnet4",
+  "codec_vectors": {
+    "codec_version": 2,
+    "passed": true,
+    "port": "zig",
+    "schema": "port.codec_vectors.v1"
+  },
+  "does_not_prove": [
+    "tip_once",
+    "tip_maintenance",
+    "power_loss_recovery",
+    "every_crash_point",
+    "serving",
+    "relay"
+  ],
+  "external_checkout": {
+    "adapter_commit": "2877990526b23b6931dd501f115ec05e9c96e50f",
+    "adapter_sha256": "48837ec98673b553b6fa258717c9b1cf72b0f6da91ad58b45389d87799db0521",
+    "project_db_mounted": false,
+    "runtime_image": "sha256:2f2fe0e4059771cbd2d309b006707c40a99a519d37f8b5de11954c5a5f4564e2",
+    "source_context": "external_standalone_checkout",
+    "source_file_count": 1898,
+    "source_manifest_sha256": "5df90994a5e892614058bed0b341323014b58528a14d711085462a6500e22fa9"
+  },
+  "fresh_state": true,
+  "implementation": "ZigNode",
+  "peer": "bitcoin-core-testnet4:48333",
+  "peer_mode": "local_reference",
+  "port": "zig",
+  "prefetch_depth": 4,
+  "project_reconciliation": {
+    "deferred_work": {
+      "preservation_receipt": "state:campaigns/zig-selective-integration-20261016/receipt.json",
+      "verified_unchanged": {
+        "mempool-stimulus": {
+          "head": "564a9c51af541645f403f3bfdd68d295a791d2c2",
+          "patch_sha256": "174dfb0536d0ed5bad58132ac3c2517ea373694391a54e3bd9f1d937b2ef416b",
+          "untracked_file_count": 8
+        },
+        "trace-watcher": {
+          "head": "59616eb75e855ce4f0b8ee2d0cf819ee6a683fe3",
+          "patch_sha256": "9abcef0663a04c5980e26ecb398b4780c46e058692197f9efc1f27af331b3747",
+          "untracked_file_count": 0
+        }
+      }
+    },
+    "full_refresh": "13 Docker manifests, 130 selected results, 50 testing results; fresh DB rebuild also passed",
+    "historical_failure_artifact_retained": "Nodes/Shared/testing/results/zig_storage_capability_2026-06-08.json",
+    "historical_fixture_archives_recovered": [
+      {
+        "file_count": 1767,
+        "fixture_hash": "14f375ab39c9c4971336b723712321b2340c1e96400a4a3796dacf0cff52f70b",
+        "method": "Canonical tar of unchanged pre-context fixture files; exact historical hash matched before retention"
+      },
+      {
+        "file_count": 1788,
+        "fixture_hash": "287eb4c5c202bb3ff2a9aa39c22b9849458301e2f9556693649fc91d068b49e8",
+        "method": "Canonical tar from retained extracted fixture package; exact historical hash matched"
+      }
+    ],
+    "new_repository_created": false,
+    "preflights": {
+      "consensus_runway_5k": "passed",
+      "port_baseline_5k": "passed"
+    },
+    "reconciled_at": "2026-10-17T00:08:18.346568+00:00",
+    "restart_capabilities": {
+      "rocksdb_restart_persistence": "pass 2/2 docker",
+      "storage_restart_after_codec_change": "pass 2/2 docker"
+    },
+    "result": "passed",
+    "unchanged_selected_benchmarks": [
+      "baseline_5k",
+      "shakedown_50k",
+      "performance_100k",
+      "post_100k_to_tip"
+    ]
+  },
+  "promotion_notes": "Bounded extraction check; raw node benchmark-shaped output remains in the campaign. No benchmark ranking or full-node claim.",
+  "proof_scope": "bounded_sync_and_clean_restart",
+  "provenance": {
+    "binary_sha256": "34e500c3f4f44d39c85894d93dba00743ffe774bc22c1301937210233bd629c1",
+    "fixture_hash": "daeaf577e38f71b0f179a8ebc2eae1a7631a283bdad39fa93644f09bc765dee2",
+    "run_ref": "state:campaigns/zig-external-20261016-final",
+    "source_commit": "c889d751765256ba09158e1a525d96975f4b9c9d"
+  },
+  "raw_artifacts": {
+    "corpus.raw.json": "16ec20fb562e84bd2219132ffc7b6e2991500bd23acf8bcc884e01fe61e651b0",
+    "resume.raw.json": "b42c00d2c2fc23fb29942c1a4bc19072ce0d15544ea8f0615a66e0beecadfaf1",
+    "storage.raw.json": "2b13bd647e93c16156b31f622738a52d53bfd1377627caf314f4fdad491e62f0",
+    "sync.raw.json": "723af43289a62124b3ed0bf9a84c380fe1578b1149a7cdd8aa9a6c5d6691ab4c"
+  },
+  "result": "passed",
+  "resume_blocks_connected": 0,
+  "rocksdb_wal_disabled": false,
+  "runtime_surface": "docker",
+  "schema": "port.external_checkout_lab.v1",
+  "script_corpus_passed": 45,
+  "script_runner_mode": "parallel",
+  "status_after_resume": {
+    "binary_gate_status": "not_attempted",
+    "chainstate_backend": "rocksdb",
+    "chainstate_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+    "chainstate_status": "usable",
+    "chainstate_utxo_count": 4574,
+    "crypto_backend": "libsecp256k1",
+    "crypto_source_digest": "unrecorded",
+    "current_blocker": null,
+    "datadir": "/data",
+    "header_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "header_height": 5000,
+    "native_crypto_available": true,
+    "native_crypto_backend": "libsecp256k1",
+    "node": "ZigNode",
+    "port": "zig",
+    "runtime_surface": "docker",
+    "schema": "port.status.v1",
+    "stored_block_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "stored_block_height": 5000,
+    "sync_status": "blocks_current",
+    "taproot_tweak_backend": "libsecp256k1",
+    "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "validated_height": 5000
+  },
+  "status_before_resume": {
+    "binary_gate_status": "not_attempted",
+    "chainstate_backend": "rocksdb",
+    "chainstate_set_hash": "e8a9c06f542eee0672539c72fbcb498cb32e1398a6b5eab05e2b240f4ad07400",
+    "chainstate_status": "usable",
+    "chainstate_utxo_count": 4574,
+    "crypto_backend": "libsecp256k1",
+    "crypto_source_digest": "unrecorded",
+    "current_blocker": null,
+    "datadir": "/data",
+    "header_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "header_height": 5000,
+    "native_crypto_available": true,
+    "native_crypto_backend": "libsecp256k1",
+    "node": "ZigNode",
+    "port": "zig",
+    "runtime_surface": "docker",
+    "schema": "port.status.v1",
+    "stored_block_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "stored_block_height": 5000,
+    "sync_status": "blocks_current",
+    "taproot_tweak_backend": "libsecp256k1",
+    "validated_hash": "000000000e3cb5b92e9765ed9c80c6b06f3d0a186478b330dd5e6b274acf03e2",
+    "validated_height": 5000
+  },
+  "storage_smoke_reopen": {
+    "binary_gate_status": "not_attempted",
+    "chainstate_backend": "rocksdb",
+    "chainstate_set_hash": "5a6cd24b3d073e14a19e0bcc0f5c0ffa4485d0edbe90f3775838b8fc3f5743a4",
+    "chainstate_status": "usable",
+    "chainstate_utxo_count": 1,
+    "crypto_backend": "unknown",
+    "crypto_source_digest": "unknown",
+    "current_blocker": null,
+    "datadir": "/data",
+    "header_hash": "",
+    "header_height": 0,
+    "native_crypto_available": false,
+    "native_crypto_backend": "unknown",
+    "node": "ZigNode",
+    "port": "zig",
+    "runtime_surface": "docker",
+    "schema": "port.status.v1",
+    "stored_block_hash": "",
+    "stored_block_height": 0,
+    "sync_status": "starting",
+    "taproot_tweak_backend": "unknown",
+    "validated_hash": "",
+    "validated_height": 2
+  },
+  "verification": {
+    "adapter_tests": 6,
+    "docker_unit_tests": {
+      "passed": 59,
+      "total": 59
+    },
+    "export_regressions": 1,
+    "final_runtime_run": "state:campaigns/zig-external-20261016-final",
+    "import_worktree_regressions": 1,
+    "offline_tests_log": "state:campaigns/zig-external-20261016-proof/offline-tests.log",
+    "standalone_inventory_files": 1898
+  },
+  "volumes": [
+    "zig-external-20261016-final-storage",
+    "zig-external-20261016-final-sync"
+  ]
+}

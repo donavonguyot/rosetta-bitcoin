@@ -20,6 +20,7 @@ RUN arch="$(dpkg --print-architecture)" \
   && ln -s /opt/zig/zig /usr/local/bin/zig
 ARG NODE_SOURCE=Nodes/Zig
 ARG CRYPTO_SOURCE=Libraries/Zig/libsecp256k1-zig
+ARG SOURCE_COMMIT=unrecorded
 WORKDIR /src/node
 COPY ${NODE_SOURCE}/build.zig ${NODE_SOURCE}/build.zig.zon ./
 COPY ${CRYPTO_SOURCE} ./libsecp256k1-zig
@@ -28,7 +29,7 @@ COPY ${NODE_SOURCE}/tests ./tests
 COPY ${NODE_SOURCE}/scripts ./scripts
 RUN --mount=type=cache,target=/root/.cache/zig \
   --mount=type=cache,target=/src/.zig-cache \
-  zig build -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND -Dcrypto-source-digest=$CRYPTO_SOURCE_DIGEST -Dcrypto-probe=$CRYPTO_PROBE -Dcrypto-reject=$CRYPTO_REJECT \
+  zig build -Doptimize=ReleaseSafe -Dstore=$STORE -Dcrypto-backend=$CRYPTO_BACKEND -Dsource-commit=$SOURCE_COMMIT -Dcrypto-source-digest=$CRYPTO_SOURCE_DIGEST -Dcrypto-probe=$CRYPTO_PROBE -Dcrypto-reject=$CRYPTO_REJECT \
   && mkdir -p /out \
   && cp /src/node/zig-out/bin/zigbitnode /out/zigbitnode
 
