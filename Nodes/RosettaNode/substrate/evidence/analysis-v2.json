@@ -36,7 +36,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-1-initial.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-1-initial.json",
       "normalized_diff": null
     },
     {
@@ -72,7 +72,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-1-maintenance.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-1-maintenance.json",
       "normalized_diff": {
         "production": {
           "added": 147,
@@ -138,7 +138,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-2-initial.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-2-initial.json",
       "normalized_diff": null
     },
     {
@@ -165,7 +165,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-2-maintenance.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-zig-2-maintenance.json",
       "normalized_diff": null
     },
     {
@@ -210,7 +210,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-go-1-initial.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-go-1-initial.json",
       "normalized_diff": null
     },
     {
@@ -246,7 +246,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-go-1-maintenance.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-go-1-maintenance.json",
       "normalized_diff": {
         "production": {
           "added": 80,
@@ -303,7 +303,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-go-2-initial.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-go-2-initial.json",
       "normalized_diff": null
     },
     {
@@ -339,7 +339,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-1-initial.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-1-initial.json",
       "normalized_diff": null
     },
     {
@@ -366,7 +366,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-1-maintenance.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-1-maintenance.json",
       "normalized_diff": null
     },
     {
@@ -402,7 +402,7 @@
         }
       ],
       "monetary_cost": null,
-      "source_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-2-initial.json",
+      "source_record": "Nodes/RosettaNode/substrate/evidence/lineage-v2-rust-2-initial.json",
       "normalized_diff": null
     }
   ],

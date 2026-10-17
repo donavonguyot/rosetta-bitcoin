@@ -627,7 +627,9 @@ def tracked_paths(root: Path, pattern: str) -> set[Path]:
 
 def iter_default_json_files(root: Path, directory: Path, tracked_only: bool) -> list[Path]:
     if not tracked_only:
-        return sorted(path for path in directory.glob("*.json") if "worktrees" not in path.parts)
+        # Exclude nested checkouts, not the checkout running this importer.
+        return sorted(path for path in directory.glob("*.json")
+                      if not path.is_relative_to(root) or "worktrees" not in path.relative_to(root).parts)
     try:
         pattern = rel(directory, root) + "/*.json"
     except ValueError:
@@ -2715,7 +2717,7 @@ def default_blocker_ledgers(root: Path) -> list[Path]:
         root / "Nodes/Shared/BLOCKER_LEDGER.md",
     ]
     paths.extend(sorted(
-        path for path in (root / "Nodes").glob("*/docs/BLOCKER_LEDGER.md") if "worktrees" not in path.parts
+        path for path in (root / "Nodes").glob("*/docs/BLOCKER_LEDGER.md") if "worktrees" not in path.relative_to(root).parts
     ))
     return [path for path in paths if path.exists()]
 

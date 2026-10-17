@@ -1,0 +1,101 @@
+name: Zigibit standalone
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    name: ${{ matrix.os }} / ${{ matrix.lane.crypto }} / ${{ matrix.lane.store }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+        lane:
+          - {crypto: c_binding, store: both}
+          - {crypto: own_curve, store: native}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare standalone source
+        shell: bash
+        run: |
+          if test -f Project/scripts/export_zig_standalone.py; then
+            python3 Project/scripts/test_export_zig_standalone.py
+            python3 Project/scripts/capture_mempool_trace.py --self-test
+            python3 Project/scripts/test_mempool_capture.py
+            python3 Project/scripts/test_zig_checkout.py
+            python3 Project/scripts/export_zig_standalone.py "$RUNNER_TEMP/zigibit"
+            echo "ZIGIBIT_SOURCE=$RUNNER_TEMP/zigibit" >> "$GITHUB_ENV"
+            echo "ZIGIBIT_MANIFEST=$RUNNER_TEMP/zigibit/standalone-manifest.json" >> "$GITHUB_ENV"
+          else
+            python3 scripts/snapshot_ci_source.py
+            echo "ZIGIBIT_SOURCE=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+            echo "ZIGIBIT_MANIFEST=$GITHUB_WORKSPACE/.zig-cache/ci-source-manifest.json" >> "$GITHUB_ENV"
+          fi
+      - name: Install native dependencies
+        if: matrix.lane.crypto == 'c_binding'
+        shell: bash
+        run: |
+          if test "$RUNNER_OS" = macOS; then
+            brew install rocksdb secp256k1
+          else
+            sudo apt-get update
+            sudo apt-get install -y build-essential librocksdb-dev libsecp256k1-dev
+          fi
+      - name: Install pinned Zig
+        shell: bash
+        run: python3 "$ZIGIBIT_SOURCE/scripts/install_ci_zig.py" "$RUNNER_TEMP/zig-0.16.0"
+      - name: Build, test, docs, and vectors from standalone source
+        shell: bash
+        env:
+          CI_STORE: ${{ matrix.lane.store }}
+          CI_CRYPTO: ${{ matrix.lane.crypto }}
+          RB_STATE_ROOT: ${{ runner.temp }}/zigibit-state
+        run: |
+          python3 "$ZIGIBIT_SOURCE/scripts/ci_standalone.py" \
+            --zig "$RUNNER_TEMP/zig-0.16.0/zig" \
+            --store "$CI_STORE" --crypto-backend "$CI_CRYPTO" --manifest "$ZIGIBIT_MANIFEST"
+
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        lane:
+          - {crypto: c_binding, store: both}
+          - {crypto: own_curve, store: native}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare standalone source
+        shell: bash
+        run: |
+          if test -f Project/scripts/export_zig_standalone.py; then
+            python3 Project/scripts/export_zig_standalone.py "$RUNNER_TEMP/zigibit"
+            echo "ZIGIBIT_SOURCE=$RUNNER_TEMP/zigibit" >> "$GITHUB_ENV"
+            echo "ZIGIBIT_MANIFEST=$RUNNER_TEMP/zigibit/standalone-manifest.json" >> "$GITHUB_ENV"
+          else
+            python3 scripts/snapshot_ci_source.py
+            echo "ZIGIBIT_SOURCE=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+            echo "ZIGIBIT_MANIFEST=$GITHUB_WORKSPACE/.zig-cache/ci-source-manifest.json" >> "$GITHUB_ENV"
+          fi
+      - name: Offline Docker acceptance with only standalone build context
+        shell: bash
+        env:
+          CI_STORE: ${{ matrix.lane.store }}
+          CI_CRYPTO: ${{ matrix.lane.crypto }}
+        run: |
+          cd "$ZIGIBIT_SOURCE"
+          python3 scripts/verify_standalone.py --manifest "$ZIGIBIT_MANIFEST"
+          docker build --progress plain --target test -f docker/Dockerfile \
+            --build-arg NODE_SOURCE=. --build-arg CRYPTO_SOURCE=libsecp256k1-zig \
+            --build-arg FIXTURE_SOURCE=fixtures \
+            --build-arg STORE="$CI_STORE" --build-arg CRYPTO_BACKEND="$CI_CRYPTO" .
+          python3 scripts/verify_standalone.py --manifest "$ZIGIBIT_MANIFEST"

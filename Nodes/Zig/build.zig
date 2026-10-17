@@ -1,6 +1,8 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
+    if (!std.mem.eql(u8, @import("builtin").zig_version_string, "0.16.0"))
+        @panic("Zig 0.16.0 is required");
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const backend = b.option([]const u8, "crypto-backend", "c_binding or own_curve") orelse "c_binding";
@@ -25,8 +27,14 @@ pub fn build(b: *std.Build) void {
     if (!std.mem.eql(u8, store, "rocksdb") and !std.mem.eql(u8, store, "native") and !std.mem.eql(u8, store, "both")) @panic("unknown store");
     options.addOption([]const u8, "store", store);
     options.addOption(bool, "store_rocksdb", !std.mem.eql(u8, store, "native"));
-    const shared_root = b.option([]const u8, "shared-root", "Shared tree") orelse b.pathResolve(&.{ "..", "Shared" });
-    const fixtures_root = b.option([]const u8, "fixtures-root", "Fixture tree laid out like Shared") orelse shared_root;
+    const bundled = blk: {
+        b.build_root.handle.access(b.graph.io, "fixtures", .{}) catch break :blk false;
+        break :blk true;
+    };
+    const shared_root = b.option([]const u8, "shared-root", "Proof output root") orelse
+        if (bundled) "zig-out" else b.pathResolve(&.{ "..", "Shared" });
+    const fixtures_root = b.option([]const u8, "fixtures-root", "Fixture tree laid out like Shared") orelse
+        if (bundled) "fixtures" else shared_root;
     options.addOption([]const u8, "shared_root", shared_root);
     options.addOption([]const u8, "fixtures_root", fixtures_root);
     // Field and group code is its own module at ReleaseFast. The node keeps
@@ -121,6 +129,8 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&guard.step);
     const coverage = b.addSystemCommand(&.{ "python3", "scripts/doc_coverage.py" });
     coverage.setCwd(b.path("."));
+    if (b.option([]const u8, "doc-results-root", "Optional historical proof reference directory")) |root|
+        coverage.addArgs(&.{ "--results-root", root });
     test_step.dependOn(&coverage.step);
     test_step.dependOn(&run_tests.step);
 

@@ -264,16 +264,9 @@ test "assembly bytes are stable and the witness commitment matches" {
     const io = std.testing.io;
     const fixture = try std.fs.path.join(allocator, &.{ core.fixtures_root, "fixtures/mining/assembly_bytes_v1.bin" });
     defer allocator.free(fixture);
-    const fixture_dir = try std.fs.path.join(allocator, &.{ core.fixtures_root, "fixtures/mining" });
-    defer allocator.free(fixture_dir);
-    try std.Io.Dir.cwd().createDirPath(io, fixture_dir);
-    const existing = std.Io.Dir.cwd().readFileAlloc(io, fixture, allocator, .limited(1_000_000)) catch null;
-    if (existing) |frozen| {
-        defer allocator.free(frozen);
-        try std.testing.expectEqualSlices(u8, frozen, bytes);
-    } else {
-        try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = fixture, .data = bytes, .flags = .{} });
-    }
+    const frozen = try std.Io.Dir.cwd().readFileAlloc(io, fixture, allocator, .limited(1_000_000));
+    defer allocator.free(frozen);
+    try std.testing.expectEqualSlices(u8, frozen, bytes);
 }
 
 test "template limits reject a duplicate txid and an overweight block" {
@@ -347,4 +340,45 @@ test "discarding store wrapper forwards a real utxo and drops the commit" {
         allocator.free(again);
     }
     try std.testing.expectEqual(@as(u64, 42), again[0].?.value_sats);
+}
+
+test "package selection witness preserves parent before child and display txids" {
+    const allocator = std.testing.allocator;
+    var backend = core.coins_view.MemoryStore.init(allocator);
+    defer backend.deinit();
+    const prev = [_]u8{0x24} ** 32;
+    try putCoin(&backend, prev, 0, 10000, 1);
+    var pool = core.mempool.Pool(core.coins_view.MemoryStore).init(allocator, &backend, 10, 0);
+    defer pool.deinit();
+    const parent = try rawTx(allocator, 2, prev, 0, 0xffffffff, &.{}, 9900, &script_true, 0);
+    defer allocator.free(parent);
+    const ptx = try core.tx.deserialize(allocator, parent, 0);
+    defer ptx.transaction.deinit(allocator);
+    const child = try rawTx(allocator, 2, ptx.transaction.txid(), 0, 0xffffffff, &.{}, 8000, &script_true, 0);
+    defer allocator.free(child);
+    const ctx = try core.tx.deserialize(allocator, child, 0);
+    defer ctx.transaction.deinit(allocator);
+    try std.testing.expectEqual(core.mempool.Reason.accepted, (try pool.apply(parent)).reason);
+    try std.testing.expectEqual(core.mempool.Reason.accepted, (try pool.apply(child)).reason);
+    const selected = try core.template.selectPackages(core.coins_view.MemoryStore, allocator, &pool, 1000, 0);
+    defer allocator.free(selected);
+    try std.testing.expectEqual(@as(usize, 2), selected.len);
+    var transactions: [2]core.tx.Transaction = undefined;
+    for (selected, 0..) |hash, i| transactions[i] = (try core.tx.deserialize(allocator, pool.get(hash).?.raw, 0)).transaction;
+    defer for (transactions) |transaction| transaction.deinit(allocator);
+    const witness = try core.rung0.selectedTxidsJson(allocator, &transactions);
+    defer allocator.free(witness);
+    const decoded = try std.json.parseFromSlice([][]const u8, allocator, witness, .{});
+    defer decoded.deinit();
+    const parent_id = ptx.transaction.txid();
+    const child_id = ctx.transaction.txid();
+    const parent_text = try core.crypto.displayHashAlloc(allocator, &parent_id);
+    defer allocator.free(parent_text);
+    const child_text = try core.crypto.displayHashAlloc(allocator, &child_id);
+    defer allocator.free(child_text);
+    try std.testing.expectEqualStrings(parent_text, decoded.value[0]);
+    try std.testing.expectEqualStrings(child_text, decoded.value[1]);
+    const empty = try core.rung0.selectedTxidsJson(allocator, &.{});
+    defer allocator.free(empty);
+    try std.testing.expectEqualStrings("[]", empty);
 }

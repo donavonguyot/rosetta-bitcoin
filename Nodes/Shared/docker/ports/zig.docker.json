@@ -48,7 +48,8 @@
     "docker_supervisor_resume": null,
     "docker_smoke_once": "cd Nodes/Zig && make docker-smoke-once",
     "docker_crypto_own_curve_5k": "python3 Project/scripts/run_crypto_lane.py --port zig --all",
-    "docker_crypto_own_curve_component": "python3 Project/scripts/run_crypto_lane.py --port zig --component-only"
+    "docker_crypto_own_curve_component": "python3 Project/scripts/run_crypto_lane.py --port zig --component-only",
+    "docker_external_checkout_lab": "python3 Project/scripts/run_zig_external_lab.py --source /path/to/zigibit"
   },
   "peer_modes": {
     "local_reference": {
@@ -120,6 +121,7 @@
     "Zig script corpus is 45/45 with engine=zig_native and delegated=false",
     "Live external P2P discovery and tip maintenance remain out of scope for proof_partial",
     "Binary gate remains not_attempted",
-    "own_curve uses a separate candidate-only build and per-run volume; default C-binding commands retain their lane."
+    "own_curve uses a separate candidate-only build and per-run volume; default C-binding commands retain their lane.",
+    "The Dockerfile supports standalone source exports via NODE_SOURCE, CRYPTO_SOURCE, and FIXTURE_SOURCE build arguments; its test stage is an offline portability check, not a network proof."
   ]
 }

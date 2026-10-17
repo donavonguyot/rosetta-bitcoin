@@ -23,8 +23,8 @@
     "own_curve": "Nodes/Shared/conformance/results/zig_script_verify_split_own_curve_host_2026-10-04.json"
   },
   "datadirs": {
-    "c_binding": "/Users/donavonguyot/.rblab/zig/script-split-100k-c_binding",
-    "own_curve": "/Users/donavonguyot/.rblab/zig/script-split-100k-own_curve"
+    "c_binding": "state:zig/script-split-100k-c_binding",
+    "own_curve": "state:zig/script-split-100k-own_curve"
   },
   "bands": {
     "through_49999": {

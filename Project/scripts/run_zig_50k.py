@@ -112,6 +112,8 @@ def main():
     if args.summarize:
         summarize(args.summarize)
         return
+    from zig_checkout import require_bundled
+    require_bundled("run_zig_50k.py")
     from state_root import acquire_writer_lease
     acquire_writer_lease()
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')

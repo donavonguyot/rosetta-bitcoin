@@ -7,9 +7,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[3]
-ZIG = REPO / "Nodes" / "Zig"
-DECOY = REPO / "worktrees" / "fake" / "Nodes" / "Zig" / "src" / "decoy.zig"
+ZIG = Path(__file__).resolve().parents[1]
+REPO = ZIG
+DECOY = ZIG / "worktrees" / "fake" / "src" / "decoy.zig"
 COVERAGE = ZIG / "scripts" / "doc_coverage.py"
 GUARD = ZIG / "scripts" / "check_no_external_paths.sh"
 

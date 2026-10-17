@@ -1,3 +1,8 @@
+> Historical RB planning record, retained for provenance. This is not an active
+> implementation plan or a statement of current readiness. Use the node README
+> for development and Project reports for evidence. Paths below are historical
+> RB workspace paths.
+
 # Module split
 
 Base: `main` at `8bb670c`. Branch `zig/module-split`.

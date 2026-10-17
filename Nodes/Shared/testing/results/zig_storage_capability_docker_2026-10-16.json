@@ -1,0 +1,142 @@
+{
+  "captured_at": "2026-10-17T00:03:31.527246+00:00",
+  "category": "test_capability_contracts",
+  "contracts": [
+    {
+      "backend": "rocksdb",
+      "blocking_for": [
+        "storage_codec_change"
+      ],
+      "capability": "storage_codec_vectors",
+      "case_passed": 7,
+      "case_total": 7,
+      "command_key": "test_storage_capability",
+      "contract_id": "zig.storage_codec_vectors",
+      "does_not_prove": "Storage codec vectors do not prove live sync safety, every future key family, or performance under long-run load.",
+      "evidence_kind": "storage_proof",
+      "evidence_path": "Nodes/Shared/conformance/results/zig_external_storage_docker_2026-10-16.json",
+      "notes": "storage codec vector evidence passed",
+      "port": "zig",
+      "provenance": [
+        "proof_derived"
+      ],
+      "scope": "docker",
+      "status": "pass",
+      "suite_hash": "2e1a634d3ceb0bf8a723a35cc0619689e472686fef1a251cbbc8eff0f97da08c",
+      "suite_id": "rb.storage_codec_vectors_v1",
+      "suite_version": "2026-06-07"
+    },
+    {
+      "backend": "rocksdb",
+      "blocking_for": [
+        "storage_codec_change"
+      ],
+      "capability": "rocksdb_restart_persistence",
+      "case_passed": 2,
+      "case_total": 2,
+      "command_key": "test_storage_capability",
+      "contract_id": "zig.rocksdb_restart_persistence",
+      "does_not_prove": "Bounded restart storage probes do not prove crash safety for every possible interruption point or long-run tip maintenance.",
+      "evidence_kind": "storage_proof",
+      "evidence_path": "Nodes/Shared/conformance/results/zig_external_storage_docker_2026-10-16.json",
+      "notes": "rocksdb_runtime_truth=True; native_restart=True",
+      "port": "zig",
+      "provenance": [
+        "proof_derived"
+      ],
+      "scope": "docker",
+      "status": "pass",
+      "suite_hash": "d6e36c11a39c0b7189d39ad268c46ba1af942456fdc8189ece416b5c914296a2",
+      "suite_id": "rb.storage_restart_probe_v1",
+      "suite_version": "2026-06-07"
+    },
+    {
+      "backend": "rocksdb",
+      "blocking_for": [
+        "storage_codec_change"
+      ],
+      "capability": "storage_restart_after_codec_change",
+      "case_passed": 2,
+      "case_total": 2,
+      "command_key": "test_storage_capability",
+      "contract_id": "zig.storage_restart_after_codec_change",
+      "does_not_prove": "Bounded restart storage probes do not prove crash safety for every possible interruption point or long-run tip maintenance.",
+      "evidence_kind": "storage_proof",
+      "evidence_path": "Nodes/Shared/conformance/results/zig_external_storage_docker_2026-10-16.json",
+      "notes": "storage_codec_vectors=True; native_restart=True",
+      "port": "zig",
+      "provenance": [
+        "proof_derived"
+      ],
+      "scope": "docker",
+      "status": "pass",
+      "suite_hash": "d6e36c11a39c0b7189d39ad268c46ba1af942456fdc8189ece416b5c914296a2",
+      "suite_id": "rb.storage_restart_probe_v1",
+      "suite_version": "2026-06-07"
+    }
+  ],
+  "external_checkout": {
+    "adapter_commit": "2877990526b23b6931dd501f115ec05e9c96e50f",
+    "adapter_sha256": "48837ec98673b553b6fa258717c9b1cf72b0f6da91ad58b45389d87799db0521",
+    "project_db_mounted": false,
+    "runtime_image": "sha256:2f2fe0e4059771cbd2d309b006707c40a99a519d37f8b5de11954c5a5f4564e2",
+    "source_context": "external_standalone_checkout",
+    "source_file_count": 1898,
+    "source_manifest_sha256": "5df90994a5e892614058bed0b341323014b58528a14d711085462a6500e22fa9"
+  },
+  "notes": "Fresh bounded clean-process restart evidence replaces the two historical native_restart=None failures. The historical artifact is retained. No power-loss or tip-maintenance proof.",
+  "port": "zig",
+  "provenance": {
+    "binary_sha256": "34e500c3f4f44d39c85894d93dba00743ffe774bc22c1301937210233bd629c1",
+    "fixture_hash": "daeaf577e38f71b0f179a8ebc2eae1a7631a283bdad39fa93644f09bc765dee2",
+    "run_ref": "state:campaigns/zig-external-20261016-final",
+    "source_commit": "c889d751765256ba09158e1a525d96975f4b9c9d"
+  },
+  "results": [
+    {
+      "case_passed": 7,
+      "case_total": 7,
+      "notes": "storage codec vector evidence passed",
+      "result": "pass",
+      "suite_id": "rb.storage_codec_vectors_v1"
+    },
+    {
+      "case_passed": 2,
+      "case_total": 2,
+      "notes": "rocksdb_runtime_truth=True; native_restart=True",
+      "result": "pass",
+      "suite_id": "rb.storage_restart_probe_v1"
+    },
+    {
+      "case_passed": 2,
+      "case_total": 2,
+      "notes": "storage_codec_vectors=True; native_restart=True",
+      "result": "pass",
+      "suite_id": "rb.storage_restart_probe_v1"
+    }
+  ],
+  "schema": "port.test_capability_contract.v1",
+  "suites": [
+    {
+      "case_total": 7,
+      "does_not_prove": "Storage codec vectors do not prove live sync safety, every future key family, or performance under long-run load.",
+      "provenance": [
+        "proof_derived"
+      ],
+      "suite_hash": "2e1a634d3ceb0bf8a723a35cc0619689e472686fef1a251cbbc8eff0f97da08c",
+      "suite_id": "rb.storage_codec_vectors_v1",
+      "suite_version": "2026-06-07"
+    },
+    {
+      "case_total": 2,
+      "does_not_prove": "Bounded restart storage probes do not prove crash safety for every possible interruption point or long-run tip maintenance.",
+      "provenance": [
+        "proof_derived"
+      ],
+      "suite_hash": "d6e36c11a39c0b7189d39ad268c46ba1af942456fdc8189ece416b5c914296a2",
+      "suite_id": "rb.storage_restart_probe_v1",
+      "suite_version": "2026-06-07"
+    }
+  ],
+  "supersedes_evidence": "Nodes/Shared/testing/results/zig_storage_capability_2026-06-08.json"
+}

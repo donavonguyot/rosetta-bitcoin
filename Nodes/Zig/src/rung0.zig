@@ -50,6 +50,7 @@ pub const Boundary = struct {
     port_fees: u64,
     core_fees: ?u64,
     ratio_micros: ?u64,
+    selected_txids: []u8,
 };
 
 pub const Report = struct {
@@ -61,10 +62,16 @@ pub const Report = struct {
     template_checked: u32 = 0,
     template_failures: u32 = 0,
     stores_agree: bool = true,
+    replacement_verdicts: []const []const u8 = &.{},
+    out_of_order_accepted: u32 = 0,
 
     pub fn deinit(self: *Report, allocator: std.mem.Allocator) void {
-        for (self.boundaries) |row| allocator.free(row.core_set_hash);
+        for (self.boundaries) |row| {
+            allocator.free(row.core_set_hash);
+            allocator.free(row.selected_txids);
+        }
         allocator.free(self.boundaries);
+        allocator.free(self.replacement_verdicts);
     }
 };
 
@@ -89,11 +96,14 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
 
     var expected = std.AutoHashMap(u32, []const u8).init(allocator);
     defer expected.deinit();
+    var out_of_order = std.AutoHashMap(u32, void).init(allocator);
+    defer out_of_order.deinit();
     var line_it = std.mem.splitScalar(u8, annotations, '\n');
     while (line_it.next()) |line| {
         if (jsonString(line, "expected_layer1") == null) continue;
         const seq: u32 = @intCast(jsonInt(line, "apply_seq") orelse continue);
         try expected.put(seq, jsonString(line, "expected_layer1").?);
+        if (jsonBool(line, "out_of_order")) try out_of_order.put(seq, {});
     }
     var core_hash = std.AutoHashMap(u32, []const u8).init(allocator);
     defer core_hash.deinit();
@@ -148,7 +158,16 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
     var accepted: u32 = 0;
     var rejected: u32 = 0;
     var rows: std.ArrayList(Boundary) = .empty;
-    errdefer rows.deinit(allocator);
+    errdefer {
+        for (rows.items) |row| {
+            allocator.free(row.core_set_hash);
+            allocator.free(row.selected_txids);
+        }
+        rows.deinit(allocator);
+    }
+    var replacement_verdicts: std.ArrayList([]const u8) = .empty;
+    defer replacement_verdicts.deinit(allocator);
+    var out_of_order_accepted: u32 = 0;
 
     var offset: usize = 0;
     while (offset + 17 <= events.len) {
@@ -175,7 +194,11 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
             const verdict = try pool.apply(payload);
             tx_checked += 1;
             if (verdict.reason == .accepted) accepted += 1 else rejected += 1;
+            if (out_of_order.contains(apply_seq) and verdict.reason == .accepted) out_of_order_accepted += 1;
             if (expected.get(apply_seq)) |want| {
+                if (std.mem.eql(u8, want, "input_spent_in_pool")) {
+                    try replacement_verdicts.append(allocator, verdict.reason.name());
+                }
                 if (!std.mem.eql(u8, verdict.reason.name(), want)) {
                     verdict_mismatches += 1;
                     try out.print("verdict mismatch apply_seq={d} have={s} want={s}\n", .{ apply_seq, verdict.reason.name(), want });
@@ -202,6 +225,9 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
                 txs[filled] = parsed.transaction;
                 filled += 1;
             }
+            const selected_txids = try selectedTxidsJson(allocator, txs[0..filled]);
+            var row_owns_ids = false;
+            errdefer if (!row_owns_ids) allocator.free(selected_txids);
             if (tip_hash) |prev| {
                 const prev_fields = (try db.headerFields(height - 1)) orelse return error.MissingHeader;
                 const prev_time = prev_fields.time;
@@ -251,19 +277,27 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
             const fees = core_fees.get(apply_seq);
             const ratio: ?u64 = if (fees) |core| if (core == 0) null else port_fees * 1_000_000 / core else null;
             const hash_text = core_hash.get(apply_seq) orelse "";
+            const owned_core_hash = try allocator.dupe(u8, hash_text);
+            errdefer if (!row_owns_ids) allocator.free(owned_core_hash);
             try rows.append(allocator, .{
                 .height = height,
                 .set_hash = pool.setHashHex(),
                 .pool_count = pool.count(),
-                .core_set_hash = try allocator.dupe(u8, hash_text),
+                .core_set_hash = owned_core_hash,
                 .port_fees = port_fees,
                 .core_fees = fees,
                 .ratio_micros = ratio,
+                .selected_txids = selected_txids,
             });
+            row_owns_ids = true;
+            const port_hash = pool.setHashHex();
             try out.print(
                 "boundary height={d} set_hash={s} pool={d} accepted={d} rejected={d} core_set_hash={s}\n",
-                .{ height, pool.setHashHex(), pool.count(), accepted, rejected, hash_text },
+                .{ height, port_hash, pool.count(), accepted, rejected, hash_text },
             );
+            if (hash_text.len != 0 and !std.mem.eql(u8, &port_hash, hash_text)) {
+                try out.print("divergent height={d} set_hash={s} core_set_hash={s}\n", .{ height, port_hash, hash_text });
+            }
             height += 1;
         } else return error.UnknownEventKind;
     }
@@ -280,6 +314,8 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
             mutation_checked,
         },
     );
+    const owned_verdicts = try replacement_verdicts.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_verdicts);
     return .{
         .boundaries = try rows.toOwnedSlice(allocator),
         .tx_checked = tx_checked,
@@ -288,7 +324,26 @@ pub fn replay(allocator: std.mem.Allocator, io: std.Io, db: anytype, trace_dir: 
         .mutation_mismatches = mutation_mismatches,
         .template_checked = template_checked,
         .template_failures = template_failures,
+        .replacement_verdicts = owned_verdicts,
+        .out_of_order_accepted = out_of_order_accepted,
     };
+}
+
+/// Mining witness in selection order, using display txids (not witness hashes).
+/// Covered by the package selection witness test.
+pub fn selectedTxidsJson(allocator: std.mem.Allocator, transactions: []const tx.Transaction) ![]u8 {
+    var body: std.ArrayList(u8) = .empty;
+    errdefer body.deinit(allocator);
+    try body.append(allocator, '[');
+    for (transactions, 0..) |transaction, i| {
+        if (i != 0) try body.append(allocator, ',');
+        const id = transaction.txid();
+        const text = try crypto.displayHashAlloc(allocator, &id);
+        defer allocator.free(text);
+        try body.print(allocator, "\"{s}\"", .{text});
+    }
+    try body.append(allocator, ']');
+    return body.toOwnedSlice(allocator);
 }
 
 pub fn medianRatio(rows: []const Boundary) ?u64 {
@@ -324,6 +379,13 @@ fn jsonString(text: []const u8, key: []const u8) ?[]const u8 {
     while (i < text.len and text[i] != '"') : (i += 1) {}
     if (i >= text.len) return null;
     return text[value_start..i];
+}
+
+fn jsonBool(text: []const u8, key: []const u8) bool {
+    const start = keyAt(text, key) orelse return false;
+    var i = start;
+    while (i < text.len and (text[i] == ' ' or text[i] == '\t' or text[i] == '\n' or text[i] == ':')) : (i += 1) {}
+    return i + 4 <= text.len and std.mem.eql(u8, text[i .. i + 4], "true");
 }
 
 fn jsonInt(text: []const u8, key: []const u8) ?u64 {

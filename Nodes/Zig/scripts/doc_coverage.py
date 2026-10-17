@@ -6,7 +6,7 @@ block sits on the lines immediately above it. A proof reference is a
 test "..." name that exists under this tree, a fixture id
 (consensus.|mining.|scripts.|script.|codec., including a family such as
 scripts.*), a gate name, or a zig_* result filename that exists under the
-Shared conformance results directory.
+optional --results-root directory. Output defaults to zig-out/docs-coverage.json.
 
 with_proof_ref counts declarations. distinct_proof_refs counts unique
 references, split into fixture, gate, and unit_test. One test name repeated
@@ -15,6 +15,7 @@ on every declaration stays one unit_test.
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -22,8 +23,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-RESULTS = ROOT.parent / "Shared" / "conformance" / "results"
-OUT = RESULTS / "zig_docs_coverage_2026-10-06.json"
 
 EXACT = {
     "connect",
@@ -72,7 +71,7 @@ def consensus(path: Path) -> bool:
 
 
 def skipped_zig(path: Path) -> bool:
-    return any(part in path.parts for part in (".zig-cache", "zig-out", "worktrees"))
+    return any(part in path.relative_to(ROOT).parts for part in (".zig-cache", "zig-out", "worktrees", "libsecp256k1-zig", "fixtures"))
 
 
 def test_names() -> set[str]:
@@ -84,10 +83,10 @@ def test_names() -> set[str]:
     return found
 
 
-def result_names() -> set[str]:
-    if not RESULTS.is_dir():
+def result_names(results: Path | None) -> set[str]:
+    if results is None or not results.is_dir():
         return set()
-    return {path.name for path in RESULTS.glob("zig_*.json")}
+    return {path.name for path in results.glob("zig_*.json")}
 
 
 def has_header(text: str) -> bool:
@@ -167,8 +166,12 @@ def module_row(path: Path, tests: set[str], results: set[str]) -> dict:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=ROOT / "zig-out/docs-coverage.json")
+    parser.add_argument("--results-root", type=Path)
+    args = parser.parse_args()
     tests = test_names()
-    results = result_names()
+    results = result_names(args.results_root)
     modules = [
         module_row(path, tests, results)
         for path in sorted(SRC.rglob("*.zig"))
@@ -187,8 +190,8 @@ def main() -> int:
         "distinct_proof_refs": len(union),
         "proof_ref_kinds": kind_counts(union),
     }
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     counted = [row for row in modules if "pub_count" in row]
     pub_count = sum(row["pub_count"] for row in counted)
     documented = sum(row["documented"] for row in counted)
@@ -199,7 +202,7 @@ def main() -> int:
         f"pub {documented}/{pub_count} proof {proved}/{pub_count} "
         f"distinct {payload['distinct_proof_refs']} "
         f"(fixture {kinds['fixture']}, gate {kinds['gate']}, unit_test {kinds['unit_test']}) "
-        f"-> {OUT.name}",
+        f"-> {args.output.name}",
         file=sys.stderr,
     )
     return 0

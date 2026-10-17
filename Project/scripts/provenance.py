@@ -162,6 +162,9 @@ def report(connection) -> None:
 
 
 def prepare_port(port: str, run_ref: str | None = None) -> tuple[dict, dict]:
+    if port == "zig" and (os.environ.get("RB_ZIG_SOURCE") or os.environ.get("RB_ZIG_MANIFEST")):
+        from zig_checkout import prepare
+        return prepare(run_ref)
     directory = ROOT / "Nodes" / PORT_DIRS[port]
     config = json.loads(subprocess.check_output([
         "docker", "compose", "--env-file", "../Shared/docker/reference_topology.env",

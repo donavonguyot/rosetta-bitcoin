@@ -1,6 +1,6 @@
 {
   "schema": "rb.current_evidence.v1",
-  "generated_at": "2026-09-16",
+  "generated_at": "2026-10-16",
   "notes": "Curated current Project evidence. Historical artifacts remain in results/ but are not imported into current Project status by default.",
   "entries": [
     {
@@ -319,17 +319,17 @@
       "port": "zig",
       "claim": "script_corpus",
       "gate_id": "",
-      "path": "Nodes/Shared/conformance/results/zig_script_corpus_2026-06-05-zig-5k-docker.json",
+      "path": "Nodes/Shared/conformance/results/zig_external_script_corpus_docker_2026-10-16.json",
       "status": "current",
-      "notes": "Current Zig port-owned 45/45 script corpus proof."
+      "notes": "Fresh external-checkout Docker/libsecp256k1 script corpus, 45/45, with source inventory and binary provenance."
     },
     {
       "port": "zig",
       "claim": "storage",
       "gate_id": "",
-      "path": "Nodes/Shared/conformance/results/zig_storage_gate_docker_2026-06-05-zig-5k-docker.json",
+      "path": "Nodes/Shared/conformance/results/zig_external_storage_docker_2026-10-16.json",
       "status": "current",
-      "notes": "Current Zig RocksDB storage proof."
+      "notes": "Fresh external-checkout RocksDB storage and clean process restart at height 5000. Historical proof retained; no crash or tip-maintenance claim."
     },
     {
       "port": "zig",
@@ -1034,6 +1034,14 @@
       "path": "Nodes/Shared/conformance/results/zig_reorg_disconnect_host_2026-10-07.json",
       "status": "current",
       "notes": "disconnectTip on native and RocksDB. Both reach the 155448 witness set hash and UTXO count with link_breaks empty. restoreAfterDisconnect stays a loud stub."
+    },
+    {
+      "port": "zig",
+      "claim": "external_checkout_lab",
+      "gate_id": "",
+      "path": "Nodes/Shared/conformance/results/zig_external_checkout_docker_2026-10-16.json",
+      "status": "current",
+      "notes": "Fresh external source, isolated volumes, bounded P2P sync to 5000 and process restart. Existing benchmark selections unchanged."
     }
   ]
 }

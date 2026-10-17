@@ -10,12 +10,12 @@
   "attempts": [
     {
       "kind": "initial_submission",
-      "evaluation": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/evaluation/result.json",
+      "evaluation": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/evaluation/result.json",
       "status": "failed"
     },
     {
       "kind": "repair",
-      "evaluation": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/repair-evaluation/result.json",
+      "evaluation": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/repair-evaluation/result.json",
       "status": "failed"
     }
   ],
@@ -42,9 +42,9 @@
       "default_permissions": "substrate",
       "permissions.substrate.filesystem": {
         ":minimal": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/tmp": "write",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/queue": "write"
+        "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace": "read",
+        "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/tmp": "write",
+        "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/queue": "write"
       },
       "permissions.substrate.network.enabled": false,
       "project_doc_max_bytes": 0,
@@ -65,7 +65,7 @@
       "shell_environment_policy.inherit": "none",
       "shell_environment_policy.set": {
         "PATH": "/usr/bin:/bin",
-        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/tmp"
+        "TMPDIR": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/tmp"
       }
     },
     "transcript_sha256": "6161a2a9e9803eb9476a38ccd5b7900a39b5513523b9d2184cfa9c4148eb7c79"
@@ -93,7 +93,7 @@
       "default_permissions": "substrate",
       "permissions.substrate.filesystem": {
         ":minimal": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace": "write"
+        "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace": "write"
       },
       "permissions.substrate.network.enabled": false,
       "project_doc_max_bytes": 0,
@@ -114,7 +114,7 @@
       "shell_environment_policy.inherit": "none",
       "shell_environment_policy.set": {
         "PATH": "/usr/bin:/bin",
-        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/tmp"
+        "TMPDIR": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/tmp"
       }
     },
     "transcript_sha256": "a479b030ffeccbff748a02fc511f815111ab4a66faf2b3d46f3a63e70ae6d968"
@@ -154,7 +154,7 @@
       "default_permissions": "substrate",
       "permissions.substrate.filesystem": {
         ":minimal": "read",
-        "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace": "write"
+        "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace": "write"
       },
       "permissions.substrate.network.enabled": false,
       "project_doc_max_bytes": 0,
@@ -175,7 +175,7 @@
       "shell_environment_policy.inherit": "none",
       "shell_environment_policy.set": {
         "PATH": "/usr/bin:/bin",
-        "TMPDIR": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/tmp"
+        "TMPDIR": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/workspace/tmp"
       }
     },
     "transcript_sha256": "4742c9fa48e91d635a8183c44bb5a6b66a7b6d14fe8a01e2c38a76d65e13b8e9"
@@ -203,10 +203,10 @@
     "tests/test_injected.py": "c314c45aef5aed198b58bb490a002e7096c03c1c97222c467ca61aa727792c4d",
     "tests/test_service.py": "ba5ee636d1599198976c03f0ccac011618bd9bc4e5a6ee7b75cbf99875ccb9c7"
   },
-  "qualified_submission": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/submission",
-  "original_round_record": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/evidence/lineage-zig-1-initial.json",
+  "qualified_submission": "Nodes/RosettaNode/substrate/.local/campaign/zig-1/initial/submission",
+  "original_round_record": "Nodes/RosettaNode/substrate/evidence/lineage-zig-1-initial.json",
   "original_freeze_sha256": "58b7ccca8af797853c804d56e3752c84b6b3ea6f155bde43d86e6f31e7c76797",
   "repair_attribution": "invalidated: evaluator defect; excluded from maintenance cost and predecessor source",
-  "corrected_evaluation": "/Users/donavonguyot/RosettaBitcoin/Nodes/RosettaNode/substrate/.local/correction-v2-final-zig-1/result.json",
+  "corrected_evaluation": "Nodes/RosettaNode/substrate/.local/correction-v2-final-zig-1/result.json",
   "initial_submission_gate_v2": "passed"
 }

@@ -118,7 +118,7 @@ def iter_text_files(path: Path) -> list[Path]:
         if candidate.is_file()
         and candidate.suffix.lower() in {".md", ".py", ".sql", ".txt", ".ts", ".rs", ".go", ".java", ".zig"}
         and candidate.name != "check_doc_drift.py"
-        and not (set(candidate.parts) & IGNORED_PATH_PARTS)
+        and not (set(candidate.relative_to(ROOT).parts) & IGNORED_PATH_PARTS)
     ]
 
 
