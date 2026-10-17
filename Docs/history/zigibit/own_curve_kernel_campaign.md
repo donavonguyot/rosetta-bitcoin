@@ -1,3 +1,8 @@
+> Historical RB planning record, retained for provenance. This is not an active
+> implementation plan or a statement of current readiness. Use the node README
+> for development and Project reports for evidence. Paths below are historical
+> RB workspace paths.
+
 # Own-curve kernel campaign
 
 Branch `zig/own-curve-kernel` from `main`. `zig/native-chainstate` is already an ancestor of `main` (no commits of its own). Do not branch from the current `zig/consensus-gaps` checkout, and do not carry its dirty evidence (`current_evidence.json`, the untracked mempool/mining result files).

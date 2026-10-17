@@ -2,7 +2,9 @@
 
 Zigibit is the Zig testnet4 node developed in RosettaBitcoin. Its executable
 remains `zigbitnode`; evidence uses port key `zig` and implementation `ZigNode`.
-See [architecture](docs/ARCHITECTURE.md) and the [blocker ledger](docs/blocker_ledger.jsonl).
+See [architecture](docs/ARCHITECTURE.md), [contributing](CONTRIBUTING.md),
+[security](SECURITY.md), [dependency provenance](docs/DEPENDENCIES.md), and the
+[blocker ledger](docs/blocker_ledger.jsonl).
 
 ## Build and test
 
@@ -114,10 +116,14 @@ python3 Project/scripts/report.py --db Project/project.db --section consensus-ru
 RB can also test a pinned external checkout without its sibling-directory layout:
 
 ```sh
-python3 Project/scripts/run_zig_external_lab.py --source /path/to/zigibit
+export RB_ZIG_SOURCE=/path/to/zigibit
+python3 Project/scripts/run_zig_external_lab.py
 ```
 
-Run that command from RB. Supply a clean standalone export, or use `--manifest`
+Run that command from RB with Python 3.11 or newer. The same `RB_ZIG_SOURCE`
+selection applies to RB Docker lab targets and Project campaign provenance.
+See the [RB consumer guide](https://github.com/donavonguyot/rosetta-bitcoin/blob/main/Docs/zigibit-consumers.md)
+for supported commands and legacy exceptions. Supply a clean standalone export, or use `--manifest`
 with a clean inventory produced by `snapshot_ci_source.py` after a future move.
 The adapter verifies all inventoried inputs, uses only the external tree as its
 Docker build context, checks the built revision and binary hash, and runs offline

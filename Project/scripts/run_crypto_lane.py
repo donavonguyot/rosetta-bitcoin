@@ -180,6 +180,9 @@ def main():
  from state_root import acquire_writer_lease
  acquire_writer_lease()
  p=argparse.ArgumentParser();p.add_argument('--run-ref');p.add_argument('--port',choices=['go','zig'],required=True);p.add_argument('--all',action='store_true');p.add_argument('--component-only',action='store_true');p.add_argument('--node-only',action='store_true');a=p.parse_args();WORK.mkdir(parents=True,exist_ok=True)
+ if a.port == 'zig':
+  from zig_checkout import require_bundled
+  require_bundled('run_crypto_lane.py --port zig')
  lib=ROOT/'Libraries'/a.port.title()/('libsecp256k1-'+a.port);digest=source_digest(lib);ref=reference();image=image_build(a.port,digest)
  if a.node_only:
   matches=sorted((ROOT/'Nodes/Shared/conformance/results').glob(f'{a.port}_own_curve_component_*.json'))

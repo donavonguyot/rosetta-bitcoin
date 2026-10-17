@@ -24,6 +24,17 @@ DOCKER_50K_PROOF_RESULT ?= /tmp/zig_docker_shakedown_50k_benchmark_$(RESULT_DATE
 DOCKER_100K_PROOF_RESULT ?= /tmp/zig_docker_performance_100k_benchmark_$(RESULT_DATE).json
 COMPOSE_OVERRIDE ?=
 DOCKER_COMPOSE = docker compose --env-file $(SHARED_ROOT)/docker/reference_topology.env -f docker/docker-compose.yml $(COMPOSE_OVERRIDE)
+# External selection applies to Docker lab commands; host experiments stay RB-owned.
+ifneq ($(strip $(RB_ZIG_SOURCE)$(RB_ZIG_MANIFEST)),)
+ifneq ($(filter-out docker-%,$(or $(MAKECMDGOALS),build)),)
+$(error RB_ZIG_SOURCE supports Docker lab targets only; run standalone build/test in that checkout)
+endif
+DOCKER_COMPOSE = python3 $(PROJECT_ROOT)/scripts/zig_checkout.py compose --env-file $(SHARED_ROOT)/docker/reference_topology.env -f docker/docker-compose.yml $(COMPOSE_OVERRIDE)
+.PHONY: external-source-check
+external-source-check:
+	python3 $(PROJECT_ROOT)/scripts/zig_checkout.py verify
+$(MAKECMDGOALS): external-source-check
+endif
 include $(SHARED_ROOT)/docker/reference_topology.mk
 VALIDATE_BENCHMARK_ARTIFACT ?= python3 $(SHARED_ROOT)/conformance/tools/validate_benchmark_artifact.py
 DOCKER_PROOF_VOLUME ?= zigbitnode_proof_data
@@ -111,7 +122,11 @@ docker-config:
 	$(DOCKER_COMPOSE) config >/dev/null
 
 docker-build:
+ifneq ($(strip $(RB_ZIG_SOURCE)$(RB_ZIG_MANIFEST)),)
+	python3 $(PROJECT_ROOT)/scripts/zig_checkout.py prepare
+else
 	$(DOCKER_COMPOSE) build
+endif
 
 docker-warm: docker-build
 

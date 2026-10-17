@@ -11,6 +11,15 @@ import testnet4_activity as activity
 
 
 class CaptureTest(unittest.TestCase):
+    def test_capture_diagnostics_stay_in_lab_state(self):
+        with tempfile.TemporaryDirectory() as temp:
+            ledger = Path(temp) / 'campaign/blockers.jsonl'
+            with patch.object(capture, 'LEDGER', ledger):
+                capture.ledger('unavailable', 'reference unavailable')
+                capture.ledger('reorg', 'discarded')
+            self.assertEqual(len(ledger.read_text().splitlines()), 2)
+        self.assertNotIn('Nodes/Zig', str(capture.LEDGER))
+
     def test_existing_trace_semantics(self):
         capture.self_test()
 

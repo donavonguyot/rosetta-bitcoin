@@ -30,6 +30,7 @@ jobs:
             python3 Project/scripts/test_export_zig_standalone.py
             python3 Project/scripts/capture_mempool_trace.py --self-test
             python3 Project/scripts/test_mempool_capture.py
+            python3 Project/scripts/test_zig_checkout.py
             python3 Project/scripts/export_zig_standalone.py "$RUNNER_TEMP/zigibit"
             echo "ZIGIBIT_SOURCE=$RUNNER_TEMP/zigibit" >> "$GITHUB_ENV"
             echo "ZIGIBIT_MANIFEST=$RUNNER_TEMP/zigibit/standalone-manifest.json" >> "$GITHUB_ENV"

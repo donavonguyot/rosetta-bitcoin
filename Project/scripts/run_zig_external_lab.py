@@ -16,6 +16,7 @@ import re
 import subprocess
 import uuid
 
+from zig_checkout import verify_source, selected_source
 from build_fixture_package import build as package_fixtures
 from state_root import PATHS, ROOT, acquire_writer_lease, primary_root
 
@@ -38,36 +39,6 @@ def digest(path: Path) -> str:
 def write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n')
 
-
-def verify_source(source: Path, manifest_path: Path, workspace: Path) -> dict:
-    source, manifest_path, workspace = source.resolve(), manifest_path.resolve(), workspace.resolve()
-    require(not source.is_relative_to(workspace), 'source must be outside RB, including its worktrees')
-    manifest = json.loads(manifest_path.read_text())
-    require(manifest.get('schema') == 'zigbitnode.standalone_source.v1', 'unsupported source inventory')
-    require(manifest.get('source_dirty') is False, 'source inventory must describe clean source')
-    require(re.fullmatch(r'[0-9a-f]{40}', manifest.get('source_commit', '')) is not None, 'invalid source revision')
-    require(manifest.get('zig_version') == '0.16.0', 'unsupported Zig version')
-    seen = set()
-    for row in manifest['files']:
-        relative = Path(row['path'])
-        require(not relative.is_absolute() and '..' not in relative.parts, 'unsafe inventory path')
-        require(row['path'] not in seen, 'duplicate inventory entry')
-        seen.add(row['path'])
-        path = source / relative
-        require(path.resolve().is_relative_to(source) and not path.is_symlink(), 'escaping source path')
-        require(digest(path) == row['sha256'], f'source checksum mismatch: {relative}')
-    ignored = {'.git', '.zig-cache', 'zig-out', '__pycache__'}
-    for directory, children, files in os.walk(source):
-        children[:] = [name for name in children if name not in ignored]
-        for name in children + files:
-            path = Path(directory) / name
-            require(not path.is_symlink(), f'symlink in source: {path}')
-            if path.is_file() and path != manifest_path and path.name != 'standalone-manifest.json':
-                require(path.relative_to(source).as_posix() in seen, f'uninventoried source: {path}')
-    for name in ('docker/Dockerfile', 'build.zig', 'src/cli/main.zig', 'libsecp256k1-zig/build.zig',
-                 'fixtures/conformance/fixtures/scripts/manifest.json'):
-        require(name in seen, f'required input missing from inventory: {name}')
-    return manifest
 
 
 def check_status(status: dict) -> None:
@@ -103,6 +74,7 @@ class Lab:
         self.manifest_hash = digest(manifest_path)
         self.adapter_commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
         self.adapter_sha = digest(Path(__file__))
+        self.checkout_sha = digest(Path(__file__).with_name('zig_checkout.py'))
         self.run_id = run_id
         self.directory = PATHS['campaigns'] / run_id
         require(not self.directory.resolve().is_relative_to(primary_root()), 'campaign state must be outside RB')
@@ -174,6 +146,7 @@ class Lab:
                 'binary_sha256': binary_sha, 'run_ref': f'state:campaigns/{self.run_id}'}
         boundary = {'source_manifest_sha256': self.manifest_hash, 'source_file_count': len(self.manifest['files']),
                     'runtime_image': self.image, 'adapter_commit': self.adapter_commit, 'adapter_sha256': self.adapter_sha,
+                    'checkout_adapter_sha256': self.checkout_sha,
                     'project_db_mounted': False, 'source_context': 'external_standalone_checkout'}
         codec = json.loads(self.container('codec-vectors', ['codec-vectors']))
         require(codec.get('passed') is True and codec.get('codec_version') == 2, 'codec vectors failed')
@@ -205,7 +178,8 @@ class Lab:
         check_restart(before, after, resumed)
         require(verify_source(self.source, self.manifest_path, primary_root()) == self.manifest
                 and digest(self.manifest_path) == self.manifest_hash, 'source changed during proof')
-        require(digest(Path(__file__)) == self.adapter_sha, 'adapter changed during proof')
+        require(digest(Path(__file__)) == self.adapter_sha
+                and digest(Path(__file__).with_name('zig_checkout.py')) == self.checkout_sha, 'adapter changed during proof')
         captured = datetime.now(timezone.utc).isoformat()
         common = {'captured_at': captured, 'provenance': pins, 'external_checkout': boundary}
         corpus.update(common)
@@ -242,14 +216,14 @@ class Lab:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', type=Path, required=True)
+    parser.add_argument('--source', type=Path, help='external checkout; defaults to RB_ZIG_SOURCE')
     parser.add_argument('--manifest', type=Path, help='clean standalone inventory; defaults to source/standalone-manifest.json')
     parser.add_argument('--run-id', default='zig-external-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ').lower() + '-' + uuid.uuid4().hex[:6])
     args = parser.parse_args()
     require(re.fullmatch(r'zig-external-[a-z0-9-]+', args.run_id) is not None and len(args.run_id) <= 80, 'invalid run ID')
     acquire_writer_lease()
-    source = args.source.expanduser().resolve()
-    lab = Lab(source, (args.manifest or source / 'standalone-manifest.json').resolve(), args.run_id)
+    source, manifest_path = selected_source(args.source, args.manifest)
+    lab = Lab(source, manifest_path, args.run_id)
     try:
         lab.execute()
     except BaseException as exc:

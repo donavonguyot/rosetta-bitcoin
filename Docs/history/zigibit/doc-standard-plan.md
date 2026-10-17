@@ -1,3 +1,8 @@
+> Historical RB planning record, retained for provenance. This is not an active
+> implementation plan or a statement of current readiness. Use the node README
+> for development and Project reports for evidence. Paths below are historical
+> RB workspace paths.
+
 # Doc standard plan
 
 Docs only. No consensus, store, or CLI behavior change. `zig build test`

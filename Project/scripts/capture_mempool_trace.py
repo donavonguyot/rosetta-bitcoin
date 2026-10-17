@@ -25,7 +25,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CONF = ROOT / "Nodes/Reference/bitcoin.conf"
 FIXTURE_ROOT = ROOT / "Nodes/Shared/fixtures/mempool"
-LEDGER = ROOT / "Nodes/Zig/docs/blocker_ledger.jsonl"
+from state_root import PATHS
+LEDGER = PATHS["campaigns"] / "mempool-capture/blockers.jsonl"
 MAGIC = bytes.fromhex("1c163f28")
 SEED = 0x524F5345545441
 MASK = (1 << 64) - 1
@@ -614,6 +615,7 @@ def ledger(kind: str, failure: str) -> None:
         "fix": "retry the capture when Reference Core is current and the chain is stable",
         "follower_notes": "A reorg or an unavailable Core is not a synthetic trace.",
     }
+    LEDGER.parent.mkdir(parents=True, exist_ok=True)
     with LEDGER.open("a") as stream:
         stream.write(json.dumps(row, separators=(",", ":")) + "\n")
 

@@ -2,9 +2,12 @@ services:
   zigbitnode:
     image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
-      context: ${RB_WORKSPACE:?set RB_WORKSPACE}
-      dockerfile: Nodes/Zig/docker/Dockerfile
+      context: ${RB_ZIG_CONTEXT:-${RB_WORKSPACE:?set RB_WORKSPACE}}
+      dockerfile: ${RB_ZIG_DOCKERFILE:-Nodes/Zig/docker/Dockerfile}
       args:
+        NODE_SOURCE: ${RB_ZIG_NODE_SOURCE:-Nodes/Zig}
+        CRYPTO_SOURCE: ${RB_ZIG_CRYPTO_SOURCE:-Libraries/Zig/libsecp256k1-zig}
+        SOURCE_COMMIT: ${RB_ZIG_COMMIT:-unrecorded}
         CRYPTO_BACKEND: ${CRYPTO_BACKEND:-c_binding}
         STORE: ${STORE:-both}
     environment:
@@ -22,9 +25,12 @@ services:
   zigbitnode-script-corpus:
     image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
-      context: ${RB_WORKSPACE:?set RB_WORKSPACE}
-      dockerfile: Nodes/Zig/docker/Dockerfile
+      context: ${RB_ZIG_CONTEXT:-${RB_WORKSPACE:?set RB_WORKSPACE}}
+      dockerfile: ${RB_ZIG_DOCKERFILE:-Nodes/Zig/docker/Dockerfile}
       args:
+        NODE_SOURCE: ${RB_ZIG_NODE_SOURCE:-Nodes/Zig}
+        CRYPTO_SOURCE: ${RB_ZIG_CRYPTO_SOURCE:-Libraries/Zig/libsecp256k1-zig}
+        SOURCE_COMMIT: ${RB_ZIG_COMMIT:-unrecorded}
         CRYPTO_BACKEND: ${CRYPTO_BACKEND:-c_binding}
         STORE: ${STORE:-both}
     environment:
@@ -38,9 +44,12 @@ services:
   zigbitnode-local-reference-proof:
     image: ${RB_PROVENANCE_IMAGE:-rb/zig:local}
     build:
-      context: ${RB_WORKSPACE:?set RB_WORKSPACE}
-      dockerfile: Nodes/Zig/docker/Dockerfile
+      context: ${RB_ZIG_CONTEXT:-${RB_WORKSPACE:?set RB_WORKSPACE}}
+      dockerfile: ${RB_ZIG_DOCKERFILE:-Nodes/Zig/docker/Dockerfile}
       args:
+        NODE_SOURCE: ${RB_ZIG_NODE_SOURCE:-Nodes/Zig}
+        CRYPTO_SOURCE: ${RB_ZIG_CRYPTO_SOURCE:-Libraries/Zig/libsecp256k1-zig}
+        SOURCE_COMMIT: ${RB_ZIG_COMMIT:-unrecorded}
         CRYPTO_BACKEND: ${CRYPTO_BACKEND:-c_binding}
         STORE: ${STORE:-both}
     environment:
